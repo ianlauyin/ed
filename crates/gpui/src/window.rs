@@ -41,7 +41,7 @@ use objc2_core_foundation::CFRetained;
 
 #[cfg(target_os = "macos")]
 use objc2_core_video::CVPixelBuffer;
-use parking_lot::RwLock;
+use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use raw_window_handle::{HandleError, HasDisplayHandle, HasWindowHandle};
 use refineable::Refineable;
 use scheduler::Instant;
@@ -499,7 +499,12 @@ impl ArenaClearNeeded {
     }
 }
 
-pub(crate) type FocusMap = RwLock<SlotMap<FocusId, FocusRef>>;
+#[derive(Default)]
+pub(crate) struct FocusMap {
+    pub(crate) handles: SlotMap<FocusId, FocusRef>,
+    pub(crate) dropped_handles: Vec<FocusId>,
+}
+
 pub(crate) struct FocusRef {
     pub(crate) ref_count: AtomicUsize,
     pub(crate) tab_index: isize,
@@ -539,7 +544,7 @@ impl FocusId {
 /// A handle which can be used to track and manipulate the focused element in a window.
 pub struct FocusHandle {
     pub(crate) id: FocusId,
-    handles: Arc<FocusMap>,
+    handles: Arc<RwLock<FocusMap>>,
     /// The index of this element in the tab order.
     pub tab_index: isize,
     /// Whether this element can be focused by tab navigation.
@@ -553,8 +558,8 @@ impl std::fmt::Debug for FocusHandle {
 }
 
 impl FocusHandle {
-    pub(crate) fn new(handles: &Arc<FocusMap>) -> Self {
-        let id = handles.write().insert(FocusRef {
+    pub(crate) fn new(handles: &Arc<RwLock<FocusMap>>) -> Self {
+        let id = handles.write().handles.insert(FocusRef {
             ref_count: AtomicUsize::new(1),
             tab_index: 0,
             tab_stop: false,
@@ -568,9 +573,9 @@ impl FocusHandle {
         }
     }
 
-    pub(crate) fn for_id(id: FocusId, handles: &Arc<FocusMap>) -> Option<Self> {
+    pub(crate) fn for_id(id: FocusId, handles: &Arc<RwLock<FocusMap>>) -> Option<Self> {
         let lock = handles.read();
-        let focus = lock.get(id)?;
+        let focus = lock.handles.get(id)?;
         if atomic_incr_if_not_zero(&focus.ref_count) == 0 {
             return None;
         }
@@ -585,7 +590,7 @@ impl FocusHandle {
     /// Sets the tab index of the element associated with this handle.
     pub fn tab_index(mut self, index: isize) -> Self {
         self.tab_index = index;
-        if let Some(focus) = self.handles.write().get_mut(self.id) {
+        if let Some(focus) = self.handles.write().handles.get_mut(self.id) {
             focus.tab_index = index;
         }
         self
@@ -596,7 +601,7 @@ impl FocusHandle {
     /// When `false`, the element will not be included in the tab order.
     pub fn tab_stop(mut self, tab_stop: bool) -> Self {
         self.tab_stop = tab_stop;
-        if let Some(focus) = self.handles.write().get_mut(self.id) {
+        if let Some(focus) = self.handles.write().handles.get_mut(self.id) {
             focus.tab_stop = tab_stop;
         }
         self
@@ -665,12 +670,15 @@ impl Eq for FocusHandle {}
 
 impl Drop for FocusHandle {
     fn drop(&mut self) {
-        self.handles
-            .read()
-            .get(self.id)
-            .unwrap()
-            .ref_count
-            .fetch_sub(1, SeqCst);
+        let handles = self.handles.upgradable_read();
+        let focus = handles.handles.get(self.id).expect("focus handle missing");
+        let previous_count = focus.ref_count.fetch_sub(1, SeqCst);
+        assert_ne!(previous_count, 0, "over-released focus handle");
+        if previous_count == 1 {
+            RwLockUpgradableReadGuard::upgrade(handles)
+                .dropped_handles
+                .push(self.id);
+        }
     }
 }
 
@@ -678,7 +686,7 @@ impl Drop for FocusHandle {
 #[derive(Clone, Debug)]
 pub struct WeakFocusHandle {
     pub(crate) id: FocusId,
-    pub(crate) handles: Weak<FocusMap>,
+    pub(crate) handles: Weak<RwLock<FocusMap>>,
 }
 
 impl WeakFocusHandle {
