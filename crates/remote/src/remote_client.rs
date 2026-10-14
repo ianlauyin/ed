@@ -150,6 +150,9 @@ const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(5);
 const INITIAL_CONNECTION_TIMEOUT: Duration =
     Duration::from_secs(if cfg!(debug_assertions) { 5 } else { 60 });
+const RECONNECT_HANDSHAKE_TIMEOUT: Duration =
+    Duration::from_secs(if cfg!(debug_assertions) { 5 } else { 15 });
+const RESYNC_TIMEOUT: Duration = Duration::from_secs(if cfg!(debug_assertions) { 5 } else { 15 });
 
 pub const MAX_RECONNECT_ATTEMPTS: usize = 3;
 
@@ -692,9 +695,20 @@ impl RemoteClient {
             };
 
             let multiplex_task = Self::monitor(this.clone(), io_task, cx);
-            client.reconnect(incoming_rx, outgoing_tx, cx);
+            let connection_ready_rx = client.reconnect(incoming_rx, outgoing_tx, cx);
+            let resync = client.resync(RESYNC_TIMEOUT);
 
-            if let Err(error) = client.resync(HEARTBEAT_TIMEOUT).await {
+            if let Err(error) = async {
+                connection_ready_rx
+                    .with_timeout(RECONNECT_HANDSHAKE_TIMEOUT, cx.background_executor())
+                    .await
+                    .context("Timed out waiting for remote connection")?
+                    .context("Remote connection closed before becoming ready")?;
+
+                resync.await
+            }
+            .await
+            {
                 failed!(error, attempts, remote_connection, delegate);
             };
 
@@ -1385,163 +1399,215 @@ impl ChannelClient {
         self.remote_started.wait()
     }
 
+    fn send_handshake(&self) -> Result<u32> {
+        let handshake_id = self.next_message_id.fetch_add(1, SeqCst);
+        let envelope = proto::RemoteStarted {}.into_envelope(handshake_id, None, None);
+        self.outgoing_tx.lock().unbounded_send(envelope)?;
+        Ok(handshake_id)
+    }
+
     fn start_handling_messages(
         this: Weak<Self>,
-        mut incoming_rx: mpsc::UnboundedReceiver<Envelope>,
+        incoming_rx: mpsc::UnboundedReceiver<Envelope>,
         cx: &AsyncApp,
     ) -> Task<Result<()>> {
         cx.spawn(async move |cx| {
-            if let Some(this) = this.upgrade() {
-                let envelope = proto::RemoteStarted {}.into_envelope(0, None, None);
-                this.outgoing_tx.lock().unbounded_send(envelope).ok();
+            let handshake_id = if let Some(this) = this.upgrade() {
+                this.send_handshake()?
+            } else {
+                return anyhow::Ok(());
             };
 
-            let peer_id = PeerId { owner_id: 0, id: 0 };
-            while let Some(incoming) = incoming_rx.next().await {
-                let Some(this) = this.upgrade() else {
-                    return anyhow::Ok(());
-                };
-                if let Some(ack_id) = incoming.ack_id {
-                    let mut buffer = this.buffer.lock();
-                    while buffer.front().is_some_and(|msg| msg.id <= ack_id) {
-                        buffer.pop_front();
-                    }
-                }
-                if let Some(proto::envelope::Payload::FlushBufferedMessages(_)) = &incoming.payload
-                {
-                    log::debug!(
-                        "{}:remote message received. name:FlushBufferedMessages",
-                        this.name
-                    );
-                    {
-                        let buffer = this.buffer.lock();
-                        for envelope in buffer.iter() {
-                            this.outgoing_tx
-                                .lock()
-                                .unbounded_send(envelope.clone())
-                                .ok();
-                        }
-                    }
-                    let mut envelope = proto::Ack {}.into_envelope(0, Some(incoming.id), None);
-                    envelope.id = this.next_message_id.fetch_add(1, SeqCst);
-                    this.outgoing_tx.lock().unbounded_send(envelope).ok();
-                    continue;
-                }
+            Self::read_messages(this, incoming_rx, handshake_id, cx).await
+        })
+    }
 
-                if let Some(proto::envelope::Payload::RemoteStarted(_)) = &incoming.payload {
-                    this.remote_started.set(());
-                    let mut envelope = proto::Ack {}.into_envelope(0, Some(incoming.id), None);
-                    envelope.id = this.next_message_id.fetch_add(1, SeqCst);
-                    this.outgoing_tx.lock().unbounded_send(envelope).ok();
-                    continue;
-                }
+    async fn read_messages(
+        this: Weak<Self>,
+        mut incoming_rx: mpsc::UnboundedReceiver<Envelope>,
+        handshake_id: u32,
+        cx: &mut AsyncApp,
+    ) -> Result<()> {
+        while let Some(incoming) = incoming_rx.next().await {
+            let Some(this) = this.upgrade() else {
+                return anyhow::Ok(());
+            };
+            if incoming.responding_to == Some(handshake_id)
+                && matches!(incoming.payload, Some(proto::envelope::Payload::Ack(_)))
+            {
+                // Handshake replies do not acknowledge buffered messages that still need replay.
+                continue;
+            }
+            Self::handle_message(this, incoming, cx).await;
+        }
+        anyhow::Ok(())
+    }
 
-                this.max_received.store(incoming.id, SeqCst);
-
-                if let Some(request_id) = incoming.responding_to {
-                    let request_id = MessageId(request_id);
-                    // An incoming response with no payload is malformed; drop
-                    // it. The request future and any stream consumers will
-                    // remain pending until either a real response arrives or
-                    // the connection is torn down.
-                    if incoming.payload.is_none() {
-                        continue;
-                    }
-                    let sender = this.response_channels.lock().remove(&request_id);
-                    if let Some(sender) = sender {
-                        let (tx, rx) = oneshot::channel();
-                        sender.send((incoming, tx)).ok();
-                        rx.await.ok();
-                    } else {
-                        let terminal_stream_response = matches!(
-                            &incoming.payload,
-                            Some(proto::envelope::Payload::Error(_))
-                                | Some(proto::envelope::Payload::EndStream(_))
-                        );
-                        let sender = if terminal_stream_response {
-                            this.stream_response_channels.lock().remove(&request_id)
-                        } else {
-                            this.stream_response_channels
-                                .lock()
-                                .get(&request_id)
-                                .cloned()
-                        };
-                        if let Some(sender) = sender {
-                            let (tx, rx) = oneshot::channel();
-                            if sender.unbounded_send((Ok(incoming), tx)).is_err() {
-                                this.stream_response_channels.lock().remove(&request_id);
-                                continue;
-                            }
-                            rx.await.ok();
-                        }
-                    }
-                } else if let Some(envelope) =
-                    build_typed_envelope(peer_id, Instant::now(), incoming)
-                {
-                    let type_name = envelope.payload_type_name();
-                    let message_id = envelope.message_id();
-                    if let Some(future) = ProtoMessageHandlerSet::handle_message(
-                        &this.message_handlers,
-                        envelope,
-                        this.clone().into(),
-                        cx.clone(),
-                    ) {
-                        log::debug!("{}:remote message received. name:{type_name}", this.name);
-                        cx.foreground_executor()
-                            .spawn(async move {
-                                match future.await {
-                                    Ok(_) => {
-                                        log::debug!(
-                                            "{}:remote message handled. name:{type_name}",
-                                            this.name
-                                        );
-                                    }
-                                    Err(error) => {
-                                        log::error!(
-                                            "{}:error handling message. type:{}, error:{:#}",
-                                            this.name,
-                                            type_name,
-                                            format!("{error:#}").lines().fold(
-                                                String::new(),
-                                                |mut message, line| {
-                                                    if !message.is_empty() {
-                                                        message.push(' ');
-                                                    }
-                                                    message.push_str(line);
-                                                    message
-                                                }
-                                            )
-                                        );
-                                    }
-                                }
-                            })
-                            .detach()
-                    } else {
-                        log::error!("{}:unhandled remote message name:{type_name}", this.name);
-                        if let Err(e) = AnyProtoClient::from(this.clone()).send_response(
-                            message_id,
-                            anyhow::anyhow!("no handler registered for {type_name}").to_proto(),
-                        ) {
-                            log::error!(
-                                "{}:error sending error response for {type_name}:{e:#}",
-                                this.name
-                            );
-                        }
-                    }
+    async fn handle_message(this: Arc<Self>, incoming: Envelope, cx: &mut AsyncApp) {
+        let peer_id = PeerId { owner_id: 0, id: 0 };
+        if let Some(ack_id) = incoming.ack_id {
+            let mut buffer = this.buffer.lock();
+            while buffer.front().is_some_and(|msg| msg.id <= ack_id) {
+                buffer.pop_front();
+            }
+        }
+        if let Some(proto::envelope::Payload::FlushBufferedMessages(_)) = &incoming.payload {
+            log::debug!(
+                "{}:remote message received. name:FlushBufferedMessages",
+                this.name
+            );
+            {
+                let buffer = this.buffer.lock();
+                for envelope in buffer.iter() {
+                    this.outgoing_tx
+                        .lock()
+                        .unbounded_send(envelope.clone())
+                        .ok();
                 }
             }
-            anyhow::Ok(())
-        })
+            let mut envelope = proto::Ack {}.into_envelope(0, Some(incoming.id), None);
+            envelope.id = this.next_message_id.fetch_add(1, SeqCst);
+            this.outgoing_tx.lock().unbounded_send(envelope).ok();
+            return;
+        }
+
+        if let Some(proto::envelope::Payload::RemoteStarted(_)) = &incoming.payload {
+            this.remote_started.set(());
+            let mut envelope = proto::Ack {}.into_envelope(0, Some(incoming.id), None);
+            envelope.id = this.next_message_id.fetch_add(1, SeqCst);
+            this.outgoing_tx.lock().unbounded_send(envelope).ok();
+            return;
+        }
+
+        this.max_received.store(incoming.id, SeqCst);
+
+        if let Some(request_id) = incoming.responding_to {
+            let request_id = MessageId(request_id);
+            // An incoming response with no payload is malformed; drop
+            // it. The request future and any stream consumers will
+            // remain pending until either a real response arrives or
+            // the connection is torn down.
+            if incoming.payload.is_none() {
+                return;
+            }
+            let sender = this.response_channels.lock().remove(&request_id);
+            if let Some(sender) = sender {
+                let (tx, rx) = oneshot::channel();
+                sender.send((incoming, tx)).ok();
+                rx.await.ok();
+            } else {
+                let terminal_stream_response = matches!(
+                    &incoming.payload,
+                    Some(proto::envelope::Payload::Error(_))
+                        | Some(proto::envelope::Payload::EndStream(_))
+                );
+                let sender = if terminal_stream_response {
+                    this.stream_response_channels.lock().remove(&request_id)
+                } else {
+                    this.stream_response_channels
+                        .lock()
+                        .get(&request_id)
+                        .cloned()
+                };
+                if let Some(sender) = sender {
+                    let (tx, rx) = oneshot::channel();
+                    if sender.unbounded_send((Ok(incoming), tx)).is_err() {
+                        this.stream_response_channels.lock().remove(&request_id);
+                        return;
+                    }
+                    rx.await.ok();
+                }
+            }
+        } else if let Some(envelope) = build_typed_envelope(peer_id, Instant::now(), incoming) {
+            let type_name = envelope.payload_type_name();
+            let message_id = envelope.message_id();
+            if let Some(future) = ProtoMessageHandlerSet::handle_message(
+                &this.message_handlers,
+                envelope,
+                this.clone().into(),
+                cx.clone(),
+            ) {
+                log::debug!("{}:remote message received. name:{type_name}", this.name);
+                cx.foreground_executor()
+                    .spawn(async move {
+                        match future.await {
+                            Ok(_) => {
+                                log::debug!(
+                                    "{}:remote message handled. name:{type_name}",
+                                    this.name
+                                );
+                            }
+                            Err(error) => {
+                                log::error!(
+                                    "{}:error handling message. type:{}, error:{:#}",
+                                    this.name,
+                                    type_name,
+                                    format!("{error:#}").lines().fold(
+                                        String::new(),
+                                        |mut message, line| {
+                                            if !message.is_empty() {
+                                                message.push(' ');
+                                            }
+                                            message.push_str(line);
+                                            message
+                                        }
+                                    )
+                                );
+                            }
+                        }
+                    })
+                    .detach()
+            } else {
+                log::error!("{}:unhandled remote message name:{type_name}", this.name);
+                if let Err(e) = AnyProtoClient::from(this.clone()).send_response(
+                    message_id,
+                    anyhow::anyhow!("no handler registered for {type_name}").to_proto(),
+                ) {
+                    log::error!(
+                        "{}:error sending error response for {type_name}:{e:#}",
+                        this.name
+                    );
+                }
+            }
+        }
     }
 
     pub(crate) fn reconnect(
         self: &Arc<Self>,
-        incoming_rx: UnboundedReceiver<Envelope>,
+        mut incoming_rx: UnboundedReceiver<Envelope>,
         outgoing_tx: UnboundedSender<Envelope>,
         cx: &AsyncApp,
-    ) {
+    ) -> oneshot::Receiver<()> {
         *self.outgoing_tx.lock() = outgoing_tx;
-        *self.task.lock() = Self::start_handling_messages(Arc::downgrade(self), incoming_rx, cx);
+        let handshake_id = self.send_handshake();
+        let (connection_ready_tx, connection_ready_rx) = oneshot::channel();
+
+        *self.task.lock() = cx.spawn({
+            let this = Arc::downgrade(self);
+            async move |cx| {
+                let handshake_id = handshake_id?;
+
+                loop {
+                    let Some(incoming) = incoming_rx.next().await else {
+                        return anyhow::Ok(());
+                    };
+                    let Some(this) = this.upgrade() else {
+                        return anyhow::Ok(());
+                    };
+                    if incoming.responding_to == Some(handshake_id)
+                        && matches!(incoming.payload, Some(proto::envelope::Payload::Ack(_)))
+                    {
+                        connection_ready_tx.send(()).ok();
+                        break;
+                    }
+                    Self::handle_message(this, incoming, cx).await;
+                }
+
+                Self::read_messages(this, incoming_rx, handshake_id, cx).await
+            }
+        });
+
+        connection_ready_rx
     }
 
     fn request<T: RequestMessage>(
@@ -1566,26 +1632,26 @@ impl ChannelClient {
         }
     }
 
-    async fn resync(&self, timeout: Duration) -> Result<()> {
-        smol::future::or(
-            async {
-                self.request_internal(proto::FlushBufferedMessages {}, false)
-                    .await?;
+    fn resync(&self, timeout: Duration) -> impl Future<Output = Result<()>> {
+        // Queue the flush before waiting for the handshake, or its ack_id could
+        // cause the server to discard messages we missed while disconnected.
+        let response = self.request_internal(proto::FlushBufferedMessages {}, false);
 
-                for envelope in self.buffer.lock().iter() {
-                    self.outgoing_tx
-                        .lock()
-                        .unbounded_send(envelope.clone())
-                        .ok();
-                }
-                Ok(())
-            },
-            async {
-                self.executor.timer(timeout).await;
-                anyhow::bail!("Timed out resyncing remote client")
-            },
-        )
-        .await
+        async move {
+            response
+                .with_timeout(timeout, &self.executor)
+                .await
+                .context("Timed out resyncing remote client")??;
+
+            for envelope in self.buffer.lock().iter() {
+                self.outgoing_tx
+                    .lock()
+                    .unbounded_send(envelope.clone())
+                    .ok();
+            }
+
+            Ok(())
+        }
     }
 
     async fn ping(&self, timeout: Duration) -> Result<()> {
