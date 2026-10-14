@@ -44,9 +44,9 @@ use node_runtime::{NodeBinaryOptions, NodeRuntime};
 use parking_lot::Mutex;
 use project::{project_settings::ProjectSettings, trusted_worktrees};
 use recent_projects::{RemoteSettings, open_remote_project};
-use release_channel::{AppCommitSha, AppVersion, ReleaseChannel};
 use session::{AppSession, Session};
 use settings::{Settings, SettingsStore, watch_config_file};
+use settings_content::app_metadata::{AppCommitSha, AppVersion};
 use smol::future::poll_once;
 use std::{
     cell::RefCell,
@@ -285,7 +285,6 @@ fn main() {
             zlog::init_output_stdout();
         };
     }
-    ztracing::init();
 
     #[cfg(unix)]
     util::increase_open_file_limit().log_err();
@@ -299,7 +298,6 @@ fn main() {
         let system_specs = system_specs::SystemSpecs::new_stateless(
             app_version,
             app_commit_sha,
-            *release_channel::RELEASE_CHANNEL,
             system_specs::platform::os_name(),
             system_specs::platform::os_version(),
         );
@@ -342,9 +340,7 @@ fn main() {
 
     let (open_listener, mut open_rx) = OpenListener::new();
 
-    let failed_single_instance_check = if *zed_env_vars::ZED_STATELESS
-        || *release_channel::RELEASE_CHANNEL == ReleaseChannel::Dev
-    {
+    let failed_single_instance_check = if *zed_env_vars::ZED_STATELESS || cfg!(debug_assertions) {
         false
     } else {
         #[cfg(any(target_os = "linux", target_os = "freebsd"))]
@@ -386,7 +382,7 @@ fn main() {
                     )
                     .to_string(),
                     binary: "zed".to_string(),
-                    release_channel: release_channel::RELEASE_CHANNEL_NAME.clone(),
+                    release_channel: settings_content::app_metadata::SERVER_RELEASE_NAME.clone(),
                     commit_sha: app_commit_sha
                         .as_ref()
                         .map(|sha| sha.full())
@@ -572,7 +568,6 @@ fn main() {
         zed::move_to_applications::init(cx);
         debugger_ui::init(cx);
         debugger_tools::init(cx);
-        feature_flags::FeatureFlagStore::init(cx);
 
         let session = cx.foreground_executor().block_on(session);
 
@@ -655,7 +650,6 @@ fn main() {
 
         title_bar::init(cx);
         git_ui::init(cx);
-        feedback::init(cx);
         markdown_preview::init(cx);
         tabular_data_preview::init(cx);
         svg_preview::init(cx);

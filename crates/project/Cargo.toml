@@ -73,7 +73,7 @@ postage.workspace = true
 prettier.workspace = true
 rand.workspace = true
 regex.workspace = true
-release_channel.workspace = true
+settings_content.workspace = true
 remote.workspace = true
 rpc.workspace = true
 schemars.workspace = true
@@ -102,7 +102,6 @@ which.workspace = true
 worktree.workspace = true
 zeroize.workspace = true
 zlog.workspace = true
-ztracing.workspace = true
 
 [dev-dependencies]
 collections = { workspace = true, features = ["test-support"] }

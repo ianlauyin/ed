@@ -164,8 +164,10 @@ pub(crate) fn commit_context_menu(
                             .icon_color(Color::Muted)
                             .icon_position(IconPosition::End)
                             .handler(|_window, cx| {
-                                let docs_url =
-                                    release_channel::docs_url(CUSTOM_GIT_COMMANDS_DOCS_SLUG, cx);
+                                let docs_url = settings_content::app_metadata::docs_url(
+                                    CUSTOM_GIT_COMMANDS_DOCS_SLUG,
+                                    cx,
+                                );
                                 cx.open_url(&docs_url);
                             }),
                     );

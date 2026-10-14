@@ -127,7 +127,6 @@ impl FoldPoint {
         &mut self.0.column
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn to_inlay_point(self, snapshot: &FoldSnapshot) -> InlayPoint {
         let (start, _, _) = snapshot
             .transforms
@@ -136,7 +135,6 @@ impl FoldPoint {
         InlayPoint(start.1.0 + overshoot)
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn to_offset(self, snapshot: &FoldSnapshot) -> FoldOffset {
         let (start, _, item) = snapshot
             .transforms
@@ -168,7 +166,6 @@ impl<'a> sum_tree::Dimension<'a, TransformSummary> for FoldPoint {
 pub(crate) struct FoldMapWriter<'a>(&'a mut FoldMap);
 
 impl FoldMapWriter<'_> {
-    #[ztracing::instrument(skip_all)]
     pub(crate) fn fold<T: ToOffset>(
         &mut self,
         ranges: impl IntoIterator<Item = (Range<T>, FoldPlaceholder)>,
@@ -235,7 +232,7 @@ impl FoldMapWriter<'_> {
     }
 
     /// Removes any folds with the given ranges.
-    #[ztracing::instrument(skip_all)]
+
     pub(crate) fn remove_folds<T: ToOffset>(
         &mut self,
         ranges: impl IntoIterator<Item = Range<T>>,
@@ -249,7 +246,7 @@ impl FoldMapWriter<'_> {
     }
 
     /// Removes any folds whose ranges intersect the given ranges.
-    #[ztracing::instrument(skip_all)]
+
     pub(crate) fn unfold_intersecting<T: ToOffset>(
         &mut self,
         ranges: impl IntoIterator<Item = Range<T>>,
@@ -260,7 +257,7 @@ impl FoldMapWriter<'_> {
 
     /// Removes any folds that intersect the given ranges and for which the given predicate
     /// returns true.
-    #[ztracing::instrument(skip_all)]
+
     fn remove_folds_with<T: ToOffset>(
         &mut self,
         ranges: impl IntoIterator<Item = Range<T>>,
@@ -313,7 +310,6 @@ impl FoldMapWriter<'_> {
         (self.0.snapshot.clone(), edits)
     }
 
-    #[ztracing::instrument(skip_all)]
     pub(crate) fn update_fold_widths(
         &mut self,
         new_widths: impl IntoIterator<Item = (ChunkRendererId, Pixels)>,
@@ -363,7 +359,6 @@ pub struct FoldMap {
 }
 
 impl FoldMap {
-    #[ztracing::instrument(skip_all)]
     pub fn new(inlay_snapshot: InlaySnapshot) -> (Self, FoldSnapshot) {
         let this = Self {
             snapshot: FoldSnapshot {
@@ -388,7 +383,6 @@ impl FoldMap {
         (this, snapshot)
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn read(
         &mut self,
         inlay_snapshot: InlaySnapshot,
@@ -399,7 +393,6 @@ impl FoldMap {
         (self.snapshot.clone(), edits)
     }
 
-    #[ztracing::instrument(skip_all)]
     pub(crate) fn write(
         &mut self,
         inlay_snapshot: InlaySnapshot,
@@ -409,7 +402,6 @@ impl FoldMap {
         (FoldMapWriter(self), snapshot, edits)
     }
 
-    #[ztracing::instrument(skip_all)]
     fn check_invariants(&self) {
         #[cfg(test)]
         {
@@ -452,7 +444,6 @@ impl FoldMap {
         }
     }
 
-    #[ztracing::instrument(skip_all)]
     fn sync(
         &mut self,
         inlay_snapshot: InlaySnapshot,
@@ -775,7 +766,6 @@ impl FoldSnapshot {
         item.is_some_and(|transform| transform.placeholder.is_some())
     }
 
-    #[ztracing::instrument(skip_all)]
     fn fold_width(&self, fold_id: &FoldId) -> Option<Pixels> {
         self.fold_metadata_by_id.get(fold_id)?.width
     }
@@ -804,7 +794,6 @@ impl FoldSnapshot {
         !self.folds.is_empty()
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn text_summary_for_range(&self, range: Range<FoldPoint>) -> MBTextSummary {
         let mut summary = MBTextSummary::default();
 
@@ -859,7 +848,6 @@ impl FoldSnapshot {
         summary
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn to_fold_point(&self, point: InlayPoint, bias: Bias) -> FoldPoint {
         let (start, end, item) = self
             .transforms
@@ -876,7 +864,6 @@ impl FoldSnapshot {
         }
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn fold_point_cursor(&self) -> FoldPointCursor<'_> {
         let cursor = self
             .transforms
@@ -884,12 +871,10 @@ impl FoldSnapshot {
         FoldPointCursor { cursor }
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn len(&self) -> FoldOffset {
         FoldOffset(self.transforms.summary().output.len)
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn line_len(&self, row: u32) -> u32 {
         let line_start = FoldPoint::new(row, 0).to_offset(self).0;
         let line_end = if row >= self.max_point().row() {
@@ -900,7 +885,6 @@ impl FoldSnapshot {
         (line_end - line_start) as u32
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn row_infos(&self, start_row: u32) -> FoldRows<'_> {
         if start_row > self.transforms.summary().output.lines.row {
             panic!("invalid display row {}", start_row);
@@ -923,7 +907,6 @@ impl FoldSnapshot {
         }
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn max_point(&self) -> FoldPoint {
         FoldPoint(self.transforms.summary().output.lines)
     }
@@ -933,7 +916,6 @@ impl FoldSnapshot {
         self.transforms.summary().output.longest_row
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn folds_in_range<T>(&self, range: Range<T>) -> impl Iterator<Item = &Fold>
     where
         T: ToOffset,
@@ -948,7 +930,6 @@ impl FoldSnapshot {
         })
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn intersects_fold<T>(&self, offset: T) -> bool
     where
         T: ToOffset,
@@ -958,7 +939,6 @@ impl FoldSnapshot {
         self.is_inlay_offset_folded(inlay_offset)
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn is_line_folded(&self, buffer_row: MultiBufferRow) -> bool {
         let mut inlay_point = self
             .inlay_snapshot
@@ -995,7 +975,6 @@ impl FoldSnapshot {
             .map(|_| start..end)
     }
 
-    #[ztracing::instrument(skip_all)]
     pub(crate) fn chunks<'a>(
         &'a self,
         range: Range<FoldOffset>,
@@ -1040,7 +1019,6 @@ impl FoldSnapshot {
         }
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn chars_at(&self, start: FoldPoint) -> impl '_ + Iterator<Item = char> {
         self.chunks(
             start.to_offset(self)..self.len(),
@@ -1053,7 +1031,6 @@ impl FoldSnapshot {
         .flat_map(|chunk| chunk.text.chars())
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn chunks_at(&self, start: FoldPoint) -> FoldChunks<'_> {
         self.chunks(
             start.to_offset(self)..self.len(),
@@ -1066,7 +1043,7 @@ impl FoldSnapshot {
     }
 
     #[cfg(test)]
-    #[ztracing::instrument(skip_all)]
+
     pub fn clip_offset(&self, offset: FoldOffset, bias: Bias) -> FoldOffset {
         if offset > self.len() {
             self.len()
@@ -1075,7 +1052,6 @@ impl FoldSnapshot {
         }
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn clip_point(&self, point: FoldPoint, bias: Bias) -> FoldPoint {
         let (start, end, item) = self
             .transforms
@@ -1110,7 +1086,6 @@ impl FoldPointCursor<'_> {
         self.cursor.reset();
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn map(&mut self, point: InlayPoint, bias: Bias) -> FoldPoint {
         let cursor = &mut self.cursor;
         if cursor.did_seek() {
@@ -1445,7 +1420,6 @@ pub struct FoldRows<'a> {
 }
 
 impl FoldRows<'_> {
-    #[ztracing::instrument(skip_all)]
     pub(crate) fn seek(&mut self, row: u32) {
         let fold_point = FoldPoint::new(row, 0);
         self.cursor.seek(&fold_point, Bias::Left);
@@ -1459,7 +1433,6 @@ impl FoldRows<'_> {
 impl Iterator for FoldRows<'_> {
     type Item = RowInfo;
 
-    #[ztracing::instrument(skip_all)]
     fn next(&mut self) -> Option<Self::Item> {
         let mut traversed_fold = false;
         while self.fold_point > self.cursor.end().0 {
@@ -1573,7 +1546,6 @@ pub struct FoldChunks<'a> {
 }
 
 impl FoldChunks<'_> {
-    #[ztracing::instrument(skip_all)]
     pub(crate) fn seek(&mut self, range: Range<FoldOffset>) {
         self.transform_cursor.seek(&range.start, Bias::Right);
 
@@ -1608,7 +1580,6 @@ impl FoldChunks<'_> {
 impl<'a> Iterator for FoldChunks<'a> {
     type Item = Chunk<'a>;
 
-    #[ztracing::instrument(skip_all)]
     fn next(&mut self) -> Option<Self::Item> {
         if self.output_offset >= self.max_output_offset {
             return None;
@@ -1710,7 +1681,6 @@ impl<'a> Iterator for FoldChunks<'a> {
 pub struct FoldOffset(pub MultiBufferOffset);
 
 impl FoldOffset {
-    #[ztracing::instrument(skip_all)]
     pub fn to_point(self, snapshot: &FoldSnapshot) -> FoldPoint {
         let (start, _, item) = snapshot
             .transforms
@@ -1726,7 +1696,7 @@ impl FoldOffset {
     }
 
     #[cfg(test)]
-    #[ztracing::instrument(skip_all)]
+
     pub fn to_inlay_offset(self, snapshot: &FoldSnapshot) -> InlayOffset {
         let (start, _, _) = snapshot
             .transforms

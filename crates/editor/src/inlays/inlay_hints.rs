@@ -7025,7 +7025,7 @@ let c = 3;"#
             let settings_store = SettingsStore::test(cx);
             cx.set_global(settings_store);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
-            release_channel::init(semver::Version::new(0, 0, 0), cx);
+            settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
             crate::init(cx);
         });
 

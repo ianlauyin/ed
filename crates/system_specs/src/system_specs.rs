@@ -2,9 +2,9 @@ pub mod platform;
 pub use gpui::GpuSpecs;
 use gpui::{App, AppContext as _, Task, Window, actions};
 use human_bytes::human_bytes;
-use release_channel::{AppCommitSha, AppVersion, ReleaseChannel};
 use semver::Version;
 use serde::Serialize;
+use settings_content::app_metadata::{AppCommitSha, AppVersion};
 use std::{env, fmt::Display};
 use sysinfo::{MemoryRefreshKind, RefreshKind, System};
 
@@ -19,7 +19,6 @@ actions!(
 #[derive(Clone, Debug, Serialize)]
 pub struct SystemSpecs {
     app_version: String,
-    release_channel: &'static str,
     os_name: String,
     os_version: String,
     memory: u64,
@@ -37,18 +36,12 @@ impl SystemSpecs {
         os_version: String,
     ) -> Task<Self> {
         let app_version = AppVersion::global(cx).to_string();
-        let release_channel = ReleaseChannel::global(cx);
         let system = System::new_with_specifics(
             RefreshKind::nothing().with_memory(MemoryRefreshKind::everything()),
         );
         let memory = system.total_memory();
         let architecture = env::consts::ARCH;
-        let commit_sha = match release_channel {
-            ReleaseChannel::Dev | ReleaseChannel::Nightly => {
-                AppCommitSha::try_global(cx).map(|sha| sha.full())
-            }
-            _ => None,
-        };
+        let commit_sha = AppCommitSha::try_global(cx).map(|sha| sha.full());
         let bundle_type = bundle_type();
 
         let gpu_specs = window.gpu_specs().map(|specs| {
@@ -61,7 +54,6 @@ impl SystemSpecs {
         cx.background_spawn(async move {
             SystemSpecs {
                 app_version,
-                release_channel: release_channel.display_name(),
                 bundle_type,
                 os_name,
                 os_version,
@@ -76,7 +68,6 @@ impl SystemSpecs {
     pub fn new_stateless(
         app_version: Version,
         app_commit_sha: Option<AppCommitSha>,
-        release_channel: ReleaseChannel,
         os_name: String,
         os_version: String,
     ) -> Self {
@@ -85,15 +76,11 @@ impl SystemSpecs {
         );
         let memory = system.total_memory();
         let architecture = env::consts::ARCH;
-        let commit_sha = match release_channel {
-            ReleaseChannel::Dev | ReleaseChannel::Nightly => app_commit_sha.map(|sha| sha.full()),
-            _ => None,
-        };
+        let commit_sha = app_commit_sha.map(|sha| sha.full());
         let bundle_type = bundle_type();
 
         Self {
             app_version: app_version.to_string(),
-            release_channel: release_channel.display_name(),
             os_name,
             os_version,
             memory,
@@ -112,8 +99,8 @@ impl Display for SystemSpecs {
             "Zed: v{} ({}) {}{}",
             self.app_version,
             match &self.commit_sha {
-                Some(commit_sha) => format!("{} {}", self.release_channel, commit_sha),
-                None => self.release_channel.to_string(),
+                Some(commit_sha) => commit_sha.to_string(),
+                None => String::new(),
             },
             if let Some(bundle_type) = &self.bundle_type {
                 format!("({bundle_type})")

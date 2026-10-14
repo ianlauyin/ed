@@ -32,8 +32,9 @@ fn main() {
 
         cx.on_action(quit);
         cx.bind_keys([KeyBinding::new("cmd-q", Quit, None)]);
-        let version = release_channel::AppVersion::load(env!("CARGO_PKG_VERSION"), None, None);
-        release_channel::init(version, cx);
+        let version =
+            settings_content::app_metadata::AppVersion::load(env!("CARGO_PKG_VERSION"), None, None);
+        settings_content::app_metadata::init(version, cx);
         cx.set_global(db::AppDatabase::new());
         Assets
             .load_fonts(cx)

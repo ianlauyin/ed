@@ -15,10 +15,10 @@ use futures::{
 use gpui::{App, AppContext as _, AsyncApp, Task};
 use parking_lot::Mutex;
 use paths::remote_server_dir_relative;
-use release_channel::{AppVersion, ReleaseChannel};
 use rpc::proto::Envelope;
 use semver::Version;
 pub use settings_content::SshPortForwardOption;
+use settings_content::app_metadata::{AppVersion, ServerRelease};
 use smol::fs;
 use std::{
     fmt::Write as _,
@@ -1002,7 +1002,7 @@ impl SshRemoteConnection {
         };
 
         let (release_channel, version) =
-            cx.update(|cx| (ReleaseChannel::global(cx), AppVersion::global(cx)));
+            cx.update(|cx| (ServerRelease::global(cx), AppVersion::global(cx)));
         this.remote_binary_path = Some(
             this.ensure_server_binary(&delegate, release_channel, version, cx)
                 .await?,
@@ -1014,12 +1014,12 @@ impl SshRemoteConnection {
     async fn ensure_server_binary(
         &self,
         delegate: &Arc<dyn RemoteClientDelegate>,
-        release_channel: ReleaseChannel,
+        release_channel: ServerRelease,
         version: Version,
         cx: &mut AsyncApp,
     ) -> Result<Arc<RelPath>> {
         let version_str = match release_channel {
-            ReleaseChannel::Dev => "build".to_string(),
+            ServerRelease::Dev => "build".to_string(),
             _ => version.to_string(),
         };
         let binary_name = format!(
@@ -1075,8 +1075,8 @@ impl SshRemoteConnection {
         }
 
         let wanted_version = cx.update(|cx| match release_channel {
-            ReleaseChannel::Nightly => Ok(None),
-            ReleaseChannel::Dev => {
+            ServerRelease::Nightly => Ok(None),
+            ServerRelease::Dev => {
                 anyhow::bail!(
                     "ZED_BUILD_REMOTE_SERVER is not set and no remote server exists at ({:?})",
                     dst_path

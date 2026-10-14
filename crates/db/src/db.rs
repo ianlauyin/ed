@@ -13,8 +13,6 @@ pub use sqlez;
 pub use sqlez_macros;
 pub use uuid;
 
-pub use release_channel::RELEASE_CHANNEL;
-use release_channel::ReleaseChannel;
 use sqlez::domain::Migrator;
 use sqlez::thread_safe_connection::ThreadSafeConnection;
 use sqlez_macros::sql;
@@ -62,7 +60,7 @@ impl AppDatabase {
     /// migrations in dependency order.
     pub fn new() -> Self {
         let db_dir = database_dir();
-        let connection = gpui::block_on(open_db::<AppMigrator>(db_dir, *RELEASE_CHANNEL));
+        let connection = gpui::block_on(open_db::<AppMigrator>(db_dir, AppDbScope));
         Self(connection)
     }
 
@@ -144,9 +142,12 @@ pub trait DbScope {
     fn scope_name(&self) -> &str;
 }
 
-impl DbScope for ReleaseChannel {
+/// Application database scope, preserving this fork's existing data directory.
+pub struct AppDbScope;
+
+impl DbScope for AppDbScope {
     fn scope_name(&self) -> &str {
-        self.dev_name()
+        "dev"
     }
 }
 
@@ -294,6 +295,7 @@ where
 
 #[cfg(test)]
 mod tests {
+    use crate::AppDbScope;
     use std::thread;
 
     use sqlez::domain::Domain;
@@ -320,7 +322,7 @@ mod tests {
             .prefix("DbTests")
             .tempdir()
             .unwrap();
-        let _bad_db = open_db::<BadDB>(tempdir.path(), release_channel::ReleaseChannel::Dev).await;
+        let _bad_db = open_db::<BadDB>(tempdir.path(), AppDbScope).await;
     }
 
     /// Test that DB exists but corrupted (causing recreate)
@@ -347,12 +349,11 @@ mod tests {
             .tempdir()
             .unwrap();
         {
-            let corrupt_db =
-                open_db::<CorruptedDB>(tempdir.path(), release_channel::ReleaseChannel::Dev).await;
+            let corrupt_db = open_db::<CorruptedDB>(tempdir.path(), AppDbScope).await;
             assert!(corrupt_db.persistent());
         }
 
-        let good_db = open_db::<GoodDB>(tempdir.path(), release_channel::ReleaseChannel::Dev).await;
+        let good_db = open_db::<GoodDB>(tempdir.path(), AppDbScope).await;
         assert!(
             good_db.select_row::<usize>("SELECT * FROM test2").unwrap()()
                 .unwrap()
@@ -386,8 +387,7 @@ mod tests {
             .unwrap();
         {
             // Setup the bad database
-            let corrupt_db =
-                open_db::<CorruptedDB>(tempdir.path(), release_channel::ReleaseChannel::Dev).await;
+            let corrupt_db = open_db::<CorruptedDB>(tempdir.path(), AppDbScope).await;
             assert!(corrupt_db.persistent());
         }
 
@@ -396,10 +396,7 @@ mod tests {
         for _ in 0..10 {
             let tmp_path = tempdir.path().to_path_buf();
             let guard = thread::spawn(move || {
-                let good_db = gpui::block_on(open_db::<GoodDB>(
-                    tmp_path.as_path(),
-                    release_channel::ReleaseChannel::Dev,
-                ));
+                let good_db = gpui::block_on(open_db::<GoodDB>(tmp_path.as_path(), AppDbScope));
                 assert!(
                     good_db.select_row::<usize>("SELECT * FROM test2").unwrap()()
                         .unwrap()

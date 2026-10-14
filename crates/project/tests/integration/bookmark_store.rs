@@ -15,7 +15,7 @@ mod integration {
         cx.update(|cx| {
             let settings_store = settings::SettingsStore::test(cx);
             cx.set_global(settings_store);
-            release_channel::init(semver::Version::new(0, 0, 0), cx);
+            settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         });
     }
 

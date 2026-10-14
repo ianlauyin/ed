@@ -31,12 +31,12 @@ use gpui::{
 };
 use parking_lot::Mutex;
 
-use release_channel::ReleaseChannel;
 use rpc::{
     AnyProtoClient, ErrorExt, ProtoClient, ProtoMessageHandlerSet, RpcError,
     proto::{self, Envelope, EnvelopedMessage, PeerId, RequestMessage, build_typed_envelope},
 };
 use semver::Version;
+use settings_content::app_metadata::ServerRelease;
 use std::{
     collections::VecDeque,
     fmt,
@@ -142,14 +142,14 @@ pub trait RemoteClientDelegate: Send + Sync {
     fn get_download_url(
         &self,
         platform: RemotePlatform,
-        release_channel: ReleaseChannel,
+        release_channel: ServerRelease,
         version: Option<Version>,
         cx: &mut AsyncApp,
     ) -> Task<Result<Option<String>>>;
     fn download_server_binary_locally(
         &self,
         platform: RemotePlatform,
-        release_channel: ReleaseChannel,
+        release_channel: ServerRelease,
         version: Option<Version>,
         cx: &mut AsyncApp,
     ) -> Task<Result<PathBuf>>;
@@ -364,8 +364,8 @@ impl ConnectionIdentifier {
     //   https://unix.stackexchange.com/questions/367008/why-is-socket-path-length-limited-to-a-hundred-chars
     // So our strings should be at most 20 characters or so.
     fn to_string(&self, cx: &App) -> String {
-        let identifier_prefix = match ReleaseChannel::global(cx) {
-            ReleaseChannel::Stable => "".to_string(),
+        let identifier_prefix = match ServerRelease::global(cx) {
+            ServerRelease::Stable => "".to_string(),
             release_channel => format!("{}-", release_channel.dev_name()),
         };
         match self {

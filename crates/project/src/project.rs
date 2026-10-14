@@ -2459,7 +2459,6 @@ impl Project {
         })
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn open_buffer(
         &mut self,
         path: impl Into<ProjectPath>,
@@ -2514,7 +2513,7 @@ impl Project {
 
     /// Opens the staged (HEAD-vs-index) diff for the given buffer, along with
     /// the index text buffer that is the diff's main buffer.
-    #[ztracing::instrument(skip_all)]
+
     pub fn open_staged_diff(
         &mut self,
         buffer: Entity<Buffer>,
@@ -2527,7 +2526,6 @@ impl Project {
             .update(cx, |git_store, cx| git_store.open_staged_diff(buffer, cx))
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn open_uncommitted_diff(
         &mut self,
         buffer: Entity<Buffer>,

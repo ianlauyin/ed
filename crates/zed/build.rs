@@ -205,7 +205,6 @@ fn main() {
             }
         }
 
-        println!("cargo:rerun-if-env-changed=RELEASE_CHANNEL");
         println!("cargo:rerun-if-env-changed=GITHUB_RUN_NUMBER");
 
         #[cfg(windows)]
@@ -222,19 +221,7 @@ fn main() {
 fn icon_path() -> std::path::PathBuf {
     use std::str::FromStr;
 
-    let release_channel = option_env!("RELEASE_CHANNEL").unwrap_or("dev");
-    let channel = match release_channel {
-        "stable" => "",
-        "preview" => "-preview",
-        "nightly" => "-nightly",
-        "dev" => "-dev",
-        _ => "-dev",
-    };
-
-    #[cfg(windows)]
-    let icon = format!("resources/windows/app-icon{}.ico", channel);
-    #[cfg(not(windows))]
-    let icon = format!("resources/app-icon{}.png", channel);
+    let icon = "resources/app-icon.png";
 
     std::path::PathBuf::from_str(&icon).unwrap()
 }
@@ -257,6 +244,5 @@ fn prepare_app_icon_x11() {
     let icon_out_path = Path::new(&out_dir).join("app_icon.png");
     resized_image.save(&icon_out_path).expect("saving app icon");
 
-    println!("cargo:rerun-if-env-changed=RELEASE_CHANNEL");
     println!("cargo:rerun-if-changed={}", icon_path().to_string_lossy());
 }

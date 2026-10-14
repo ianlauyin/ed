@@ -9,10 +9,10 @@ use gpui::{
     ParentElement as _, Render, SharedString, Task, TextStyleRefinement, WeakEntity,
 };
 use markdown::{Markdown, MarkdownElement, MarkdownStyle};
-use release_channel::ReleaseChannel;
 use remote::{ConnectionIdentifier, RemoteClient, RemoteConnectionOptions, RemotePlatform};
 use semver::Version;
 use settings::Settings;
+use settings_content::app_metadata::ServerRelease;
 use theme_settings::ThemeSettings;
 use ui::{
     ActiveTheme, CommonAnimationExt, Context, InteractiveElement, KeyBinding, ListItem, Tooltip,
@@ -488,7 +488,7 @@ impl remote::RemoteClientDelegate for RemoteClientDelegate {
     fn download_server_binary_locally(
         &self,
         platform: RemotePlatform,
-        release_channel: ReleaseChannel,
+        release_channel: ServerRelease,
         version: Option<Version>,
         cx: &mut AsyncApp,
     ) -> Task<anyhow::Result<PathBuf>> {
@@ -520,7 +520,7 @@ impl remote::RemoteClientDelegate for RemoteClientDelegate {
     fn get_download_url(
         &self,
         platform: RemotePlatform,
-        release_channel: ReleaseChannel,
+        release_channel: ServerRelease,
         version: Option<Version>,
         cx: &mut AsyncApp,
     ) -> Task<Result<Option<String>>> {
@@ -655,7 +655,7 @@ impl remote::RemoteClientDelegate for BackgroundRemoteClientDelegate {
     fn download_server_binary_locally(
         &self,
         platform: RemotePlatform,
-        release_channel: ReleaseChannel,
+        release_channel: ServerRelease,
         version: Option<Version>,
         cx: &mut AsyncApp,
     ) -> Task<anyhow::Result<PathBuf>> {
@@ -686,7 +686,7 @@ impl remote::RemoteClientDelegate for BackgroundRemoteClientDelegate {
     fn get_download_url(
         &self,
         platform: RemotePlatform,
-        release_channel: ReleaseChannel,
+        release_channel: ServerRelease,
         version: Option<Version>,
         cx: &mut AsyncApp,
     ) -> Task<Result<Option<String>>> {

@@ -1151,7 +1151,6 @@ dependencies = [
  "unindent",
  "util",
  "zlog",
- "ztracing",
 ]
 
 [[package]]
@@ -1556,9 +1555,9 @@ dependencies = [
  "paths",
  "plist",
  "rayon",
- "release_channel",
  "serde",
  "serde_json",
+ "settings_content",
  "tempfile",
  "util",
  "walkdir",
@@ -1785,10 +1784,10 @@ dependencies = [
  "node_runtime",
  "notifications",
  "project",
- "release_channel",
  "reqwest_client",
  "session",
  "settings",
+ "settings_content",
  "theme",
  "theme_settings",
  "ui",
@@ -2458,7 +2457,6 @@ dependencies = [
  "inventory",
  "log",
  "paths",
- "release_channel",
  "sqlez",
  "sqlez_macros",
  "tempfile",
@@ -2529,7 +2527,6 @@ dependencies = [
  "db",
  "debugger_tools",
  "editor",
- "feature_flags",
  "file_icons",
  "futures 0.3.34",
  "fuzzy",
@@ -2952,7 +2949,6 @@ dependencies = [
  "dap",
  "db",
  "emojis",
- "feature_flags",
  "file_icons",
  "fs",
  "futures 0.3.34",
@@ -2979,7 +2975,6 @@ dependencies = [
  "proptest-derive",
  "rand 0.9.4",
  "regex",
- "release_channel",
  "rope",
  "rpc",
  "schemars",
@@ -2987,6 +2982,7 @@ dependencies = [
  "serde",
  "serde_json",
  "settings",
+ "settings_content",
  "smallvec",
  "snippet",
  "sum_tree",
@@ -3017,7 +3013,6 @@ dependencies = [
  "workspace",
  "zed_actions",
  "zlog",
- "ztracing",
 ]
 
 [[package]]
@@ -3031,9 +3026,9 @@ dependencies = [
  "language",
  "multi_buffer",
  "project",
- "release_channel",
  "semver",
  "settings",
+ "settings_content",
  "theme",
  "workspace",
 ]
@@ -3412,7 +3407,6 @@ dependencies = [
  "wasm-encoder 0.254.0",
  "wasmparser 0.254.0",
  "which",
- "ztracing",
 ]
 
 [[package]]
@@ -3487,41 +3481,6 @@ name = "fearless_simd"
 version = "0.4.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b97b65636e5b9ef369943878ac74335ba1c55c1cb6adbf1e2c293c624248d693"
-
-[[package]]
-name = "feature_flags"
-version = "0.1.0"
-dependencies = [
- "collections",
- "feature_flags_macros",
- "fs",
- "gpui",
- "inventory",
- "schemars",
- "serde_json",
- "settings",
-]
-
-[[package]]
-name = "feature_flags_macros"
-version = "0.1.0"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
-
-[[package]]
-name = "feedback"
-version = "0.1.0"
-dependencies = [
- "gpui",
- "system_specs",
- "urlencoding",
- "util",
- "workspace",
- "zed_actions",
-]
 
 [[package]]
 name = "file_content"
@@ -3998,21 +3957,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "generator"
-version = "0.8.9"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b3b854b0e584ead1a33f18b2fcad7cf7be18b3875c78816b753639aa501513ae"
-dependencies = [
- "cc",
- "cfg-if",
- "libc",
- "log",
- "rustversion",
- "windows-link 0.2.1",
- "windows-result 0.4.1",
-]
-
-[[package]]
 name = "generic-array"
 version = "0.14.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4153,7 +4097,6 @@ dependencies = [
  "urlencoding",
  "util",
  "uuid",
- "ztracing",
 ]
 
 [[package]]
@@ -4212,13 +4155,13 @@ dependencies = [
  "pretty_assertions",
  "project",
  "rand 0.9.4",
- "release_channel",
  "remote_connection",
  "schemars",
  "search",
  "serde",
  "serde_json",
  "settings",
+ "settings_content",
  "smallvec",
  "strum",
  "sysinfo 0.39.6",
@@ -4238,7 +4181,6 @@ dependencies = [
  "workspace",
  "zed_actions",
  "zlog",
- "ztracing",
 ]
 
 [[package]]
@@ -4281,7 +4223,6 @@ dependencies = [
  "zed_actions",
  "zeroize",
  "zlog",
- "ztracing",
 ]
 
 [[package]]
@@ -5637,7 +5578,7 @@ dependencies = [
  "anyhow",
  "gpui",
  "log",
- "release_channel",
+ "settings_content",
  "smol",
  "util",
  "workspace",
@@ -5917,7 +5858,6 @@ dependencies = [
  "collections",
  "dap",
  "extension",
- "feature_flags",
  "fs",
  "gpui",
  "language",
@@ -6201,7 +6141,6 @@ dependencies = [
  "util",
  "watch",
  "zlog",
- "ztracing",
 ]
 
 [[package]]
@@ -6254,7 +6193,6 @@ dependencies = [
  "serde_json",
  "tracing",
  "util",
- "ztracing",
 ]
 
 [[package]]
@@ -6306,11 +6244,11 @@ dependencies = [
  "path",
  "project",
  "proto",
- "release_channel",
  "rpc",
  "semver",
  "serde_json",
  "settings",
+ "settings_content",
  "sysinfo 0.39.6",
  "theme",
  "theme_settings",
@@ -6668,19 +6606,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "loom"
-version = "0.7.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "419e0dc8046cb947daa77eb95ae174acfbddb7673b4151f56d1eed8e93fbfaca"
-dependencies = [
- "cfg-if",
- "generator",
- "scoped-tls",
- "tracing",
- "tracing-subscriber",
-]
-
-[[package]]
 name = "loop9"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6721,11 +6646,11 @@ dependencies = [
  "lsp-types",
  "parking_lot",
  "postage",
- "release_channel",
  "schemars",
  "semver",
  "serde",
  "serde_json",
+ "settings_content",
  "util",
  "zlog",
 ]
@@ -7102,7 +7027,6 @@ dependencies = [
  "serde_json",
  "tracing",
  "usvg",
- "ztracing",
 ]
 
 [[package]]
@@ -7421,7 +7345,6 @@ dependencies = [
  "unicode-segmentation",
  "util",
  "zlog",
- "ztracing",
 ]
 
 [[package]]
@@ -9755,7 +9678,6 @@ dependencies = [
  "project",
  "rand 0.9.4",
  "regex",
- "release_channel",
  "remote",
  "rpc",
  "schemars",
@@ -9763,6 +9685,7 @@ dependencies = [
  "serde",
  "serde_json",
  "settings",
+ "settings_content",
  "sha2",
  "shellexpand",
  "smallvec",
@@ -9785,7 +9708,6 @@ dependencies = [
  "worktree",
  "zeroize",
  "zlog",
- "ztracing",
 ]
 
 [[package]]
@@ -9802,11 +9724,11 @@ dependencies = [
  "language",
  "node_runtime",
  "project",
- "release_channel",
  "remote",
  "rpassword",
  "semver",
  "settings",
+ "settings_content",
  "watch",
 ]
 
@@ -9867,10 +9789,10 @@ dependencies = [
  "picker",
  "picker_preview",
  "project",
- "release_channel",
  "semver",
  "serde_json",
  "settings",
+ "settings_content",
  "theme",
  "theme_settings",
  "util",
@@ -10459,7 +10381,6 @@ dependencies = [
  "paths",
  "picker",
  "project",
- "release_channel",
  "remote",
  "remote_connection",
  "remote_server",
@@ -10467,6 +10388,7 @@ dependencies = [
  "semver",
  "serde_json",
  "settings",
+ "settings_content",
  "ui",
  "util",
  "windows-registry 0.6.1",
@@ -10578,14 +10500,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6f6ff9a378485b298a5286656da665ba74413d36db0979633275d2e708145d4"
 
 [[package]]
-name = "release_channel"
-version = "0.1.0"
-dependencies = [
- "gpui",
- "semver",
-]
-
-[[package]]
 name = "remote"
 version = "0.1.0"
 dependencies = [
@@ -10600,7 +10514,6 @@ dependencies = [
  "log",
  "parking_lot",
  "paths",
- "release_channel",
  "rpc",
  "schemars",
  "semver",
@@ -10630,12 +10543,12 @@ dependencies = [
  "markdown",
  "menu",
  "paths",
- "release_channel",
  "remote",
  "semver",
  "serde",
  "serde_json",
  "settings",
+ "settings_content",
  "smol",
  "tempfile",
  "theme",
@@ -10684,7 +10597,6 @@ dependencies = [
  "project",
  "proto",
  "rayon",
- "release_channel",
  "remote",
  "reqwest_client",
  "rpc",
@@ -10692,6 +10604,7 @@ dependencies = [
  "semver",
  "serde_json",
  "settings",
+ "settings_content",
  "shellexpand",
  "smol",
  "sysinfo 0.39.6",
@@ -10730,7 +10643,6 @@ dependencies = [
  "collections",
  "command_palette_hooks",
  "editor",
- "feature_flags",
  "file_icons",
  "futures 0.3.34",
  "gpui",
@@ -10886,7 +10798,6 @@ dependencies = [
  "unicode-segmentation",
  "util",
  "zlog",
- "ztracing",
 ]
 
 [[package]]
@@ -11403,7 +11314,6 @@ dependencies = [
  "util_macros",
  "workspace",
  "zed_actions",
- "ztracing",
 ]
 
 [[package]]
@@ -11675,7 +11585,6 @@ dependencies = [
  "migrator",
  "paths",
  "pretty_assertions",
- "release_channel",
  "schemars",
  "serde",
  "serde_json",
@@ -11699,6 +11608,7 @@ dependencies = [
  "gpui",
  "log",
  "schemars",
+ "semver",
  "serde",
  "serde_json",
  "serde_json_lenient",
@@ -11761,7 +11671,6 @@ dependencies = [
  "cpal",
  "editor",
  "extension",
- "feature_flags",
  "fs",
  "futures 0.3.34",
  "fuzzy",
@@ -11778,7 +11687,6 @@ dependencies = [
  "pretty_assertions",
  "project",
  "regex",
- "release_channel",
  "rodio",
  "schemars",
  "search",
@@ -11786,6 +11694,7 @@ dependencies = [
  "serde_json",
  "serde_yaml_ng",
  "settings",
+ "settings_content",
  "strum",
  "theme",
  "theme_settings",
@@ -12331,7 +12240,6 @@ dependencies = [
  "rayon",
  "tracing",
  "zlog",
- "ztracing",
 ]
 
 [[package]]
@@ -12643,9 +12551,9 @@ dependencies = [
  "objc2-foundation 0.3.2",
  "pciid-parser",
  "regex",
- "release_channel",
  "semver",
  "serde",
+ "settings_content",
  "sysinfo 0.39.6",
  "util",
  "windows 0.62.2",
@@ -12848,10 +12756,10 @@ dependencies = [
  "percent-encoding",
  "rand 0.9.4",
  "regex",
- "release_channel",
  "schemars",
  "serde",
  "settings",
+ "settings_content",
  "sysinfo 0.39.6",
  "task",
  "theme",
@@ -12895,7 +12803,6 @@ dependencies = [
  "pretty_assertions",
  "project",
  "regex",
- "release_channel",
  "remote",
  "rpc",
  "schemars",
@@ -12903,6 +12810,7 @@ dependencies = [
  "serde",
  "serde_json",
  "settings",
+ "settings_content",
  "shellexpand",
  "shlex 2.0.1",
  "task",
@@ -13561,38 +13469,6 @@ dependencies = [
  "tracing-core",
  "tracing-log",
  "tracing-serde",
-]
-
-[[package]]
-name = "tracing-tracy"
-version = "0.11.4"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0eaa1852afa96e0fe9e44caa53dc0bd2d9d05e0f2611ce09f97f8677af56e4ba"
-dependencies = [
- "tracing-core",
- "tracing-subscriber",
- "tracy-client",
-]
-
-[[package]]
-name = "tracy-client"
-version = "0.18.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91d722a05fe49b31fef971c4732a7d4aa6a18283d9ba46abddab35f484872947"
-dependencies = [
- "loom",
- "once_cell",
- "tracy-client-sys",
-]
-
-[[package]]
-name = "tracy-client-sys"
-version = "0.27.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2fb391ac70462b3097a755618fbf9c8f95ecc1eb379a414f7b46f202ed10db1f"
-dependencies = [
- "cc",
- "windows-targets 0.48.5",
 ]
 
 [[package]]
@@ -14340,13 +14216,13 @@ dependencies = [
  "project",
  "project_panel",
  "regex",
- "release_channel",
  "schemars",
  "search",
  "semver",
  "serde",
  "serde_json",
  "settings",
+ "settings_content",
  "settings_ui",
  "task",
  "text",
@@ -15465,21 +15341,6 @@ dependencies = [
 
 [[package]]
 name = "windows-targets"
-version = "0.48.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9a2fa6e2155d7247be68c096456083145c183cbbbc2764150dda45a87197940c"
-dependencies = [
- "windows_aarch64_gnullvm 0.48.5",
- "windows_aarch64_msvc 0.48.5",
- "windows_i686_gnu 0.48.5",
- "windows_i686_msvc 0.48.5",
- "windows_x86_64_gnu 0.48.5",
- "windows_x86_64_gnullvm 0.48.5",
- "windows_x86_64_msvc 0.48.5",
-]
-
-[[package]]
-name = "windows-targets"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "9b724f72796e036ab90c1021d4780d4d3d648aca59e491e6b98e725b84e99973"
@@ -15540,12 +15401,6 @@ dependencies = [
 
 [[package]]
 name = "windows_aarch64_gnullvm"
-version = "0.48.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b38e32f0abccf9987a4e3079dfb67dcd799fb61361e53e2882c3cbaf0d905d8"
-
-[[package]]
-name = "windows_aarch64_gnullvm"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "32a4622180e7a0ec044bb555404c800bc9fd9ec262ec147edd5989ccd0c02cd3"
@@ -15558,12 +15413,6 @@ checksum = "a9d8416fa8b42f5c947f8482c43e7d89e73a173cead56d044f6a56104a6d1b53"
 
 [[package]]
 name = "windows_aarch64_msvc"
-version = "0.48.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "dc35310971f3b2dbbf3f0690a219f40e2d9afcf64f9ab7cc1be722937c26b4bc"
-
-[[package]]
-name = "windows_aarch64_msvc"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "09ec2a7bb152e2252b53fa7803150007879548bc709c039df7627cabbd05d469"
@@ -15573,12 +15422,6 @@ name = "windows_aarch64_msvc"
 version = "0.53.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b9d782e804c2f632e395708e99a94275910eb9100b2114651e04744e9b125006"
-
-[[package]]
-name = "windows_i686_gnu"
-version = "0.48.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a75915e7def60c94dcef72200b9a8e58e5091744960da64ec734a6c6e9b3743e"
 
 [[package]]
 name = "windows_i686_gnu"
@@ -15606,12 +15449,6 @@ checksum = "fa7359d10048f68ab8b09fa71c3daccfb0e9b559aed648a8f95469c27057180c"
 
 [[package]]
 name = "windows_i686_msvc"
-version = "0.48.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8f55c233f70c4b27f66c523580f78f1004e8b5a8b659e05a4eb49d4166cca406"
-
-[[package]]
-name = "windows_i686_msvc"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "240948bc05c5e7c6dabba28bf89d89ffce3e303022809e73deaefe4f6ec56c66"
@@ -15631,12 +15468,6 @@ dependencies = [
 
 [[package]]
 name = "windows_x86_64_gnu"
-version = "0.48.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53d40abd2583d23e4718fddf1ebec84dbff8381c07cae67ff7768bbf19c6718e"
-
-[[package]]
-name = "windows_x86_64_gnu"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "147a5c80aabfbf0c7d901cb5895d1de30ef2907eb21fbbab29ca94c5b08b1a78"
@@ -15649,12 +15480,6 @@ checksum = "9c3842cdd74a865a8066ab39c8a7a473c0778a3f29370b5fd6b4b9aa7df4a499"
 
 [[package]]
 name = "windows_x86_64_gnullvm"
-version = "0.48.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0b7b52767868a23d5bab768e390dc5f5c55825b6d30b86c844ff2dc7414044cc"
-
-[[package]]
-name = "windows_x86_64_gnullvm"
 version = "0.52.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "24d5b23dc417412679681396f2b49f3de8c1473deb516bd34410872eff51ed0d"
@@ -15664,12 +15489,6 @@ name = "windows_x86_64_gnullvm"
 version = "0.53.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0ffa179e2d07eee8ad8f57493436566c7cc30ac536a3379fdf008f47f6bb7ae1"
-
-[[package]]
-name = "windows_x86_64_msvc"
-version = "0.48.5"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed94fce61571a4006852b7389a063ab983c02eb1bb37b47f8272ce92d06d9538"
 
 [[package]]
 name = "windows_x86_64_msvc"
@@ -15855,7 +15674,6 @@ dependencies = [
  "project",
  "proptest",
  "proptest-derive",
- "release_channel",
  "remote",
  "rpc",
  "schemars",
@@ -15863,6 +15681,7 @@ dependencies = [
  "serde_json",
  "session",
  "settings",
+ "settings_content",
  "smallvec",
  "sqlez",
  "strum",
@@ -15914,7 +15733,6 @@ dependencies = [
  "util",
  "worktree",
  "zlog",
- "ztracing",
 ]
 
 [[package]]
@@ -16290,8 +16108,6 @@ dependencies = [
  "env_logger 0.11.8",
  "etw_tracing",
  "extension",
- "feature_flags",
- "feedback",
  "file_finder",
  "fs",
  "futures 0.3.34",
@@ -16347,7 +16163,6 @@ dependencies = [
  "proto",
  "rayon",
  "recent_projects",
- "release_channel",
  "remote",
  "remote_server",
  "repl",
@@ -16359,6 +16174,7 @@ dependencies = [
  "serde_json",
  "session",
  "settings",
+ "settings_content",
  "settings_profile_selector",
  "settings_ui",
  "shellexpand",
@@ -16400,7 +16216,6 @@ dependencies = [
  "zed_env_vars",
  "zlog",
  "zlog_settings",
- "ztracing",
 ]
 
 [[package]]
@@ -16706,26 +16521,6 @@ dependencies = [
  "cc",
  "pkg-config",
 ]
-
-[[package]]
-name = "ztracing"
-version = "0.1.0"
-dependencies = [
- "async-channel 2.5.0",
- "js-sys",
- "tracing",
- "tracing-subscriber",
- "tracing-tracy",
- "tracy-client",
- "wasm-bindgen",
- "web-sys",
- "zlog",
- "ztracing_macro",
-]
-
-[[package]]
-name = "ztracing_macro"
-version = "0.1.0"
 
 [[package]]
 name = "zune-core"

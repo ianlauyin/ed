@@ -22,7 +22,6 @@ indoc.workspace = true
 inventory.workspace = true
 log.workspace = true
 paths.workspace = true
-release_channel.workspace = true
 sqlez.workspace = true
 sqlez_macros.workspace = true
 util.workspace = true

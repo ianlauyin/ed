@@ -87,8 +87,6 @@ async fn run_git_blame(
     source: BlameSource<'_>,
 ) -> Result<Vec<BlameEntry>> {
     let mut child = {
-        let span = ztracing::debug_span!("spawning git-blame command", path = path.as_unix_str());
-        let _enter = span.enter();
         let mut args = vec!["blame", "--incremental"];
         let revision_string;
         match source {

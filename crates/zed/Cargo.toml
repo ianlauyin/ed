@@ -12,7 +12,6 @@ default-run = "zed"
 workspace = true
 
 [features]
-tracy = ["ztracing/tracy"]
 # LEAK_BACKTRACE=1 cargo run --features zed/track-project-leak --profile release-fast
 track-project-leak = ["gpui/leak-detection"]
 test-support = [
@@ -82,8 +81,6 @@ editor.workspace = true
 encoding_selector.workspace = true
 env_logger = { workspace = true, optional = true }
 extension.workspace = true
-feature_flags.workspace = true
-feedback.workspace = true
 file_finder.workspace = true
 fs.workspace = true
 futures.workspace = true
@@ -146,7 +143,7 @@ project_panel.workspace = true
 project_symbols.workspace = true
 proto.workspace = true
 recent_projects.workspace = true
-release_channel.workspace = true
+settings_content.workspace = true
 remote.workspace = true
 repl.workspace = true
 reqwest = { workspace = true, features = ["multipart"] }
@@ -192,7 +189,6 @@ zed_actions.workspace = true
 zed_env_vars.workspace = true
 zlog.workspace = true
 zlog_settings.workspace = true
-ztracing.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 nix = { workspace = true, features = ["user"] }

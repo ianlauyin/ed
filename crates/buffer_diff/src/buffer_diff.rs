@@ -360,7 +360,6 @@ impl BufferDiffSnapshot {
         &self.buffer_snapshot
     }
 
-    #[ztracing::instrument(skip_all)]
     pub fn hunks_intersecting_range<'a>(
         &'a self,
         range: Range<Anchor>,

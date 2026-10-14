@@ -78,7 +78,6 @@ unicase.workspace = true
 util.workspace = true
 watch.workspace = true
 zlog.workspace = true
-ztracing.workspace = true
 
 [dev-dependencies]
 collections = { workspace = true, features = ["test-support"] }

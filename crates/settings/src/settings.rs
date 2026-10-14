@@ -63,7 +63,6 @@ impl Global for ActiveSettingsProfileName {}
 
 pub trait UserSettingsContentExt {
     fn for_profile(&self, cx: &App) -> Option<&SettingsProfile>;
-    fn for_release_channel(&self) -> Option<&SettingsContent>;
     fn for_os(&self) -> Option<&SettingsContent>;
 }
 
@@ -73,11 +72,6 @@ impl UserSettingsContentExt for UserSettingsContent {
             return None;
         };
         self.profiles.get(&active_profile.0)
-    }
-
-    fn for_release_channel(&self) -> Option<&SettingsContent> {
-        self.release_channel_overrides
-            .get_by_key(release_channel::RELEASE_CHANNEL.dev_name())
     }
 
     fn for_os(&self) -> Option<&SettingsContent> {

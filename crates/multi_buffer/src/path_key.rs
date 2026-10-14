@@ -7,7 +7,6 @@ use rope::Point;
 use sum_tree::{Cursor, Dimensions, SumTree};
 use text::{Bias, BufferId, Edit, OffsetRangeExt, Patch};
 use util::rel_path::RelPath;
-use ztracing::instrument;
 
 use crate::{
     Anchor, BufferState, BufferStateSnapshot, DiffChangeKind, Event, Excerpt, ExcerptOffset,
@@ -80,7 +79,7 @@ impl MultiBuffer {
     /// Sets excerpts, returns `true` if at least one new excerpt was added.
     ///
     /// Any existing excerpts for this buffer or this path will be replaced by the provided ranges.
-    #[instrument(skip_all)]
+
     pub fn set_excerpts_for_path(
         &mut self,
         path: PathKey,

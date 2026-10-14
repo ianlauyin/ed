@@ -32,7 +32,6 @@
 // https://github.com/bits/UTF-8-Unicode-Test-Documents/blob/master/UTF-8_sequence_separated/utf8_sequence_0-0x10ffff_assigned_including-unprintable-asis.txt
 use unicode_segmentation::GraphemeCursor;
 
-#[ztracing::instrument(skip_all)]
 pub fn is_invisible(c: char) -> bool {
     if c <= '\u{1f}' {
         c != '\t' && c != '\n' && c != '\r'

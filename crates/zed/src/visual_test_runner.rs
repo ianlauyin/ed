@@ -169,7 +169,7 @@ fn run_visual_tests(project_path: PathBuf, update_baseline: bool) -> Result<()> 
         gpui_tokio::init(cx);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
         workspace::init(app_state.clone(), cx);
-        release_channel::init(semver::Version::new(0, 0, 0), cx);
+        settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         command_palette::init(cx);
         editor::init(cx);
 

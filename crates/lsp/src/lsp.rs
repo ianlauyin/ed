@@ -1149,10 +1149,12 @@ impl LanguageServer {
             },
             trace: None,
             workspace_folders: Some(workspace_folders),
-            client_info: release_channel::ReleaseChannel::try_global(cx).map(|release_channel| {
+            client_info: settings_content::app_metadata::ServerRelease::try_global(cx).map(|_| {
                 ClientInfo {
-                    name: release_channel.display_name().to_string(),
-                    version: Some(release_channel::AppVersion::global(cx).to_string()),
+                    name: "Zed".to_string(),
+                    version: Some(
+                        settings_content::app_metadata::AppVersion::global(cx).to_string(),
+                    ),
                 }
             }),
             locale: None,
@@ -2177,7 +2179,7 @@ mod tests {
     #[gpui::test]
     async fn test_fake(cx: &mut TestAppContext) {
         cx.update(|cx| {
-            release_channel::init(semver::Version::new(0, 0, 0), cx);
+            settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         });
         let (server, mut fake) = FakeLanguageServer::new(
             LanguageServerId(0),
@@ -2307,7 +2309,7 @@ mod tests {
     #[gpui::test]
     async fn test_subscription_leaks_handlers_after_server_drop(cx: &mut TestAppContext) {
         cx.update(|cx| {
-            release_channel::init(semver::Version::new(0, 0, 0), cx);
+            settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         });
         let (server, mut fake) = FakeLanguageServer::new(
             LanguageServerId(0),
@@ -2376,7 +2378,7 @@ mod tests {
     #[gpui::test]
     async fn test_unit_params_request_with_empty_object_params(cx: &mut TestAppContext) {
         cx.update(|cx| {
-            release_channel::init(semver::Version::new(0, 0, 0), cx);
+            settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         });
         let (server, fake) = FakeLanguageServer::new(
             LanguageServerId(0),
@@ -2421,7 +2423,7 @@ mod tests {
     #[gpui::test]
     async fn test_unit_result_response_with_empty_object(cx: &mut TestAppContext) {
         cx.update(|cx| {
-            release_channel::init(semver::Version::new(0, 0, 0), cx);
+            settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         });
         let (server, fake) = FakeLanguageServer::new(
             LanguageServerId(0),
@@ -2535,7 +2537,7 @@ mod tests {
     #[gpui::test]
     async fn test_default_initialize_params(cx: &mut TestAppContext) {
         cx.update(|cx| {
-            release_channel::init(semver::Version::new(0, 0, 0), cx);
+            settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         });
         let (server, _fake) = FakeLanguageServer::new(
             LanguageServerId(0),

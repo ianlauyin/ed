@@ -19,7 +19,6 @@ log.workspace = true
 rayon.workspace = true
 sum_tree.workspace = true
 unicode-segmentation.workspace = true
-ztracing.workspace = true
 tracing.workspace = true
 
 [dev-dependencies]

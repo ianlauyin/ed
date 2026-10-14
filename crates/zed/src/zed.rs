@@ -21,7 +21,6 @@ use breadcrumbs::Breadcrumbs;
 use collections::VecDeque;
 use debugger_ui::debugger_panel::DebugPanel;
 use editor::{Editor, MultiBuffer};
-use feature_flags::{FeatureFlagAppExt as _, PanicFeatureFlag};
 use futures::{StreamExt, channel::mpsc, select_biased};
 use git_ui::branch_diff::BranchDiffToolbar;
 use git_ui::commit_view::CommitViewToolbar;
@@ -60,7 +59,6 @@ use project::{
 use project_panel::ProjectPanel;
 use quick_action_bar::QuickActionBar;
 use recent_projects::open_remote_project;
-use release_channel::{AppCommitSha, AppVersion, ReleaseChannel};
 use rope::Rope;
 use search::project_search::ProjectSearchBar;
 use settings::{
@@ -69,6 +67,7 @@ use settings::{
     SettingsFile, SettingsStore, VIM_KEYMAP_PATH, initial_local_debug_tasks_content,
     initial_project_settings_content, initial_tasks_content, update_settings_file,
 };
+use settings_content::app_metadata::{AppCommitSha, AppVersion};
 #[cfg(debug_assertions)]
 use workspace::workspace_error::{ErrorAction, ErrorSeverity, WorkspaceError};
 
@@ -138,10 +137,6 @@ actions!(
         ToggleFullScreen,
         /// Zooms the window.
         Zoom,
-        /// Triggers a test panic for debugging.
-        TestPanic,
-        /// Triggers a hard crash for debugging.
-        TestCrash,
     ]
 );
 
@@ -189,26 +184,6 @@ pub fn init(cx: &mut App) {
     #[cfg(target_os = "macos")]
     cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
     cx.on_action(quit);
-
-    cx.observe_flag::<PanicFeatureFlag, _>({
-        let mut added = false;
-        move |flag, cx| {
-            if added || !*flag {
-                return;
-            }
-            added = true;
-            cx.on_action(|_: &TestPanic, _| panic!("Ran the TestPanic action"))
-                .on_action(|_: &TestCrash, _| {
-                    unsafe extern "C" {
-                        fn puts(s: *const i8);
-                    }
-                    unsafe {
-                        puts(0xabad1d3a as *const i8);
-                    }
-                });
-        }
-    })
-    .detach();
 
     // When Zed logs to stdout rather than the log file, avoid registering
     // handlers for both `OpenLog` and `RevealLogInFileManager`, as the log file
@@ -347,7 +322,7 @@ pub fn build_window_options(display_uuid: Option<Uuid>, cx: &mut App) -> WindowO
             .into_iter()
             .find(|display| display.uuid().ok() == Some(uuid))
     });
-    let app_id = ReleaseChannel::global(cx).app_id();
+    let app_id = settings_content::app_metadata::APP_ID;
     let window_decorations = match std::env::var("ZED_WINDOW_DECORATIONS") {
         Ok(val) if val == "server" => gpui::WindowDecorations::Server,
         Ok(val) if val == "client" => gpui::WindowDecorations::Client,
@@ -1069,7 +1044,7 @@ fn register_actions(
                             NotificationId::unique::<RegisterZedScheme>(),
                             format!(
                                 "zed:// links will now open in {}.",
-                                ReleaseChannel::global(cx).display_name()
+                                "Zed"
                             ),
                         ),
                         cx,
@@ -1299,21 +1274,6 @@ fn initialize_pane(
 }
 
 fn open_about_window(cx: &mut App) {
-    fn about_window_icon(release_channel: ReleaseChannel) -> Arc<Image> {
-        let bytes = match release_channel {
-            ReleaseChannel::Dev => include_bytes!("../resources/app-icon-dev.png").as_slice(),
-            ReleaseChannel::Nightly => {
-                include_bytes!("../resources/app-icon-nightly.png").as_slice()
-            }
-            ReleaseChannel::Preview => {
-                include_bytes!("../resources/app-icon-preview.png").as_slice()
-            }
-            ReleaseChannel::Stable => include_bytes!("../resources/app-icon.png").as_slice(),
-        };
-
-        Arc::new(Image::from_bytes(ImageFormat::Png, bytes.to_vec()))
-    }
-
     struct AboutWindow {
         focus_handle: FocusHandle,
         ok_entry: NavigableEntry,
@@ -1326,8 +1286,7 @@ fn open_about_window(cx: &mut App) {
 
     impl AboutWindow {
         fn new(cx: &mut Context<Self>) -> Self {
-            let release_channel = ReleaseChannel::global(cx);
-            let release_channel_name = release_channel.display_name();
+            let app_name = "Zed";
             let full_version: SharedString = AppVersion::global(cx).to_string().into();
             let version = env!("CARGO_PKG_VERSION");
 
@@ -1336,7 +1295,7 @@ fn open_about_window(cx: &mut App) {
             } else {
                 ""
             };
-            let message: SharedString = format!("{release_channel_name} {version} {debug}").into();
+            let message: SharedString = format!("{app_name} {version} {debug}").into();
             let commit = AppCommitSha::try_global(cx)
                 .map(|sha| sha.full())
                 .filter(|commit| !commit.is_empty())
@@ -1346,7 +1305,10 @@ fn open_about_window(cx: &mut App) {
                 focus_handle: cx.focus_handle(),
                 ok_entry: NavigableEntry::focusable(cx),
                 copy_entry: NavigableEntry::focusable(cx),
-                app_icon: about_window_icon(release_channel),
+                app_icon: Arc::new(Image::from_bytes(
+                    ImageFormat::Png,
+                    include_bytes!("../resources/app-icon.png").to_vec(),
+                )),
                 message,
                 commit,
                 full_version,
@@ -1498,7 +1460,7 @@ fn open_about_window(cx: &mut App) {
             is_resizable: false,
             is_minimizable: false,
             kind: WindowKind::Floating,
-            app_id: Some(ReleaseChannel::global(cx).app_id().to_owned()),
+            app_id: Some(settings_content::app_metadata::APP_ID.to_owned()),
             ..Default::default()
         },
         |window, cx| {

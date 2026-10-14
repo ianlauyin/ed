@@ -1012,8 +1012,7 @@ impl Measurement for ResourceCounter {
 /// ```
 ///
 /// A binary has exactly one global allocator, so this can't be installed where a
-/// dependency already sets one (such as `ztracing` built with
-/// `ztracing_with_memory`); allocation metrics are then skipped.
+/// dependency already sets one; allocation metrics are then skipped.
 pub struct CountingAllocator<A = std::alloc::System> {
     inner: A,
 }

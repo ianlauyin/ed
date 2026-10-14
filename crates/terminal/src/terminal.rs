@@ -1108,7 +1108,7 @@ impl TerminalBuilder {
         activation_script: Vec<String>,
         path_style: PathStyle,
     ) -> Task<Result<TerminalBuilder>> {
-        let version = release_channel::AppVersion::global(cx);
+        let version = settings_content::app_metadata::AppVersion::global(cx);
         let background_executor = cx.background_executor().clone();
         // Headless hosts (e.g. the eval CLI) have no controlling TTY, so PTY
         // allocation / acquiring a controlling terminal fails with `ENOTTY`.

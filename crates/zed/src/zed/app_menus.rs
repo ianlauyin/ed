@@ -1,10 +1,9 @@
 use gpui::{App, Menu, MenuItem, OsAction};
 
-use release_channel::ReleaseChannel;
 use terminal_view::terminal_panel;
 use zed_actions::{Quit, debug_panel, dev, git_panel, project_panel};
 
-pub fn app_menus(cx: &mut App) -> Vec<Menu> {
+pub fn app_menus(_cx: &mut App) -> Vec<Menu> {
     let mut view_items = vec![
         MenuItem::action(
             "Zoom In",
@@ -51,7 +50,7 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
         MenuItem::separator(),
     ]);
 
-    if ReleaseChannel::try_global(cx) == Some(ReleaseChannel::Dev) {
+    if cfg!(debug_assertions) {
         view_items.push(MenuItem::action(
             "Toggle GPUI Inspector",
             dev::ToggleInspector,
@@ -298,9 +297,6 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
                 MenuItem::action("View Dependency Licenses", zed_actions::OpenLicenses),
                 MenuItem::action("Show Welcome", onboarding::ShowWelcome),
                 MenuItem::separator(),
-                MenuItem::action("File Bug Report...", zed_actions::feedback::FileBugReport),
-                MenuItem::action("Request Feature...", zed_actions::feedback::RequestFeature),
-                MenuItem::action("Email Us...", zed_actions::feedback::EmailZed),
                 MenuItem::separator(),
                 MenuItem::action(
                     "Documentation",
@@ -308,7 +304,6 @@ pub fn app_menus(cx: &mut App) -> Vec<Menu> {
                         url: "https://zed.dev/docs".into(),
                     },
                 ),
-                MenuItem::action("Zed Repository", feedback::OpenZedRepo),
                 MenuItem::action(
                     "Zed Twitter",
                     super::OpenBrowser {

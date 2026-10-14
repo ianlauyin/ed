@@ -38,7 +38,7 @@ env_logger.workspace = true
 fs.workspace = true
 gpui_platform = { workspace = true, features = ["screen-capture", "font-kit", "wayland", "x11"] }
 node_runtime.workspace = true
-release_channel.workspace = true
+settings_content.workspace = true
 reqwest_client.workspace = true
 session.workspace = true
 settings.workspace = true

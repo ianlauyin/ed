@@ -111,9 +111,9 @@ fn main() {
     let single = args.single;
 
     gpui_platform::headless().run(move |cx| {
-        release_channel::init_test(
+        settings_content::app_metadata::init_test(
             semver::Version::new(0, 0, 0),
-            release_channel::ReleaseChannel::Dev,
+            settings_content::app_metadata::ServerRelease::Dev,
             cx,
         );
         settings::init(cx);

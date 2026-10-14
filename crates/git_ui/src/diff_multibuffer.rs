@@ -35,7 +35,6 @@ use workspace::{
     CloseActiveItem, ItemNavHistory, Workspace,
     item::{Item, SaveOptions},
 };
-use ztracing::instrument;
 
 /// Loading every changed file at once makes the first one land no sooner than the
 /// last, leaving a large diff on a spinner. Throughput flattens past this point.
@@ -435,7 +434,6 @@ impl DiffMultibuffer {
         }
     }
 
-    #[instrument(skip_all)]
     fn register_buffer(
         &mut self,
         repo_path: RepoPath,
@@ -622,7 +620,6 @@ impl DiffMultibuffer {
         );
     }
 
-    #[instrument(skip(this, cx))]
     pub(crate) async fn refresh(this: WeakEntity<Self>, cx: &mut AsyncWindowContext) -> Result<()> {
         let entries = this.update(cx, |this, cx| {
             let (repo, buffers_to_load) = this.branch_diff.update(cx, |branch_diff, cx| {
@@ -670,8 +667,7 @@ impl DiffMultibuffer {
                     editor.rhs_editor().update(cx, |editor, cx| {
                         conflict_view::buffers_removed(editor, &[buffer_id], cx);
                     });
-                    let _span = ztracing::info_span!("remove_excerpts_for_path");
-                    _span.enter();
+
                     editor.remove_excerpts_for_path(path, cx);
                 }
             });

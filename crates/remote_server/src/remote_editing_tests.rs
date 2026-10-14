@@ -1720,7 +1720,7 @@ async fn test_remote_code_action_resolve(cx: &mut TestAppContext, server_cx: &mu
         let settings_store = SettingsStore::test(cx);
         cx.set_global(settings_store);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
-        release_channel::init(semver::Version::new(0, 0, 0), cx);
+        settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         editor::init(cx);
     });
 
@@ -2479,7 +2479,7 @@ async fn test_remote_code_lens_resolve(cx: &mut TestAppContext, server_cx: &mut 
         let settings_store = SettingsStore::test(cx);
         cx.set_global(settings_store);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
-        release_channel::init(semver::Version::new(0, 0, 0), cx);
+        settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         editor::init(cx);
         SettingsStore::update_global(cx, |store, cx| {
             store.update_user_settings(cx, |settings| {
@@ -4209,7 +4209,7 @@ async fn test_remote_git_diffs_when_recv_update_repository_delay(
         let settings_store = SettingsStore::test(cx);
         cx.set_global(settings_store);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
-        release_channel::init(semver::Version::new(0, 0, 0), cx);
+        settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         editor::init(cx);
     });
 
@@ -5014,7 +5014,7 @@ async fn test_remote_restore_unstaged_hunk_clears_diff(
         let settings_store = SettingsStore::test(cx);
         cx.set_global(settings_store);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
-        release_channel::init(semver::Version::new(0, 0, 0), cx);
+        settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         editor::init(cx);
     });
 
@@ -5385,10 +5385,10 @@ pub async fn init_test(
 ) -> (Entity<Project>, Entity<HeadlessProject>) {
     let server_fs = server_fs.clone();
     cx.update(|cx| {
-        release_channel::init(semver::Version::new(0, 0, 0), cx);
+        settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
     });
     server_cx.update(|cx| {
-        release_channel::init(semver::Version::new(0, 0, 0), cx);
+        settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
     });
     init_logger();
 

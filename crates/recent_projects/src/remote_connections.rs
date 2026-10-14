@@ -520,10 +520,10 @@ mod tests {
         let executor = cx.executor();
 
         cx.update(|cx| {
-            release_channel::init(semver::Version::new(0, 0, 0), cx);
+            settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         });
         server_cx.update(|cx| {
-            release_channel::init(semver::Version::new(0, 0, 0), cx);
+            settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         });
 
         let (opts, server_session, connect_guard) = RemoteClient::fake_server(cx, server_cx);
@@ -601,10 +601,10 @@ mod tests {
         let executor = cx.executor();
 
         cx.update(|cx| {
-            release_channel::init(semver::Version::new(0, 0, 0), cx);
+            settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         });
         server_cx.update(|cx| {
-            release_channel::init(semver::Version::new(0, 0, 0), cx);
+            settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         });
 
         let (opts, server_session, connect_guard) = RemoteClient::fake_server(cx, server_cx);
@@ -774,10 +774,10 @@ mod tests {
         let executor = cx.executor();
 
         cx.update(|cx| {
-            release_channel::init(semver::Version::new(0, 0, 0), cx);
+            settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         });
         server_cx.update(|cx| {
-            release_channel::init(semver::Version::new(0, 0, 0), cx);
+            settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         });
 
         let (opts, server_session, connect_guard) = RemoteClient::fake_server(cx, server_cx);
@@ -869,10 +869,10 @@ mod tests {
         let executor = cx.executor();
 
         cx.update(|cx| {
-            release_channel::init(semver::Version::new(0, 0, 0), cx);
+            settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         });
         server_cx.update(|cx| {
-            release_channel::init(semver::Version::new(0, 0, 0), cx);
+            settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         });
 
         let (opts, server_session, connect_guard) = RemoteClient::fake_server(cx, server_cx);

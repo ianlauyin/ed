@@ -14,7 +14,6 @@ use language::Buffer;
 use sum_tree::SumTree;
 use text::BufferId;
 use util::ResultExt;
-use ztracing::instrument;
 
 use crate::{
     ConflictSet,
@@ -290,7 +289,6 @@ impl DiffBufferList {
         self.repo.as_ref()
     }
 
-    #[instrument(skip_all)]
     pub fn load_buffers(&mut self, cx: &mut Context<Self>) -> Vec<DiffBuffer> {
         let mut output = Vec::default();
         let Some(repo) = self.repo.clone() else {
@@ -382,7 +380,6 @@ impl DiffBufferList {
         output
     }
 
-    #[instrument(skip_all)]
     fn load_buffer(
         diff_base: DiffBase,
         branch_diff: Option<git::status::TreeDiffStatus>,

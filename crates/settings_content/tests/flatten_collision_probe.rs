@@ -21,7 +21,6 @@ fn no_key_collisions_between_named_fields_and_flattened_sections() {
         settings_content::UserSettingsContent::NAMED_DESERIALIZE_KEYS,
         vec![
             section::<settings_content::SettingsContent>("content"),
-            section::<settings_content::ReleaseChannelOverrides>("release_channel_overrides"),
             section::<settings_content::PlatformOverrides>("platform_overrides"),
         ],
     );

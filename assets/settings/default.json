@@ -2412,38 +2412,6 @@
     // Delay in milliseconds before showing the which-key popup.
     "delay_ms": 1000
   },
-  // The server to connect to. If the environment variable
-  // ZED_SERVER_URL is set, it will override this setting.
-  // Settings overrides to use when using Zed Preview.
-  // Mostly useful for developers who are managing multiple instances of Zed.
-  "preview": {
-    // "theme": "Andromeda"
-  },
-  // Settings overrides to use when using Zed Nightly.
-  // Mostly useful for developers who are managing multiple instances of Zed.
-  "nightly": {
-    // "theme": "Andromeda"
-    "instrumentation": {
-      "performance_profiler": {
-        "enabled": true
-      }
-    }
-  },
-  // Settings overrides to use when using Zed Stable.
-  // Mostly useful for developers who are managing multiple instances of Zed.
-  "stable": {
-    // "theme": "Andromeda"
-  },
-  // Settings overrides to use when using Zed Dev.
-  // Mostly useful for developers who are managing multiple instances of Zed.
-  "dev": {
-    // "theme": "Andromeda"
-    "instrumentation": {
-      "performance_profiler": {
-        "enabled": true
-      }
-    }
-  },
   // Settings overrides to use when using Linux.
   "linux": {},
   // Settings overrides to use when using macOS.

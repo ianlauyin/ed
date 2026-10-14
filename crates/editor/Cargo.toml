@@ -46,7 +46,6 @@ dap.workspace = true
 db.workspace = true
 buffer_diff.workspace = true
 emojis.workspace = true
-feature_flags.workspace = true
 file_icons.workspace = true
 futures.workspace = true
 futures-lite.workspace = true
@@ -90,7 +89,6 @@ tree-sitter-html = { workspace = true, optional = true }
 tree-sitter-rust = { workspace = true, optional = true }
 tree-sitter-typescript = { workspace = true, optional = true }
 tree-sitter-python = { workspace = true, optional = true }
-ztracing.workspace = true
 unicode-segmentation.workspace = true
 unicode-script.workspace = true
 unindent = { workspace = true, optional = true }
@@ -118,7 +116,7 @@ pretty_assertions.workspace = true
 project = { workspace = true, features = ["test-support"] }
 proptest.workspace = true
 proptest-derive.workspace = true
-release_channel.workspace = true
+settings_content.workspace = true
 rand.workspace = true
 semver.workspace = true
 settings = { workspace = true, features = ["test-support"] }

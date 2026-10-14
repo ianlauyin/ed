@@ -31,7 +31,6 @@ gpui.workspace = true
 log = { workspace = true, features = ["kv_unstable_std"] }
 parking_lot.workspace = true
 paths.workspace = true
-release_channel.workspace = true
 rpc = { workspace = true, features = ["gpui"] }
 schemars.workspace = true
 semver.workspace = true

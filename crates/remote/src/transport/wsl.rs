@@ -9,9 +9,9 @@ use async_trait::async_trait;
 use collections::HashMap;
 use futures::channel::mpsc::{Sender, UnboundedReceiver, UnboundedSender};
 use gpui::{App, AppContext as _, AsyncApp, Task};
-use release_channel::{AppVersion, ReleaseChannel};
 use rpc::proto::Envelope;
 use semver::Version;
+use settings_content::app_metadata::{AppVersion, ServerRelease};
 use smol::{
     fs,
     io::{self, AsyncWriteExt as _},
@@ -74,7 +74,7 @@ impl WslRemoteConnection {
             connection_options.user
         );
         let (release_channel, version) =
-            cx.update(|cx| (ReleaseChannel::global(cx), AppVersion::global(cx)));
+            cx.update(|cx| (ServerRelease::global(cx), AppVersion::global(cx)));
 
         let mut this = Self {
             connection_options,
@@ -213,12 +213,12 @@ impl WslRemoteConnection {
     async fn ensure_server_binary(
         &self,
         delegate: &Arc<dyn RemoteClientDelegate>,
-        release_channel: ReleaseChannel,
+        release_channel: ServerRelease,
         version: Version,
         cx: &mut AsyncApp,
     ) -> Result<Arc<RelPath>> {
         let version_str = match release_channel {
-            ReleaseChannel::Dev => "build".to_string(),
+            ServerRelease::Dev => "build".to_string(),
             _ => version.to_string(),
         };
 
@@ -273,7 +273,7 @@ impl WslRemoteConnection {
         }
 
         let wanted_version = match release_channel {
-            ReleaseChannel::Nightly | ReleaseChannel::Dev => None,
+            ServerRelease::Nightly | ServerRelease::Dev => None,
             _ => Some(cx.update(|cx| AppVersion::global(cx))),
         };
 

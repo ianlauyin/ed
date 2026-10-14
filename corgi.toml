@@ -54,7 +54,6 @@ extension_host = ["../extension_api/wit/**"]
 gpui_apple = ["../gpui/src/**", "src/metal_renderer.rs", "src/shaders.metal"]
 eval_cli = ["../zed/Cargo.toml"]
 prompt_store = ["../git_ui/src/commit_message_prompt.txt"]
-release_channel = ["../zed/RELEASE_CHANNEL"]
 cli = ["../../script/uninstall.sh"]
 remote_server = ["../zed/Cargo.toml"]
 # `../zed/Cargo.toml`: build.rs reads it for ZED_PKG_VERSION. `../grammars/src`

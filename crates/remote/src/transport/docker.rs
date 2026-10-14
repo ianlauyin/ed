@@ -4,8 +4,8 @@ use anyhow::anyhow;
 use async_trait::async_trait;
 use collections::HashMap;
 use parking_lot::Mutex;
-use release_channel::{AppCommitSha, AppVersion, ReleaseChannel};
 use semver::Version as SemanticVersion;
+use settings_content::app_metadata::{AppCommitSha, AppVersion, ServerRelease};
 use std::collections::BTreeMap;
 use std::fmt::Write;
 use std::time::Instant;
@@ -84,7 +84,7 @@ impl DockerExecConnection {
         };
         let (release_channel, version, commit) = cx.update(|cx| {
             (
-                ReleaseChannel::global(cx),
+                ServerRelease::global(cx),
                 AppVersion::global(cx),
                 AppCommitSha::try_global(cx),
             )
@@ -204,7 +204,7 @@ impl DockerExecConnection {
     async fn ensure_server_binary(
         &self,
         delegate: &Arc<dyn RemoteClientDelegate>,
-        release_channel: ReleaseChannel,
+        release_channel: ServerRelease,
         version: SemanticVersion,
         remote_dir_for_server: &str,
         commit: Option<AppCommitSha>,
@@ -215,11 +215,11 @@ impl DockerExecConnection {
             .context("No remote platform defined; cannot proceed.")?;
 
         let version_str = match release_channel {
-            ReleaseChannel::Nightly => {
+            ServerRelease::Nightly => {
                 let commit = commit.map(|s| s.full()).unwrap_or_default();
                 format!("{}-{}", version, commit)
             }
-            ReleaseChannel::Dev => "build".to_string(),
+            ServerRelease::Dev => "build".to_string(),
             _ => version.to_string(),
         };
         let binary_name = format!(
@@ -274,8 +274,8 @@ impl DockerExecConnection {
         }
 
         let wanted_version = cx.update(|cx| match release_channel {
-            ReleaseChannel::Nightly => Ok(None),
-            ReleaseChannel::Dev => {
+            ServerRelease::Nightly => Ok(None),
+            ServerRelease::Dev => {
                 anyhow::bail!(
                     "ZED_BUILD_REMOTE_SERVER is not set and no remote server exists at ({:?})",
                     dst_path

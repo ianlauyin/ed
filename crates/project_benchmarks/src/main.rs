@@ -14,9 +14,9 @@ use project::{
     Project, RealFs,
     search::{SearchQuery, SearchResult},
 };
-use release_channel::ReleaseChannel;
 use remote::{ConnectionIdentifier, RemoteClientDelegate, SshConnectionOptions};
 use semver::Version;
+use settings_content::app_metadata::ServerRelease;
 
 #[derive(Parser)]
 struct Args {
@@ -69,7 +69,7 @@ impl RemoteClientDelegate for BenchmarkRemoteClient {
     fn get_download_url(
         &self,
         _platform: remote::RemotePlatform,
-        _release_channel: ReleaseChannel,
+        _release_channel: ServerRelease,
         _version: Option<Version>,
         _cx: &mut gpui::AsyncApp,
     ) -> gpui::Task<gpui::Result<Option<String>>> {
@@ -79,7 +79,7 @@ impl RemoteClientDelegate for BenchmarkRemoteClient {
     fn download_server_binary_locally(
         &self,
         _platform: remote::RemotePlatform,
-        _release_channel: ReleaseChannel,
+        _release_channel: ServerRelease,
         _version: Option<Version>,
         _cx: &mut gpui::AsyncApp,
     ) -> gpui::Task<gpui::Result<std::path::PathBuf>> {
@@ -128,7 +128,7 @@ fn main() -> Result<(), anyhow::Error> {
         )
     }?;
     gpui_platform::headless().run(|cx| {
-        release_channel::init_test(semver::Version::new(0, 0, 0), ReleaseChannel::Dev, cx);
+        settings_content::app_metadata::init_test(semver::Version::new(0, 0, 0), ServerRelease::Dev, cx);
         settings::init(cx);
         let http_client = FakeHttpClient::with_200_response();
         let (_, rx) = watch::channel(None);

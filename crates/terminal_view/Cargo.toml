@@ -53,7 +53,7 @@ gpui = { workspace = true, features = ["test-support"] }
 pretty_assertions.workspace = true
 project = { workspace = true, features = ["test-support"] }
 remote = { workspace = true, features = ["test-support"] }
-release_channel.workspace = true
+settings_content.workspace = true
 rpc = { workspace = true, features = ["test-support"] }
 semver.workspace = true
 terminal = { workspace = true, features = ["test-support"] }

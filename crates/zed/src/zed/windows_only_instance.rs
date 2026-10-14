@@ -3,7 +3,7 @@ use std::{sync::Arc, thread::JoinHandle};
 use anyhow::Context;
 use cli::{CliRequest, CliResponse, IpcHandshake, ipc::IpcOneShotServer};
 use parking_lot::Mutex;
-use release_channel::app_identifier;
+use settings_content::app_metadata::app_identifier;
 use util::ResultExt;
 use windows::{
     Win32::{

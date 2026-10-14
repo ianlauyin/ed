@@ -18,7 +18,6 @@ use gpui::{
 use language::Buffer;
 use platform_title_bar::PlatformTitleBar;
 use project::{Project, ProjectPath, Worktree, WorktreeId};
-use release_channel::ReleaseChannel;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use settings::{
@@ -814,7 +813,7 @@ fn open_settings_editor_with(
         let scale_factor = current_rem_size / default_rem_size;
         let scaled_bounds: gpui::Size<Pixels> = default_bounds.map(|axis| axis * scale_factor);
 
-        let app_id = ReleaseChannel::global(cx).app_id();
+        let app_id = settings_content::app_metadata::APP_ID;
         let window_decorations = match std::env::var("ZED_WINDOW_DECORATIONS") {
             Ok(val) if val == "server" => gpui::WindowDecorations::Server,
             Ok(val) if val == "client" => gpui::WindowDecorations::Client,
@@ -1707,17 +1706,6 @@ impl SettingsWindow {
         })
         .detach();
 
-        use feature_flags::FeatureFlagAppExt as _;
-        let mut last_is_staff = cx.is_staff();
-        cx.observe_global_in::<feature_flags::FeatureFlagStore>(window, move |this, window, cx| {
-            let is_staff = cx.is_staff();
-            if is_staff != last_is_staff {
-                last_is_staff = is_staff;
-                this.rebuild_pages(window, cx);
-            }
-        })
-        .detach();
-
         cx.on_window_closed(|cx, _window_id| {
             if let Some(existing_window) = cx
                 .windows()
@@ -2379,15 +2367,6 @@ impl SettingsWindow {
         self.update_matches(cx);
 
         cx.notify();
-    }
-
-    fn rebuild_pages(&mut self, window: &mut Window, cx: &mut Context<SettingsWindow>) {
-        self.pages.clear();
-        self.navbar_entries.clear();
-        self.navbar_focus_subscriptions.clear();
-        self.content_handles.clear();
-        self.build_ui(window, cx);
-        self.build_search_index();
     }
 
     #[track_caller]

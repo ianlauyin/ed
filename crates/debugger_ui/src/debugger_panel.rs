@@ -16,11 +16,10 @@ use dap::adapters::DebugAdapterName;
 use dap::{DapRegistry, StartDebuggingRequestArguments};
 use dap::{client::SessionId, debugger_settings::DebuggerSettings};
 use editor::Editor;
-use feature_flags::{FeatureFlag, FeatureFlagAppExt as _, PresenceFlag, register_feature_flag};
 use gpui::{
-    Action, Anchor, App, AsyncWindowContext, ClipboardItem, Context, DismissEvent, Entity,
-    EntityId, EventEmitter, FocusHandle, Focusable, MouseButton, MouseDownEvent, Point,
-    Subscription, Task, TaskExt, WeakEntity, anchored, deferred,
+    Action, App, AsyncWindowContext, ClipboardItem, Context, DismissEvent, Entity, EntityId,
+    EventEmitter, FocusHandle, Focusable, MouseButton, MouseDownEvent, Point, Subscription, Task,
+    TaskExt, WeakEntity, anchored, deferred,
 };
 
 use itertools::Itertools as _;
@@ -32,10 +31,7 @@ use settings::Settings;
 use std::sync::Arc;
 use task::{DebugScenario, SharedTaskContext};
 
-use ui::{
-    ButtonLike, ContextMenu, Divider, ElevationIndex, PopoverMenu, PopoverMenuHandle, SplitButton,
-    Tab, TintColor, Tooltip, prelude::*,
-};
+use ui::{ContextMenu, Divider, PopoverMenuHandle, Tab, Tooltip, prelude::*};
 use util::redact::redact_command;
 use util::rel_path::RelPath;
 use util::{ResultExt, debug_panic, maybe};
@@ -46,14 +42,6 @@ use workspace::{
     dock::{DockPosition, Panel, PanelEvent},
 };
 use zed_actions::debug_panel::ToggleFocus;
-
-pub struct DebuggerHistoryFeatureFlag;
-
-impl FeatureFlag for DebuggerHistoryFeatureFlag {
-    const NAME: &'static str = "debugger-history";
-    type Value = PresenceFlag;
-}
-register_feature_flag!(DebuggerHistoryFeatureFlag);
 
 const DEBUG_PANEL_KEY: &str = "DebugPanel";
 
@@ -923,53 +911,36 @@ impl DebugPanel {
                                                 }
                                             }),
                                     )
-                                    .when(supports_detach, |div| {
-                                        div.child(
-                                            IconButton::new(
-                                                "debug-disconnect",
-                                                IconName::DebugDetach,
-                                            )
-                                            .disabled(
-                                                thread_status != ThreadStatus::Stopped
-                                                    && thread_status != ThreadStatus::Running,
-                                            )
-                                            .icon_size(IconSize::Small)
-                                            .on_click(window.listener_for(
-                                                running_state,
-                                                |this, _, _, cx| {
-                                                    this.detach_client(cx);
-                                                },
-                                            ))
-                                            .tooltip({
-                                                let focus_handle = focus_handle.clone();
-                                                move |_window, cx| {
-                                                    Tooltip::for_action_in(
-                                                        "Detach",
-                                                        &Detach,
-                                                        &focus_handle,
-                                                        cx,
-                                                    )
-                                                }
-                                            }),
-                                        )
-                                    })
                                     .when(
-                                        cx.has_flag::<DebuggerHistoryFeatureFlag>(),
-                                        |this| {
-                                            this.child(Divider::vertical()).child(
-                                                SplitButton::new(
-                                                    self.render_history_button(
-                                                        &running_state,
-                                                        thread_status,
-                                                        window,
-                                                    ),
-                                                    self.render_history_toggle_button(
-                                                        thread_status,
-                                                        &running_state,
-                                                    )
-                                                    .into_any_element(),
+                                        supports_detach,
+                                        |div| {
+                                            div.child(
+                                                IconButton::new(
+                                                    "debug-disconnect",
+                                                    IconName::DebugDetach,
                                                 )
-                                                .style(ui::SplitButtonStyle::Outlined),
+                                                .disabled(
+                                                    thread_status != ThreadStatus::Stopped
+                                                        && thread_status != ThreadStatus::Running,
+                                                )
+                                                .icon_size(IconSize::Small)
+                                                .on_click(window.listener_for(
+                                                    running_state,
+                                                    |this, _, _, cx| {
+                                                        this.detach_client(cx);
+                                                    },
+                                                ))
+                                                .tooltip({
+                                                    let focus_handle = focus_handle.clone();
+                                                    move |_window, cx| {
+                                                        Tooltip::for_action_in(
+                                                            "Detach",
+                                                            &Detach,
+                                                            &focus_handle,
+                                                            cx,
+                                                        )
+                                                    }
+                                                }),
                                             )
                                         },
                                     )
@@ -1314,101 +1285,6 @@ impl DebugPanel {
                 keep(&child)
             });
         }
-    }
-
-    fn render_history_button(
-        &self,
-        running_state: &Entity<RunningState>,
-        thread_status: ThreadStatus,
-        window: &mut Window,
-    ) -> ButtonLike {
-        ButtonLike::new_rounded_left("debug-back-in-history")
-            .layer(ElevationIndex::ModalSurface)
-            .child(Icon::new(IconName::HistoryRerun).size(IconSize::Small))
-            .disabled(
-                thread_status == ThreadStatus::Running || thread_status == ThreadStatus::Stepping,
-            )
-            .tooltip(Tooltip::text("Step Back in Session History"))
-            .on_click(window.listener_for(running_state, |this, _, _window, cx| {
-                this.session().update(cx, |session, cx| {
-                    let ix = session
-                        .active_snapshot_index()
-                        .unwrap_or_else(|| session.historic_snapshots().len());
-
-                    session.select_historic_snapshot(Some(ix.saturating_sub(1)), cx);
-                })
-            }))
-    }
-
-    fn render_history_toggle_button(
-        &self,
-        thread_status: ThreadStatus,
-        running_state: &Entity<RunningState>,
-    ) -> impl IntoElement {
-        let chevron_button_size = rems_from_px(20_f32);
-        PopoverMenu::new("debug-back-in-history-menu")
-            .trigger(
-                ButtonLike::new_rounded_right("debug-back-in-history-menu-trigger")
-                    .layer(ElevationIndex::ModalSurface)
-                    .selected_style(ButtonStyle::Tinted(TintColor::Accent))
-                    .disabled(
-                        thread_status == ThreadStatus::Running
-                            || thread_status == ThreadStatus::Stepping,
-                    )
-                    .width(chevron_button_size)
-                    .height(chevron_button_size.into())
-                    .child(Icon::new(IconName::ChevronDown).size(IconSize::XSmall)),
-            )
-            .menu({
-                let running_state = running_state.clone();
-                move |window, cx| {
-                    let handler =
-                        |ix: Option<usize>, running_state: Entity<RunningState>, cx: &mut App| {
-                            running_state.update(cx, |state, cx| {
-                                state.session().update(cx, |session, cx| {
-                                    session.select_historic_snapshot(ix, cx);
-                                })
-                            })
-                        };
-
-                    let running_state = running_state.clone();
-                    Some(ContextMenu::build(
-                        window,
-                        cx,
-                        move |mut context_menu, _window, cx| {
-                            let history = running_state
-                                .read(cx)
-                                .session()
-                                .read(cx)
-                                .historic_snapshots();
-
-                            context_menu = context_menu.entry("Current State", None, {
-                                let running_state = running_state.clone();
-                                move |_window, cx| {
-                                    handler(None, running_state.clone(), cx);
-                                }
-                            });
-
-                            if !history.is_empty() {
-                                context_menu = context_menu.separator();
-                            }
-
-                            for (ix, _) in history.iter().enumerate().rev() {
-                                context_menu =
-                                    context_menu.entry(format!("history-{}", ix + 1), None, {
-                                        let running_state = running_state.clone();
-                                        move |_window, cx| {
-                                            handler(Some(ix), running_state.clone(), cx);
-                                        }
-                                    });
-                            }
-
-                            context_menu
-                        },
-                    ))
-                }
-            })
-            .anchor(Anchor::TopRight)
     }
 }
 

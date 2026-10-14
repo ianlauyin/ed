@@ -3,9 +3,9 @@ use futures::{AsyncReadExt as _, StreamExt as _};
 use gpui::AsyncApp;
 use http_client::{HttpClient, Url};
 use paths::remote_servers_dir;
-use release_channel::ReleaseChannel;
 use semver::Version;
 use serde::Deserialize;
+use settings_content::app_metadata::ServerRelease;
 use smol::fs::File;
 use std::{
     ffi::OsStr,
@@ -21,7 +21,7 @@ pub struct ReleaseAsset {
 }
 
 async fn release_asset(
-    channel: ReleaseChannel,
+    channel: ServerRelease,
     version: Option<Version>,
     os: &str,
     arch: &str,
@@ -54,7 +54,7 @@ async fn release_asset(
 }
 
 pub async fn get_remote_server_release_url(
-    channel: ReleaseChannel,
+    channel: ServerRelease,
     version: Option<Version>,
     os: &str,
     arch: &str,
@@ -66,7 +66,7 @@ pub async fn get_remote_server_release_url(
 }
 
 pub async fn download_remote_server_release(
-    channel: ReleaseChannel,
+    channel: ServerRelease,
     version: Option<Version>,
     os: &str,
     arch: &str,

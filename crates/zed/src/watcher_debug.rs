@@ -6,8 +6,8 @@ use gpui::{
     Window, WindowBounds, WindowOptions, actions, px, size,
 };
 use language::{LineEnding, language_settings::SoftWrap};
-use release_channel::AppVersion;
 use serde::Serialize;
+use settings_content::app_metadata::AppVersion;
 use std::{
     collections::{HashSet, VecDeque},
     sync::Arc,
@@ -855,7 +855,7 @@ mod tests {
 
     #[gpui::test]
     async fn saves_json_handles_cancellation_and_reports_errors(cx: &mut gpui::TestAppContext) {
-        cx.update(|cx| release_channel::init("1.2.3+dev.test".parse().unwrap(), cx));
+        cx.update(|cx| settings_content::app_metadata::init("1.2.3+dev.test".parse().unwrap(), cx));
         let app_state = cx.update(AppState::test);
         let fs = app_state.fs.clone();
         let root = std::path::Path::new(util::path!("/exports"));

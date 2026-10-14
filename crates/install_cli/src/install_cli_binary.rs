@@ -1,7 +1,6 @@
 use super::register_zed_scheme;
 use anyhow::Result;
 use gpui::{AppContext as _, AsyncApp, Context, PromptLevel, Window, actions};
-use release_channel::ReleaseChannel;
 use std::ops::Deref;
 use std::path::{Path, PathBuf};
 use util::ResultExt;
@@ -131,7 +130,7 @@ pub fn install_cli_binary(window: &mut Window, cx: &mut Context<Workspace>) {
                     format!(
                         "Installed `zed` to {}. You can launch {} from your terminal.",
                         path.to_string_lossy(),
-                        ReleaseChannel::global(cx).display_name()
+                        "Zed"
                     ),
                 ),
                 cx,

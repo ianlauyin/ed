@@ -3002,10 +3002,10 @@ mod tests {
         server_cx: &mut TestAppContext,
     ) -> (Entity<Project>, Entity<Workspace>) {
         cx.update(|cx| {
-            release_channel::init(semver::Version::new(0, 0, 0), cx);
+            settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         });
         server_cx.update(|cx| {
-            release_channel::init(semver::Version::new(0, 0, 0), cx);
+            settings_content::app_metadata::init(semver::Version::new(0, 0, 0), cx);
         });
 
         let params = cx.update(AppState::test);

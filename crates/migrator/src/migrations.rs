@@ -1,6 +1,6 @@
 use anyhow::Result;
 use serde_json::Value;
-use settings_content::{PlatformOverrides, ReleaseChannelOverrides};
+use settings_content::PlatformOverrides;
 
 /// Applies a migration callback to the root settings object as well as all
 /// nested platform, release-channel, and profile override objects.
@@ -14,7 +14,7 @@ pub(crate) fn migrate_settings(
 
     migrate_one(root_object)?;
 
-    let override_keys = ReleaseChannelOverrides::OVERRIDE_KEYS
+    let override_keys = ["dev", "nightly", "preview", "stable"]
         .iter()
         .copied()
         .chain(PlatformOverrides::OVERRIDE_KEYS.iter().copied());
@@ -85,7 +85,7 @@ pub(crate) fn migrate_language_setting(
         return Ok(());
     };
 
-    let override_keys = ReleaseChannelOverrides::OVERRIDE_KEYS
+    let override_keys = ["dev", "nightly", "preview", "stable"]
         .iter()
         .copied()
         .chain(PlatformOverrides::OVERRIDE_KEYS.iter().copied());

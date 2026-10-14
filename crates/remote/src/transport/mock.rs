@@ -442,7 +442,7 @@ impl RemoteClientDelegate for MockDelegate {
     fn download_server_binary_locally(
         &self,
         _platform: crate::RemotePlatform,
-        _release_channel: release_channel::ReleaseChannel,
+        _release_channel: settings_content::app_metadata::ServerRelease,
         _version: Option<semver::Version>,
         _cx: &mut AsyncApp,
     ) -> Task<Result<PathBuf>> {
@@ -452,7 +452,7 @@ impl RemoteClientDelegate for MockDelegate {
     fn get_download_url(
         &self,
         _platform: crate::RemotePlatform,
-        _release_channel: release_channel::ReleaseChannel,
+        _release_channel: settings_content::app_metadata::ServerRelease,
         _version: Option<semver::Version>,
         _cx: &mut AsyncApp,
     ) -> Task<Result<Option<String>>> {

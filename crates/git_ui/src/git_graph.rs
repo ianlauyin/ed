@@ -1417,7 +1417,7 @@ impl RefMenuEntry {
                     .icon_color(Color::Muted)
                     .icon_position(IconPosition::End)
                     .handler(|_window, cx| {
-                        cx.open_url(&release_channel::docs_url(
+                        cx.open_url(&settings_content::app_metadata::docs_url(
                             CUSTOM_GIT_COMMANDS_DOCS_SLUG,
                             cx,
                         ));

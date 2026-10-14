@@ -958,7 +958,6 @@ impl SettingsStore {
     fn parse_default_settings(default_settings: &str) -> Result<SettingsContent> {
         let parsed = UserSettingsContent::parse_json_with_comments(default_settings)?;
         let mut merged = (*parsed.content).clone();
-        merged.merge_from_option(parsed.for_release_channel());
         merged.merge_from_option(parsed.for_os());
         Ok(merged)
     }
@@ -1386,7 +1385,6 @@ impl SettingsStore {
 
                 if should_merge_user_settings {
                     merged.merge_from(&user_settings.content);
-                    merged.merge_from_option(user_settings.for_release_channel());
                     merged.merge_from_option(user_settings.for_os());
                 }
 
@@ -1794,34 +1792,6 @@ mod tests {
                     migration_status: MigrationStatus::NotNeeded
                 }
             ]
-        );
-    }
-
-    #[gpui::test]
-    fn test_default_settings_release_channel_overrides(cx: &mut App) {
-        // The test deals with overrides and should ignore the other set-ups (Preview and Stable runs)
-        if *release_channel::RELEASE_CHANNEL != release_channel::ReleaseChannel::Dev {
-            return;
-        }
-
-        let mut defaults: serde_json::Value =
-            crate::parse_json_with_comments(&default_settings()).unwrap();
-        let root = defaults
-            .as_object_mut()
-            .expect("default settings must be a JSON object");
-        root.insert("dev".into(), serde_json::json!({ "cursor_blink": false }));
-        root.insert("stable".into(), serde_json::json!({ "cursor_blink": true }));
-        let defaults_with_overrides = serde_json::to_string(&defaults).unwrap();
-
-        let mut store = SettingsStore::new(cx, &defaults_with_overrides);
-        store.register_setting::<TestCursorBlinkSetting>();
-
-        assert_eq!(
-            store.get::<TestCursorBlinkSetting>(None),
-            &TestCursorBlinkSetting {
-                cursor_blink: false
-            },
-            "dev override from default settings should apply",
         );
     }
 
