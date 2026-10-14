@@ -356,7 +356,7 @@ impl Render for ApplicationMenu {
 mod tests {
     use gpui::{Action, Menu, MenuItem, OwnedMenu, OwnedMenuItem, TestAppContext, UpdateGlobal};
 
-    use settings::{Settings, SettingsStore};
+    use settings::SettingsStore;
 
     use crate::application_menu::{ApplicationMenu, MenuEntry, OpenApplicationMenu};
 

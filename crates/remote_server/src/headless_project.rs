@@ -1,10 +1,10 @@
 use anyhow::{Context as _, Result, anyhow};
-use client::ProjectId;
 use collections::HashMap;
 use collections::HashSet;
 use gpui::TasksIncluded;
 use language::File;
 use lsp::LanguageServerId;
+use rpc::ProjectId;
 
 use extension::ExtensionHostProxy;
 use fs::Fs;
@@ -306,7 +306,6 @@ impl HeadlessProject {
         TaskStore::init(Some(&session));
         ToolchainStore::init(&session);
         DapStore::init(&session, cx);
-        // todo(debugger): Re init breakpoint store when we set it up for collab
         BreakpointStore::init(&session);
         GitStore::init(&session);
 
@@ -563,7 +562,7 @@ impl HeadlessProject {
         message: TypedEnvelope<proto::AddWorktree>,
         mut cx: AsyncApp,
     ) -> Result<proto::AddWorktreeResponse> {
-        use client::ErrorCodeExt;
+        use rpc::ErrorCodeExt;
         let fs = this.read_with(&cx, |this, _| this.fs.clone());
         let path = PathBuf::from(shellexpand::tilde(&message.payload.path).to_string());
 

@@ -8,7 +8,6 @@ mod open_listener;
 mod open_url_modal;
 mod quick_action_bar;
 pub mod remote_debug;
-pub mod telemetry_log;
 #[cfg(all(target_os = "macos", feature = "visual-tests"))]
 pub mod visual_tests;
 #[cfg(target_os = "windows")]
@@ -19,12 +18,10 @@ pub use app_menus::*;
 use assets::Assets;
 
 use breadcrumbs::Breadcrumbs;
-use client::zed_urls;
 use collections::VecDeque;
 use debugger_ui::debugger_panel::DebugPanel;
 use editor::{Editor, MultiBuffer};
 use feature_flags::{FeatureFlagAppExt as _, PanicFeatureFlag};
-use futures::FutureExt as _;
 use futures::{StreamExt, channel::mpsc, select_biased};
 use git_ui::branch_diff::BranchDiffToolbar;
 use git_ui::commit_view::CommitViewToolbar;
@@ -97,11 +94,11 @@ use workspace::{
     create_and_open_local_file, notifications::simple_message_notification::MessageNotification,
     open_new,
 };
-use workspace::{CloseProject, CloseWindow, RestoreBanner, with_active_or_new_workspace};
+use workspace::{CloseProject, CloseWindow, with_active_or_new_workspace};
 use workspace::{Pane, notifications::DetachAndPromptErr};
 use zed_actions::{
-    About, GetMerch, OpenAccountSettings, OpenBrowser, OpenDocs, OpenProjectTasks,
-    OpenServerSettings, OpenSettingsFile, OpenStatusPage, OpenZedUrl, Quit,
+    About, GetMerch, OpenBrowser, OpenDocs, OpenProjectTasks, OpenServerSettings, OpenSettingsFile,
+    OpenStatusPage, OpenZedUrl, Quit,
 };
 
 const DOCS_URL: &str = "https://zed.dev/docs/";
@@ -193,8 +190,6 @@ pub fn init(cx: &mut App) {
     cx.on_action(|_: &ShowAll, cx| cx.unhide_other_apps());
     cx.on_action(quit);
 
-    cx.on_action(|_: &RestoreBanner, cx| title_bar::restore_banner(cx));
-
     cx.observe_flag::<PanicFeatureFlag, _>({
         let mut added = false;
         move |flag, cx| {
@@ -259,11 +254,6 @@ pub fn init(cx: &mut App) {
                 window,
                 cx,
             );
-        });
-    })
-    .on_action(|_: &OpenAccountSettings, cx| {
-        with_active_or_new_workspace(cx, |_, _, cx| {
-            cx.open_url(&zed_urls::account_url(cx));
         });
     })
     .on_action(|_: &OpenTasks, cx| {
@@ -465,23 +455,6 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
             })
             .detach();
         }
-
-        cx.spawn_in(window, async move |_this, cx| {
-            const TELEMETRY_INTERVAL: std::time::Duration = std::time::Duration::from_mins(5);
-            loop {
-                cx.background_executor().timer(TELEMETRY_INTERVAL).await;
-                if cx
-                    .update(|window, cx| {
-                        input_latency_ui::report_input_latency_telemetry(window, cx);
-                        input_latency_ui::report_frame_duration_telemetry(window, cx);
-                    })
-                    .is_err()
-                {
-                    break;
-                }
-            }
-        })
-        .detach();
 
         let multi_workspace_handle = cx.entity().downgrade();
         window.on_window_should_close(cx, move |window, cx| {
@@ -708,8 +681,6 @@ fn initialize_panels(window: &mut Window, cx: &mut Context<Workspace>) -> Task<a
         let outline_panel = OutlinePanel::load(workspace_handle.clone(), cx.clone());
         let terminal_panel = TerminalPanel::load(workspace_handle.clone(), cx.clone());
         let git_panel = GitPanel::load(workspace_handle.clone(), cx.clone());
-        let channels_panel =
-            collab_ui::collab_panel::CollabPanel::load(workspace_handle.clone(), cx.clone());
         let debug_panel = DebugPanel::load(workspace_handle.clone(), cx);
 
         async fn add_panel_when_ready(
@@ -732,7 +703,6 @@ fn initialize_panels(window: &mut Window, cx: &mut Context<Workspace>) -> Task<a
             add_panel_when_ready(outline_panel, workspace_handle.clone(), cx.clone()),
             add_panel_when_ready(terminal_panel, workspace_handle.clone(), cx.clone()),
             add_panel_when_ready(git_panel, workspace_handle.clone(), cx.clone()),
-            add_panel_when_ready(channels_panel, workspace_handle.clone(), cx.clone()),
             add_panel_when_ready(debug_panel, workspace_handle.clone(), cx.clone()),
         );
 
@@ -760,22 +730,8 @@ fn register_actions(
              window: &mut Window,
              cx: &mut Context<Workspace>| {
                 let project = workspace.project().clone();
-                // In a collab session the report buffer is visible to other
-                // participants, so attribute the data to this user's machine.
-                let reported_by = if project.read(cx).is_shared()
-                    || project.read(cx).is_via_collab()
-                {
-                    workspace
-                        .user_store()
-                        .read(cx)
-                        .current_user()
-                        .map(|user| user.username.to_string())
-                } else {
-                    None
-                };
                 let report_data = input_latency_ui::snapshot_input_latency_report(
                     window,
-                    reported_by,
                     cx,
                 );
                 cx.spawn_in(window, async move |workspace, cx| {
@@ -910,7 +866,7 @@ fn register_actions(
             }
         })
         .register_action(|workspace, action: &workspace::Open, window, cx| {
-            telemetry::event!("Project Opened");
+
             workspace::prompt_for_open_path_and_open(
                 workspace,
                 workspace.app_state().clone(),
@@ -961,7 +917,7 @@ fn register_actions(
                     DefaultOpenBehavior::NewWindow
                 )
             });
-            telemetry::event!("Project Opened");
+
             let paths = workspace.prompt_for_open_path(
                 PathPromptOptions {
                     files: true,
@@ -1148,14 +1104,7 @@ fn register_actions(
                 workspace.toggle_panel_focus::<OutlinePanel>(window, cx);
             },
         )
-        .register_action(
-            |workspace: &mut Workspace,
-             _: &collab_ui::collab_panel::ToggleFocus,
-             window: &mut Window,
-             cx: &mut Context<Workspace>| {
-                workspace.toggle_panel_focus::<collab_ui::collab_panel::CollabPanel>(window, cx);
-            },
-        )
+
         .register_action(
             |workspace: &mut Workspace,
              _: &terminal_panel::ToggleFocus,
@@ -1321,9 +1270,6 @@ fn initialize_pane(
             toolbar.add_item(lsp_log_item, window, cx);
             let dap_log_item = cx.new(|_| debugger_tools::DapLogToolbarItemView::new());
             toolbar.add_item(dap_log_item, window, cx);
-            let telemetry_log_item =
-                cx.new(|cx| telemetry_log::TelemetryLogToolbarItemView::new(window, cx));
-            toolbar.add_item(telemetry_log_item, window, cx);
             let syntax_tree_item = cx.new(|_| language_tools::SyntaxTreeToolbarItemView::new());
             toolbar.add_item(syntax_tree_item, window, cx);
             let migration_banner =
@@ -2574,7 +2520,7 @@ mod tests {
     use project::{Project, ProjectPath};
     use remote::RemoteClient;
     use remote_server::{HeadlessAppState, HeadlessProject};
-    use semver::Version;
+
     use serde_json::json;
     use settings::{SettingsStore, SplicingVec, watch_config_file};
     use std::{
@@ -2742,10 +2688,6 @@ mod tests {
     ) {
         let app_state = init_test(cx);
         let executor = cx.executor();
-
-        server_cx.update(|cx| {
-            release_channel::init(Version::new(0, 0, 0), cx);
-        });
 
         let (connection_options, server_session, connect_guard) =
             RemoteClient::fake_server(cx, server_cx);
@@ -5188,7 +5130,6 @@ mod tests {
             let app_state = AppState::test(cx);
 
             theme_settings::init(theme::LoadThemes::JustBase, cx);
-            client::init(&app_state.client, cx);
             workspace::init(app_state.clone(), cx);
             onboarding::init(cx);
             app_state
@@ -5576,111 +5517,22 @@ mod tests {
                 .collect::<Vec<_>>();
             assert_eq!(actions_without_namespace, Vec::<&str>::new());
 
-            let expected_namespaces = vec![
-                "action",
-                "activity_indicator",
-                "agent",
-                "agents_sidebar",
-                "app_menu",
-                "assistant",
-                "assistant2",
-                "auto_update",
-                "branch_picker",
-                "bedrock",
-                "branches",
-                "buffer_search",
-                "call_hierarchy",
-                "channel_modal",
-                "cli",
-                "client",
+            for removed in [
                 "collab",
                 "collab_panel",
-                "command_palette",
-                "console",
-                "context_server",
-                "copilot",
-                "copilot_edit_predictions",
-                "debug_panel",
-                "debugger",
-                "dev",
-                "diagnostics",
-                "edit_prediction",
-                "editor",
-                "encoding_selector",
-                "feedback",
-                "file_finder",
-                "git",
-                "git_graph",
-                "git_onboarding",
-                "git_panel",
-                "git_picker",
-                "go_to_line",
-                "highlights_tree_view",
-                "icon_theme_selector",
-                "image_viewer",
-                "inline_assistant",
-                "journal",
-                "keymap_editor",
-                "keystroke_input",
-                "language_selector",
-                "welcome",
-                "line_ending_selector",
-                "lsp_command_selector",
-                "lsp_tool",
-                "markdown",
-                "menu",
-                "multi_workspace",
-                "new_process_modal",
-                "notebook",
-                "onboarding",
-                "outline",
-                "outline_panel",
-                "pane",
-                "picker",
-                "project_panel",
-                "project_search",
-                "project_symbols",
-                "projects",
-                "recent_projects",
-                "remote_debug",
-                "repl",
-                "search",
-                "settings_editor",
-                "settings_profile_selector",
-                "skill_creator",
-                "snippets",
-                "stash_picker",
-                "svg",
-                "syntax_tree_view",
-                "tab_switcher",
-                "tabular_data",
-                "task",
-                "terminal",
-                "terminal_panel",
-                "text_finder",
-                "theme",
-                "theme_selector",
-                "toast",
-                "toolchain",
-                "variable_list",
-                "vim",
-                "which_key",
-                "window",
-                "workspace",
-                "worktree_picker",
-                "zed",
-                "zed_actions",
-                "zed_predict_onboarding",
-                "zeta",
-            ];
-            assert_eq!(
-                all_namespaces,
-                expected_namespaces
-                    .into_iter()
-                    .map(|namespace| namespace.to_string())
-                    .sorted()
-                    .collect::<Vec<_>>()
-            );
+                "call",
+                "channel_modal",
+                "client",
+                "auto_update",
+            ] {
+                assert!(
+                    !all_namespaces.iter().any(|namespace| namespace == removed),
+                    "removed action namespace: {removed}"
+                );
+            }
+            for retained in ["editor", "workspace", "title_bar"] {
+                assert!(all_namespaces.iter().any(|namespace| namespace == retained));
+            }
         });
     }
 
@@ -5850,15 +5702,12 @@ mod tests {
             gpui_tokio::init(cx);
             AppState::set_global(app_state.clone(), cx);
             theme_settings::init(theme::LoadThemes::JustBase, cx);
-            audio::init(cx);
-            channel::init(&app_state.client, app_state.user_store.clone(), cx);
-            call::init(app_state.client.clone(), app_state.user_store.clone(), cx);
-            notifications::init(app_state.client.clone(), app_state.user_store.clone(), cx);
+
             workspace::init(app_state.clone(), cx);
-            release_channel::init(Version::new(0, 0, 0), cx);
+
             command_palette::init(cx);
             editor::init(cx);
-            collab_ui::init(&app_state, cx);
+            title_bar::init(cx);
             git_ui::init(cx);
             project_panel::init(cx);
             outline_panel::init(cx);
@@ -5867,10 +5716,7 @@ mod tests {
             repl::init(app_state.fs.clone(), cx);
             repl::notebook::init(cx);
             tasks_ui::init(cx);
-            project::debugger::breakpoint_store::BreakpointStore::init(
-                &app_state.client.clone().into(),
-            );
-            project::debugger::dap_store::DapStore::init(&app_state.client.clone().into(), cx);
+
             debugger_ui::init(cx);
             initialize_workspace(app_state.clone(), cx);
             search::init(cx);

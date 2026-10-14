@@ -19,7 +19,6 @@ use async_lock::Semaphore;
 use buffer_diff::{
     BufferDiff, DiffHunk, DiffHunkSecondaryStatus, DiffOperations, PendingHunk, PendingSense,
 };
-use client::ProjectId;
 use collections::HashMap;
 pub use conflict_set::{ConflictRegion, ConflictSet, ConflictSetSnapshot, ConflictSetUpdate};
 use file_content::{decode_text, encode_text};
@@ -63,6 +62,7 @@ use parking_lot::Mutex;
 use paths::{config_dir, home_dir};
 use pending_op::{PendingOp, PendingOpId, PendingOps, PendingOpsSummary};
 use postage::stream::Stream as _;
+use rpc::ProjectId;
 use rpc::{
     AnyProtoClient, TypedEnvelope,
     proto::{self, git_reset, split_repository_update},
@@ -1256,10 +1256,6 @@ impl GitStore {
             }
         }
         self.shared_diffs.clear();
-    }
-
-    pub(crate) fn forget_shared_diffs_for(&mut self, peer_id: &proto::PeerId) {
-        self.shared_diffs.remove(peer_id);
     }
 
     pub fn active_repository(&self) -> Option<Entity<Repository>> {
@@ -3344,11 +3340,6 @@ impl GitStore {
                 upstream_project_id,
                 ..
             } => {
-                if upstream_client.is_via_collab() {
-                    return Task::ready(Err(anyhow!(
-                        "Git Clone isn't supported for project guests"
-                    )));
-                }
                 let request = upstream_client.request(proto::GitClone {
                     project_id: *upstream_project_id,
                     abs_path: path.to_string_lossy().into_owned(),
@@ -3375,15 +3366,8 @@ impl GitStore {
                     .spawn(async move { fs.git_config(&path, args).await })
             }
             GitStoreState::Remote {
-                upstream_client, ..
+                upstream_client: _, ..
             } => {
-                // Prevent running git config commands for collab.
-                if upstream_client.is_via_collab() {
-                    return Task::ready(Err(anyhow!(
-                        "Git Config isn't support for project guests"
-                    )));
-                }
-
                 // TODO: Implement this for remote repositories.
                 Task::ready(Err(anyhow!(
                     "Git Config isn't yet supported for remote projects"

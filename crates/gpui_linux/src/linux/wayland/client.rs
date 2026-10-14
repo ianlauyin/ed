@@ -27,13 +27,6 @@ use wayland_backend::client::ObjectId;
 use wayland_backend::protocol::WEnum;
 use wayland_client::event_created_child;
 use wayland_client::globals::{GlobalList, GlobalListContents, registry_queue_init};
-use wayland_client::protocol::wl_callback::{self, WlCallback};
-use wayland_client::protocol::wl_data_device_manager::DndAction;
-use wayland_client::protocol::wl_data_offer::WlDataOffer;
-use wayland_client::protocol::wl_pointer::AxisSource;
-use wayland_client::protocol::{
-    wl_data_device, wl_data_device_manager, wl_data_offer, wl_data_source, wl_output, wl_region,
-};
 use wayland_client::{
     Connection, Dispatch, Proxy, QueueHandle, delegate_noop,
     protocol::{
@@ -76,6 +69,13 @@ use wayland_protocols::{
 };
 use wayland_protocols_plasma::blur::client::{org_kde_kwin_blur, org_kde_kwin_blur_manager};
 use wayland_protocols_wlr::layer_shell::v1::client::{zwlr_layer_shell_v1, zwlr_layer_surface_v1};
+use wayland_rpc::protocol::wl_callback::{self, WlCallback};
+use wayland_rpc::protocol::wl_data_device_manager::DndAction;
+use wayland_rpc::protocol::wl_data_offer::WlDataOffer;
+use wayland_rpc::protocol::wl_pointer::AxisSource;
+use wayland_rpc::protocol::{
+    wl_data_device, wl_data_device_manager, wl_data_offer, wl_data_source, wl_output, wl_region,
+};
 use xkbcommon::xkb::ffi::XKB_KEYMAP_FORMAT_TEXT_V1;
 use xkbcommon::xkb::{self, KEYMAP_COMPILE_NO_FLAGS, Keycode};
 

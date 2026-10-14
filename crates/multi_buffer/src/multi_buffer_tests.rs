@@ -3112,19 +3112,13 @@ async fn test_map_excerpt_ranges(cx: &mut TestAppContext) {
                     ..snapshot.point_to_offset(Point::new(1, 6)),
                 (),
             ),
-            (
-                snapshot.point_to_offset(Point::zero())..snapshot.point_to_offset(Point::new(5, 1)),
-                ()
-            ),
+            (snapshot.point_to_offset(Point::zero())..snapshot.point_to_offset(Point::new(5, 1)),),
             (
                 snapshot.point_to_offset(Point::new(4, 2))
                     ..snapshot.point_to_offset(Point::new(4, 7)),
                 (),
             ),
-            (
-                snapshot.point_to_offset(Point::zero())..snapshot.point_to_offset(Point::new(4, 0)),
-                ()
-            ),
+            (snapshot.point_to_offset(Point::zero())..snapshot.point_to_offset(Point::new(4, 0)),),
         ]),
     );
 

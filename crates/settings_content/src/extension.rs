@@ -17,8 +17,6 @@ pub struct ExtensionSettingsContent {
     /// Default: { "html": true }
     #[serde(default)]
     pub auto_install_extensions: HashMap<Arc<str>, bool>,
-    #[serde(default)]
-    pub auto_update_extensions: HashMap<Arc<str>, bool>,
     /// Whether to suggest installing extensions based on the files you open.
     ///
     /// Default: true
@@ -32,7 +30,6 @@ impl Default for ExtensionSettingsContent {
     fn default() -> Self {
         Self {
             auto_install_extensions: HashMap::default(),
-            auto_update_extensions: HashMap::default(),
             suggest_extensions: true,
             granted_extension_capabilities: None,
         }

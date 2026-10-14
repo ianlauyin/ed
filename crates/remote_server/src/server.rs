@@ -7,7 +7,6 @@ pub use headless_project::{HeadlessAppState, HeadlessProject};
 
 use anyhow::{Context as _, Result, anyhow};
 use clap::Subcommand;
-use client::ProxySettings;
 use collections::HashMap;
 use extension::ExtensionHostProxy;
 use fs::{Fs, RealFs};
@@ -38,6 +37,7 @@ use remote::{
 use reqwest_client::ReqwestClient;
 use rpc::proto::{self, Envelope, REMOTE_SERVER_PROJECT_ID};
 use rpc::{AnyProtoClient, TypedEnvelope};
+use settings::ProxySettings;
 use settings::{Settings, SettingsStore, watch_config_file};
 use smol::{
     Timer,
@@ -410,34 +410,10 @@ fn init_logging_server(log_file_path: &Path) -> Result<Receiver<Vec<u8>>> {
 
     Ok(rx)
 }
-
-/// Initializes the telemetry queue on the remote server, forwarding every
 /// emitted event to the connected client over the proto channel.
 ///
-/// The remote server cannot upload telemetry itself (it has no logged-in user,
-/// no checksum seed, and no Telemetry instance), so without this its
-/// `telemetry::event!` calls are silently dropped. The client attributes these
 /// events to the remote host using the platform it already detected during
 /// connection setup, so no OS metadata needs to be sent here.
-fn init_telemetry_forwarding(session: AnyProtoClient, cx: &mut App) {
-    let (tx, mut rx) = mpsc::unbounded::<telemetry::Event>();
-    telemetry::init(tx);
-
-    cx.background_spawn(async move {
-        while let Some(event) = rx.next().await {
-            let Some(event_json) = serde_json::to_string(&event).log_err() else {
-                continue;
-            };
-            session
-                .send(proto::TelemetryEvent {
-                    project_id: REMOTE_SERVER_PROJECT_ID,
-                    event_json,
-                })
-                .log_err();
-        }
-    })
-    .detach();
-}
 
 fn handle_crash_files_requests(project: &Entity<HeadlessProject>, client: &AnyProtoClient) {
     client.add_request_handler(
@@ -676,8 +652,10 @@ pub fn execute_run(
     let app = gpui_platform::headless();
     let pid = std::process::id();
     let id = pid.to_string();
-    let should_install_crash_handler =
-        client::telemetry::should_install_crash_handler(*RELEASE_CHANNEL);
+    let should_install_crash_handler = matches!(
+        std::env::var("ZED_GENERATE_MINIDUMPS").as_deref(),
+        Ok("true" | "1")
+    );
 
     let crash_handler = if should_install_crash_handler {
         Some(app.background_executor().spawn(crashes::init(
@@ -770,7 +748,7 @@ pub fn execute_run(
 
         log::info!("gpui app started, initializing server");
         let session = start_server(listeners, log_rx, cx, is_wsl_interop);
-        init_telemetry_forwarding(session.clone(), cx);
+
         trusted_worktrees::init(HashMap::default(), cx);
 
         GitHostingProviderRegistry::set_global(git_hosting_provider_registry, cx);
@@ -954,8 +932,10 @@ pub(crate) fn execute_proxy(
     let server_paths = ServerPaths::new(&identifier)?;
 
     let id = std::process::id().to_string();
-    let should_install_crash_handler =
-        client::telemetry::should_install_crash_handler(*RELEASE_CHANNEL);
+    let should_install_crash_handler = matches!(
+        std::env::var("ZED_GENERATE_MINIDUMPS").as_deref(),
+        Ok("true" | "1")
+    );
 
     if should_install_crash_handler {
         smol::spawn(crashes::init(

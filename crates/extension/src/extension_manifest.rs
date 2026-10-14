@@ -4,8 +4,8 @@ use std::fmt;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
+use crate::extension_provides::ExtensionProvides;
 use anyhow::{Context as _, Result, anyhow, bail};
-use cloud_api_types::ExtensionProvides;
 use collections::{BTreeMap, BTreeSet, HashMap};
 use fs::Fs;
 use language::LanguageName;

@@ -187,8 +187,6 @@ impl DockerExecConnection {
         let uname = self.run_docker_exec_delimited("uname -sm").await?;
         parse_platform(&uname)
     }
-
-    /// Best-effort detection of the container's OS version for telemetry.
     async fn discover_os_version(&self, os: RemoteOs) -> Option<String> {
         let (program, args) = super::os_version_command(os);
         match self

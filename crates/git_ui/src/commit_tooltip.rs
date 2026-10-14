@@ -502,7 +502,7 @@ pub(crate) fn shallow_boundary_notice(
     let avatar_width = CommitAvatar::rendered_size(rems(1.), window);
     let can_fetch = workspace
         .read_with(cx, |workspace, cx| {
-            !workspace.project().read(cx).is_via_collab()
+            !workspace.project().read(cx).is_read_only(cx)
         })
         .unwrap_or(false);
     Some(

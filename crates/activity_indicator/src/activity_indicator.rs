@@ -1,4 +1,4 @@
-use auto_update::DismissMessage;
+gpui::actions!(activity_indicator, [DismissMessage]);
 use editor::Editor;
 use futures::StreamExt;
 use gpui::{

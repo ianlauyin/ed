@@ -153,7 +153,6 @@ impl CommitModal {
                 }
             }
             git_panel.set_modal_open(true, cx);
-            git_panel.load_local_committer(cx);
         });
 
         let dock = workspace.dock_at_position(git_panel.position(window, cx));
@@ -352,7 +351,6 @@ impl CommitModal {
             can_commit,
             tooltip,
             commit_label,
-            co_authors,
             active_repo,
             commit_options,
             workspace,
@@ -360,7 +358,7 @@ impl CommitModal {
         ) = self.git_panel.update(cx, |git_panel, cx| {
             let (can_commit, tooltip) = git_panel.configure_commit_button(cx);
             let title = git_panel.commit_button_title();
-            let co_authors = git_panel.render_co_authors(cx);
+
             let active_repo = git_panel.active_repository.clone();
             let commit_options = git_panel.commit_options();
             let is_generating = false;
@@ -368,7 +366,6 @@ impl CommitModal {
                 can_commit,
                 tooltip,
                 title,
-                co_authors,
                 active_repo,
                 commit_options,
                 git_panel.workspace.clone(),
@@ -429,17 +426,12 @@ impl CommitModal {
             .flex_none()
             .justify_between()
             .child(
-                h_flex()
-                    .gap_1()
-                    .flex_shrink_1()
-                    .overflow_x_hidden()
-                    .child(
-                        h_flex()
-                            .flex_shrink_1()
-                            .overflow_x_hidden()
-                            .child(branch_picker),
-                    )
-                    .children(co_authors),
+                h_flex().gap_1().flex_shrink_1().overflow_x_hidden().child(
+                    h_flex()
+                        .flex_shrink_1()
+                        .overflow_x_hidden()
+                        .child(branch_picker),
+                ),
             )
             .child(
                 h_flex()
@@ -452,7 +444,6 @@ impl CommitModal {
                             .disabled(!can_commit)
                             .child(Label::new(commit_label).size(LabelSize::Small).mr_0p5())
                             .on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
-                                telemetry::event!("Git Committed", source = "Git Modal");
                                 this.git_panel.update(cx, |git_panel, cx| {
                                     let options = git_panel.commit_options();
                                     git_panel.commit_changes(options, window, cx)
@@ -514,9 +505,7 @@ impl CommitModal {
         });
         if did_execute {
             if is_amend {
-                telemetry::event!("Git Amended", source = "Git Modal");
             } else {
-                telemetry::event!("Git Committed", source = "Git Modal");
             }
             cx.emit(DismissEvent);
         }
@@ -537,7 +526,6 @@ impl CommitModal {
         if self.git_panel.update(cx, |git_panel, cx| {
             git_panel.amend(&self.commit_editor.focus_handle(cx), window, cx)
         }) {
-            telemetry::event!("Git Amended", source = "Git Modal");
             cx.emit(DismissEvent);
         }
     }

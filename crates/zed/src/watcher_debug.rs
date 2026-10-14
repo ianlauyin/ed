@@ -401,7 +401,7 @@ impl WatcherDebug {
         let watcher = recording.snapshot();
         let worktree_scan_exclusions = worktree_exclusions(&self.app_state, cx);
         let zed_version = AppVersion::global(cx).to_string();
-        let os_name = client::telemetry::os_name();
+        let os_name = system_specs::platform::os_name();
         let directory = std::env::home_dir().unwrap_or_default();
         let path = cx.prompt_for_new_path(&directory, Some("filesystem-watcher.json"));
         let fs = self.app_state.fs.clone();
@@ -417,7 +417,7 @@ impl WatcherDebug {
                     let export = Export {
                         zed_version,
                         os_name,
-                        os_version: client::telemetry::os_version(),
+                        os_version: system_specs::platform::os_version(),
                         watcher,
                         worktree_scan_exclusions,
                         exclusion_scope: EXCLUSION_SCOPE,
@@ -889,10 +889,10 @@ mod tests {
         cx.run_until_parked();
         let json: serde_json::Value = serde_json::from_str(&fs.load(&path).await.unwrap()).unwrap();
         assert_eq!(json["zed_version"], "1.2.3+dev.test");
-        assert_eq!(json["os_name"], client::telemetry::os_name());
+        assert_eq!(json["os_name"], system_specs::platform::os_name());
         let os_version = cx
             .background_executor
-            .spawn(async { client::telemetry::os_version() })
+            .spawn(async { system_specs::platform::os_version() })
             .await;
         assert_eq!(json["os_version"], os_version);
         assert!(!os_version.is_empty());

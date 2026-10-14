@@ -39,12 +39,12 @@
 //! To ease trusting multiple directory worktrees at once, it's possible to trust a parent directory of a certain directory worktree opened in Zed.
 //! Trusting a directory means trusting all its subdirectories as well, including all current and potential directory worktrees.
 
-use client::ProjectId;
 use collections::{HashMap, HashSet};
 use gpui::{
     App, AppContext as _, Context, Entity, EventEmitter, Global, SharedString, Task, WeakEntity,
 };
 use remote::RemoteConnectionOptions;
+use rpc::ProjectId;
 use rpc::{AnyProtoClient, proto};
 use settings::{Settings as _, WorktreeId};
 use std::{

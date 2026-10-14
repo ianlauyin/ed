@@ -839,7 +839,6 @@ impl PlatformInput {
     }
 
     /// A short static name for this input's variant, for diagnostics and
-    /// telemetry.
     pub fn kind_name(&self) -> &'static str {
         match self {
             PlatformInput::KeyDown(_) => "key_down",

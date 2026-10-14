@@ -90,7 +90,7 @@ pub const FS_WATCH_LATENCY: Duration = Duration::from_millis(100);
 pub const ROOT_PATH_CHECK_INTERVAL: Duration = Duration::from_secs(5);
 
 /// A set of local or remote files that are being opened as part of a project.
-/// Responsible for tracking related FS (for local)/collab (for remote) events and corresponding updates.
+/// Responsible for tracking related filesystem (for local)/RPC (for remote) events and corresponding updates.
 /// Stores git repositories data and the diagnostics for the file(s).
 ///
 /// Has an absolute path, and may be set to be visible in Zed UI or not.

@@ -72,8 +72,6 @@ impl RemoteOs {
     pub fn is_windows(&self) -> bool {
         matches!(self, RemoteOs::Windows)
     }
-
-    /// A human-readable OS name for telemetry. Matches `client::telemetry::os_name`
     /// ignoring the compositor (as we run headless on remotes).
     pub fn display_name(&self) -> &'static str {
         match self {
@@ -436,7 +434,7 @@ impl RemoteClient {
                 let platform = remote_connection.remote_platform();
                 let os_version = remote_connection.remote_os_version();
                 let connection_options = remote_connection.connection_options();
-                let connection_type = connection_options.connection_type();
+                let _connection_type = connection_options.connection_type();
                 let this = cx.new(|_| Self {
                     client: client.clone(),
                     unique_identifier: unique_identifier.clone(),
@@ -513,16 +511,6 @@ impl RemoteClient {
                 });
 
                 // Use the same `remote_*` property schema as the forwarded
-                // remote events (see `client::telemetry::report_remote_event`)
-                // so all remote-origin telemetry can be queried uniformly.
-                telemetry::event!(
-                    "Remote Connection Established",
-                    remote = true,
-                    remote_connection_type = connection_type,
-                    remote_os_name = platform.os.display_name(),
-                    remote_os_version = os_version,
-                    remote_architecture = platform.arch.as_str(),
-                );
 
                 Ok(Some(this))
             });
@@ -1373,7 +1361,6 @@ impl RemoteConnectionOptions {
     }
 
     /// A stable identifier for the kind of remote connection, suitable for
-    /// telemetry (e.g. `"ssh"`, `"wsl"`, `"docker"`, `"podman"`).
     pub fn connection_type(&self) -> &'static str {
         match self {
             RemoteConnectionOptions::Ssh(_) => "ssh",
@@ -2119,10 +2106,6 @@ impl ProtoClient for ChannelClient {
 
     fn message_handler_set(&self) -> &Mutex<ProtoMessageHandlerSet> {
         &self.message_handlers
-    }
-
-    fn is_via_collab(&self) -> bool {
-        false
     }
 
     fn has_wsl_interop(&self) -> bool {

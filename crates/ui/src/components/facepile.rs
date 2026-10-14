@@ -91,7 +91,7 @@ pub const EXAMPLE_FACES: [&str; 6] = [
 
 impl Component for Facepile {
     fn scope() -> ComponentScope {
-        ComponentScope::Collaboration
+        ComponentScope::Images
     }
 
     fn description() -> &'static str {

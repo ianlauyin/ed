@@ -241,8 +241,6 @@ impl HangDetector {
             .collect()
     }
 }
-
-/// A [`HangIncident`] in a telemetry-friendly form: timestamps and durations
 /// in fractional milliseconds since app startup (microsecond precision),
 /// locations as plain data, contributor count capped by the converter.
 #[derive(Debug, Clone, Serialize)]

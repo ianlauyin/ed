@@ -3,7 +3,7 @@ mod page_data;
 pub mod pages;
 
 use anyhow::{Context as _, Result};
-use cloud_api_types::OrganizationConfiguration;
+
 use editor::{Editor, EditorEvent};
 use futures::{StreamExt, channel::mpsc};
 use fuzzy::StringMatchCandidate;
@@ -54,7 +54,6 @@ use crate::components::{
     EnumVariantDropdown, NumberField, NumberFieldMode, NumberFieldType, SettingsInputField,
     SettingsSectionHeader, font_picker, icon_theme_picker, text_field_a11y_state, theme_picker,
 };
-use crate::pages::{render_input_audio_device_dropdown, render_output_audio_device_dropdown};
 
 const NAVBAR_CONTAINER_TAB_INDEX: isize = 0;
 const NAVBAR_GROUP_TAB_INDEX: isize = 1;
@@ -111,7 +110,6 @@ struct SettingField<T: 'static> {
     /// organization's settings. Takes the organization configuration and the
     /// resolved settings value, and returns `Some(...)` if the organization
     /// overrides the setting, otherwise `None`.
-    organization_override: Option<fn(&OrganizationConfiguration) -> Option<&T>>,
 
     /// A json-path-like string that gives a unique-ish string that identifies
     /// where in the JSON the setting is defined.
@@ -161,7 +159,6 @@ impl<T: 'static> SettingField<T> {
         SettingField {
             pick: |_| Some(&UnimplementedSettingField),
             write: |_, _, _| unreachable!(),
-            organization_override: None,
             json_path: self.json_path,
         }
     }
@@ -181,8 +178,6 @@ trait AnySettingField {
     ) -> Option<Box<dyn Fn(&mut Window, &mut App)>>;
 
     fn json_path(&self) -> Option<&'static str>;
-
-    fn is_overridden_by_organization(&self, cx: &App) -> bool;
 }
 
 impl<T: PartialEq + Clone + Send + Sync + 'static> AnySettingField for SettingField<T> {
@@ -257,19 +252,6 @@ impl<T: PartialEq + Clone + Send + Sync + 'static> AnySettingField for SettingFi
 
     fn json_path(&self) -> Option<&'static str> {
         self.json_path
-    }
-
-    fn is_overridden_by_organization(&self, cx: &App) -> bool {
-        let Some(org_override) = self.organization_override else {
-            return false;
-        };
-
-        let user_store = AppState::global(cx).user_store.read(cx);
-        let Some(org_config) = user_store.current_organization_configuration() else {
-            return false;
-        };
-
-        (org_override)(&org_config).is_some()
     }
 }
 
@@ -639,8 +621,8 @@ fn init_renderers(cx: &mut App) {
         .add_basic_renderer::<settings::SemanticTokens>(render_dropdown)
         .add_basic_renderer::<settings::DocumentFoldingRanges>(render_dropdown)
         .add_basic_renderer::<settings::DocumentSymbols>(render_dropdown)
-        .add_basic_renderer::<settings::AudioInputDeviceName>(render_input_audio_device_dropdown)
-        .add_basic_renderer::<settings::AudioOutputDeviceName>(render_output_audio_device_dropdown)
+
+
         .add_basic_renderer::<settings::TerminalBell>(render_dropdown)
         // please semicolon stay on next line
         ;
@@ -804,8 +786,6 @@ fn open_settings_editor_with(
     cx: &mut App,
     callback: impl FnOnce(&mut SettingsWindow, &mut Window, &mut Context<SettingsWindow>) + 'static,
 ) {
-    telemetry::event!("Settings Viewed");
-
     let existing_window = cx
         .windows()
         .into_iter()
@@ -1422,35 +1402,6 @@ fn render_settings_item(
         .filter(|f| f != &file)
         .and_then(|f| settings_window.display_name(&f));
 
-    let control = if setting_item.field.is_overridden_by_organization(cx) {
-        h_flex()
-            .gap_2()
-            .child(
-                div()
-                    .id(format!(
-                        "{}-organization-configuration-warning",
-                        setting_item.title
-                    ))
-                    .child(
-                        Icon::new(IconName::Warning)
-                            .size(IconSize::Small)
-                            .color(Color::Warning),
-                    )
-                    .tooltip(|_, cx| {
-                        Tooltip::with_meta(
-                            "Overridden by Organization",
-                            None,
-                            "Contact your organization admins to adjust this setting.",
-                            cx,
-                        )
-                    }),
-            )
-            .child(control)
-            .into_any_element()
-    } else {
-        control
-    };
-
     render_settings_item_layout(
         settings_window,
         setting_item.title,
@@ -1778,8 +1729,6 @@ impl SettingsWindow {
                     window.remove_window();
                 })
                 .ok();
-
-                telemetry::event!("Settings Closed")
             }
         })
         .detach();
@@ -2266,7 +2215,6 @@ impl SettingsWindow {
             .ok();
 
             cx.background_executor().timer(Duration::from_secs(1)).await;
-            telemetry::event!("Settings Searched", query = query)
         }));
     }
 
@@ -2626,9 +2574,7 @@ impl SettingsWindow {
         }
         self.current_file = self.files[ix].0.clone();
 
-        if let SettingsUiFile::Project((_, _)) = &self.current_file {
-            telemetry::event!("Setting Project Clicked");
-        }
+        if let SettingsUiFile::Project((_, _)) = &self.current_file {}
 
         self.build_ui(window, cx);
 
@@ -2657,9 +2603,7 @@ impl SettingsWindow {
         }
         self.current_file = self.files[ix].0.clone();
 
-        if let SettingsUiFile::Project((_, _)) = &self.current_file {
-            telemetry::event!("Setting Project Clicked");
-        }
+        if let SettingsUiFile::Project((_, _)) = &self.current_file {}
 
         let sub_page_stack = std::mem::take(&mut self.sub_page_stack);
         self.build_ui(window, cx);
@@ -3127,8 +3071,8 @@ impl SettingsWindow {
                                                 ))
                                         })
                                         .on_click({
-                                            let category = this.pages[entry.page_index].title;
-                                            let subcategory =
+                                            let _category = this.pages[entry.page_index].title;
+                                            let _subcategory =
                                                 (!entry.is_root).then_some(entry.title);
 
                                             cx.listener(move |this, event: &gpui::ClickEvent, window, cx| {
@@ -3141,12 +3085,6 @@ impl SettingsWindow {
                                                 {
                                                     return;
                                                 }
-
-                                                telemetry::event!(
-                                                    "Settings Navigation Clicked",
-                                                    category = category,
-                                                    subcategory = subcategory
-                                                );
 
                                                 this.open_and_scroll_to_navbar_entry(
                                                     entry_index,
@@ -3761,9 +3699,7 @@ impl SettingsWindow {
                 shown_errors: &mut HashSet<String>,
                 cx: &mut Context<SettingsWindow>,
             ) -> impl IntoElement {
-                if shown_errors.insert(error.clone()) {
-                    telemetry::event!("Settings Error Shown", label = label, error = &error);
-                }
+                if shown_errors.insert(error.clone()) {}
                 Banner::new()
                     .severity(Severity::Warning)
                     .child(
@@ -4551,13 +4487,11 @@ fn update_settings_file(
 #[inline(never)]
 fn update_settings_file_inner(
     file: SettingsUiFile,
-    file_name: Option<&'static str>,
+    _file_name: Option<&'static str>,
     window: &mut Window,
     cx: &mut App,
     update: &mut dyn FnMut() -> Box<dyn Send + FnOnce(&mut SettingsContent, &App)>,
 ) -> Result<()> {
-    telemetry::event!("Settings Change", setting = file_name, type = file.setting_type());
-
     match file {
         SettingsUiFile::Project((worktree_id, rel_path)) => {
             let rel_path = rel_path.join(paths::local_settings_file_relative_path());
@@ -4738,21 +4672,14 @@ fn get_current_value<'a, T>(
     settings_store: &'a SettingsStore,
     file: &SettingsUiFile,
     field: &'a SettingField<T>,
-    cx: &'a App,
+    _cx: &'a App,
 ) -> Option<CurrentSettingsValue<'a, T>> {
-    let user_store = AppState::global(cx).user_store.read(cx);
-    let org_config = user_store.current_organization_configuration();
-
     let (_file, value) = settings_store.get_value_from_file(file.to_settings(), field.pick);
     let value = value?;
 
-    let org_value = org_config
-        .zip(field.organization_override)
-        .and_then(|(org_config, org_override)| (org_override)(org_config));
-
     Some(CurrentSettingsValue {
-        disabled: org_value.is_some(),
-        value: org_value.unwrap_or(&value),
+        disabled: false,
+        value,
     })
 }
 
@@ -4850,12 +4777,16 @@ fn render_toggle_button<B: Into<bool> + From<bool> + Copy>(
         .disabled(disabled)
         .on_click({
             move |state, window, cx| {
-                telemetry::event!("Settings Change", setting = field.json_path, type = file.setting_type());
-
                 let state = *state == ui::ToggleState::Selected;
-                update_settings_file(file.clone(), field.json_path, window, cx, move |settings, app| {
-                    (field.write)(settings, Some(state.into()), app);
-                })
+                update_settings_file(
+                    file.clone(),
+                    field.json_path,
+                    window,
+                    cx,
+                    move |settings, app| {
+                        (field.write)(settings, Some(state.into()), app);
+                    },
+                )
                 .log_err(); // todo(settings_ui) don't log err
             }
         })
@@ -6355,9 +6286,8 @@ pub mod test {
 
         let project1 = cx.update(|cx| {
             Project::local(
-                app_state.client.clone(),
+                app_state.http_client.clone(),
                 app_state.node_runtime.clone(),
-                app_state.user_store.clone(),
                 app_state.languages.clone(),
                 app_state.fs.clone(),
                 None,
@@ -6381,9 +6311,8 @@ pub mod test {
 
         let project2 = cx.update(|cx| {
             Project::local(
-                app_state.client.clone(),
+                app_state.http_client.clone(),
                 app_state.node_runtime.clone(),
-                app_state.user_store.clone(),
                 app_state.languages.clone(),
                 app_state.fs.clone(),
                 None,
@@ -6526,9 +6455,8 @@ pub mod test {
 
         let project1 = cx.update(|cx| {
             Project::local(
-                app_state.client.clone(),
+                app_state.http_client.clone(),
                 app_state.node_runtime.clone(),
-                app_state.user_store.clone(),
                 app_state.languages.clone(),
                 app_state.fs.clone(),
                 None,
@@ -6576,9 +6504,8 @@ pub mod test {
 
         let project2 = cx.update(|_, cx| {
             Project::local(
-                app_state.client.clone(),
+                app_state.http_client.clone(),
                 app_state.node_runtime.clone(),
-                app_state.user_store.clone(),
                 app_state.languages.clone(),
                 app_state.fs.clone(),
                 None,

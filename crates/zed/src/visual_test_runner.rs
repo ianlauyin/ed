@@ -168,13 +168,11 @@ fn run_visual_tests(project_path: PathBuf, update_baseline: bool) -> Result<()> 
     cx.update(|cx| {
         gpui_tokio::init(cx);
         theme_settings::init(theme::LoadThemes::JustBase, cx);
-        client::init(&app_state.client, cx);
-        audio::init(cx);
         workspace::init(app_state.clone(), cx);
         release_channel::init(semver::Version::new(0, 0, 0), cx);
         command_palette::init(cx);
         editor::init(cx);
-        call::init(app_state.client.clone(), app_state.user_store.clone(), cx);
+
         title_bar::init(cx);
         project_panel::init(cx);
         outline_panel::init(cx);
@@ -218,9 +216,8 @@ fn run_visual_tests(project_path: PathBuf, update_baseline: bool) -> Result<()> 
     // Create a project for the workspace
     let project = cx.update(|cx| {
         project::Project::local(
-            app_state.client.clone(),
+            app_state.http_client.clone(),
             app_state.node_runtime.clone(),
-            app_state.user_store.clone(),
             app_state.languages.clone(),
             app_state.fs.clone(),
             None,
@@ -815,21 +812,19 @@ fn init_app_state(cx: &mut App) -> Arc<AppState> {
     let languages = Arc::new(language::LanguageRegistry::test(
         cx.background_executor().clone(),
     ));
-    let clock = Arc::new(clock::FakeSystemClock::new());
     let http_client = http_client::FakeHttpClient::with_404_response();
-    let client = client::Client::new(clock, http_client, cx);
+
     let session = cx.new(|cx| session::AppSession::new(Session::test(), cx));
-    let user_store = cx.new(|cx| client::UserStore::new(client.clone(), cx));
-    let workspace_store = cx.new(|cx| workspace::WorkspaceStore::new(client.clone(), cx));
+
+    let workspace_store = cx.new(|cx| workspace::WorkspaceStore::new(cx));
 
     theme_settings::init(theme::LoadThemes::JustBase, cx);
-    client::init(&client, cx);
 
     let app_state = Arc::new(AppState {
-        client,
+        http_client,
         fs,
         languages,
-        user_store,
+
         workspace_store,
         node_runtime: NodeRuntime::unavailable(),
         build_window_options: |_, _| Default::default(),
@@ -879,9 +874,8 @@ fn run_breakpoint_hover_visual_tests(
     // Create project
     let project = cx.update(|cx| {
         project::Project::local(
-            app_state.client.clone(),
+            app_state.http_client.clone(),
             app_state.node_runtime.clone(),
-            app_state.user_store.clone(),
             app_state.languages.clone(),
             app_state.fs.clone(),
             None,
@@ -1151,9 +1145,8 @@ fn run_settings_ui_subpage_visual_tests(
 
     let project = cx.update(|cx| {
         project::Project::local(
-            app_state.client.clone(),
+            app_state.http_client.clone(),
             app_state.node_runtime.clone(),
-            app_state.user_store.clone(),
             app_state.languages.clone(),
             app_state.fs.clone(),
             None,
@@ -1694,9 +1687,8 @@ fn create_project_with_worktree(
 ) -> Result<Entity<Project>> {
     let project = cx.update(|cx| {
         project::Project::local(
-            app_state.client.clone(),
+            app_state.http_client.clone(),
             app_state.node_runtime.clone(),
-            app_state.user_store.clone(),
             app_state.languages.clone(),
             app_state.fs.clone(),
             None,

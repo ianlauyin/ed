@@ -203,23 +203,12 @@ pub struct SettingsContent {
 
     pub preview_tabs: Option<PreviewTabsSettingsContent>,
 
-    /// Configuration of audio in Zed.
-    pub audio: Option<AudioSettingsContent>,
-
-    /// Whether or not to automatically check for updates.
-    ///
-    /// Default: true
-    pub auto_update: Option<bool>,
-
     /// This base keymap settings adjusts the default keybindings in Zed to be similar
     /// to other common code editors. By default, Zed's keymap closely follows VSCode's
     /// keymap, with minor adjustments, this corresponds to the "VSCode" setting.
     ///
     /// Default: VSCode
     pub base_keymap: Option<BaseKeymapContent>,
-
-    /// Configuration for the collab panel visual settings.
-    pub collaboration_panel: Option<PanelSettingsContent>,
 
     pub debugger: Option<DebuggerSettingsContent>,
 
@@ -277,20 +266,8 @@ pub struct SettingsContent {
     /// Default: off
     pub reduce_motion: Option<ReduceMotionMode>,
 
-    /// The URL of the Zed server to connect to.
-    pub server_url: Option<String>,
-
-    /// The URL used as the key for credential storage.
-    ///
-    /// When set, credentials are stored under this URL instead of `server_url`.
-    /// This allows running multiple Zed instances side by side without them
-    /// overwriting each other's keychain entries.
-    pub credentials_url: Option<String>,
-
     /// Configuration for session-related features
     pub session: Option<SessionSettingsContent>,
-    /// Control what info is collected by Zed.
-    pub telemetry: Option<TelemetrySettingsContent>,
 
     /// Configuration of the terminal in Zed.
     pub terminal: Option<TerminalSettingsContent>,
@@ -301,9 +278,6 @@ pub struct SettingsContent {
     ///
     /// Default: false
     pub vim_mode: Option<bool>,
-
-    // Settings related to calls in Zed
-    pub calls: Option<CallSettingsContent>,
 
     /// Settings for the which-key popup.
     pub which_key: Option<WhichKeySettingsContent>,
@@ -395,12 +369,12 @@ fallible_options::flattened_deserialize!(SettingsContent {
     sections: { project, theme, extension, workspace, editor, remote },
     options: {
         call_hierarchy, command_palette, file_finder, git_panel, tabs, tab_bar, tab_switcher, status_bar, preview_tabs,
-         audio, auto_update, base_keymap, collaboration_panel, debugger, diagnostics,
+         base_keymap, debugger, diagnostics,
         git,
         global_lsp_settings, image_viewer, markdown_preview, repl, helix_mode, hide_mouse,
         journal, log, line_indicator_format,   outline_panel, project_panel,
-        node, proxy, reduce_motion, server_url, credentials_url, session, telemetry, terminal,
-        title_bar, vim_mode, calls, which_key, vim, modeline_lines, feature_flags,
+        node, proxy, reduce_motion, session, terminal,
+        title_bar, vim_mode, which_key, vim, modeline_lines, feature_flags,
         instrumentation,
     },
     defaults: {},
@@ -549,79 +523,6 @@ impl strum::VariantNames for BaseKeymapContent {
     ];
 }
 
-/// Configuration of audio in Zed.
-#[with_fallible_options]
-#[derive(Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug)]
-pub struct AudioSettingsContent {
-    /// Select specific output audio device.
-    #[serde(rename = "experimental.output_audio_device")]
-    pub output_audio_device: Option<AudioOutputDeviceName>,
-    /// Select specific input audio device.
-    #[serde(rename = "experimental.input_audio_device")]
-    pub input_audio_device: Option<AudioInputDeviceName>,
-}
-
-#[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
-#[serde(transparent)]
-pub struct AudioOutputDeviceName(pub Option<String>);
-
-impl AsRef<Option<String>> for AudioInputDeviceName {
-    fn as_ref(&self) -> &Option<String> {
-        &self.0
-    }
-}
-
-impl From<Option<String>> for AudioInputDeviceName {
-    fn from(value: Option<String>) -> Self {
-        Self(value)
-    }
-}
-
-#[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
-#[serde(transparent)]
-pub struct AudioInputDeviceName(pub Option<String>);
-
-impl AsRef<Option<String>> for AudioOutputDeviceName {
-    fn as_ref(&self) -> &Option<String> {
-        &self.0
-    }
-}
-
-impl From<Option<String>> for AudioOutputDeviceName {
-    fn from(value: Option<String>) -> Self {
-        Self(value)
-    }
-}
-
-/// Control what info is collected by Zed.
-#[with_fallible_options]
-#[derive(Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Debug, MergeFrom)]
-pub struct TelemetrySettingsContent {
-    /// Send debug info like crash reports.
-    ///
-    /// Default: true
-    pub diagnostics: Option<bool>,
-    /// Send anonymized usage data like what languages you're using Zed with.
-    ///
-    /// Default: true
-    pub metrics: Option<bool>,
-    /// Allow sending requests to Anthropic models that cannot be offered with
-    /// Zero Data Retention.
-    ///
-    /// Default: false
-    pub anthropic_retention: Option<bool>,
-}
-
-impl Default for TelemetrySettingsContent {
-    fn default() -> Self {
-        Self {
-            diagnostics: Some(true),
-            metrics: Some(true),
-            anthropic_retention: Some(false),
-        }
-    }
-}
-
 #[with_fallible_options]
 #[derive(Default, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema, Clone, MergeFrom)]
 pub struct DebuggerSettingsContent {
@@ -700,21 +601,6 @@ pub enum DockPosition {
     Left,
     Bottom,
     Right,
-}
-
-/// Configuration of voice calls in Zed.
-#[with_fallible_options]
-#[derive(Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug)]
-pub struct CallSettingsContent {
-    /// Whether the microphone should be muted when joining a channel or a call.
-    ///
-    /// Default: false
-    pub mute_on_join: Option<bool>,
-
-    /// Whether your current project should be shared when joining an empty channel.
-    ///
-    /// Default: false
-    pub share_on_join: Option<bool>,
 }
 
 #[with_fallible_options]
@@ -976,10 +862,6 @@ pub struct FileFinderSettingsContent {
     ///
     /// Default: Smart
     pub include_ignored: Option<IncludeIgnoredContent>,
-    /// Whether to include text channels in file finder results.
-    ///
-    /// Default: false
-    pub include_channels: Option<bool>,
     /// Whether to pre-fill the file finder's query with the text selected in the
     /// focused item (e.g. an editor or a terminal) when it is opened.
     ///
@@ -1648,5 +1530,50 @@ impl std::str::FromStr for DelayMs {
             .parse::<u64>()
             .map(DelayMs)
             .with_context(|| format!("failed to parse delay duration: {s}"))
+    }
+}
+
+#[cfg(test)]
+mod removed_feature_tests {
+    use super::*;
+
+    #[test]
+    fn legacy_collaboration_telemetry_and_update_settings_are_ignored() {
+        let settings: SettingsContent = serde_json::from_value(serde_json::json!({
+            "collaboration_panel": { "button": true },
+            "telemetry": { "metrics": true, "diagnostics": true },
+            "calls": { "share_on_join": true },
+            "audio": {},
+            "auto_update": true,
+            "server_url": "http://localhost:8080",
+            "credentials_url": "legacy-account",
+            "title_bar": {
+                "show_user_menu": true,
+                "show_sign_in": true,
+                "show_user_picture": true,
+                "show_branch_name": false
+            }
+        }))
+        .unwrap();
+        assert_eq!(
+            settings.title_bar.as_ref().unwrap().show_branch_name,
+            Some(false)
+        );
+        let serialized = serde_json::to_value(&settings).unwrap();
+        for removed in [
+            "collaboration_panel",
+            "telemetry",
+            "calls",
+            "audio",
+            "auto_update",
+            "server_url",
+            "credentials_url",
+        ] {
+            assert!(serialized.get(removed).is_none(), "{removed}");
+        }
+        let title_bar = serialized.get("title_bar").unwrap();
+        for removed in ["show_user_menu", "show_sign_in", "show_user_picture"] {
+            assert!(title_bar.get(removed).is_none(), "{removed}");
+        }
     }
 }

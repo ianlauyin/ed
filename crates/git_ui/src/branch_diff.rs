@@ -23,7 +23,7 @@ use project::{
         diff_buffer_list::{self, DiffBase},
     },
 };
-use settings::{GitDiffBaseSetting, Settings};
+use settings::GitDiffBaseSetting;
 use std::{
     any::{Any, TypeId},
     sync::Arc,
@@ -79,7 +79,6 @@ impl BranchDiff {
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) {
-        telemetry::event!("Git Branch Diff Opened");
         let project = workspace.project().clone();
         let Some(intended_repo) = project.read(cx).active_repository(cx) else {
             let workspace = cx.entity().downgrade();
@@ -434,10 +433,6 @@ impl Item for BranchDiff {
             DiffBase::Merge { base_ref } => format!("Changes since {}", base_ref).into(),
             DiffBase::Head | DiffBase::Index | DiffBase::Staged => "Changes".into(),
         }
-    }
-
-    fn telemetry_event_text(&self) -> Option<&'static str> {
-        Some("Branch Diff Opened")
     }
 
     fn as_searchable(&self, _: &Entity<Self>, cx: &App) -> Option<Box<dyn SearchableItemHandle>> {

@@ -1694,10 +1694,6 @@ impl Item for TerminalView {
         terminal.title(detail == 0).into()
     }
 
-    fn telemetry_event_text(&self) -> Option<&'static str> {
-        None
-    }
-
     fn handle_drop(
         &self,
         active_pane: &Pane,
@@ -3025,9 +3021,8 @@ mod tests {
         let project = cx.update(|cx| {
             Project::remote(
                 remote_client,
-                params.client.clone(),
+                params.http_client.clone(),
                 params.node_runtime.clone(),
-                params.user_store.clone(),
                 params.languages.clone(),
                 params.fs.clone(),
                 false,

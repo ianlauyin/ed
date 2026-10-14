@@ -180,17 +180,12 @@ impl VsCodeSettings {
 
     pub fn settings_content(&self) -> SettingsContent {
         SettingsContent {
-            audio: None,
-            auto_update: None,
             base_keymap: Some(BaseKeymapContent::VSCode),
-            calls: None,
-            collaboration_panel: None,
             command_palette: self
                 .read_u64("workbench.commandPalette.history")
                 .map(|history| CommandPaletteSettingsContent {
                     use_command_history: Some(history > 0),
                 }),
-            credentials_url: None,
             debugger: None,
             diagnostics: None,
             editor: self.editor_settings_content(),
@@ -224,13 +219,11 @@ impl VsCodeSettings {
             }),
             remote: RemoteSettingsContent::default(),
             repl: None,
-            server_url: None,
             session: None,
             status_bar: self.status_bar_settings_content(),
             tab_bar: self.tab_bar_settings_content(),
             tab_switcher: None,
             tabs: self.item_settings_content(),
-            telemetry: self.telemetry_settings_content(),
             terminal: self.terminal_settings_content(),
             theme: Box::new(self.theme_settings_content()),
             title_bar: None,
@@ -834,22 +827,6 @@ impl VsCodeSettings {
         }
 
         skip_default(project_panel_settings)
-    }
-
-    fn telemetry_settings_content(&self) -> Option<TelemetrySettingsContent> {
-        self.read_enum("telemetry.telemetryLevel", |level| {
-            let (metrics, diagnostics) = match level {
-                "all" => (true, true),
-                "error" | "crash" => (false, true),
-                "off" => (false, false),
-                _ => return None,
-            };
-            Some(TelemetrySettingsContent {
-                metrics: Some(metrics),
-                diagnostics: Some(diagnostics),
-                anthropic_retention: None,
-            })
-        })
     }
 
     fn terminal_settings_content(&self) -> Option<TerminalSettingsContent> {

@@ -649,7 +649,7 @@ impl WaylandWindowState {
     }
 
     fn update_subpixel_layout(&mut self) {
-        use wayland_client::protocol::wl_output::Subpixel;
+        use wayland_rpc::protocol::wl_output::Subpixel;
         let is_bgr = self
             .display
             .as_ref()

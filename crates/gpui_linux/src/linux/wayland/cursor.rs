@@ -4,9 +4,9 @@ use anyhow::{Context as _, anyhow};
 use gpui_util::ResultExt;
 
 use wayland_client::Connection;
-use wayland_client::protocol::wl_surface::WlSurface;
-use wayland_client::protocol::{wl_pointer::WlPointer, wl_shm::WlShm};
 use wayland_cursor::{CursorImageBuffer, CursorTheme};
+use wayland_rpc::protocol::wl_surface::WlSurface;
+use wayland_rpc::protocol::{wl_pointer::WlPointer, wl_shm::WlShm};
 
 pub(crate) struct Cursor {
     loaded_theme: Option<LoadedTheme>,

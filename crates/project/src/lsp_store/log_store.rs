@@ -689,34 +689,12 @@ impl LogStore {
                                     cx,
                                 );
                             }
-                            crate::Event::CollaboratorLeft(peer_id) => {
-                                log_store.release_downstream_log_streams(
-                                    &project.downgrade(),
-                                    Some(*peer_id),
-                                    cx,
-                                );
-                            }
                             crate::Event::RemoteIdChanged(None) => {
                                 log_store.release_downstream_log_streams(
                                     &project.downgrade(),
                                     None,
                                     cx,
                                 );
-                            }
-                            crate::Event::CollaboratorUpdated {
-                                old_peer_id,
-                                new_peer_id,
-                            } => {
-                                log_store.update_downstream_peer_id(
-                                    &project.downgrade(),
-                                    *old_peer_id,
-                                    *new_peer_id,
-                                );
-                            }
-                            crate::Event::Rejoined | crate::Event::HostReshared => {
-                                // The host can miss a peer-ID update while offline. Synchronize on
-                                // either side's return, since the guest can rejoin first.
-                                log_store.synchronize_log_streams(&project.downgrade(), cx);
                             }
                             _ => {}
                         }
@@ -1161,25 +1139,6 @@ impl LogStore {
         }
     }
 
-    fn update_downstream_peer_id(
-        &mut self,
-        project: &WeakEntity<Project>,
-        old_peer_id: proto::PeerId,
-        new_peer_id: proto::PeerId,
-    ) {
-        for (key, state) in &mut self.language_servers {
-            if key.kind.project() == Some(project)
-                && let Some(log_kinds) = state.downstream_log_streams.remove(&old_peer_id)
-            {
-                state
-                    .downstream_log_streams
-                    .entry(new_peer_id)
-                    .or_default()
-                    .extend(log_kinds);
-            }
-        }
-    }
-
     fn update_log_stream_ownership(
         &mut self,
         key: &LanguageServerLogKey,
@@ -1202,20 +1161,6 @@ impl LogStore {
             Self::send_toggle_log_message(key, is_enabled, log_kind, cx);
         }
         Some(())
-    }
-
-    fn synchronize_log_streams(&self, project: &WeakEntity<Project>, cx: &mut App) {
-        for (key, state) in &self.language_servers {
-            if !matches!(&key.kind, LanguageServerKind::Remote { project: server_project } if server_project == project)
-            {
-                continue;
-            }
-            // Disables sent while disconnected were lost, but the host may have
-            // migrated those obsolete subscriptions to our new peer ID.
-            for log_kind in [LogKind::Logs, LogKind::Trace, LogKind::Rpc] {
-                Self::send_toggle_log_message(key, state.has_log_stream(log_kind), log_kind, cx);
-            }
-        }
     }
 
     fn send_toggle_log_message(

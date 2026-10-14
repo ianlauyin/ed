@@ -538,8 +538,7 @@ impl CommitView {
         let stash = self.stash;
         let file_filter = self.file_filter.clone();
         let unshallow_state = self.repository.read(cx).unshallow_state();
-        let can_fetch = !self.project.read(cx).is_via_collab()
-            && unshallow_state != UnshallowState::Unshallowed;
+        let can_fetch = unshallow_state != UnshallowState::Unshallowed;
         let fetch_in_flight = unshallow_state == UnshallowState::InProgress;
         v_flex()
             .flex_grow(1.)
@@ -1218,10 +1217,6 @@ impl Item for CommitView {
 
     fn to_item_events(event: &EditorEvent, f: &mut dyn FnMut(ItemEvent)) {
         Editor::to_item_events(event, f)
-    }
-
-    fn telemetry_event_text(&self) -> Option<&'static str> {
-        Some("Commit View Opened")
     }
 
     fn deactivated(&mut self, window: &mut Window, cx: &mut Context<Self>) {

@@ -1,6 +1,6 @@
 use super::{KernelSession, RunningKernel, SshRemoteKernelSpecification, start_kernel_tasks};
 use anyhow::{Context as _, Result};
-use client::proto;
+use rpc::proto;
 
 use futures::{
     AsyncBufReadExt as _, StreamExt as _,
@@ -36,12 +36,8 @@ impl SshRunningKernel {
         window: &mut Window,
         cx: &mut App,
     ) -> Task<Result<Box<dyn RunningKernel>>> {
-        let client = project.read(cx).client();
         let remote_client = project.read(cx).remote_client();
-        let project_id = project
-            .read(cx)
-            .remote_id()
-            .unwrap_or(proto::REMOTE_SERVER_PROJECT_ID);
+        let project_id = proto::REMOTE_SERVER_PROJECT_ID;
 
         window.spawn(cx, async move |cx| {
             let command = kernel_spec
@@ -71,7 +67,7 @@ impl SshRunningKernel {
                     .request(request)
                     .await?
             } else {
-                client.request(request).await?
+                anyhow::bail!("remote kernel requires a remote connection")
             };
 
             let kernel_id = response.kernel_id.clone();
@@ -320,7 +316,10 @@ impl RunningKernel for SshRunningKernel {
     fn force_shutdown(&mut self, _window: &mut Window, cx: &mut App) -> Task<Result<()>> {
         let kernel_id = self.kernel_id.clone();
         let project_id = self.project_id;
-        let client = self.project.read(cx).client();
+        let Some(remote) = self.project.read(cx).remote_client() else {
+            return Task::ready(Err(anyhow::anyhow!("remote connection closed")));
+        };
+        let client = remote.read(cx).proto_client();
 
         cx.background_executor().spawn(async move {
             let request = proto::KillKernel {

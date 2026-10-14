@@ -625,10 +625,6 @@ impl TerminalPanel {
 
         let project = workspace.read(cx).project().read(cx);
 
-        if project.is_via_collab() {
-            return Task::ready(Err(anyhow!("cannot spawn tasks as a guest")));
-        }
-
         let remote_client = project.remote_client();
         let is_windows = project.path_style(cx).is_windows();
         let remote_shell = remote_client
@@ -924,7 +920,7 @@ impl TerminalPanel {
         let workspace = self.workspace.clone();
         self.spawn_pending_terminal(window, cx, async move |terminal_panel, cx| {
             if workspace.update(cx, |workspace, cx| !is_enabled_in_workspace(workspace, cx))? {
-                anyhow::bail!("terminal not yet supported for collaborative projects");
+                anyhow::bail!("terminal is unavailable for this project");
             }
             let project = workspace.read_with(cx, |workspace, _| workspace.project().clone())?;
             let terminal = if force_local {
@@ -1493,8 +1489,6 @@ impl Render for TerminalPanel {
                         workspace.zoomed_item(),
                         None,
                         &workspace::PaneRenderContext {
-                            follower_states: &HashMap::default(),
-                            active_call: workspace.active_call(),
                             active_pane: &self.active_pane,
                             app_state: workspace.app_state(),
                             project: workspace.project(),
@@ -1830,14 +1824,13 @@ impl workspace::TerminalProvider for TerminalProvider {
     }
 }
 
-#[derive(IntoElement)]
 #[cfg(test)]
 mod tests {
     use std::num::NonZero;
 
     use super::*;
     use crate::persistence::{SerializedPane, SerializedPaneGroup};
-    use gpui::{Modifiers, TestAppContext, UpdateGlobal as _, VisualTestContext};
+    use gpui::{TestAppContext, UpdateGlobal as _, VisualTestContext};
     use pretty_assertions::assert_eq;
     use project::FakeFs;
     use settings::SettingsStore;

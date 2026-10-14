@@ -1,6 +1,7 @@
 syntax = "proto3";
 package zed.messages;
 
+
 message Timestamp {
   uint64 seconds = 1;
   uint32 nanos = 2;

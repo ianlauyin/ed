@@ -17,6 +17,8 @@ doctest = false
 default = []
 
 [dependencies]
+util.workspace = true
+regex.workspace = true
 anyhow.workspace = true
 gpui.workspace = true
 human_bytes.workspace = true
@@ -27,3 +29,9 @@ sysinfo.workspace = true
 
 [target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
 pciid-parser.workspace = true
+
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2-foundation.workspace = true
+
+[target.'cfg(target_os = "windows")'.dependencies]
+windows = { workspace = true, features = ["Wdk_System_SystemServices", "Win32_System_SystemInformation"] }

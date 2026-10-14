@@ -624,7 +624,7 @@ impl Settings for ProjectSettings {
 
 pub enum SettingsObserverMode {
     Local(Arc<dyn Fs>),
-    Remote { via_collab: bool },
+    Remote,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -747,7 +747,6 @@ impl SettingsObserver {
                                 LocalSettingsKind::Editorconfig,
                                 content.clone(),
                             )],
-                            false,
                             cx,
                         );
                     }
@@ -791,7 +790,7 @@ impl SettingsObserver {
         worktree_store: Entity<WorktreeStore>,
         task_store: Entity<TaskStore>,
         upstream_client: Option<AnyProtoClient>,
-        via_collab: bool,
+
         cx: &mut Context<Self>,
     ) -> Self {
         let mut user_settings_watcher = None;
@@ -821,7 +820,7 @@ impl SettingsObserver {
         Self {
             worktree_store,
             task_store,
-            mode: SettingsObserverMode::Remote { via_collab },
+            mode: SettingsObserverMode::Remote,
             downstream_client: None,
             project_id: REMOTE_SERVER_PROJECT_ID,
             _trusted_worktrees_watcher: None,
@@ -911,10 +910,6 @@ impl SettingsObserver {
         )?;
 
         this.update(&mut cx, |this, cx| {
-            let is_via_collab = match &this.mode {
-                SettingsObserverMode::Local(..) => false,
-                SettingsObserverMode::Remote { via_collab } => *via_collab,
-            };
             let worktree_id = WorktreeId::from_proto(envelope.payload.worktree_id);
             let Some(worktree) = this
                 .worktree_store
@@ -931,7 +926,6 @@ impl SettingsObserver {
                     local_settings_kind_from_proto(kind),
                     envelope.payload.content,
                 )],
-                is_via_collab,
                 cx,
             );
         });
@@ -1146,7 +1140,6 @@ impl SettingsObserver {
                                 content.and_then(|c| c.log_err()),
                             )
                         }),
-                        false,
                         cx,
                     )
                 })
@@ -1161,17 +1154,13 @@ impl SettingsObserver {
         settings_contents: impl IntoIterator<
             Item = (LocalSettingsPath, LocalSettingsKind, Option<String>),
         >,
-        is_via_collab: bool,
+
         cx: &mut Context<Self>,
     ) {
         let worktree_id = worktree.read(cx).id();
         let remote_worktree_id = worktree.read(cx).id();
         let task_store = self.task_store.clone();
-        let can_trust_worktree = if is_via_collab {
-            OnceCell::from(true)
-        } else {
-            OnceCell::new()
-        };
+        let can_trust_worktree = OnceCell::new();
         for (directory_path, kind, file_content) in settings_contents {
             let mut applied = true;
             match (&directory_path, kind) {

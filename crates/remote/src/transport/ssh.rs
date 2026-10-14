@@ -1649,7 +1649,6 @@ impl SshSocket {
 
     /// Best-effort detection of the remote OS version. Failures are logged and
     /// result in `None` rather than failing the connection, since this is only
-    /// used for telemetry.
     async fn os_version(&self, os: RemoteOs, shell: ShellKind) -> Option<String> {
         let (program, args) = super::os_version_command(os);
         match self.run_command(shell, program, args, false).await {

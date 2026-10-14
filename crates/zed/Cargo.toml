@@ -1,5 +1,5 @@
 [package]
-description = "The fast, collaborative code editor."
+description = "A focused single-user code editor."
 edition.workspace = true
 name = "zed"
 version = "1.25.0"
@@ -61,19 +61,12 @@ activity_indicator.workspace = true
 anyhow.workspace = true
 askpass.workspace = true
 assets.workspace = true
-audio.workspace = true
-auto_update.workspace = true
-auto_update_ui.workspace = true
 breadcrumbs.workspace = true
-call.workspace = true
 call_hierarchy.workspace = true
-channel.workspace = true
 chrono.workspace = true
 clap.workspace = true
 cli.workspace = true
-client.workspace = true
 clock = { workspace = true, optional = true }
-collab_ui.workspace = true
 collections.workspace = true
 command_palette.workspace = true
 component_preview.workspace = true
@@ -96,7 +89,7 @@ fs.workspace = true
 futures.workspace = true
 git.workspace = true
 git_hosting_providers.workspace = true
-git_ui = { workspace = true, features = ["call"] }
+git_ui.workspace = true
 git_ui_core.workspace = true
 go_to_line.workspace = true
 gpui = { workspace = true, features = ["profiler", "stacker"] }
@@ -107,7 +100,6 @@ gpui_platform = { workspace = true, features = [
     "x11",
 ] }
 gpui_tokio.workspace = true
-hang_telemetry.workspace = true
 image = { workspace = true, optional = true }
 itertools.workspace = true
 rayon.workspace = true
@@ -175,8 +167,6 @@ svg_preview.workspace = true
 sysinfo.workspace = true
 tab_switcher.workspace = true
 tasks_ui.workspace = true
-telemetry.workspace = true
-telemetry_events.workspace = true
 terminal_view.workspace = true
 theme.workspace = true
 theme_extension.workspace = true
@@ -199,7 +189,6 @@ watch.workspace = true
 which_key.workspace = true
 workspace.workspace = true
 zed_actions.workspace = true
-zed_credentials_provider.workspace = true
 zed_env_vars.workspace = true
 zlog.workspace = true
 zlog_settings.workspace = true
@@ -230,7 +219,6 @@ pkg-config = "0.3.22"
 
 [dev-dependencies]
 activity_indicator = { workspace = true, features = ["test-support"] }
-call = { workspace = true, features = ["test-support"] }
 editor = { workspace = true, features = ["test-support"] }
 env_logger.workspace = true
 fs = { workspace = true, features = ["test-support"] }

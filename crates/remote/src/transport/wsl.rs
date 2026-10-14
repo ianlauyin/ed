@@ -130,8 +130,6 @@ impl WslRemoteConnection {
         let output = self.run_wsl_command_with_output(&program, &["-sm"]).await?;
         parse_platform(&output)
     }
-
-    /// Best-effort detection of the remote OS version for telemetry. Failures
     /// result in `None` rather than failing the connection.
     async fn detect_os_version(&self) -> Option<String> {
         let (program, args) = super::os_version_command(self.platform.os);

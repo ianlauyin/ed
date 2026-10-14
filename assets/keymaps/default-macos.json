@@ -40,7 +40,6 @@
       "cmd-m": "zed::Minimize",
 
       "ctrl-cmd-l": "lsp_tool::ToggleMenu",
-      "ctrl-cmd-c": "editor::DisplayCursorNames",
       "ctrl-cmd-s": "workspace::ToggleWorktreeSecurity"
     }
   },
@@ -550,7 +549,6 @@
       "cmd-k n": "encoding_selector::Toggle",
       "cmd-k m": "language_selector::Toggle",
       "cmd-k cmd-m": "toolchain::AddToolchain",
-      "escape": "workspace::Unfollow",
       "cmd-k cmd-left": "workspace::ActivatePaneLeft",
       "cmd-k cmd-right": "workspace::ActivatePaneRight",
       "cmd-k cmd-up": "workspace::ActivatePaneUp",
@@ -704,9 +702,7 @@
   {
     "use_key_equivalents": true,
     "bindings": {
-      "ctrl-alt-cmd-f": "workspace::FollowNextCollaborator",
       // TODO: Move this to a dock open action
-      "cmd-shift-c": "collab_panel::ToggleFocus",
       // Only available in debug builds: opens an element inspector for development.
       "cmd-alt-i": "dev::ToggleInspector",
       // Cycles the frame-time debug overlay between hidden, frame-time-only, and detailed modes.
@@ -956,38 +952,10 @@
       "right": "debugger::NextBreakpointProperty"
     }
   },
-  {
-    "context": "CollabPanel && not_editing",
-    "use_key_equivalents": true,
-    "bindings": {
-      "ctrl-backspace": "collab_panel::Remove",
-      "space": "menu::Confirm"
-    }
-  },
-  {
-    "context": "CollabPanel",
-    "use_key_equivalents": true,
-    "bindings": {
-      "alt-up": "collab_panel::MoveChannelUp",
-      "alt-down": "collab_panel::MoveChannelDown",
-      "alt-enter": "collab_panel::OpenSelectedChannelNotes",
-      "shift-enter": "collab_panel::ToggleSelectedChannelFavorite"
-    }
-  },
-  {
-    "context": "(CollabPanel && editing) > Editor",
-    "use_key_equivalents": true,
-    "bindings": {
-      "space": "collab_panel::InsertSpace"
-    }
-  },
-  {
-    "context": "ChannelModal",
-    "use_key_equivalents": true,
-    "bindings": {
-      "tab": "channel_modal::ToggleMode"
-    }
-  },
+
+
+
+
   {
     "context": "CallHierarchyPicker > Picker > Editor",
     "use_key_equivalents": true,
@@ -1020,13 +988,7 @@
       "tab": "lsp_command_selector::ToggleArgumentsFocus"
     }
   },
-  {
-    "context": "ChannelModal > Picker > Editor",
-    "use_key_equivalents": true,
-    "bindings": {
-      "tab": "channel_modal::ToggleMode"
-    }
-  },
+
   {
     "context": "ToolchainSelector",
     "use_key_equivalents": true,
@@ -1263,8 +1225,6 @@
       "cmd--": ["zed::DecreaseUiFontSize", { "persist": false }],
       "cmd-0": ["zed::ResetUiFontSize", { "persist": false }],
       "cmd-enter": "onboarding::Finish",
-      "alt-tab": "onboarding::SignIn",
-      "alt-shift-a": "onboarding::OpenAccount"
     }
   },
   {

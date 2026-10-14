@@ -232,16 +232,6 @@ pub struct CrashPanic {
     pub span: String,
 }
 
-/// The Sentry field identifying the crashing user, which the uploader falls
-/// back to filling in itself when a session never reported one.
-pub const SENTRY_USER_ID: &str = "sentry[user][id]";
-
-#[derive(Debug, Clone)]
-pub struct UserInfo {
-    pub metrics_id: Option<String>,
-    pub is_staff: Option<bool>,
-}
-
 fn send_crash_server_message(crash_client: &Arc<Client>, message: CrashServerMessage) {
     let data = match serde_json::to_vec(&message) {
         Ok(data) => data,
@@ -258,19 +248,6 @@ fn send_crash_server_message(crash_client: &Arc<Client>, message: CrashServerMes
 
 pub fn set_gpu_info(crash_client: &Arc<Client>, specs: GpuSpecs) {
     send_crash_server_message(crash_client, CrashServerMessage::GPUInfo(specs));
-}
-
-pub fn set_user_info(crash_client: &Arc<Client>, info: UserInfo) {
-    set_tags(
-        crash_client,
-        [
-            (SENTRY_USER_ID, info.metrics_id),
-            (
-                "sentry[user][is_staff]",
-                info.is_staff.map(|is_staff| is_staff.to_string()),
-            ),
-        ],
-    );
 }
 
 /// Attaches a value to every crash this session produces from now on, or clears
@@ -754,7 +731,7 @@ mod tests {
         let server = test_crash_server();
 
         server.receive(CrashServerMessage::SetTags(vec![
-            (SENTRY_USER_ID.to_string(), Some("metrics-1".to_string())),
+            ("debug_user".to_string(), Some("metrics-1".to_string())),
             (
                 "sentry[user][is_staff]".to_string(),
                 Some("true".to_string()),
@@ -771,14 +748,14 @@ mod tests {
         assert_eq!(
             server.tags.lock().clone(),
             BTreeMap::from([
-                (SENTRY_USER_ID.to_string(), "metrics-1".to_string()),
+                ("debug_user".to_string(), "metrics-1".to_string()),
                 ("sentry[user][is_staff]".to_string(), "true".to_string()),
                 ("sentry[tags][custom]".to_string(), "second".to_string()),
             ])
         );
 
         server.receive(CrashServerMessage::SetTags(vec![
-            (SENTRY_USER_ID.to_string(), None),
+            ("debug_user".to_string(), None),
             ("sentry[user][is_staff]".to_string(), None),
         ]));
         assert_eq!(
