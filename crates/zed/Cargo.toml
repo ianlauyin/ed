@@ -93,8 +93,6 @@ gpui = { workspace = true, features = ["profiler", "stacker"] }
 gpui_platform = { workspace = true, features = [
     "screen-capture",
     "font-kit",
-    "wayland",
-    "x11",
 ] }
 gpui_tokio.workspace = true
 image = { workspace = true, optional = true }
@@ -192,26 +190,6 @@ zlog_settings.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 nix = { workspace = true, features = ["user"] }
-
-[target.'cfg(target_os = "windows")'.dependencies]
-etw_tracing.workspace = true
-windows = { workspace = true, features = ["Win32_System_Console", "Win32_System_Pipes"] }
-gpui = { workspace = true, features = ["profiler", "windows-manifest"] }
-
-[target.'cfg(target_os = "windows")'.build-dependencies]
-windows_resources.workspace = true
-
-[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
-gpui = { workspace = true, features = ["profiler", "wayland", "x11"] }
-ashpd = { workspace = true, features = ["notification"] }
-image.workspace = true
-
-[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.build-dependencies]
-image.workspace = true
-
-
-[target.'cfg(target_os = "linux")'.build-dependencies]
-pkg-config = "0.3.22"
 
 [dev-dependencies]
 activity_indicator = { workspace = true, features = ["test-support"] }

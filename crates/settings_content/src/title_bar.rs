@@ -1,82 +1,6 @@
-use gpui::WindowButtonLayout;
-use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use settings_macros::{MergeFrom, with_fallible_options};
-
-/// The layout of window control buttons as represented by user settings.
-///
-/// Custom layout strings use the GNOME `button-layout` format (e.g.
-/// `"close:minimize,maximize"`).
-#[derive(
-    Clone,
-    PartialEq,
-    Debug,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    Default,
-    strum::EnumDiscriminants,
-)]
-#[strum_discriminants(derive(strum::VariantArray, strum::VariantNames, strum::FromRepr))]
-#[schemars(schema_with = "window_button_layout_schema")]
-#[serde(from = "String", into = "String")]
-pub enum WindowButtonLayoutContent {
-    /// Follow the system/desktop configuration.
-    #[default]
-    PlatformDefault,
-    /// Use Zed's built-in standard layout, regardless of system config.
-    Standard,
-    /// A raw GNOME-style layout string.
-    Custom(String),
-}
-
-impl WindowButtonLayoutContent {
-    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-    pub fn into_layout(self) -> Option<WindowButtonLayout> {
-        use util::ResultExt;
-
-        match self {
-            Self::PlatformDefault => None,
-            Self::Standard => Some(WindowButtonLayout::linux_default()),
-            Self::Custom(layout) => WindowButtonLayout::parse(&layout).log_err(),
-        }
-    }
-
-    #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
-    pub fn into_layout(self) -> Option<WindowButtonLayout> {
-        None
-    }
-}
-
-fn window_button_layout_schema(_: &mut SchemaGenerator) -> Schema {
-    json_schema!({
-        "anyOf": [
-            { "enum": ["platform_default", "standard"] },
-            { "type": "string" }
-        ]
-    })
-}
-
-impl From<WindowButtonLayoutContent> for String {
-    fn from(value: WindowButtonLayoutContent) -> Self {
-        match value {
-            WindowButtonLayoutContent::PlatformDefault => "platform_default".to_string(),
-            WindowButtonLayoutContent::Standard => "standard".to_string(),
-            WindowButtonLayoutContent::Custom(s) => s,
-        }
-    }
-}
-
-impl From<String> for WindowButtonLayoutContent {
-    fn from(layout_string: String) -> Self {
-        match layout_string.as_str() {
-            "platform_default" => Self::PlatformDefault,
-            "standard" => Self::Standard,
-            _ => Self::Custom(layout_string),
-        }
-    }
-}
 
 #[with_fallible_options]
 #[derive(Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug)]
@@ -107,12 +31,4 @@ pub struct TitleBarSettingsContent {
     ///
     /// Default: false
     pub open_menus_on_hover: Option<bool>,
-    /// The layout of window control buttons in the title bar (Linux only).
-    ///
-    /// This can be set to "platform_default" to follow the system configuration, or
-    /// "standard" to use Zed's built-in layout. For custom layouts, use a
-    /// GNOME-style layout string like "close:minimize,maximize".
-    ///
-    /// Default: "platform_default"
-    pub button_layout: Option<WindowButtonLayoutContent>,
 }

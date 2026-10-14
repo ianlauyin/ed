@@ -316,7 +316,7 @@ mod test {
     }
 
     #[gpui::test]
-    #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
+
     async fn test_replace_mode(cx: &mut gpui::TestAppContext) {
         let mut cx: NeovimBackedTestContext = NeovimBackedTestContext::new(cx).await;
 

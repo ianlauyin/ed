@@ -1,11 +1,9 @@
 #![allow(clippy::disallowed_methods, reason = "build scripts are exempt")]
 
 fn main() {
-    #[cfg(any(target_os = "macos", target_os = "ios"))]
     apple_build::run();
 }
 
-#[cfg(any(target_os = "macos", target_os = "ios"))]
 mod apple_build {
     use std::{
         env,

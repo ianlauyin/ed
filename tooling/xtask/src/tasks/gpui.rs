@@ -11,7 +11,33 @@ use anyhow::{Context as _, Result, bail};
 use clap::{Parser, Subcommand};
 use guppy::graph::DependencyDirection;
 
-use crate::tasks::workflows::GitSha;
+#[derive(Clone)]
+pub(crate) struct GitSha(String);
+
+impl AsRef<str> for GitSha {
+    fn as_ref(&self) -> &str {
+        &self.0
+    }
+}
+
+impl std::str::FromStr for GitSha {
+    type Err = String;
+
+    fn from_str(value: &str) -> Result<Self, Self::Err> {
+        const GIT_SHA_LENGTH: usize = 40;
+        if value.len() != GIT_SHA_LENGTH {
+            return Err(format!(
+                "Git SHA has wrong length! \
+                Only SHAs with a full length of {GIT_SHA_LENGTH} are supported, found {len} characters.",
+                len = value.len()
+            ));
+        }
+        if !value.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+            return Err("Not a valid Git SHA".to_owned());
+        }
+        Ok(Self(value.to_owned()))
+    }
+}
 
 #[derive(Subcommand)]
 pub enum GpuiCommand {

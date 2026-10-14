@@ -4,6 +4,9 @@
 #![allow(clippy::collapsible_else_if)] // False positives in platform specific code
 #![allow(unused_mut)] // False positives in platform specific code
 
+#[cfg(not(target_os = "macos"))]
+compile_error!("This editor only supports macOS.");
+
 extern crate self as gpui;
 #[macro_use]
 mod action;
@@ -36,14 +39,7 @@ mod platform;
 pub mod prelude;
 /// Profiling utilities for task, frame, and thread performance tracking.
 pub mod profiler;
-#[cfg(any(
-    test,
-    target_os = "windows",
-    target_os = "linux",
-    target_family = "wasm",
-    feature = "test-support",
-    feature = "bench-support"
-))]
+#[cfg(any(test, feature = "test-support", feature = "bench-support"))]
 #[expect(missing_docs)]
 pub mod queue;
 /// A seeded, mutable element tree for benchmarks and tests of GPUI rendering.
@@ -194,8 +190,7 @@ pub use keymap::*;
 pub use path_builder::*;
 pub use platform::*;
 pub use profiler::*;
-#[cfg(any(target_os = "windows", target_os = "linux", target_family = "wasm"))]
-pub use queue::{PriorityQueueReceiver, PriorityQueueSender};
+
 pub use refineable::*;
 pub use scene::*;
 pub use shared_uri::*;
@@ -214,7 +209,6 @@ pub use util::{FutureExt, Timeout};
 pub use view::*;
 pub use window::*;
 
-#[cfg(not(target_family = "wasm"))]
 pub use pollster::block_on;
 
 /// The context trait, allows the different contexts in GPUI to be used

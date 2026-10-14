@@ -1363,16 +1363,15 @@ pub async fn get_git_committer(cx: &AsyncApp) -> GitCommitter {
         };
     }
 
-    let git_binary_path =
-        if cfg!(target_os = "macos") && option_env!("ZED_BUNDLE").as_deref() == Some("true") {
-            cx.update(|cx| {
-                cx.path_for_auxiliary_executable("git")
-                    .context("could not find git binary path")
-                    .log_err()
-            })
-        } else {
-            None
-        };
+    let git_binary_path = if true && option_env!("ZED_BUNDLE").as_deref() == Some("true") {
+        cx.update(|cx| {
+            cx.path_for_auxiliary_executable("git")
+                .context("could not find git binary path")
+                .log_err()
+        })
+    } else {
+        None
+    };
 
     let git = GitBinary::new(
         git_binary_path.unwrap_or(PathBuf::from("git")),
@@ -2066,7 +2065,6 @@ impl GitRepository for RealGitRepository {
                     let current_mode = if metadata.file_type().is_symlink() {
                         "120000"
                     } else {
-                        #[cfg(unix)]
                         {
                             use std::os::unix::fs::PermissionsExt as _;
                             if metadata.permissions().mode() & 0o111 == 0 {
@@ -2074,10 +2072,6 @@ impl GitRepository for RealGitRepository {
                             } else {
                                 "100755"
                             }
-                        }
-                        #[cfg(not(unix))]
-                        {
-                            "100644"
                         }
                     };
                     if current_mode != base_mode {
@@ -4076,10 +4070,7 @@ async fn run_git_command(
                 .env("GIT_CONFIG_COUNT", "1")
                 .env("GIT_CONFIG_KEY_0", "gpg.program")
                 .env("GIT_CONFIG_VALUE_0", gpg_wrapper);
-        }
-
-        #[cfg(target_os = "windows")]
-        command.env("ZED_ASKPASS_SOCKET", ask_pass.socket_path());
+        };
         let git_process = command.spawn()?;
 
         run_askpass_command(ask_pass, git_process).await
@@ -4596,7 +4587,6 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
     #[gpui::test]
     async fn test_merge_base_worktree_diff_handles_recreated_symlink(cx: &mut TestAppContext) {
         use std::os::unix::fs::symlink;
@@ -5791,7 +5781,6 @@ mod tests {
         // );
     }
 
-    #[cfg(unix)]
     #[gpui::test]
     async fn test_commit_runs_git_hooks(cx: &mut TestAppContext) {
         use std::os::unix::fs::PermissionsExt as _;

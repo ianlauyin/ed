@@ -339,11 +339,7 @@ fn render_keybinding_keystroke_with_style(
     vim_mode: bool,
     style: KeyBindingStyle,
 ) -> Vec<AnyElement> {
-    let use_text = vim_mode
-        || matches!(
-            platform_style,
-            PlatformStyle::Linux | PlatformStyle::Windows
-        );
+    let use_text = vim_mode;
     let size = size.into();
 
     if use_text {
@@ -437,15 +433,12 @@ fn render_modifiers_with_style(
     #[derive(Clone)]
     enum KeyOrIcon {
         Key(&'static str),
-        Plus,
         Icon(IconName),
     }
 
     struct Modifier {
         enabled: bool,
         mac: KeyOrIcon,
-        linux: KeyOrIcon,
-        windows: KeyOrIcon,
     }
 
     let mac_modifier = |icon, label| match style {
@@ -454,38 +447,26 @@ fn render_modifiers_with_style(
     };
 
     let table = {
-        use KeyOrIcon::*;
-
         [
             Modifier {
                 enabled: modifiers.function,
                 mac: mac_modifier(IconName::Control, "Fn"),
-                linux: Key("Fn"),
-                windows: Key("Fn"),
             },
             Modifier {
                 enabled: modifiers.control,
                 mac: mac_modifier(IconName::Control, "⌃"),
-                linux: Key("Ctrl"),
-                windows: Key("Ctrl"),
             },
             Modifier {
                 enabled: modifiers.alt,
                 mac: mac_modifier(IconName::Option, "⌥"),
-                linux: Key("Alt"),
-                windows: Key("Alt"),
             },
             Modifier {
                 enabled: modifiers.platform,
                 mac: mac_modifier(IconName::Command, "⌘"),
-                linux: Key("Super"),
-                windows: Key("Win"),
             },
             Modifier {
                 enabled: modifiers.shift,
                 mac: mac_modifier(IconName::Shift, "⇧"),
-                linux: Key("Shift"),
-                windows: Key("Shift"),
             },
         ]
     };
@@ -499,14 +480,10 @@ fn render_modifiers_with_style(
         .into_iter()
         .map(move |modifier| match platform_style {
             PlatformStyle::Mac => Some(modifier.mac),
-            PlatformStyle::Linux => Some(modifier.linux),
-            PlatformStyle::Windows => Some(modifier.windows),
         });
 
     let separator = match platform_style {
         PlatformStyle::Mac => None,
-        PlatformStyle::Linux => Some(KeyOrIcon::Plus),
-        PlatformStyle::Windows => Some(KeyOrIcon::Plus),
     };
 
     let platform_keys = itertools::intersperse(platform_keys, separator.clone());
@@ -524,10 +501,6 @@ fn render_modifiers_with_style(
                 KeyBindingStyle::Label => LabelKey::new(key, color).size(size).into_any_element(),
             },
             KeyOrIcon::Icon(icon) => KeyIcon::new(icon, color).size(size).into_any_element(),
-            KeyOrIcon::Plus => match style {
-                KeyBindingStyle::Default => "+".into_any_element(),
-                KeyBindingStyle::Label => LabelKey::new("+", color).size(size).into_any_element(),
-            },
         })
 }
 
@@ -709,7 +682,6 @@ fn keystroke_text(
     if modifiers.control {
         match (platform_style, vim_mode) {
             (PlatformStyle::Mac, false) => text.push_str("Control"),
-            (PlatformStyle::Linux | PlatformStyle::Windows, false) => text.push_str("Ctrl"),
             (_, true) => text.push_str("ctrl"),
         }
 
@@ -720,10 +692,6 @@ fn keystroke_text(
         match (platform_style, vim_mode) {
             (PlatformStyle::Mac, false) => text.push_str("Command"),
             (PlatformStyle::Mac, true) => text.push_str("cmd"),
-            (PlatformStyle::Linux, false) => text.push_str("Super"),
-            (PlatformStyle::Linux, true) => text.push_str("super"),
-            (PlatformStyle::Windows, false) => text.push_str("Win"),
-            (PlatformStyle::Windows, true) => text.push_str("win"),
         }
 
         text.push(delimiter);
@@ -733,8 +701,6 @@ fn keystroke_text(
         match (platform_style, vim_mode) {
             (PlatformStyle::Mac, false) => text.push_str("Option"),
             (PlatformStyle::Mac, true) => text.push_str("option"),
-            (PlatformStyle::Linux | PlatformStyle::Windows, false) => text.push_str("Alt"),
-            (_, true) => text.push_str("alt"),
         }
 
         text.push(delimiter);
@@ -773,7 +739,7 @@ impl Component for KeyBinding {
 
     fn description() -> &'static str {
         "A component that displays a key binding, \
-        supporting different platform styles and vim mode."
+        supporting macOS shortcuts and vim mode."
     }
 
     fn preview(_window: &mut Window, _cx: &mut App) -> AnyElement {
@@ -792,26 +758,12 @@ impl Component for KeyBinding {
             .children(vec![
                 example_group_with_title(
                     "Platform Styles",
-                    vec![
-                        single_example(
-                            "Mac Style",
-                            keybinding("cmd-s")
-                                .platform_style(PlatformStyle::Mac)
-                                .into_any_element(),
-                        ),
-                        single_example(
-                            "Linux Style",
-                            keybinding("ctrl-s")
-                                .platform_style(PlatformStyle::Linux)
-                                .into_any_element(),
-                        ),
-                        single_example(
-                            "Windows Style",
-                            keybinding("ctrl-s")
-                                .platform_style(PlatformStyle::Windows)
-                                .into_any_element(),
-                        ),
-                    ],
+                    vec![single_example(
+                        "Mac Style",
+                        keybinding("cmd-s")
+                            .platform_style(PlatformStyle::Mac)
+                            .into_any_element(),
+                    )],
                 ),
                 example_group_with_title(
                     "Vim Mode Style",
@@ -826,14 +778,14 @@ impl Component for KeyBinding {
                         single_example(
                             "With Modifiers",
                             keybinding("ctrl-s")
-                                .platform_style(PlatformStyle::Linux)
+                                .platform_style(PlatformStyle::Mac)
                                 .vim_mode(true)
                                 .into_any_element(),
                         ),
                         single_example(
                             "With other special key",
                             keybinding("ctrl-escape")
-                                .platform_style(PlatformStyle::Windows)
+                                .platform_style(PlatformStyle::Mac)
                                 .vim_mode(true)
                                 .into_any_element(),
                         ),
@@ -850,11 +802,7 @@ mod tests {
 
     #[test]
     fn test_backspace_and_delete_have_distinct_icons() {
-        for platform_style in [
-            PlatformStyle::Mac,
-            PlatformStyle::Linux,
-            PlatformStyle::Windows,
-        ] {
+        for platform_style in [PlatformStyle::Mac] {
             let backspace = icon_for_key("backspace", platform_style);
             let delete = icon_for_key("delete", platform_style);
             assert!(backspace.is_some());
@@ -875,24 +823,6 @@ mod tests {
             ),
             "Command-C".to_string()
         );
-        assert_eq!(
-            keystroke_text(
-                &keystroke.modifiers,
-                &keystroke.key,
-                PlatformStyle::Linux,
-                false
-            ),
-            "Super-C".to_string()
-        );
-        assert_eq!(
-            keystroke_text(
-                &keystroke.modifiers,
-                &keystroke.key,
-                PlatformStyle::Windows,
-                false
-            ),
-            "Win-C".to_string()
-        );
 
         let keystroke = Keystroke::parse("ctrl-alt-delete").unwrap();
         assert_eq!(
@@ -904,24 +834,6 @@ mod tests {
             ),
             "Control-Option-Delete".to_string()
         );
-        assert_eq!(
-            keystroke_text(
-                &keystroke.modifiers,
-                &keystroke.key,
-                PlatformStyle::Linux,
-                false
-            ),
-            "Ctrl-Alt-Delete".to_string()
-        );
-        assert_eq!(
-            keystroke_text(
-                &keystroke.modifiers,
-                &keystroke.key,
-                PlatformStyle::Windows,
-                false
-            ),
-            "Ctrl-Alt-Delete".to_string()
-        );
 
         let keystroke = Keystroke::parse("shift-pageup").unwrap();
         assert_eq!(
@@ -929,24 +841,6 @@ mod tests {
                 &keystroke.modifiers,
                 &keystroke.key,
                 PlatformStyle::Mac,
-                false
-            ),
-            "Shift-PageUp".to_string()
-        );
-        assert_eq!(
-            keystroke_text(
-                &keystroke.modifiers,
-                &keystroke.key,
-                PlatformStyle::Linux,
-                false,
-            ),
-            "Shift-PageUp".to_string()
-        );
-        assert_eq!(
-            keystroke_text(
-                &keystroke.modifiers,
-                &keystroke.key,
-                PlatformStyle::Windows,
                 false
             ),
             "Shift-PageUp".to_string()

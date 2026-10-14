@@ -241,7 +241,7 @@ mod tests {
         use super::super::*;
 
         #[test]
-        #[cfg(target_family = "unix")]
+
         fn test_absolute_unix_path() {
             let result = journal_dir("/home/user");
             assert!(result.is_some());
@@ -286,15 +286,6 @@ mod tests {
                     );
                 }
             }
-        }
-
-        #[test]
-        #[cfg(target_os = "windows")]
-        fn test_absolute_path_windows_style() {
-            let result = journal_dir("C:\\Users\\user\\Documents");
-            assert!(result.is_some());
-            let path = result.unwrap();
-            assert_eq!(path, PathBuf::from("C:\\Users\\user\\Documents\\journal"));
         }
     }
 }

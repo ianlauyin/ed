@@ -1,3 +1,6 @@
+#[cfg(not(target_os = "macos"))]
+compile_error!("This editor CLI only supports macOS.");
+
 use std::path::PathBuf;
 
 use anyhow::Result;

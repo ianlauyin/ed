@@ -64,29 +64,6 @@ pub(crate) fn build_python_exec_shell_script(
     )
 }
 
-/// Build a POSIX shell script that outputs the best Python binary.
-#[cfg(target_os = "windows")]
-pub(crate) fn build_python_discovery_shell_script() -> String {
-    let venv_dirs = VENV_DIR_NAMES.join(" ");
-    format!(
-        "for venv_dir in {venv_dirs}; do \
-           if [ -f \"$venv_dir/pyvenv.cfg\" ] || [ -f \"$venv_dir/bin/activate\" ]; then \
-             if [ -x \"$venv_dir/bin/python\" ]; then \
-               echo \"$venv_dir/bin/python\"; exit 0; \
-             elif [ -x \"$venv_dir/bin/python3\" ]; then \
-               echo \"$venv_dir/bin/python3\"; exit 0; \
-             fi; \
-           fi; \
-         done; \
-         if command -v python3 >/dev/null 2>&1; then \
-           echo python3; exit 0; \
-         elif command -v python >/dev/null 2>&1; then \
-           echo python; exit 0; \
-         fi; \
-         exit 1"
-    )
-}
-
 pub fn start_kernel_tasks<S: KernelSession + 'static>(
     session: Entity<S>,
     iopub_socket: ClientIoPubConnection,
@@ -571,92 +548,6 @@ pub fn python_env_kernel_specifications(
             .filter_map(|x| async move { x })
             .collect::<Vec<_>>()
             .await;
-
-        #[cfg(target_os = "windows")]
-        if kernel_specs.is_empty() && !is_remote {
-            if let Some(root_path) = worktree_root_path {
-                let root_path_str: std::borrow::Cow<str> = root_path.to_string_lossy();
-                let (distro, internal_path) =
-                    if let Some(path_without_prefix) = root_path_str.strip_prefix(r"\\wsl$\") {
-                        if let Some((distro, path)) = path_without_prefix.split_once('\\') {
-                            let replaced_path: String = path.replace('\\', "/");
-                            (Some(distro), Some(format!("/{}", replaced_path)))
-                        } else {
-                            (Some(path_without_prefix), Some("/".to_string()))
-                        }
-                    } else if let Some(path_without_prefix) =
-                        root_path_str.strip_prefix(r"\\wsl.localhost\")
-                    {
-                        if let Some((distro, path)) = path_without_prefix.split_once('\\') {
-                            let replaced_path: String = path.replace('\\', "/");
-                            (Some(distro), Some(format!("/{}", replaced_path)))
-                        } else {
-                            (Some(path_without_prefix), Some("/".to_string()))
-                        }
-                    } else {
-                        (None, None)
-                    };
-
-                if let (Some(distro), Some(internal_path)) = (distro, internal_path) {
-                    let discovery_script = build_python_discovery_shell_script();
-                    let script = format!(
-                        "cd {} && {}",
-                        shlex::try_quote(&internal_path)
-                            .unwrap_or(std::borrow::Cow::Borrowed(&internal_path)),
-                        discovery_script
-                    );
-                    let output = util::command::new_command("wsl")
-                        .arg("-d")
-                        .arg(distro)
-                        .arg("bash")
-                        .arg("-l")
-                        .arg("-c")
-                        .arg(&script)
-                        .output()
-                        .await;
-
-                    if let Ok(output) = output {
-                        if output.status.success() {
-                            let python_cmd =
-                                String::from_utf8_lossy(&output.stdout).trim().to_string();
-                            let (python_path, display_suffix) = if python_cmd.contains('/') {
-                                let venv_name = python_cmd.split('/').next().unwrap_or("venv");
-                                (
-                                    format!("{}/{}", internal_path, python_cmd),
-                                    format!("({})", venv_name),
-                                )
-                            } else {
-                                (python_cmd, "(System)".to_string())
-                            };
-
-                            let display_name = format!("WSL: {} {}", distro, display_suffix);
-                            let default_kernelspec = JupyterKernelspec {
-                                argv: vec![
-                                    python_path,
-                                    "-m".to_string(),
-                                    "ipykernel_launcher".to_string(),
-                                    "-f".to_string(),
-                                    "{connection_file}".to_string(),
-                                ],
-                                display_name: display_name.clone(),
-                                language: "python".to_string(),
-                                interrupt_mode: None,
-                                metadata: None,
-                                env: None,
-                            };
-
-                            kernel_specs.push(KernelSpecification::WslRemote(
-                                WslKernelSpecification {
-                                    name: display_name,
-                                    kernelspec: default_kernelspec,
-                                    distro: distro.to_string(),
-                                },
-                            ));
-                        }
-                    }
-                }
-            }
-        }
 
         anyhow::Ok(kernel_specs)
     }

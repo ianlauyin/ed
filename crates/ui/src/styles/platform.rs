@@ -1,18 +1,9 @@
 /// Expands to a literal so platform-specific hints can use `concat!` without allocating.
-#[cfg(target_os = "macos")]
+
 #[macro_export]
 macro_rules! alt_key_name {
     () => {
         "option"
-    };
-}
-
-/// Expands to a literal so platform-specific hints can use `concat!` without allocating.
-#[cfg(not(target_os = "macos"))]
-#[macro_export]
-macro_rules! alt_key_name {
-    () => {
-        "alt"
     };
 }
 
@@ -23,21 +14,11 @@ macro_rules! alt_key_name {
 pub enum PlatformStyle {
     /// Display in macOS style.
     Mac,
-    /// Display in Linux style.
-    Linux,
-    /// Display in Windows style.
-    Windows,
 }
 
 impl PlatformStyle {
     /// Returns the [`PlatformStyle`] for the current platform.
     pub const fn platform() -> Self {
-        if cfg!(any(target_os = "linux", target_os = "freebsd")) {
-            Self::Linux
-        } else if cfg!(target_os = "windows") {
-            Self::Windows
-        } else {
-            Self::Mac
-        }
+        Self::Mac
     }
 }

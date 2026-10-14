@@ -30,8 +30,6 @@ members = [
     "crates/editor_benchmarks",
     "crates/encoding_selector",
     "crates/env_var",
-    "crates/etw_tracing",
-    "crates/explorer_command_injector",
     "crates/extension",
     "crates/file_content",
     "crates/file_finder",
@@ -47,16 +45,12 @@ members = [
     "crates/go_to_line",
     "crates/gpui",
     "crates/gpui_apple",
-    "crates/gpui_linux",
     "crates/gpui_macos",
     "crates/gpui_macros",
     "crates/gpui_platform",
     "crates/gpui_shared_string",
     "crates/gpui_tokio",
     "crates/gpui_util",
-    "crates/gpui_web",
-    "crates/gpui_wgpu",
-    "crates/gpui_windows",
     "crates/grammars",
     "crates/html_to_markdown",
     "crates/http_client",
@@ -162,7 +156,6 @@ members = [
     "crates/vim_mode_setting",
     "crates/watch",
     "crates/which_key",
-    "crates/windows_resources",
     "crates/workspace",
     "crates/worktree",
     "crates/worktree_benchmarks",
@@ -225,7 +218,6 @@ diagnostics = { path = "crates/diagnostics" }
 editor = { path = "crates/editor" }
 encoding_selector = { path = "crates/encoding_selector" }
 env_var = { path = "crates/env_var" }
-etw_tracing = { path = "crates/etw_tracing" }
 extension = { path = "crates/extension" }
 file_content = { path = "crates/file_content" }
 file_finder = { path = "crates/file_finder" }
@@ -240,16 +232,12 @@ git_ui_core = { path = "crates/git_ui_core" }
 go_to_line = { path = "crates/go_to_line" }
 gpui = { path = "crates/gpui", default-features = false }
 gpui_apple = { path = "crates/gpui_apple" }
-gpui_linux = { path = "crates/gpui_linux", default-features = false }
 gpui_macos = { path = "crates/gpui_macos", default-features = false }
 gpui_macros = { path = "crates/gpui_macros" }
 gpui_platform = { path = "crates/gpui_platform", default-features = false }
 gpui_shared_string = { path = "crates/gpui_shared_string" }
 gpui_tokio = { path = "crates/gpui_tokio" }
 gpui_util = { path = "crates/gpui_util" }
-gpui_web = { path = "crates/gpui_web", default-features = false }
-gpui_wgpu = { path = "crates/gpui_wgpu" }
-gpui_windows = { path = "crates/gpui_windows", default-features = false }
 grammars = { path = "crates/grammars" }
 html_to_markdown = { path = "crates/html_to_markdown" }
 http_client = { path = "crates/http_client" }
@@ -353,7 +341,6 @@ vim = { path = "crates/vim" }
 vim_mode_setting = { path = "crates/vim_mode_setting" }
 watch = { path = "crates/watch" }
 which_key = { path = "crates/which_key" }
-windows_resources = { path = "crates/windows_resources" }
 workspace = { path = "crates/workspace" }
 worktree = { path = "crates/worktree" }
 zed_actions = { path = "crates/zed_actions" }
@@ -367,20 +354,11 @@ zlog_settings = { path = "crates/zlog_settings" }
 
 accesskit = { version = "0.24.0", features = ["enumn"] }
 accesskit_macos = "0.26.0"
-accesskit_unix = "0.22"
-accesskit_windows = "0.34"
 aho-corasick = "1.1"
 alacritty_terminal = { git = "https://github.com/zed-industries/alacritty", rev = "4c129667ce56611becdc82de6e28218c80e2e88f" }
 any_vec = "0.14"
 anyhow = "1.0.86"
 arc-swap = "1.9.0"
-ashpd = { version = "0.13", default-features = false, features = [
-    "async-io",
-    "inhibit",
-    "open_uri",
-    "file_chooser",
-    "settings"
-] }
 async-channel = { version = "2.5", default-features = false }
 async-compat = "0.2.1"
 async-compression = { version = "0.4", features = ["bzip2", "gzip", "futures-io"] }
@@ -430,7 +408,6 @@ coreaudio-rs = { version = "0.12", default-features = false }
 cpal = { git = "https://github.com/RustAudio/cpal", rev = "e1612d5d98152f8dc2a62e1b51ef7cbf4f7f26b7" }
 crash-handler = "0.8"
 criterion = { version = "0.8.2", features = ["html_reports"] }
-perf-event = { package = "perf-event2", version = "0.7.4" }
 crossbeam-queue = "0.3.12"
 ctor = "1.0.12"
 dap-types = { git = "https://github.com/zed-industries/dap-types", rev = "1b461b310481d01e02b2603c16d7144b926339f8" }
@@ -457,7 +434,6 @@ fork = "0.4.0"
 futures = "0.3.34"
 futures-concurrency = "7.7.1"
 futures-lite = "2"
-gh-workflow = { git = "https://github.com/zed-industries/gh-workflow", rev = "37f3c0575d379c218a9c455ee67585184e40d43f" }
 globset = "0.4"
 handlebars = "4.3"
 hdrhistogram = { version = "7", default-features = false }
@@ -596,8 +572,6 @@ objc2-user-notifications = { version = "0.3", default-features = false, features
     "UNUserNotificationCenter",
 ] }
 octocrab = { version = "0.49", default-features = false }
-oo7 = { version = "0.6", default-features = false }
-open = "5.0.0"
 ordered-float = "5"
 palette = { version = "0.7.5", default-features = false, features = ["std"] }
 parking_lot = "0.12.1"
@@ -657,8 +631,6 @@ rustc-hash = "2.1.0"
 rustix = { version = "1.1", features = ["fs"] }
 rustls = "0.23.26"
 rustls-platform-verifier = "0.7"
-# WARNING: If you change this, you must also publish a new version of zed-scap to crates.io
-scap = { git = "https://github.com/zed-industries/scap", rev = "4afea48c3b002197176fb19cd0f9b180dd36eaac", default-features = false, package = "zed-scap", version = "0.0.8-zed" }
 schemars = { version = "1.0", default-features = false, features = ["std", "indexmap2"] }
 sea-orm = { version = "=1.1.10", default-features = false }
 seccompiler = "0.5"
@@ -760,35 +732,11 @@ wax = { version = "0.7", default-features = false }
 web-sys = "0.3"
 web-time = "1.1.0"
 webpki-roots = "1.0.8"
-wgpu = { version = "29.0", default-features = false }
 which = "8"
-windows-core = "0.62"
-windows-registry = "0.6.0"
-xkbcommon = { version = "0.8", default-features = false }
 yaml-rust2 = { version = "0.8", default-features = false }
 yawc = { version = "0.4", default-features = false }
 zeroize = "1.8"
 zstd = { version = "0.13", default-features = false, features = ["legacy", "arrays"] }
-
-[workspace.dependencies.windows]
-version = "0.62"
-features = [
-    "Win32_Foundation",
-    "Win32_Graphics_Gdi",
-    "Win32_Security",
-    "Win32_Storage_FileSystem",
-    "Win32_System_Com",
-    "Win32_System_Com_StructuredStorage",
-    "Win32_System_IO",
-    "Win32_System_LibraryLoader",
-    "Win32_System_Ole",
-    "Win32_System_Threading",
-    "Win32_System_Variant",
-    "Win32_UI_Shell",
-    "Win32_UI_Shell_Common",
-    "Win32_UI_Shell_PropertiesSystem",
-    "Win32_UI_WindowsAndMessaging",
-]
 
 [patch.crates-io]
 cpal = { git = "https://github.com/RustAudio/cpal", rev = "e1612d5d98152f8dc2a62e1b51ef7cbf4f7f26b7" }
@@ -798,13 +746,8 @@ cpal = { git = "https://github.com/RustAudio/cpal", rev = "e1612d5d98152f8dc2a62
 tree-sitter-language = { git = "https://github.com/tree-sitter/tree-sitter", rev = "43623ec9bf0eaaf7113285c46e8a09018f181b18" }
 async-process = { git = "https://github.com/zed-industries/async-process.git", rev = "0b6d6713570af61806e1e5cb40e0f757cb93fd9d" }
 async-task = { git = "https://github.com/zed-industries/async-task.git", rev = "015845a19fc31752c02367567d3b8900a406f9da" }
-windows-capture = { git = "https://github.com/zed-industries/windows-capture.git", rev = "f0d6c1b6691db75461b732f6d5ff56eed002eeb9" }
-calloop = { git = "https://github.com/zed-industries/calloop", rev = "3759371fee14c40066d64777e2a36b6ffcc22590" }
 notify = { git = "https://github.com/zed-industries/notify", rev = "d842f16b2716bd60f09caf3ae3a894237ab38f54" }
 notify-types = { git = "https://github.com/zed-industries/notify", rev = "d842f16b2716bd60f09caf3ae3a894237ab38f54" }
-# Avoid panicking when a failed EGL call reports EGL_SUCCESS.
-# https://github.com/timothee-haudebourg/khronos-egl/pull/37
-khronos-egl = { git = "https://github.com/zed-industries/khronos-egl", rev = "42214b36347b108fd9630ca6254b96dde59e04fe" }
 
 [profile.dev]
 split-debuginfo = "unpacked"

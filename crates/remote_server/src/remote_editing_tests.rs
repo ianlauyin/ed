@@ -41,7 +41,7 @@ use project::{
     search::{SearchQuery, SearchResult},
 };
 use remote::{ConnectionState, RemoteClient, RemoteClientEvent};
-#[cfg(not(windows))]
+
 use remote::{MOCK_STDIO_FRAME_HEX, command::RemoteCommand};
 use rpc::proto;
 use serde_json::json;
@@ -5429,7 +5429,6 @@ fn init_logger() {
     zlog::init_test();
 }
 
-#[cfg(not(windows))]
 fn stdio_launch_args(output_path: &Path, initialize_result: &str) -> Vec<String> {
     let script = format!(
         r#"printf '%s\n' "${MOCK_STDIO_FRAME_HEX}" > "$1"
@@ -5448,7 +5447,6 @@ exec cat >/dev/null"#
     ]
 }
 
-#[cfg(not(windows))]
 fn read_stdio_launch(output_path: &Path) -> (RemoteCommand, serde_json::Value) {
     let output = std::fs::read_to_string(output_path).unwrap();
     let (frame_hex, first_line) = output.trim_end().split_once('\n').unwrap();

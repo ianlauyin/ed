@@ -10,11 +10,6 @@ pub use platform_title_bar::{
 };
 use project::{linked_worktree_short_name, repo_identity_path, repo_identity_path_if_local};
 
-#[cfg(not(target_os = "macos"))]
-use crate::application_menu::{
-    ActivateDirection, ActivateMenuLeft, ActivateMenuRight, OpenApplicationMenu,
-};
-
 use gpui::{
     AnyElement, App, Context, Entity, Focusable, InteractiveElement, IntoElement, MouseButton,
     ParentElement, Render, Styled, Subscription, WeakEntity, Window, actions, div,
@@ -74,52 +69,6 @@ pub fn init(cx: &mut App) {
         let multi_workspace = workspace.multi_workspace().cloned();
         let item = cx.new(|cx| TitleBar::new("title-bar", workspace, multi_workspace, window, cx));
         workspace.set_titlebar_item(item.into(), window, cx);
-
-        #[cfg(not(target_os = "macos"))]
-        workspace.register_action(|workspace, action: &OpenApplicationMenu, window, cx| {
-            if let Some(titlebar) = workspace
-                .titlebar_item()
-                .and_then(|item| item.downcast::<TitleBar>().ok())
-            {
-                titlebar.update(cx, |titlebar, cx| {
-                    if let Some(ref menu) = titlebar.application_menu {
-                        menu.update(cx, |menu, cx| menu.open_menu(action, window, cx));
-                    }
-                });
-            }
-        });
-
-        #[cfg(not(target_os = "macos"))]
-        workspace.register_action(|workspace, _: &ActivateMenuRight, window, cx| {
-            if let Some(titlebar) = workspace
-                .titlebar_item()
-                .and_then(|item| item.downcast::<TitleBar>().ok())
-            {
-                titlebar.update(cx, |titlebar, cx| {
-                    if let Some(ref menu) = titlebar.application_menu {
-                        menu.update(cx, |menu, cx| {
-                            menu.navigate_menus_in_direction(ActivateDirection::Right, window, cx)
-                        });
-                    }
-                });
-            }
-        });
-
-        #[cfg(not(target_os = "macos"))]
-        workspace.register_action(|workspace, _: &ActivateMenuLeft, window, cx| {
-            if let Some(titlebar) = workspace
-                .titlebar_item()
-                .and_then(|item| item.downcast::<TitleBar>().ok())
-            {
-                titlebar.update(cx, |titlebar, cx| {
-                    if let Some(ref menu) = titlebar.application_menu {
-                        menu.update(cx, |menu, cx| {
-                            menu.navigate_menus_in_direction(ActivateDirection::Left, window, cx)
-                        });
-                    }
-                });
-            }
-        });
     })
     .detach();
 }
@@ -150,7 +99,6 @@ impl Render for TitleBar {
         }
 
         let title_bar_settings = *TitleBarSettings::get_global(cx);
-        let button_layout = title_bar_settings.button_layout;
         let is_git_enabled = ProjectSettings::get_global(cx).git.enabled.status;
 
         let show_menus = show_menus(cx);
@@ -266,7 +214,6 @@ impl Render for TitleBar {
 
         if show_menus {
             self.platform_titlebar.update(cx, |this, _| {
-                this.set_button_layout(button_layout);
                 this.set_children(
                     self.application_menu
                         .clone()
@@ -294,7 +241,6 @@ impl Render for TitleBar {
                 .into_any_element()
         } else {
             self.platform_titlebar.update(cx, |this, _| {
-                this.set_button_layout(button_layout);
                 this.set_children(children);
             });
             self.platform_titlebar.clone().into_any_element()
@@ -313,18 +259,10 @@ impl TitleBar {
         let project = workspace.project().clone();
         let git_store = project.read(cx).git_store().clone();
 
-        let platform_style = PlatformStyle::platform();
-        let application_menu = match platform_style {
-            PlatformStyle::Mac => {
-                if option_env!("ZED_USE_CROSS_PLATFORM_MENU").is_some() {
-                    Some(cx.new(|cx| ApplicationMenu::new(window, cx)))
-                } else {
-                    None
-                }
-            }
-            PlatformStyle::Linux | PlatformStyle::Windows => {
-                Some(cx.new(|cx| ApplicationMenu::new(window, cx)))
-            }
+        let application_menu = if option_env!("ZED_USE_CROSS_PLATFORM_MENU").is_some() {
+            Some(cx.new(|cx| ApplicationMenu::new(window, cx)))
+        } else {
+            None
         };
 
         let mut subscriptions = Vec::new();
@@ -354,7 +292,6 @@ impl TitleBar {
                 },
             ));
         }
-        subscriptions.push(cx.observe_button_layout_changed(window, |_, _, cx| cx.notify()));
         if let Some(trusted_worktrees) = TrustedWorktrees::try_get_global(cx) {
             subscriptions.push(cx.subscribe(&trusted_worktrees, |_, _, _, cx| {
                 cx.notify();

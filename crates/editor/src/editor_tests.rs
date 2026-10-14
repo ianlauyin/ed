@@ -21917,9 +21917,6 @@ async fn test_auto_formatter_failure_is_silent(cx: &mut TestAppContext) {
 #[gpui::test]
 async fn test_external_formatter_with_no_output_leaves_buffer_unchanged(cx: &mut TestAppContext) {
     init_test(cx, |settings| {
-        #[cfg(windows)]
-        let (command, arguments) = ("cmd", vec!["/C".to_string(), "more > nul".to_string()]);
-        #[cfg(not(windows))]
         let (command, arguments) = ("sh", vec!["-c".to_string(), "cat >/dev/null".to_string()]);
 
         // Consume stdin without printing anything, mirroring tools like `cargo fmt`
@@ -35571,7 +35568,7 @@ async fn test_multi_buffer_navigation_with_folded_buffers(cx: &mut TestAppContex
     init_test(cx, |_| {});
     cx.update(|cx| {
         let default_key_bindings = settings::KeymapFile::load_asset_allow_partial_failure(
-            "keymaps/default-linux.json",
+            "keymaps/default-macos.json",
             cx,
         )
         .unwrap();

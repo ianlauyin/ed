@@ -48,16 +48,10 @@ pub struct WorkspaceSettings {
     pub focus_follows_mouse: FocusFollowsMouse,
 }
 
-#[cfg(target_os = "macos")]
 pub fn closing_last_window_quits_app(cx: &App) -> bool {
     WorkspaceSettings::get_global(cx)
         .on_last_window_closed
         .is_quit_app()
-}
-
-#[cfg(not(target_os = "macos"))]
-pub fn closing_last_window_quits_app(_cx: &App) -> bool {
-    true
 }
 
 #[derive(Copy, Clone, Deserialize)]

@@ -130,7 +130,7 @@ pub fn test_settings() -> &'static str {
             crate::default_settings().as_ref(),
         )
         .unwrap();
-        #[cfg(not(target_os = "windows"))]
+
         util::merge_non_null_json_value_into(
             serde_json::json!({
                 "format_on_save": "on",
@@ -139,22 +139,6 @@ pub fn test_settings() -> &'static str {
                 "ui_font_size": 14,
                 "ui_font_fallback": [],
                 "buffer_font_family": "Courier",
-                "buffer_font_features": {},
-                "buffer_font_size": 14,
-                "buffer_font_fallbacks": [],
-                "theme": EMPTY_THEME_NAME,
-            }),
-            &mut value,
-        );
-        #[cfg(target_os = "windows")]
-        util::merge_non_null_json_value_into(
-            serde_json::json!({
-                "format_on_save": "on",
-                "ui_font_family": "Courier New",
-                "ui_font_features": {},
-                "ui_font_size": 14,
-                "ui_font_fallback": [],
-                "buffer_font_family": "Courier New",
                 "buffer_font_features": {},
                 "buffer_font_size": 14,
                 "buffer_font_fallbacks": [],

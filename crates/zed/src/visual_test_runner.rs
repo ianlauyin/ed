@@ -36,13 +36,7 @@
 //!   VISUAL_TEST_OUTPUT_DIR - Directory to save test output (default: target/visual_tests)
 
 // Stub main for non-macOS platforms
-#[cfg(not(target_os = "macos"))]
-fn main() {
-    eprintln!("Visual test runner is only supported on macOS");
-    std::process::exit(1);
-}
 
-#[cfg(target_os = "macos")]
 fn main() {
     // Set ZED_STATELESS early to prevent file system access to real config directories
     // This must be done before any code accesses zed_env_vars::ZED_STATELESS
@@ -92,7 +86,7 @@ fn main() {
 }
 
 // All macOS-specific imports grouped together
-#[cfg(target_os = "macos")]
+
 use {
     anyhow::{Context as _, Result},
     assets::Assets,
@@ -115,7 +109,7 @@ use {
 };
 
 // All macOS-specific constants grouped together
-#[cfg(target_os = "macos")]
+
 mod constants {
     use std::time::Duration;
 
@@ -133,10 +127,8 @@ mod constants {
     pub const TOOLTIP_SHOW_DELAY: Duration = Duration::from_millis(500);
 }
 
-#[cfg(target_os = "macos")]
 use constants::*;
 
-#[cfg(target_os = "macos")]
 fn run_visual_tests(project_path: PathBuf, update_baseline: bool) -> Result<()> {
     // Create the visual test context with deterministic task scheduling
     // Use real Assets so that SVG icons render properly
@@ -505,13 +497,11 @@ fn run_visual_tests(project_path: PathBuf, update_baseline: bool) -> Result<()> 
     }
 }
 
-#[cfg(target_os = "macos")]
 enum TestResult {
     Passed,
     BaselineUpdated(PathBuf),
 }
 
-#[cfg(target_os = "macos")]
 fn run_visual_test(
     test_name: &str,
     window: gpui::AnyWindowHandle,
@@ -587,7 +577,6 @@ fn run_visual_test(
     }
 }
 
-#[cfg(target_os = "macos")]
 fn get_baseline_path(test_name: &str) -> PathBuf {
     // Get the workspace root (where Cargo.toml is)
     let manifest_dir = std::env::var("CARGO_MANIFEST_DIR").unwrap_or_else(|_| ".".to_string());
@@ -602,7 +591,6 @@ fn get_baseline_path(test_name: &str) -> PathBuf {
         .join(format!("{}.png", test_name))
 }
 
-#[cfg(target_os = "macos")]
 struct ImageComparison {
     match_percentage: f64,
     diff_image: RgbaImage,
@@ -611,7 +599,6 @@ struct ImageComparison {
     total_pixels: u32,
 }
 
-#[cfg(target_os = "macos")]
 fn compare_images(actual: &RgbaImage, expected: &RgbaImage) -> ImageComparison {
     let width = actual.width().max(expected.width());
     let height = actual.height().max(expected.height());
@@ -656,7 +643,6 @@ fn compare_images(actual: &RgbaImage, expected: &RgbaImage) -> ImageComparison {
     }
 }
 
-#[cfg(target_os = "macos")]
 fn pixels_are_similar(a: &image::Rgba<u8>, b: &image::Rgba<u8>) -> bool {
     const TOLERANCE: i16 = 2;
     (a.0[0] as i16 - b.0[0] as i16).abs() <= TOLERANCE
@@ -665,7 +651,6 @@ fn pixels_are_similar(a: &image::Rgba<u8>, b: &image::Rgba<u8>) -> bool {
         && (a.0[3] as i16 - b.0[3] as i16).abs() <= TOLERANCE
 }
 
-#[cfg(target_os = "macos")]
 fn create_test_files(project_path: &Path) {
     // Create src directory
     let src_dir = project_path.join("src");
@@ -793,7 +778,6 @@ cargo run
     std::fs::write(project_path.join("README.md"), readme).expect("Failed to write README.md");
 }
 
-#[cfg(target_os = "macos")]
 fn init_app_state(cx: &mut App) -> Arc<AppState> {
     use fs::Fs;
     use node_runtime::NodeRuntime;
@@ -840,7 +824,7 @@ fn init_app_state(cx: &mut App) -> Arc<AppState> {
 /// 1. Gutter with line numbers, no breakpoint hover (baseline)
 /// 2. Gutter with breakpoint hover indicator (gray circle)
 /// 3. Gutter with breakpoint hover AND tooltip
-#[cfg(target_os = "macos")]
+
 fn run_breakpoint_hover_visual_tests(
     app_state: Arc<AppState>,
     cx: &mut VisualTestAppContext,
@@ -1130,7 +1114,7 @@ fn run_breakpoint_hover_visual_tests(
 /// This test captures two states:
 /// 1. Settings opened with a path that maps to multiple items (no auto-open)
 /// 2. Settings opened with a path that maps to a single SubPageLink (auto-opens sub-page)
-#[cfg(target_os = "macos")]
+
 fn run_settings_ui_subpage_visual_tests(
     app_state: Arc<AppState>,
     cx: &mut VisualTestAppContext,
@@ -1292,10 +1276,8 @@ fn run_settings_ui_subpage_visual_tests(
     }
 }
 
-#[cfg(target_os = "macos")]
 struct ErrorWrappingTestView;
 
-#[cfg(target_os = "macos")]
 impl gpui::Render for ErrorWrappingTestView {
     fn render(
         &mut self,
@@ -1341,10 +1323,8 @@ impl gpui::Render for ErrorWrappingTestView {
     }
 }
 
-#[cfg(target_os = "macos")]
 struct ThreadItemBranchNameTestView;
 
-#[cfg(target_os = "macos")]
 impl gpui::Render for ThreadItemBranchNameTestView {
     fn render(
         &mut self,
@@ -1538,10 +1518,8 @@ impl gpui::Render for ThreadItemBranchNameTestView {
     }
 }
 
-#[cfg(target_os = "macos")]
 struct ThreadItemIconDecorationsTestView;
 
-#[cfg(target_os = "macos")]
 impl gpui::Render for ThreadItemIconDecorationsTestView {
     fn render(
         &mut self,
@@ -1626,7 +1604,6 @@ impl gpui::Render for ThreadItemIconDecorationsTestView {
     }
 }
 
-#[cfg(target_os = "macos")]
 fn run_error_wrapping_visual_tests(
     _app_state: Arc<AppState>,
     cx: &mut VisualTestAppContext,
@@ -1678,7 +1655,6 @@ fn run_error_wrapping_visual_tests(
     Ok(test_result)
 }
 
-#[cfg(target_os = "macos")]
 /// Helper to create a project, add a worktree at the given path, and return the project.
 fn create_project_with_worktree(
     worktree_dir: &Path,

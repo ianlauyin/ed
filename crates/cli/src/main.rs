@@ -2,10 +2,6 @@
     clippy::disallowed_methods,
     reason = "We are not in an async environment, so std::process::Command is fine"
 )]
-#![cfg_attr(
-    any(target_os = "linux", target_os = "freebsd", target_os = "windows"),
-    allow(dead_code)
-)]
 
 mod completions;
 
@@ -87,12 +83,7 @@ struct Args {
     classic: bool,
     /// Sets a custom directory for all user data (e.g., database, extensions, logs).
     /// This overrides the default platform-specific data directory location:
-    #[cfg_attr(target_os = "macos", doc = "`~/Library/Application Support/Zed`.")]
-    #[cfg_attr(target_os = "windows", doc = "`%LOCALAPPDATA%\\Zed`.")]
-    #[cfg_attr(
-        not(any(target_os = "windows", target_os = "macos")),
-        doc = "`$XDG_DATA_HOME/zed`."
-    )]
+    #[doc = "`~/Library/Application Support/Zed`."]
     #[arg(long, value_name = "DIR", value_hint = clap::ValueHint::DirPath)]
     user_data_dir: Option<String>,
     /// The paths to open in Zed (space-separated).
@@ -112,18 +103,7 @@ struct Args {
     /// Run zed in dev-server mode
     #[arg(long)]
     dev_server_token: Option<String>,
-    /// The username and WSL distribution to use when opening paths. If not specified,
-    /// Zed will attempt to open the paths directly.
-    ///
-    /// The username is optional, and if not specified, the default user for the distribution
-    /// will be used.
-    ///
-    /// Example: `me@Ubuntu` or `Ubuntu`.
-    ///
-    /// WARN: You should not fill in this field by hand.
-    #[cfg(target_os = "windows")]
-    #[arg(long, value_name = "USER@DISTRO")]
-    wsl: Option<String>,
+
     /// Not supported in Zed CLI, only supported on Zed binary
     /// Will attempt to give the correct command to run
     #[arg(long)]
@@ -376,7 +356,7 @@ mod tests {
     // NOTE:
     // While POSIX symbolic links are somewhat supported on Windows, they are an opt in by the user, and thus
     // we assume that they are not supported out of the box.
-    #[cfg(not(windows))]
+
     #[test]
     fn test_parse_symlink_file() {
         let temp_tree = TempTree::new(json!({
@@ -396,7 +376,6 @@ mod tests {
         assert_eq!(result, target_path.to_string_lossy());
     }
 
-    #[cfg(not(windows))]
     #[test]
     fn test_parse_symlink_dir() {
         let temp_tree = TempTree::new(json!({
@@ -482,15 +461,9 @@ fn main() {
 }
 
 fn run() -> Result<()> {
-    #[cfg(unix)]
     util::prevent_root_execution();
 
     // Exit flatpak sandbox if needed
-    #[cfg(target_os = "linux")]
-    {
-        flatpak::try_restart_to_host();
-        flatpak::ld_extra_libs();
-    }
 
     // Must happen before clap — SSH invokes cli.exe directly as SSH_ASKPASS
     // and passes the socket path via env var to avoid argument parsing.
@@ -512,9 +485,6 @@ fn run() -> Result<()> {
     if let Some(dir) = &user_data_dir {
         paths::set_custom_data_dir(dir);
     }
-
-    #[cfg(target_os = "linux")]
-    let args = flatpak::set_bin_if_no_escape(args);
 
     let app = Detect::detect(args.zed.as_deref()).context("Bundle detection")?;
 
@@ -592,30 +562,6 @@ fn run() -> Result<()> {
     };
 
     let env = {
-        #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-        {
-            use collections::HashMap;
-
-            // On Linux, the desktop entry uses `cli` to spawn `zed`.
-            // We need to handle env vars correctly since std::env::vars() may not contain
-            // project-specific vars (e.g. those set by direnv).
-            // By setting env to None here, the LSP will use worktree env vars instead,
-            // which is what we want.
-            if !std::io::stdout().is_terminal() {
-                None
-            } else {
-                Some(std::env::vars().collect::<HashMap<_, _>>())
-            }
-        }
-
-        #[cfg(target_os = "windows")]
-        {
-            // On Windows, by default, a child process inherits a copy of the environment block of the parent process.
-            // So we don't need to pass env vars explicitly.
-            None
-        }
-
-        #[cfg(not(any(target_os = "linux", target_os = "freebsd", target_os = "windows")))]
         {
             use collections::HashMap;
 
@@ -658,9 +604,6 @@ fn run() -> Result<()> {
         let _ = temp_dir.keep();
     }
 
-    #[cfg(target_os = "windows")]
-    let wsl = args.wsl.as_ref();
-    #[cfg(not(target_os = "windows"))]
     let wsl = None;
 
     for path in args.paths_with_position.iter() {
@@ -704,9 +647,6 @@ fn run() -> Result<()> {
                 let (_, handshake) = server.accept().context("Handshake after Zed spawn")?;
                 let (tx, rx) = (handshake.requests, handshake.responses);
 
-                #[cfg(target_os = "windows")]
-                let wsl = args.wsl;
-                #[cfg(not(target_os = "windows"))]
                 let wsl = None;
 
                 let open_request = CliRequest::Open {
@@ -791,22 +731,6 @@ fn run() -> Result<()> {
 }
 
 fn anonymous_fd(path: &str) -> Option<fs::File> {
-    #[cfg(target_os = "linux")]
-    {
-        use std::os::fd::{self, FromRawFd};
-
-        let fd_str = path.strip_prefix("/proc/self/fd/")?;
-
-        let link = fs::read_link(path).ok()?;
-        if !link.starts_with("memfd:") {
-            return None;
-        }
-
-        let fd: fd::RawFd = fd_str.parse().ok()?;
-        let file = unsafe { fs::File::from_raw_fd(fd) };
-        Some(file)
-    }
-    #[cfg(any(target_os = "macos", target_os = "freebsd"))]
     {
         use std::os::{
             fd::{self, FromRawFd},
@@ -823,12 +747,6 @@ fn anonymous_fd(path: &str) -> Option<fs::File> {
         let fd: fd::RawFd = fd_str.parse().ok()?;
         let file = unsafe { fs::File::from_raw_fd(fd) };
         Some(file)
-    }
-    #[cfg(not(any(target_os = "linux", target_os = "macos", target_os = "freebsd")))]
-    {
-        _ = path;
-        // not implemented for bsd, windows. Could be, but isn't yet
-        None
     }
 }
 
@@ -869,411 +787,6 @@ fn prompt_open_behavior() -> Option<cli::CliBehaviorSetting> {
     })
 }
 
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
-mod linux {
-    use std::{
-        env,
-        ffi::OsString,
-        io,
-        os::unix::net::{SocketAddr, UnixDatagram},
-        path::{Path, PathBuf},
-        process::{self, ExitStatus},
-        thread,
-        time::Duration,
-    };
-
-    use anyhow::{Context as _, anyhow};
-    use cli::FORCE_CLI_MODE_ENV_VAR_NAME;
-    use fork::Fork;
-
-    use crate::{Detect, InstalledApp};
-
-    struct App(PathBuf);
-
-    impl Detect {
-        pub fn detect(path: Option<&Path>) -> anyhow::Result<impl InstalledApp> {
-            let path = if let Some(path) = path {
-                path.to_path_buf().canonicalize()?
-            } else {
-                let cli = env::current_exe()?;
-                let dir = cli.parent().context("no parent path for cli")?;
-
-                // libexec is the standard, lib/zed is for Arch (and other non-libexec distros),
-                // ./zed is for the target directory in development builds.
-                let possible_locations =
-                    ["../libexec/zed-editor", "../lib/zed/zed-editor", "./zed"];
-                possible_locations
-                    .iter()
-                    .find_map(|p| dir.join(p).canonicalize().ok().filter(|path| path != &cli))
-                    .with_context(|| {
-                        format!("could not find any of: {}", possible_locations.join(", "))
-                    })?
-            };
-
-            Ok(App(path))
-        }
-    }
-
-    impl InstalledApp for App {
-        fn zed_version_string(&self) -> String {
-            format!(
-                "Zed {}{} – {}",
-                option_env!("RELEASE_VERSION").unwrap_or_default(),
-                match option_env!("ZED_COMMIT_SHA") {
-                    Some(commit_sha) => format!(" {commit_sha} "),
-                    None => "".to_string(),
-                },
-                self.0.display(),
-            )
-        }
-
-        fn launch(&self, ipc_url: String, user_data_dir: Option<&str>) -> anyhow::Result<()> {
-            let data_dir = user_data_dir
-                .map(PathBuf::from)
-                .unwrap_or_else(|| paths::data_dir().clone());
-
-            let sock_path = data_dir.join(format!(
-                "zed-{}.sock",
-                *settings_content::app_metadata::SERVER_RELEASE_NAME
-            ));
-            let sock = UnixDatagram::unbound()?;
-            if sock.connect(&sock_path).is_err() {
-                self.boot_background(ipc_url, user_data_dir)?;
-            } else {
-                sock.send(ipc_url.as_bytes())?;
-            }
-            Ok(())
-        }
-
-        fn run_foreground(
-            &self,
-            ipc_url: String,
-            user_data_dir: Option<&str>,
-        ) -> io::Result<ExitStatus> {
-            let mut cmd = std::process::Command::new(self.0.clone());
-            cmd.arg(ipc_url);
-            if let Some(dir) = user_data_dir {
-                cmd.arg("--user-data-dir").arg(dir);
-            }
-            cmd.status()
-        }
-
-        fn path(&self) -> PathBuf {
-            self.0.clone()
-        }
-    }
-
-    impl App {
-        fn boot_background(
-            &self,
-            ipc_url: String,
-            user_data_dir: Option<&str>,
-        ) -> anyhow::Result<()> {
-            let path = &self.0;
-
-            match fork::fork() {
-                Ok(Fork::Parent(_)) => Ok(()),
-                Ok(Fork::Child) => {
-                    unsafe { std::env::set_var(FORCE_CLI_MODE_ENV_VAR_NAME, "") };
-                    if fork::setsid().is_err() {
-                        eprintln!("failed to setsid: {}", std::io::Error::last_os_error());
-                        process::exit(1);
-                    }
-                    if fork::close_fd().is_err() {
-                        eprintln!("failed to close_fd: {}", std::io::Error::last_os_error());
-                    }
-                    let mut args: Vec<OsString> =
-                        vec![path.as_os_str().to_owned(), OsString::from(ipc_url)];
-                    if let Some(dir) = user_data_dir {
-                        args.push(OsString::from("--user-data-dir"));
-                        args.push(OsString::from(dir));
-                    }
-                    let error = exec::execvp(path.clone(), &args);
-                    // if exec succeeded, we never get here.
-                    eprintln!("failed to exec {:?}: {}", path, error);
-                    process::exit(1)
-                }
-                Err(_) => Err(anyhow!(io::Error::last_os_error())),
-            }
-        }
-
-        fn wait_for_socket(
-            &self,
-            sock_addr: &SocketAddr,
-            sock: &mut UnixDatagram,
-        ) -> Result<(), std::io::Error> {
-            for _ in 0..100 {
-                thread::sleep(Duration::from_millis(10));
-                if sock.connect_addr(sock_addr).is_ok() {
-                    return Ok(());
-                }
-            }
-            sock.connect_addr(sock_addr)
-        }
-    }
-}
-
-#[cfg(target_os = "linux")]
-mod flatpak {
-    use std::ffi::OsString;
-    use std::path::{Path, PathBuf};
-    use std::process::Command;
-    use std::{env, process};
-
-    const EXTRA_LIB_ENV_NAME: &str = "ZED_FLATPAK_LIB_PATH";
-    const NO_ESCAPE_ENV_NAME: &str = "ZED_FLATPAK_NO_ESCAPE";
-
-    fn restart_cli_args(flatpak_dir: &Path, invocation_args: &[OsString]) -> Vec<OsString> {
-        let mut args = Vec::with_capacity(invocation_args.len() + 2);
-
-        if !invocation_args.iter().any(|arg| arg == "--zed") {
-            // Positional paths consume all following arguments, so launcher options must precede them.
-            args.push("--zed".into());
-            args.push(flatpak_dir.join("libexec").join("zed-editor").into());
-        }
-
-        args.extend_from_slice(invocation_args);
-        args
-    }
-
-    /// Adds bundled libraries to LD_LIBRARY_PATH if running under flatpak
-    pub fn ld_extra_libs() {
-        let mut paths = if let Ok(paths) = env::var("LD_LIBRARY_PATH") {
-            env::split_paths(&paths).collect()
-        } else {
-            Vec::new()
-        };
-
-        if let Ok(extra_path) = env::var(EXTRA_LIB_ENV_NAME) {
-            paths.push(extra_path.into());
-        }
-
-        unsafe { env::set_var("LD_LIBRARY_PATH", env::join_paths(paths).unwrap()) };
-    }
-
-    /// Restarts outside of the sandbox if currently running within it
-    pub fn try_restart_to_host() {
-        if let Some(flatpak_dir) = get_flatpak_dir() {
-            let mut args = vec!["/usr/bin/flatpak-spawn".into(), "--host".into()];
-            args.append(&mut get_xdg_env_args());
-            args.push("--env=ZED_UPDATE_EXPLANATION=Please use flatpak to update zed".into());
-            args.push(
-                format!(
-                    "--env={EXTRA_LIB_ENV_NAME}={}",
-                    flatpak_dir.join("lib").to_str().unwrap()
-                )
-                .into(),
-            );
-            args.push(flatpak_dir.join("bin").join("zed").into());
-
-            let invocation_args = env::args_os().skip(1).collect::<Vec<_>>();
-            args.extend(restart_cli_args(&flatpak_dir, &invocation_args));
-
-            let error = exec::execvp("/usr/bin/flatpak-spawn", args);
-            eprintln!("failed restart cli on host: {:?}", error);
-            process::exit(1);
-        }
-    }
-
-    pub fn set_bin_if_no_escape(mut args: super::Args) -> super::Args {
-        if env::var(NO_ESCAPE_ENV_NAME).is_ok()
-            && env::var("FLATPAK_ID").is_ok_and(|id| id.starts_with("dev.zed.Zed"))
-            && args.zed.is_none()
-        {
-            args.zed = Some("/app/libexec/zed-editor".into());
-            unsafe { env::set_var("ZED_UPDATE_EXPLANATION", "Please use flatpak to update zed") };
-        }
-        args
-    }
-
-    fn get_flatpak_dir() -> Option<PathBuf> {
-        if env::var(NO_ESCAPE_ENV_NAME).is_ok() {
-            return None;
-        }
-
-        if let Ok(flatpak_id) = env::var("FLATPAK_ID") {
-            if !flatpak_id.starts_with("dev.zed.Zed") {
-                return None;
-            }
-
-            let install_dir = Command::new("/usr/bin/flatpak-spawn")
-                .arg("--host")
-                .arg("flatpak")
-                .arg("info")
-                .arg("--show-location")
-                .arg(flatpak_id)
-                .output()
-                .unwrap();
-            let install_dir = PathBuf::from(String::from_utf8(install_dir.stdout).unwrap().trim());
-            Some(install_dir.join("files"))
-        } else {
-            None
-        }
-    }
-
-    fn get_xdg_env_args() -> Vec<OsString> {
-        let xdg_keys = [
-            "XDG_DATA_HOME",
-            "XDG_CONFIG_HOME",
-            "XDG_CACHE_HOME",
-            "XDG_STATE_HOME",
-        ];
-        env::vars()
-            .filter(|(key, _)| xdg_keys.contains(&key.as_str()))
-            .map(|(key, val)| format!("--env=FLATPAK_{}={}", key, val).into())
-            .collect()
-    }
-
-    #[cfg(test)]
-    mod tests {
-        use clap::Parser as _;
-
-        use super::*;
-
-        #[test]
-        fn test_restart_cli_args() {
-            let flatpak_dir = Path::new("/flatpak");
-            let args = restart_cli_args(flatpak_dir, &["project".into()]);
-            let parsed =
-                crate::Args::try_parse_from(std::iter::once(OsString::from("zed")).chain(args))
-                    .unwrap();
-
-            assert_eq!(parsed.zed, Some(flatpak_dir.join("libexec/zed-editor")));
-            assert_eq!(parsed.paths_with_position, ["project"]);
-
-            let invocation_args = ["--zed".into(), "/custom/zed-editor".into()];
-            assert_eq!(
-                restart_cli_args(flatpak_dir, &invocation_args),
-                invocation_args
-            );
-        }
-    }
-}
-
-#[cfg(target_os = "windows")]
-mod windows {
-    use anyhow::Context;
-    use settings_content::app_metadata::app_identifier;
-    use windows::{
-        Win32::{
-            Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GENERIC_WRITE, GetLastError},
-            Storage::FileSystem::{
-                CreateFileW, FILE_FLAGS_AND_ATTRIBUTES, FILE_SHARE_MODE, OPEN_EXISTING, WriteFile,
-            },
-            System::Threading::CreateMutexW,
-        },
-        core::HSTRING,
-    };
-
-    use crate::{Detect, InstalledApp};
-    use std::io;
-    use std::path::{Path, PathBuf};
-    use std::process::{ExitStatus, Stdio};
-
-    fn check_single_instance() -> bool {
-        let mutex = unsafe {
-            CreateMutexW(
-                None,
-                false,
-                &HSTRING::from(format!("{}-Instance-Mutex", app_identifier())),
-            )
-            .expect("Unable to create instance sync event")
-        };
-        let last_err = unsafe { GetLastError() };
-        let _ = unsafe { CloseHandle(mutex) };
-        last_err != ERROR_ALREADY_EXISTS
-    }
-
-    struct App(PathBuf);
-
-    impl InstalledApp for App {
-        fn zed_version_string(&self) -> String {
-            format!(
-                "Zed {}{} – {}",
-                option_env!("RELEASE_VERSION").unwrap_or_default(),
-                match option_env!("ZED_COMMIT_SHA") {
-                    Some(commit_sha) => format!(" {commit_sha} "),
-                    None => "".to_string(),
-                },
-                self.0.display(),
-            )
-        }
-
-        fn launch(&self, ipc_url: String, user_data_dir: Option<&str>) -> anyhow::Result<()> {
-            if check_single_instance() {
-                let mut cmd = std::process::Command::new(self.0.clone());
-                cmd.arg(ipc_url);
-                if let Some(dir) = user_data_dir {
-                    cmd.arg("--user-data-dir").arg(dir);
-                }
-                cmd.stdin(Stdio::null())
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null());
-                cmd.spawn()?;
-            } else {
-                unsafe {
-                    let pipe = CreateFileW(
-                        &HSTRING::from(format!("\\\\.\\pipe\\{}-Named-Pipe", app_identifier())),
-                        GENERIC_WRITE.0,
-                        FILE_SHARE_MODE::default(),
-                        None,
-                        OPEN_EXISTING,
-                        FILE_FLAGS_AND_ATTRIBUTES::default(),
-                        None,
-                    )?;
-                    let message = ipc_url.as_bytes();
-                    let mut bytes_written = 0;
-                    WriteFile(pipe, Some(message), Some(&mut bytes_written), None)?;
-                    CloseHandle(pipe)?;
-                }
-            }
-            Ok(())
-        }
-
-        fn run_foreground(
-            &self,
-            ipc_url: String,
-            user_data_dir: Option<&str>,
-        ) -> io::Result<ExitStatus> {
-            let mut cmd = std::process::Command::new(self.0.clone());
-            cmd.arg(ipc_url).arg("--foreground");
-            if let Some(dir) = user_data_dir {
-                cmd.arg("--user-data-dir").arg(dir);
-            }
-            cmd.spawn()?.wait()
-        }
-
-        fn path(&self) -> PathBuf {
-            self.0.clone()
-        }
-    }
-
-    impl Detect {
-        pub fn detect(path: Option<&Path>) -> anyhow::Result<impl InstalledApp> {
-            let path = if let Some(path) = path {
-                path.to_path_buf().canonicalize()?
-            } else {
-                let cli = std::env::current_exe()?;
-                let dir = cli.parent().context("no parent path for cli")?;
-
-                // ../Zed.exe is the standard, lib/zed is for MSYS2, ./zed.exe is for the target
-                // directory in development builds.
-                let possible_locations = ["../Zed.exe", "../lib/zed/zed-editor.exe", "./zed.exe"];
-                possible_locations
-                    .iter()
-                    .find_map(|p| dir.join(p).canonicalize().ok().filter(|path| path != &cli))
-                    .context(format!(
-                        "could not find any of: {}",
-                        possible_locations.join(", ")
-                    ))?
-            };
-
-            Ok(App(path))
-        }
-    }
-}
-
-#[cfg(target_os = "macos")]
 mod mac_os {
     use anyhow::{Context as _, Result};
     use core_foundation::{

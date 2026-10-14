@@ -35,19 +35,6 @@ pub async fn gather() -> Value {
         }
     }
 
-    #[cfg(target_os = "linux")]
-    {
-        match collect_linux_proc_info() {
-            Ok(info) => {
-                diag.insert("linux_proc".into(), info);
-            }
-            Err(err) => {
-                log::warn!("git runtime diagnostics: failed to read /proc info: {err:#}");
-            }
-        }
-    }
-
-    #[cfg(target_os = "macos")]
     {
         match collect_macos_git_child_diagnostics().await {
             Ok(info) => {
@@ -255,53 +242,6 @@ fn descendants_of(system: &sysinfo::System, root: sysinfo::Pid) -> Vec<sysinfo::
     out
 }
 
-#[cfg(target_os = "linux")]
-fn collect_linux_proc_info() -> anyhow::Result<Value> {
-    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, RefreshKind, System};
-
-    let current_pid = sysinfo::get_current_pid()
-        .map_err(|e| anyhow::anyhow!("sysinfo::get_current_pid failed: {e}"))?;
-    let refresh = ProcessRefreshKind::nothing();
-    let mut system = System::new_with_specifics(RefreshKind::nothing().with_processes(refresh));
-    system.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh);
-
-    let descendants = descendants_of(&system, current_pid);
-
-    let mut entries = Vec::new();
-    for pid in descendants {
-        let pid_u32 = pid.as_u32();
-
-        let wchan = match std::fs::read_to_string(format!("/proc/{pid_u32}/wchan")) {
-            Ok(s) => Value::String(s.trim().to_string()),
-            Err(err) => {
-                log::warn!("git runtime diagnostics: failed to read /proc/{pid_u32}/wchan: {err}");
-                Value::Null
-            }
-        };
-
-        let state = match std::fs::read_to_string(format!("/proc/{pid_u32}/status")) {
-            Ok(contents) => contents
-                .lines()
-                .find(|l| l.starts_with("State:"))
-                .map(|l| Value::String(l.trim_start_matches("State:").trim().to_string()))
-                .unwrap_or(Value::Null),
-            Err(err) => {
-                log::warn!("git runtime diagnostics: failed to read /proc/{pid_u32}/status: {err}");
-                Value::Null
-            }
-        };
-
-        entries.push(serde_json::json!({
-            "pid": pid_u32,
-            "wchan": wchan,
-            "state": state,
-        }));
-    }
-
-    Ok(serde_json::json!({ "descendants": entries }))
-}
-
-#[cfg(target_os = "macos")]
 async fn collect_macos_git_child_diagnostics() -> anyhow::Result<Value> {
     use std::path::Path;
     use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, RefreshKind, System, UpdateKind};
@@ -383,7 +323,6 @@ async fn collect_macos_git_child_diagnostics() -> anyhow::Result<Value> {
     Ok(Value::Array(entries))
 }
 
-#[cfg(target_os = "macos")]
 async fn run_capturing(program: &str, args: &[&str]) -> anyhow::Result<String> {
     let output = util::command::new_command(program)
         .args(args)
@@ -399,7 +338,6 @@ async fn run_capturing(program: &str, args: &[&str]) -> anyhow::Result<String> {
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }
 
-#[cfg(target_os = "macos")]
 fn truncate(mut s: String, max_bytes: usize) -> String {
     if s.len() <= max_bytes {
         return s;

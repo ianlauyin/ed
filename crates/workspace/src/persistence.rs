@@ -68,7 +68,7 @@ fn parse_timestamp(text: &str) -> DateTime<Utc> {
 }
 
 fn contains_wsl_path(paths: &PathList) -> bool {
-    cfg!(windows)
+    false
         && paths
             .paths()
             .iter()
@@ -5314,7 +5314,6 @@ mod tests {
         assert_eq!(restored_ids, vec![ws1_id, ws2_id]);
     }
 
-    #[cfg(target_os = "macos")]
     #[gpui::test]
     async fn test_close_window_platform_default_still_removes_from_session(
         cx: &mut gpui::TestAppContext,

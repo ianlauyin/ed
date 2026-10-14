@@ -1901,7 +1901,6 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
     #[test]
     fn test_prepare_script_like_task() {
         let user_command = r#"REPO_URL=$(git remote get-url origin | sed -e \"s/^git@\\(.*\\):\\(.*\\)\\.git$/https:\\/\\/\\1\\/\\2/\"); COMMIT_SHA=$(git log -1 --format=\"%H\" -- \"${ZED_RELATIVE_FILE}\"); echo \"${REPO_URL}/blob/${COMMIT_SHA}/${ZED_RELATIVE_FILE}#L${ZED_ROW}-$(echo $(($(wc -l <<< \"$ZED_SELECTED_TEXT\") + $ZED_ROW - 1)))\" | xclip -selection clipboard"#.to_string();
@@ -2783,11 +2782,7 @@ mod tests {
 
     // On Windows `echo` is a shell builtin rather than an executable, so spawning it directly fails.
     fn echo_task() -> SpawnInTerminal {
-        let (command, args) = if cfg!(windows) {
-            ("cmd.exe", vec!["/C".to_owned(), "echo".to_owned()])
-        } else {
-            ("echo", Vec::new())
-        };
+        let (command, args) = { ("echo", Vec::new()) };
         SpawnInTerminal {
             command: Some(command.to_owned()),
             args,

@@ -29,7 +29,7 @@ impl OsWatcherKind {
     /// Poll watches and native macOS/Windows watches cover their whole subtree;
     /// native Linux (inotify) watches cover one directory.
     fn is_recursive(self) -> bool {
-        self == Self::Poll || cfg!(any(target_os = "windows", target_os = "macos"))
+        self == Self::Poll || true
     }
 }
 
@@ -299,12 +299,6 @@ pub fn requires_poll_watcher(path: &Path) -> bool {
         _ => {}
     }
 
-    #[cfg(target_os = "linux")]
-    {
-        return detect_requires_poll_watcher_linux(path);
-    }
-
-    #[cfg(not(target_os = "linux"))]
     {
         let _ = path;
         false
@@ -354,117 +348,9 @@ fn register_existing_path(
     }))
 }
 
-#[cfg(target_os = "linux")]
-fn detect_requires_poll_watcher_linux(path: &Path) -> bool {
-    use std::ffi::CString;
-    use std::os::unix::ffi::OsStrExt;
-
-    let c_path = match CString::new(path.as_os_str().as_bytes()) {
-        Ok(p) => p,
-        Err(_) => return false,
-    };
-
-    let mut stat: libc::statfs = unsafe { std::mem::zeroed() };
-    if unsafe { libc::statfs(c_path.as_ptr(), &mut stat) } != 0 {
-        return false;
-    }
-
-    const V9FS_MAGIC: u64 = 0x0102_1997;
-    const NFS_SUPER_MAGIC: u64 = 0x0000_6969;
-    const CIFS_MAGIC: u64 = 0xFF53_4D42;
-    const SMB_SUPER_MAGIC: u64 = 0x0000_517B;
-    const SMB2_MAGIC: u64 = 0xFE53_4D42;
-    const FUSE_SUPER_MAGIC: u64 = 0x6573_5546;
-
-    let fs_type = (stat.f_type as u64) & 0xFFFF_FFFF;
-    if fs_type == FUSE_SUPER_MAGIC && is_virtiofs(path) {
-        return false;
-    }
-
-    if fs_type == V9FS_MAGIC
-        || fs_type == NFS_SUPER_MAGIC
-        || fs_type == CIFS_MAGIC
-        || fs_type == SMB_SUPER_MAGIC
-        || fs_type == SMB2_MAGIC
-        || fs_type == FUSE_SUPER_MAGIC
-    {
-        log::info!(
-            "Detected network/virtual filesystem (type 0x{:x}) at {}, using poll watcher",
-            fs_type,
-            path.display()
-        );
-        return true;
-    }
-
-    if is_wsl_drvfs_path(path) {
-        log::info!(
-            "Detected WSL drvfs mount at {}, using poll watcher",
-            path.display()
-        );
-        return true;
-    }
-
-    false
-}
-
-#[cfg(target_os = "linux")]
-fn is_virtiofs(path: &Path) -> bool {
-    let Ok(mountinfo) = std::fs::read_to_string("/proc/self/mountinfo") else {
-        return false;
-    };
-
-    let mut best_mount = None;
-    for line in mountinfo.lines() {
-        let fields = line.split(' ').collect::<Vec<_>>();
-        let Some(separator) = fields.iter().position(|field| *field == "-") else {
-            continue;
-        };
-        let (Some(mount_point), Some(fs_type)) = (fields.get(4), fields.get(separator + 1)) else {
-            continue;
-        };
-
-        let mount_point = mount_point
-            .replace("\\040", " ")
-            .replace("\\011", "\t")
-            .replace("\\012", "\n")
-            .replace("\\134", "\\");
-        if path.starts_with(&mount_point)
-            && best_mount.is_none_or(|(length, _)| mount_point.len() > length)
-        {
-            best_mount = Some((mount_point.len(), *fs_type));
-        }
-    }
-
-    best_mount.is_some_and(|(_, fs_type)| fs_type == "virtiofs" || fs_type == "fuse.virtiofs")
-}
-
-#[cfg(target_os = "linux")]
-fn is_wsl_drvfs_path(path: &Path) -> bool {
-    if std::env::var_os("WSL_DISTRO_NAME").is_none() {
-        if let Ok(version) = std::fs::read_to_string("/proc/version") {
-            let version = version.to_lowercase();
-            if !version.contains("microsoft") && !version.contains("wsl") {
-                return false;
-            }
-        } else {
-            return false;
-        }
-    }
-
-    let Some(path) = path.to_str() else {
-        return false;
-    };
-    if !path.starts_with("/mnt/") || path.len() < 6 {
-        return false;
-    }
-    let after_mnt = &path[5..];
-    after_mnt.starts_with(|c: char| c.is_ascii_alphabetic())
-        && (after_mnt.len() == 1 || after_mnt.as_bytes()[1] == b'/')
-}
-
 /// Whether the volume backing `path` does case-insensitive name lookups, used to
 /// pick exact vs. folded matching.
-#[cfg(target_os = "macos")]
+
 pub(crate) fn case_insensitive_path(path: &Path) -> bool {
     use std::os::unix::ffi::OsStrExt as _;
 
@@ -475,45 +361,6 @@ pub(crate) fn case_insensitive_path(path: &Path) -> bool {
     };
     // SAFETY: We just initialized c_path, so it's a valid pointer
     unsafe { libc::pathconf(c_path.as_ptr(), libc::_PC_CASE_SENSITIVE) == 0 }
-}
-
-#[cfg(target_os = "linux")]
-pub(crate) fn case_insensitive_path(_path: &Path) -> bool {
-    // use std::os::unix::ffi::OsStrExt as _;
-
-    // // Only ext4/f2fs casefold (`+F`) dirs are insensitive, reported by `statx` via
-    // // STATX_ATTR_CASEFOLD; any failure (e.g. pre-4.11 ENOSYS) means case-sensitive.
-    // const STATX_ATTR_CASEFOLD: u64 = 0x0000_2000;
-    // let Ok(c_path) = std::ffi::CString::new(path.as_os_str().as_bytes()) else {
-    //     return false;
-    // };
-    // let mut buf = std::mem::MaybeUninit::<libc::statx>::zeroed();
-
-    // // SAFETY: c_path is still valid, buffer has been zeroed
-    // if unsafe { libc::statx(libc::AT_FDCWD, c_path.as_ptr(), 0, 0, buf.as_mut_ptr()) } != 0 {
-    //     return false;
-    // }
-
-    // // SAFETY: libc statx initialized this buffer, otherwise we would've returned on a error
-    // // in that function call
-    // let buf = unsafe { buf.assume_init() };
-    // buf.stx_attributes_mask & STATX_ATTR_CASEFOLD != 0
-    //     && buf.stx_attributes & STATX_ATTR_CASEFOLD != 0
-    false
-}
-
-#[cfg(target_os = "windows")]
-pub(crate) fn case_insensitive_path(_path: &Path) -> bool {
-    // todo(windows): Windows defaults to case in sensitive, but
-    // they can mark specific directories as case sensitive. Mainly
-    // for WSL use cases
-    true
-}
-
-#[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-pub(crate) fn case_insensitive_path(_path: &Path) -> bool {
-    // Other BSDs default to case-sensitive local filesystems.
-    false
 }
 
 /// Whether `path` is `root` or sits beneath it, folding case on case-insensitive
@@ -560,13 +407,12 @@ impl WatchKey {
         // NFD), and FSEvents can report NFD while a config/LSP supplies NFC, so
         // normalize before folding case. Windows (NTFS) and Linux are
         // normalization-sensitive, so there we only fold case.
-        #[cfg(target_os = "macos")]
+
         let folded = {
             use unicode_normalization::UnicodeNormalization as _;
             lossy.chars().nfc().collect::<String>().to_lowercase()
         };
-        #[cfg(not(target_os = "macos"))]
-        let folded = lossy.to_lowercase();
+
         Self::Folded(folded.into())
     }
 
@@ -1590,58 +1436,6 @@ mod tests {
         assert_eq!(native_backend.watch_calls, &[first_path.to_path_buf()]);
     }
 
-    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    #[test]
-    fn removed_or_renamed_path_is_rewatched_once() {
-        let dir = PathBuf::from("/Repo/Dir");
-        let subdir = PathBuf::from("/Repo/Dir/Subdir");
-        let removal = notify::Event {
-            paths: vec![dir.clone()],
-            ..notify::Event::new(EventKind::Remove(notify::event::RemoveKind::Folder))
-        };
-        let overflow = notify::Event::new(EventKind::Other).set_flag(notify::event::Flag::Rescan);
-        let rename = |path: &str| notify::Event {
-            paths: vec![PathBuf::from(path)],
-            ..notify::Event::new(EventKind::Modify(notify::event::ModifyKind::Name(
-                notify::event::RenameMode::From,
-            )))
-        };
-
-        for (event, case_insensitive, rewatched) in [
-            (removal, false, &dir),
-            (overflow, false, &dir),
-            (rename("/Repo/Dir"), false, &subdir),
-            (rename("/repo/dir"), true, &subdir),
-        ] {
-            let backend = Arc::new(Mutex::new(FakeWatchBackend::default()));
-            let watcher = test_os_watcher(OsWatcherKind::Native, Some(backend.clone()));
-            for path in [&dir, &dir, &subdir] {
-                watcher
-                    .add(path.as_path().into(), case_insensitive, |_| {})
-                    .expect("add watch")
-                    .expect("watch registered");
-            }
-
-            watcher.dispatch(Ok(event));
-            let rewatched = SanitizedPath::new(rewatched);
-            let key = WatchKey::for_registration(rewatched, case_insensitive);
-            watcher
-                .rewatch_if_stale(&mut watcher.state.lock(), rewatched, &key)
-                .expect("rewatch");
-
-            let backend = backend.lock();
-            assert_eq!(
-                backend.watch_calls,
-                &[
-                    dir.clone(),
-                    subdir.clone(),
-                    rewatched.as_path().to_path_buf()
-                ]
-            );
-            assert_eq!(backend.unwatch_calls, &[rewatched.as_path().to_path_buf()]);
-        }
-    }
-
     fn modify_event(path: &str) -> notify::Event {
         notify::Event {
             paths: vec![PathBuf::from(path)],
@@ -1714,7 +1508,6 @@ mod tests {
         assert_ne!(WatchKey::exact(mixed), WatchKey::folded(mixed));
     }
 
-    #[cfg(target_os = "macos")]
     #[test]
     fn watch_key_folds_unicode_normalization_on_macos() {
         // "Café" precomposed (NFC) vs decomposed (NFD) are different byte
@@ -1879,32 +1672,6 @@ mod tests {
                 "/repo/b".to_owned(),
             ]
         );
-    }
-
-    #[test]
-    #[cfg(target_os = "windows")]
-    fn event_dispatches_when_reported_path_has_verbatim_prefix() {
-        // `notify` (and Windows APIs generally) can report a changed path using the
-        // verbatim `\\?\` long-path form even when the directory was registered
-        // without it.
-        let backend = Arc::new(Mutex::new(FakeWatchBackend::default()));
-        let watcher = test_os_watcher(OsWatcherKind::Native, Some(backend));
-        let fired = Arc::new(Mutex::new(Vec::new()));
-        {
-            let fired = fired.clone();
-            watcher
-                .add(
-                    Arc::<Path>::from(Path::new("C:\\repo\\src")),
-                    false,
-                    move |_| fired.lock().push(()),
-                )
-                .expect("add watch")
-                .expect("watch registered");
-        }
-
-        watcher.dispatch(Ok(modify_event("\\\\?\\C:\\repo\\src\\main.rs")));
-
-        assert_eq!(fired.lock().len(), 1);
     }
 
     #[test]

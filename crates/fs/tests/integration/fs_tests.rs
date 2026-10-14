@@ -508,21 +508,6 @@ async fn test_realfs_atomic_write_non_existing_file(executor: BackgroundExecutor
 }
 
 #[gpui::test]
-#[cfg(target_os = "windows")]
-async fn test_realfs_canonicalize(executor: BackgroundExecutor) {
-    use util::paths::SanitizedPath;
-
-    let fs = RealFs::new(None, executor);
-    let temp_dir = TempDir::new().unwrap();
-    let file = temp_dir.path().join("test (1).txt");
-    let file = SanitizedPath::new(&file);
-    std::fs::write(&file, "test").unwrap();
-
-    let canonicalized = fs.canonicalize(file.as_path()).await;
-    assert!(canonicalized.is_ok());
-}
-
-#[gpui::test]
 async fn test_rename(executor: BackgroundExecutor) {
     let fs = FakeFs::new(executor.clone());
     fs.insert_tree(
@@ -582,7 +567,7 @@ async fn test_rename(executor: BackgroundExecutor) {
 }
 
 #[gpui::test]
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+
 async fn test_realfs_parallel_rename_without_overwrite_preserves_losing_source(
     executor: BackgroundExecutor,
 ) {
@@ -610,7 +595,7 @@ async fn test_realfs_parallel_rename_without_overwrite_preserves_losing_source(
 }
 
 #[gpui::test]
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+
 async fn test_realfs_rename_ignore_if_exists_leaves_source_and_target_unchanged(
     executor: BackgroundExecutor,
 ) {
@@ -744,7 +729,7 @@ async fn assert_remove_file_unlinks_symlink(root: &Path, fs: &dyn Fs) {
 }
 
 #[gpui::test]
-#[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
+
 async fn test_realfs_copy_and_remove_semantics(cx: &mut TestAppContext) {
     cx.executor().allow_parking();
     let executor = cx.executor();
@@ -814,7 +799,7 @@ async fn test_fake_fs_rename_onto_itself_keeps_the_file(executor: BackgroundExec
 }
 
 #[gpui::test]
-#[cfg(unix)]
+
 async fn test_realfs_executable_metadata(executor: BackgroundExecutor) {
     use std::os::unix::fs::PermissionsExt as _;
 
@@ -857,7 +842,7 @@ async fn test_realfs_executable_metadata(executor: BackgroundExecutor) {
 }
 
 #[gpui::test]
-#[cfg(unix)]
+
 async fn test_realfs_broken_symlink_metadata(executor: BackgroundExecutor) {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.path();
@@ -877,7 +862,7 @@ async fn test_realfs_broken_symlink_metadata(executor: BackgroundExecutor) {
 }
 
 #[gpui::test]
-#[cfg(unix)]
+
 async fn test_realfs_symlink_loop_metadata(executor: BackgroundExecutor) {
     let tempdir = TempDir::new().unwrap();
     let path = tempdir.path();
@@ -1061,22 +1046,7 @@ async fn test_fake_fs_restore(executor: BackgroundExecutor) {
 /// the create-symlink privilege), so callers can skip a scenario gracefully
 /// rather than failing the whole test.
 fn make_dir_symlink(target: &Path, link: &Path) -> std::io::Result<()> {
-    #[cfg(unix)]
-    {
-        std::os::unix::fs::symlink(target, link)
-    }
-    #[cfg(windows)]
-    {
-        std::os::windows::fs::symlink_dir(target, link)
-    }
-    #[cfg(not(any(unix, windows)))]
-    {
-        let _ = (target, link);
-        Err(std::io::Error::new(
-            std::io::ErrorKind::Unsupported,
-            "symlinks are not supported on this platform",
-        ))
-    }
+    std::os::unix::fs::symlink(target, link)
 }
 
 /// Waits up to `timeout` for `events` to deliver something that covers the

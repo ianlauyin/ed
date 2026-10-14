@@ -168,12 +168,10 @@ impl From<settings_content::SshConnection> for SshConnectionOptions {
 
 struct SshSocket {
     connection_options: SshConnectionOptions,
-    #[cfg(not(windows))]
+
     socket_path: std::path::PathBuf,
     /// Extra environment variables needed for the ssh process
     envs: HashMap<String, String>,
-    #[cfg(windows)]
-    _proxy: askpass::PasswordProxy,
 }
 
 struct RemoteEnvironment {
@@ -299,7 +297,6 @@ struct MasterProcess {
     process: Child,
 }
 
-#[cfg(not(windows))]
 impl MasterProcess {
     pub fn new(
         askpass_script_path: &std::ffi::OsStr,
@@ -342,69 +339,6 @@ impl MasterProcess {
         let mut output = Vec::new();
         stdout.read_to_end(&mut output).await?;
         Ok(())
-    }
-}
-
-#[cfg(windows)]
-impl MasterProcess {
-    const CONNECTION_ESTABLISHED_MAGIC: &str = "ZED_SSH_CONNECTION_ESTABLISHED";
-
-    pub fn new(
-        askpass_script_path: &std::ffi::OsStr,
-        askpass_socket_path: &std::ffi::OsStr,
-        additional_args: Vec<String>,
-        destination: &str,
-    ) -> Result<Self> {
-        // On Windows, `ControlMaster` and `ControlPath` are not supported:
-        // https://github.com/PowerShell/Win32-OpenSSH/issues/405
-        // https://github.com/PowerShell/Win32-OpenSSH/wiki/Project-Scope
-        //
-        // Using an ugly workaround to detect connection establishment
-        // -N doesn't work with JumpHosts as windows openssh never closes stdin in that case
-        let args = [
-            "-t",
-            &format!("echo '{}'; exec $0", Self::CONNECTION_ESTABLISHED_MAGIC),
-        ];
-
-        let mut master_process = util::command::new_command("ssh");
-        master_process
-            .kill_on_drop(true)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .env("SSH_ASKPASS_REQUIRE", "force")
-            .env("SSH_ASKPASS", askpass_script_path)
-            .env("ZED_ASKPASS_SOCKET", askpass_socket_path)
-            .args(additional_args)
-            .arg(destination)
-            .args(args);
-
-        let process = master_process.spawn()?;
-
-        Ok(MasterProcess { process })
-    }
-
-    pub async fn wait_connected(&mut self) -> Result<()> {
-        use smol::io::AsyncBufReadExt;
-
-        let Some(stdout) = self.process.stdout.take() else {
-            anyhow::bail!("ssh process stdout capture failed");
-        };
-
-        let mut reader = smol::io::BufReader::new(stdout);
-
-        let mut line = String::new();
-
-        loop {
-            let n = reader.read_line(&mut line).await?;
-            if n == 0 {
-                anyhow::bail!("ssh process exited before connection established");
-            }
-
-            if line.contains(Self::CONNECTION_ESTABLISHED_MAGIC) {
-                return Ok(());
-            }
-        }
     }
 }
 
@@ -719,7 +653,7 @@ impl RemoteConnection for SshRemoteConnection {
 
 /// Check if the user already has an active SSH ControlMaster session for the
 /// given destination. See: https://github.com/zed-industries/zed/issues/45271
-#[cfg(not(windows))]
+
 async fn find_existing_control_master(
     destination: &str,
     additional_args: &[String],
@@ -810,11 +744,10 @@ impl SshRemoteConnection {
 
         // On non-Windows, check if the user already has an active ControlMaster
         // session for this host. If so, reuse it instead of prompting for auth.
-        #[cfg(not(windows))]
+
         let reused_socket =
             find_existing_control_master(&destination, &connection_options.additional_args()).await;
 
-        #[cfg(not(windows))]
         let (socket, master_process_option) = if let Some(reused_path) = reused_socket {
             delegate.set_status(Some("Connecting (reusing session)"), cx);
             log::info!("reusing existing ControlMaster, skipping authentication");
@@ -880,75 +813,6 @@ impl SshRemoteConnection {
 
             let socket = SshSocket::new(connection_options, socket_path).await?;
             drop(askpass);
-            (socket, Some(master_process))
-        };
-
-        #[cfg(windows)]
-        let (socket, master_process_option) = {
-            let askpass_delegate = askpass::AskPassDelegate::new_with_cancellation(cx, {
-                let delegate = delegate.clone();
-                move |prompt, tx, cancellation, cx| {
-                    delegate.ask_password(prompt, tx, cancellation, cx)
-                }
-            });
-
-            let mut askpass =
-                askpass::AskPassSession::new(cx.background_executor().clone(), askpass_delegate)
-                    .await?;
-
-            delegate.set_status(Some("Connecting"), cx);
-
-            let mut master_process = MasterProcess::new(
-                askpass.script_path().as_ref(),
-                askpass.socket_path().as_ref(),
-                connection_options.additional_args(),
-                &destination,
-            )?;
-
-            let result = select_biased! {
-                result = askpass.run(Some(SSH_CONNECTION_PROMPT_TIMEOUT)).fuse() => {
-                    match result {
-                        AskPassResult::CancelledByUser => {
-                            master_process.as_mut().kill().ok();
-                            anyhow::bail!("SSH connection canceled")
-                        }
-                        AskPassResult::Timedout => {
-                            anyhow::bail!("connecting to host timed out")
-                        }
-                    }
-                }
-                _ = master_process.wait_connected().fuse() => {
-                    anyhow::Ok(())
-                }
-            };
-
-            if let Err(e) = result {
-                return Err(e.context("Failed to connect to host"));
-            }
-
-            if master_process.as_mut().try_status()?.is_some() {
-                let mut output = Vec::new();
-                let mut stderr = master_process.as_mut().stderr.take().unwrap();
-                stderr.read_to_end(&mut output).await?;
-
-                let error_message = format!(
-                    "failed to connect: {}",
-                    String::from_utf8_lossy(&output).trim()
-                );
-                anyhow::bail!(error_message);
-            }
-
-            let socket = SshSocket::new(
-                connection_options,
-                askpass
-                    .get_password()
-                    .or_else(|| askpass::EncryptedPassword::try_from("").ok())
-                    .context("Failed to fetch askpass password")?,
-                cx.background_executor().clone(),
-            )
-            .await?;
-            drop(askpass);
-
             (socket, Some(master_process))
         };
 
@@ -1484,40 +1348,11 @@ impl SshRemoteConnection {
 }
 
 impl SshSocket {
-    #[cfg(not(windows))]
     async fn new(options: SshConnectionOptions, socket_path: PathBuf) -> Result<Self> {
         Ok(Self {
             connection_options: options,
             envs: HashMap::default(),
             socket_path,
-        })
-    }
-
-    #[cfg(windows)]
-    async fn new(
-        options: SshConnectionOptions,
-        password: askpass::EncryptedPassword,
-        executor: gpui::BackgroundExecutor,
-    ) -> Result<Self> {
-        let mut envs = HashMap::default();
-        let get_password =
-            move |_| Task::ready(std::ops::ControlFlow::Continue(Ok(password.clone())));
-
-        let _proxy = askpass::PasswordProxy::new(Box::new(get_password), executor).await?;
-        envs.insert("SSH_ASKPASS_REQUIRE".into(), "force".into());
-        envs.insert(
-            "SSH_ASKPASS".into(),
-            _proxy.script_path().as_ref().display().to_string(),
-        );
-        envs.insert(
-            "ZED_ASKPASS_SOCKET".into(),
-            _proxy.socket_path().as_ref().display().to_string(),
-        );
-
-        Ok(Self {
-            connection_options: options,
-            envs,
-            _proxy,
         })
     }
 
@@ -1606,10 +1441,8 @@ impl SshSocket {
             .stderr(Stdio::piped())
             .args(args);
 
-        if cfg!(windows) {
-            cmd.envs(self.envs.clone());
-        }
-        #[cfg(not(windows))]
+        {}
+
         {
             cmd.args(["-o", "ControlMaster=no", "-o"])
                 .arg(format!("ControlPath={}", self.socket_path.display()));
@@ -1623,7 +1456,7 @@ impl SshSocket {
     // SSH command structure: ssh [options] destination [command]
     fn ssh_command_options(&self) -> Vec<String> {
         let arguments = self.connection_options.additional_args();
-        #[cfg(not(windows))]
+
         let arguments = {
             let mut args = arguments;
             args.extend(vec![
@@ -2264,7 +2097,6 @@ fn build_command_windows(
 mod tests {
     use super::*;
 
-    #[cfg(not(windows))]
     #[test]
     fn test_build_stdio_command() -> Result<()> {
         let mut connection = SshRemoteConnection {
@@ -2430,51 +2262,6 @@ mod tests {
 
     #[test]
     fn probe_returns_parseable_environment() -> Result<()> {
-        #[cfg(windows)]
-        {
-            use base64::Engine as _;
-
-            for powershell in [
-                PathBuf::from("powershell.exe"),
-                #[cfg(target_arch = "x86_64")]
-                PathBuf::from(std::env::var("SystemRoot")?)
-                    // The 32-bit PowerShell on 64-bit Windows
-                    .join("SysWOW64/WindowsPowerShell/v1.0/powershell.exe"),
-            ] {
-                for language_mode in ["FullLanguage", "ConstrainedLanguage"] {
-                    let script = format!(
-                        "$ExecutionContext.SessionState.LanguageMode = '{language_mode}'; {}",
-                        RemoteEnvironment::windows_script()
-                    );
-                    let encoded_script = base64::engine::general_purpose::STANDARD.encode(
-                        script
-                            .encode_utf16()
-                            .flat_map(u16::to_le_bytes)
-                            .collect::<Vec<_>>(),
-                    );
-                    let output = smol::block_on(
-                        util::command::new_command(&powershell)
-                            .args(["-E", &encoded_script])
-                            .output(),
-                    )?;
-                    assert!(
-                        output.status.success(),
-                        "{} ({language_mode}): {}",
-                        powershell.display(),
-                        String::from_utf8_lossy(&output.stderr)
-                    );
-
-                    let environment =
-                        RemoteEnvironment::parse_windows(&String::from_utf8_lossy(&output.stdout))?;
-                    assert_eq!(environment.platform.os, RemoteOs::Windows);
-                    assert_eq!(environment.platform.arch.as_str(), std::env::consts::ARCH);
-                    assert!(!environment.shell.is_empty());
-                    assert!(environment.os_version.is_some());
-                }
-            }
-        }
-
-        #[cfg(unix)]
         {
             let output = smol::block_on(
                 util::command::new_command("/bin/sh")
@@ -2495,14 +2282,9 @@ mod tests {
         Ok(())
     }
 
-    #[cfg(unix)]
     #[test]
     fn version_query_failure_does_not_abort_probe() -> Result<()> {
-        let command = if cfg!(target_os = "macos") {
-            "sw_vers"
-        } else {
-            "cat"
-        };
+        let command = { "sw_vers" };
         let script = format!(
             "{command}() {{ return 7; }}; {}",
             RemoteEnvironment::posix_script()

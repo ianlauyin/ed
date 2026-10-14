@@ -668,7 +668,7 @@ pub fn runnable_to_task_template(label: String, args: RunnableArgs) -> TaskTempl
             );
             task_template.args.extend(cargo.cargo_args);
             if !cargo.executable_args.is_empty() {
-                let shell_kind = task_template.shell.shell_kind(cfg!(windows));
+                let shell_kind = task_template.shell.shell_kind(false);
                 task_template.args.push("--".to_string());
                 task_template.args.extend(
                     cargo

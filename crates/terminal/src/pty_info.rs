@@ -2,9 +2,6 @@ use gpui::{Context, Task};
 use parking_lot::{MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard};
 use std::{path::PathBuf, sync::Arc};
 
-#[cfg(target_os = "windows")]
-use windows::Win32::{Foundation::HANDLE, System::Threading::GetProcessId};
-
 use sysinfo::{Pid, Process, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
 
 use crate::{Event, Terminal};
@@ -28,7 +25,6 @@ impl ProcessIdGetter {
     }
 }
 
-#[cfg(unix)]
 impl ProcessIdGetter {
     fn pid(&self) -> Option<Pid> {
         // Negative pid means error.
@@ -44,24 +40,6 @@ impl ProcessIdGetter {
         }
 
         None
-    }
-}
-
-#[cfg(windows)]
-impl ProcessIdGetter {
-    fn pid(&self) -> Option<Pid> {
-        let pid = unsafe { GetProcessId(HANDLE(self.handle as _)) };
-        // the GetProcessId may fail and returns zero, which will lead to a stack overflow issue
-        if pid == 0 {
-            // in the builder process, there is a small chance, almost negligible,
-            // that this value could be zero, which means child_watcher returns None,
-            // GetProcessId returns 0.
-            if self.fallback_pid == 0 {
-                return None;
-            }
-            return Some(Pid::from_u32(self.fallback_pid));
-        }
-        Some(Pid::from_u32(pid))
     }
 }
 
@@ -146,7 +124,6 @@ impl PtyProcessInfo {
         RwLockReadGuard::try_map(self.system.read(), |system| system.process(pid)).ok()
     }
 
-    #[cfg(unix)]
     pub(crate) fn kill_current_process(&self) -> bool {
         let Some(pid) = self.pid_getter.pid() else {
             return false;
@@ -154,24 +131,13 @@ impl PtyProcessInfo {
         unsafe { libc::killpg(pid.as_u32() as i32, libc::SIGKILL) == 0 }
     }
 
-    #[cfg(not(unix))]
-    pub(crate) fn kill_current_process(&self) -> bool {
-        self.refresh().is_some_and(|process| process.kill())
-    }
-
     pub(crate) fn kill_child_process(&self) -> bool {
         self.get_child().is_some_and(|process| process.kill())
     }
 
-    #[cfg(unix)]
     pub(crate) fn terminate_child_process(&self) -> bool {
         let pid = self.pid_getter.fallback_pid();
         unsafe { libc::killpg(pid.as_u32() as i32, libc::SIGTERM) == 0 }
-    }
-
-    #[cfg(not(unix))]
-    pub(crate) fn terminate_child_process(&self) -> bool {
-        false
     }
 
     fn load(&self) -> Option<ProcessInfo> {

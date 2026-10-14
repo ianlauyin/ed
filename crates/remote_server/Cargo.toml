@@ -75,9 +75,6 @@ uuid = { workspace = true, features = ["v4"] }
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
 
-[target.'cfg(windows)'.dependencies]
-gpui = { workspace = true, features = ["windows-manifest"] }
-
 [dev-dependencies]
 clock = { workspace = true, features = ["test-support"] }
 editor = { workspace = true, features = ["test-support"] }

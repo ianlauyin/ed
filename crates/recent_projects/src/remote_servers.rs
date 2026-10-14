@@ -115,47 +115,6 @@ impl CreateRemoteDevContainer {
     }
 }
 
-#[cfg(target_os = "windows")]
-struct AddWslDistro {
-    picker: Entity<Picker<crate::wsl_picker::WslPickerDelegate>>,
-    connection_prompt: Option<Entity<RemoteConnectionPrompt>>,
-    _creating: Option<Task<()>>,
-}
-
-#[cfg(target_os = "windows")]
-impl AddWslDistro {
-    fn new(window: &mut Window, cx: &mut Context<RemoteServerProjects>) -> Self {
-        use crate::wsl_picker::{WslDistroSelected, WslPickerDelegate, WslPickerDismissed};
-
-        let delegate = WslPickerDelegate::new();
-        let picker = cx.new(|cx| Picker::uniform_list(delegate, window, cx).embedded());
-
-        cx.subscribe_in(
-            &picker,
-            window,
-            |this, _, _: &WslDistroSelected, window, cx| {
-                this.confirm(&menu::Confirm, window, cx);
-            },
-        )
-        .detach();
-
-        cx.subscribe_in(
-            &picker,
-            window,
-            |this, _, _: &WslPickerDismissed, window, cx| {
-                this.cancel(&menu::Cancel, window, cx);
-            },
-        )
-        .detach();
-
-        AddWslDistro {
-            picker,
-            connection_prompt: None,
-            _creating: None,
-        }
-    }
-}
-
 enum ProjectPickerData {
     Ssh {
         connection_string: SharedString,
@@ -794,8 +753,6 @@ enum Mode {
     ProjectPicker(Entity<ProjectPicker>),
     CreateRemoteServer(CreateRemoteServer),
     CreateRemoteDevContainer(CreateRemoteDevContainer),
-    #[cfg(target_os = "windows")]
-    AddWslDistro(AddWslDistro),
 }
 
 impl Mode {
@@ -899,9 +856,7 @@ impl RemoteServerPickerDelegate {
             if has_open_project && is_local {
                 matches.push(RemoteMatch::AddDevContainer);
             }
-            if cfg!(target_os = "windows") {
-                matches.push(RemoteMatch::AddWsl);
-            }
+            {}
         }
 
         let push_server = |matches: &mut Vec<RemoteMatch>,
@@ -1158,15 +1113,7 @@ impl PickerDelegate for RemoteServerPickerDelegate {
                     })
                     .ok();
             }
-            RemoteMatch::AddWsl => {
-                #[cfg(target_os = "windows")]
-                remote_server_projects
-                    .update(cx, |this, cx| {
-                        this.mode = Mode::AddWslDistro(AddWslDistro::new(window, cx));
-                        cx.notify();
-                    })
-                    .ok();
-            }
+            RemoteMatch::AddWsl => {}
             RemoteMatch::Project {
                 server, project, ..
             } => {
@@ -1386,24 +1333,6 @@ impl PickerDelegate for RemoteServerPickerDelegate {
 }
 
 impl RemoteServerProjects {
-    #[cfg(target_os = "windows")]
-    pub fn wsl(
-        create_new_window: bool,
-        fs: Arc<dyn Fs>,
-        window: &mut Window,
-        workspace: WeakEntity<Workspace>,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        Self::new_inner(
-            Mode::AddWslDistro(AddWslDistro::new(window, cx)),
-            create_new_window,
-            fs,
-            window,
-            workspace,
-            cx,
-        )
-    }
-
     pub fn new(
         create_new_window: bool,
         fs: Arc<dyn Fs>,
@@ -1660,77 +1589,6 @@ impl RemoteServerProjects {
         });
     }
 
-    #[cfg(target_os = "windows")]
-    fn connect_wsl_distro(
-        &mut self,
-        picker: Entity<Picker<crate::wsl_picker::WslPickerDelegate>>,
-        distro: String,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let connection_options = WslConnectionOptions {
-            distro_name: distro,
-            user: None,
-        };
-
-        let prompt = cx.new(|cx| {
-            RemoteConnectionPrompt::new(
-                connection_options.distro_name.clone(),
-                None,
-                true,
-                false,
-                window,
-                cx,
-            )
-        });
-        let connection = connect(
-            ConnectionIdentifier::setup(),
-            connection_options.clone().into(),
-            prompt.clone(),
-            window,
-            cx,
-        )
-        .prompt_err("Failed to connect", window, cx, |_, _, _| None);
-
-        let wsl_picker = picker.clone();
-        let creating = cx.spawn_in(window, async move |this, cx| {
-            match connection.await {
-                Some(Some(client)) => this.update_in(cx, |this, window, cx| {
-                    this.retained_connections.push(client);
-                    let Some(fs) = this
-                        .workspace
-                        .read_with(cx, |workspace, cx| {
-                            workspace.project().read(cx).fs().clone()
-                        })
-                        .log_err()
-                    else {
-                        return;
-                    };
-
-                    crate::add_wsl_distro(fs, &connection_options, cx);
-                    this.mode = Mode::default_mode(&BTreeSet::new(), cx);
-                    this.focus_handle(cx).focus(window, cx);
-                    cx.notify();
-                }),
-                _ => this.update(cx, |this, cx| {
-                    this.mode = Mode::AddWslDistro(AddWslDistro {
-                        picker: wsl_picker,
-                        connection_prompt: None,
-                        _creating: None,
-                    });
-                    cx.notify();
-                }),
-            }
-            .log_err();
-        });
-
-        self.mode = Mode::AddWslDistro(AddWslDistro {
-            picker,
-            connection_prompt: Some(prompt),
-            _creating: Some(creating),
-        });
-    }
-
     fn view_server_options(
         &mut self,
         (server_index, connection): (ServerIndex, RemoteConnectionOptions),
@@ -1902,12 +1760,6 @@ impl RemoteServerProjects {
                 });
                 self.mode = Mode::default_mode(&self.ssh_config_servers, cx);
                 self.focus_handle.focus(window, cx);
-            }
-            #[cfg(target_os = "windows")]
-            Mode::AddWslDistro(state) => {
-                let delegate = &state.picker.read(cx).delegate;
-                let distro = delegate.selected_distro().unwrap();
-                self.connect_wsl_distro(state.picker.clone(), distro, window, cx);
             }
         }
     }
@@ -2535,33 +2387,6 @@ impl RemoteServerProjects {
             )
     }
 
-    #[cfg(target_os = "windows")]
-    fn render_add_wsl_distro(
-        &self,
-        state: &AddWslDistro,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        let connection_prompt = state.connection_prompt.clone();
-
-        state.picker.update(cx, |picker, cx| {
-            picker.focus_handle(cx).focus(window, cx);
-        });
-
-        v_flex()
-            .id("add-wsl-distro")
-            .overflow_hidden()
-            .size_full()
-            .flex_1()
-            .map(|this| {
-                if let Some(connection_prompt) = connection_prompt {
-                    this.child(connection_prompt)
-                } else {
-                    this.child(state.picker.clone())
-                }
-            })
-    }
-
     fn render_view_options(
         &mut self,
         options: ViewServerOptionsState,
@@ -3084,10 +2909,6 @@ impl Render for RemoteServerProjects {
                     .into_any_element(),
                 Mode::EditNickname(state) => self
                     .render_edit_nickname(state, window, cx)
-                    .into_any_element(),
-                #[cfg(target_os = "windows")]
-                Mode::AddWslDistro(state) => self
-                    .render_add_wsl_distro(state, window, cx)
                     .into_any_element(),
             })
     }

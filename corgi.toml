@@ -47,7 +47,6 @@ json_schema_store = ["src/schemas/**"]
 prettier = ["src/prettier_server.js"]
 zed = ["resources/**"]
 zed_extension_api = ["wit/**"]
-gpui_wgpu = ["src/*.wgsl"]
 # Cross-package reads (and, for gpui_apple, its own metal shader source).
 extension_host = ["../extension_api/wit/**"]
 # cbindgen reads the renderer source directly from build.rs to generate shader bindings.

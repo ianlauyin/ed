@@ -1053,18 +1053,10 @@ mod tests {
             }
 
             #[test]
-            #[cfg_attr(
-                not(target_os = "windows"),
-                should_panic(
-                    expected = "Path = «/test/cool.rs:4:NotDesc», at grid cells (0, 1)..=(7, 2)"
-                )
+            #[should_panic(
+                expected = "Path = «/test/cool.rs:4:NotDesc», at grid cells (0, 1)..=(7, 2)"
             )]
-            #[cfg_attr(
-                target_os = "windows",
-                should_panic(
-                    expected = r#"Path = «C:\\test\\cool.rs:4:NotDesc», at grid cells (0, 1)..=(8, 1)"#
-                )
-            )]
+
             // PathWithPosition::parse_str considers "/test/co👉ol.rs:4:NotDesc" invalid input, but
             // still succeeds and truncates the part after the position. Ideally this would be
             // parsed as the path "/test/co👉ol.rs:4:NotDesc" with no position.
@@ -1091,32 +1083,18 @@ mod tests {
             }
 
             #[test]
-            #[cfg_attr(
-                not(target_os = "windows"),
-                should_panic(
-                    expected = "Path = «/test/cool.rs», line = 1, at grid cells (0, 0)..=(9, 0)"
-                )
+            #[should_panic(
+                expected = "Path = «/test/cool.rs», line = 1, at grid cells (0, 0)..=(9, 0)"
             )]
-            #[cfg_attr(
-                target_os = "windows",
-                should_panic(
-                    expected = r#"Path = «C:\\test\\cool.rs», line = 1, at grid cells (0, 0)..=(9, 2)"#
-                )
-            )]
+
             fn invalid_row_column_should_be_part_of_path() {
                 test_path!("‹«/👉test/cool.rs:1:618033988749»›");
                 test_path!("‹«/👉test/cool.rs(1,618033988749)»›");
             }
 
             #[test]
-            #[cfg_attr(
-                not(target_os = "windows"),
-                should_panic(expected = "Path = «/te:st/co:ol.r:s:4:2::::::»")
-            )]
-            #[cfg_attr(
-                target_os = "windows",
-                should_panic(expected = r#"Path = «C:\\te:st\\co:ol.r:s:4:2::::::»"#)
-            )]
+            #[should_panic(expected = "Path = «/te:st/co:ol.r:s:4:2::::::»")]
+
             fn many_trailing_colons_should_be_parsed_as_part_of_the_path() {
                 test_path!("‹«/te:st/👉co:ol.r:s:4:2::::::»›");
                 test_path!("/test/cool.rs:::👉:");
@@ -1396,7 +1374,6 @@ mod tests {
             ($file_iri:literal) => { { test_hyperlink!(concat!("‹«👉", $file_iri, "»›"); FileIri) } };
         }
 
-        #[cfg(not(target_os = "windows"))]
         #[test]
         fn absolute_file_iri() {
             test_file_iri!("file:///test/cool/index.rs");
@@ -1404,7 +1381,7 @@ mod tests {
         }
 
         mod issues {
-            #[cfg(not(target_os = "windows"))]
+
             #[test]
             fn issue_file_iri_with_percent_encoded_characters() {
                 // Non-space characters
@@ -1414,41 +1391,6 @@ mod tests {
                 // Spaces
                 test_file_iri!("file:///te%20st/co%20ol/index.rs");
                 test_file_iri!("file:///te%20st/co%20ol/");
-            }
-        }
-
-        #[cfg(target_os = "windows")]
-        mod windows {
-            mod issues {
-                // The test uses Url::to_file_path(), but it seems that the Url crate doesn't
-                // support relative file IRIs.
-                #[test]
-                #[should_panic(
-                    expected = r#"Failed to interpret file IRI `file:/test/cool/index.rs` as a path"#
-                )]
-                fn issue_relative_file_iri() {
-                    test_file_iri!("file:/test/cool/index.rs");
-                    test_file_iri!("file:/test/cool/");
-                }
-
-                // See https://en.wikipedia.org/wiki/File_URI_scheme
-                // https://github.com/zed-industries/zed/issues/39189
-                #[test]
-                fn issue_39189() {
-                    test_file_iri!("file:///C:/test/cool/index.rs");
-                    test_file_iri!("file:///C:/test/cool/");
-                }
-
-                #[test]
-                fn issue_file_iri_with_percent_encoded_characters() {
-                    // Non-space characters
-                    // file:///test/Ῥόδος/
-                    test_file_iri!("file:///C:/test/%E1%BF%AC%CF%8C%CE%B4%CE%BF%CF%82/"); // URI
-
-                    // Spaces
-                    test_file_iri!("file:///C:/te%20st/co%20ol/index.rs");
-                    test_file_iri!("file:///C:/te%20st/co%20ol/");
-                }
             }
         }
     }
@@ -1633,7 +1575,7 @@ mod tests {
 
         for text in test_lines {
             let chars: Box<dyn Iterator<Item = char>> =
-                if cfg!(windows) && hyperlink_kind == HyperlinkKind::Path {
+                if false && hyperlink_kind == HyperlinkKind::Path {
                     Box::new(text.chars().map(|c| if c == '/' { '\\' } else { c })) as _
                 } else {
                     Box::new(text.chars()) as _
@@ -1700,7 +1642,7 @@ mod tests {
 
                         let is_windows_abs_path_start = captures_state
                             == CapturesState::PathNextChar
-                            && cfg!(windows)
+                            && false
                             && hyperlink_kind == HyperlinkKind::Path
                             && c == '\\'
                             && chars.peek().is_some_and(|c| *c != '\\');

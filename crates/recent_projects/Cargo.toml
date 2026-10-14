@@ -49,9 +49,6 @@ worktree.workspace = true
 zed_actions.workspace = true
 indoc.workspace = true
 
-[target.'cfg(target_os = "windows")'.dependencies]
-windows-registry.workspace = true
-
 [dev-dependencies]
 editor = { workspace = true, features = ["test-support"] }
 extension.workspace = true

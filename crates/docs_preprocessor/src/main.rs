@@ -20,20 +20,8 @@ static KEYMAP_MACOS: LazyLock<KeymapFile> = LazyLock::new(|| {
     load_keymap("keymaps/default-macos.json").expect("Failed to load MacOS keymap")
 });
 
-static KEYMAP_LINUX: LazyLock<KeymapFile> = LazyLock::new(|| {
-    load_keymap("keymaps/default-linux.json").expect("Failed to load Linux keymap")
-});
-
-static KEYMAP_WINDOWS: LazyLock<KeymapFile> = LazyLock::new(|| {
-    load_keymap("keymaps/default-windows.json").expect("Failed to load Windows keymap")
-});
-
 static KEYMAP_JETBRAINS_MACOS: LazyLock<KeymapFile> = LazyLock::new(|| {
     load_keymap("keymaps/macos/jetbrains.json").expect("Failed to load JetBrains macOS keymap")
-});
-
-static KEYMAP_JETBRAINS_LINUX: LazyLock<KeymapFile> = LazyLock::new(|| {
-    load_keymap("keymaps/linux/jetbrains.json").expect("Failed to load JetBrains Linux keymap")
 });
 
 static ALL_ACTIONS: LazyLock<ActionManifest> = LazyLock::new(load_all_actions);
@@ -42,8 +30,6 @@ static ALL_ACTIONS: LazyLock<ActionManifest> = LazyLock::new(load_all_actions);
 #[allow(dead_code)]
 enum Os {
     MacOs,
-    Linux,
-    Windows,
 }
 
 #[derive(Clone, Copy)]
@@ -62,7 +48,6 @@ impl KeymapOverlay {
     fn keymap(self, os: Os) -> &'static KeymapFile {
         match (self, os) {
             (Self::JetBrains, Os::MacOs) => &KEYMAP_JETBRAINS_MACOS,
-            (Self::JetBrains, Os::Linux | Os::Windows) => &KEYMAP_JETBRAINS_LINUX,
         }
     }
 }
@@ -286,20 +271,15 @@ fn template_and_validate_keybindings(book: &mut Book, errors: &mut HashSet<Prepr
                 };
 
                 let macos_binding =
-                    find_binding_with_overlay(Os::MacOs, action, overlay)
-                        .unwrap_or_default();
-                let linux_binding =
-                    find_binding_with_overlay(Os::Linux, action, overlay)
-                        .unwrap_or_default();
+                    find_binding_with_overlay(Os::MacOs, action, overlay).unwrap_or_default();
 
-                if macos_binding.is_empty() && linux_binding.is_empty() {
+                if macos_binding.is_empty() {
                     return "<div>No default binding</div>".to_string();
                 }
 
                 let formatted_macos_binding = format_binding(macos_binding);
-                let formatted_linux_binding = format_binding(linux_binding);
 
-                format!("<kbd class=\"keybinding\">{formatted_macos_binding}&#124;{formatted_linux_binding}</kbd>")
+                format!("<kbd class=\"keybinding\">{formatted_macos_binding}</kbd>")
             })
             .into_owned()
     });
@@ -369,8 +349,6 @@ fn find_binding_in_keymap(keymap: &KeymapFile, action: &str) -> Option<String> {
 fn find_binding(os: Os, action: &str) -> Option<String> {
     let keymap = match os {
         Os::MacOs => &KEYMAP_MACOS,
-        Os::Linux => &KEYMAP_LINUX,
-        Os::Windows => &KEYMAP_WINDOWS,
     };
     find_binding_in_keymap(keymap, action)
 }

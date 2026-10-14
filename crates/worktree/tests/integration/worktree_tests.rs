@@ -1254,7 +1254,7 @@ async fn test_scan_symlinks_always_respects_gitignore(cx: &mut TestAppContext) {
 // canonicalization or readdir behavior is not covered by the FakeFs tests.
 // These tests use a real temp directory and a real symlink to exercise the
 // production path on the host platform.
-#[cfg(unix)]
+
 #[gpui::test]
 async fn test_real_fs_scan_symlinks_always(cx: &mut TestAppContext) {
     cx.executor().allow_parking();
@@ -1325,7 +1325,6 @@ async fn test_real_fs_scan_symlinks_always(cx: &mut TestAppContext) {
     });
 }
 
-#[cfg(unix)]
 #[gpui::test]
 async fn test_real_fs_scan_symlinks_expanded(cx: &mut TestAppContext) {
     cx.executor().allow_parking();
@@ -1513,7 +1512,6 @@ async fn test_internal_symlink_updates_preserve_entry_ids(cx: &mut TestAppContex
     });
 }
 
-#[cfg(target_os = "macos")]
 #[gpui::test]
 async fn test_renaming_case_only(cx: &mut TestAppContext) {
     cx.executor().allow_parking();
@@ -1672,66 +1670,12 @@ async fn test_root_rescan_keeps_root_watcher_registered(cx: &mut TestAppContext)
         .into_iter()
         .filter(|path| path == Path::new("/root"))
         .count();
-    let expected_root_watch_calls = if cfg!(any(target_os = "windows", target_os = "macos")) {
-        1
-    } else {
-        2
-    };
+    let expected_root_watch_calls = { 1 };
     assert_eq!(root_watch_calls, expected_root_watch_calls);
 }
 
 // Native watches are recursive on macOS and Windows, so the new directory is
 // covered by the root watch and never watched separately.
-#[cfg(not(any(target_os = "windows", target_os = "macos")))]
-#[gpui::test]
-async fn test_new_directory_scan_does_not_miss_event_before_adding_watcher(
-    cx: &mut TestAppContext,
-) {
-    init_test(cx);
-    let fs = FakeFs::new(cx.background_executor.clone());
-    fs.insert_tree("/root", json!({})).await;
-
-    let tree = Worktree::local(
-        Path::new("/root"),
-        true,
-        fs.clone(),
-        Default::default(),
-        true,
-        WorktreeId::from_proto(0),
-        &mut cx.to_async(),
-    )
-    .await
-    .unwrap();
-
-    cx.read(|cx| tree.read(cx).as_local().unwrap().scan_complete())
-        .await;
-
-    fs.create_file_before_next_watch_add("/root/new-directory", "/root/new-directory/file.txt");
-    fs.create_dir(Path::new("/root/new-directory"))
-        .await
-        .unwrap();
-
-    wait_for_condition(cx, |cx| {
-        tree.read_with(cx, |tree, _| {
-            tree.entry_for_path(rel_path("new-directory/file.txt"))
-                .is_some()
-        })
-    })
-    .await;
-
-    tree.read_with(cx, |tree, _| {
-        assert_eq!(
-            tree.entries(true, 0)
-                .map(|entry| entry.path.as_ref())
-                .collect::<Vec<_>>(),
-            vec![
-                rel_path(""),
-                rel_path("new-directory"),
-                rel_path("new-directory/file.txt"),
-            ]
-        );
-    });
-}
 
 #[gpui::test]
 async fn test_subtree_rescan_reports_unchanged_descendants_as_updated(cx: &mut TestAppContext) {
@@ -6047,11 +5991,7 @@ async fn test_load_file_encoding(cx: &mut TestAppContext) {
         },
     ];
 
-    let root_path = if cfg!(windows) {
-        Path::new("C:\\root")
-    } else {
-        Path::new("/root")
-    };
+    let root_path = { Path::new("/root") };
 
     let fs = FakeFs::new(cx.background_executor.clone());
     fs.create_dir(root_path).await.unwrap();
@@ -6119,11 +6059,7 @@ async fn test_write_file_encoding(cx: &mut gpui::TestAppContext) {
     init_test(cx);
     let fs = FakeFs::new(cx.executor());
 
-    let root_path = if cfg!(windows) {
-        Path::new("C:\\root")
-    } else {
-        Path::new("/root")
-    };
+    let root_path = { Path::new("/root") };
     fs.create_dir(root_path).await.unwrap();
 
     let worktree = Worktree::local(
@@ -6682,9 +6618,7 @@ fn test_remote_worktree_language_matching(cx: &mut TestAppContext) {
             "templates/index.html",
             PathStyle::Windows,
         ),
-        #[cfg(unix)]
         ("config", r"/home/user\.ssh/config", "", PathStyle::Unix),
-        #[cfg(unix)]
         ("repo", r"C:\repo", "raw/index.html", PathStyle::Windows),
     ] {
         cx.update(|cx| {

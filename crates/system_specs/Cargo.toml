@@ -27,11 +27,5 @@ semver.workspace = true
 serde.workspace = true
 sysinfo.workspace = true
 
-[target.'cfg(any(target_os = "linux", target_os = "freebsd"))'.dependencies]
-pciid-parser.workspace = true
-
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-foundation.workspace = true
-
-[target.'cfg(target_os = "windows")'.dependencies]
-windows = { workspace = true, features = ["Wdk_System_SystemServices", "Win32_System_SystemInformation"] }

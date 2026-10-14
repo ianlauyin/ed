@@ -347,31 +347,6 @@ impl OpenListener {
     }
 }
 
-#[cfg(any(target_os = "linux", target_os = "freebsd"))]
-pub fn listen_for_cli_connections(opener: OpenListener) -> Result<()> {
-    use settings_content::app_metadata::SERVER_RELEASE_NAME;
-    use std::os::unix::net::UnixDatagram;
-
-    let sock_path = paths::data_dir().join(format!("zed-{}.sock", *SERVER_RELEASE_NAME));
-    // remove the socket if the process listening on it has died
-    if let Err(e) = UnixDatagram::unbound()?.connect(&sock_path)
-        && e.kind() == std::io::ErrorKind::ConnectionRefused
-    {
-        std::fs::remove_file(&sock_path)?;
-    }
-    let listener = UnixDatagram::bind(&sock_path)?;
-    thread::spawn(move || {
-        let mut buf = [0u8; 1024];
-        while let Ok(len) = listener.recv(&mut buf) {
-            opener.open(RawOpenRequest {
-                urls: vec![String::from_utf8_lossy(&buf[..len]).to_string()],
-                ..Default::default()
-            });
-        }
-    });
-    Ok(())
-}
-
 fn connect_to_cli(
     server_name: &str,
 ) -> Result<(
@@ -1047,7 +1022,7 @@ pub async fn derive_paths_with_position(
             .and_then(|name| name.to_str())
             .is_none_or(|name| name.contains(':'));
 
-        if (!has_colon || !cfg!(windows))
+        if (!has_colon || !false)
             && parsed.row.is_some()
             && parsed.path != original_path
             && (fs.is_file(original_path).await || fs.is_dir(original_path).await)
@@ -1257,7 +1232,7 @@ mod tests {
 
     // Test file with colon (`:`) in the name on non-Windows platforms,
     // as it is valid for file names on Unix-like systems.
-    #[cfg(not(target_os = "windows"))]
+
     #[gpui::test]
     async fn test_derive_paths_with_position_colon_in_name_reverts_on_unix(
         cx: &mut TestAppContext,
@@ -1284,30 +1259,6 @@ mod tests {
 
     // On Windows `:` is used to delimit NTFS alternate data streams,
     // `notes.txt:10` should be parsed as `notes.txt` at row 10
-    #[cfg(target_os = "windows")]
-    #[gpui::test]
-    async fn test_derive_paths_with_position_colon_in_name_parsed_as_position_on_windows(
-        cx: &mut TestAppContext,
-    ) {
-        let app_state = init_test(cx);
-        let fs = app_state.fs.as_fake();
-
-        fs.insert_tree(path!("/root"), json!({ "test.txt": "" }))
-            .await;
-
-        let result =
-            derive_paths_with_position(fs.as_ref(), vec![path!("/root/test.txt:10").to_string()])
-                .await;
-
-        let paths: Vec<_> = result
-            .iter()
-            .map(|p| (p.path.to_string_lossy().to_string(), p.row, p.column))
-            .collect();
-        assert_eq!(
-            paths,
-            vec![(path!("/root/test.txt").to_string(), Some(10), None)]
-        );
-    }
 
     #[gpui::test]
     fn test_parse_ssh_url_preserves_open_behavior(cx: &mut TestAppContext) {
@@ -1775,17 +1726,9 @@ mod tests {
     async fn test_reuse_flag_functionality(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 
-        let root_dir = if cfg!(windows) { "C:\\root" } else { "/root" };
-        let file1_path = if cfg!(windows) {
-            "C:\\root\\file1.txt"
-        } else {
-            "/root/file1.txt"
-        };
-        let file2_path = if cfg!(windows) {
-            "C:\\root\\file2.txt"
-        } else {
-            "/root/file2.txt"
-        };
+        let root_dir = { "/root" };
+        let file1_path = { "/root/file1.txt" };
+        let file2_path = { "/root/file2.txt" };
 
         app_state.fs.create_dir(Path::new(root_dir)).await.unwrap();
         app_state
@@ -1960,17 +1903,9 @@ mod tests {
     async fn test_add_flag_prefers_focused_window(cx: &mut TestAppContext) {
         let app_state = init_test(cx);
 
-        let root_dir = if cfg!(windows) { "C:\\root" } else { "/root" };
-        let file1_path = if cfg!(windows) {
-            "C:\\root\\file1.txt"
-        } else {
-            "/root/file1.txt"
-        };
-        let file2_path = if cfg!(windows) {
-            "C:\\root\\file2.txt"
-        } else {
-            "/root/file2.txt"
-        };
+        let root_dir = { "/root" };
+        let file1_path = { "/root/file1.txt" };
+        let file2_path = { "/root/file2.txt" };
 
         app_state.fs.create_dir(Path::new(root_dir)).await.unwrap();
         app_state
@@ -2064,11 +1999,7 @@ mod tests {
 
         // Now use --add flag (open_behavior = OpenBehavior::Add) to add a new file
         // It should open in the focused window (window2), not an arbitrary window
-        let new_file_path = if cfg!(windows) {
-            "C:\\root\\new_file.txt"
-        } else {
-            "/root/new_file.txt"
-        };
+        let new_file_path = { "/root/new_file.txt" };
         app_state
             .fs
             .create_file(Path::new(new_file_path), Default::default())

@@ -15,26 +15,22 @@ use gpui::BackgroundExecutor;
 use gpui::Global;
 use gpui::ReadGlobal as _;
 use gpui::SharedString;
-#[cfg(unix)]
+
 use std::ffi::CString;
 use util::command::{Stdio, new_command};
 
-#[cfg(unix)]
 use std::os::fd::{AsFd, AsRawFd};
-#[cfg(unix)]
+
 use std::os::unix::ffi::OsStrExt;
 
-#[cfg(unix)]
 use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
 
-#[cfg(any(target_os = "macos", target_os = "freebsd"))]
 use std::mem::MaybeUninit;
 
 use async_tar::Archive;
 use futures::{AsyncRead, Stream, StreamExt, future::BoxFuture};
 use git::repository::{GitRepository, RealGitRepository};
-#[cfg(windows)]
-use is_executable::IsExecutable;
+
 use rope::Rope;
 use serde::{Deserialize, Serialize};
 use smol::io::AsyncWriteExt;
@@ -470,7 +466,6 @@ pub trait FileHandle: Send + Sync + std::fmt::Debug {
 }
 
 impl FileHandle for std::fs::File {
-    #[cfg(target_os = "macos")]
     fn current_path(&self, _: &Arc<dyn Fs>) -> Result<PathBuf> {
         use std::{
             ffi::{CStr, OsStr},
@@ -488,76 +483,6 @@ impl FileHandle for std::fs::File {
         anyhow::ensure!(!c_str.is_empty(), "Could find a path for the file handle");
         let path = PathBuf::from(OsStr::from_bytes(c_str.to_bytes()));
         Ok(path)
-    }
-
-    #[cfg(target_os = "linux")]
-    fn current_path(&self, _: &Arc<dyn Fs>) -> Result<PathBuf> {
-        let fd = self.as_fd();
-        let fd_path = format!("/proc/self/fd/{}", fd.as_raw_fd());
-        let new_path = std::fs::read_link(fd_path)?;
-        if new_path
-            .file_name()
-            .is_some_and(|f| f.to_string_lossy().ends_with(" (deleted)"))
-        {
-            anyhow::bail!("file was deleted")
-        };
-
-        Ok(new_path)
-    }
-
-    #[cfg(target_os = "freebsd")]
-    fn current_path(&self, _: &Arc<dyn Fs>) -> Result<PathBuf> {
-        use std::{
-            ffi::{CStr, OsStr},
-            os::unix::ffi::OsStrExt,
-        };
-
-        let fd = self.as_fd();
-        let mut kif = MaybeUninit::<libc::kinfo_file>::uninit();
-        kif.kf_structsize = libc::KINFO_FILE_SIZE;
-
-        let result = unsafe { libc::fcntl(fd.as_raw_fd(), libc::F_KINFO, kif.as_mut_ptr()) };
-        anyhow::ensure!(result != -1, "fcntl returned -1");
-
-        // SAFETY: `fcntl` will initialize the kif.
-        let c_str = unsafe { CStr::from_ptr(kif.assume_init().kf_path.as_ptr()) };
-        anyhow::ensure!(!c_str.is_empty(), "Could find a path for the file handle");
-        let path = PathBuf::from(OsStr::from_bytes(c_str.to_bytes()));
-        Ok(path)
-    }
-
-    #[cfg(target_os = "windows")]
-    fn current_path(&self, _: &Arc<dyn Fs>) -> Result<PathBuf> {
-        use std::ffi::OsString;
-        use std::os::windows::ffi::OsStringExt;
-        use std::os::windows::io::AsRawHandle;
-
-        use windows::Win32::Foundation::HANDLE;
-        use windows::Win32::Storage::FileSystem::{
-            FILE_NAME_NORMALIZED, GetFinalPathNameByHandleW,
-        };
-
-        let handle = HANDLE(self.as_raw_handle() as _);
-
-        // Query required buffer size (in wide chars)
-        let required_len =
-            unsafe { GetFinalPathNameByHandleW(handle, &mut [], FILE_NAME_NORMALIZED) };
-        anyhow::ensure!(
-            required_len != 0,
-            "GetFinalPathNameByHandleW returned 0 length"
-        );
-
-        // Allocate buffer and retrieve the path
-        let mut buf: Vec<u16> = vec![0u16; required_len as usize + 1];
-        let written = unsafe { GetFinalPathNameByHandleW(handle, &mut buf, FILE_NAME_NORMALIZED) };
-        anyhow::ensure!(
-            written != 0,
-            "GetFinalPathNameByHandleW failed to write path"
-        );
-
-        let os_str: OsString = OsString::from_wide(&buf[..written as usize]);
-        anyhow::ensure!(!os_str.is_empty(), "Could find a path for the file handle");
-        Ok(PathBuf::from(os_str))
     }
 }
 
@@ -583,68 +508,13 @@ impl RealFs {
             is_case_sensitive: Default::default(),
         })
     }
-
-    #[cfg(target_os = "windows")]
-    fn canonicalize(path: &Path) -> Result<PathBuf> {
-        use std::ffi::OsString;
-        use std::os::windows::ffi::OsStringExt;
-        use windows::Win32::Storage::FileSystem::GetVolumePathNameW;
-        use windows::core::HSTRING;
-
-        // std::fs::canonicalize resolves mapped network paths to UNC paths, which can
-        // confuse some software. To mitigate this, we canonicalize the input, then rebase
-        // the result onto the input's original volume root if both paths are on the same
-        // volume. This keeps the same drive letter or mount point the caller used.
-
-        let abs_path = if path.is_relative() {
-            std::env::current_dir()?.join(path)
-        } else {
-            path.to_path_buf()
-        };
-
-        let path_hstring = HSTRING::from(abs_path.as_os_str());
-        let mut vol_buf = vec![0u16; abs_path.as_os_str().len() + 2];
-        unsafe { GetVolumePathNameW(&path_hstring, &mut vol_buf)? };
-        let volume_root = {
-            let len = vol_buf
-                .iter()
-                .position(|&c| c == 0)
-                .unwrap_or(vol_buf.len());
-            PathBuf::from(OsString::from_wide(&vol_buf[..len]))
-        };
-
-        let resolved_path = dunce::canonicalize(&abs_path)?;
-        let resolved_root = dunce::canonicalize(&volume_root)?;
-
-        if let Ok(relative) = resolved_path.strip_prefix(&resolved_root) {
-            let mut result = volume_root;
-            result.push(relative);
-            Ok(result)
-        } else {
-            Ok(resolved_path)
-        }
-    }
 }
 
-#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn rename_without_replace(source: &Path, target: &Path) -> io::Result<()> {
     let source = path_to_c_string(source)?;
     let target = path_to_c_string(target)?;
 
-    #[cfg(target_os = "macos")]
     let result = unsafe { libc::renamex_np(source.as_ptr(), target.as_ptr(), libc::RENAME_EXCL) };
-
-    #[cfg(target_os = "linux")]
-    let result = unsafe {
-        libc::syscall(
-            libc::SYS_renameat2,
-            libc::AT_FDCWD,
-            source.as_ptr(),
-            libc::AT_FDCWD,
-            target.as_ptr(),
-            libc::RENAME_NOREPLACE,
-        )
-    };
 
     if result == 0 {
         Ok(())
@@ -653,27 +523,6 @@ fn rename_without_replace(source: &Path, target: &Path) -> io::Result<()> {
     }
 }
 
-#[cfg(target_os = "windows")]
-fn rename_without_replace(source: &Path, target: &Path) -> io::Result<()> {
-    use std::os::windows::ffi::OsStrExt;
-
-    use windows::Win32::Storage::FileSystem::{MOVE_FILE_FLAGS, MoveFileExW};
-    use windows::core::PCWSTR;
-
-    let source: Vec<u16> = source.as_os_str().encode_wide().chain(Some(0)).collect();
-    let target: Vec<u16> = target.as_os_str().encode_wide().chain(Some(0)).collect();
-
-    unsafe {
-        MoveFileExW(
-            PCWSTR(source.as_ptr()),
-            PCWSTR(target.as_ptr()),
-            MOVE_FILE_FLAGS::default(),
-        )
-    }
-    .map_err(|_| io::Error::last_os_error())
-}
-
-#[cfg(any(target_os = "macos", target_os = "linux"))]
 fn path_to_c_string(path: &Path) -> io::Result<CString> {
     CString::new(path.as_os_str().as_bytes()).map_err(|_| {
         io::Error::new(
@@ -694,7 +543,7 @@ fn path_to_c_string(path: &Path) -> io::Result<CString> {
 //
 // To avoid crashing the app in this situation, we use the rustix analogue of
 // ReadDir, which doesn't have this panic in drop.
-#[cfg(unix)]
+
 fn read_dir_entries(path: PathBuf) -> Result<impl Send + Iterator<Item = Result<PathBuf>>> {
     use rustix::fs::{Dir, Mode, OFlags};
     use std::ffi::OsStr;
@@ -725,17 +574,6 @@ fn read_dir_entries(path: PathBuf) -> Result<impl Send + Iterator<Item = Result<
     }))
 }
 
-#[cfg(not(unix))]
-fn read_dir_entries(path: PathBuf) -> Result<impl Send + Iterator<Item = Result<PathBuf>>> {
-    let entries =
-        std::fs::read_dir(&path).with_context(|| format!("failed to open directory {path:?}"))?;
-    Ok(entries.map(move |entry| {
-        entry
-            .map(|entry| entry.path())
-            .with_context(|| format!("failed to read directory entry in {path:?}"))
-    }))
-}
-
 #[async_trait::async_trait]
 impl Fs for RealFs {
     async fn create_dir(&self, path: &Path) -> Result<()> {
@@ -743,27 +581,7 @@ impl Fs for RealFs {
     }
 
     async fn create_symlink(&self, path: &Path, target: PathBuf) -> Result<()> {
-        #[cfg(unix)]
         smol::fs::unix::symlink(target, path).await?;
-
-        #[cfg(windows)]
-        if smol::fs::metadata(&target).await?.is_dir() {
-            let status = new_command("cmd")
-                .args(["/C", "mklink", "/J"])
-                .args([path, target.as_path()])
-                .status()
-                .await?;
-
-            if !status.success() {
-                return Err(anyhow::anyhow!(
-                    "Failed to create junction from {:?} to {:?}",
-                    path,
-                    target
-                ));
-            }
-        } else {
-            smol::fs::windows::symlink_file(target, path).await?
-        }
 
         Ok(())
     }
@@ -830,7 +648,6 @@ impl Fs for RealFs {
         }
 
         let use_metadata_fallback = {
-            #[cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))]
             {
                 let source = source.to_path_buf();
                 let target = target.to_path_buf();
@@ -862,12 +679,6 @@ impl Fs for RealFs {
                     Err(error) => return Err(error.into()),
                 }
             }
-
-            #[cfg(not(any(target_os = "macos", target_os = "linux", target_os = "windows")))]
-            {
-                // For platforms which do not have an atomic no-overwrite rename yet.
-                true
-            }
         };
 
         if use_metadata_fallback && smol::fs::metadata(target).await.is_ok() {
@@ -898,22 +709,6 @@ impl Fs for RealFs {
     }
 
     async fn remove_file(&self, path: &Path, options: RemoveOptions) -> Result<()> {
-        #[cfg(windows)]
-        if let Ok(Some(metadata)) = self.metadata(path).await
-            && metadata.is_symlink
-            && metadata.is_dir
-        {
-            self.remove_dir(
-                path,
-                RemoveOptions {
-                    recursive: false,
-                    ignore_if_not_exists: true,
-                },
-            )
-            .await?;
-            return Ok(());
-        }
-
         match smol::fs::remove_file(path).await {
             Ok(()) => Ok(()),
             Err(err) if err.kind() == io::ErrorKind::NotFound && options.ignore_if_not_exists => {
@@ -947,11 +742,7 @@ impl Fs for RealFs {
     async fn open_handle(&self, path: &Path) -> Result<Arc<dyn FileHandle>> {
         let mut options = std::fs::OpenOptions::new();
         options.read(true);
-        #[cfg(windows)]
-        {
-            use std::os::windows::fs::OpenOptionsExt;
-            options.custom_flags(windows::Win32::Storage::FileSystem::FILE_FLAG_BACKUP_SEMANTICS.0);
-        }
+
         Ok(Arc::new(options.open(path)?))
     }
 
@@ -974,7 +765,6 @@ impl Fs for RealFs {
         Ok(bytes)
     }
 
-    #[cfg(not(target_os = "windows"))]
     async fn atomic_write(&self, path: PathBuf, data: String) -> Result<()> {
         smol::unblock(move || {
             // Use the directory of the destination as temp dir to avoid
@@ -988,35 +778,6 @@ impl Fs for RealFs {
         })
         .await?;
 
-        Ok(())
-    }
-
-    #[cfg(target_os = "windows")]
-    async fn atomic_write(&self, path: PathBuf, data: String) -> Result<()> {
-        smol::unblock(move || {
-            // If temp dir is set to a different drive than the destination,
-            // we receive error:
-            //
-            // failed to persist temporary file:
-            // The system cannot move the file to a different disk drive. (os error 17)
-            //
-            // This is because `ReplaceFileW` does not support cross volume moves.
-            // See the remark section: "The backup file, replaced file, and replacement file must all reside on the same volume."
-            // https://learn.microsoft.com/en-us/windows/win32/api/winbase/nf-winbase-replacefilew#remarks
-            //
-            // So we use the directory of the destination as a temp dir to avoid it.
-            // https://github.com/zed-industries/zed/issues/16571
-            let temp_dir = TempDir::new_in(path.parent().unwrap_or(paths::temp_dir()))?;
-            let temp_file = {
-                let temp_file_path = temp_dir.path().join("temp_file");
-                let mut file = std::fs::File::create_new(&temp_file_path)?;
-                file.write_all(data.as_bytes())?;
-                temp_file_path
-            };
-            atomic_replace(path.as_path(), temp_file.as_path())?;
-            anyhow::Ok(())
-        })
-        .await?;
         Ok(())
     }
 
@@ -1058,10 +819,6 @@ impl Fs for RealFs {
         let path = path.to_owned();
         self.executor
             .spawn(async move {
-                #[cfg(target_os = "windows")]
-                let result = Self::canonicalize(&path);
-
-                #[cfg(not(target_os = "windows"))]
                 let result = std::fs::canonicalize(&path);
 
                 result.with_context(|| format!("canonicalizing {path:?}"))
@@ -1126,28 +883,11 @@ impl Fs for RealFs {
             symlink_metadata
         };
 
-        #[cfg(unix)]
         let inode = metadata.ino();
 
-        #[cfg(windows)]
-        let inode = file_id(path).await?;
-
-        #[cfg(windows)]
-        let is_fifo = false;
-
-        #[cfg(unix)]
         let is_fifo = metadata.file_type().is_fifo();
 
-        #[cfg(unix)]
         let is_executable = metadata.is_file() && metadata.permissions().mode() & 0o111 != 0;
-
-        #[cfg(windows)]
-        let path_buf = path.to_path_buf();
-        #[cfg(windows)]
-        let is_executable = self
-            .executor
-            .spawn(async move { path_buf.is_executable() })
-            .await;
 
         Ok(Some(Metadata {
             inode,
@@ -1429,7 +1169,6 @@ impl Fs for RealFs {
     }
 }
 
-#[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
 impl Watcher for RealWatcher {
     fn add(&self, _: &Path) -> Result<()> {
         Ok(())
@@ -3647,56 +3386,3 @@ fn read_recursive<'a>(
 // todo(windows)
 // can we get file id not open the file twice?
 // https://github.com/rust-lang/rust/issues/63010
-#[cfg(target_os = "windows")]
-async fn file_id(path: impl AsRef<Path>) -> Result<u64> {
-    use std::os::windows::io::AsRawHandle;
-
-    use smol::fs::windows::OpenOptionsExt;
-    use windows::Win32::{
-        Foundation::HANDLE,
-        Storage::FileSystem::{
-            BY_HANDLE_FILE_INFORMATION, FILE_FLAG_BACKUP_SEMANTICS, GetFileInformationByHandle,
-        },
-    };
-
-    let file = smol::fs::OpenOptions::new()
-        .read(true)
-        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS.0)
-        .open(path)
-        .await?;
-
-    let mut info: BY_HANDLE_FILE_INFORMATION = unsafe { std::mem::zeroed() };
-    // https://learn.microsoft.com/en-us/windows/win32/api/fileapi/nf-fileapi-getfileinformationbyhandle
-    // This function supports Windows XP+
-    smol::unblock(move || {
-        unsafe { GetFileInformationByHandle(HANDLE(file.as_raw_handle() as _), &mut info)? };
-
-        Ok(((info.nFileIndexHigh as u64) << 32) | (info.nFileIndexLow as u64))
-    })
-    .await
-}
-
-#[cfg(target_os = "windows")]
-fn atomic_replace<P: AsRef<Path>>(
-    replaced_file: P,
-    replacement_file: P,
-) -> windows::core::Result<()> {
-    use windows::{
-        Win32::Storage::FileSystem::{REPLACE_FILE_FLAGS, ReplaceFileW},
-        core::HSTRING,
-    };
-
-    // If the file does not exist, create it.
-    let _ = std::fs::File::create_new(replaced_file.as_ref());
-
-    unsafe {
-        ReplaceFileW(
-            &HSTRING::from(replaced_file.as_ref().to_string_lossy().into_owned()),
-            &HSTRING::from(replacement_file.as_ref().to_string_lossy().into_owned()),
-            None,
-            REPLACE_FILE_FLAGS::default(),
-            None,
-            None,
-        )
-    }
-}

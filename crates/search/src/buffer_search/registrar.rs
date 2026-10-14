@@ -217,10 +217,6 @@ impl<A: Action> ActionExecutor<A> for WithResultsOrExternalQuery<A> {
         window: &mut Window,
         cx: &mut Context<BufferSearchBar>,
     ) -> DidHandleAction {
-        #[cfg(not(target_os = "macos"))]
-        let has_external_query = false;
-
-        #[cfg(target_os = "macos")]
         let has_external_query = search_bar.pending_external_query.is_some();
 
         if has_external_query || search_bar.active_match_index.is_some() {

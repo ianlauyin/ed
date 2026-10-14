@@ -1,4 +1,3 @@
-// Disable command line from opening on release mode
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod watcher_debug;
@@ -102,7 +101,7 @@ fn files_not_created_on_launch(errors: HashMap<io::ErrorKind, Vec<&Path>>) {
                 _many => format!("{kind} when creating directories {paths:?}"),
             };
 
-            #[cfg(unix)]
+
             {
                 if kind == io::ErrorKind::PermissionDenied {
                     error_kind_details.push_str("\n\nConsider using chown and chmod tools for altering the directories permissions if your user has corresponding rights.\
@@ -149,59 +148,21 @@ fn fail_to_open_window_async(e: anyhow::Error, cx: &mut AsyncApp) {
 }
 
 fn fail_to_open_window(e: anyhow::Error, _cx: &mut App) {
-    eprintln!(
-        "Zed failed to open a window: {e:?}. See https://zed.dev/docs/linux for troubleshooting steps."
-    );
-    #[cfg(not(any(target_os = "linux", target_os = "freebsd")))]
-    {
-        process::exit(1);
-    }
-
-    // Maybe unify this with gpui::platform::linux::platform::ResultExt::notify_err(..)?
-    #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-    {
-        use ashpd::desktop::notification::{Notification, NotificationProxy, Priority};
-        _cx.spawn(async move |_cx| {
-            let Ok(proxy) = NotificationProxy::new().await else {
-                process::exit(1);
-            };
-
-            let notification_id = "dev.zed.Oops";
-            proxy
-                .add_notification(
-                    notification_id,
-                    Notification::new("Zed failed to launch")
-                        .body(Some(
-                            format!(
-                                "{e:?}. See https://zed.dev/docs/linux for troubleshooting steps."
-                            )
-                            .as_str(),
-                        ))
-                        .priority(Priority::High)
-                        .icon(ashpd::desktop::Icon::with_names(&[
-                            "dialog-question-symbolic",
-                        ])),
-                )
-                .await
-                .ok();
-
-            process::exit(1);
-        })
-        .detach();
-    }
+    zlog::error!("Failed to open window: {e:?}");
+    eprintln!("Zed failed to open a window: {e:?}.");
+    process::exit(1);
 }
 static STARTUP_TIME: OnceLock<Instant> = OnceLock::new();
 
 fn main() {
     STARTUP_TIME.get_or_init(|| Instant::now());
 
-    #[cfg(unix)]
     util::prevent_root_execution();
 
     let args = Args::parse();
 
     // `zed --askpass` Makes zed operate in nc/netcat mode for use with askpass
-    #[cfg(not(target_os = "windows"))]
+
     if let Some(socket) = &args.askpass {
         askpass::main(socket);
         return;
@@ -211,29 +172,6 @@ fn main() {
     if let Some(socket) = &args.crash_handler {
         crashes::crash_server(socket.as_path(), paths::logs_dir().clone());
         return;
-    }
-
-    #[cfg(target_os = "windows")]
-    if args.record_etw_trace {
-        let Some(etw_socket) = args.etw_socket else {
-            eprintln!("--etw-socket is required for --record-etw-trace");
-            process::exit(1);
-        };
-
-        if let Err(error) = etw_tracing::record_etw_trace(args.etw_zed_pid, &etw_socket) {
-            eprintln!("ETW trace recording failed: {error:#}");
-            process::exit(1);
-        }
-        return;
-    }
-
-    #[cfg(all(not(debug_assertions), target_os = "windows"))]
-    unsafe {
-        use windows::Win32::System::Console::{ATTACH_PARENT_PROCESS, AttachConsole};
-
-        if args.foreground {
-            let _ = AttachConsole(ATTACH_PARENT_PROCESS);
-        }
     }
 
     // `zed --printenv` Outputs environment variables as JSON to stdout
@@ -257,17 +195,6 @@ fn main() {
         Vec::new()
     };
 
-    #[cfg(target_os = "windows")]
-    match util::get_zed_cli_path() {
-        Ok(path) => askpass::set_askpass_program(path),
-        Err(err) => {
-            eprintln!("Error: {}", err);
-            if std::option_env!("ZED_BUNDLE").is_some() {
-                process::exit(1);
-            }
-        }
-    }
-
     let file_errors = init_paths();
     if !file_errors.is_empty() {
         files_not_created_on_launch(file_errors);
@@ -286,7 +213,6 @@ fn main() {
         };
     }
 
-    #[cfg(unix)]
     util::increase_open_file_limit().log_err();
 
     let version = option_env!("ZED_BUILD_ID");
@@ -322,9 +248,6 @@ fn main() {
             .unwrap_or("unknown"),
     );
 
-    #[cfg(windows)]
-    check_for_conpty_dll();
-
     let app = build_application()
         .with_assets(Assets)
         .with_restart_arguments(restart_arguments);
@@ -343,17 +266,6 @@ fn main() {
     let failed_single_instance_check = if *zed_env_vars::ZED_STATELESS || cfg!(debug_assertions) {
         false
     } else {
-        #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-        {
-            crate::zed::listen_for_cli_connections(open_listener.clone()).is_err()
-        }
-
-        #[cfg(target_os = "windows")]
-        {
-            !crate::zed::windows_only_instance::handle_single_instance(open_listener.clone(), &args)
-        }
-
-        #[cfg(target_os = "macos")]
         {
             use zed::mac_only_instance::*;
             ensure_only_instance() != IsOnlyInstance::Yes
@@ -404,14 +316,13 @@ fn main() {
     };
 
     let git_hosting_provider_registry = Arc::new(GitHostingProviderRegistry::new());
-    let git_binary_path =
-        if cfg!(target_os = "macos") && option_env!("ZED_BUNDLE").as_deref() == Some("true") {
-            app.path_for_auxiliary_executable("git")
-                .context("could not find git binary path")
-                .log_err()
-        } else {
-            None
-        };
+    let git_binary_path = if true && option_env!("ZED_BUNDLE").as_deref() == Some("true") {
+        app.path_for_auxiliary_executable("git")
+            .context("could not find git binary path")
+            .log_err()
+    } else {
+        None
+    };
     if let Some(git_binary_path) = &git_binary_path {
         log::info!("Using git binary path: {:?}", git_binary_path);
     }
@@ -427,7 +338,6 @@ fn main() {
     if !stdout_is_a_pty() {
         app.background_executor()
             .spawn(async {
-                #[cfg(unix)]
                 util::load_login_shell_environment().await.log_err();
                 shell_env_loaded_tx.send(()).ok();
             })
@@ -564,7 +474,7 @@ fn main() {
         );
 
         zed::init(cx);
-        #[cfg(target_os = "macos")]
+
         zed::move_to_applications::init(cx);
         debugger_ui::init(cx);
         debugger_tools::init(cx);
@@ -603,8 +513,6 @@ fn main() {
         dev_container::init(cx);
 
         load_embedded_fonts(cx);
-        #[cfg(target_os = "linux")]
-        prewarm_fonts(cx);
 
         editor::init(cx);
         image_viewer::init(cx);
@@ -660,8 +568,6 @@ fn main() {
         json_schema_store::init(cx);
         miniprofiler_ui::init(*STARTUP_TIME.get().unwrap(), cx);
         which_key::init(cx);
-        #[cfg(target_os = "windows")]
-        etw_tracing::init(cx);
 
         cx.observe_global::<SettingsStore>({
             move |cx| {
@@ -746,9 +652,6 @@ fn main() {
             .map(|chunk| [chunk[0].clone(), chunk[1].clone()])
             .collect();
 
-        #[cfg(target_os = "windows")]
-        let wsl = args.wsl;
-        #[cfg(not(target_os = "windows"))]
         let wsl = None;
 
         if !urls.is_empty() || !diff_paths.is_empty() {
@@ -1402,19 +1305,6 @@ struct Args {
     #[arg(long, value_name = "DIR", verbatim_doc_comment)]
     user_data_dir: Option<String>,
 
-    /// The username and WSL distribution to use when opening paths. If not specified,
-    /// Zed will attempt to open the paths directly.
-    ///
-    /// The username is optional, and if not specified, the default user for the distribution
-    /// will be used.
-    ///
-    /// Example: `me@Ubuntu` or `Ubuntu`.
-    ///
-    /// WARN: You should not fill in this field by hand.
-    #[cfg(target_os = "windows")]
-    #[arg(long, value_name = "USER@DISTRO")]
-    wsl: Option<String>,
-
     /// Open the project in a dev container.
     ///
     /// Automatically triggers "Reopen in Dev Container" if a `.devcontainer/`
@@ -1439,22 +1329,9 @@ struct Args {
     #[arg(long, hide = true)]
     crash_handler: Option<PathBuf>,
 
-    /// Run zed in the foreground, only used on Windows, to match the behavior on macOS.
-    #[arg(long)]
-    #[cfg(target_os = "windows")]
-    #[arg(hide = true)]
-    foreground: bool,
-
-    /// The dock action to perform. This is used on Windows only.
-    #[arg(long)]
-    #[cfg(target_os = "windows")]
-    #[arg(hide = true)]
-    dock_action: Option<usize>,
-
     /// Used for SSH/Git password authentication, to remove the need for netcat as a dependency,
     /// by having Zed act like netcat communicating over a Unix socket.
     #[arg(long)]
-    #[cfg(not(target_os = "windows"))]
     #[arg(hide = true)]
     askpass: Option<String>,
 
@@ -1464,21 +1341,6 @@ struct Args {
     /// Output current environment variables as JSON to stdout
     #[arg(long, hide = true)]
     printenv: bool,
-
-    /// Record an ETW trace. Must be run as administrator.
-    #[cfg(target_os = "windows")]
-    #[arg(long, hide = true)]
-    record_etw_trace: bool,
-
-    /// The PID of the Zed process to trace for heap analysis.
-    #[cfg(target_os = "windows")]
-    #[arg(long, hide = true)]
-    etw_zed_pid: Option<u32>,
-
-    /// Unix socket path for IPC with the parent Zed process.
-    #[cfg(target_os = "windows")]
-    #[arg(long, hide = true)]
-    etw_socket: Option<PathBuf>,
 }
 
 fn parse_url_arg(arg: &str, _cx: &App) -> String {
@@ -1520,50 +1382,6 @@ fn load_embedded_fonts(cx: &App) {
     cx.text_system()
         .add_fonts(embedded_fonts.into_inner())
         .unwrap();
-}
-
-#[cfg(target_os = "linux")]
-fn prewarm_fonts(cx: &mut App) {
-    let theme_settings = theme::theme_settings(cx);
-    let ui_font = theme_settings.ui_font(cx).clone();
-    let buffer_font = theme_settings.buffer_font(cx).clone();
-    let mut fonts = vec![ui_font.clone(), buffer_font.clone()];
-    let mut add_variant = |base_font: &gpui::Font, weight, style| {
-        let mut font = base_font.clone();
-        font.weight = weight;
-        font.style = style;
-        fonts.push(font);
-    };
-
-    for weight in [
-        gpui::FontWeight::MEDIUM,
-        gpui::FontWeight::SEMIBOLD,
-        gpui::FontWeight::BOLD,
-    ] {
-        add_variant(&ui_font, weight, gpui::FontStyle::Normal);
-    }
-    add_variant(&ui_font, gpui::FontWeight::NORMAL, gpui::FontStyle::Italic);
-    add_variant(
-        &buffer_font,
-        gpui::FontWeight::BOLD,
-        gpui::FontStyle::Normal,
-    );
-    add_variant(
-        &buffer_font,
-        gpui::FontWeight::NORMAL,
-        gpui::FontStyle::Italic,
-    );
-    add_variant(
-        &buffer_font,
-        gpui::FontWeight::BOLD,
-        gpui::FontStyle::Italic,
-    );
-
-    let text_system = cx.text_system().clone();
-    cx.background_spawn(async move {
-        text_system.prewarm_fonts(&fonts);
-    })
-    .detach();
 }
 
 /// Spawns a background task to load the user themes from the themes directory.
@@ -1728,22 +1546,4 @@ fn dump_all_gpui_actions() {
         serde_json::to_string_pretty(&output).unwrap().as_bytes(),
     )
     .unwrap();
-}
-
-#[cfg(target_os = "windows")]
-fn check_for_conpty_dll() {
-    use windows::{
-        Win32::{Foundation::FreeLibrary, System::LibraryLoader::LoadLibraryW},
-        core::w,
-    };
-
-    if let Ok(hmodule) = unsafe { LoadLibraryW(w!("conpty.dll")) } {
-        unsafe {
-            FreeLibrary(hmodule)
-                .context("Failed to free conpty.dll")
-                .log_err();
-        }
-    } else {
-        log::warn!("Failed to load conpty.dll. Terminal will work with reduced functionality.");
-    }
 }

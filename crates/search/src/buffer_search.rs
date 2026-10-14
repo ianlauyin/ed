@@ -71,11 +71,9 @@ pub struct BufferSearchBar {
     replacement_editor_focused: bool,
     active_searchable_item: Option<Box<dyn SearchableItemHandle>>,
     active_match_index: Option<usize>,
-    #[cfg(target_os = "macos")]
+
     active_searchable_item_subscriptions: Option<[Subscription; 2]>,
-    #[cfg(not(target_os = "macos"))]
-    active_searchable_item_subscriptions: Option<Subscription>,
-    #[cfg(target_os = "macos")]
+
     pending_external_query: Option<(String, SearchOptions)>,
     active_search: Option<Arc<SearchQuery>>,
     searchable_items_with_matches:
@@ -564,7 +562,6 @@ impl ToolbarItemView for BufferSearchBar {
                 }),
             );
 
-            #[cfg(target_os = "macos")]
             {
                 let item_focus_handle = searchable_item_handle.item_focus_handle(cx);
 
@@ -602,10 +599,6 @@ impl ToolbarItemView for BufferSearchBar {
                         });
                     }),
                 ]);
-            }
-            #[cfg(not(target_os = "macos"))]
-            {
-                self.active_searchable_item_subscriptions = Some(search_event_subscription);
             }
 
             let is_project_search = searchable_item_handle.supported_options(cx).find_in_results;
@@ -1055,7 +1048,6 @@ impl BufferSearchBar {
                 self.search(&suggestion, Some(self.default_options), true, window, cx)
             });
 
-        #[cfg(target_os = "macos")]
         let search = search.or_else(|| {
             self.pending_external_query
                 .take()
@@ -1163,14 +1155,13 @@ impl BufferSearchBar {
             });
             self.set_search_options(options, cx);
             self.clear_matches(window, cx);
-            #[cfg(target_os = "macos")]
+
             self.update_find_pasteboard(cx);
             cx.notify();
         }
         self.update_matches(!updated, add_to_history, window, cx)
     }
 
-    #[cfg(target_os = "macos")]
     pub fn update_find_pasteboard(&mut self, cx: &mut App) {
         cx.write_to_find_pasteboard(gpui::ClipboardItem::new_string_with_metadata(
             self.query(cx),
@@ -1305,7 +1296,6 @@ impl BufferSearchBar {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        #[cfg(target_os = "macos")]
         if let Some((query, options)) = self.pending_external_query.take() {
             let search_rx = self.search(&query, Some(options), true, window, cx);
             cx.spawn_in(window, async move |this, cx| {
@@ -1393,7 +1383,7 @@ impl BufferSearchBar {
                     if search.await.is_ok() {
                         this.update_in(cx, |this, window, cx| {
                             this.activate_current_match(window, cx);
-                            #[cfg(target_os = "macos")]
+
                             this.update_find_pasteboard(cx);
                         })?;
                     }
@@ -1512,7 +1502,7 @@ impl BufferSearchBar {
         let (done_tx, done_rx) = oneshot::channel();
         let query = self.query(cx);
         self.pending_search.take();
-        #[cfg(target_os = "macos")]
+
         self.pending_external_query.take();
 
         if let Some(active_searchable_item) = self.active_searchable_item.as_ref() {
@@ -1887,12 +1877,12 @@ mod tests {
     use futures::stream::StreamExt as _;
     use gpui::{FocusHandle, Hsla, TestAppContext, UpdateGlobal, VisualTestContext};
     use language::{Buffer, Point};
-    #[cfg(target_os = "macos")]
+
     use project::Project;
     use settings::{SearchSettingsContent, SettingsStore};
     use unindent::Unindent as _;
     use util_macros::perf;
-    #[cfg(target_os = "macos")]
+
     use workspace::{AppState, MultiWorkspace, Workspace};
     use workspace::{item::Item, searchable::SearchableItem};
 
@@ -3350,7 +3340,6 @@ mod tests {
         });
     }
 
-    #[cfg(target_os = "macos")]
     #[gpui::test]
     async fn test_cmd_e_then_cmd_g_uses_selection_for_find(cx: &mut TestAppContext) {
         init_globals(cx);

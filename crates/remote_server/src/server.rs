@@ -25,7 +25,7 @@ use node_runtime::{NodeBinaryOptions, NodeRuntime};
 use paths::logs_dir;
 use project::{project_settings::ProjectSettings, trusted_worktrees};
 use proto::CrashReport;
-#[cfg(unix)]
+
 use remote::command::RemoteCommand;
 use remote::{
     RemoteClient,
@@ -55,7 +55,7 @@ use std::{
     sync::{Arc, LazyLock},
     time::Instant,
 };
-#[cfg(unix)]
+
 use std::{
     ffi::OsString,
     os::{
@@ -87,7 +87,7 @@ pub enum Commands {
         identifier: String,
     },
     Version,
-    #[cfg(unix)]
+
     Exec,
 }
 
@@ -113,7 +113,7 @@ pub fn run(command: Commands) -> anyhow::Result<()> {
             identifier,
             reconnect,
         } => execute_proxy(identifier, reconnect).context("running proxy on the remote server"),
-        #[cfg(unix)]
+
         Commands::Exec => execute_command(),
         Commands::Version => {
             let release_channel = *SERVER_RELEASE;
@@ -150,7 +150,6 @@ pub static VERSION: LazyLock<String> = LazyLock::new(|| match *SERVER_RELEASE {
     }
 });
 
-#[cfg(unix)]
 fn execute_command() -> Result<()> {
     let mut stdin = File::from(std::io::stdin().as_fd().try_clone_to_owned()?);
     let descriptor = RemoteCommand::read(&mut stdin)?;
@@ -170,7 +169,6 @@ fn execute_command() -> Result<()> {
     Err(error).with_context(|| format!("Failed to execute {}", descriptor.program))
 }
 
-#[cfg(unix)]
 fn exec_with_script_fallback(
     descriptor: &RemoteCommand,
     working_dir: Option<&str>,
@@ -211,7 +209,6 @@ fn exec_with_script_fallback(
     error
 }
 
-#[cfg(unix)]
 fn script_candidates(program: &str, path: Option<&OsStr>) -> Vec<PathBuf> {
     let explicit = |candidate: PathBuf| {
         if candidate.is_absolute() {
@@ -230,10 +227,8 @@ fn script_candidates(program: &str, path: Option<&OsStr>) -> Vec<PathBuf> {
         .collect()
 }
 
-#[cfg(unix)]
 const DEFAULT_PATH: &str = "/usr/local/bin:/bin:/usr/bin";
 
-#[cfg(unix)]
 fn exec_command(
     descriptor: &RemoteCommand,
     working_dir: Option<&str>,
@@ -704,7 +699,6 @@ pub fn execute_run(
         .build_global()
         .unwrap();
 
-    #[cfg(unix)]
     let shell_env_loaded_rx = {
         let (shell_env_loaded_tx, shell_env_loaded_rx) = oneshot::channel();
         app.background_executor()
@@ -715,8 +709,6 @@ pub fn execute_run(
             .detach();
         Some(shell_env_loaded_rx)
     };
-    #[cfg(windows)]
-    let shell_env_loaded_rx: Option<oneshot::Receiver<()>> = None;
 
     let git_hosting_provider_registry = Arc::new(GitHostingProviderRegistry::new());
     let run = move |cx: &mut App| {
@@ -739,12 +731,7 @@ pub fn execute_run(
 
         HeadlessProject::init(cx);
 
-        let is_wsl_interop = if cfg!(target_os = "linux") {
-            // See: https://learn.microsoft.com/en-us/windows/wsl/filesystems#disable-interoperability
-            matches!(std::fs::read_to_string("/proc/sys/fs/binfmt_misc/WSLInterop").or_else(|_| std::fs::read_to_string("/proc/sys/fs/binfmt_misc/WSLInterop-late")), Ok(s) if s.contains("enabled"))
-        } else {
-            false
-        };
+        let is_wsl_interop = { false };
 
         log::info!("gpui app started, initializing server");
         let session = start_server(listeners, log_rx, cx, is_wsl_interop);
@@ -1134,12 +1121,6 @@ async fn spawn_server(paths: &ServerPaths) -> Result<(), SpawnServerError> {
 
     let binary_name = std::env::current_exe().map_err(SpawnServerError::CurrentExe)?;
 
-    #[cfg(windows)]
-    {
-        spawn_server_windows(&binary_name, paths)?;
-    }
-
-    #[cfg(not(windows))]
     {
         spawn_server_normal(&binary_name, paths)?;
     }
@@ -1166,34 +1147,6 @@ async fn spawn_server(paths: &ServerPaths) -> Result<(), SpawnServerError> {
     Ok(())
 }
 
-#[cfg(windows)]
-fn spawn_server_windows(binary_name: &Path, paths: &ServerPaths) -> Result<(), SpawnServerError> {
-    use smol::process::windows::CommandExt;
-    // Detach from the console and break away from sshd's job so closing the SSH session doesn't kill the daemon.
-    const DETACHED_PROCESS: u32 = 0x0000_0008;
-    const CREATE_BREAKAWAY_FROM_JOB: u32 = 0x0100_0000;
-    smol::process::Command::new(binary_name)
-        .stdin(util::command::Stdio::null())
-        .stdout(util::command::Stdio::null())
-        .stderr(util::command::Stdio::null())
-        .arg("run")
-        .arg("--log-file")
-        .arg(&paths.log_file)
-        .arg("--pid-file")
-        .arg(&paths.pid_file)
-        .arg("--stdin-socket")
-        .arg(&paths.stdin_socket)
-        .arg("--stdout-socket")
-        .arg(&paths.stdout_socket)
-        .arg("--stderr-socket")
-        .arg(&paths.stderr_socket)
-        .creation_flags(DETACHED_PROCESS | CREATE_BREAKAWAY_FROM_JOB)
-        .spawn()
-        .map_err(SpawnServerError::ProcessStatus)?;
-    Ok(())
-}
-
-#[cfg(not(windows))]
 fn spawn_server_normal(binary_name: &Path, paths: &ServerPaths) -> Result<(), SpawnServerError> {
     let mut server_process = new_command(binary_name);
     server_process
@@ -1464,7 +1417,6 @@ fn is_file_in_use(file_name: &OsStr) -> bool {
 mod tests {
     use super::*;
 
-    #[cfg(unix)]
     mod unix {
         use super::*;
         use gpui::TestAppContext;
@@ -1652,7 +1604,6 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
     #[test]
     fn script_candidates_never_start_with_a_dash() {
         assert_eq!(
@@ -1690,7 +1641,6 @@ mod tests {
         );
     }
 
-    #[cfg(unix)]
     #[test]
     fn script_fallback_runs_option_like_wrapper_instead_of_its_arguments() {
         use std::cell::RefCell;

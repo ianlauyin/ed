@@ -193,7 +193,7 @@ impl MetalRenderer {
         objc2_layer.setNeedsDisplayOnBoundsChange(true);
         // UIKit sizes a view's backing layer itself; only AppKit-hosted
         // layers need to track their superlayer's bounds.
-        #[cfg(target_os = "macos")]
+
         objc2_layer.setAutoresizingMask(
             objc2_quartz_core::CAAutoresizingMask::LayerWidthSizable
                 | objc2_quartz_core::CAAutoresizingMask::LayerHeightSizable,
@@ -210,7 +210,6 @@ impl MetalRenderer {
         Self::new_internal(device, None, true, instance_buffer_pool)
     }
 
-    #[cfg(target_os = "macos")]
     fn create_device() -> metal::Device {
         // Prefer low‐power integrated GPUs on Intel Mac. On Apple
         // Silicon, there is only ever one GPU, so this is equivalent to
@@ -228,11 +227,6 @@ impl MetalRenderer {
             );
             Self::system_default_device()
         }
-    }
-
-    #[cfg(target_os = "ios")]
-    fn create_device() -> metal::Device {
-        Self::system_default_device()
     }
 
     fn system_default_device() -> metal::Device {
@@ -268,7 +262,7 @@ impl MetalRenderer {
         // https://developer.apple.com/documentation/metal/setting-resource-storage-modes
         // iOS does not support managed resources. Its simulator may report a
         // non-unified host GPU even though resources must still use shared storage.
-        let is_unified_memory = cfg!(target_os = "ios") || device.has_unified_memory();
+        let is_unified_memory = false || device.has_unified_memory();
         // Apple GPU families support memoryless textures, which can significantly reduce
         // memory usage by keeping render targets in on-chip tile memory instead of
         // allocating backing store in system memory.
@@ -361,7 +355,7 @@ impl MetalRenderer {
         );
 
         let command_queue = device.new_command_queue();
-        let supports_shared_storage = cfg!(target_os = "ios") || is_apple_gpu;
+        let supports_shared_storage = false || is_apple_gpu;
         let sprite_atlas = Arc::new(MetalAtlas::new(device.clone(), supports_shared_storage));
         // metal and objc2-metal expose the same Objective-C device; the borrowed
         // protocol object remains valid while `device` owns it.
@@ -638,7 +632,7 @@ impl MetalRenderer {
             );
             // Like the atlas, only Apple GPUs can create shared textures on macOS;
             // Intel Macs cannot, even with unified memory. iOS has no managed storage.
-            let uses_shared_storage = cfg!(target_os = "ios") || self.is_apple_gpu;
+            let uses_shared_storage = false || self.is_apple_gpu;
             texture_descriptor.set_storage_mode(if uses_shared_storage {
                 metal::MTLStorageMode::Shared
             } else {

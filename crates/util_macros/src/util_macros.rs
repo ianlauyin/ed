@@ -1,4 +1,4 @@
-#![cfg_attr(not(target_os = "windows"), allow(unused))]
+#![allow(unused)]
 #![allow(clippy::test_attr_in_doctest)]
 
 use perf::*;
@@ -23,15 +23,7 @@ use syn::{ItemFn, LitStr, parse_macro_input, parse_quote};
 #[proc_macro]
 pub fn path(input: TokenStream) -> TokenStream {
     let path = parse_macro_input!(input as LitStr);
-    let mut path = path.value();
-
-    #[cfg(target_os = "windows")]
-    {
-        path = path.replace("/", "\\");
-        if path.starts_with("\\") {
-            path = format!("C:{}", path);
-        }
-    }
+    let path = path.value();
 
     TokenStream::from(quote! {
         #path
@@ -56,9 +48,6 @@ pub fn uri(input: TokenStream) -> TokenStream {
     let uri = parse_macro_input!(input as LitStr);
     let uri = uri.value();
 
-    #[cfg(target_os = "windows")]
-    let uri = uri.replace("file:///", "file:///C:/");
-
     TokenStream::from(quote! {
         #uri
     })
@@ -81,9 +70,6 @@ pub fn uri(input: TokenStream) -> TokenStream {
 pub fn line_endings(input: TokenStream) -> TokenStream {
     let text = parse_macro_input!(input as LitStr);
     let text = text.value();
-
-    #[cfg(target_os = "windows")]
-    let text = text.replace("\n", "\r\n");
 
     TokenStream::from(quote! {
         #text

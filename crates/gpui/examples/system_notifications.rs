@@ -1,5 +1,3 @@
-#![cfg_attr(target_family = "wasm", no_main)]
-
 //! Demonstrates posting, replacing, dismissing, and responding to system notifications.
 
 #[path = "example_support/fonts.rs"]
@@ -77,7 +75,7 @@ impl Render for SystemNotificationExample {
                     .bg(rgb(0x27272a))
                     .child(self.status.clone()),
             )
-            .when(cfg!(target_os = "macos"), |this| {
+            .when(true, |this| {
                 this.child(div().mt_2().text_xs().text_color(rgb(0x71717a)).child(
                     "macOS only delivers notifications when this example runs from an app bundle.",
                 ))
@@ -142,14 +140,6 @@ fn run_example() {
     });
 }
 
-#[cfg(not(target_family = "wasm"))]
 fn main() {
-    run_example();
-}
-
-#[cfg(target_family = "wasm")]
-#[wasm_bindgen::prelude::wasm_bindgen(start)]
-pub fn start() {
-    gpui_platform::web_init();
     run_example();
 }

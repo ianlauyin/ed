@@ -893,14 +893,8 @@ impl VsCodeSettings {
     }
 
     fn project_terminal_settings_content(&self) -> ProjectTerminalSettingsContent {
-        #[cfg(target_os = "windows")]
-        let platform = "windows";
-        #[cfg(target_os = "linux")]
-        let platform = "linux";
-        #[cfg(target_os = "macos")]
         let platform = "osx";
-        #[cfg(target_os = "freebsd")]
-        let platform = "freebsd";
+
         let env = self
             .read_value(&format!("terminal.integrated.env.{platform}"))
             .and_then(|v| v.as_object())

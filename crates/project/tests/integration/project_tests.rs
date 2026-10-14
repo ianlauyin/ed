@@ -66,9 +66,7 @@ use project::{
 use rand::{Rng as _, rngs::StdRng};
 use serde_json::json;
 use settings::{GlobalLspSettingsContent, SettingsStore, SplicingVec};
-#[cfg(target_os = "linux")]
-use settings::{LocalSettingsKind, LocalSettingsPath};
-#[cfg(not(windows))]
+
 use std::os;
 use std::{
     cell::RefCell,
@@ -83,8 +81,7 @@ use std::{
     task::Poll,
     time::Duration,
 };
-#[cfg(target_os = "linux")]
-use std::{ffi::OsStr, os::unix::ffi::OsStrExt as _};
+
 use sum_tree::SumTree;
 use task::{ResolvedTask, ShellKind, TaskContext};
 use text::{Anchor, PointUtf16, ReplicaId, ToOffset, Unclipped};
@@ -104,10 +101,7 @@ async fn test_block_via_channel(cx: &mut gpui::TestAppContext) {
 
     let (tx, mut rx) = futures::channel::mpsc::unbounded();
     let _thread = std::thread::spawn(move || {
-        #[cfg(not(target_os = "windows"))]
         std::fs::metadata("/tmp").unwrap();
-        #[cfg(target_os = "windows")]
-        std::fs::metadata("C:/Windows").unwrap();
         std::thread::sleep(Duration::from_millis(1000));
         tx.unbounded_send(1).unwrap();
     });
@@ -191,7 +185,7 @@ async fn test_default_session_work_dirs_falls_back_to_home_for_empty_project(
 // NOTE:
 // While POSIX symbolic links are somewhat supported on Windows, they are an opt in by the user, and thus
 // we assume that they are not supported out of the box.
-#[cfg(not(windows))]
+
 #[gpui::test]
 async fn test_symlinks(cx: &mut gpui::TestAppContext) {
     init_test(cx);
@@ -239,7 +233,6 @@ async fn test_symlinks(cx: &mut gpui::TestAppContext) {
     });
 }
 
-#[cfg(not(windows))]
 #[gpui::test]
 async fn test_resolve_abs_file_link_project_aliases(cx: &mut gpui::TestAppContext) {
     init_test(cx);
@@ -359,30 +352,6 @@ async fn test_resolve_abs_file_link_project_aliases(cx: &mut gpui::TestAppContex
     project.read_with(cx, |project, cx| {
         assert_eq!(project.worktrees(cx).count(), 1);
         assert_eq!(project.get_open_buffer(&alias, cx), Some(buffer));
-    });
-}
-
-#[cfg(target_os = "linux")]
-#[gpui::test]
-async fn test_resolve_abs_file_link_rejects_non_utf8_target(cx: &mut gpui::TestAppContext) {
-    init_test(cx);
-    cx.executor().allow_parking();
-    let directory = TempTree::new(json!({}));
-    let target = directory.path().join(OsStr::from_bytes(b"\xff.rs"));
-    std::fs::write(&target, "actual target").unwrap();
-    std::fs::write(directory.path().join("�.rs"), "replacement-character decoy").unwrap();
-    let alias = directory.path().join("alias.rs");
-    os::unix::fs::symlink(&target, &alias).unwrap();
-    let project = Project::test(RealFs::new(None, cx.executor()), [], cx).await;
-    let error = project
-        .update(cx, |project, cx| {
-            project.resolve_abs_file_link(alias.to_str().unwrap(), cx)
-        })
-        .await
-        .unwrap_err();
-    assert_eq!(error.to_string(), "canonical file path is not valid UTF-8");
-    project.read_with(cx, |project, cx| {
-        assert_eq!(project.worktrees(cx).count(), 0);
     });
 }
 
@@ -9125,52 +9094,6 @@ async fn test_rescan_and_remote_updates(cx: &mut gpui::TestAppContext) {
     });
 }
 
-#[cfg(target_os = "linux")]
-#[gpui::test(retries = 5)]
-async fn test_recreated_directory_receives_child_events(cx: &mut gpui::TestAppContext) {
-    init_test(cx);
-    cx.executor().allow_parking();
-
-    let dir = TempTree::new(json!({}));
-    let project = Project::test(RealFs::new(None, cx.executor()), [dir.path()], cx).await;
-    let tree = project.update(cx, |project, cx| project.worktrees(cx).next().unwrap());
-
-    tree.flush_fs_events(cx).await;
-
-    let repro_dir = dir.path().join("repro");
-    std::fs::create_dir(&repro_dir).unwrap();
-    tree.flush_fs_events(cx).await;
-
-    cx.update(|cx| {
-        assert!(tree.read(cx).entry_for_path(rel_path("repro")).is_some());
-    });
-
-    std::fs::remove_dir_all(&repro_dir).unwrap();
-    tree.flush_fs_events(cx).await;
-
-    cx.update(|cx| {
-        assert!(tree.read(cx).entry_for_path(rel_path("repro")).is_none());
-    });
-
-    std::fs::create_dir(&repro_dir).unwrap();
-    tree.flush_fs_events(cx).await;
-
-    cx.update(|cx| {
-        assert!(tree.read(cx).entry_for_path(rel_path("repro")).is_some());
-    });
-
-    std::fs::write(repro_dir.join("repro-marker"), "").unwrap();
-    tree.flush_fs_events(cx).await;
-
-    cx.update(|cx| {
-        assert!(
-            tree.read(cx)
-                .entry_for_path(rel_path("repro/repro-marker"))
-                .is_some()
-        );
-    });
-}
-
 #[gpui::test(iterations = 10)]
 async fn test_buffer_identity_across_renames(cx: &mut gpui::TestAppContext) {
     init_test(cx);
@@ -17104,7 +17027,7 @@ async fn test_single_file_diffs(cx: &mut gpui::TestAppContext) {
 
 // TODO: Should we test this on Windows also?
 #[gpui::test]
-#[cfg(not(windows))]
+
 async fn test_staging_hunk_preserve_executable_permission(cx: &mut gpui::TestAppContext) {
     use std::os::unix::fs::PermissionsExt;
     init_test(cx);
@@ -17615,98 +17538,6 @@ async fn test_git_repository_status_removes_directory_descendants(cx: &mut gpui:
             }]
         );
     });
-}
-
-#[cfg(target_os = "linux")]
-#[gpui::test(retries = 5)]
-async fn test_git_events_after_project_excludes_dot_git(cx: &mut gpui::TestAppContext) {
-    init_test(cx);
-    cx.executor().allow_parking();
-
-    cx.update(|cx| {
-        SettingsStore::update_global(cx, |store, cx| {
-            store.update_user_settings(cx, |settings| {
-                settings.project.worktree.file_scan_exclusions =
-                    Some(SplicingVec::from(vec!["foo".to_string()]));
-            });
-        });
-    });
-
-    let root = TempTree::new(json!({
-        "project": {
-            "a.txt": "a",
-        },
-    }));
-
-    let work_dir = root.path().join("project");
-    let repo = git_init(&work_dir);
-    git_add("a.txt", &repo);
-    git_commit("Initial commit", &repo);
-    git_branch("other-branch", &repo);
-
-    let project = Project::test(RealFs::new(None, cx.executor()), [work_dir.as_path()], cx).await;
-
-    let tree = project.read_with(cx, |project, cx| project.worktrees(cx).next().unwrap());
-    tree.flush_fs_events(cx).await;
-    project
-        .update(cx, |project, cx| project.git_scans_complete(cx))
-        .await;
-    cx.executor().run_until_parked();
-
-    let repository = project.read_with(cx, |project, cx| {
-        project.repositories(cx).values().next().unwrap().clone()
-    });
-    let branch = repository.read_with(cx, |repository, _| {
-        repository
-            .snapshot()
-            .branch
-            .as_ref()
-            .map(|branch| branch.ref_name.to_string())
-    });
-    assert_eq!(branch.as_deref(), Some("refs/heads/main"));
-
-    let worktree_id = tree.read_with(cx, |tree, _| tree.id());
-    cx.update_global::<SettingsStore, _>(|store, cx| {
-        store
-            .set_local_settings(
-                worktree_id,
-                LocalSettingsPath::InWorktree(Arc::from(RelPath::empty())),
-                LocalSettingsKind::Settings,
-                Some(r#"{ "file_scan_exclusions": ["**/.git"] }"#),
-                cx,
-            )
-            .unwrap();
-    });
-    cx.read(|cx| tree.read(cx).as_local().unwrap().scan_complete())
-        .await;
-    cx.executor().run_until_parked();
-
-    cx.update(|cx| {
-        assert!(tree.read(cx).entry_for_path(rel_path(".git")).is_none());
-    });
-
-    git_checkout("other-branch", &repo);
-
-    let mut events = cx.events::<RepositoryEvent, _>(&repository);
-    let timeout = futures::FutureExt::fuse(cx.background_executor.timer(Duration::from_secs(5)));
-    futures::pin_mut!(timeout);
-    loop {
-        let branch = repository.read_with(cx, |repository, _| {
-            repository
-                .snapshot()
-                .branch
-                .as_ref()
-                .map(|branch| branch.ref_name.to_string())
-        });
-        if branch.as_deref() == Some("refs/heads/other-branch") {
-            break;
-        }
-
-        futures::select_biased! {
-            _ = events.next() => {}
-            _ = timeout => panic!("timed out waiting for repository HEAD update after .git was excluded"),
-        }
-    }
 }
 
 #[gpui::test]
@@ -18564,84 +18395,6 @@ async fn test_repository_subfolder_git_status(
 }
 
 // TODO: this test is flaky (especially on Windows but at least sometimes on all platforms).
-#[cfg(any())]
-#[gpui::test]
-async fn test_conflicted_cherry_pick(cx: &mut gpui::TestAppContext) {
-    init_test(cx);
-    cx.executor().allow_parking();
-
-    let root = TempTree::new(json!({
-        "project": {
-            "a.txt": "a",
-        },
-    }));
-    let root_path = root.path();
-
-    let work_dir = &root_path.join("project");
-    let repo = git_init(work_dir);
-    git_add("a.txt", &repo);
-    git_commit("init", &repo);
-
-    let project = Project::test(RealFs::new(None, cx.executor()), [root_path], cx).await;
-
-    let tree = project.read_with(cx, |project, cx| project.worktrees(cx).next().unwrap());
-    tree.flush_fs_events(cx).await;
-    project
-        .update(cx, |project, cx| project.git_scans_complete(cx))
-        .await;
-    cx.executor().run_until_parked();
-
-    let repository = project.read_with(cx, |project, cx| {
-        project.repositories(cx).values().next().unwrap().clone()
-    });
-
-    git_branch("other-branch", &repo);
-    git_checkout("other-branch", &repo);
-    std::fs::write(root_path.join("project/a.txt"), "A").unwrap();
-    git_add("a.txt", &repo);
-    git_commit("capitalize", &repo);
-    let commit = git_rev_parse("HEAD", &repo);
-    git_checkout("main", &repo);
-    std::fs::write(root_path.join("project/a.txt"), "b").unwrap();
-    git_add("a.txt", &repo);
-    git_commit("improve letter", &repo);
-    git_cherry_pick_expect_conflict(&commit, &repo);
-    std::fs::read_to_string(root_path.join("project/.git/CHERRY_PICK_HEAD"))
-        .expect("No CHERRY_PICK_HEAD");
-    pretty_assertions::assert_eq!(
-        git_status(&repo),
-        collections::HashMap::from_iter([("a.txt".to_owned(), GIT_STATUS_CONFLICTED.to_owned())])
-    );
-    tree.flush_fs_events(cx).await;
-    project
-        .update(cx, |project, cx| project.git_scans_complete(cx))
-        .await;
-    cx.executor().run_until_parked();
-    let conflicts = repository.update(cx, |repository, _| {
-        repository
-            .merge_conflicts
-            .iter()
-            .cloned()
-            .collect::<Vec<_>>()
-    });
-    pretty_assertions::assert_eq!(conflicts, [RepoPath::from("a.txt")]);
-
-    git_add("a.txt", &repo);
-    // Attempt to manually simulate what `git cherry-pick --continue` would do.
-    git_commit("whatevs", &repo);
-    std::fs::remove_file(root.path().join("project/.git/CHERRY_PICK_HEAD"))
-        .expect("Failed to remove CHERRY_PICK_HEAD");
-    pretty_assertions::assert_eq!(git_status(&repo), collections::HashMap::default());
-    tree.flush_fs_events(cx).await;
-    let conflicts = repository.update(cx, |repository, _| {
-        repository
-            .merge_conflicts
-            .iter()
-            .cloned()
-            .collect::<Vec<_>>()
-    });
-    pretty_assertions::assert_eq!(conflicts, []);
-}
 
 #[gpui::test]
 async fn test_update_gitignore(cx: &mut gpui::TestAppContext) {
@@ -18718,7 +18471,7 @@ async fn test_update_gitignore(cx: &mut gpui::TestAppContext) {
 // See: https://stackoverflow.com/questions/41365318/access-is-denied-when-renaming-folder
 // See: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information
 #[gpui::test]
-#[cfg_attr(target_os = "windows", ignore)]
+
 async fn test_rename_work_directory(cx: &mut gpui::TestAppContext) {
     init_test(cx);
     cx.executor().allow_parking();
@@ -18813,7 +18566,7 @@ async fn test_rename_work_directory(cx: &mut gpui::TestAppContext) {
 // See: https://stackoverflow.com/questions/41365318/access-is-denied-when-renaming-folder
 // See: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information
 #[gpui::test]
-#[cfg_attr(target_os = "windows", ignore)]
+
 async fn test_file_status(cx: &mut gpui::TestAppContext) {
     init_test(cx);
     cx.executor().allow_parking();
@@ -20362,9 +20115,6 @@ fn assert_entry_git_state(
     );
 }
 
-#[cfg(any())]
-const GIT_STATUS_CONFLICTED: &str = "UU";
-
 #[allow(clippy::disallowed_methods)]
 fn git_cmd(work_dir: &Path) -> Command {
     let mut cmd = Command::new("git");
@@ -20464,91 +20214,6 @@ fn git_reset(offset: usize, work_dir: &Path) {
         "git reset failed: {}",
         String::from_utf8_lossy(&output.stderr)
     );
-}
-
-#[cfg(target_os = "linux")]
-#[allow(clippy::disallowed_methods)]
-#[track_caller]
-fn git_branch(name: &str, work_dir: &Path) {
-    let output = git_cmd(work_dir)
-        .args(["branch", name])
-        .output()
-        .expect("Failed to run git branch");
-    assert!(
-        output.status.success(),
-        "git branch failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
-#[cfg(target_os = "linux")]
-#[allow(clippy::disallowed_methods)]
-#[track_caller]
-fn git_checkout(name: &str, work_dir: &Path) {
-    let output = git_cmd(work_dir)
-        .args(["checkout", name])
-        .output()
-        .expect("Failed to run git checkout");
-    assert!(
-        output.status.success(),
-        "git checkout failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-}
-
-#[cfg(any())]
-#[allow(clippy::disallowed_methods)]
-#[track_caller]
-fn git_rev_parse(rev: &str, work_dir: &Path) -> String {
-    let output = git_cmd(work_dir)
-        .args(["rev-parse", rev])
-        .output()
-        .expect("Failed to run git rev-parse");
-    assert!(
-        output.status.success(),
-        "git rev-parse failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    String::from_utf8(output.stdout).unwrap().trim().to_string()
-}
-
-#[cfg(any())]
-#[allow(clippy::disallowed_methods)]
-#[track_caller]
-fn git_cherry_pick_expect_conflict(commit: &str, work_dir: &Path) {
-    let output = git_cmd(work_dir)
-        .args(["cherry-pick", "--no-commit", commit])
-        .output()
-        .expect("Failed to run git cherry-pick");
-    assert!(
-        !output.status.success(),
-        "git cherry-pick unexpectedly succeeded"
-    );
-}
-
-#[cfg(any())]
-#[allow(clippy::disallowed_methods)]
-#[track_caller]
-fn git_status(work_dir: &Path) -> collections::HashMap<String, String> {
-    let output = git_cmd(work_dir)
-        .args(["status", "--porcelain=v1"])
-        .output()
-        .expect("Failed to run git status");
-    assert!(
-        output.status.success(),
-        "git status failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
-    let stdout = String::from_utf8(output.stdout).unwrap();
-    stdout
-        .lines()
-        .filter(|line| !line.is_empty())
-        .map(|line| {
-            let status = line[..2].to_string();
-            let path = line[3..].to_string();
-            (path, status)
-        })
-        .collect()
 }
 
 #[gpui::test]
@@ -21079,7 +20744,7 @@ async fn test_read_only_files_empty_setting(cx: &mut gpui::TestAppContext) {
 }
 
 #[gpui::test]
-#[cfg(not(windows))]
+
 async fn test_os_read_only_files_open_as_read_only(cx: &mut gpui::TestAppContext) {
     init_test(cx);
     cx.executor().allow_parking();

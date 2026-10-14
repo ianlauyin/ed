@@ -253,13 +253,9 @@ async fn stream_file_archive(
         AssetKind::TarGz => extract_tar_gz(destination_path, url, file_archive).await?,
         AssetKind::TarBz2 => extract_tar_bz2(destination_path, url, file_archive).await?,
         AssetKind::Gz => extract_gz(destination_path, url, file_archive).await?,
-        #[cfg(not(windows))]
+
         AssetKind::Zip => {
             util::archive::extract_seekable_zip(destination_path, file_archive).await?;
-        }
-        #[cfg(windows)]
-        AssetKind::Zip => {
-            util::archive::extract_zip(destination_path, file_archive).await?;
         }
     };
     Ok(())
@@ -430,7 +426,7 @@ mod tests {
                 std::fs::read(&binary_path).unwrap(),
                 b"#!/bin/sh\necho hello\n"
             );
-            #[cfg(unix)]
+
             {
                 use std::os::unix::fs::PermissionsExt;
                 let mode = std::fs::metadata(&binary_path)

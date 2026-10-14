@@ -72,7 +72,6 @@ impl Display for BaseKeymap {
 }
 
 impl BaseKeymap {
-    #[cfg(target_os = "macos")]
     pub const OPTIONS: [(&'static str, Self); 8] = [
         ("Zed (Default)", Self::Zed),
         ("VS Code", Self::VSCode),
@@ -84,19 +83,7 @@ impl BaseKeymap {
         ("Cursor", Self::Cursor),
     ];
 
-    #[cfg(not(target_os = "macos"))]
-    pub const OPTIONS: [(&'static str, Self); 7] = [
-        ("Zed (Default)", Self::Zed),
-        ("VS Code", Self::VSCode),
-        ("Atom", Self::Atom),
-        ("JetBrains", Self::JetBrains),
-        ("Sublime Text", Self::SublimeText),
-        ("Emacs (beta)", Self::Emacs),
-        ("Cursor", Self::Cursor),
-    ];
-
     pub fn asset_path(&self) -> Option<&'static str> {
-        #[cfg(target_os = "macos")]
         match self {
             BaseKeymap::JetBrains => Some("keymaps/macos/jetbrains.json"),
             BaseKeymap::SublimeText => Some("keymaps/macos/sublime_text.json"),
@@ -105,19 +92,6 @@ impl BaseKeymap {
             BaseKeymap::Emacs => Some("keymaps/macos/emacs.json"),
             BaseKeymap::Cursor => Some("keymaps/macos/cursor.json"),
             BaseKeymap::VSCode => Some("keymaps/macos/vscode.json"),
-            BaseKeymap::Zed => None,
-            BaseKeymap::None => None,
-        }
-
-        #[cfg(not(target_os = "macos"))]
-        match self {
-            BaseKeymap::JetBrains => Some("keymaps/linux/jetbrains.json"),
-            BaseKeymap::SublimeText => Some("keymaps/linux/sublime_text.json"),
-            BaseKeymap::Atom => Some("keymaps/linux/atom.json"),
-            BaseKeymap::Emacs => Some("keymaps/linux/emacs.json"),
-            BaseKeymap::Cursor => Some("keymaps/linux/cursor.json"),
-            BaseKeymap::TextMate => None,
-            BaseKeymap::VSCode => Some("keymaps/linux/vscode.json"),
             BaseKeymap::Zed => None,
             BaseKeymap::None => None,
         }

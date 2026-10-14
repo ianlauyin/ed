@@ -1515,29 +1515,6 @@ impl Editor {
         window.invalidate_character_coordinates();
 
         // Copy selections to primary selection buffer
-        #[cfg(any(target_os = "linux", target_os = "freebsd"))]
-        if local {
-            let selections = self
-                .selections
-                .all::<MultiBufferOffset>(&self.display_snapshot(cx));
-            let buffer_handle = self.buffer.read(cx).read(cx);
-
-            let mut text = String::new();
-            for (index, selection) in selections.iter().enumerate() {
-                let text_for_selection = buffer_handle
-                    .text_for_range(selection.start..selection.end)
-                    .collect::<String>();
-
-                text.push_str(&text_for_selection);
-                if index != selections.len() - 1 {
-                    text.push('\n');
-                }
-            }
-
-            if !text.is_empty() {
-                cx.write_to_primary(ClipboardItem::new_string(text));
-            }
-        }
 
         let selection_anchors = self.selections.disjoint_anchors_arc();
 

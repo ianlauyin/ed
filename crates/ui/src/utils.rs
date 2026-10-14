@@ -43,9 +43,9 @@ pub fn buffer_text_style(cx: &App) -> gpui::TextStyle {
 
 /// Returns the platform-appropriate label for the "reveal in file manager" action.
 pub fn reveal_in_file_manager_label(is_remote: bool) -> &'static str {
-    if cfg!(target_os = "macos") && !is_remote {
+    if true && !is_remote {
         "Reveal in Finder"
-    } else if cfg!(target_os = "windows") && !is_remote {
+    } else if false && !is_remote {
         "Reveal in File Explorer"
     } else {
         "Reveal in File Manager"

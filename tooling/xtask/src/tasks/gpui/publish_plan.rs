@@ -4,7 +4,7 @@ use anyhow::{Context as _, Result, bail, ensure};
 use guppy::graph::{DependencyDirection, ExternalSource, PackageGraph, PackageMetadata};
 use url::Url;
 
-use crate::tasks::{gpui::GpuiArgs, workflows::GitSha};
+use crate::tasks::gpui::{GitSha, GpuiArgs};
 
 pub enum Repository {
     Workspace,

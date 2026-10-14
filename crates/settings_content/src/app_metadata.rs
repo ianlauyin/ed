@@ -17,12 +17,6 @@ const ZED_DOCS_URL: &str = "https://zed.dev/docs";
 /// Application identity used for desktop integration.
 pub const APP_ID: &str = "dev.zed.Zed";
 
-/// Application identifier used by the Windows CLI and instance endpoint.
-#[cfg(target_os = "windows")]
-pub fn app_identifier() -> &'static str {
-    "Zed-Editor-Stable"
-}
-
 /// The Git commit SHA that Zed was built at.
 #[derive(Clone, Eq, Debug, PartialEq)]
 pub struct AppCommitSha(String);

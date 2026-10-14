@@ -1544,31 +1544,6 @@ async fn test_adding_directory_via_file(cx: &mut gpui::TestAppContext) {
     );
 
     // Test filename ends with "\"
-    #[cfg(target_os = "windows")]
-    {
-        select_path(&panel, "root1", cx);
-        panel.update_in(cx, |panel, window, cx| panel.new_file(&NewFile, window, cx));
-        let confirm = panel.update_in(cx, |panel, window, cx| {
-            // If we want to create a subdirectory, there should be no prefix slash.
-            panel
-                .filename_editor
-                .update(cx, |editor, cx| editor.set_text("new_dir_3\\", window, cx));
-            panel.confirm_edit(true, window, cx).unwrap()
-        });
-        confirm.await.unwrap();
-        cx.run_until_parked();
-        assert_eq!(
-            visible_entries_as_strings(&panel, 0..10, cx),
-            &[
-                "v root1",
-                "    > .git",
-                "    v new dir 2",
-                "    v new_dir",
-                "    v new_dir_3  <== selected",
-                "      .dockerignore",
-            ]
-        );
-    }
 }
 
 #[gpui::test]
@@ -3090,7 +3065,7 @@ async fn test_create_duplicate_items(cx: &mut gpui::TestAppContext) {
 // when it triggers the lsp store it converts `/src/test/first copy.txt` into an uri
 // but it fails with message `"/src\\test\\first copy.txt" is not parseable as an URI`
 #[gpui::test]
-#[cfg_attr(target_os = "windows", ignore)]
+
 async fn test_create_duplicate_items_and_check_history(cx: &mut gpui::TestAppContext) {
     init_test_with_editor(cx);
 
@@ -3356,7 +3331,7 @@ async fn test_create_duplicate_items_and_check_history(cx: &mut gpui::TestAppCon
 // when it triggers the lsp store it converts `/src/test/first.txt` into an uri
 // but it fails with message `"/src\\test\\first.txt" is not parseable as an URI`
 #[gpui::test]
-#[cfg_attr(target_os = "windows", ignore)]
+
 async fn test_rename_item_and_check_history(cx: &mut gpui::TestAppContext) {
     init_test_with_editor(cx);
 
@@ -4725,7 +4700,7 @@ async fn test_new_file_move(cx: &mut gpui::TestAppContext) {
 // See: https://stackoverflow.com/questions/41365318/access-is-denied-when-renaming-folder
 // See: https://learn.microsoft.com/en-us/windows-hardware/drivers/ddi/ntifs/ns-ntifs-_file_rename_information
 #[gpui::test]
-#[cfg_attr(target_os = "windows", ignore)]
+
 async fn test_rename_root_of_worktree(cx: &mut gpui::TestAppContext) {
     init_test_with_editor(cx);
 
@@ -4892,7 +4867,6 @@ async fn test_rename_with_hide_root(cx: &mut gpui::TestAppContext) {
             "Rename should be blocked on Windows even with multiple worktrees"
         );
 
-        #[cfg(not(target_os = "windows"))]
         {
             assert!(
                 panel.read_with(cx, |panel, _| panel.state.edit_state.is_some()),
@@ -5893,8 +5867,8 @@ async fn test_range_selection_drag_moves_entire_folded_directories(cx: &mut Test
         extend_range_selection_to(&panel, range_selection, target_path, cx);
 
         cx.simulate_modifiers_change(Modifiers {
-            alt: copy && cfg!(target_os = "macos"),
-            control: copy && cfg!(not(target_os = "macos")),
+            alt: copy && true,
+            control: copy && false,
             ..Modifiers::none()
         });
         drag_selection_to(&panel, "project", false, cx);
@@ -9965,75 +9939,6 @@ async fn test_context_menu_new_file_in_empty_hidden_root(cx: &mut gpui::TestAppC
     );
 }
 
-#[cfg(windows)]
-#[gpui::test]
-async fn test_create_entry_with_trailing_dot_windows(cx: &mut gpui::TestAppContext) {
-    init_test(cx);
-
-    let fs = FakeFs::new(cx.executor());
-    fs.insert_tree(
-        path!("/root"),
-        json!({
-            "dir1": {
-                "file1.txt": "",
-            },
-        }),
-    )
-    .await;
-
-    let project = Project::test(fs.clone(), [path!("/root").as_ref()], cx).await;
-    let window = cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
-    let workspace = window
-        .read_with(cx, |mw, _| mw.workspace().clone())
-        .unwrap();
-    let cx = &mut VisualTestContext::from_window(window.into(), cx);
-
-    let panel = workspace.update_in(cx, |workspace, window, cx| {
-        let panel = ProjectPanel::new(workspace, window, cx);
-        workspace.add_panel(panel.clone(), window, cx);
-        panel
-    });
-    cx.run_until_parked();
-
-    #[rustfmt::skip]
-    assert_eq!(
-        visible_entries_as_strings(&panel, 0..20, cx),
-        &[
-            "v root",
-            "    > dir1",
-        ],
-        "Initial state with nothing selected"
-    );
-
-    panel.update_in(cx, |panel, window, cx| {
-        panel.new_file(&NewFile, window, cx);
-    });
-    cx.run_until_parked();
-    panel.update_in(cx, |panel, window, cx| {
-        assert!(panel.filename_editor.read(cx).is_focused(window));
-    });
-    panel
-        .update_in(cx, |panel, window, cx| {
-            panel
-                .filename_editor
-                .update(cx, |editor, cx| editor.set_text("foo.", window, cx));
-            panel.confirm_edit(true, window, cx).unwrap()
-        })
-        .await
-        .unwrap();
-    cx.run_until_parked();
-    #[rustfmt::skip]
-    assert_eq!(
-        visible_entries_as_strings(&panel, 0..20, cx),
-        &[
-            "v root",
-            "    > dir1",
-            "      foo  <== selected  <== marked",
-        ],
-        "A new file is created under the root directory without the trailing dot"
-    );
-}
-
 #[gpui::test]
 async fn test_highlight_entry_for_external_drag(cx: &mut gpui::TestAppContext) {
     init_test(cx);
@@ -11483,9 +11388,7 @@ fn visible_entries_as_strings(
             } else {
                 "  "
             };
-            #[cfg(windows)]
-            let filename = details.filename.replace("\\", "/");
-            #[cfg(not(windows))]
+
             let filename = details.filename;
             let name = if details.is_editing {
                 format!("[EDITOR: '{}']", filename)

@@ -1,19 +1,18 @@
 #[cfg(test)]
 extern crate self as util;
 
-#[cfg(not(target_family = "wasm"))]
 pub mod archive;
-#[cfg(not(target_family = "wasm"))]
+
 pub mod command;
-#[cfg(not(target_family = "wasm"))]
+
 pub mod fs;
-#[cfg(not(target_family = "wasm"))]
+
 pub mod process;
-#[cfg(not(target_family = "wasm"))]
+
 pub mod shell;
-#[cfg(not(target_family = "wasm"))]
+
 pub mod shell_builder;
-#[cfg(not(target_family = "wasm"))]
+
 pub mod shell_env;
 
 pub mod disambiguate;
@@ -48,7 +47,6 @@ pub use path::rel_path;
 #[cfg(any(test, feature = "test-support"))]
 pub use util_macros::{line_endings, path, uri};
 
-#[cfg(not(target_family = "wasm"))]
 pub use self::shell::{
     get_default_system_shell, get_default_system_shell_preferring_bash, get_system_shell,
 };
@@ -220,7 +218,7 @@ where
 /// This function checks if the current process is running with root privileges
 /// and terminates the program with an error message unless explicitly allowed via the
 /// `ZED_ALLOW_ROOT` environment variable.
-#[cfg(unix)]
+
 pub fn prevent_root_execution() {
     let is_root = nix::unistd::geteuid().is_root();
     let allow_root = std::env::var("ZED_ALLOW_ROOT").is_ok_and(|val| val == "true");
@@ -240,18 +238,14 @@ Error: Running Zed as root or via sudo is unsupported.
 /// Raises the soft limit on open file descriptors without changing the hard limit.
 ///
 /// Call during startup, before spawning children that will inherit the limit.
-#[cfg(unix)]
+
 pub fn increase_open_file_limit() -> Result<()> {
     use anyhow::Context as _;
     use nix::sys::resource::{Resource::RLIMIT_NOFILE, getrlimit, setrlimit};
 
     let (soft_limit, hard_limit) = getrlimit(RLIMIT_NOFILE).context("getrlimit(RLIMIT_NOFILE)")?;
     // These are startup targets, not OS ceilings. Preserve higher inherited limits.
-    let target = if cfg!(target_os = "macos") {
-        10_240
-    } else {
-        65_536
-    };
+    let target = { 10_240 };
     let mut requested_limit = hard_limit.min(target);
 
     while requested_limit > soft_limit {
@@ -270,7 +264,6 @@ pub fn increase_open_file_limit() -> Result<()> {
     Ok(())
 }
 
-#[cfg(unix)]
 fn load_shell_from_passwd() -> Result<()> {
     let buflen = match unsafe { libc::sysconf(libc::_SC_GETPW_R_SIZE_MAX) } {
         n if n < 0 => 1024,
@@ -326,13 +319,13 @@ fn load_shell_from_passwd() -> Result<()> {
 }
 
 /// Returns a shell escaped path for the current zed executable
-#[cfg(not(target_family = "wasm"))]
+
 pub fn get_shell_safe_zed_path(shell_kind: shell::ShellKind) -> anyhow::Result<String> {
     use anyhow::Context as _;
     use paths::PathExt;
     let mut zed_path =
         std::env::current_exe().context("Failed to determine current zed executable path.")?;
-    if cfg!(target_os = "linux")
+    if false
         && !zed_path.is_file()
         && let Some(truncated) = zed_path
             .clone()
@@ -359,18 +352,10 @@ pub fn get_zed_cli_path() -> Result<PathBuf> {
         .parent()
         .context("Failed to determine parent directory of zed executable path.")?;
 
-    let possible_locations: &[&str] = if cfg!(target_os = "macos") {
+    let possible_locations: &[&str] = {
         // On macOS, the zed executable and zed-cli are inside the app bundle,
         // so here ./cli is for both installed and development builds.
         &["./cli"]
-    } else if cfg!(target_os = "windows") {
-        // bin/zed.exe is for installed builds, ./cli.exe is for development builds.
-        &["bin/zed.exe", "./cli.exe"]
-    } else if cfg!(target_os = "linux") || cfg!(target_os = "freebsd") {
-        // bin is the standard, ./cli is for the target directory in development builds.
-        &["../bin/zed", "./cli"]
-    } else {
-        anyhow::bail!("unsupported platform for determining zed-cli path");
     };
 
     possible_locations
@@ -390,7 +375,6 @@ pub fn get_zed_cli_path() -> Result<PathBuf> {
         })
 }
 
-#[cfg(unix)]
 pub async fn load_login_shell_environment() -> Result<()> {
     use anyhow::Context as _;
 
@@ -433,7 +417,7 @@ pub fn set_pre_exec_to_start_new_session(
 ) -> &mut std::process::Command {
     // safety: code in pre_exec should be signal safe.
     // https://man7.org/linux/man-pages/man7/signal-safety.7.html
-    #[cfg(unix)]
+
     unsafe {
         use std::os::unix::process::CommandExt;
         command.pre_exec(|| {

@@ -555,22 +555,6 @@ mod tests {
         assert!(opt_in_server.is_opt_in_for(&julia));
         assert!(!opt_in_server.is_opt_in_for(&markdown));
     }
-
-    #[test]
-    #[cfg(target_os = "windows")]
-    fn test_deserialize_manifest_with_windows_separators() {
-        use indoc::indoc;
-
-        let content = indoc! {r#"
-            id = "test-manifest"
-            name = "Test Manifest"
-            version = "0.0.1"
-            schema_version = 0
-            languages = ["foo\\bar"]
-        "#};
-        let manifest: ExtensionManifest = toml::from_str(&content).expect("manifest should parse");
-        assert_eq!(manifest.languages, vec![rel_path_buf("foo/bar")]);
-    }
 }
 
 /// Requirements for the manifest format of the next schema version.

@@ -386,13 +386,6 @@ mod tests {
 
     #[gpui::test]
     fn test_prepare_pending_bindings_preserves_keybinding_keystrokes(cx: &mut App) {
-        #[cfg(target_os = "windows")]
-        let keystroke = KeybindingKeystroke::new(
-            Keystroke::parse("ctrl-$").expect("valid keystroke"),
-            gpui::Modifiers::control_shift(),
-            "4".to_owned(),
-        );
-        #[cfg(not(target_os = "windows"))]
         let keystroke = KeybindingKeystroke::from_keystroke(
             Keystroke::parse("ctrl-x").expect("valid keystroke"),
         );

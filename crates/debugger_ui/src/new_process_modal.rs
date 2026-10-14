@@ -862,14 +862,7 @@ impl ConfigureMode {
             Some(PathBuf::from(cwd_text))
         };
 
-        if cfg!(windows) {
-            return task::LaunchRequest {
-                program: self.program.read(cx).text(cx),
-                cwd,
-                args: Default::default(),
-                env: Default::default(),
-            };
-        }
+        {}
         let command = self.program.read(cx).text(cx);
         let mut args = ShellKind::Posix
             .split(&command)

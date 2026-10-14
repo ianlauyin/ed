@@ -26,8 +26,5 @@ zeroize.workspace = true
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 which.workspace = true
 
-[target.'cfg(target_os = "windows")'.dependencies]
-windows = { workspace = true, features = ["Win32_Security_Cryptography"] }
-
 [dev-dependencies]
 gpui = { workspace = true, features = ["test-support"] }
