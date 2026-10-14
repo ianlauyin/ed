@@ -7,9 +7,8 @@ not depend on wasmtime.
 
 ## Behaviour
 
-- Languages, grammars, themes, icon themes, language servers, debug adapters,
-  context servers, and LLM providers come only from built-in code and user
-  settings/files.
+- Languages, grammars, themes, icon themes, language servers, and debug adapters
+  come only from built-in code and user settings/files.
 - Tree-sitter grammars are native only (`LanguageRegistry::register_native_grammars`);
   WASM grammars cannot be loaded, and tree-sitter is built without its `wasm` feature.
 - The remote server does not sync or install extensions.

@@ -2,7 +2,6 @@ use std::ops::Range;
 use std::time::{Duration, Instant};
 
 use collections::HashMap;
-use feature_flags::{DiffReviewFeatureFlag, FeatureFlagAppExt as _};
 use gpui::{
     AnyElement, App, AvailableSpace, ClickEvent, Context, DispatchPhase, Element, MouseButton,
     MouseClickEvent, MouseDownEvent, MouseMoveEvent, MousePressureEvent, MouseUpEvent,
@@ -10,7 +9,7 @@ use gpui::{
     deferred, point, px,
 };
 use multi_buffer::MultiBufferRow;
-use project::DisableAiSettings;
+
 use settings::Settings;
 use sum_tree::Bias;
 use text::SelectionGoal;
@@ -112,55 +111,8 @@ impl EditorElement {
             }
         }
 
-        // Handle diff review indicator when gutter is hovered in diff mode with AI enabled
-        let show_diff_review = editor.show_diff_review_button()
-            && cx.has_flag::<DiffReviewFeatureFlag>()
-            && !DisableAiSettings::is_ai_disabled_for_buffer(
-                editor.buffer.read(cx).as_singleton().as_ref(),
-                cx,
-            );
-
-        let diff_review_indicator = if gutter_hovered && show_diff_review {
-            let is_visible = editor
-                .gutter_diff_review_indicator
-                .0
-                .is_some_and(|indicator| indicator.is_active);
-
-            if !is_visible {
-                editor
-                    .gutter_diff_review_indicator
-                    .1
-                    .get_or_insert_with(|| {
-                        cx.spawn(async move |this, cx| {
-                            cx.background_executor()
-                                .timer(Duration::from_millis(200))
-                                .await;
-
-                            this.update(cx, |this, cx| {
-                                if let Some(indicator) =
-                                    this.gutter_diff_review_indicator.0.as_mut()
-                                {
-                                    indicator.is_active = true;
-                                    cx.notify();
-                                }
-                            })
-                            .ok();
-                        })
-                    });
-            }
-
-            let anchor = position_map
-                .snapshot
-                .display_point_to_anchor(valid_point, Bias::Left);
-            Some(PhantomDiffReviewIndicator {
-                start: anchor,
-                end: anchor,
-                is_active: is_visible,
-            })
-        } else {
-            editor.gutter_diff_review_indicator.1 = None;
-            None
-        };
+        editor.gutter_diff_review_indicator.1 = None;
+        let diff_review_indicator: Option<PhantomDiffReviewIndicator> = None;
 
         if diff_review_indicator != editor.gutter_diff_review_indicator.0 {
             editor.gutter_diff_review_indicator.0 = diff_review_indicator;

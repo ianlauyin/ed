@@ -2,7 +2,6 @@ use super::*;
 use crate::{
     JoinLines,
     code_context_menus::CodeContextMenu,
-    edit_prediction_tests::FakeEditPredictionDelegate,
     element::{StickyHeader, header_jump_data},
     linked_editing_ranges::LinkedEditingRanges,
     mouse_context_menu::MenuPosition,
@@ -15304,104 +15303,6 @@ async fn test_undo_format_scrolls_to_last_edit_pos(cx: &mut TestAppContext) {
         linXˇe 3
         line 4
         line 5
-    "});
-}
-
-#[gpui::test]
-async fn test_undo_edit_prediction_scrolls_to_edit_pos(cx: &mut TestAppContext) {
-    init_test(cx, |_| {});
-
-    let mut cx = EditorTestContext::new(cx).await;
-
-    let provider = cx.new(|_| FakeEditPredictionDelegate::default());
-    cx.update_editor(|editor, window, cx| {
-        editor.set_edit_prediction_provider(
-            Some(provider.clone()),
-            EditPredictionRequestTrigger::EditorCreated,
-            window,
-            cx,
-        );
-    });
-
-    cx.set_state(indoc! {"
-        line 1
-        line 2
-        linˇe 3
-        line 4
-        line 5
-        line 6
-        line 7
-        line 8
-        line 9
-        line 10
-    "});
-
-    let snapshot = cx.buffer_snapshot();
-    let edit_position = snapshot.anchor_after(Point::new(2, 4));
-
-    cx.update(|_, cx| {
-        provider.update(cx, |provider, _| {
-            provider.set_edit_prediction(Some(edit_prediction_types::EditPrediction::Local {
-                id: None,
-                edits: vec![(edit_position..edit_position, "X".into())],
-                cursor_position: None,
-                edit_preview: None,
-            }))
-        })
-    });
-
-    cx.update_editor(|editor, window, cx| editor.update_visible_edit_prediction(window, cx));
-    cx.update_editor(|editor, window, cx| {
-        editor.accept_edit_prediction(&crate::AcceptEditPrediction, window, cx)
-    });
-
-    cx.assert_editor_state(indoc! {"
-        line 1
-        line 2
-        lineXˇ 3
-        line 4
-        line 5
-        line 6
-        line 7
-        line 8
-        line 9
-        line 10
-    "});
-
-    cx.update_editor(|editor, window, cx| {
-        editor.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
-            s.select_ranges([Point::new(9, 2)..Point::new(9, 2)]);
-        });
-    });
-
-    cx.assert_editor_state(indoc! {"
-        line 1
-        line 2
-        lineX 3
-        line 4
-        line 5
-        line 6
-        line 7
-        line 8
-        line 9
-        liˇne 10
-    "});
-
-    cx.update_editor(|editor, window, cx| {
-        editor.undo(&Default::default(), window, cx);
-    });
-
-    cx.assert_editor_state(indoc! {"
-        line 1
-        line 2
-        lineˇ 3
-        line 4
-        line 5
-        line 6
-        line 7
-        line 8
-        line 9
-        line 10
     "});
 }
 
@@ -36387,74 +36288,6 @@ async fn test_edit_prediction_text_with_deletions(cx: &mut TestAppContext) {
     .await;
 }
 
-async fn assert_highlighted_edits(
-    text: &str,
-    edits: Vec<(Range<Point>, String)>,
-    include_deletions: bool,
-    cx: &mut TestAppContext,
-    assertion_fn: &dyn Fn(HighlightedText, &App),
-) {
-    let window = cx.add_window(|window, cx| {
-        let buffer = MultiBuffer::build_simple(text, cx);
-        Editor::new(EditorMode::full(), buffer, None, window, cx)
-    });
-    let cx = &mut VisualTestContext::from_window(*window, cx);
-
-    let (buffer, snapshot) = window
-        .update(cx, |editor, _window, cx| {
-            (
-                editor.buffer().clone(),
-                editor.buffer().read(cx).snapshot(cx),
-            )
-        })
-        .unwrap();
-
-    let edits = edits
-        .into_iter()
-        .map(|(range, edit)| {
-            (
-                snapshot.anchor_after(range.start)..snapshot.anchor_before(range.end),
-                edit,
-            )
-        })
-        .collect::<Vec<_>>();
-
-    let text_anchor_edits = edits
-        .clone()
-        .into_iter()
-        .map(|(range, edit)| {
-            (
-                range.start.expect_text_anchor()..range.end.expect_text_anchor(),
-                edit.into(),
-            )
-        })
-        .collect::<Vec<_>>();
-
-    let edit_preview = window
-        .update(cx, |_, _window, cx| {
-            buffer
-                .read(cx)
-                .as_singleton()
-                .unwrap()
-                .read(cx)
-                .preview_edits(text_anchor_edits.into(), cx)
-        })
-        .unwrap()
-        .await;
-
-    cx.update(|_window, cx| {
-        let highlighted_edits = edit_prediction_edit_text(
-            snapshot.as_singleton().unwrap(),
-            &edits,
-            &edit_preview,
-            include_deletions,
-            &snapshot,
-            cx,
-        );
-        assertion_fn(highlighted_edits, cx)
-    });
-}
-
 #[track_caller]
 fn assert_breakpoint(
     breakpoints: &BTreeMap<Arc<Path>, Vec<SourceBreakpoint>>,
@@ -46476,15 +46309,6 @@ async fn test_diff_review_indicator_created_on_gutter_hover(cx: &mut TestAppCont
 async fn test_diff_review_button_hidden_when_ai_disabled(cx: &mut TestAppContext) {
     init_test(cx, |_| {});
 
-    // Register DisableAiSettings and set disable_ai to true
-    cx.update(|cx| {
-        project::DisableAiSettings::register(cx);
-        project::DisableAiSettings::override_global(
-            project::DisableAiSettings { disable_ai: true },
-            cx,
-        );
-    });
-
     let fs = FakeFs::new(cx.executor());
     fs.insert_tree(path!("/root"), json!({ "file.txt": "hello\nworld\n" }))
         .await;
@@ -46515,80 +46339,11 @@ async fn test_diff_review_button_hidden_when_ai_disabled(cx: &mut TestAppContext
         editor.set_show_diff_review_button(true, cx);
     });
 
-    // Verify AI is disabled
-    cx.read(|cx| {
-        assert!(
-            project::DisableAiSettings::get_global(cx).disable_ai,
-            "AI should be disabled"
-        );
-    });
-
-    // The indicator should not be created when AI is disabled
-    // (The mouse_moved handler checks DisableAiSettings before creating the indicator)
+    // The AI diff review indicator is permanently unavailable.
     editor.update(cx, |editor, _cx| {
         assert!(
             editor.gutter_diff_review_indicator.0.is_none(),
             "Indicator should be None when AI is disabled"
-        );
-    });
-}
-
-#[gpui::test]
-async fn test_diff_review_button_shown_when_ai_enabled(cx: &mut TestAppContext) {
-    init_test(cx, |_| {});
-
-    // Register DisableAiSettings and set disable_ai to false
-    cx.update(|cx| {
-        project::DisableAiSettings::register(cx);
-        project::DisableAiSettings::override_global(
-            project::DisableAiSettings { disable_ai: false },
-            cx,
-        );
-    });
-
-    let fs = FakeFs::new(cx.executor());
-    fs.insert_tree(path!("/root"), json!({ "file.txt": "hello\nworld\n" }))
-        .await;
-
-    let project = Project::test(fs, [path!("/root").as_ref()], cx).await;
-    let window = cx.add_window(|window, cx| MultiWorkspace::test_new(project.clone(), window, cx));
-    let workspace = window
-        .read_with(cx, |mw, _| mw.workspace().clone())
-        .unwrap();
-    let cx = &mut VisualTestContext::from_window(*window, cx);
-
-    let editor = workspace
-        .update_in(cx, |workspace, window, cx| {
-            workspace.open_abs_path(
-                PathBuf::from(path!("/root/file.txt")),
-                OpenOptions::default(),
-                window,
-                cx,
-            )
-        })
-        .await
-        .unwrap()
-        .downcast::<Editor>()
-        .unwrap();
-
-    // Enable diff review button mode
-    editor.update(cx, |editor, cx| {
-        editor.set_show_diff_review_button(true, cx);
-    });
-
-    // Verify AI is enabled
-    cx.read(|cx| {
-        assert!(
-            !project::DisableAiSettings::get_global(cx).disable_ai,
-            "AI should be enabled"
-        );
-    });
-
-    // The show_diff_review_button flag should be true
-    editor.update(cx, |editor, _cx| {
-        assert!(
-            editor.show_diff_review_button(),
-            "show_diff_review_button should be true"
         );
     });
 }
