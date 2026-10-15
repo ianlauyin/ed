@@ -5,3 +5,6 @@
   extensions, are recognized automatically.
 - Shell commands and `RUN` heredoc bodies use Bash syntax highlighting.
 - Dockerfile support does not register a language server or require external tools.
+- Jupyter notebooks and integrated REPL execution are removed, including kernel
+  management, remote kernel launching, execution controls, settings, and shortcuts.
+- Python source editing remains supported. `.ipynb` files open as ordinary text.

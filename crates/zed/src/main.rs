@@ -160,13 +160,6 @@ fn main() {
 
     let args = Args::parse();
 
-    // `zed --askpass` Makes zed operate in nc/netcat mode for use with askpass
-
-    if let Some(socket) = &args.askpass {
-        askpass::main(socket);
-        return;
-    }
-
     // `zed --crash-handler` Makes zed operate in minidump crash handler mode
     if let Some(socket) = &args.crash_handler {
         crashes::crash_server(socket.as_path(), paths::logs_dir().clone());
@@ -476,14 +469,12 @@ fn main() {
         command_palette::init(cx);
 
         snippet_provider::init(cx);
-        repl::init(app_state.fs.clone(), cx);
         recent_projects::init(cx);
 
         load_embedded_fonts(cx);
 
         editor::init(cx);
         image_viewer::init(cx);
-        repl::notebook::init(cx);
         diagnostics::init(cx);
 
         workspace::init(app_state.clone(), cx);
@@ -1239,12 +1230,6 @@ struct Args {
     /// process communicating over a socket.
     #[arg(long, hide = true)]
     crash_handler: Option<PathBuf>,
-
-    /// Used for SSH/Git password authentication, to remove the need for netcat as a dependency,
-    /// by having Zed act like netcat communicating over a Unix socket.
-    #[arg(long)]
-    #[arg(hide = true)]
-    askpass: Option<String>,
 
     #[arg(long, hide = true)]
     dump_all_actions: bool,

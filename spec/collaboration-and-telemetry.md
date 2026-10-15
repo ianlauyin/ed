@@ -30,7 +30,7 @@ unusable binary fails the connection with an error naming the required path.
 SSH never downloads, builds, uploads, or installs a remote server. WSL retains
 its remote-server installer, independently of any application updater.
 
-Feature flags and local flag overrides are removed. Notebooks are always enabled.
+Feature flags and local flag overrides are removed.
 Diff-review gutter controls and intentional panic/crash
 actions are disabled and cannot be enabled through settings or environment variables.
 

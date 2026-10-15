@@ -1,4 +1,3 @@
-use git_ui_core::askpass_modal::AskPassModal;
 pub(crate) use git_ui_core::notifications::{open_output, show_error_toast};
 
 use crate::commit_context_menu::{
@@ -18,7 +17,6 @@ use crate::{
     git_panel_settings::GitPanelSettings, git_status_icon, repository_selector::RepositorySelector,
 };
 use anyhow::Context as _;
-use askpass::AskPassDelegate;
 use collections::{BTreeMap, HashMap, HashSet};
 use db::kvp::KeyValueStore;
 use editor::{Editor, EditorElement, EditorMode, MultiBuffer, MultiBufferOffset, SizingBehavior};
@@ -3832,7 +3830,6 @@ impl GitPanel {
             return;
         }
 
-        let askpass = self.askpass_delegate("git commit", window, cx);
         let commit_message = self.custom_or_suggested_commit_message(window, cx);
 
         let Some(message) = commit_message else {
@@ -3846,7 +3843,7 @@ impl GitPanel {
         let task = if self.has_staged_changes() {
             // Repository serializes all git operations, so we can just send a commit immediately
             let commit_task = active_repository.update(cx, |repo, cx| {
-                repo.commit(message.into(), None, options, askpass, cx)
+                repo.commit(message.into(), None, options, cx)
             });
             cx.background_spawn(async move { commit_task.await? })
         } else {
@@ -3866,7 +3863,7 @@ impl GitPanel {
             cx.spawn(async move |_, cx| {
                 stage_task.await?;
                 let commit_task = active_repository.update(cx, |repo, cx| {
-                    repo.commit(message.into(), None, options, askpass, cx)
+                    repo.commit(message.into(), None, options, cx)
                 });
                 commit_task.await?
             })
@@ -4162,7 +4159,6 @@ impl GitPanel {
             return;
         }
 
-        let askpass = self.askpass_delegate("git fetch", window, cx);
         let this = cx.weak_entity();
 
         let fetch_options = if is_fetch_all {
@@ -4180,9 +4176,7 @@ impl GitPanel {
                 let Some(fetch_options) = fetch_options.await else {
                     return Ok(());
                 };
-                let fetch = repo.update(cx, |repo, cx| {
-                    repo.fetch(fetch_options.clone(), askpass, cx)
-                });
+                let fetch = repo.update(cx, |repo, cx| repo.fetch(fetch_options.clone(), cx));
 
                 let remote_message = fetch.await?;
                 this.update(cx, |this, cx| {
@@ -4334,17 +4328,13 @@ impl GitPanel {
                 }
             };
 
-            let askpass = this.update_in(cx, |this, window, cx| {
-                this.askpass_delegate(format!("git pull {}", remote.name), window, cx)
-            })?;
-
             let branch_name = branch
                 .upstream
                 .is_none()
                 .then(|| branch.name().to_owned().into());
 
             let pull = repo.update(cx, |repo, cx| {
-                repo.pull(branch_name, remote.name.clone(), rebase, askpass, cx)
+                repo.pull(branch_name, remote.name.clone(), rebase, cx)
             });
 
             let remote_message = pull.await?;
@@ -4424,10 +4414,6 @@ impl GitPanel {
                 }
             };
 
-            let askpass_delegate = this.update_in(cx, |this, window, cx| {
-                this.askpass_delegate(format!("git push {}", remote.name), window, cx)
-            })?;
-
             let push = repo.update(cx, |repo, cx| {
                 repo.push(
                     branch.name().to_owned().into(),
@@ -4441,7 +4427,6 @@ impl GitPanel {
                         .into(),
                     remote.name.clone(),
                     options,
-                    askpass_delegate,
                     cx,
                 )
             });
@@ -4551,38 +4536,6 @@ impl GitPanel {
                 panel.show_error_toast("create pull request", err, cx);
             });
         }
-    }
-
-    fn askpass_delegate(
-        &self,
-        operation: impl Into<SharedString>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> AskPassDelegate {
-        let workspace = self.workspace.clone();
-        let operation = operation.into();
-        let window = window.window_handle();
-        AskPassDelegate::new_with_cancellation(
-            &mut cx.to_async(),
-            move |prompt, tx, cancellation, cx| {
-                window
-                    .update(cx, |_, window, cx| {
-                        workspace.update(cx, |workspace, cx| {
-                            workspace.toggle_modal(window, cx, |window, cx| {
-                                AskPassModal::new(
-                                    operation.clone(),
-                                    prompt.into(),
-                                    tx,
-                                    cancellation,
-                                    window,
-                                    cx,
-                                )
-                            });
-                        })
-                    })
-                    .ok();
-            },
-        )
     }
 
     fn can_push_and_pull(&self, cx: &App) -> bool {

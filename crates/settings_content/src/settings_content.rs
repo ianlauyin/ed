@@ -221,8 +221,6 @@ pub struct SettingsContent {
     /// The settings for the markdown preview.
     pub markdown_preview: Option<MarkdownPreviewSettingsContent>,
 
-    pub repl: Option<ReplSettingsContent>,
-
     /// Determines when the mouse cursor should be hidden in response to
     /// keyboard input. Applies globally across all input surfaces (editors,
     /// terminals, palettes, etc.).
@@ -311,7 +309,7 @@ fallible_options::flattened_deserialize!(SettingsContent {
         call_hierarchy, command_palette, file_finder, git_panel, tabs, tab_bar, tab_switcher, status_bar, preview_tabs,
          base_keymap, diagnostics,
         git,
-        global_lsp_settings, image_viewer, markdown_preview, repl, hide_mouse,
+        global_lsp_settings, image_viewer, markdown_preview, hide_mouse,
         log, line_indicator_format,   outline_panel, project_panel,
         node, proxy, reduce_motion, session, terminal,
         title_bar, which_key, modeline_lines,
@@ -944,8 +942,7 @@ pub struct MarkdownPreviewSettingsContent {
     /// Falls back to the main editor theme if unset.
     pub theme: Option<ThemeSelection>,
     /// The weight of headings (H1 through H6) in the markdown preview, in CSS
-    /// units from 100 to 900. Also applies to rendered Markdown cells in
-    /// notebooks, which share the preview typography.
+    /// units from 100 to 900.
     ///
     /// Default: 600
     pub heading_font_weight: Option<FontWeightContent>,
@@ -1054,36 +1051,6 @@ pub struct SshPortForwardOption {
     pub local_port: u16,
     pub remote_host: Option<String>,
     pub remote_port: u16,
-}
-
-/// Settings for configuring REPL display and behavior.
-#[with_fallible_options]
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
-pub struct ReplSettingsContent {
-    /// Maximum number of lines to keep in REPL's scrollback buffer.
-    /// Clamped with [4, 256] range.
-    ///
-    /// Default: 32
-    pub max_lines: Option<usize>,
-    /// Maximum number of columns to keep in REPL's scrollback buffer.
-    /// Clamped with [20, 512] range.
-    ///
-    /// Default: 128
-    pub max_columns: Option<usize>,
-    /// Whether to show small single-line outputs inline instead of in a block.
-    ///
-    /// Default: true
-    pub inline_output: Option<bool>,
-    /// Maximum number of characters for an output to be shown inline.
-    /// Only applies when `inline_output` is true.
-    ///
-    /// Default: 50
-    pub inline_output_max_length: Option<usize>,
-    /// Maximum number of lines of output to display before scrolling.
-    /// Set to 0 to disable output height limits.
-    ///
-    /// Default: 0
-    pub output_max_height_lines: Option<usize>,
 }
 
 /// Settings for configuring the tab switcher behaviour.

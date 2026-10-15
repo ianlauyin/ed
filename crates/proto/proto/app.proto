@@ -31,18 +31,6 @@ message CrashReport {
   bytes minidump_contents = 4;
 }
 
-message AskPassRequest {
-  uint64 project_id = 1;
-  reserved 2;
-  uint64 repository_id = 3;
-  uint64 askpass_id = 4;
-  string prompt = 5;
-}
-
-message AskPassResponse {
-  string response = 1;
-}
-
 message GetRemoteProfilingData {
   uint64 project_id = 1;
   bool foreground_only = 2;

@@ -1,7 +1,6 @@
 use std::fmt::Display;
 use std::num;
 
-use collections::HashMap;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use settings_macros::{MergeFrom, with_fallible_options};
@@ -209,9 +208,6 @@ pub struct EditorSettingsContent {
     ///
     /// Default: center
     pub go_to_definition_scroll_strategy: Option<GoToDefinitionScrollStrategy>,
-
-    /// Jupyter REPL settings.
-    pub jupyter: Option<JupyterContent>,
 
     /// Which level to use to filter out diagnostics displayed in the editor.
     ///
@@ -1008,21 +1004,6 @@ pub struct SearchSettingsContent {
     pub center_on_match: Option<bool>,
     /// Start searching as you type in project search, without pressing Enter.
     pub search_on_type: Option<bool>,
-}
-
-#[with_fallible_options]
-#[derive(Default, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom)]
-#[serde(rename_all = "snake_case")]
-pub struct JupyterContent {
-    /// Whether the Jupyter feature is enabled.
-    ///
-    /// Default: true
-    pub enabled: Option<bool>,
-
-    /// Default kernels to select for each language.
-    ///
-    /// Default: `{}`
-    pub kernel_selections: Option<HashMap<String, String>>,
 }
 
 /// Whether to allow drag and drop text selection in buffer.

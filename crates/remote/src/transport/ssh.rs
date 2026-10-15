@@ -34,8 +34,8 @@ use util::{
     shell::ShellKind,
 };
 
-/// How long to wait for SSH to connect when no askpass prompt has opened.
-const SSH_CONNECTION_PROMPT_TIMEOUT: Duration = Duration::from_secs(17);
+/// How long to wait for SSH to establish a connection.
+const SSH_CONNECTION_TIMEOUT: Duration = Duration::from_secs(17);
 
 pub(crate) struct SshRemoteConnection {
     socket: SshSocket,
@@ -116,7 +116,6 @@ pub struct SshConnectionOptions {
     pub host: SshConnectionHost,
     pub username: Option<String>,
     pub port: Option<u16>,
-    pub password: Option<String>,
     pub args: Option<Vec<String>>,
     pub port_forwards: Option<Vec<SshPortForwardOption>>,
     pub connection_timeout: Option<u16>,
@@ -131,7 +130,6 @@ impl From<settings_content::SshConnection> for SshConnectionOptions {
             host: val.host.to_string().into(),
             username: val.username,
             port: val.port,
-            password: None,
             args: Some(val.args),
             nickname: val.nickname,
             upload_binary_over_ssh: val.upload_binary_over_ssh.unwrap_or_default(),
@@ -274,7 +272,6 @@ struct MasterProcess {
 
 impl MasterProcess {
     pub fn new(
-        askpass_script_path: &std::ffi::OsStr,
         additional_args: Vec<String>,
         socket_path: &std::path::Path,
         destination: &str,
@@ -295,7 +292,7 @@ impl MasterProcess {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .env("SSH_ASKPASS_REQUIRE", "force")
-            .env("SSH_ASKPASS", askpass_script_path)
+            .env("SSH_ASKPASS", "/usr/bin/false")
             .args(additional_args)
             .args(args);
 
@@ -492,10 +489,6 @@ impl RemoteConnection for SshRemoteConnection {
         cx.background_spawn(async move {
             // We will try SFTP first, and if that fails, we will fall back to SCP.
             // If SCP fails also, we give up and return an error.
-            // The reason we allow a fallback from SFTP to SCP is that if the user has to specify a password,
-            // depending on the implementation of SSH stack, SFTP may disable interactive password prompts in batch mode.
-            // This is for example the case on Windows as evidenced by this implementation snippet:
-            // https://github.com/PowerShell/openssh-portable/blob/b8c08ef9da9450a94a9c5ef717d96a7bd83f3332/sshconnect2.c#L417
             if Self::is_sftp_available().await {
                 log::debug!("using SFTP for directory upload");
                 let mut child = sftp_command.spawn()?;
@@ -708,8 +701,6 @@ impl SshRemoteConnection {
         delegate: Arc<dyn RemoteClientDelegate>,
         cx: &mut AsyncApp,
     ) -> Result<Self> {
-        use askpass::AskPassResult;
-
         let destination = connection_options.ssh_destination();
 
         let temp_dir = tempfile::Builder::new()
@@ -717,7 +708,7 @@ impl SshRemoteConnection {
             .tempdir()?;
 
         // On non-Windows, check if the user already has an active ControlMaster
-        // session for this host. If so, reuse it instead of prompting for auth.
+        // session for this host. If so, reuse it without authenticating again.
 
         let reused_socket =
             find_existing_control_master(&destination, &connection_options.additional_args()).await;
@@ -728,17 +719,6 @@ impl SshRemoteConnection {
             let socket = SshSocket::new(connection_options, reused_path).await?;
             (socket, None)
         } else {
-            let askpass_delegate = askpass::AskPassDelegate::new_with_cancellation(cx, {
-                let delegate = delegate.clone();
-                move |prompt, tx, cancellation, cx| {
-                    delegate.ask_password(prompt, tx, cancellation, cx)
-                }
-            });
-
-            let mut askpass =
-                askpass::AskPassSession::new(cx.background_executor().clone(), askpass_delegate)
-                    .await?;
-
             delegate.set_status(Some("Connecting"), cx);
 
             // Start the master SSH process, which does not do anything except
@@ -746,27 +726,16 @@ impl SshRemoteConnection {
             // commands to reuse it via a control socket.
             let socket_path = temp_dir.path().join("ssh.sock");
             let mut master_process = MasterProcess::new(
-                askpass.script_path().as_ref(),
                 connection_options.additional_args(),
                 &socket_path,
                 &destination,
             )?;
 
             let result = select_biased! {
-                result = askpass.run(Some(SSH_CONNECTION_PROMPT_TIMEOUT)).fuse() => {
-                    match result {
-                        AskPassResult::CancelledByUser => {
-                            master_process.as_mut().kill().ok();
-                            anyhow::bail!("SSH connection canceled")
-                        }
-                        AskPassResult::Timedout => {
-                            anyhow::bail!("connecting to host timed out")
-                        }
-                    }
+                _ = cx.background_executor().timer(SSH_CONNECTION_TIMEOUT).fuse() => {
+                    anyhow::bail!("connecting to host timed out")
                 }
-                _ = master_process.wait_connected().fuse() => {
-                    anyhow::Ok(())
-                }
+                result = master_process.wait_connected().fuse() => result,
             };
 
             if let Err(e) = result {
@@ -786,7 +755,6 @@ impl SshRemoteConnection {
             }
 
             let socket = SshSocket::new(connection_options, socket_path).await?;
-            drop(askpass);
             (socket, Some(master_process))
         };
 
@@ -1334,7 +1302,6 @@ impl SshConnectionOptions {
             port,
             port_forwards,
             args: Some(args),
-            password: None,
             nickname: None,
             upload_binary_over_ssh: false,
             connection_timeout: None,
@@ -1355,7 +1322,9 @@ impl SshConnectionOptions {
     }
 
     pub fn additional_args_for_scp(&self) -> Vec<String> {
-        self.args.iter().flatten().cloned().collect::<Vec<String>>()
+        let mut args = vec!["-o".to_string(), "BatchMode=yes".to_string()];
+        args.extend(self.args.iter().flatten().cloned());
+        args
     }
 
     pub fn additional_args(&self) -> Vec<String> {

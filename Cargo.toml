@@ -2,7 +2,6 @@
 resolver = "2"
 members = [
     "crates/activity_indicator",
-    "crates/askpass",
     "crates/assets",
     "crates/breadcrumbs",
     "crates/buffer_diff",
@@ -41,14 +40,12 @@ members = [
     "crates/gpui_tokio",
     "crates/gpui_util",
     "crates/grammars",
-    "crates/html_to_markdown",
     "crates/http_client",
     "crates/http_client_tls",
     "crates/icons",
     "crates/image_viewer",
     "crates/input_latency_ui",
     "crates/inspector_ui",
-    "crates/install_cli",
     "crates/json_schema_store",
     "crates/language",
     "crates/language_core",
@@ -91,7 +88,6 @@ members = [
     "crates/remote",
     "crates/remote_connection",
     "crates/remote_server",
-    "crates/repl",
     "crates/reqwest_client",
     "crates/rope",
     "crates/rpc",
@@ -156,7 +152,6 @@ edition = "2024"
 #
 
 activity_indicator = { path = "crates/activity_indicator" }
-askpass = { path = "crates/askpass" }
 assets = { path = "crates/assets" }
 breadcrumbs = { path = "crates/breadcrumbs" }
 buffer_diff = { path = "crates/buffer_diff" }
@@ -195,14 +190,12 @@ gpui_shared_string = { path = "crates/gpui_shared_string" }
 gpui_tokio = { path = "crates/gpui_tokio" }
 gpui_util = { path = "crates/gpui_util" }
 grammars = { path = "crates/grammars" }
-html_to_markdown = { path = "crates/html_to_markdown" }
 http_client = { path = "crates/http_client" }
 http_client_tls = { path = "crates/http_client_tls" }
 icons = { path = "crates/icons" }
 image_viewer = { path = "crates/image_viewer" }
 input_latency_ui = { path = "crates/input_latency_ui" }
 inspector_ui = { path = "crates/inspector_ui" }
-install_cli = { path = "crates/install_cli" }
 json_schema_store = { path = "crates/json_schema_store" }
 language = { path = "crates/language" }
 language_core = { path = "crates/language_core" }
@@ -242,7 +235,6 @@ recent_projects = { path = "crates/recent_projects" }
 refineable = { path = "crates/refineable" }
 remote = { path = "crates/remote" }
 remote_connection = { path = "crates/remote_connection" }
-repl = { path = "crates/repl" }
 reqwest_client = { path = "crates/reqwest_client" }
 rope = { path = "crates/rope" }
 rpc = { path = "crates/rpc" }
@@ -303,7 +295,6 @@ anyhow = "1.0.86"
 arc-swap = "1.9.0"
 async-channel = { version = "2.5", default-features = false }
 async-compression = { version = "0.4", features = ["bzip2", "gzip", "futures-io"] }
-async-dispatcher = "0.1"
 async-fs = "2.1"
 async-lock = { version = "3.4", default-features = false }
 # `unstable` is required to compile async-tar's Windows symlink support.
@@ -390,8 +381,6 @@ indoc = "2"
 inventory = "0.3.19"
 itertools = "0.14.0"
 jsonschema = { version = "0.51", default-features = false }
-jupyter-protocol = "1.4.0"
-jupyter-websocket-client = "1.1.0"
 libc = "0.2"
 libsqlite3-sys = { version = "0.30.1", features = ["bundled"] }
 linkify = "0.10.0"
@@ -403,7 +392,6 @@ markup5ever_rcdom = "0.39"
 mdbook = { version = "=0.4.40", default-features = false, features = ["search"] }
 merman = { version = "=0.8.0-alpha.5", default-features = false }
 minidumper = "0.11"
-nbformat = "1.2.0"
 nix = "0.30"
 nucleo = { package = "nucleo-matcher", version = "0.3" }
 objc2 = "0.6.5"
@@ -523,9 +511,6 @@ resvg = { version = "0.46.0", default-features = false, features = [
     "memmap-fonts",
     "raster-images",
 ] }
-runtimelib = { version = "1.4.0", default-features = false, features = [
-    "async-dispatcher-runtime", "aws-lc-rs"
-] }
 rust-embed = { version = "8.11", features = ["include-exclude", "compression"] }
 rustc-hash = "2.1.0"
 rustix = { version = "1.1", features = ["fs"] }
@@ -603,7 +588,6 @@ walkdir = "2.5"
 wax = { version = "0.7", default-features = false }
 webpki-roots = "1.0.8"
 which = "8"
-zeroize = "1.8"
 zstd = { version = "0.13", default-features = false, features = ["legacy", "arrays"] }
 
 [patch.crates-io]
@@ -649,7 +633,6 @@ command_palette_hooks = { codegen-units = 1 }
 file_content = { codegen-units = 1 }
 file_icons = { codegen-units = 1 }
 image_viewer = { codegen-units = 1 }
-install_cli = { codegen-units = 1 }
 json_schema_store = { codegen-units = 1 }
 menu = { codegen-units = 1 }
 notifications = { codegen-units = 1 }

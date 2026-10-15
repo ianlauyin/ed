@@ -1,12 +1,10 @@
 use crate::commit_view::CommitView;
 use anyhow::Result;
-use askpass::AskPassDelegate;
 use editor::hover_markdown_style;
 use futures::Future;
 use git::blame::BlameEntry;
 use git::repository::CommitSummary;
 use git::{GitRemote, commit::ParsedCommitMessage};
-use git_ui_core::askpass_modal::AskPassModal;
 use git_ui_core::notifications::show_error_toast;
 use gpui::{
     AbsoluteLength, App, Asset, Element, Entity, MouseButton, ParentElement, Pixels, Render,
@@ -577,34 +575,7 @@ pub(crate) fn fetch_unshallow(
     if repository.read(cx).unshallow_state() != UnshallowState::Idle {
         return Task::ready(Ok(()));
     }
-    let askpass = {
-        let workspace = workspace.clone();
-        let window_handle = window.window_handle();
-        AskPassDelegate::new_with_cancellation(
-            &mut cx.to_async(),
-            move |prompt, tx, cancellation, cx| {
-                window_handle
-                    .update(cx, |_, window, cx| {
-                        workspace
-                            .update(cx, |workspace, cx| {
-                                workspace.toggle_modal(window, cx, |window, cx| {
-                                    AskPassModal::new(
-                                        "git fetch --unshallow".into(),
-                                        prompt.into(),
-                                        tx,
-                                        cancellation,
-                                        window,
-                                        cx,
-                                    )
-                                });
-                            })
-                            .ok();
-                    })
-                    .ok();
-            },
-        )
-    };
-    let fetch = repository.update(cx, |repository, cx| repository.fetch_unshallow(askpass, cx));
+    let fetch = repository.update(cx, |repository, cx| repository.fetch_unshallow(cx));
     window.refresh();
     window.spawn(cx, async move |cx| {
         let result = match fetch.await {

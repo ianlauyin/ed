@@ -4,7 +4,6 @@ use std::{
 };
 
 use anyhow::{Context as _, Result};
-use askpass::EncryptedPassword;
 use editor::Editor;
 use futures::{FutureExt as _, channel::oneshot, select};
 use gpui::{AppContext, AsyncApp, PromptLevel, WindowHandle};
@@ -254,18 +253,7 @@ pub async fn open_remote_project(
                         ui.set_cancellation_tx(cancel_tx);
                     });
 
-                    Some(Arc::new(RemoteClientDelegate::new(
-                        window.window_handle(),
-                        ui.downgrade(),
-                        if let RemoteConnectionOptions::Ssh(options) = &connection_options {
-                            options
-                                .password
-                                .as_deref()
-                                .and_then(|pw| EncryptedPassword::try_from(pw).ok())
-                        } else {
-                            None
-                        },
-                    )))
+                    Some(Arc::new(RemoteClientDelegate::new(ui.downgrade())))
                 })
             }
         })?;

@@ -10,6 +10,15 @@ remote server supports macOS and Linux.
 
 - The editor uses native macOS windows, Metal rendering, system menus, and window tabs.
 - The native menu bar has no Help menu.
+- CLI installation is manual. The editor has no CLI installer, installation menu
+  item, or commands for installing the CLI or registering its URL scheme.
+- Git operations (including clones and commit signing) and SSH connections require
+  authentication that works without user input, such as an SSH agent or cached
+  credentials. Password/passphrase requests fail instead of opening a prompt.
+  SSH host verification must also succeed without interactive confirmation.
+- The askpass crate, password dialogs, credential forwarding over RPC, and
+  askpass helper modes are removed. Remote connection progress and cancellation
+  remain available.
 - Audio input and speech recognition are unsupported; the app requests no
   microphone or speech-recognition access. Background tasks use high, medium,
   or low priority, with no realtime audio scheduling.

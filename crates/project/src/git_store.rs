@@ -14,7 +14,6 @@ use crate::{
     worktree_store::{WorktreeStore, WorktreeStoreEvent},
 };
 use anyhow::{Context as _, Result, anyhow, bail};
-use askpass::{AskPassDelegate, EncryptedPassword, IKnowWhatIAmDoingAndIHaveReadTheDocs};
 use async_lock::Semaphore;
 use buffer_diff::{
     BufferDiff, DiffHunk, DiffHunkSecondaryStatus, DiffOperations, PendingHunk, PendingSense,
@@ -58,7 +57,6 @@ use language::{
     Anchor, Buffer, BufferEvent, Capability, Language, LanguageRegistry,
     proto::{deserialize_version, serialize_version},
 };
-use parking_lot::Mutex;
 use paths::{config_dir, home_dir};
 use pending_op::{PendingOp, PendingOpId, PendingOps, PendingOpsSummary};
 use postage::stream::Stream as _;
@@ -98,7 +96,6 @@ use worktree::{
     File, PathChange, PathKey, PathProgress, PathSummary, PathTarget, ProjectEntryId,
     UpdatedGitRepositoriesSet, UpdatedGitRepository, Worktree, WorktreeSettings,
 };
-use zeroize::Zeroize;
 
 pub struct GitStore {
     state: GitStoreState,
@@ -698,48 +695,10 @@ pub struct Repository {
     job_debug_queue: job_debug_queue::GitJobDebugQueue,
     pending_ops: SumTree<PendingOps>,
     job_id: JobId,
-    askpass_delegates: RemoteAskPassDelegates,
-    latest_askpass_id: u64,
     repository_state: Shared<Task<Result<RepositoryState, String>>>,
     initial_graph_data: HashMap<(LogSource, LogOrder), InitialGitGraphData>,
     commit_data_handler: CommitDataHandlerState,
     commit_data: HashMap<Oid, CommitDataState>,
-}
-
-type RemoteAskPassDelegates = Arc<Mutex<HashMap<u64, RemoteAskPassDelegate>>>;
-
-struct RemoteAskPassDelegate {
-    delegate: AskPassDelegate,
-    active_request_cancellation: Option<oneshot::Sender<()>>,
-}
-
-struct RemoteAskPassOperation {
-    askpass_id: u64,
-    delegates: RemoteAskPassDelegates,
-}
-
-impl RemoteAskPassOperation {
-    fn new(askpass_id: u64, delegate: AskPassDelegate, delegates: RemoteAskPassDelegates) -> Self {
-        let previous = delegates.lock().insert(
-            askpass_id,
-            RemoteAskPassDelegate {
-                delegate,
-                active_request_cancellation: None,
-            },
-        );
-        debug_assert!(previous.is_none());
-        Self {
-            askpass_id,
-            delegates,
-        }
-    }
-}
-
-impl Drop for RemoteAskPassOperation {
-    fn drop(&mut self) {
-        let delegate = self.delegates.lock().remove(&self.askpass_id);
-        debug_assert!(delegate.is_some());
-    }
 }
 
 impl std::ops::Deref for Repository {
@@ -1072,7 +1031,6 @@ impl GitStore {
         client.add_entity_request_handler(Self::handle_add_path_to_git_info_exclude);
         client.add_entity_request_handler(Self::handle_open_commit_message_buffer);
         client.add_entity_request_handler(Self::handle_set_index_text);
-        client.add_entity_request_handler(Self::handle_askpass);
         client.add_entity_request_handler(Self::handle_check_for_pushed_commits);
         client.add_entity_request_handler(Self::handle_git_diff);
         client.add_entity_request_handler(Self::handle_tree_diff);
@@ -3475,19 +3433,10 @@ impl GitStore {
         let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
         let fetch_options =
             FetchOptions::from_proto(envelope.payload.remote, envelope.payload.unshallow);
-        let askpass_id = envelope.payload.askpass_id;
-
-        let askpass = make_remote_delegate(
-            this,
-            envelope.payload.project_id,
-            repository_id,
-            askpass_id,
-            &mut cx,
-        );
 
         let remote_output = repository_handle
             .update(&mut cx, |repository_handle, cx| {
-                repository_handle.fetch(fetch_options, askpass, cx)
+                repository_handle.fetch(fetch_options, cx)
             })
             .await??;
 
@@ -3505,15 +3454,6 @@ impl GitStore {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
         let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
 
-        let askpass_id = envelope.payload.askpass_id;
-        let askpass = make_remote_delegate(
-            this,
-            envelope.payload.project_id,
-            repository_id,
-            askpass_id,
-            &mut cx,
-        );
-
         let options = envelope
             .payload
             .options
@@ -3529,14 +3469,7 @@ impl GitStore {
 
         let remote_output = repository_handle
             .update(&mut cx, |repository_handle, cx| {
-                repository_handle.push(
-                    branch_name,
-                    remote_branch_name,
-                    remote_name,
-                    options,
-                    askpass,
-                    cx,
-                )
+                repository_handle.push(branch_name, remote_branch_name, remote_name, options, cx)
             })
             .await??;
         Ok(proto::RemoteMessageResponse {
@@ -3552,14 +3485,6 @@ impl GitStore {
     ) -> Result<proto::RemoteMessageResponse> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
         let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
-        let askpass_id = envelope.payload.askpass_id;
-        let askpass = make_remote_delegate(
-            this,
-            envelope.payload.project_id,
-            repository_id,
-            askpass_id,
-            &mut cx,
-        );
 
         let branch_name = envelope.payload.branch_name.map(|name| name.into());
         let remote_name = envelope.payload.remote_name.into();
@@ -3567,7 +3492,7 @@ impl GitStore {
 
         let remote_message = repository_handle
             .update(&mut cx, |repository_handle, cx| {
-                repository_handle.pull(branch_name, remote_name, rebase, askpass, cx)
+                repository_handle.pull(branch_name, remote_name, rebase, cx)
             })
             .await??;
 
@@ -3777,15 +3702,6 @@ impl GitStore {
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
         let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
-        let askpass_id = envelope.payload.askpass_id;
-
-        let askpass = make_remote_delegate(
-            this,
-            envelope.payload.project_id,
-            repository_id,
-            askpass_id,
-            &mut cx,
-        );
 
         let message = SharedString::from(envelope.payload.message);
         let name = envelope.payload.name.map(SharedString::from);
@@ -3803,7 +3719,6 @@ impl GitStore {
                         allow_empty: options.allow_empty,
                         no_verify: options.no_verify,
                     },
-                    askpass,
                     cx,
                 )
             })
@@ -4669,28 +4584,6 @@ impl GitStore {
 
         Ok(proto::OpenBufferResponse {
             buffer_id: buffer_id.to_proto(),
-        })
-    }
-
-    async fn handle_askpass(
-        this: Entity<Self>,
-        envelope: TypedEnvelope<proto::AskPassRequest>,
-        mut cx: AsyncApp,
-    ) -> Result<proto::AskPassResponse> {
-        let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository = Self::repository_for_request(&this, repository_id, &mut cx)?;
-
-        let delegates = cx.update(|cx| repository.read(cx).askpass_delegates.clone());
-        let response = request_remote_password(
-            &delegates,
-            envelope.payload.askpass_id,
-            envelope.payload.prompt,
-        )
-        .await?;
-
-        // In fact, we don't quite know what we're doing here, as we're sending askpass password unencrypted, but..
-        Ok(proto::AskPassResponse {
-            response: response.decrypt(IKnowWhatIAmDoingAndIHaveReadTheDocs)?,
         })
     }
 
@@ -6004,71 +5897,6 @@ impl BufferGitState {
     }
 }
 
-fn make_remote_delegate(
-    this: Entity<GitStore>,
-    project_id: u64,
-    repository_id: RepositoryId,
-    askpass_id: u64,
-    cx: &mut AsyncApp,
-) -> AskPassDelegate {
-    AskPassDelegate::new(cx, move |prompt, tx, cx| {
-        this.update(cx, |this, cx| {
-            let Some((client, _)) = this.downstream_client() else {
-                return;
-            };
-            let response = client.request(proto::AskPassRequest {
-                project_id,
-                repository_id: repository_id.to_proto(),
-                askpass_id,
-                prompt,
-            });
-            cx.spawn(async move |_, _| {
-                let mut response = response.await?.response;
-                tx.send(EncryptedPassword::try_from(response.as_ref())?)
-                    .ok();
-                response.zeroize();
-                anyhow::Ok(())
-            })
-            .detach_and_log_err(cx);
-        });
-    })
-}
-
-async fn request_remote_password(
-    delegates: &RemoteAskPassDelegates,
-    askpass_id: u64,
-    prompt: String,
-) -> Result<EncryptedPassword> {
-    let (password_request, operation_cancellation) = {
-        let mut delegates = delegates.lock();
-        let delegate = delegates
-            .get_mut(&askpass_id)
-            .context("remote Git operation no longer exists")?;
-        if delegate.active_request_cancellation.is_some() {
-            bail!("another askpass request is already active");
-        }
-
-        let (cancellation_sender, cancellation_receiver) = oneshot::channel();
-        let password_request = delegate.delegate.ask_password(prompt);
-        delegate.active_request_cancellation = Some(cancellation_sender);
-        (password_request.fuse(), cancellation_receiver.fuse())
-    };
-
-    futures::pin_mut!(password_request, operation_cancellation);
-    let response = futures::select_biased! {
-        response = password_request => response,
-        _ = operation_cancellation => None,
-    };
-
-    let mut delegates = delegates.lock();
-    let delegate = delegates
-        .get_mut(&askpass_id)
-        .context("remote Git operation ended while awaiting askpass")?;
-    delegate.active_request_cancellation.take();
-
-    response.context("askpass cancelled")
-}
-
 impl RepositoryId {
     pub fn to_proto(self) -> u64 {
         self.0
@@ -6585,9 +6413,7 @@ impl Repository {
             repository_state: Task::ready(Err("not yet initialized".into())).shared(),
             _worker_task: Task::ready(()),
             commit_message_buffer: None,
-            askpass_delegates: Default::default(),
             paths_needing_status_update: Default::default(),
-            latest_askpass_id: 0,
             job_sender: mpsc::unbounded().0,
             job_id: 0,
             active_jobs: Default::default(),
@@ -6639,8 +6465,6 @@ impl Repository {
             job_sender,
             _worker_task: worker_task,
             repository_state,
-            askpass_delegates: Default::default(),
-            latest_askpass_id: 0,
             active_jobs: Default::default(),
             job_debug_queue: job_debug_queue::GitJobDebugQueue::new(),
             job_id: 0,
@@ -8610,12 +8434,9 @@ impl Repository {
         message: SharedString,
         name_and_email: Option<(SharedString, SharedString)>,
         options: CommitOptions,
-        askpass: AskPassDelegate,
         _cx: &mut App,
     ) -> oneshot::Receiver<Result<()>> {
         let id = self.id;
-        let askpass_delegates = self.askpass_delegates.clone();
-        let askpass_id = util::post_inc(&mut self.latest_askpass_id);
 
         self.send_job(
             "commit",
@@ -8628,12 +8449,10 @@ impl Repository {
                         ..
                     }) => {
                         backend
-                            .commit(message, name_and_email, options, askpass, environment)
+                            .commit(message, name_and_email, options, environment)
                             .await
                     }
                     RepositoryState::Remote(RemoteRepositoryState { project_id, client }) => {
-                        let _askpass_operation =
-                            RemoteAskPassOperation::new(askpass_id, askpass, askpass_delegates);
                         let (name, email) = name_and_email.unzip();
                         client
                             .request(proto::Commit {
@@ -8648,7 +8467,6 @@ impl Repository {
                                     allow_empty: options.allow_empty,
                                     no_verify: options.no_verify,
                                 }),
-                                askpass_id,
                             })
                             .await?;
 
@@ -8699,10 +8517,9 @@ impl Repository {
 
     pub fn fetch_unshallow(
         &mut self,
-        askpass: AskPassDelegate,
         cx: &mut Context<Self>,
     ) -> oneshot::Receiver<Result<RemoteCommandOutput>> {
-        let receiver = self.fetch(FetchOptions::Unshallow, askpass, cx);
+        let receiver = self.fetch(FetchOptions::Unshallow, cx);
         self.unshallow_state = UnshallowState::InProgress;
         cx.notify();
         let (tx, rx) = oneshot::channel();
@@ -8729,11 +8546,8 @@ impl Repository {
     pub fn fetch(
         &mut self,
         fetch_options: FetchOptions,
-        askpass: AskPassDelegate,
         cx: &mut Context<Self>,
     ) -> oneshot::Receiver<Result<RemoteCommandOutput>> {
-        let askpass_delegates = self.askpass_delegates.clone();
-        let askpass_id = util::post_inc(&mut self.latest_askpass_id);
         let id = self.id;
 
         let updates_tx = self
@@ -8756,23 +8570,17 @@ impl Repository {
                         environment,
                         ..
                     }) => {
-                        let result = backend
-                            .fetch(fetch_options, askpass, environment, cx.clone())
-                            .await;
+                        let result = backend.fetch(fetch_options, environment, cx.clone()).await;
                         if result.is_ok() {
                             Self::refresh_branch_list(&this, backend, updates_tx, &mut cx).await?;
                         }
                         result
                     }
                     RepositoryState::Remote(RemoteRepositoryState { project_id, client }) => {
-                        let _askpass_operation =
-                            RemoteAskPassOperation::new(askpass_id, askpass, askpass_delegates);
-
                         let response = client
                             .request(proto::Fetch {
                                 project_id: project_id.0,
                                 repository_id: id.to_proto(),
-                                askpass_id,
                                 remote: fetch_options.to_proto(),
                                 unshallow: fetch_options == FetchOptions::Unshallow,
                             })
@@ -8794,11 +8602,8 @@ impl Repository {
         remote_branch: SharedString,
         remote: SharedString,
         options: Option<PushOptions>,
-        askpass: AskPassDelegate,
         cx: &mut Context<Self>,
     ) -> oneshot::Receiver<Result<RemoteCommandOutput>> {
-        let askpass_delegates = self.askpass_delegates.clone();
-        let askpass_id = util::post_inc(&mut self.latest_askpass_id);
         let id = self.id;
 
         let args = options
@@ -8834,7 +8639,6 @@ impl Repository {
                                 remote_branch.to_string(),
                                 remote.to_string(),
                                 options,
-                                askpass,
                                 environment.clone(),
                                 cx.clone(),
                             )
@@ -8846,13 +8650,10 @@ impl Repository {
                         result
                     }
                     RepositoryState::Remote(RemoteRepositoryState { project_id, client }) => {
-                        let _askpass_operation =
-                            RemoteAskPassOperation::new(askpass_id, askpass, askpass_delegates);
                         let response = client
                             .request(proto::Push {
                                 project_id: project_id.0,
                                 repository_id: id.to_proto(),
-                                askpass_id,
                                 branch_name: branch.to_string(),
                                 remote_branch_name: remote_branch.to_string(),
                                 remote_name: remote.to_string(),
@@ -8881,11 +8682,8 @@ impl Repository {
         branch: Option<SharedString>,
         remote: SharedString,
         rebase: bool,
-        askpass: AskPassDelegate,
         _cx: &mut App,
     ) -> oneshot::Receiver<Result<RemoteCommandOutput>> {
-        let askpass_delegates = self.askpass_delegates.clone();
-        let askpass_id = util::post_inc(&mut self.latest_askpass_id);
         let id = self.id;
 
         let mut status = "git pull".to_string();
@@ -8912,20 +8710,16 @@ impl Repository {
                                 branch.as_ref().map(|b| b.to_string()),
                                 remote.to_string(),
                                 rebase,
-                                askpass,
                                 environment.clone(),
                                 cx,
                             )
                             .await
                     }
                     RepositoryState::Remote(RemoteRepositoryState { project_id, client }) => {
-                        let _askpass_operation =
-                            RemoteAskPassOperation::new(askpass_id, askpass, askpass_delegates);
                         let response = client
                             .request(proto::Pull {
                                 project_id: project_id.0,
                                 repository_id: id.to_proto(),
-                                askpass_id,
                                 rebase,
                                 branch_name: branch.as_ref().map(|b| b.to_string()),
                                 remote_name: remote.to_string(),

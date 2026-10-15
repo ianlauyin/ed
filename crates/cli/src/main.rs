@@ -116,10 +116,6 @@ struct Args {
     /// Generate shell completions for Zed
     #[arg(long, value_names = ["SHELL"])]
     completions: Option<Shell>,
-    /// Used for SSH/Git password authentication, to remove the need for netcat as a dependency,
-    /// by having Zed act like netcat communicating over a Unix socket.
-    #[arg(long, hide = true)]
-    askpass: Option<String>,
 }
 
 /// Parses a path containing a position (e.g. `path:line:column`)
@@ -331,20 +327,7 @@ fn run() -> Result<()> {
 
     // Exit flatpak sandbox if needed
 
-    // Must happen before clap — SSH invokes cli.exe directly as SSH_ASKPASS
-    // and passes the socket path via env var to avoid argument parsing.
-    if let Ok(socket) = std::env::var("ZED_ASKPASS_SOCKET") {
-        askpass::main_from_args(&socket, std::env::args().skip(1));
-        return Ok(());
-    }
-
     let args = Args::parse();
-
-    // `zed --askpass` Makes zed operate in nc/netcat mode for use with askpass
-    if let Some(socket) = &args.askpass {
-        askpass::main(socket);
-        return Ok(());
-    }
 
     // Set custom data directory before any path operations
     let user_data_dir = args.user_data_dir.clone();

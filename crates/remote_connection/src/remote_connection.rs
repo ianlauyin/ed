@@ -2,23 +2,17 @@ mod server_release;
 use std::{path::PathBuf, sync::Arc};
 
 use anyhow::Result;
-use askpass::EncryptedPassword;
 use futures::{FutureExt as _, channel::oneshot, select};
 use gpui::{
-    AnyWindowHandle, App, AsyncApp, DismissEvent, Entity, EventEmitter, Focusable, FontFeatures,
-    ParentElement as _, Render, SharedString, Task, TextStyleRefinement, WeakEntity,
+    App, AsyncApp, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, ParentElement as _,
+    Render, SharedString, Task, WeakEntity,
 };
-use markdown::{Markdown, MarkdownElement, MarkdownStyle};
 use remote::{ConnectionIdentifier, RemoteClient, RemoteConnectionOptions, RemotePlatform};
 use semver::Version;
-use settings::Settings;
 use settings_content::app_metadata::ServerRelease;
-use theme_settings::ThemeSettings;
 use ui::{
-    ActiveTheme, CommonAnimationExt, Context, InteractiveElement, KeyBinding, ListItem, Tooltip,
-    prelude::*,
+    ActiveTheme, CommonAnimationExt, Context, InteractiveElement, KeyBinding, ListItem, prelude::*,
 };
-use ui_input::{ERASED_EDITOR_FACTORY, ErasedEditor};
 use workspace::{DismissDecision, ModalView, Workspace};
 
 pub struct RemoteConnectionPrompt {
@@ -26,12 +20,8 @@ pub struct RemoteConnectionPrompt {
     nickname: Option<SharedString>,
     is_wsl: bool,
     status_message: Option<SharedString>,
-    prompt: Option<(Entity<Markdown>, oneshot::Sender<EncryptedPassword>)>,
-    prompt_cancellation_task: Option<Task<()>>,
     cancellation: Option<oneshot::Sender<()>>,
-    editor: Arc<dyn ErasedEditor>,
-    is_password_prompt: bool,
-    is_masked: bool,
+    focus_handle: FocusHandle,
 }
 
 impl Drop for RemoteConnectionPrompt {
@@ -54,25 +44,16 @@ impl RemoteConnectionPrompt {
         connection_string: String,
         nickname: Option<String>,
         is_wsl: bool,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let editor_factory = ERASED_EDITOR_FACTORY
-            .get()
-            .expect("ErasedEditorFactory to be initialized");
-        let editor = (editor_factory)(window, cx);
-
         Self {
             connection_string: connection_string.into(),
             nickname: nickname.map(|nickname| nickname.into()),
             is_wsl,
-            editor,
+            focus_handle: cx.focus_handle(),
             status_message: None,
             cancellation: None,
-            prompt: None,
-            prompt_cancellation_task: None,
-            is_password_prompt: false,
-            is_masked: true,
         }
     }
 
@@ -80,133 +61,17 @@ impl RemoteConnectionPrompt {
         self.cancellation = Some(tx);
     }
 
-    pub fn set_prompt(
-        &mut self,
-        prompt: String,
-        tx: oneshot::Sender<EncryptedPassword>,
-        cancellation: oneshot::Receiver<()>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let is_yes_no = prompt.contains("yes/no");
-        self.is_password_prompt = !is_yes_no;
-        self.is_masked = !is_yes_no;
-        self.editor.set_masked(self.is_masked, window, cx);
-
-        let markdown = cx.new(|cx| Markdown::new_text(prompt.into(), cx));
-        self.prompt = Some((markdown, tx));
-        self.prompt_cancellation_task = Some(cx.spawn(async move |this, cx| {
-            cancellation.await.ok();
-            this.update(cx, |this, cx| {
-                this.prompt.take();
-                cx.notify();
-            })
-            .ok();
-        }));
-        self.status_message.take();
-        window.focus(&self.editor.focus_handle(cx), cx);
-        cx.notify();
-    }
-
     pub fn set_status(&mut self, status: Option<String>, cx: &mut Context<Self>) {
         self.status_message = status.map(|s| s.into());
         cx.notify();
     }
-
-    pub fn confirm(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some((_, tx)) = self.prompt.take() {
-            self.prompt_cancellation_task.take();
-            self.status_message = Some("Connecting".into());
-
-            let pw = self.editor.text(cx);
-            if let Ok(secure) = EncryptedPassword::try_from(pw.as_ref()) {
-                tx.send(secure).ok();
-            }
-            self.editor.clear(window, cx);
-        }
-    }
 }
 
 impl Render for RemoteConnectionPrompt {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let theme = ThemeSettings::get_global(cx);
-
-        let mut text_style = window.text_style();
-        let refinement = TextStyleRefinement {
-            font_family: Some(theme.buffer_font.family.clone()),
-            font_features: Some(FontFeatures::disable_ligatures()),
-            font_size: Some(theme.buffer_font_size(cx).into()),
-            color: Some(cx.theme().colors().editor_foreground),
-            background_color: Some(gpui::transparent_black()),
-            ..Default::default()
-        };
-
-        text_style.refine(&refinement);
-        let markdown_style = MarkdownStyle {
-            base_text_style: text_style,
-            selection_background_color: cx.theme().colors().element_selection_background,
-            ..Default::default()
-        };
-
-        let is_password_prompt = self.is_password_prompt;
-        let is_masked = self.is_masked;
-        let (masked_password_icon, masked_password_tooltip) = if is_masked {
-            (IconName::Eye, "Toggle to Unmask Password")
-        } else {
-            (IconName::EyeOff, "Toggle to Mask Password")
-        };
-
+    fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
-            .key_context("PasswordPrompt")
             .p_2()
             .size_full()
-            .when_some(self.prompt.as_ref(), |this, prompt| {
-                this.child(
-                    v_flex()
-                        .text_sm()
-                        .size_full()
-                        .overflow_hidden()
-                        .child(
-                            h_flex()
-                                .w_full()
-                                .justify_between()
-                                .child(MarkdownElement::new(prompt.0.clone(), markdown_style))
-                                .when(is_password_prompt, |this| {
-                                    this.child(
-                                        IconButton::new("toggle_mask", masked_password_icon)
-                                            .icon_size(IconSize::Small)
-                                            .tooltip(Tooltip::text(masked_password_tooltip))
-                                            .on_click(cx.listener(|this, _, window, cx| {
-                                                this.is_masked = !this.is_masked;
-                                                this.editor.set_masked(this.is_masked, window, cx);
-                                                window.focus(&this.editor.focus_handle(cx), cx);
-                                                cx.notify();
-                                            })),
-                                    )
-                                }),
-                        )
-                        .child(div().flex_1().child(self.editor.render(window, cx))),
-                )
-                .when(window.capslock().on, |this| {
-                    this.child(
-                        h_flex()
-                            .py_0p5()
-                            .min_w_0()
-                            .w_full()
-                            .gap_1()
-                            .child(
-                                Icon::new(IconName::Warning)
-                                    .size(IconSize::Small)
-                                    .color(Color::Muted),
-                            )
-                            .child(
-                                Label::new("Caps lock is on.")
-                                    .size(LabelSize::Small)
-                                    .color(Color::Muted),
-                            ),
-                    )
-                })
-            })
             .when_some(self.status_message.clone(), |this, status_message| {
                 this.child(
                     h_flex()
@@ -252,11 +117,6 @@ impl RemoteConnectionModal {
             finished: false,
             paths,
         }
-    }
-
-    fn confirm(&mut self, _: &menu::Confirm, window: &mut Window, cx: &mut Context<Self>) {
-        self.prompt
-            .update(cx, |prompt, cx| prompt.confirm(window, cx))
     }
 
     pub fn finished(&mut self, cx: &mut Context<Self>) {
@@ -354,7 +214,6 @@ impl Render for RemoteConnectionModal {
             .key_context("SshConnectionModal")
             .track_focus(&self.focus_handle(cx))
             .on_action(cx.listener(Self::dismiss))
-            .on_action(cx.listener(Self::confirm))
             .child(
                 SshConnectionHeader {
                     paths: self.paths.clone(),
@@ -393,7 +252,7 @@ impl Render for RemoteConnectionModal {
 
 impl Focusable for RemoteConnectionModal {
     fn focus_handle(&self, cx: &gpui::App) -> gpui::FocusHandle {
-        self.prompt.read(cx).editor.focus_handle(cx)
+        self.prompt.read(cx).focus_handle.clone()
     }
 }
 
@@ -415,47 +274,16 @@ impl ModalView for RemoteConnectionModal {
 
 #[derive(Clone)]
 pub struct RemoteClientDelegate {
-    window: AnyWindowHandle,
     ui: WeakEntity<RemoteConnectionPrompt>,
-    known_password: Option<EncryptedPassword>,
 }
 
 impl RemoteClientDelegate {
-    pub fn new(
-        window: AnyWindowHandle,
-        ui: WeakEntity<RemoteConnectionPrompt>,
-        known_password: Option<EncryptedPassword>,
-    ) -> Self {
-        Self {
-            window,
-            ui,
-            known_password,
-        }
+    pub fn new(ui: WeakEntity<RemoteConnectionPrompt>) -> Self {
+        Self { ui }
     }
 }
 
 impl remote::RemoteClientDelegate for RemoteClientDelegate {
-    fn ask_password(
-        &self,
-        prompt: String,
-        tx: oneshot::Sender<EncryptedPassword>,
-        cancellation: oneshot::Receiver<()>,
-        cx: &mut AsyncApp,
-    ) {
-        let mut known_password = self.known_password.clone();
-        if let Some(password) = known_password.take() {
-            tx.send(password).ok();
-        } else {
-            self.window
-                .update(cx, |_, window, cx| {
-                    self.ui.update(cx, |modal, cx| {
-                        modal.set_prompt(prompt, tx, cancellation, window, cx);
-                    })
-                })
-                .ok();
-        }
-    }
-
     fn set_status(&self, status: Option<&str>, cx: &mut AsyncApp) {
         self.update_status(status, cx)
     }
@@ -606,25 +434,10 @@ pub fn connect_reusing_pool(
 }
 
 /// Delegate for remote connections that reuse an existing pooled
-/// connection. Password prompts are not expected (the SSH transport
-/// is already established), but server binary downloads are supported
-/// by the remote connection.
+/// connection. Server binary downloads are supported by the remote connection.
 struct BackgroundRemoteClientDelegate;
 
 impl remote::RemoteClientDelegate for BackgroundRemoteClientDelegate {
-    fn ask_password(
-        &self,
-        prompt: String,
-        _tx: oneshot::Sender<EncryptedPassword>,
-        _cancellation: oneshot::Receiver<()>,
-        _cx: &mut AsyncApp,
-    ) {
-        log::warn!(
-            "Pooled remote connection unexpectedly requires a password \
-             (prompt: {prompt})"
-        );
-    }
-
     fn set_status(&self, _status: Option<&str>, _cx: &mut AsyncApp) {}
 
     fn download_server_binary_locally(
@@ -682,25 +495,13 @@ pub fn connect(
     unique_identifier: ConnectionIdentifier,
     connection_options: RemoteConnectionOptions,
     ui: Entity<RemoteConnectionPrompt>,
-    window: &mut Window,
+    _window: &mut Window,
     cx: &mut App,
 ) -> Task<Result<Option<Entity<RemoteClient>>>> {
-    let window = window.window_handle();
-    let known_password = match &connection_options {
-        RemoteConnectionOptions::Ssh(ssh_connection_options) => ssh_connection_options
-            .password
-            .as_deref()
-            .and_then(|pw| pw.try_into().ok()),
-        _ => None,
-    };
     let (tx, mut rx) = oneshot::channel();
     ui.update(cx, |ui, _cx| ui.set_cancellation_tx(tx));
 
-    let delegate = Arc::new(RemoteClientDelegate {
-        window,
-        ui: ui.downgrade(),
-        known_password,
-    });
+    let delegate = Arc::new(RemoteClientDelegate { ui: ui.downgrade() });
 
     cx.spawn(async move |cx| {
         let connection = remote::connect(connection_options, delegate.clone(), cx);

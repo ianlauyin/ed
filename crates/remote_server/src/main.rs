@@ -13,10 +13,6 @@ use std::path::PathBuf;
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
-    /// Used for SSH/Git password authentication, to remove the need for netcat as a dependency,
-    /// by having Zed act like netcat communicating over a Unix socket.
-    #[arg(long, hide = true)]
-    askpass: Option<String>,
     /// Used for recording minidumps on crashes by having the server run a separate
     /// process communicating over a socket.
     #[arg(long, hide = true)]
@@ -28,11 +24,6 @@ struct Cli {
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-
-    if let Some(socket_path) = &cli.askpass {
-        askpass::main(socket_path);
-        return Ok(());
-    }
 
     if let Some(socket) = &cli.crash_handler {
         crashes::crash_server(socket.as_path(), paths::logs_dir().clone());

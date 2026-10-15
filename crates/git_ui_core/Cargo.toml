@@ -15,7 +15,6 @@ doctest = false
 
 [dependencies]
 anyhow.workspace = true
-askpass.workspace = true
 buffer_diff.workspace = true
 collections.workspace = true
 db.workspace = true
@@ -44,4 +43,3 @@ util.workspace = true
 watch.workspace = true
 workspace.workspace = true
 zed_actions.workspace = true
-zeroize.workspace = true

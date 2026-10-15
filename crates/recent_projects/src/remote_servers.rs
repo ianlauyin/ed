@@ -1422,10 +1422,7 @@ impl RemoteServerProjects {
             Mode::Default | Mode::ViewServerOptions(_) => {}
             Mode::ProjectPicker(_) => {}
             Mode::CreateRemoteServer(state) => {
-                if let Some(prompt) = state.ssh_prompt.as_ref() {
-                    prompt.update(cx, |prompt, cx| {
-                        prompt.confirm(window, cx);
-                    });
+                if state.ssh_prompt.is_some() {
                     return;
                 }
 

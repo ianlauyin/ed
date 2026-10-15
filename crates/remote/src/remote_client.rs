@@ -9,7 +9,6 @@ use crate::{
     },
 };
 use anyhow::{Context as _, Result, anyhow};
-use askpass::EncryptedPassword;
 use async_trait::async_trait;
 use collections::HashMap;
 use futures::{
@@ -129,13 +128,6 @@ pub enum Interactive {
 }
 
 pub trait RemoteClientDelegate: Send + Sync {
-    fn ask_password(
-        &self,
-        prompt: String,
-        tx: oneshot::Sender<EncryptedPassword>,
-        cancellation: oneshot::Receiver<()>,
-        cx: &mut AsyncApp,
-    );
     fn get_download_url(
         &self,
         platform: RemotePlatform,
@@ -390,7 +382,7 @@ pub async fn connect(
 
 /// Returns `true` if the global [`ConnectionPool`] already has a live
 /// connection for the given options. Callers can use this to decide
-/// whether to show interactive UI (e.g., a password modal) before
+/// whether to show connection progress UI before
 /// connecting.
 pub fn has_active_connection(opts: &RemoteConnectionOptions, cx: &App) -> bool {
     cx.try_global::<ConnectionPool>().is_some_and(|pool| {

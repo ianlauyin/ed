@@ -11,7 +11,7 @@ use file_content::{ByteContent, decode_byte_header};
 use futures::channel::oneshot;
 use futures::future::BoxFuture;
 use futures::io::BufWriter;
-use futures::{AsyncWriteExt, FutureExt as _, select_biased};
+use futures::{AsyncWriteExt, FutureExt as _};
 use gpui::{AppContext as _, AsyncApp, BackgroundExecutor, SharedString, Task};
 use parking_lot::Mutex;
 use rope::Rope;
@@ -41,10 +41,6 @@ use util::paths::PathStyle;
 use util::rel_path::RelPath;
 use util::{ResultExt, paths};
 use uuid::Uuid;
-
-pub use askpass::{AskPassDelegate, AskPassResult, AskPassSession};
-
-pub const REMOTE_CANCELLED_BY_USER: &str = "Operation cancelled by user";
 
 /// Format string used in graph log to get initial data for the git graph
 /// %H - Full commit hash
@@ -954,7 +950,6 @@ pub trait GitRepository: Send + Sync {
         message: SharedString,
         name_and_email: Option<(SharedString, SharedString)>,
         options: CommitOptions,
-        askpass: AskPassDelegate,
         env: Arc<HashMap<String, String>>,
     ) -> BoxFuture<'_, Result<()>>;
 
@@ -995,7 +990,6 @@ pub trait GitRepository: Send + Sync {
         remote_branch_name: String,
         upstream_name: String,
         options: Option<PushOptions>,
-        askpass: AskPassDelegate,
         env: Arc<HashMap<String, String>>,
         // This method takes an AsyncApp to ensure it's invoked on the main thread,
         // otherwise git-credentials-manager won't work.
@@ -1007,7 +1001,6 @@ pub trait GitRepository: Send + Sync {
         branch_name: Option<String>,
         upstream_name: String,
         rebase: bool,
-        askpass: AskPassDelegate,
         env: Arc<HashMap<String, String>>,
         // This method takes an AsyncApp to ensure it's invoked on the main thread,
         // otherwise git-credentials-manager won't work.
@@ -1017,7 +1010,6 @@ pub trait GitRepository: Send + Sync {
     fn fetch(
         &self,
         fetch_options: FetchOptions,
-        askpass: AskPassDelegate,
         env: Arc<HashMap<String, String>>,
         // This method takes an AsyncApp to ensure it's invoked on the main thread,
         // otherwise git-credentials-manager won't work.
@@ -2728,13 +2720,9 @@ impl GitRepository for RealGitRepository {
         message: SharedString,
         name_and_email: Option<(SharedString, SharedString)>,
         options: CommitOptions,
-        ask_pass: AskPassDelegate,
         env: Arc<HashMap<String, String>>,
     ) -> BoxFuture<'_, Result<()>> {
         let git = self.git_binary_in_worktree();
-        let executor = self.executor.clone();
-        // Note: Do not spawn this command on the background thread, it might pop open the credential helper
-        // which we want to block on.
         async move {
             let git = git?;
             let mut cmd = git.build_command(&["commit", "--quiet", "-m"]);
@@ -2764,7 +2752,7 @@ impl GitRepository for RealGitRepository {
                 cmd.arg("--author").arg(&format!("{name} <{email}>"));
             }
 
-            run_git_command(env, ask_pass, cmd, executor).await?;
+            run_git_command(git, env, cmd).await?;
 
             Ok(())
         }
@@ -2800,7 +2788,6 @@ impl GitRepository for RealGitRepository {
         remote_branch_name: String,
         remote_name: String,
         options: Option<PushOptions>,
-        ask_pass: AskPassDelegate,
         env: Arc<HashMap<String, String>>,
         cx: AsyncApp,
     ) -> BoxFuture<'_, Result<RemoteCommandOutput>> {
@@ -2809,8 +2796,6 @@ impl GitRepository for RealGitRepository {
         let executor = cx.background_executor().clone();
         let git_binary_path = self.system_git_binary_path.clone();
         let is_trusted = self.is_trusted();
-        // Note: Do not spawn this command on the background thread, it might pop open the credential helper
-        // which we want to block on.
         async move {
             let git_binary_path = git_binary_path.context("git not found on $PATH, can't push")?;
             let git = GitBinary::new(
@@ -2833,7 +2818,7 @@ impl GitRepository for RealGitRepository {
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
 
-            run_git_command(env, ask_pass, command, executor).await
+            run_git_command(git, env, command).await
         }
         .boxed()
     }
@@ -2843,7 +2828,6 @@ impl GitRepository for RealGitRepository {
         branch_name: Option<String>,
         remote_name: String,
         rebase: bool,
-        ask_pass: AskPassDelegate,
         env: Arc<HashMap<String, String>>,
         cx: AsyncApp,
     ) -> BoxFuture<'_, Result<RemoteCommandOutput>> {
@@ -2852,8 +2836,6 @@ impl GitRepository for RealGitRepository {
         let executor = cx.background_executor().clone();
         let git_binary_path = self.system_git_binary_path.clone();
         let is_trusted = self.is_trusted();
-        // Note: Do not spawn this command on the background thread, it might pop open the credential helper
-        // which we want to block on.
         async move {
             let git_binary_path = git_binary_path.context("git not found on $PATH, can't pull")?;
             let git = GitBinary::new(
@@ -2876,7 +2858,7 @@ impl GitRepository for RealGitRepository {
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
 
-            run_git_command(env, ask_pass, command, executor).await
+            run_git_command(git, env, command).await
         }
         .boxed()
     }
@@ -2884,7 +2866,6 @@ impl GitRepository for RealGitRepository {
     fn fetch(
         &self,
         fetch_options: FetchOptions,
-        ask_pass: AskPassDelegate,
         env: Arc<HashMap<String, String>>,
         cx: AsyncApp,
     ) -> BoxFuture<'_, Result<RemoteCommandOutput>> {
@@ -2894,8 +2875,6 @@ impl GitRepository for RealGitRepository {
         let git_binary_path = self.system_git_binary_path.clone();
         let executor = cx.background_executor().clone();
         let is_trusted = self.is_trusted();
-        // Note: Do not spawn this command on the background thread, it might pop open the credential helper
-        // which we want to block on.
         async move {
             let git_binary_path = git_binary_path.context("git not found on $PATH, can't fetch")?;
             let git = GitBinary::new(
@@ -2911,7 +2890,7 @@ impl GitRepository for RealGitRepository {
                 .stdout(Stdio::piped())
                 .stderr(Stdio::piped());
 
-            run_git_command(env, ask_pass, command, executor).await
+            run_git_command(git, env, command).await
         }
         .boxed()
     }
@@ -4012,75 +3991,72 @@ struct GitBinaryCommandError {
 }
 
 async fn run_git_command(
+    git: GitBinary,
     env: Arc<HashMap<String, String>>,
-    ask_pass: AskPassDelegate,
     mut command: util::command::Command,
-    executor: BackgroundExecutor,
 ) -> Result<RemoteCommandOutput> {
-    if env.contains_key("GIT_ASKPASS") {
-        let git_process = command.spawn()?;
-        let output = git_process.output().await?;
-        anyhow::ensure!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        Ok(RemoteCommandOutput {
-            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-        })
-    } else {
-        let ask_pass = AskPassSession::new(executor, ask_pass).await?;
-        command
-            .env("GIT_ASKPASS", ask_pass.script_path())
-            .env("SSH_ASKPASS", ask_pass.script_path())
-            .env("SSH_ASKPASS_REQUIRE", "force");
-
-        if !env.contains_key("GIT_CONFIG_COUNT")
-            && let Some(gpg_wrapper) = ask_pass.gpg_wrapper_path()
-        {
-            command
-                .env("GIT_CONFIG_COUNT", "1")
-                .env("GIT_CONFIG_KEY_0", "gpg.program")
-                .env("GIT_CONFIG_VALUE_0", gpg_wrapper);
+    let git = git.envs((*env).clone());
+    // GPG can launch pinentry independently of Git, including while rebasing.
+    // Allow cached/unprotected keys, but fail when a passphrase is needed.
+    let signing_dir = tempfile::Builder::new()
+        .prefix("zed-git-signing")
+        .tempdir()?;
+    let config_count = env
+        .get("GIT_CONFIG_COUNT")
+        .cloned()
+        .or_else(|| std::env::var("GIT_CONFIG_COUNT").ok())
+        .unwrap_or_else(|| "0".to_string())
+        .parse::<usize>()
+        .context("Invalid GIT_CONFIG_COUNT")?;
+    for (offset, (key, default_program)) in [
+        ("gpg.openpgp.program", "gpg"),
+        ("gpg.x509.program", "gpgsm"),
+    ]
+    .into_iter()
+    .enumerate()
+    {
+        let program = match git.run(&["config", "--get", key]).await {
+            Ok(program) => program,
+            Err(_) if key == "gpg.openpgp.program" => git
+                .run(&["config", "--get", "gpg.program"])
+                .await
+                .unwrap_or_else(|_| default_program.to_string()),
+            Err(_) => default_program.to_string(),
         };
-        let git_process = command.spawn()?;
-
-        run_askpass_command(ask_pass, git_process).await
+        let program = util::shell::ShellKind::Posix
+            .try_quote(&program)
+            .context("Failed to quote signing program")?;
+        let wrapper = signing_dir.path().join(default_program);
+        smol::fs::write(
+            &wrapper,
+            format!("#!/bin/sh\nexec {program} --batch --pinentry-mode error \"$@\"\n"),
+        )
+        .await?;
+        util::fs::make_file_executable(&wrapper).await?;
+        let index = config_count + offset;
+        command
+            .env(format!("GIT_CONFIG_KEY_{index}"), key)
+            .env(format!("GIT_CONFIG_VALUE_{index}"), &wrapper);
     }
-}
-
-async fn run_askpass_command(
-    mut ask_pass: AskPassSession,
-    git_process: util::command::Child,
-) -> anyhow::Result<RemoteCommandOutput> {
-    select_biased! {
-        // Git can legitimately run long without prompting (e.g. large fetches,
-        // hooks), so completion is determined by the process itself.
-        result = ask_pass.run(None).fuse() => {
-            match result {
-                AskPassResult::CancelledByUser => {
-                    Err(anyhow!(REMOTE_CANCELLED_BY_USER))?
-                }
-                AskPassResult::Timedout => {
-                    // Unreachable since no timeout is passed to run()
-                    Err(anyhow!("Connecting to host timed out"))?
-                }
-            }
-        }
-        output = git_process.output().fuse() => {
-            let output = output?;
-            anyhow::ensure!(
-                output.status.success(),
-                "{}",
-                String::from_utf8_lossy(&output.stderr)
-            );
-            Ok(RemoteCommandOutput {
-                stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-                stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-            })
-        }
-    }
+    command.env("GIT_CONFIG_COUNT", (config_count + 2).to_string());
+    // Override inherited prompt helpers as well as terminal input.
+    command
+        .env("GIT_TERMINAL_PROMPT", "0")
+        .env("GIT_ASKPASS", "/usr/bin/false")
+        .env("SSH_ASKPASS", "/usr/bin/false")
+        .env("SSH_ASKPASS_REQUIRE", "force")
+        .env("GCM_INTERACTIVE", "never")
+        .stdin(Stdio::null());
+    let output = command.output().await?;
+    anyhow::ensure!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    Ok(RemoteCommandOutput {
+        stdout: String::from_utf8_lossy(&output.stdout).to_string(),
+        stderr: String::from_utf8_lossy(&output.stderr).to_string(),
+    })
 }
 
 #[derive(Clone, Ord, Hash, PartialOrd, Eq, PartialEq)]

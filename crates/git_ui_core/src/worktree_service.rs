@@ -4,7 +4,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 
 use anyhow::anyhow;
-use askpass::AskPassDelegate;
 use collections::HashSet;
 use fs::Fs;
 use gpui::{
@@ -27,7 +26,6 @@ use git::repository::{FetchOptions, Remote};
 
 use util::ResultExt as _;
 
-use crate::askpass_modal::AskPassModal;
 use crate::notifications::{open_output, show_error_toast};
 use crate::worktree_names;
 
@@ -379,61 +377,20 @@ fn remote_branch_to_fetch(branch_target: &NewWorktreeBranchTarget) -> Option<(&s
     }
 }
 
-fn create_worktree_askpass_delegate(
-    workspace: WeakEntity<Workspace>,
-    operation: impl Into<SharedString>,
-    window: &mut Window,
-    cx: &mut Context<Workspace>,
-) -> AskPassDelegate {
-    let operation = operation.into();
-    let window = window.window_handle();
-    AskPassDelegate::new_with_cancellation(
-        &mut cx.to_async(),
-        move |prompt, tx, cancellation, cx| {
-            window
-                .update(cx, |_, window, cx| {
-                    workspace.update(cx, |workspace, cx| {
-                        workspace.toggle_modal(window, cx, |window, cx| {
-                            AskPassModal::new(
-                                operation.clone(),
-                                prompt.into(),
-                                tx,
-                                cancellation,
-                                window,
-                                cx,
-                            )
-                        });
-                    })
-                })
-                .ok();
-        },
-    )
-}
-
 async fn fetch_remote_for_worktree_base(
     git_repos: &[Entity<Repository>],
     remote_name: String,
-    askpass_delegates: Vec<AskPassDelegate>,
     cx: &mut AsyncWindowContext,
 ) -> anyhow::Result<()> {
-    if askpass_delegates.len() != git_repos.len() {
-        return Err(anyhow!(
-            "Unable to fetch {remote_name}: missing credential prompt delegate"
-        ));
-    }
-
     let fetches = cx.update(|_, cx| {
         git_repos
             .iter()
-            .cloned()
-            .zip(askpass_delegates)
-            .map(|(repo, askpass)| {
+            .map(|repo| {
                 repo.update(cx, |repo, cx| {
                     repo.fetch(
                         FetchOptions::Remote(Remote {
                             name: remote_name.clone().into(),
                         }),
-                        askpass,
                         cx,
                     )
                 })
@@ -817,25 +774,6 @@ fn create_worktree_workspace_inner(
 
     let worktree_name = action.worktree_name.clone();
     let branch_target = action.branch_target.clone();
-    let fetch_askpass_delegates = if remote_branch_fetch_mode.should_fetch() {
-        remote_branch_to_fetch(&branch_target)
-            .map(|(remote_name, _branch_name)| {
-                git_repos
-                    .iter()
-                    .map(|_| {
-                        create_worktree_askpass_delegate(
-                            workspace_handle.clone(),
-                            format!("git fetch {remote_name}"),
-                            window,
-                            cx,
-                        )
-                    })
-                    .collect()
-            })
-            .unwrap_or_default()
-    } else {
-        Vec::new()
-    };
     let display_name: SharedString = worktree_name
         .as_deref()
         .unwrap_or("worktree")
@@ -850,7 +788,6 @@ fn create_worktree_workspace_inner(
             non_git_paths,
             worktree_name.clone(),
             branch_target.clone(),
-            fetch_askpass_delegates,
             remote_branch_fetch_mode,
             previous_state,
             workspace_handle.clone(),
@@ -960,7 +897,6 @@ async fn do_create_worktree(
     non_git_paths: Vec<PathBuf>,
     worktree_name: Option<String>,
     branch_target: NewWorktreeBranchTarget,
-    fetch_askpass_delegates: Vec<AskPassDelegate>,
     remote_branch_fetch_mode: RemoteBranchFetchMode,
     previous_state: PreviousWorkspaceState,
     workspace: WeakEntity<Workspace>,
@@ -1012,13 +948,8 @@ async fn do_create_worktree(
     {
         let remote_name = remote_name.to_string();
         let branch_name = branch_name.to_string();
-        if let Err(error) = fetch_remote_for_worktree_base(
-            &git_repos,
-            remote_name.clone(),
-            fetch_askpass_delegates,
-            cx,
-        )
-        .await
+        if let Err(error) =
+            fetch_remote_for_worktree_base(&git_repos, remote_name.clone(), cx).await
         {
             return Err(WorktreeFetchError {
                 remote_name,

@@ -217,11 +217,12 @@ impl OpenRequest {
             self.open_paths.is_empty(),
             "cannot open both local and ssh paths"
         );
-        let mut connection_options =
+        anyhow::ensure!(
+            url.password().is_none(),
+            "SSH password authentication is unsupported; configure non-interactive authentication"
+        );
+        let connection_options =
             RemoteSettings::get_global(cx).connection_options_for(host, port, username);
-        if let Some(password) = url.password() {
-            connection_options.password = Some(urlencoding::decode(password)?.into_owned());
-        }
 
         let connection_options = RemoteConnectionOptions::Ssh(connection_options);
         if let Some(ssh_connection) = &self.remote_connection {

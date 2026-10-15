@@ -1,8 +1,5 @@
 mod headless_project;
 
-// Cargo shares dependencies with the binary, which handles --askpass.
-use askpass as _;
-
 pub use headless_project::{HeadlessAppState, HeadlessProject};
 
 use anyhow::{Context as _, Result, anyhow};
