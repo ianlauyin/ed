@@ -258,10 +258,9 @@ impl PickerDelegate for SidebarRecentProjectsDelegate {
                         requesting_window: replace_window,
                         ..Default::default()
                     };
-                    if let RemoteConnectionOptions::Ssh(connection) = &mut connection {
-                        crate::RemoteSettings::get_global(cx)
-                            .fill_connection_options_from_settings(connection);
-                    };
+                    let RemoteConnectionOptions::Ssh(ssh_options) = &mut connection;
+                    crate::RemoteSettings::get_global(cx)
+                        .fill_connection_options_from_settings(ssh_options);
                     let paths = recent_workspace.paths.paths().to_vec();
                     cx.spawn_in(window, async move |_, cx| {
                         open_remote_project(connection.clone(), paths, app_state, open_options, cx)

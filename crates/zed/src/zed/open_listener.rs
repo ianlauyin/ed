@@ -17,7 +17,7 @@ use gpui::{App, AsyncApp, Global, TaskExt, WindowHandle};
 use onboarding::FIRST_OPEN;
 use onboarding::show_onboarding_view;
 use recent_projects::{RemoteSettings, navigate_to_positions, open_remote_project};
-use remote::{RemoteConnectionOptions, WslConnectionOptions};
+use remote::RemoteConnectionOptions;
 use settings::Settings;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -100,20 +100,6 @@ impl OpenRequest {
         this.diff_paths = request.diff_paths;
         this.diff_all = request.diff_all;
         this.open_behavior = request.open_behavior;
-        if let Some(wsl) = request.wsl {
-            let (user, distro_name) = if let Some((user, distro)) = wsl.split_once('@') {
-                if user.is_empty() {
-                    anyhow::bail!("user is empty in wsl argument");
-                }
-                (Some(user.to_string()), distro.to_string())
-            } else {
-                (None, wsl)
-            };
-            this.remote_connection = Some(RemoteConnectionOptions::Wsl(WslConnectionOptions {
-                distro_name,
-                user,
-            }));
-        }
 
         for url in request.urls {
             if let Some(server_name) = url.strip_prefix("zed-cli://") {
@@ -300,7 +286,6 @@ pub struct RawOpenRequest {
     pub urls: Vec<String>,
     pub diff_paths: Vec<[String; 2]>,
     pub diff_all: bool,
-    pub wsl: Option<String>,
     pub open_behavior: Option<cli::OpenBehavior>,
 }
 
@@ -478,7 +463,6 @@ pub async fn handle_cli_connection(
                 diff_paths,
                 diff_all,
                 wait,
-                wsl,
                 mut open_behavior,
                 env,
                 user_data_dir: _,
@@ -491,7 +475,6 @@ pub async fn handle_cli_connection(
                                 urls,
                                 diff_paths,
                                 diff_all,
-                                wsl,
                                 open_behavior: Some(open_behavior),
                             },
                             cx,
@@ -806,12 +789,11 @@ async fn open_workspaces(
             }
             SerializedWorkspaceLocation::Remote(mut connection) => {
                 let app_state = app_state.clone();
-                if let RemoteConnectionOptions::Ssh(options) = &mut connection {
-                    cx.update(|cx| {
-                        RemoteSettings::get_global(cx)
-                            .fill_connection_options_from_settings(options)
-                    });
-                }
+                let RemoteConnectionOptions::Ssh(options) = &mut connection;
+                cx.update(|cx| {
+                    RemoteSettings::get_global(cx).fill_connection_options_from_settings(options)
+                });
+
                 cx.spawn(async move |cx| {
                     open_remote_project(
                         connection,

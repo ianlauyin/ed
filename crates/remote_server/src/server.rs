@@ -47,7 +47,6 @@ use std::{
     io::Write,
     mem,
     path::{Path, PathBuf},
-    str::FromStr,
     sync::{Arc, LazyLock},
     time::Instant,
 };
@@ -478,7 +477,6 @@ fn start_server(
     listeners: ServerListeners,
     log_rx: Receiver<Vec<u8>>,
     cx: &mut App,
-    is_wsl_interop: bool,
 ) -> AnyProtoClient {
     // This is the server idle timeout. If no connection comes in this timeout, the server will shut down.
     const IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10 * 60);
@@ -608,7 +606,7 @@ fn start_server(
     })
     .detach();
 
-    RemoteClient::proto_client_from_channels(incoming_rx, outgoing_tx, cx, "server", is_wsl_interop)
+    RemoteClient::proto_client_from_channels(incoming_rx, outgoing_tx, cx, "server")
 }
 
 fn init_paths() -> anyhow::Result<()> {
@@ -723,15 +721,8 @@ pub fn execute_run(
 
         HeadlessProject::init(cx);
 
-        let is_wsl_interop = if cfg!(target_os = "linux") {
-            // See: https://learn.microsoft.com/en-us/windows/wsl/filesystems#disable-interoperability
-            matches!(std::fs::read_to_string("/proc/sys/fs/binfmt_misc/WSLInterop").or_else(|_| std::fs::read_to_string("/proc/sys/fs/binfmt_misc/WSLInterop-late")), Ok(s) if s.contains("enabled"))
-        } else {
-            false
-        };
-
         log::info!("gpui app started, initializing server");
-        let session = start_server(listeners, log_rx, cx, is_wsl_interop);
+        let session = start_server(listeners, log_rx, cx);
 
         trusted_worktrees::init(HashMap::default(), cx);
 
@@ -762,8 +753,7 @@ pub fn execute_run(
                 )
             };
 
-            let node_runtime =
-                NodeRuntime::new(http_client.clone(), shell_env_loaded_rx, node_settings_rx);
+            let node_runtime = NodeRuntime::new(shell_env_loaded_rx, node_settings_rx);
 
             let mut languages = LanguageRegistry::new(cx.background_executor().clone());
             languages.set_language_server_download_dir(paths::languages_dir().clone());
@@ -784,12 +774,6 @@ pub fn execute_run(
         });
 
         handle_crash_files_requests(&project, &session);
-
-        cx.background_spawn(async move {
-            cleanup_old_binaries_wsl();
-            cleanup_old_binaries()
-        })
-        .detach();
 
         mem::forget(project);
     };
@@ -1277,9 +1261,6 @@ fn initialize_settings(
         if Some(new_node_settings) != node_settings.as_ref() {
             log::info!("Got new node settings: {new_node_settings:?}");
             let options = NodeBinaryOptions {
-                allow_path_lookup: !new_node_settings.ignore_system_version,
-                // TODO: Implement this setting
-                allow_binary_download: true,
                 use_paths: new_node_settings.path.as_ref().map(|node_path| {
                     let node_path = PathBuf::from(shellexpand::tilde(node_path).as_ref());
                     let npm_path = new_node_settings
@@ -1349,58 +1330,4 @@ fn read_proxy_settings(cx: &mut Context<HeadlessProject>) -> Option<Url> {
                 .ok()
         })
         .or_else(read_proxy_from_env)
-}
-
-fn cleanup_old_binaries() -> Result<()> {
-    let server_dir = paths::remote_server_dir_relative();
-    let release_channel = settings_content::app_metadata::SERVER_RELEASE.dev_name();
-    let prefix = format!("zed-remote-server-{}-", release_channel);
-
-    for entry in std::fs::read_dir(server_dir.as_std_path())? {
-        let path = entry?.path();
-
-        if let Some(file_name) = path.file_name()
-            && let Some(version) = file_name.to_string_lossy().strip_prefix(&prefix)
-            && !is_new_version(version)
-            && !is_file_in_use(file_name)
-        {
-            log::info!("removing old remote server binary: {:?}", path);
-            std::fs::remove_file(&path)?;
-        }
-    }
-
-    Ok(())
-}
-
-// Remove this once 223 goes stable, we only have this to clean up old binaries on WSL
-// we no longer download them into this folder, we use the same folder as other remote servers
-fn cleanup_old_binaries_wsl() {
-    let server_dir = paths::remote_wsl_server_dir_relative();
-    if let Ok(()) = std::fs::remove_dir_all(server_dir.as_std_path()) {
-        log::info!("removing old wsl remote server folder: {:?}", server_dir);
-    }
-}
-
-fn is_new_version(version: &str) -> bool {
-    semver::Version::from_str(version)
-        .ok()
-        .zip(semver::Version::from_str(env!("ZED_PKG_VERSION")).ok())
-        .is_some_and(|(version, current_version)| version >= current_version)
-}
-
-fn is_file_in_use(file_name: &OsStr) -> bool {
-    let info = sysinfo::System::new_with_specifics(sysinfo::RefreshKind::nothing().with_processes(
-        sysinfo::ProcessRefreshKind::nothing().with_exe(sysinfo::UpdateKind::Always),
-    ));
-
-    for process in info.processes().values() {
-        if process
-            .exe()
-            .is_some_and(|exe| exe.file_name().is_some_and(|name| name == file_name))
-        {
-            return true;
-        }
-    }
-
-    false
 }

@@ -16,8 +16,8 @@ onboarding switches, and telemetry log actions are removed. Local diagnostic log
 and manually requested performance reports remain available. Local minidumps may
 be explicitly enabled with `ZED_GENERATE_MINIDUMPS`.
 
-SSH and WSL editing remain supported; their shared transport and
-buffer synchronization primitives remain in the editor.
+SSH editing remains supported, including transport and buffer synchronization.
+WSL transport, UI, settings, CLI requests, and saved connection restoration are removed.
 Reconnection uses separate timeouts for the new connection's handshake and
 for the resync that follows; the resync timeout starts only once the handshake
 completes.
@@ -30,8 +30,9 @@ SSH connections require an executable server installed by the user at
 `~/.local/bin/ed_remote_server` on the target host. Connection setup checks that
 it runs, then uses it for the remote session and command execution. A missing or
 unusable binary fails the connection with an error naming the required path.
-SSH never downloads, builds, uploads, or installs a remote server. WSL retains
-its remote-server installer, independently of any application updater.
+The editor never downloads, builds, uploads, or installs a remote server.
+Remote-server release fetching and archive caching are removed. The obsolete
+`upload_binary_over_ssh` setting is removed.
 
 Feature flags and local flag overrides are removed.
 Diff-review gutter controls and intentional panic/crash
@@ -43,8 +44,7 @@ removed. Local database failures still display a diagnostic notification.
 The editor has a single application identity and icon, with no release-channel
 selection, branding, or channel-specific settings overrides. Build version and
 commit metadata remain available. Existing local database state remains in the
-same directory. Upstream remote-server release identifiers remain for WSL
-compatibility; WSL uses the stable remote-server distribution.
+same directory.
 
 The ztracing instrumentation and Tracy integration are removed. The local GPUI
 performance profiler and diagnostic logs remain available.

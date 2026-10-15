@@ -1757,7 +1757,6 @@ pub(crate) fn icon_for_remote_connection(options: Option<&RemoteConnectionOption
         None => IconName::Screen,
         Some(options) => match options {
             RemoteConnectionOptions::Ssh(_) => IconName::Server,
-            RemoteConnectionOptions::Wsl(_) => IconName::Linux,
         },
     }
 }
@@ -1954,10 +1953,9 @@ impl RecentProjectsDelegate {
                         requesting_window: replace_window,
                         ..Default::default()
                     };
-                    if let RemoteConnectionOptions::Ssh(connection) = &mut connection {
-                        RemoteSettings::get_global(cx)
-                            .fill_connection_options_from_settings(connection);
-                    };
+                    let RemoteConnectionOptions::Ssh(ssh_options) = &mut connection;
+                    RemoteSettings::get_global(cx)
+                        .fill_connection_options_from_settings(ssh_options);
                     let paths = candidate_workspace_paths.paths().to_vec();
                     cx.spawn_in(window, async move |_, cx| {
                         open_remote_project(connection.clone(), paths, app_state, open_options, cx)

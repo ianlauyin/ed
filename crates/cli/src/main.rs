@@ -270,51 +270,6 @@ fn create_empty_stub(temp_dir: &mut TempDir, rel: &Path) -> anyhow::Result<PathB
     Ok(stub_path)
 }
 
-fn parse_path_in_wsl(source: &str, wsl: &str) -> Result<String> {
-    let mut source = PathWithPosition::parse_str(source);
-
-    let (user, distro_name) = if let Some((user, distro)) = wsl.split_once('@') {
-        if user.is_empty() {
-            anyhow::bail!("user is empty in wsl argument");
-        }
-        (Some(user), distro)
-    } else {
-        (None, wsl)
-    };
-
-    let mut args = vec!["--distribution", distro_name];
-    if let Some(user) = user {
-        args.push("--user");
-        args.push(user);
-    }
-
-    let command = [
-        OsStr::new("realpath"),
-        OsStr::new("-s"),
-        source.path.as_ref(),
-    ];
-
-    let output = util::command::new_std_command("wsl.exe")
-        .args(&args)
-        .arg("--exec")
-        .args(&command)
-        .output()?;
-    let result = if output.status.success() {
-        String::from_utf8_lossy(&output.stdout).to_string()
-    } else {
-        let fallback = util::command::new_std_command("wsl.exe")
-            .args(&args)
-            .arg("--")
-            .args(&command)
-            .output()?;
-        String::from_utf8_lossy(&fallback.stdout).to_string()
-    };
-
-    source.path = Path::new(result.trim()).to_owned();
-
-    Ok(source.to_string(&|path| path.to_string_lossy().into_owned()))
-}
-
 fn main() {
     if let Err(error) = run() {
         eprintln!("error: {error:#}");
@@ -427,8 +382,6 @@ fn run() -> Result<()> {
         let _ = temp_dir.keep();
     }
 
-    let wsl = None;
-
     for path in args.paths_with_position.iter() {
         if URL_PREFIX.iter().any(|&prefix| path.starts_with(prefix)) {
             urls.push(path.to_string());
@@ -442,8 +395,6 @@ fn run() -> Result<()> {
             paths.push(tmp_file.path().to_string_lossy().into_owned());
             let (tmp_file, _) = tmp_file.keep()?;
             anonymous_fd_tmp_files.push((file, tmp_file));
-        } else if let Some(wsl) = wsl {
-            urls.push(format!("file://{}", parse_path_in_wsl(path, wsl)?));
         } else {
             paths.push(parse_path_with_position(path)?);
         }
@@ -470,14 +421,11 @@ fn run() -> Result<()> {
                 let (_, handshake) = server.accept().context("Handshake after Zed spawn")?;
                 let (tx, rx) = (handshake.requests, handshake.responses);
 
-                let wsl = None;
-
                 let open_request = CliRequest::Open {
                     paths,
                     urls,
                     diff_paths,
                     diff_all: diff_all_mode,
-                    wsl,
                     wait: args.wait,
                     open_behavior,
                     env,

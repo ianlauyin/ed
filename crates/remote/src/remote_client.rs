@@ -1,12 +1,6 @@
 use crate::{
-    SshConnectionOptions,
-    command::RemoteCommand,
-    protocol::MessageId,
-    proxy::ProxyLaunchError,
-    transport::{
-        ssh::SshRemoteConnection,
-        wsl::{WslConnectionOptions, WslRemoteConnection},
-    },
+    SshConnectionOptions, command::RemoteCommand, protocol::MessageId, proxy::ProxyLaunchError,
+    transport::ssh::SshRemoteConnection,
 };
 use anyhow::{Context as _, Result, anyhow};
 use async_trait::async_trait;
@@ -31,7 +25,6 @@ use rpc::{
     AnyProtoClient, ErrorExt, ProtoClient, ProtoMessageHandlerSet, RpcError,
     proto::{self, Envelope, EnvelopedMessage, PeerId, RequestMessage, build_typed_envelope},
 };
-use semver::Version;
 use settings_content::app_metadata::ServerRelease;
 use std::{
     collections::VecDeque,
@@ -128,20 +121,6 @@ pub enum Interactive {
 }
 
 pub trait RemoteClientDelegate: Send + Sync {
-    fn get_download_url(
-        &self,
-        platform: RemotePlatform,
-        release_channel: ServerRelease,
-        version: Option<Version>,
-        cx: &mut AsyncApp,
-    ) -> Task<Result<Option<String>>>;
-    fn download_server_binary_locally(
-        &self,
-        platform: RemotePlatform,
-        release_channel: ServerRelease,
-        version: Option<Version>,
-        cx: &mut AsyncApp,
-    ) -> Task<Result<PathBuf>>;
     fn set_status(&self, status: Option<&str>, cx: &mut AsyncApp);
 }
 
@@ -412,15 +391,8 @@ impl RemoteClient {
                 let (incoming_tx, incoming_rx) = mpsc::unbounded::<Envelope>();
                 let (connection_activity_tx, connection_activity_rx) = mpsc::channel::<()>(1);
 
-                let client = cx.update(|cx| {
-                    ChannelClient::new(
-                        incoming_rx,
-                        outgoing_tx,
-                        cx,
-                        "client",
-                        remote_connection.has_wsl_interop(),
-                    )
-                });
+                let client =
+                    cx.update(|cx| ChannelClient::new(incoming_rx, outgoing_tx, cx, "client"));
 
                 let path_style = remote_connection.path_style();
                 let platform = remote_connection.remote_platform();
@@ -521,9 +493,8 @@ impl RemoteClient {
         outgoing_tx: mpsc::UnboundedSender<Envelope>,
         cx: &App,
         name: &'static str,
-        has_wsl_interop: bool,
     ) -> AnyProtoClient {
-        ChannelClient::new(incoming_rx, outgoing_tx, cx, name, has_wsl_interop).into()
+        ChannelClient::new(incoming_rx, outgoing_tx, cx, name).into()
     }
 
     pub fn shutdown_processes<T: RequestMessage>(
@@ -953,11 +924,6 @@ impl RemoteClient {
             .map_or(false, |connection| connection.shares_network_interface())
     }
 
-    pub fn has_wsl_interop(&self) -> bool {
-        self.remote_connection()
-            .map_or(false, |connection| connection.has_wsl_interop())
-    }
-
     pub fn build_command(
         &self,
         program: Option<String>,
@@ -1051,8 +1017,7 @@ impl RemoteClient {
         self.os_version.clone()
     }
 
-    /// A stable identifier for the kind of remote connection (e.g. `"ssh"`,
-    /// `"wsl"`).
+    /// A stable identifier for the kind of remote connection (`"ssh"`).
     pub fn connection_type(&self) -> &'static str {
         self.connection_options.connection_type()
     }
@@ -1182,11 +1147,6 @@ impl ConnectionPool {
                                 .await
                                 .map(|connection| Arc::new(connection) as Arc<dyn RemoteConnection>)
                         }
-                        RemoteConnectionOptions::Wsl(opts) => {
-                            WslRemoteConnection::new(opts, delegate, cx)
-                                .await
-                                .map(|connection| Arc::new(connection) as Arc<dyn RemoteConnection>)
-                        }
                     };
 
                     cx.update_global(|pool: &mut Self, _| {
@@ -1222,7 +1182,6 @@ impl ConnectionPool {
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
 pub enum RemoteConnectionOptions {
     Ssh(SshConnectionOptions),
-    Wsl(WslConnectionOptions),
 }
 
 impl RemoteConnectionOptions {
@@ -1232,7 +1191,6 @@ impl RemoteConnectionOptions {
                 .nickname
                 .clone()
                 .unwrap_or_else(|| opts.host.to_string()),
-            RemoteConnectionOptions::Wsl(opts) => opts.distro_name.clone(),
         }
     }
 
@@ -1240,14 +1198,12 @@ impl RemoteConnectionOptions {
     pub fn connection_type(&self) -> &'static str {
         match self {
             RemoteConnectionOptions::Ssh(_) => "ssh",
-            RemoteConnectionOptions::Wsl(_) => "wsl",
         }
     }
 
     pub fn host(&self) -> String {
         match self {
             RemoteConnectionOptions::Ssh(opts) => opts.host.to_string(),
-            RemoteConnectionOptions::Wsl(opts) => opts.distro_name.clone(),
         }
     }
 }
@@ -1255,12 +1211,6 @@ impl RemoteConnectionOptions {
 impl From<SshConnectionOptions> for RemoteConnectionOptions {
     fn from(opts: SshConnectionOptions) -> Self {
         RemoteConnectionOptions::Ssh(opts)
-    }
-}
-
-impl From<WslConnectionOptions> for RemoteConnectionOptions {
-    fn from(opts: WslConnectionOptions) -> Self {
-        RemoteConnectionOptions::Wsl(opts)
     }
 }
 
@@ -1314,7 +1264,6 @@ pub trait RemoteConnection: Send + Sync {
     fn remote_os_version(&self) -> Option<String>;
     fn shell(&self) -> String;
     fn default_system_shell(&self) -> String;
-    fn has_wsl_interop(&self) -> bool;
 }
 
 type ResponseChannels = Mutex<HashMap<MessageId, oneshot::Sender<(Envelope, oneshot::Sender<()>)>>>;
@@ -1363,7 +1312,6 @@ pub(crate) struct ChannelClient {
     name: &'static str,
     task: Mutex<Task<Result<()>>>,
     remote_started: Signal<()>,
-    has_wsl_interop: bool,
     executor: BackgroundExecutor,
 }
 
@@ -1373,7 +1321,6 @@ impl ChannelClient {
         outgoing_tx: mpsc::UnboundedSender<Envelope>,
         cx: &App,
         name: &'static str,
-        has_wsl_interop: bool,
     ) -> Arc<Self> {
         Arc::new_cyclic(|this| Self {
             outgoing_tx: Mutex::new(outgoing_tx),
@@ -1391,7 +1338,6 @@ impl ChannelClient {
                 &cx.to_async(),
             )),
             remote_started: Signal::new(cx),
-            has_wsl_interop,
         })
     }
 
@@ -1801,9 +1747,5 @@ impl ProtoClient for ChannelClient {
 
     fn message_handler_set(&self) -> &Mutex<ProtoMessageHandlerSet> {
         &self.message_handlers
-    }
-
-    fn has_wsl_interop(&self) -> bool {
-        self.has_wsl_interop
     }
 }

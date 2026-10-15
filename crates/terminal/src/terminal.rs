@@ -1118,11 +1118,7 @@ impl TerminalBuilder {
             let terminal_title_override =
                 shell_params.as_ref().and_then(|e| e.title_override.clone());
 
-            // Note: when remoting, this shell_kind will scrutinize `ssh` or
-            // `wsl.exe` as a shell and fall back to posix or powershell based on
-            // the compilation target. This is fine right now due to the restricted
-            // way we use the return value, but would become incorrect if we
-            // supported remoting into windows.
+            // Remote commands use SSH, which is treated as a POSIX shell.
             let shell_kind = shell.shell_kind(false);
 
             let scrolling_history = if task.is_some() {

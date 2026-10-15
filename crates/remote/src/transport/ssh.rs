@@ -121,7 +121,6 @@ pub struct SshConnectionOptions {
     pub connection_timeout: Option<u16>,
 
     pub nickname: Option<String>,
-    pub upload_binary_over_ssh: bool,
 }
 
 impl From<settings_content::SshConnection> for SshConnectionOptions {
@@ -132,7 +131,6 @@ impl From<settings_content::SshConnection> for SshConnectionOptions {
             port: val.port,
             args: Some(val.args),
             nickname: val.nickname,
-            upload_binary_over_ssh: val.upload_binary_over_ssh.unwrap_or_default(),
             port_forwards: val.port_forwards,
             connection_timeout: val.connection_timeout,
         }
@@ -612,10 +610,6 @@ impl RemoteConnection for SshRemoteConnection {
 
     fn remote_os_version(&self) -> Option<String> {
         self.ssh_os_version.clone()
-    }
-
-    fn has_wsl_interop(&self) -> bool {
-        false
     }
 }
 
@@ -1303,7 +1297,6 @@ impl SshConnectionOptions {
             port_forwards,
             args: Some(args),
             nickname: None,
-            upload_binary_over_ssh: false,
             connection_timeout: None,
         })
     }

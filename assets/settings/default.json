@@ -1892,13 +1892,9 @@
   // Settings for which version of Node.js and NPM to use when installing
   // language servers.
   //
-  // Note: changing this setting currently requires restarting Zed.
+  // Zed requires system Node.js 22 or newer and npm. It never downloads Node.js.
   "node": {
-    // By default, Zed will look for `node` and `npm` on your `$PATH`, and use the
-    // existing executables if their version is recent enough. Set this to `true`
-    // to prevent this, and force Zed to always download and install its own
-    // version of Node.
-    "ignore_system_version": false,
+    // By default, Zed looks for `node` and `npm` on your `$PATH`.
     // You can also specify alternative paths to Node and NPM. If you specify
     // `path`, but not `npm_path`, Zed will assume that `npm` is located at
     // `${path}/../npm`.

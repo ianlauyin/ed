@@ -22,7 +22,7 @@ transport that only served dev containers.
   `debugger.scm` queries.
 - No "Connect Dev Container" entry, `.devcontainer` suggestion toast,
   `projects::OpenDevContainer` action, or `--dev-container` CLI flag. Remote
-  projects are SSH or WSL only; saved Docker connections are not restored.
+  projects use SSH only; saved Docker and WSL connections are not restored.
 - Debugger RPC messages and the `GetProcesses` request are removed from the
   protocol (field numbers reserved). The workspace database drops the
   `breakpoints` table.

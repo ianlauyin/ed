@@ -81,8 +81,6 @@ pub trait ProtoClient: Send + Sync {
     fn send_response(&self, envelope: Envelope, message_type: &'static str) -> Result<()>;
 
     fn message_handler_set(&self) -> &parking_lot::Mutex<ProtoMessageHandlerSet>;
-
-    fn has_wsl_interop(&self) -> bool;
 }
 
 #[derive(Default)]
@@ -637,10 +635,6 @@ impl AnyProtoClient {
                 handle: entity.downgrade().into(),
             },
         );
-    }
-
-    pub fn has_wsl_interop(&self) -> bool {
-        self.0.client.has_wsl_interop()
     }
 }
 

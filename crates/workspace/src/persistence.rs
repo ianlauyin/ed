@@ -26,7 +26,7 @@ use project::{
 
 use language::{LanguageName, Toolchain, ToolchainScope};
 use remote::{
-    RemoteConnectionIdentity, RemoteConnectionOptions, SshConnectionOptions, WslConnectionOptions,
+    RemoteConnectionIdentity, RemoteConnectionOptions, SshConnectionOptions,
     remote_connection_identity,
 };
 use serde::{Deserialize, Serialize};
@@ -62,14 +62,6 @@ fn parse_timestamp(text: &str) -> DateTime<Utc> {
     NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M:%S")
         .map(|naive| naive.and_utc())
         .unwrap_or_else(|_| Utc::now())
-}
-
-fn contains_wsl_path(paths: &PathList) -> bool {
-    false
-        && paths
-            .paths()
-            .iter()
-            .any(|path| util::paths::WslPath::from_path(path).is_some())
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -1442,35 +1434,19 @@ impl WorkspaceDb {
         this: &Connection,
         options: RemoteConnectionOptions,
     ) -> Result<RemoteConnectionId> {
-        let identity = remote_connection_identity(&options);
-        let kind;
-        let user: Option<String>;
-        let mut host = None;
-        let mut port = None;
-        let mut distro = None;
-
-        match identity {
-            RemoteConnectionIdentity::Ssh {
-                host: identity_host,
-                username,
-                port: identity_port,
-            } => {
-                kind = RemoteConnectionKind::Ssh;
-                host = Some(identity_host);
-                port = identity_port;
-                user = username;
-            }
-            RemoteConnectionIdentity::Wsl {
-                distro_name,
-                user: identity_user,
-            } => {
-                kind = RemoteConnectionKind::Wsl;
-                distro = Some(distro_name);
-                user = identity_user;
-            }
-        }
-
-        Self::get_or_create_remote_connection_query(this, kind, host, port, user, distro)
+        let RemoteConnectionIdentity::Ssh {
+            host,
+            username,
+            port,
+        } = remote_connection_identity(&options);
+        Self::get_or_create_remote_connection_query(
+            this,
+            RemoteConnectionKind::Ssh,
+            Some(host),
+            port,
+            username,
+            None,
+        )
     }
 
     fn get_or_create_remote_connection_query(
@@ -1648,13 +1624,9 @@ impl WorkspaceDb {
         host: Option<String>,
         port: Option<u16>,
         user: Option<String>,
-        distro: Option<String>,
+        _distro: Option<String>,
     ) -> Option<RemoteConnectionOptions> {
         match RemoteConnectionKind::deserialize(&kind)? {
-            RemoteConnectionKind::Wsl => Some(RemoteConnectionOptions::Wsl(WslConnectionOptions {
-                distro_name: distro?,
-                user: user,
-            })),
             RemoteConnectionKind::Ssh => Some(RemoteConnectionOptions::Ssh(SshConnectionOptions {
                 host: host?.into(),
                 port,
@@ -1710,7 +1682,7 @@ impl WorkspaceDb {
                 continue;
             }
 
-            if paths.paths().is_empty() || contains_wsl_path(&paths) {
+            if paths.paths().is_empty() {
                 continue;
             }
 
@@ -1786,8 +1758,8 @@ impl WorkspaceDb {
     }
 
     // Deletes workspace rows that can no longer be restored from. Remote workspaces whose
-    // connection was removed, and (on Windows) workspaces pointing at WSL paths, are cleaned
-    // up immediately. Local workspaces with no valid paths on disk are kept for seven days
+    // connection was removed are cleaned up immediately. Local workspaces with no valid paths
+    // on disk are kept for seven days
     // after going stale. Workspaces belonging to the current session or the last session are
     // always preserved so that an in-progress restore can rehydrate them.
     pub async fn garbage_collect_workspaces(
@@ -1812,16 +1784,6 @@ impl WorkspaceDb {
                 if !remote_connections.contains_key(&remote_connection_id) {
                     workspaces_to_delete.push(id);
                 }
-                continue;
-            }
-
-            // Delete the workspace if any of the paths are WSL paths. If a
-            // local workspace points to WSL, attempting to read its metadata
-            // will wait for the WSL VM and file server to boot up. This can
-            // block for many seconds. Supported scenarios use remote
-            // workspaces.
-            if contains_wsl_path(&paths) {
-                workspaces_to_delete.push(id);
                 continue;
             }
 

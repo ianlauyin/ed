@@ -46,10 +46,6 @@ pub trait PathExt {
         path::try_from_bytes::<Self>(bytes)
     }
 
-    /// Converts a local path to one that can be used inside of WSL.
-    /// Returns `None` if the path cannot be converted into a WSL one (network share).
-    fn local_to_wsl(&self) -> Option<PathBuf>;
-
     /// Returns a file's "full" joined collection of extensions, in the case where a file does not
     /// just have a singular extension but instead has multiple (e.g File.tar.gz, Component.stories.tsx)
     ///
@@ -87,35 +83,6 @@ impl<T: AsRef<Path>> PathExt for T {
         path.extension()
             .and_then(|e| e.to_str())
             .or_else(|| path.file_stem()?.to_str())
-    }
-
-    fn local_to_wsl(&self) -> Option<PathBuf> {
-        // quite sketchy to convert this back to path at the end, but a lot of functions only accept paths
-        // todo: ideally rework them..?
-        let mut new_path = std::ffi::OsString::new();
-        for component in self.as_ref().components() {
-            match component {
-                std::path::Component::Prefix(prefix) => {
-                    let drive_letter = prefix.as_os_str().to_string_lossy().to_lowercase();
-                    let drive_letter = drive_letter.strip_suffix(':')?;
-
-                    new_path.push(format!("/mnt/{}", drive_letter));
-                }
-                std::path::Component::RootDir => {}
-                std::path::Component::CurDir => {
-                    new_path.push("/.");
-                }
-                std::path::Component::ParentDir => {
-                    new_path.push("/..");
-                }
-                std::path::Component::Normal(os_str) => {
-                    new_path.push("/");
-                    new_path.push(os_str);
-                }
-            }
-        }
-
-        Some(new_path.into())
     }
 
     fn multiple_extensions(&self) -> Option<String> {
@@ -1228,22 +1195,6 @@ pub fn compare_paths(
             (None, Some(_)) => break Ordering::Less,
             (None, None) => break Ordering::Equal,
         }
-    }
-}
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct WslPath {
-    pub distro: String,
-
-    // the reason this is an OsString and not any of the path types is that it needs to
-    // represent a unix path (with '/' separators) on windows. `from_path` does this by
-    // manually constructing it from the path components of a given windows path.
-    pub path: std::ffi::OsString,
-}
-
-impl WslPath {
-    pub fn from_path<P: AsRef<Path>>(_path: P) -> Option<WslPath> {
-        None
     }
 }
 

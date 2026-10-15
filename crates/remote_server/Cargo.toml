@@ -49,7 +49,6 @@ settings_content.workspace = true
 remote.workspace = true
 reqwest_client.workspace = true
 rpc.workspace = true
-semver.workspace = true
 serde_json.workspace = true
 settings.workspace = true
 shellexpand.workspace = true

@@ -94,7 +94,6 @@ macro_rules! settings_overrides {
         }
     }
 }
-use std::collections::BTreeSet;
 use std::hash::Hash;
 pub use util::serde::default_true;
 
@@ -1000,7 +999,6 @@ pub enum ImageFileSizeUnit {
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
 pub struct RemoteSettingsContent {
     pub ssh_connections: Option<Vec<SshConnection>>,
-    pub wsl_connections: Option<Vec<WslConnection>>,
     pub read_ssh_config: Option<bool>,
 }
 
@@ -1016,24 +1014,10 @@ pub struct SshConnection {
     pub projects: collections::BTreeSet<RemoteProject>,
     /// Name to use for this server in UI.
     pub nickname: Option<String>,
-    // By default Zed will download the binary to the host directly.
-    // If this is set to true, Zed will download the binary to your local machine,
-    // and then upload it over the SSH connection. Useful if your SSH server has
-    // limited outbound internet access.
-    pub upload_binary_over_ssh: Option<bool>,
-
     pub port_forwards: Option<Vec<SshPortForwardOption>>,
-    /// Timeout in seconds for SSH connection and downloading the remote server binary.
+    /// Timeout in seconds for the SSH connection.
     /// Defaults to 10 seconds if not specified.
     pub connection_timeout: Option<u16>,
-}
-
-#[derive(Clone, Default, Serialize, Deserialize, PartialEq, JsonSchema, MergeFrom, Debug)]
-pub struct WslConnection {
-    pub distro_name: String,
-    pub user: Option<String>,
-    #[serde(default)]
-    pub projects: BTreeSet<RemoteProject>,
 }
 
 #[with_fallible_options]

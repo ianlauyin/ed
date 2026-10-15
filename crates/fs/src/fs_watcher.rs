@@ -283,7 +283,7 @@ fn path_covered_by_recursive_registration(
 /// Detect whether a path requires polling instead of native file watching.
 ///
 /// Returns `true` for filesystem types where inotify/FSEvents/ReadDirectoryChanges
-/// silently fail to deliver events: 9P (WSL drvfs), NFS, CIFS/SMB, FUSE (sshfs), etc.
+/// silently fail to deliver events: 9P, NFS, CIFS/SMB, FUSE (sshfs), etc.
 ///
 /// Can be overridden with the `ZED_FILE_WATCHER_MODE` environment variable:
 /// - `native` — always use native OS watcher
@@ -1278,14 +1278,6 @@ fn detect_requires_poll_watcher_linux(path: &Path) -> bool {
         return true;
     }
 
-    if is_wsl_drvfs_path(path) {
-        log::info!(
-            "Detected WSL drvfs mount at {}, using poll watcher",
-            path.display()
-        );
-        return true;
-    }
-
     false
 }
 
@@ -1318,28 +1310,4 @@ fn is_virtiofs(path: &Path) -> bool {
     }
 
     best_mount.is_some_and(|(_, fs_type)| fs_type == "virtiofs" || fs_type == "fuse.virtiofs")
-}
-
-#[cfg(target_os = "linux")]
-fn is_wsl_drvfs_path(path: &Path) -> bool {
-    if std::env::var_os("WSL_DISTRO_NAME").is_none() {
-        if let Ok(version) = std::fs::read_to_string("/proc/version") {
-            let version = version.to_lowercase();
-            if !version.contains("microsoft") && !version.contains("wsl") {
-                return false;
-            }
-        } else {
-            return false;
-        }
-    }
-
-    let Some(path) = path.to_str() else {
-        return false;
-    };
-    if !path.starts_with("/mnt/") || path.len() < 6 {
-        return false;
-    }
-    let after_mnt = &path[5..];
-    after_mnt.starts_with(|c: char| c.is_ascii_alphabetic())
-        && (after_mnt.len() == 1 || after_mnt.as_bytes()[1] == b'/')
 }

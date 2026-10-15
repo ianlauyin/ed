@@ -91,8 +91,6 @@ pub struct NodeBinarySettings {
     pub path: Option<String>,
     /// The path to the npm binary Zed should use (defaults to `.path/../npm`).
     pub npm_path: Option<String>,
-    /// If enabled, Zed will download its own copy of Node.
-    pub ignore_system_version: bool,
 }
 
 impl From<settings::NodeBinarySettings> for NodeBinarySettings {
@@ -100,7 +98,6 @@ impl From<settings::NodeBinarySettings> for NodeBinarySettings {
         Self {
             path: settings.path,
             npm_path: settings.npm_path,
-            ignore_system_version: settings.ignore_system_version.unwrap_or(false),
         }
     }
 }

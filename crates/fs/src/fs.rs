@@ -143,7 +143,7 @@ pub trait Fs: Send + Sync {
     /// Whether the volume holding `path` compares file names case-sensitively.
     fn is_path_case_sensitive(&self, path: &Path) -> bool;
     /// Whether `path` sits on a filesystem where native file watching does not
-    /// deliver events (network mounts, some FUSE and WSL mounts), so it must be polled.
+    /// deliver events (network mounts and some FUSE mounts), so it must be polled.
     fn requires_poll_watcher(&self, path: &Path) -> bool;
 
     async fn watch(

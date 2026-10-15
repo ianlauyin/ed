@@ -392,7 +392,6 @@ impl TitleBar {
                 "Remote Project",
                 IconName::Server,
             ),
-            RemoteConnectionOptions::Wsl(_) => (None, "Remote Project", IconName::Linux),
         };
 
         let nickname = nickname.unwrap_or_else(|| host.clone());

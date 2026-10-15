@@ -15,7 +15,6 @@ doctest = false
 
 [features]
 default = []
-build-remote-server-binary = []
 
 [dependencies]
 anyhow.workspace = true
@@ -26,10 +25,7 @@ futures.workspace = true
 gpui.workspace = true
 log = { workspace = true, features = ["kv_unstable_std"] }
 parking_lot.workspace = true
-paths.workspace = true
 rpc = { workspace = true, features = ["gpui"] }
-schemars.workspace = true
-semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 settings_content.workspace = true

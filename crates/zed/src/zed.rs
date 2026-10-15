@@ -2107,15 +2107,10 @@ fn open_settings_file(
     cx.spawn_in(window, async move |workspace, cx| {
         workspace
             .update_in(cx, |workspace, window, cx| {
-                workspace.with_local_or_wsl_workspace(window, cx, move |workspace, window, cx| {
+                workspace.with_local_workspace(window, cx, move |workspace, window, cx| {
                     let project = workspace.project().clone();
 
                     cx.spawn_in(window, async move |workspace, cx| {
-                        let config_dir = project
-                            .update(cx, |project, cx| {
-                                project.try_windows_path_to_wsl(paths::config_dir().as_path(), cx)
-                            })
-                            .await?;
                         // Set up a dedicated worktree for settings, since
                         // otherwise we're dropping and re-starting LSP servers
                         // for each file inside on every settings file
@@ -2127,7 +2122,7 @@ fn open_settings_file(
                         // restarts.
                         let (_worktree, _) = project
                             .update(cx, |project, cx| {
-                                project.find_or_create_worktree(&config_dir, false, cx)
+                                project.find_or_create_worktree(paths::config_dir(), false, cx)
                             })
                             .await?;
 

@@ -561,12 +561,6 @@ actions!(
     [ShowIncomingCalls, ShowOutgoingCalls, ToggleDirection]
 );
 
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct WslConnectionOptions {
-    pub distro_name: String,
-    pub user: Option<String>,
-}
-
 pub mod preview {
     pub mod markdown {
         use gpui::actions;

@@ -28,7 +28,6 @@ pub(crate) struct RemoteConnectionId(pub u64);
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub(crate) enum RemoteConnectionKind {
     Ssh,
-    Wsl,
 }
 
 #[derive(Debug, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
@@ -151,14 +150,12 @@ impl RemoteConnectionKind {
     pub(crate) fn serialize(&self) -> &'static str {
         match self {
             RemoteConnectionKind::Ssh => "ssh",
-            RemoteConnectionKind::Wsl => "wsl",
         }
     }
 
     pub(crate) fn deserialize(text: &str) -> Option<Self> {
         match text {
             "ssh" => Some(Self::Ssh),
-            "wsl" => Some(Self::Wsl),
             _ => None,
         }
     }

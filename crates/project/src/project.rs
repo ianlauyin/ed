@@ -24,7 +24,7 @@ use git_store::{Repository, RepositoryId};
 pub mod search_history;
 pub mod yarn;
 
-use itertools::{Either, Itertools};
+use itertools::Itertools;
 
 use crate::{
     git_store::GitStore,
@@ -1548,9 +1548,6 @@ impl Project {
     }
 
     /// Reveals the given path in the system file manager.
-    ///
-    /// On Windows with a WSL remote connection, this converts the POSIX path
-    /// to a Windows UNC path before revealing.
     pub fn reveal_path(&self, path: &Path, cx: &mut Context<Self>) {
         cx.reveal_path(path);
     }
@@ -2023,22 +2020,6 @@ impl Project {
     #[inline]
     pub fn is_remote(&self) -> bool {
         self.remote_client.is_some()
-    }
-
-    #[inline]
-    pub fn is_via_wsl_with_host_interop(&self, cx: &App) -> bool {
-        self.remote_client
-            .as_ref()
-            .is_some_and(|remote| remote.read(cx).has_wsl_interop())
-    }
-
-    /// Whether this project is served by a WSL distribution.
-    #[inline]
-    pub fn is_via_wsl(&self, cx: &App) -> bool {
-        matches!(
-            self.remote_connection_options(cx),
-            Some(RemoteConnectionOptions::Wsl(_))
-        )
     }
 
     pub fn disable_worktree_scanner(&mut self, cx: &mut Context<Self>) {
@@ -3521,28 +3502,6 @@ impl Project {
         self.worktree_store.update(cx, |worktree_store, cx| {
             worktree_store.move_worktree(source, destination, cx)
         })
-    }
-
-    /// Attempts to convert the input path to a WSL path if this is a wsl remote project and the input path is a host windows path.
-    pub fn try_windows_path_to_wsl(
-        &self,
-        abs_path: &Path,
-        cx: &App,
-    ) -> impl Future<Output = Result<PathBuf>> + use<> {
-        let fut = if false
-            && let Some(remote_client) = &self.remote_client
-            && let RemoteConnectionOptions::Wsl(wsl) = remote_client.read(cx).connection_options()
-        {
-            Either::Left(wsl.abs_windows_path_to_wsl_path(abs_path))
-        } else {
-            Either::Right(abs_path.to_owned())
-        };
-        async move {
-            match fut {
-                Either::Left(fut) => fut.await.map(Into::into),
-                Either::Right(path) => Ok(path),
-            }
-        }
     }
 
     pub fn find_or_create_worktree(

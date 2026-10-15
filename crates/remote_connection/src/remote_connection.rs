@@ -1,4 +1,3 @@
-mod server_release;
 use std::{path::PathBuf, sync::Arc};
 
 use anyhow::Result;
@@ -7,9 +6,7 @@ use gpui::{
     App, AsyncApp, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, ParentElement as _,
     Render, SharedString, Task, WeakEntity,
 };
-use remote::{ConnectionIdentifier, RemoteClient, RemoteConnectionOptions, RemotePlatform};
-use semver::Version;
-use settings_content::app_metadata::ServerRelease;
+use remote::{ConnectionIdentifier, RemoteClient, RemoteConnectionOptions};
 use ui::{
     ActiveTheme, CommonAnimationExt, Context, InteractiveElement, KeyBinding, ListItem, prelude::*,
 };
@@ -18,7 +15,6 @@ use workspace::{DismissDecision, ModalView, Workspace};
 pub struct RemoteConnectionPrompt {
     connection_string: SharedString,
     nickname: Option<SharedString>,
-    is_wsl: bool,
     status_message: Option<SharedString>,
     cancellation: Option<oneshot::Sender<()>>,
     focus_handle: FocusHandle,
@@ -43,14 +39,12 @@ impl RemoteConnectionPrompt {
     pub fn new(
         connection_string: String,
         nickname: Option<String>,
-        is_wsl: bool,
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
         Self {
             connection_string: connection_string.into(),
             nickname: nickname.map(|nickname| nickname.into()),
-            is_wsl,
             focus_handle: cx.focus_handle(),
             status_message: None,
             cancellation: None,
@@ -104,16 +98,14 @@ impl RemoteConnectionModal {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let (connection_string, nickname, is_wsl) = match connection_options {
+        let (connection_string, nickname) = match connection_options {
             RemoteConnectionOptions::Ssh(options) => {
-                (options.connection_string(), options.nickname.clone(), false)
+                (options.connection_string(), options.nickname.clone())
             }
-            RemoteConnectionOptions::Wsl(options) => (options.distro_name.clone(), None, true),
         };
         Self {
-            prompt: cx.new(|cx| {
-                RemoteConnectionPrompt::new(connection_string, nickname, is_wsl, window, cx)
-            }),
+            prompt: cx
+                .new(|cx| RemoteConnectionPrompt::new(connection_string, nickname, window, cx)),
             finished: false,
             paths,
         }
@@ -140,7 +132,6 @@ pub struct SshConnectionHeader {
     pub connection_string: SharedString,
     pub paths: Vec<PathBuf>,
     pub nickname: Option<SharedString>,
-    pub is_wsl: bool,
 }
 
 impl RenderOnce for SshConnectionHeader {
@@ -156,12 +147,6 @@ impl RenderOnce for SshConnectionHeader {
             (self.connection_string, None)
         };
 
-        let icon = if self.is_wsl {
-            IconName::Linux
-        } else {
-            IconName::Server
-        };
-
         h_flex()
             .px(DynamicSpacing::Base12.rems(cx))
             .pt(DynamicSpacing::Base08.rems(cx))
@@ -169,7 +154,7 @@ impl RenderOnce for SshConnectionHeader {
             .rounded_t_sm()
             .w_full()
             .gap_1p5()
-            .child(Icon::new(icon).size(IconSize::Small))
+            .child(Icon::new(IconName::Server).size(IconSize::Small))
             .child(
                 h_flex()
                     .gap_1()
@@ -201,7 +186,6 @@ impl Render for RemoteConnectionModal {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl ui::IntoElement {
         let nickname = self.prompt.read(cx).nickname.clone();
         let connection_string = self.prompt.read(cx).connection_string.clone();
-        let is_wsl = self.prompt.read(cx).is_wsl;
 
         let theme = cx.theme().clone();
         let body_color = theme.colors().editor_background;
@@ -219,7 +203,6 @@ impl Render for RemoteConnectionModal {
                     paths: self.paths.clone(),
                     connection_string,
                     nickname,
-                    is_wsl,
                 }
                 .render(window, cx),
             )
@@ -286,57 +269,6 @@ impl RemoteClientDelegate {
 impl remote::RemoteClientDelegate for RemoteClientDelegate {
     fn set_status(&self, status: Option<&str>, cx: &mut AsyncApp) {
         self.update_status(status, cx)
-    }
-
-    fn download_server_binary_locally(
-        &self,
-        platform: RemotePlatform,
-        release_channel: ServerRelease,
-        version: Option<Version>,
-        cx: &mut AsyncApp,
-    ) -> Task<anyhow::Result<PathBuf>> {
-        let this = self.clone();
-        cx.spawn(async move |cx| {
-            server_release::download_remote_server_release(
-                release_channel,
-                version.clone(),
-                platform.os.as_str(),
-                platform.arch.as_str(),
-                move |status, cx| this.set_status(Some(status), cx),
-                cx,
-            )
-            .await
-            .with_context(|| {
-                format!(
-                    "Downloading remote server binary (version: {}, os: {}, arch: {})",
-                    version
-                        .as_ref()
-                        .map(|v| format!("{}", v))
-                        .unwrap_or("unknown".to_string()),
-                    platform.os,
-                    platform.arch,
-                )
-            })
-        })
-    }
-
-    fn get_download_url(
-        &self,
-        platform: RemotePlatform,
-        release_channel: ServerRelease,
-        version: Option<Version>,
-        cx: &mut AsyncApp,
-    ) -> Task<Result<Option<String>>> {
-        cx.spawn(async move |cx| {
-            server_release::get_remote_server_release_url(
-                release_channel,
-                version,
-                platform.os.as_str(),
-                platform.arch.as_str(),
-                cx,
-            )
-            .await
-        })
     }
 }
 
@@ -434,61 +366,11 @@ pub fn connect_reusing_pool(
 }
 
 /// Delegate for remote connections that reuse an existing pooled
-/// connection. Server binary downloads are supported by the remote connection.
+/// connection.
 struct BackgroundRemoteClientDelegate;
 
 impl remote::RemoteClientDelegate for BackgroundRemoteClientDelegate {
     fn set_status(&self, _status: Option<&str>, _cx: &mut AsyncApp) {}
-
-    fn download_server_binary_locally(
-        &self,
-        platform: RemotePlatform,
-        release_channel: ServerRelease,
-        version: Option<Version>,
-        cx: &mut AsyncApp,
-    ) -> Task<anyhow::Result<PathBuf>> {
-        cx.spawn(async move |cx| {
-            server_release::download_remote_server_release(
-                release_channel,
-                version.clone(),
-                platform.os.as_str(),
-                platform.arch.as_str(),
-                |_status, _cx| {},
-                cx,
-            )
-            .await
-            .with_context(|| {
-                format!(
-                    "Downloading remote server binary (version: {}, os: {}, arch: {})",
-                    version
-                        .as_ref()
-                        .map(|v| format!("{v}"))
-                        .unwrap_or("unknown".to_string()),
-                    platform.os,
-                    platform.arch,
-                )
-            })
-        })
-    }
-
-    fn get_download_url(
-        &self,
-        platform: RemotePlatform,
-        release_channel: ServerRelease,
-        version: Option<Version>,
-        cx: &mut AsyncApp,
-    ) -> Task<Result<Option<String>>> {
-        cx.spawn(async move |cx| {
-            server_release::get_remote_server_release_url(
-                release_channel,
-                version,
-                platform.os.as_str(),
-                platform.arch.as_str(),
-                cx,
-            )
-            .await
-        })
-    }
 }
 
 pub fn connect(
@@ -514,5 +396,3 @@ pub fn connect(
             .await
     })
 }
-
-use anyhow::Context as _;
