@@ -382,6 +382,7 @@ fn main() {
         menu::init();
         zed_actions::init();
 
+        settings_content::app_metadata::init(app_version, cx);
         gpui_tokio::init(cx);
         if let Some(app_commit_sha) = app_commit_sha {
             AppCommitSha::set_global(app_commit_sha, cx);
