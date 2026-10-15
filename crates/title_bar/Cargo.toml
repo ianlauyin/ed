@@ -19,7 +19,7 @@ default = []
 platform_title_bar.workspace = true
 
 git_ui_core.workspace = true
-gpui = { workspace = true, features = ["screen-capture"] }
+gpui.workspace = true
 project.workspace = true
 recent_projects.workspace = true
 remote.workspace = true

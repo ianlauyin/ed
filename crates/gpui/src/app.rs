@@ -36,7 +36,7 @@ use crate::{
     Global, KeyBinding, KeyContext, Keymap, Keystroke, LayoutId, Menu, MenuItem, MissingGlyph,
     OwnedMenu, PathPromptOptions, Pixels, Platform, PlatformDisplay, PlatformKeyboardLayout,
     PlatformKeyboardMapper, Point, Priority, PromptBuilder, PromptButton, PromptHandle,
-    PromptLevel, Render, RenderImage, RenderablePromptHandle, Reservation, ScreenCaptureSource,
+    PromptLevel, Render, RenderImage, RenderablePromptHandle, Reservation,
     SharedString, SubscriberSet, Subscription, SvgRenderer, SystemNotification,
     SystemNotificationResponse, Task, TextRenderingMode, TextSystem, ThermalState, Window,
     WindowAppearance, WindowButtonLayout, WindowHandle, WindowId, WindowInvalidator,
@@ -1495,18 +1495,6 @@ impl App {
     /// Returns the primary display that will be used for new windows.
     pub fn primary_display(&self) -> Option<Rc<dyn PlatformDisplay>> {
         self.platform.primary_display()
-    }
-
-    /// Returns whether `screen_capture_sources` may work.
-    pub fn is_screen_capture_supported(&self) -> bool {
-        self.platform.is_screen_capture_supported()
-    }
-
-    /// Returns a list of available screen capture sources.
-    pub fn screen_capture_sources(
-        &self,
-    ) -> oneshot::Receiver<Result<Vec<Rc<dyn ScreenCaptureSource>>>> {
-        self.platform.screen_capture_sources()
     }
 
     /// Returns the display with the given ID, if one exists.

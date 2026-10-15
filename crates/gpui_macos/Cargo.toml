@@ -16,7 +16,6 @@ doctest = false
 default = ["gpui/default"]
 runtime_shaders = ["gpui_apple/runtime_shaders"]
 font-kit = ["gpui_apple/font-kit"]
-screen-capture = ["gpui/screen-capture", "dep:objc2-core-graphics", "dep:objc2-core-media", "dep:objc2-screen-capture-kit"]
 
 [dependencies]
 gpui.workspace = true
@@ -39,12 +38,9 @@ itertools.workspace = true
 log.workspace = true
 objc2.workspace = true
 objc2-app-kit = { workspace = true, features = ["NSDragging", "NSEvent", "NSTextInputClient", "NSVisualEffectView"] }
-objc2-core-graphics = { workspace = true, optional = true }
-objc2-core-media = { workspace = true, optional = true }
 objc2-core-video = { workspace = true, features = ["CVHostTime"] }
 objc2-foundation = { workspace = true, features = ["NSKeyedArchiver"] }
 objc2-quartz-core.workspace = true
-objc2-screen-capture-kit = { workspace = true, optional = true }
 objc2-user-notifications.workspace = true
 parking_lot.workspace = true
 raw-window-handle.workspace = true

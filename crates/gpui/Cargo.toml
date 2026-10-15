@@ -21,7 +21,6 @@ default = ["font-kit"]
 # by setting `GPUI_LEAK_DETECTION` when building; see `build.rs`.
 leak-detection = []
 font-kit = []
-screen-capture = []
 profiler = ["dep:hdrhistogram"]
 stacker = ["dep:stacksafe"]
 

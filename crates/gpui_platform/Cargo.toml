@@ -15,7 +15,6 @@ doctest = false
 [features]
 default = []
 font-kit = ["gpui_macos/font-kit"]
-screen-capture = ["gpui/screen-capture", "gpui_macos/screen-capture"]
 runtime_shaders = ["gpui_macos/runtime_shaders"]
 
 [dependencies]

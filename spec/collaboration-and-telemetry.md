@@ -5,6 +5,8 @@ notes, calls, screen sharing, participant controls, account menus, and sign-in
 entry points are removed, together with the collaboration server, UI, client,
 and account API crates. Unused account, channel, call, and following protocol
 definitions are removed. Local services use HTTP directly; remote editing uses RPC.
+GPUI has no screen-capture API or `screen-capture` feature, and the app does not
+link ScreenCaptureKit or ReplayKit.
 
 The title bar retains project, worktree, Git, and platform window controls.
 These controls initialize independently of collaboration. Old collaboration and
