@@ -3024,7 +3024,6 @@ impl Window {
     }
 
     /// Sets the position of the macOS traffic light buttons.
-
     pub fn set_traffic_light_position(&self, position: Point<Pixels>) {
         self.platform_window.set_traffic_light_position(position);
     }
@@ -5130,7 +5129,6 @@ impl Window {
     /// Paint a surface into the scene for the next frame at the current z-index.
     ///
     /// This method should only be called as part of the paint phase of element drawing.
-
     pub fn paint_surface(
         &mut self,
         bounds: Bounds<Pixels>,

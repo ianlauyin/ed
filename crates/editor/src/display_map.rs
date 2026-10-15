@@ -715,7 +715,6 @@ impl DisplayMap {
     }
 
     /// Creates folds for the given creases.
-
     pub fn fold<T: Clone + ToOffset>(&mut self, creases: Vec<Crease<T>>, cx: &mut Context<Self>) {
         if self.companion().is_some() {
             return;
@@ -789,7 +788,6 @@ impl DisplayMap {
     }
 
     /// Removes any folds with the given ranges.
-
     pub fn remove_folds_with_type<T: ToOffset>(
         &mut self,
         ranges: impl IntoIterator<Item = Range<T>>,
@@ -819,7 +817,6 @@ impl DisplayMap {
     }
 
     /// Removes any folds whose ranges intersect any of the given ranges.
-
     pub fn unfold_intersecting<T: ToOffset>(
         &mut self,
         ranges: impl IntoIterator<Item = Range<T>>,
@@ -1825,7 +1822,6 @@ impl DisplaySnapshot {
     }
 
     /// Returns text chunks starting at the given display row until the end of the file
-
     pub fn text_chunks(&self, display_row: DisplayRow) -> impl Iterator<Item = &str> {
         self.block_snapshot
             .chunks(
@@ -1841,7 +1837,6 @@ impl DisplaySnapshot {
     }
 
     /// Returns text chunks starting at the end of the given display row in reverse until the start of the file
-
     pub fn reverse_text_chunks(&self, display_row: DisplayRow) -> impl Iterator<Item = &str> {
         (0..=display_row.0).rev().flat_map(move |row| {
             self.block_snapshot
@@ -2436,7 +2431,6 @@ impl DisplaySnapshot {
     }
 
     #[cfg(any(test, feature = "test-support"))]
-
     pub fn text_highlight_ranges(
         &self,
         key: HighlightKey,
@@ -2445,7 +2439,6 @@ impl DisplaySnapshot {
     }
 
     #[cfg(any(test, feature = "test-support"))]
-
     pub fn all_text_highlight_ranges(
         &self,
         f: &dyn Fn(&HighlightKey) -> bool,
@@ -2492,7 +2485,6 @@ impl DisplaySnapshot {
     ///
     /// This moves by buffer rows instead of display rows, a distinction that is
     /// important when soft wrapping is enabled.
-
     pub fn start_of_relative_buffer_row(&self, point: DisplayPoint, times: isize) -> DisplayPoint {
         let start = self.display_point_to_fold_point(point, Bias::Left);
         let target = start.row() as isize + times;

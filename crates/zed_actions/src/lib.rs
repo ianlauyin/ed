@@ -28,25 +28,12 @@ pub struct OpenZedUrl {
     pub url: Arc<str>,
 }
 
-/// Opens the keymap to either add a keybinding or change an existing one
-#[derive(PartialEq, Clone, Default, Action, JsonSchema, Serialize, Deserialize)]
-#[action(namespace = zed, no_json, no_register)]
-pub struct ChangeKeybinding {
-    pub action: String,
-}
-
 actions!(
     zed,
     [
-        /// Opens the settings editor.
-        #[action(deprecated_aliases = ["zed_actions::OpenSettingsEditor"])]
-        OpenSettings,
         /// Opens the settings JSON file.
         #[action(deprecated_aliases = ["zed_actions::OpenSettings"])]
         OpenSettingsFile,
-        /// Opens project-specific settings.
-        #[action(deprecated_aliases = ["zed_actions::OpenProjectSettings"])]
-        OpenProjectSettings,
         /// Opens the project tasks configuration.
         OpenProjectTasks,
         /// Opens the project tasks configuration with worktree setup guidance.
@@ -56,9 +43,6 @@ actions!(
         /// Opens the user keymap file.
         #[action(deprecated_aliases = ["zed_actions::OpenKeymap"])]
         OpenKeymapFile,
-        /// Opens the keymap editor.
-        #[action(deprecated_aliases = ["zed_actions::OpenKeymapEditor"])]
-        OpenKeymap,
         /// Opens account settings.
         /// Opens server settings.
         OpenServerSettings,
@@ -131,38 +115,6 @@ pub struct DecreaseBufferFontSize {
 pub struct IncreaseBufferFontSize {
     #[serde(default)]
     pub persist: bool,
-}
-
-/// Opens the settings editor at a specific path.
-#[derive(PartialEq, Clone, Debug, Deserialize, JsonSchema, Action)]
-#[action(namespace = zed)]
-#[serde(deny_unknown_fields)]
-pub struct OpenSettingsAt {
-    /// A path to a specific setting (e.g. `theme.mode`)
-    pub path: String,
-    /// The settings file to select before opening `path`. When omitted, the
-    /// existing settings file selection is preserved.
-    #[serde(default)]
-    pub target: Option<OpenSettingsAtTarget>,
-}
-
-#[derive(PartialEq, Clone, Debug, Deserialize, JsonSchema, Action)]
-#[action(namespace = zed)]
-#[serde(deny_unknown_fields)]
-pub struct OpenSettingsPage {
-    /// A settings page title (e.g. `AI`).
-    pub page: String,
-    /// The settings file to select before opening `page`. When omitted, the
-    /// existing settings file selection is preserved.
-    #[serde(default)]
-    pub target: Option<OpenSettingsAtTarget>,
-}
-
-#[derive(PartialEq, Clone, Debug, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum OpenSettingsAtTarget {
-    User,
-    Project { worktree_id: usize },
 }
 
 /// Resets the buffer font size to the default value.
@@ -686,18 +638,6 @@ actions!(
         OpenProjectDebugTasks,
     ]
 );
-
-pub mod vim {
-    use gpui::actions;
-
-    actions!(
-        vim,
-        [
-            /// Opens the default keymap file.
-            OpenDefaultKeymap
-        ]
-    );
-}
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct WslConnectionOptions {

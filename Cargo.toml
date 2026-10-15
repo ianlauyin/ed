@@ -62,7 +62,6 @@ members = [
     "crates/install_cli",
     "crates/journal",
     "crates/json_schema_store",
-    "crates/keymap_editor",
     "crates/language",
     "crates/language_core",
     "crates/language_detection",
@@ -79,7 +78,6 @@ members = [
     "crates/markdown_preview",
     "crates/menu",
     "crates/mermaid_render",
-    "crates/migrator",
     "crates/miniprofiler_ui",
     "crates/multi_buffer",
     "crates/net",
@@ -120,7 +118,6 @@ members = [
     "crates/settings_json",
     "crates/settings_macros",
     "crates/settings_profile_selector",
-    "crates/settings_ui",
     "crates/snippet",
     "crates/snippet_provider",
     "crates/snippets_ui",
@@ -152,8 +149,6 @@ members = [
     "crates/ui_prompt",
     "crates/util",
     "crates/util_macros",
-    "crates/vim",
-    "crates/vim_mode_setting",
     "crates/watch",
     "crates/which_key",
     "crates/workspace",
@@ -249,7 +244,6 @@ inspector_ui = { path = "crates/inspector_ui" }
 install_cli = { path = "crates/install_cli" }
 journal = { path = "crates/journal" }
 json_schema_store = { path = "crates/json_schema_store" }
-keymap_editor = { path = "crates/keymap_editor" }
 language = { path = "crates/language" }
 language_core = { path = "crates/language_core" }
 language_detection = { path = "crates/language_detection" }
@@ -266,7 +260,6 @@ markdown = { path = "crates/markdown" }
 markdown_preview = { path = "crates/markdown_preview" }
 menu = { path = "crates/menu" }
 mermaid_render = { path = "crates/mermaid_render" }
-migrator = { path = "crates/migrator" }
 miniprofiler_ui = { path = "crates/miniprofiler_ui" }
 multi_buffer = { path = "crates/multi_buffer" }
 net = { path = "crates/net" }
@@ -306,7 +299,6 @@ settings_content = { path = "crates/settings_content" }
 settings_json = { path = "crates/settings_json", default-features = false }
 settings_macros = { path = "crates/settings_macros" }
 settings_profile_selector = { path = "crates/settings_profile_selector" }
-settings_ui = { path = "crates/settings_ui" }
 snippet = { path = "crates/snippet" }
 snippet_provider = { path = "crates/snippet_provider" }
 snippets_ui = { path = "crates/snippets_ui" }
@@ -337,8 +329,6 @@ ui_macros = { path = "crates/ui_macros" }
 ui_prompt = { path = "crates/ui_prompt" }
 util = { path = "crates/util" }
 util_macros = { path = "crates/util_macros" }
-vim = { path = "crates/vim" }
-vim_mode_setting = { path = "crates/vim_mode_setting" }
 watch = { path = "crates/watch" }
 which_key = { path = "crates/which_key" }
 workspace = { path = "crates/workspace" }

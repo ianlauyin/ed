@@ -17,7 +17,6 @@ use std::{
     fmt, iter,
     ops::{Add, AddAssign, Deref, DerefMut, Range, Sub, SubAssign},
     sync::Arc,
-    usize,
 };
 use sum_tree::{Bias, Cursor, Dimensions, FilterCursor, SumTree, Summary, TreeMap};
 use ui::IntoElement as _;
@@ -232,7 +231,6 @@ impl FoldMapWriter<'_> {
     }
 
     /// Removes any folds with the given ranges.
-
     pub(crate) fn remove_folds<T: ToOffset>(
         &mut self,
         ranges: impl IntoIterator<Item = Range<T>>,
@@ -246,7 +244,6 @@ impl FoldMapWriter<'_> {
     }
 
     /// Removes any folds whose ranges intersect the given ranges.
-
     pub(crate) fn unfold_intersecting<T: ToOffset>(
         &mut self,
         ranges: impl IntoIterator<Item = Range<T>>,
@@ -257,7 +254,6 @@ impl FoldMapWriter<'_> {
 
     /// Removes any folds that intersect the given ranges and for which the given predicate
     /// returns true.
-
     fn remove_folds_with<T: ToOffset>(
         &mut self,
         ranges: impl IntoIterator<Item = Range<T>>,
@@ -1043,7 +1039,6 @@ impl FoldSnapshot {
     }
 
     #[cfg(test)]
-
     pub fn clip_offset(&self, offset: FoldOffset, bias: Bias) -> FoldOffset {
         if offset > self.len() {
             self.len()
@@ -1696,7 +1691,6 @@ impl FoldOffset {
     }
 
     #[cfg(test)]
-
     pub fn to_inlay_offset(self, snapshot: &FoldSnapshot) -> InlayOffset {
         let (start, _, _) = snapshot
             .transforms

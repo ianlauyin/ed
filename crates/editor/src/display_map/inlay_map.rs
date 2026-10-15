@@ -775,7 +775,6 @@ impl InlayMap {
     }
 
     #[cfg(test)]
-
     pub(crate) fn randomly_mutate(
         &mut self,
         next_inlay_id: &mut usize,
@@ -1259,7 +1258,6 @@ impl InlaySnapshot {
     }
 
     #[cfg(test)]
-
     pub fn text(&self) -> String {
         self.chunks(
             Default::default()..self.len(),

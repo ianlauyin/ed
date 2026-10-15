@@ -23,7 +23,6 @@ pub use path::PathStyle;
 ///
 /// This crate's own tests see a fixed fake path. Every other build, including
 /// builds with `test-support`, sees the real home directory.
-
 pub fn home_dir() -> &'static PathBuf {
     static HOME_DIR: std::sync::OnceLock<PathBuf> = std::sync::OnceLock::new();
     HOME_DIR.get_or_init(|| {
@@ -67,7 +66,6 @@ pub trait PathExt {
     fn multiple_extensions(&self) -> Option<String>;
 
     /// Try to make a shell-safe representation of the path.
-
     fn try_shell_safe(&self, shell_kind: crate::shell::ShellKind) -> anyhow::Result<String>;
 }
 

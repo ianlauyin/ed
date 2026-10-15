@@ -11077,7 +11077,6 @@ impl HighlightedRange {
 
 enum CursorPopoverType {
     CodeContextMenu,
-    EditPrediction,
 }
 
 pub fn register_action<T: Action>(

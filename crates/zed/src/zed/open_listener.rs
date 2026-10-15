@@ -60,10 +60,6 @@ pub enum OpenRequestKind {
     BuiltinJsonSchema {
         schema_path: String,
     },
-    Setting {
-        /// `None` opens settings without navigating to a specific path.
-        setting_path: Option<String>,
-    },
     GitClone {
         repo_url: SharedString,
     },
@@ -88,10 +84,6 @@ impl std::fmt::Debug for OpenRequestKind {
             Self::BuiltinJsonSchema { schema_path } => f
                 .debug_struct("BuiltinJsonSchema")
                 .field("schema_path", schema_path)
-                .finish(),
-            Self::Setting { setting_path } => f
-                .debug_struct("Setting")
-                .field("setting_path", setting_path)
                 .finish(),
             Self::GitClone { repo_url } => f
                 .debug_struct("GitClone")
@@ -155,12 +147,6 @@ impl OpenRequest {
             } else if let Some(schema_path) = url.strip_prefix("zed://schemas/") {
                 this.kind = Some(OpenRequestKind::BuiltinJsonSchema {
                     schema_path: schema_path.to_string(),
-                });
-            } else if url == "zed://settings" || url == "zed://settings/" {
-                this.kind = Some(OpenRequestKind::Setting { setting_path: None });
-            } else if let Some(setting_path) = url.strip_prefix("zed://settings/") {
-                this.kind = Some(OpenRequestKind::Setting {
-                    setting_path: Some(setting_path.to_string()),
                 });
             } else if let Some(clone_path) = url.strip_prefix("zed://git/clone") {
                 this.parse_git_clone_url(clone_path)?
@@ -1377,12 +1363,6 @@ mod tests {
         });
 
         assert!(result.is_err());
-    }
-
-    fn agent_url_with_prompt(prompt: &str) -> String {
-        let mut serializer = url::form_urlencoded::Serializer::new("zed://agent?".to_string());
-        serializer.append_pair("prompt", prompt);
-        serializer.finish()
     }
 
     #[gpui::test]

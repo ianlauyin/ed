@@ -97,7 +97,6 @@ pub trait Scheduler: Send + Sync {
     /// Returns `true` if the future completed, `false` if it timed out.
     /// The future is passed as a pinned mutable reference so the caller
     /// retains ownership and can continue polling or return it on timeout.
-
     fn block(
         &self,
         session_id: Option<SessionId>,

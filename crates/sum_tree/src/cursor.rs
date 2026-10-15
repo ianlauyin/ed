@@ -211,7 +211,6 @@ where
     }
 
     #[track_caller]
-
     pub fn prev(&mut self) {
         self.search_backward(|_| true)
     }
@@ -403,7 +402,6 @@ where
 {
     /// Returns whether we found the item you were seeking for.
     #[track_caller]
-
     pub fn seek<Target>(&mut self, pos: &Target, bias: Bias) -> bool
     where
         Target: SeekTarget<'a, T::Summary, D>,
@@ -418,7 +416,6 @@ where
     ///
     /// If we did not seek before, use seek instead in that case.
     #[track_caller]
-
     pub fn seek_forward<Target>(&mut self, pos: &Target, bias: Bias) -> bool
     where
         Target: SeekTarget<'a, T::Summary, D>,
@@ -460,7 +457,6 @@ where
 
     /// Returns whether we found the item you were seeking for.
     #[track_caller]
-
     fn seek_internal(
         &mut self,
         target: &dyn SeekTarget<'a, T::Summary, D>,

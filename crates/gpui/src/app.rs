@@ -1751,7 +1751,6 @@ impl App {
     /// Used to share the current search string between apps.
     ///
     /// https://developer.apple.com/documentation/appkit/nspasteboard/name-swift.struct/find
-
     pub fn read_from_find_pasteboard(&self) -> Option<ClipboardItem> {
         self.platform.read_from_find_pasteboard()
     }
@@ -1761,7 +1760,6 @@ impl App {
     /// Used to share the current search string between apps.
     ///
     /// https://developer.apple.com/documentation/appkit/nspasteboard/name-swift.struct/find
-
     pub fn write_to_find_pasteboard(&self, item: ClipboardItem) {
         self.platform.write_to_find_pasteboard(item)
     }

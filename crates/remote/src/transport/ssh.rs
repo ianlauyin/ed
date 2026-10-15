@@ -653,7 +653,6 @@ impl RemoteConnection for SshRemoteConnection {
 
 /// Check if the user already has an active SSH ControlMaster session for the
 /// given destination. See: https://github.com/zed-industries/zed/issues/45271
-
 async fn find_existing_control_master(
     destination: &str,
     additional_args: &[String],
@@ -1440,33 +1439,23 @@ impl SshSocket {
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .args(args);
-
-        {}
-
-        {
-            cmd.args(["-o", "ControlMaster=no", "-o"])
-                .arg(format!("ControlPath={}", self.socket_path.display()));
-        }
+        cmd.args(["-o", "ControlMaster=no", "-o"])
+            .arg(format!("ControlPath={}", self.socket_path.display()));
         cmd
     }
 
     // Returns the SSH command-line options (without the destination) for building commands.
-    // On Linux, this includes the ControlPath option to reuse the existing connection.
+    // This includes the ControlPath option to reuse the existing connection.
     // Note: The destination must be added separately after all options to ensure proper
     // SSH command structure: ssh [options] destination [command]
     fn ssh_command_options(&self) -> Vec<String> {
-        let arguments = self.connection_options.additional_args();
-
-        let arguments = {
-            let mut args = arguments;
-            args.extend(vec![
-                "-o".to_string(),
-                "ControlMaster=no".to_string(),
-                "-o".to_string(),
-                format!("ControlPath={}", self.socket_path.display()),
-            ]);
-            args
-        };
+        let mut arguments = self.connection_options.additional_args();
+        arguments.extend([
+            "-o".to_string(),
+            "ControlMaster=no".to_string(),
+            "-o".to_string(),
+            format!("ControlPath={}", self.socket_path.display()),
+        ]);
         arguments
     }
 

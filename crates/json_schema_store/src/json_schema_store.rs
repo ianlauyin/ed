@@ -518,7 +518,7 @@ fn generate_jsonc_schema() -> serde_json::Value {
         .expect("meta_schema should be present in schemars settings")
         .to_string();
     let defs = generator.definitions();
-    let mut schema = schemars::json_schema!({
+    let schema = schemars::json_schema!({
         "$schema": meta_schema,
         "allowTrailingCommas": true,
         "$defs": defs,

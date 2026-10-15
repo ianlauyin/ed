@@ -1056,7 +1056,6 @@ mod tests {
             #[should_panic(
                 expected = "Path = «/test/cool.rs:4:NotDesc», at grid cells (0, 1)..=(7, 2)"
             )]
-
             // PathWithPosition::parse_str considers "/test/co👉ol.rs:4:NotDesc" invalid input, but
             // still succeeds and truncates the part after the position. Ideally this would be
             // parsed as the path "/test/co👉ol.rs:4:NotDesc" with no position.
@@ -1086,7 +1085,6 @@ mod tests {
             #[should_panic(
                 expected = "Path = «/test/cool.rs», line = 1, at grid cells (0, 0)..=(9, 0)"
             )]
-
             fn invalid_row_column_should_be_part_of_path() {
                 test_path!("‹«/👉test/cool.rs:1:618033988749»›");
                 test_path!("‹«/👉test/cool.rs(1,618033988749)»›");
@@ -1094,7 +1092,6 @@ mod tests {
 
             #[test]
             #[should_panic(expected = "Path = «/te:st/co:ol.r:s:4:2::::::»")]
-
             fn many_trailing_colons_should_be_parsed_as_part_of_the_path() {
                 test_path!("‹«/te:st/👉co:ol.r:s:4:2::::::»›");
                 test_path!("/test/cool.rs:::👉:");

@@ -326,9 +326,7 @@ impl PythonDebugAdapter {
                     toolchain.path.to_string()
                 } else {
                     Self::system_python_name(delegate).await.ok_or_else(|| {
-                        let mut message = "Could not find a Python installation".to_owned();
-                        {}
-                        message
+                        "Could not find a Python installation".to_owned()
                     })?
                 };
 

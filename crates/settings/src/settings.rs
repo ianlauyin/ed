@@ -48,8 +48,8 @@ pub use settings_file::*;
 pub use settings_json::*;
 pub use settings_store::{
     DefaultSemanticTokenRules, InvalidSettingsError, LSP_SETTINGS_SCHEMA_URL_PREFIX,
-    LocalSettingsKind, LocalSettingsPath, MigrationStatus, Settings, SettingsFile,
-    SettingsJsonSchemaParams, SettingsKey, SettingsLocation, SettingsParseResult, SettingsStore,
+    LocalSettingsKind, LocalSettingsPath, Settings, SettingsFile, SettingsJsonSchemaParams,
+    SettingsKey, SettingsLocation, SettingsParseResult, SettingsStore,
 };
 
 pub use vscode_import::{VsCodeSettings, VsCodeSettingsSource};
@@ -142,18 +142,11 @@ pub fn default_keymap() -> Cow<'static, str> {
     asset_str::<SettingsAssets>(DEFAULT_KEYMAP_PATH)
 }
 
-pub const VIM_KEYMAP_PATH: &str = "keymaps/vim.json";
-
-pub fn vim_keymap() -> Cow<'static, str> {
-    asset_str::<SettingsAssets>(VIM_KEYMAP_PATH)
-}
-
 /// Specific keybinding overrides. Loaded after the base keymap so they win over
 /// conflicting base-keymap (and default `Editor`) bindings for the same chords,
 /// while still allowing user keymaps (loaded last) to override them. Shared
 /// across features - prefer adding a context block here over creating another
 /// override keymap file.
-
 pub const SPECIFIC_OVERRIDES_KEYMAP_PATH: &str = "keymaps/specific-overrides-macos.json";
 
 pub fn initial_user_settings_content() -> Cow<'static, str> {

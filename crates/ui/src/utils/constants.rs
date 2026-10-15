@@ -9,11 +9,8 @@ pub const MACOS_SDK_26_OR_LATER: bool = cfg!(macos_sdk_26_or_later);
 // the 1px border around the window on macOS apps.
 pub const TRAFFIC_LIGHT_PADDING: f32 = if MACOS_SDK_26_OR_LATER { 78. } else { 71. };
 
-/// Returns the platform-appropriate title bar height.
-///
-/// On Windows, this returns a fixed height of 32px.
-/// On other platforms, it scales with the window's rem size (1.75x) with a minimum of 34px.
-
+/// Returns the title bar height, which scales with the window's rem size (1.75x) with a
+/// minimum of 34px.
 pub fn platform_title_bar_height(window: &Window) -> Pixels {
     (1.75 * window.rem_size()).max(px(34.))
 }

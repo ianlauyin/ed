@@ -2815,7 +2815,7 @@ impl Workspace {
                         .insert(project_path.clone());
                 }
 
-                history.insert(project_path, (fs_path, std::usize::MAX));
+                history.insert(project_path, (fs_path, usize::MAX));
             }
         }
 
@@ -5715,7 +5715,6 @@ impl Workspace {
                 pane.update(cx, |pane, _| {
                     pane.track_alternate_file_items();
                 });
-                if *local {}
                 serialize_workspace = *focus_changed || pane != self.active_pane();
                 if pane == self.active_pane() {
                     self.active_item_path_changed(*focus_changed, window, cx);
@@ -16495,7 +16494,6 @@ mod tests {
         struct TestPngItemView {
             focus_handle: FocusHandle,
             project_item: Entity<TestPngItem>,
-            project_path: ProjectPath,
         }
         // Model
         struct TestPngItem {
@@ -16579,8 +16577,7 @@ mod tests {
             {
                 Self {
                     focus_handle: cx.focus_handle(),
-                    project_item: item.clone(),
-                    project_path: item.read(cx).project_path.clone(),
+                    project_item: item,
                 }
             }
         }

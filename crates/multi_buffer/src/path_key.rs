@@ -79,7 +79,6 @@ impl MultiBuffer {
     /// Sets excerpts, returns `true` if at least one new excerpt was added.
     ///
     /// Any existing excerpts for this buffer or this path will be replaced by the provided ranges.
-
     pub fn set_excerpts_for_path(
         &mut self,
         path: PathKey,

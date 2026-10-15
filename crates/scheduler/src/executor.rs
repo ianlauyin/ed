@@ -128,7 +128,6 @@ impl LocalExecutor {
 
     /// Block until the future completes or timeout occurs.
     /// Returns Ok(output) if completed, Err(future) if timed out.
-
     pub fn block_with_timeout<Fut: Future>(
         &self,
         timeout: Duration,

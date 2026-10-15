@@ -544,7 +544,6 @@ fn main() {
             },
             wrap_div_with_search_actions: search::buffer_search::register_pane_search_actions,
         });
-        vim::init(cx);
         terminal_view::init(cx);
         journal::init(app_state.clone(), cx);
         encoding_selector::init(cx);
@@ -562,8 +561,6 @@ fn main() {
         tabular_data_preview::init(cx);
         svg_preview::init(cx);
         onboarding::init(cx);
-        settings_ui::init(cx);
-        keymap_editor::init(cx);
         inspector_ui::init(app_state.clone(), cx);
         json_schema_store::init(cx);
         miniprofiler_ui::init(*STARTUP_TIME.get().unwrap(), cx);
@@ -844,28 +841,6 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
                     })
                     .detach();
                 });
-            }
-            OpenRequestKind::Setting { setting_path } => {
-                // zed://settings/languages/$(language)/tab_size  - DONT SUPPORT
-                // zed://settings/languages/Rust/tab_size  - SUPPORT
-                // languages.$(language).tab_size
-                // [ languages $(language) tab_size]
-                cx.spawn(async move |cx| {
-                    let workspace =
-                        workspace::get_any_active_multi_workspace(app_state, cx.clone()).await?;
-
-                    workspace.update(cx, |_, window, cx| match setting_path {
-                        None => window.dispatch_action(Box::new(zed_actions::OpenSettings), cx),
-                        Some(setting_path) => window.dispatch_action(
-                            Box::new(zed_actions::OpenSettingsAt {
-                                path: setting_path,
-                                target: None,
-                            }),
-                            cx,
-                        ),
-                    })
-                })
-                .detach_and_log_err(cx);
             }
             OpenRequestKind::GitClone { repo_url } => {
                 workspace::with_active_or_new_workspace(cx, |_workspace, window, cx| {

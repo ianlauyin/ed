@@ -131,7 +131,6 @@ impl BackgroundExecutor {
     ///
     /// Dropping the returned future cancels its tasks and synchronously waits for their futures to
     /// be destroyed before returning.
-
     pub async fn scoped<'scope, F>(&self, scheduler: F)
     where
         F: FnOnce(&mut Scope<'scope>),
@@ -152,7 +151,6 @@ impl BackgroundExecutor {
     ///
     /// Dropping the returned future cancels its tasks and synchronously waits for their futures to
     /// be destroyed before returning.
-
     pub async fn scoped_priority<'scope, F>(&self, priority: Priority, scheduler: F)
     where
         F: FnOnce(&mut Scope<'scope>),
@@ -436,13 +434,11 @@ impl ForegroundExecutor {
 
     /// Block the current thread until the given future resolves.
     /// Consider using `block_with_timeout` instead.
-
     pub fn block_on<R>(&self, future: impl Future<Output = R>) -> R {
         self.inner.block_on(future)
     }
 
     /// Block the current thread until the given future resolves or the timeout elapses.
-
     pub fn block_with_timeout<R, Fut: Future<Output = R>>(
         &self,
         duration: Duration,
@@ -463,7 +459,6 @@ impl ForegroundExecutor {
 }
 
 /// Scope manages a set of tasks that are enqueued and waited on together. See [`BackgroundExecutor::scoped`].
-
 pub struct Scope<'a> {
     executor: BackgroundExecutor,
     priority: Priority,

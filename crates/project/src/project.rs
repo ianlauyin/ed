@@ -1847,10 +1847,8 @@ impl Project {
         }
     }
 
-    #[inline]
-
     /// Collect all worktrees, including ones that don't appear in the project panel
-
+    #[inline]
     pub fn worktrees<'a>(
         &self,
         cx: &'a App,
@@ -2276,10 +2274,8 @@ impl Project {
         self.remote_client.is_some()
     }
 
-    #[inline]
-
     /// `!self.is_local()`
-
+    #[inline]
     pub fn is_remote(&self) -> bool {
         self.remote_client.is_some()
     }
@@ -2499,7 +2495,6 @@ impl Project {
 
     /// Opens the staged (HEAD-vs-index) diff for the given buffer, along with
     /// the index text buffer that is the diff's main buffer.
-
     pub fn open_staged_diff(
         &mut self,
         buffer: Entity<Buffer>,
@@ -3067,7 +3062,7 @@ impl Project {
                         .send(proto::UpdateBuffer {
                             project_id: 0,
                             buffer_id: buffer_id.to_proto(),
-                            operations: vec![operation.clone()],
+                            operations: vec![operation],
                         })
                         .ok();
                 }

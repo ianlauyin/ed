@@ -53,7 +53,6 @@ impl Render for TodoWindow {
 }
 
 /// English, Chinese, Japanese and Korean for a word, then an emoji for it.
-
 const SAMPLE_TODOS: [&str; 5] = [
     "milk / 牛奶 / 牛乳 / 우유 🥛",
     "apple / 苹果 / りんご / 사과 🍎",
@@ -107,7 +106,6 @@ fn open_window(todos: &Entity<Todos>, cx: &mut App) -> anyhow::Result<()> {
 }
 
 /// Builds the environment for `open`, which carries nothing on this platform.
-
 fn display_environment(_arguments: &str) -> anyhow::Result<GraphicalEnvironment> {
     Ok(GraphicalEnvironment::detect())
 }

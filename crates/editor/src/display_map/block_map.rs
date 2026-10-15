@@ -1192,7 +1192,6 @@ impl BlockMap {
     }
 
     /// Guarantees that `wrap_row_for` is called with points in increasing order.
-
     fn header_and_footer_blocks<'a, R, T>(
         &'a self,
         buffer: &'a multi_buffer::MultiBufferSnapshot,
@@ -2178,7 +2177,6 @@ impl BlockSnapshot {
     }
 
     #[cfg(test)]
-
     pub fn text(&self) -> String {
         self.chunks(
             BlockRow(0)..self.transforms.summary().output_rows,
@@ -2590,7 +2588,6 @@ impl BlockSnapshot {
 
 impl BlockChunks<'_> {
     /// Go to the next transform
-
     fn advance(&mut self) {
         self.input_chunk = Chunk::default();
         self.transforms.next();

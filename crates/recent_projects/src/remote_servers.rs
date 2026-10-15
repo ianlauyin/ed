@@ -767,7 +767,6 @@ impl Mode {
 enum RemoteMatch {
     AddServer,
     AddDevContainer,
-    AddWsl,
     Separator,
     ServerHeader {
         server: usize,
@@ -856,7 +855,6 @@ impl RemoteServerPickerDelegate {
             if has_open_project && is_local {
                 matches.push(RemoteMatch::AddDevContainer);
             }
-            {}
         }
 
         let push_server = |matches: &mut Vec<RemoteMatch>,
@@ -1113,7 +1111,6 @@ impl PickerDelegate for RemoteServerPickerDelegate {
                     })
                     .ok();
             }
-            RemoteMatch::AddWsl => {}
             RemoteMatch::Project {
                 server, project, ..
             } => {
@@ -1213,9 +1210,6 @@ impl PickerDelegate for RemoteServerPickerDelegate {
             }
             RemoteMatch::AddDevContainer => {
                 Some(self.render_action_item(ix, IconName::Plus, "Connect Dev Container", selected))
-            }
-            RemoteMatch::AddWsl => {
-                Some(self.render_action_item(ix, IconName::Plus, "Add WSL Distro", selected))
             }
             RemoteMatch::OpenFolder { .. } => {
                 Some(self.render_action_item(ix, IconName::Plus, "Open Folder", selected))

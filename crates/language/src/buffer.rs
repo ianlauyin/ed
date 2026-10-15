@@ -1131,7 +1131,6 @@ impl Buffer {
     }
 
     /// Assign a language to the buffer, blocking for up to 1ms to reparse the buffer, returning the buffer.
-
     pub fn with_language(mut self, language: Arc<Language>, cx: &mut Context<Self>) -> Self {
         self.set_language(Some(language), cx);
         self
@@ -1505,7 +1504,6 @@ impl Buffer {
 
     /// Retrieve a snapshot of the buffer's raw text, without any
     /// language-related state like the syntax tree or diagnostics.
-
     pub fn text_snapshot(&self) -> text::BufferSnapshot {
         // todo lw
         self.text.snapshot().clone()
@@ -1930,7 +1928,6 @@ impl Buffer {
     /// initiate an additional reparse recursively. To avoid concurrent parses
     /// for the same buffer, we only initiate a new parse if we are not already
     /// parsing in the background.
-
     pub fn reparse(&mut self, cx: &mut Context<Self>, may_block: bool) {
         if self.text.version() != *self.tree_sitter_data.version() {
             Self::invalidate_tree_sitter_data(&mut self.tree_sitter_data, self.text.snapshot());
@@ -4149,7 +4146,6 @@ impl BufferSnapshot {
     /// in an arbitrary way due to being stored in a [`Rope`](text::Rope). The text is also
     /// returned in chunks where each chunk has a single syntax highlighting style and
     /// diagnostic status.
-
     pub fn chunks<T: ToOffset>(
         &self,
         range: Range<T>,

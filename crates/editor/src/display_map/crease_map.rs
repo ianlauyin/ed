@@ -45,7 +45,6 @@ impl CreaseSnapshot {
     }
 
     /// Returns the first Crease starting on the specified buffer row.
-
     pub fn query_row<'a>(
         &'a self,
         row: MultiBufferRow,

@@ -3363,9 +3363,7 @@ impl GitStore {
                 cx.background_executor()
                     .spawn(async move { fs.git_config(&path, args).await })
             }
-            GitStoreState::Remote {
-                upstream_client: _, ..
-            } => {
+            GitStoreState::Remote { .. } => {
                 // TODO: Implement this for remote repositories.
                 Task::ready(Err(anyhow!(
                     "Git Config isn't yet supported for remote projects"

@@ -42,7 +42,6 @@ use project::{
 };
 use remote::{ConnectionState, RemoteClient, RemoteClientEvent};
 
-use remote::{MOCK_STDIO_FRAME_HEX, command::RemoteCommand};
 use rpc::proto;
 use serde_json::json;
 use settings::{
@@ -5427,37 +5426,6 @@ pub async fn init_test(
 
 fn init_logger() {
     zlog::init_test();
-}
-
-fn stdio_launch_args(output_path: &Path, initialize_result: &str) -> Vec<String> {
-    let script = format!(
-        r#"printf '%s\n' "${MOCK_STDIO_FRAME_HEX}" > "$1"
-IFS= read -r line
-printf '%s\n' "$line" >> "$1"
-id=$(printf '%s' "$line" | sed -nE 's/^\{{"jsonrpc":"2.0","id":("[^"]*"|[0-9]+),.*/\1/p')
-printf '{{"jsonrpc":"2.0","id":%s,"result":%s}}\n' "$id" "$2"
-exec cat >/dev/null"#
-    );
-    vec![
-        String::from("-c"),
-        script,
-        String::from("sh"),
-        output_path.display().to_string(),
-        String::from(initialize_result),
-    ]
-}
-
-fn read_stdio_launch(output_path: &Path) -> (RemoteCommand, serde_json::Value) {
-    let output = std::fs::read_to_string(output_path).unwrap();
-    let (frame_hex, first_line) = output.trim_end().split_once('\n').unwrap();
-    let frame = (0..frame_hex.len())
-        .step_by(2)
-        .map(|index| u8::from_str_radix(&frame_hex[index..index + 2], 16).unwrap())
-        .collect::<Vec<_>>();
-    let mut frame = &frame[..];
-    let command = RemoteCommand::read(&mut frame).unwrap();
-    assert_eq!(frame, b"");
-    (command, serde_json::from_str(first_line).unwrap())
 }
 
 fn build_project(ssh: Entity<RemoteClient>, cx: &mut TestAppContext) -> Entity<Project> {

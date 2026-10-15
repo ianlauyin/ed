@@ -1922,7 +1922,6 @@ pub(crate) fn splice_included_ranges(
 /// different lines. For performance, only iterate through the given range of
 /// indices. All of the ranges in the array are relative to a given start byte
 /// and point.
-
 fn insert_newlines_between_ranges(
     indices: Range<usize>,
     ranges: &mut Vec<tree_sitter::Range>,

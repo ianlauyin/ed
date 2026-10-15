@@ -27,7 +27,7 @@ use crate::{
     element::SplitSide,
     split_editor_view::{SplitEditorState, SplitEditorView},
 };
-use ui::{Toggleable as _, Tooltip, prelude::*, render_modifiers};
+use ui::{Toggleable as _, Tooltip, prelude::*};
 use workspace::{
     ActivatePaneLeft, ActivatePaneRight, Item, ToolbarItemLocation, Workspace,
     item::{ItemBufferKind, ItemEvent, SaveOptions, TabContentParams},
@@ -40,7 +40,6 @@ use crate::{
     actions::{DisableBreakpoint, EditLogBreakpoint, EnableBreakpoint, ToggleBreakpoint},
     display_map::Companion,
 };
-use zed_actions::OpenSettingsAt;
 
 pub(crate) fn patches_for_lhs_range(
     rhs_snapshot: &MultiBufferSnapshot,
@@ -480,51 +479,23 @@ impl RenderOnce for DiffStyleControls {
                 IconButton::new("diff-style-split", split_icon)
                     .icon_size(IconSize::Small)
                     .toggle_state(is_split_set)
-                    .tooltip(Tooltip::element(move |_, cx| {
+                    .tooltip(move |_, cx| {
                         let message = if is_split_pending {
                             format!("Split when wider than {} columns", min_columns).into()
                         } else {
                             SharedString::from("Split")
                         };
-
-                        v_flex()
-                            .child(message)
-                            .child(
-                                h_flex()
-                                    .gap_0p5()
-                                    .text_ui_sm(cx)
-                                    .text_color(Color::Muted.color(cx))
-                                    .children(render_modifiers(
-                                        &gpui::Modifiers::secondary_key(),
-                                        PlatformStyle::platform(),
-                                        None,
-                                        Some(TextSize::Small.rems(cx).into()),
-                                        false,
-                                    ))
-                                    .child("click to change min width"),
-                            )
-                            .into_any_element()
-                    }))
+                        Tooltip::simple(message, cx)
+                    })
                     .on_click({
                         let splittable_editor = self.splittable_editor.clone();
                         move |_, window, cx| {
-                            if window.modifiers().secondary() {
-                                window.dispatch_action(
-                                    OpenSettingsAt {
-                                        path: "minimum_split_diff_width".to_string(),
-                                        target: None,
-                                    }
-                                    .boxed_clone(),
-                                    cx,
-                                );
-                            } else {
-                                Self::set_diff_view_style(
-                                    &splittable_editor,
-                                    DiffViewStyle::Split,
-                                    window,
-                                    cx,
-                                );
-                            }
+                            Self::set_diff_view_style(
+                                &splittable_editor,
+                                DiffViewStyle::Split,
+                                window,
+                                cx,
+                            );
                         }
                     }),
             )

@@ -1011,10 +1011,6 @@ impl Editor {
         self.toggle_diff_hunks_in_ranges(ranges, cx);
     }
 
-    pub(super) fn show_diff_review_button(&self) -> bool {
-        self.show_diff_review_button
-    }
-
     pub(super) fn render_diff_review_button(
         &self,
         display_row: DisplayRow,

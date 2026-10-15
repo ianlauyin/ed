@@ -30,7 +30,7 @@ use ui::{
 };
 use util::ResultExt;
 use workspace::{ModalView, Workspace, WorkspaceSettings};
-use zed_actions::{OpenZedUrl, command_palette::Toggle};
+use zed_actions::command_palette::Toggle;
 
 actions!(command_palette, [RemoveSelected]);
 
@@ -696,23 +696,7 @@ impl PickerDelegate for CommandPaletteDelegate {
             .ok();
     }
 
-    fn confirm(&mut self, secondary: bool, window: &mut Window, cx: &mut Context<Picker<Self>>) {
-        if secondary {
-            if self.matches.is_empty() {
-                return;
-            }
-            let Some(selected_command) = self.selected_command() else {
-                return;
-            };
-            let action_name = selected_command.action.name();
-            let open_keymap = Box::new(zed_actions::ChangeKeybinding {
-                action: action_name.to_string(),
-            });
-            window.dispatch_action(open_keymap, cx);
-            self.dismissed(window, cx);
-            return;
-        }
-
+    fn confirm(&mut self, _secondary: bool, window: &mut Window, cx: &mut Context<Picker<Self>>) {
         if self.matches.is_empty() {
             self.dismissed(window, cx);
             return;
@@ -793,33 +777,11 @@ impl PickerDelegate for CommandPaletteDelegate {
 
     fn render_footer(
         &self,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut Context<Picker<Self>>,
     ) -> Option<AnyElement> {
-        let selected_command = self.selected_command()?;
-        let keybind =
-            KeyBinding::for_action_in(&*selected_command.action, &self.previous_focus_handle, cx);
-
+        self.selected_command()?;
         let focus_handle = &self.previous_focus_handle;
-        let keybinding_buttons = if keybind.has_binding(window) {
-            Button::new("change", "Change Keybinding…")
-                .key_binding(
-                    KeyBinding::for_action_in(&menu::SecondaryConfirm, focus_handle, cx)
-                        .map(|kb| kb.size(rems_from_px(12_f32))),
-                )
-                .on_click(move |_, window, cx| {
-                    window.dispatch_action(menu::SecondaryConfirm.boxed_clone(), cx);
-                })
-        } else {
-            Button::new("add", "Add Keybinding…")
-                .key_binding(
-                    KeyBinding::for_action_in(&menu::SecondaryConfirm, focus_handle, cx)
-                        .map(|kb| kb.size(rems_from_px(12_f32))),
-                )
-                .on_click(move |_, window, cx| {
-                    window.dispatch_action(menu::SecondaryConfirm.boxed_clone(), cx);
-                })
-        };
 
         Some(
             h_flex()
@@ -829,7 +791,6 @@ impl PickerDelegate for CommandPaletteDelegate {
                 .justify_end()
                 .border_t_1()
                 .border_color(cx.theme().colors().border_variant)
-                .child(keybinding_buttons)
                 .child(
                     Button::new("run-action", "Run")
                         .key_binding(

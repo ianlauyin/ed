@@ -409,7 +409,6 @@ fn init_logging_server(log_file_path: &Path) -> Result<Receiver<Vec<u8>>> {
 ///
 /// events to the remote host using the platform it already detected during
 /// connection setup, so no OS metadata needs to be sent here.
-
 fn handle_crash_files_requests(project: &Entity<HeadlessProject>, client: &AnyProtoClient) {
     client.add_request_handler(
         project.downgrade(),

@@ -5,7 +5,6 @@ use std::{
     borrow::Cow,
     path::{Path, PathBuf},
     sync::Arc,
-    usize,
 };
 use tasks_ui::{TaskOverrides, TasksModal};
 
@@ -862,7 +861,6 @@ impl ConfigureMode {
             Some(PathBuf::from(cwd_text))
         };
 
-        {}
         let command = self.program.read(cx).text(cx);
         let mut args = ShellKind::Posix
             .split(&command)

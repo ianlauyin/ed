@@ -218,7 +218,6 @@ where
 /// This function checks if the current process is running with root privileges
 /// and terminates the program with an error message unless explicitly allowed via the
 /// `ZED_ALLOW_ROOT` environment variable.
-
 pub fn prevent_root_execution() {
     let is_root = nix::unistd::geteuid().is_root();
     let allow_root = std::env::var("ZED_ALLOW_ROOT").is_ok_and(|val| val == "true");
@@ -238,7 +237,6 @@ Error: Running Zed as root or via sudo is unsupported.
 /// Raises the soft limit on open file descriptors without changing the hard limit.
 ///
 /// Call during startup, before spawning children that will inherit the limit.
-
 pub fn increase_open_file_limit() -> Result<()> {
     use anyhow::Context as _;
     use nix::sys::resource::{Resource::RLIMIT_NOFILE, getrlimit, setrlimit};
@@ -319,7 +317,6 @@ fn load_shell_from_passwd() -> Result<()> {
 }
 
 /// Returns a shell escaped path for the current zed executable
-
 pub fn get_shell_safe_zed_path(shell_kind: shell::ShellKind) -> anyhow::Result<String> {
     use anyhow::Context as _;
     use paths::PathExt;

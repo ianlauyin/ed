@@ -29,7 +29,6 @@ pub struct Surface {
 }
 
 /// Create a new surface element.
-
 pub fn surface(source: impl Into<SurfaceSource>) -> Surface {
     Surface {
         source: source.into(),

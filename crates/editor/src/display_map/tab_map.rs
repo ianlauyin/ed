@@ -340,7 +340,6 @@ impl TabSnapshot {
     }
 
     #[cfg(test)]
-
     pub fn text(&self) -> String {
         self.chunks(
             TabPoint::zero()..self.max_point(),
@@ -423,7 +422,6 @@ impl TabSnapshot {
     /// Expands the tabs between the cursor's position and `column`. `tab_count`
     /// and `expanded_tab_len` carry the tabs already passed on this row, so the
     /// same cursor can be advanced to a later column of the row.
-
     fn expand_tabs(
         &self,
         cursor: &mut TabStopCursor<'_>,
@@ -955,7 +953,6 @@ impl<'a> TabStopCursor<'a> {
     }
 
     /// distance: length to move forward while searching for the next tab stop
-
     fn seek_forward(&mut self, distance: u32) -> Option<TabStop> {
         if distance == 0 {
             return None;

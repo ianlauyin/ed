@@ -350,7 +350,6 @@ fn register_existing_path(
 
 /// Whether the volume backing `path` does case-insensitive name lookups, used to
 /// pick exact vs. folded matching.
-
 pub(crate) fn case_insensitive_path(path: &Path) -> bool {
     use std::os::unix::ffi::OsStrExt as _;
 

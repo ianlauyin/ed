@@ -1728,11 +1728,9 @@ impl PyLspAdapter {
         }
     }
     async fn ensure_venv(delegate: &dyn LspAdapterDelegate) -> Result<Arc<Path>> {
-        let python_path = Self::find_base_python(delegate).await.with_context(|| {
-            let mut message = "Could not find Python installation for PyLSP".to_owned();
-            {}
-            message
-        })?;
+        let python_path = Self::find_base_python(delegate)
+            .await
+            .context("Could not find Python installation for PyLSP")?;
         let work_dir = delegate
             .language_server_download_dir(&Self::SERVER_NAME)
             .await

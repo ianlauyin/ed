@@ -1719,7 +1719,6 @@ pub struct PlatformInputHandler {
 }
 
 #[expect(missing_docs)]
-
 impl PlatformInputHandler {
     pub fn new(cx: AsyncWindowContext, handler: Box<dyn InputHandler>) -> Self {
         Self { cx, handler }

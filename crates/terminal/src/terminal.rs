@@ -3778,7 +3778,6 @@ mod tests {
     /// headless hosts (e.g. the eval CLI) where PTY allocation fails with
     /// `ENOTTY`. The command runs as a plain subprocess whose piped output is
     /// pumped into the emulator.
-
     async fn build_test_subprocess_terminal(
         cx: &mut TestAppContext,
         program: String,

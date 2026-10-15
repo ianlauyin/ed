@@ -424,8 +424,6 @@ pub fn set_askpass_program(path: std::path::PathBuf) {
 }
 
 /// Generates the Unix shell askpass script.
-/// Not used on Windows — cli.exe is invoked directly as SSH_ASKPASS.
-
 fn generate_askpass_script(
     askpass_program: &std::path::Path,
     askpass_socket: &std::path::Path,
@@ -450,7 +448,6 @@ fn generate_askpass_script(
 }
 
 #[inline]
-
 fn generate_gpg_wrapper_script(
     askpass_program: &std::path::Path,
     askpass_socket: &std::path::Path,
@@ -557,7 +554,6 @@ printf '%s\n' "$passphrase" |
 
 /// Finds the real `gpg` (or `gpg2`) executable on `PATH`.
 #[inline]
-
 fn find_gpg_program() -> Option<std::path::PathBuf> {
     ["gpg", "gpg2"]
         .into_iter()

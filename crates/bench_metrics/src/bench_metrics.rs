@@ -291,7 +291,6 @@ use darwin as backend;
 /// runners included) reject `thread_selfcounts` with `ENOTSUP` while still
 /// serving `proc_pid_rusage`. Branch and cache events require the private
 /// `kperf` framework and root, so they are unsupported here.
-
 pub mod darwin {
     use super::*;
 

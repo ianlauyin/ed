@@ -988,7 +988,6 @@ impl WrapSnapshot {
 
     /// Try to find a TabRow start that is also a WrapRow start
     /// Every TabRow start is a WrapRow start
-
     pub fn prev_row_boundary(&self, point: WrapPoint) -> WrapRow {
         if self.transforms.is_empty() {
             return WrapRow(0);

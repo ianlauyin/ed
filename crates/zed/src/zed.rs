@@ -1,7 +1,6 @@
 mod app_menus;
 
 pub(crate) mod mac_only_instance;
-mod migrate;
 
 pub(crate) mod move_to_applications;
 mod open_listener;
@@ -41,8 +40,6 @@ use language_onboarding::BasedPyrightBanner;
 use language_tools::lsp_button::{self, LspButton};
 use language_tools::lsp_log_view::LspLogToolbarItemView;
 use markdown::{Markdown, MarkdownElement, MarkdownFont, MarkdownStyle};
-use migrate::{MigrationBanner, MigrationEvent, MigrationNotification, MigrationType};
-use migrator::migrate_keymap;
 use onboarding::multibuffer_hint::MultibufferHint;
 pub use open_listener::*;
 use outline_panel::OutlinePanel;
@@ -61,9 +58,9 @@ use rope::Rope;
 use search::project_search::ProjectSearchBar;
 use settings::{
     BaseKeymap, DEFAULT_KEYMAP_PATH, DefaultOpenBehavior, InvalidSettingsError, KeybindSource,
-    KeymapFile, KeymapFileLoadResult, MigrationStatus, SPECIFIC_OVERRIDES_KEYMAP_PATH, Settings,
-    SettingsFile, SettingsStore, VIM_KEYMAP_PATH, initial_local_debug_tasks_content,
-    initial_project_settings_content, initial_tasks_content, update_settings_file,
+    KeymapFile, KeymapFileLoadResult, SPECIFIC_OVERRIDES_KEYMAP_PATH, Settings, SettingsFile,
+    SettingsStore, initial_local_debug_tasks_content, initial_project_settings_content,
+    initial_tasks_content, update_settings_file,
 };
 use settings_content::app_metadata::{AppCommitSha, AppVersion};
 #[cfg(debug_assertions)]
@@ -83,7 +80,6 @@ use util::markdown::MarkdownString;
 use util::rel_path::RelPath;
 use util::{ResultExt, asset_str, maybe};
 use uuid::Uuid;
-use vim_mode_setting::VimModeSetting;
 use workspace::notifications::{NotificationId, dismiss_app_notification, show_app_notification};
 
 use workspace::{
@@ -460,7 +456,6 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
             cx.new(|_| language_selector::ActiveBufferLanguage::new(workspace));
         let active_toolchain_language =
             cx.new(|cx| toolchain_selector::ActiveToolchain::new(workspace, window, cx));
-        let vim_mode_indicator = cx.new(|cx| vim::ModeIndicator::new(window, cx));
         let pending_keystrokes_indicator =
             cx.new(|cx| which_key::PendingKeystrokesIndicator::new(window, cx));
         let image_info = cx.new(|_cx| ImageInfo::new(workspace));
@@ -492,8 +487,7 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
             status_bar.add_right_item(line_ending_indicator, window, cx);
             status_bar.add_right_item(cursor_position, window, cx);
             status_bar.add_right_item(image_info, window, cx);
-            // Keep these last so they stay leftmost and can change without moving the other items.
-            status_bar.add_right_item(vim_mode_indicator, window, cx);
+            // Keep this last so it stays leftmost and can change without moving the other items.
             status_bar.add_right_item(pending_keystrokes_indicator, window, cx);
         });
 
@@ -1116,7 +1110,6 @@ fn initialize_pane(
     window: &mut Window,
     cx: &mut Context<Workspace>,
 ) {
-    let workspace_handle = cx.weak_entity();
     pane.update(cx, |pane, cx| {
         pane.toolbar().update(cx, |toolbar, cx| {
             let multibuffer_hint = cx.new(|_| MultibufferHint::new());
@@ -1148,9 +1141,6 @@ fn initialize_pane(
             toolbar.add_item(dap_log_item, window, cx);
             let syntax_tree_item = cx.new(|_| language_tools::SyntaxTreeToolbarItemView::new());
             toolbar.add_item(syntax_tree_item, window, cx);
-            let migration_banner =
-                cx.new(|inner_cx| MigrationBanner::new(workspace_handle.clone(), inner_cx));
-            toolbar.add_item(migration_banner, window, cx);
             let highlights_tree_item =
                 cx.new(|_| language_tools::HighlightsTreeToolbarItemView::new());
             toolbar.add_item(highlights_tree_item, window, cx);
@@ -1561,12 +1551,11 @@ fn notify_settings_errors(result: settings::SettingsParseResult, is_user: bool, 
     };
     let id = NotificationId::Named(format!("failed-to-parse-settings-{is_user}").into());
 
-    let showed_parse_error = match error {
+    match error {
         Some(error) => {
             if let Some(InvalidSettingsError::LocalSettings { .. }) =
                 error.downcast_ref::<InvalidSettingsError>()
             {
-                false
                 // Local settings errors are displayed by the projects
             } else {
                 show_app_notification(id, cx, move |cx| {
@@ -1583,42 +1572,10 @@ fn notify_settings_errors(result: settings::SettingsParseResult, is_user: bool, 
                             })
                     })
                 });
-                true
             }
         }
-        None => {
-            dismiss_app_notification(&id, cx);
-            false
-        }
-    };
-    let id = NotificationId::Named(format!("failed-to-migrate-settings-{is_user}").into());
-
-    match result.migration_status {
-        settings::MigrationStatus::Succeeded | settings::MigrationStatus::NotNeeded => {
-            dismiss_app_notification(&id, cx);
-        }
-        settings::MigrationStatus::Failed { error: err } => {
-            if !showed_parse_error {
-                show_app_notification(id, cx, move |cx| {
-                    cx.new(|cx| {
-                        MessageNotification::new(
-                            format!(
-                                "Failed to migrate settings\n\
-                                {err}"
-                            ),
-                            cx,
-                        )
-                        .primary_message("Open Settings File")
-                        .primary_icon(IconName::Settings)
-                        .primary_on_click(|window, cx| {
-                            window.dispatch_action(zed_actions::OpenSettingsFile.boxed_clone(), cx);
-                            cx.emit(DismissEvent);
-                        })
-                    })
-                });
-            }
-        }
-    };
+        None => dismiss_app_notification(&id, cx),
+    }
 }
 
 fn init_global_config_error_notifications(cx: &mut App) {
@@ -1717,22 +1674,10 @@ fn init_reduce_motion(cx: &mut App) {
 }
 
 pub fn watch_settings_files(fs: Arc<dyn fs::Fs>, cx: &mut App) {
-    MigrationNotification::set_global(cx.new(|_| MigrationNotification), cx);
-
     SettingsStore::update_global(cx, move |store, cx| {
         store.watch_settings_files(fs, cx, |settings_file, result, cx| {
             let is_user = matches!(settings_file, SettingsFile::User);
-            let migrating_in_memory =
-                matches!(&result.migration_status, MigrationStatus::Succeeded);
             notify_settings_errors(result, is_user, cx);
-            if let Some(notifier) = MigrationNotification::try_global(cx) {
-                notifier.update(cx, |_, cx| {
-                    cx.emit(MigrationEvent::ContentChanged {
-                        migration_type: MigrationType::Settings,
-                        migrating_in_memory,
-                    });
-                });
-            }
         });
     });
 }
@@ -1745,21 +1690,12 @@ pub fn handle_keymap_file_changes(
     let (base_keymap_tx, mut base_keymap_rx) = mpsc::unbounded();
     let (keyboard_layout_tx, mut keyboard_layout_rx) = mpsc::unbounded();
     let mut old_base_keymap = *BaseKeymap::get_global(cx);
-    let mut old_vim_enabled = VimModeSetting::get_global(cx).0;
-    let mut old_helix_enabled = vim_mode_setting::HelixModeSetting::get_global(cx).0;
 
     cx.observe_global::<SettingsStore>(move |cx| {
         let new_base_keymap = *BaseKeymap::get_global(cx);
-        let new_vim_enabled = VimModeSetting::get_global(cx).0;
-        let new_helix_enabled = vim_mode_setting::HelixModeSetting::get_global(cx).0;
 
-        if new_base_keymap != old_base_keymap
-            || new_vim_enabled != old_vim_enabled
-            || new_helix_enabled != old_helix_enabled
-        {
+        if new_base_keymap != old_base_keymap {
             old_base_keymap = new_base_keymap;
-            old_vim_enabled = new_vim_enabled;
-            old_helix_enabled = new_helix_enabled;
 
             base_keymap_tx.unbounded_send(()).unwrap();
         }
@@ -1786,32 +1722,17 @@ pub fn handle_keymap_file_changes(
     cx.spawn(async move |cx| {
         let _user_keymap_watcher = user_keymap_watcher;
         let mut user_keymap_content = String::new();
-        let mut migrating_in_memory = false;
         loop {
             select_biased! {
                 _ = base_keymap_rx.next() => {},
                 _ = keyboard_layout_rx.next() => {},
                 content = user_keymap_file_rx.next() => {
                     if let Some(content) = content {
-                        if let Ok(Some(migrated_content)) = migrate_keymap(&content) {
-                            user_keymap_content = migrated_content;
-                            migrating_in_memory = true;
-                        } else {
-                            user_keymap_content = content;
-                            migrating_in_memory = false;
-                        }
+                        user_keymap_content = content;
                     }
                 }
             };
             cx.update(|cx| {
-                if let Some(notifier) = MigrationNotification::try_global(cx) {
-                    notifier.update(cx, |_, cx| {
-                        cx.emit(MigrationEvent::ContentChanged {
-                            migration_type: MigrationType::Keymap,
-                            migrating_in_memory,
-                        });
-                    });
-                }
                 let load_result = KeymapFile::load(&user_keymap_content, cx);
                 match load_result {
                     KeymapFileLoadResult::Success { key_bindings } => {
@@ -1927,8 +1848,6 @@ fn reload_keymaps(cx: &mut App, mut user_key_bindings: Vec<KeyBinding>) {
         "New Window",
         workspace::NewWindow,
     )]);
-    // todo: nicer api here?
-    keymap_editor::KeymapEventChannel::trigger_keymap_changed(cx);
 }
 
 pub fn load_default_keymap(cx: &mut App) {
@@ -1943,12 +1862,6 @@ pub fn load_default_keymap(cx: &mut App) {
 
     if let Some(asset_path) = base_keymap.asset_path() {
         cx.bind_keys(KeymapFile::load_asset(asset_path, Some(KeybindSource::Base), cx).unwrap());
-    }
-
-    if VimModeSetting::get_global(cx).0 || vim_mode_setting::HelixModeSetting::get_global(cx).0 {
-        cx.bind_keys(
-            KeymapFile::load_asset(VIM_KEYMAP_PATH, Some(KeybindSource::Vim), cx).unwrap(),
-        );
     }
 
     cx.bind_keys(
