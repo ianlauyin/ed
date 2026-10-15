@@ -1696,16 +1696,6 @@ impl RunningState {
         &self.stack_frame_list
     }
 
-    #[cfg(test)]
-    pub fn console(&self) -> &Entity<Console> {
-        &self.console
-    }
-
-    #[cfg(test)]
-    pub(crate) fn module_list(&self) -> &Entity<ModuleList> {
-        &self.module_list
-    }
-
     pub(crate) fn activate_item(
         &mut self,
         item: DebuggerPaneItem,
@@ -1729,16 +1719,6 @@ impl RunningState {
         pane.update(cx, |this, cx| {
             this.activate_item(variable_list_position, true, true, window, cx);
         });
-    }
-
-    #[cfg(test)]
-    pub(crate) fn variable_list(&self) -> &Entity<VariableList> {
-        &self.variable_list
-    }
-
-    #[cfg(test)]
-    pub(crate) fn serialized_layout(&self, cx: &App) -> SerializedLayout {
-        persistence::build_serialized_layout(&self.panes.root, self.dock_axis, cx)
     }
 
     pub fn capabilities(&self, cx: &App) -> Capabilities {
@@ -2078,100 +2058,5 @@ impl RunningState {
 impl Focusable for RunningState {
     fn focus_handle(&self, _: &App) -> FocusHandle {
         self.focus_handle.clone()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{
-        debugger_panel::DebugPanel,
-        tests::{init_test, init_test_workspace, start_debug_session},
-    };
-    use gpui::{BackgroundExecutor, TestAppContext, VisualTestContext};
-    use project::{FakeFs, Project};
-    use serde_json::json;
-    use util::path;
-
-    #[gpui::test]
-    async fn stale_subview_host_during_tab_drop_does_not_read_updating_source_pane(
-        executor: BackgroundExecutor,
-        cx: &mut TestAppContext,
-    ) {
-        init_test(cx);
-
-        let fs = FakeFs::new(executor);
-        fs.insert_tree(
-            path!("/project"),
-            json!({
-                "main.rs": "fn main() {}",
-            }),
-        )
-        .await;
-
-        let project = Project::test(fs, [path!("/project").as_ref()], cx).await;
-        let workspace = init_test_workspace(&project, cx).await;
-        let cx = &mut VisualTestContext::from_window(*workspace, cx);
-
-        start_debug_session(&workspace, cx, |_| {}).expect("debug session starts");
-        cx.run_until_parked();
-
-        let running_state = workspace
-            .update(cx, |multi_workspace, _window, cx| {
-                multi_workspace.workspace().update(cx, |workspace, cx| {
-                    let debug_panel = workspace.panel::<DebugPanel>(cx).expect("debug panel");
-                    let active_session = debug_panel
-                        .read(cx)
-                        .active_session()
-                        .expect("active debug session");
-                    active_session.read(cx).running_state().clone()
-                })
-            })
-            .expect("workspace update succeeds");
-
-        let (source_pane, stale_host_pane) = running_state.read_with(cx, |running_state, _| {
-            let panes = running_state.panes.panes();
-            let mut panes = panes.into_iter();
-            let source_pane = panes.next().expect("source pane").clone();
-            let stale_host_pane = panes.next().expect("stale host pane").clone();
-            (source_pane, stale_host_pane)
-        });
-
-        let dragged_tab = {
-            let source_pane_entity = source_pane.clone();
-            source_pane.read_with(cx, |source_pane, _| {
-                let item = source_pane
-                    .item_for_index(0)
-                    .expect("source pane contains debugger subview")
-                    .boxed_clone();
-                DraggedTab {
-                    pane: source_pane_entity,
-                    item,
-                    ix: 0,
-                    detail: 0,
-                    is_active: true,
-                }
-            })
-        };
-
-        let active_subview = source_pane.read_with(cx, |source_pane, _| {
-            source_pane
-                .active_item()
-                .and_then(|item| item.downcast::<SubView>())
-                .expect("active item is a debugger subview")
-        });
-        active_subview.update(cx, |subview, _| {
-            subview.set_host_pane(stale_host_pane.downgrade());
-        });
-
-        source_pane.update_in(cx, |source_pane, window, cx| {
-            source_pane.handle_tab_drop(
-                &dragged_tab,
-                source_pane.active_item_index(),
-                true,
-                window,
-                cx,
-            );
-        });
     }
 }

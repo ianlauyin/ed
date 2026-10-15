@@ -159,10 +159,6 @@ pub use folding_ranges::LspFoldingRange;
 pub use fs::*;
 pub use language::Location;
 pub use lsp_store::inlay_hints::{CacheInlayHints, CacheInlayHintsTask, InvalidationStrategy};
-#[cfg(any(test, feature = "test-support"))]
-pub use prettier::FORMAT_SUFFIX as TEST_PRETTIER_FORMAT_SUFFIX;
-#[cfg(any(test, feature = "test-support"))]
-pub use prettier::RANGE_FORMAT_SUFFIX as TEST_PRETTIER_RANGE_FORMAT_SUFFIX;
 pub use semantic_tokens::{
     BufferSemanticToken, BufferSemanticTokens, SemanticTokenStylizer, TokenType,
 };
@@ -530,26 +526,9 @@ impl LocalLspStore {
             let adapter = adapter.clone();
             let server_name = adapter.name.clone();
             let stderr_capture = stderr_capture.clone();
-            #[cfg(any(test, feature = "test-support"))]
-            let lsp_store = self.weak.clone();
             let pending_workspace_folders = pending_workspace_folders.clone();
             async move |cx| {
                 let binary = binary.await?;
-                #[cfg(any(test, feature = "test-support"))]
-                if let Some(server) = lsp_store
-                    .update(&mut cx.clone(), |this, cx| {
-                        this.languages.create_fake_language_server(
-                            server_id,
-                            &server_name,
-                            binary.clone(),
-                            &mut cx.to_async(),
-                        )
-                    })
-                    .ok()
-                    .flatten()
-                {
-                    return Ok(server);
-                }
 
                 let code_action_kinds = adapter.code_action_kinds();
                 lsp::LanguageServer::new(
@@ -774,46 +753,6 @@ impl LocalLspStore {
                         .collect(),
                 })
             });
-        }
-
-        #[cfg(any(test, feature = "test-support"))]
-        if !adapter.adapter.is_extension() && self.languages.has_fake_lsp_server(&adapter.name) {
-            let language_server_name = adapter.name.clone();
-            return cx.spawn(async move |_| {
-                if let Some(mut wait_until_worktree_trust) = wait_until_worktree_trust {
-                    let already_trusted = *wait_until_worktree_trust.borrow();
-                    if !already_trusted {
-                        log::info!(
-                            "Waiting for worktree {worktree_abs_path:?} to be trusted, before starting language server {language_server_name}",
-                        );
-                        while let Some(worktree_trusted) = wait_until_worktree_trust.recv().await {
-                            if worktree_trusted {
-                                break;
-                            }
-                        }
-                        log::info!(
-                            "Worktree {worktree_abs_path:?} is trusted, starting language server {language_server_name}",
-                        );
-                    }
-                    delegate.update_status(
-                        language_server_name.clone(),
-                        BinaryStatus::Starting,
-                    );
-                }
-
-                Ok(LanguageServerBinary {
-                    path: PathBuf::from(format!("/fake/lsp/{language_server_name}")),
-                    arguments: Vec::new(),
-                    env: None,
-                })
-            });
-        }
-
-        if cfg!(any(test, feature = "test-support")) && !adapter.adapter.is_extension() {
-            return Task::ready(Err(anyhow!(
-                "language server binary lookup for {:?} is disabled in tests; register a fake language server or configure an explicit binary",
-                adapter.name
-            )));
         }
 
         let lsp_binary_options = LanguageServerBinaryOptions {
@@ -4649,11 +4588,6 @@ impl BufferLspData {
         let semantic_tokens = self.semantic_tokens.take();
         *self = Self::new(buffer, cx);
         self.semantic_tokens = semantic_tokens;
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn inlay_hints(&self) -> &BufferInlayHints {
-        &self.inlay_hints
     }
 }
 
@@ -9661,15 +9595,7 @@ impl LspStore {
                 Some(lsp::TextDocumentSyncKind::FULL) => build_full_change(),
                 Some(lsp::TextDocumentSyncKind::INCREMENTAL) => build_change(),
                 _ => {
-                    #[cfg(any(test, feature = "test-support"))]
-                    {
-                        build_change()
-                    }
-
-                    #[cfg(not(any(test, feature = "test-support")))]
-                    {
-                        continue;
-                    }
+                    continue;
                 }
             };
 
@@ -10066,34 +9992,6 @@ impl LspStore {
                 language_name.0
             );
         }
-    }
-
-    #[cfg(feature = "test-support")]
-    pub fn update_diagnostic_entries(
-        &mut self,
-        server_id: LanguageServerId,
-        abs_path: PathBuf,
-        result_id: Option<SharedString>,
-        version: Option<i32>,
-        diagnostics: Vec<DiagnosticEntry<Unclipped<PointUtf16>>>,
-        cx: &mut Context<Self>,
-    ) -> anyhow::Result<()> {
-        self.merge_diagnostic_entries(
-            vec![DocumentDiagnosticsUpdate {
-                diagnostics: DocumentDiagnostics {
-                    diagnostics,
-                    document_abs_path: abs_path,
-                    version,
-                },
-                result_id,
-                server_id,
-                disk_based_sources: Cow::Borrowed(&[]),
-                registration_id: None,
-            }],
-            |_, _, _| false,
-            cx,
-        )?;
-        Ok(())
     }
 
     // A path's diagnostics are dropped per server, through the same merge machinery that
@@ -11729,16 +11627,6 @@ impl LspStore {
         })
     }
 
-    #[cfg(feature = "test-support")]
-    pub fn has_language_server_seed_for_worktree(&self, worktree_id: WorktreeId) -> bool {
-        self.as_local().is_some_and(|local| {
-            local
-                .language_server_ids
-                .keys()
-                .any(|seed| seed.worktree_id == worktree_id)
-        })
-    }
-
     pub(super) fn did_rename_entry(
         &self,
         worktree_id: WorktreeId,
@@ -13176,30 +13064,6 @@ impl LspStore {
         )
     }
 
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn update_diagnostics(
-        &mut self,
-        server_id: LanguageServerId,
-        diagnostics: lsp::PublishDiagnosticsParams,
-        result_id: Option<SharedString>,
-        source_kind: DiagnosticSourceKind,
-        disk_based_sources: &[String],
-        cx: &mut Context<Self>,
-    ) -> Result<()> {
-        self.merge_lsp_diagnostics(
-            source_kind,
-            vec![DocumentDiagnosticsUpdate {
-                diagnostics,
-                result_id,
-                server_id,
-                disk_based_sources: Cow::Borrowed(disk_based_sources),
-                registration_id: None,
-            }],
-            |_, _, _| false,
-            cx,
-        )
-    }
-
     pub fn merge_lsp_diagnostics(
         &mut self,
         source_kind: DiagnosticSourceKind,
@@ -13762,17 +13626,6 @@ impl LspStore {
         }
     }
 
-    #[cfg(feature = "test-support")]
-    pub fn register_supplementary_language_server_for_test(
-        &mut self,
-        id: LanguageServerId,
-        name: LanguageServerName,
-        server: Arc<LanguageServer>,
-        cx: &mut Context<Self>,
-    ) {
-        self.register_supplementary_language_server(id, name, server, cx);
-    }
-
     fn unregister_supplementary_language_server(
         &mut self,
         id: LanguageServerId,
@@ -13783,15 +13636,6 @@ impl LspStore {
             local.initial_server_capabilities.remove(&id);
             cx.emit(LspStoreEvent::SupplementaryLanguageServerRemoved(id));
         }
-    }
-
-    #[cfg(feature = "test-support")]
-    pub fn unregister_supplementary_language_server_for_test(
-        &mut self,
-        id: LanguageServerId,
-        cx: &mut Context<Self>,
-    ) {
-        self.unregister_supplementary_language_server(id, cx);
     }
 
     pub fn language_server_adapter_for_id(
@@ -15965,17 +15809,6 @@ impl LanguageServerPromptRequest {
             None
         }
     }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn test(
-        level: PromptLevel,
-        message: String,
-        actions: Vec<MessageActionItem>,
-        lsp_name: String,
-    ) -> Self {
-        let (tx, _rx) = async_channel::unbounded();
-        LanguageServerPromptRequest::new(level, message, actions, lsp_name, tx)
-    }
 }
 impl PartialEq for LanguageServerPromptRequest {
     fn eq(&self, other: &Self) -> bool {
@@ -16227,20 +16060,7 @@ pub enum CompletionDocumentation {
     },
 }
 
-impl CompletionDocumentation {
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn text(&self) -> SharedString {
-        match self {
-            CompletionDocumentation::Undocumented => "".into(),
-            CompletionDocumentation::SingleLine(s) => s.clone(),
-            CompletionDocumentation::MultiLinePlainText(s) => s.clone(),
-            CompletionDocumentation::MultiLineMarkdown(s) => s.clone(),
-            CompletionDocumentation::SingleLineAndMultiLinePlainText { single_line, .. } => {
-                single_line.clone()
-            }
-        }
-    }
-}
+impl CompletionDocumentation {}
 
 impl From<lsp::Documentation> for CompletionDocumentation {
     fn from(docs: lsp::Documentation) -> Self {
@@ -16855,601 +16675,4 @@ fn extend_formatting_transaction(
         }
         Ok(())
     })
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{InlayHintLabel, InlayHintTextEdits, Project};
-    use fs::FakeFs;
-    use futures::future;
-    use gpui::TestAppContext;
-    use settings::SettingsStore;
-    use text::Point;
-
-    #[gpui::test]
-    fn test_inlay_hint_server_removal_retires_ids_and_resolves(cx: &mut TestAppContext) {
-        let buffer = cx.new(|cx| Buffer::local("x", cx));
-        let position = buffer.read_with(cx, |buffer, _| buffer.anchor_after(0));
-        let mut hints = cx.update(|cx| BufferInlayHints::new(&buffer, cx));
-        let chunk = hints
-            .applicable_chunks(&[Point::new(0, 0)..Point::new(0, 1)])
-            .next()
-            .expect("inlay chunk");
-        let server_id = LanguageServerId(1);
-        let other_server_id = LanguageServerId(2);
-        let old_id = InlayId::Hint(1);
-        let other_id = InlayId::Hint(2);
-        let new_id = InlayId::Hint(3);
-        let old_hint = inlay_hint_for_test(position, "old");
-        let other_hint = inlay_hint_for_test(position, "other");
-        let new_hint = inlay_hint_for_test(position, "new");
-        hints.insert_new_hints(chunk, server_id, vec![(old_id, old_hint)]);
-        hints.insert_new_hints(chunk, other_server_id, vec![(other_id, other_hint.clone())]);
-        let cancelled = Arc::new(AtomicUsize::new(0));
-        let resolve = cx.background_executor.spawn({
-            let cancelled = cancelled.clone();
-            async move {
-                let _cancelled = defer(move || {
-                    cancelled.fetch_add(1, atomic::Ordering::SeqCst);
-                });
-                future::pending::<Option<InlayHint>>().await
-            }
-        });
-        hints.hint_resolves.insert(old_id, resolve.shared());
-        hints
-            .hint_resolves
-            .insert(other_id, Task::ready(None).shared());
-        cx.run_until_parked();
-
-        hints.remove_server_data(server_id);
-        hints.insert_new_hints(chunk, server_id, vec![(new_id, new_hint.clone())]);
-        assert_eq!(hints.cached_hint(old_id), None);
-        assert_eq!(hints.hint_for_id(old_id), None);
-        assert_eq!(hints.cached_hint(new_id), Some(&new_hint));
-        assert_eq!(hints.cached_hint(other_id), Some(&other_hint));
-        assert_eq!(
-            hints.hint_resolves.keys().copied().collect::<Vec<_>>(),
-            vec![other_id]
-        );
-        cx.run_until_parked();
-        assert_eq!(cancelled.load(atomic::Ordering::SeqCst), 1);
-    }
-
-    #[gpui::test]
-    async fn test_inlay_hint_resolve_retires_task_without_losing_waiters(cx: &mut TestAppContext) {
-        cx.update(|cx| {
-            let settings_store = SettingsStore::test(cx);
-            cx.set_global(settings_store);
-        });
-        let fs = FakeFs::new(cx.executor());
-        let project = Project::test(fs, [], cx).await;
-        let buffer = project.update(cx, |project, cx| {
-            project.create_local_buffer("x", None, false, cx)
-        });
-        let (buffer_id, position) =
-            buffer.read_with(cx, |buffer, _| (buffer.remote_id(), buffer.anchor_after(0)));
-        let lsp_store = project.read_with(cx, |project, _| project.lsp_store());
-        let id = InlayId::Hint(1);
-        let server_id = LanguageServerId(1);
-        let expected = inlay_hint_for_test(position, "hint");
-        let (resolve, other_resolve) = lsp_store.update(cx, |lsp_store, cx| {
-            let hints = &mut lsp_store.latest_lsp_data(&buffer, cx).inlay_hints;
-            let chunk = hints
-                .applicable_chunks(&[Point::new(0, 0)..Point::new(0, 1)])
-                .next()
-                .expect("inlay chunk");
-            let mut hint = expected.clone();
-            hint.resolve_state = ResolveState::CanResolve(server_id, None);
-            hints.insert_new_hints(chunk, server_id, vec![(id, hint)]);
-            let Some(ResolvedHint::Resolving(resolve)) = lsp_store.resolved_hint(buffer_id, id, cx)
-            else {
-                panic!("expected a pending resolve");
-            };
-            let Some(ResolvedHint::Resolving(other_resolve)) =
-                lsp_store.resolved_hint(buffer_id, id, cx)
-            else {
-                panic!("expected a shared pending resolve");
-            };
-            assert_eq!(
-                lsp_store.lsp_data[&buffer_id]
-                    .inlay_hints
-                    .hint_resolves
-                    .len(),
-                1
-            );
-            (resolve, other_resolve)
-        });
-        assert_eq!(resolve.await, Some(expected.clone()));
-        assert_eq!(other_resolve.await, Some(expected.clone()));
-        lsp_store.update(cx, |lsp_store, cx| {
-            assert!(
-                lsp_store.lsp_data[&buffer_id]
-                    .inlay_hints
-                    .hint_resolves
-                    .is_empty()
-            );
-            assert_eq!(lsp_store.cached_inlay_hint(buffer_id, id), Some(&expected));
-            let Some(ResolvedHint::Resolved(hint)) = lsp_store.resolved_hint(buffer_id, id, cx)
-            else {
-                panic!("expected a cached resolved hint");
-            };
-            assert_eq!(hint, expected);
-        });
-    }
-
-    #[gpui::test]
-    async fn test_inlay_hint_rejects_malformed_edit_anchors(cx: &mut TestAppContext) {
-        let buffer = cx.new(|cx| Buffer::local("a😀b", cx));
-        let position = buffer.read_with(cx, |buffer, _| buffer.anchor_after(1));
-        let other_buffer = cx.new(|cx| Buffer::local("a😀b", cx));
-        let invalid_anchor = other_buffer.read_with(cx, |buffer, _| buffer.anchor_after(1));
-        let mut async_cx = cx.to_async();
-        for (hint_position, start, end, expected) in [
-            (
-                position,
-                invalid_anchor,
-                position,
-                "invalid inlay hint text edit start anchor",
-            ),
-            (
-                position,
-                position,
-                invalid_anchor,
-                "invalid inlay hint text edit end anchor",
-            ),
-            (
-                invalid_anchor,
-                position,
-                position,
-                "invalid inlay hint position anchor",
-            ),
-        ] {
-            let mut hint = inlay_hint_for_test(hint_position, "hint");
-            hint.text_edits = Some(InlayHintTextEdits {
-                edits: vec![(start..end, "replacement".to_string())],
-                buffer_version: Global::new(),
-            });
-            let message = InlayHints::project_to_proto_hint(hint);
-            InlayHints::wait_for_hints_version(
-                std::slice::from_ref(&message),
-                &[],
-                &buffer,
-                &mut async_cx,
-            )
-            .await
-            .expect("empty versions");
-            let hint = InlayHints::proto_to_project_hint(message).expect("hint payload");
-            let snapshot = buffer.read_with(cx, |buffer, _| buffer.snapshot());
-            let result = InlayHints::project_to_lsp_hint(hint, &snapshot);
-
-            assert_eq!(
-                result.map(|_| ()).map_err(|error| error.to_string()),
-                Err(expected.to_string()),
-            );
-        }
-    }
-
-    #[gpui::test]
-    fn test_inlay_hint_rejects_reversed_edit_ranges(cx: &mut TestAppContext) {
-        let buffer = cx.new(|cx| Buffer::local("a😀b", cx));
-        let snapshot = buffer.read_with(cx, |buffer, _| buffer.snapshot());
-        let ranges = [
-            snapshot.anchor_after(5)..snapshot.anchor_before(1),
-            snapshot.anchor_after(1)..snapshot.anchor_before(1),
-        ];
-        let version = snapshot.version().clone();
-        buffer.update(cx, |buffer, cx| buffer.edit([(1..1, "x")], None, cx));
-        let snapshot = buffer.read_with(cx, |buffer, _| buffer.snapshot());
-        assert_eq!(snapshot.text(), "ax😀b");
-        for range in ranges {
-            let mut hint = inlay_hint_for_test(snapshot.anchor_after(1), "hint");
-            hint.text_edits = Some(InlayHintTextEdits {
-                edits: vec![(range, "replacement".to_string())],
-                buffer_version: version.clone(),
-            });
-            assert_eq!(
-                InlayHints::project_to_lsp_hint(hint, &snapshot)
-                    .map(|_| ())
-                    .map_err(|error| error.to_string()),
-                Err("reversed inlay hint text edit range".to_string()),
-            );
-        }
-    }
-
-    #[gpui::test]
-    fn test_inlay_hint_converts_valid_edit_anchors(cx: &mut TestAppContext) {
-        let buffer = cx.new(|cx| Buffer::local("a😀b", cx));
-        let snapshot = buffer.read_with(cx, |buffer, _| buffer.snapshot());
-        let mut hint = inlay_hint_for_test(snapshot.anchor_after(5), "hint");
-        hint.text_edits = Some(InlayHintTextEdits {
-            edits: vec![(
-                snapshot.anchor_after(1)..snapshot.anchor_before(5),
-                "z".to_string(),
-            )],
-            buffer_version: snapshot.version().clone(),
-        });
-        for (edit, position, start) in [
-            (None, lsp::Position::new(0, 3), lsp::Position::new(0, 1)),
-            (
-                Some((0..0, "é")),
-                lsp::Position::new(0, 4),
-                lsp::Position::new(0, 2),
-            ),
-            (
-                Some((0..0, "\n")),
-                lsp::Position::new(1, 4),
-                lsp::Position::new(1, 2),
-            ),
-            (
-                Some((4..8, "")),
-                lsp::Position::new(1, 2),
-                lsp::Position::new(1, 2),
-            ),
-        ] {
-            if let Some(edit) = edit {
-                buffer.update(cx, |buffer, cx| buffer.edit([edit], None, cx));
-            }
-            let snapshot = buffer.read_with(cx, |buffer, _| buffer.snapshot());
-            let converted = InlayHints::project_to_lsp_hint(hint.clone(), &snapshot)
-                .expect("valid hint anchors in a later snapshot");
-            assert_eq!(converted.position, position);
-            assert_eq!(
-                converted.text_edits,
-                Some(vec![lsp::TextEdit {
-                    range: lsp::Range::new(start, position),
-                    new_text: "z".to_string(),
-                }])
-            );
-        }
-    }
-
-    #[gpui::test]
-    async fn test_fetch_inlay_hints_after_buffer_edit(cx: &mut gpui::TestAppContext) {
-        cx.update(|cx| {
-            let settings_store = SettingsStore::test(cx);
-            cx.set_global(settings_store);
-            settings_content::app_metadata::init(Version::new(0, 0, 0), cx);
-        });
-        let fs = fs::FakeFs::new(cx.executor());
-        fs.insert_tree(
-            util::path!("/the-root"),
-            serde_json::json!({ "main.rs": "fn main() {}" }),
-        )
-        .await;
-        let project = Project::test(fs, [util::path!("/the-root").as_ref()], cx).await;
-        let languages = project.read_with(cx, |project, _| project.languages().clone());
-        languages.add(language::rust_lang());
-        let (request_sender, request_receiver) = async_channel::bounded(1);
-        let (response_sender, response_receiver) = async_channel::bounded(1);
-        let mut fake_servers = languages.register_fake_lsp(
-            "Rust",
-            language::FakeLspAdapter {
-                capabilities: lsp::ServerCapabilities {
-                    inlay_hint_provider: Some(lsp::OneOf::Left(true)),
-                    ..lsp::ServerCapabilities::default()
-                },
-                initializer: Some(Box::new(move |fake_server| {
-                    let request_sender = request_sender.clone();
-                    let response_receiver = response_receiver.clone();
-                    fake_server.set_request_handler::<lsp::request::InlayHintRequest, _, _>(
-                        move |_, _| {
-                            let request_sender = request_sender.clone();
-                            let response_receiver = response_receiver.clone();
-                            async move {
-                                request_sender.send(()).await?;
-                                response_receiver.recv().await?;
-                                Ok(Some(
-                                    [
-                                        (0, 2, lsp::InlayHintKind::TYPE),
-                                        (0, 3, lsp::InlayHintKind::PARAMETER),
-                                        (1, 5, lsp::InlayHintKind::TYPE),
-                                        (1, 12, lsp::InlayHintKind::TYPE),
-                                    ]
-                                    .into_iter()
-                                    .map(|(row, column, kind)| lsp::InlayHint {
-                                        position: lsp::Position::new(row, column),
-                                        label: lsp::InlayHintLabel::String("hint".to_owned()),
-                                        kind: Some(kind),
-                                        text_edits: None,
-                                        tooltip: None,
-                                        padding_left: None,
-                                        padding_right: None,
-                                        data: None,
-                                    })
-                                    .collect(),
-                                ))
-                            }
-                        },
-                    );
-                })),
-                ..language::FakeLspAdapter::default()
-            },
-        );
-        let (buffer, _lsp_handle) = project
-            .update(cx, |project, cx| {
-                project.open_local_buffer_with_lsp(util::path!("/the-root/main.rs"), cx)
-            })
-            .await
-            .expect("open buffer");
-        let fake_server = fake_servers.next().await.expect("start language server");
-        let server_id = fake_server.server.server_id();
-        let lsp_store = project.read_with(cx, |project, _| project.lsp_store());
-
-        for (range_end, expected_offsets) in [(5, vec![4, 5]), (12, vec![4, 5, 11, 18])] {
-            buffer.update(cx, |buffer, cx| {
-                buffer.edit([(0..buffer.len(), "fn main() {}")], None, cx);
-            });
-            cx.run_until_parked();
-            let hints_task = lsp_store.update(cx, |lsp_store, cx| {
-                let snapshot = buffer.read(cx).snapshot();
-                lsp_store.fetch_inlay_hints(
-                    None,
-                    &buffer,
-                    snapshot.anchor_before(0)..snapshot.anchor_after(range_end),
-                    cx,
-                )
-            });
-            request_receiver.recv().await.expect("receive request");
-            buffer.update(cx, |buffer, cx| {
-                buffer.edit([(0..0, "😀x\n")], None, cx);
-            });
-            response_sender.send(()).await.expect("release response");
-
-            let hints_by_server = hints_task.await.expect("fetch hints");
-            let hints = hints_by_server.get(&server_id).expect("server hints");
-            buffer.read_with(cx, |buffer, _| {
-                assert_eq!(
-                    hints
-                        .iter()
-                        .map(|hint| hint.position.to_offset(buffer))
-                        .collect::<Vec<_>>(),
-                    expected_offsets,
-                );
-            });
-        }
-    }
-
-    #[test]
-    fn should_log_lsp_request_failure_suppresses_known_noise() {
-        // Suppressed: rust-analyzer's superseded/denied request signals.
-        assert!(!should_log_lsp_request_failure(
-            "Get diagnostics via rust-analyzer failed: content modified"
-        ));
-        assert!(!should_log_lsp_request_failure(
-            "Get diagnostics via rust-analyzer failed: server cancelled the request"
-        ));
-
-        // Logged: anything else is a real failure.
-        assert!(should_log_lsp_request_failure(
-            "Get diagnostics via rust-analyzer failed: server shut down"
-        ));
-        assert!(should_log_lsp_request_failure(
-            "Get diagnostics via rust-analyzer failed: Server reset the connection"
-        ));
-        assert!(should_log_lsp_request_failure("something else entirely"));
-    }
-    #[test]
-    fn synced_server_capabilities_wire_format_is_compatible_with_plain_capabilities() {
-        let registrations: dynamic_registration::TextDocumentRegistrations =
-            HashMap::from_iter([(
-                "textDocument/completion".to_string(),
-                collections::IndexMap::from_iter([(
-                    "file-completion".to_string(),
-                    dynamic_registration::DynamicTextDocumentRegistration {
-                        document_selector: Some(vec![lsp::DocumentFilter {
-                            language: Some("rust".to_string()),
-                            scheme: Some("file".to_string()),
-                            pattern: None,
-                        }]),
-                        server_capabilities: lsp::ServerCapabilities {
-                            completion_provider: Some(lsp::CompletionOptions {
-                                trigger_characters: Some(vec![".".to_string()]),
-                                ..lsp::CompletionOptions::default()
-                            }),
-                            ..lsp::ServerCapabilities::default()
-                        },
-                    },
-                )]),
-            )]);
-        let server_capabilities = lsp::ServerCapabilities {
-            hover_provider: Some(lsp::HoverProviderCapability::Simple(true)),
-            ..lsp::ServerCapabilities::default()
-        };
-        let initial_server_capabilities = lsp::ServerCapabilities {
-            definition_provider: Some(lsp::OneOf::Left(true)),
-            ..lsp::ServerCapabilities::default()
-        };
-
-        let envelope = serde_json::to_string(&SyncedServerCapabilities {
-            server_capabilities: server_capabilities.clone(),
-            initial_server_capabilities: Some(initial_server_capabilities.clone()),
-            text_document_registrations: Some(registrations.clone()),
-        })
-        .unwrap();
-        let parsed_by_old_peer =
-            serde_json::from_str::<lsp::ServerCapabilities>(&envelope).unwrap();
-        assert_eq!(
-            parsed_by_old_peer, server_capabilities,
-            "peers without the extra field should parse the envelope as plain capabilities",
-        );
-        let parsed = serde_json::from_str::<SyncedServerCapabilities>(&envelope).unwrap();
-        assert_eq!(parsed.server_capabilities, server_capabilities);
-        assert_eq!(
-            parsed.initial_server_capabilities,
-            Some(initial_server_capabilities)
-        );
-        assert_eq!(parsed.text_document_registrations, Some(registrations));
-
-        let plain_capabilities = serde_json::to_string(&server_capabilities).unwrap();
-        let parsed_plain =
-            serde_json::from_str::<SyncedServerCapabilities>(&plain_capabilities).unwrap();
-        assert_eq!(
-            parsed_plain.server_capabilities, server_capabilities,
-            "payloads from peers without the extra field should parse as an envelope",
-        );
-        assert_eq!(parsed_plain.initial_server_capabilities, None);
-        assert_eq!(parsed_plain.text_document_registrations, None);
-    }
-
-    #[test]
-    fn remote_capability_check_falls_back_to_merged_capabilities_without_initial_capabilities() {
-        let merged_capabilities = rename_capabilities();
-        let context = rust_file_context();
-        assert!(
-            remote_text_document_capabilities_match(
-                None,
-                Some(&merged_capabilities),
-                None,
-                Some(&context),
-                rename_capability_check,
-            ),
-            "old hosts send only merged capabilities, which must be consulted",
-        );
-    }
-
-    #[test]
-    fn remote_capability_check_skips_registrations_with_non_matching_selectors() {
-        let initial_capabilities = lsp::ServerCapabilities::default();
-        let merged_capabilities = rename_capabilities();
-        let registrations = rename_registrations("python");
-        let context = rust_file_context();
-        assert!(
-            !remote_text_document_capabilities_match(
-                Some(&initial_capabilities),
-                Some(&merged_capabilities),
-                Some(&registrations),
-                Some(&context),
-                rename_capability_check,
-            ),
-            "a registration scoped to another language must not match",
-        );
-    }
-
-    #[test]
-    fn remote_capability_check_fails_open_without_selector_context() {
-        let initial_capabilities = lsp::ServerCapabilities::default();
-        let merged_capabilities = rename_capabilities();
-        let registrations = rename_registrations("python");
-        assert!(
-            remote_text_document_capabilities_match(
-                Some(&initial_capabilities),
-                Some(&merged_capabilities),
-                Some(&registrations),
-                None,
-                rename_capability_check,
-            ),
-            "without a selector context the guest must fail open and let the host re-filter",
-        );
-    }
-
-    #[test]
-    fn remote_capability_check_rejects_when_no_registration_matches() {
-        let initial_capabilities = lsp::ServerCapabilities::default();
-        let merged_capabilities = rename_capabilities();
-        let registrations = collections::IndexMap::default();
-        let context = rust_file_context();
-        assert!(
-            !remote_text_document_capabilities_match(
-                Some(&initial_capabilities),
-                Some(&merged_capabilities),
-                Some(&registrations),
-                Some(&context),
-                rename_capability_check,
-            ),
-            "initial capabilities without the capability and no registrations must not match",
-        );
-    }
-
-    fn rename_capability_check(capabilities: AdapterServerCapabilities<'_>) -> bool {
-        capabilities.server_capabilities.rename_provider.is_some()
-    }
-
-    fn rename_capabilities() -> lsp::ServerCapabilities {
-        lsp::ServerCapabilities {
-            rename_provider: Some(lsp::OneOf::Left(true)),
-            ..lsp::ServerCapabilities::default()
-        }
-    }
-
-    fn rust_file_context() -> DocumentSelectorContext {
-        DocumentSelectorContext {
-            language_id: "rust".to_string(),
-            scheme: "file",
-        }
-    }
-
-    fn rename_registrations(
-        language: &str,
-    ) -> collections::IndexMap<String, dynamic_registration::DynamicTextDocumentRegistration> {
-        collections::IndexMap::from_iter([(
-            "rename-registration".to_string(),
-            dynamic_registration::DynamicTextDocumentRegistration {
-                document_selector: Some(vec![lsp::DocumentFilter {
-                    language: Some(language.to_string()),
-                    scheme: Some("file".to_string()),
-                    pattern: None,
-                }]),
-                server_capabilities: rename_capabilities(),
-            },
-        )])
-    }
-
-    #[test]
-    fn lsp_pull_cancelled_with_retrigger_follows_the_spec() {
-        assert!(lsp_pull_cancelled_with_retrigger(&server_cancellation(
-            None
-        )));
-        assert!(lsp_pull_cancelled_with_retrigger(&server_cancellation(
-            Some(serde_json::json!({ "retriggerRequest": true }))
-        )));
-        assert!(!lsp_pull_cancelled_with_retrigger(&server_cancellation(
-            Some(serde_json::json!({ "retriggerRequest": false }))
-        )));
-        assert!(lsp_pull_cancelled_with_retrigger(
-            &server_cancellation(None).context("pulling diagnostics")
-        ));
-        assert!(!lsp_pull_cancelled_with_retrigger(&anyhow::Error::new(
-            lsp::ResponseError::new(lsp::ResponseErrorCode::RequestFailed, "request failed")
-        )));
-        assert!(!lsp_pull_cancelled_with_retrigger(&anyhow::anyhow!(
-            "server cancelled the request"
-        )));
-    }
-
-    #[test]
-    fn should_log_lsp_response_error_suppresses_denied_requests() {
-        assert!(!should_log_lsp_response_error(&server_cancellation(None)));
-        assert!(!should_log_lsp_response_error(&anyhow::Error::new(
-            lsp::ResponseError::new(
-                lsp::ResponseErrorCode::ContentModified,
-                "content changed meanwhile",
-            )
-        )));
-        assert!(should_log_lsp_response_error(&anyhow::Error::new(
-            lsp::ResponseError::new(lsp::ResponseErrorCode::RequestFailed, "request failed")
-        )));
-        assert!(should_log_lsp_response_error(&anyhow::anyhow!(
-            "something else entirely"
-        )));
-    }
-
-    fn server_cancellation(data: Option<serde_json::Value>) -> anyhow::Error {
-        let mut response_error = lsp::ResponseError::server_cancelled();
-        response_error.data = data;
-        anyhow::Error::new(response_error)
-    }
-
-    fn inlay_hint_for_test(position: Anchor, label: &str) -> InlayHint {
-        InlayHint {
-            position,
-            label: InlayHintLabel::String(label.to_string()),
-            kind: None,
-            padding_left: false,
-            padding_right: false,
-            tooltip: None,
-            text_edits: None,
-            resolve_state: ResolveState::Resolved,
-        }
-    }
 }

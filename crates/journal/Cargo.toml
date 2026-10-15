@@ -21,6 +21,3 @@ log.workspace = true
 settings.workspace = true
 shellexpand.workspace = true
 workspace.workspace = true
-
-[dev-dependencies]
-editor = { workspace = true, features = ["test-support"] }

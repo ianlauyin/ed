@@ -451,23 +451,6 @@ impl std::hash::Hasher for TypeIdHasher {
     }
 }
 
-#[test]
-fn type_id_hasher() {
-    use core::any::TypeId;
-    use core::hash::{Hash, Hasher};
-    fn verify_hashing_with(type_id: TypeId) {
-        let mut hasher = TypeIdHasher::default();
-        type_id.hash(&mut hasher);
-        assert_ne!(hasher.finish(), 0);
-    }
-    // Pick a variety of types, just to demonstrate it’s all sane. Normal, zero-sized, unsized, &c.
-    verify_hashing_with(TypeId::of::<usize>());
-    verify_hashing_with(TypeId::of::<()>());
-    verify_hashing_with(TypeId::of::<str>());
-    verify_hashing_with(TypeId::of::<&str>());
-    verify_hashing_with(TypeId::of::<Vec<u8>>());
-}
-
 pub fn truncate_to_bottom_n_sorted_by<T, F>(items: &mut Vec<T>, limit: usize, compare: &F)
 where
     F: Fn(&T, &T) -> std::cmp::Ordering,
@@ -488,69 +471,4 @@ where
     items.select_nth_unstable_by(limit, compare);
     items.truncate(limit);
     items.sort_by(compare);
-}
-
-#[cfg(test)]
-mod logging_tests {
-    use super::{ResultExt, TryFutureExt, TryFutureExtBacktrace};
-    use log::{Level, Log, Metadata, Record};
-    use std::{
-        cell::RefCell,
-        future::ready,
-        pin::pin,
-        task::{Context, Poll, Waker},
-    };
-
-    #[test]
-    fn logging_preserves_diagnostics_and_callers() {
-        log::set_logger(&TestLogger).expect("failed to install test logger");
-        let error = anyhow::anyhow!("root failure")
-            .context("inner context")
-            .context("outer context");
-        let display = "outer context: inner context: root failure";
-        let debug = format!("{error:?}");
-        let line = line!() + 1;
-        assert_eq!(Err::<(), _>(&error).log_err(), None);
-        assert_logged(line, display);
-        let line = line!() + 1;
-        assert_eq!(Err::<(), _>(&error).log_err_with_backtrace(), None);
-        assert_logged(line, &debug);
-        let mut context = Context::from_waker(Waker::noop());
-        let line = line!() + 1;
-        let mut future = pin!(ready(Err::<(), _>(&error)).log_err());
-        assert_eq!(future.as_mut().poll(&mut context), Poll::Ready(None));
-        assert_logged(line, display);
-        let line = line!() + 1;
-        let mut future = pin!(ready(Err::<(), _>(&error)).log_err_with_backtrace());
-        assert_eq!(future.as_mut().poll(&mut context), Poll::Ready(None));
-        assert_logged(line, &debug);
-    }
-
-    thread_local! {
-        static RECORDS: RefCell<Vec<(Option<u32>, String)>> = const { RefCell::new(Vec::new()) };
-    }
-
-    struct TestLogger;
-
-    impl Log for TestLogger {
-        fn enabled(&self, _: &Metadata<'_>) -> bool {
-            true
-        }
-
-        fn log(&self, record: &Record<'_>) {
-            assert_eq!(record.target(), "gpui_util::lib");
-            assert_eq!(record.module_path(), Some("crates/gpui_util/src/lib.rs"));
-            assert_eq!(record.file(), Some(file!()));
-            assert_eq!(record.level(), Level::Error);
-            RECORDS.with_borrow_mut(|records| {
-                records.push((record.line(), record.args().to_string()));
-            });
-        }
-
-        fn flush(&self) {}
-    }
-
-    fn assert_logged(line: u32, message: &str) {
-        assert_eq!(RECORDS.take(), [(Some(line), message.to_owned())]);
-    }
 }

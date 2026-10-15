@@ -12,18 +12,6 @@ workspace = true
 path = "src/workspace.rs"
 doctest = false
 
-[features]
-test-support = [
-    "http_client/test-support",
-    "db/test-support",
-    "project/test-support",
-    "remote/test-support",
-    "session/test-support",
-    "settings/test-support",
-    "gpui/test-support",
-    "fs/test-support",
-]
-
 [dependencies]
 rpc.workspace = true
 any_vec.workspace = true
@@ -69,18 +57,3 @@ url.workspace = true
 util.workspace = true
 uuid.workspace = true
 zed_actions.workspace = true
-
-[dev-dependencies]
-db = { workspace = true, features = ["test-support"] }
-fs = { workspace = true, features = ["test-support"] }
-gpui = { workspace = true, features = ["test-support"] }
-project = { workspace = true, features = ["test-support"] }
-remote = { workspace = true, features = ["test-support"] }
-session = { workspace = true, features = ["test-support"] }
-settings = { workspace = true, features = ["test-support"] }
-http_client = { workspace = true, features = ["test-support"] }
-pretty_assertions.workspace = true
-proptest.workspace = true
-proptest-derive.workspace = true
-tempfile.workspace = true
-zlog.workspace = true

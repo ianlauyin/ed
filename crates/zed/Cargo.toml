@@ -14,46 +14,10 @@ workspace = true
 [features]
 # LEAK_BACKTRACE=1 cargo run --features zed/track-project-leak --profile release-fast
 track-project-leak = ["gpui/leak-detection"]
-test-support = [
-    "gpui/test-support",
-    "gpui_platform/screen-capture",
-    "dep:image",
-    "workspace/test-support",
-    "project/test-support",
-    "editor/test-support",
-    "terminal_view/test-support",
-    "image_viewer/test-support",
-    "recent_projects/test-support",
-    "repl/test-support",
-    "title_bar/test-support",
-]
-visual-tests = [
-    "gpui/test-support",
-    "gpui_platform/screen-capture",
-    "gpui_platform/test-support",
-    "dep:image",
-    "dep:tempfile",
-    "dep:env_logger",
-    "workspace/test-support",
-    "project/test-support",
-    "editor/test-support",
-    "terminal_view/test-support",
-    "image_viewer/test-support",
-    "clock/test-support",
-    "db/test-support",
-    "fs/test-support",
-    "recent_projects/test-support",
-    "title_bar/test-support",
-]
 
 [[bin]]
 name = "zed"
 path = "src/main.rs"
-
-[[bin]]
-name = "zed_visual_test_runner"
-path = "src/visual_test_runner.rs"
-required-features = ["visual-tests"]
 
 [dependencies]
 activity_indicator.workspace = true
@@ -65,7 +29,6 @@ call_hierarchy.workspace = true
 chrono.workspace = true
 clap.workspace = true
 cli.workspace = true
-clock = { workspace = true, optional = true }
 collections.workspace = true
 command_palette.workspace = true
 component_preview.workspace = true
@@ -79,7 +42,6 @@ dev_container.workspace = true
 diagnostics.workspace = true
 editor.workspace = true
 encoding_selector.workspace = true
-env_logger = { workspace = true, optional = true }
 extension.workspace = true
 file_finder.workspace = true
 fs.workspace = true
@@ -95,13 +57,11 @@ gpui_platform = { workspace = true, features = [
     "font-kit",
 ] }
 gpui_tokio.workspace = true
-image = { workspace = true, optional = true }
 itertools.workspace = true
 rayon.workspace = true
 semver.workspace = true
 system_specs.workspace = true
 tabular_data_preview.workspace = true
-tempfile = { workspace = true, optional = true }
 
 http_client.workspace = true
 image_viewer.workspace = true
@@ -185,28 +145,6 @@ zlog_settings.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 nix = { workspace = true, features = ["user"] }
-
-[dev-dependencies]
-activity_indicator = { workspace = true, features = ["test-support"] }
-editor = { workspace = true, features = ["test-support"] }
-env_logger.workspace = true
-fs = { workspace = true, features = ["test-support"] }
-gpui = { workspace = true, features = ["profiler", "test-support"] }
-image_viewer = { workspace = true, features = ["test-support"] }
-itertools.workspace = true
-language = { workspace = true, features = ["test-support"] }
-pretty_assertions.workspace = true
-project = { workspace = true, features = ["test-support"] }
-remote = { workspace = true, features = ["test-support"] }
-remote_server = { workspace = true, features = ["test-support"] }
-semver.workspace = true
-terminal_view = { workspace = true, features = ["test-support"] }
-title_bar = { workspace = true, features = ["test-support"] }
-workspace = { workspace = true, features = ["test-support"] }
-image.workspace = true
-search = { workspace = true, features = ["test-support"] }
-repl = { workspace = true, features = ["test-support"] }
-
 
 [package.metadata.bundle-dev]
 icon = ["resources/app-icon-dev@2x.png", "resources/app-icon-dev.png"]

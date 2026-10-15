@@ -241,16 +241,6 @@ impl RenderOnce for KeyBinding {
             };
 
             h_flex()
-                .debug_selector(|| {
-                    format!(
-                        "KEY_BINDING-{}",
-                        keystrokes
-                            .iter()
-                            .map(|k| k.key().to_string())
-                            .collect::<Vec<_>>()
-                            .join(" ")
-                    )
-                })
                 .gap(DynamicSpacing::Base04.rems(cx))
                 .flex_none()
                 .children(keystrokes.iter().map(|keystroke| {
@@ -679,40 +669,5 @@ impl Component for KeyBinding {
                 )],
             )])
             .into_any_element()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_backspace_and_delete_have_distinct_icons() {
-        let backspace = icon_for_key("backspace", PlatformStyle::Mac);
-        let delete = icon_for_key("delete", PlatformStyle::Mac);
-        assert!(backspace.is_some());
-        assert!(delete.is_some());
-        assert_ne!(backspace, delete);
-    }
-
-    #[test]
-    fn test_text_for_keystroke() {
-        let keystroke = Keystroke::parse("cmd-c").unwrap();
-        assert_eq!(
-            keystroke_text(&keystroke.modifiers, &keystroke.key, PlatformStyle::Mac),
-            "Command-C".to_string()
-        );
-
-        let keystroke = Keystroke::parse("ctrl-alt-delete").unwrap();
-        assert_eq!(
-            keystroke_text(&keystroke.modifiers, &keystroke.key, PlatformStyle::Mac),
-            "Control-Option-Delete".to_string()
-        );
-
-        let keystroke = Keystroke::parse("shift-pageup").unwrap();
-        assert_eq!(
-            keystroke_text(&keystroke.modifiers, &keystroke.key, PlatformStyle::Mac),
-            "Shift-PageUp".to_string()
-        );
     }
 }

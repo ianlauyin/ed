@@ -29,14 +29,7 @@ pub enum PageContents {
     Mapped(Arc<MappedPageContents>),
 }
 
-impl PageContents {
-    #[cfg(feature = "test-support")]
-    pub fn mapped(contents: Vec<u8>) -> Self {
-        PageContents::Mapped(Arc::new(MappedPageContents(
-            vec![PageChunk::Mapped(contents.into())].into(),
-        )))
-    }
-}
+impl PageContents {}
 
 #[derive(Clone, Debug)]
 enum PageChunk {

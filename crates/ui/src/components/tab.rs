@@ -42,11 +42,8 @@ pub struct Tab {
 
 impl Tab {
     pub fn new(id: impl Into<ElementId>) -> Self {
-        let id = id.into();
         Self {
-            div: div()
-                .id(id.clone())
-                .debug_selector(|| format!("TAB-{}", id)),
+            div: div().id(id.into()),
             selected: false,
             position: TabPosition::First,
             close_side: TabCloseSide::End,

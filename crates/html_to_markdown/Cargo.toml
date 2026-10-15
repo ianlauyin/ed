@@ -21,7 +21,3 @@ anyhow.workspace = true
 html5ever.workspace = true
 markup5ever_rcdom.workspace = true
 regex = { workspace = true, features = ["unicode-perl"] }
-
-[dev-dependencies]
-indoc.workspace = true
-pretty_assertions.workspace = true

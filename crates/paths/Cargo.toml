@@ -8,9 +8,6 @@ license = "GPL-3.0-or-later"
 [lints]
 workspace = true
 
-[features]
-test-support = []
-
 [lib]
 path = "src/paths.rs"
 doctest = false

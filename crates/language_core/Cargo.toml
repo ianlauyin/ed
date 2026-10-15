@@ -27,5 +27,3 @@ strum.workspace = true
 toml.workspace = true
 tree-sitter.workspace = true
 
-[features]
-test-support = []

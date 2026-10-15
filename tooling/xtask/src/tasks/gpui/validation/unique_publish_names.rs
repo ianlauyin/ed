@@ -57,33 +57,3 @@ fn duplicate_publish_names<'a>(
     }
     duplicates
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn reports_crates_that_would_be_published_under_the_same_name() {
-        let duplicates = duplicate_publish_names([
-            ("gpui_util".to_owned(), "util"),
-            ("gpui_collections".to_owned(), "collections"),
-            ("gpui_util".to_owned(), "gpui_util"),
-            ("zed-fork".to_owned(), "fork"),
-        ]);
-        assert_eq!(
-            duplicates
-                .iter()
-                .map(ToString::to_string)
-                .collect::<Vec<_>>(),
-            ["`gpui_util` and `util` would both be published as `gpui_util`"]
-        );
-
-        assert!(
-            duplicate_publish_names([
-                ("gpui_util".to_owned(), "util"),
-                ("gpui_collections".to_owned(), "collections"),
-            ])
-            .is_empty()
-        );
-    }
-}

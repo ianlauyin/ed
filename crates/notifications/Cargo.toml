@@ -13,13 +13,6 @@ path = "src/notifications.rs"
 doctest = false
 test = false
 
-[features]
-test-support = [
-
-    "gpui/test-support",
-    "rpc/test-support",
-]
-
 [dependencies]
 anyhow.workspace = true
 futures-lite.workspace = true

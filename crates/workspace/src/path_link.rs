@@ -8,14 +8,6 @@ use util::{
     rel_path::RelPath,
 };
 
-#[cfg(any(test, feature = "test-support"))]
-#[derive(Debug, Clone, Copy, Eq, PartialEq)]
-pub enum OpenTargetFoundBy {
-    WorktreeExact,
-    WorktreeScan,
-    BackgroundPathResolution,
-}
-
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BackgroundPathChecks {
     LocalFileSystem,
@@ -33,16 +25,8 @@ pub enum PathMatching {
 
 #[derive(Debug, Clone)]
 pub enum OpenTarget {
-    Worktree(
-        PathWithPosition,
-        Entry,
-        #[cfg(any(test, feature = "test-support"))] OpenTargetFoundBy,
-    ),
-    Path(
-        PathWithPosition,
-        bool,
-        #[cfg(any(test, feature = "test-support"))] OpenTargetFoundBy,
-    ),
+    Worktree(PathWithPosition, Entry),
+    Path(PathWithPosition, bool),
 }
 
 impl OpenTarget {
@@ -64,14 +48,6 @@ impl OpenTarget {
         match self {
             OpenTarget::Worktree(path, ..) => path,
             OpenTarget::Path(path, ..) => path,
-        }
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn found_by(&self) -> OpenTargetFoundBy {
-        match self {
-            OpenTarget::Worktree(.., found_by) => *found_by,
-            OpenTarget::Path(.., found_by) => *found_by,
         }
     }
 }
@@ -143,25 +119,6 @@ pub fn resolve_open_target(
     cx: &App,
 ) -> Task<Option<OpenTarget>> {
     resolve_open_target_internal(workspace, matching, maybe_path, cwd, cx, None)
-}
-
-#[cfg(any(test, feature = "test-support"))]
-pub fn resolve_open_target_with_fs_checks(
-    workspace: &WeakEntity<Workspace>,
-    matching: PathMatching,
-    maybe_path: &str,
-    cwd: Option<&Path>,
-    cx: &App,
-    background_path_checks: BackgroundPathChecks,
-) -> Task<Option<OpenTarget>> {
-    resolve_open_target_internal(
-        workspace,
-        matching,
-        maybe_path,
-        cwd,
-        cx,
-        Some(background_path_checks),
-    )
 }
 
 fn resolve_open_target_internal(
@@ -246,8 +203,6 @@ fn resolve_open_target_internal(
                         open_target = Some(OpenTarget::Worktree(
                             root_path_with_position,
                             root_entry.clone(),
-                            #[cfg(any(test, feature = "test-support"))]
-                            OpenTargetFoundBy::WorktreeExact,
                         ));
                         break 'worktree_loop;
                     }
@@ -299,8 +254,6 @@ fn resolve_open_target_internal(
                         column: path_to_check.column,
                     },
                     entry.clone(),
-                    #[cfg(any(test, feature = "test-support"))]
-                    OpenTargetFoundBy::WorktreeExact,
                 ));
                 break 'worktree_loop;
             }
@@ -344,12 +297,7 @@ fn resolve_open_target_internal(
                             .unwrap_or(true)
                         {
                             path_to_check.path = fs_path_to_check;
-                            return Some(OpenTarget::Path(
-                                path_to_check,
-                                metadata.is_dir,
-                                #[cfg(any(test, feature = "test-support"))]
-                                OpenTargetFoundBy::BackgroundPathResolution,
-                            ));
+                            return Some(OpenTarget::Path(path_to_check, metadata.is_dir));
                         }
 
                         break;
@@ -384,12 +332,7 @@ fn resolve_open_target_internal(
                             .unwrap_or(true)
                         {
                             path_to_check.path = resolved_abs_path;
-                            return Some(OpenTarget::Path(
-                                path_to_check,
-                                is_dir,
-                                #[cfg(any(test, feature = "test-support"))]
-                                OpenTargetFoundBy::BackgroundPathResolution,
-                            ));
+                            return Some(OpenTarget::Path(path_to_check, is_dir));
                         }
 
                         break;
@@ -447,8 +390,6 @@ fn resolve_open_target_internal(
                                 column: path_with_position.column,
                             },
                             entry.clone(),
-                            #[cfg(any(test, feature = "test-support"))]
-                            OpenTargetFoundBy::WorktreeScan,
                         ));
                     }
                 }

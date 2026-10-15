@@ -829,59 +829,6 @@ impl DiffMultibuffer {
             })
         })
     }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn excerpt_paths(&self, cx: &App) -> Vec<std::sync::Arc<util::rel_path::RelPath>> {
-        let snapshot = self
-            .editor()
-            .read(cx)
-            .rhs_editor()
-            .read(cx)
-            .buffer()
-            .read(cx)
-            .snapshot(cx);
-        snapshot
-            .excerpts()
-            .map(|excerpt| {
-                snapshot
-                    .path_for_buffer(excerpt.context.start.buffer_id)
-                    .unwrap()
-                    .path
-                    .clone()
-            })
-            .collect()
-    }
-
-    /// Returns the real (worktree-relative) path of each excerpted buffer, in
-    /// the order the excerpts appear in the multibuffer. Unlike
-    /// [`Self::excerpt_paths`], this resolves the buffer's actual `File` rather
-    /// than the (possibly synthetic) `PathKey` path used for sorting.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn excerpt_file_paths(&self, cx: &App) -> Vec<String> {
-        let multibuffer = self
-            .editor()
-            .read(cx)
-            .rhs_editor()
-            .read(cx)
-            .buffer()
-            .clone();
-        let snapshot = multibuffer.read(cx).snapshot(cx);
-        let mut result = Vec::new();
-        let mut last_buffer_id = None;
-        for excerpt in snapshot.excerpts() {
-            let buffer_id = excerpt.context.start.buffer_id;
-            if last_buffer_id == Some(buffer_id) {
-                continue;
-            }
-            last_buffer_id = Some(buffer_id);
-            if let Some(buffer) = multibuffer.read(cx).buffer(buffer_id)
-                && let Some(file) = buffer.read(cx).file()
-            {
-                result.push(file.path().as_unix_str().to_string());
-            }
-        }
-        result
-    }
 }
 
 impl EventEmitter<EditorEvent> for DiffMultibuffer {}

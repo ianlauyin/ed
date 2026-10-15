@@ -68,14 +68,6 @@ where
 impl BackgroundExecutor {
     /// Creates a new BackgroundExecutor from the given PlatformDispatcher.
     pub fn new(dispatcher: Arc<dyn PlatformDispatcher>) -> Self {
-        #[cfg(any(test, feature = "test-support"))]
-        let scheduler: Arc<dyn Scheduler> = if let Some(test_dispatcher) = dispatcher.as_test() {
-            test_dispatcher.scheduler().clone()
-        } else {
-            Arc::new(PlatformScheduler::new(dispatcher.clone()))
-        };
-
-        #[cfg(not(any(test, feature = "test-support")))]
         let scheduler: Arc<dyn Scheduler> = Arc::new(PlatformScheduler::new(dispatcher.clone()));
 
         Self {
@@ -185,107 +177,14 @@ impl BackgroundExecutor {
         self.spawn(self.inner.scheduler().timer(duration))
     }
 
-    /// In tests, run an arbitrary number of tasks (determined by the SEED environment variable)
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn simulate_random_delay(&self) -> impl Future<Output = ()> + use<> {
-        self.dispatcher.as_test().unwrap().simulate_random_delay()
-    }
-
-    /// In tests, move time forward. This does not run any tasks, but does make `timer`s ready.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn advance_clock(&self, duration: Duration) {
-        self.dispatcher.as_test().unwrap().advance_clock(duration)
-    }
-
-    /// In tests, run one task.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn tick(&self) -> bool {
-        self.dispatcher.as_test().unwrap().scheduler().tick()
-    }
-
-    /// In tests, run tasks until the scheduler would park.
-    ///
-    /// Under the scheduler-backed test dispatcher, `tick()` will not advance the clock, so a pending
-    /// timer can keep `has_pending_tasks()` true even after all currently-runnable tasks have been
-    /// drained. To preserve the historical semantics that tests relied on (drain all work that can
-    /// make progress), we advance the clock to the next timer when no runnable tasks remain.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn run_until_parked(&self) {
-        let scheduler = self.dispatcher.as_test().unwrap().scheduler();
-        scheduler.run();
-    }
-
-    /// In tests, prevents `run_until_parked` from panicking if there are outstanding tasks.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn allow_parking(&self) {
-        self.dispatcher
-            .as_test()
-            .unwrap()
-            .scheduler()
-            .allow_parking();
-
-        if std::env::var("GPUI_RUN_UNTIL_PARKED_LOG").ok().as_deref() == Some("1") {
-            log::warn!("[gpui::executor] allow_parking: enabled");
-        }
-    }
-
-    /// Sets the range of ticks to run before timing out in block_on.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn set_block_on_ticks(&self, range: std::ops::RangeInclusive<usize>) {
-        self.dispatcher
-            .as_test()
-            .unwrap()
-            .scheduler()
-            .set_timeout_ticks(range);
-    }
-
-    /// Undoes the effect of [`Self::allow_parking`].
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn forbid_parking(&self) {
-        self.dispatcher
-            .as_test()
-            .unwrap()
-            .scheduler()
-            .forbid_parking();
-    }
-
-    /// In tests, returns the rng used by the dispatcher.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn rng(&self) -> scheduler::SharedRng {
-        self.dispatcher.as_test().unwrap().scheduler().rng()
-    }
-
     /// How many CPUs are available to the dispatcher.
     pub fn num_cpus(&self) -> usize {
-        #[cfg(any(test, feature = "test-support"))]
-        if let Some(test) = self.dispatcher.as_test() {
-            return test.num_cpus_override().unwrap_or(4);
-        }
         num_cpus::get()
-    }
-
-    /// Override the number of CPUs reported by this executor in tests.
-    /// Panics if not called on a test executor.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn set_num_cpus(&self, count: usize) {
-        self.dispatcher
-            .as_test()
-            .expect("set_num_cpus can only be called on a test executor")
-            .set_num_cpus(count);
     }
 
     /// Whether we're on the main thread.
     pub fn is_main_thread(&self) -> bool {
         self.dispatcher.is_main_thread()
-    }
-
-    /// Whether this executor runs on the deterministic test scheduler.
-    ///
-    /// Available in every build. Use it, rather than `cfg(feature =
-    /// "test-support")`, for behavior that must differ under tests, so that
-    /// compiling `test-support` into an application doesn't change it.
-    pub fn is_test(&self) -> bool {
-        self.inner.is_test()
     }
 
     #[doc(hidden)]
@@ -297,46 +196,10 @@ impl BackgroundExecutor {
 impl ForegroundExecutor {
     /// Creates a new ForegroundExecutor from the given PlatformDispatcher.
     pub fn new(dispatcher: Arc<dyn PlatformDispatcher>) -> Self {
-        #[cfg(any(test, feature = "test-support"))]
-        let (scheduler, session_id): (Arc<dyn Scheduler>, _) =
-            if let Some(test_dispatcher) = dispatcher.as_test() {
-                (
-                    test_dispatcher.scheduler().clone(),
-                    test_dispatcher.session_id(),
-                )
-            } else {
-                let platform_scheduler = Arc::new(PlatformScheduler::new(dispatcher.clone()));
-                let inner = platform_scheduler.foreground_executor();
-                return Self {
-                    inner,
-                    dispatcher,
-                    #[cfg(feature = "profiler")]
-                    foreground_runnables: Some(platform_scheduler.foreground_runnable_counter()),
-                    not_send: PhantomData,
-                };
-            };
-
-        #[cfg(not(any(test, feature = "test-support")))]
         let platform_scheduler = Arc::new(PlatformScheduler::new(dispatcher.clone()));
-        #[cfg(not(any(test, feature = "test-support")))]
         let inner = platform_scheduler.foreground_executor();
-        #[cfg(all(not(any(test, feature = "test-support")), feature = "profiler"))]
+        #[cfg(feature = "profiler")]
         let foreground_runnables = Some(platform_scheduler.foreground_runnable_counter());
-
-        #[cfg(any(test, feature = "test-support"))]
-        let inner = {
-            let scheduler_for_dispatch = Arc::downgrade(&scheduler);
-            scheduler::LocalExecutor::new(session_id, scheduler, move |runnable| {
-                if let Some(scheduler) = scheduler_for_dispatch.upgrade() {
-                    scheduler.schedule_local(session_id, runnable);
-                }
-            })
-        };
-
-        #[cfg(all(any(test, feature = "test-support"), feature = "profiler"))]
-        // The deterministic test scheduler does not invoke GPUI's task profiler
-        // hooks, so an increment here would have no matching decrement.
-        let foreground_runnables = None;
 
         Self {
             inner,
@@ -408,28 +271,6 @@ impl ForegroundExecutor {
     /// budget of its own.
     pub fn idle_time_remaining(&self) -> Option<Duration> {
         self.dispatcher.idle_time_remaining()
-    }
-
-    /// Used by the test harness to run an async test in a synchronous fashion.
-    #[cfg(all(not(target_family = "wasm"), any(test, feature = "test-support")))]
-    #[track_caller]
-    pub fn block_test<R>(&self, future: impl Future<Output = R>) -> R {
-        use std::cell::Cell;
-
-        let scheduler = self.inner.scheduler();
-
-        let output = Cell::new(None);
-        let future = async {
-            output.set(Some(future.await));
-        };
-        let mut future = std::pin::pin!(future);
-
-        // In async GPUI tests, we must allow foreground tasks scheduled by the test itself
-        // (which are associated with the test session) to make progress while we block.
-        // Otherwise, awaiting futures that depend on same-session foreground work can deadlock.
-        scheduler.block(None, future.as_mut(), None);
-
-        output.take().expect("block_test future did not complete")
     }
 
     /// Block the current thread until the given future resolves.
@@ -523,54 +364,5 @@ impl Drop for Scope<'_> {
             .inner
             .scheduler()
             .block(None, future.as_mut(), None);
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use super::*;
-    use crate::{App, TestDispatcher, TestPlatform};
-    use std::cell::RefCell;
-
-    /// Helper to create test infrastructure.
-    /// Returns (dispatcher, background_executor, app).
-    fn create_test_app() -> (TestDispatcher, BackgroundExecutor, Rc<crate::AppCell>) {
-        let dispatcher = TestDispatcher::new(0);
-        let arc_dispatcher = Arc::new(dispatcher.clone());
-        let background_executor = BackgroundExecutor::new(arc_dispatcher.clone());
-        let foreground_executor = ForegroundExecutor::new(arc_dispatcher);
-
-        let platform = TestPlatform::new(background_executor.clone(), foreground_executor);
-        let asset_source = Arc::new(());
-        let http_client = http_client::FakeHttpClient::with_404_response();
-
-        let app = App::new_app(platform, asset_source, http_client);
-        (dispatcher, background_executor, app)
-    }
-
-    #[test]
-    fn sanity_test_tasks_run() {
-        let (dispatcher, _background_executor, app) = create_test_app();
-        let foreground_executor = app.borrow().foreground_executor.clone();
-
-        let task_ran = Rc::new(RefCell::new(false));
-
-        foreground_executor
-            .spawn({
-                let task_ran = Rc::clone(&task_ran);
-                async move {
-                    *task_ran.borrow_mut() = true;
-                }
-            })
-            .detach();
-
-        // Run dispatcher while app is still alive
-        dispatcher.run_until_parked();
-
-        // Task should have run
-        assert!(
-            *task_ran.borrow(),
-            "Task should run normally when app is alive"
-        );
     }
 }

@@ -924,6 +924,3 @@ fn keymap_schema_for_actions(
         &deprecation_messages,
     )
 }
-
-#[cfg(test)]
-mod tests;

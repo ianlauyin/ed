@@ -20,25 +20,12 @@ use parking_lot::RwLock;
 use slotmap::SlotMap;
 
 pub use async_context::*;
-#[cfg(feature = "bench-support")]
-pub use bench_context::{
-    BenchAppContext, BenchMeasurement, BenchReport, BenchWindowContext, CountingAllocator,
-    MetricReport, bench_platform,
-};
 use collections::{FxHashMap, FxHashSet, HashMap, TypeIdHashMap, TypeIdHashSet, VecDeque};
 pub use context::*;
 pub use entity_map::*;
 use gpui_util::{ResultExt, debug_panic};
-#[cfg(any(test, feature = "test-support"))]
-pub use headless_app_context::*;
 use http_client::{HttpClient, Url};
 use smallvec::SmallVec;
-#[cfg(any(test, feature = "test-support"))]
-pub use test_app::*;
-#[cfg(any(test, feature = "test-support"))]
-pub use test_context::*;
-#[cfg(all(target_os = "macos", any(test, feature = "test-support")))]
-pub use visual_test_context::*;
 
 #[cfg(any(feature = "inspector", debug_assertions))]
 use crate::InspectorElementRegistry;
@@ -61,18 +48,8 @@ use crate::{
 };
 
 mod async_context;
-#[cfg(feature = "bench-support")]
-mod bench_context;
 mod context;
 mod entity_map;
-#[cfg(any(test, feature = "test-support"))]
-mod headless_app_context;
-#[cfg(any(test, feature = "test-support"))]
-mod test_app;
-#[cfg(any(test, feature = "test-support"))]
-mod test_context;
-#[cfg(all(target_os = "macos", any(test, feature = "test-support")))]
-mod visual_test_context;
 
 /// The duration for which native applications wait for futures returned from
 /// [Context::on_app_quit] before fully quitting.
@@ -770,26 +747,13 @@ impl SystemWindowTabController {
 }
 
 pub(crate) enum GpuiMode {
-    #[cfg(any(test, feature = "test-support"))]
-    Test {
-        skip_drawing: bool,
-    },
     Production,
 }
 
 impl GpuiMode {
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn test() -> Self {
-        GpuiMode::Test {
-            skip_drawing: false,
-        }
-    }
-
     #[inline]
     pub(crate) fn skip_drawing(&self) -> bool {
         match self {
-            #[cfg(any(test, feature = "test-support"))]
-            GpuiMode::Test { skip_drawing } => *skip_drawing,
             GpuiMode::Production => false,
         }
     }
@@ -889,7 +853,7 @@ pub struct App {
     pub(crate) inspector_renderer: Option<crate::InspectorRenderer>,
     #[cfg(any(feature = "inspector", debug_assertions))]
     pub(crate) inspector_element_registry: InspectorElementRegistry,
-    #[cfg(any(test, feature = "test-support", debug_assertions))]
+    #[cfg(debug_assertions)]
     pub(crate) name: Option<&'static str>,
     pub(crate) text_rendering_mode: Rc<Cell<TextRenderingMode>>,
 
@@ -908,7 +872,7 @@ pub struct App {
 
     // We need to ensure the leak detector drops last, after all tasks, callbacks and things have been dropped.
     // Otherwise it may report false positives.
-    #[cfg(any(test, gpui_leak_detection))]
+    #[cfg(gpui_leak_detection)]
     _ref_counts: Arc<RwLock<EntityRefCounts>>,
 }
 
@@ -934,7 +898,7 @@ impl App {
         let keyboard_layout = platform.keyboard_layout();
         let keyboard_mapper = platform.keyboard_mapper();
 
-        #[cfg(any(test, gpui_leak_detection))]
+        #[cfg(gpui_leak_detection)]
         let _ref_counts = entities.ref_counts_drop_handle();
 
         let app = Rc::new_cyclic(|this| AppCell {
@@ -1007,12 +971,12 @@ impl App {
                 synced_animation_epoch,
                 accessibility_force_disabled: false,
 
-                #[cfg(any(test, feature = "test-support", debug_assertions))]
+                #[cfg(debug_assertions)]
                 name: None,
                 element_arena: RefCell::new(Arena::new(1024 * 1024)),
                 event_arena: Arena::new(1024 * 1024),
 
-                #[cfg(any(test, gpui_leak_detection))]
+                #[cfg(gpui_leak_detection)]
                 _ref_counts,
             }),
         });
@@ -1114,7 +1078,7 @@ impl App {
     /// The returned [`LeakDetectorSnapshot`] can later be passed to
     /// [`assert_no_new_leaks`](Self::assert_no_new_leaks) to verify that no
     /// entities created after the snapshot are still alive.
-    #[cfg(any(test, gpui_leak_detection))]
+    #[cfg(gpui_leak_detection)]
     pub fn leak_detector_snapshot(&self) -> LeakDetectorSnapshot {
         self.entities.leak_detector_snapshot()
     }
@@ -1130,21 +1094,10 @@ impl App {
     /// Panics if any new entity handles exist. The panic message lists every
     /// leaked entity with its type name, and includes allocation-site backtraces
     /// when `LEAK_BACKTRACE` is set.
-    #[cfg(any(test, gpui_leak_detection))]
+    #[cfg(gpui_leak_detection)]
     pub fn assert_no_new_leaks(&self, snapshot: &LeakDetectorSnapshot) {
         self.entities.assert_no_new_leaks(snapshot)
     }
-
-    /// Without leak detection compiled in, this records nothing.
-    #[cfg(all(feature = "test-support", not(any(test, gpui_leak_detection))))]
-    pub fn leak_detector_snapshot(&self) -> LeakDetectorSnapshot {
-        LeakDetectorSnapshot::default()
-    }
-
-    /// Without leak detection compiled in, this checks nothing. Set
-    /// `GPUI_LEAK_DETECTION` when building to enable it.
-    #[cfg(all(feature = "test-support", not(any(test, gpui_leak_detection))))]
-    pub fn assert_no_new_leaks(&self, _snapshot: &LeakDetectorSnapshot) {}
 
     /// Quit the application gracefully.
     ///
@@ -2009,22 +1962,6 @@ impl App {
                     }
                 }
             } else {
-                #[cfg(any(test, feature = "test-support"))]
-                if matches!(self.mode, GpuiMode::Test { .. }) {
-                    for window in self
-                        .windows
-                        .values()
-                        .filter_map(|window| {
-                            let window = window.as_deref()?;
-                            window.invalidator.is_dirty().then_some(window.handle)
-                        })
-                        .collect::<Vec<_>>()
-                    {
-                        self.update_window(window, |_, window, cx| window.draw(cx).clear(cx))
-                            .unwrap();
-                    }
-                }
-
                 if self.pending_effects.is_empty() {
                     for window in self.windows.values().filter_map(|window| window.as_deref()) {
                         if window.invalidator.is_dirty()
@@ -2207,12 +2144,6 @@ impl App {
     /// Obtains a reference to the executor, which can be used to spawn futures.
     pub fn background_executor(&self) -> &BackgroundExecutor {
         &self.background_executor
-    }
-
-    /// Whether this app runs on the deterministic test scheduler. See
-    /// [`BackgroundExecutor::is_test`].
-    pub fn is_test(&self) -> bool {
-        self.background_executor.is_test()
     }
 
     /// Obtains a reference to the executor, which can be used to spawn futures.
@@ -2405,12 +2336,6 @@ impl App {
         let global_type = TypeId::of::<G>();
         self.push_effect(Effect::NotifyGlobalObservers { global_type });
         self.globals_by_type.insert(global_type, Box::new(global));
-    }
-
-    /// Clear all stored globals. Does not notify global observers.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn clear_globals(&mut self) {
-        self.globals_by_type.drain();
     }
 
     /// Remove the global of the given type from the app context. Does not notify global observers.
@@ -2991,14 +2916,6 @@ impl App {
         self.loading_assets.remove(&asset_id);
     }
 
-    /// Check whether an asset is present in GPUI's cache (loading or loaded),
-    /// without fetching it.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn has_asset<A: Asset>(&self, source: &A::Source) -> bool {
-        let asset_id = (TypeId::of::<A>(), hash(source));
-        self.loading_assets.contains_key(&asset_id)
-    }
-
     /// Starts loading an uncached asset and returns its result once available.
     ///
     /// Pending loads and completed results are cached until [`Self::remove_asset`].
@@ -3065,7 +2982,7 @@ impl App {
     }
 
     /// Returns the name for this [`App`].
-    #[cfg(any(test, feature = "test-support", debug_assertions))]
+    #[cfg(debug_assertions)]
     pub fn get_name(&self) -> Option<&'static str> {
         self.name
     }
@@ -3542,162 +3459,5 @@ impl<'a, T> Drop for GpuiBorrow<'a, T> {
         self.app.notify(lease.id);
         self.app.entities.end_lease(lease);
         self.app.finish_update();
-    }
-}
-
-#[cfg(test)]
-mod test {
-    use std::{
-        cell::{Cell, RefCell},
-        ffi::OsString,
-        path::PathBuf,
-        rc::Rc,
-    };
-
-    use std::os::unix::ffi::OsStringExt;
-
-    use crate::{
-        AppContext, Context, Empty, FallbackFontClass, IntoElement, MissingGlyph, Render,
-        TestAppContext, Window,
-    };
-
-    struct RenderCounter(Rc<Cell<usize>>);
-
-    impl Render for RenderCounter {
-        fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
-            self.0.set(self.0.get() + 1);
-            Empty
-        }
-    }
-
-    #[gpui::test]
-    fn async_app_refresh_flushes_refresh_effect(cx: &mut TestAppContext) {
-        let render_count = Rc::new(Cell::new(0));
-
-        let _window = cx.add_window({
-            let render_count = render_count.clone();
-            move |_, _| RenderCounter(render_count)
-        });
-
-        cx.run_until_parked();
-        let render_count_before_refresh = render_count.get();
-
-        cx.to_async().refresh();
-
-        assert_eq!(render_count.get(), render_count_before_refresh + 1);
-    }
-
-    #[gpui::test]
-    fn missing_glyph_callbacks_follow_subscription_lifetime(cx: &mut TestAppContext) {
-        let observed = Rc::new(RefCell::new(Vec::new()));
-        let subscription = cx.update(|cx| {
-            let observed = observed.clone();
-            cx.on_missing_glyphs(move |missing_glyphs, _| {
-                observed.borrow_mut().extend_from_slice(missing_glyphs);
-            })
-        });
-        cx.update(|cx| {
-            cx.text_system()
-                .report_missing_glyphs_in_test(vec![missing_glyph("active")]);
-        });
-        cx.run_until_parked();
-        assert_eq!(observed.borrow().as_slice(), &[missing_glyph("active")]);
-
-        let second_observed = Rc::new(RefCell::new(Vec::new()));
-        let second_subscription = cx.update(|cx| {
-            let second_observed = second_observed.clone();
-            cx.on_missing_glyphs(move |missing_glyphs, _| {
-                second_observed
-                    .borrow_mut()
-                    .extend_from_slice(missing_glyphs);
-            })
-        });
-        cx.update(|cx| {
-            cx.text_system()
-                .report_missing_glyphs_in_test(vec![missing_glyph("replacement")]);
-        });
-        cx.run_until_parked();
-        assert_eq!(observed.borrow().as_slice(), &[missing_glyph("active")]);
-        assert_eq!(
-            second_observed.borrow().as_slice(),
-            &[missing_glyph("replacement")]
-        );
-
-        drop(subscription);
-        cx.update(|cx| {
-            cx.text_system()
-                .report_missing_glyphs_in_test(vec![missing_glyph("after old drop")]);
-        });
-        cx.run_until_parked();
-        assert_eq!(
-            second_observed.borrow().as_slice(),
-            &[
-                missing_glyph("replacement"),
-                missing_glyph("after old drop")
-            ]
-        );
-
-        drop(second_subscription);
-        cx.update(|cx| {
-            cx.text_system()
-                .report_missing_glyphs_in_test(vec![missing_glyph("inactive")]);
-        });
-        cx.run_until_parked();
-        assert_eq!(second_observed.borrow().len(), 2);
-    }
-
-    #[test]
-    fn test_gpui_borrow() {
-        let cx = TestAppContext::single();
-        let observation_count = Rc::new(RefCell::new(0));
-
-        let state = cx.update(|cx| {
-            let state = cx.new(|_| false);
-            cx.observe(&state, {
-                let observation_count = observation_count.clone();
-                move |_, _| {
-                    let mut count = observation_count.borrow_mut();
-                    *count += 1;
-                }
-            })
-            .detach();
-
-            state
-        });
-
-        cx.update(|cx| {
-            // Calling this like this so that we don't clobber the borrow_mut above
-            *std::borrow::BorrowMut::borrow_mut(&mut state.as_mut(cx)) = true;
-        });
-
-        cx.update(|cx| {
-            state.write(cx, false);
-        });
-
-        assert_eq!(*observation_count.borrow(), 2);
-    }
-
-    #[gpui::test]
-    async fn test_restart_preserves_path_and_arguments(cx: &mut TestAppContext) {
-        let user_data_dir = OsString::from_vec(b"/tmp/zed data/\xff".to_vec());
-
-        let arguments = vec![OsString::from("--user-data-dir"), user_data_dir];
-        let restart_path = PathBuf::from("updated-zed");
-        let _application =
-            super::Application(cx.app.clone()).with_restart_arguments(arguments.clone());
-        let restart = cx.expect_restart();
-
-        cx.update(|cx| {
-            cx.set_restart_path(restart_path.clone());
-            cx.restart();
-        });
-
-        let (path, restart_arguments) = restart.await.expect("restart was not requested");
-        assert_eq!(path, Some(restart_path));
-        assert_eq!(restart_arguments, arguments);
-    }
-
-    fn missing_glyph(grapheme: &'static str) -> MissingGlyph {
-        MissingGlyph::new(grapheme.into(), FallbackFontClass::Proportional)
     }
 }

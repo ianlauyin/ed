@@ -32,7 +32,7 @@ pub struct IconButton {
 
 impl IconButton {
     pub fn new(id: impl Into<ElementId>, icon: IconName) -> Self {
-        let mut this = Self {
+        Self {
             base: ButtonLike::new(id),
             shape: IconButtonShape::Wide,
             icon,
@@ -45,9 +45,7 @@ impl IconButton {
             indicator: None,
             indicator_border_color: None,
             alpha: None,
-        };
-        this.base.base = this.base.base.debug_selector(|| format!("ICON-{:?}", icon));
-        this
+        }
     }
 
     pub fn shape(mut self, shape: IconButtonShape) -> Self {

@@ -12,25 +12,13 @@ readme = "README.md"
 keywords = ["desktop", "gui", "immediate"]
 categories = ["gui"]
 
-
 [lints]
 workspace = true
 
 [features]
 default = ["font-kit"]
-test-support = [
-    "collections/test-support",
-    "http_client/test-support",
-    "proptest",
-    "dep:futures-concurrency",
-    "dep:postage",
-    "dep:web-time",
-]
-bench-support = ["profiler", "dep:criterion", "dep:bench_metrics"]
-# Preserve the published feature name while consumers migrate to `bench-support`.
-bench = ["bench-support"]
 inspector = ["gpui_macros/inspector"]
-# Tracks every entity handle so tests can assert nothing leaked. Also enabled
+# Tracks every entity handle to report leaks. Also enabled
 # by setting `GPUI_LEAK_DETECTION` when building; see `build.rs`.
 leak-detection = []
 font-kit = []
@@ -49,13 +37,10 @@ backtrace.workspace = true
 bitflags.workspace = true
 
 collections.workspace = true
-bench_metrics = { workspace = true, optional = true }
-criterion = { workspace = true, optional = true }
 ctor.workspace = true
 derive_more = { workspace = true, features = ["add", "add_assign", "mul", "mul_assign", "not"] }
 etagere.workspace = true
 futures.workspace = true
-futures-concurrency = { workspace = true, optional = true }
 gpui_macros.workspace = true
 gpui_shared_string.workspace = true
 http_client.workspace = true
@@ -66,8 +51,6 @@ log.workspace = true
 num_cpus = "1.13"
 parking = "2.0.0"
 parking_lot.workspace = true
-postage = { workspace = true, features = ["blocking"], optional = true }
-proptest = { workspace = true, optional = true }
 chrono = { workspace = true, default-features = true }
 profiling.workspace = true
 rand = { workspace = true, features = ["small_rng", "thread_rng"] }
@@ -105,7 +88,6 @@ pin-project = "1.1.10"
 spin.workspace = true
 url.workspace = true
 uuid = { workspace = true, features = ["v4"] }
-web-time = { workspace = true, optional = true }
 heapless.workspace = true
 
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dependencies]
@@ -124,25 +106,11 @@ objc2 = { workspace = true, optional = true }
 objc2-metal = { version = "0.3", optional = true }
 
 [dev-dependencies]
-backtrace.workspace = true
-bench_metrics = { workspace = true, features = ["test-support"] }
-collections = { workspace = true, features = ["test-support"] }
 env_logger.workspace = true
-futures-concurrency.workspace = true
-postage = { workspace = true, features = ["blocking"] }
-web-time.workspace = true
 gpui_platform = { workspace = true, features = ["font-kit"] }
-gpui_util.workspace = true
+reqwest_client.workspace = true
 lyon = { version = "1.0", features = ["extra"] }
-rand = { workspace = true, default-features = true }
-scheduler = { workspace = true, features = ["test-support"] }
 unicode-segmentation.workspace = true
-util_macros.workspace = true
-
-[target.'cfg(not(target_family = "wasm"))'.dev-dependencies]
-http_client = { workspace = true, features = ["test-support"] }
-proptest.workspace = true
-reqwest_client = { workspace = true, features = ["test-support"] }
 
 [build-dependencies]
 
@@ -193,7 +161,6 @@ path = "examples/set_menus.rs"
 [[example]]
 name = "system_notifications"
 path = "examples/system_notifications.rs"
-
 
 [[example]]
 name = "shadow"
@@ -254,13 +221,6 @@ path = "examples/toggle_headless.rs"
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
 async-channel.workspace = true
 
-
 [target.'cfg(target_family = "wasm")'.dependencies]
 getrandom = { version = "0.3.4", features = ["wasm_js"] }
 uuid = { workspace = true, features = ["js"] }
-
-
-
-[target.'cfg(target_family = "wasm")'.dev-dependencies]
-wasm-bindgen.workspace = true
-web-sys.workspace = true

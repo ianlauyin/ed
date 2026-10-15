@@ -18,6 +18,4 @@ pub mod locators;
 pub mod memory;
 pub mod session;
 
-#[cfg(any(feature = "test-support", test))]
-pub mod test;
 pub use memory::MemoryCell;

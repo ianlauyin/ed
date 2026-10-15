@@ -1,6 +1,3 @@
-#[cfg(test)]
-mod tab_switcher_tests;
-
 use collections::{HashMap, HashSet};
 use editor::items::{
     entry_diagnostic_aware_icon_decoration_and_color, entry_git_aware_label_color,
@@ -903,9 +900,7 @@ impl PickerDelegate for TabSwitcherDelegate {
                 .toggle_state(selected)
                 .child(
                     h_flex()
-                        .when(ix == 0, |row| {
-                            row.debug_selector(|| "tab-switcher-first-item".into())
-                        })
+                        .when(ix == 0, |row| row)
                         .w_full()
                         .min_w_0()
                         .overflow_hidden()

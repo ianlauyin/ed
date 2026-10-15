@@ -30,6 +30,3 @@ tokio = { workspace = true, features = ["rt-multi-thread"] }
 toml.workspace = true
 toml_edit.workspace = true
 url.workspace = true
-
-[dev-dependencies]
-tempfile.workspace = true

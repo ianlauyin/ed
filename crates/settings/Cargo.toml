@@ -12,9 +12,6 @@ workspace = true
 path = "src/settings.rs"
 doctest = false
 
-[features]
-test-support = ["gpui/test-support", "fs/test-support"]
-
 [dependencies]
 http_client.workspace = true
 anyhow.workspace = true
@@ -35,12 +32,3 @@ settings_json = { workspace = true, features = ["editing"] }
 settings_macros.workspace = true
 smallvec.workspace = true
 util.workspace = true
-
-[dev-dependencies]
-fs = { workspace = true, features = ["test-support"] }
-gpui = { workspace = true, features = ["test-support"] }
-zlog.workspace = true
-
-indoc.workspace = true
-pretty_assertions.workspace = true
-unindent.workspace = true

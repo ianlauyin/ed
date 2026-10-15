@@ -64,15 +64,6 @@ impl AppDatabase {
         Self(connection)
     }
 
-    /// Creates a new in-memory database with a unique name and runs all
-    /// inventory-registered migrations in dependency order.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn test_new() -> Self {
-        let name = format!("test-db-{}", uuid::Uuid::new_v4());
-        let connection = gpui::block_on(open_test_db::<AppMigrator>(&name));
-        Self(connection)
-    }
-
     /// Returns the per-App connection if set, otherwise falls back to
     /// the shared LazyLock.
     pub fn global(cx: &App) -> &ThreadSafeConnection {
@@ -80,9 +71,6 @@ impl AppDatabase {
         if let Some(db) = cx.try_global::<Self>() {
             return &db.0;
         } else {
-            #[cfg(any(feature = "test-support", test))]
-            return &TEST_APP_DATABASE.0;
-
             panic!("database not initialized")
         }
     }
@@ -115,10 +103,6 @@ fn topological_sort<'a>(registrations: &[&'a DomainMigration]) -> Vec<&'a Domain
     }
     sorted
 }
-
-/// Shared fallback `AppDatabase` used when no per-App global is set.
-#[cfg(any(test, feature = "test-support"))]
-static TEST_APP_DATABASE: LazyLock<AppDatabase> = LazyLock::new(AppDatabase::test_new);
 
 const CONNECTION_INITIALIZE_QUERY: &str = sql!(
     PRAGMA foreign_keys=TRUE;
@@ -225,20 +209,6 @@ async fn open_fallback_db<M: Migrator>() -> ThreadSafeConnection {
         )
 }
 
-#[cfg(any(test, feature = "test-support"))]
-pub async fn open_test_db<M: Migrator>(db_name: &str) -> ThreadSafeConnection {
-    use sqlez::thread_safe_connection::locking_queue;
-
-    ThreadSafeConnection::builder::<M>(db_name, false)
-        .with_db_initialization_query(DB_INITIALIZE_QUERY)
-        .with_connection_initialize_query(CONNECTION_INITIALIZE_QUERY)
-        // Serialize queued writes via a mutex and run them synchronously
-        .with_write_queue_constructor(locking_queue())
-        .build()
-        .await
-        .unwrap()
-}
-
 /// Implements a basic DB wrapper for a given domain
 ///
 /// Arguments:
@@ -268,10 +238,6 @@ macro_rules! static_connection {
                 $t($crate::AppDatabase::global(cx).clone())
             }
 
-            #[cfg(any(test, feature = "test-support"))]
-            pub async fn open_test_db(name: &'static str) -> Self {
-                $t($crate::open_test_db::<$t>(name).await)
-            }
         }
 
         $crate::inventory::submit! {
@@ -291,124 +257,4 @@ where
 {
     cx.background_spawn(async move { db_write().await.log_err() })
         .detach()
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::AppDbScope;
-    use std::thread;
-
-    use sqlez::domain::Domain;
-    use sqlez_macros::sql;
-
-    use crate::open_db;
-
-    // Test bad migration panics
-    #[gpui::test]
-    #[should_panic]
-    async fn test_bad_migration_panics() {
-        enum BadDB {}
-
-        impl Domain for BadDB {
-            const NAME: &str = "db_tests";
-            const MIGRATIONS: &[&str] = &[
-                sql!(CREATE TABLE test(value);),
-                // failure because test already exists
-                sql!(CREATE TABLE test(value);),
-            ];
-        }
-
-        let tempdir = tempfile::Builder::new()
-            .prefix("DbTests")
-            .tempdir()
-            .unwrap();
-        let _bad_db = open_db::<BadDB>(tempdir.path(), AppDbScope).await;
-    }
-
-    /// Test that DB exists but corrupted (causing recreate)
-    #[gpui::test]
-    async fn test_db_corruption(cx: &mut gpui::TestAppContext) {
-        cx.executor().allow_parking();
-
-        enum CorruptedDB {}
-
-        impl Domain for CorruptedDB {
-            const NAME: &str = "db_tests";
-            const MIGRATIONS: &[&str] = &[sql!(CREATE TABLE test(value);)];
-        }
-
-        enum GoodDB {}
-
-        impl Domain for GoodDB {
-            const NAME: &str = "db_tests"; //Notice same name
-            const MIGRATIONS: &[&str] = &[sql!(CREATE TABLE test2(value);)];
-        }
-
-        let tempdir = tempfile::Builder::new()
-            .prefix("DbTests")
-            .tempdir()
-            .unwrap();
-        {
-            let corrupt_db = open_db::<CorruptedDB>(tempdir.path(), AppDbScope).await;
-            assert!(corrupt_db.persistent());
-        }
-
-        let good_db = open_db::<GoodDB>(tempdir.path(), AppDbScope).await;
-        assert!(
-            good_db.select_row::<usize>("SELECT * FROM test2").unwrap()()
-                .unwrap()
-                .is_none()
-        );
-    }
-
-    /// Test that DB exists but corrupted (causing recreate)
-    #[gpui::test(iterations = 30)]
-    async fn test_simultaneous_db_corruption(cx: &mut gpui::TestAppContext) {
-        cx.executor().allow_parking();
-
-        enum CorruptedDB {}
-
-        impl Domain for CorruptedDB {
-            const NAME: &str = "db_tests";
-
-            const MIGRATIONS: &[&str] = &[sql!(CREATE TABLE test(value);)];
-        }
-
-        enum GoodDB {}
-
-        impl Domain for GoodDB {
-            const NAME: &str = "db_tests"; //Notice same name
-            const MIGRATIONS: &[&str] = &[sql!(CREATE TABLE test2(value);)]; // But different migration
-        }
-
-        let tempdir = tempfile::Builder::new()
-            .prefix("DbTests")
-            .tempdir()
-            .unwrap();
-        {
-            // Setup the bad database
-            let corrupt_db = open_db::<CorruptedDB>(tempdir.path(), AppDbScope).await;
-            assert!(corrupt_db.persistent());
-        }
-
-        // Try to connect to it a bunch of times at once
-        let mut guards = vec![];
-        for _ in 0..10 {
-            let tmp_path = tempdir.path().to_path_buf();
-            let guard = thread::spawn(move || {
-                let good_db = gpui::block_on(open_db::<GoodDB>(tmp_path.as_path(), AppDbScope));
-                assert!(
-                    good_db.select_row::<usize>("SELECT * FROM test2").unwrap()()
-                        .unwrap()
-                        .is_none()
-                );
-            });
-
-            guards.push(guard);
-        }
-
-        for guard in guards.into_iter() {
-            assert!(guard.join().is_ok());
-        }
-    }
 }

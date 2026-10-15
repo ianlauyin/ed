@@ -180,11 +180,6 @@ impl BookmarkStore {
         cx.notify();
     }
 
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn paths_failed_to_open(&self) -> &HashSet<Arc<Path>> {
-        &self.paths_failed_to_open
-    }
-
     pub fn forget_failed_paths(&mut self, cx: &mut Context<Self>) {
         if self.paths_failed_to_open.is_empty() {
             return;

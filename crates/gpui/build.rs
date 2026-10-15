@@ -4,10 +4,8 @@ fn main() {
     println!("cargo:rerun-if-changed=build.rs");
     println!("cargo::rustc-check-cfg=cfg(gles)");
 
-    // Leak detection does bookkeeping on every entity handle, so `test-support`
-    // does not enable it: that feature must stay cheap enough to compile into
-    // every build. CI sets `GPUI_LEAK_DETECTION`; the `leak-detection` feature
-    // turns it on explicitly.
+    // Leak detection does bookkeeping on every entity handle, so it is opt-in:
+    // set `GPUI_LEAK_DETECTION` or enable the `leak-detection` feature.
     println!("cargo::rustc-check-cfg=cfg(gpui_leak_detection)");
     println!("cargo::rerun-if-env-changed=GPUI_LEAK_DETECTION");
     let requested_by_environment =

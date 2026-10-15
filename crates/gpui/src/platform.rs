@@ -5,15 +5,6 @@ mod keystroke;
 /// Types for configuring parent-anchored popup windows such as menus, dropdowns and tooltips.
 pub mod popup;
 
-#[cfg(any(test, feature = "test-support", feature = "bench-support"))]
-mod threaded_dispatcher;
-
-#[cfg(any(test, feature = "test-support", feature = "bench-support"))]
-mod test;
-
-#[cfg(all(target_os = "macos", any(test, feature = "test-support")))]
-mod visual_test;
-
 #[cfg(not(feature = "screen-capture"))]
 pub(crate) type PlatformScreenCaptureFrame = ();
 #[cfg(all(target_os = "macos", feature = "screen-capture"))]
@@ -34,8 +25,6 @@ use anyhow::{Context as _, Result};
 use async_task::Runnable;
 use collections::FxHashMap;
 use futures::channel::oneshot;
-#[cfg(any(test, feature = "test-support", feature = "bench-support"))]
-use image::RgbaImage;
 use image::codecs::gif::GifDecoder;
 use image::{AnimationDecoder as _, DynamicImage, Frame};
 use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
@@ -153,18 +142,6 @@ pub enum ActivationPolicy {
     /// Run without foreground application UI while retaining the ability to open windows.
     Accessory,
 }
-
-#[cfg(any(test, feature = "test-support", feature = "bench-support"))]
-pub(crate) use test::*;
-
-#[cfg(any(test, feature = "test-support"))]
-pub use test::{TestDispatcher, TestScreenCaptureSource, TestScreenCaptureStream};
-
-#[cfg(any(test, feature = "test-support", feature = "bench-support"))]
-pub use threaded_dispatcher::ThreadedDispatcher;
-
-#[cfg(all(target_os = "macos", any(test, feature = "test-support")))]
-pub use visual_test::VisualTestPlatform;
 
 /// Keeps an operating system activity, such as an idle sleep inhibitor, alive until dropped.
 pub struct ActivityGuard {
@@ -1131,40 +1108,6 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
 
     /// Inform the adapter of updated window bounds.
     fn a11y_update_window_bounds(&self) {}
-
-    #[cfg(any(test, feature = "test-support", feature = "bench-support"))]
-    fn as_test(&mut self) -> Option<&mut TestWindow> {
-        None
-    }
-
-    /// Renders the given scene to a texture and returns the pixel data as an RGBA image.
-    /// This does not present the frame to screen - useful for visual testing where we want
-    /// to capture what would be rendered without displaying it or requiring the window to be visible.
-    #[cfg(any(test, feature = "test-support"))]
-    fn render_to_image(&self, _scene: &Scene) -> Result<RgbaImage> {
-        anyhow::bail!("render_to_image not implemented for this platform")
-    }
-}
-
-/// A renderer for headless windows that can produce real rendered output.
-#[cfg(any(test, feature = "test-support", feature = "bench-support"))]
-pub trait PlatformHeadlessRenderer {
-    /// Render a scene and return the result as an RGBA image.
-    fn render_scene_to_image(
-        &mut self,
-        scene: &Scene,
-        size: Size<DevicePixels>,
-    ) -> Result<RgbaImage>;
-
-    /// Render a scene to an offscreen target without reading the result back.
-    ///
-    /// This is the headless analogue of presenting a frame: it performs the
-    /// same CPU-side scene encoding and GPU submission as drawing to a real
-    /// window, but doesn't block on GPU completion or copy pixels back.
-    fn render_scene(&mut self, scene: &Scene, size: Size<DevicePixels>) -> Result<()>;
-
-    /// Returns the sprite atlas used by this renderer.
-    fn sprite_atlas(&self) -> Arc<dyn PlatformAtlas>;
 }
 
 /// Type alias for runnables with metadata.
@@ -1215,18 +1158,6 @@ pub trait PlatformDispatcher: Send + Sync {
 
     fn prevent_app_nap(&self, _reason: &str) -> ActivityGuard {
         ActivityGuard::noop()
-    }
-
-    #[cfg(any(test, feature = "test-support", feature = "bench-support"))]
-    fn as_test(&self) -> Option<&TestDispatcher> {
-        None
-    }
-
-    // This cfg must match the `threaded_dispatcher` module's, which implements
-    // this method whenever it compiles.
-    #[cfg(any(test, feature = "test-support", feature = "bench-support"))]
-    fn as_threaded(&self) -> Option<&ThreadedDispatcher> {
-        None
     }
 }
 
@@ -1488,11 +1419,6 @@ pub trait PlatformAtlas {
         build: &mut dyn FnMut() -> Result<Option<(Size<DevicePixels>, Cow<'a, [u8]>)>>,
     ) -> Result<Option<AtlasTile>>;
     fn remove(&self, key: &AtlasKey);
-
-    #[cfg(any(test, feature = "test-support", feature = "bench-support"))]
-    fn contains(&self, _key: &AtlasKey) -> bool {
-        false
-    }
 }
 
 #[doc(hidden)]
@@ -1617,11 +1543,6 @@ impl PlatformAtlas for HeadlessAtlas {
 
     fn remove(&self, key: &AtlasKey) {
         self.0.lock().remove(key);
-    }
-
-    #[cfg(any(test, feature = "test-support", feature = "bench-support"))]
-    fn contains(&self, key: &AtlasKey) -> bool {
-        self.0.lock().contains(key)
     }
 }
 
@@ -2997,13 +2918,6 @@ impl Image {
         ImageSource::Image(self).remove_asset(cx);
     }
 
-    /// Check whether this image is present in GPUI's asset cache (loading or
-    /// loaded), without fetching it.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn is_asset_cached(self: &Arc<Self>, cx: &App) -> bool {
-        ImageSource::Image(self.clone()).is_asset_cached(cx)
-    }
-
     /// Convert the clipboard image to an `ImageData` object.
     pub fn to_image_data(&self, svg_renderer: SvgRenderer) -> Result<Arc<RenderImage>> {
         let frames = match self.format {
@@ -3119,208 +3033,5 @@ impl From<String> for ClipboardString {
             text: value,
             metadata: None,
         }
-    }
-}
-
-#[cfg(test)]
-mod image_tests {
-    use super::*;
-    use std::sync::Arc;
-
-    #[test]
-    fn test_image_to_image_data_applies_exif_orientation() {
-        let image = Image::from_bytes(
-            ImageFormat::Jpeg,
-            include_bytes!("../examples/image/exif-orientation-rotate-180.jpg").to_vec(),
-        );
-
-        let render_image = image.to_image_data(SvgRenderer::new(Arc::new(()))).unwrap();
-
-        assert_eq!(render_image.size(0), size(16.into(), 32.into()));
-
-        let bytes = render_image.as_bytes(0).unwrap();
-        assert_eq!(&bytes[..4], &[255, 255, 255, 255]);
-        assert_eq!(&bytes[(16 * 32 - 1) * 4..], &[0, 0, 0, 255]);
-    }
-
-    #[test]
-    fn test_svg_image_to_image_data_converts_to_bgra() {
-        let image = Image::from_bytes(
-            ImageFormat::Svg,
-            br##"<svg xmlns="http://www.w3.org/2000/svg" width="1" height="1">
-<rect width="1" height="1" fill="#38BDF8"/>
-</svg>"##
-                .to_vec(),
-        );
-
-        let render_image = image.to_image_data(SvgRenderer::new(Arc::new(()))).unwrap();
-        let bytes = render_image.as_bytes(0).unwrap();
-
-        for pixel in bytes.chunks_exact(4) {
-            assert_eq!(pixel, &[0xF8, 0xBD, 0x38, 0xFF]);
-        }
-    }
-}
-
-#[cfg(test)]
-mod atlas_tests {
-    use super::*;
-
-    const TILE_SIZE: Size<DevicePixels> = Size {
-        width: DevicePixels(1),
-        height: DevicePixels(1),
-    };
-
-    #[derive(Default)]
-    struct RecordingAtlasBackend {
-        insert_calls: u32,
-        fail_next_insert: bool,
-        removed_tiles: Vec<AtlasTile>,
-    }
-
-    impl AtlasBackend for RecordingAtlasBackend {
-        fn insert(
-            &mut self,
-            kind: AtlasTextureKind,
-            size: Size<DevicePixels>,
-            _bytes: &[u8],
-        ) -> Result<AtlasTile> {
-            self.insert_calls += 1;
-            if std::mem::take(&mut self.fail_next_insert) {
-                anyhow::bail!("backend failed");
-            }
-            Ok(AtlasTile {
-                texture_id: AtlasTextureId { index: 0, kind },
-                tile_id: TileId(self.insert_calls),
-                padding: 0,
-                bounds: Bounds {
-                    origin: Point::default(),
-                    size,
-                },
-            })
-        }
-
-        fn remove(&mut self, tile: AtlasTile) {
-            self.removed_tiles.push(tile);
-        }
-    }
-
-    fn image_key(image_id: usize) -> AtlasKey {
-        AtlasKey::Image(RenderImageParams {
-            image_id: crate::ImageId(image_id),
-            frame_index: 0,
-        })
-    }
-
-    fn build_tile() -> Result<Option<(Size<DevicePixels>, Cow<'static, [u8]>)>> {
-        Ok(Some((TILE_SIZE, Cow::Borrowed(&[0, 0, 0, 255]))))
-    }
-
-    #[test]
-    fn only_successful_inserts_are_cached() -> Result<()> {
-        let mut state = AtlasState::new(RecordingAtlasBackend::default());
-        let key = image_key(1);
-
-        assert_eq!(
-            state.get_or_insert_with(key.clone(), &mut || Ok(None))?,
-            None
-        );
-        state
-            .get_or_insert_with(key.clone(), &mut || anyhow::bail!("builder failed"))
-            .expect_err("builder error should propagate");
-        assert!(!state.contains(&key));
-        assert_eq!(state.backend.insert_calls, 0);
-
-        state.backend.fail_next_insert = true;
-        state
-            .get_or_insert_with(key.clone(), &mut build_tile)
-            .expect_err("backend error should propagate");
-        assert!(!state.contains(&key));
-        assert_eq!(state.backend.insert_calls, 1);
-
-        let tile = state
-            .get_or_insert_with(key.clone(), &mut build_tile)?
-            .context("builder should produce a tile")?;
-        assert_eq!(tile.texture_id.kind, key.texture_kind());
-        assert_eq!(
-            state.get_or_insert_with(key.clone(), &mut || {
-                anyhow::bail!("cache hit must not call the builder")
-            })?,
-            Some(tile)
-        );
-        assert!(state.contains(&key));
-        assert_eq!(state.backend.insert_calls, 2);
-        Ok(())
-    }
-
-    #[test]
-    fn remove_and_clear_invalidate_keys() -> Result<()> {
-        let mut state = AtlasState::new(RecordingAtlasBackend::default());
-        let key = image_key(1);
-        let other_key = image_key(2);
-        let tile = state
-            .get_or_insert_with(key.clone(), &mut build_tile)?
-            .context("builder should produce a tile")?;
-        state
-            .get_or_insert_with(other_key.clone(), &mut build_tile)?
-            .context("builder should produce another tile")?;
-
-        state.remove(&key);
-        state.remove(&key);
-        assert!(!state.contains(&key));
-        assert!(state.contains(&other_key));
-        assert_eq!(state.backend.removed_tiles, vec![tile]);
-
-        let mut reset_calls = 0;
-        state.clear(|_| reset_calls += 1);
-        assert_eq!(reset_calls, 1);
-        assert!(!state.contains(&other_key));
-        assert_eq!(state.backend.removed_tiles, vec![tile]);
-        Ok(())
-    }
-}
-
-#[cfg(test)]
-mod frame_signal_tests {
-    use super::*;
-
-    #[cfg(feature = "profiler")]
-    #[test]
-    fn coalesced_signals_retain_the_earliest_until_drained() {
-        for (first_source, later_source) in [
-            (
-                FrameRequestSource::NativeCallback,
-                FrameRequestSource::LocalSchedule,
-            ),
-            (
-                FrameRequestSource::LocalSchedule,
-                FrameRequestSource::NativeCallback,
-            ),
-        ] {
-            let signal = PlatformFrameSignal::new();
-            let first =
-                PlatformFrameSignal::capture(Instant::now).expect("profiling captures requests");
-            assert_eq!(signal.take(), None);
-            signal.record(first + Duration::from_millis(16), later_source);
-            signal.record(first, first_source);
-            signal.record(first + Duration::from_millis(32), later_source);
-            assert_eq!(signal.take(), Some((first, first_source)));
-            assert_eq!(signal.take(), None);
-            let next = first + Duration::from_millis(48);
-            signal.record(next, later_source);
-            assert_eq!(signal.take(), Some((next, later_source)));
-        }
-    }
-
-    #[cfg(not(feature = "profiler"))]
-    #[test]
-    fn disabled_profiling_does_not_capture_or_store_timestamps() {
-        let captured = PlatformFrameSignal::capture(|| {
-            panic!("profiler-disabled builds must not evaluate the capture closure");
-        });
-        assert_eq!(captured, None);
-        let signal = PlatformFrameSignal::new();
-        signal.record(Instant::now(), FrameRequestSource::LocalSchedule);
-        assert_eq!(signal.take(), None);
     }
 }

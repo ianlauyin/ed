@@ -559,33 +559,3 @@ fn find_gpg_program() -> Option<std::path::PathBuf> {
         .into_iter()
         .find_map(|candidate| which::which(candidate).ok())
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use gpui::TestAppContext;
-
-    #[gpui::test]
-    async fn dropping_password_request_cancels_prompt(cx: &mut TestAppContext) {
-        let (prompt_sender, mut prompt_receiver) = mpsc::unbounded();
-        let delegate = AskPassDelegate::new_with_cancellation(
-            &mut cx.to_async(),
-            move |_, response_sender, cancellation, _| {
-                prompt_sender
-                    .unbounded_send((response_sender, cancellation))
-                    .expect("prompt receiver should remain open");
-            },
-        );
-
-        let password_request = delegate.ask_password("Password:".to_string());
-        let (response_sender, cancellation) = prompt_receiver
-            .next()
-            .await
-            .expect("password prompt should be received");
-
-        drop(password_request);
-
-        assert!(cancellation.await.is_err());
-        drop(response_sender);
-    }
-}

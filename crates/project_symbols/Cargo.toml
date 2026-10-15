@@ -27,16 +27,3 @@ theme.workspace = true
 theme_settings.workspace = true
 util.workspace = true
 workspace.workspace = true
-
-[dev-dependencies]
-editor = { workspace = true, features = ["test-support"] }
-futures.workspace = true
-gpui = { workspace = true, features = ["test-support"] }
-language = { workspace = true, features = ["test-support"] }
-lsp = { workspace = true, features = ["test-support"] }
-project = { workspace = true, features = ["test-support"] }
-settings_content.workspace = true
-semver.workspace = true
-settings = { workspace = true, features = ["test-support"] }
-theme = { workspace = true, features = ["test-support"] }
-workspace = { workspace = true, features = ["test-support"] }

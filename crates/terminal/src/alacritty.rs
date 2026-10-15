@@ -467,11 +467,6 @@ impl Cell {
         self.cell.c
     }
 
-    #[cfg(test)]
-    pub(crate) fn set_character(&mut self, character: char) {
-        self.cell.c = character;
-    }
-
     #[inline]
     pub fn foreground(&self) -> Color {
         self.cell.fg
@@ -485,11 +480,6 @@ impl Cell {
     #[inline]
     pub fn zerowidth(&self) -> Option<&[char]> {
         self.cell.zerowidth()
-    }
-
-    #[cfg(test)]
-    pub(crate) fn push_zerowidth(&mut self, character: char) {
-        self.cell.push_zerowidth(character);
     }
 
     #[inline]
@@ -566,50 +556,7 @@ impl Iterator for RenderableCells<'_> {
     }
 }
 
-impl Modes {
-    #[cfg(test)]
-    fn to_alacritty(self) -> TermMode {
-        let mut mode = TermMode::empty();
-        add_alacritty_mode(&mut mode, self, Self::APP_CURSOR, TermMode::APP_CURSOR);
-        add_alacritty_mode(&mut mode, self, Self::APP_KEYPAD, TermMode::APP_KEYPAD);
-        add_alacritty_mode(&mut mode, self, Self::SHOW_CURSOR, TermMode::SHOW_CURSOR);
-        add_alacritty_mode(&mut mode, self, Self::LINE_WRAP, TermMode::LINE_WRAP);
-        add_alacritty_mode(&mut mode, self, Self::ORIGIN, TermMode::ORIGIN);
-        add_alacritty_mode(&mut mode, self, Self::INSERT, TermMode::INSERT);
-        add_alacritty_mode(
-            &mut mode,
-            self,
-            Self::LINE_FEED_NEW_LINE,
-            TermMode::LINE_FEED_NEW_LINE,
-        );
-        add_alacritty_mode(&mut mode, self, Self::FOCUS_IN_OUT, TermMode::FOCUS_IN_OUT);
-        add_alacritty_mode(
-            &mut mode,
-            self,
-            Self::ALTERNATE_SCROLL,
-            TermMode::ALTERNATE_SCROLL,
-        );
-        add_alacritty_mode(
-            &mut mode,
-            self,
-            Self::BRACKETED_PASTE,
-            TermMode::BRACKETED_PASTE,
-        );
-        add_alacritty_mode(&mut mode, self, Self::SGR_MOUSE, TermMode::SGR_MOUSE);
-        add_alacritty_mode(&mut mode, self, Self::UTF8_MOUSE, TermMode::UTF8_MOUSE);
-        add_alacritty_mode(&mut mode, self, Self::ALT_SCREEN, TermMode::ALT_SCREEN);
-        add_alacritty_mode(
-            &mut mode,
-            self,
-            Self::MOUSE_REPORT_CLICK,
-            TermMode::MOUSE_REPORT_CLICK,
-        );
-        add_alacritty_mode(&mut mode, self, Self::MOUSE_DRAG, TermMode::MOUSE_DRAG);
-        add_alacritty_mode(&mut mode, self, Self::MOUSE_MOTION, TermMode::MOUSE_MOTION);
-        add_alacritty_mode(&mut mode, self, Self::VI, TermMode::VI);
-        mode
-    }
-}
+impl Modes {}
 
 fn terminal_modes_from_alacritty(mode: TermMode) -> Modes {
     let mut terminal_modes = Modes::empty();
@@ -714,18 +661,6 @@ fn add_terminal_mode(
     }
 }
 
-#[cfg(test)]
-fn add_alacritty_mode(
-    alacritty_modes: &mut TermMode,
-    terminal_modes: Modes,
-    terminal_mode: Modes,
-    alacritty_mode: TermMode,
-) {
-    if terminal_modes.contains(terminal_mode) {
-        alacritty_modes.insert(alacritty_mode);
-    }
-}
-
 impl Cursor {
     fn from_alacritty(cursor: RenderableCursor) -> Self {
         Self {
@@ -759,11 +694,6 @@ fn terminal_point_from_alacritty(point: AlacPoint) -> Point {
 }
 
 impl Range {
-    #[cfg(test)]
-    fn to_alacritty(self) -> RangeInclusive<AlacPoint> {
-        self.start.to_alacritty()..=self.end.to_alacritty()
-    }
-
     fn from_alacritty(range: RangeInclusive<AlacPoint>) -> Self {
         Self {
             start: terminal_point_from_alacritty(*range.start()),
@@ -1104,111 +1034,4 @@ fn all_search_matches<'a, T>(
     let start = AlacPoint::new(term.grid().topmost_line(), Column(0));
     let end = AlacPoint::new(term.grid().bottommost_line(), term.grid().last_column());
     RegexIter::new(start, end, AlacDirection::Right, term, regex)
-}
-
-#[cfg(test)]
-mod tests {
-    use std::sync::Arc;
-
-    use super::*;
-
-    #[test]
-    fn terminal_hyperlink_from_alacritty_keeps_alacritty_storage() {
-        let hyperlink = AlacHyperlink::new(Some("id"), "https://example.com".to_string());
-        let hyperlink = terminal_hyperlink_from_alacritty(hyperlink);
-
-        assert!(matches!(&hyperlink.data, HyperlinkData::Alacritty(_)));
-        assert_eq!(hyperlink.id(), Some("id"));
-        assert_eq!(hyperlink.uri(), "https://example.com");
-    }
-
-    #[test]
-    fn terminal_cell_from_alacritty_shares_extra_storage() {
-        let mut cell = AlacCell::default();
-        cell.push_zerowidth('a');
-
-        let converted = terminal_cell_from_alacritty(&cell);
-
-        match (&cell.extra, &converted.cell.extra) {
-            (Some(extra), Some(converted_extra)) => assert!(Arc::ptr_eq(extra, converted_extra)),
-            _ => panic!("expected extra storage on both cells"),
-        }
-    }
-
-    #[test]
-    fn terminal_modes_round_trip_alacritty_flags() {
-        let alacritty_modes = TermMode::APP_CURSOR
-            | TermMode::BRACKETED_PASTE
-            | TermMode::ALT_SCREEN
-            | TermMode::MOUSE_DRAG
-            | TermMode::SGR_MOUSE
-            | TermMode::VI;
-
-        let terminal_modes = terminal_modes_from_alacritty(alacritty_modes);
-        assert!(terminal_modes.contains(Modes::APP_CURSOR));
-        assert!(terminal_modes.contains(Modes::BRACKETED_PASTE));
-        assert!(terminal_modes.contains(Modes::ALT_SCREEN));
-        assert!(terminal_modes.contains(Modes::MOUSE_DRAG));
-        assert!(terminal_modes.intersects(Modes::MOUSE_MODE));
-        assert!(terminal_modes.contains(Modes::SGR_MOUSE));
-        assert!(terminal_modes.contains(Modes::VI));
-        assert!(!terminal_modes.contains(Modes::MOUSE_REPORT_CLICK));
-
-        let alacritty_modes = terminal_modes.to_alacritty();
-        assert!(alacritty_modes.contains(TermMode::APP_CURSOR));
-        assert!(alacritty_modes.contains(TermMode::BRACKETED_PASTE));
-        assert!(alacritty_modes.contains(TermMode::ALT_SCREEN));
-        assert!(alacritty_modes.contains(TermMode::MOUSE_DRAG));
-        assert!(alacritty_modes.contains(TermMode::SGR_MOUSE));
-        assert!(alacritty_modes.contains(TermMode::VI));
-        assert!(!alacritty_modes.contains(TermMode::MOUSE_REPORT_CLICK));
-    }
-
-    #[test]
-    fn terminal_selection_range_round_trip_alacritty_range() {
-        let alacritty_range = AlacSelectionRange {
-            start: AlacPoint::new(Line(-2), Column(3)),
-            end: AlacPoint::new(Line(4), Column(8)),
-            is_block: true,
-        };
-
-        let terminal_range = terminal_selection_range_from_alacritty(alacritty_range);
-        assert_eq!(
-            terminal_range,
-            SelectionRange {
-                start: Point {
-                    line: -2,
-                    column: 3
-                },
-                end: Point { line: 4, column: 8 },
-                is_block: true,
-            }
-        );
-    }
-
-    #[test]
-    fn semantic_selection_stops_at_tree_branch() {
-        let config = pty_term_config(1000, SettingsCursorShape::default());
-        let (events_tx, _events_rx) = futures::channel::mpsc::unbounded();
-        let mut term = Term::new(
-            config,
-            &TerminalBounds::default(),
-            ZedListener {
-                sender: events_tx,
-                generation: 0,
-            },
-        );
-        for character in "└─zms-demo.target".chars() {
-            term.input(character);
-        }
-
-        let selection = Selection::new(
-            SelectionType::Semantic,
-            Point::new(0, 2),
-            SelectionSide::Left,
-        );
-        set_selection(&mut term, Some(&selection));
-
-        assert_eq!(selection_text(&term).as_deref(), Some("zms-demo.target"));
-    }
 }

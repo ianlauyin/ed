@@ -264,13 +264,6 @@ impl LspStore {
         cx.background_spawn(async move { new_task.await.ok().flatten() })
     }
 
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn document_links_for_buffer(&self, buffer_id: BufferId) -> Option<BufferDocumentLinks> {
-        let data = self.lsp_data.get(&buffer_id)?;
-        let document_links = data.document_links.as_ref()?;
-        Some(document_links.links.clone())
-    }
-
     fn fetch_document_links_for_buffer(
         &mut self,
         buffer: &Entity<Buffer>,

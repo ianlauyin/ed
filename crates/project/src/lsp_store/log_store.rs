@@ -342,30 +342,6 @@ impl RpcLogHeaderState {
     }
 }
 
-#[cfg(feature = "test-support")]
-#[derive(Default)]
-pub struct TestRpcLogHeaderState(RpcLogHeaderState);
-
-#[cfg(feature = "test-support")]
-impl TestRpcLogHeaderState {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn header_for_message(
-        &mut self,
-        received: bool,
-        elapsed: Option<Duration>,
-    ) -> Option<String> {
-        let kind = if received {
-            MessageKind::Receive
-        } else {
-            MessageKind::Send
-        };
-        self.0.header_for_message(kind, elapsed)
-    }
-}
-
 impl RpcRequestTracker {
     fn observe(
         &mut self,
@@ -400,39 +376,6 @@ impl RpcRequestTracker {
             self.pending_requests.remove(&oldest_key);
         }
         self.pending_requests.insert(key, observed_at);
-    }
-}
-
-#[cfg(feature = "test-support")]
-#[derive(Default)]
-pub struct TestRpcRequestTracker(RpcRequestTracker);
-
-#[cfg(feature = "test-support")]
-impl TestRpcRequestTracker {
-    pub fn new() -> Self {
-        Self::default()
-    }
-
-    pub fn observe(
-        &mut self,
-        received: bool,
-        message: &str,
-        observed_at: Instant,
-    ) -> Option<Duration> {
-        let kind = if received {
-            MessageKind::Receive
-        } else {
-            MessageKind::Send
-        };
-        self.0.observe(kind, message, observed_at)
-    }
-
-    pub fn pending_request_count(&self) -> usize {
-        self.0.pending_requests.len()
-    }
-
-    pub fn max_pending_requests() -> usize {
-        MAX_PENDING_REQUESTS
     }
 }
 

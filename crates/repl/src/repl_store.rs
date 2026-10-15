@@ -428,14 +428,4 @@ impl ReplStore {
         self.sessions.clear();
         futures::future::ready(())
     }
-
-    #[cfg(test)]
-    pub fn set_kernel_specs_for_testing(
-        &mut self,
-        specs: Vec<KernelSpecification>,
-        cx: &mut Context<Self>,
-    ) {
-        self.kernel_specifications = specs;
-        cx.notify();
-    }
 }

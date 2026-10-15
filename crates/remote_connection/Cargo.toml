@@ -14,7 +14,6 @@ doctest = false
 
 [features]
 default = []
-test-support = ["remote/test-support"]
 
 [dependencies]
 serde_json.workspace = true
@@ -38,9 +37,3 @@ theme_settings.workspace = true
 ui.workspace = true
 ui_input.workspace = true
 workspace.workspace = true
-
-[dev-dependencies]
-editor.workspace = true
-gpui = { workspace = true, features = ["test-support"] }
-settings = { workspace = true, features = ["test-support"] }
-theme.workspace = true

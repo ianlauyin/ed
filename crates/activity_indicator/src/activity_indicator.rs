@@ -376,11 +376,6 @@ impl ActivityIndicator {
         }
     }
 
-    #[cfg(feature = "test-support")]
-    pub fn message_to_render(&mut self, cx: &mut Context<Self>) -> Option<String> {
-        self.content_to_render(cx).map(|content| content.message)
-    }
-
     fn content_to_render(&mut self, cx: &mut Context<Self>) -> Option<Content> {
         if let Some(content) = self.primary_content(cx) {
             return Some(content);

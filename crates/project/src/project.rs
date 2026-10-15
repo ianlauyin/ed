@@ -136,10 +136,6 @@ use worktree_store::{WorktreeStore, WorktreeStoreEvent};
 
 pub use fs::*;
 pub use language::Location;
-#[cfg(any(test, feature = "test-support"))]
-pub use prettier::FORMAT_SUFFIX as TEST_PRETTIER_FORMAT_SUFFIX;
-#[cfg(any(test, feature = "test-support"))]
-pub use prettier::RANGE_FORMAT_SUFFIX as TEST_PRETTIER_RANGE_FORMAT_SUFFIX;
 pub use task_inventory::{
     BasicContextProvider, ContextProviderWithTasks, DebugScenarioContext, GIT_COMMAND_TASK_TAG,
     Inventory, TaskContexts, TaskSourceKind,
@@ -1051,12 +1047,6 @@ impl DirectoryLister {
 
 pub const CURRENT_PROJECT_FEATURES: &[&str] = &["new-style-anchors"];
 
-#[cfg(feature = "test-support")]
-pub const DEFAULT_COMPLETION_CONTEXT: CompletionContext = CompletionContext {
-    trigger_kind: lsp::CompletionTriggerKind::INVOKED,
-    trigger_character: None,
-};
-
 /// An LSP diagnostics associated with a certain language server.
 #[derive(Clone, Debug, Default)]
 pub enum LspPullDiagnostics {
@@ -1550,134 +1540,6 @@ impl Project {
         }
     }
 
-    #[cfg(feature = "test-support")]
-    pub async fn example(
-        root_paths: impl IntoIterator<Item = &Path>,
-        cx: &mut AsyncApp,
-    ) -> Entity<Project> {
-        let fs = RealFs::new(None, cx.background_executor().clone());
-        let languages = LanguageRegistry::test(cx.background_executor().clone());
-        let http_client = http_client::FakeHttpClient::with_404_response();
-
-        let project = cx.update(|cx| {
-            Project::local(
-                http_client.clone(),
-                node_runtime::NodeRuntime::unavailable(),
-                Arc::new(languages),
-                fs,
-                None,
-                LocalProjectFlags {
-                    init_worktree_trust: false,
-                    ..Default::default()
-                },
-                cx,
-            )
-        });
-        for path in root_paths {
-            let (tree, _): (Entity<Worktree>, _) = project
-                .update(cx, |project, cx| {
-                    project.find_or_create_worktree(path, true, cx)
-                })
-                .await
-                .unwrap();
-            tree.read_with(cx, |tree, _| tree.as_local().unwrap().scan_complete())
-                .await;
-        }
-        project
-    }
-
-    #[cfg(feature = "test-support")]
-    pub async fn test(
-        fs: Arc<dyn Fs>,
-        root_paths: impl IntoIterator<Item = &Path>,
-        cx: &mut gpui::TestAppContext,
-    ) -> Entity<Project> {
-        Self::test_project(fs, root_paths, false, cx).await
-    }
-
-    #[cfg(feature = "test-support")]
-    pub async fn test_with_worktree_trust(
-        fs: Arc<dyn Fs>,
-        root_paths: impl IntoIterator<Item = &Path>,
-        cx: &mut gpui::TestAppContext,
-    ) -> Entity<Project> {
-        Self::test_project(fs, root_paths, true, cx).await
-    }
-
-    #[cfg(feature = "test-support")]
-    async fn test_project(
-        fs: Arc<dyn Fs>,
-        root_paths: impl IntoIterator<Item = &Path>,
-        init_worktree_trust: bool,
-        cx: &mut gpui::TestAppContext,
-    ) -> Entity<Project> {
-        let languages = LanguageRegistry::test(cx.executor());
-        let http_client = http_client::FakeHttpClient::with_404_response();
-
-        let project = cx.update(|cx| {
-            Project::local(
-                http_client.clone(),
-                node_runtime::NodeRuntime::unavailable(),
-                Arc::new(languages),
-                fs,
-                None,
-                LocalProjectFlags {
-                    init_worktree_trust,
-                    ..Default::default()
-                },
-                cx,
-            )
-        });
-        for path in root_paths {
-            let (tree, _) = project
-                .update(cx, |project, cx| {
-                    project.find_or_create_worktree(path, true, cx)
-                })
-                .await
-                .unwrap();
-
-            tree.read_with(cx, |tree, _| tree.as_local().unwrap().scan_complete())
-                .await;
-        }
-        project
-    }
-
-    /// Adds a remote worktree to a test project.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn add_test_remote_worktree(
-        &mut self,
-        abs_path: &str,
-        cx: &mut Context<Self>,
-    ) -> Entity<Worktree> {
-        use rpc::NoopProtoClient;
-        use util::paths::PathStyle;
-
-        let root_name = std::path::Path::new(abs_path)
-            .file_name()
-            .map(|n| n.to_string_lossy().to_string())
-            .unwrap_or_default();
-
-        let client = AnyProtoClient::new(NoopProtoClient::new());
-        let worktree = Worktree::remote(
-            0,
-            ReplicaId::new(1),
-            proto::WorktreeMetadata {
-                id: 100 + self.visible_worktrees(cx).count() as u64,
-                root_name,
-                visible: true,
-                abs_path: abs_path.to_string(),
-                root_repo_common_dir: None,
-                root_repo_is_linked_worktree: false,
-            },
-            client,
-            PathStyle::Unix,
-            cx,
-        );
-        self.worktree_store
-            .update(cx, |store, cx| store.add(&worktree, cx));
-        worktree
-    }
-
     #[inline]
     pub fn dap_store(&self) -> Entity<DapStore> {
         self.dap_store.clone()
@@ -1767,15 +1629,6 @@ impl Project {
         self.environment.update(cx, |environment, _| {
             environment.pop_environment_error();
         });
-    }
-
-    #[cfg(feature = "test-support")]
-    #[inline]
-    pub fn has_open_buffer(&self, path: impl Into<ProjectPath>, cx: &App) -> bool {
-        self.buffer_store
-            .read(cx)
-            .get_by_path(&path.into())
-            .is_some()
     }
 
     #[inline]
@@ -2361,19 +2214,6 @@ impl Project {
         })
     }
 
-    #[cfg(feature = "test-support")]
-    pub fn open_local_buffer_with_lsp(
-        &mut self,
-        abs_path: impl AsRef<Path>,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<(Entity<Buffer>, lsp_store::OpenLspBufferHandle)>> {
-        if let Some((worktree, relative_path)) = self.find_worktree(abs_path.as_ref(), cx) {
-            self.open_buffer_with_lsp((worktree.read(cx).id(), relative_path), cx)
-        } else {
-            Task::ready(Err(anyhow!("no such path")))
-        }
-    }
-
     pub fn download_file(
         &mut self,
         worktree_id: WorktreeId,
@@ -2452,22 +2292,6 @@ impl Project {
 
         self.buffer_store.update(cx, |buffer_store, cx| {
             buffer_store.open_buffer(path.into(), cx)
-        })
-    }
-
-    #[cfg(feature = "test-support")]
-    pub fn open_buffer_with_lsp(
-        &mut self,
-        path: impl Into<ProjectPath>,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<(Entity<Buffer>, lsp_store::OpenLspBufferHandle)>> {
-        let buffer = self.open_buffer(path, cx);
-        cx.spawn(async move |this, cx| {
-            let buffer = buffer.await?;
-            let handle = this.update(cx, |project, cx| {
-                project.register_buffer_with_language_servers(&buffer, cx)
-            })?;
-            Ok((buffer, handle))
         })
     }
 
@@ -5047,15 +4871,6 @@ impl Project {
             })
     }
 
-    #[cfg(feature = "test-support")]
-    pub fn has_language_servers_for(&self, buffer: &Buffer, cx: &mut App) -> bool {
-        self.lsp_store.update(cx, |this, cx| {
-            this.running_language_servers_for_local_buffer(buffer, cx)
-                .next()
-                .is_some()
-        })
-    }
-
     pub fn git_init(
         &self,
         path: Arc<Path>,
@@ -5077,31 +4892,6 @@ impl Project {
 
     pub fn git_store(&self) -> &Entity<GitStore> {
         &self.git_store
-    }
-
-    #[cfg(feature = "test-support")]
-    pub fn git_scans_complete(&self, cx: &Context<Self>) -> Task<()> {
-        use futures::future::join_all;
-        cx.spawn(async move |this, cx| {
-            let scans_complete = this
-                .read_with(cx, |this, cx| {
-                    this.worktrees(cx)
-                        .filter_map(|worktree| Some(worktree.read(cx).as_local()?.scan_complete()))
-                        .collect::<Vec<_>>()
-                })
-                .unwrap();
-            join_all(scans_complete).await;
-            let barriers = this
-                .update(cx, |this, cx| {
-                    let repos = this.repositories(cx).values().cloned().collect::<Vec<_>>();
-                    repos
-                        .into_iter()
-                        .map(|repo| repo.update(cx, |repo, _| repo.barrier()))
-                        .collect::<Vec<_>>()
-                })
-                .unwrap();
-            join_all(barriers).await;
-        })
     }
 
     pub fn active_repository(&self, cx: &App) -> Option<Entity<Repository>> {

@@ -11,9 +11,6 @@ workspace = true
 [lib]
 doctest = false
 
-[features]
-test-support = []
-
 [dependencies]
 anyhow.workspace = true
 collections.workspace = true
@@ -29,8 +26,3 @@ serde_json_lenient.workspace = true
 snippet.workspace = true
 util.workspace = true
 schemars.workspace = true
-
-[dev-dependencies]
-fs = { workspace = true, features = ["test-support"] }
-gpui = { workspace = true, features = ["test-support"] }
-indoc.workspace = true

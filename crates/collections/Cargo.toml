@@ -13,9 +13,6 @@ workspace = true
 path = "src/collections.rs"
 doctest = false
 
-[features]
-test-support = []
-
 [dependencies]
 indexmap.workspace = true
 rustc-hash.workspace = true

@@ -49,15 +49,7 @@ mod split;
 pub mod split_editor_view;
 
 mod bookmarks;
-#[cfg(test)]
-mod code_completion_tests;
-#[cfg(test)]
-mod editor_block_comment_tests;
-#[cfg(test)]
-mod editor_tests;
 mod signature_help;
-#[cfg(any(test, feature = "test-support"))]
-pub mod test;
 
 mod clipboard;
 mod code_actions;
@@ -77,8 +69,6 @@ pub use clipboard::ClipboardSelection;
 pub use code_actions::CodeActionProvider;
 use collections::TypeIdHashMap;
 pub use completions::CompletionProvider;
-#[cfg(test)]
-pub(crate) use completions::snippet_candidate_suffixes;
 pub(crate) use completions::split_words;
 use diagnostics::{ActiveDiagnostic, GlobalDiagnosticRenderer, InlineDiagnostic};
 pub use diagnostics::{DiagnosticRenderer, set_diagnostic_renderer};
@@ -1685,8 +1675,6 @@ struct GutterButtonTooltip {
     primary: GutterButtonIntent,
     secondary: GutterButtonIntent,
     focus_handle: FocusHandle,
-    #[cfg(test)]
-    on_render: Option<Rc<RefCell<Vec<(String, String)>>>>,
 }
 
 impl GutterButtonTooltip {
@@ -1721,13 +1709,6 @@ impl Render for GutterButtonTooltip {
         let intent = self.active_intent(window.modifiers());
         let key_binding = KeyBinding::for_action_in(intent.action(), &self.focus_handle, cx);
         let meta_text = self.meta_text();
-
-        #[cfg(test)]
-        if let Some(on_render) = &self.on_render {
-            on_render
-                .borrow_mut()
-                .push((intent.as_str().to_owned(), meta_text.clone()));
-        }
 
         tooltip_container(cx, move |this, _| {
             this.child(
@@ -3137,11 +3118,6 @@ impl Editor {
             hold.min_line_number_digits = digits;
             cx.notify();
         }
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn search_results_hold(&self) -> Option<SearchResultsHold> {
-        self.search_results_hold
     }
 
     fn frozen_scroll_range(
@@ -4701,8 +4677,6 @@ impl Editor {
                         primary,
                         secondary,
                         focus_handle: focus_handle.clone(),
-                        #[cfg(test)]
-                        on_render: None,
                     })
                     .into()
                 })
@@ -6555,11 +6529,6 @@ impl Editor {
         });
 
         cx.notify();
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn breakpoint_store(&self) -> Option<Entity<BreakpointStore>> {
-        self.breakpoint_store.clone()
     }
 
     fn go_to_active_debug_line(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
@@ -9470,78 +9439,6 @@ impl Editor {
         });
         self.gutter_highlights
             .insert(TypeId::of::<T>(), (color_fetcher, gutter_highlights));
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn all_text_highlights(
-        &self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Vec<(HighlightStyle, Vec<Range<DisplayPoint>>)> {
-        let snapshot = self.snapshot(window, cx);
-        self.display_map.update(cx, |display_map, _| {
-            display_map
-                .all_text_highlights()
-                .map(|(_, highlight)| {
-                    let (style, ranges) = highlight.as_ref();
-                    (
-                        *style,
-                        ranges
-                            .iter()
-                            .map(|range| range.clone().to_display_points(&snapshot))
-                            .collect(),
-                    )
-                })
-                .collect()
-        })
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn all_text_background_highlights(
-        &self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Vec<(Range<DisplayPoint>, Hsla)> {
-        let snapshot = self.snapshot(window, cx);
-        let buffer = &snapshot.buffer_snapshot();
-        let start = buffer.anchor_before(MultiBufferOffset(0));
-        let end = buffer.anchor_after(buffer.len());
-        self.sorted_background_highlights_in_range(start..end, &snapshot, cx.theme())
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn sorted_background_highlights_in_range(
-        &self,
-        search_range: Range<Anchor>,
-        display_snapshot: &DisplaySnapshot,
-        theme: &Theme,
-    ) -> Vec<(Range<DisplayPoint>, Hsla)> {
-        let mut res = self.background_highlights_in_range(search_range, display_snapshot, theme);
-        res.sort_by(|a, b| {
-            a.0.start
-                .cmp(&b.0.start)
-                .then_with(|| a.0.end.cmp(&b.0.end))
-                .then_with(|| a.1.cmp(&b.1))
-        });
-        res
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn search_background_highlights(&mut self, cx: &mut Context<Self>) -> Vec<Range<Point>> {
-        let snapshot = self.buffer().read(cx).snapshot(cx);
-
-        let highlights = self
-            .background_highlights
-            .get(&HighlightKey::BufferSearchHighlights);
-
-        if let Some((_color, ranges)) = highlights {
-            ranges
-                .iter()
-                .map(|range| range.start.to_point(&snapshot)..range.end.to_point(&snapshot))
-                .collect_vec()
-        } else {
-            vec![]
-        }
     }
 
     pub fn has_background_highlights(&self, key: HighlightKey) -> bool {

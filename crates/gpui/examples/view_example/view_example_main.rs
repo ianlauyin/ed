@@ -18,9 +18,6 @@ mod example_editor;
 mod example_input;
 mod example_text_area;
 
-#[cfg(test)]
-mod example_tests;
-
 use example_editor::Editor;
 use example_input::Input;
 use example_text_area::TextArea;

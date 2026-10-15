@@ -543,33 +543,6 @@ impl LspLogView {
         }
     }
 
-    #[cfg(test)]
-    pub(crate) fn show_entry_for_test(
-        &mut self,
-        key: LanguageServerLogKey,
-        log_kind: LogKind,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        match log_kind {
-            LogKind::Rpc => self.show_rpc_trace_for_server(key, window, cx),
-            LogKind::Trace => self.show_trace_for_server(key, window, cx),
-            LogKind::Logs => self.show_logs_for_server(key, window, cx),
-            LogKind::ServerInfo => self.show_server_info(key, window, cx),
-        }
-    }
-
-    #[cfg(test)]
-    pub(crate) fn stream_enabled_for_test(
-        &self,
-        key: &LanguageServerLogKey,
-        log_kind: LogKind,
-    ) -> bool {
-        self.enabled_streams
-            .get(key)
-            .is_some_and(|streams| streams.log_kinds.contains(&log_kind))
-    }
-
     fn show_logs_for_server(
         &mut self,
         key: LanguageServerLogKey,

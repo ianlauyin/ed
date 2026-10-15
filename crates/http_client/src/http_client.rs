@@ -12,8 +12,6 @@ use http::{HeaderName, HeaderValue};
 use futures::future::BoxFuture;
 use parking_lot::Mutex;
 use serde::Serialize;
-#[cfg(feature = "test-support")]
-use std::{any::type_name, fmt};
 use std::{ops::Deref, sync::Arc, time::Duration};
 pub use url::{Host, Url};
 
@@ -166,11 +164,6 @@ pub trait HttpClient: 'static + Send + Sync {
             Err(e) => Box::pin(async move { Err(e.into()) }),
         }
     }
-
-    #[cfg(feature = "test-support")]
-    fn as_fake(&self) -> &FakeHttpClient {
-        panic!("called as_fake on {}", type_name::<Self>())
-    }
 }
 
 /// An [`HttpClient`] that may have a proxy.
@@ -219,11 +212,6 @@ impl HttpClient for HttpClientWithProxy {
 
     fn proxy(&self) -> Option<&Url> {
         self.proxy.as_ref()
-    }
-
-    #[cfg(feature = "test-support")]
-    fn as_fake(&self) -> &FakeHttpClient {
-        self.client.as_fake()
     }
 }
 
@@ -360,11 +348,6 @@ impl HttpClient for HttpClientWithUrl {
     fn proxy(&self) -> Option<&Url> {
         self.client.proxy.as_ref()
     }
-
-    #[cfg(feature = "test-support")]
-    fn as_fake(&self) -> &FakeHttpClient {
-        self.client.as_fake()
-    }
 }
 
 pub fn read_proxy_from_env() -> Option<Url> {
@@ -417,105 +400,5 @@ impl HttpClient for BlockedHttpClient {
 
     fn proxy(&self) -> Option<&Url> {
         None
-    }
-
-    #[cfg(feature = "test-support")]
-    fn as_fake(&self) -> &FakeHttpClient {
-        panic!("called as_fake on {}", type_name::<Self>())
-    }
-}
-
-#[cfg(feature = "test-support")]
-type FakeHttpHandler = Arc<
-    dyn Fn(Request<AsyncBody>) -> BoxFuture<'static, anyhow::Result<Response<AsyncBody>>>
-        + Send
-        + Sync
-        + 'static,
->;
-
-#[cfg(feature = "test-support")]
-pub struct FakeHttpClient {
-    handler: Mutex<Option<FakeHttpHandler>>,
-    user_agent: HeaderValue,
-}
-
-#[cfg(feature = "test-support")]
-impl FakeHttpClient {
-    pub fn create<Fut, F>(handler: F) -> Arc<HttpClientWithUrl>
-    where
-        Fut: futures::Future<Output = anyhow::Result<Response<AsyncBody>>> + Send + 'static,
-        F: Fn(Request<AsyncBody>) -> Fut + Send + Sync + 'static,
-    {
-        Arc::new(HttpClientWithUrl {
-            base_url: Mutex::new("http://test.example".into()),
-            client: HttpClientWithProxy {
-                client: Arc::new(Self {
-                    handler: Mutex::new(Some(Arc::new(move |req| Box::pin(handler(req))))),
-                    user_agent: HeaderValue::from_static(type_name::<Self>()),
-                }),
-                proxy: None,
-            },
-        })
-    }
-
-    pub fn with_404_response() -> Arc<HttpClientWithUrl> {
-        log::warn!("Using fake HTTP client with 404 response");
-        Self::create(|_| async move {
-            Ok(Response::builder()
-                .status(404)
-                .body(Default::default())
-                .unwrap())
-        })
-    }
-
-    pub fn with_200_response() -> Arc<HttpClientWithUrl> {
-        log::warn!("Using fake HTTP client with 200 response");
-        Self::create(|_| async move {
-            Ok(Response::builder()
-                .status(200)
-                .body(Default::default())
-                .unwrap())
-        })
-    }
-
-    pub fn replace_handler<Fut, F>(&self, new_handler: F)
-    where
-        Fut: futures::Future<Output = anyhow::Result<Response<AsyncBody>>> + Send + 'static,
-        F: Fn(FakeHttpHandler, Request<AsyncBody>) -> Fut + Send + Sync + 'static,
-    {
-        let mut handler = self.handler.lock();
-        let old_handler = handler.take().unwrap();
-        *handler = Some(Arc::new(move |req| {
-            Box::pin(new_handler(old_handler.clone(), req))
-        }));
-    }
-}
-
-#[cfg(feature = "test-support")]
-impl fmt::Debug for FakeHttpClient {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("FakeHttpClient").finish()
-    }
-}
-
-#[cfg(feature = "test-support")]
-impl HttpClient for FakeHttpClient {
-    fn send(
-        &self,
-        req: Request<AsyncBody>,
-    ) -> BoxFuture<'static, anyhow::Result<Response<AsyncBody>>> {
-        ((self.handler.lock().as_ref().unwrap())(req)) as _
-    }
-
-    fn user_agent(&self) -> Option<&HeaderValue> {
-        Some(&self.user_agent)
-    }
-
-    fn proxy(&self) -> Option<&Url> {
-        None
-    }
-
-    fn as_fake(&self) -> &FakeHttpClient {
-        self
     }
 }

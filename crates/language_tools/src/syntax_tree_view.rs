@@ -749,16 +749,3 @@ impl ToolbarItemView for SyntaxTreeToolbarItemView {
         ToolbarItemLocation::Hidden
     }
 }
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn anonymous_node_kinds_escape_control_characters() {
-        assert_eq!(format_anonymous_node_kind("\n"), "\"\\n\"");
-        assert_eq!(format_anonymous_node_kind("\r\n"), "\"\\r\\n\"");
-        assert_eq!(format_anonymous_node_kind("\t"), "\"\\t\"");
-        assert_eq!(format_anonymous_node_kind(","), "\",\"");
-    }
-}

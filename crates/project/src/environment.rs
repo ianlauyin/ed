@@ -68,9 +68,6 @@ impl ProjectEnvironment {
 
     /// Returns the inherited CLI environment, if this project was opened from the Zed CLI.
     pub(crate) fn get_cli_environment(&self) -> Option<HashMap<String, String>> {
-        if cfg!(any(test, feature = "test-support")) {
-            return Some(HashMap::default());
-        }
         if let Some(mut env) = self.cli_environment.clone() {
             set_origin_marker(&mut env, EnvironmentOrigin::Cli);
             Some(env)
@@ -256,10 +253,6 @@ impl ProjectEnvironment {
         remote_client: Entity<RemoteClient>,
         cx: &mut App,
     ) -> Shared<Task<Option<HashMap<String, String>>>> {
-        if cfg!(any(test, feature = "test-support")) {
-            return Task::ready(Some(HashMap::default())).shared();
-        }
-
         self.remote_environments
             .entry((shell.clone(), abs_path.clone()))
             .or_insert_with(|| {

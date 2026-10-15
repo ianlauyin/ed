@@ -12,9 +12,6 @@ workspace = true
 path = "src/text.rs"
 doctest = false
 
-[features]
-test-support = ["rand", "dep:util", "util/test-support"]
-
 [dependencies]
 anyhow.workspace = true
 clock.workspace = true
@@ -23,17 +20,7 @@ gpui_util.workspace = true
 log.workspace = true
 parking_lot.workspace = true
 postage.workspace = true
-rand = { workspace = true, optional = true }
 regex.workspace = true
 rope.workspace = true
 smallvec.workspace = true
 sum_tree.workspace = true
-util = { workspace = true, optional = true }
-
-[dev-dependencies]
-collections = { workspace = true, features = ["test-support"] }
-ctor.workspace = true
-gpui = { workspace = true, features = ["test-support"] }
-rand.workspace = true
-util = { workspace = true, features = ["test-support"] }
-zlog.workspace = true

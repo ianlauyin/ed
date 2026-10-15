@@ -9,16 +9,10 @@ license = "Apache-2.0"
 path = "src/path.rs"
 doctest = false
 
-[features]
-test-support = []
-
 [dependencies]
 anyhow.workspace = true
 dunce.workspace = true
 serde = { workspace = true, features = ["derive"], optional = true }
-
-[dev-dependencies]
-tempfile.workspace = true
 
 [lints]
 workspace = true

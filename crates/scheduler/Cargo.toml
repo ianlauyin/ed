@@ -13,7 +13,6 @@ path = "src/scheduler.rs"
 doctest = false
 
 [features]
-test-support = []
 # Allows `spawn_dedicated` to create real threads on wasm targets by spawning
 # web workers. Off by default because it requires shared-memory threading
 # (atomics + bulk-memory); wasm consumers without those build flags keep
@@ -34,7 +33,6 @@ futures.workspace = true
 parking_lot.workspace = true
 rand.workspace = true
 web-time.workspace = true
-
 
 [target.'cfg(target_family = "wasm")'.dependencies]
 wasm_thread = { workspace = true, optional = true }

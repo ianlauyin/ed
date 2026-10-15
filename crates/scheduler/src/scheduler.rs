@@ -1,26 +1,8 @@
 mod clock;
 mod executor;
-mod test_scheduler;
-#[cfg(test)]
-mod tests;
 
 pub use clock::*;
 pub use executor::*;
-pub use test_scheduler::*;
-
-static TEST_SCHEDULER_CREATED: std::sync::atomic::AtomicBool =
-    std::sync::atomic::AtomicBool::new(false);
-
-/// Whether this process has created a [`TestScheduler`].
-///
-/// Test harnesses create one before the test body runs, and applications never
-/// do. Code with no executor at hand, such as expensive data-structure invariant
-/// checks, can use this to run only in test processes. Code that has an
-/// executor should prefer [`BackgroundExecutor::is_test`], which is correct per
-/// executor.
-pub fn test_scheduler_created() -> bool {
-    TEST_SCHEDULER_CREATED.load(std::sync::atomic::Ordering::Relaxed)
-}
 
 use async_task::Runnable;
 use futures::channel::oneshot;
@@ -132,9 +114,7 @@ pub trait Scheduler: Send + Sync {
     /// Spawn a closure on a fresh session pinned to its own [`LocalExecutor`].
     ///
     /// `PlatformScheduler` runs the closure on a new OS thread (see
-    /// [`spawn_dedicated_thread`]). `TestScheduler` runs it on the test
-    /// scheduler's loop alongside everything else so determinism under
-    /// `TestScheduler::many` is preserved.
+    /// [`spawn_dedicated_thread`]).
     ///
     /// This is the dyn-safe entry point: the closure's output is type-erased
     /// as `Box<dyn Any + Send + Sync>` so the trait stays object-safe.
@@ -153,10 +133,6 @@ pub trait Scheduler: Send + Sync {
                 + 'static,
         >,
     ) -> Task<Box<dyn Any + Send + Sync>>;
-
-    fn as_test(&self) -> Option<&TestScheduler> {
-        None
-    }
 }
 
 /// Spawn work on a fresh OS thread that's exclusive to the returned task and

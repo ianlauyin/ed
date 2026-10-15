@@ -24,12 +24,6 @@ schemars.workspace = true
 text.workspace = true
 util.workspace = true
 
-[dev-dependencies]
-gpui = { workspace = true, features = ["test-support"] }
-project = { workspace = true, features = ["test-support"] }
-proptest.workspace = true
-workspace = { workspace = true, features = ["test-support"] }
-
 [features]
 dev-tools = []
 

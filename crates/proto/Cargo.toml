@@ -6,9 +6,6 @@ version = "0.1.0"
 publish.workspace = true
 license = "GPL-3.0-or-later"
 
-[features]
-test-support = []
-
 [lints]
 workspace = true
 
@@ -24,5 +21,3 @@ serde = { workspace = true, features = ["derive"] }
 [build-dependencies]
 prost-build.workspace = true
 protox.workspace = true
-
-[dev-dependencies]

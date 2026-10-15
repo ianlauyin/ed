@@ -171,10 +171,6 @@ impl From<RemoteConnectionOptions> for RemoteHostLocation {
                 Some(SharedString::new(docker_connection_options.name)),
                 SharedString::new(docker_connection_options.container_id),
             ),
-            #[cfg(feature = "test-support")]
-            RemoteConnectionOptions::Mock(mock) => {
-                (None, SharedString::new(format!("mock-{}", mock.id)))
-            }
         };
         Self {
             user_name,
@@ -261,17 +257,6 @@ impl TrustedWorktreesStore {
                         .is_some()
                 })
             })
-    }
-
-    #[cfg(feature = "test-support")]
-    pub fn restricted_worktrees_for_store(
-        &self,
-        worktree_store: &Entity<WorktreeStore>,
-    ) -> HashSet<WorktreeId> {
-        self.restricted
-            .get(&worktree_store.downgrade())
-            .unwrap()
-            .clone()
     }
 
     /// Adds certain entities on this host to the trusted list.

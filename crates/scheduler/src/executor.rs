@@ -59,11 +59,6 @@ impl LocalExecutor {
         &self.scheduler
     }
 
-    /// Whether this executor runs on a [`TestScheduler`](crate::TestScheduler).
-    pub fn is_test(&self) -> bool {
-        self.scheduler.as_test().is_some()
-    }
-
     #[track_caller]
     pub fn spawn<F>(&self, future: F) -> Task<F::Output>
     where
@@ -165,8 +160,7 @@ impl LocalExecutor {
     }
 
     /// Spawn a closure on a fresh session pinned to its own [`LocalExecutor`].
-    /// The closure runs on a new OS thread under `PlatformScheduler`, or on
-    /// the test scheduler's loop under `TestScheduler`.
+    /// The closure runs on a new OS thread.
     ///
     /// The returned `Task` represents the dedicated work: dropping it cancels
     /// the dedicated closure, `.await`ing it yields the closure's return
@@ -293,14 +287,8 @@ impl BackgroundExecutor {
         &self.scheduler
     }
 
-    /// Whether this executor runs on a [`TestScheduler`](crate::TestScheduler).
-    pub fn is_test(&self) -> bool {
-        self.scheduler.as_test().is_some()
-    }
-
     /// Spawn a closure on a fresh session pinned to its own [`LocalExecutor`].
-    /// The closure runs on a new OS thread under `PlatformScheduler`, or on
-    /// the test scheduler's loop under `TestScheduler`.
+    /// The closure runs on a new OS thread.
     ///
     /// The returned `Task` represents the dedicated work: dropping it cancels
     /// the dedicated closure, `.await`ing it yields the closure's return
@@ -349,8 +337,7 @@ pub struct DedicatedExecutor {
 
 impl DedicatedExecutor {
     /// Starts a dedicated session on `executor` and returns a handle that
-    /// spawns futures onto it. Under `TestScheduler` the session runs on the
-    /// deterministic test loop; no real thread is created.
+    /// spawns futures onto it.
     #[track_caller]
     pub fn new(executor: &BackgroundExecutor) -> Self {
         let (sender, receiver) = flume::unbounded::<Runnable<RunnableMeta>>();

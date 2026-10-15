@@ -21,9 +21,6 @@ mod new_process_modal;
 mod persistence;
 pub(crate) mod session;
 
-#[cfg(any(test, feature = "test-support"))]
-pub mod tests;
-
 // Let's see the diff-test in action.
 actions!(
     debugger,

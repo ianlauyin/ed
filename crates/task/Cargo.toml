@@ -5,12 +5,6 @@ edition.workspace = true
 publish.workspace = true
 license = "GPL-3.0-or-later"
 
-[features]
-test-support = [
-    "gpui/test-support",
-    "util/test-support"
-]
-
 [lib]
 path = "src/task.rs"
 doctest = false
@@ -35,7 +29,3 @@ sha2.workspace = true
 shellexpand.workspace = true
 util.workspace = true
 zed_actions.workspace = true
-
-[dev-dependencies]
-gpui = { workspace = true, features = ["test-support"] }
-pretty_assertions.workspace = true

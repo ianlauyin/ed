@@ -74,15 +74,6 @@ impl Inlay {
         }
     }
 
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn mock_hint(id: usize, position: Anchor, text: impl Into<Rope>) -> Self {
-        Self {
-            id: InlayId::Hint(id),
-            position,
-            content: InlayContent::Text(text.into()),
-        }
-    }
-
     pub fn color(id: usize, position: Anchor, color: Rgba) -> Self {
         Self {
             id: InlayId::Color(id),
@@ -120,14 +111,6 @@ impl Inlay {
         match &self.content {
             InlayContent::Text(text) => text,
             InlayContent::Color(_) => COLOR_TEXT.get_or_init(|| Rope::from("◼")),
-        }
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn get_color(&self) -> Option<Hsla> {
-        match self.content {
-            InlayContent::Color(color) => Some(color),
-            _ => None,
         }
     }
 }
@@ -185,24 +168,5 @@ impl Editor {
 
     pub fn inline_values_enabled(&self) -> bool {
         self.inline_value_cache.enabled
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn inline_value_inlays(&self, cx: &gpui::App) -> Vec<Inlay> {
-        self.display_map
-            .read(cx)
-            .current_inlays()
-            .filter(|inlay| matches!(inlay.id, InlayId::DebuggerValue(_)))
-            .cloned()
-            .collect()
-    }
-
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn all_inlays(&self, cx: &gpui::App) -> Vec<Inlay> {
-        self.display_map
-            .read(cx)
-            .current_inlays()
-            .cloned()
-            .collect()
     }
 }

@@ -14,22 +14,10 @@ doctest = false
 
 [features]
 default = []
-bench-support = ["gpui/bench-support", "gpui_macos/bench-support"]
 font-kit = ["gpui_macos/font-kit"]
 inspector = ["gpui/inspector"]
-test-support = ["gpui/test-support", "gpui_macos/test-support"]
 screen-capture = ["gpui/screen-capture", "gpui_macos/screen-capture"]
 runtime_shaders = ["gpui_macos/runtime_shaders"]
-
-[[bench]]
-name = "inspector_render"
-harness = false
-required-features = ["bench-support"]
-
-[[bench]]
-name = "randomized_element_tree"
-harness = false
-required-features = ["bench-support"]
 
 [dependencies]
 anyhow.workspace = true
@@ -37,7 +25,3 @@ gpui.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 gpui_macos.workspace = true
-
-[dev-dependencies]
-bench_metrics.workspace = true
-criterion.workspace = true

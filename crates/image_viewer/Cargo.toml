@@ -12,9 +12,6 @@ workspace = true
 path = "src/image_viewer.rs"
 doctest = false
 
-[features]
-test-support = ["gpui/test-support", "editor/test-support"]
-
 [dependencies]
 anyhow.workspace = true
 db.workspace = true
@@ -30,8 +27,3 @@ theme_settings.workspace = true
 ui.workspace = true
 util.workspace = true
 workspace.workspace = true
-
-[dev-dependencies]
-editor = { workspace = true, features = ["test-support"] }
-fs.workspace = true
-theme.workspace = true

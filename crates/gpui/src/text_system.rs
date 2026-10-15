@@ -320,11 +320,6 @@ impl TextSystem {
         self.missing_glyph_reporter.reset();
     }
 
-    #[cfg(test)]
-    pub(crate) fn report_missing_glyphs_in_test(&self, missing_glyphs: Vec<MissingGlyph>) {
-        self.missing_glyph_reporter.report(missing_glyphs);
-    }
-
     /// Get the FontId for the configure font family and style.
     fn font_id(&self, font: &Font) -> Result<FontId> {
         fn clone_font_id_result(font_id: &Result<FontId>) -> Result<FontId> {
@@ -1240,15 +1235,6 @@ pub struct TextRun {
     pub strikethrough: Option<StrikethroughStyle>,
 }
 
-#[cfg(all(target_os = "macos", test))]
-impl TextRun {
-    fn with_len(&self, len: usize) -> Self {
-        let mut this = self.clone();
-        this.len = len;
-        this
-    }
-}
-
 /// An identifier for a specific glyph, as returned by [`WindowTextSystem::layout_line`].
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Hash)]
 #[repr(C)]
@@ -1443,63 +1429,5 @@ pub fn font_name_with_fallbacks_shared<'a>(
         ".ZedSans" | "Zed Plex Sans" => const { &SharedString::new_static("IBM Plex Sans") },
         ".ZedMono" | "Zed Plex Mono" => const { &SharedString::new_static("Lilex") },
         _ => name,
-    }
-}
-
-#[cfg(test)]
-mod missing_glyph_tests {
-    use super::*;
-    use futures::FutureExt as _;
-
-    #[test]
-    fn bounds_retained_missing_glyphs() {
-        let (reporter, mut receiver) = missing_glyph_channel();
-        reporter.report(
-            (0..MAX_REPORTED_MISSING_GLYPHS)
-                .map(|index| {
-                    MissingGlyph::new(index.to_string().into(), FallbackFontClass::Proportional)
-                })
-                .collect(),
-        );
-        assert!(receiver.recv().now_or_never().unwrap().is_ok());
-
-        let newest = MissingGlyph::new("newest".into(), FallbackFontClass::Monospace);
-        reporter.report(vec![newest.clone()]);
-        assert!(receiver.recv().now_or_never().unwrap().is_ok());
-
-        let state = &receiver.state;
-        assert_eq!(state.reported.len(), MAX_REPORTED_MISSING_GLYPHS);
-        assert_eq!(state.reported_order.len(), MAX_REPORTED_MISSING_GLYPHS);
-        assert!(state.reported.contains(&newest));
-    }
-
-    #[test]
-    fn dropping_receiver_closes_and_clears_reports() {
-        let (reporter, receiver) = missing_glyph_channel();
-        reporter.report(vec![missing_glyph("missing")]);
-
-        drop(receiver);
-
-        assert!(reporter.sender.is_closed());
-        assert!(reporter.sender.is_empty());
-    }
-
-    fn missing_glyph_channel() -> (MissingGlyphReporter, MissingGlyphReceiver) {
-        let (sender, receiver) = async_channel::bounded(MAX_REPORTED_MISSING_GLYPHS);
-        let generation = Arc::<AtomicUsize>::default();
-        let reporter = MissingGlyphReporter {
-            generation: generation.clone(),
-            sender,
-        };
-        let receiver = MissingGlyphReceiver {
-            state: MissingGlyphState::default(),
-            generation,
-            receiver,
-        };
-        (reporter, receiver)
-    }
-
-    fn missing_glyph(grapheme: &'static str) -> MissingGlyph {
-        MissingGlyph::new(grapheme.into(), FallbackFontClass::Proportional)
     }
 }

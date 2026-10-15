@@ -12,9 +12,6 @@ workspace = true
 doctest = false
 
 [features]
-test-support = [
-    "load-grammars"
-]
 load-grammars = [
     "grammars/load-grammars",
     "tree-sitter",
@@ -66,21 +63,3 @@ tree-sitter = { workspace = true, optional = true }
 tree-sitter-gitcommit = { workspace = true, optional = true }
 url.workspace = true
 util.workspace = true
-
-[dev-dependencies]
-fs = { workspace = true, features = ["test-support"] }
-language = { workspace = true, features = ["test-support"] }
-pretty_assertions.workspace = true
-tempfile.workspace = true
-settings = { workspace = true, features = ["test-support"] }
-theme = { workspace = true, features = ["test-support"] }
-tree-sitter-bash.workspace = true
-tree-sitter-c.workspace = true
-tree-sitter-cpp.workspace = true
-tree-sitter-css.workspace = true
-tree-sitter-go.workspace = true
-tree-sitter-python.workspace = true
-tree-sitter-rust.workspace = true
-tree-sitter-typescript.workspace = true
-tree-sitter.workspace = true
-unindent.workspace = true

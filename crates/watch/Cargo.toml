@@ -16,8 +16,3 @@ doctest = true
 arc-swap.workspace = true
 futures.workspace = true
 parking_lot.workspace = true
-
-[dev-dependencies]
-ctor.workspace = true
-gpui = { workspace = true, features = ["test-support"] }
-zlog.workspace = true

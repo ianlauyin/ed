@@ -58,10 +58,6 @@ tempfile = { workspace = true, optional = true }
 rayon = { workspace = true, optional = true }
 walkdir = { workspace = true, optional = true }
 
-[dev-dependencies]
-serde_json.workspace = true
-util = { workspace = true, features = ["test-support"] }
-
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = { workspace = true, optional = true }
 core-services = { workspace = true, optional = true }

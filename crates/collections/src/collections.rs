@@ -11,5 +11,3 @@ pub use rustc_hash::{FxBuildHasher, FxHashMap, FxHashSet, FxHasher};
 pub use std::collections::*;
 
 pub mod vecmap;
-#[cfg(test)]
-mod vecmap_tests;

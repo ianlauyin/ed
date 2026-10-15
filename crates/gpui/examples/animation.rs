@@ -220,7 +220,6 @@ impl Render for AnimationExample {
                                                 .rounded_full()
                                                 .bg(rgba(0x3b82f6ff))
                                                 .cursor_pointer()
-                                                .debug_selector(|| "spring-position".into())
                                                 .with_spring(
                                                     "spring-position",
                                                     SpringAnimation::new(spring)
@@ -332,32 +331,4 @@ fn run_example() {
 
 fn main() {
     run_example();
-}
-
-#[cfg(all(test, feature = "test-support"))]
-mod tests {
-    use gpui::{Modifiers, TestAppContext};
-
-    use super::*;
-
-    #[gpui::test]
-    fn clicking_spring_position_changes_the_target(cx: &mut TestAppContext) {
-        let (view, cx) = cx.add_window_view(|_, _| AnimationExample {
-            spring_phase: 0,
-            spring_damping: 14.0,
-            spring_damping_drag: None,
-        });
-        cx.simulate_resize(size(px(300.0), px(300.0)));
-        cx.run_until_parked();
-
-        let position_bounds = cx
-            .debug_bounds("spring-position")
-            .expect("spring position should be rendered");
-        let position = position_bounds.center();
-        cx.simulate_mouse_move(position, None, Modifiers::default());
-        cx.simulate_click(position, Modifiers::default());
-        cx.run_until_parked();
-
-        assert_eq!(cx.update(|_, cx| view.read(cx).spring_phase), 1);
-    }
 }

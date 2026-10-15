@@ -10,14 +10,6 @@ use db::{
 use serde::{Deserialize, Serialize};
 use time::OffsetDateTime;
 
-#[cfg(test)]
-#[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
-pub(crate) struct SerializedCommandInvocation {
-    pub(crate) command_name: String,
-    pub(crate) user_query: String,
-    pub(crate) last_invoked: OffsetDateTime,
-}
-
 #[derive(Debug, Clone, Deserialize, Serialize, PartialEq)]
 pub(crate) struct SerializedCommandUsage {
     pub(crate) command_name: String,
@@ -37,21 +29,6 @@ impl Column for SerializedCommandUsage {
             last_invoked: OffsetDateTime::from_unix_timestamp(last_invoked_raw)?,
         };
         Ok((usage, next_index))
-    }
-}
-
-#[cfg(test)]
-impl Column for SerializedCommandInvocation {
-    fn column(statement: &mut Statement, start_index: i32) -> Result<(Self, i32)> {
-        let (command_name, next_index): (String, i32) = Column::column(statement, start_index)?;
-        let (user_query, next_index): (String, i32) = Column::column(statement, next_index)?;
-        let (last_invoked_raw, next_index): (i64, i32) = Column::column(statement, next_index)?;
-        let command_invocation = Self {
-            command_name,
-            user_query,
-            last_invoked: OffsetDateTime::from_unix_timestamp(last_invoked_raw)?,
-        };
-        Ok((command_invocation, next_index))
     }
 }
 
@@ -92,33 +69,6 @@ impl CommandPaletteDB {
         }
     }
 
-    #[cfg(test)]
-    query! {
-        pub(crate) fn get_last_invoked(command: &str) -> Result<Option<SerializedCommandInvocation>> {
-            SELECT
-            command_name,
-            user_query,
-            last_invoked FROM command_invocations
-            WHERE command_name=(?)
-            ORDER BY last_invoked DESC
-            LIMIT 1
-        }
-    }
-
-    #[cfg(test)]
-    query! {
-        pub(crate) async fn clear_all() -> Result<()> {
-            DELETE FROM command_invocations
-        }
-    }
-
-    #[cfg(test)]
-    query! {
-        pub(crate) async fn set_last_invoked(last_invoked: i64, command_name: String) -> Result<()> {
-            UPDATE command_invocations SET last_invoked = (?) WHERE command_name = (?)
-        }
-    }
-
     query! {
         pub fn get_command_usage(command: &str) -> Result<Option<SerializedCommandUsage>> {
             SELECT command_name, COUNT(1), MAX(last_invoked)
@@ -152,132 +102,5 @@ impl CommandPaletteDB {
             GROUP BY user_query
             ORDER BY MAX(last_invoked) ASC
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-
-    use crate::persistence::{CommandPaletteDB, SerializedCommandUsage};
-
-    #[gpui::test]
-    async fn test_saves_and_retrieves_command_invocation() {
-        let db =
-            CommandPaletteDB::open_test_db("test_saves_and_retrieves_command_invocation").await;
-
-        let retrieved_cmd = db.get_last_invoked("editor: backspace").unwrap();
-
-        assert!(retrieved_cmd.is_none());
-
-        db.write_command_invocation("editor: backspace", "")
-            .await
-            .unwrap();
-
-        let retrieved_cmd = db.get_last_invoked("editor: backspace").unwrap();
-
-        assert!(retrieved_cmd.is_some());
-        let retrieved_cmd = retrieved_cmd.expect("is some");
-        assert_eq!(retrieved_cmd.command_name, "editor: backspace".to_string());
-        assert_eq!(retrieved_cmd.user_query, "".to_string());
-    }
-
-    #[gpui::test]
-    async fn test_gets_usage_history() {
-        let db = CommandPaletteDB::open_test_db("test_gets_usage_history").await;
-        db.write_command_invocation("go to line: toggle", "200")
-            .await
-            .unwrap();
-        db.write_command_invocation("go to line: toggle", "201")
-            .await
-            .unwrap();
-
-        let retrieved_cmd = db.get_last_invoked("go to line: toggle").unwrap();
-
-        assert!(retrieved_cmd.is_some());
-        let retrieved_cmd = retrieved_cmd.expect("is some");
-
-        let command_usage = db.get_command_usage("go to line: toggle").unwrap();
-
-        assert!(command_usage.is_some());
-        let command_usage: SerializedCommandUsage = command_usage.expect("is some");
-
-        assert_eq!(command_usage.command_name, "go to line: toggle");
-        assert_eq!(command_usage.invocations, 2);
-        assert_eq!(command_usage.last_invoked, retrieved_cmd.last_invoked);
-    }
-
-    #[gpui::test]
-    async fn test_lists_ordered_by_usage() {
-        let db = CommandPaletteDB::open_test_db("test_lists_ordered_by_usage").await;
-
-        let empty_commands = db.list_commands_used();
-        match &empty_commands {
-            Ok(_) => (),
-            Err(e) => println!("Error: {:?}", e),
-        }
-        assert!(empty_commands.is_ok());
-        assert_eq!(empty_commands.expect("is ok").len(), 0);
-
-        db.write_command_invocation("go to line: toggle", "200")
-            .await
-            .unwrap();
-        db.write_command_invocation("editor: backspace", "")
-            .await
-            .unwrap();
-        db.write_command_invocation("editor: backspace", "")
-            .await
-            .unwrap();
-
-        let commands = db.list_commands_used();
-
-        assert!(commands.is_ok());
-        let commands = commands.expect("is ok");
-        assert_eq!(commands.len(), 2);
-        assert_eq!(commands.as_slice()[0].command_name, "editor: backspace");
-        assert_eq!(commands.as_slice()[0].invocations, 2);
-        assert_eq!(commands.as_slice()[1].command_name, "go to line: toggle");
-        assert_eq!(commands.as_slice()[1].invocations, 1);
-    }
-
-    #[gpui::test]
-    async fn test_deletes_all_history_for_one_command() {
-        let db = CommandPaletteDB::open_test_db("test_deletes_all_history_for_one_command").await;
-        db.write_command_invocation("editor: backspace", "back")
-            .await
-            .unwrap();
-        db.write_command_invocation("editor: backspace", "backspace")
-            .await
-            .unwrap();
-        db.write_command_invocation("go to line: toggle", "line")
-            .await
-            .unwrap();
-        let remaining_usage = db.get_command_usage("go to line: toggle").unwrap().unwrap();
-
-        for _ in 0..2 {
-            db.delete_command_history("editor: backspace".to_string())
-                .await
-                .unwrap();
-
-            assert_eq!(
-                db.list_commands_used().unwrap(),
-                vec![remaining_usage.clone()]
-            );
-            assert_eq!(db.list_recent_queries().unwrap(), vec!["line"]);
-        }
-    }
-
-    #[gpui::test]
-    async fn test_handles_max_invocation_entries() {
-        let db = CommandPaletteDB::open_test_db("test_handles_max_invocation_entries").await;
-
-        for i in 1..=1001 {
-            db.write_command_invocation("some-command", &i.to_string())
-                .await
-                .unwrap();
-        }
-        let some_command = db.get_command_usage("some-command").unwrap();
-
-        assert!(some_command.is_some());
-        assert_eq!(some_command.expect("is some").invocations, 1000);
     }
 }

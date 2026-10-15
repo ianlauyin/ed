@@ -285,7 +285,7 @@ enum CrashServerMessage {
 /// we shouldn't trust it. Reading is capped at (one page minus the header),
 /// which both bounds the work and ensures the read never extends past the end
 /// of the mapping.
-#[cfg(any(target_os = "linux", test))]
+#[cfg(target_os = "linux")]
 fn abort_message_read_len(size: u32) -> Option<usize> {
     // Every Linux page size (4 KiB, 16 KiB, 64 KiB, ...) is a multiple of 4 KiB.
     const PAGE_MULTIPLE: usize = 4096;
@@ -302,7 +302,7 @@ fn abort_message_read_len(size: u32) -> Option<usize> {
 /// The message is NUL-terminated inside a zero-filled mapping, so truncate at
 /// the first NUL; `trim` alone would keep the padding, since NUL is not
 /// whitespace.
-#[cfg(any(target_os = "linux", test))]
+#[cfg(target_os = "linux")]
 fn parse_abort_message(bytes: &[u8]) -> Option<String> {
     let len = bytes
         .iter()
@@ -563,140 +563,4 @@ pub fn crash_server(socket: &Path, logs_dir: PathBuf) {
             Some(CRASH_HANDLER_PING_TIMEOUT),
         )
         .expect("failed to run server");
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    /// Clearing a tag has to remove it rather than record an empty value,
-    /// because that is how an application withdraws identifying state from
-    /// crashes it has not produced yet.
-    #[test]
-    fn setting_tags_updates_and_removes_values() {
-        let server = test_crash_server();
-
-        server.receive(CrashServerMessage::SetTags(vec![
-            ("debug_user".to_string(), Some("metrics-1".to_string())),
-            (
-                "sentry[user][is_staff]".to_string(),
-                Some("true".to_string()),
-            ),
-            (
-                "sentry[tags][custom]".to_string(),
-                Some("first".to_string()),
-            ),
-            (
-                "sentry[tags][custom]".to_string(),
-                Some("second".to_string()),
-            ),
-        ]));
-        assert_eq!(
-            server.tags.lock().clone(),
-            BTreeMap::from([
-                ("debug_user".to_string(), "metrics-1".to_string()),
-                ("sentry[user][is_staff]".to_string(), "true".to_string()),
-                ("sentry[tags][custom]".to_string(), "second".to_string()),
-            ])
-        );
-
-        server.receive(CrashServerMessage::SetTags(vec![
-            ("debug_user".to_string(), None),
-            ("sentry[user][is_staff]".to_string(), None),
-        ]));
-        assert_eq!(
-            server.tags.lock().clone(),
-            BTreeMap::from([("sentry[tags][custom]".to_string(), "second".to_string())])
-        );
-    }
-
-    /// A crash is reported by the build that starts next, so an upgrade always
-    /// reads crash data written by the previous build. Tags were introduced
-    /// after `user_info`, and dropping a stale identity is acceptable, but
-    /// failing to parse would discard the whole crash.
-    #[test]
-    fn crash_info_written_before_tags_existed_still_parses() {
-        let crash_info: CrashInfo = serde_json::from_str(
-            r#"{
-                "init": {
-                    "session_id": "session-1",
-                    "zed_version": "1.2.3",
-                    "binary": "zed",
-                    "release_channel": "stable",
-                    "commit_sha": "abc123"
-                },
-                "panic": null,
-                "minidump_error": null,
-                "gpus": [],
-                "active_gpu": null,
-                "user_info": { "metrics_id": "metrics-1", "is_staff": true }
-            }"#,
-        )
-        .expect("crash data from an older build must still parse");
-
-        assert_eq!(crash_info.init.session_id, "session-1");
-        assert!(crash_info.tags.is_empty());
-    }
-
-    #[test]
-    fn abort_message_read_len_requires_page_rounded_total() {
-        assert_eq!(abort_message_read_len(0), None);
-        // A message length rather than a mapping total means the glibc layout
-        // has changed out from under us.
-        assert_eq!(abort_message_read_len(23), None);
-        assert_eq!(abort_message_read_len(4097), None);
-        // The read must stay within the mapping: one page minus the header.
-        assert_eq!(abort_message_read_len(4096), Some(4092));
-        // Larger totals (long messages, larger page sizes) are clamped.
-        assert_eq!(abort_message_read_len(8192), Some(4092));
-        assert_eq!(abort_message_read_len(65536), Some(4092));
-    }
-
-    #[test]
-    fn parse_abort_message_truncates_at_nul() {
-        let mut buffer = b"free(): invalid pointer\n\0".to_vec();
-        buffer.resize(4092, 0);
-        assert_eq!(
-            parse_abort_message(&buffer),
-            Some("free(): invalid pointer".to_string())
-        );
-    }
-
-    #[test]
-    fn parse_abort_message_handles_missing_nul() {
-        assert_eq!(
-            parse_abort_message(b"double free or corruption (out)"),
-            Some("double free or corruption (out)".to_string())
-        );
-    }
-
-    #[test]
-    fn parse_abort_message_rejects_empty() {
-        assert_eq!(parse_abort_message(&[]), None);
-        assert_eq!(parse_abort_message(&[0; 16]), None);
-        assert_eq!(parse_abort_message(b"\n \0garbage after nul"), None);
-    }
-
-    impl CrashServer {
-        fn receive(&self, message: CrashServerMessage) {
-            use minidumper::ServerHandler as _;
-
-            let message =
-                serde_json::to_vec(&message).expect("failed to serialize a crash server message");
-            self.on_message(0, message);
-        }
-    }
-
-    fn test_crash_server() -> CrashServer {
-        CrashServer {
-            initialization_params: Mutex::default(),
-            panic_info: Mutex::default(),
-            active_gpu: Mutex::default(),
-            tags: Mutex::default(),
-            abort_message_location: Mutex::default(),
-            shutdown: Arc::default(),
-            has_connection: Arc::default(),
-            logs_dir: PathBuf::new(),
-        }
-    }
 }

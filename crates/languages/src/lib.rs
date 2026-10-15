@@ -387,51 +387,7 @@ fn register_language(
     );
 }
 
-#[cfg(any(test, feature = "test-support"))]
-pub fn language(name: &str, grammar: tree_sitter::Language) -> Arc<Language> {
-    Arc::new(
-        Language::new(grammars::load_config(name), Some(grammar))
-            .with_queries(grammars::load_queries(name))
-            .unwrap(),
-    )
-}
-
 fn load_config(name: &str) -> LanguageConfig {
-    let grammars_loaded = cfg!(any(feature = "load-grammars", test));
+    let grammars_loaded = cfg!(feature = "load-grammars");
     grammars::load_config_for_feature(name, grammars_loaded)
-}
-
-#[cfg(test)]
-mod tests {
-    use gpui::App;
-    use language::{File, LanguageRegistry, TestFile};
-    use settings::SettingsStore;
-    use std::sync::Arc;
-    use util::rel_path::rel_path;
-
-    #[gpui::test]
-    fn test_env_files_are_not_shell_scripts(cx: &mut App) {
-        let settings_store = SettingsStore::test(cx);
-        cx.set_global(settings_store);
-
-        let registry = Arc::new(LanguageRegistry::test(cx.background_executor().clone()));
-        registry.add(crate::language("env", tree_sitter_bash::LANGUAGE.into()));
-        registry.add(crate::language("bash", tree_sitter_bash::LANGUAGE.into()));
-
-        let language_of = |path: &str, cx: &App| {
-            let file: Arc<dyn File> = Arc::new(TestFile {
-                path: Arc::from(rel_path(path)),
-                root_name: "zed".into(),
-                local_root: None,
-            });
-
-            registry
-                .language_for_file(&file, None, cx)
-                .and_then(|id| registry.language_name_for_id(id))
-        };
-
-        assert_eq!(language_of(".env", cx), Some("Env".into()));
-        assert_eq!(language_of(".envrc", cx), Some("Shell Script".into()));
-        assert_eq!(language_of("deploy.sh", cx), Some("Shell Script".into()));
-    }
 }

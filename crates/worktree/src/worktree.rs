@@ -912,14 +912,6 @@ impl Worktree {
         }
     }
 
-    #[cfg(feature = "test-support")]
-    pub fn has_update_observer(&self) -> bool {
-        match self {
-            Worktree::Local(this) => this.update_observer.is_some(),
-            Worktree::Remote(this) => this.update_observer.is_some(),
-        }
-    }
-
     pub fn load_file(&self, path: &RelPath, cx: &Context<Worktree>) -> Task<Result<LoadedFile>> {
         match self {
             Worktree::Local(this) => this.load_file(path, cx),
@@ -2127,14 +2119,6 @@ impl LocalWorktree {
         rx
     }
 
-    #[cfg(feature = "test-support")]
-    pub fn manually_refresh_entries_for_paths(
-        &self,
-        paths: Vec<Arc<RelPath>>,
-    ) -> barrier::Receiver {
-        self.refresh_entries_for_paths(paths)
-    }
-
     pub fn add_path_prefix_to_scan(&self, path_prefix: Arc<RelPath>) -> barrier::Receiver {
         let (tx, rx) = barrier::channel();
         self.path_prefixes_to_scan_tx
@@ -2249,19 +2233,6 @@ impl LocalWorktree {
             });
         self.snapshot.update_abs_path(new_path, root_name);
         self.restart_background_scanners(cx);
-    }
-    #[cfg(feature = "test-support")]
-    pub fn set_defer_watch(&mut self, defer: bool, cx: &mut Context<Worktree>) {
-        self.force_defer_watch = defer;
-        self.restart_background_scanners(cx);
-    }
-
-    #[cfg(feature = "test-support")]
-    pub fn repositories(&self) -> Vec<Arc<Path>> {
-        self.git_repositories
-            .values()
-            .map(|entry| entry.work_directory_abs_path.clone())
-            .collect::<Vec<_>>()
     }
 }
 
@@ -3158,118 +3129,6 @@ impl LocalSnapshot {
 
         ignore_stack
     }
-
-    #[cfg(feature = "test-support")]
-    pub fn expanded_entries(&self, file_scan_depth: Option<u32>) -> impl Iterator<Item = &Entry> {
-        let file_scan_depth = if self.root_repo_common_dir.is_some() {
-            None
-        } else {
-            file_scan_depth
-        };
-        self.entries_by_path.cursor::<()>(()).filter(move |entry| {
-            entry.kind == EntryKind::Dir
-                && (entry.is_external
-                    || entry.is_ignored
-                    || (!entry.is_always_included
-                        && is_beyond_scan_depth(file_scan_depth, &entry.path)
-                        && !self
-                            .git_repositories
-                            .values()
-                            .any(|repo| repo.work_directory.directory_contains(&entry.path))))
-        })
-    }
-
-    #[cfg(feature = "test-support")]
-    pub fn check_invariants(&self, git_state: bool) {
-        use pretty_assertions::assert_eq;
-
-        assert_eq!(
-            self.entries_by_path
-                .cursor::<()>(())
-                .map(|e| (&e.path, e.id))
-                .collect::<Vec<_>>(),
-            self.entries_by_id
-                .cursor::<()>(())
-                .map(|e| (&e.path, e.id))
-                .collect::<collections::BTreeSet<_>>()
-                .into_iter()
-                .collect::<Vec<_>>(),
-            "entries_by_path and entries_by_id are inconsistent"
-        );
-
-        let mut files = self.files(true, 0);
-        let mut visible_files = self.files(false, 0);
-        for entry in self.entries_by_path.cursor::<()>(()) {
-            if entry.is_file() {
-                assert_eq!(files.next().unwrap().inode, entry.inode);
-                if !entry.is_ignored || entry.is_always_included {
-                    assert_eq!(visible_files.next().unwrap().inode, entry.inode);
-                }
-            }
-        }
-
-        assert!(files.next().is_none());
-        assert!(visible_files.next().is_none());
-
-        let mut bfs_paths = Vec::new();
-        let mut stack = self
-            .root_entry()
-            .map(|e| e.path.as_ref())
-            .into_iter()
-            .collect::<Vec<_>>();
-        while let Some(path) = stack.pop() {
-            bfs_paths.push(path);
-            let ix = stack.len();
-            for child_entry in self.child_entries(path) {
-                stack.insert(ix, &child_entry.path);
-            }
-        }
-
-        let dfs_paths_via_iter = self
-            .entries_by_path
-            .cursor::<()>(())
-            .map(|e| e.path.as_ref())
-            .collect::<Vec<_>>();
-        assert_eq!(bfs_paths, dfs_paths_via_iter);
-
-        let dfs_paths_via_traversal = self
-            .entries(true, 0)
-            .map(|e| e.path.as_ref())
-            .collect::<Vec<_>>();
-
-        assert_eq!(dfs_paths_via_traversal, dfs_paths_via_iter);
-
-        if git_state {
-            for ignore_parent_abs_path in self.ignores_by_parent_abs_path.keys() {
-                let ignore_parent_path = &RelPath::new(
-                    ignore_parent_abs_path
-                        .strip_prefix(self.abs_path.as_path())
-                        .unwrap(),
-                    PathStyle::local(),
-                )
-                .unwrap();
-                assert!(self.entry_for_path(ignore_parent_path).is_some());
-                assert!(
-                    self.entry_for_path(
-                        &ignore_parent_path.join(RelPath::from_unix_str(GITIGNORE).unwrap())
-                    )
-                    .is_some()
-                );
-            }
-        }
-    }
-
-    #[cfg(feature = "test-support")]
-    pub fn entries_without_ids(&self, include_ignored: bool) -> Vec<(&RelPath, u64, bool)> {
-        let mut paths = Vec::new();
-        for entry in self.entries_by_path.cursor::<()>(()) {
-            if include_ignored || !entry.is_ignored {
-                paths.push((entry.path.as_ref(), entry.inode, entry.is_ignored));
-            }
-        }
-        paths.sort_by(|a, b| a.0.cmp(b.0));
-        paths
-    }
 }
 
 impl BackgroundScannerState {
@@ -3353,9 +3212,6 @@ impl BackgroundScannerState {
                 .await;
         }
 
-        #[cfg(feature = "test-support")]
-        self.snapshot.check_invariants(false);
-
         entry
     }
 
@@ -3420,9 +3276,6 @@ impl BackgroundScannerState {
         if let Err(ix) = self.changed_paths.binary_search(&parent_path) {
             self.changed_paths.insert(ix, parent_path.clone());
         }
-
-        #[cfg(feature = "test-support")]
-        self.snapshot.check_invariants(false);
     }
 
     fn remove_path_from_snapshot_and_unwatch(
@@ -3547,9 +3400,6 @@ impl BackgroundScannerState {
                 .git_repositories
                 .retain(|id, _| removed_ids.binary_search(id).is_err());
         }
-
-        #[cfg(feature = "test-support")]
-        self.snapshot.check_invariants(false);
 
         removed_dir_abs_paths
     }
@@ -6280,11 +6130,6 @@ impl BackgroundScanner {
             return futures::future::pending().await;
         }
 
-        #[cfg(feature = "test-support")]
-        if self.fs.is_fake() {
-            return self.executor.simulate_random_delay().await;
-        }
-
         self.executor.timer(FS_WATCH_LATENCY).await
     }
 
@@ -6584,230 +6429,9 @@ struct UpdateIgnoreStatusJob {
     scan_queue: Sender<ScanJob>,
 }
 
-pub trait WorktreeModelHandle {
-    #[cfg(feature = "test-support")]
-    fn flush_fs_events<'a>(
-        &self,
-        cx: &'a mut gpui::TestAppContext,
-    ) -> futures::future::LocalBoxFuture<'a, ()>;
+pub trait WorktreeModelHandle {}
 
-    #[cfg(feature = "test-support")]
-    fn flush_fs_events_in_root_git_repository<'a>(
-        &self,
-        cx: &'a mut gpui::TestAppContext,
-    ) -> futures::future::LocalBoxFuture<'a, ()>;
-}
-
-impl WorktreeModelHandle for Entity<Worktree> {
-    // When the worktree's FS event stream sometimes delivers "redundant" events for FS changes that
-    // occurred before the worktree was constructed. These events can cause the worktree to perform
-    // extra directory scans, and emit extra scan-state notifications.
-    //
-    // This function mutates the worktree's directory and waits for those mutations to be picked up,
-    // to ensure that all redundant FS events have already been processed.
-    #[cfg(feature = "test-support")]
-    fn flush_fs_events<'a>(
-        &self,
-        cx: &'a mut gpui::TestAppContext,
-    ) -> futures::future::LocalBoxFuture<'a, ()> {
-        let file_name = "fs-event-sentinel";
-
-        let tree = self.clone();
-        let (fs, root_path) = self.read_with(cx, |tree, _| {
-            let tree = tree.as_local().unwrap();
-            (tree.fs.clone(), tree.abs_path.clone())
-        });
-
-        async move {
-            // Subscribe to events BEFORE creating the file to avoid race condition
-            // where events fire before subscription is set up
-            let mut events = cx.events(&tree);
-
-            fs.create_file(&root_path.join(file_name), Default::default())
-                .await
-                .unwrap();
-
-            // Check if condition is already met before waiting for events
-            let file_exists = || {
-                tree.read_with(cx, |tree, _| {
-                    tree.entry_for_path(RelPath::from_unix_str(file_name).unwrap())
-                        .is_some()
-                })
-            };
-
-            // Use select to avoid blocking indefinitely if events are delayed
-            let mut ticks = 0;
-            while !file_exists() {
-                futures::select_biased! {
-                    _ = events.next() => {}
-                    _ = futures::FutureExt::fuse(cx.background_executor.timer(std::time::Duration::from_millis(10))) => {
-                        ticks += 1;
-                        if ticks % SENTINEL_RETRY_TICKS == 0 {
-                            retouch_sentinel(fs.as_ref(), &root_path.join(file_name)).await;
-                        }
-                    }
-                }
-            }
-
-            fs.remove_file(&root_path.join(file_name), Default::default())
-                .await
-                .unwrap();
-
-            // Check if condition is already met before waiting for events
-            let file_gone = || {
-                tree.read_with(cx, |tree, _| {
-                    tree.entry_for_path(RelPath::from_unix_str(file_name).unwrap())
-                        .is_none()
-                })
-            };
-
-            // Use select to avoid blocking indefinitely if events are delayed
-            let mut ticks = 0;
-            while !file_gone() {
-                futures::select_biased! {
-                    _ = events.next() => {}
-                    _ = futures::FutureExt::fuse(cx.background_executor.timer(std::time::Duration::from_millis(10))) => {
-                        ticks += 1;
-                        if ticks % SENTINEL_RETRY_TICKS == 0 {
-                            retouch_and_remove_sentinel(fs.as_ref(), &root_path.join(file_name)).await;
-                        }
-                    }
-                }
-            }
-
-            cx.update(|cx| tree.read(cx).as_local().unwrap().scan_complete())
-                .await;
-        }
-        .boxed_local()
-    }
-
-    // This function is similar to flush_fs_events, except that it waits for events to be flushed in
-    // the .git folder of the root repository.
-    // The reason for its existence is that a repository's .git folder might live *outside* of the
-    // worktree and thus its FS events might go through a different path.
-    // In order to flush those, we need to create artificial events in the .git folder and wait
-    // for the repository to be reloaded.
-    #[cfg(feature = "test-support")]
-    fn flush_fs_events_in_root_git_repository<'a>(
-        &self,
-        cx: &'a mut gpui::TestAppContext,
-    ) -> futures::future::LocalBoxFuture<'a, ()> {
-        let file_name = "fs-event-sentinel";
-
-        let tree = self.clone();
-        let (fs, root_path, mut git_dir_scan_id) = self.read_with(cx, |tree, _| {
-            let tree = tree.as_local().unwrap();
-            let local_repo_entry = tree
-                .git_repositories
-                .values()
-                .min_by_key(|local_repo_entry| local_repo_entry.work_directory.clone())
-                .unwrap();
-            (
-                tree.fs.clone(),
-                local_repo_entry.common_dir_abs_path.clone(),
-                local_repo_entry.git_dir_scan_id,
-            )
-        });
-
-        let scan_id_increased = |tree: &mut Worktree, git_dir_scan_id: &mut usize| {
-            let tree = tree.as_local().unwrap();
-            // let repository = tree.repositories.first().unwrap();
-            let local_repo_entry = tree
-                .git_repositories
-                .values()
-                .min_by_key(|local_repo_entry| local_repo_entry.work_directory.clone())
-                .unwrap();
-
-            if local_repo_entry.git_dir_scan_id > *git_dir_scan_id {
-                *git_dir_scan_id = local_repo_entry.git_dir_scan_id;
-                true
-            } else {
-                false
-            }
-        };
-
-        async move {
-            // Subscribe to events BEFORE creating the file to avoid race condition
-            // where events fire before subscription is set up
-            let mut events = cx.events(&tree);
-
-            fs.create_file(&root_path.join(file_name), Default::default())
-                .await
-                .unwrap();
-
-            // Use select to avoid blocking indefinitely if events are delayed
-            let mut ticks = 0;
-            while !tree.update(cx, |tree, _| scan_id_increased(tree, &mut git_dir_scan_id)) {
-                futures::select_biased! {
-                    _ = events.next() => {}
-                    _ = futures::FutureExt::fuse(cx.background_executor.timer(std::time::Duration::from_millis(10))) => {
-                        ticks += 1;
-                        if ticks % SENTINEL_RETRY_TICKS == 0 {
-                            retouch_sentinel(fs.as_ref(), &root_path.join(file_name)).await;
-                        }
-                    }
-                }
-            }
-
-            fs.remove_file(&root_path.join(file_name), Default::default())
-                .await
-                .unwrap();
-
-            // Use select to avoid blocking indefinitely if events are delayed
-            let mut ticks = 0;
-            while !tree.update(cx, |tree, _| scan_id_increased(tree, &mut git_dir_scan_id)) {
-                futures::select_biased! {
-                    _ = events.next() => {}
-                    _ = futures::FutureExt::fuse(cx.background_executor.timer(std::time::Duration::from_millis(10))) => {
-                        ticks += 1;
-                        if ticks % SENTINEL_RETRY_TICKS == 0 {
-                            retouch_and_remove_sentinel(fs.as_ref(), &root_path.join(file_name)).await;
-                        }
-                    }
-                }
-            }
-
-            cx.update(|cx| tree.read(cx).as_local().unwrap().scan_complete())
-                .await;
-        }
-        .boxed_local()
-    }
-}
-
-#[cfg(feature = "test-support")]
-const SENTINEL_RETRY_TICKS: usize = 10;
-
-// On macOS an FS event can rarely be dropped while notify's shared FSEventStream
-// is being swapped out by a concurrent watch/unwatch: events already queued for
-// the old stream's callback are discarded when it is stopped. A dropped sentinel
-// event would park the test forever, so touch the sentinel again to emit a fresh
-// event on the current stream.
-#[cfg(feature = "test-support")]
-async fn retouch_sentinel(fs: &dyn Fs, abs_path: &std::path::Path) {
-    fs.create_file(
-        abs_path,
-        fs::CreateOptions {
-            overwrite: true,
-            ignore_if_exists: false,
-        },
-    )
-    .await
-    .unwrap();
-}
-
-#[cfg(feature = "test-support")]
-async fn retouch_and_remove_sentinel(fs: &dyn Fs, abs_path: &std::path::Path) {
-    retouch_sentinel(fs, abs_path).await;
-    fs.remove_file(
-        abs_path,
-        RemoveOptions {
-            recursive: false,
-            ignore_if_not_exists: true,
-        },
-    )
-    .await
-    .unwrap();
-}
+impl WorktreeModelHandle for Entity<Worktree> {}
 
 #[derive(Clone, Debug)]
 struct TraversalProgress<'a> {
@@ -7162,16 +6786,6 @@ impl ProjectEntryId {
     }
 }
 
-#[cfg(feature = "test-support")]
-impl CreatedEntry {
-    pub fn into_included(self) -> Option<Entry> {
-        match self {
-            CreatedEntry::Included(entry) => Some(entry),
-            CreatedEntry::Excluded { .. } => None,
-        }
-    }
-}
-
 fn parse_gitfile(content: &str) -> anyhow::Result<&Path> {
     let path = content
         .strip_prefix("gitdir:")
@@ -7421,297 +7035,4 @@ fn push_normalized(rope: &mut Rope, text: &str, scratch: &mut String) {
     }
     scratch.push_str(&text[start..]);
     rope.push(scratch);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{
-        BackgroundScanner, BackgroundScannerPhase, BackgroundScannerState, IgnoreStack,
-        NullWatcher, RemovedEntries, STREAM_BLOCK_BYTES, ScanRequest, UpdateIgnoreStatusJob,
-        Worktree, stream_utf8_into_rope,
-    };
-    use collections::{HashMap, HashSet};
-    use fs::{FakeFs, Fs, RemoveOptions, RenameOptions};
-    use futures::{FutureExt as _, channel::mpsc};
-    use gpui::TestAppContext;
-    use serde_json::json;
-    use settings::{SettingsStore, WorktreeId};
-    use smallvec::SmallVec;
-    use std::{path::Path, sync::Arc};
-    use text::LineEnding;
-    use util::{path, rel_path::rel_path};
-
-    /// Streams `bytes` the way `decode_file_text_to_rope` would, returning the
-    /// decoded text and detected line ending, or `None` if the fast path bailed.
-    async fn stream(bytes: &[u8]) -> Option<(String, LineEnding)> {
-        let mut reader = std::io::Cursor::new(bytes.to_vec());
-        stream_utf8_into_rope(&mut reader, Vec::new(), false, Path::new("test"), true)
-            .await
-            .unwrap()
-            .map(|(rope, line_ending)| (rope.to_string(), line_ending))
-    }
-
-    #[test]
-    fn test_stream_utf8_yields_between_blocks() {
-        let mut reader = std::io::Cursor::new(vec![b'a'; STREAM_BLOCK_BYTES * 2]);
-
-        assert!(
-            stream_utf8_into_rope(&mut reader, Vec::new(), false, Path::new("test"), true)
-                .now_or_never()
-                .is_none()
-        );
-        assert_eq!(reader.position(), STREAM_BLOCK_BYTES as u64);
-    }
-
-    #[gpui::test]
-    async fn test_stream_utf8_normalizes_line_endings() {
-        let crlf = "one\r\ntwo\r\nthree\r\n".repeat(40);
-        let (text, line_ending) = stream(crlf.as_bytes()).await.unwrap();
-        assert_eq!(text, crlf.replace("\r\n", "\n"));
-        assert_eq!(line_ending, LineEnding::Windows);
-
-        let cr = "one\rtwo\rthree\r".repeat(40);
-        assert_eq!(
-            stream(cr.as_bytes()).await.unwrap().0,
-            cr.replace('\r', "\n")
-        );
-    }
-
-    #[gpui::test]
-    async fn test_stream_utf8_block_boundaries() {
-        // A carriage return landing on the last byte of a block, with and
-        // without its newline arriving in the next one.
-        for (suffix, expected) in [("\r\ntail\n", "\ntail\n"), ("\rtail", "\ntail")] {
-            let filler = "a".repeat(STREAM_BLOCK_BYTES - 1);
-            let source = format!("{filler}{suffix}");
-            assert_eq!(
-                stream(source.as_bytes()).await.unwrap().0,
-                format!("{filler}{expected}"),
-                "suffix = {suffix:?}"
-            );
-        }
-
-        // Multi-byte characters straddling the boundary at every split point.
-        for ch in ['\u{20ac}', '\u{1f600}'] {
-            for split in 1..=ch.len_utf8() {
-                let filler = "a".repeat(STREAM_BLOCK_BYTES - split);
-                let source = format!("{filler}{ch}tail");
-                assert_eq!(
-                    stream(source.as_bytes()).await.unwrap().0,
-                    source,
-                    "ch = {ch:?}, split = {split}"
-                );
-            }
-        }
-    }
-
-    #[gpui::test]
-    async fn test_ignore_update_preserves_refreshed_entries(cx: &mut TestAppContext) {
-        cx.update(|cx| {
-            let settings_store = SettingsStore::test(cx);
-            cx.set_global(settings_store);
-        });
-        for initially_ignored in [false, true] {
-            let fs = FakeFs::new(cx.background_executor.clone());
-            fs.insert_tree(
-                path!("/root"),
-                json!({
-                    ".gitignore": if initially_ignored { "*.txt\n" } else { "" },
-                    "gone.txt": "gone",
-                    "renamed.txt": "renamed",
-                    "modified.txt": "old",
-
-                    "directory": { "child.txt": "child" },
-                    "removed": { "child.txt": "child" },
-                    "replaced": {},
-                }),
-            )
-            .await;
-            let tree = Worktree::local(
-                Path::new(path!("/root")),
-                true,
-                fs.clone(),
-                Arc::default(),
-                true,
-                WorktreeId::from_proto(0),
-                &mut cx.to_async(),
-            )
-            .await
-            .unwrap();
-            tree.read_with(cx, |tree, _| tree.as_local().unwrap().scan_complete())
-                .await;
-            let (status_updates_tx, _status_updates_rx) = mpsc::unbounded();
-            let scanner = tree.update(cx, |tree, cx| {
-                let tree = tree.as_local_mut().unwrap();
-                tree._background_scanner_tasks.clear();
-                BackgroundScanner {
-                    state: async_lock::Mutex::new(BackgroundScannerState {
-                        snapshot: tree.snapshot.clone(),
-                        prev_snapshot: tree.snapshot.snapshot.clone(),
-                        symlink_paths_by_target: HashMap::default(),
-                        scanned_dirs: HashSet::default(),
-                        watched_dir_abs_paths_by_entry_id: HashMap::default(),
-                        path_prefixes_to_scan: HashSet::default(),
-                        paths_to_scan: HashSet::default(),
-                        removed_entries: RemovedEntries::default(),
-                        changed_paths: Vec::new(),
-                        scanning_enabled: true,
-                    }),
-                    fs: fs.clone(),
-                    fs_case_sensitive: tree.fs_case_sensitive,
-                    status_updates_tx,
-                    executor: cx.background_executor().clone(),
-                    scan_requests_rx: async_channel::unbounded().1,
-                    path_prefixes_to_scan_rx: async_channel::unbounded().1,
-                    next_entry_id: tree.next_entry_id.clone(),
-                    phase: BackgroundScannerPhase::Events,
-                    watcher: Arc::new(NullWatcher),
-                    settings: tree.settings.clone(),
-                    share_private_files: tree.share_private_files,
-                    track_git_repositories: true,
-                    is_single_file: false,
-                    defer_watch: false,
-                }
-            });
-            fs.insert_file(
-                path!("/root/.gitignore"),
-                if initially_ignored {
-                    Vec::new()
-                } else {
-                    b"*.txt\n".to_vec()
-                },
-            )
-            .await;
-            scanner
-                .process_scan_request(
-                    ScanRequest {
-                        relative_paths: vec![rel_path(".gitignore").into_arc()],
-                        done: SmallVec::new(),
-                    },
-                    true,
-                )
-                .await;
-            let old_snapshot = scanner.state.lock().await.snapshot.clone();
-            fs.remove_file(Path::new(path!("/root/gone.txt")), RemoveOptions::default())
-                .await
-                .unwrap();
-            fs.rename(
-                Path::new(path!("/root/renamed.txt")),
-                Path::new(path!("/root/moved.txt")),
-                RenameOptions::default(),
-            )
-            .await
-            .unwrap();
-            fs.insert_file(path!("/root/modified.txt"), b"new content".to_vec())
-                .await;
-            fs.remove_dir(
-                Path::new(path!("/root/removed")),
-                RemoveOptions {
-                    recursive: true,
-                    ..RemoveOptions::default()
-                },
-            )
-            .await
-            .unwrap();
-            fs.remove_dir(Path::new(path!("/root/replaced")), RemoveOptions::default())
-                .await
-                .unwrap();
-            fs.insert_file(path!("/root/replaced"), b"file".to_vec())
-                .await;
-            scanner
-                .process_scan_request(
-                    ScanRequest {
-                        relative_paths: [
-                            "gone.txt",
-                            "renamed.txt",
-                            "moved.txt",
-                            "modified.txt",
-                            "directory",
-                            "removed",
-                            "replaced",
-                        ]
-                        .map(|path| rel_path(path).into_arc())
-                        .to_vec(),
-                        done: SmallVec::new(),
-                    },
-                    true,
-                )
-                .await;
-            let refreshed_snapshot = scanner.state.lock().await.snapshot.clone();
-            let expected_entries = refreshed_snapshot
-                .entries(true, 0)
-                .cloned()
-                .map(|mut entry| {
-                    if entry.path.as_ref() == rel_path("directory/child.txt") {
-                        entry.is_ignored = !initially_ignored;
-                    }
-                    entry
-                })
-                .collect::<Vec<_>>();
-            assert_eq!(
-                refreshed_snapshot.paths().collect::<Vec<_>>(),
-                [
-                    ".gitignore",
-                    "directory",
-                    "directory/child.txt",
-                    "modified.txt",
-                    "moved.txt",
-                    "replaced",
-                ]
-                .map(rel_path),
-            );
-            assert_eq!(
-                refreshed_snapshot
-                    .entry_for_path(rel_path("modified.txt"))
-                    .unwrap()
-                    .size,
-                11
-            );
-            let (ignore_queue, ignore_jobs) = async_channel::unbounded();
-            let (scan_queue, _scan_jobs) = async_channel::unbounded();
-            scanner
-                .update_ignore_status(
-                    UpdateIgnoreStatusJob {
-                        abs_path: Arc::from(Path::new(path!("/root"))),
-                        ignore_stack: IgnoreStack::none(),
-                        ignore_queue,
-                        scan_queue,
-                    },
-                    &old_snapshot,
-                )
-                .await;
-            let child_job = ignore_jobs.try_recv().unwrap();
-            assert_eq!(
-                child_job.abs_path.as_ref(),
-                Path::new(path!("/root/directory"))
-            );
-            scanner.update_ignore_status(child_job, &old_snapshot).await;
-            let state = scanner.state.lock().await;
-            assert_eq!(
-                state.snapshot.entries(true, 0).cloned().collect::<Vec<_>>(),
-                expected_entries
-            );
-            assert!(ignore_jobs.is_empty());
-
-            state.snapshot.check_invariants(false);
-            for entry in &expected_entries {
-                let path_entry = state.snapshot.entries_by_id.get(&entry.id, ()).unwrap();
-
-                assert_eq!(path_entry.is_ignored, entry.is_ignored);
-            }
-            assert_eq!(
-                state.changed_paths,
-                vec![rel_path("directory/child.txt").into_arc()]
-            );
-        }
-    }
-
-    #[gpui::test]
-    async fn test_stream_utf8_falls_back_on_non_utf8() {
-        // Each of these must bail so the caller re-reads and decodes the slow
-        // way, rather than silently mangling the file.
-        assert_eq!(stream(b"hello \xff\xfeA").await, None, "invalid utf-8");
-        assert_eq!(stream(b"hello \xe2\x82").await, None, "truncated at eof");
-        assert_eq!(stream(b"plain \x1b$B text").await, None, "iso-2022 escape");
-    }
 }

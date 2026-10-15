@@ -22,11 +22,3 @@ path.workspace = true
 
 [package.metadata.cargo-shear]
 ignored = ["parking_lot"]
-
-[dev-dependencies]
-criterion.workspace = true
-gpui = { workspace = true, features = ["test-support"] }
-
-[[bench]]
-name = "match_benchmark"
-harness = false

@@ -495,19 +495,6 @@ impl LspStore {
         task
     }
 
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn forget_code_lens_task(&mut self, buffer_id: text::BufferId) -> Option<CodeLensTask> {
-        Some(
-            self.lsp_data
-                .get_mut(&buffer_id)?
-                .code_lens
-                .take()?
-                .update
-                .take()?
-                .task,
-        )
-    }
-
     pub(super) async fn handle_refresh_code_lens(
         lsp_store: Entity<Self>,
         envelope: TypedEnvelope<proto::RefreshCodeLens>,

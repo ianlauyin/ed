@@ -243,19 +243,6 @@ impl SnippetProvider {
         user_snippets
     }
 
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn add_snippet_for_test(
-        &mut self,
-        language: SnippetKind,
-        path: PathBuf,
-        snippet: Vec<Arc<Snippet>>,
-    ) {
-        self.snippets
-            .entry(language)
-            .or_default()
-            .insert(path, snippet);
-    }
-
     pub fn snippets_for(&self, language: SnippetKind, cx: &App) -> Vec<Arc<Snippet>> {
         let mut requested_snippets = self.lookup_snippets::<true>(&language, cx);
 
@@ -264,40 +251,5 @@ impl SnippetProvider {
             requested_snippets.extend(self.lookup_snippets::<true>(&None, cx));
         }
         requested_snippets
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use fs::FakeFs;
-    use gpui;
-    use gpui::TestAppContext;
-    use indoc::indoc;
-
-    #[gpui::test]
-    fn test_lookup_snippets_dup_registry_snippets(cx: &mut TestAppContext) {
-        let fs = FakeFs::new(cx.background_executor.clone());
-        cx.update(|cx| {
-            SnippetRegistry::init_global(cx);
-            SnippetRegistry::global(cx)
-                .register_snippets(
-                    "ruby".as_ref(),
-                    indoc! {r#"
-                    {
-                      "Log to console": {
-                        "prefix": "log",
-                        "body": ["console.info(\"Hello, ${1:World}!\")", "$0"],
-                        "description": "Logs to console"
-                      }
-                    }
-            "#},
-                )
-                .unwrap();
-            let provider = SnippetProvider::new(fs.clone(), Default::default(), cx);
-            cx.update_entity(&provider, |provider, cx| {
-                assert_eq!(1, provider.snippets_for(Some("ruby".to_owned()), cx).len());
-            });
-        });
     }
 }

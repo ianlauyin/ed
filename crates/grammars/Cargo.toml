@@ -58,4 +58,3 @@ load-grammars = [
     "tree-sitter-typescript",
     "tree-sitter-yaml",
 ]
-test-support = ["load-grammars"]

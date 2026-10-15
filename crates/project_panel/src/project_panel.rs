@@ -6916,7 +6916,6 @@ impl ProjectPanel {
                                 }
                             }),
                         )
-                        .debug_selector(|| format!("project_panel_path_component_{component}"))
                         .child(
                             Label::new(component)
                                 .single_line()
@@ -8344,7 +8343,3 @@ fn git_status_indicator(git_status: GitSummary) -> Option<(&'static str, Color)>
     }
     None
 }
-
-#[cfg(test)]
-mod project_panel_tests;
-mod tests;

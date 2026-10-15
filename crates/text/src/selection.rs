@@ -137,17 +137,6 @@ impl<T: std::ops::Sub + Copy> Selection<T> {
 }
 
 impl<T: Copy + Eq> Selection<T> {
-    #[cfg(feature = "test-support")]
-    pub fn from_offset(offset: T) -> Self {
-        Selection {
-            id: 0,
-            start: offset,
-            end: offset,
-            goal: SelectionGoal::None,
-            reversed: false,
-        }
-    }
-
     pub fn equals(&self, offset_range: &Range<T>) -> bool {
         self.start == offset_range.start && self.end == offset_range.end
     }

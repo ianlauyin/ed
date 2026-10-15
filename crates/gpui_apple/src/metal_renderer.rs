@@ -6,8 +6,6 @@ use gpui::{
     AtlasTextureId, Background, Bounds, ContentMask, DevicePixels, PaintSurface, Path, Point,
     PrimitiveBatch, ScaledPixels, Scene, Size, point, size,
 };
-#[cfg(any(test, feature = "bench-support", feature = "test-support"))]
-use image::RgbaImage;
 use objc2::runtime::AnyObject;
 
 use foreign_types::{ForeignType, ForeignTypeRef};
@@ -132,10 +130,6 @@ pub struct MetalRenderer {
     path_intermediate_texture: Option<metal::Texture>,
     path_intermediate_msaa_texture: Option<metal::Texture>,
     path_sample_count: u32,
-    /// Offscreen render target reused across `render_scene` calls when
-    /// rendering headlessly without reading pixels back.
-    #[cfg(any(test, feature = "bench-support", feature = "test-support"))]
-    headless_render_target: Option<metal::Texture>,
 }
 
 #[repr(C)]
@@ -181,11 +175,6 @@ impl MetalRenderer {
         // https://developer.apple.com/documentation/metal/managing-your-game-window-for-metal-in-macos
         layer.set_opaque(!transparent);
         layer.set_maximum_drawable_count(3);
-        // Allow texture reading for visual tests and UI automation screenshots
-        // (captures without ScreenCaptureKit). Only debug builds pay the
-        // presentation cost, even when `test-support` is compiled in.
-        #[cfg(all(feature = "test-support", debug_assertions))]
-        layer.set_framebuffer_only(false);
         // metal-rs doesn't bind these setters, so view the same object through
         // objc2's typed CAMetalLayer binding.
         let objc2_layer: &objc2_quartz_core::CAMetalLayer = unsafe { &*layer.as_ptr().cast() };
@@ -198,16 +187,6 @@ impl MetalRenderer {
             objc2_quartz_core::CAAutoresizingMask::LayerWidthSizable
                 | objc2_quartz_core::CAAutoresizingMask::LayerHeightSizable,
         );
-    }
-
-    /// Creates a new headless MetalRenderer for offscreen rendering without a window.
-    ///
-    /// This renderer can render scenes to images without requiring a CAMetalLayer,
-    /// window, or AppKit. Use `render_scene_to_image()` to render scenes.
-    #[cfg(any(test, feature = "bench-support", feature = "test-support"))]
-    pub fn new_headless(instance_buffer_pool: Arc<Mutex<InstanceBufferPool>>) -> Self {
-        let device = Self::create_device();
-        Self::new_internal(device, None, true, instance_buffer_pool)
     }
 
     fn create_device() -> metal::Device {
@@ -400,8 +379,6 @@ impl MetalRenderer {
             path_intermediate_texture: None,
             path_intermediate_msaa_texture: None,
             path_sample_count: PATH_SAMPLE_COUNT,
-            #[cfg(any(test, feature = "bench-support", feature = "test-support"))]
-            headless_render_target: None,
         }
     }
 
@@ -570,137 +547,6 @@ impl MetalRenderer {
         }
 
         Ok(command_buffer)
-    }
-
-    /// Renders the scene to a texture and returns the pixel data as an RGBA image.
-    /// This does not present the frame to screen - useful for visual testing
-    /// where we want to capture what would be rendered without displaying it.
-    ///
-    /// Note: This requires a layer-backed renderer. For headless rendering,
-    /// use `render_scene_to_image()` instead.
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn render_to_image(&mut self, scene: &Scene) -> Result<RgbaImage> {
-        let layer = self
-            .layer
-            .clone()
-            .ok_or_else(|| anyhow::anyhow!("render_to_image requires a layer-backed renderer"))?;
-        let viewport_size = layer.drawable_size();
-        let viewport_size: Size<DevicePixels> = size(
-            (viewport_size.width.ceil() as i32).into(),
-            (viewport_size.height.ceil() as i32).into(),
-        );
-        let drawable = layer
-            .next_drawable()
-            .ok_or_else(|| anyhow::anyhow!("Failed to get drawable for render_to_image"))?;
-
-        let command_buffer = self.render_frame(scene, drawable.texture(), viewport_size)?;
-
-        // Commit and wait for completion without presenting
-        command_buffer.commit();
-        command_buffer.wait_until_completed();
-
-        read_texture_to_image(drawable.texture())
-    }
-
-    /// Renders a scene to an image without requiring a window or CAMetalLayer.
-    ///
-    /// This is the primary method for headless rendering. It creates an offscreen
-    /// texture, renders the scene to it, and returns the pixel data as an RGBA image.
-    #[cfg(any(test, feature = "bench-support", feature = "test-support"))]
-    pub fn render_scene_to_image(
-        &mut self,
-        scene: &Scene,
-        size: Size<DevicePixels>,
-    ) -> Result<RgbaImage> {
-        if size.width.0 <= 0 || size.height.0 <= 0 {
-            anyhow::bail!("Invalid size for render_scene_to_image: {:?}", size);
-        }
-
-        // Headless callers do not have a Cocoa event-loop pool to release
-        // autoreleased command buffers and render-pass descriptors.
-        objc2::rc::autoreleasepool(|_| {
-            // Update path intermediate textures for this size
-            self.update_path_intermediate_textures(size);
-
-            // Create an offscreen texture as render target
-            let texture_descriptor = metal::TextureDescriptor::new();
-            texture_descriptor.set_width(size.width.0 as u64);
-            texture_descriptor.set_height(size.height.0 as u64);
-            texture_descriptor.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
-            texture_descriptor.set_usage(
-                metal::MTLTextureUsage::RenderTarget | metal::MTLTextureUsage::ShaderRead,
-            );
-            // Like the atlas, only Apple GPUs can create shared textures on macOS;
-            // Intel Macs cannot, even with unified memory. iOS has no managed storage.
-            let uses_shared_storage = false || self.is_apple_gpu;
-            texture_descriptor.set_storage_mode(if uses_shared_storage {
-                metal::MTLStorageMode::Shared
-            } else {
-                metal::MTLStorageMode::Managed
-            });
-            let target_texture = self.device.new_texture(&texture_descriptor);
-
-            let command_buffer = self.render_frame(scene, &target_texture, size)?;
-
-            // Managed textures require an explicit blit synchronize before the CPU
-            // can read back the rendered data. Without this, get_bytes returns
-            // stale zeros.
-            if !uses_shared_storage {
-                let blit = command_buffer.new_blit_command_encoder();
-                blit.synchronize_resource(&target_texture);
-                blit.end_encoding();
-            }
-
-            // Commit and wait for completion
-            command_buffer.commit();
-            command_buffer.wait_until_completed();
-
-            read_texture_to_image(&target_texture)
-        })
-    }
-
-    /// Renders a scene to a reused offscreen texture without reading pixels
-    /// back or blocking on GPU completion.
-    ///
-    /// This mirrors the CPU cost of presenting a frame to a window (scene
-    /// encoding, instance buffer writes, command submission) and is used by
-    /// headless benchmark rendering, where the produced pixels are never
-    /// inspected.
-    #[cfg(any(test, feature = "bench-support", feature = "test-support"))]
-    pub fn render_scene(&mut self, scene: &Scene, size: Size<DevicePixels>) -> Result<()> {
-        if size.width.0 <= 0 || size.height.0 <= 0 {
-            anyhow::bail!("Invalid size for render_scene: {:?}", size);
-        }
-
-        objc2::rc::autoreleasepool(|_| {
-            self.update_path_intermediate_textures(size);
-
-            let needs_new_target = self.headless_render_target.as_ref().is_none_or(|texture| {
-                texture.width() != size.width.0 as u64 || texture.height() != size.height.0 as u64
-            });
-            if needs_new_target {
-                let texture_descriptor = metal::TextureDescriptor::new();
-                texture_descriptor.set_width(size.width.0 as u64);
-                texture_descriptor.set_height(size.height.0 as u64);
-                texture_descriptor.set_pixel_format(MTLPixelFormat::BGRA8Unorm);
-                texture_descriptor.set_usage(
-                    metal::MTLTextureUsage::RenderTarget | metal::MTLTextureUsage::ShaderRead,
-                );
-                texture_descriptor.set_storage_mode(metal::MTLStorageMode::Private);
-                self.headless_render_target = Some(self.device.new_texture(&texture_descriptor));
-            }
-            let target_texture = self
-                .headless_render_target
-                .clone()
-                .expect("just ensured the render target exists");
-
-            let command_buffer = self.render_frame(scene, &target_texture, size)?;
-
-            // Commit without waiting, mirroring presentation to a real window where
-            // the CPU doesn't block on the GPU.
-            command_buffer.commit();
-            Ok(())
-        })
     }
 
     fn draw_primitives_to_texture(
@@ -1302,36 +1148,6 @@ fn new_command_encoder_for_texture<'a>(
     command_encoder
 }
 
-#[cfg(any(test, feature = "bench-support", feature = "test-support"))]
-fn read_texture_to_image(texture: &metal::TextureRef) -> Result<RgbaImage> {
-    let width = texture.width() as u32;
-    let height = texture.height() as u32;
-    let bytes_per_row = width as usize * 4;
-    let mut pixels = vec![0u8; height as usize * bytes_per_row];
-
-    let region = metal::MTLRegion {
-        origin: metal::MTLOrigin { x: 0, y: 0, z: 0 },
-        size: metal::MTLSize {
-            width: width as u64,
-            height: height as u64,
-            depth: 1,
-        },
-    };
-    texture.get_bytes(
-        pixels.as_mut_ptr() as *mut std::ffi::c_void,
-        bytes_per_row as u64,
-        region,
-        0,
-    );
-
-    // Convert BGRA to RGBA (swap B and R channels)
-    for chunk in pixels.chunks_exact_mut(4) {
-        chunk.swap(0, 2);
-    }
-
-    RgbaImage::from_raw(width, height, pixels).context("failed to create RgbaImage from pixel data")
-}
-
 fn build_pipeline_state(
     device: &metal::DeviceRef,
     library: &metal::LibraryRef,
@@ -1656,113 +1472,4 @@ pub struct PathSprite {
 pub struct SurfaceBounds {
     pub bounds: Bounds<ScaledPixels>,
     pub content_mask: ContentMask<ScaledPixels>,
-}
-
-#[cfg(any(test, feature = "bench-support", feature = "test-support"))]
-pub struct MetalHeadlessRenderer {
-    renderer: MetalRenderer,
-}
-
-#[cfg(any(test, feature = "bench-support", feature = "test-support"))]
-impl MetalHeadlessRenderer {
-    pub fn new() -> Self {
-        let instance_buffer_pool = Arc::new(Mutex::new(InstanceBufferPool::default()));
-        let renderer = MetalRenderer::new_headless(instance_buffer_pool);
-        Self { renderer }
-    }
-}
-
-#[cfg(any(test, feature = "bench-support", feature = "test-support"))]
-impl gpui::PlatformHeadlessRenderer for MetalHeadlessRenderer {
-    fn render_scene_to_image(
-        &mut self,
-        scene: &Scene,
-        size: Size<DevicePixels>,
-    ) -> anyhow::Result<image::RgbaImage> {
-        self.renderer.render_scene_to_image(scene, size)
-    }
-
-    fn render_scene(&mut self, scene: &Scene, size: Size<DevicePixels>) -> anyhow::Result<()> {
-        self.renderer.render_scene(scene, size)
-    }
-
-    fn sprite_atlas(&self) -> Arc<dyn gpui::PlatformAtlas> {
-        self.renderer.sprite_atlas().clone()
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use objc2_core_foundation::{CFDictionary, CFType};
-    use objc2_core_video::{
-        CVPixelBufferCreate, CVPixelBufferGetBaseAddressOfPlane,
-        CVPixelBufferGetBytesPerRowOfPlane, CVPixelBufferLockBaseAddress, CVPixelBufferLockFlags,
-        CVPixelBufferUnlockBaseAddress, kCVPixelBufferIOSurfacePropertiesKey,
-    };
-
-    #[test]
-    fn render_core_video_surface() {
-        let attributes = CFDictionary::from_slices(
-            &[unsafe { kCVPixelBufferIOSurfacePropertiesKey }],
-            &[&*CFDictionary::<CFType, CFType>::empty()],
-        );
-        let mut image_buffer = ptr::null_mut();
-        assert_eq!(
-            unsafe {
-                CVPixelBufferCreate(
-                    None,
-                    16,
-                    16,
-                    kCVPixelFormatType_420YpCbCr8BiPlanarFullRange,
-                    Some(attributes.as_opaque()),
-                    ptr::NonNull::from(&mut image_buffer),
-                )
-            },
-            kCVReturnSuccess
-        );
-        let image_buffer =
-            unsafe { CFRetained::from_raw(ptr::NonNull::new(image_buffer).unwrap()) };
-        unsafe {
-            assert_eq!(
-                CVPixelBufferLockBaseAddress(&image_buffer, CVPixelBufferLockFlags::empty()),
-                kCVReturnSuccess
-            );
-            for plane in 0..2 {
-                let bytes = CVPixelBufferGetBaseAddressOfPlane(&image_buffer, plane).cast::<u8>();
-                let length = CVPixelBufferGetBytesPerRowOfPlane(&image_buffer, plane)
-                    * CVPixelBufferGetHeightOfPlane(&image_buffer, plane);
-                slice::from_raw_parts_mut(bytes, length).fill(128);
-            }
-            assert_eq!(
-                CVPixelBufferUnlockBaseAddress(&image_buffer, CVPixelBufferLockFlags::empty()),
-                kCVReturnSuccess
-            );
-        }
-
-        let bounds = Bounds {
-            origin: Point::default(),
-            size: size(ScaledPixels(16.0), ScaledPixels(16.0)),
-        };
-        let mut scene = Scene::default();
-        scene.insert_primitive(PaintSurface {
-            order: 0,
-            bounds,
-            content_mask: ContentMask { bounds },
-            image_buffer: image_buffer.clone(),
-        });
-        drop(image_buffer);
-        scene.finish();
-
-        let mut renderer = MetalRenderer::new_headless(Arc::new(Mutex::new(Default::default())));
-        let image = renderer
-            .render_scene_to_image(&scene, size(DevicePixels(16), DevicePixels(16)))
-            .unwrap();
-        for image::Rgba([red, green, blue, alpha]) in image.pixels() {
-            assert!(red.abs_diff(128) <= 2);
-            assert!(green.abs_diff(128) <= 2);
-            assert!(blue.abs_diff(128) <= 2);
-            assert_eq!(*alpha, 255);
-        }
-    }
 }

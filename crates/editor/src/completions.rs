@@ -1095,28 +1095,6 @@ impl Editor {
     }
 }
 
-#[cfg(any(test, feature = "test-support"))]
-impl Editor {
-    pub fn completion_provider(&self) -> Option<Rc<dyn CompletionProvider>> {
-        self.completion_provider.clone()
-    }
-
-    pub fn current_completions(&self) -> Option<Vec<project::Completion>> {
-        let menu = self.context_menu.borrow();
-        if let CodeContextMenu::Completions(menu) = menu.as_ref()? {
-            let completions = menu.completions.borrow();
-            Some(completions.to_vec())
-        } else {
-            None
-        }
-    }
-
-    #[cfg(test)]
-    pub(super) fn disable_word_completions(&mut self) {
-        self.word_completions_enabled = false;
-    }
-}
-
 pub trait CompletionProvider {
     fn completions(
         &self,

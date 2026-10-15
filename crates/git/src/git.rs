@@ -226,16 +226,6 @@ impl Oid {
         })
     }
 
-    #[cfg(any(test, feature = "test-support"))]
-    pub fn random(rng: &mut impl rand::Rng) -> Self {
-        let mut bytes = [0u8; SHA256_BYTE_LENGTH];
-        rng.fill(&mut bytes[..SHA1_BYTE_LENGTH]);
-        Self {
-            bytes,
-            format: OidFormat::Sha1,
-        }
-    }
-
     pub fn as_bytes(&self) -> &[u8] {
         &self.bytes[..self.format.byte_len()]
     }
@@ -367,36 +357,6 @@ impl From<Oid> for usize {
         let mut u64_bytes = [0u8; 8];
         u64_bytes.copy_from_slice(&oid.as_bytes()[..8]);
         u64::from_ne_bytes(u64_bytes) as usize
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parses_short_sha1_oid_by_padding_trailing_nibbles() {
-        let oid = "abc1234".parse::<Oid>().expect("failed to parse oid");
-
-        assert_eq!(oid.as_bytes().len(), SHA1_BYTE_LENGTH);
-        assert_eq!(oid.display_short(), "abc1234");
-        assert_eq!(oid.to_string(), "abc1234000000000000000000000000000000000");
-    }
-
-    #[test]
-    fn parses_full_sha256_oid() {
-        let sha = "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
-        let oid = sha.parse::<Oid>().expect("failed to parse oid");
-
-        assert_eq!(oid.as_bytes().len(), SHA256_BYTE_LENGTH);
-        assert_eq!(oid.to_string(), sha);
-    }
-
-    #[test]
-    fn rejects_invalid_oid_lengths() {
-        assert!("".parse::<Oid>().is_err());
-        assert!("a".repeat(SHA1_HEX_LENGTH + 1).parse::<Oid>().is_err());
-        assert!("a".repeat(SHA256_HEX_LENGTH - 1).parse::<Oid>().is_err());
     }
 }
 

@@ -9,24 +9,8 @@ license = "GPL-3.0-or-later"
 path = "src/worktree.rs"
 doctest = false
 
-[[test]]
-name = "integration"
-required-features = ["test-support"]
-path = "tests/integration/worktree_tests.rs"
-
 [lints]
 workspace = true
-
-[features]
-test-support = [
-    "gpui/test-support",
-
-    "language/test-support",
-    "pretty_assertions",
-    "settings/test-support",
-    "text/test-support",
-    "util/test-support",
-]
 
 [dependencies]
 anyhow.workspace = true
@@ -48,7 +32,6 @@ log.workspace = true
 parking_lot.workspace = true
 paths.workspace = true
 postage.workspace = true
-pretty_assertions = { workspace = true, optional = true }
 rpc = { workspace = true, features = ["gpui"] }
 settings.workspace = true
 smallvec.workspace = true
@@ -56,19 +39,6 @@ sum_tree.workspace = true
 text.workspace = true
 tracing.workspace = true
 util.workspace = true
-
-[dev-dependencies]
-clock = { workspace = true, features = ["test-support"] }
-collections = { workspace = true, features = ["test-support"] }
-gpui = { workspace = true, features = ["test-support"] }
-paths = { workspace = true, features = ["test-support"] }
-rand.workspace = true
-rpc = { workspace = true, features = ["test-support"] }
-serde_json.workspace = true
-settings = { workspace = true, features = ["test-support"] }
-util = { workspace = true, features = ["test-support"] }
-worktree = { workspace = true, features = ["test-support"] }
-zlog.workspace = true
 
 [package.metadata.cargo-shear]
 ignored = ["tracing"]

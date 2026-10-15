@@ -15,7 +15,6 @@ doctest = false
 
 [features]
 gpui = ["dep:gpui"]
-test-support = ["collections/test-support", "gpui/test-support", "proto/test-support"]
 
 [dependencies]
 anyhow.workspace = true
@@ -29,9 +28,3 @@ proto.workspace = true
 serde.workspace = true
 tracing = { version = "0.1", default-features = false, features = ["std", "log"] }
 zstd.workspace = true
-
-[dev-dependencies]
-collections = { workspace = true, features = ["test-support"] }
-gpui = { workspace = true, features = ["test-support"] }
-proto = { workspace = true, features = ["test-support"] }
-zlog.workspace = true

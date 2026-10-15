@@ -31,11 +31,6 @@ ui_macros.workspace = true
 web-time.workspace = true
 gpui_util.workspace = true
 
-[dev-dependencies]
-gpui = { workspace = true, features = ["test-support"] }
-settings = { workspace = true, features = ["test-support"] }
-theme_settings.workspace = true
-
 [package.metadata.cargo-shear]
 ignored = ["log"]
 

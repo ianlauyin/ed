@@ -18,9 +18,6 @@ use gpui_apple::metal_renderer as renderer;
 
 pub mod metal_renderer {
     pub use gpui_apple::metal_renderer::{PathRasterizationVertex, PathSprite, SurfaceBounds};
-
-    #[cfg(any(test, feature = "bench-support", feature = "test-support"))]
-    pub use gpui_apple::metal_renderer::MetalHeadlessRenderer;
 }
 
 mod platform;

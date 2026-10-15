@@ -533,11 +533,6 @@ impl BufferDiagnosticsEditor {
                     }
                 }
 
-                // Cloning the blocks before moving ownership so these can later
-                // be used to set the block contents for testing purposes.
-                #[cfg(test)]
-                let cloned_blocks = blocks.clone();
-
                 // Build new diagnostic blocks to be added to the editor's
                 // display map for the new diagnostics. Update the `blocks`
                 // property before finishing, to ensure the blocks are removed
@@ -564,30 +559,6 @@ impl BufferDiagnosticsEditor {
                         display_map.insert_blocks(editor_blocks, cx)
                     })
                 });
-
-                // In order to be able to verify which diagnostic blocks are
-                // rendered in the editor, the `set_block_content_for_tests`
-                // function must be used, so that the
-                // `editor::test::editor_content_with_blocks` function can then
-                // be called to fetch these blocks.
-                #[cfg(test)]
-                {
-                    for (block_id, block) in block_ids.iter().zip(cloned_blocks.iter()) {
-                        let markdown = block.markdown.clone();
-                        editor::test::set_block_content_for_tests(
-                            &buffer_diagnostics_editor.editor,
-                            *block_id,
-                            cx,
-                            move |cx| {
-                                markdown::MarkdownElement::rendered_text(
-                                    markdown.clone(),
-                                    cx,
-                                    editor::hover_popover::diagnostics_markdown_style,
-                                )
-                            },
-                        );
-                    }
-                }
 
                 buffer_diagnostics_editor.blocks = block_ids;
                 cx.notify()
@@ -664,16 +635,6 @@ impl BufferDiagnosticsEditor {
             true => DiagnosticSeverity::Warning,
             false => DiagnosticSeverity::Error,
         }
-    }
-
-    #[cfg(test)]
-    pub fn editor(&self) -> &Entity<Editor> {
-        &self.editor
-    }
-
-    #[cfg(test)]
-    pub fn summary(&self) -> &DiagnosticSummary {
-        &self.summary
     }
 }
 

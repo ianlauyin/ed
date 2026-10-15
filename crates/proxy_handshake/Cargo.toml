@@ -26,9 +26,3 @@ percent-encoding.workspace = true
 thiserror.workspace = true
 tokio = { workspace = true, features = ["io-util"], optional = true }
 url.workspace = true
-
-[dev-dependencies]
-futures.workspace = true
-piper.workspace = true
-proptest.workspace = true
-tokio = { workspace = true, features = ["io-util", "macros", "rt"] }

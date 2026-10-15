@@ -6,7 +6,6 @@ publish = false
 license = "Apache-2.0"
 description = "A collection of utility structs and functions used by Zed and GPUI"
 
-
 [lints]
 workspace = true
 
@@ -15,7 +14,6 @@ path = "src/util.rs"
 doctest = true
 
 [features]
-test-support = ["rand", "util_macros", "path/test-support", "dep:tempfile"]
 # Embed `fs_embed!` assets at compile time even in debug builds.
 debug-embed = ["rust-embed/debug-embed"]
 
@@ -25,18 +23,15 @@ collections.workspace = true
 dunce.workspace = true
 globset.workspace = true
 itertools.workspace = true
-rand = { workspace = true, optional = true }
 regex = { workspace = true, features = ["unicode-bool", "unicode-gencat"] }
 rust-embed.workspace = true
 schemars = { workspace = true, features = ["derive"] }
 serde = { workspace = true, features = ["derive"] }
 serde_json.workspace = true
 serde_json_lenient.workspace = true
-tempfile = { workspace = true, optional = true }
 unicase.workspace = true
 url.workspace = true
 percent-encoding.workspace = true
-util_macros = { workspace = true, optional = true }
 gpui_util.workspace = true
 path = { workspace = true, features = ["serde"] }
 
@@ -61,13 +56,4 @@ tempfile.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 mach2.workspace = true
-which.workspace = true
-
-[dev-dependencies]
-rand.workspace = true
-tempfile.workspace = true
-util_macros.workspace = true
-path = { workspace = true, features = ["test-support"] }
-
-[target.'cfg(unix)'.dev-dependencies]
 which.workspace = true
