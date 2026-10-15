@@ -57,8 +57,6 @@ mod apple_build {
             "MonochromeSprite".into(),
             "PolychromeSprite".into(),
             "PathSprite".into(),
-            "SurfaceInputIndex".into(),
-            "SurfaceBounds".into(),
             "TransformationMatrix".into(),
         ]);
         config.no_includes = true;

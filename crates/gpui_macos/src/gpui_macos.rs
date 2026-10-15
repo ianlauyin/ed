@@ -12,11 +12,10 @@ mod ns;
 mod pasteboard;
 mod system_notifications;
 
-
 use gpui_apple::metal_renderer as renderer;
 
 pub mod metal_renderer {
-    pub use gpui_apple::metal_renderer::{PathRasterizationVertex, PathSprite, SurfaceBounds};
+    pub use gpui_apple::metal_renderer::{PathRasterizationVertex, PathSprite};
 }
 
 mod platform;

@@ -2,16 +2,11 @@ use crate::metal_atlas::MetalAtlas;
 use anyhow::{Context as _, Result};
 use block2::RcBlock;
 use gpui::{
-    AtlasTextureId, Background, Bounds, ContentMask, DevicePixels, PaintSurface, Path, Point,
-    PrimitiveBatch, ScaledPixels, Scene, Size, point, size,
+    AtlasTextureId, Background, Bounds, DevicePixels, Path, Point, PrimitiveBatch, ScaledPixels,
+    Scene, Size, point, size,
 };
 use objc2::{Message as _, rc::Retained, runtime::ProtocolObject};
-use objc2_core_foundation::{CFRetained, CGSize};
-use objc2_core_video::{
-    CVMetalTexture, CVMetalTextureCache, CVMetalTextureGetTexture, CVPixelBufferGetHeight,
-    CVPixelBufferGetHeightOfPlane, CVPixelBufferGetPixelFormatType, CVPixelBufferGetWidth,
-    CVPixelBufferGetWidthOfPlane, kCVPixelFormatType_420YpCbCr8BiPlanarFullRange, kCVReturnSuccess,
-};
+use objc2_core_foundation::CGSize;
 use objc2_foundation::{NSRange, NSString};
 use objc2_metal::{
     MTLBlendFactor, MTLBlendOperation, MTLBuffer, MTLClearColor, MTLCommandBuffer,
@@ -143,12 +138,10 @@ pub struct MetalRenderer {
     underlines_pipeline_state: Retained<RenderPipelineState>,
     monochrome_sprites_pipeline_state: Retained<RenderPipelineState>,
     polychrome_sprites_pipeline_state: Retained<RenderPipelineState>,
-    surfaces_pipeline_state: Retained<RenderPipelineState>,
     unit_vertices: Retained<Buffer>,
     #[allow(clippy::arc_with_non_send_sync)]
     instance_buffer_pool: Arc<Mutex<InstanceBufferPool>>,
     sprite_atlas: Arc<MetalAtlas>,
-    core_video_texture_cache: CFRetained<CVMetalTextureCache>,
     path_intermediate_texture: Option<Retained<Texture>>,
     path_intermediate_msaa_texture: Option<Retained<Texture>>,
     path_sample_count: u32,
@@ -339,35 +332,12 @@ impl MetalRenderer {
             "polychrome_sprite_fragment",
             MTLPixelFormat::BGRA8Unorm,
         );
-        let surfaces_pipeline_state = build_pipeline_state(
-            &device,
-            &library,
-            "surfaces",
-            "surface_vertex",
-            "surface_fragment",
-            MTLPixelFormat::BGRA8Unorm,
-        );
 
         let command_queue = device
             .newCommandQueue()
             .expect("failed to create command queue");
         let supports_shared_storage = false || is_apple_gpu;
         let sprite_atlas = Arc::new(MetalAtlas::new(device.clone(), supports_shared_storage));
-        let core_video_texture_cache = unsafe {
-            let mut cache = ptr::null_mut();
-            let status = CVMetalTextureCache::create(
-                None,
-                None,
-                &device,
-                None,
-                ptr::NonNull::from(&mut cache),
-            );
-            assert_eq!(
-                status, kCVReturnSuccess,
-                "failed to create CoreVideo Metal texture cache"
-            );
-            CFRetained::from_raw(ptr::NonNull::new(cache).expect("CoreVideo returned a null cache"))
-        };
 
         Self {
             device,
@@ -384,11 +354,9 @@ impl MetalRenderer {
             underlines_pipeline_state,
             monochrome_sprites_pipeline_state,
             polychrome_sprites_pipeline_state,
-            surfaces_pipeline_state,
             unit_vertices,
             instance_buffer_pool,
             sprite_atlas,
-            core_video_texture_cache,
             path_intermediate_texture: None,
             path_intermediate_msaa_texture: None,
             path_sample_count: PATH_SAMPLE_COUNT,
@@ -531,14 +499,13 @@ impl MetalRenderer {
         );
         let instance_bindings = write_instances(scene, &mut writer).with_context(|| {
             format!(
-                "scene too large: {} paths, {} shadows, {} quads, {} underlines, {} mono, {} poly, {} surfaces",
+                "scene too large: {} paths, {} shadows, {} quads, {} underlines, {} mono, {} poly",
                 scene.paths.len(),
                 scene.shadows.len(),
                 scene.quads.len(),
                 scene.underlines.len(),
                 scene.monochrome_sprites.len(),
                 scene.polychrome_sprites.len(),
-                scene.surfaces.len(),
             )
         })?;
         let command_buffer = self.draw_primitives_to_texture(
@@ -647,13 +614,6 @@ impl MetalRenderer {
                         viewport_size,
                         &command_encoder,
                     ),
-                PrimitiveBatch::Surfaces(range) => self.draw_surfaces(
-                    &scene.surfaces[range.clone()],
-                    range.start,
-                    instance_bindings,
-                    viewport_size,
-                    &command_encoder,
-                ),
                 PrimitiveBatch::SubpixelSprites { .. } => unreachable!(),
             }
         }
@@ -1121,111 +1081,6 @@ impl MetalRenderer {
             )
         };
     }
-
-    fn draw_surfaces(
-        &mut self,
-        surfaces: &[PaintSurface],
-        first_surface: usize,
-        instance_bindings: &InstanceBindings,
-        viewport_size: Size<DevicePixels>,
-        command_encoder: &RenderCommandEncoder,
-    ) {
-        if surfaces.is_empty() {
-            return;
-        }
-
-        command_encoder.setRenderPipelineState(&self.surfaces_pipeline_state);
-        unsafe {
-            command_encoder.setVertexBuffer_offset_atIndex(
-                Some(&self.unit_vertices),
-                0,
-                SurfaceInputIndex::Vertices as usize,
-            )
-        };
-        unsafe {
-            command_encoder.setVertexBuffer_offset_atIndex(
-                Some(&instance_bindings.surfaces.buffer),
-                instance_bindings.surfaces.offset,
-                SurfaceInputIndex::Surfaces as usize,
-            )
-        };
-        unsafe {
-            set_vertex_bytes(
-                command_encoder,
-                SurfaceInputIndex::ViewportSize as usize,
-                &viewport_size,
-            )
-        };
-
-        for (index, surface) in surfaces.iter().enumerate() {
-            let image_buffer = &surface.image_buffer;
-            let texture_size = size(
-                DevicePixels::from(CVPixelBufferGetWidth(image_buffer) as i32),
-                DevicePixels::from(CVPixelBufferGetHeight(image_buffer) as i32),
-            );
-
-            assert_eq!(
-                CVPixelBufferGetPixelFormatType(image_buffer),
-                kCVPixelFormatType_420YpCbCr8BiPlanarFullRange
-            );
-
-            let plane_texture = |plane, format| unsafe {
-                let mut texture = ptr::null_mut();
-                let status = CVMetalTextureCache::create_texture_from_image(
-                    None,
-                    &self.core_video_texture_cache,
-                    image_buffer,
-                    None,
-                    format,
-                    CVPixelBufferGetWidthOfPlane(image_buffer, plane),
-                    CVPixelBufferGetHeightOfPlane(image_buffer, plane),
-                    plane,
-                    ptr::NonNull::from(&mut texture),
-                );
-                assert_eq!(
-                    status, kCVReturnSuccess,
-                    "failed to create CoreVideo Metal texture"
-                );
-                CFRetained::<CVMetalTexture>::from_raw(
-                    ptr::NonNull::new(texture).expect("CoreVideo returned a null texture"),
-                )
-            };
-            let y_texture = plane_texture(0, MTLPixelFormat::R8Unorm);
-            let cb_cr_texture = plane_texture(1, MTLPixelFormat::RG8Unorm);
-
-            unsafe {
-                set_vertex_bytes(
-                    command_encoder,
-                    SurfaceInputIndex::TextureSize as usize,
-                    &texture_size,
-                )
-            };
-            let y_texture =
-                CVMetalTextureGetTexture(&y_texture).expect("CoreVideo returned no Metal texture");
-            let cb_cr_texture = CVMetalTextureGetTexture(&cb_cr_texture)
-                .expect("CoreVideo returned no Metal texture");
-            unsafe {
-                command_encoder.setFragmentTexture_atIndex(
-                    Some(&y_texture),
-                    SurfaceInputIndex::YTexture as usize,
-                );
-                command_encoder.setFragmentTexture_atIndex(
-                    Some(&cb_cr_texture),
-                    SurfaceInputIndex::CbCrTexture as usize,
-                );
-            }
-
-            unsafe {
-                command_encoder.drawPrimitives_vertexStart_vertexCount_instanceCount_baseInstance(
-                    MTLPrimitiveType::Triangle,
-                    0,
-                    6,
-                    1,
-                    first_surface + index,
-                )
-            };
-        }
-    }
 }
 
 fn new_command_encoder_for_texture(
@@ -1384,7 +1239,6 @@ struct InstanceBindings {
     underlines: InstanceBinding,
     monochrome_sprites: InstanceBinding,
     polychrome_sprites: InstanceBinding,
-    surfaces: InstanceBinding,
 }
 
 fn write_instances(scene: &Scene, writer: &mut InstanceBufferWriter) -> Result<InstanceBindings> {
@@ -1394,10 +1248,6 @@ fn write_instances(scene: &Scene, writer: &mut InstanceBufferWriter) -> Result<I
         underlines: writer.write(&scene.underlines)?,
         monochrome_sprites: writer.write(&scene.monochrome_sprites)?,
         polychrome_sprites: writer.write(&scene.polychrome_sprites)?,
-        surfaces: writer.write_iter(scene.surfaces.iter().map(|surface| SurfaceBounds {
-            bounds: surface.bounds,
-            content_mask: surface.content_mask,
-        }))?,
     })
 }
 
@@ -1463,17 +1313,6 @@ impl InstanceBufferWriter {
                 destination.as_mut_ptr().cast::<T>(),
                 values.len(),
             );
-        }
-        Ok(binding)
-    }
-
-    fn write_iter<T>(
-        &mut self,
-        values: impl ExactSizeIterator<Item = T>,
-    ) -> Result<InstanceBinding> {
-        let (binding, destination) = self.allocate::<T>(values.len())?;
-        for (slot, value) in destination.iter_mut().zip(values) {
-            slot.write(value);
         }
         Ok(binding)
     }
@@ -1565,16 +1404,6 @@ enum SpriteInputIndex {
 }
 
 #[repr(C)]
-enum SurfaceInputIndex {
-    Vertices = 0,
-    Surfaces = 1,
-    ViewportSize = 2,
-    TextureSize = 3,
-    YTexture = 4,
-    CbCrTexture = 5,
-}
-
-#[repr(C)]
 enum PathRasterizationInputIndex {
     Vertices = 0,
     ViewportSize = 1,
@@ -1584,11 +1413,4 @@ enum PathRasterizationInputIndex {
 #[repr(C)]
 pub struct PathSprite {
     pub bounds: Bounds<ScaledPixels>,
-}
-
-#[derive(Clone, Debug, Eq, PartialEq)]
-#[repr(C)]
-pub struct SurfaceBounds {
-    pub bounds: Bounds<ScaledPixels>,
-    pub content_mask: ContentMask<ScaledPixels>,
 }

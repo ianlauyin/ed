@@ -34,11 +34,6 @@ use gpui_util::{ResultExt, measure};
 use itertools::FoldWhile::{Continue, Done};
 use itertools::Itertools;
 
-#[cfg(target_os = "macos")]
-use objc2_core_foundation::CFRetained;
-
-#[cfg(target_os = "macos")]
-use objc2_core_video::CVPixelBuffer;
 use parking_lot::{RwLock, RwLockUpgradableReadGuard};
 use raw_window_handle::{HandleError, HasDisplayHandle, HasWindowHandle};
 use refineable::Refineable;
@@ -4992,29 +4987,6 @@ impl Window {
             opacity,
         });
         Ok(())
-    }
-
-    /// Paint a surface into the scene for the next frame at the current z-index.
-    ///
-    /// This method should only be called as part of the paint phase of element drawing.
-    #[cfg(target_os = "macos")]
-    pub fn paint_surface(
-        &mut self,
-        bounds: Bounds<Pixels>,
-        image_buffer: CFRetained<CVPixelBuffer>,
-    ) {
-        use crate::PaintSurface;
-
-        self.invalidator.debug_assert_paint();
-
-        let bounds = self.snap_bounds(bounds);
-        let content_mask = self.snapped_content_mask();
-        self.next_frame.scene.insert_primitive(PaintSurface {
-            order: 0,
-            bounds,
-            content_mask,
-            image_buffer,
-        });
     }
 
     /// Removes an image from the sprite atlas.
