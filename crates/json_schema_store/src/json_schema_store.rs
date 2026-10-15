@@ -31,12 +31,6 @@ static JSONC_SCHEMA: LazyLock<String> = LazyLock::new(|| {
     serde_json::to_string(&generate_jsonc_schema()).expect("JSONC schema should serialize")
 });
 
-#[cfg(debug_assertions)]
-static INSPECTOR_STYLE_SCHEMA: LazyLock<String> = LazyLock::new(|| {
-    serde_json::to_string(&generate_inspector_style_schema())
-        .expect("Inspector style schema should serialize")
-});
-
 static KEYMAP_SCHEMA: LazyLock<String> = LazyLock::new(|| {
     serde_json::to_string(&settings::KeymapFile::generate_json_schema_from_inventory())
         .expect("Keymap schema should serialize")
@@ -99,20 +93,6 @@ fn resolve_static_schema(path: &str) -> Option<String> {
         "snippets" => Some(SNIPPETS_SCHEMA.clone()),
         "jsonc" => Some(JSONC_SCHEMA.clone()),
         "keymap" => Some(KEYMAP_SCHEMA.clone()),
-        "zed_inspector_style" => {
-            #[cfg(debug_assertions)]
-            {
-                Some(INSPECTOR_STYLE_SCHEMA.clone())
-            }
-            #[cfg(not(debug_assertions))]
-            {
-                Some(
-                    serde_json::to_string(&schemars::json_schema!(true).to_value())
-                        .expect("true schema should serialize"),
-                )
-            }
-        }
-
         "action" => {
             let normalized_action_name = match rest {
                 Some(name) => name,
@@ -385,19 +365,6 @@ pub fn all_schema_file_associations(
         },
     ]);
 
-    #[cfg(debug_assertions)]
-    {
-        file_associations
-            .as_array_mut()
-            .unwrap()
-            .push(serde_json::json!({
-                "fileMatch": [
-                    "zed-inspector-style.json"
-                ],
-                "url": format!("{SCHEMA_URI_PREFIX}zed_inspector_style")
-            }));
-    }
-
     file_associations
         .as_array_mut()
         .unwrap()
@@ -430,16 +397,6 @@ fn generate_jsonc_schema() -> serde_json::Value {
         "allowTrailingCommas": true,
         "$defs": defs,
     });
-    serde_json::to_value(schema).unwrap()
-}
-
-#[cfg(debug_assertions)]
-fn generate_inspector_style_schema() -> serde_json::Value {
-    let schema = schemars::generate::SchemaSettings::draft2019_09()
-        .with_transform(util::schemars::DefaultDenyUnknownFields)
-        .into_generator()
-        .root_schema_for::<gpui::StyleRefinement>();
-
     serde_json::to_value(schema).unwrap()
 }
 

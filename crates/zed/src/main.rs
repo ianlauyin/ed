@@ -518,7 +518,6 @@ fn main() {
         tabular_data_preview::init(cx);
         svg_preview::init(cx);
         onboarding::init(cx);
-        inspector_ui::init(app_state.clone(), cx);
         json_schema_store::init(cx);
         miniprofiler_ui::init(*STARTUP_TIME.get().unwrap(), cx);
         which_key::init(cx);

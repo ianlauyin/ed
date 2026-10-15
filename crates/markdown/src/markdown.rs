@@ -2532,7 +2532,6 @@ impl Element for MarkdownElement {
     fn request_layout(
         &mut self,
         _id: Option<&GlobalElementId>,
-        _inspector_id: Option<&gpui::InspectorElementId>,
         window: &mut Window,
         cx: &mut App,
     ) -> (gpui::LayoutId, Self::RequestLayoutState) {
@@ -3307,7 +3306,6 @@ impl Element for MarkdownElement {
     fn prepaint(
         &mut self,
         _id: Option<&GlobalElementId>,
-        _inspector_id: Option<&gpui::InspectorElementId>,
         bounds: Bounds<Pixels>,
         rendered_markdown: &mut Self::RequestLayoutState,
         window: &mut Window,
@@ -3326,7 +3324,6 @@ impl Element for MarkdownElement {
     fn paint(
         &mut self,
         _id: Option<&GlobalElementId>,
-        _inspector_id: Option<&gpui::InspectorElementId>,
         _bounds: Bounds<Pixels>,
         rendered_markdown: &mut Self::RequestLayoutState,
         hitbox: &mut Self::PrepaintState,
@@ -4299,17 +4296,15 @@ impl Element for RenderedLineElement {
     fn request_layout(
         &mut self,
         _id: Option<&GlobalElementId>,
-        inspector_id: Option<&gpui::InspectorElementId>,
         window: &mut Window,
         cx: &mut App,
     ) -> (gpui::LayoutId, Self::RequestLayoutState) {
-        self.text.request_layout(None, inspector_id, window, cx)
+        self.text.request_layout(None, window, cx)
     }
 
     fn prepaint(
         &mut self,
         _id: Option<&GlobalElementId>,
-        inspector_id: Option<&gpui::InspectorElementId>,
         bounds: Bounds<Pixels>,
         request_layout: &mut Self::RequestLayoutState,
         window: &mut Window,
@@ -4318,14 +4313,12 @@ impl Element for RenderedLineElement {
         self.line
             .visible_bounds
             .set(Some(bounds.intersect(&window.content_mask().bounds)));
-        self.text
-            .prepaint(None, inspector_id, bounds, request_layout, window, cx);
+        self.text.prepaint(None, bounds, request_layout, window, cx);
     }
 
     fn paint(
         &mut self,
         _id: Option<&GlobalElementId>,
-        _inspector_id: Option<&gpui::InspectorElementId>,
         _bounds: Bounds<Pixels>,
         _request_layout: &mut Self::RequestLayoutState,
         _prepaint: &mut Self::PrepaintState,

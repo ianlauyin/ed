@@ -19,12 +19,12 @@ use crate::{
     Action, AnyDrag, AnyElement, AnyTooltip, AnyView, App, Bounds, ClickEvent, DispatchPhase,
     Display, Element, ElementId, Entity, EntityId, ExternalDragPayload, ExternalDragPayloadSource,
     FileDropEvent, FocusHandle, Global, GlobalElementId, Hitbox, HitboxBehavior, HitboxId,
-    InspectorElementId, IntoElement, IsZero, KeyContext, KeyDownEvent, KeyUpEvent, KeyboardButton,
-    KeyboardClickEvent, LayoutId, LongPressEvent, ModifiersChangedEvent, MouseButton,
-    MouseClickEvent, MouseDownEvent, MouseExitEvent, MouseMoveEvent, MousePressureEvent,
-    MouseUpEvent, OngoingScroll, Overflow, ParentElement, PinchEvent, Pixels, Point, Render,
-    ScrollWheelEvent, SharedString, Size, Style, StyleRefinement, Styled, Task, TooltipId,
-    TouchPhase, Visibility, Window, WindowControlArea, point, px, size,
+    IntoElement, IsZero, KeyContext, KeyDownEvent, KeyUpEvent, KeyboardButton, KeyboardClickEvent,
+    LayoutId, LongPressEvent, ModifiersChangedEvent, MouseButton, MouseClickEvent, MouseDownEvent,
+    MouseExitEvent, MouseMoveEvent, MousePressureEvent, MouseUpEvent, OngoingScroll, Overflow,
+    ParentElement, PinchEvent, Pixels, Point, Render, ScrollWheelEvent, SharedString, Size, Style,
+    StyleRefinement, Styled, Task, TooltipId, TouchPhase, Visibility, Window, WindowControlArea,
+    point, px, size,
 };
 use collections::HashMap;
 use gpui_util::ResultExt;
@@ -91,7 +91,7 @@ impl<T: 'static> DragMoveEvent<T> {
 
 impl Interactivity {
     /// Create an `Interactivity`, capturing the caller location in debug mode.
-    #[cfg(any(feature = "inspector", debug_assertions))]
+    #[cfg(debug_assertions)]
     #[track_caller]
     pub fn new() -> Interactivity {
         Interactivity {
@@ -101,19 +101,19 @@ impl Interactivity {
     }
 
     /// Create an `Interactivity`, capturing the caller location in debug mode.
-    #[cfg(not(any(feature = "inspector", debug_assertions)))]
+    #[cfg(not(debug_assertions))]
     pub fn new() -> Interactivity {
         Interactivity::default()
     }
 
     /// Gets the source location of construction. Returns `None` when not in debug mode.
     pub fn source_location(&self) -> Option<&'static std::panic::Location<'static>> {
-        #[cfg(any(feature = "inspector", debug_assertions))]
+        #[cfg(debug_assertions)]
         {
             self.source_location
         }
 
-        #[cfg(not(any(feature = "inspector", debug_assertions)))]
+        #[cfg(not(debug_assertions))]
         {
             None
         }
@@ -1830,20 +1830,6 @@ pub struct DivFrameState {
     child_layout_ids: SmallVec<[LayoutId; 2]>,
 }
 
-/// Interactivity state displayed an manipulated in the inspector.
-#[derive(Clone)]
-pub struct DivInspectorState {
-    /// The inspected element's base style. This is used for both inspecting and modifying the
-    /// state. In the future it will make sense to separate the read and write, possibly tracking
-    /// the modifications.
-    #[cfg(any(feature = "inspector", debug_assertions))]
-    pub base_style: Box<StyleRefinement>,
-    /// Inspects the bounds of the element.
-    pub bounds: Bounds<Pixels>,
-    /// Size of the children of the element, or `bounds.size` if it has no children.
-    pub content_size: Size<Pixels>,
-}
-
 impl Styled for Div {
     fn style(&mut self) -> &mut StyleRefinement {
         &mut self.interactivity.base_style
@@ -1904,7 +1890,6 @@ impl Element for Div {
     fn request_layout(
         &mut self,
         global_id: Option<&GlobalElementId>,
-        inspector_id: Option<&InspectorElementId>,
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
@@ -1915,12 +1900,8 @@ impl Element for Div {
             .map(|provider| provider.provide(window, cx));
 
         let layout_id = window.with_image_cache(image_cache, |window| {
-            self.interactivity.request_layout(
-                global_id,
-                inspector_id,
-                window,
-                cx,
-                |style, window, cx| {
+            self.interactivity
+                .request_layout(global_id, window, cx, |style, window, cx| {
                     window.with_text_style(style.text_style().cloned(), |window| {
                         child_layout_ids = self
                             .children
@@ -1929,8 +1910,7 @@ impl Element for Div {
                             .collect::<SmallVec<_>>();
                         window.request_layout(style, child_layout_ids.iter().copied(), cx)
                     })
-                },
-            )
+                })
         });
 
         (layout_id, DivFrameState { child_layout_ids })
@@ -1940,7 +1920,6 @@ impl Element for Div {
     fn prepaint(
         &mut self,
         global_id: Option<&GlobalElementId>,
-        inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
         request_layout: &mut Self::RequestLayoutState,
         window: &mut Window,
@@ -1994,7 +1973,6 @@ impl Element for Div {
 
         self.interactivity.prepaint(
             global_id,
-            inspector_id,
             bounds,
             content_size,
             window,
@@ -2035,7 +2013,6 @@ impl Element for Div {
     fn paint(
         &mut self,
         global_id: Option<&GlobalElementId>,
-        inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
         _request_layout: &mut Self::RequestLayoutState,
         hitbox: &mut Option<Hitbox>,
@@ -2050,7 +2027,6 @@ impl Element for Div {
         window.with_image_cache(image_cache, |window| {
             self.interactivity.paint(
                 global_id,
-                inspector_id,
                 bounds,
                 hitbox.as_ref(),
                 window,
@@ -2173,7 +2149,7 @@ pub struct Interactivity {
     pub(crate) override_role: Option<accesskit::Role>,
     pub(crate) aria: AriaProperties,
 
-    #[cfg(any(feature = "inspector", debug_assertions))]
+    #[cfg(debug_assertions)]
     pub(crate) source_location: Option<&'static core::panic::Location<'static>>,
 }
 
@@ -2182,28 +2158,10 @@ impl Interactivity {
     pub fn request_layout(
         &mut self,
         global_id: Option<&GlobalElementId>,
-        _inspector_id: Option<&InspectorElementId>,
         window: &mut Window,
         cx: &mut App,
         f: impl FnOnce(Style, &mut Window, &mut App) -> LayoutId,
     ) -> LayoutId {
-        #[cfg(any(feature = "inspector", debug_assertions))]
-        window.with_inspector_state(
-            _inspector_id,
-            cx,
-            |inspector_state: &mut Option<DivInspectorState>, _window| {
-                if let Some(inspector_state) = inspector_state {
-                    self.base_style = inspector_state.base_style.clone();
-                } else {
-                    *inspector_state = Some(DivInspectorState {
-                        base_style: self.base_style.clone(),
-                        bounds: Default::default(),
-                        content_size: Default::default(),
-                    })
-                }
-            },
-        );
-
         window.with_optional_element_state::<InteractiveElementState, _>(
             global_id,
             |element_state, window| {
@@ -2275,7 +2233,6 @@ impl Interactivity {
     pub fn prepaint<R>(
         &mut self,
         global_id: Option<&GlobalElementId>,
-        _inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
         content_size: Size<Pixels>,
         window: &mut Window,
@@ -2283,18 +2240,6 @@ impl Interactivity {
         f: impl FnOnce(&Style, Point<Pixels>, Option<Hitbox>, &mut Window, &mut App) -> R,
     ) -> R {
         self.content_size = content_size;
-
-        #[cfg(any(feature = "inspector", debug_assertions))]
-        window.with_inspector_state(
-            _inspector_id,
-            cx,
-            |inspector_state: &mut Option<DivInspectorState>, _window| {
-                if let Some(inspector_state) = inspector_state {
-                    inspector_state.bounds = bounds;
-                    inspector_state.content_size = content_size;
-                }
-            },
-        );
 
         if let Some(focus_handle) = self.tracked_focus_handle.as_ref() {
             window.set_focus_handle(focus_handle, cx);
@@ -2360,7 +2305,7 @@ impl Interactivity {
                     window.with_content_mask(
                         style.overflow_mask(bounds, window.rem_size()),
                         |window| {
-                            let hitbox = if self.should_insert_hitbox(&style, window, cx) {
+                            let hitbox = if self.should_insert_hitbox(&style) {
                                 Some(window.insert_hitbox(bounds, self.hitbox_behavior))
                             } else {
                                 None
@@ -2377,7 +2322,7 @@ impl Interactivity {
         )
     }
 
-    fn should_insert_hitbox(&self, style: &Style, window: &Window, cx: &App) -> bool {
+    fn should_insert_hitbox(&self, style: &Style) -> bool {
         self.hitbox_behavior != HitboxBehavior::Normal
             || self.window_control.is_some()
             || style.mouse_cursor.is_some()
@@ -2401,7 +2346,6 @@ impl Interactivity {
             || !self.drop_listeners.is_empty()
             || !self.drag_over_styles.is_empty()
             || self.tooltip_builder.is_some()
-            || window.is_inspector_picking(cx)
     }
 
     fn clamp_scroll_position(
@@ -2480,7 +2424,6 @@ impl Interactivity {
     pub fn paint(
         &mut self,
         global_id: Option<&GlobalElementId>,
-        _inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
         hitbox: Option<&Hitbox>,
         window: &mut Window,
@@ -2580,17 +2523,10 @@ impl Interactivity {
 
                                         f(&style, window, cx);
 
-                                        if let Some(_hitbox) = hitbox {
-                                            #[cfg(any(feature = "inspector", debug_assertions))]
-                                            window.insert_inspector_hitbox(
-                                                _hitbox.id,
-                                                _inspector_id,
-                                                cx,
-                                            );
-
-                                            if let Some(group) = self.group.as_ref() {
-                                                GroupHitboxes::pop(group, cx);
-                                            }
+                                        if hitbox.is_some()
+                                            && let Some(group) = self.group.as_ref()
+                                        {
+                                            GroupHitboxes::pop(group, cx);
                                         }
                                     })
                                 },
@@ -4093,45 +4029,34 @@ where
     fn request_layout(
         &mut self,
         id: Option<&GlobalElementId>,
-        inspector_id: Option<&InspectorElementId>,
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        self.element.request_layout(id, inspector_id, window, cx)
+        self.element.request_layout(id, window, cx)
     }
 
     fn prepaint(
         &mut self,
         id: Option<&GlobalElementId>,
-        inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
         state: &mut Self::RequestLayoutState,
         window: &mut Window,
         cx: &mut App,
     ) -> E::PrepaintState {
-        self.element
-            .prepaint(id, inspector_id, bounds, state, window, cx)
+        self.element.prepaint(id, bounds, state, window, cx)
     }
 
     fn paint(
         &mut self,
         id: Option<&GlobalElementId>,
-        inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
         request_layout: &mut Self::RequestLayoutState,
         prepaint: &mut Self::PrepaintState,
         window: &mut Window,
         cx: &mut App,
     ) {
-        self.element.paint(
-            id,
-            inspector_id,
-            bounds,
-            request_layout,
-            prepaint,
-            window,
-            cx,
-        );
+        self.element
+            .paint(id, bounds, request_layout, prepaint, window, cx);
     }
 }
 

@@ -20,6 +20,10 @@ building (`cargo check` / `cargo clippy`) and running the app.
   are removed. GPUI keeps the development dependency needed by its documentation examples.
 - GPUI leak detection (`GPUI_LEAK_DETECTION` / `leak-detection` feature) stays as
   a runtime debugging aid.
+- The GPUI element inspector is removed from all builds, including its UI,
+  command, keybinding, style schema, reflection macro, and Cargo features.
+  Rendering carries no inspector state or IDs. Debug source locations remain
+  available for accessibility diagnostics and source navigation.
 
 ## Dependencies
 

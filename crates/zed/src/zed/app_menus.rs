@@ -1,7 +1,7 @@
 use gpui::{App, Menu, MenuItem, OsAction};
 
 use terminal_view::terminal_panel;
-use zed_actions::{Quit, dev, git_panel, project_panel};
+use zed_actions::{Quit, git_panel, project_panel};
 
 pub fn app_menus(_cx: &mut App) -> Vec<Menu> {
     let mut view_items = vec![
@@ -48,14 +48,6 @@ pub fn app_menus(_cx: &mut App) -> Vec<Menu> {
         MenuItem::action("Diagnostics", diagnostics::Deploy),
         MenuItem::separator(),
     ]);
-
-    if cfg!(debug_assertions) {
-        view_items.push(MenuItem::action(
-            "Toggle GPUI Inspector",
-            dev::ToggleInspector,
-        ));
-        view_items.push(MenuItem::separator());
-    }
 
     vec![
         Menu {

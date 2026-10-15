@@ -31,12 +31,10 @@
 //! elements when you need to take manual control of the layout and painting process, such as when using
 //! your own custom layout algorithm or rendering a code editor.
 
-#[cfg(any(feature = "inspector", debug_assertions))]
-use crate::InspectorElementPath;
 use crate::{
     A11ySubtreeBuilder, App, ArenaBox, AvailableSpace, Bounds, Context, DispatchNodeId, ElementId,
-    FocusHandle, InspectorElementId, LayoutId, Pixels, Point, Size, Style, Window,
-    util::FluentBuilder, window::with_element_arena,
+    FocusHandle, LayoutId, Pixels, Point, Size, Style, Window, util::FluentBuilder,
+    window::with_element_arena,
 };
 use std::{
     any::Any,
@@ -65,8 +63,7 @@ pub trait Element: 'static + IntoElement {
     /// frames. This id must be unique among children of the first containing element with an id.
     fn id(&self) -> Option<ElementId>;
 
-    /// Source location where this element was constructed, used to disambiguate elements in the
-    /// inspector and navigate to their source code.
+    /// Source location where this element was constructed, used for accessibility debugging.
     fn source_location(&self) -> Option<&'static panic::Location<'static>>;
 
     /// Before an element can be painted, we need to know where it's going to be and how big it is.
@@ -74,7 +71,6 @@ pub trait Element: 'static + IntoElement {
     fn request_layout(
         &mut self,
         id: Option<&GlobalElementId>,
-        inspector_id: Option<&InspectorElementId>,
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState);
@@ -84,7 +80,6 @@ pub trait Element: 'static + IntoElement {
     fn prepaint(
         &mut self,
         id: Option<&GlobalElementId>,
-        inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
         request_layout: &mut Self::RequestLayoutState,
         window: &mut Window,
@@ -96,7 +91,6 @@ pub trait Element: 'static + IntoElement {
     fn paint(
         &mut self,
         id: Option<&GlobalElementId>,
-        inspector_id: Option<&InspectorElementId>,
         bounds: Bounds<Pixels>,
         request_layout: &mut Self::RequestLayoutState,
         prepaint: &mut Self::PrepaintState,
@@ -326,20 +320,17 @@ enum ElementDrawPhase<RequestLayoutState, PrepaintState> {
     RequestLayout {
         layout_id: LayoutId,
         global_id: Option<GlobalElementId>,
-        inspector_id: Option<InspectorElementId>,
         request_layout: RequestLayoutState,
     },
     LayoutComputed {
         layout_id: LayoutId,
         global_id: Option<GlobalElementId>,
-        inspector_id: Option<InspectorElementId>,
         available_space: Size<AvailableSpace>,
         request_layout: RequestLayoutState,
     },
     Prepaint {
         node_id: DispatchNodeId,
         global_id: Option<GlobalElementId>,
-        inspector_id: Option<InspectorElementId>,
         bounds: Bounds<Pixels>,
         request_layout: RequestLayoutState,
         prepaint: PrepaintState,
@@ -364,28 +355,8 @@ impl<E: Element> Drawable<E> {
                     .id()
                     .map(|element_id| prepare_element_id(element_id, window));
 
-                let inspector_id;
-                #[cfg(any(feature = "inspector", debug_assertions))]
-                {
-                    inspector_id = if window.inspector_enabled() {
-                        self.element
-                            .source_location()
-                            .map(|source| prepare_inspector_id(source, window))
-                    } else {
-                        None
-                    };
-                }
-                #[cfg(not(any(feature = "inspector", debug_assertions)))]
-                {
-                    inspector_id = None;
-                }
-
-                let (layout_id, request_layout) = self.element.request_layout(
-                    global_id.as_ref(),
-                    inspector_id.as_ref(),
-                    window,
-                    cx,
-                );
+                let (layout_id, request_layout) =
+                    self.element.request_layout(global_id.as_ref(), window, cx);
 
                 if global_id.is_some() {
                     window.element_id_stack.pop();
@@ -394,7 +365,6 @@ impl<E: Element> Drawable<E> {
                 self.phase = ElementDrawPhase::RequestLayout {
                     layout_id,
                     global_id,
-                    inspector_id,
                     request_layout,
                 };
                 layout_id
@@ -408,13 +378,11 @@ impl<E: Element> Drawable<E> {
             ElementDrawPhase::RequestLayout {
                 layout_id,
                 global_id,
-                inspector_id,
                 mut request_layout,
             }
             | ElementDrawPhase::LayoutComputed {
                 layout_id,
                 global_id,
-                inspector_id,
                 mut request_layout,
                 ..
             } => {
@@ -465,7 +433,6 @@ impl<E: Element> Drawable<E> {
                 let node_id = window.next_frame.dispatch_tree.push_node();
                 let mut prepaint = self.element.prepaint(
                     global_id.as_ref(),
-                    inspector_id.as_ref(),
                     bounds,
                     &mut request_layout,
                     window,
@@ -506,7 +473,6 @@ impl<E: Element> Drawable<E> {
                 self.phase = ElementDrawPhase::Prepaint {
                     node_id,
                     global_id,
-                    inspector_id,
                     bounds,
                     request_layout,
                     prepaint,
@@ -525,7 +491,6 @@ impl<E: Element> Drawable<E> {
             ElementDrawPhase::Prepaint {
                 node_id,
                 global_id,
-                inspector_id,
                 bounds,
                 mut request_layout,
                 mut prepaint,
@@ -539,7 +504,6 @@ impl<E: Element> Drawable<E> {
                 window.next_frame.dispatch_tree.set_active_node(node_id);
                 self.element.paint(
                     global_id.as_ref(),
-                    inspector_id.as_ref(),
                     bounds,
                     &mut request_layout,
                     &mut prepaint,
@@ -572,14 +536,12 @@ impl<E: Element> Drawable<E> {
             ElementDrawPhase::RequestLayout {
                 layout_id,
                 global_id,
-                inspector_id,
                 request_layout,
             } => {
                 window.compute_layout(layout_id, available_space, cx);
                 self.phase = ElementDrawPhase::LayoutComputed {
                     layout_id,
                     global_id,
-                    inspector_id,
                     available_space,
                     request_layout,
                 };
@@ -588,7 +550,6 @@ impl<E: Element> Drawable<E> {
             ElementDrawPhase::LayoutComputed {
                 layout_id,
                 global_id,
-                inspector_id,
                 available_space: prev_available_space,
                 request_layout,
             } => {
@@ -598,7 +559,6 @@ impl<E: Element> Drawable<E> {
                 self.phase = ElementDrawPhase::LayoutComputed {
                     layout_id,
                     global_id,
-                    inspector_id,
                     available_space,
                     request_layout,
                 };
@@ -740,7 +700,6 @@ impl Element for AnyElement {
     fn request_layout(
         &mut self,
         _: Option<&GlobalElementId>,
-        _inspector_id: Option<&InspectorElementId>,
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
@@ -751,7 +710,6 @@ impl Element for AnyElement {
     fn prepaint(
         &mut self,
         _: Option<&GlobalElementId>,
-        _inspector_id: Option<&InspectorElementId>,
         _: Bounds<Pixels>,
         _: &mut Self::RequestLayoutState,
         window: &mut Window,
@@ -763,7 +721,6 @@ impl Element for AnyElement {
     fn paint(
         &mut self,
         _: Option<&GlobalElementId>,
-        _inspector_id: Option<&InspectorElementId>,
         _: Bounds<Pixels>,
         _: &mut Self::RequestLayoutState,
         _: &mut Self::PrepaintState,
@@ -812,7 +769,6 @@ impl Element for Empty {
     fn request_layout(
         &mut self,
         _id: Option<&GlobalElementId>,
-        _inspector_id: Option<&InspectorElementId>,
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
@@ -832,7 +788,6 @@ impl Element for Empty {
     fn prepaint(
         &mut self,
         _id: Option<&GlobalElementId>,
-        _inspector_id: Option<&InspectorElementId>,
         _bounds: Bounds<Pixels>,
         _state: &mut Self::RequestLayoutState,
         _window: &mut Window,
@@ -843,7 +798,6 @@ impl Element for Empty {
     fn paint(
         &mut self,
         _id: Option<&GlobalElementId>,
-        _inspector_id: Option<&InspectorElementId>,
         _bounds: Bounds<Pixels>,
         _request_layout: &mut Self::RequestLayoutState,
         _prepaint: &mut Self::PrepaintState,
@@ -857,17 +811,4 @@ impl Element for Empty {
 fn prepare_element_id(element_id: ElementId, window: &mut Window) -> GlobalElementId {
     window.element_id_stack.push(element_id);
     window.element_id_stack.global_id()
-}
-
-#[cfg(any(feature = "inspector", debug_assertions))]
-#[inline(never)]
-fn prepare_inspector_id(
-    source: &'static panic::Location<'static>,
-    window: &mut Window,
-) -> InspectorElementId {
-    let path = InspectorElementPath {
-        global_id: window.element_id_stack.global_id(),
-        source_location: source,
-    };
-    window.build_inspector_element_id(path)
 }

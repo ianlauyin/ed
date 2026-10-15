@@ -97,8 +97,6 @@ impl gpui::Global for CrashHandler {}
 actions!(
     zed,
     [
-        /// Opens the element inspector for debugging UI.
-        DebugElements,
         /// Hides the application window.
         Hide,
         /// Hides all other application windows.
