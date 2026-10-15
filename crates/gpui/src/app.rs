@@ -3073,7 +3073,7 @@ impl App {
                     let quit_on_empty = match cx.quit_mode {
                         QuitMode::Explicit => false,
                         QuitMode::LastWindowClosed => true,
-                        QuitMode::Default => false,
+                        QuitMode::Default => cfg!(not(target_os = "macos")),
                     };
 
                     if quit_on_empty && cx.windows.is_empty() {

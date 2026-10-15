@@ -210,7 +210,11 @@ pub fn increase_open_file_limit() -> Result<()> {
 
     let (soft_limit, hard_limit) = getrlimit(RLIMIT_NOFILE).context("getrlimit(RLIMIT_NOFILE)")?;
     // These are startup targets, not OS ceilings. Preserve higher inherited limits.
-    let target = { 10_240 };
+    let target = if cfg!(target_os = "macos") {
+        10_240
+    } else {
+        65_536
+    };
     let mut requested_limit = hard_limit.min(target);
 
     while requested_limit > soft_limit {
@@ -289,7 +293,7 @@ pub fn get_shell_safe_zed_path(shell_kind: shell::ShellKind) -> anyhow::Result<S
     use paths::PathExt;
     let mut zed_path =
         std::env::current_exe().context("Failed to determine current zed executable path.")?;
-    if false
+    if cfg!(target_os = "linux")
         && !zed_path.is_file()
         && let Some(truncated) = zed_path
             .clone()

@@ -2894,7 +2894,11 @@ impl Window {
     /// that currently owns the mouse cursor.
     /// On mac, this is equivalent to `is_window_active`.
     pub fn is_window_hovered(&self) -> bool {
-        self.is_window_active()
+        if cfg!(target_os = "linux") {
+            self.hovered.get()
+        } else {
+            self.is_window_active()
+        }
     }
 
     /// Toggle zoom on the window.

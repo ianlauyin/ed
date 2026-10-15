@@ -3,6 +3,7 @@
 fn main() {
     println!("cargo::rustc-check-cfg=cfg(macos_sdk_26_or_later)");
 
+    #[cfg(target_os = "macos")]
     {
         use std::process::Command;
 

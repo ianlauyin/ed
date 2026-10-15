@@ -18,6 +18,9 @@ zstd.workspace = true
 [target.'cfg(not(target_os = "windows"))'.dependencies]
 async-process.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+libc.workspace = true
+
 [target.'cfg(target_os = "macos")'.dependencies]
 mach2.workspace = true
 

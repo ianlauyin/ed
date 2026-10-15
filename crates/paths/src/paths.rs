@@ -180,9 +180,18 @@ pub fn state_dir() -> &'static PathBuf {
 pub fn temp_dir() -> &'static PathBuf {
     static TEMP_DIR: OnceLock<PathBuf> = OnceLock::new();
     TEMP_DIR.get_or_init(|| {
-        dirs::cache_dir()
-            .expect("failed to determine cachesDirectory directory")
-            .join(APP_NAME)
+        #[cfg(target_os = "macos")]
+        {
+            dirs::cache_dir()
+                .expect("failed to determine cachesDirectory directory")
+                .join(APP_NAME)
+        }
+        #[cfg(target_os = "linux")]
+        {
+            dirs::cache_dir()
+                .expect("failed to determine XDG_CACHE_HOME directory")
+                .join(APP_NAME_LOWERCASE)
+        }
     })
 }
 
@@ -234,7 +243,9 @@ pub fn database_dir() -> &'static PathBuf {
 /// Returns the path to the crashes directory, if it exists for the current platform.
 pub fn crashes_dir() -> &'static Option<PathBuf> {
     static CRASHES_DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
-    CRASHES_DIR.get_or_init(|| true.then_some(home_dir().join("Library/Logs/DiagnosticReports")))
+    CRASHES_DIR.get_or_init(|| {
+        cfg!(target_os = "macos").then_some(home_dir().join("Library/Logs/DiagnosticReports"))
+    })
 }
 
 /// Returns the path to the retired crashes directory, if it exists for the current platform.
@@ -310,7 +321,13 @@ pub fn snippets_dir() -> &'static PathBuf {
 /// This is where the prompts for use with the Assistant are stored.
 pub fn prompts_dir() -> &'static PathBuf {
     static PROMPTS_DIR: OnceLock<PathBuf> = OnceLock::new();
-    PROMPTS_DIR.get_or_init(|| config_dir().join("prompts"))
+    PROMPTS_DIR.get_or_init(|| {
+        if cfg!(target_os = "macos") {
+            config_dir().join("prompts")
+        } else {
+            data_dir().join("prompts")
+        }
+    })
 }
 
 /// Returns the path to the prompt templates directory.
@@ -330,7 +347,13 @@ pub fn prompt_overrides_dir(repo_path: Option<&Path>) -> PathBuf {
 
     static PROMPT_TEMPLATES_DIR: OnceLock<PathBuf> = OnceLock::new();
     PROMPT_TEMPLATES_DIR
-        .get_or_init(|| config_dir().join("prompt_overrides"))
+        .get_or_init(|| {
+            if cfg!(target_os = "macos") {
+                config_dir().join("prompt_overrides")
+            } else {
+                data_dir().join("prompt_overrides")
+            }
+        })
         .clone()
 }
 
@@ -339,7 +362,13 @@ pub fn prompt_overrides_dir(repo_path: Option<&Path>) -> PathBuf {
 /// This is where the embeddings used to power semantic search are stored.
 pub fn embeddings_dir() -> &'static PathBuf {
     static EMBEDDINGS_DIR: OnceLock<PathBuf> = OnceLock::new();
-    EMBEDDINGS_DIR.get_or_init(|| config_dir().join("embeddings"))
+    EMBEDDINGS_DIR.get_or_init(|| {
+        if cfg!(target_os = "macos") {
+            config_dir().join("embeddings")
+        } else {
+            data_dir().join("embeddings")
+        }
+    })
 }
 
 /// Returns the path to the languages directory.
@@ -471,10 +500,16 @@ fn cursor_user_data_paths() -> Vec<PathBuf> {
 }
 
 fn add_vscode_user_data_paths(paths: &mut Vec<PathBuf>, product_name: &str) {
-    {
+    if cfg!(target_os = "macos") {
         paths.push(
             home_dir()
                 .join("Library/Application Support")
+                .join(product_name),
+        );
+    } else {
+        paths.push(
+            dirs::config_dir()
+                .unwrap_or(home_dir().join(".config"))
                 .join(product_name),
         );
     }

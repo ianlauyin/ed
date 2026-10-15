@@ -27,5 +27,8 @@ semver.workspace = true
 serde.workspace = true
 sysinfo.workspace = true
 
+[target.'cfg(target_os = "linux")'.dependencies]
+pciid-parser.workspace = true
+
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2-foundation.workspace = true

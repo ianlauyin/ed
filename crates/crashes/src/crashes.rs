@@ -34,7 +34,7 @@ pub fn force_backtrace() {
         unsafe { env::set_var("RUST_BACKTRACE", "1") };
         old_hook(info);
         // prevent the macOS crash dialog from popping up
-        {
+        if cfg!(target_os = "macos") {
             std::process::exit(1);
         }
     }));
@@ -140,6 +140,20 @@ where
 
     info!("crash signal handlers installed");
     send_crash_server_message(&client, CrashServerMessage::Init(crash_init));
+
+    #[cfg(all(target_os = "linux", target_env = "gnu"))]
+    if let Some(address) = abort_message_address() {
+        send_crash_server_message(
+            &client,
+            CrashServerMessage::AbortMessageLocation(AbortMessageLocation {
+                pid: process::id(),
+                address,
+            }),
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    handler.set_ptracer(Some(_crash_handler.id()));
 
     info!("crash handler registered");
     spawn(Box::pin({
@@ -282,6 +296,47 @@ enum CrashServerMessage {
     Shutdown,
 }
 
+/// glibc records the diagnostic it prints just before aborting (malloc integrity
+/// failures like "free(): invalid pointer", assertion failures, stack-smashing
+/// reports) in the private global `__abort_msg`, specifically so it can be
+/// recovered post-mortem. Resolve its address here, in a safe context at startup.
+/// The symbol is only exported at the GLIBC_PRIVATE version, which plain `dlsym`
+/// won't resolve, and it has no stability guarantee, so a null result (e.g. musl,
+/// or a future glibc removing it) just disables this diagnostic.
+#[cfg(all(target_os = "linux", target_env = "gnu"))]
+fn abort_message_address() -> Option<u64> {
+    let ptr = unsafe {
+        libc::dlvsym(
+            libc::RTLD_DEFAULT,
+            c"__abort_msg".as_ptr(),
+            c"GLIBC_PRIVATE".as_ptr(),
+        )
+    };
+    std::ptr::NonNull::new(ptr).map(|ptr| ptr.as_ptr() as u64)
+}
+
+/// Read the crashed process's abort diagnostic. `__abort_msg` points to a
+/// `struct abort_msg_s { unsigned int size; char msg[]; }` that glibc allocates
+/// with mmap so that it stays intact even when the heap is corrupt. `size` is
+/// the total byte size of that mapping (header included, rounded up to whole
+/// pages), not the message length; the message itself is NUL-terminated.
+#[cfg(target_os = "linux")]
+fn read_abort_message(location: AbortMessageLocation) -> Option<String> {
+    let pointer_bytes = read_process_memory(location.pid, location.address, size_of::<usize>())?;
+    let message_address = usize::from_ne_bytes(pointer_bytes.try_into().ok()?) as u64;
+    if message_address == 0 {
+        return None;
+    }
+    let size_bytes = read_process_memory(location.pid, message_address, size_of::<u32>())?;
+    let size = u32::from_ne_bytes(size_bytes.try_into().ok()?);
+    let message_bytes = read_process_memory(
+        location.pid,
+        message_address + size_of::<u32>() as u64,
+        abort_message_read_len(size)?,
+    )?;
+    parse_abort_message(&message_bytes)
+}
+
 /// How many message bytes to read given the `size` field of glibc's
 /// `abort_msg_s`. `size` holds the total size of the mmap'd allocation, so a
 /// value that isn't a whole number of pages means the layout has changed and
@@ -313,6 +368,35 @@ fn parse_abort_message(bytes: &[u8]) -> Option<String> {
         .unwrap_or(bytes.len());
     let message = String::from_utf8_lossy(&bytes[..len]).trim().to_string();
     (!message.is_empty()).then_some(message)
+}
+
+#[cfg(target_os = "linux")]
+fn read_process_memory(pid: u32, address: u64, len: usize) -> Option<Vec<u8>> {
+    let mut buffer = vec![0u8; len];
+    let local = libc::iovec {
+        iov_base: buffer.as_mut_ptr().cast(),
+        iov_len: len,
+    };
+    let remote = libc::iovec {
+        iov_base: address as *mut libc::c_void,
+        iov_len: len,
+    };
+    let bytes_read =
+        unsafe { libc::process_vm_readv(pid as libc::pid_t, &local, 1, &remote, 1, 0) };
+    if bytes_read < 0 {
+        log::warn!(
+            "process_vm_readv of {len} bytes at {address:#x} in pid {pid} failed: {}",
+            io::Error::last_os_error()
+        );
+        return None;
+    }
+    if bytes_read as usize != len {
+        log::warn!(
+            "process_vm_readv short read at {address:#x} in pid {pid}: {bytes_read} of {len} bytes"
+        );
+        return None;
+    }
+    Some(buffer)
 }
 
 impl minidumper::ServerHandler for CrashServer {
@@ -349,12 +433,24 @@ impl minidumper::ServerHandler for CrashServer {
             Err(e) => Some(format!("{e:?}")),
         };
 
+        #[cfg(not(target_os = "linux"))]
         let gpus = vec![];
+
+        #[cfg(target_os = "linux")]
+        let gpus = match system_specs::read_gpu_info_from_sys_class_drm() {
+            Ok(gpus) => gpus,
+            Err(err) => {
+                log::warn!("Failed to collect GPU information for crash report: {err}");
+                vec![]
+            }
+        };
 
         // The crashed process is still alive at this point: it stays parked in
         // its signal handler until the server acknowledges the dump request,
         // which happens after this callback returns.
-
+        #[cfg(target_os = "linux")]
+        let abort_message = (*self.abort_message_location.lock()).and_then(read_abort_message);
+        #[cfg(not(target_os = "linux"))]
         let abort_message = None;
 
         let crash_info = CrashInfo {

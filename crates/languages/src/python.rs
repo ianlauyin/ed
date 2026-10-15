@@ -319,9 +319,16 @@ pub struct TyLspAdapter {
     fs: Arc<dyn Fs>,
 }
 
+#[cfg(target_os = "macos")]
 impl TyLspAdapter {
     const GITHUB_ASSET_KIND: AssetKind = AssetKind::TarGz;
     const ARCH_SERVER_NAME: &str = "apple-darwin";
+}
+
+#[cfg(target_os = "linux")]
+impl TyLspAdapter {
+    const GITHUB_ASSET_KIND: AssetKind = AssetKind::TarGz;
+    const ARCH_SERVER_NAME: &str = "unknown-linux-gnu";
 }
 
 impl TyLspAdapter {
@@ -2412,9 +2419,16 @@ impl RuffLspAdapter {
     }
 }
 
+#[cfg(target_os = "macos")]
 impl RuffLspAdapter {
     const GITHUB_ASSET_KIND: AssetKind = AssetKind::TarGz;
     const ARCH_SERVER_NAME: &str = "apple-darwin";
+}
+
+#[cfg(target_os = "linux")]
+impl RuffLspAdapter {
+    const GITHUB_ASSET_KIND: AssetKind = AssetKind::TarGz;
+    const ARCH_SERVER_NAME: &str = "unknown-linux-gnu";
 }
 
 impl RuffLspAdapter {

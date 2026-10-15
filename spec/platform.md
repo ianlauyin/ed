@@ -23,5 +23,8 @@ remote server supports macOS and Linux.
 
 Use a Rust toolchain and the native SDK/C toolchain for the intended target.
 Metal shaders compile at runtime on macOS. Linux remote-server builds require a
-Linux host or a configured Linux cross-compilation toolchain. Upstream workflow
+Linux host or a configured Linux cross-compilation toolchain.
+Crates in the remote server's dependency tree must gate macOS-only build steps
+(e.g. `xcrun`, SDK probes) and macOS paths behind `target_os = "macos"`, keeping
+Linux branches for paths, crash handling, and LSP download assets. Upstream workflow
 generators that depended on removed release and deployment infrastructure are absent.

@@ -19,9 +19,7 @@ use gpui::SharedString;
 use std::ffi::CString;
 use util::command::{Stdio, new_command};
 
-#[cfg(target_os = "macos")]
-use std::os::fd::AsFd;
-use std::os::fd::AsRawFd;
+use std::os::fd::{AsFd, AsRawFd};
 
 use std::os::unix::ffi::OsStrExt;
 
@@ -443,10 +441,17 @@ pub trait FileHandle: Send + Sync + std::fmt::Debug {
 impl FileHandle for std::fs::File {
     #[cfg(target_os = "linux")]
     fn current_path(&self, _: &Arc<dyn Fs>) -> Result<PathBuf> {
-        Ok(std::fs::read_link(format!(
-            "/proc/self/fd/{}",
-            self.as_raw_fd()
-        ))?)
+        let fd = self.as_fd();
+        let fd_path = format!("/proc/self/fd/{}", fd.as_raw_fd());
+        let new_path = std::fs::read_link(fd_path)?;
+        if new_path
+            .file_name()
+            .is_some_and(|f| f.to_string_lossy().ends_with(" (deleted)"))
+        {
+            anyhow::bail!("file was deleted")
+        };
+
+        Ok(new_path)
     }
 
     #[cfg(target_os = "macos")]

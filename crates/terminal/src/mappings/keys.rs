@@ -211,7 +211,7 @@ pub(crate) fn to_esc_str(
     }
 
     // Handling alt keys. These work for single ASCII characters.
-    if (!true || option_as_meta)
+    if (!cfg!(target_os = "macos") || option_as_meta)
         && keystroke.modifiers.alt
         && keystroke.key.is_ascii()
         && keystroke.key.len() == 1

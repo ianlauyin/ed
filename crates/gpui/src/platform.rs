@@ -5,7 +5,7 @@ mod keystroke;
 /// Types for configuring parent-anchored popup windows such as menus, dropdowns and tooltips.
 pub mod popup;
 
-#[cfg(not(feature = "screen-capture"))]
+#[cfg(not(all(target_os = "macos", feature = "screen-capture")))]
 pub(crate) type PlatformScreenCaptureFrame = ();
 #[cfg(all(target_os = "macos", feature = "screen-capture"))]
 pub(crate) type PlatformScreenCaptureFrame =

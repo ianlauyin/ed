@@ -723,7 +723,12 @@ pub fn execute_run(
 
         HeadlessProject::init(cx);
 
-        let is_wsl_interop = { false };
+        let is_wsl_interop = if cfg!(target_os = "linux") {
+            // See: https://learn.microsoft.com/en-us/windows/wsl/filesystems#disable-interoperability
+            matches!(std::fs::read_to_string("/proc/sys/fs/binfmt_misc/WSLInterop").or_else(|_| std::fs::read_to_string("/proc/sys/fs/binfmt_misc/WSLInterop-late")), Ok(s) if s.contains("enabled"))
+        } else {
+            false
+        };
 
         log::info!("gpui app started, initializing server");
         let session = start_server(listeners, log_rx, cx, is_wsl_interop);

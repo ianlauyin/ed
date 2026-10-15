@@ -122,8 +122,10 @@ impl Keystroke {
                 continue;
             }
             if component.eq_ignore_ascii_case("secondary") {
-                {
+                if cfg!(target_os = "macos") {
                     modifiers.platform = true;
+                } else {
+                    modifiers.control = true;
                 };
                 continue;
             }
@@ -408,7 +410,15 @@ impl Modifiers {
     /// On macOS, this is the command key.
     /// On Linux and Windows, this is the control key.
     pub fn secondary(&self) -> bool {
-        self.platform
+        #[cfg(target_os = "macos")]
+        {
+            self.platform
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            self.control
+        }
     }
 
     /// Returns how many modifier keys are pressed.
@@ -435,9 +445,18 @@ impl Modifiers {
 
     /// A Returns [`Modifiers`] with just the secondary key pressed.
     pub fn secondary_key() -> Modifiers {
+        #[cfg(target_os = "macos")]
         {
             Modifiers {
                 platform: true,
+                ..Default::default()
+            }
+        }
+
+        #[cfg(target_os = "linux")]
+        {
+            Modifiers {
+                control: true,
                 ..Default::default()
             }
         }
@@ -598,42 +617,59 @@ impl<T: AsKeystroke + ?Sized> AsKeystroke for &T {
 
 fn display_modifiers(modifiers: &Modifiers, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     if modifiers.control {
+        #[cfg(target_os = "macos")]
         f.write_char('^')?;
+
+        #[cfg(target_os = "linux")]
+        write!(f, "ctrl-")?;
     }
     if modifiers.alt {
+        #[cfg(target_os = "macos")]
         f.write_char('⌥')?;
+
+        #[cfg(target_os = "linux")]
+        write!(f, "alt-")?;
     }
     if modifiers.platform {
+        #[cfg(target_os = "macos")]
         f.write_char('⌘')?;
+
+        #[cfg(target_os = "linux")]
+        f.write_char('❖')?;
     }
     if modifiers.shift {
+        #[cfg(target_os = "macos")]
         f.write_char('⇧')?;
+
+        #[cfg(target_os = "linux")]
+        write!(f, "shift-")?;
     }
     Ok(())
 }
 
 fn display_key(key: &str, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
     let key = match key {
+        #[cfg(target_os = "macos")]
         "backspace" => '⌫',
-
+        #[cfg(target_os = "macos")]
         "up" => '↑',
-
+        #[cfg(target_os = "macos")]
         "down" => '↓',
-
+        #[cfg(target_os = "macos")]
         "left" => '←',
-
+        #[cfg(target_os = "macos")]
         "right" => '→',
-
+        #[cfg(target_os = "macos")]
         "tab" => '⇥',
-
+        #[cfg(target_os = "macos")]
         "escape" => '⎋',
-
+        #[cfg(target_os = "macos")]
         "shift" => '⇧',
-
+        #[cfg(target_os = "macos")]
         "control" => '⌃',
-
+        #[cfg(target_os = "macos")]
         "alt" => '⌥',
-
+        #[cfg(target_os = "macos")]
         "platform" => '⌘',
 
         key if key.len() == 1 => key.chars().next().unwrap().to_ascii_uppercase(),
@@ -655,7 +691,11 @@ fn unparse(modifiers: &Modifiers, key: &str) -> String {
         result.push_str("alt-");
     }
     if modifiers.platform {
+        #[cfg(target_os = "macos")]
         result.push_str("cmd-");
+
+        #[cfg(target_os = "linux")]
+        result.push_str("super-");
     }
     if modifiers.shift {
         result.push_str("shift-");
