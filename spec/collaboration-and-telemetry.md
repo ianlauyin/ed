@@ -21,10 +21,14 @@ buffer synchronization primitives remain in the editor.
 
 The application updater, update checks, downloads/installers, helper executable,
 release-note actions, and update indicators are removed. Updates are installed
-externally. The obsolete extension auto-update setting is also removed. Remote
-connections retain only the remote-server installer needed for SSH and WSL
-setup; it runs when establishing those connections,
-independently of any application updater.
+externally. The obsolete extension auto-update setting is also removed.
+
+SSH connections require an executable server installed by the user at
+`~/.local/bin/ed_remote_server` on the target host. Connection setup checks that
+it runs, then uses it for the remote session and command execution. A missing or
+unusable binary fails the connection with an error naming the required path.
+SSH never downloads, builds, uploads, or installs a remote server. WSL retains
+its remote-server installer, independently of any application updater.
 
 Feature flags and local flag overrides are removed. Notebooks are always enabled.
 Diff-review gutter controls and intentional panic/crash
@@ -36,8 +40,8 @@ removed. Local database failures still display a diagnostic notification.
 The editor has a single application identity and icon, with no release-channel
 selection, branding, or channel-specific settings overrides. Build version and
 commit metadata remain available. Existing local database state remains in the
-same directory. Upstream remote-server release identifiers remain for SSH and
-WSL compatibility; this fork uses the stable remote-server distribution.
+same directory. Upstream remote-server release identifiers remain for WSL
+compatibility; WSL uses the stable remote-server distribution.
 
 The ztracing instrumentation and Tracy integration are removed. The local GPUI
 performance profiler and diagnostic logs remain available.
