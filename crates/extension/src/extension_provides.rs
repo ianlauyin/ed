@@ -23,6 +23,7 @@ pub enum ExtensionProvides {
     IconThemes,
     Grammars,
     LanguageServers,
+    /// Deprecated
     DebugAdapters,
     ContextServers,
     /// Deprecated

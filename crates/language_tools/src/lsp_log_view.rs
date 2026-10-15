@@ -1392,7 +1392,6 @@ fn initialize_new_editor(
         editor.set_show_git_diff_gutter(false, cx);
         editor.set_show_runnables(false, cx);
         editor.set_show_bookmarks(false, cx);
-        editor.set_show_breakpoints(false, cx);
         editor.set_read_only(true);
 
         editor.set_soft_wrap_mode(SoftWrap::EditorWidth, cx);

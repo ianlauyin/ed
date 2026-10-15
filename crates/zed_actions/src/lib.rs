@@ -77,7 +77,6 @@ pub enum ExtensionCategoryFilter {
     LanguageServers,
     ContextServers,
     Snippets,
-    DebugAdapters,
 }
 
 /// Opens the extensions management interface.
@@ -511,12 +510,6 @@ pub struct OpenRemote {
     pub create_new_window: Option<bool>,
 }
 
-/// Opens the dev container connection modal.
-#[derive(PartialEq, Clone, Deserialize, Default, JsonSchema, Action)]
-#[action(namespace = projects)]
-#[serde(deny_unknown_fields)]
-pub struct OpenDevContainer;
-
 /// Where to spawn the task in the UI.
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
@@ -612,31 +605,6 @@ actions!(
 actions!(
     call_hierarchy,
     [ShowIncomingCalls, ShowOutgoingCalls, ToggleDirection]
-);
-
-pub mod debug_panel {
-    use gpui::actions;
-    actions!(
-        debug_panel,
-        [
-            /// Toggles the debug panel.
-            Toggle,
-            /// Toggles focus on the debug panel.
-            ToggleFocus
-        ]
-    );
-}
-
-actions!(
-    debugger,
-    [
-        /// Toggles the enabled state of a breakpoint.
-        ToggleEnableBreakpoint,
-        /// Removes a breakpoint.
-        UnsetBreakpoint,
-        /// Opens the project debug tasks configuration.
-        OpenProjectDebugTasks,
-    ]
 );
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]

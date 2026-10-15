@@ -14,5 +14,5 @@ are removed. There is no `disable_ai` configuration option.
   network initialization in local or remote projects.
 - AI actions and default keybindings are removed. Legacy AI bindings cannot
   shadow normal editor bindings.
-- Language-server completions, code actions, diagnostics, Git tools, terminals,
-  and debugging remain available.
+- Language-server completions, code actions, diagnostics, Git tools, and
+  terminals remain available.

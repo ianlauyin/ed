@@ -66,7 +66,7 @@ pub use item::{
     SerializableItemHandle, WeakItemHandle,
 };
 use itertools::Itertools;
-use language::{Buffer, LanguageRegistry, Rope};
+use language::{LanguageRegistry, Rope};
 pub use modal_layer::*;
 use node_runtime::NodeRuntime;
 use notifications::{
@@ -90,7 +90,6 @@ use persistence::{SerializedWindowBounds, model::SerializedWorkspace};
 use project::{
     DirectoryLister, Project, ProjectEntryId, ProjectPath, ResolvedPath, Worktree, WorktreeId,
     WorktreeSettings,
-    debugger::{breakpoint_store::BreakpointStoreEvent, session::ThreadStatus},
     git_store::{GitStoreEvent, RepositoryEvent},
     project_settings::ProjectSettings,
     toolchain_store::ToolchainStoreEvent,
@@ -134,7 +133,7 @@ use std::{
     },
     time::Duration,
 };
-use task::{DebugScenario, SharedTaskContext, SpawnInTerminal};
+use task::SpawnInTerminal;
 use theme::{ActiveTheme, ClientDecorationsExt, SystemAppearance};
 use theme_settings::ThemeSettings;
 pub use toolbar::{
@@ -155,7 +154,7 @@ pub use workspace_settings::{
     RestoreOnStartupBehavior, StatusBarSettings, TabBarSettings, WorkspaceSettings,
     closing_last_window_quits_app, observe_accessible_mode,
 };
-use zed_actions::{Spawn, theme::ToggleMode};
+use zed_actions::theme::ToggleMode;
 
 use crate::{dock::PanelSizeState, item::ItemBufferKind, notifications::NotificationId};
 use crate::{
@@ -326,33 +325,6 @@ pub trait TerminalProvider {
     ) -> Task<Option<Result<ExitStatus>>>;
 }
 
-pub trait DebuggerProvider {
-    // `active_buffer` is used to resolve build task's name against language-specific tasks.
-    fn start_session(
-        &self,
-        definition: DebugScenario,
-        task_context: SharedTaskContext,
-        active_buffer: Option<Entity<Buffer>>,
-        worktree_id: Option<WorktreeId>,
-        window: &mut Window,
-        cx: &mut App,
-    );
-
-    fn spawn_task_or_modal(
-        &self,
-        workspace: &mut Workspace,
-        action: &Spawn,
-        window: &mut Window,
-        cx: &mut Context<Workspace>,
-    );
-
-    fn task_scheduled(&self, cx: &mut App);
-    fn debug_scenario_scheduled(&self, cx: &mut App);
-    fn debug_scenario_scheduled_last(&self, cx: &App) -> bool;
-
-    fn active_thread_state(&self, cx: &App) -> Option<ThreadStatus>;
-}
-
 /// Opens a file or directory.
 #[derive(Clone, PartialEq, Deserialize, JsonSchema, Action)]
 #[action(namespace = workspace)]
@@ -452,8 +424,6 @@ actions!(
         SaveAs,
         /// Saves without formatting.
         SaveWithoutFormat,
-        /// Shuts down all debug adapters.
-        ShutdownDebugAdapters,
         /// Suppresses the current notification.
         SuppressNotification,
         /// Toggles the bottom dock.
@@ -1477,15 +1447,12 @@ pub struct Workspace {
     on_prompt_for_new_path: Option<PromptForNewPath>,
     on_prompt_for_open_path: Option<PromptForOpenPath>,
     terminal_provider: Option<Box<dyn TerminalProvider>>,
-    debugger_provider: Option<Arc<dyn DebuggerProvider>>,
     serializable_items_tx: UnboundedSender<Box<dyn SerializableItemHandle>>,
     _items_serializer: Task<Result<()>>,
     session_id: Option<String>,
     scheduled_tasks: Vec<Task<()>>,
     last_open_dock_positions: Vec<DockPosition>,
     removing: bool,
-    open_in_dev_container: bool,
-    _dev_container_task: Option<Task<Result<()>>>,
     _panels_task: Option<Task<Result<()>>>,
     sidebar_focus_handle: Option<FocusHandle>,
     multi_workspace: Option<WeakEntity<MultiWorkspace>>,
@@ -1668,18 +1635,6 @@ impl Workspace {
         })
         .detach();
 
-        cx.subscribe_in(
-            &project.read(cx).breakpoint_store(),
-            window,
-            |workspace, _, event, window, cx| match event {
-                BreakpointStoreEvent::BreakpointsUpdated(_, _)
-                | BreakpointStoreEvent::BreakpointsCleared(_) => {
-                    workspace.serialize_workspace(window, cx);
-                }
-                BreakpointStoreEvent::SetDebugLine | BreakpointStoreEvent::ClearDebugLines => {}
-            },
-        )
-        .detach();
         if let Some(toolchain_store) = project.read(cx).toolchain_store() {
             cx.subscribe_in(
                 &toolchain_store,
@@ -1902,7 +1857,6 @@ impl Workspace {
             on_prompt_for_new_path: None,
             on_prompt_for_open_path: None,
             terminal_provider: None,
-            debugger_provider: None,
             serializable_items_tx,
             _items_serializer,
             session_id: Some(session_id),
@@ -1914,8 +1868,6 @@ impl Workspace {
             multi_workspace,
             active_workspace_id: None,
             active_worktree_creation: ActiveWorktreeCreation::default(),
-            open_in_dev_container: false,
-            _dev_container_task: None,
             deferred_save_items: Vec::new(),
             persisted_recent_navigation_history: Vec::new(),
             last_active_project_path: None,
@@ -3089,26 +3041,6 @@ impl Workspace {
 
     pub fn set_terminal_provider(&mut self, provider: impl TerminalProvider + 'static) {
         self.terminal_provider = Some(Box::new(provider));
-    }
-
-    pub fn set_debugger_provider(&mut self, provider: impl DebuggerProvider + 'static) {
-        self.debugger_provider = Some(Arc::new(provider));
-    }
-
-    pub fn set_open_in_dev_container(&mut self, value: bool) {
-        self.open_in_dev_container = value;
-    }
-
-    pub fn open_in_dev_container(&self) -> bool {
-        self.open_in_dev_container
-    }
-
-    pub fn set_dev_container_task(&mut self, task: Task<Result<()>>) {
-        self._dev_container_task = Some(task);
-    }
-
-    pub fn debugger_provider(&self) -> Option<Arc<dyn DebuggerProvider>> {
-        self.debugger_provider.clone()
     }
 
     pub fn prompt_for_open_path(
@@ -6467,12 +6399,6 @@ impl Workspace {
                         .all_serialized_bookmarks(cx)
                 });
 
-                let breakpoints = self.project.update(cx, |project, cx| {
-                    project
-                        .breakpoint_store()
-                        .read(cx)
-                        .all_source_breakpoints(cx)
-                });
                 let user_toolchains = self
                     .project
                     .read(cx)
@@ -6500,7 +6426,6 @@ impl Workspace {
                     centered_layout: self.centered_layout,
                     session_id: self.session_id.clone(),
                     bookmarks,
-                    breakpoints,
                     window_id: Some(window.window_handle().window_id().as_u64()),
                     user_toolchains,
                     recent_navigation_history,
@@ -6701,17 +6626,6 @@ impl Workspace {
                 .await
                 .log_err();
 
-            let _ = project
-                .update(cx, |project, cx| {
-                    project
-                        .breakpoint_store()
-                        .update(cx, |breakpoint_store, cx| {
-                            breakpoint_store
-                                .with_serialized_breakpoints(serialized_workspace.breakpoints, cx)
-                        })
-                })
-                .await;
-
             // Clean up all the items that have _not_ been loaded. Our ItemIds aren't stable. That means
             // after loading the items, we might have different items and in order to avoid
             // the database filling up, we delete items that haven't been loaded now.
@@ -6753,30 +6667,6 @@ impl Workspace {
         let mut context = KeyContext::new_with_defaults();
         context.add("Workspace");
         context.set("keyboard_layout", cx.keyboard_layout().name().to_string());
-        if let Some(status) = self
-            .debugger_provider
-            .as_ref()
-            .and_then(|provider| provider.active_thread_state(cx))
-        {
-            match status {
-                ThreadStatus::Running | ThreadStatus::Stepping => {
-                    context.add("debugger_running");
-                }
-                ThreadStatus::Stopped => context.add("debugger_stopped"),
-                ThreadStatus::Exited | ThreadStatus::Ended => {}
-            }
-            // A coarse "there is a live debug session" flag (running, stepping,
-            // or stopped at a breakpoint) used to gate debugger controls like
-            // step/pause/stop. Distinct from `debugger_running`, which is only
-            // true while the program is actually executing.
-            if matches!(
-                status,
-                ThreadStatus::Running | ThreadStatus::Stepping | ThreadStatus::Stopped
-            ) {
-                context.add("debugger_session");
-            }
-        }
-
         if self.left_dock.read(cx).is_open() {
             if let Some(active_panel) = self.left_dock.read(cx).active_panel() {
                 context.set("left_dock", active_panel.panel_key());
@@ -8962,10 +8852,6 @@ fn workspace_is_at_location(
                 // The WSL username is not consistently populated in the workspace location, so ignore it for now.
                 workspace_remote.distro_name == remote.distro_name
             }
-            (
-                RemoteConnectionOptions::Docker(workspace_remote),
-                RemoteConnectionOptions::Docker(remote),
-            ) => workspace_remote.container_id == remote.container_id,
             _ => false,
         },
         _ => false,
@@ -9116,7 +9002,6 @@ pub struct OpenOptions {
     pub requesting_window: Option<WindowHandle<MultiWorkspace>>,
     pub open_mode: OpenMode,
     pub env: Option<HashMap<String, String>>,
-    pub open_in_dev_container: bool,
 }
 
 impl Default for OpenOptions {
@@ -9130,7 +9015,6 @@ impl Default for OpenOptions {
             requesting_window: None,
             open_mode: OpenMode::default(),
             env: None,
-            open_in_dev_container: false,
         }
     }
 }
@@ -9356,17 +9240,12 @@ pub fn open_paths(
             }
         }
 
-        let open_in_dev_container = open_options.open_in_dev_container;
-
         let result = if let Some((existing, target_workspace)) = existing {
             let open_task = existing
                 .update(cx, |multi_workspace, window, cx| {
                     window.activate_window();
                     multi_workspace.activate(target_workspace.clone(), None, window, cx);
                     target_workspace.update(cx, |workspace, cx| {
-                        if open_in_dev_container {
-                            workspace.set_open_in_dev_container(true);
-                        }
                         workspace.open_paths(
                             abs_paths,
                             OpenOptions {
@@ -9398,20 +9277,6 @@ pub fn open_paths(
                 opened_items: open_task,
             })
         } else {
-            let init = if open_in_dev_container {
-                Some(Box::new(
-                    |workspace: &mut Workspace,
-                     _window: &mut Window,
-                     _cx: &mut Context<Workspace>| {
-                        workspace.set_open_in_dev_container(true);
-                    },
-                )
-                    as Box<
-                        dyn FnOnce(&mut Workspace, &mut Window, &mut Context<Workspace>) + Send,
-                    >)
-            } else {
-                None
-            };
             let result = cx
                 .update(move |cx| {
                     Workspace::new_local(
@@ -9419,7 +9284,7 @@ pub fn open_paths(
                         app_state.clone(),
                         open_options.requesting_window,
                         open_options.env,
-                        init,
+                        None,
                         open_options.open_mode,
                         cx,
                     )

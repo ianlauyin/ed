@@ -7,8 +7,8 @@ not depend on wasmtime.
 
 ## Behaviour
 
-- Languages, grammars, themes, icon themes, language servers, and debug adapters
-  come only from built-in code and user settings/files.
+- Languages, grammars, themes, icon themes, and language servers come only from
+  built-in code and user settings/files.
 - Tree-sitter grammars are native only (`LanguageRegistry::register_native_grammars`);
   WASM grammars cannot be loaded, and tree-sitter is built without its `wasm` feature.
 - The remote server does not sync or install extensions.
@@ -18,8 +18,8 @@ not depend on wasmtime.
 ## What remains
 
 - The `extension` crate (`ExtensionHostProxy` and proxy traits) is still threaded
-  through project/remote/language init, along with `language_extension`,
-  `theme_extension`, and `debug_adapter_extension`. Nothing registers extensions
+  through project/remote/language init, along with `language_extension` and
+  `theme_extension`. Nothing registers extensions
   through them, so they are inert and can be removed later.
 
 ## Build requirements

@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::ffi::OsStr;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -12,8 +11,7 @@ use language::LanguageName;
 use lsp::LanguageServerName;
 use semver::Version;
 use serde::{Deserialize, Serialize};
-use util::paths::PathStyle;
-use util::rel_path::{RelPath, RelPathBuf};
+use util::rel_path::RelPathBuf;
 
 use crate::ExtensionCapability;
 
@@ -117,10 +115,6 @@ pub struct ExtensionManifest {
     #[serde(default)]
     pub capabilities: Vec<ExtensionCapability>,
     #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub debug_adapters: BTreeMap<Arc<str>, DebugAdapterManifestEntry>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
-    pub debug_locators: BTreeMap<Arc<str>, DebugLocatorManifestEntry>,
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub language_model_providers: BTreeMap<Arc<str>, LanguageModelProviderManifestEntry>,
 }
 
@@ -156,10 +150,6 @@ impl ExtensionManifest {
             provides.insert(ExtensionProvides::Snippets);
         }
 
-        if !self.debug_adapters.is_empty() {
-            provides.insert(ExtensionProvides::DebugAdapters);
-        }
-
         provides
     }
 
@@ -189,10 +179,7 @@ impl ExtensionManifest {
     }
 
     pub fn remote_load(&self) -> Option<RemoteLoad<'_>> {
-        (!self.language_servers.is_empty()
-            || !self.debug_adapters.is_empty()
-            || !self.debug_locators.is_empty())
-        .then_some(RemoteLoad { manifest: self })
+        (!self.language_servers.is_empty()).then_some(RemoteLoad { manifest: self })
     }
 }
 
@@ -206,21 +193,6 @@ impl RemoteLoad<'_> {
             .language_servers
             .values()
             .flat_map(|language_server_config| language_server_config.languages())
-    }
-}
-
-pub fn build_debug_adapter_schema_path(
-    adapter_name: &Arc<str>,
-    meta: &DebugAdapterManifestEntry,
-) -> anyhow::Result<RelPathBuf> {
-    match &meta.schema_path {
-        Some(path) => Ok(path.clone()),
-        None => RelPath::new(
-            &Path::new("debug_adapter_schemas")
-                .join(Path::new(adapter_name.as_ref()).with_extension("json")),
-            PathStyle::local(),
-        )
-        .map(Cow::into_owned),
     }
 }
 
@@ -300,14 +272,6 @@ pub struct SlashCommandManifestEntry {
     pub requires_argument: bool,
 }
 
-#[derive(Clone, Default, PartialEq, Eq, Debug, Deserialize, Serialize)]
-pub struct DebugAdapterManifestEntry {
-    pub schema_path: Option<RelPathBuf>,
-}
-
-#[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
-pub struct DebugLocatorManifestEntry {}
-
 /// Manifest entry for a language model provider.
 #[derive(Clone, PartialEq, Eq, Debug, Deserialize, Serialize)]
 pub struct LanguageModelProviderManifestEntry {
@@ -385,8 +349,6 @@ fn manifest_from_old_manifest(
         slash_commands: BTreeMap::default(),
         snippets: None,
         capabilities: Vec::new(),
-        debug_adapters: Default::default(),
-        debug_locators: Default::default(),
         language_model_providers: Default::default(),
     }
 }

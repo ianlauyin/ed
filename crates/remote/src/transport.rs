@@ -14,7 +14,6 @@ use gpui::{AppContext as _, AsyncApp, Task};
 use rpc::proto::Envelope;
 use util::command::Child;
 
-pub mod docker;
 pub mod ssh;
 pub mod wsl;
 

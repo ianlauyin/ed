@@ -6,7 +6,6 @@
 //!
 //! Inlay examples in Zed:
 //! * inlay hints, received from LSP
-//! * inline values, shown in the debugger
 //! * inline predictions, showing the Zeta/Copilot/etc. predictions
 //! * document color values, if configured to be displayed as inlays
 //! * ... anything else, potentially.
@@ -19,7 +18,7 @@ pub mod inlay_hints;
 
 use std::sync::OnceLock;
 
-use gpui::{Context, HighlightStyle, Hsla, Rgba, Task};
+use gpui::{Context, HighlightStyle, Hsla, Rgba};
 use multi_buffer::Anchor;
 use project::{InlayHint, InlayId};
 use text::Rope;
@@ -90,14 +89,6 @@ impl Inlay {
         }
     }
 
-    pub fn debugger<T: Into<Rope>>(id: usize, position: Anchor, text: T) -> Self {
-        Self {
-            id: InlayId::DebuggerValue(id),
-            position,
-            content: InlayContent::Text(text.into()),
-        }
-    }
-
     pub fn repl_result<T: Into<Rope>>(id: usize, position: Anchor, text: T) -> Self {
         Self {
             id: InlayId::ReplResult(id),
@@ -111,22 +102,6 @@ impl Inlay {
         match &self.content {
             InlayContent::Text(text) => text,
             InlayContent::Color(_) => COLOR_TEXT.get_or_init(|| Rope::from("◼")),
-        }
-    }
-}
-
-pub struct InlineValueCache {
-    pub enabled: bool,
-    pub inlays: Vec<InlayId>,
-    pub refresh_task: Task<Option<()>>,
-}
-
-impl InlineValueCache {
-    pub fn new(enabled: bool) -> Self {
-        Self {
-            enabled,
-            inlays: Vec::new(),
-            refresh_task: Task::ready(None),
         }
     }
 }
@@ -164,9 +139,5 @@ impl Editor {
         self.display_map
             .update(cx, |map, _| map.highlight_inlays(key, highlights, style));
         cx.notify();
-    }
-
-    pub fn inline_values_enabled(&self) -> bool {
-        self.inline_value_cache.enabled
     }
 }

@@ -16,18 +16,18 @@ onboarding switches, and telemetry log actions are removed. Local diagnostic log
 and manually requested performance reports remain available. Local minidumps may
 be explicitly enabled with `ZED_GENERATE_MINIDUMPS`.
 
-SSH, WSL, and container editing remain supported; their shared transport and
+SSH and WSL editing remain supported; their shared transport and
 buffer synchronization primitives remain in the editor.
 
 The application updater, update checks, downloads/installers, helper executable,
 release-note actions, and update indicators are removed. Updates are installed
 externally. The obsolete extension auto-update setting is also removed. Remote
-connections retain only the remote-server installer needed for SSH, WSL, and
-container setup; it runs when establishing those connections,
+connections retain only the remote-server installer needed for SSH and WSL
+setup; it runs when establishing those connections,
 independently of any application updater.
 
 Feature flags and local flag overrides are removed. Notebooks are always enabled.
-Diff-review gutter controls, debugger history controls, and intentional panic/crash
+Diff-review gutter controls and intentional panic/crash
 actions are disabled and cannot be enabled through settings or environment variables.
 
 Feedback actions, bug-report links, and feature-request/email menu entries are
@@ -36,8 +36,8 @@ removed. Local database failures still display a diagnostic notification.
 The editor has a single application identity and icon, with no release-channel
 selection, branding, or channel-specific settings overrides. Build version and
 commit metadata remain available. Existing local database state remains in the
-same directory. Upstream remote-server release identifiers remain for SSH, WSL,
-and container compatibility; this fork uses the stable remote-server distribution.
+same directory. Upstream remote-server release identifiers remain for SSH and
+WSL compatibility; this fork uses the stable remote-server distribution.
 
 The ztracing instrumentation and Tracy integration are removed. The local GPUI
 performance profiler and diagnostic logs remain available.

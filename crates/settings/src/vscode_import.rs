@@ -177,7 +177,6 @@ impl VsCodeSettings {
                 .map(|history| CommandPaletteSettingsContent {
                     use_command_history: Some(history > 0),
                 }),
-            debugger: None,
             diagnostics: None,
             editor: self.editor_settings_content(),
             extension: ExtensionSettingsContent::default(),
@@ -328,7 +327,6 @@ impl VsCodeSettings {
             }),
             min_line_number_digits: None,
             runnables: None,
-            breakpoints: None,
             bookmarks: None,
             folds: self.read_enum("editor.showFoldingControls", |s| match s {
                 "always" | "mouseover" => Some(true),
@@ -507,7 +505,6 @@ impl VsCodeSettings {
             worktree: self.worktree_settings_content(),
             lsp: Default::default(),
             terminal: None,
-            dap: Default::default(),
             load_direnv: None,
             git_hosting_providers: None,
         }
@@ -537,7 +534,6 @@ impl VsCodeSettings {
                 }),
                 ..Default::default()
             }),
-            debuggers: None,
 
             enable_language_server: None,
             ensure_final_newline_on_save: self.read_bool("files.insertFinalNewline"),

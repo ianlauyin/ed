@@ -393,9 +393,6 @@ impl TitleBar {
                 IconName::Server,
             ),
             RemoteConnectionOptions::Wsl(_) => (None, "Remote Project", IconName::Linux),
-            RemoteConnectionOptions::Docker(_dev_container_connection) => {
-                (None, "Dev Container", IconName::Box)
-            }
         };
 
         let nickname = nickname.unwrap_or_else(|| host.clone());

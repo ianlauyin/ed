@@ -13,10 +13,7 @@ use db::sqlez::{
 use gpui::{AsyncWindowContext, Entity, WeakEntity, WindowId};
 
 use language::{Toolchain, ToolchainScope};
-use project::{
-    Project, ProjectGroupKey, bookmark_store::SerializedBookmark,
-    debugger::breakpoint_store::SourceBreakpoint,
-};
+use project::{Project, ProjectGroupKey, bookmark_store::SerializedBookmark};
 use remote::RemoteConnectionOptions;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -36,7 +33,6 @@ pub(crate) struct RemoteConnectionId(pub u64);
 pub(crate) enum RemoteConnectionKind {
     Ssh,
     Wsl,
-    Docker,
 }
 
 #[derive(Debug, PartialEq, Clone, serde::Serialize, serde::Deserialize)]
@@ -144,7 +140,6 @@ pub(crate) struct SerializedWorkspace {
     pub(crate) docks: DockStructure,
     pub(crate) session_id: Option<String>,
     pub(crate) bookmarks: BTreeMap<Arc<Path>, Vec<SerializedBookmark>>,
-    pub(crate) breakpoints: BTreeMap<Arc<Path>, Vec<SourceBreakpoint>>,
     pub(crate) user_toolchains: BTreeMap<ToolchainScope, IndexSet<Toolchain>>,
     pub(crate) recent_navigation_history: Vec<PathBuf>,
     pub(crate) window_id: Option<u64>,
@@ -162,7 +157,6 @@ impl RemoteConnectionKind {
         match self {
             RemoteConnectionKind::Ssh => "ssh",
             RemoteConnectionKind::Wsl => "wsl",
-            RemoteConnectionKind::Docker => "docker",
         }
     }
 
@@ -170,7 +164,6 @@ impl RemoteConnectionKind {
         match text {
             "ssh" => Some(Self::Ssh),
             "wsl" => Some(Self::Wsl),
-            "docker" => Some(Self::Docker),
             _ => None,
         }
     }

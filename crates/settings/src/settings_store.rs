@@ -221,7 +221,6 @@ pub enum LocalSettingsKind {
     Settings,
     Tasks,
     Editorconfig,
-    Debug,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -1027,16 +1026,6 @@ impl SettingsStore {
                         .to_path_buf(),
                 });
             }
-            (LocalSettingsPath::InWorktree(directory_path), LocalSettingsKind::Debug, _) => {
-                return Err(InvalidSettingsError::Debug {
-                    message: "Attempted to submit debugger config into the settings store"
-                        .to_string(),
-                    path: directory_path
-                        .join(RelPath::from_unix_str(task_file_name()).unwrap())
-                        .as_std_path()
-                        .to_path_buf(),
-                });
-            }
             (LocalSettingsPath::InWorktree(directory_path), LocalSettingsKind::Settings, None) => {
                 zed_settings_changed = self
                     .local_settings
@@ -1459,10 +1448,6 @@ pub enum InvalidSettingsError {
         path: PathBuf,
         message: String,
     },
-    Debug {
-        path: PathBuf,
-        message: String,
-    },
 }
 
 impl std::fmt::Display for InvalidSettingsError {
@@ -1473,8 +1458,7 @@ impl std::fmt::Display for InvalidSettingsError {
             | InvalidSettingsError::ServerSettings { message }
             | InvalidSettingsError::DefaultSettings { message }
             | InvalidSettingsError::Tasks { message, .. }
-            | InvalidSettingsError::Editorconfig { message, .. }
-            | InvalidSettingsError::Debug { message, .. } => write!(f, "{message}"),
+            | InvalidSettingsError::Editorconfig { message, .. } => write!(f, "{message}"),
         }
     }
 }

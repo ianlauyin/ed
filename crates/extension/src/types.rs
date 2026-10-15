@@ -1,4 +1,3 @@
-mod dap;
 mod lsp;
 mod slash_command;
 
@@ -6,7 +5,6 @@ use std::{ops::Range, path::PathBuf};
 
 use util::redact::should_redact;
 
-pub use dap::*;
 pub use lsp::*;
 pub use slash_command::*;
 

@@ -449,7 +449,6 @@ fn main() {
 
         let node_runtime = NodeRuntime::new(http_client.clone(), Some(shell_env_loaded_rx), rx);
 
-        debug_adapter_extension::init(extension_host_proxy.clone(), cx);
         languages::init(languages.clone(), fs.clone(), node_runtime.clone(), cx);
 
         let workspace_store = cx.new(|cx| WorkspaceStore::new(cx));
@@ -476,8 +475,6 @@ fn main() {
         zed::init(cx);
 
         zed::move_to_applications::init(cx);
-        debugger_ui::init(cx);
-        debugger_tools::init(cx);
 
         let session = cx.foreground_executor().block_on(session);
 
@@ -496,7 +493,6 @@ fn main() {
         AppState::set_global(app_state.clone(), cx);
 
         watcher_debug::init(app_state.clone(), cx);
-        dap_adapters::init(cx);
 
         theme_settings::init(theme::LoadThemes::All(Box::new(Assets)), cx);
         theme_extension::init(
@@ -510,7 +506,6 @@ fn main() {
         snippet_provider::init(cx);
         repl::init(app_state.fs.clone(), cx);
         recent_projects::init(cx);
-        dev_container::init(cx);
 
         load_embedded_fonts(cx);
 
@@ -657,7 +652,6 @@ fn main() {
                 diff_paths,
                 wsl,
                 diff_all: diff_all_mode,
-                dev_container: args.dev_container,
                 ..Default::default()
             })
         }
@@ -945,7 +939,6 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
     }
 
     let mut task = None;
-    let dev_container = request.dev_container;
     if !request.open_paths.is_empty() || !request.diff_paths.is_empty() {
         let app_state = app_state.clone();
         let base_open_options = zed::open_options_for_request(
@@ -961,10 +954,7 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
                 &request.diff_paths,
                 request.diff_all,
                 app_state,
-                workspace::OpenOptions {
-                    open_in_dev_container: dev_container,
-                    ..base_open_options
-                },
+                base_open_options,
                 cx,
             )
             .await?;
@@ -1230,7 +1220,6 @@ fn init_paths() -> HashMap<io::ErrorKind, Vec<&'static Path>> {
         paths::config_dir(),
         paths::extensions_dir(),
         paths::languages_dir(),
-        paths::debug_adapters_dir(),
         paths::database_dir(),
         paths::logs_dir(),
         paths::temp_dir(),
@@ -1279,13 +1268,6 @@ struct Args {
     /// On Windows, the default is `%LOCALAPPDATA%\Zed`.
     #[arg(long, value_name = "DIR", verbatim_doc_comment)]
     user_data_dir: Option<String>,
-
-    /// Open the project in a dev container.
-    ///
-    /// Automatically triggers "Reopen in Dev Container" if a `.devcontainer/`
-    /// configuration is found in the project directory.
-    #[arg(long)]
-    dev_container: bool,
 
     /// Instructs zed to run as a dev server on this machine. (not implemented)
     #[arg(long)]

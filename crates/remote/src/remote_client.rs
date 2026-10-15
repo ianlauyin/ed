@@ -4,7 +4,6 @@ use crate::{
     protocol::MessageId,
     proxy::ProxyLaunchError,
     transport::{
-        docker::{DockerConnectionOptions, DockerExecConnection},
         ssh::SshRemoteConnection,
         wsl::{WslConnectionOptions, WslRemoteConnection},
     },
@@ -1047,7 +1046,7 @@ impl RemoteClient {
     }
 
     /// A stable identifier for the kind of remote connection (e.g. `"ssh"`,
-    /// `"wsl"`, `"docker"`, `"podman"`).
+    /// `"wsl"`).
     pub fn connection_type(&self) -> &'static str {
         self.connection_options.connection_type()
     }
@@ -1182,11 +1181,6 @@ impl ConnectionPool {
                                 .await
                                 .map(|connection| Arc::new(connection) as Arc<dyn RemoteConnection>)
                         }
-                        RemoteConnectionOptions::Docker(opts) => {
-                            DockerExecConnection::new(opts, delegate, cx)
-                                .await
-                                .map(|connection| Arc::new(connection) as Arc<dyn RemoteConnection>)
-                        }
                     };
 
                     cx.update_global(|pool: &mut Self, _| {
@@ -1223,7 +1217,6 @@ impl ConnectionPool {
 pub enum RemoteConnectionOptions {
     Ssh(SshConnectionOptions),
     Wsl(WslConnectionOptions),
-    Docker(DockerConnectionOptions),
 }
 
 impl RemoteConnectionOptions {
@@ -1234,13 +1227,6 @@ impl RemoteConnectionOptions {
                 .clone()
                 .unwrap_or_else(|| opts.host.to_string()),
             RemoteConnectionOptions::Wsl(opts) => opts.distro_name.clone(),
-            RemoteConnectionOptions::Docker(opts) => {
-                if opts.use_podman {
-                    format!("[podman] {}", opts.name)
-                } else {
-                    opts.name.clone()
-                }
-            }
         }
     }
 
@@ -1249,13 +1235,6 @@ impl RemoteConnectionOptions {
         match self {
             RemoteConnectionOptions::Ssh(_) => "ssh",
             RemoteConnectionOptions::Wsl(_) => "wsl",
-            RemoteConnectionOptions::Docker(opts) => {
-                if opts.use_podman {
-                    "podman"
-                } else {
-                    "docker"
-                }
-            }
         }
     }
 
@@ -1263,7 +1242,6 @@ impl RemoteConnectionOptions {
         match self {
             RemoteConnectionOptions::Ssh(opts) => opts.host.to_string(),
             RemoteConnectionOptions::Wsl(opts) => opts.distro_name.clone(),
-            RemoteConnectionOptions::Docker(opts) => opts.name.clone(),
         }
     }
 }

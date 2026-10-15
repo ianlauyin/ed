@@ -1,4 +1,3 @@
-mod dev_container_suggest;
 pub mod disconnected_overlay;
 mod remote_connections;
 mod remote_servers;
@@ -35,7 +34,6 @@ pub use remote_servers::RemoteServerProjects;
 use settings::{DefaultOpenBehavior, Settings, WorktreeId};
 use workspace::ProjectGroupKey;
 
-use dev_container::{DevContainerContext, find_devcontainer_configs};
 use ui::{
     ButtonLike, ContextMenu, Divider, HighlightedLabel, KeyBinding, ListItem, ListItemSpacing,
     ListSubHeader, PopoverMenu, PopoverMenuHandle, TintColor, Tooltip, prelude::*,
@@ -46,7 +44,7 @@ use workspace::{
     SerializedWorkspaceLocation, Workspace, WorkspaceDb, WorkspaceId,
     notifications::DetachAndPromptErr, with_active_or_new_workspace,
 };
-use zed_actions::{OpenDevContainer, OpenRecent, OpenRemote};
+use zed_actions::{OpenRecent, OpenRemote};
 
 actions!(
     recent_projects,
@@ -365,77 +363,6 @@ pub fn init(cx: &mut App) {
     });
 
     cx.observe_new(DisconnectedOverlay::register).detach();
-
-    cx.on_action(|_: &OpenDevContainer, cx| {
-        with_active_or_new_workspace(cx, move |workspace, window, cx| {
-            if !workspace.project().read(cx).is_local() {
-                cx.spawn_in(window, async move |_, cx| {
-                    cx.prompt(
-                        gpui::PromptLevel::Critical,
-                        "Cannot open Dev Container from remote project",
-                        None,
-                        &["OK"],
-                    )
-                    .await
-                    .ok();
-                })
-                .detach();
-                return;
-            }
-
-            let fs = workspace.project().read(cx).fs().clone();
-            let configs = find_devcontainer_configs(workspace, cx);
-            let app_state = workspace.app_state().clone();
-            let dev_container_context = DevContainerContext::from_workspace(workspace, cx);
-            let handle = cx.entity().downgrade();
-            workspace.toggle_modal(window, cx, |window, cx| {
-                RemoteServerProjects::new_dev_container(
-                    fs,
-                    configs,
-                    app_state,
-                    dev_container_context,
-                    window,
-                    handle,
-                    cx,
-                )
-            });
-        });
-    });
-
-    // Subscribe to worktree additions to suggest opening the project in a dev container
-    cx.observe_new(
-        |workspace: &mut Workspace, window: Option<&mut Window>, cx: &mut Context<Workspace>| {
-            let Some(window) = window else {
-                return;
-            };
-            // A workspace opened with `--dev-container` has its worktrees scanning
-            // before this observer runs, so their update events can't be relied on
-            // to trigger the auto-open.
-            if workspace.open_in_dev_container() {
-                dev_container_suggest::open_dev_container_from_cli(workspace, window, cx);
-            }
-            cx.subscribe_in(
-                workspace.project(),
-                window,
-                move |workspace, project, event, window, cx| {
-                    if let project::Event::WorktreeUpdatedEntries(worktree_id, updated_entries) =
-                        event
-                    {
-                        dev_container_suggest::suggest_on_worktree_updated(
-                            workspace,
-                            *worktree_id,
-                            updated_entries,
-                            project,
-                            window,
-                            cx,
-                        );
-                    }
-                },
-            )
-            .detach();
-        },
-    )
-    .detach();
 }
 
 pub struct RecentProjects {
@@ -1831,7 +1758,6 @@ pub(crate) fn icon_for_remote_connection(options: Option<&RemoteConnectionOption
         Some(options) => match options {
             RemoteConnectionOptions::Ssh(_) => IconName::Server,
             RemoteConnectionOptions::Wsl(_) => IconName::Linux,
-            RemoteConnectionOptions::Docker(_) => IconName::Box,
         },
     }
 }

@@ -1,7 +1,6 @@
 pub mod model;
 
 use std::{
-    borrow::Cow,
     collections::BTreeMap,
     path::{Path, PathBuf},
     str::FromStr,
@@ -23,14 +22,13 @@ use gpui::{Axis, Bounds, Task, WindowBounds, WindowId, point, size};
 use project::{
     ProjectGroupKey,
     bookmark_store::SerializedBookmark,
-    debugger::breakpoint_store::{BreakpointState, SourceBreakpoint},
     trusted_worktrees::{DbTrustedPaths, RemoteHostLocation},
 };
 
 use language::{LanguageName, Toolchain, ToolchainScope};
 use remote::{
-    DockerConnectionOptions, RemoteConnectionIdentity, RemoteConnectionOptions,
-    SshConnectionOptions, WslConnectionOptions, remote_connection_identity,
+    RemoteConnectionIdentity, RemoteConnectionOptions, SshConnectionOptions, WslConnectionOptions,
+    remote_connection_identity,
 };
 use serde::{Deserialize, Serialize};
 use sqlez::{
@@ -425,96 +423,6 @@ impl Column for Bookmark {
         let (label, next_index) = String::column(statement, start_index + 1)?;
 
         Ok((Bookmark { row, label }, next_index))
-    }
-}
-
-#[derive(Debug)]
-pub struct Breakpoint {
-    pub position: u32,
-    pub message: Option<Arc<str>>,
-    pub condition: Option<Arc<str>>,
-    pub hit_condition: Option<Arc<str>>,
-    pub state: BreakpointState,
-}
-
-/// Wrapper for DB type of a breakpoint
-struct BreakpointStateWrapper<'a>(Cow<'a, BreakpointState>);
-
-impl From<BreakpointState> for BreakpointStateWrapper<'static> {
-    fn from(kind: BreakpointState) -> Self {
-        BreakpointStateWrapper(Cow::Owned(kind))
-    }
-}
-
-impl StaticColumnCount for BreakpointStateWrapper<'_> {
-    fn column_count() -> usize {
-        1
-    }
-}
-
-impl Bind for BreakpointStateWrapper<'_> {
-    fn bind(&self, statement: &Statement, start_index: i32) -> anyhow::Result<i32> {
-        statement.bind(&self.0.to_int(), start_index)
-    }
-}
-
-impl Column for BreakpointStateWrapper<'_> {
-    fn column(statement: &mut Statement, start_index: i32) -> anyhow::Result<(Self, i32)> {
-        let state = statement.column_int(start_index)?;
-
-        match state {
-            0 => Ok((BreakpointState::Enabled.into(), start_index + 1)),
-            1 => Ok((BreakpointState::Disabled.into(), start_index + 1)),
-            _ => anyhow::bail!("Invalid BreakpointState discriminant {state}"),
-        }
-    }
-}
-
-impl sqlez::bindable::StaticColumnCount for Breakpoint {
-    fn column_count() -> usize {
-        // Position, log message, condition message, and hit condition message
-        4 + BreakpointStateWrapper::column_count()
-    }
-}
-
-impl sqlez::bindable::Bind for Breakpoint {
-    fn bind(
-        &self,
-        statement: &sqlez::statement::Statement,
-        start_index: i32,
-    ) -> anyhow::Result<i32> {
-        let next_index = statement.bind(&self.position, start_index)?;
-        let next_index = statement.bind(&self.message, next_index)?;
-        let next_index = statement.bind(&self.condition, next_index)?;
-        let next_index = statement.bind(&self.hit_condition, next_index)?;
-        statement.bind(
-            &BreakpointStateWrapper(Cow::Borrowed(&self.state)),
-            next_index,
-        )
-    }
-}
-
-impl Column for Breakpoint {
-    fn column(statement: &mut Statement, start_index: i32) -> Result<(Self, i32)> {
-        let position = statement
-            .column_int(start_index)
-            .with_context(|| format!("Failed to read BreakPoint at index {start_index}"))?
-            as u32;
-        let (message, next_index) = Option::<String>::column(statement, start_index + 1)?;
-        let (condition, next_index) = Option::<String>::column(statement, next_index)?;
-        let (hit_condition, next_index) = Option::<String>::column(statement, next_index)?;
-        let (state, next_index) = BreakpointStateWrapper::column(statement, next_index)?;
-
-        Ok((
-            Breakpoint {
-                position,
-                message: message.map(Arc::from),
-                condition: condition.map(Arc::from),
-                hit_condition: hit_condition.map(Arc::from),
-                state: state.0.into_owned(),
-            },
-            next_index,
-        ))
     }
 }
 
@@ -1065,6 +973,9 @@ impl Domain for WorkspaceDb {
         sql!(
             ALTER TABLE workspaces ADD COLUMN native_window_state BLOB;
         ),
+        sql!(
+            DROP TABLE IF EXISTS breakpoints;
+        ),
     ];
 
     // Allow recovering from bad migration that was initially shipped to nightly
@@ -1213,7 +1124,6 @@ impl WorkspaceDb {
             docks,
             session_id: None,
             bookmarks: self.bookmarks(workspace_id),
-            breakpoints: self.breakpoints(workspace_id),
             window_id,
             user_toolchains: self.user_toolchains(workspace_id, remote_connection_id),
             recent_navigation_history: self.recent_navigation_history(workspace_id),
@@ -1318,7 +1228,6 @@ impl WorkspaceDb {
             docks,
             session_id: None,
             bookmarks: self.bookmarks(workspace_id),
-            breakpoints: self.breakpoints(workspace_id),
             window_id,
             user_toolchains: self.user_toolchains(workspace_id, remote_connection_id),
             recent_navigation_history: self.recent_navigation_history(workspace_id),
@@ -1371,52 +1280,6 @@ impl WorkspaceDb {
             Err(e) => {
                 log::error!("Failed to load bookmarks: {}", e);
                 BTreeMap::default()
-            }
-        }
-    }
-
-    fn breakpoints(&self, workspace_id: WorkspaceId) -> BTreeMap<Arc<Path>, Vec<SourceBreakpoint>> {
-        let breakpoints: Result<Vec<(PathBuf, Breakpoint)>> = self
-            .select_bound(sql! {
-                SELECT path, breakpoint_location, log_message, condition, hit_condition, state
-                FROM breakpoints
-                WHERE workspace_id = ?
-            })
-            .and_then(|mut prepared_statement| (prepared_statement)(workspace_id));
-
-        match breakpoints {
-            Ok(bp) => {
-                if bp.is_empty() {
-                    log::debug!("Breakpoints are empty after querying database for them");
-                }
-
-                let mut map: BTreeMap<Arc<Path>, Vec<SourceBreakpoint>> = Default::default();
-
-                for (path, breakpoint) in bp {
-                    let path: Arc<Path> = path.into();
-                    map.entry(path.clone()).or_default().push(SourceBreakpoint {
-                        row: breakpoint.position,
-                        path,
-                        message: breakpoint.message,
-                        condition: breakpoint.condition,
-                        hit_condition: breakpoint.hit_condition,
-                        state: breakpoint.state,
-                    });
-                }
-
-                for (path, bps) in map.iter() {
-                    log::info!(
-                        "Got {} breakpoints from database at path: {}",
-                        bps.len(),
-                        path.to_string_lossy()
-                    );
-                }
-
-                map
-            }
-            Err(msg) => {
-                log::error!("Breakpoints query failed with msg: {msg}");
-                Default::default()
             }
         }
     }
@@ -1531,38 +1394,6 @@ impl WorkspaceDb {
                     }
                 }
 
-                conn.exec_bound(
-                    sql!(
-                        DELETE FROM breakpoints WHERE workspace_id = ?1;
-                    )
-                )?(workspace.id).context("Clearing old breakpoints")?;
-
-                for (path, breakpoints) in workspace.breakpoints {
-                    for bp in breakpoints {
-                        let state = BreakpointStateWrapper::from(bp.state);
-                        match conn.exec_bound(sql!(
-                            INSERT INTO breakpoints (workspace_id, path, breakpoint_location,  log_message, condition, hit_condition, state)
-                            VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7);))?
-
-                        ((
-                            workspace.id,
-                            path.as_ref(),
-                            bp.row,
-                            bp.message,
-                            bp.condition,
-                            bp.hit_condition,
-                            state,
-                        )) {
-                            Ok(_) => {
-                                log::debug!("Stored breakpoint at row: {} in path: {}", bp.row, path.to_string_lossy())
-                            }
-                            Err(err) => {
-                                log::error!("{err}");
-                                continue;
-                            }
-                        }
-                    }
-                }
 
                 conn.exec_bound(
                     sql!(
@@ -1707,10 +1538,6 @@ impl WorkspaceDb {
         let mut host = None;
         let mut port = None;
         let mut distro = None;
-        let mut name = None;
-        let mut container_id = None;
-        let mut use_podman = None;
-        let mut remote_env = None;
 
         match identity {
             RemoteConnectionIdentity::Ssh {
@@ -1731,35 +1558,9 @@ impl WorkspaceDb {
                 distro = Some(distro_name);
                 user = identity_user;
             }
-            RemoteConnectionIdentity::Docker {
-                container_id: identity_container_id,
-                name: identity_name,
-                remote_user,
-            } => {
-                kind = RemoteConnectionKind::Docker;
-                container_id = Some(identity_container_id);
-                name = Some(identity_name);
-                user = Some(remote_user);
-            }
         }
 
-        if let RemoteConnectionOptions::Docker(options) = options {
-            use_podman = Some(options.use_podman);
-            remote_env = serde_json::to_string(&options.remote_env).ok();
-        }
-
-        Self::get_or_create_remote_connection_query(
-            this,
-            kind,
-            host,
-            port,
-            user,
-            distro,
-            name,
-            container_id,
-            use_podman,
-            remote_env,
-        )
+        Self::get_or_create_remote_connection_query(this, kind, host, port, user, distro)
     }
 
     fn get_or_create_remote_connection_query(
@@ -1769,10 +1570,6 @@ impl WorkspaceDb {
         port: Option<u16>,
         user: Option<String>,
         distro: Option<String>,
-        name: Option<String>,
-        container_id: Option<String>,
-        use_podman: Option<bool>,
-        remote_env: Option<String>,
     ) -> Result<RemoteConnectionId> {
         if let Some(id) = this.select_row_bound(sql!(
             SELECT id
@@ -1782,9 +1579,7 @@ impl WorkspaceDb {
                 host IS ? AND
                 port IS ? AND
                 user IS ? AND
-                distro IS ? AND
-                name IS ? AND
-                container_id IS ?
+                distro IS ?
             LIMIT 1
         ))?((
             kind.serialize(),
@@ -1792,8 +1587,6 @@ impl WorkspaceDb {
             port,
             user.clone(),
             distro.clone(),
-            name.clone(),
-            container_id.clone(),
         ))? {
             Ok(RemoteConnectionId(id))
         } else {
@@ -1803,24 +1596,10 @@ impl WorkspaceDb {
                     host,
                     port,
                     user,
-                    distro,
-                    name,
-                    container_id,
-                    use_podman,
-                    remote_env
-                    ) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)
+                    distro
+                    ) VALUES (?1, ?2, ?3, ?4, ?5)
                 RETURNING id
-            ))?((
-                kind.serialize(),
-                host,
-                port,
-                user,
-                distro,
-                name,
-                container_id,
-                use_podman,
-                remote_env,
-            ))?
+            ))?((kind.serialize(), host, port, user, distro))?
             .context("failed to insert remote project")?;
             Ok(RemoteConnectionId(id))
         }
@@ -1923,47 +1702,20 @@ impl WorkspaceDb {
         }
     }
 
-    query! {
-        pub fn breakpoints_for_file(workspace_id: WorkspaceId, file_path: &Path) -> Result<Vec<Breakpoint>> {
-            SELECT breakpoint_location
-            FROM breakpoints
-            WHERE  workspace_id= ?1 AND path = ?2
-        }
-    }
-
-    query! {
-        pub fn clear_breakpoints(file_path: &Path) -> Result<()> {
-            DELETE FROM breakpoints
-            WHERE file_path = ?2
-        }
-    }
-
     fn remote_connections(&self) -> Result<HashMap<RemoteConnectionId, RemoteConnectionOptions>> {
         Ok(self.select(sql!(
             SELECT
-                id, kind, host, port, user, distro, container_id, name, use_podman, remote_env
+                id, kind, host, port, user, distro
             FROM
                 remote_connections
         ))?()?
         .into_iter()
-        .filter_map(
-            |(id, kind, host, port, user, distro, container_id, name, use_podman, remote_env)| {
-                Some((
-                    RemoteConnectionId(id),
-                    Self::remote_connection_from_row(
-                        kind,
-                        host,
-                        port,
-                        user,
-                        distro,
-                        container_id,
-                        name,
-                        use_podman,
-                        remote_env,
-                    )?,
-                ))
-            },
-        )
+        .filter_map(|(id, kind, host, port, user, distro)| {
+            Some((
+                RemoteConnectionId(id),
+                Self::remote_connection_from_row(kind, host, port, user, distro)?,
+            ))
+        })
         .collect())
     }
 
@@ -1971,25 +1723,14 @@ impl WorkspaceDb {
         &self,
         id: RemoteConnectionId,
     ) -> Result<RemoteConnectionOptions> {
-        let (kind, host, port, user, distro, container_id, name, use_podman, remote_env) =
-            self.select_row_bound(sql!(
-                SELECT kind, host, port, user, distro, container_id, name, use_podman, remote_env
-                FROM remote_connections
-                WHERE id = ?
-            ))?(id.0)?
-            .context("no such remote connection")?;
-        Self::remote_connection_from_row(
-            kind,
-            host,
-            port,
-            user,
-            distro,
-            container_id,
-            name,
-            use_podman,
-            remote_env,
-        )
-        .context("invalid remote_connection row")
+        let (kind, host, port, user, distro) = self.select_row_bound(sql!(
+            SELECT kind, host, port, user, distro
+            FROM remote_connections
+            WHERE id = ?
+        ))?(id.0)?
+        .context("no such remote connection")?;
+        Self::remote_connection_from_row(kind, host, port, user, distro)
+            .context("invalid remote_connection row")
     }
 
     fn remote_connection_from_row(
@@ -1998,10 +1739,6 @@ impl WorkspaceDb {
         port: Option<u16>,
         user: Option<String>,
         distro: Option<String>,
-        container_id: Option<String>,
-        name: Option<String>,
-        use_podman: Option<bool>,
-        remote_env: Option<String>,
     ) -> Option<RemoteConnectionOptions> {
         match RemoteConnectionKind::deserialize(&kind)? {
             RemoteConnectionKind::Wsl => Some(RemoteConnectionOptions::Wsl(WslConnectionOptions {
@@ -2014,18 +1751,6 @@ impl WorkspaceDb {
                 username: user,
                 ..Default::default()
             })),
-            RemoteConnectionKind::Docker => {
-                let remote_env: BTreeMap<String, String> =
-                    serde_json::from_str(&remote_env?).ok()?;
-                Some(RemoteConnectionOptions::Docker(DockerConnectionOptions {
-                    container_id: container_id?,
-                    name: name?,
-                    remote_user: user?,
-                    upload_binary_over_docker_exec: false,
-                    use_podman: use_podman?,
-                    remote_env,
-                }))
-            }
         }
     }
 

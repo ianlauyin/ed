@@ -14,7 +14,6 @@ use assets::Assets;
 
 use breadcrumbs::Breadcrumbs;
 use collections::VecDeque;
-use debugger_ui::debugger_panel::DebugPanel;
 use editor::{Editor, MultiBuffer};
 use futures::{StreamExt, channel::mpsc, select_biased};
 use git_ui::branch_diff::BranchDiffToolbar;
@@ -41,10 +40,7 @@ use markdown::{Markdown, MarkdownElement, MarkdownFont, MarkdownStyle};
 use onboarding::multibuffer_hint::MultibufferHint;
 pub use open_listener::*;
 use outline_panel::OutlinePanel;
-use paths::{
-    local_debug_file_relative_path, local_settings_file_relative_path,
-    local_tasks_file_relative_path,
-};
+use paths::{local_settings_file_relative_path, local_tasks_file_relative_path};
 use project::{
     DirectoryLister, ProjectItem,
     project_settings::{SettingsObserver, SettingsObserverEvent},
@@ -57,8 +53,7 @@ use search::project_search::ProjectSearchBar;
 use settings::{
     BaseKeymap, DEFAULT_KEYMAP_PATH, DefaultOpenBehavior, InvalidSettingsError, KeybindSource,
     KeymapFile, KeymapFileLoadResult, SPECIFIC_OVERRIDES_KEYMAP_PATH, Settings, SettingsFile,
-    SettingsStore, initial_local_debug_tasks_content, initial_project_settings_content,
-    initial_tasks_content, update_settings_file,
+    SettingsStore, initial_project_settings_content, initial_tasks_content, update_settings_file,
 };
 use settings_content::app_metadata::{AppCommitSha, AppVersion};
 #[cfg(debug_assertions)]
@@ -117,8 +112,6 @@ actions!(
         OpenProjectSettingsFile,
         /// Opens the tasks panel.
         OpenTasks,
-        /// Opens debug tasks configuration.
-        OpenDebugTasks,
         /// Shows the default semantic token rules (read-only).
         ShowDefaultSemanticTokenRules,
         /// Resets the application database.
@@ -227,16 +220,6 @@ pub fn init(cx: &mut App) {
             open_settings_file(
                 paths::tasks_file(),
                 || settings::initial_tasks_content().as_ref().into(),
-                window,
-                cx,
-            );
-        });
-    })
-    .on_action(|_: &OpenDebugTasks, cx| {
-        with_active_or_new_workspace(cx, |_, window, cx| {
-            open_settings_file(
-                paths::debug_scenarios_file(),
-                || settings::initial_debug_tasks_content().as_ref().into(),
                 window,
                 cx,
             );
@@ -550,7 +533,6 @@ fn initialize_panels(window: &mut Window, cx: &mut Context<Workspace>) -> Task<a
         let outline_panel = OutlinePanel::load(workspace_handle.clone(), cx.clone());
         let terminal_panel = TerminalPanel::load(workspace_handle.clone(), cx.clone());
         let git_panel = GitPanel::load(workspace_handle.clone(), cx.clone());
-        let debug_panel = DebugPanel::load(workspace_handle.clone(), cx);
 
         async fn add_panel_when_ready(
             panel_task: impl Future<Output = anyhow::Result<Entity<impl workspace::Panel>>> + 'static,
@@ -572,7 +554,6 @@ fn initialize_panels(window: &mut Window, cx: &mut Context<Workspace>) -> Task<a
             add_panel_when_ready(outline_panel, workspace_handle.clone(), cx.clone()),
             add_panel_when_ready(terminal_panel, workspace_handle.clone(), cx.clone()),
             add_panel_when_ready(git_panel, workspace_handle.clone(), cx.clone()),
-            add_panel_when_ready(debug_panel, workspace_handle.clone(), cx.clone()),
         );
 
         workspace_handle.update(cx, |workspace, cx| {
@@ -956,7 +937,6 @@ fn register_actions(
         .register_action(open_project_settings_file)
         .register_action(open_project_tasks_file)
         .register_action(open_worktree_setup_tasks_file)
-        .register_action(open_project_debug_tasks_file)
         .register_action(
             |workspace: &mut Workspace,
              _: &zed_actions::project_panel::ToggleFocus,
@@ -1135,8 +1115,6 @@ fn initialize_pane(
             toolbar.add_item(project_search_bar, window, cx);
             let lsp_log_item = cx.new(|_| LspLogToolbarItemView::new());
             toolbar.add_item(lsp_log_item, window, cx);
-            let dap_log_item = cx.new(|_| debugger_tools::DapLogToolbarItemView::new());
-            toolbar.add_item(dap_log_item, window, cx);
             let syntax_tree_item = cx.new(|_| language_tools::SyntaxTreeToolbarItemView::new());
             toolbar.add_item(syntax_tree_item, window, cx);
             let highlights_tree_item =
@@ -1585,11 +1563,6 @@ fn init_global_config_error_notifications(cx: &mut App) {
                         window.dispatch_action(OpenTasks.boxed_clone(), cx)
                     })
                 }
-                SettingsObserverEvent::GlobalDebugScenariosUpdated(result) => {
-                    (result, "debug scenarios", |window, cx| {
-                        window.dispatch_action(OpenDebugTasks.boxed_clone(), cx)
-                    })
-                }
                 _ => return,
             };
             let id = NotificationId::Named(format!("invalid-global-{file_kind}-file").into());
@@ -2011,23 +1984,6 @@ fn open_worktree_setup_tasks_file(
         })?
     })
     .detach_and_log_err(cx);
-}
-
-fn open_project_debug_tasks_file(
-    workspace: &mut Workspace,
-    _: &zed_actions::OpenProjectDebugTasks,
-    window: &mut Window,
-    cx: &mut Context<Workspace>,
-) {
-    if let Some(task) = open_local_file(
-        workspace,
-        local_debug_file_relative_path(),
-        initial_local_debug_tasks_content(),
-        window,
-        cx,
-    ) {
-        task.detach_and_log_err(cx);
-    }
 }
 
 fn open_local_file(

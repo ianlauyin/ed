@@ -167,10 +167,6 @@ impl From<RemoteConnectionOptions> for RemoteHostLocation {
                 wsl.user.map(SharedString::new),
                 SharedString::new(wsl.distro_name),
             ),
-            RemoteConnectionOptions::Docker(docker_connection_options) => (
-                Some(SharedString::new(docker_connection_options.name)),
-                SharedString::new(docker_connection_options.container_id),
-            ),
         };
         Self {
             user_name,

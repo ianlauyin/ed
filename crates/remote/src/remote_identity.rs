@@ -5,7 +5,7 @@ use crate::RemoteConnectionOptions;
 ///
 /// This mirrors workspace persistence identity semantics rather than full
 /// `RemoteConnectionOptions` equality, so runtime-only fields like SSH
-/// nicknames or Docker environment overrides do not affect matching.
+/// nicknames do not affect matching.
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum RemoteConnectionIdentity {
     Ssh {
@@ -16,11 +16,6 @@ pub enum RemoteConnectionIdentity {
     Wsl {
         distro_name: String,
         user: Option<String>,
-    },
-    Docker {
-        container_id: String,
-        name: String,
-        remote_user: String,
     },
 }
 
@@ -44,11 +39,6 @@ impl RemoteConnectionIdentity {
                 user.as_deref().unwrap_or_default(),
                 distro_name
             ),
-            Self::Docker {
-                container_id,
-                name,
-                remote_user,
-            } => format!("docker:{remote_user}@{name}:{container_id}"),
         }
     }
 }
@@ -64,11 +54,6 @@ impl From<&RemoteConnectionOptions> for RemoteConnectionIdentity {
             RemoteConnectionOptions::Wsl(options) => Self::Wsl {
                 distro_name: options.distro_name.clone(),
                 user: options.user.clone(),
-            },
-            RemoteConnectionOptions::Docker(options) => Self::Docker {
-                container_id: options.container_id.clone(),
-                name: options.name.clone(),
-                remote_user: options.remote_user.clone(),
             },
         }
     }
