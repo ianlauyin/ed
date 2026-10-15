@@ -26,16 +26,7 @@ impl Default for GrammarId {
     }
 }
 
-/// A handle that can produce a parseable [`tree_sitter::Language`] on the
-/// current thread.
-///
-/// On native targets a language is process-global, so the handle simply
-/// stores it. On WebAssembly, a dynamically linked grammar's functions live
-/// in the function table of the wasm instance that linked it, and every
-/// thread is a separate instance — so a parseable language is only valid on
-/// the thread that produced it, and [`tree_sitter::Language`] is `!Send`
-/// there. The handle instead stores a thread-safe resolver that links or
-/// looks up a copy of the grammar for whichever thread asks.
+/// A process-global native Tree-sitter language.
 #[derive(Clone)]
 pub struct ParseableLanguage {
     language: tree_sitter::Language,
@@ -291,20 +282,14 @@ impl Grammar {
             redactions_config: None,
             runnable_config: None,
             error_query,
-            #[cfg(not(target_family = "wasm"))]
             ts_language: parseable_language
                 .resolve()
                 .expect("resolving a native parseable language cannot fail"),
-            #[cfg(target_family = "wasm")]
-            parseable_language,
             highlight_map: Default::default(),
         }
     }
 
     /// A parseable [`tree_sitter::Language`] valid on the calling thread.
-    ///
-    /// See [`ParseableLanguage`] for why this is a resolution rather than a
-    /// field access on WebAssembly.
     pub fn parseable_language(&self) -> Result<tree_sitter::Language> {
         Ok(self.ts_language.clone())
     }

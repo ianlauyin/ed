@@ -1,6 +1,6 @@
 use chrono::{DateTime, Utc};
 
-pub use web_time::Instant;
+pub use std::time::Instant;
 
 pub trait Clock {
     fn utc_now(&self) -> DateTime<Utc>;

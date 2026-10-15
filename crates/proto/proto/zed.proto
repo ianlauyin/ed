@@ -16,6 +16,7 @@ import "project.proto";
 
 // Looking for a number? Search "// current max"
 message Envelope {
+  reserved 285, 286, 287, 401;
   uint32 id = 1;
   optional uint32 responding_to = 2;
   optional PeerId original_sender_id = 3;
@@ -197,9 +198,6 @@ message Envelope {
     LspExtOpenDocs lsp_ext_open_docs = 283;
     LspExtOpenDocsResponse lsp_ext_open_docs_response = 284;
 
-    SyncExtensions sync_extensions = 285;
-    SyncExtensionsResponse sync_extensions_response = 286;
-    InstallExtension install_extension = 287;
 
     OpenUnstagedDiff open_unstaged_diff = 288;
     OpenUnstagedDiffResponse open_unstaged_diff_response = 289;
@@ -337,7 +335,6 @@ message Envelope {
 
     GitDeleteBranch git_delete_branch = 400;
 
-    ExternalExtensionAgentsUpdated external_extension_agents_updated = 401;
 
     GitCreateRemote git_create_remote = 402;
     GitRemoveRemote git_remove_remote = 403;

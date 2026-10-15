@@ -23,7 +23,6 @@ buffer_diff.workspace = true
 clock.workspace = true
 collections.workspace = true
 encoding_rs.workspace = true
-extension.workspace = true
 fancy-regex.workspace = true
 file_content.workspace = true
 fs.workspace = true

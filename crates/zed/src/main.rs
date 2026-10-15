@@ -20,7 +20,6 @@ use collections::HashMap;
 use crashes::InitCrashHandler;
 use db::kvp::KeyValueStore;
 use editor::Editor;
-use extension::ExtensionHostProxy;
 use fs::{Fs, RealFs};
 use futures::{FutureExt, StreamExt, channel::oneshot};
 use git::GitHostingProviderRegistry;
@@ -414,9 +413,6 @@ fn main() {
 
         OpenListener::set_global(cx, open_listener.clone());
 
-        extension::init(cx);
-        let extension_host_proxy = ExtensionHostProxy::global(cx);
-
         let http_client = cx.http_client();
         let mut languages = LanguageRegistry::new(cx.background_executor().clone());
         languages.set_language_server_download_dir(paths::languages_dir().clone());
@@ -454,25 +450,6 @@ fn main() {
 
         let workspace_store = cx.new(|cx| WorkspaceStore::new(cx));
 
-        language_extension::init(
-            language_extension::LspAccess::ViaWorkspaces({
-                let workspace_store = workspace_store.clone();
-                Arc::new(move |cx: &mut App| {
-                    workspace_store.update(cx, |workspace_store, cx| {
-                        Ok(workspace_store
-                            .workspaces()
-                            .filter_map(|weak| weak.upgrade())
-                            .map(|workspace: gpui::Entity<workspace::Workspace>| {
-                                workspace.read(cx).project().read(cx).lsp_store()
-                            })
-                            .collect())
-                    })
-                })
-            }),
-            extension_host_proxy.clone(),
-            languages.clone(),
-        );
-
         zed::init(cx);
 
         zed::move_to_applications::init(cx);
@@ -496,11 +473,6 @@ fn main() {
         watcher_debug::init(app_state.clone(), cx);
 
         theme_settings::init(theme::LoadThemes::All(Box::new(Assets)), cx);
-        theme_extension::init(
-            extension_host_proxy,
-            ThemeRegistry::global(cx),
-            cx.background_executor().clone(),
-        );
         command_palette::init(cx);
 
         zed::remote_debug::init(cx);
@@ -757,22 +729,6 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
                         return anyhow::Ok(());
                     }
                     restore_or_create_workspace(app_state, cx).await
-                })
-                .detach_and_log_err(cx);
-            }
-            OpenRequestKind::Extension { extension_id } => {
-                cx.spawn(async move |cx| {
-                    let workspace =
-                        workspace::get_any_active_multi_workspace(app_state, cx.clone()).await?;
-                    workspace.update(cx, |_, window, cx| {
-                        window.dispatch_action(
-                            Box::new(zed_actions::Extensions {
-                                category_filter: None,
-                                id: Some(extension_id),
-                            }),
-                            cx,
-                        );
-                    })
                 })
                 .detach_and_log_err(cx);
             }
@@ -1219,7 +1175,6 @@ pub(crate) async fn restorable_workspace_locations(
 fn init_paths() -> HashMap<io::ErrorKind, Vec<&'static Path>> {
     [
         paths::config_dir(),
-        paths::extensions_dir(),
         paths::languages_dir(),
         paths::database_dir(),
         paths::logs_dir(),

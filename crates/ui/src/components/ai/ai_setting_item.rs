@@ -44,7 +44,6 @@ impl AiSettingItemStatus {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum AiSettingItemSource {
-    Extension,
     Custom,
     Registry,
 }
@@ -52,7 +51,6 @@ pub enum AiSettingItemSource {
 impl AiSettingItemSource {
     fn icon_name(&self) -> IconName {
         match self {
-            Self::Extension => IconName::ZedSrcExtension,
             Self::Custom => IconName::ZedSrcCustom,
             Self::Registry => IconName::AcpRegistry,
         }
@@ -60,7 +58,6 @@ impl AiSettingItemSource {
 
     fn tooltip_text(&self, label: &str) -> String {
         match self {
-            Self::Extension => format!("{label} was installed from an extension."),
             Self::Registry => format!("{label} was installed from the ACP registry."),
             Self::Custom => format!("{label} was configured manually."),
         }
@@ -295,10 +292,10 @@ impl Component for AiSettingItem {
                 container()
                     .child(
                         AiSettingItem::new(
-                            "ext-mcp",
+                            "custom-mcp",
                             "Postgres",
                             AiSettingItemStatus::Running,
-                            AiSettingItemSource::Extension,
+                            AiSettingItemSource::Custom,
                         )
                         .detail_label("3 tools")
                         .action(
@@ -332,7 +329,7 @@ impl Component for AiSettingItem {
                         "starting-mcp",
                         "Context7",
                         AiSettingItemStatus::Starting,
-                        AiSettingItemSource::Extension,
+                        AiSettingItemSource::Custom,
                     ))
                     .into_any_element(),
             ),
@@ -344,7 +341,7 @@ impl Component for AiSettingItem {
                             "ext-agent",
                             "Claude Agent",
                             AiSettingItemStatus::Running,
-                            AiSettingItemSource::Extension,
+                            AiSettingItemSource::Custom,
                         )
                         .icon(
                             Icon::new(IconName::AiClaude)
@@ -390,7 +387,7 @@ impl Component for AiSettingItem {
                             "error-mcp",
                             "Amplitude",
                             AiSettingItemStatus::Error,
-                            AiSettingItemSource::Extension,
+                            AiSettingItemSource::Custom,
                         )
                         .details(
                             details_row(

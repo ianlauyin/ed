@@ -70,7 +70,7 @@ impl SemanticTokenConfig {
     /// Clears all cached stylizers.
     ///
     /// This is called when settings change to ensure that any modifications to
-    /// language-specific semantic token rules (e.g. from extension install/uninstall)
+    /// language-specific semantic token rules
     /// are picked up. Stylizers are recreated lazily on next use.
     pub(super) fn clear_stylizers(&mut self) {
         self.stylizers.clear();

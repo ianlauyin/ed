@@ -5,7 +5,6 @@ pub use headless_project::{HeadlessAppState, HeadlessProject};
 use anyhow::{Context as _, Result, anyhow};
 use clap::Subcommand;
 use collections::HashMap;
-use extension::ExtensionHostProxy;
 use fs::{Fs, RealFs};
 use futures::{
     AsyncRead, AsyncWrite, AsyncWriteExt, FutureExt, SinkExt,
@@ -615,13 +614,10 @@ fn start_server(
 fn init_paths() -> anyhow::Result<()> {
     for path in [
         paths::config_dir(),
-        paths::extensions_dir(),
         paths::languages_dir(),
         paths::logs_dir(),
         paths::temp_dir(),
         paths::hang_traces_dir(),
-        paths::remote_extensions_dir(),
-        paths::remote_extensions_uploads_dir(),
     ]
     .iter()
     {
@@ -737,9 +733,6 @@ pub fn execute_run(
         GitHostingProviderRegistry::set_global(git_hosting_provider_registry, cx);
         git_hosting_providers::init(cx);
 
-        extension::init(cx);
-        let extension_host_proxy = ExtensionHostProxy::global(cx);
-
         json_schema_store::init(cx);
 
         let project = cx.new(|cx| {
@@ -778,7 +771,6 @@ pub fn execute_run(
                     http_client,
                     node_runtime,
                     languages,
-                    extension_host_proxy,
                     startup_time,
                 },
                 true,

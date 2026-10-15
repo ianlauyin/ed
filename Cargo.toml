@@ -21,7 +21,6 @@ members = [
     "crates/editor",
     "crates/encoding_selector",
     "crates/env_var",
-    "crates/extension",
     "crates/file_content",
     "crates/file_finder",
     "crates/file_icons",
@@ -55,7 +54,6 @@ members = [
     "crates/language",
     "crates/language_core",
     "crates/language_detection",
-    "crates/language_extension",
     "crates/language_onboarding",
     "crates/language_selector",
     "crates/language_tools",
@@ -125,7 +123,6 @@ members = [
     "crates/terminal_view",
     "crates/text",
     "crates/theme",
-    "crates/theme_extension",
     "crates/theme_importer",
     "crates/theme_selector",
     "crates/theme_settings",
@@ -179,7 +176,6 @@ diagnostics = { path = "crates/diagnostics" }
 editor = { path = "crates/editor" }
 encoding_selector = { path = "crates/encoding_selector" }
 env_var = { path = "crates/env_var" }
-extension = { path = "crates/extension" }
 file_content = { path = "crates/file_content" }
 file_finder = { path = "crates/file_finder" }
 file_icons = { path = "crates/file_icons" }
@@ -213,7 +209,6 @@ json_schema_store = { path = "crates/json_schema_store" }
 language = { path = "crates/language" }
 language_core = { path = "crates/language_core" }
 language_detection = { path = "crates/language_detection" }
-language_extension = { path = "crates/language_extension" }
 language_onboarding = { path = "crates/language_onboarding" }
 language_selector = { path = "crates/language_selector" }
 language_tools = { path = "crates/language_tools" }
@@ -281,7 +276,6 @@ terminal = { path = "crates/terminal" }
 terminal_view = { path = "crates/terminal_view" }
 text = { path = "crates/text" }
 theme = { path = "crates/theme" }
-theme_extension = { path = "crates/theme_extension" }
 theme_selector = { path = "crates/theme_selector" }
 theme_settings = { path = "crates/theme_settings" }
 time_format = { path = "crates/time_format" }
@@ -655,14 +649,7 @@ usvg = { version = "0.46.0", default-features = false }
 uuid = { version = "1.1", features = ["serde"] }
 vte = { version = "0.15.0", features = ["ansi"] }
 walkdir = "2.5"
-wasm-encoder = "0.254"
-# Forked because upstream is unmaintained and its worker bootstrap still calls
-# the wasm-bindgen init function with the positional arguments deprecated in 0.2.93.
-wasm_thread = { git = "https://github.com/zed-industries/wasm_thread", rev = "0cf96c7708dfb97ccf3da50347e25edcf75d6937", version = "0.3", features = ["es_modules"] }
-wasmparser = "0.254"
-wasm-bindgen-futures = "0.4"
 wax = { version = "0.7", default-features = false }
-web-time = "1.1.0"
 webpki-roots = "1.0.8"
 which = "8"
 yawc = { version = "0.4", default-features = false }

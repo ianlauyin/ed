@@ -231,9 +231,9 @@ pub struct LanguageTaskSettings {
     /// Extra task variables to set for a particular language.
     pub variables: HashMap<String, String>,
     pub enabled: bool,
-    /// Use LSP tasks over Zed language extension ones.
+    /// Use LSP tasks over built-in language tasks.
     /// If no LSP tasks are returned due to error/timeout or regular execution,
-    /// Zed language extension tasks will be used instead.
+    /// Built-in language tasks will be used instead.
     ///
     /// Other Zed tasks will still be shown:
     /// * Zed task from either of the task config file

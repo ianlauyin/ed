@@ -36,7 +36,7 @@ use crate::{
     LanguageToSettingsMap, LspSettings, LspSettingsMap, SemanticTokenRules, ThemeName,
     UserSettingsContentExt, VsCodeSettings, WorktreeId,
     settings_content::{
-        ExtendingSet, ExtensionsSettingsContent, ProfileBase, ProjectSettingsContent,
+        ExtendingSet, LanguageDefaultsContent, ProfileBase, ProjectSettingsContent,
         RootUserSettings, SettingsContent, UserSettingsContent, merge_from::MergeFrom,
     },
 };
@@ -157,7 +157,7 @@ pub struct SettingsStore {
     user_settings: Option<UserSettingsContent>,
     global_settings: Option<Box<SettingsContent>>,
 
-    extension_settings: Option<Box<SettingsContent>>,
+    language_defaults: Option<Box<SettingsContent>>,
     server_settings: Option<Box<SettingsContent>>,
 
     language_semantic_token_rules: HashMap<SharedString, SemanticTokenRules>,
@@ -320,7 +320,7 @@ impl SettingsStore {
             global_settings: None,
             server_settings: None,
             user_settings: None,
-            extension_settings: None,
+            language_defaults: None,
             language_semantic_token_rules: HashMap::default(),
 
             merged_settings: default_settings,
@@ -647,7 +647,7 @@ impl SettingsStore {
         // ignoring os profiles
         // ignoring release channel profiles
         // ignoring global
-        // ignoring extension
+        // ignoring language defaults
 
         if self.user_settings.is_some() {
             files.push(SettingsFile::User);
@@ -980,9 +980,8 @@ impl SettingsStore {
 
     /// Sets language-specific semantic token rules.
     ///
-    /// These rules are registered by language modules (e.g. the Rust language module)
-    /// or by third-party extensions (via `semantic_token_rules.json` in their language
-    /// directories). They are stored separately from the global rules and are only
+    /// These rules are registered by built-in language modules.
+    /// They are stored separately from the global rules and are only
     /// applied to buffers of the matching language by the `SemanticTokenStylizer`.
     pub fn set_language_semantic_token_rules(
         &mut self,
@@ -1097,12 +1096,12 @@ impl SettingsStore {
         Ok(())
     }
 
-    pub fn set_extension_settings(
+    pub fn set_language_defaults(
         &mut self,
-        content: ExtensionsSettingsContent,
+        content: LanguageDefaultsContent,
         cx: &mut App,
     ) -> Result<()> {
-        self.extension_settings = Some(Box::new(SettingsContent {
+        self.language_defaults = Some(Box::new(SettingsContent {
             project: ProjectSettingsContent {
                 all_languages: content.all_languages,
                 ..Default::default()
@@ -1310,7 +1309,7 @@ impl SettingsStore {
 
         if changed_local_path.is_none() {
             let mut merged = self.default_settings.as_ref().clone();
-            merged.merge_from_option(self.extension_settings.as_deref());
+            merged.merge_from_option(self.language_defaults.as_deref());
             merged.merge_from_option(self.global_settings.as_deref());
             if let Some(user_settings) = self.user_settings.as_ref() {
                 let active_profile = user_settings.for_profile(cx);

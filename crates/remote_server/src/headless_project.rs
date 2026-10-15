@@ -6,7 +6,6 @@ use language::File;
 use lsp::LanguageServerId;
 use rpc::ProjectId;
 
-use extension::ExtensionHostProxy;
 use fs::Fs;
 use futures::{channel::oneshot, stream::StreamExt as _};
 use gpui::{App, AppContext as _, AsyncApp, Context, Entity, PromptLevel, Task, TaskExt};
@@ -77,7 +76,6 @@ pub struct HeadlessAppState {
     pub http_client: Arc<dyn HttpClient>,
     pub node_runtime: NodeRuntime,
     pub languages: Arc<LanguageRegistry>,
-    pub extension_host_proxy: Arc<ExtensionHostProxy>,
     pub startup_time: Instant,
 }
 
@@ -105,7 +103,6 @@ impl HeadlessProject {
             http_client,
             node_runtime,
             languages,
-            extension_host_proxy: proxy,
             startup_time,
         }: HeadlessAppState,
         init_worktree_trust: bool,
@@ -216,11 +213,6 @@ impl HeadlessProject {
         });
 
         cx.subscribe(&lsp_store, Self::on_lsp_store_event).detach();
-        language_extension::init(
-            language_extension::LspAccess::ViaLspStore(lsp_store.downgrade()),
-            proxy,
-            languages.clone(),
-        );
 
         cx.subscribe(&buffer_store, |_this, _buffer_store, event, cx| {
             if let BufferStoreEvent::BufferAdded(buffer) = event {

@@ -1,4 +1,4 @@
-use crate::available_languages::{AvailableLanguage, LanguageOrigin};
+use crate::available_languages::AvailableLanguage;
 use crate::{
     CachedLspAdapter, File, Language, LanguageConfig, LanguageId, LanguageMatcher,
     LanguageServerName, LspAdapter, ManifestName, PLAIN_TEXT, ToolchainLister,
@@ -138,30 +138,6 @@ impl LanguageRegistry {
             .reorder_language_servers(language, ordered_lsp_adapters);
     }
 
-    /// Removes the specified languages and grammars from the registry.
-    pub fn remove_languages(
-        &self,
-        languages_to_remove: &[LanguageName],
-        grammars_to_remove: &[Arc<str>],
-    ) {
-        self.state
-            .write()
-            .remove_languages(languages_to_remove, grammars_to_remove)
-    }
-
-    pub fn remove_lsp_adapter(&self, language_name: &LanguageName, name: &LanguageServerName) {
-        let mut state = self.state.write();
-        if let Some(adapters) = state.lsp_adapters.get_mut(language_name) {
-            adapters.retain(|adapter| &adapter.name != name)
-        }
-        state.all_lsp_adapters.remove(name);
-        state.available_lsp_adapters.remove(name);
-
-        state.version += 1;
-        state.reload_count += 1;
-        *state.subscription.0.borrow_mut() = ();
-    }
-
     /// Registers an available language server adapter.
     ///
     /// The language server is registered under the language server name, but
@@ -175,16 +151,6 @@ impl LanguageRegistry {
         adapter: Arc<dyn LspAdapter>,
     ) {
         let mut state = self.state.write();
-
-        if adapter.is_extension()
-            && let Some(existing_adapter) = state.all_lsp_adapters.get(&name)
-            && !existing_adapter.adapter.is_extension()
-        {
-            log::warn!(
-                "not registering extension-provided language server {name:?}, since a builtin language server exists with that name",
-            );
-            return;
-        }
 
         state.available_lsp_adapters.insert(
             name,
@@ -223,17 +189,6 @@ impl LanguageRegistry {
     pub fn register_lsp_adapter(&self, language_name: LanguageName, adapter: Arc<dyn LspAdapter>) {
         let mut state = self.state.write();
 
-        if adapter.is_extension()
-            && let Some(existing_adapter) = state.all_lsp_adapters.get(&adapter.name())
-            && !existing_adapter.adapter.is_extension()
-        {
-            log::warn!(
-                "not registering extension-provided language server {:?} for language {language_name:?}, since a builtin language server exists with that name",
-                adapter.name(),
-            );
-            return;
-        }
-
         let cached = CachedLspAdapter::new(adapter);
         state
             .lsp_adapters
@@ -257,63 +212,16 @@ impl LanguageRegistry {
         manifest_name: Option<ManifestName>,
         load: LanguageLoader,
     ) {
-        self.register_language_with_origin(
-            name,
-            grammar_name,
-            matcher,
-            hidden,
-            manifest_name,
-            load,
-            LanguageOrigin::Native,
-        );
-    }
-
-    pub fn register_extension_language(
-        &self,
-        name: LanguageName,
-        grammar_name: Option<Arc<str>>,
-        matcher: Arc<LanguageMatcher>,
-        hidden: bool,
-        manifest_name: Option<ManifestName>,
-        load: LanguageLoader,
-    ) -> bool {
-        self.register_language_with_origin(
-            name,
-            grammar_name,
-            matcher,
-            hidden,
-            manifest_name,
-            load,
-            LanguageOrigin::Extension,
-        )
-    }
-
-    fn register_language_with_origin(
-        &self,
-        name: LanguageName,
-        grammar_name: Option<Arc<str>>,
-        matcher: Arc<LanguageMatcher>,
-        hidden: bool,
-        manifest_name: Option<ManifestName>,
-        load: LanguageLoader,
-        origin: LanguageOrigin,
-    ) -> bool {
         let state = &mut *self.state.write();
 
-        let Some(was_loaded) = state.available_languages.register(
+        let was_loaded = state.available_languages.register(
             name.clone(),
             grammar_name,
             matcher,
             hidden,
             manifest_name,
             load,
-            origin,
-        ) else {
-            log::warn!(
-                "not registering extension language {name}: a language with this name is already registered outside of extensions"
-            );
-            return false;
-        };
+        );
         if was_loaded {
             state.languages.retain(|language| language.name() != name);
         }
@@ -321,7 +229,6 @@ impl LanguageRegistry {
         state.version += 1;
         state.reload_count += 1;
         *state.subscription.0.borrow_mut() = ();
-        true
     }
 
     /// Adds grammars to the registry. Language configurations reference a grammar by name. The
@@ -373,7 +280,6 @@ impl LanguageRegistry {
             manifest_name: None,
             load: Arc::new(|| async { Err(anyhow!("already loaded")) }.boxed()),
             loaded: true,
-            origin: LanguageOrigin::Native,
         });
         state.add(language);
     }
@@ -834,25 +740,6 @@ impl LanguageRegistryState {
         }
 
         *lsp_adapters = new_lsp_adapters;
-    }
-
-    fn remove_languages(
-        &mut self,
-        languages_to_remove: &[LanguageName],
-        grammars_to_remove: &[Arc<str>],
-    ) {
-        if languages_to_remove.is_empty() && grammars_to_remove.is_empty() {
-            return;
-        }
-
-        let removed_languages = self
-            .available_languages
-            .remove_extension_languages(languages_to_remove);
-        self.languages
-            .retain(|language| !removed_languages.contains(&language.name()));
-        self.version += 1;
-        self.reload_count += 1;
-        *self.subscription.0.borrow_mut() = ();
     }
 
     /// Mark the given language as having been loaded, so that the

@@ -783,6 +783,7 @@ pub(crate) fn observe_power(cx: &App) {
     .detach();
 }
 
+#[cfg(target_os = "macos")]
 fn system_suspended_time() -> Option<Duration> {
     use std::sync::OnceLock;
 
@@ -1372,4 +1373,28 @@ impl IntervalSealer {
         self.interval_start = ended;
         snapshot
     }
+}
+
+#[cfg(target_os = "linux")]
+fn system_suspended_time() -> Option<Duration> {
+    // CLOCK_BOOTTIME is CLOCK_MONOTONIC plus time spent suspended:
+    // https://man7.org/linux/man-pages/man2/clock_gettime.2.html
+    let awake = read_clock(libc::CLOCK_MONOTONIC)?;
+    let total = read_clock(libc::CLOCK_BOOTTIME)?;
+    Some(total.saturating_sub(awake))
+}
+#[cfg(target_os = "linux")]
+fn read_clock(clock: libc::clockid_t) -> Option<Duration> {
+    let mut time = libc::timespec {
+        tv_sec: 0,
+        tv_nsec: 0,
+    };
+    // SAFETY: `time` is a valid, writable timespec.
+    if unsafe { libc::clock_gettime(clock, &mut time) } != 0 {
+        return None;
+    }
+    Some(Duration::new(
+        u64::try_from(time.tv_sec).ok()?,
+        u32::try_from(time.tv_nsec).ok()?,
+    ))
 }

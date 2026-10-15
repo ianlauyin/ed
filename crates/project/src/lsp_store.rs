@@ -6277,7 +6277,7 @@ impl LspStore {
         self.semantic_token_config
             .update_rules(new_semantic_token_rules);
         // Always clear cached stylizers so that changes to language-specific
-        // semantic token rules (e.g. from extension install/uninstall) are
+        // language-specific semantic token rules are
         // picked up. Stylizers are recreated lazily, so this is cheap.
         self.semantic_token_config.clear_stylizers();
 
@@ -9728,10 +9728,7 @@ impl LspStore {
                 .flatten()?;
 
             log::debug!("Refreshing workspace configurations for servers {refreshed_servers:?}");
-            // TODO this asynchronous job runs concurrently with extension (de)registration and may take enough time for a certain extension
-            // to stop and unregister its language server wrapper.
-            // This is racy : an extension might have already removed all `local.language_servers` state, but here we `.clone()` and hold onto it anyway.
-            // This now causes errors in the logs, we should find a way to remove such servers from the processing everywhere.
+            // A server may stop while its workspace configuration is being refreshed.
             let _: Vec<Option<()>> = join_all(servers).await;
 
             Some(())

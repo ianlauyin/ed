@@ -1868,9 +1868,9 @@
   "tasks": {
     "variables": {},
     "enabled": true,
-    // Use LSP tasks over Zed language extension ones.
+    // Use LSP tasks over built-in language tasks.
     // If no LSP tasks are returned due to error/timeout or regular execution,
-    // Zed language extension tasks will be used instead.
+    // Built-in language tasks will be used instead.
     //
     // Other Zed tasks will still be shown:
     // * Zed task from either of the task config file
@@ -1917,23 +1917,6 @@
     "path": null,
     "npm_path": null
   },
-  // The extensions that Zed should automatically install on startup.
-  //
-  // If you don't want any of these extensions, add this field to your settings
-  // and change the value to `false`.
-  "auto_install_extensions": {
-    "html": true
-  },
-  // Whether to suggest installing extensions based on the files you open.
-  "suggest_extensions": true,
-  // The capabilities granted to extensions.
-  //
-  // This list can be customized to restrict what extensions are able to do.
-  "granted_extension_capabilities": [
-    { "kind": "process:exec", "command": "*", "args": ["**"] },
-    { "kind": "download_file", "host": "*", "path": ["**"] },
-    { "kind": "npm:install", "package": "*" }
-  ],
   // Controls how completions are processed for this language.
   "completions": {
     // Controls how words are completed.

@@ -1,13 +1,22 @@
 pub fn os_name() -> String {
-    "macOS".to_string()
+    #[cfg(target_os = "macos")]
+    {
+        "macOS".to_string()
+    }
+    #[cfg(target_os = "linux")]
+    {
+        "Linux".to_string()
+    }
 }
 
 /// Note: This might do blocking IO! Only call from background threads
 pub fn os_version() -> String {
     cfg_select! {
-       test => {
-           // MacOS branch in particular is quite slow, hence we ought to "avoid" it in tests.
-           "test binary".to_owned()
+       target_os = "linux" => {
+           let content = std::fs::read_to_string("/etc/os-release")
+               .or_else(|_| std::fs::read_to_string("/usr/lib/os-release"))
+               .unwrap_or_default();
+           util::parse_os_release(&content).unwrap_or_else(|| "unknown".to_string())
        }
        target_os = "macos" => {
            static MACOS_VERSION_REGEX: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {

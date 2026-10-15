@@ -113,17 +113,20 @@ where
                 .compare_exchange(false, true, Ordering::Acquire, Ordering::Relaxed)
                 .is_ok()
             {
+                #[cfg(target_os = "macos")]
                 macos::suspend_all_other_threads();
 
                 // on macos this "ping" is needed to ensure that all our
                 // `client.send_message` calls have been processed before we trigger the
                 // minidump request.
+                #[cfg(target_os = "macos")]
                 client.ping().ok();
                 let r = client.request_dump(crash_context);
                 if let Err(e) = &r {
                     eprintln!("failed to request dump: {:?}", e);
                 }
 
+                #[cfg(target_os = "macos")]
                 macos::resume_all_other_threads();
                 r.is_ok()
             } else {
@@ -468,11 +471,13 @@ pub fn panic_hook(crash_client: Arc<Client>, message: &str, location: Option<&Lo
     );
     log::error!("triggering a crash to generate a minidump...");
 
+    #[cfg(target_os = "macos")]
     macos::set_panic_thread_id();
 
     std::process::abort();
 }
 
+#[cfg(target_os = "macos")]
 mod macos {
     static PANIC_THREAD_ID: std::sync::atomic::AtomicU32 = std::sync::atomic::AtomicU32::new(0);
 

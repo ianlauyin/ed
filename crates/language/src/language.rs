@@ -677,11 +677,6 @@ pub trait LspAdapter: 'static + Send + Sync + DynLspInstaller {
         false
     }
 
-    /// True for the extension adapter and false otherwise.
-    fn is_extension(&self) -> bool {
-        false
-    }
-
     /// Called when a user responds to a ShowMessageRequest from this language server.
     /// This allows adapters to intercept preference selections (like "Always" or "Never")
     /// for settings that should be persisted to Zed's settings file.

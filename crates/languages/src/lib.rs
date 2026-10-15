@@ -309,8 +309,8 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, node: NodeRuntime
                 cx.update(|cx| {
                     SettingsStore::update_global(cx, |settings, cx| {
                         settings
-                            .set_extension_settings(
-                                settings::ExtensionsSettingsContent {
+                            .set_language_defaults(
+                                settings::LanguageDefaultsContent {
                                     all_languages: language_settings.clone(),
                                 },
                                 cx,

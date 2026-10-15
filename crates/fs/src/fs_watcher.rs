@@ -29,7 +29,7 @@ impl OsWatcherKind {
     /// Poll watches and native macOS/Windows watches cover their whole subtree;
     /// native Linux (inotify) watches cover one directory.
     fn is_recursive(self) -> bool {
-        self == Self::Poll || true
+        self == Self::Poll || cfg!(target_os = "macos")
     }
 }
 
@@ -299,6 +299,11 @@ pub fn requires_poll_watcher(path: &Path) -> bool {
         _ => {}
     }
 
+    #[cfg(target_os = "linux")]
+    {
+        detect_requires_poll_watcher_linux(path)
+    }
+    #[cfg(target_os = "macos")]
     {
         let _ = path;
         false
@@ -350,6 +355,7 @@ fn register_existing_path(
 
 /// Whether the volume backing `path` does case-insensitive name lookups, used to
 /// pick exact vs. folded matching.
+#[cfg(target_os = "macos")]
 pub(crate) fn case_insensitive_path(path: &Path) -> bool {
     use std::os::unix::ffi::OsStrExt as _;
 
@@ -407,10 +413,14 @@ impl WatchKey {
         // normalize before folding case. Windows (NTFS) and Linux are
         // normalization-sensitive, so there we only fold case.
 
+        #[cfg(target_os = "macos")]
         let folded = {
             use unicode_normalization::UnicodeNormalization as _;
             lossy.chars().nfc().collect::<String>().to_lowercase()
         };
+
+        #[cfg(target_os = "linux")]
+        let folded = lossy.to_lowercase();
 
         Self::Folded(folded.into())
     }
@@ -1219,4 +1229,117 @@ static NATIVE_WATCH_LIMIT_COOLDOWN: LazyLock<Duration> = LazyLock::new(|| {
 
 pub fn poll_interval() -> Duration {
     *POLL_INTERVAL
+}
+
+#[cfg(target_os = "linux")]
+pub(crate) fn case_insensitive_path(_path: &Path) -> bool {
+    false
+}
+
+#[cfg(target_os = "linux")]
+fn detect_requires_poll_watcher_linux(path: &Path) -> bool {
+    use std::ffi::CString;
+    use std::os::unix::ffi::OsStrExt;
+
+    let c_path = match CString::new(path.as_os_str().as_bytes()) {
+        Ok(p) => p,
+        Err(_) => return false,
+    };
+
+    let mut stat: libc::statfs = unsafe { std::mem::zeroed() };
+    if unsafe { libc::statfs(c_path.as_ptr(), &mut stat) } != 0 {
+        return false;
+    }
+
+    const V9FS_MAGIC: u64 = 0x0102_1997;
+    const NFS_SUPER_MAGIC: u64 = 0x0000_6969;
+    const CIFS_MAGIC: u64 = 0xFF53_4D42;
+    const SMB_SUPER_MAGIC: u64 = 0x0000_517B;
+    const SMB2_MAGIC: u64 = 0xFE53_4D42;
+    const FUSE_SUPER_MAGIC: u64 = 0x6573_5546;
+
+    let fs_type = (stat.f_type as u64) & 0xFFFF_FFFF;
+    if fs_type == FUSE_SUPER_MAGIC && is_virtiofs(path) {
+        return false;
+    }
+
+    if fs_type == V9FS_MAGIC
+        || fs_type == NFS_SUPER_MAGIC
+        || fs_type == CIFS_MAGIC
+        || fs_type == SMB_SUPER_MAGIC
+        || fs_type == SMB2_MAGIC
+        || fs_type == FUSE_SUPER_MAGIC
+    {
+        log::info!(
+            "Detected network/virtual filesystem (type 0x{:x}) at {}, using poll watcher",
+            fs_type,
+            path.display()
+        );
+        return true;
+    }
+
+    if is_wsl_drvfs_path(path) {
+        log::info!(
+            "Detected WSL drvfs mount at {}, using poll watcher",
+            path.display()
+        );
+        return true;
+    }
+
+    false
+}
+
+#[cfg(target_os = "linux")]
+fn is_virtiofs(path: &Path) -> bool {
+    let Ok(mountinfo) = std::fs::read_to_string("/proc/self/mountinfo") else {
+        return false;
+    };
+
+    let mut best_mount = None;
+    for line in mountinfo.lines() {
+        let fields = line.split(' ').collect::<Vec<_>>();
+        let Some(separator) = fields.iter().position(|field| *field == "-") else {
+            continue;
+        };
+        let (Some(mount_point), Some(fs_type)) = (fields.get(4), fields.get(separator + 1)) else {
+            continue;
+        };
+
+        let mount_point = mount_point
+            .replace("\\040", " ")
+            .replace("\\011", "\t")
+            .replace("\\012", "\n")
+            .replace("\\134", "\\");
+        if path.starts_with(&mount_point)
+            && best_mount.is_none_or(|(length, _)| mount_point.len() > length)
+        {
+            best_mount = Some((mount_point.len(), *fs_type));
+        }
+    }
+
+    best_mount.is_some_and(|(_, fs_type)| fs_type == "virtiofs" || fs_type == "fuse.virtiofs")
+}
+
+#[cfg(target_os = "linux")]
+fn is_wsl_drvfs_path(path: &Path) -> bool {
+    if std::env::var_os("WSL_DISTRO_NAME").is_none() {
+        if let Ok(version) = std::fs::read_to_string("/proc/version") {
+            let version = version.to_lowercase();
+            if !version.contains("microsoft") && !version.contains("wsl") {
+                return false;
+            }
+        } else {
+            return false;
+        }
+    }
+
+    let Some(path) = path.to_str() else {
+        return false;
+    };
+    if !path.starts_with("/mnt/") || path.len() < 6 {
+        return false;
+    }
+    let after_mnt = &path[5..];
+    after_mnt.starts_with(|c: char| c.is_ascii_alphabetic())
+        && (after_mnt.len() == 1 || after_mnt.as_bytes()[1] == b'/')
 }

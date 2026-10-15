@@ -19,12 +19,15 @@ use gpui::SharedString;
 use std::ffi::CString;
 use util::command::{Stdio, new_command};
 
-use std::os::fd::{AsFd, AsRawFd};
+#[cfg(target_os = "macos")]
+use std::os::fd::AsFd;
+use std::os::fd::AsRawFd;
 
 use std::os::unix::ffi::OsStrExt;
 
 use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
 
+#[cfg(target_os = "macos")]
 use std::mem::MaybeUninit;
 
 use async_tar::Archive;
@@ -438,6 +441,15 @@ pub trait FileHandle: Send + Sync + std::fmt::Debug {
 }
 
 impl FileHandle for std::fs::File {
+    #[cfg(target_os = "linux")]
+    fn current_path(&self, _: &Arc<dyn Fs>) -> Result<PathBuf> {
+        Ok(std::fs::read_link(format!(
+            "/proc/self/fd/{}",
+            self.as_raw_fd()
+        ))?)
+    }
+
+    #[cfg(target_os = "macos")]
     fn current_path(&self, _: &Arc<dyn Fs>) -> Result<PathBuf> {
         use std::{
             ffi::{CStr, OsStr},
@@ -486,7 +498,20 @@ fn rename_without_replace(source: &Path, target: &Path) -> io::Result<()> {
     let source = path_to_c_string(source)?;
     let target = path_to_c_string(target)?;
 
+    #[cfg(target_os = "macos")]
     let result = unsafe { libc::renamex_np(source.as_ptr(), target.as_ptr(), libc::RENAME_EXCL) };
+
+    #[cfg(target_os = "linux")]
+    let result = unsafe {
+        libc::syscall(
+            libc::SYS_renameat2,
+            libc::AT_FDCWD,
+            source.as_ptr(),
+            libc::AT_FDCWD,
+            target.as_ptr(),
+            libc::RENAME_NOREPLACE,
+        )
+    };
 
     if result == 0 {
         Ok(())

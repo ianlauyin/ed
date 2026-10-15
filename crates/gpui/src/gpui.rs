@@ -4,8 +4,8 @@
 #![allow(clippy::collapsible_else_if)] // False positives in platform specific code
 #![allow(unused_mut)] // False positives in platform specific code
 
-#[cfg(not(target_os = "macos"))]
-compile_error!("This editor only supports macOS.");
+#[cfg(not(any(target_os = "macos", target_os = "linux")))]
+compile_error!("Supported targets are macOS and the headless Linux remote server.");
 
 extern crate self as gpui;
 #[macro_use]

@@ -35,7 +35,7 @@ pub struct LanguageConfig {
     /// For example, the Nu extension would set this to `["nushell"]`.
     #[serde(default)]
     pub kernel_language_names: Vec<Arc<str>>,
-    // The name of the grammar in a WASM bundle (experimental).
+    // The name of the native Tree-sitter grammar.
     pub grammar: Option<Arc<str>>,
     /// The criteria for matching this language to a given file.
     #[serde(flatten)]

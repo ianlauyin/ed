@@ -145,16 +145,8 @@ pub trait Scheduler: Send + Sync {
 /// detached children keep running until they finish. The thread shuts down
 /// once the executor and every task on it are gone.
 ///
-/// This function never blocks: the returned task starts as an asynchronous
-/// rendezvous that resolves to the root task's handle once the dedicated
-/// thread has spawned it, and behaves like that handle from then on. That
-/// makes it safe to call from threads that must not block, such as the web
-/// main thread. On wasm targets the thread is a web worker and requires the
-/// `wasm-threads` cargo feature (and a shared-memory build); without it this
-/// panics. Spawning a worker is far more expensive than an OS thread —
-/// module instantiation plus a fresh function table — so on the web treat a
-/// dedicated session as a long-lived place to send work, not a per-job
-/// convenience.
+/// This function never blocks: the returned task asynchronously receives the root
+/// task handle after the dedicated thread spawns it.
 ///
 /// The caller is responsible for supplying a `session_id` that's distinct from
 /// every other live session on `scheduler`. Concrete schedulers typically wrap

@@ -90,10 +90,8 @@ url.workspace = true
 uuid = { workspace = true, features = ["v4"] }
 heapless.workspace = true
 
-[target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dependencies]
 async-channel = { workspace = true, features = ["std"] }
 
-[target.'cfg(not(target_family = "wasm"))'.dependencies]
 pollster.workspace = true
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
@@ -116,7 +114,6 @@ unicode-segmentation.workspace = true
 
 [package.metadata.cargo-shear]
 ignored = [
-    "getrandom",
     "objc2",
     "objc2-metal",
 ]
@@ -218,9 +215,5 @@ path = "examples/view_example/view_example_main.rs"
 name = "toggle_headless"
 path = "examples/toggle_headless.rs"
 
-[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
-async-channel.workspace = true
-
-[target.'cfg(target_family = "wasm")'.dependencies]
-getrandom = { version = "0.3.4", features = ["wasm_js"] }
-uuid = { workspace = true, features = ["js"] }
+[target.'cfg(target_os = "linux")'.dependencies]
+libc.workspace = true

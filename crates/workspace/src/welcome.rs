@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use settings::{DefaultOpenBehavior, Settings};
 use ui::{ButtonLike, Divider, DividerColor, KeyBinding, Vector, VectorName, prelude::*};
 use util::ResultExt;
-use zed_actions::{Extensions, OpenKeymapFile, OpenOnboarding, OpenSettingsFile, command_palette};
+use zed_actions::{OpenKeymapFile, OpenOnboarding, OpenSettingsFile, command_palette};
 
 #[derive(PartialEq, Clone, Debug, Deserialize, Serialize, JsonSchema, Action)]
 #[action(namespace = welcome)]
@@ -157,7 +157,7 @@ impl SectionEntry {
     }
 }
 
-const CONTENT: (Section<4>, Section<3>) = (
+const CONTENT: (Section<4>, Section<2>) = (
     Section {
         title: "Get Started",
         entries: [
@@ -200,15 +200,6 @@ const CONTENT: (Section<4>, Section<3>) = (
                 icon: IconName::Keyboard,
                 title: "Customize Keymaps",
                 action: &OpenKeymapFile,
-                visibility_guard: SectionVisibility::Always,
-            },
-            SectionEntry {
-                icon: IconName::Blocks,
-                title: "Explore Extensions",
-                action: &Extensions {
-                    category_filter: None,
-                    id: None,
-                },
                 visibility_guard: SectionVisibility::Always,
             },
         ],

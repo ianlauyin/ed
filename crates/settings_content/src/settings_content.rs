@@ -2,7 +2,6 @@ pub mod app_metadata;
 
 mod action;
 mod editor;
-mod extension;
 mod fallible_options;
 mod language;
 pub mod merge_from;
@@ -16,7 +15,6 @@ mod workspace;
 pub use action::{ActionName, ActionWithArguments, CommandAliasTarget};
 use anyhow::Context;
 pub use editor::*;
-pub use extension::*;
 pub use fallible_options::*;
 pub use language::*;
 pub use merge_from::MergeFrom as MergeFromTrait;
@@ -176,9 +174,6 @@ pub struct SettingsContent {
     pub theme: Box<ThemeSettingsContent>,
 
     #[serde(flatten)]
-    pub extension: ExtensionSettingsContent,
-
-    #[serde(flatten)]
     pub workspace: WorkspaceSettingsContent,
 
     #[serde(flatten)]
@@ -313,7 +308,7 @@ impl SettingsContent {
 }
 
 fallible_options::flattened_deserialize!(SettingsContent {
-    sections: { project, theme, extension, workspace, editor, remote },
+    sections: { project, theme, workspace, editor, remote },
     options: {
         call_hierarchy, command_palette, file_finder, git_panel, tabs, tab_bar, tab_switcher, status_bar, preview_tabs,
          base_keymap, diagnostics,
@@ -414,7 +409,7 @@ pub struct UserSettingsContent {
     pub profiles: IndexMap<String, SettingsProfile>,
 }
 
-pub struct ExtensionsSettingsContent {
+pub struct LanguageDefaultsContent {
     pub all_languages: AllLanguageSettingsContent,
 }
 
@@ -1147,7 +1142,7 @@ pub struct WhichKeySettingsContent {
 // to allow new values to be added.
 //
 // Consider using a HashMap<String, bool> instead of this type
-// (like auto_install_extensions) so that user settings files can both add
+// (like language settings) so that user settings files can both add
 // and remove values from the set.
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ExtendingVec<T>(pub Vec<T>);

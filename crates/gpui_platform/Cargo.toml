@@ -25,3 +25,8 @@ gpui.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 gpui_macos.workspace = true
+
+[target.'cfg(target_os = "linux")'.dependencies]
+flume.workspace = true
+futures.workspace = true
+smol.workspace = true

@@ -31,7 +31,7 @@ impl KeyContext {
     pub fn new_with_defaults() -> Self {
         let mut context = Self::default();
 
-        context.set("os", "macos");
+        context.set("os", std::env::consts::OS);
         context
     }
 

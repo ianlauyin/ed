@@ -63,8 +63,6 @@ struct ThemeRegistryState {
     themes: HashMap<SharedString, Arc<Theme>>,
     icon_themes: HashMap<SharedString, Arc<IconTheme>>,
     loaded_icon_theme: Option<LoadedIconTheme>,
-    /// Whether the extensions have been loaded yet.
-    extensions_loaded: bool,
 }
 
 /// The registry for themes.
@@ -114,7 +112,6 @@ impl ThemeRegistry {
                 themes: HashMap::default(),
                 icon_themes: HashMap::default(),
                 loaded_icon_theme: None,
-                extensions_loaded: false,
             }),
             assets,
         };
@@ -131,18 +128,6 @@ impl ThemeRegistry {
             .insert(default_icon_theme.name.clone(), default_icon_theme);
 
         registry
-    }
-
-    /// Returns whether the extensions have been loaded.
-    pub fn extensions_loaded(&self) -> bool {
-        self.state.read().extensions_loaded
-    }
-
-    /// Sets the flag indicating that the extensions have loaded.
-    pub fn set_extensions_loaded(&self) {
-        let mut state = self.state.write();
-        state.extensions_loaded = true;
-        state.loaded_icon_theme = None;
     }
 
     /// Inserts the given theme families into the registry.
@@ -334,7 +319,7 @@ impl ThemeRegistry {
                 .icon_themes
                 .insert(icon_theme.name.clone(), Arc::new(icon_theme));
         }
-        state.loaded_icon_theme = (!state.extensions_loaded).then(|| LoadedIconTheme {
+        state.loaded_icon_theme = Some(LoadedIconTheme {
             path: path.to_path_buf(),
             icons_root_dir: icons_root_dir.to_path_buf(),
             contents,

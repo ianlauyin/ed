@@ -171,9 +171,7 @@ fn configured_theme(cx: &mut App) -> Arc<Theme> {
     let theme = match themes.get(&theme_name.0) {
         Ok(theme) => theme,
         Err(err) => {
-            if themes.extensions_loaded() {
-                log::error!("{err}");
-            }
+            log::error!("{err}");
             themes
                 .get(default_theme(*system_appearance))
                 .unwrap_or_else(|_| themes.get(DEFAULT_DARK_THEME).unwrap())
@@ -192,9 +190,7 @@ fn configured_icon_theme(cx: &mut App) -> Arc<theme::IconTheme> {
     match themes.get_icon_theme(&icon_theme_name.0) {
         Ok(theme) => theme,
         Err(err) => {
-            if themes.extensions_loaded() {
-                log::error!("{err}");
-            }
+            log::error!("{err}");
             themes.get_icon_theme(DEFAULT_ICON_THEME_NAME).unwrap()
         }
     }

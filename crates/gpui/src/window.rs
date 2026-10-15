@@ -36,8 +36,10 @@ use gpui_util::{ResultExt, measure};
 use itertools::FoldWhile::{Continue, Done};
 use itertools::Itertools;
 
+#[cfg(target_os = "macos")]
 use objc2_core_foundation::CFRetained;
 
+#[cfg(target_os = "macos")]
 use objc2_core_video::CVPixelBuffer;
 use parking_lot::RwLock;
 use raw_window_handle::{HandleError, HasDisplayHandle, HasWindowHandle};
@@ -1585,7 +1587,6 @@ impl Window {
                 window_min_size,
                 app_id: app_id.clone(),
                 icon,
-                #[cfg(target_os = "macos")]
                 tabbing_identifier,
             },
         )?;
@@ -5032,6 +5033,7 @@ impl Window {
     /// Paint a surface into the scene for the next frame at the current z-index.
     ///
     /// This method should only be called as part of the paint phase of element drawing.
+    #[cfg(target_os = "macos")]
     pub fn paint_surface(
         &mut self,
         bounds: Bounds<Pixels>,

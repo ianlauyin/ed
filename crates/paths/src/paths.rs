@@ -88,7 +88,7 @@ pub fn remote_wsl_server_dir_relative() -> &'static RelPath {
 /// # Arguments
 ///
 /// * `dir` - The path to use as the custom data directory. This will be used as the base
-///   directory for all user data, including databases, extensions, and logs.
+///   directory for all user data, including databases and logs.
 ///
 /// # Returns
 ///
@@ -124,7 +124,16 @@ pub fn config_dir() -> &'static PathBuf {
         if let Some(custom_dir) = CUSTOM_DATA_DIR.get() {
             custom_dir.join("config")
         } else {
-            home_dir().join(".config").join(APP_NAME_LOWERCASE)
+            #[cfg(target_os = "macos")]
+            {
+                home_dir().join(".config").join(APP_NAME_LOWERCASE)
+            }
+            #[cfg(target_os = "linux")]
+            {
+                dirs::config_dir()
+                    .expect("failed to determine config directory")
+                    .join(APP_NAME_LOWERCASE)
+            }
         }
     })
 }
@@ -135,16 +144,36 @@ pub fn data_dir() -> &'static PathBuf {
         if let Some(custom_dir) = CUSTOM_DATA_DIR.get() {
             custom_dir.clone()
         } else {
-            home_dir()
-                .join("Library/Application Support")
-                .join(APP_NAME)
+            #[cfg(target_os = "macos")]
+            {
+                home_dir()
+                    .join("Library/Application Support")
+                    .join(APP_NAME)
+            }
+            #[cfg(target_os = "linux")]
+            {
+                dirs::data_local_dir()
+                    .expect("failed to determine data directory")
+                    .join(APP_NAME_LOWERCASE)
+            }
         }
     })
 }
 
 pub fn state_dir() -> &'static PathBuf {
     static STATE_DIR: OnceLock<PathBuf> = OnceLock::new();
-    STATE_DIR.get_or_init(|| home_dir().join(".local").join("state").join(APP_NAME))
+    STATE_DIR.get_or_init(|| {
+        #[cfg(target_os = "macos")]
+        {
+            home_dir().join(".local").join("state").join(APP_NAME)
+        }
+        #[cfg(target_os = "linux")]
+        {
+            dirs::state_dir()
+                .expect("failed to determine state directory")
+                .join(APP_NAME_LOWERCASE)
+        }
+    })
 }
 
 /// Returns the path to the temp directory used by Zed.
@@ -166,7 +195,16 @@ pub fn hang_traces_dir() -> &'static PathBuf {
 /// Returns the path to the logs directory.
 pub fn logs_dir() -> &'static PathBuf {
     static LOGS_DIR: OnceLock<PathBuf> = OnceLock::new();
-    LOGS_DIR.get_or_init(|| home_dir().join("Library/Logs").join(APP_NAME))
+    LOGS_DIR.get_or_init(|| {
+        #[cfg(target_os = "macos")]
+        {
+            home_dir().join("Library/Logs").join(APP_NAME)
+        }
+        #[cfg(target_os = "linux")]
+        {
+            state_dir().join("logs")
+        }
+    })
 }
 
 /// Returns the path to the Zed server directory on this SSH host.
@@ -253,33 +291,9 @@ pub fn agents_file() -> &'static PathBuf {
 pub const GLOBAL_AGENTS_FILE_DISPLAY: &str =
     const_format::concatcp!("~/.config/", APP_NAME_LOWERCASE, "/AGENTS.md");
 
-/// Returns the path to the extensions directory.
-///
-/// This is where installed extensions are stored.
-pub fn extensions_dir() -> &'static PathBuf {
-    static EXTENSIONS_DIR: OnceLock<PathBuf> = OnceLock::new();
-    EXTENSIONS_DIR.get_or_init(|| data_dir().join("extensions"))
-}
-
-/// Returns the path to the extensions directory.
-///
-/// This is where installed extensions are stored on a remote.
-pub fn remote_extensions_dir() -> &'static PathBuf {
-    static EXTENSIONS_DIR: OnceLock<PathBuf> = OnceLock::new();
-    EXTENSIONS_DIR.get_or_init(|| data_dir().join("remote_extensions"))
-}
-
-/// Returns the path to the extensions directory.
-///
-/// This is where installed extensions are stored on a remote.
-pub fn remote_extensions_uploads_dir() -> &'static PathBuf {
-    static UPLOAD_DIR: OnceLock<PathBuf> = OnceLock::new();
-    UPLOAD_DIR.get_or_init(|| remote_extensions_dir().join("uploads"))
-}
-
 /// Returns the path to the themes directory.
 ///
-/// This is where themes that are not provided by extensions are stored.
+/// This is where user themes are stored.
 pub fn themes_dir() -> &'static PathBuf {
     static THEMES_DIR: OnceLock<PathBuf> = OnceLock::new();
     THEMES_DIR.get_or_init(|| config_dir().join("themes"))
