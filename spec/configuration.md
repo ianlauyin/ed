@@ -22,3 +22,7 @@ modal editing.
   no Vim keymap layer, mode indicator, Vim/Helix toggles (quick action bar,
   onboarding), or Vim-style keybinding notation. Keymap layers are User > Base >
   Default.
+- Journaling is removed: no journal entry command or `journal` settings section.
+- Bookmarks are removed: no bookmark actions, labels, navigation, project view,
+  gutter controls, or `gutter.bookmarks` setting. Existing saved bookmarks are
+  discarded when the workspace database is upgraded.

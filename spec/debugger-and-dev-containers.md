@@ -26,4 +26,4 @@ transport that only served dev containers.
 - Debugger RPC messages and the `GetProcesses` request are removed from the
   protocol (field numbers reserved). The workspace database drops the
   `breakpoints` table.
-- Gutter hover/right-click still offers bookmarks, git blame, and run status.
+- Gutter right-click still offers git blame and run status.

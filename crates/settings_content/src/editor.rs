@@ -533,10 +533,6 @@ pub struct GutterContent {
     ///
     /// Default: true
     pub runnables: Option<bool>,
-    /// Whether to show bookmarks in the gutter.
-    ///
-    /// Default: true
-    pub bookmarks: Option<bool>,
     /// Whether to show fold buttons in the gutter.
     ///
     /// Default: true

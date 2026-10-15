@@ -675,11 +675,6 @@ impl EditorElement {
         register_action(editor, window, Editor::open_active_item_in_terminal);
         register_action(editor, window, Editor::spawn_nearest_task);
         register_action(editor, window, Editor::open_selections_in_multibuffer);
-        register_action(editor, window, Editor::toggle_bookmark);
-        register_action(editor, window, Editor::toggle_bookmark_with_label);
-        register_action(editor, window, Editor::edit_bookmark);
-        register_action(editor, window, Editor::go_to_next_bookmark);
-        register_action(editor, window, Editor::go_to_previous_bookmark);
         register_action(editor, window, Editor::toggle_read_only);
         register_action(editor, window, Editor::reload_file);
 
@@ -2450,58 +2445,6 @@ impl EditorElement {
         }
 
         (offset_y, length, row_range)
-    }
-
-    fn layout_bookmarks(
-        &self,
-        gutter: &Gutter<'_>,
-        bookmarks: &HashSet<DisplayRow>,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Vec<AnyElement> {
-        if self.split_side == Some(SplitSide::Left) {
-            return Vec::new();
-        }
-
-        self.editor.update(cx, |editor, cx| {
-            bookmarks
-                .iter()
-                .filter_map(|row| {
-                    gutter.layout_item_skipping_folds(
-                        *row,
-                        |cx, _| editor.render_bookmark(*row, cx).into_any_element(),
-                        window,
-                        cx,
-                    )
-                })
-                .collect_vec()
-        })
-    }
-
-    fn layout_gutter_hover_button(
-        &self,
-        gutter: &Gutter,
-        position: Anchor,
-        row: DisplayRow,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Option<AnyElement> {
-        if self.split_side == Some(SplitSide::Left) {
-            return None;
-        }
-
-        self.editor.update(cx, |editor, cx| {
-            gutter.layout_item_skipping_folds(
-                row,
-                |cx, window| {
-                    editor
-                        .render_gutter_hover_button(position, row, window, cx)
-                        .into_any_element()
-                },
-                window,
-                cx,
-            )
-        })
     }
 
     fn should_render_diff_review_button(
@@ -5349,14 +5292,6 @@ impl EditorElement {
                 }
             });
 
-            for bookmark in layout.bookmarks.iter_mut() {
-                bookmark.paint(window, cx);
-            }
-
-            for gutter_hover_button in layout.gutter_hover_buttons.iter_mut() {
-                gutter_hover_button.paint(window, cx);
-            }
-
             for test_indicator in layout.test_indicators.iter_mut() {
                 test_indicator.paint(window, cx);
             }
@@ -6755,25 +6690,6 @@ struct Gutter<'a> {
 }
 
 impl Gutter<'_> {
-    fn layout_item_skipping_folds(
-        &self,
-        display_row: DisplayRow,
-        render_item: impl Fn(&mut Context<'_, Editor>, &mut Window) -> AnyElement,
-        window: &mut Window,
-        cx: &mut Context<'_, Editor>,
-    ) -> Option<AnyElement> {
-        let row = MultiBufferRow(
-            DisplayPoint::new(display_row, 0)
-                .to_point(self.snapshot)
-                .row,
-        );
-        if self.snapshot.is_line_folded(row) {
-            return None;
-        }
-
-        self.layout_item(display_row, render_item, window, cx)
-    }
-
     fn layout_item(
         &self,
         display_row: DisplayRow,
@@ -9395,43 +9311,6 @@ impl Element for EditorElement {
                         Vec::new()
                     };
 
-                    let show_bookmarks =
-                        snapshot.show_bookmarks.unwrap_or(gutter_settings.bookmarks);
-
-                    let bookmark_rows = self.editor.update(cx, |editor, cx| {
-                        let mut rows = editor.active_bookmarks(start_row..end_row, window, cx);
-                        rows.retain(|k| !run_indicator_rows.contains(k));
-                        rows
-                    });
-
-                    let bookmarks = if show_bookmarks {
-                        self.layout_bookmarks(&gutter, &bookmark_rows, window, cx)
-                    } else {
-                        Vec::new()
-                    };
-
-                    let mut gutter_hover_buttons = Vec::new();
-
-                    let gutter_hover_button = self
-                        .editor
-                        .read(cx)
-                        .gutter_hover_button
-                        .0
-                        .filter(|phantom| phantom.is_active)
-                        .map(|phantom| phantom.display_row);
-
-                    if let Some(row) = gutter_hover_button
-                        && !run_indicator_rows.contains(&row)
-                        && !bookmark_rows.contains(&row)
-                        && show_bookmarks
-                    {
-                        let position = snapshot
-                            .display_point_to_anchor(DisplayPoint::new(row, 0), Bias::Right);
-                        gutter_hover_buttons.extend(
-                            self.layout_gutter_hover_button(&gutter, position, row, window, cx),
-                        );
-                    }
-
                     let git_gutter_width = Self::gutter_strip_width(line_height, cx)
                         + gutter_dimensions
                             .git_blame_entries_width
@@ -9726,8 +9605,6 @@ impl Element for EditorElement {
                         diff_hunk_controls,
                         mouse_context_menu,
                         test_indicators,
-                        bookmarks,
-                        gutter_hover_buttons,
                         diff_review_button,
                         crease_toggles,
                         crease_trailers,
@@ -9942,8 +9819,6 @@ pub struct EditorLayout {
     navigation_overlay_paint_commands: Vec<NavigationOverlayPaintCommand>,
     selections: Vec<(PlayerColor, Vec<SelectionLayout>)>,
     test_indicators: Vec<AnyElement>,
-    bookmarks: Vec<AnyElement>,
-    gutter_hover_buttons: Vec<AnyElement>,
     diff_review_button: Option<AnyElement>,
     crease_toggles: Vec<Option<AnyElement>>,
     expand_toggles: Vec<Option<(AnyElement, gpui::Point<Pixels>)>>,

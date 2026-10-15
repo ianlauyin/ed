@@ -128,7 +128,6 @@
     "context": "Pane", // this is to override the default Pane mappings to switch tabs
     "bindings": {
       "cmd-1": "project_panel::ToggleFocus",
-      "cmd-2": null, // Bookmarks (left dock)
       "cmd-3": null, // Find Panel (bottom dock)
       "cmd-4": null, // Run Panel (bottom dock)
       "cmd-6": "diagnostics::Deploy",

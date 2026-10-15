@@ -589,14 +589,10 @@ actions!(
         GoToPreviousHunk,
         /// Goes to implementation in a split pane.
         GoToImplementationSplit,
-        /// Goes to the next bookmark in the file.
-        GoToNextBookmark,
         /// Goes to the next change in the file.
         GoToNextChange,
         /// Goes to the parent module of the current file.
         GoToParentModule,
-        /// Goes to the previous bookmark in the file.
-        GoToPreviousBookmark,
         /// Goes to the previous change in the file.
         GoToPreviousChange,
         /// Goes to the next symbol.
@@ -698,8 +694,6 @@ actions!(
         NextScreen,
         /// Goes to the next snippet tabstop if one exists.
         NextSnippetTabstop,
-        /// Opens a view of all bookmarks in the project.
-        ViewBookmarks,
         /// Opens the context menu at cursor position.
         OpenContextMenu,
         /// Opens excerpts from the current file.
@@ -845,12 +839,6 @@ actions!(
         Tab,
         /// Removes a tab character or outdents.
         Backtab,
-        /// Toggles a bookmark at the current line.
-        ToggleBookmark,
-        /// Toggles a bookmark at the current line, prompting for a label when adding one.
-        ToggleBookmarkWithLabel,
-        /// Edits the bookmark's label at the current line.
-        EditBookmark,
         /// Toggles the case of selected text.
         ToggleCase,
         /// Toggles automatic signature help.

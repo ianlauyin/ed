@@ -9,6 +9,7 @@ remote server supports macOS and Linux.
 ## Behaviour
 
 - The editor uses native macOS windows, Metal rendering, system menus, and window tabs.
+- The native menu bar has no Help menu.
 - Ship only macOS default bindings and macOS variants of alternate keymaps.
 - The Linux remote server needs no display server, GPU, desktop integration, or fonts.
   It retains background execution, timers, and a foreground event loop for remote projects.

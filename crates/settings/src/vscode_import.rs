@@ -190,7 +190,6 @@ impl VsCodeSettings {
             hide_mouse: None,
             image_viewer: None,
             markdown_preview: None,
-            journal: None,
             line_indicator_format: None,
             log: None,
             node: self.node_binary_settings(),
@@ -326,7 +325,6 @@ impl VsCodeSettings {
             }),
             min_line_number_digits: None,
             runnables: None,
-            bookmarks: None,
             folds: self.read_enum("editor.showFoldingControls", |s| match s {
                 "always" | "mouseover" => Some(true),
                 "never" => Some(false),

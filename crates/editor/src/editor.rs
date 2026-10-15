@@ -48,7 +48,6 @@ pub mod semantic_tokens;
 mod split;
 pub mod split_editor_view;
 
-mod bookmarks;
 mod signature_help;
 
 mod clipboard;
@@ -177,13 +176,11 @@ use multi_buffer::{
     ExcerptBoundaryInfo, ExpandExcerptDirection, MultiBufferDiffHunk, MultiBufferPoint,
     MultiBufferRow,
 };
-use parking_lot::Mutex;
 use persistence::EditorDb;
 use project::{
     CodeAction, Completion, CompletionDisplayOptions, CompletionIntent, CompletionResponse,
     CompletionSource, DocumentHighlight, InvalidationStrategy, Location, LocationLink, LspAction,
     PrepareRenameResponse, Project, ProjectItem, ProjectPath, ProjectTransaction,
-    bookmark_store::BookmarkStore,
     git_store::GitStoreEvent,
     lsp_store::{
         BufferSemanticTokens, CacheInlayHints, CompletionDocumentation, FormatTrigger,
@@ -225,8 +222,8 @@ use theme::{
 };
 use theme_settings::{ThemeSettings, observe_buffer_font_size_adjustment};
 use ui::{
-    Avatar, ContextMenu, Disclosure, IconButtonShape, KeyBinding, Tooltip, prelude::*,
-    scrollbars::ScrollbarAutoHide, tooltip_container, utils::WithRemSize,
+    Avatar, ContextMenu, Disclosure, IconButtonShape, Tooltip, prelude::*,
+    scrollbars::ScrollbarAutoHide,
 };
 use ui_input::ErasedEditor;
 use util::{RangeExt, ResultExt, TryFutureExt, maybe, post_inc};
@@ -242,7 +239,6 @@ pub use zed_actions::editor::RevealInFileManager;
 use zed_actions::editor::{MoveDown, MoveUp};
 
 use crate::{
-    bookmarks::BookmarksTabState,
     code_context_menus::CompletionsMenuSource,
     editor_settings::MultiCursorModifier,
     hover_links::{find_url, find_url_from_range},
@@ -311,7 +307,6 @@ pub fn init(cx: &mut App) {
             workspace.register_action(Editor::new_file_horizontal);
             workspace.register_action(Editor::cancel_language_server_work);
             workspace.register_action(Editor::toggle_focus);
-            workspace.register_action(Editor::view_bookmarks);
             if let Some(window) = window {
                 cx.subscribe_in(
                     workspace.project(),
@@ -854,16 +849,6 @@ enum ColumnarSelectionState {
     },
 }
 
-/// Represents a button that shows up when hovering over lines in the gutter that don't have
-/// any button on them already (like a bookmark or run indicator).
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-struct GutterHoverButton {
-    display_row: DisplayRow,
-    /// There's a small debounce between hovering over the line and showing the indicator.
-    /// We don't want to show the indicator when moving the mouse from editor to e.g. project panel.
-    is_active: bool,
-}
-
 enum CodeActionsForSelection {
     None,
     Fetching(Shared<Task<Option<ActionFetchReady>>>),
@@ -968,7 +953,6 @@ pub struct Editor {
     show_git_diff_gutter: Option<bool>,
     show_code_actions: Option<bool>,
     show_runnables: Option<bool>,
-    show_bookmarks: Option<bool>,
     show_diff_review_button: bool,
     show_wrap_guides: Option<bool>,
     show_indent_guides: Option<bool>,
@@ -1081,10 +1065,6 @@ pub struct Editor {
     last_horizontal_scrollbar_visible: bool,
     expect_bounds_change: Option<Bounds<Pixels>>,
     runnables: RunnableData,
-    bookmark_store: Option<Entity<BookmarkStore>>,
-    bookmarks_tab_state: Option<Entity<BookmarksTabState>>,
-    bookmarks_tab_subscription: Option<Subscription>,
-    gutter_hover_button: (Option<GutterHoverButton>, Option<Task<()>>),
     pub(crate) gutter_diff_review_indicator: (Option<PhantomDiffReviewIndicator>, Option<Task<()>>),
     pub(crate) diff_review_drag_state: Option<DiffReviewDragState>,
     /// Active diff review overlays. Multiple overlays can be open simultaneously
@@ -1191,7 +1171,6 @@ pub struct EditorSnapshot {
     show_git_diff_gutter: Option<bool>,
     show_code_actions: Option<bool>,
     show_runnables: Option<bool>,
-    show_bookmarks: Option<bool>,
     git_blame_gutter_max_author_length: Option<usize>,
     pub display_snapshot: DisplaySnapshot,
     pub placeholder_display_snapshot: Option<DisplaySnapshot>,
@@ -1616,91 +1595,6 @@ pub struct RewrapOptions {
     pub line_length: Option<usize>,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum GutterButtonIntent {
-    SetBookmark,
-}
-
-impl GutterButtonIntent {
-    fn as_str(&self) -> &'static str {
-        match self {
-            Self::SetBookmark => "Set Bookmark",
-        }
-    }
-
-    fn icon(&self) -> ui::IconName {
-        match self {
-            Self::SetBookmark => ui::IconName::Bookmark,
-        }
-    }
-
-    fn color(&self) -> Color {
-        match self {
-            Self::SetBookmark => Color::Info,
-        }
-    }
-
-    fn action(&self) -> &'static dyn Action {
-        match self {
-            Self::SetBookmark => &ToggleBookmark,
-        }
-    }
-}
-
-struct GutterButtonTooltip {
-    primary: GutterButtonIntent,
-    secondary: GutterButtonIntent,
-    focus_handle: FocusHandle,
-}
-
-impl GutterButtonTooltip {
-    fn active_intent(&self, modifiers: Modifiers) -> GutterButtonIntent {
-        if modifiers.secondary() {
-            self.secondary
-        } else {
-            self.primary
-        }
-    }
-
-    fn meta_text(&self) -> String {
-        const RIGHT_CLICK_HINT: &str = "right-click for more options";
-
-        if self.primary == self.secondary {
-            return RIGHT_CLICK_HINT.to_string();
-        }
-        let modifier_as_text = gpui::Keystroke {
-            modifiers: Modifiers::secondary_key(),
-            ..Default::default()
-        };
-        let secondary = match self.secondary {
-            GutterButtonIntent::SetBookmark => "bookmark",
-        };
-        format!("{modifier_as_text}-click to add a {secondary}\n{RIGHT_CLICK_HINT}")
-    }
-}
-
-impl Render for GutterButtonTooltip {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let intent = self.active_intent(window.modifiers());
-        let key_binding = KeyBinding::for_action_in(intent.action(), &self.focus_handle, cx);
-        let meta_text = self.meta_text();
-
-        tooltip_container(cx, move |this, _| {
-            this.child(
-                h_flex()
-                    .justify_between()
-                    .child(intent.as_str())
-                    .child(key_binding),
-            )
-            .child(
-                Label::new(meta_text)
-                    .size(LabelSize::Small)
-                    .color(Color::Muted),
-            )
-        })
-    }
-}
-
 impl Editor {
     pub fn single_line(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let buffer = cx.new(|cx| Buffer::local("", cx));
@@ -1808,9 +1702,6 @@ impl Editor {
         clone.needs_initial_data_update = self.enable_lsp_data;
         clone.enable_runnables = self.enable_runnables;
         clone.enable_code_lens = self.enable_code_lens;
-        if let Some(bookmarks_tab_state) = self.bookmarks_tab_state.clone() {
-            clone.set_bookmarks_tab_state(bookmarks_tab_state, cx);
-        }
         clone
     }
 
@@ -2142,12 +2033,6 @@ impl Editor {
                 ));
             };
 
-            project_subscriptions.push(cx.observe(
-                &project.read(cx).bookmark_store(),
-                |_, _, cx| {
-                    cx.notify();
-                },
-            ));
             let git_store = project.read(cx).git_store().clone();
             let project = project.clone();
             project_subscriptions.push(cx.subscribe(
@@ -2212,11 +2097,6 @@ impl Editor {
                 None
             };
 
-        let bookmark_store = match (&mode, project.as_ref()) {
-            (EditorMode::Full { .. }, Some(project)) => Some(project.read(cx).bookmark_store()),
-            _ => None,
-        };
-
         let mut code_action_providers = Vec::new();
         if let Some(project) = project.clone() {
             code_action_providers.push(Rc::new(project) as Rc<_>);
@@ -2280,7 +2160,6 @@ impl Editor {
             show_git_diff_gutter: None,
             show_code_actions: None,
             show_runnables: None,
-            show_bookmarks: None,
             show_diff_review_button: false,
             show_wrap_guides: None,
             show_indent_guides,
@@ -2376,10 +2255,6 @@ impl Editor {
             blame_subscription: None,
             pending_blame_hover_observation: None,
 
-            bookmark_store,
-            bookmarks_tab_state: None,
-            bookmarks_tab_subscription: None,
-            gutter_hover_button: (None, None),
             gutter_diff_review_indicator: (None, None),
             diff_review_drag_state: None,
             diff_review_overlays: Vec::new(),
@@ -2944,7 +2819,6 @@ impl Editor {
             semantic_tokens_enabled: self.semantic_token_state.enabled(),
             show_code_actions: self.show_code_actions,
             show_runnables: self.show_runnables,
-            show_bookmarks: self.show_bookmarks,
             git_blame_gutter_max_author_length,
             scroll_anchor: self.scroll_manager.shared_scroll_anchor(cx),
             display_snapshot,
@@ -3898,9 +3772,6 @@ impl Editor {
 
         let mouse_position = window.mouse_position();
         if !position_map.text_hitbox.is_hovered(window) {
-            if self.gutter_hover_button.0.is_some() {
-                cx.notify();
-            }
             return;
         }
 
@@ -4027,90 +3898,8 @@ impl Editor {
             .collect()
     }
 
-    fn active_bookmarks(
-        &self,
-        range: Range<DisplayRow>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> HashSet<DisplayRow> {
-        let mut bookmark_display_points = HashSet::default();
-
-        let Some(bookmark_store) = self.bookmark_store.clone() else {
-            return bookmark_display_points;
-        };
-
-        let snapshot = self.snapshot(window, cx);
-
-        let multi_buffer_snapshot = snapshot.buffer_snapshot();
-        let Some(project) = self.project() else {
-            return bookmark_display_points;
-        };
-
-        let range = snapshot.display_point_to_point(DisplayPoint::new(range.start, 0), Bias::Left)
-            ..snapshot.display_point_to_point(DisplayPoint::new(range.end, 0), Bias::Right);
-
-        for (buffer_snapshot, range, _excerpt_range) in
-            multi_buffer_snapshot.range_to_buffer_ranges(range.start..range.end)
-        {
-            let Some(buffer) = project
-                .read(cx)
-                .buffer_for_id(buffer_snapshot.remote_id(), cx)
-            else {
-                continue;
-            };
-            let bookmarks = bookmark_store.update(cx, |store, cx| {
-                store.bookmarks_for_buffer(
-                    buffer,
-                    buffer_snapshot.anchor_before(range.start)
-                        ..buffer_snapshot.anchor_after(range.end),
-                    &buffer_snapshot,
-                    cx,
-                )
-            });
-            for bookmark in bookmarks {
-                let Some(multi_buffer_anchor) =
-                    multi_buffer_snapshot.anchor_in_buffer(bookmark.anchor)
-                else {
-                    continue;
-                };
-                let position = multi_buffer_anchor
-                    .to_point(&multi_buffer_snapshot)
-                    .to_display_point(&snapshot);
-
-                bookmark_display_points.insert(position.row());
-            }
-        }
-
-        bookmark_display_points
-    }
-
-    fn render_bookmark(&self, row: DisplayRow, cx: &mut Context<Self>) -> IconButton {
-        let focus_handle = self.focus_handle.clone();
-        IconButton::new(("bookmark indicator", row.0 as usize), IconName::Bookmark)
-            .icon_size(IconSize::XSmall)
-            .size(ui::ButtonSize::None)
-            .icon_color(Color::Info)
-            .style(ButtonStyle::Transparent)
-            .on_click(cx.listener(move |editor, _, _window, cx| {
-                editor.toggle_bookmark_at_row(row, cx);
-            }))
-            .on_right_click(cx.listener(move |editor, event: &ClickEvent, window, cx| {
-                editor.set_gutter_context_menu(row, None, event.position(), window, cx);
-            }))
-            .tooltip(move |_window, cx| {
-                Tooltip::with_meta_in(
-                    "Remove Bookmark",
-                    Some(&ToggleBookmark),
-                    SharedString::from("Right-click for more options"),
-                    &focus_handle,
-                    cx,
-                )
-            })
-    }
-
     fn gutter_context_menu(
         &self,
-        anchor: Anchor,
         display_row: DisplayRow,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -4118,27 +3907,11 @@ impl Editor {
         let weak_editor = cx.weak_entity();
         let focus_handle = self.focus_handle(cx);
 
-        let row = self
-            .buffer
-            .read(cx)
-            .snapshot(cx)
-            .summary_for_anchor::<Point>(&anchor)
-            .row;
-
         let git_blame_msg = if self.show_git_blame_gutter {
             "Close Git Blame"
         } else {
             "Open Git Blame"
         };
-
-        let bookmark = self.bookmark_at_row(row, window, cx);
-
-        let set_bookmark_msg = if bookmark.as_ref().is_some() {
-            "Remove Bookmark"
-        } else {
-            "Add Bookmark"
-        };
-        let has_bookmark = bookmark.as_ref().is_some();
 
         let clear_runnable_task_status = self
             .runnable_task_key_for_display_row(display_row, window, cx)
@@ -4178,87 +3951,7 @@ impl Editor {
                             .log_err();
                     }
                 })
-                .separator()
-                .entry(set_bookmark_msg, Some(ToggleBookmark.boxed_clone()), {
-                    let weak_editor = weak_editor.clone();
-                    move |_window, cx| {
-                        weak_editor
-                            .update(cx, |this, cx| {
-                                this.toggle_bookmark_at_anchor(anchor, cx);
-                            })
-                            .log_err();
-                    }
-                })
-                .when(has_bookmark, |this| {
-                    this.entry(
-                        "Edit Bookmark",
-                        Some(EditBookmark.boxed_clone()),
-                        move |window, cx| {
-                            weak_editor
-                                .update(cx, |this, cx| {
-                                    this.edit_bookmark_at_anchor(anchor, window, cx);
-                                })
-                                .log_err();
-                        },
-                    )
-                })
         })
-    }
-
-    fn render_gutter_hover_button(
-        &self,
-        position: Anchor,
-        row: DisplayRow,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> IconButton {
-        let gutter_settings = EditorSettings::get_global(cx).gutter;
-        let show_bookmarks = self.show_bookmarks.unwrap_or(gutter_settings.bookmarks);
-        if !show_bookmarks {
-            log::error!("Trying to place gutter_hover without anything enabled!!");
-        }
-        let [primary, secondary] = [GutterButtonIntent::SetBookmark; 2];
-
-        let intent = if window.modifiers().secondary() {
-            secondary
-        } else {
-            primary
-        };
-
-        let focus_handle = self.focus_handle.clone();
-        let has_context_menu = self.has_mouse_context_menu();
-        IconButton::new(("add_bookmark_button", row.0 as usize), intent.icon())
-            .icon_size(IconSize::XSmall)
-            .size(ui::ButtonSize::None)
-            .icon_color(intent.color())
-            .style(ButtonStyle::Transparent)
-            .on_click(cx.listener({
-                move |editor, _: &ClickEvent, window, cx| {
-                    window.focus(&editor.focus_handle(cx), cx);
-                    let intent = if window.modifiers().secondary() {
-                        secondary
-                    } else {
-                        primary
-                    };
-
-                    match intent {
-                        GutterButtonIntent::SetBookmark => editor.toggle_bookmark_at_row(row, cx),
-                    }
-                }
-            }))
-            .on_right_click(cx.listener(move |editor, event: &ClickEvent, window, cx| {
-                editor.set_gutter_context_menu(row, Some(position), event.position(), window, cx);
-            }))
-            .when(!has_context_menu, |button| {
-                button.tooltip(move |_window, cx| {
-                    cx.new(|_| GutterButtonTooltip {
-                        primary,
-                        secondary,
-                        focus_handle: focus_handle.clone(),
-                    })
-                    .into()
-                })
-            })
     }
 
     fn build_tasks_context(
@@ -5551,9 +5244,7 @@ impl Editor {
         let source = display_snapshot.display_point_to_anchor(display_point, Bias::Left);
         let anchor = position.unwrap_or(source);
 
-        // Every entry in this menu either requires a worktree-file-backed buffer
-        // (bookmarks) or is meaningless without one
-        // (git blame), so don't open it for e.g. untitled buffers.
+        // Git blame requires a worktree-file-backed buffer; skip untitled buffers.
         if !display_snapshot
             .buffer_snapshot()
             .anchor_to_buffer_anchor(anchor)
@@ -5564,7 +5255,7 @@ impl Editor {
             return;
         }
 
-        let context_menu = self.gutter_context_menu(anchor, display_row, window, cx);
+        let context_menu = self.gutter_context_menu(display_row, window, cx);
 
         self.mouse_context_menu = MouseContextMenu::pinned_to_editor(
             self,
@@ -5574,115 +5265,6 @@ impl Editor {
             window,
             cx,
         );
-    }
-
-    fn add_edit_block(
-        &mut self,
-        anchor: Anchor,
-        base_text: &str,
-        placeholder_text: &str,
-        confirm: Option<PromptEditorCallback>,
-        cancel: Option<PromptEditorCallback>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let weak_editor = cx.weak_entity();
-        let bp_prompt = cx.new(|cx| {
-            let mut prompt_editor =
-                PromptEditor::new(weak_editor, placeholder_text, base_text, window, cx);
-
-            if let Some(callback) = confirm {
-                prompt_editor = prompt_editor.on_confirm(callback);
-            }
-            if let Some(callback) = cancel {
-                prompt_editor = prompt_editor.on_cancel(callback);
-            }
-
-            prompt_editor
-        });
-
-        let height = bp_prompt.update(cx, |this, cx| {
-            this.prompt
-                .update(cx, |prompt, cx| prompt.max_point(cx).row().0 + 1 + 2)
-        });
-        let cloned_prompt = bp_prompt.clone();
-        let blocks = vec![BlockProperties {
-            style: BlockStyle::Sticky,
-            placement: BlockPlacement::Above(anchor),
-            height: Some(height),
-            render: Arc::new(move |cx| {
-                *cloned_prompt.read(cx).editor_margins.lock() = *cx.margins;
-                cloned_prompt.clone().into_any_element()
-            }),
-            priority: 0,
-        }];
-
-        let focus_handle = bp_prompt.focus_handle(cx);
-        window.focus(&focus_handle, cx);
-
-        let block_ids = self.insert_blocks(blocks, None, cx);
-        bp_prompt.update(cx, |prompt, _| {
-            prompt.add_block_ids(block_ids);
-        });
-    }
-
-    pub(crate) fn bookmark_at_row(
-        &self,
-        row: u32,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Option<Anchor> {
-        let snapshot = self.snapshot(window, cx);
-        let bookmark_position = snapshot.buffer_snapshot().anchor_before(Point::new(row, 0));
-
-        self.bookmark_at_anchor(bookmark_position, &snapshot, cx)
-    }
-
-    pub(crate) fn bookmark_at_anchor(
-        &self,
-        bookmark_position: Anchor,
-        snapshot: &EditorSnapshot,
-        cx: &mut Context<Self>,
-    ) -> Option<Anchor> {
-        let (bookmark_position, _) = snapshot
-            .buffer_snapshot()
-            .anchor_to_buffer_anchor(bookmark_position)?;
-        let buffer = self.buffer.read(cx).buffer(bookmark_position.buffer_id)?;
-
-        let buffer_snapshot = buffer.read(cx).snapshot();
-
-        let row = buffer_snapshot
-            .summary_for_anchor::<text::PointUtf16>(&bookmark_position)
-            .row;
-
-        let line_len = buffer_snapshot.line_len(row);
-        let anchor_end = buffer_snapshot.anchor_after(Point::new(row, line_len));
-
-        self.bookmark_store
-            .as_ref()?
-            .update(cx, |bookmark_store, cx| {
-                bookmark_store
-                    .bookmarks_for_buffer(
-                        buffer,
-                        bookmark_position..anchor_end,
-                        &buffer_snapshot,
-                        cx,
-                    )
-                    .first()
-                    .and_then(|bookmark| {
-                        let bookmark_row = buffer_snapshot
-                            .summary_for_anchor::<text::PointUtf16>(&bookmark.anchor)
-                            .row;
-
-                        if bookmark_row == row {
-                            snapshot
-                                .buffer_snapshot()
-                                .anchor_in_excerpt(bookmark.anchor)
-                        } else {
-                            None
-                        }
-                    })
-            })
     }
 
     pub fn align_selections(
@@ -9766,7 +9348,6 @@ impl Editor {
                         modifiers: window.modifiers(),
                     },
                     &position_map,
-                    None,
                     window,
                     cx,
                 );
@@ -11036,7 +10617,6 @@ impl EditorSnapshot {
             };
 
             let show_runnables = self.show_runnables.unwrap_or(gutter_settings.runnables);
-            let show_bookmarks = self.show_bookmarks.unwrap_or(gutter_settings.bookmarks);
 
             let git_blame_entries_width =
                 self.git_blame_gutter_max_author_length
@@ -11057,9 +10637,7 @@ impl EditorSnapshot {
             let left_padding = git_blame_entries_width.unwrap_or(Pixels::ZERO)
                 + if !is_singleton {
                     ch_width * 4.0
-                // runnables and bookmarks are shown in the same place
-                // if all three are there only the runnable is shown
-                } else if show_runnables || show_bookmarks {
+                } else if show_runnables {
                     ch_width * 3.0
                 } else if show_git_gutter && show_line_numbers {
                     ch_width * 2.0
@@ -11692,226 +11270,6 @@ fn collapse_multiline_range(range: Range<Point>) -> Range<Point> {
 }
 
 const UPDATE_DEBOUNCE: Duration = Duration::from_millis(50);
-
-type PromptEditorCallback = Box<dyn FnOnce(String, &mut Editor, &mut Context<Editor>) + 'static>;
-
-struct PromptEditor {
-    pub(crate) prompt: Entity<Editor>,
-    editor: WeakEntity<Editor>,
-    confirm_callback: Option<PromptEditorCallback>,
-    cancel_callback: Option<PromptEditorCallback>,
-    block_ids: HashSet<CustomBlockId>,
-    editor_margins: Arc<Mutex<EditorMargins>>,
-    _subscriptions: Vec<Subscription>,
-}
-
-impl PromptEditor {
-    const MAX_LINES: u8 = 4;
-
-    fn new(
-        editor: WeakEntity<Editor>,
-        placeholder_text: &str,
-        base_text: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        let buffer = cx.new(|cx| Buffer::local(base_text, cx));
-        let buffer = cx.new(|cx| MultiBuffer::singleton(buffer, cx));
-
-        let prompt = cx.new(|cx| {
-            let mut prompt = Editor::new(
-                EditorMode::AutoHeight {
-                    min_lines: 1,
-                    max_lines: Some(Self::MAX_LINES as usize),
-                },
-                buffer,
-                None,
-                window,
-                cx,
-            );
-            prompt.set_soft_wrap_mode(language::language_settings::SoftWrap::EditorWidth, cx);
-            prompt.set_show_cursor_when_unfocused(false, cx);
-            prompt.set_placeholder_text(placeholder_text, window, cx);
-
-            prompt
-        });
-
-        Self {
-            prompt,
-            editor,
-            confirm_callback: None,
-            cancel_callback: None,
-            editor_margins: Arc::new(Mutex::new(EditorMargins::default())),
-            block_ids: Default::default(),
-            _subscriptions: vec![],
-        }
-    }
-
-    fn on_confirm(mut self, confirm: PromptEditorCallback) -> Self {
-        self.confirm_callback = Some(confirm);
-        self
-    }
-
-    fn on_cancel(mut self, cancel: PromptEditorCallback) -> Self {
-        self.cancel_callback = Some(cancel);
-        self
-    }
-
-    pub(crate) fn add_block_ids(&mut self, block_ids: Vec<CustomBlockId>) {
-        self.block_ids.extend(block_ids)
-    }
-
-    fn confirm(&mut self, _: &menu::Confirm, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(editor) = self.editor.upgrade() {
-            let message = self
-                .prompt
-                .read(cx)
-                .buffer
-                .read(cx)
-                .as_singleton()
-                .expect("A multi buffer in prompt isn't possible")
-                .read(cx)
-                .as_rope()
-                .to_string();
-
-            editor.update(cx, |editor, cx| {
-                if let Some(confirm) = self.confirm_callback.take() {
-                    confirm(message, editor, cx);
-                }
-
-                editor.remove_blocks(self.block_ids.clone(), None, cx);
-                cx.focus_self(window);
-            });
-        }
-    }
-
-    fn cancel(&mut self, _: &menu::Cancel, window: &mut Window, cx: &mut Context<Self>) {
-        self.editor
-            .update(cx, |editor, cx| {
-                let message = self
-                    .prompt
-                    .read(cx)
-                    .buffer
-                    .read(cx)
-                    .as_singleton()
-                    .expect("A multi buffer in prompt isn't possible")
-                    .read(cx)
-                    .as_rope()
-                    .to_string();
-
-                if let Some(cancel) = self.cancel_callback.take() {
-                    cancel(message, editor, cx);
-                }
-
-                editor.remove_blocks(self.block_ids.clone(), None, cx);
-                window.focus(&editor.focus_handle, cx);
-            })
-            .log_err();
-    }
-
-    fn render_prompt_editor(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let settings = ThemeSettings::get_global(cx);
-        let text_style = TextStyle {
-            color: if self.prompt.read(cx).read_only(cx) {
-                cx.theme().colors().text_disabled
-            } else {
-                cx.theme().colors().text
-            },
-            font_family: settings.buffer_font.family.clone(),
-            font_fallbacks: settings.buffer_font.fallbacks.clone(),
-            font_size: settings.buffer_font_size(cx).into(),
-            font_weight: settings.buffer_font.weight,
-            line_height: relative(settings.buffer_line_height.value()),
-            ..Default::default()
-        };
-        EditorElement::new(
-            &self.prompt,
-            EditorStyle {
-                background: cx.theme().colors().editor_background,
-                local_player: cx.theme().players().local(),
-                text: text_style,
-                ..Default::default()
-            },
-        )
-    }
-
-    fn render_close_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let focus_handle = self.prompt.focus_handle(cx);
-        IconButton::new("cancel", IconName::Close)
-            .icon_color(Color::Muted)
-            .shape(IconButtonShape::Square)
-            .tooltip(move |_window, cx| {
-                Tooltip::for_action_in("Cancel", &menu::Cancel, &focus_handle, cx)
-            })
-            .on_click(cx.listener(|this, _, window, cx| {
-                this.cancel(&menu::Cancel, window, cx);
-            }))
-    }
-
-    fn render_confirm_button(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let focus_handle = self.prompt.focus_handle(cx);
-        IconButton::new("confirm", IconName::Return)
-            .icon_color(Color::Muted)
-            .shape(IconButtonShape::Square)
-            .tooltip(move |_window, cx| {
-                Tooltip::for_action_in("Confirm", &menu::Confirm, &focus_handle, cx)
-            })
-            .on_click(cx.listener(|this, _, window, cx| {
-                this.confirm(&menu::Confirm, window, cx);
-            }))
-    }
-}
-
-impl Render for PromptEditor {
-    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let ui_font_size = ThemeSettings::get_global(cx).ui_font_size(cx);
-        let editor_margins = *self.editor_margins.lock();
-        let gutter_dimensions = editor_margins.gutter;
-        let left_gutter_width = gutter_dimensions.full_width() + (gutter_dimensions.margin / 2.0);
-        let right_padding = editor_margins.right + px(9.);
-        h_flex()
-            .key_context("Editor")
-            .bg(cx.theme().colors().editor_background)
-            .border_y_1()
-            .border_color(cx.theme().status().info_border)
-            .size_full()
-            .py(window.line_height() / 2.5)
-            .pr(right_padding)
-            .on_action(cx.listener(Self::confirm))
-            .on_action(cx.listener(Self::cancel))
-            .child(
-                WithRemSize::new(ui_font_size)
-                    .h_full()
-                    .w(left_gutter_width)
-                    .flex()
-                    .flex_row()
-                    .flex_shrink_0()
-                    .items_center()
-                    .justify_center()
-                    .gap_1()
-                    .child(self.render_close_button(cx)),
-            )
-            .child(
-                h_flex()
-                    .w_full()
-                    .justify_between()
-                    .child(div().flex_1().child(self.render_prompt_editor(cx)))
-                    .child(
-                        WithRemSize::new(ui_font_size)
-                            .flex()
-                            .flex_row()
-                            .items_center()
-                            .child(self.render_confirm_button(cx)),
-                    ),
-            )
-    }
-}
-
-impl Focusable for PromptEditor {
-    fn focus_handle(&self, cx: &App) -> FocusHandle {
-        self.prompt.focus_handle(cx)
-    }
-}
 
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct LineHighlight {

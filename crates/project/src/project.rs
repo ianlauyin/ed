@@ -1,4 +1,3 @@
-pub mod bookmark_store;
 pub mod buffer_store;
 pub mod color_extractor;
 pub mod debounced_delay;
@@ -28,7 +27,6 @@ pub mod yarn;
 use itertools::{Either, Itertools};
 
 use crate::{
-    bookmark_store::BookmarkStore,
     git_store::GitStore,
     lsp_store::{SymbolLocation, log_store::LogKind},
     project_search::SearchResultsHandle,
@@ -187,8 +185,6 @@ pub struct Project {
     active_entry: Option<ProjectEntryId>,
 
     languages: Arc<LanguageRegistry>,
-
-    bookmark_store: Entity<BookmarkStore>,
 
     task_store: Entity<TaskStore>,
 
@@ -1101,9 +1097,6 @@ impl Project {
             cx.subscribe(&buffer_store, Self::on_buffer_store_event)
                 .detach();
 
-            let bookmark_store =
-                cx.new(|cx| BookmarkStore::new(worktree_store.clone(), buffer_store.clone(), cx));
-
             let image_store = cx.new(|cx| ImageStore::local(worktree_store.clone(), cx));
             cx.subscribe(&image_store, Self::on_image_store_event)
                 .detach();
@@ -1192,7 +1185,6 @@ impl Project {
                 settings_observer,
                 fs,
                 remote_client: None,
-                bookmark_store,
 
                 buffers_needing_diff: Default::default(),
                 git_diff_debouncer: DebouncedDelay::new(),
@@ -1310,9 +1302,6 @@ impl Project {
             });
             cx.subscribe(&lsp_store, Self::on_lsp_store_event).detach();
 
-            let bookmark_store =
-                cx.new(|cx| BookmarkStore::new(worktree_store.clone(), buffer_store.clone(), cx));
-
             let git_store = cx.new(|cx| {
                 GitStore::remote(
                     &worktree_store,
@@ -1355,8 +1344,6 @@ impl Project {
                 buffer_store,
                 image_store,
                 lsp_store,
-
-                bookmark_store,
 
                 git_store,
 
@@ -1467,11 +1454,6 @@ impl Project {
             })
             .detach()
         }
-    }
-
-    #[inline]
-    pub fn bookmark_store(&self) -> Entity<BookmarkStore> {
-        self.bookmark_store.clone()
     }
 
     #[inline]

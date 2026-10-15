@@ -21,7 +21,6 @@ use db::{
 use gpui::{Axis, Bounds, Task, WindowBounds, WindowId, point, size};
 use project::{
     ProjectGroupKey,
-    bookmark_store::SerializedBookmark,
     trusted_worktrees::{DbTrustedPaths, RemoteHostLocation},
 };
 
@@ -387,43 +386,6 @@ pub async fn write_default_dock_state(
     kvp.write_kvp(DEFAULT_DOCK_STATE_KEY.to_string(), json_str)
         .await?;
     Ok(())
-}
-
-#[derive(Debug)]
-pub struct Bookmark {
-    pub row: u32,
-    pub label: String,
-}
-
-impl sqlez::bindable::StaticColumnCount for Bookmark {
-    fn column_count() -> usize {
-        // row, label
-        2
-    }
-}
-
-impl sqlez::bindable::Bind for Bookmark {
-    fn bind(
-        &self,
-        statement: &sqlez::statement::Statement,
-        start_index: i32,
-    ) -> anyhow::Result<i32> {
-        let next_index = statement.bind(&self.row, start_index)?;
-        statement.bind(&self.label, next_index)
-    }
-}
-
-impl Column for Bookmark {
-    fn column(statement: &mut Statement, start_index: i32) -> Result<(Self, i32)> {
-        let row = statement
-            .column_int(start_index)
-            .with_context(|| format!("Failed to read bookmark at index {start_index}"))?
-            as u32;
-
-        let (label, next_index) = String::column(statement, start_index + 1)?;
-
-        Ok((Bookmark { row, label }, next_index))
-    }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -976,6 +938,9 @@ impl Domain for WorkspaceDb {
         sql!(
             DROP TABLE IF EXISTS breakpoints;
         ),
+        sql!(
+            DROP TABLE IF EXISTS bookmarks;
+        ),
     ];
 
     // Allow recovering from bad migration that was initially shipped to nightly
@@ -1123,7 +1088,6 @@ impl WorkspaceDb {
             display,
             docks,
             session_id: None,
-            bookmarks: self.bookmarks(workspace_id),
             window_id,
             user_toolchains: self.user_toolchains(workspace_id, remote_connection_id),
             recent_navigation_history: self.recent_navigation_history(workspace_id),
@@ -1227,7 +1191,6 @@ impl WorkspaceDb {
             display,
             docks,
             session_id: None,
-            bookmarks: self.bookmarks(workspace_id),
             window_id,
             user_toolchains: self.user_toolchains(workspace_id, remote_connection_id),
             recent_navigation_history: self.recent_navigation_history(workspace_id),
@@ -1245,43 +1208,6 @@ impl WorkspaceDb {
         .context("Loading recent navigation history")
         .log_err()
         .unwrap_or_default()
-    }
-
-    fn bookmarks(&self, workspace_id: WorkspaceId) -> BTreeMap<Arc<Path>, Vec<SerializedBookmark>> {
-        let bookmarks: Result<Vec<(PathBuf, Bookmark)>> = self
-            .select_bound(sql! {
-                SELECT path, row, label
-                FROM bookmarks
-                WHERE workspace_id = ?
-                ORDER BY path, row
-            })
-            .and_then(|mut prepared_statement| (prepared_statement)(workspace_id));
-
-        match bookmarks {
-            Ok(bookmarks) => {
-                if bookmarks.is_empty() {
-                    log::debug!("Bookmarks are empty after querying database for them");
-                }
-
-                let mut map: BTreeMap<_, Vec<_>> = BTreeMap::default();
-
-                for (path, bookmark) in bookmarks {
-                    let path: Arc<Path> = path.into();
-                    map.entry(path.clone())
-                        .or_default()
-                        .push(SerializedBookmark {
-                            row: bookmark.row,
-                            label: bookmark.label,
-                        })
-                }
-
-                map
-            }
-            Err(e) => {
-                log::error!("Failed to load bookmarks: {}", e);
-                BTreeMap::default()
-            }
-        }
     }
 
     fn user_toolchains(
@@ -1378,22 +1304,6 @@ impl WorkspaceDb {
                     DELETE FROM pane_groups WHERE workspace_id = ?1;
                     DELETE FROM panes WHERE workspace_id = ?1;))?(workspace.id)
                     .context("Clearing old panes")?;
-
-                conn.exec_bound(
-                    sql!(
-                        DELETE FROM bookmarks WHERE workspace_id = ?1;
-                    )
-                )?(workspace.id).context("Clearing old bookmarks")?;
-
-                for (path, bookmarks) in workspace.bookmarks {
-                    for bookmark in bookmarks {
-                        conn.exec_bound(sql!(
-                            INSERT INTO bookmarks (workspace_id, path, row, label)
-                            VALUES (?1, ?2, ?3, ?4);
-                        ))?((workspace.id, path.as_ref(), bookmark.row, bookmark.label)).context("Inserting bookmark")?;
-                    }
-                }
-
 
                 conn.exec_bound(
                     sql!(

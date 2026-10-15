@@ -475,7 +475,6 @@ fn main() {
         theme_settings::init(theme::LoadThemes::All(Box::new(Assets)), cx);
         command_palette::init(cx);
 
-        zed::remote_debug::init(cx);
         snippet_provider::init(cx);
         repl::init(app_state.fs.clone(), cx);
         recent_projects::init(cx);
@@ -513,7 +512,6 @@ fn main() {
             wrap_div_with_search_actions: search::buffer_search::register_pane_search_actions,
         });
         terminal_view::init(cx);
-        journal::init(app_state.clone(), cx);
         encoding_selector::init(cx);
         language_selector::init(cx);
         line_ending_selector::init(cx);

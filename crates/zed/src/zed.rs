@@ -6,7 +6,6 @@ pub(crate) mod move_to_applications;
 mod open_listener;
 mod open_url_modal;
 mod quick_action_bar;
-pub mod remote_debug;
 
 use anyhow::Context as _;
 pub use app_menus::*;
