@@ -343,15 +343,16 @@ impl LspAdapter for JsonLspAdapter {
     }
 }
 
-/// json-language-server quotes `filterText` (`"status_bar"`), but the completion
-/// query never includes the opening quote, which skews fuzzy match scores.
+/// json-language-server quotes `filterText` (`"status_bar"`), or the label of items
+/// without one (`"dark"`), but the completion query never includes the opening
+/// quote, which skews fuzzy match scores.
 fn unquote_filter_texts(items: &mut [lsp::CompletionItem]) {
     for item in items {
-        if let Some(filter_text) = item.filter_text.as_mut()
-            && filter_text.starts_with('"')
+        let filter_text = item.filter_text.as_deref().unwrap_or(&item.label);
+        if filter_text.starts_with('"')
             && let Ok(unquoted) = serde_json::from_str::<String>(filter_text)
         {
-            *filter_text = unquoted;
+            item.filter_text = Some(unquoted);
         }
     }
 }
