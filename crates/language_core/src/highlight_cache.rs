@@ -43,6 +43,23 @@ pub struct ResolvedHighlights {
 }
 
 impl ResolvedHighlights {
+    pub fn runs_in_range(
+        self,
+        range: Range<usize>,
+    ) -> impl Iterator<Item = (Range<usize>, HighlightId)> {
+        let runs = self.runs;
+        (0..runs.len()).filter_map(move |index| {
+            let (run_range, highlight_id) = &runs[index];
+            (run_range.start < range.end && run_range.end > range.start).then(|| {
+                (
+                    run_range.start.max(range.start) - range.start
+                        ..run_range.end.min(range.end) - range.start,
+                    *highlight_id,
+                )
+            })
+        })
+    }
+
     pub fn is_current(&self) -> bool {
         self.sources
             .iter()
@@ -94,7 +111,7 @@ impl TextHighlightCache {
     pub fn insert(
         &self,
         key: TextHighlightKey,
-        text: Arc<str>,
+        text: String,
         highlights: ResolvedHighlights,
     ) -> ResolvedHighlights {
         let cost = text.len() + highlights.cost_bytes();
@@ -196,7 +213,7 @@ impl<K: Hash + Eq, V> CostBudgetedLru<K, V> {
 }
 
 struct TextHighlightEntry {
-    text: Arc<str>,
+    text: String,
     highlights: ResolvedHighlights,
 }
 
