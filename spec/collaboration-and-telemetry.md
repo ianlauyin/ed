@@ -18,6 +18,9 @@ be explicitly enabled with `ZED_GENERATE_MINIDUMPS`.
 
 SSH and WSL editing remain supported; their shared transport and
 buffer synchronization primitives remain in the editor.
+Reconnection uses separate timeouts for the new connection's handshake and
+for the resync that follows; the resync timeout starts only once the handshake
+completes.
 
 The application updater, update checks, downloads/installers, helper executable,
 release-note actions, and update indicators are removed. Updates are installed

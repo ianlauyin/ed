@@ -8,3 +8,5 @@
 - Jupyter notebooks and integrated REPL execution are removed, including kernel
   management, remote kernel launching, execution controls, settings, and shortcuts.
 - Python source editing remains supported. `.ipynb` files open as ordinary text.
+- `editor::RestartLanguageServer` restarts the servers relevant to the current
+  buffer, including servers previously stopped with `editor::StopLanguageServer`.
