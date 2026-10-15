@@ -17,7 +17,6 @@ doctest = false
 anyhow.workspace = true
 gpui.workspace = true
 log.workspace = true
-settings_content.workspace = true
 smol.workspace = true
 util.workspace = true
 

@@ -14,7 +14,6 @@ doctest = false
 [features]
 load-grammars = [
     "grammars/load-grammars",
-    "tree-sitter",
     "tree-sitter-gitcommit",
 ]
 
@@ -47,7 +46,6 @@ pet-virtualenv.workspace = true
 pet.workspace = true
 project.workspace = true
 regex.workspace = true
-rope.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 serde_json_lenient.workspace = true
@@ -58,8 +56,6 @@ smol.workspace = true
 snippet.workspace = true
 task.workspace = true
 terminal.workspace = true
-theme.workspace = true
-tree-sitter = { workspace = true, optional = true }
 tree-sitter-gitcommit = { workspace = true, optional = true }
 url.workspace = true
 util.workspace = true

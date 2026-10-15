@@ -16,8 +16,3 @@ doctest = false
 [dependencies]
 heapless.workspace = true
 rayon.workspace = true
-tracing.workspace = true
-
-[package.metadata.cargo-shear]
-ignored = ["tracing"]
-

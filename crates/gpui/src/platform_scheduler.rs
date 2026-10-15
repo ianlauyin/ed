@@ -119,10 +119,6 @@ impl Scheduler for PlatformScheduler {
         self.dispatcher.dispatch(runnable, priority);
     }
 
-    fn spawn_realtime(&self, f: Box<dyn FnOnce() + Send>) {
-        self.dispatcher.spawn_realtime(f);
-    }
-
     #[track_caller]
     fn timer(&self, duration: Duration) -> Timer {
         let (tx, rx) = oneshot::channel();

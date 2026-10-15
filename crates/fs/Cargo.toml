@@ -17,11 +17,9 @@ anyhow.workspace = true
 async-channel.workspace = true
 async-tar.workspace = true
 async-trait.workspace = true
-collections.workspace = true
 futures.workspace = true
 git.workspace = true
 gpui.workspace = true
-ignore.workspace = true
 libc.workspace = true
 log.workspace = true
 parking_lot.workspace = true
@@ -30,13 +28,11 @@ rope.workspace = true
 proto.workspace = true
 thiserror.workspace = true
 serde.workspace = true
-serde_json.workspace = true
 slotmap.workspace = true
 smol.workspace = true
 tempfile.workspace = true
 text.workspace = true
 util.workspace = true
-path.workspace = true
 notify = "9.0.0-rc.4"
 trash = { git = "https://github.com/zed-industries/trash-rs", rev = "41c6c800d884a89351f3b8856d12894cccee261d" }
 
@@ -48,4 +44,3 @@ unicode-normalization = "0.1"
 
 [package.metadata.cargo-shear]
 ignored = ["async-std"]
-

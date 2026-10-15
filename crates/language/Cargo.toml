@@ -41,7 +41,6 @@ semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 settings.workspace = true
-shellexpand.workspace = true
 smallvec.workspace = true
 streaming-iterator.workspace = true
 strsim.workspace = true
@@ -49,12 +48,8 @@ sum_tree.workspace = true
 task.workspace = true
 text.workspace = true
 theme.workspace = true
-tracing.workspace = true
 tree-sitter.workspace = true
 unicase.workspace = true
 util.workspace = true
 watch.workspace = true
 zlog.workspace = true
-
-[package.metadata.cargo-shear]
-ignored = ["tracing"]

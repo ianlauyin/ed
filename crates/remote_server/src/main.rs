@@ -1,3 +1,8 @@
+#![expect(
+    unused_crate_dependencies,
+    reason = "Cargo also passes the server library's dependencies to this binary entry point"
+)]
+
 use clap::Parser;
 use remote_server::Commands;
 use std::io::Write as _;

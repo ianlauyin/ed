@@ -29,22 +29,3 @@ project.workspace = true
 ui.workspace = true
 ui_input.workspace = true
 workspace.workspace = true
-
-[dev-dependencies]
-assets.workspace = true
-editor.workspace = true
-env_logger.workspace = true
-fs.workspace = true
-gpui_platform = { workspace = true, features = ["screen-capture", "font-kit"] }
-node_runtime.workspace = true
-settings_content.workspace = true
-reqwest_client.workspace = true
-session.workspace = true
-settings.workspace = true
-theme.workspace = true
-theme_settings.workspace = true
-uuid.workspace = true
-
-[[example]]
-name = "component_preview"
-path = "examples/component_preview.rs"

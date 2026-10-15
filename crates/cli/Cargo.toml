@@ -18,8 +18,7 @@ path = "src/main.rs"
 required-features = ["cli"]
 
 [features]
-no-bundled-uninstall = ["cli"]
-default = ["cli", "no-bundled-uninstall"]
+default = ["cli"]
 cli = [
     "dep:askpass",
     "dep:clap",
@@ -33,7 +32,6 @@ cli = [
     "dep:paths",
     "dep:plist",
     "dep:rayon",
-    "dep:settings_content",
     "dep:tempfile",
     "dep:util",
     "dep:walkdir",
@@ -51,7 +49,6 @@ dialoguer = { workspace = true, optional = true }
 ipc-channel = "0.19"
 parking_lot = { workspace = true, optional = true }
 paths = { workspace = true, optional = true }
-settings_content = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }
 util = { workspace = true, optional = true }
 tempfile = { workspace = true, optional = true }

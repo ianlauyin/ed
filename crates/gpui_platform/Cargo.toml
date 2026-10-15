@@ -20,13 +20,13 @@ screen-capture = ["gpui/screen-capture", "gpui_macos/screen-capture"]
 runtime_shaders = ["gpui_macos/runtime_shaders"]
 
 [dependencies]
-anyhow.workspace = true
 gpui.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
 gpui_macos.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
+anyhow.workspace = true
 flume.workspace = true
 futures.workspace = true
 smol.workspace = true

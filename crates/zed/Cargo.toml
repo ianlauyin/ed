@@ -51,13 +51,11 @@ gpui_platform = { workspace = true, features = [
     "font-kit",
 ] }
 gpui_tokio.workspace = true
-itertools.workspace = true
 rayon.workspace = true
 semver.workspace = true
 system_specs.workspace = true
 tabular_data_preview.workspace = true
 
-http_client.workspace = true
 image_viewer.workspace = true
 input_latency_ui.workspace = true
 inspector_ui.workspace = true
@@ -78,23 +76,19 @@ menu.workspace = true
 mimalloc = { version = "0.1", optional = true }
 miniprofiler_ui.workspace = true
 node_runtime.workspace = true
-notifications.workspace = true
 onboarding.workspace = true
 outline.workspace = true
 outline_panel.workspace = true
 parking_lot.workspace = true
 paths.workspace = true
 picker.workspace = true
-profiling.workspace = true
 project.workspace = true
 project_panel.workspace = true
 project_symbols.workspace = true
-proto.workspace = true
 recent_projects.workspace = true
 settings_content.workspace = true
 remote.workspace = true
 repl.workspace = true
-reqwest = { workspace = true, features = ["multipart"] }
 reqwest_client.workspace = true
 rope.workspace = true
 search.workspace = true
@@ -108,18 +102,14 @@ smol.workspace = true
 snippet_provider.workspace = true
 snippets_ui.workspace = true
 svg_preview.workspace = true
-sysinfo.workspace = true
 tab_switcher.workspace = true
 tasks_ui.workspace = true
 terminal_view.workspace = true
 theme.workspace = true
 theme_selector.workspace = true
 theme_settings.workspace = true
-time.workspace = true
-time_format.workspace = true
 title_bar.workspace = true
 toolchain_selector.workspace = true
-tracing.workspace = true
 ui.workspace = true
 ui_prompt.workspace = true
 url.workspace = true
@@ -172,6 +162,3 @@ category = "Developer Tool"
 osx_minimum_system_version = "10.15.7"
 osx_info_plist_exts = ["resources/info/*"]
 osx_url_schemes = ["zed"]
-
-[package.metadata.cargo-shear]
-ignored = ["profiling", "tracing"]

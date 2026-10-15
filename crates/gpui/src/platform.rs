@@ -1146,8 +1146,6 @@ pub trait PlatformDispatcher: Send + Sync {
         None
     }
 
-    fn spawn_realtime(&self, f: Box<dyn FnOnce() + Send>);
-
     fn now(&self) -> Instant {
         Instant::now()
     }

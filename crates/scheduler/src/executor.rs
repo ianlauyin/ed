@@ -243,37 +243,6 @@ impl BackgroundExecutor {
         Task(TaskState::Spawned(task))
     }
 
-    /// Spawns a future on a dedicated realtime thread for audio processing.
-    #[track_caller]
-    pub fn spawn_realtime<F>(&self, future: F) -> Task<F::Output>
-    where
-        F: Future + Send + 'static,
-        F::Output: Send + 'static,
-    {
-        let location = Location::caller();
-        let (tx, rx) = flume::bounded::<async_task::Runnable<RunnableMeta>>(1);
-
-        self.scheduler.spawn_realtime(Box::new(move || {
-            while let Ok(runnable) = rx.recv() {
-                runnable.run();
-            }
-        }));
-
-        let (runnable, task) = async_task::Builder::new()
-            .metadata(RunnableMeta {
-                location,
-                spawned: crate::SpawnTime(Instant::now()),
-            })
-            .spawn(
-                move |_| future,
-                move |runnable| {
-                    let _ = tx.send(runnable);
-                },
-            );
-        runnable.schedule();
-        Task(TaskState::Spawned(task))
-    }
-
     #[track_caller]
     pub fn timer(&self, duration: Duration) -> Timer {
         self.scheduler.timer(duration)

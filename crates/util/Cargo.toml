@@ -20,7 +20,6 @@ debug-embed = ["rust-embed/debug-embed"]
 [dependencies]
 anyhow.workspace = true
 collections.workspace = true
-dunce.workspace = true
 globset.workspace = true
 itertools.workspace = true
 regex = { workspace = true, features = ["unicode-bool", "unicode-gencat"] }
@@ -41,7 +40,6 @@ futures.workspace = true
 shlex.workspace = true
 smol.workspace = true
 async-fs.workspace = true
-walkdir.workspace = true
 dirs.workspace = true
 
 log.workspace = true

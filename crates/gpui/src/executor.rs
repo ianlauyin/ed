@@ -100,9 +100,6 @@ impl BackgroundExecutor {
     }
 
     /// Enqueues the given future to be run to completion on a background thread with the given priority.
-    ///
-    /// When `Priority::RealtimeAudio` is used, the task runs on a dedicated thread with
-    /// realtime scheduling priority, suitable for audio processing.
     #[track_caller]
     pub fn spawn_with_priority<R>(
         &self,
@@ -112,11 +109,7 @@ impl BackgroundExecutor {
     where
         R: Send + 'static,
     {
-        if priority == Priority::RealtimeAudio {
-            self.inner.spawn_realtime(future)
-        } else {
-            self.inner.spawn_with_priority(priority, future)
-        }
+        self.inner.spawn_with_priority(priority, future)
     }
 
     /// Runs background tasks that may borrow from their environment and waits for all of them to complete.

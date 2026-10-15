@@ -24,10 +24,6 @@ use std::{
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
 #[repr(u8)]
 pub enum Priority {
-    /// Realtime priority
-    ///
-    /// Spawning a task with this priority will spin it off on a separate thread dedicated just to that task. Only use for audio.
-    RealtimeAudio,
     /// High priority - use for tasks critical to user experience/responsiveness.
     High,
     /// Medium priority - suitable for most use cases.
@@ -45,8 +41,6 @@ impl Priority {
             Priority::High => 60,
             Priority::Medium => 30,
             Priority::Low => 10,
-            // realtime priorities are not considered for probability scheduling
-            Priority::RealtimeAudio => 0,
         }
     }
 }
@@ -98,9 +92,6 @@ pub trait Scheduler: Send + Sync {
         runnable: Runnable<RunnableMeta>,
         priority: Priority,
     );
-
-    /// Spawn a closure on a dedicated realtime thread for audio processing.
-    fn spawn_realtime(&self, f: Box<dyn FnOnce() + Send>);
 
     /// Schedule a background task with default (medium) priority.
     fn schedule_background(&self, runnable: Runnable<RunnableMeta>) {

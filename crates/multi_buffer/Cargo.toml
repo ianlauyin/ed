@@ -16,14 +16,12 @@ doctest = false
 anyhow.workspace = true
 clock.workspace = true
 collections.workspace = true
-ctor.workspace = true
 futures-lite.workspace = true
 buffer_diff.workspace = true
 gpui.workspace = true
 itertools.workspace = true
 language.workspace = true
 log.workspace = true
-parking_lot.workspace = true
 rand.workspace = true
 rope.workspace = true
 settings.workspace = true
@@ -33,9 +31,5 @@ sum_tree.workspace = true
 text.workspace = true
 theme.workspace = true
 tree-sitter.workspace = true
-tracing.workspace = true
 util.workspace = true
 unicode-segmentation.workspace = true
-
-[package.metadata.cargo-shear]
-ignored = ["tracing"]

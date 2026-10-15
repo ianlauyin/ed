@@ -1,3 +1,7 @@
+// Release builds use this to hide the unavailable inspector action.
+#[cfg(debug_assertions)]
+use command_palette_hooks as _;
+
 #[cfg(debug_assertions)]
 mod div_inspector;
 #[cfg(debug_assertions)]

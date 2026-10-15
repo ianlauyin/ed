@@ -21,7 +21,3 @@ merman = { workspace = true, features = [
 ] }
 quick-xml.workspace = true
 serde_json.workspace = true
-tracing.workspace = true
-
-[package.metadata.cargo-shear]
-ignored = ["tracing"]

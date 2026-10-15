@@ -8,6 +8,10 @@
 compile_error!("Supported targets are macOS and the headless Linux remote server.");
 
 extern crate self as gpui;
+// Keep the dependency available for GPUI_LEAK_DETECTION builds as well as the feature.
+#[cfg(not(gpui_leak_detection))]
+use backtrace as _;
+
 #[macro_use]
 mod action;
 mod app;

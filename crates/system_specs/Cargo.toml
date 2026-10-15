@@ -17,9 +17,7 @@ doctest = false
 default = []
 
 [dependencies]
-util.workspace = true
 regex.workspace = true
-anyhow.workspace = true
 gpui.workspace = true
 human_bytes.workspace = true
 settings_content.workspace = true
@@ -28,6 +26,8 @@ serde.workspace = true
 sysinfo.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
+anyhow.workspace = true
+util.workspace = true
 pciid-parser.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]

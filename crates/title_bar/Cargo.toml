@@ -16,22 +16,13 @@ doctest = false
 default = []
 
 [dependencies]
-anyhow.workspace = true
-fs.workspace = true
 platform_title_bar.workspace = true
-chrono.workspace = true
-command_palette_hooks.workspace = true
-db.workspace = true
 
 git_ui_core.workspace = true
 gpui = { workspace = true, features = ["screen-capture"] }
-icons.workspace = true
 project.workspace = true
 recent_projects.workspace = true
 remote.workspace = true
-remote_connection.workspace = true
-rpc.workspace = true
-semver.workspace = true
 schemars.workspace = true
 serde.workspace = true
 settings.workspace = true

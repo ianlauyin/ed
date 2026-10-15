@@ -1,3 +1,11 @@
+#![cfg_attr(
+    feature = "cli",
+    expect(
+        unused_crate_dependencies,
+        reason = "Cargo also passes this package's CLI binary dependencies to the protocol library"
+    )
+)]
+
 #[cfg(not(target_os = "macos"))]
 compile_error!("This editor CLI only supports macOS.");
 

@@ -10,6 +10,9 @@ remote server supports macOS and Linux.
 
 - The editor uses native macOS windows, Metal rendering, system menus, and window tabs.
 - The native menu bar has no Help menu.
+- Audio input and speech recognition are unsupported; the app requests no
+  microphone or speech-recognition access. Background tasks use high, medium,
+  or low priority, with no realtime audio scheduling.
 - Ship only macOS default bindings and macOS variants of alternate keymaps.
 - The Linux remote server needs no display server, GPU, desktop integration, or fonts.
   It retains background execution, timers, and a foreground event loop for remote projects.

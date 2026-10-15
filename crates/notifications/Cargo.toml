@@ -14,15 +14,9 @@ doctest = false
 test = false
 
 [dependencies]
-anyhow.workspace = true
-futures-lite.workspace = true
 component.workspace = true
 gpui.workspace = true
-rpc.workspace = true
-sum_tree.workspace = true
-time.workspace = true
 ui.workspace = true
-util.workspace = true
 workspace.workspace = true
 zed_actions.workspace = true
 

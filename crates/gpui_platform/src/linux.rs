@@ -96,10 +96,6 @@ impl PlatformDispatcher for Dispatcher {
             })
             .detach();
     }
-
-    fn spawn_realtime(&self, f: Box<dyn FnOnce() + Send>) {
-        thread::spawn(f);
-    }
 }
 
 impl Platform for HeadlessPlatform {
