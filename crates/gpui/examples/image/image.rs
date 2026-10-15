@@ -12,8 +12,6 @@ use gpui::{
     img, prelude::*, px, rgb, size,
 };
 
-use reqwest_client::ReqwestClient;
-
 struct Assets {
     base: PathBuf,
 }
@@ -160,11 +158,6 @@ fn run_example() {
     .run(move |cx: &mut App| {
         if !example_support::load_fonts(cx) {
             return;
-        }
-
-        {
-            let http_client = ReqwestClient::user_agent("gpui example").unwrap();
-            cx.set_http_client(Arc::new(http_client));
         }
 
         cx.activate(true);

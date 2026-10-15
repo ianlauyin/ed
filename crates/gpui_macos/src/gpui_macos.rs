@@ -8,6 +8,7 @@ mod display;
 mod display_link;
 mod events;
 mod keyboard;
+mod ns;
 mod pasteboard;
 mod system_notifications;
 
@@ -24,14 +25,10 @@ mod platform;
 mod window;
 mod window_appearance;
 
-use cocoa::{
-    base::{id, nil},
-    foundation::{NSAutoreleasePool, NSNotFound, NSString, NSUInteger},
-};
-
-use objc::runtime::{BOOL, NO, YES};
+use ns::{NSNotFound, NSUInteger, id};
+use objc2::{Encode, Encoding, RefEncode, class, msg_send};
 use std::{
-    ffi::{CStr, c_char},
+    ffi::{CStr, c_char, c_void},
     ops::Range,
 };
 
@@ -44,28 +41,21 @@ pub(crate) use window::*;
 
 pub use platform::MacPlatform;
 
-trait BoolExt {
-    fn to_objc(self) -> BOOL;
-}
-
-impl BoolExt for bool {
-    fn to_objc(self) -> BOOL {
-        if self { YES } else { NO }
-    }
-}
-
 trait NSStringExt {
     unsafe fn to_str(&self) -> &str;
 }
 
 impl NSStringExt for id {
     unsafe fn to_str(&self) -> &str {
+        if self.is_null() {
+            return "";
+        }
         unsafe {
-            let cstr = self.UTF8String();
+            let cstr: *const c_char = msg_send![*self, UTF8String];
             if cstr.is_null() {
                 ""
             } else {
-                CStr::from_ptr(cstr as *mut c_char).to_str().unwrap()
+                CStr::from_ptr(cstr).to_str().unwrap()
             }
         }
     }
@@ -92,8 +82,8 @@ impl NSRange {
 
     fn to_range(self) -> Option<Range<usize>> {
         if self.is_valid() {
-            let start = self.location as usize;
-            let end = start + self.length as usize;
+            let start = self.location;
+            let end = start + self.length;
             Some(start..end)
         } else {
             None
@@ -110,19 +100,27 @@ impl From<Range<usize>> for NSRange {
     }
 }
 
-unsafe impl objc::Encode for NSRange {
-    fn encode() -> objc::Encoding {
-        let encoding = format!(
-            "{{NSRange={}{}}}",
-            NSUInteger::encode().as_str(),
-            NSUInteger::encode().as_str()
-        );
-        unsafe { objc::Encoding::from_str(&encoding) }
-    }
+// SAFETY: `NSRange` is `#[repr(C)]` with the same layout as Foundation's `_NSRange`.
+unsafe impl Encode for NSRange {
+    const ENCODING: Encoding = objc2_foundation::NSRange::ENCODING;
 }
 
-/// Allow NSString::alloc use here because it sets autorelease
-#[allow(clippy::disallowed_methods)]
+// SAFETY: see the `Encode` impl above.
+unsafe impl RefEncode for NSRange {
+    const ENCODING_REF: Encoding = Encoding::Pointer(&Self::ENCODING);
+}
+
+/// Returns an autoreleased `NSString`.
 unsafe fn ns_string(string: &str) -> id {
-    unsafe { NSString::alloc(nil).init_str(string).autorelease() }
+    const NS_UTF8_STRING_ENCODING: NSUInteger = 4;
+    unsafe {
+        let ns_string: id = msg_send![class!(NSString), alloc];
+        let ns_string: id = msg_send![
+            ns_string,
+            initWithBytes: string.as_ptr().cast::<c_void>(),
+            length: string.len(),
+            encoding: NS_UTF8_STRING_ENCODING
+        ];
+        msg_send![ns_string, autorelease]
+    }
 }

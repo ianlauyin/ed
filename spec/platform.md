@@ -29,3 +29,23 @@ Crates in the remote server's dependency tree must gate macOS-only build steps
 (e.g. `xcrun`, SDK probes) and macOS paths behind `target_os = "macos"`, keeping
 Linux branches for paths, crash handling, and LSP download assets. Upstream workflow
 generators that depended on removed release and deployment infrastructure are absent.
+
+## macOS bindings
+
+- AppKit/Foundation access uses the `objc2` crate family only; neither the
+  deprecated `cocoa` crate nor the legacy `objc` 0.2 crate is a dependency.
+- The Metal renderer and sprite atlas (`gpui_apple`) use `objc2-metal` and
+  `objc2-quartz-core`'s `CAMetalLayer`; the `metal` (metal-rs) crate is not a
+  dependency.
+- `gpui_macos` declares its `NSApplication`/`NSWindow`/`NSPanel`/`NSView`
+  subclasses with `objc2::define_class!`. Window, panel and view share one
+  typed ivar holding a strong `Arc` to the window state; it is installed right
+  after creation and released when the object deallocates. The application and
+  its delegate hold a platform pointer that AppKit-created instances get
+  zero-filled, so that ivar must stay valid when zeroed and have no `Drop`.
+- Much of the crate still sends `msg_send!` to untyped pointers (`id`, from the
+  crate-local `ns` module); new code should prefer typed `objc2-*` APIs.
+- objc2 debug builds verify every message's type encodings and panic on
+  messages to nil, so raw sends must use exact types (e.g. `bool` for `BOOL`,
+  `NSUInteger` not `u32`, `*const c_void` for `void *`, a value type instead of
+  `()` for non-void methods) and guard receivers that may be nil.

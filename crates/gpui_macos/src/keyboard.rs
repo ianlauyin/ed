@@ -1,7 +1,7 @@
 use collections::HashMap;
 use std::ffi::{CStr, c_void};
 
-use objc::{msg_send, runtime::Object, sel, sel_impl};
+use objc2::{msg_send, runtime::AnyObject};
 
 use gpui::{KeybindingKeystroke, Keystroke, PlatformKeyboardLayout, PlatformKeyboardMapper};
 
@@ -55,14 +55,14 @@ impl MacKeyboardLayout {
         unsafe {
             let current_keyboard = TISCopyCurrentKeyboardLayoutInputSource();
 
-            let id: *mut Object = TISGetInputSourceProperty(
+            let id: *mut AnyObject = TISGetInputSourceProperty(
                 current_keyboard,
                 kTISPropertyInputSourceID as *const c_void,
             );
             let id: *const std::os::raw::c_char = msg_send![id, UTF8String];
             let id = CStr::from_ptr(id).to_str().unwrap().to_string();
 
-            let name: *mut Object = TISGetInputSourceProperty(
+            let name: *mut AnyObject = TISGetInputSourceProperty(
                 current_keyboard,
                 kTISPropertyLocalizedName as *const c_void,
             );
