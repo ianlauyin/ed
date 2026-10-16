@@ -1,10 +1,7 @@
 use std::{ops::Range, sync::Arc};
 
-use anyhow::Result;
-use async_trait::async_trait;
 use derive_more::{Deref, DerefMut};
 use gpui::{App, Global, SharedString};
-use http_client::HttpClient;
 use itertools::Itertools;
 use parking_lot::RwLock;
 use url::Url;
@@ -34,25 +31,6 @@ impl std::fmt::Debug for GitRemote {
     }
 }
 
-impl GitRemote {
-    pub fn host_supports_avatars(&self) -> bool {
-        self.host.supports_avatars()
-    }
-
-    pub async fn avatar_url(
-        &self,
-        commit: SharedString,
-        author_email: Option<SharedString>,
-        client: Arc<dyn HttpClient>,
-    ) -> Option<Url> {
-        self.host
-            .commit_author_avatar_url(&self.owner, &self.repo, commit, author_email, client)
-            .await
-            .ok()
-            .flatten()
-    }
-}
-
 pub struct BuildCommitPermalinkParams<'a> {
     pub sha: &'a str,
 }
@@ -75,7 +53,6 @@ impl<'a> BuildPermalinkParams<'a> {
 }
 
 /// A Git hosting provider.
-#[async_trait]
 pub trait GitHostingProvider {
     /// Returns the name of the provider.
     fn name(&self) -> String;
@@ -101,9 +78,6 @@ pub trait GitHostingProvider {
     ) -> Option<Url> {
         None
     }
-
-    /// Returns whether this provider supports avatars.
-    fn supports_avatars(&self) -> bool;
 
     /// Returns a URL fragment to the given line selection.
     fn line_fragment(&self, selection: &Range<u32>) -> String {
@@ -133,17 +107,6 @@ pub trait GitHostingProvider {
         _message: &str,
     ) -> Option<PullRequest> {
         None
-    }
-
-    async fn commit_author_avatar_url(
-        &self,
-        _repo_owner: &str,
-        _repo: &str,
-        _commit: SharedString,
-        _author_email: Option<SharedString>,
-        _http_client: Arc<dyn HttpClient>,
-    ) -> Result<Option<Url>> {
-        Ok(None)
     }
 }
 

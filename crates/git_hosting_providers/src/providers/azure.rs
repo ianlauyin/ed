@@ -1,7 +1,6 @@
 use std::str::FromStr;
 use std::sync::LazyLock;
 
-use async_trait::async_trait;
 use regex::Regex;
 use url::Url;
 
@@ -85,7 +84,6 @@ impl Azure {
     }
 }
 
-#[async_trait]
 impl GitHostingProvider for Azure {
     fn name(&self) -> String {
         "Azure DevOps".to_string()
@@ -93,10 +91,6 @@ impl GitHostingProvider for Azure {
 
     fn base_url(&self) -> Url {
         Url::parse("https://dev.azure.com").unwrap()
-    }
-
-    fn supports_avatars(&self) -> bool {
-        false
     }
 
     fn format_line_number(&self, line: u32) -> String {

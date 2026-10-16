@@ -43,10 +43,6 @@ impl GitHostingProvider for Tangled {
         self.base_url.clone()
     }
 
-    fn supports_avatars(&self) -> bool {
-        false
-    }
-
     fn format_line_number(&self, line: u32) -> String {
         format!("L{line}")
     }

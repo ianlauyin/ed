@@ -22,7 +22,6 @@ impl Gerrit {
     }
 }
 
-#[async_trait::async_trait]
 impl GitHostingProvider for Gerrit {
     fn name(&self) -> String {
         self.name.clone()
@@ -30,10 +29,6 @@ impl GitHostingProvider for Gerrit {
 
     fn base_url(&self) -> Url {
         self.base_url.clone()
-    }
-
-    fn supports_avatars(&self) -> bool {
-        false
     }
 
     fn format_line_number(&self, line: u32) -> String {

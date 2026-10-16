@@ -4,7 +4,7 @@ use crate::commit_context_menu::{
     CommitContextMenuData, CommitContextMenuSource, commit_context_menu,
 };
 use crate::commit_modal::CommitModal;
-use crate::commit_tooltip::{CommitAvatar, CommitTooltip};
+use crate::commit_tooltip::CommitTooltip;
 use crate::commit_view::CommitView;
 use crate::git_panel_settings::GitPanelScrollbarAccessor;
 use crate::project_diff::{DeployBranchDiff, Diff, ProjectDiff};
@@ -37,9 +37,9 @@ use git::{
     status::FileStatus,
 };
 use git::{
-    ExpandCommitEditor, GitHostingProviderRegistry, GitRemote, RestoreTrackedFiles, StageAll,
+    ExpandCommitEditor, GitHostingProviderRegistry, RestoreTrackedFiles, StageAll,
     StashAll, StashApply, StashPop, StashStaged, StashTracked, ToggleCommitEditor,
-    ToggleFillCommitEditor, TrashUntrackedFiles, UnstageAll, ViewFile, parse_git_remote_url,
+    ToggleFillCommitEditor, TrashUntrackedFiles, UnstageAll, ViewFile,
 };
 use gpui::{
     AbsoluteLength, Action, Anchor, AnyElement, AsyncWindowContext, ClickEvent, ClipboardItem,
@@ -6826,18 +6826,6 @@ impl GitPanel {
         }
     }
 
-    fn git_remote(&self, cx: &mut App) -> Option<GitRemote> {
-        let repo = self.active_repository.as_ref()?;
-        let remote_url = repo.read(cx).default_remote_url()?;
-        let provider_registry = GitHostingProviderRegistry::default_global(cx);
-        let (provider, parsed) = parse_git_remote_url(provider_registry, &remote_url)?;
-        Some(GitRemote {
-            host: provider,
-            owner: parsed.owner.into(),
-            repo: parsed.repo.into(),
-        })
-    }
-
     fn render_commit_history(
         &self,
         window: &mut Window,
@@ -6852,7 +6840,6 @@ impl GitPanel {
         let repo_weak = active_repository.downgrade();
         let item_count = entries.len();
         let commit_history_scroll_handle = self.commit_history_scroll_handle.clone();
-        let remote = self.git_remote(cx);
 
         let focused_history_entry = self.focused_history_entry;
         let is_panel_focused = self.focus_handle.is_focused(window);
@@ -6882,7 +6869,7 @@ impl GitPanel {
                         let workspace = workspace;
                         let repo_weak = repo_weak;
                         let git_panel = cx.weak_entity();
-                        move |range, window, cx| {
+                        move |range, _window, cx| {
                             let local_offset = time::UtcOffset::current_local_offset()
                                 .unwrap_or(time::UtcOffset::UTC);
                             let now = time::OffsetDateTime::now_utc();
@@ -6909,24 +6896,21 @@ impl GitPanel {
                                 .map(|(ix, (entry, data))| {
                                     let index = range.start + ix;
                                     let sha_string = entry.sha.to_string();
-                                    let sha_shared: SharedString = sha_string.clone().into();
                                     let short_sha: SharedString =
                                         sha_string[..7.min(sha_string.len())].to_string().into();
                                     let tag_names = entry.tag_names.clone();
 
-                                    let (subject, author_name, author_email, timestamp): (
+                                    let (subject, author_name, timestamp): (
                                         SharedString,
                                         SharedString,
-                                        Option<SharedString>,
                                         Option<i64>,
                                     ) = match &data {
                                         Some(data) => (
                                             data.subject.clone(),
                                             data.author_name.clone(),
-                                            Some(data.author_email.clone()),
                                             Some(data.commit_timestamp),
                                         ),
-                                        None => ("Loading…".into(), "".into(), None, None),
+                                        None => ("Loading…".into(), "".into(), None),
                                     };
 
                                     let relative_time: SharedString = timestamp
@@ -6943,14 +6927,6 @@ impl GitPanel {
                                             .into()
                                         })
                                         .unwrap_or_else(|| "".into());
-
-                                    let avatar = CommitAvatar::new(
-                                        &sha_shared,
-                                        author_email,
-                                        remote.as_ref(),
-                                    )
-                                    .size(px(14.))
-                                    .render(window, cx);
 
                                     let is_unpushed = index < ahead_count;
                                     let is_focused = focused_history_entry == Some(index);
@@ -7071,7 +7047,6 @@ impl GitPanel {
                                                 .w_full()
                                                 .min_w_0()
                                                 .gap_1p5()
-                                                .child(div().flex_none().child(avatar))
                                                 .when(!author_name.is_empty(), |this| {
                                                     this.child(
                                                         Label::new(author_name)

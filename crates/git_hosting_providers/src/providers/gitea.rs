@@ -1,12 +1,6 @@
 use std::str::FromStr;
-use std::sync::Arc;
 
-use anyhow::{Context as _, Result, bail};
-use async_trait::async_trait;
-use futures::AsyncReadExt;
-use gpui::SharedString;
-use http_client::{AsyncBody, HttpClient, HttpRequestExt, Request};
-use serde::Deserialize;
+use anyhow::{Result, bail};
 use url::Url;
 
 use git::{
@@ -15,16 +9,6 @@ use git::{
 };
 
 use crate::get_host_from_git_remote_url;
-
-#[derive(Debug, Deserialize)]
-struct CommitDetails {
-    author: Option<User>,
-}
-
-#[derive(Debug, Deserialize)]
-struct User {
-    pub avatar_url: String,
-}
 
 pub struct Gitea {
     name: String,
@@ -61,50 +45,8 @@ impl Gitea {
             Url::parse(&format!("https://{}", host))?,
         ))
     }
-
-    async fn fetch_gitea_commit_author(
-        &self,
-        repo_owner: &str,
-        repo: &str,
-        commit: &str,
-        client: &Arc<dyn HttpClient>,
-    ) -> Result<Option<User>> {
-        let Some(host) = self.base_url.host_str() else {
-            bail!("failed to get host from gitea base url");
-        };
-        let url = format!(
-            "https://{host}/api/v1/repos/{repo_owner}/{repo}/git/commits/{commit}?stat=false&verification=false&files=false"
-        );
-
-        let request = Request::get(&url)
-            .header("Content-Type", "application/json")
-            .follow_redirects(http_client::RedirectPolicy::FollowAll);
-
-        let mut response = client
-            .send(request.body(AsyncBody::default())?)
-            .await
-            .with_context(|| format!("error fetching Gitea commit details at {:?}", url))?;
-
-        let mut body = Vec::new();
-        response.body_mut().read_to_end(&mut body).await?;
-
-        if response.status().is_client_error() {
-            let text = String::from_utf8_lossy(body.as_slice());
-            bail!(
-                "status error {}, response: {text:?}",
-                response.status().as_u16()
-            );
-        }
-
-        let body_str = std::str::from_utf8(&body)?;
-
-        serde_json::from_str::<CommitDetails>(body_str)
-            .map(|commit| commit.author)
-            .context("failed to deserialize Gitea commit details")
-    }
 }
 
-#[async_trait]
 impl GitHostingProvider for Gitea {
     fn name(&self) -> String {
         self.name.clone()
@@ -112,10 +54,6 @@ impl GitHostingProvider for Gitea {
 
     fn base_url(&self) -> Url {
         self.base_url.clone()
-    }
-
-    fn supports_avatars(&self) -> bool {
-        true
     }
 
     fn format_line_number(&self, line: u32) -> String {
@@ -175,39 +113,5 @@ impl GitHostingProvider for Gitea {
                 .as_deref(),
         );
         permalink
-    }
-
-    async fn commit_author_avatar_url(
-        &self,
-        repo_owner: &str,
-        repo: &str,
-        commit: SharedString,
-        _author_email: Option<SharedString>,
-        http_client: Arc<dyn HttpClient>,
-    ) -> Result<Option<Url>> {
-        let commit = commit.to_string();
-        let avatar_url = self
-            .fetch_gitea_commit_author(repo_owner, repo, &commit, &http_client)
-            .await?
-            .map(|author| -> Result<Url, url::ParseError> {
-                let mut url = Url::parse(&author.avatar_url)?;
-                if let Some(host) = url.host_str() {
-                    let size_query = if host.contains("gravatar") || host.contains("libravatar") {
-                        Some("s=128")
-                    } else if self
-                        .base_url
-                        .host_str()
-                        .is_some_and(|base_host| host.contains(base_host))
-                    {
-                        Some("size=128")
-                    } else {
-                        None
-                    };
-                    url.set_query(size_query);
-                }
-                Ok(url)
-            })
-            .transpose()?;
-        Ok(avatar_url)
     }
 }

@@ -1,23 +1,21 @@
 use crate::commit_view::CommitView;
 use anyhow::Result;
 use editor::hover_markdown_style;
-use futures::Future;
 use git::blame::BlameEntry;
 use git::repository::CommitSummary;
-use git::{GitRemote, commit::ParsedCommitMessage};
+use git::commit::ParsedCommitMessage;
 use git_ui_core::notifications::show_error_toast;
 use gpui::{
-    AbsoluteLength, App, Asset, Element, Entity, MouseButton, ParentElement, Pixels, Render,
+    App, Element, Entity, MouseButton, ParentElement, Render,
     ScrollHandle, StatefulInteractiveElement, Task, WeakEntity, Window, prelude::*,
 };
 use markdown::{Markdown, MarkdownElement};
 use notifications::status_toast::StatusToast;
 use project::git_store::{Repository, UnshallowState};
 use settings::Settings;
-use std::hash::Hash;
 use theme_settings::ThemeSettings;
 use time::{OffsetDateTime, UtcOffset};
-use ui::{Avatar, Chip, CopyButton, Divider, Tooltip, prelude::*, tooltip_container};
+use ui::{Chip, CopyButton, Divider, Tooltip, prelude::*, tooltip_container};
 use workspace::Workspace;
 
 #[derive(Clone, Debug)]
@@ -73,143 +71,6 @@ pub(crate) fn commit_tag_chips(tag_names: &[SharedString]) -> Option<impl IntoEl
                 .child(Divider::vertical()),
         ),
     )
-}
-
-const COMMIT_AVATAR_BORDER_WIDTH: Pixels = px(1.);
-
-pub struct CommitAvatar<'a> {
-    sha: &'a SharedString,
-    author_email: Option<SharedString>,
-    remote: Option<&'a GitRemote>,
-    size: Option<AbsoluteLength>,
-}
-
-impl<'a> CommitAvatar<'a> {
-    pub fn new(
-        sha: &'a SharedString,
-        author_email: Option<SharedString>,
-        remote: Option<&'a GitRemote>,
-    ) -> Self {
-        Self {
-            sha,
-            author_email,
-            remote,
-            size: None,
-        }
-    }
-
-    pub fn from_commit_details(details: &'a CommitDetails) -> Self {
-        Self {
-            sha: &details.sha,
-            author_email: Some(details.author_email.clone()),
-            remote: details
-                .message
-                .as_ref()
-                .and_then(|details| details.remote.as_ref()),
-            size: None,
-        }
-    }
-
-    pub fn size(mut self, size: impl Into<AbsoluteLength>) -> Self {
-        self.size = Some(size.into());
-        self
-    }
-
-    pub fn rendered_size(size: impl Into<AbsoluteLength>, window: &Window) -> Pixels {
-        size.into().to_pixels(window.rem_size()) + COMMIT_AVATAR_BORDER_WIDTH * 2.
-    }
-
-    pub fn render(&'a self, window: &mut Window, cx: &mut App) -> AnyElement {
-        let border_color = cx.theme().colors().border_variant;
-
-        match self.avatar(window, cx) {
-            None => {
-                let container_size = self.size.map(|size| Self::rendered_size(size, window));
-
-                h_flex()
-                    .when_some(container_size, |this, size| this.size(size))
-                    .justify_center()
-                    .rounded_full()
-                    .border(COMMIT_AVATAR_BORDER_WIDTH)
-                    .border_color(border_color)
-                    .bg(cx.theme().colors().element_disabled)
-                    .child(
-                        Icon::new(IconName::Person)
-                            .color(Color::Muted)
-                            .size(IconSize::XSmall),
-                    )
-                    .into_any_element()
-            }
-            Some(avatar) => avatar
-                .when_some(self.size, |this, size| this.size(size))
-                .border_color(border_color)
-                .into_any_element(),
-        }
-    }
-
-    pub fn avatar(&'a self, window: &mut Window, cx: &mut App) -> Option<Avatar> {
-        // Bail early if the email isn't available yet. Without it,
-        // the GitHub provider skips the fast CDN path and falls back
-        // to an unauthenticated per-commit API call that is slow and
-        // rate-limited. Worse, a failed lookup gets permanently
-        // cached under the key (sha, host) — so even when the email
-        // arrives on a later render, the cached None shadows the
-        // fast path forever.
-        self.author_email.as_ref()?;
-
-        let remote = self
-            .remote
-            .filter(|remote| remote.host_supports_avatars())?;
-        let avatar_url =
-            CommitAvatarAsset::new(remote.clone(), self.sha.clone(), self.author_email.clone());
-
-        let url = window.use_asset::<CommitAvatarAsset>(&avatar_url, cx)??;
-        Some(Avatar::new(url.to_string()))
-    }
-}
-
-#[derive(Clone, Debug)]
-struct CommitAvatarAsset {
-    sha: SharedString,
-    author_email: Option<SharedString>,
-    remote: GitRemote,
-}
-
-impl Hash for CommitAvatarAsset {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        self.sha.hash(state);
-        self.remote.host.name().hash(state);
-    }
-}
-
-impl CommitAvatarAsset {
-    fn new(remote: GitRemote, sha: SharedString, author_email: Option<SharedString>) -> Self {
-        Self {
-            remote,
-            sha,
-            author_email,
-        }
-    }
-}
-
-impl Asset for CommitAvatarAsset {
-    type Source = Self;
-    type Output = Option<SharedString>;
-
-    fn load(
-        source: Self::Source,
-        cx: &mut App,
-    ) -> impl Future<Output = Self::Output> + Send + 'static {
-        let client = cx.http_client();
-
-        async move {
-            source
-                .remote
-                .avatar_url(source.sha, source.author_email, client)
-                .await
-                .map(|url| SharedString::from(url.to_string()))
-        }
-    }
 }
 
 pub struct CommitTooltip {
@@ -284,8 +145,6 @@ impl CommitTooltip {
 
 impl Render for CommitTooltip {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let avatar = CommitAvatar::from_commit_details(&self.commit).render(window, cx);
-
         let author = self.commit.author_name.clone();
 
         let author_email = self.commit.author_email.clone();
@@ -372,7 +231,6 @@ impl Render for CommitTooltip {
                                 .gap_2()
                                 .overflow_x_hidden()
                                 .flex_wrap()
-                                .child(avatar)
                                 .child(author)
                                 .when(!author_email.is_empty(), |this| {
                                     this.child(
@@ -497,7 +355,7 @@ pub(crate) fn shallow_boundary_notice(
         return None;
     }
     let in_flight = unshallow_state == UnshallowState::InProgress;
-    let avatar_width = CommitAvatar::rendered_size(rems(1.), window);
+    let icon_width = rems(1.).to_pixels(window.rem_size());
     let can_fetch = workspace
         .read_with(cx, |workspace, cx| {
             !workspace.project().read(cx).is_read_only(cx)
@@ -514,7 +372,7 @@ pub(crate) fn shallow_boundary_notice(
                     .gap_2()
                     .items_start()
                     .child(
-                        h_flex().w(avatar_width).justify_center().child(
+                        h_flex().w(icon_width).justify_center().child(
                             Icon::new(IconName::Warning)
                                 .size(IconSize::Small)
                                 .color(Color::Warning),
@@ -534,7 +392,7 @@ pub(crate) fn shallow_boundary_notice(
                 this.child(
                     h_flex()
                         .gap_2()
-                        .child(div().w(avatar_width))
+                        .child(div().w(icon_width))
                         .child(
                             Button::new(
                                 "fetch-unshallow",

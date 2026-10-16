@@ -13,7 +13,7 @@ use git::{
     parse_git_remote_url,
 };
 use gpui::{
-    AnyElement, App, AppContext as _, AsyncWindowContext, ClipboardItem, Context, Entity,
+    App, AppContext as _, AsyncWindowContext, ClipboardItem, Context, Entity,
     EventEmitter, FocusHandle, Focusable, InteractiveElement, IntoElement, ParentElement,
     PromptLevel, Render, ScrollHandle, StatefulInteractiveElement as _, Styled, Task, WeakEntity,
     Window, actions,
@@ -45,7 +45,6 @@ use workspace::{
     searchable::SearchableItemHandle,
 };
 
-use crate::commit_tooltip::CommitAvatar;
 use crate::git_panel::GitPanel;
 
 actions!(
@@ -637,22 +636,6 @@ impl CommitView {
             )
     }
 
-    fn render_commit_avatar(
-        &self,
-        sha: &SharedString,
-        size: impl Into<gpui::AbsoluteLength>,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> AnyElement {
-        CommitAvatar::new(
-            sha,
-            Some(self.commit.author_email.clone()),
-            self.remote.as_ref(),
-        )
-        .size(size)
-        .render(window, cx)
-    }
-
     fn calculate_changed_lines(&self, cx: &App) -> (u32, u32) {
         self.multibuffer.read(cx).snapshot(cx).total_changed_lines()
     }
@@ -718,8 +701,6 @@ impl CommitView {
             time_format::TimestampFormat::MediumAbsolute,
         );
 
-        let avatar_size = rems_from_px(40_f32);
-        let avatar_size_px = avatar_size.to_pixels(window.rem_size());
         let gutter_width = self.editor.update(cx, |editor, cx| {
             let editor = editor.rhs_editor().clone();
             editor.update(cx, |editor, cx| {
@@ -732,9 +713,6 @@ impl CommitView {
                     .full_width()
             })
         });
-        let avatar_min_side_padding = rems_from_px(6_f32).to_pixels(window.rem_size());
-        let avatar_container_min = avatar_size_px + avatar_min_side_padding;
-        let avatar_container_width = gutter_width.max(avatar_container_min);
 
         let clipboard_has_sha = cx
             .read_from_clipboard()
@@ -771,18 +749,7 @@ impl CommitView {
                     .justify_between()
                     .child(
                         h_flex()
-                            .child(
-                                h_flex()
-                                    .flex_none()
-                                    .w(avatar_container_width)
-                                    .justify_center()
-                                    .child(self.render_commit_avatar(
-                                        &commit.sha,
-                                        avatar_size,
-                                        window,
-                                        cx,
-                                    )),
-                            )
+                            .child(h_flex().flex_none().w(gutter_width))
                             .child(
                                 v_flex()
                                     .child(h_flex().gap_1().child(Label::new(author_name)).when(
@@ -853,12 +820,12 @@ impl CommitView {
                         )
                     }),
             )
-            .children(self.render_commit_message(avatar_container_width, window, cx))
+            .children(self.render_commit_message(gutter_width, window, cx))
     }
 
     fn render_commit_message(
         &self,
-        avatar_spacer: Pixels,
+        gutter_spacer: Pixels,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<impl IntoElement> {
@@ -880,7 +847,7 @@ impl CommitView {
             h_flex()
                 .w_full()
                 .pr_2p5()
-                .child(h_flex().flex_none().w(avatar_spacer))
+                .child(h_flex().flex_none().w(gutter_spacer))
                 .child(
                     div()
                         .relative()

@@ -1,5 +1,5 @@
 use crate::{
-    commit_tooltip::{CommitAvatar, CommitTooltip, commit_tag_chips, shallow_boundary_notice},
+    commit_tooltip::{CommitTooltip, commit_tag_chips, shallow_boundary_notice},
     commit_view::{CommitView, GitBlob, build_buffer, worktree_id_for_repo_path},
 };
 use anyhow::Context as _;
@@ -30,7 +30,6 @@ use workspace::{Workspace, notifications::NotifyTaskExt as _};
 const GIT_BLAME_MAX_AUTHOR_CHARS_DISPLAYED: usize = 20;
 const GIT_BLAME_GUTTER_MARGIN: Rems = rems(0.5);
 const GIT_BLAME_GUTTER_GAP: Rems = rems(0.5);
-const GIT_BLAME_AVATAR_SIZE: Rems = rems(1.);
 
 pub struct GitBlameRenderer;
 
@@ -137,17 +136,9 @@ impl BlameRenderer for GitBlameRenderer {
         GIT_BLAME_MAX_AUTHOR_CHARS_DISPLAYED
     }
 
-    fn blame_entry_non_text_width(&self, window: &Window, cx: &App) -> Pixels {
-        let show_avatar = ProjectSettings::get_global(cx).git.blame.show_avatar;
-        let gap_count = if show_avatar { 3. } else { 2. };
-        let width = GIT_BLAME_GUTTER_MARGIN.to_pixels(window.rem_size())
-            + GIT_BLAME_GUTTER_GAP.to_pixels(window.rem_size()) * gap_count;
-
-        if show_avatar {
-            width + CommitAvatar::rendered_size(GIT_BLAME_AVATAR_SIZE, window)
-        } else {
-            width
-        }
+    fn blame_entry_non_text_width(&self, window: &Window, _cx: &App) -> Pixels {
+        GIT_BLAME_GUTTER_MARGIN.to_pixels(window.rem_size())
+            + GIT_BLAME_GUTTER_GAP.to_pixels(window.rem_size()) * 2.
     }
 
     fn render_blame_entry(
@@ -161,7 +152,7 @@ impl BlameRenderer for GitBlameRenderer {
         editor: Entity<Editor>,
         ix: usize,
         sha_color: Hsla,
-        window: &mut Window,
+        _window: &mut Window,
         cx: &mut App,
     ) -> Option<AnyElement> {
         let relative_timestamp = blame_entry_relative_timestamp(&blame_entry);
@@ -172,28 +163,6 @@ impl BlameRenderer for GitBlameRenderer {
             .read(cx)
             .blame()
             .is_some_and(|blame| blame.read(cx).highlighted_sha() == Some(blame_entry.sha));
-
-        let avatar = if ProjectSettings::get_global(cx).git.blame.show_avatar {
-            let author_email = blame_entry.author_mail.as_ref().map(|email| {
-                SharedString::from(
-                    email
-                        .trim_start_matches('<')
-                        .trim_end_matches('>')
-                        .to_string(),
-                )
-            });
-            Some(
-                CommitAvatar::new(
-                    &blame_entry.sha.to_string().into(),
-                    author_email,
-                    details.as_ref().and_then(|it| it.remote.as_ref()),
-                )
-                .size(GIT_BLAME_AVATAR_SIZE)
-                .render(window, cx),
-            )
-        } else {
-            None
-        };
 
         Some(
             div()
@@ -214,7 +183,6 @@ impl BlameRenderer for GitBlameRenderer {
                             h_flex()
                                 .gap_2()
                                 .child(div().text_color(sha_color).child(short_commit_id))
-                                .children(avatar)
                                 .child(name),
                         )
                         .child(relative_timestamp)
@@ -316,27 +284,13 @@ impl BlameRenderer for GitBlameRenderer {
             .and_then(|t| OffsetDateTime::from_unix_timestamp(t).ok())
             .unwrap_or(OffsetDateTime::now_utc());
 
-        let sha = blame.sha.to_string().into();
+        let sha: SharedString = blame.sha.to_string().into();
         let author: SharedString = blame
             .author
             .clone()
             .unwrap_or("<no name>".to_string())
             .into();
         let author_email = blame.author_mail.as_deref().unwrap_or_default();
-        let author_email_for_avatar = blame.author_mail.as_ref().map(|email| {
-            SharedString::from(
-                email
-                    .trim_start_matches('<')
-                    .trim_end_matches('>')
-                    .to_string(),
-            )
-        });
-        let avatar = CommitAvatar::new(
-            &sha,
-            author_email_for_avatar,
-            details.as_ref().and_then(|it| it.remote.as_ref()),
-        )
-        .render(window, cx);
 
         let short_commit_id = sha
             .get(..git::SHORT_SHA_LENGTH)
@@ -420,7 +374,6 @@ impl BlameRenderer for GitBlameRenderer {
                                     .flex_wrap()
                                     .border_b_1()
                                     .border_color(cx.theme().colors().border_variant)
-                                    .child(avatar)
                                     .child(author)
                                     .when(!author_email.is_empty(), |this| {
                                         this.child(

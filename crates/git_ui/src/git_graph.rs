@@ -4,7 +4,6 @@ use crate::{
         CUSTOM_GIT_COMMANDS_DOCS_SLUG, CommitContextMenuData, CommitContextMenuSource,
         commit_context_menu, git_context_menu_tasks, git_task_context,
     },
-    commit_tooltip::CommitAvatar,
     commit_view::CommitView,
     git_status_icon,
 };
@@ -2009,17 +2008,6 @@ impl GitGraph {
 
         let row_height = Self::row_height(window, cx);
 
-        let remote = repository.as_ref().and_then(|repository| {
-            let remote_url = repository.read(cx).default_remote_url()?;
-            let provider_registry = GitHostingProviderRegistry::default_global(cx);
-            let (provider, parsed) = parse_git_remote_url(provider_registry, &remote_url)?;
-            Some(GitRemote {
-                host: provider,
-                owner: parsed.owner.into(),
-                repo: parsed.repo.into(),
-            })
-        });
-
         // We fetch data outside the visible viewport to avoid loading entries when
         // users scroll through the git graph
         if let Some(repository) = repository.as_ref() {
@@ -2055,18 +2043,14 @@ impl GitGraph {
                 let mut formatted_time = String::new();
                 let subject: SharedString;
                 let author_name: Option<SharedString>;
-                let author_email: Option<SharedString>;
 
                 if let CommitDataState::Loaded(ref data) = data {
                     subject = data.subject.clone();
                     author_name = (!data.author_name.is_empty()).then(|| data.author_name.clone());
-                    author_email =
-                        (!data.author_email.is_empty()).then(|| data.author_email.clone());
                     formatted_time = format_timestamp(data.commit_timestamp);
                 } else {
                     subject = "Loading…".into();
                     author_name = None;
-                    author_email = None;
                 }
 
                 let is_selected = self.selected_entry_idx == Some(idx);
@@ -2123,23 +2107,15 @@ impl GitGraph {
                         .child(h_flex().gap_2().overflow_hidden().child(subject_label))
                         .into_any_element(),
                     column_label(formatted_time.into()),
-                    {
-                        let avatar_sha: SharedString = commit.data.sha.to_string().into();
-                        let avatar = CommitAvatar::new(&avatar_sha, author_email, remote.as_ref())
-                            .size(px(16.))
-                            .render(window, cx);
-                        h_flex()
-                            .id(ElementId::NamedInteger("commit-author".into(), idx as u64))
-                            .h(row_height)
-                            .items_center()
-                            .gap_1p5()
-                            .overflow_hidden()
-                            .child(avatar)
-                            .when_some(author_name, |this, author_name| {
-                                this.child(column_label(author_name))
-                            })
-                            .into_any_element()
-                    },
+                    h_flex()
+                        .id(ElementId::NamedInteger("commit-author".into(), idx as u64))
+                        .h(row_height)
+                        .items_center()
+                        .overflow_hidden()
+                        .when_some(author_name, |this, author_name| {
+                            this.child(column_label(author_name))
+                        })
+                        .into_any_element(),
                     column_label(short_sha.into()),
                 ]
             })
@@ -3069,18 +3045,6 @@ impl GitGraph {
             })
         });
 
-        let avatar = {
-            let author_email_for_avatar = if author_email.is_empty() {
-                None
-            } else {
-                Some(author_email.clone())
-            };
-
-            CommitAvatar::new(&full_sha, author_email_for_avatar, remote.as_ref())
-                .size(px(32.))
-                .render(window, cx)
-        };
-
         let changed_files_count = self
             .selected_commit_diff
             .as_ref()
@@ -3208,8 +3172,7 @@ impl GitGraph {
                                 .py_1()
                                 .w_full()
                                 .items_center()
-                                .child(avatar)
-                                .child(Label::new(author_name).mt_1p5())
+                                .child(Label::new(author_name))
                                 .child(
                                     Label::new(date_string)
                                         .color(Color::Muted)
@@ -3433,7 +3396,7 @@ impl GitGraph {
                                 } else {
                                     flat_entries.len()
                                 };
-                                let commit_sha = full_sha.clone();
+                                let commit_sha = full_sha;
                                 let repository = repository.downgrade();
                                 let workspace = self.workspace.clone();
                                 let git_graph = cx.weak_entity();

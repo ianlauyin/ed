@@ -1,14 +1,9 @@
 use std::sync::LazyLock;
-use std::{str::FromStr, sync::Arc};
+use std::str::FromStr;
 
-use anyhow::{Context as _, Result, bail};
-use async_trait::async_trait;
-use futures::AsyncReadExt;
-use gpui::SharedString;
-use http_client::{AsyncBody, HttpClient, HttpRequestExt, Request};
+use anyhow::{Result, bail};
 use itertools::Itertools as _;
 use regex::Regex;
-use serde::Deserialize;
 use url::Url;
 
 use git::{
@@ -25,42 +20,6 @@ fn pull_request_regex() -> &'static Regex {
         Regex::new(r"\(pull request #(\d+)\)").unwrap()
     });
     &PULL_REQUEST_REGEX
-}
-
-#[derive(Debug, Deserialize)]
-struct CommitDetails {
-    author: Author,
-}
-
-#[derive(Debug, Deserialize)]
-struct Author {
-    user: Account,
-}
-
-#[derive(Debug, Deserialize)]
-struct Account {
-    links: AccountLinks,
-}
-
-#[derive(Debug, Deserialize)]
-struct AccountLinks {
-    avatar: Option<Link>,
-}
-
-#[derive(Debug, Deserialize)]
-struct Link {
-    href: String,
-}
-
-#[derive(Debug, Deserialize)]
-struct CommitDetailsSelfHosted {
-    author: AuthorSelfHosted,
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "camelCase")]
-struct AuthorSelfHosted {
-    avatar_url: Option<String>,
 }
 
 pub struct Bitbucket {
@@ -104,60 +63,8 @@ impl Bitbucket {
             .host_str()
             .is_some_and(|host| host != "bitbucket.org")
     }
-
-    async fn fetch_bitbucket_commit_author(
-        &self,
-        repo_owner: &str,
-        repo: &str,
-        commit: &str,
-        client: &Arc<dyn HttpClient>,
-    ) -> Result<Option<String>> {
-        let Some(host) = self.base_url.host_str() else {
-            bail!("failed to get host from bitbucket base url");
-        };
-        let is_self_hosted = self.is_self_hosted();
-        let url = if is_self_hosted {
-            format!(
-                "https://{host}/rest/api/latest/projects/{repo_owner}/repos/{repo}/commits/{commit}?avatarSize=128"
-            )
-        } else {
-            format!("https://api.{host}/2.0/repositories/{repo_owner}/{repo}/commit/{commit}")
-        };
-
-        let request = Request::get(&url)
-            .header("Content-Type", "application/json")
-            .follow_redirects(http_client::RedirectPolicy::FollowAll);
-
-        let mut response = client
-            .send(request.body(AsyncBody::default())?)
-            .await
-            .with_context(|| format!("error fetching BitBucket commit details at {:?}", url))?;
-
-        let mut body = Vec::new();
-        response.body_mut().read_to_end(&mut body).await?;
-
-        if response.status().is_client_error() {
-            let text = String::from_utf8_lossy(body.as_slice());
-            bail!(
-                "status error {}, response: {text:?}",
-                response.status().as_u16()
-            );
-        }
-
-        let body_str = std::str::from_utf8(&body)?;
-
-        if is_self_hosted {
-            serde_json::from_str::<CommitDetailsSelfHosted>(body_str)
-                .map(|commit| commit.author.avatar_url)
-        } else {
-            serde_json::from_str::<CommitDetails>(body_str)
-                .map(|commit| commit.author.user.links.avatar.map(|link| link.href))
-        }
-        .context("failed to deserialize BitBucket commit details")
-    }
 }
 
-#[async_trait]
 impl GitHostingProvider for Bitbucket {
     fn name(&self) -> String {
         self.name.clone()
@@ -165,10 +72,6 @@ impl GitHostingProvider for Bitbucket {
 
     fn base_url(&self) -> Url {
         self.base_url.clone()
-    }
-
-    fn supports_avatars(&self) -> bool {
-        true
     }
 
     fn format_line_number(&self, line: u32) -> String {
@@ -304,22 +207,5 @@ impl GitHostingProvider for Bitbucket {
         url.set_path(&path);
 
         Some(PullRequest { number, url })
-    }
-
-    async fn commit_author_avatar_url(
-        &self,
-        repo_owner: &str,
-        repo: &str,
-        commit: SharedString,
-        _author_email: Option<SharedString>,
-        http_client: Arc<dyn HttpClient>,
-    ) -> Result<Option<Url>> {
-        let commit = commit.to_string();
-        let avatar_url = self
-            .fetch_bitbucket_commit_author(repo_owner, repo, &commit, &http_client)
-            .await?
-            .map(|avatar_url| Url::parse(&avatar_url))
-            .transpose()?;
-        Ok(avatar_url)
     }
 }
