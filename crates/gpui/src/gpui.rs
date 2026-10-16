@@ -114,11 +114,9 @@ pub(crate) use tab_stop::*;
 use taffy::TaffyLayoutEngine;
 pub use taffy::{AvailableSpace, LayoutId};
 pub use text_system::*;
-pub use util::{FutureExt, Timeout};
+pub use util::{FutureExt, Timeout, block_on};
 pub use view::*;
 pub use window::*;
-
-pub use pollster::block_on;
 
 /// The context trait, allows the different contexts in GPUI to be used
 /// interchangeably for certain operations.

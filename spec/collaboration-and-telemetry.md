@@ -52,4 +52,6 @@ same directory.
 The ztracing instrumentation and Tracy integration are removed. The GPUI
 `profiler` feature is removed too: no task/frame timing collection, performance
 profiler panel or `instrumentation.performance_profiler` setting, FPS/frame debug
-overlay, input-latency histogram, hang monitor, or remote profiling RPC. Diagnostic logs remain available.
+overlay, input-latency histogram, hang monitor, or remote profiling RPC. GPUI has no
+`profiling` crate instrumentation (no puffin/optick/superluminal/tracy hooks).
+Diagnostic logs remain available.

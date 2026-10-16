@@ -7,6 +7,23 @@ use std::{
     time::Duration,
 };
 
+/// Blocks the current thread until the given future completes.
+pub fn block_on<T>(future: impl Future<Output = T>) -> T {
+    let parker = parking::Parker::new();
+    let unparker = parker.unparker();
+    let waker = waker_fn::waker_fn(move || {
+        unparker.unpark();
+    });
+    let mut cx = task::Context::from_waker(&waker);
+    let mut future = std::pin::pin!(future);
+    loop {
+        if let task::Poll::Ready(output) = future.as_mut().poll(&mut cx) {
+            return output;
+        }
+        parker.park();
+    }
+}
+
 /// A helper trait for building complex objects with imperative conditionals in a fluent style.
 pub trait FluentBuilder {
     /// Imperatively modify self with the given closure.

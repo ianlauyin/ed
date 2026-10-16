@@ -25,7 +25,6 @@ paths.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-serde_json_lenient.workspace = true
 settings_content.workspace = true
 settings_json = { workspace = true, features = ["editing"] }
 settings_macros.workspace = true

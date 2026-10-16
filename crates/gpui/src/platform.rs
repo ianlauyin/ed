@@ -1300,7 +1300,6 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
         match self.tiles_by_key.entry(key) {
             Entry::Occupied(entry) => Ok(Some(*entry.get())),
             Entry::Vacant(entry) => {
-                profiling::scope!("new tile");
                 let Some((size, bytes)) = build()? else {
                     return Ok(None);
                 };

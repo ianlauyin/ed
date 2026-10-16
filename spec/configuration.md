@@ -23,9 +23,10 @@ modal editing.
   Default.
 - Journaling is removed: no journal entry command or `journal` settings section.
 - Onboarding is removed: no first-launch onboarding page, `zed::OpenOnboarding`,
-  base keymap picker, VS Code/Cursor settings import actions, or multibuffer hint
-  toolbar. The first launch opens an empty editor like any other launch. The
-  welcome page (`zed::ShowWelcome`) remains, without a "Return to Onboarding" button.
+  base keymap picker, or multibuffer hint toolbar. There is no VS Code/Cursor
+  settings importer (actions or the underlying translation code). The first
+  launch opens an empty editor like any other launch. The welcome page
+  (`zed::ShowWelcome`) remains, without a "Return to Onboarding" button.
 - Bookmarks are removed: no bookmark actions, labels, navigation, project view,
   gutter controls, or `gutter.bookmarks` setting. Existing saved bookmarks are
   discarded when the workspace database is upgraded.

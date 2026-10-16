@@ -234,8 +234,6 @@ fn parse_window_title_format(template: &str) -> Vec<WindowTitleTemplatePart<'_>>
     let mut parts = Vec::new();
     let mut start = 0;
 
-    // Keep this placeholder scan in sync with the importer in
-    // settings/src/vscode_import.rs.
     while let Some(offset) = template[start..].find("${") {
         let variable_start = start + offset;
         if variable_start > start {

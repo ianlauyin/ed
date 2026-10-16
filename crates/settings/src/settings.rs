@@ -6,7 +6,6 @@ mod granted_write_path;
 mod keymap_file;
 mod settings_file;
 mod settings_store;
-mod vscode_import;
 
 pub use settings_macros::RegisterSetting;
 
@@ -50,7 +49,6 @@ pub use settings_store::{
     SettingsKey, SettingsLocation, SettingsParseResult, SettingsStore,
 };
 
-pub use vscode_import::{VsCodeSettings, VsCodeSettingsSource};
 
 pub use keymap_file::ActionSequence;
 

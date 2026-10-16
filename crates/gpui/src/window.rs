@@ -3188,7 +3188,6 @@ impl Window {
 
     /// Produces a new frame and assigns it to `rendered_frame`. To actually show
     /// the contents of the new [`Scene`], use [`Self::present`].
-    #[profiling::function]
     pub fn draw(&mut self, cx: &mut App) -> ArenaClearNeeded {
         // Set up the per-App arena for element allocation during this draw.
         // This ensures that multiple test Apps have isolated arenas.
@@ -3342,11 +3341,9 @@ impl Window {
         self.invalidator.replace_views(views);
     }
 
-    #[profiling::function]
     fn present(&mut self) {
         self.platform_window.draw(&self.rendered_frame.scene);
         self.needs_present.set(false);
-        profiling::finish_frame!();
     }
 
     fn draw_roots(&mut self, cx: &mut App) {
@@ -5183,7 +5180,6 @@ impl Window {
     }
 
     /// Dispatch a mouse, keyboard, or touch event on the window.
-    #[profiling::function]
     pub fn dispatch_event(&mut self, event: PlatformInput, cx: &mut App) -> DispatchEventResult {
         let update_count_before = self.invalidator.update_count();
         // Track input modality for focus-visible styling and hover suppression.
