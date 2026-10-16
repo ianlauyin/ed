@@ -31,22 +31,13 @@ pub struct VtslsLspAdapter {
 
 impl VtslsLspAdapter {
     const TYPESCRIPT_TSDK_PATH: &'static str = "node_modules/typescript/lib";
-    const TYPESCRIPT_YARN_TSDK_PATH: &'static str = ".yarn/sdks/typescript/lib";
 
     pub fn new(fs: Arc<dyn Fs>) -> Self {
         VtslsLspAdapter { fs }
     }
 
     async fn tsdk_path(&self, adapter: &Arc<dyn LspAdapterDelegate>) -> Option<&'static str> {
-        let yarn_sdk = adapter
-            .worktree_root_path()
-            .join(Self::TYPESCRIPT_YARN_TSDK_PATH);
-
-        let tsdk_path = if self.fs.is_dir(&yarn_sdk).await {
-            Self::TYPESCRIPT_YARN_TSDK_PATH
-        } else {
-            Self::TYPESCRIPT_TSDK_PATH
-        };
+        let tsdk_path = Self::TYPESCRIPT_TSDK_PATH;
 
         // vtsls doesn't support TypeScript 7+, which no longer ships `tsserver.js`.
         if self

@@ -28,7 +28,6 @@ use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
 #[cfg(target_os = "macos")]
 use std::mem::MaybeUninit;
 
-use async_tar::Archive;
 use futures::{AsyncRead, Stream, StreamExt, future::BoxFuture};
 use git::repository::{GitRepository, RealGitRepository};
 
@@ -83,11 +82,6 @@ pub trait Fs: Send + Sync {
         &self,
         path: &Path,
         content: Pin<&mut (dyn AsyncRead + Send)>,
-    ) -> Result<()>;
-    async fn extract_tar_file(
-        &self,
-        path: &Path,
-        content: Archive<Pin<&mut (dyn AsyncRead + Send)>>,
     ) -> Result<()>;
     async fn copy_file(&self, source: &Path, target: &Path, options: CopyOptions) -> Result<()>;
     async fn rename(&self, source: &Path, target: &Path, options: RenameOptions) -> Result<()>;
@@ -612,15 +606,6 @@ impl Fs for RealFs {
             .await
             .with_context(|| format!("Failed to create file at {:?}", path))?;
         futures::io::copy(content, &mut file).await?;
-        Ok(())
-    }
-
-    async fn extract_tar_file(
-        &self,
-        path: &Path,
-        content: Archive<Pin<&mut (dyn AsyncRead + Send)>>,
-    ) -> Result<()> {
-        content.unpack(path).await?;
         Ok(())
     }
 

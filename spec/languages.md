@@ -27,3 +27,7 @@
 - `lsp.<server>.fetch` and `lsp.<server>.binary.ignore_system_version` are removed;
   `binary.arguments` and `binary.env` still apply to whichever binary is used.
 - Server binary statuses no longer include checking-for-update or downloading.
+- Yarn Plug'n'Play is not supported. LSP locations inside `.zip` archives or Yarn
+  `__virtual__` paths are not resolved, and the TypeScript servers only use
+  `node_modules/typescript/lib` as the TypeScript SDK (never `.yarn/sdks`).
+  Yarn remains usable as a package manager / task runner (`yarn.lock` detection).

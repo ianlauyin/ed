@@ -53,7 +53,6 @@ use crate::{
     toolchain_store::{LocalToolchainStore, ToolchainStoreEvent},
     trusted_worktrees::{PathTrust, TrustedWorktrees, TrustedWorktreesEvent},
     worktree_store::{WorktreeStore, WorktreeStoreEvent},
-    yarn::YarnPathStore,
 };
 use anyhow::{Context as _, Result, anyhow};
 use async_trait::async_trait;
@@ -308,7 +307,6 @@ pub struct LocalLspStore {
     fs: Arc<dyn Fs>,
     languages: Arc<LanguageRegistry>,
     language_server_ids: HashMap<LanguageServerSeed, UnifiedLanguageServer>,
-    yarn: Entity<YarnPathStore>,
     pub language_servers: HashMap<LanguageServerId, LanguageServerState>,
     buffers_being_formatted: HashSet<BufferId>,
     last_workspace_edits_by_language_server: HashMap<LanguageServerId, ProjectTransaction>,
@@ -4785,7 +4783,6 @@ impl LspStore {
         fs: Arc<dyn Fs>,
         cx: &mut Context<Self>,
     ) -> Self {
-        let yarn = YarnPathStore::new(fs.clone(), cx);
         cx.subscribe(&buffer_store, Self::on_buffer_store_event)
             .detach();
         cx.subscribe(&worktree_store, Self::on_worktree_store_event)
@@ -4825,7 +4822,6 @@ impl LspStore {
                 prettier_store,
                 environment,
                 fs,
-                yarn,
                 next_diagnostic_group_id: Default::default(),
                 diagnostics: Default::default(),
                 _subscription: cx.on_app_quit(|this, _| {
@@ -10234,51 +10230,19 @@ impl LspStore {
     ) -> Task<Result<Entity<Buffer>>> {
         let path_style = self.worktree_store.read(cx).path_style();
         cx.spawn(async move |lsp_store, cx| {
-            // Escape percent-encoded string.
-            let current_scheme = abs_path.scheme().to_owned();
-            // Uri is immutable, so we can't modify the scheme
-
             let abs_path = abs_path
                 .to_file_path_ext(path_style)
                 .map_err(|()| anyhow!("can't convert URI to path"))?;
-            let p = abs_path.clone();
-            let yarn_worktree = lsp_store
-                .update(cx, move |lsp_store, cx| match lsp_store.as_local() {
-                    Some(local_lsp_store) => local_lsp_store.yarn.update(cx, |_, cx| {
-                        cx.spawn(async move |this, cx| {
-                            let t = this
-                                .update(cx, |this, cx| this.process_path(&p, &current_scheme, cx))
-                                .ok()?;
-                            t.await
-                        })
-                    }),
-                    None => Task::ready(None),
-                })?
-                .await;
-            let (worktree_root_target, known_relative_path) =
-                if let Some((zip_root, relative_path)) = yarn_worktree {
-                    (zip_root, Some(relative_path))
-                } else {
-                    (Arc::<Path>::from(abs_path.as_path()), None)
-                };
-            let worktree = if known_relative_path.is_some() {
-                lsp_store.read_with(cx, |lsp_store, cx| {
-                    lsp_store
-                        .worktree_store
-                        .read(cx)
-                        .find_worktree(&worktree_root_target, cx)
-                })?
-            } else {
-                find_worktree_for_lsp_path(&lsp_store, &abs_path, cx).await?
-            };
-            let (worktree, relative_path, source_ws) = if let Some(result) = worktree {
-                let relative_path = known_relative_path.unwrap_or_else(|| result.1.clone());
-                (result.0, relative_path, None)
+            let worktree = find_worktree_for_lsp_path(&lsp_store, &abs_path, cx).await?;
+            let (worktree, relative_path, source_ws) = if let Some((worktree, relative_path)) =
+                worktree
+            {
+                (worktree, relative_path, None)
             } else {
                 let worktree = lsp_store
                     .update(cx, |lsp_store, cx| {
                         lsp_store.worktree_store.update(cx, |worktree_store, cx| {
-                            worktree_store.create_worktree(&worktree_root_target, false, cx)
+                            worktree_store.create_worktree(&abs_path, false, cx)
                         })
                     })?
                     .await?;
@@ -10304,12 +10268,9 @@ impl LspStore {
                 } else {
                     None
                 };
-                let relative_path = if let Some(known_path) = known_relative_path {
-                    known_path
-                } else {
+                let relative_path =
                     RelPath::new(abs_path.strip_prefix(worktree_root)?, PathStyle::local())?
-                        .into_arc()
-                };
+                        .into_arc();
                 (worktree, relative_path, source_ws)
             };
             let project_path = ProjectPath {

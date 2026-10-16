@@ -608,18 +608,7 @@ impl TypeScriptLspAdapter {
     }
 
     async fn tsdk_path(&self, adapter: &Arc<dyn LspAdapterDelegate>) -> Option<&'static str> {
-        let is_yarn = adapter
-            .read_text_file(
-                RelPath::from_unix_str(".yarn/sdks/typescript/lib/typescript.js").unwrap(),
-            )
-            .await
-            .is_ok();
-
-        let tsdk_path = if is_yarn {
-            ".yarn/sdks/typescript/lib"
-        } else {
-            "node_modules/typescript/lib"
-        };
+        let tsdk_path = "node_modules/typescript/lib";
 
         // typescript-language-server doesn't support TypeScript 7+, which no longer
         // ships `tsserver.js`.

@@ -22,7 +22,6 @@ use buffer_diff::BufferDiff;
 pub use environment::ProjectEnvironmentEvent;
 use git_store::{Repository, RepositoryId};
 pub mod search_history;
-pub mod yarn;
 
 use itertools::Itertools;
 

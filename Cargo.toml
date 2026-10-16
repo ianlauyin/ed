@@ -277,17 +277,13 @@ any_vec = "0.14"
 anyhow = "1.0.86"
 arc-swap = "1.9.0"
 async-channel = { version = "2.5", default-features = false }
-async-compression = { version = "0.4", features = ["bzip2", "gzip", "futures-io"] }
 async-fs = "2.1"
 async-lock = { version = "3.4", default-features = false }
-# `unstable` is required to compile async-tar's Windows symlink support.
 async-process = "2.5.0"
 async-recursion = "1.0.0"
-async-tar = { git = "https://github.com/zed-industries/async-tar", rev = "bd3ad6f89df9a9da7a8535958756d6bf465936a0" }
 async-task = "4.7"
 async-trait = "0.1"
 async-tungstenite = "0.33"
-async_zip = { version = "0.0.18", features = ["deflate", "deflate64"] }
 base64 = "0.22"
 betlang = "0.1.1"
 bitflags = "2.6.0"
