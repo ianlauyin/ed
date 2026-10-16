@@ -36,7 +36,6 @@ use language_onboarding::BasedPyrightBanner;
 use language_tools::lsp_button::{self, LspButton};
 use language_tools::lsp_log_view::LspLogToolbarItemView;
 use markdown::{Markdown, MarkdownElement, MarkdownFont, MarkdownStyle};
-use onboarding::multibuffer_hint::MultibufferHint;
 pub use open_listener::*;
 use outline_panel::OutlinePanel;
 use paths::{local_settings_file_relative_path, local_tasks_file_relative_path};
@@ -346,37 +345,10 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
     init_reduce_motion(cx);
     init_global_config_error_notifications(cx);
 
-    cx.observe_new(|_multi_workspace: &mut MultiWorkspace, window, cx| {
+    cx.observe_new(|_: &mut MultiWorkspace, window, cx| {
         let Some(window) = window else {
             return;
         };
-
-        #[cfg(feature = "track-project-leak")]
-        {
-            let multi_workspace_handle = cx.weak_entity();
-            let workspace_handle = _multi_workspace.workspace().downgrade();
-            let project_handle = _multi_workspace.workspace().read(cx).project().downgrade();
-            let window_id_2 = window.window_handle().window_id();
-            cx.on_window_closed(move |cx, window_id| {
-                let multi_workspace_handle = multi_workspace_handle.clone();
-                let workspace_handle = workspace_handle.clone();
-                let project_handle = project_handle.clone();
-                if window_id != window_id_2 {
-                    return;
-                }
-                cx.spawn(async move |cx| {
-                    cx.background_executor()
-                        .timer(std::time::Duration::from_millis(1500))
-                        .await;
-
-                    multi_workspace_handle.assert_released();
-                    workspace_handle.assert_released();
-                    project_handle.assert_released();
-                })
-                .detach();
-            })
-            .detach();
-        }
 
         let multi_workspace_handle = cx.entity().downgrade();
         window.on_window_should_close(cx, move |window, cx| {
@@ -417,7 +389,6 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
 
         if let Some(specs) = window.gpu_specs() {
             log::info!("Using GPU: {:?}", specs);
-            show_software_emulation_warning_if_needed(specs.clone(), window, cx);
             if let Some(crash_client) = cx.try_global::<CrashHandler>() {
                 crashes::set_gpu_info(&crash_client.0, specs);
             }
@@ -480,50 +451,6 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
     .detach();
 }
 
-fn show_software_emulation_warning_if_needed(
-    specs: gpui::GpuSpecs,
-    window: &mut Window,
-    cx: &mut Context<Workspace>,
-) {
-    if specs.is_software_emulated && std::env::var("ZED_ALLOW_EMULATED_GPU").is_err() {
-        let (graphics_api, docs_url, open_url) = {
-            (
-                "Vulkan",
-                "https://zed.dev/docs/linux",
-                "https://zed.dev/docs/linux#zed-fails-to-open-windows",
-            )
-        };
-        let message = format!(
-            db::indoc! {r#"
-            Zed uses {} for rendering and requires a compatible GPU.
-
-            Currently you are using a software emulated GPU ({}) which
-            will result in awful performance.
-
-            For troubleshooting see: {}
-            Set ZED_ALLOW_EMULATED_GPU=1 env var to permanently override.
-            "#},
-            graphics_api, specs.device_name, docs_url
-        );
-        let prompt = window.prompt(
-            PromptLevel::Critical,
-            "Unsupported GPU",
-            Some(&message),
-            &["Skip", "Troubleshoot and Quit"],
-            cx,
-        );
-        cx.spawn(async move |_, cx| {
-            if prompt.await == Ok(1) {
-                cx.update(|cx| {
-                    cx.open_url(open_url);
-                    cx.quit();
-                });
-            }
-        })
-        .detach()
-    }
-}
-
 fn initialize_panels(window: &mut Window, cx: &mut Context<Workspace>) -> Task<anyhow::Result<()>> {
     cx.spawn_in(window, async move |workspace_handle, cx| {
         let project_panel = ProjectPanel::load(workspace_handle.clone(), cx.clone());
@@ -571,38 +498,6 @@ fn register_actions(
         .register_action(|_, _: &OpenDocs, _, cx| cx.open_url(DOCS_URL))
         .register_action(|_, _: &OpenStatusPage, _, cx| cx.open_url(STATUS_URL))
         .register_action(|_, _: &GetMerch, _, cx| cx.open_url(MERCH_URL))
-        .register_action(
-            |workspace: &mut Workspace,
-             _: &input_latency_ui::DumpInputLatencyHistogram,
-             window: &mut Window,
-             cx: &mut Context<Workspace>| {
-                let project = workspace.project().clone();
-                let report_data = input_latency_ui::snapshot_input_latency_report(
-                    window,
-                    cx,
-                );
-                cx.spawn_in(window, async move |workspace, cx| {
-                    let report = cx
-                        .background_spawn(async move {
-                            input_latency_ui::format_input_latency_report(&report_data)
-                        })
-                        .await;
-                    let buffer = project
-                        .update(cx, |project, cx| project.create_buffer(None, true, cx))
-                        .await?;
-                    buffer.update(cx, |buffer, cx| {
-                        buffer.set_text(report, cx);
-                    });
-                    workspace.update_in(cx, |workspace, window, cx| {
-                        let editor = cx
-                            .new(|cx| Editor::for_buffer(buffer, Some(project), window, cx));
-                        workspace
-                            .add_item_to_active_pane(Box::new(editor), None, true, window, cx);
-                    })
-                })
-                .detach_and_log_err(cx);
-            },
-        )
         .register_action(
             |workspace: &mut Workspace,
              _: &DumpAccessibilityTree,
@@ -675,14 +570,6 @@ fn register_actions(
                 window.toggle_fullscreen();
             }
         })
-        .register_action(|_, _: &zed_actions::dev::ToggleFpsOverlay, window, _| {
-            window.cycle_debug_frame_overlay_mode();
-        })
-        .register_action(
-            |_, _: &zed_actions::dev::ResetFrameOverlayStats, window, _| {
-                window.reset_debug_frame_overlay_stats();
-            },
-        )
         .register_action(|_, action: &OpenZedUrl, _, cx| {
             OpenListener::global(cx).open(RawOpenRequest {
                 urls: vec![String::from(&*action.url)],
@@ -1059,8 +946,6 @@ fn initialize_pane(
 ) {
     pane.update(cx, |pane, cx| {
         pane.toolbar().update(cx, |toolbar, cx| {
-            let multibuffer_hint = cx.new(|_| MultibufferHint::new());
-            toolbar.add_item(multibuffer_hint, window, cx);
             let solo_diff_style_toolbar = cx.new(SoloDiffStyleToolbar::new);
             toolbar.add_item(solo_diff_style_toolbar, window, cx);
             let file_diff_style_toolbar = cx.new(FileDiffStyleToolbar::new);

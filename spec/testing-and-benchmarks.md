@@ -18,8 +18,10 @@ building (`cargo check` / `cargo clippy`) and running the app.
 - The `perf` tooling, `util_macros`, and the dylint UI test fixtures are removed.
 - GPUI and component-preview examples and their development-only dependencies
   are removed. GPUI keeps the development dependency needed by its documentation examples.
-- GPUI leak detection (`GPUI_LEAK_DETECTION` / `leak-detection` feature) stays as
-  a runtime debugging aid.
+- GPUI entity leak detection is removed: no `leak-detection` feature,
+  `GPUI_LEAK_DETECTION`/`LEAK_BACKTRACE` handling, handle tracking, or
+  `assert_released`/leak-snapshot APIs, and no `track-project-leak` feature in zed.
+- The component preview page and its `workspace::OpenComponentPreview` action are removed.
 - The GPUI element inspector is removed from all builds, including its UI,
   command, keybinding, style schema, reflection macro, and Cargo features.
   Rendering carries no inspector state or IDs. Debug source locations remain

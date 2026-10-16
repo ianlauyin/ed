@@ -402,8 +402,6 @@ actions!(
         OpenFiles,
         /// Opens the current location in terminal.
         OpenInTerminal,
-        /// Opens the component preview.
-        OpenComponentPreview,
         /// Reloads the active item.
         ReloadActiveItem,
         /// Reopens the most recently dismissed picker in the current window.
@@ -946,6 +944,7 @@ pub fn init(app_state: Arc<AppState>, cx: &mut App) {
     component::init();
     theme_preview::init(cx);
     toast_layer::init(cx);
+    welcome::init(cx);
     history_manager::init(app_state.fs.clone(), cx);
 
     cx.on_app_quit(flush_windows_serialization_on_quit).detach();

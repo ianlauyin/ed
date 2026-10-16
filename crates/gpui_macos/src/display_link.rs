@@ -55,14 +55,11 @@ use core_graphics::display::CGDirectDisplayID;
 use dispatch2::{
     _dispatch_source_type_data_add, DispatchObject, DispatchQueue, DispatchRetained, DispatchSource,
 };
-use gpui::{FrameRequestSource, PlatformFrameSignal};
 use gpui_util::ResultExt;
-use scheduler::Instant;
 use std::{
     collections::{BTreeMap, btree_map},
     ffi::c_void,
-    sync::{Arc, Mutex, MutexGuard, PoisonError},
-    time::Duration,
+    sync::{Mutex, MutexGuard, PoisonError},
 };
 
 static REGISTRY: Mutex<Registry> = Mutex::new(Registry::new());
@@ -90,7 +87,6 @@ struct DisplayEntry {
 struct DisplayLinkSubscriber {
     id: SubscriberId,
     frame_requests: DispatchRetained<DispatchSource>,
-    signal: Arc<PlatformFrameSignal>,
 }
 
 // SAFETY: Both fields wrapping raw pointers are refcounted handles to
@@ -126,71 +122,25 @@ fn debug_assert_main_thread() {
 
 unsafe extern "C" fn display_link_output_callback(
     _display_link_out: *mut sys::CVDisplayLink,
-    current_time: *const sys::CVTimeStamp,
+    _current_time: *const sys::CVTimeStamp,
     _output_time: *const sys::CVTimeStamp,
     _flags_in: i64,
     _flags_out: *mut i64,
     display_id: *mut c_void,
 ) -> i32 {
-    let signal_at = PlatformFrameSignal::capture(|| {
-        // Instant cannot be constructed from Mach ticks, so sample both clock domains.
-        let current_host_time = objc2_core_video::CVGetCurrentHostTime();
-        let received_at = Instant::now();
-        let host_clock_frequency = objc2_core_video::CVGetHostClockFrequency();
-        // SAFETY: CoreVideo owns this timestamp for the lifetime of the callback.
-        let current_time = unsafe { current_time.as_ref() };
-        frame_request_instant(
-            current_time,
-            current_host_time,
-            host_clock_frequency,
-            received_at,
-        )
-    });
     let display_id = display_id as usize as CGDirectDisplayID;
     let registry = lock_registry();
     if let Some(entry) = registry.displays.get(&display_id) {
         for subscriber in &entry.subscribers {
-            if let Some(signal_at) = signal_at {
-                subscriber
-                    .signal
-                    .record(signal_at, FrameRequestSource::NativeCallback);
-            }
             subscriber.frame_requests.merge_data(1);
         }
     }
     0
 }
 
-/// Maps a CoreVideo host timestamp using a paired clock sample.
-///
-/// Invalid timestamps or clock conversions fall back to callback receipt time.
-fn frame_request_instant(
-    timestamp: Option<&sys::CVTimeStamp>,
-    current_host_time: u64,
-    host_clock_frequency: f64,
-    received_at: Instant,
-) -> Instant {
-    let Some(timestamp) = timestamp.filter(|timestamp| {
-        timestamp.version == 0 && timestamp.flags & sys::kCVTimeStampHostTimeValid != 0
-    }) else {
-        return received_at;
-    };
-    if !host_clock_frequency.is_finite() || host_clock_frequency <= 0.0 {
-        return received_at;
-    }
-    current_host_time
-        .checked_sub(timestamp.host_time)
-        .and_then(|elapsed_ticks| {
-            Duration::try_from_secs_f64(elapsed_ticks as f64 / host_clock_frequency).ok()
-        })
-        .and_then(|elapsed| received_at.checked_sub(elapsed))
-        .unwrap_or(received_at)
-}
-
 fn subscribe(
     display_id: CGDirectDisplayID,
     frame_requests: DispatchRetained<DispatchSource>,
-    signal: Arc<PlatformFrameSignal>,
 ) -> Result<SubscriberId> {
     debug_assert_main_thread();
 
@@ -232,7 +182,6 @@ fn subscribe(
         entry.subscribers.push(DisplayLinkSubscriber {
             id: subscriber_id,
             frame_requests,
-            signal,
         });
         let link_to_start = if entry.running {
             None
@@ -250,14 +199,9 @@ fn subscribe(
             let mut registry = lock_registry();
             if let Some(entry) = registry.displays.get_mut(&display_id) {
                 entry.running = false;
-                entry.subscribers.retain(|subscriber| {
-                    if subscriber.id == subscriber_id {
-                        subscriber.signal.take();
-                        false
-                    } else {
-                        true
-                    }
-                });
+                entry
+                    .subscribers
+                    .retain(|subscriber| subscriber.id != subscriber_id);
             }
             return Err(error);
         }
@@ -298,7 +242,6 @@ fn unsubscribe(display_id: CGDirectDisplayID, subscriber_id: SubscriberId) {
 pub struct WindowFrameSource {
     frame_requests: DispatchRetained<DispatchSource>,
     registration: Option<(CGDirectDisplayID, SubscriberId)>,
-    signal: Arc<PlatformFrameSignal>,
 }
 
 impl WindowFrameSource {
@@ -320,27 +263,20 @@ impl WindowFrameSource {
         Self {
             frame_requests,
             registration: None,
-            signal: Arc::new(PlatformFrameSignal::new()),
         }
     }
 
     pub fn start(&mut self, display_id: CGDirectDisplayID) -> Result<()> {
         self.stop();
-        let subscriber_id =
-            subscribe(display_id, self.frame_requests.clone(), self.signal.clone())?;
+        let subscriber_id = subscribe(display_id, self.frame_requests.clone())?;
         self.registration = Some((display_id, subscriber_id));
         Ok(())
-    }
-
-    pub fn take_signal(&self) -> Option<(Instant, FrameRequestSource)> {
-        self.signal.take()
     }
 
     pub fn stop(&mut self) {
         if let Some((display_id, subscriber_id)) = self.registration.take() {
             unsubscribe(display_id, subscriber_id);
         }
-        self.signal.take();
     }
 }
 

@@ -67,14 +67,8 @@ impl LocalExecutor {
     {
         let schedule = self.schedule();
         let location = Location::caller();
-        let (runnable, task) = spawn_local_with_source_location(
-            future,
-            schedule,
-            RunnableMeta {
-                location,
-                spawned: crate::SpawnTime(Instant::now()),
-            },
-        );
+        let (runnable, task) =
+            spawn_local_with_source_location(future, schedule, RunnableMeta { location });
         runnable.schedule();
         Task(TaskState::Spawned(task))
     }
@@ -94,14 +88,8 @@ impl LocalExecutor {
         F::Output: 'static,
     {
         let location = Location::caller();
-        let (runnable, task) = spawn_local_with_source_location(
-            future,
-            dispatch,
-            RunnableMeta {
-                location,
-                spawned: crate::SpawnTime(Instant::now()),
-            },
-        );
+        let (runnable, task) =
+            spawn_local_with_source_location(future, dispatch, RunnableMeta { location });
         runnable.schedule();
         Task(TaskState::Spawned(task))
     }
@@ -234,10 +222,7 @@ impl BackgroundExecutor {
         let schedule = self.schedule_with_priority(priority);
         let location = Location::caller();
         let (runnable, task) = async_task::Builder::new()
-            .metadata(RunnableMeta {
-                location,
-                spawned: crate::SpawnTime(Instant::now()),
-            })
+            .metadata(RunnableMeta { location })
             .spawn(move |_| future, schedule);
         runnable.schedule();
         Task(TaskState::Spawned(task))

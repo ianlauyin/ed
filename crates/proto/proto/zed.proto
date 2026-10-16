@@ -358,9 +358,6 @@ message Envelope {
     GetFoldingRanges get_folding_ranges = 421;
     GetFoldingRangesResponse get_folding_ranges_response = 422;
 
-    GetRemoteProfilingData get_remote_profiling_data = 423;
-    GetRemoteProfilingDataResponse get_remote_profiling_data_response = 424;
-
     GitRemoveWorktree git_remove_worktree = 431;
     GitRenameWorktree git_rename_worktree = 432;
     GitCreateCheckpoint git_create_checkpoint = 433;
@@ -431,6 +428,7 @@ message Envelope {
   reserved 90;
   reserved 326 to 327; // Removed debugger.
   reserved 339 to 342; // Removed debugger.
+  reserved 423 to 424; // Removed remote profiling.
   reserved 348; // Removed debugger.
   reserved 369 to 370; // Removed debugger.
   reserved 102 to 103;

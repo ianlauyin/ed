@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use settings::{DefaultOpenBehavior, Settings};
 use ui::{ButtonLike, Divider, DividerColor, KeyBinding, Vector, VectorName, prelude::*};
 use util::ResultExt;
-use zed_actions::{OpenKeymapFile, OpenOnboarding, OpenSettingsFile, command_palette};
+use zed_actions::{OpenKeymapFile, OpenSettingsFile, command_palette};
 
 #[derive(PartialEq, Clone, Debug, Deserialize, Serialize, JsonSchema, Action)]
 #[action(namespace = welcome)]
@@ -33,6 +33,38 @@ actions!(
         ShowWelcome
     ]
 );
+
+pub fn init(cx: &mut App) {
+    cx.on_action(|_: &ShowWelcome, cx| {
+        crate::with_active_or_new_workspace(cx, |workspace, window, cx| {
+            workspace
+                .with_local_workspace(window, cx, |workspace, window, cx| {
+                    let existing = workspace
+                        .active_pane()
+                        .read(cx)
+                        .items()
+                        .find_map(|item| item.downcast::<WelcomePage>());
+
+                    if let Some(existing) = existing {
+                        workspace.activate_item(&existing, true, true, window, cx);
+                    } else {
+                        let welcome_page = cx
+                            .new(|cx| WelcomePage::new(workspace.weak_handle(), false, window, cx));
+                        workspace.add_item_to_active_pane(
+                            Box::new(welcome_page),
+                            None,
+                            true,
+                            window,
+                            cx,
+                        )
+                    }
+                })
+                .detach();
+        });
+    });
+
+    crate::register_serializable_item::<WelcomePage>(cx);
+}
 
 #[derive(IntoElement)]
 struct SectionHeader {
@@ -354,7 +386,6 @@ impl Render for WelcomePage {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let (first_section, second_section) = CONTENT;
         let first_section_entries = first_section.entries.len();
-        let next_tab_index = first_section_entries + second_section.entries.len();
 
         let recent_projects = self
             .recent_workspaces
@@ -425,20 +456,7 @@ impl Render for WelcomePage {
                             ),
                     )
                     .child(first_section.render(Default::default(), &self.focus_handle))
-                    .child(second_section)
-                    .when(!self.fallback_to_recent_projects, |this| {
-                        this.child(
-                            v_flex().gap_4().child(Divider::horizontal()).child(
-                                Button::new("welcome-exit", "Return to Onboarding")
-                                    .tab_index(next_tab_index as isize)
-                                    .full_width()
-                                    .label_size(LabelSize::XSmall)
-                                    .on_click(|_, window, cx| {
-                                        window.dispatch_action(OpenOnboarding.boxed_clone(), cx);
-                                    }),
-                            ),
-                        )
-                    }),
+                    .child(second_section),
             )
     }
 }

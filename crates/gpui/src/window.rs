@@ -1,7 +1,3 @@
-#[cfg(feature = "profiler")]
-use crate::DebugFrameOverlayMode;
-#[cfg(feature = "profiler")]
-use crate::profiler;
 use crate::{
     Action, AnyDrag, AnyElement, AnyImageCache, AnyTooltip, AnyView, App, AppContext, Arena, Asset,
     AsyncWindowContext, AtlasTile, AvailableSpace, Background, BorderStyle, Bounds, BoxShadow,
@@ -116,36 +112,11 @@ impl DispatchPhase {
 }
 
 struct WindowInvalidatorInner {
-    #[cfg(feature = "profiler")]
-    pub window_id: WindowId,
     pub dirty: bool,
     pub draw_phase: DrawPhase,
     pub dirty_views: FxHashSet<EntityId>,
     pub update_count: usize,
-    #[cfg(feature = "profiler")]
-    pub frame_dirty: FrameDirtyAccumulator,
     pub platform_waker: Option<Rc<dyn Fn()>>,
-}
-
-/// Per-frame invalidation bookkeeping, drained at draw time and emitted to the
-/// frame profiler. Tracks when the current frame first became dirty and how
-/// many invalidations were coalesced into it, whenever the profiler is
-/// compiled in. Retention of the resulting per-frame records is what
-/// `profiler::trace_enabled()` controls, not this measurement.
-#[cfg(feature = "profiler")]
-#[derive(Default)]
-struct FrameDirtyAccumulator {
-    dirty_at: Option<Instant>,
-    invalidations: u64,
-}
-
-/// Why GPUI capped a window's frame rate.
-#[derive(Clone, Copy)]
-enum FrameRateLimit {
-    /// The window isn't focused.
-    Inactive,
-    /// The system is under thermal pressure.
-    Thermal,
 }
 
 #[derive(Clone)]
@@ -154,17 +125,13 @@ pub(crate) struct WindowInvalidator {
 }
 
 impl WindowInvalidator {
-    pub fn new(#[allow(unused_variables)] window_id: WindowId) -> Self {
+    pub fn new() -> Self {
         WindowInvalidator {
             inner: Rc::new(RefCell::new(WindowInvalidatorInner {
-                #[cfg(feature = "profiler")]
-                window_id,
                 dirty: true,
                 draw_phase: DrawPhase::None,
                 dirty_views: FxHashSet::default(),
                 update_count: 0,
-                #[cfg(feature = "profiler")]
-                frame_dirty: FrameDirtyAccumulator::default(),
                 platform_waker: None,
             })),
         }
@@ -175,18 +142,10 @@ impl WindowInvalidator {
         inner.update_count += 1;
         inner.dirty_views.insert(entity);
         if inner.draw_phase == DrawPhase::None {
-            #[cfg(feature = "profiler")]
-            let dirty_at = Self::record_frame_dirty(&mut inner);
             let became_dirty = !inner.dirty;
             inner.dirty = true;
             let waker = became_dirty.then(|| inner.platform_waker.clone()).flatten();
-            #[cfg(feature = "profiler")]
-            let window_id = inner.window_id;
             drop(inner);
-            #[cfg(feature = "profiler")]
-            if became_dirty {
-                profiler::journal::record_frame_pending(window_id, dirty_at);
-            }
             cx.push_effect(Effect::Notify { emitter: entity });
             if let Some(waker) = waker {
                 waker();
@@ -208,16 +167,8 @@ impl WindowInvalidator {
         if dirty {
             inner.update_count += 1;
         }
-        #[cfg(feature = "profiler")]
-        let dirty_at = dirty.then(|| Self::record_frame_dirty(&mut inner));
         let waker = became_dirty.then(|| inner.platform_waker.clone()).flatten();
-        #[cfg(feature = "profiler")]
-        let window_id = inner.window_id;
         drop(inner);
-        #[cfg(feature = "profiler")]
-        if became_dirty && let Some(dirty_at) = dirty_at {
-            profiler::journal::record_frame_pending(window_id, dirty_at);
-        }
         if let Some(waker) = waker {
             waker();
         }
@@ -249,18 +200,6 @@ impl WindowInvalidator {
 
     pub fn update_count(&self) -> usize {
         self.inner.borrow().update_count
-    }
-
-    #[cfg(feature = "profiler")]
-    fn record_frame_dirty(inner: &mut WindowInvalidatorInner) -> Instant {
-        let dirty_at = *inner.frame_dirty.dirty_at.get_or_insert_with(Instant::now);
-        inner.frame_dirty.invalidations += 1;
-        dirty_at
-    }
-
-    #[cfg(feature = "profiler")]
-    fn take_frame_dirty(&self) -> FrameDirtyAccumulator {
-        mem::take(&mut self.inner.borrow_mut().frame_dirty)
     }
 
     pub fn take_views(&self) -> FxHashSet<EntityId> {
@@ -1230,8 +1169,6 @@ pub struct Window {
     /// Tracks recent input event timestamps to determine if input is arriving at a high rate.
     /// Used to selectively enable VRR optimization only when input rate exceeds 60fps.
     pub(crate) input_rate_tracker: Rc<RefCell<InputRateTracker>>,
-    #[cfg(feature = "profiler")]
-    pub(crate) window_profiler: profiler::WindowProfiler,
     last_input_modality: InputModality,
     touch_gestures: TouchGestureRecognizer,
     touch_prediction_enabled: bool,
@@ -1252,8 +1189,6 @@ pub struct Window {
     /// The hitbox that has captured the pointer, if any.
     /// While captured, mouse events route to this hitbox regardless of hit testing.
     captured_hitbox: Option<HitboxId>,
-    #[cfg(feature = "profiler")]
-    debug_frame_overlay: crate::debug_overlay::DebugFrameOverlay,
     pub(crate) a11y: A11y,
 }
 
@@ -1590,11 +1525,9 @@ impl Window {
         let scale_factor = platform_window.scale_factor();
         let appearance = platform_window.appearance();
         let text_system = Arc::new(WindowTextSystem::new(cx.text_system().clone()));
-        let invalidator = WindowInvalidator::new(handle.window_id());
+        let invalidator = WindowInvalidator::new();
         let active = Rc::new(Cell::new(platform_window.is_active()));
         let visibility = platform_window.visibility();
-        #[cfg(feature = "profiler")]
-        profiler::journal::record_window_visibility(handle.window_id(), visibility);
         let hovered = Rc::new(Cell::new(platform_window.is_hovered()));
         let needs_present = Rc::new(Cell::new(false));
         let next_frame_callbacks: Rc<RefCell<Vec<FrameCallback>>> = Default::default();
@@ -1713,18 +1646,6 @@ impl Window {
             let input_rate_tracker = input_rate_tracker.clone();
             let mut deferred_force_render = false;
             move |request_frame_options| {
-                #[cfg(feature = "profiler")]
-                let (_foreground_turn, window_id) = {
-                    let foreground_turn = profiler::journal::foreground_turn();
-                    let window_id = handle.window_id();
-                    profiler::journal::record_platform_signal(profiler::journal::PlatformSignal {
-                        window_id,
-                        signal_at: request_frame_options.signal_at,
-                        handled_at: Instant::now(),
-                        source: request_frame_options.signal_source,
-                    });
-                    (foreground_turn, window_id)
-                };
                 // This must be checked before accessing App: if this request
                 // arrived re-entrantly while a draw is on this thread's stack
                 // (e.g. via a nested message pump in the Windows window
@@ -1743,8 +1664,6 @@ impl Window {
                 if draw_in_progress() {
                     log::debug!("deferring re-entrant window draw request");
                     deferred_force_render |= request_frame_options.force_render;
-                    #[cfg(feature = "profiler")]
-                    profiler::journal::record_reentrant_frame_skipped(window_id, Instant::now());
                     return;
                 }
                 // Take the deferred flag first: `||` short-circuits, and leaving
@@ -1766,16 +1685,15 @@ impl Window {
                 {
                     None
                 } else if !active.get() && !input_rate_tracker.borrow_mut().is_high_rate() {
-                    inactive_frame_interval.map(|interval| (interval, FrameRateLimit::Inactive))
+                    inactive_frame_interval
                 } else if let Some(ThermalState::Critical | ThermalState::Serious) = thermal_state {
-                    Some((Duration::from_micros(16667), FrameRateLimit::Thermal))
+                    Some(Duration::from_micros(16667))
                 } else {
                     None
                 };
 
                 let now = Instant::now();
-                #[cfg_attr(not(feature = "profiler"), expect(unused_variables))]
-                if let Some((min_interval, limit)) = min_frame_interval {
+                if let Some(min_interval) = min_frame_interval {
                     if let Some(last_frame) = last_frame_time.get()
                         && now.duration_since(last_frame) < min_interval
                     {
@@ -1792,19 +1710,6 @@ impl Window {
                         // unserved; platforms that stop requesting frames for
                         // idle windows need a wakeup to deliver the retry.
                         invalidator.wake_platform();
-                        #[cfg(feature = "profiler")]
-                        profiler::journal::record_frame_skipped(
-                            window_id,
-                            Instant::now(),
-                            match limit {
-                                FrameRateLimit::Inactive => {
-                                    profiler::journal::FrameSkipReason::InactiveFrameRateLimit
-                                }
-                                FrameRateLimit::Thermal => {
-                                    profiler::journal::FrameSkipReason::ThermalFrameRateLimit
-                                }
-                            },
-                        );
                         return;
                     }
                 }
@@ -1833,10 +1738,6 @@ impl Window {
                     measure("frame duration", || {
                         handle
                             .update(&mut cx, |_, window, cx| {
-                                #[cfg(feature = "profiler")]
-                                window
-                                    .window_profiler
-                                    .record_frame_signal(request_frame_options.signal_at);
                                 if force_render {
                                     // Bypass cached view reuse so we don't replay stale
                                     // atlas tile references after a GPU device recovery.
@@ -1871,14 +1772,6 @@ impl Window {
                 // source explicitly.
                 if invalidator.is_dirty() || !next_frame_callbacks.borrow().is_empty() {
                     invalidator.wake_platform();
-                }
-                #[cfg(feature = "profiler")]
-                if !should_draw {
-                    profiler::journal::record_frame_skipped(
-                        window_id,
-                        Instant::now(),
-                        profiler::journal::FrameSkipReason::NoRenderNeeded,
-                    );
                 }
             }
         }));
@@ -2120,8 +2013,6 @@ impl Window {
             hovered,
             needs_present,
             input_rate_tracker,
-            #[cfg(feature = "profiler")]
-            window_profiler: profiler::WindowProfiler::new(handle.window_id())?,
             last_input_modality: InputModality::Mouse,
             touch_gestures: TouchGestureRecognizer::new(
                 cx.platform
@@ -2143,8 +2034,6 @@ impl Window {
             client_inset: None,
             image_cache_stack: Vec::new(),
             captured_hitbox: None,
-            #[cfg(feature = "profiler")]
-            debug_frame_overlay: crate::debug_overlay::DebugFrameOverlay::new(),
             a11y: A11y::new(
                 a11y_active_flag,
                 accessibility_force_disabled,
@@ -2212,15 +2101,9 @@ impl Window {
         let visibility = self.platform_window.visibility();
         if self.visibility != visibility {
             self.visibility = visibility;
-            #[cfg(feature = "profiler")]
-            profiler::journal::record_window_visibility(self.handle.window_id(), visibility);
             self.visibility_observers
                 .clone()
                 .retain(&(), |callback| callback(visibility, self, cx));
-        }
-        #[cfg(feature = "profiler")]
-        if self.invalidator.is_dirty() || self.needs_present.get() {
-            profiler::journal::record_frame_pending(self.handle.window_id(), Instant::now());
         }
     }
 
@@ -3307,13 +3190,6 @@ impl Window {
     /// the contents of the new [`Scene`], use [`Self::present`].
     #[profiling::function]
     pub fn draw(&mut self, cx: &mut App) -> ArenaClearNeeded {
-        // Drain every draw in profiler builds so a previous frame's
-        // first-invalidation timestamp can't be attributed to this one.
-        #[cfg(feature = "profiler")]
-        let frame_dirty = self.invalidator.take_frame_dirty();
-        #[cfg(feature = "profiler")]
-        self.window_profiler.begin_draw();
-
         // Set up the per-App arena for element allocation during this draw.
         // This ensures that multiple test Apps have isolated arenas.
         let arena_scope = ElementArenaScope::enter(&cx.element_arena);
@@ -3346,16 +3222,6 @@ impl Window {
         }
         if !cx.mode.skip_drawing() {
             self.draw_roots(cx);
-            #[cfg(feature = "profiler")]
-            {
-                let viewport_size = self.viewport_size;
-                let scale_factor = self.scale_factor();
-                self.debug_frame_overlay.paint(
-                    &mut self.next_frame.scene,
-                    viewport_size,
-                    scale_factor,
-                );
-            }
         }
         self.dirty_views.clear();
         self.next_frame.window_active = self.active.get();
@@ -3449,16 +3315,6 @@ impl Window {
         }
         self.needs_present.set(true);
 
-        #[cfg(feature = "profiler")]
-        {
-            self.window_profiler
-                .set_refresh_interval(self.refresh_interval(cx));
-            let draw_duration = self
-                .window_profiler
-                .end_draw(frame_dirty.dirty_at, frame_dirty.invalidations);
-            self.debug_frame_overlay.record_frame(draw_duration);
-        }
-
         // Exit the scope to obtain the arena-clear token this draw owes; the
         // scope's teardown itself happens in `ElementArenaScope::drop`.
         arena_scope.exit(&cx.element_arena)
@@ -3488,60 +3344,9 @@ impl Window {
 
     #[profiling::function]
     fn present(&mut self) {
-        #[cfg(feature = "profiler")]
-        let _foreground_turn = profiler::journal::foreground_turn();
-        #[cfg(feature = "profiler")]
-        let present_start = Instant::now();
         self.platform_window.draw(&self.rendered_frame.scene);
-        #[cfg(feature = "profiler")]
-        self.window_profiler.record_present(
-            present_start,
-            Instant::now(),
-            self.active.get(),
-            !self.next_frame_callbacks.borrow().is_empty(),
-        );
         self.needs_present.set(false);
         profiling::finish_frame!();
-    }
-
-    /// Returns a snapshot of the current input-latency histograms.
-    #[cfg(feature = "profiler")]
-    pub fn input_latency_snapshot(&self) -> profiler::InputLatencySnapshot {
-        self.window_profiler.input_latency_snapshot()
-    }
-
-    /// Returns a snapshot of the current frame-duration histograms.
-    #[cfg(feature = "profiler")]
-    pub fn frame_duration_snapshot(&self) -> profiler::FrameDurationSnapshot {
-        self.window_profiler.frame_duration_snapshot()
-    }
-
-    /// Returns the current mode of the debug frame overlay.
-    #[cfg(feature = "profiler")]
-    pub fn debug_frame_overlay_mode(&self) -> DebugFrameOverlayMode {
-        self.debug_frame_overlay.mode()
-    }
-
-    /// Sets the mode of the debug frame overlay and schedules a redraw.
-    #[cfg(feature = "profiler")]
-    pub fn set_debug_frame_overlay_mode(&mut self, mode: DebugFrameOverlayMode) {
-        self.debug_frame_overlay.set_mode(mode);
-        self.refresh();
-    }
-
-    /// Advances the debug frame overlay through its hidden, frame-time-only,
-    /// and detailed modes.
-    #[cfg(feature = "profiler")]
-    pub fn cycle_debug_frame_overlay_mode(&mut self) {
-        self.set_debug_frame_overlay_mode(self.debug_frame_overlay.mode().next());
-    }
-
-    /// Clears the debug frame overlay's frame-time statistics, except for the
-    /// total frame count, and schedules a redraw.
-    #[cfg(feature = "profiler")]
-    pub fn reset_debug_frame_overlay_stats(&mut self) {
-        self.debug_frame_overlay.reset_stats();
-        self.refresh();
     }
 
     fn draw_roots(&mut self, cx: &mut App) {
@@ -3557,12 +3362,8 @@ impl Window {
         // stretches to fill the viewport unless explicitly sized, window roots
         // fill the window when their size is `auto`.
         let scale_factor = self.scale_factor();
-        #[cfg(feature = "profiler")]
-        let request_layout_start = Instant::now();
         let mut root_element = self.root.as_ref().unwrap().clone().into_any_element();
         let root_layout_id = root_element.request_layout(self, cx);
-        #[cfg(feature = "profiler")]
-        let prepaint_start = Instant::now();
         self.layout_engine
             .as_mut()
             .unwrap()
@@ -3597,8 +3398,6 @@ impl Window {
         self.mouse_hit_test = self.next_frame.hit_test(self.mouse_position);
 
         // Now actually paint the elements.
-        #[cfg(feature = "profiler")]
-        let paint_start = Instant::now();
         self.invalidator.set_phase(DrawPhase::Paint);
         root_element.paint(self, cx);
 
@@ -3611,14 +3410,6 @@ impl Window {
         } else if let Some(mut tooltip_element) = tooltip_element {
             tooltip_element.paint(self, cx);
         }
-
-        #[cfg(feature = "profiler")]
-        self.window_profiler
-            .record_draw_phases(profiler::DrawPhases {
-                request_layout: prepaint_start.duration_since(request_layout_start),
-                prepaint: paint_start.duration_since(prepaint_start),
-                paint: Instant::now().duration_since(paint_start),
-            });
 
         // a11y may have been activated/deactivated halfway through the frame
         let a11y_active_start_of_frame = self.a11y.is_active();
@@ -5394,8 +5185,6 @@ impl Window {
     /// Dispatch a mouse, keyboard, or touch event on the window.
     #[profiling::function]
     pub fn dispatch_event(&mut self, event: PlatformInput, cx: &mut App) -> DispatchEventResult {
-        #[cfg(feature = "profiler")]
-        self.window_profiler.begin_input(event.kind_name());
         let update_count_before = self.invalidator.update_count();
         // Track input modality for focus-visible styling and hover suppression.
         // Hover is suppressed during keyboard modality so that keyboard navigation
@@ -5554,8 +5343,6 @@ impl Window {
         if caused_invalidation {
             self.input_rate_tracker.borrow_mut().record_input();
         }
-        #[cfg(feature = "profiler")]
-        self.window_profiler.end_input(caused_invalidation);
 
         DispatchEventResult {
             propagate: cx.propagate_event,
@@ -6292,11 +6079,7 @@ impl Window {
             .remove(&action.as_any().type_id())
         {
             for listener in &global_listeners {
-                #[cfg(feature = "profiler")]
-                self.window_profiler.begin_action_handler(action, cx);
                 listener(action.as_any(), DispatchPhase::Capture, cx);
-                #[cfg(feature = "profiler")]
-                self.window_profiler.end_action_handler();
                 if !cx.propagate_event {
                     break;
                 }
@@ -6326,11 +6109,7 @@ impl Window {
             {
                 let any_action = action.as_any();
                 if action_type == any_action.type_id() {
-                    #[cfg(feature = "profiler")]
-                    self.window_profiler.begin_action_handler(action, cx);
                     listener(any_action, DispatchPhase::Capture, self, cx);
-                    #[cfg(feature = "profiler")]
-                    self.window_profiler.end_action_handler();
 
                     if !cx.propagate_event {
                         return;
@@ -6350,11 +6129,7 @@ impl Window {
                 let any_action = action.as_any();
                 if action_type == any_action.type_id() {
                     cx.propagate_event = false; // Actions stop propagation by default during the bubble phase
-                    #[cfg(feature = "profiler")]
-                    self.window_profiler.begin_action_handler(action, cx);
                     listener(any_action, DispatchPhase::Bubble, self, cx);
-                    #[cfg(feature = "profiler")]
-                    self.window_profiler.end_action_handler();
 
                     if !cx.propagate_event {
                         return;
@@ -6371,11 +6146,7 @@ impl Window {
             for listener in global_listeners.iter().rev() {
                 cx.propagate_event = false; // Actions stop propagation by default during the bubble phase
 
-                #[cfg(feature = "profiler")]
-                self.window_profiler.begin_action_handler(action, cx);
                 listener(action.as_any(), DispatchPhase::Bubble, cx);
-                #[cfg(feature = "profiler")]
-                self.window_profiler.end_action_handler();
                 if !cx.propagate_event {
                     break;
                 }

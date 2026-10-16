@@ -12,7 +12,6 @@ members = [
     "crates/command_palette",
     "crates/command_palette_hooks",
     "crates/component",
-    "crates/component_preview",
     "crates/crashes",
     "crates/db",
     "crates/diagnostics",
@@ -42,7 +41,6 @@ members = [
     "crates/grammars",
     "crates/icons",
     "crates/image_viewer",
-    "crates/input_latency_ui",
     "crates/json_schema_store",
     "crates/language",
     "crates/language_core",
@@ -59,12 +57,10 @@ members = [
     "crates/markdown_preview",
     "crates/menu",
     "crates/mermaid_render",
-    "crates/miniprofiler_ui",
     "crates/multi_buffer",
     "crates/net",
     "crates/node_runtime",
     "crates/notifications",
-    "crates/onboarding",
     "crates/open_path_prompt",
     "crates/outline",
     "crates/outline_panel",
@@ -157,7 +153,6 @@ collections = { path = "crates/collections", version = "0.1.0" }
 command_palette = { path = "crates/command_palette" }
 command_palette_hooks = { path = "crates/command_palette_hooks" }
 component = { path = "crates/component" }
-component_preview = { path = "crates/component_preview" }
 crashes = { path = "crates/crashes" }
 db = { path = "crates/db" }
 derive_refineable = { path = "crates/refineable/derive_refineable" }
@@ -187,7 +182,6 @@ gpui_util = { path = "crates/gpui_util" }
 grammars = { path = "crates/grammars" }
 icons = { path = "crates/icons" }
 image_viewer = { path = "crates/image_viewer" }
-input_latency_ui = { path = "crates/input_latency_ui" }
 json_schema_store = { path = "crates/json_schema_store" }
 language = { path = "crates/language" }
 language_core = { path = "crates/language_core" }
@@ -204,12 +198,10 @@ markdown = { path = "crates/markdown" }
 markdown_preview = { path = "crates/markdown_preview" }
 menu = { path = "crates/menu" }
 mermaid_render = { path = "crates/mermaid_render" }
-miniprofiler_ui = { path = "crates/miniprofiler_ui" }
 multi_buffer = { path = "crates/multi_buffer" }
 net = { path = "crates/net" }
 node_runtime = { path = "crates/node_runtime" }
 notifications = { path = "crates/notifications" }
-onboarding = { path = "crates/onboarding" }
 open_path_prompt = { path = "crates/open_path_prompt" }
 outline = { path = "crates/outline" }
 outline_panel = { path = "crates/outline_panel" }
@@ -296,7 +288,6 @@ async-task = "4.7"
 async-trait = "0.1"
 async-tungstenite = "0.33"
 async_zip = { version = "0.0.18", features = ["deflate", "deflate64"] }
-backtrace = "0.3"
 base64 = "0.22"
 betlang = "0.1.1"
 bitflags = "2.6.0"
@@ -337,7 +328,6 @@ foreign-types = "0.5"
 futures = "0.3.34"
 futures-lite = "2"
 globset = "0.4"
-hdrhistogram = { version = "7", default-features = false }
 heapless = "0.9.2"
 hex = "0.4.3"
 html5ever = "0.39"
@@ -408,7 +398,6 @@ objc2-app-kit = { version = "0.3.2", default-features = false, features = [
 ] }
 objc2-core-foundation = { version = "=0.3.2", default-features = false }
 objc2-core-text = { version = "0.3.2", default-features = false, features = ["std", "CTFont", "CTFontDescriptor"] }
-objc2-core-video = { version = "=0.3.2", default-features = false }
 objc2-foundation = { version = "=0.3.2", default-features = false, features = [
     "NSArray",
     "NSAttributedString",
@@ -505,7 +494,6 @@ shlex = "2.0"
 simplelog = { version = "0.12", default-features = false }
 slotmap = "1.0.6"
 smallvec = { version = "1.6", features = ["union", "const_new"] }
-spin = { version = "0.10", default-features = false, features = ["mutex", "spin_mutex", "lock_api"] }
 smol = "2.0"
 sqlformat = "0.2"
 stacksafe = "1.0"

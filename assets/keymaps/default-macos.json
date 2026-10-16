@@ -665,16 +665,6 @@
       "down": "editor::SignatureHelpNext"
     }
   },
-  // Custom bindings
-  {
-    "use_key_equivalents": true,
-    "bindings": {
-      // Cycles the frame-time debug overlay between hidden, frame-time-only, and detailed modes.
-      "ctrl-alt-shift-p": "dev::ToggleFpsOverlay",
-      // Clears the frame-time overlay's statistics, except the total frame count.
-      "ctrl-alt-shift-o": "dev::ResetFrameOverlayStats"
-    }
-  },
   {
     "context": "Editor && mode == full",
     "use_key_equivalents": true,
@@ -1069,17 +1059,6 @@
       "cmd-down": "markdown::ScrollToBottom",
       "cmd-shift-v": "markdown::CloseAndReturnToEditor",
       "cmd-f": "buffer_search::Deploy"
-    }
-  },
-  {
-    "context": "Onboarding",
-    "use_key_equivalents": true,
-    "bindings": {
-      "cmd-=": ["zed::IncreaseUiFontSize", { "persist": false }],
-      "cmd-+": ["zed::IncreaseUiFontSize", { "persist": false }],
-      "cmd--": ["zed::DecreaseUiFontSize", { "persist": false }],
-      "cmd-0": ["zed::ResetUiFontSize", { "persist": false }],
-      "cmd-enter": "onboarding::Finish",
     }
   },
   {

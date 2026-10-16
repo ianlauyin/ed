@@ -38,13 +38,11 @@ itertools.workspace = true
 log.workspace = true
 objc2.workspace = true
 objc2-app-kit = { workspace = true, features = ["NSDragging", "NSEvent", "NSTextInputClient", "NSVisualEffectView"] }
-objc2-core-video = { workspace = true, features = ["CVHostTime"] }
 objc2-foundation = { workspace = true, features = ["NSKeyedArchiver"] }
 objc2-quartz-core.workspace = true
 objc2-user-notifications.workspace = true
 parking_lot.workspace = true
 raw-window-handle.workspace = true
-scheduler.workspace = true
 semver.workspace = true
 smallvec.workspace = true
 strum.workspace = true

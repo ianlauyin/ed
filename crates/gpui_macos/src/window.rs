@@ -15,12 +15,12 @@ use block2::RcBlock;
 use dispatch2::DispatchQueue;
 use gpui::{
     AnyWindowHandle, BackgroundExecutor, Bounds, Capslock, CursorStyle, ExternalDragPayload,
-    ExternalPaths, FileDropEvent, ForegroundExecutor, FrameRequestSource, KeyDownEvent, Keystroke,
-    Modifiers, ModifiersChangedEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent,
-    Pixels, PlatformAtlas, PlatformDisplay, PlatformFrameSignal, PlatformInput,
-    PlatformInputHandler, PlatformWindow, Point, PromptButton, PromptLevel, RequestFrameOptions,
-    SharedString, Size, SystemWindowTab, WindowAppearance, WindowBackgroundAppearance,
-    WindowBounds, WindowControlArea, WindowKind, WindowParams, WindowVisibility, point, px, size,
+    ExternalPaths, FileDropEvent, ForegroundExecutor, KeyDownEvent, Keystroke, Modifiers,
+    ModifiersChangedEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
+    PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point,
+    PromptButton, PromptLevel, RequestFrameOptions, SharedString, Size, SystemWindowTab,
+    WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowKind,
+    WindowParams, WindowVisibility, point, px, size,
 };
 
 use core_foundation::base::{CFRelease, CFTypeRef};
@@ -3258,7 +3258,6 @@ fn report_display_change(window_state: &Arc<Mutex<MacWindowState>>) {
 }
 
 fn window_did_change_key_status(this: &AnyObject, selector: Sel, _: id) {
-    let signal_at = PlatformFrameSignal::capture(scheduler::Instant::now);
     let window_state = unsafe { get_window_state(this) };
     let lock = window_state.lock();
     let is_active = unsafe { ns_window(lock.native_window).isKeyWindow() };
@@ -3312,11 +3311,7 @@ fn window_did_change_key_status(this: &AnyObject, selector: Sel, _: id) {
                 lock.renderer.set_presents_with_transaction(true);
                 lock.stop_display_link();
                 drop(lock);
-                callback(RequestFrameOptions {
-                    signal_at,
-                    signal_source: FrameRequestSource::NativeCallback,
-                    ..Default::default()
-                });
+                callback(RequestFrameOptions::default());
 
                 let mut lock = window_state.lock();
                 lock.request_frame_callback = Some(callback);
@@ -3431,18 +3426,13 @@ fn set_frame_size(this: &AnyObject, size: NSSize) {
 }
 
 fn display_layer(this: &AnyObject, _: id) {
-    let signal_at = PlatformFrameSignal::capture(scheduler::Instant::now);
     let window_state = unsafe { get_window_state(this) };
     let mut lock = window_state.lock();
     if let Some(mut callback) = lock.request_frame_callback.take() {
         lock.renderer.set_presents_with_transaction(true);
         lock.stop_display_link();
         drop(lock);
-        callback(RequestFrameOptions {
-            signal_at,
-            signal_source: FrameRequestSource::NativeCallback,
-            ..Default::default()
-        });
+        callback(RequestFrameOptions::default());
 
         let mut lock = window_state.lock();
         lock.request_frame_callback = Some(callback);
@@ -3457,20 +3447,8 @@ extern "C" fn step(view: *mut c_void) {
     let mut lock = window_state.lock();
 
     if let Some(mut callback) = lock.request_frame_callback.take() {
-        let (signal_at, signal_source) = lock
-            .frame_source
-            .as_ref()
-            .and_then(WindowFrameSource::take_signal)
-            .map_or(
-                (None, FrameRequestSource::NativeCallback),
-                |(at, source)| (Some(at), source),
-            );
         drop(lock);
-        callback(RequestFrameOptions {
-            signal_at,
-            signal_source,
-            ..Default::default()
-        });
+        callback(RequestFrameOptions::default());
         window_state.lock().request_frame_callback = Some(callback);
     }
 }

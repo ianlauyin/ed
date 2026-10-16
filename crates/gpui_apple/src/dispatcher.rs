@@ -87,9 +87,5 @@ extern "C" fn trampoline(context: *mut c_void) {
     let runnable =
         unsafe { Runnable::<RunnableMeta>::from_raw(NonNull::new_unchecked(context as *mut ())) };
 
-    let location = runnable.metadata().location;
-    let spawned = runnable.metadata().spawned;
-    gpui::profiler::update_running_task(spawned, location);
     runnable.run();
-    gpui::profiler::save_task_timing();
 }

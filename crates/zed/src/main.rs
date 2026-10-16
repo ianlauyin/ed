@@ -31,7 +31,6 @@ use gpui_platform;
 
 use gpui_tokio::Tokio;
 use language::LanguageRegistry;
-use onboarding::{FIRST_OPEN, show_onboarding_view};
 use project_panel::ProjectPanel;
 use remote::RemoteConnectionOptions;
 
@@ -51,8 +50,8 @@ use std::{
     path::{Path, PathBuf},
     process,
     rc::Rc,
-    sync::{Arc, LazyLock, OnceLock},
-    time::{Duration, Instant},
+    sync::{Arc, LazyLock},
+    time::Duration,
 };
 use theme::{ActiveTheme, GlobalTheme, ThemeRegistry};
 use theme_settings::load_user_theme;
@@ -149,11 +148,8 @@ fn fail_to_open_window(e: anyhow::Error, _cx: &mut App) {
     eprintln!("Zed failed to open a window: {e:?}.");
     process::exit(1);
 }
-static STARTUP_TIME: OnceLock<Instant> = OnceLock::new();
 
 fn main() {
-    STARTUP_TIME.get_or_init(|| Instant::now());
-
     util::prevent_root_execution();
 
     let args = Args::parse();
@@ -507,9 +503,7 @@ fn main() {
         markdown_preview::init(cx);
         tabular_data_preview::init(cx);
         svg_preview::init(cx);
-        onboarding::init(cx);
         json_schema_store::init(cx);
-        miniprofiler_ui::init(*STARTUP_TIME.get().unwrap(), cx);
         which_key::init(cx);
 
         cx.observe_global::<SettingsStore>({
@@ -666,8 +660,6 @@ fn main() {
         .detach_and_log_err(cx);
 
         let app_state = app_state.clone();
-
-        component_preview::init(app_state.clone(), cx);
 
         cx.spawn(async move |cx| {
             let _first_window_subscription = _first_window_subscription;
@@ -913,7 +905,6 @@ pub(crate) async fn restore_or_create_workspace(
     app_state: Arc<AppState>,
     cx: &mut AsyncApp,
 ) -> Result<()> {
-    let kvp = cx.update(|cx| KeyValueStore::global(cx));
     if let Some(multi_workspaces) = restorable_workspaces(cx, &app_state).await {
         let mut error_count = 0;
         for multi_workspace in multi_workspaces {
@@ -1042,8 +1033,6 @@ pub(crate) async fn restore_or_create_workspace(
             })
             .await?;
         }
-    } else if matches!(kvp.read_kvp(FIRST_OPEN), Ok(None)) {
-        cx.update(|cx| show_onboarding_view(app_state, cx)).await?;
     } else {
         cx.update(|cx| {
             workspace::open_new(
@@ -1152,7 +1141,6 @@ fn init_paths() -> HashMap<io::ErrorKind, Vec<&'static Path>> {
         paths::database_dir(),
         paths::logs_dir(),
         paths::temp_dir(),
-        paths::hang_traces_dir(),
     ]
     .into_iter()
     .fold(HashMap::default(), |mut errors, path| {

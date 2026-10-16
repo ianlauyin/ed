@@ -215,7 +215,6 @@ impl VsCodeSettings {
             workspace: self.workspace_settings_content(),
             which_key: None,
             modeline_lines: None,
-            instrumentation: None,
         }
     }
 

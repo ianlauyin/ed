@@ -8,9 +8,6 @@
 compile_error!("Supported targets are macOS and the headless Linux remote server.");
 
 extern crate self as gpui;
-// Keep the dependency available for GPUI_LEAK_DETECTION builds as well as the feature.
-#[cfg(not(gpui_leak_detection))]
-use backtrace as _;
 
 #[macro_use]
 mod action;
@@ -23,8 +20,6 @@ mod bounds_tree;
 mod color;
 /// The default colors used by GPUI.
 pub mod colors;
-#[cfg(feature = "profiler")]
-mod debug_overlay;
 mod element;
 mod elements;
 mod executor;
@@ -41,8 +36,6 @@ mod keymap;
 mod path_builder;
 mod platform;
 pub mod prelude;
-/// Profiling utilities for task, frame, and thread performance tracking.
-pub mod profiler;
 mod scene;
 mod shared_uri;
 mod spring;
@@ -90,8 +83,6 @@ pub use asset_cache::*;
 pub use assets::*;
 pub use color::*;
 pub use ctor::ctor;
-#[cfg(feature = "profiler")]
-pub use debug_overlay::*;
 pub use element::*;
 pub use elements::*;
 pub use executor::*;
@@ -110,7 +101,6 @@ use key_dispatch::*;
 pub use keymap::*;
 pub use path_builder::*;
 pub use platform::*;
-pub use profiler::*;
 
 pub use refineable::*;
 pub use scene::*;

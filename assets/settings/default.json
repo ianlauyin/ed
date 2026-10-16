@@ -2385,17 +2385,5 @@
   // Useful for filtering out noisy logs or enabling more verbose logging.
   //
   // Example: {"log": {"client": "warn"}}
-  "log": {},
-
-  // Configuration for developer-oriented instrumentation tools that can be
-  // toggled at runtime.
-  "instrumentation": {
-    // Performance profiler, accessed via the `zed: open performance profiler`
-    // action. Collects timing data for foreground and background executor
-    // tasks. Enabling this may lead to increased memory usage, hence it's
-    // disabled by default for regular builds.
-    "performance_profiler": {
-      "enabled": false
-    }
-  }
+  "log": {}
 }

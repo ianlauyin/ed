@@ -775,10 +775,6 @@ pub struct App {
     platform_owned_drag: Option<PlatformOwnedDrag>,
     pub(crate) background_executor: BackgroundExecutor,
     pub(crate) foreground_executor: ForegroundExecutor,
-    #[cfg(feature = "profiler")]
-    foreground_journal: crate::profiler::journal::ForegroundJournal,
-    #[cfg(feature = "profiler")]
-    hang_monitor: Option<crate::profiler::hang::HangMonitor>,
     pub(crate) entities: EntityMap,
     pub(crate) new_entity_observers: SubscriberSet<TypeId, NewEntityListener>,
     pub(crate) windows: SlotMap<WindowId, Option<Box<Window>>>,
@@ -856,11 +852,6 @@ pub struct App {
     pending_updates: usize,
     quit_mode: QuitMode,
     quitting: bool,
-
-    // We need to ensure the leak detector drops last, after all tasks, callbacks and things have been dropped.
-    // Otherwise it may report false positives.
-    #[cfg(gpui_leak_detection)]
-    _ref_counts: Arc<RwLock<EntityRefCounts>>,
 }
 
 impl App {
@@ -875,17 +866,12 @@ impl App {
             background_executor.is_main_thread(),
             "must construct App on main thread"
         );
-        #[cfg(feature = "profiler")]
-        let foreground_journal = crate::profiler::journal::install_foreground_journal();
         let synced_animation_epoch = background_executor.now();
 
         let text_system = Arc::new(TextSystem::new(platform.text_system()));
         let entities = EntityMap::new();
         let keyboard_layout = platform.keyboard_layout();
         let keyboard_mapper = platform.keyboard_mapper();
-
-        #[cfg(gpui_leak_detection)]
-        let _ref_counts = entities.ref_counts_drop_handle();
 
         let app = Rc::new_cyclic(|this| AppCell {
             app: RefCell::new(App {
@@ -900,10 +886,6 @@ impl App {
                 platform_owned_drag: None,
                 background_executor,
                 foreground_executor,
-                #[cfg(feature = "profiler")]
-                foreground_journal,
-                #[cfg(feature = "profiler")]
-                hang_monitor: None,
                 svg_renderer: SvgRenderer::new(asset_source.clone()),
                 loading_assets: Default::default(),
                 asset_source,
@@ -957,16 +939,11 @@ impl App {
                 name: None,
                 element_arena: RefCell::new(Arena::new(1024 * 1024)),
                 event_arena: Arena::new(1024 * 1024),
-
-                #[cfg(gpui_leak_detection)]
-                _ref_counts,
             }),
         });
 
         init_app_menus(platform.as_ref(), &app.borrow());
         SystemWindowTabController::init(&mut app.borrow_mut());
-        #[cfg(feature = "profiler")]
-        crate::profiler::journal::observe_power(&app.borrow());
 
         platform.on_keyboard_layout_change(Box::new({
             let app = Rc::downgrade(&app);
@@ -1050,37 +1027,6 @@ impl App {
         app
     }
 
-    #[doc(hidden)]
-    pub fn ref_counts_drop_handle(&self) -> impl Sized + use<> {
-        self.entities.ref_counts_drop_handle()
-    }
-
-    /// Captures a snapshot of all entities that currently have alive handles.
-    ///
-    /// The returned [`LeakDetectorSnapshot`] can later be passed to
-    /// [`assert_no_new_leaks`](Self::assert_no_new_leaks) to verify that no
-    /// entities created after the snapshot are still alive.
-    #[cfg(gpui_leak_detection)]
-    pub fn leak_detector_snapshot(&self) -> LeakDetectorSnapshot {
-        self.entities.leak_detector_snapshot()
-    }
-
-    /// Asserts that no entities created after `snapshot` still have alive handles.
-    ///
-    /// Entities that were already tracked at the time of the snapshot are ignored,
-    /// even if they still have handles. Only *new* entities (those whose
-    /// `EntityId` was not present in the snapshot) are considered leaks.
-    ///
-    /// # Panics
-    ///
-    /// Panics if any new entity handles exist. The panic message lists every
-    /// leaked entity with its type name, and includes allocation-site backtraces
-    /// when `LEAK_BACKTRACE` is set.
-    #[cfg(gpui_leak_detection)]
-    pub fn assert_no_new_leaks(&self, snapshot: &LeakDetectorSnapshot) {
-        self.entities.assert_no_new_leaks(snapshot)
-    }
-
     /// Quit the application gracefully.
     ///
     /// Native applications give handlers registered with [`Context::on_app_quit`]
@@ -1088,28 +1034,11 @@ impl App {
     pub fn shutdown(&mut self) {
         // Requested first so the final hang poll overlaps with the quit
         // handlers. It's awaited alongside them, within `SHUTDOWN_TIMEOUT`.
-        #[cfg(feature = "profiler")]
-        let hang_monitor_flush = self
-            .hang_monitor
-            .as_ref()
-            .and_then(|hang_monitor| hang_monitor.request_flush());
 
         let mut futures: Vec<LocalBoxFuture<'static, ()>> = Vec::new();
 
         for observer in self.quit_observers.remove(&()) {
             futures.push(observer(self));
-        }
-
-        #[cfg(feature = "profiler")]
-        if let Some(flushed) = hang_monitor_flush {
-            futures.push(
-                async move {
-                    if flushed.await.is_err() {
-                        log::warn!("hang monitor exited before flushing");
-                    }
-                }
-                .boxed_local(),
-            );
         }
 
         self.windows.clear();
@@ -2132,52 +2061,6 @@ impl App {
             panic!("Can't spawn on main thread after on_app_quit")
         };
         &self.foreground_executor
-    }
-
-    /// Returns the foreground work journal for this app's foreground thread.
-    /// Apps constructed on the same thread share the stream.
-    #[cfg(feature = "profiler")]
-    pub fn foreground_journal(&self) -> crate::profiler::journal::ForegroundJournal {
-        self.foreground_journal.clone()
-    }
-
-    /// Starts detecting foreground hangs on a dedicated thread.
-    ///
-    /// Nothing is spawned unless the app calls this. The thread polls a
-    /// detector over this app's foreground journal every `config.interval`
-    /// and passes each poll's incidents, including empty polls, to `on_poll`
-    /// on that thread. When the app quits, a final poll with
-    /// [`HangMonitorPollReason::Flush`] runs during shutdown, concurrently
-    /// with quit handlers and within [`SHUTDOWN_TIMEOUT`], so `on_poll` can
-    /// deliver batched results.
-    ///
-    /// # Errors
-    ///
-    /// Fails if the monitor was already started or its thread can't be
-    /// spawned.
-    ///
-    /// [`HangMonitorPollReason::Flush`]: crate::profiler::hang::HangMonitorPollReason::Flush
-    #[cfg(feature = "profiler")]
-    pub fn start_hang_monitor(
-        &mut self,
-        config: crate::profiler::hang::HangMonitorConfig,
-        on_poll: impl FnMut(crate::profiler::hang::HangMonitorPoll) + Send + 'static,
-    ) -> Result<(), crate::profiler::hang::HangMonitorError> {
-        use crate::profiler::hang::{HangDetector, HangMonitor, HangMonitorError};
-
-        if self.hang_monitor.is_some() {
-            debug_assert!(false, "the hang monitor was started twice");
-            return Err(HangMonitorError::AlreadyStarted);
-        }
-        let detector = HangDetector::new(
-            self.foreground_journal(),
-            config.threshold,
-            config.frame_budget,
-        );
-        let monitor = HangMonitor::spawn(detector, config.interval, on_poll)
-            .map_err(HangMonitorError::Spawn)?;
-        self.hang_monitor = Some(monitor);
-        Ok(())
     }
 
     /// Spawns the future returned by the given function on the main thread. The closure will be invoked

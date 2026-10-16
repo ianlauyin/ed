@@ -45,16 +45,11 @@ impl Priority {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
-pub struct SpawnTime(pub Instant);
-
-/// Metadata attached to runnables for debugging and profiling.
+/// Metadata attached to runnables for debugging.
 #[derive(Clone, Debug)]
 pub struct RunnableMeta {
     /// The source location where the task was spawned.
     pub location: &'static Location<'static>,
-    /// The moment the task was spawned.
-    pub spawned: SpawnTime,
 }
 
 impl RunnableMeta {
@@ -62,7 +57,6 @@ impl RunnableMeta {
     pub fn new_with_callers_location() -> Self {
         Self {
             location: core::panic::Location::caller(),
-            spawned: SpawnTime(Instant::now()),
         }
     }
 }

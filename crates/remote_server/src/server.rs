@@ -44,7 +44,6 @@ use std::{
     mem,
     path::{Path, PathBuf},
     sync::{Arc, LazyLock},
-    time::Instant,
 };
 
 use std::{
@@ -606,14 +605,7 @@ fn start_server(
 }
 
 fn init_paths() -> anyhow::Result<()> {
-    for path in [
-        paths::config_dir(),
-        paths::logs_dir(),
-        paths::temp_dir(),
-        paths::hang_traces_dir(),
-    ]
-    .iter()
-    {
+    for path in [paths::config_dir(), paths::logs_dir(), paths::temp_dir()].iter() {
         std::fs::create_dir_all(path).with_context(|| format!("creating directory {path:?}"))?;
     }
     Ok(())
@@ -628,7 +620,6 @@ pub fn execute_run(
 ) -> Result<()> {
     init_paths()?;
 
-    let startup_time = Instant::now();
     let app = gpui_platform::headless();
     let pid = std::process::id();
     let id = pid.to_string();
@@ -740,7 +731,6 @@ pub fn execute_run(
                     fs,
                     node_runtime,
                     languages,
-                    startup_time,
                 },
                 true,
                 cx,

@@ -668,16 +668,6 @@ pub struct A11yCallbacks {
     pub deactivation: Box<dyn Fn() + Send + 'static>,
 }
 
-/// The source of a platform frame request's timestamp.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
-pub enum FrameRequestSource {
-    /// An OS callback or compositor-paced frame request.
-    #[default]
-    NativeCallback,
-    /// A refresh timer, retry, queued wakeup, or fallback sleep paced by the app.
-    LocalSchedule,
-}
-
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 #[expect(missing_docs)]
 pub struct RequestFrameOptions {
@@ -685,102 +675,6 @@ pub struct RequestFrameOptions {
     pub require_presentation: bool,
     /// Force refresh of all rendering states when true.
     pub force_render: bool,
-    /// When the platform first requested this frame, before main-thread dispatch.
-    ///
-    /// `None` means the captured request time is unavailable.
-    /// Coalesced requests carry their first request time, not their delivery time.
-    /// Built-in backends collect timestamps only with the `profiler` feature.
-    pub signal_at: Option<Instant>,
-    /// Distinguishes native callbacks from local scheduling requests.
-    pub signal_source: FrameRequestSource,
-}
-
-/// Preserves the first platform frame request time across coalesced notifications.
-///
-/// Producers may record from a platform thread without waiting for the UI thread.
-/// The consumer drains the timestamp before dispatching the request on the UI thread.
-/// The timestamp offset and source share one atomic word so coalescing cannot
-/// mix a request's time with another request's source. The low bit encodes the
-/// source; the remaining bits encode nanoseconds from `origin`. `u64::MAX` is empty.
-/// Without the `profiler` feature, this accumulator has no timestamp storage.
-pub struct PlatformFrameSignal {
-    #[cfg(feature = "profiler")]
-    origin: Instant,
-    #[cfg(feature = "profiler")]
-    first_signal: std::sync::atomic::AtomicU64,
-}
-
-impl Default for PlatformFrameSignal {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-impl PlatformFrameSignal {
-    /// Creates an empty signal accumulator.
-    pub fn new() -> Self {
-        Self {
-            #[cfg(feature = "profiler")]
-            origin: Instant::now(),
-            #[cfg(feature = "profiler")]
-            first_signal: std::sync::atomic::AtomicU64::new(u64::MAX),
-        }
-    }
-
-    /// Captures a platform request timestamp only when profiling is enabled.
-    ///
-    /// The closure is not invoked in profiler-disabled builds.
-    #[inline]
-    pub fn capture(capture: impl FnOnce() -> Instant) -> Option<Instant> {
-        if cfg!(feature = "profiler") {
-            Some(capture())
-        } else {
-            None
-        }
-    }
-
-    /// Records a platform frame request, retaining the first undrained timestamp.
-    #[inline]
-    #[cfg_attr(not(feature = "profiler"), expect(unused_variables))]
-    pub fn record(&self, at: Instant, source: FrameRequestSource) {
-        #[cfg(feature = "profiler")]
-        {
-            let nanoseconds = at
-                .saturating_duration_since(self.origin)
-                .as_nanos()
-                .min(u128::from((u64::MAX >> 1) - 1)) as u64;
-            let source_bit = match source {
-                FrameRequestSource::NativeCallback => 0,
-                FrameRequestSource::LocalSchedule => 1,
-            };
-            self.first_signal.fetch_min(
-                (nanoseconds << 1) | source_bit,
-                std::sync::atomic::Ordering::Relaxed,
-            );
-        }
-    }
-
-    /// Drains the first platform frame request time and source, leaving the accumulator empty.
-    #[inline]
-    pub fn take(&self) -> Option<(Instant, FrameRequestSource)> {
-        #[cfg(feature = "profiler")]
-        {
-            let signal = self
-                .first_signal
-                .swap(u64::MAX, std::sync::atomic::Ordering::Relaxed);
-            (signal != u64::MAX).then(|| {
-                let source = match signal & 1 {
-                    0 => FrameRequestSource::NativeCallback,
-                    _ => FrameRequestSource::LocalSchedule,
-                };
-                (self.origin + Duration::from_nanos(signal >> 1), source)
-            })
-        }
-        #[cfg(not(feature = "profiler"))]
-        {
-            None
-        }
-    }
 }
 
 /// The application's lifecycle phase, as owned and reported by a mobile OS.
@@ -1059,12 +953,6 @@ pub type RunnableVariant = Runnable<RunnableMeta>;
 
 #[doc(hidden)]
 pub type TimerResolutionGuard = gpui_util::Deferred<Box<dyn FnOnce() + Send>>;
-
-#[doc(hidden)]
-pub enum TasksIncluded {
-    OnlyCompleted,
-    CompletedAndRunning,
-}
 
 /// This type is public so that our test macro can generate and use it, but it should not
 /// be considered part of our public API.
