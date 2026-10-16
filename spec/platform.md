@@ -22,6 +22,11 @@ remote server supports macOS and Linux.
 - Audio input and speech recognition are unsupported; the app requests no
   microphone or speech-recognition access. Background tasks use high, medium,
   or low priority, with no realtime audio scheduling.
+- HTTP uses the upstream `reqwest` crate directly (rustls with the platform
+  certificate verifier), run on the app's Tokio runtime. There is no HTTP client
+  abstraction crate; gpui holds an optional client used only to load remote images.
+- No proxy support: there is no `proxy` setting, environment proxy variables are
+  ignored, and JSON language server proxy settings are not forwarded.
 - Ship only macOS default bindings and macOS variants of alternate keymaps.
 - The Linux remote server needs no display server, GPU, desktop integration, or fonts.
   It retains background execution, timers, and a foreground event loop for remote projects.

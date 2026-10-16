@@ -11,5 +11,5 @@ links, pull request links). They make no network requests.
   tooltips, commit view, git graph, git panel history). Authors are shown by
   name/email only.
 - `GitHostingProvider` has no avatar API; the `git` and `git_hosting_providers`
-  crates do not depend on `http_client`.
+  crates make no HTTP requests.
 - The `git.blame` settings group (`show_avatar`) is removed.

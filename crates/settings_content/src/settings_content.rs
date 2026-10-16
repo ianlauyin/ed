@@ -242,8 +242,6 @@ pub struct SettingsContent {
     /// Configuration for Node-related features
     pub node: Option<NodeBinarySettings>,
 
-    pub proxy: Option<String>,
-
     /// Whether to reduce non-essential motion in the UI, such as loading
     /// spinners and pulsating labels, by rendering them in a static state.
     ///
@@ -310,7 +308,7 @@ fallible_options::flattened_deserialize!(SettingsContent {
         git,
         global_lsp_settings, image_viewer, markdown_preview, hide_mouse,
         log, line_indicator_format,   outline_panel, project_panel,
-        node, proxy, reduce_motion, session, terminal,
+        node, reduce_motion, session, terminal,
         title_bar, which_key, modeline_lines,
         instrumentation,
     },

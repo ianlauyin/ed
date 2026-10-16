@@ -181,7 +181,6 @@ pub enum OpenedBufferEvent {
 ///
 /// Projects are local or use an explicit remote server connection.
 pub struct Project {
-    http_client: Arc<dyn http_client::HttpClient>,
     active_entry: Option<ProjectEntryId>,
 
     languages: Arc<LanguageRegistry>,
@@ -1052,7 +1051,6 @@ pub enum PulledDiagnostics {
 
 impl Project {
     pub fn local(
-        http_client: Arc<dyn http_client::HttpClient>,
         node: NodeRuntime,
 
         languages: Arc<LanguageRegistry>,
@@ -1174,7 +1172,6 @@ impl Project {
                 git_store,
 
                 _subscriptions: vec![cx.on_release(Self::release)],
-                http_client: http_client.clone(),
                 active_entry: None,
                 snippets,
                 languages,
@@ -1209,7 +1206,6 @@ impl Project {
 
     pub fn remote(
         remote: Entity<RemoteClient>,
-        http_client: Arc<dyn http_client::HttpClient>,
         node: NodeRuntime,
 
         languages: Arc<LanguageRegistry>,
@@ -1365,7 +1361,6 @@ impl Project {
                         })
                     }),
                 ],
-                http_client: http_client.clone(),
                 active_entry: None,
                 snippets,
                 languages,
@@ -1479,11 +1474,6 @@ impl Project {
     #[inline]
     pub fn languages(&self) -> &Arc<LanguageRegistry> {
         &self.languages
-    }
-
-    #[inline]
-    pub fn http_client(&self) -> Arc<dyn http_client::HttpClient> {
-        self.http_client.clone()
     }
 
     pub fn remote_client(&self) -> Option<Entity<RemoteClient>> {

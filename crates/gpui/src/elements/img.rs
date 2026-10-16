@@ -617,25 +617,24 @@ impl Asset for ImageAssetLoader {
                 Resource::Path(uri) => fs::read(uri.as_ref())?,
                 Resource::Uri(uri) => {
                     use anyhow::Context as _;
-                    use futures::AsyncReadExt as _;
 
-                    let mut response = client
-                        .get(uri.as_ref(), ().into(), true)
+                    let client = client.context("no HTTP client available")?;
+                    let request = client.client().get(uri.as_ref()).send();
+                    let (status, body) = client
+                        .spawn(async move {
+                            let response = request.await?;
+                            let status = response.status();
+                            anyhow::Ok((status, response.bytes().await?))
+                        })
                         .await
                         .with_context(|| format!("loading image asset from {uri:?}"))?;
-                    let mut body = Vec::new();
-                    response.body_mut().read_to_end(&mut body).await?;
-                    if !response.status().is_success() {
+                    if !status.is_success() {
                         let mut body = String::from_utf8_lossy(&body).into_owned();
                         let first_line = body.lines().next().unwrap_or("").trim_end();
                         body.truncate(first_line.len());
-                        return Err(ImageCacheError::BadStatus {
-                            uri,
-                            status: response.status(),
-                            body,
-                        });
+                        return Err(ImageCacheError::BadStatus { uri, status, body });
                     }
-                    body
+                    body.to_vec()
                 }
                 Resource::Embedded(path) => {
                     let data = asset_source.load(&path).ok().flatten();
@@ -743,7 +742,7 @@ pub enum ImageCacheError {
         /// The URI of the image.
         uri: SharedUri,
         /// The HTTP status code.
-        status: http_client::StatusCode,
+        status: crate::reqwest::StatusCode,
         /// The HTTP response body.
         body: String,
     },

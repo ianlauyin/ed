@@ -81,7 +81,6 @@ project_symbols.workspace = true
 recent_projects.workspace = true
 settings_content.workspace = true
 remote.workspace = true
-reqwest_client.workspace = true
 rope.workspace = true
 search.workspace = true
 serde.workspace = true

@@ -1213,7 +1213,6 @@ pub fn register_serializable_item<I: SerializableItem>(cx: &mut App) {
 
 pub struct AppState {
     pub languages: Arc<LanguageRegistry>,
-    pub http_client: Arc<dyn http_client::HttpClient>,
 
     pub workspace_store: Entity<WorkspaceStore>,
     pub fs: Arc<dyn fs::Fs>,
@@ -1883,7 +1882,6 @@ impl Workspace {
         cx: &mut App,
     ) -> Task<anyhow::Result<OpenResult>> {
         let project_handle = Project::local(
-            app_state.http_client.clone(),
             app_state.node_runtime.clone(),
             app_state.languages.clone(),
             app_state.fs.clone(),
@@ -8962,7 +8960,6 @@ pub fn open_workspace_by_id(
     cx: &mut App,
 ) -> Task<anyhow::Result<WindowHandle<MultiWorkspace>>> {
     let project_handle = Project::local(
-        app_state.http_client.clone(),
         app_state.node_runtime.clone(),
         app_state.languages.clone(),
         app_state.fs.clone(),
@@ -9330,7 +9327,6 @@ pub fn open_remote_project_with_new_connection(
         let project = cx.update(|cx| {
             project::Project::remote(
                 session,
-                app_state.http_client.clone(),
                 app_state.node_runtime.clone(),
                 app_state.languages.clone(),
                 app_state.fs.clone(),

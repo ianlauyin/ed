@@ -40,8 +40,6 @@ members = [
     "crates/gpui_tokio",
     "crates/gpui_util",
     "crates/grammars",
-    "crates/http_client",
-    "crates/http_client_tls",
     "crates/icons",
     "crates/image_viewer",
     "crates/input_latency_ui",
@@ -80,14 +78,12 @@ members = [
     "crates/project_panel",
     "crates/project_symbols",
     "crates/proto",
-    "crates/proxy_handshake",
     "crates/recent_projects",
     "crates/refineable",
     "crates/refineable/derive_refineable",
     "crates/remote",
     "crates/remote_connection",
     "crates/remote_server",
-    "crates/reqwest_client",
     "crates/rope",
     "crates/rpc",
     "crates/scheduler",
@@ -189,8 +185,6 @@ gpui_shared_string = { path = "crates/gpui_shared_string" }
 gpui_tokio = { path = "crates/gpui_tokio" }
 gpui_util = { path = "crates/gpui_util" }
 grammars = { path = "crates/grammars" }
-http_client = { path = "crates/http_client" }
-http_client_tls = { path = "crates/http_client_tls" }
 icons = { path = "crates/icons" }
 image_viewer = { path = "crates/image_viewer" }
 input_latency_ui = { path = "crates/input_latency_ui" }
@@ -233,7 +227,6 @@ recent_projects = { path = "crates/recent_projects" }
 refineable = { path = "crates/refineable" }
 remote = { path = "crates/remote" }
 remote_connection = { path = "crates/remote_connection" }
-reqwest_client = { path = "crates/reqwest_client" }
 rope = { path = "crates/rope" }
 rpc = { path = "crates/rpc" }
 scheduler = { path = "crates/scheduler" }
@@ -483,14 +476,10 @@ rand = { version = "0.9", default-features = false, features = ["std", "std_rng"
 raw-window-handle = "0.6"
 rayon = "1.8"
 regex = { version = "1.5", default-features = false, features = ["std", "perf"] }
-# WARNING: If you change this, you must also publish a new version of zed-reqwest to crates.io
-reqwest = { git = "https://github.com/zed-industries/reqwest.git", rev = "33bc764aa15ff7b200bf7c93bd96e24878d53e14", default-features = false, features = [
+reqwest = { version = "0.13.5", default-features = false, features = [
     "http2",
-    "macos-system-configuration",
-    "rustls-tls-native-roots",
-    "socks",
-    "stream",
-], package = "zed-reqwest", version = "0.12.15-zed" }
+    "rustls",
+] }
 resvg = { version = "0.46.0", default-features = false, features = [
     "text",
     "system-fonts",
@@ -500,8 +489,6 @@ resvg = { version = "0.46.0", default-features = false, features = [
 rust-embed = { version = "8.11", features = ["include-exclude", "compression"] }
 rustc-hash = "2.1.0"
 rustix = { version = "1.1", features = ["fs"] }
-rustls = "0.23.26"
-rustls-platform-verifier = "0.7"
 schemars = { version = "1.0", default-features = false, features = ["std", "indexmap2"] }
 semver = { version = "1.0", features = ["serde"] }
 serde = { version = "1.0", features = ["rc"] }
@@ -572,7 +559,6 @@ uuid = { version = "1.1", features = ["serde"] }
 vte = { version = "0.15.0", features = ["ansi"] }
 walkdir = "2.5"
 wax = { version = "0.7", default-features = false }
-webpki-roots = "1.0.8"
 which = "8"
 zstd = { version = "0.13", default-features = false, features = ["legacy", "arrays"] }
 
@@ -627,7 +613,6 @@ paths = { codegen-units = 1 }
 prettier = { codegen-units = 1 }
 project_symbols = { codegen-units = 1 }
 refineable = { codegen-units = 1 }
-reqwest_client = { codegen-units = 1 }
 session = { codegen-units = 1 }
 snippet = { codegen-units = 1 }
 snippets_ui = { codegen-units = 1 }

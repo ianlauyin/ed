@@ -28,14 +28,12 @@ use gpui::{
     App, AppContext, Application, AsyncApp, QuitMode, Task, TaskExt, UpdateGlobal as _, block_on,
 };
 use gpui_platform;
-use settings::ProxySettings;
 
 use gpui_tokio::Tokio;
 use language::LanguageRegistry;
 use onboarding::{FIRST_OPEN, show_onboarding_view};
 use project_panel::ProjectPanel;
 use remote::RemoteConnectionOptions;
-use reqwest_client::ReqwestClient;
 
 use assets::Assets;
 use node_runtime::{NodeBinaryOptions, NodeRuntime};
@@ -54,7 +52,7 @@ use std::{
     process,
     rc::Rc,
     sync::{Arc, LazyLock, OnceLock},
-    time::Instant,
+    time::{Duration, Instant},
 };
 use theme::{ActiveTheme, GlobalTheme, ThemeRegistry};
 use theme_settings::load_user_theme;
@@ -390,14 +388,13 @@ fn main() {
             std::env::consts::OS,
             std::env::consts::ARCH
         );
-        let proxy_url = ProxySettings::get_global(cx).proxy_url();
-        let http = {
-            let _guard = Tokio::handle(cx).enter();
-
-            ReqwestClient::proxy_and_user_agent(proxy_url, &user_agent)
-                .expect("could not start HTTP client")
-        };
-        cx.set_http_client(Arc::new(http));
+        let http = gpui::reqwest::Client::builder()
+            .user_agent(user_agent)
+            .connect_timeout(Duration::from_secs(10))
+            .no_proxy()
+            .build()
+            .expect("could not start HTTP client");
+        cx.set_http_client(gpui::HttpClient::new(http, Tokio::handle(cx)));
 
         <dyn Fs>::set_global(fs.clone(), cx);
 
@@ -406,7 +403,6 @@ fn main() {
 
         OpenListener::set_global(cx, open_listener.clone());
 
-        let http_client = cx.http_client();
         let languages = Arc::new(LanguageRegistry::new(cx.background_executor().clone()));
         let (mut tx, rx) = watch::channel(None);
         cx.observe_global::<SettingsStore>(move |cx| {
@@ -448,7 +444,6 @@ fn main() {
 
         let app_state = Arc::new(AppState {
             languages,
-            http_client: http_client.clone(),
 
             fs: fs.clone(),
             build_window_options,

@@ -1,5 +1,3 @@
-mod proxy_settings;
-pub use proxy_settings::ProxySettings;
 mod base_keymap_setting;
 mod content_into_gpui;
 mod editable_setting_control;

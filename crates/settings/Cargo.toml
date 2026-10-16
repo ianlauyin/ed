@@ -13,7 +13,6 @@ path = "src/settings.rs"
 doctest = false
 
 [dependencies]
-http_client.workspace = true
 anyhow.workspace = true
 collections.workspace = true
 ec4rs.workspace = true

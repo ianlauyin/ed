@@ -33,6 +33,7 @@ pub(crate) use platform_scheduler::PlatformScheduler;
 mod geometry;
 mod gestures;
 mod global;
+mod http;
 mod input;
 mod interactive;
 mod key_dispatch;
@@ -102,7 +103,7 @@ pub use spring::*;
 
 pub use gpui_shared_string::*;
 pub use gpui_util::arc_cow::ArcCow;
-pub use http_client;
+pub use http::*;
 pub use input::*;
 pub use interactive::*;
 use key_dispatch::*;
