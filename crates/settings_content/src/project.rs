@@ -267,7 +267,6 @@ pub struct LspSettings {
     /// Default: true
     #[serde(default = "default_true")]
     pub enable_lsp_tasks: bool,
-    pub fetch: Option<FetchSettings>,
 }
 
 impl Default for LspSettings {
@@ -277,7 +276,6 @@ impl Default for LspSettings {
             initialization_options: None,
             settings: None,
             enable_lsp_tasks: true,
-            fetch: None,
         }
     }
 }
@@ -290,16 +288,6 @@ pub struct BinarySettings {
     pub path: Option<String>,
     pub arguments: Option<Vec<String>>,
     pub env: Option<BTreeMap<String, String>>,
-    pub ignore_system_version: Option<bool>,
-}
-
-#[with_fallible_options]
-#[derive(
-    Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom, Hash,
-)]
-pub struct FetchSettings {
-    // Whether to consider pre-releases for fetching
-    pub pre_release: Option<bool>,
 }
 
 /// Common language server settings.

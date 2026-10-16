@@ -19,3 +19,11 @@
   certificates, and user npm configuration remain supported.
 - The Node runtime does not accept or forward editor proxy settings to npm.
   Network routing can use a system-wide TUN proxy when needed.
+- Language servers are never downloaded or installed by Zed. A server starts only
+  from `lsp.<server>.binary.path` or from a user installation the adapter finds
+  (`PATH`, project `node_modules`, or the active toolchain). A missing server is
+  reported through the existing failed-server status ("Failed to run …" in the
+  activity indicator, "Error" in the LSP menu) naming the server and the setting.
+- `lsp.<server>.fetch` and `lsp.<server>.binary.ignore_system_version` are removed;
+  `binary.arguments` and `binary.env` still apply to whichever binary is used.
+- Server binary statuses no longer include checking-for-update or downloading.

@@ -2,24 +2,19 @@ use anyhow::Result;
 use async_trait::async_trait;
 use collections::HashMap;
 use gpui::AsyncApp;
-use language::{
-    LanguageName, LspAdapter, LspAdapterDelegate, LspInstaller, PromptResponseContext, Toolchain,
-};
+use language::{LanguageName, LspAdapter, LspAdapterDelegate, PromptResponseContext, Toolchain};
 use lsp::{CodeActionKind, LanguageServerBinary, LanguageServerName, Uri};
-use node_runtime::{NodeRuntime, VersionStrategy};
 use project::{Fs, lsp_store::language_server_settings};
 use regex::Regex;
-use semver::Version;
 use serde_json::Value;
 use serde_json::json;
 use settings::update_settings_file;
 use std::{
     ffi::OsString,
-    future::Future,
-    path::{Path, PathBuf},
+    path::Path,
     sync::{Arc, LazyLock},
 };
-use util::{ResultExt, maybe, merge_json_value_into};
+use util::merge_json_value_into;
 
 const ACTION_ALWAYS: &str = "Always";
 const ACTION_NEVER: &str = "Never";
@@ -31,19 +26,15 @@ fn typescript_server_binary_arguments(server_path: &Path) -> Vec<OsString> {
 }
 
 pub struct VtslsLspAdapter {
-    node: NodeRuntime,
     fs: Arc<dyn Fs>,
 }
 
 impl VtslsLspAdapter {
-    const PACKAGE_NAME: &'static str = "@vtsls/language-server";
-    const SERVER_PATH: &'static str = "node_modules/@vtsls/language-server/bin/vtsls.js";
-
     const TYPESCRIPT_TSDK_PATH: &'static str = "node_modules/typescript/lib";
     const TYPESCRIPT_YARN_TSDK_PATH: &'static str = ".yarn/sdks/typescript/lib";
 
-    pub fn new(node: NodeRuntime, fs: Arc<dyn Fs>) -> Self {
-        VtslsLspAdapter { node, fs }
+    pub fn new(fs: Arc<dyn Fs>) -> Self {
+        VtslsLspAdapter { fs }
     }
 
     async fn tsdk_path(&self, adapter: &Arc<dyn LspAdapterDelegate>) -> Option<&'static str> {
@@ -91,18 +82,10 @@ impl VtslsLspAdapter {
 
 const SERVER_NAME: LanguageServerName = LanguageServerName::new_static("vtsls");
 
-impl LspInstaller for VtslsLspAdapter {
-    type BinaryVersion = Version;
-
-    async fn fetch_latest_server_version(
-        &self,
-        _: &Arc<dyn LspAdapterDelegate>,
-        _: bool,
-        _: &mut AsyncApp,
-    ) -> Result<Self::BinaryVersion> {
-        self.node
-            .npm_package_latest_version(Self::PACKAGE_NAME)
-            .await
+#[async_trait(?Send)]
+impl LspAdapter for VtslsLspAdapter {
+    fn name(&self) -> LanguageServerName {
+        SERVER_NAME
     }
 
     async fn check_if_user_installed(
@@ -118,76 +101,6 @@ impl LspInstaller for VtslsLspAdapter {
             arguments: typescript_server_binary_arguments(&path),
             env: Some(env),
         })
-    }
-
-    fn fetch_server_binary(
-        &self,
-        _latest_version: Self::BinaryVersion,
-        container_dir: PathBuf,
-        _: &Arc<dyn LspAdapterDelegate>,
-    ) -> impl Send + Future<Output = Result<LanguageServerBinary>> + use<> {
-        let node = self.node.clone();
-
-        async move {
-            let server_path = container_dir.join(Self::SERVER_PATH);
-
-            node.npm_install_latest_packages(&container_dir, &[Self::PACKAGE_NAME])
-                .await?;
-
-            Ok(LanguageServerBinary {
-                path: node.binary_path().await?,
-                env: None,
-                arguments: typescript_server_binary_arguments(&server_path),
-            })
-        }
-    }
-
-    fn check_if_version_installed(
-        &self,
-        version: &Self::BinaryVersion,
-        container_dir: &PathBuf,
-        _: &Arc<dyn LspAdapterDelegate>,
-    ) -> impl Send + Future<Output = Option<LanguageServerBinary>> + use<> {
-        let node = self.node.clone();
-        let server_version = version.clone();
-        let container_dir = container_dir.clone();
-
-        async move {
-            let server_path = container_dir.join(Self::SERVER_PATH);
-
-            if node
-                .should_install_npm_package(
-                    Self::PACKAGE_NAME,
-                    &server_path,
-                    &container_dir,
-                    VersionStrategy::Latest(&server_version),
-                )
-                .await
-            {
-                return None;
-            }
-
-            Some(LanguageServerBinary {
-                path: node.binary_path().await.ok()?,
-                env: None,
-                arguments: typescript_server_binary_arguments(&server_path),
-            })
-        }
-    }
-
-    async fn cached_server_binary(
-        &self,
-        container_dir: PathBuf,
-        _: &dyn LspAdapterDelegate,
-    ) -> Option<LanguageServerBinary> {
-        get_cached_ts_server_binary(container_dir, &self.node).await
-    }
-}
-
-#[async_trait(?Send)]
-impl LspAdapter for VtslsLspAdapter {
-    fn name(&self) -> LanguageServerName {
-        SERVER_NAME
     }
 
     fn code_action_kinds(&self) -> Option<Vec<CodeActionKind>> {
@@ -369,24 +282,4 @@ impl LspAdapter for VtslsLspAdapter {
             });
         }
     }
-}
-
-async fn get_cached_ts_server_binary(
-    container_dir: PathBuf,
-    node: &NodeRuntime,
-) -> Option<LanguageServerBinary> {
-    maybe!(async {
-        let server_path = container_dir.join(VtslsLspAdapter::SERVER_PATH);
-        anyhow::ensure!(
-            server_path.exists(),
-            "missing executable in directory {container_dir:?}"
-        );
-        Ok(LanguageServerBinary {
-            path: node.binary_path().await?,
-            env: None,
-            arguments: typescript_server_binary_arguments(&server_path),
-        })
-    })
-    .await
-    .log_err()
 }

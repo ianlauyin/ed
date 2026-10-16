@@ -8,7 +8,6 @@ use rpc::ProjectId;
 use fs::Fs;
 use futures::{channel::oneshot, stream::StreamExt as _};
 use gpui::{App, AppContext as _, AsyncApp, Context, Entity, PromptLevel, Task, TaskExt};
-use http_client::HttpClient;
 use language::{Buffer, BufferEvent, LanguageRegistry, proto::serialize_operation};
 use node_runtime::NodeRuntime;
 use project::{
@@ -70,7 +69,6 @@ pub struct HeadlessProject {
 pub struct HeadlessAppState {
     pub session: AnyProtoClient,
     pub fs: Arc<dyn Fs>,
-    pub http_client: Arc<dyn HttpClient>,
     pub node_runtime: NodeRuntime,
     pub languages: Arc<LanguageRegistry>,
     pub startup_time: Instant,
@@ -97,7 +95,6 @@ impl HeadlessProject {
         HeadlessAppState {
             session,
             fs,
-            http_client,
             node_runtime,
             languages,
             startup_time,
@@ -105,7 +102,7 @@ impl HeadlessProject {
         init_worktree_trust: bool,
         cx: &mut Context<Self>,
     ) -> Self {
-        languages::init(languages.clone(), fs.clone(), node_runtime.clone(), cx);
+        languages::init(languages.clone(), fs.clone(), cx);
 
         let worktree_store = cx.new(|cx| {
             let mut store = WorktreeStore::local(true, fs.clone(), WorktreeIdCounter::get(cx));
@@ -201,7 +198,6 @@ impl HeadlessProject {
                 environment.clone(),
                 manifest_tree,
                 languages.clone(),
-                http_client.clone(),
                 fs.clone(),
                 cx,
             );

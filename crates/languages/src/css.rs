@@ -1,50 +1,19 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use gpui::AsyncApp;
-use language::{LspAdapter, LspAdapterDelegate, LspInstaller, Toolchain};
+use language::{LspAdapter, LspAdapterDelegate, Toolchain};
 use lsp::{LanguageServerBinary, LanguageServerName, Uri};
-use node_runtime::{NodeRuntime, VersionStrategy};
 use project::lsp_store::language_server_settings;
-use semver::Version;
 use serde_json::json;
-use std::{
-    ffi::OsString,
-    future::Future,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
-use util::{ResultExt, maybe, merge_json_value_into};
+use std::sync::Arc;
+use util::merge_json_value_into;
 
-const SERVER_PATH: &str =
-    "node_modules/vscode-langservers-extracted/bin/vscode-css-language-server";
+pub struct CssLspAdapter;
 
-fn server_binary_arguments(server_path: &Path) -> Vec<OsString> {
-    vec![server_path.into(), "--stdio".into()]
-}
-
-pub struct CssLspAdapter {
-    node: NodeRuntime,
-}
-
-impl CssLspAdapter {
-    const PACKAGE_NAME: &str = "vscode-langservers-extracted";
-    pub fn new(node: NodeRuntime) -> Self {
-        CssLspAdapter { node }
-    }
-}
-
-impl LspInstaller for CssLspAdapter {
-    type BinaryVersion = Version;
-
-    async fn fetch_latest_server_version(
-        &self,
-        _: &Arc<dyn LspAdapterDelegate>,
-        _: bool,
-        _: &mut AsyncApp,
-    ) -> Result<Self::BinaryVersion> {
-        self.node
-            .npm_package_latest_version("vscode-langservers-extracted")
-            .await
+#[async_trait(?Send)]
+impl LspAdapter for CssLspAdapter {
+    fn name(&self) -> LanguageServerName {
+        LanguageServerName("vscode-css-language-server".into())
     }
 
     async fn check_if_user_installed(
@@ -63,77 +32,6 @@ impl LspInstaller for CssLspAdapter {
             env: Some(env),
             arguments: vec!["--stdio".into()],
         })
-    }
-
-    fn fetch_server_binary(
-        &self,
-        _latest_version: Self::BinaryVersion,
-        container_dir: PathBuf,
-        _: &Arc<dyn LspAdapterDelegate>,
-    ) -> impl Send + Future<Output = Result<LanguageServerBinary>> + use<> {
-        let node = self.node.clone();
-
-        async move {
-            let server_path = container_dir.join(SERVER_PATH);
-
-            node.npm_install_latest_packages(&container_dir, &[Self::PACKAGE_NAME])
-                .await?;
-
-            Ok(LanguageServerBinary {
-                path: node.binary_path().await?,
-                env: None,
-                arguments: server_binary_arguments(&server_path),
-            })
-        }
-    }
-
-    fn check_if_version_installed(
-        &self,
-        version: &Self::BinaryVersion,
-        container_dir: &PathBuf,
-        _: &Arc<dyn LspAdapterDelegate>,
-    ) -> impl Send + Future<Output = Option<LanguageServerBinary>> + use<> {
-        let node = self.node.clone();
-        let version = version.clone();
-        let container_dir = container_dir.clone();
-
-        async move {
-            let server_path = container_dir.join(SERVER_PATH);
-
-            let should_install_language_server = node
-                .should_install_npm_package(
-                    Self::PACKAGE_NAME,
-                    &server_path,
-                    &container_dir,
-                    VersionStrategy::Latest(&version),
-                )
-                .await;
-
-            if should_install_language_server {
-                None
-            } else {
-                Some(LanguageServerBinary {
-                    path: node.binary_path().await.ok()?,
-                    env: None,
-                    arguments: server_binary_arguments(&server_path),
-                })
-            }
-        }
-    }
-
-    async fn cached_server_binary(
-        &self,
-        container_dir: PathBuf,
-        _: &dyn LspAdapterDelegate,
-    ) -> Option<LanguageServerBinary> {
-        get_cached_server_binary(container_dir, &self.node).await
-    }
-}
-
-#[async_trait(?Send)]
-impl LspAdapter for CssLspAdapter {
-    fn name(&self) -> LanguageServerName {
-        LanguageServerName("vscode-css-language-server".into())
     }
 
     async fn initialization_options(
@@ -176,24 +74,4 @@ impl LspAdapter for CssLspAdapter {
 
         Ok(default_config)
     }
-}
-
-async fn get_cached_server_binary(
-    container_dir: PathBuf,
-    node: &NodeRuntime,
-) -> Option<LanguageServerBinary> {
-    maybe!(async {
-        let server_path = container_dir.join(SERVER_PATH);
-        anyhow::ensure!(
-            server_path.exists(),
-            "missing executable in directory {server_path:?}"
-        );
-        Ok(LanguageServerBinary {
-            path: node.binary_path().await?,
-            env: None,
-            arguments: server_binary_arguments(&server_path),
-        })
-    })
-    .await
-    .log_err()
 }

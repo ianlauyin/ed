@@ -1,7 +1,6 @@
 use anyhow::{Context as _, Result, bail};
-use chrono::{DateTime, Utc};
 use futures::{AsyncReadExt, FutureExt as _, channel::oneshot, future::Shared};
-use semver::{Version, VersionReq};
+use semver::Version;
 use serde::Deserialize;
 use smol::{fs, lock::Mutex};
 use std::collections::HashMap;
@@ -13,7 +12,6 @@ use std::{
     process::Output,
     sync::Arc,
 };
-use util::ResultExt;
 
 const NODE_CA_CERTS_ENV_VAR: &str = "NODE_EXTRA_CA_CERTS";
 
@@ -29,13 +27,6 @@ pub struct NpmCommand {
     pub path: PathBuf,
     pub args: Vec<String>,
     pub env: HashMap<String, String>,
-}
-
-pub enum VersionStrategy<'a> {
-    /// Install if current version doesn't match pinned version
-    Pin(&'a Version),
-    /// Install if current version is older than latest version
-    Latest(&'a Version),
 }
 
 #[derive(Clone)]
@@ -138,55 +129,7 @@ impl NodeRuntime {
             .npm_command(prefix_dir, subcommand, args))
     }
 
-    pub async fn npm_package_latest_version(&self, name: &str) -> Result<Version> {
-        self.npm_package_latest_version_with_requirement(name, None)
-            .await
-    }
-
-    pub async fn npm_package_latest_version_with_requirement(
-        &self,
-        name: &str,
-        version_requirement: Option<&VersionReq>,
-    ) -> Result<Version> {
-        let instance = self.instance().await?;
-        let output = instance
-            .run_npm_subcommand(
-                None,
-                "info",
-                &[
-                    name,
-                    "--json",
-                    "--fetch-retry-mintimeout",
-                    "2000",
-                    "--fetch-retry-maxtimeout",
-                    "5000",
-                    "--fetch-timeout",
-                    "5000",
-                ],
-            )
-            .await?;
-
-        let info: NpmInfo = deserialize_npm_info_from_response(&output.stdout).map_err(|e| {
-            anyhow::anyhow!(
-                "failed to parse npm info response: {e}\nstdout: {}",
-                String::from_utf8_lossy(&output.stdout)
-            )
-        })?;
-        let before = npm_config_before(&instance)
-            .await
-            .context("getting npm before config")
-            .log_err()
-            .flatten();
-        let latest_dist_tag = info.dist_tags.latest.clone();
-        let selected_version =
-            select_npm_package_version(name, info, before.as_deref(), version_requirement)?;
-        log::debug!(
-            "selected latest npm package version package={name:?} version_requirement={version_requirement:?} before={before:?} dist_tag_latest={latest_dist_tag:?} selected={selected_version}"
-        );
-        Ok(selected_version)
-    }
-
-    pub async fn npm_install_packages(
+    async fn npm_install_packages(
         &self,
         directory: &Path,
         packages: &[(&str, &str)],
@@ -242,208 +185,6 @@ impl NodeRuntime {
             .collect::<Vec<_>>();
         self.npm_install_packages(directory, &packages).await
     }
-
-    pub async fn should_install_npm_package(
-        &self,
-        package_name: &str,
-        local_executable_path: &Path,
-        local_package_directory: &Path,
-        version_strategy: VersionStrategy<'_>,
-    ) -> bool {
-        // In the case of the local system not having the package installed,
-        // or in the instances where we fail to parse package.json data,
-        // we attempt to install the package.
-        if fs::metadata(local_executable_path).await.is_err() {
-            log::debug!(
-                "npm package cache miss package={package_name:?} reason=missing-executable executable={}",
-                local_executable_path.display()
-            );
-            return true;
-        }
-
-        let Some(installed_version) = self
-            .npm_package_installed_version(local_package_directory, package_name)
-            .await
-            .log_err()
-            .flatten()
-        else {
-            log::debug!(
-                "npm package cache miss package={package_name:?} reason=missing-installed-version package_dir={}",
-                local_package_directory.display()
-            );
-            return true;
-        };
-
-        let version_strategy_label = match &version_strategy {
-            VersionStrategy::Pin(version) => format!("pin:{version}"),
-            VersionStrategy::Latest(version) => format!("latest:{version}"),
-        };
-        let should_install =
-            should_install_npm_package_version(&installed_version, version_strategy);
-        log::debug!(
-            "npm package cache check package={package_name:?} installed={installed_version} strategy={version_strategy_label} should_install={should_install}"
-        );
-        should_install
-    }
-}
-
-fn should_install_npm_package_version(
-    installed_version: &Version,
-    version_strategy: VersionStrategy<'_>,
-) -> bool {
-    match version_strategy {
-        VersionStrategy::Pin(pinned_version) => installed_version != pinned_version,
-        VersionStrategy::Latest(latest_version) => installed_version < latest_version,
-    }
-}
-
-#[derive(Debug, Deserialize)]
-#[serde(rename_all = "kebab-case")]
-pub struct NpmInfo {
-    #[serde(default)]
-    dist_tags: NpmInfoDistTags,
-    versions: Vec<Version>,
-    #[serde(default, deserialize_with = "deserialize_npm_info_time")]
-    time: HashMap<String, String>,
-}
-
-/// Parse NpmInfo from npm info --json output, handling both v11 and >= v12 formats.
-fn deserialize_npm_info_from_response(data: &[u8]) -> Result<NpmInfo, serde_json::Error> {
-    let value: serde_json::Value = serde_json::from_slice(data)?;
-
-    // npm >= 12 returns an array with one object: [ { ... } ]
-    if let serde_json::Value::Array(arr) = &value {
-        if arr.len() == 1 {
-            return NpmInfo::deserialize(&arr[0]);
-        }
-    }
-
-    // npm <= v11 returns a bare JSON object: { ... }
-    NpmInfo::deserialize(value)
-}
-
-#[derive(Debug, Deserialize, Default)]
-pub struct NpmInfoDistTags {
-    latest: Option<Version>,
-}
-
-// Some registries put non-string values in the `time` map: JFrog Artifactory emits
-// `"unpublished": null`, and npm itself reports `unpublished` as an object when a
-// package has had versions unpublished. Only version keys map to the RFC 3339 strings
-// we read, so keep the string entries and drop the rest rather than failing to parse
-// the entire `npm info` response (which would block language server installation).
-fn deserialize_npm_info_time<'de, D>(deserializer: D) -> Result<HashMap<String, String>, D::Error>
-where
-    D: serde::Deserializer<'de>,
-{
-    let entries = HashMap::<String, serde_json::Value>::deserialize(deserializer)?;
-    Ok(entries
-        .into_iter()
-        .filter_map(|(key, value)| match value {
-            serde_json::Value::String(value) => Some((key, value)),
-            _ => None,
-        })
-        .collect())
-}
-
-#[derive(Debug, Deserialize)]
-struct NpmConfig {
-    #[serde(default)]
-    before: Option<String>,
-}
-
-async fn npm_config_before(node_runtime: &SystemNodeRuntime) -> Result<Option<String>> {
-    // `npm config get before` renders Date values for display. The JSON config output keeps the
-    // computed cutoff in the same ISO format used by `npm info --json` release times.
-    let output = node_runtime
-        .run_npm_subcommand(None, "config", &["list", "--json"])
-        .await?;
-    let config: NpmConfig = serde_json::from_slice(&output.stdout)?;
-    Ok(config
-        .before
-        .filter(|before| !before.trim().is_empty() && before != "null"))
-}
-
-fn select_npm_package_version(
-    package_name: &str,
-    mut info: NpmInfo,
-    before: Option<&str>,
-    version_requirement: Option<&VersionReq>,
-) -> Result<Version> {
-    if let Some(version_requirement) = version_requirement {
-        info.versions
-            .retain(|version| version_requirement.matches(version));
-        info.versions.sort();
-        info.dist_tags.latest = info
-            .dist_tags
-            .latest
-            .take()
-            .filter(|version| version_requirement.matches(version));
-    }
-
-    if let Some(before) = before
-        && !info.time.is_empty()
-    {
-        let before_timestamp = DateTime::parse_from_rfc3339(before)
-            .with_context(|| format!("parsing npm before config timestamp {before:?}"))?
-            .with_timezone(&Utc);
-        let latest_version = info.dist_tags.latest.as_ref();
-
-        if let Some(version) = latest_version
-            && npm_version_was_published_before(version, &info.time, &before_timestamp)?
-        {
-            return Ok(version.clone());
-        }
-
-        for version in info.versions.iter().rev() {
-            if is_allowed_npm_version_before(
-                version,
-                latest_version,
-                &info.time,
-                &before_timestamp,
-                version_requirement.is_some(),
-            )? {
-                return Ok(version.clone());
-            }
-        }
-
-        bail!("no version found for npm package {package_name} before {before}");
-    }
-
-    info.dist_tags
-        .latest
-        .or_else(|| info.versions.pop())
-        .with_context(|| format!("no version found for npm package {package_name}"))
-}
-
-fn is_allowed_npm_version_before(
-    version: &Version,
-    latest_version: Option<&Version>,
-    published_at_by_version: &HashMap<String, String>,
-    before: &DateTime<Utc>,
-    allow_prereleases: bool,
-) -> Result<bool> {
-    if (!allow_prereleases && !version.pre.is_empty())
-        || latest_version.is_some_and(|latest_version| version > latest_version)
-    {
-        return Ok(false);
-    }
-
-    npm_version_was_published_before(version, published_at_by_version, before)
-}
-
-fn npm_version_was_published_before(
-    version: &Version,
-    published_at_by_version: &HashMap<String, String>,
-    before: &DateTime<Utc>,
-) -> Result<bool> {
-    let Some(published_at) = published_at_by_version.get(&version.to_string()) else {
-        return Ok(false);
-    };
-    let published_at = DateTime::parse_from_rfc3339(published_at)
-        .with_context(|| format!("parsing npm release timestamp for version {version}"))?
-        .with_timezone(&Utc);
-    Ok(&published_at <= before)
 }
 
 fn path_with_node_binary_prepended(node_binary: &Path) -> Option<OsString> {

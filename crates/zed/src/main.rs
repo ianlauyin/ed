@@ -407,9 +407,7 @@ fn main() {
         OpenListener::set_global(cx, open_listener.clone());
 
         let http_client = cx.http_client();
-        let mut languages = LanguageRegistry::new(cx.background_executor().clone());
-        languages.set_language_server_download_dir(paths::languages_dir().clone());
-        let languages = Arc::new(languages);
+        let languages = Arc::new(LanguageRegistry::new(cx.background_executor().clone()));
         let (mut tx, rx) = watch::channel(None);
         cx.observe_global::<SettingsStore>(move |cx| {
             let settings = &ProjectSettings::get_global(cx).node;
@@ -436,7 +434,7 @@ fn main() {
 
         let node_runtime = NodeRuntime::new(Some(shell_env_loaded_rx), rx);
 
-        languages::init(languages.clone(), fs.clone(), node_runtime.clone(), cx);
+        languages::init(languages.clone(), fs.clone(), cx);
 
         let workspace_store = cx.new(|cx| WorkspaceStore::new(cx));
 
@@ -1156,7 +1154,6 @@ pub(crate) async fn restorable_workspace_locations(
 fn init_paths() -> HashMap<io::ErrorKind, Vec<&'static Path>> {
     [
         paths::config_dir(),
-        paths::languages_dir(),
         paths::database_dir(),
         paths::logs_dir(),
         paths::temp_dir(),

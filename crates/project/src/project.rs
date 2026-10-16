@@ -1158,7 +1158,6 @@ impl Project {
                     environment.clone(),
                     manifest_tree,
                     languages.clone(),
-                    http_client.clone(),
                     fs.clone(),
                     cx,
                 )

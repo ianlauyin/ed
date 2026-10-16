@@ -12,9 +12,7 @@ use futures::{
     select, select_biased,
 };
 use git::GitHostingProviderRegistry;
-use gpui::{App, AppContext as _, Context, Entity, UpdateGlobal as _};
-use gpui_tokio::Tokio;
-use http_client::{Url, read_proxy_from_env};
+use gpui::{App, AppContext as _, Entity, UpdateGlobal as _};
 use language::LanguageRegistry;
 use net::async_net::{UnixListener, UnixStream};
 use node_runtime::{NodeBinaryOptions, NodeRuntime};
@@ -29,10 +27,8 @@ use remote::{
     protocol::{read_message, write_message},
     proxy::ProxyLaunchError,
 };
-use reqwest_client::ReqwestClient;
 use rpc::proto::{self, Envelope, REMOTE_SERVER_PROJECT_ID};
 use rpc::{AnyProtoClient, TypedEnvelope};
-use settings::ProxySettings;
 use settings::{Settings, SettingsStore, watch_config_file};
 use settings_content::app_metadata::{AppCommitSha, AppVersion, SERVER_RELEASE, ServerRelease};
 use smol::{
@@ -612,7 +608,6 @@ fn start_server(
 fn init_paths() -> anyhow::Result<()> {
     for path in [
         paths::config_dir(),
-        paths::languages_dir(),
         paths::logs_dir(),
         paths::temp_dir(),
         paths::hang_traces_dir(),
@@ -735,35 +730,14 @@ pub fn execute_run(
             let fs = RealFs::new(None, cx.background_executor().clone());
             let node_settings_rx = initialize_settings(session.clone(), fs.clone(), cx);
 
-            let proxy_url = read_proxy_settings(cx);
-
-            let http_client = {
-                let _guard = Tokio::handle(cx).enter();
-                Arc::new(
-                    ReqwestClient::proxy_and_user_agent(
-                        proxy_url,
-                        &format!(
-                            "Zed-Server/{} ({}; {})",
-                            env!("CARGO_PKG_VERSION"),
-                            std::env::consts::OS,
-                            std::env::consts::ARCH
-                        ),
-                    )
-                    .expect("Could not start HTTP client"),
-                )
-            };
-
             let node_runtime = NodeRuntime::new(shell_env_loaded_rx, node_settings_rx);
 
-            let mut languages = LanguageRegistry::new(cx.background_executor().clone());
-            languages.set_language_server_download_dir(paths::languages_dir().clone());
-            let languages = Arc::new(languages);
+            let languages = Arc::new(LanguageRegistry::new(cx.background_executor().clone()));
 
             HeadlessProject::new(
                 HeadlessAppState {
                     session: session.clone(),
                     fs,
-                    http_client,
                     node_runtime,
                     languages,
                     startup_time,
@@ -1314,20 +1288,4 @@ pub fn handle_settings_file_changes(
         }
     })
     .detach();
-}
-
-fn read_proxy_settings(cx: &mut Context<HeadlessProject>) -> Option<Url> {
-    let proxy_str = ProxySettings::get_global(cx).proxy.to_owned();
-
-    proxy_str
-        .as_deref()
-        .map(str::trim)
-        .filter(|input| !input.is_empty())
-        .and_then(|input| {
-            input
-                .parse::<Url>()
-                .inspect_err(|e| log::error!("Error parsing proxy settings: {}", e))
-                .ok()
-        })
-        .or_else(read_proxy_from_env)
 }

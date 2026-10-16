@@ -18,8 +18,6 @@ pub enum ServerHealth {
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BinaryStatus {
     None,
-    CheckingForUpdate,
-    Downloading,
     Starting,
     Stopping,
     Stopped,

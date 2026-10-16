@@ -7,24 +7,20 @@ use gpui::{App, AppContext, AsyncApp, Entity, Task};
 use itertools::Itertools as _;
 use language::{
     Buffer, ContextLocation, ContextProvider, File, LanguageName, LanguageToolchainStore,
-    LspAdapter, LspAdapterDelegate, LspInstaller, Toolchain,
+    LspAdapter, LspAdapterDelegate, Toolchain,
 };
 use lsp::{CodeActionKind, LanguageServerBinary, LanguageServerName, Uri};
-use node_runtime::{NodeRuntime, VersionStrategy};
 use project::{Fs, lsp_store::language_server_settings};
-use semver::{Version, VersionReq};
 use serde_json::{Value, json};
 use smol::lock::RwLock;
 use std::{
     borrow::Cow,
-    ffi::OsString,
-    future::Future,
     path::{Path, PathBuf},
     sync::{Arc, LazyLock},
 };
 use task::{TaskTemplate, TaskTemplates, VariableName};
+use util::ResultExt;
 use util::rel_path::RelPath;
-use util::{ResultExt, maybe};
 
 use crate::{PackageJson, PackageJsonData};
 
@@ -591,36 +587,24 @@ impl ContextProvider for TypeScriptContextProvider {
     }
 }
 
-fn typescript_server_binary_arguments(server_path: &Path) -> Vec<OsString> {
-    vec![server_path.into(), "--stdio".into()]
-}
-
 fn replace_test_name_parameters(test_name: &str) -> String {
     static PATTERN: LazyLock<regex::Regex> =
         LazyLock::new(|| regex::Regex::new(r"(\$([A-Za-z0-9_\.]+|[\#])|%[psdifjo#\$%])").unwrap());
     PATTERN.split(test_name).map(regex::escape).join("(.+?)")
 }
 
-static TYPESCRIPT_VERSION_REQ: LazyLock<VersionReq> =
-    LazyLock::new(|| VersionReq::parse("^6").expect("Failed to parse TypeScript version req"));
-
 pub struct TypeScriptLspAdapter {
     fs: Arc<dyn Fs>,
-    node: NodeRuntime,
 }
 
 impl TypeScriptLspAdapter {
-    const OLD_SERVER_PATH: &str = "node_modules/typescript-language-server/lib/cli.js";
-    const NEW_SERVER_PATH: &str = "node_modules/typescript-language-server/lib/cli.mjs";
-
-    const PACKAGE_NAME: &str = "typescript";
     const SERVER_PACKAGE_NAME: &str = "typescript-language-server";
 
     const SERVER_NAME: LanguageServerName =
         LanguageServerName::new_static(Self::SERVER_PACKAGE_NAME);
 
-    pub fn new(node: NodeRuntime, fs: Arc<dyn Fs>) -> Self {
-        TypeScriptLspAdapter { fs, node }
+    pub fn new(fs: Arc<dyn Fs>) -> Self {
+        TypeScriptLspAdapter { fs }
     }
 
     async fn tsdk_path(&self, adapter: &Arc<dyn LspAdapterDelegate>) -> Option<&'static str> {
@@ -656,124 +640,26 @@ impl TypeScriptLspAdapter {
     }
 }
 
-pub struct TypeScriptVersions {
-    typescript_version: Version,
-    server_version: Version,
-}
-
-impl LspInstaller for TypeScriptLspAdapter {
-    type BinaryVersion = TypeScriptVersions;
-
-    async fn fetch_latest_server_version(
-        &self,
-        _: &Arc<dyn LspAdapterDelegate>,
-        _: bool,
-        _: &mut AsyncApp,
-    ) -> Result<Self::BinaryVersion> {
-        Ok(TypeScriptVersions {
-            typescript_version: self
-                .node
-                .npm_package_latest_version_with_requirement(
-                    Self::PACKAGE_NAME,
-                    Some(&TYPESCRIPT_VERSION_REQ),
-                )
-                .await?,
-            server_version: self
-                .node
-                .npm_package_latest_version(Self::SERVER_PACKAGE_NAME)
-                .await?,
-        })
-    }
-
-    fn check_if_version_installed(
-        &self,
-        version: &Self::BinaryVersion,
-        container_dir: &PathBuf,
-        _: &Arc<dyn LspAdapterDelegate>,
-    ) -> impl Send + Future<Output = Option<LanguageServerBinary>> + use<> {
-        let node = self.node.clone();
-        let typescript_version = version.typescript_version.clone();
-        let server_version = version.server_version.clone();
-        let container_dir = container_dir.clone();
-
-        async move {
-            let server_path = container_dir.join(Self::NEW_SERVER_PATH);
-
-            // Pin rather than Latest so an unusable TypeScript 7.x install gets downgraded.
-            if node
-                .should_install_npm_package(
-                    Self::PACKAGE_NAME,
-                    &server_path,
-                    &container_dir,
-                    VersionStrategy::Pin(&typescript_version),
-                )
-                .await
-            {
-                return None;
-            }
-
-            if node
-                .should_install_npm_package(
-                    Self::SERVER_PACKAGE_NAME,
-                    &server_path,
-                    &container_dir,
-                    VersionStrategy::Latest(&server_version),
-                )
-                .await
-            {
-                return None;
-            }
-
-            Some(LanguageServerBinary {
-                path: node.binary_path().await.ok()?,
-                env: None,
-                arguments: typescript_server_binary_arguments(&server_path),
-            })
-        }
-    }
-
-    fn fetch_server_binary(
-        &self,
-        latest_version: Self::BinaryVersion,
-        container_dir: PathBuf,
-        _: &Arc<dyn LspAdapterDelegate>,
-    ) -> impl Send + Future<Output = Result<LanguageServerBinary>> + use<> {
-        let node = self.node.clone();
-
-        async move {
-            let server_path = container_dir.join(Self::NEW_SERVER_PATH);
-            let typescript_version = latest_version.typescript_version.to_string();
-
-            node.npm_install_packages(
-                &container_dir,
-                &[
-                    (Self::PACKAGE_NAME, typescript_version.as_str()),
-                    (Self::SERVER_PACKAGE_NAME, "latest"),
-                ],
-            )
-            .await?;
-
-            Ok(LanguageServerBinary {
-                path: node.binary_path().await?,
-                env: None,
-                arguments: typescript_server_binary_arguments(&server_path),
-            })
-        }
-    }
-
-    async fn cached_server_binary(
-        &self,
-        container_dir: PathBuf,
-        _: &dyn LspAdapterDelegate,
-    ) -> Option<LanguageServerBinary> {
-        get_cached_ts_server_binary(container_dir, &self.node).await
-    }
-}
-
 #[async_trait(?Send)]
 impl LspAdapter for TypeScriptLspAdapter {
     fn name(&self) -> LanguageServerName {
         Self::SERVER_NAME
+    }
+
+    async fn check_if_user_installed(
+        &self,
+        delegate: &Arc<dyn LspAdapterDelegate>,
+        _: Option<Toolchain>,
+        _: &AsyncApp,
+    ) -> Option<LanguageServerBinary> {
+        let path = delegate.which(Self::SERVER_PACKAGE_NAME.as_ref()).await?;
+        let env = delegate.shell_env().await;
+
+        Some(LanguageServerBinary {
+            path,
+            env: Some(env),
+            arguments: vec!["--stdio".into()],
+        })
     }
 
     fn code_action_kinds(&self) -> Option<Vec<CodeActionKind>> {
@@ -879,31 +765,4 @@ impl LspAdapter for TypeScriptLspAdapter {
     fn is_opt_in_for(&self, language: &LanguageName) -> bool {
         matches!(language.as_ref(), "TypeScript" | "JavaScript" | "TSX")
     }
-}
-
-async fn get_cached_ts_server_binary(
-    container_dir: PathBuf,
-    node: &NodeRuntime,
-) -> Option<LanguageServerBinary> {
-    maybe!(async {
-        let old_server_path = container_dir.join(TypeScriptLspAdapter::OLD_SERVER_PATH);
-        let new_server_path = container_dir.join(TypeScriptLspAdapter::NEW_SERVER_PATH);
-        if new_server_path.exists() {
-            Ok(LanguageServerBinary {
-                path: node.binary_path().await?,
-                env: None,
-                arguments: typescript_server_binary_arguments(&new_server_path),
-            })
-        } else if old_server_path.exists() {
-            Ok(LanguageServerBinary {
-                path: node.binary_path().await?,
-                env: None,
-                arguments: typescript_server_binary_arguments(&old_server_path),
-            })
-        } else {
-            anyhow::bail!("missing executable in directory {container_dir:?}")
-        }
-    })
-    .await
-    .log_err()
 }

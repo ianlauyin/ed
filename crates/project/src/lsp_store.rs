@@ -71,16 +71,14 @@ use gpui::{
     App, AppContext, AsyncApp, Context, Entity, EventEmitter, PromptLevel, SharedString,
     Subscription, Task, TaskExt, WeakEntity,
 };
-use http_client::HttpClient;
 use itertools::Itertools as _;
 use language::{
     Bias, BinaryStatus, Buffer, BufferRow, BufferSnapshot, CachedLspAdapter, Capability, CodeLabel,
     CodeLabelExt, Diagnostic, DiagnosticEntry, DiagnosticMessage, DiagnosticSet,
     DiagnosticSourceKind, Diff, File as _, Language, LanguageAwareStyling, LanguageName,
-    LanguageRegistry, LocalFile, LspAdapter, LspAdapterDelegate, LspInstaller, ManifestDelegate,
-    ManifestName, ModelineSettings, OffsetUtf16, Patch, PointUtf16, RelatedInformation,
-    RelatedLocation, TextBufferSnapshot, ToOffset, ToOffsetUtf16, ToPointUtf16, Toolchain,
-    Transaction, Unclipped,
+    LanguageRegistry, LocalFile, LspAdapter, LspAdapterDelegate, ManifestDelegate, ManifestName,
+    ModelineSettings, OffsetUtf16, Patch, PointUtf16, RelatedInformation, RelatedLocation,
+    TextBufferSnapshot, ToOffset, ToOffsetUtf16, ToPointUtf16, Toolchain, Transaction, Unclipped,
     language_settings::{
         AllLanguageSettings, FormatOnSave, Formatter, LanguageSettings, LineEndingSetting,
         all_language_settings,
@@ -98,10 +96,9 @@ use lsp::{
     DiagnosticServerCapabilities, DiagnosticSeverity, DiagnosticTag,
     DidChangeWatchedFilesRegistrationOptions, Edit, FileOperationFilter, FileOperationPatternKind,
     FileOperationRegistrationOptions, FileRename, FileSystemWatcher, LanguageServer,
-    LanguageServerBinary, LanguageServerBinaryOptions, LanguageServerId, LanguageServerName,
-    LanguageServerSelector, LspRequestFuture, MessageActionItem, MessageType, OneOf,
-    RenameFilesParams, TextEdit, Uri, WillRenameFiles, WorkDoneProgressCancelParams,
-    notification::DidRenameFiles,
+    LanguageServerBinary, LanguageServerId, LanguageServerName, LanguageServerSelector,
+    LspRequestFuture, MessageActionItem, MessageType, OneOf, RenameFilesParams, TextEdit, Uri,
+    WillRenameFiles, WorkDoneProgressCancelParams, notification::DidRenameFiles,
 };
 use node_runtime::read_package_installed_version;
 use parking_lot::Mutex;
@@ -175,7 +172,6 @@ const WORKSPACE_DIAGNOSTICS_REPULL_DELAY: Duration = Duration::from_secs(2);
 const CROSS_BUFFER_DIAGNOSTICS_PULL_DELAY: Duration = Duration::from_millis(100);
 const DOCUMENT_DIAGNOSTICS_RETRIGGER_LIMIT: usize = 3;
 const DOCUMENT_DIAGNOSTICS_RETRIGGER_DELAY: Duration = Duration::from_millis(100);
-const SERVER_DOWNLOAD_TIMEOUT: Duration = Duration::from_secs(10);
 static NEXT_PROMPT_REQUEST_ID: AtomicUsize = AtomicUsize::new(0);
 
 /// Refresh messages carry a monotonic id for backwards compatibility only: older peers
@@ -308,7 +304,6 @@ pub struct LocalLspStore {
     weak: WeakEntity<LspStore>,
     pub worktree_store: Entity<WorktreeStore>,
     toolchain_store: Entity<LocalToolchainStore>,
-    http_client: Arc<dyn HttpClient>,
     environment: Entity<ProjectEnvironment>,
     fs: Arc<dyn Fs>,
     languages: Arc<LanguageRegistry>,
@@ -540,7 +535,6 @@ impl LocalLspStore {
             settings,
             toolchain.clone(),
             delegate.clone(),
-            true,
             wait_until_worktree_trust,
             cx,
         );
@@ -735,64 +729,9 @@ impl LocalLspStore {
         settings: Arc<LspSettings>,
         toolchain: Option<Toolchain>,
         delegate: Arc<dyn LspAdapterDelegate>,
-        allow_binary_download: bool,
         wait_until_worktree_trust: Option<watch::Receiver<bool>>,
         cx: &mut App,
     ) -> Task<Result<LanguageServerBinary>> {
-        if let Some(settings) = &settings.binary
-            && let Some(path) = settings.path.as_ref().map(PathBuf::from)
-        {
-            let settings = settings.clone();
-            return cx.background_spawn(async move {
-                if let Some(mut wait_until_worktree_trust) = wait_until_worktree_trust {
-                    let already_trusted =  *wait_until_worktree_trust.borrow();
-                    if !already_trusted {
-                        log::info!(
-                            "Waiting for worktree {worktree_abs_path:?} to be trusted, before starting language server {}",
-                            adapter.name(),
-                        );
-                        while let Some(worktree_trusted) = wait_until_worktree_trust.recv().await {
-                            if worktree_trusted {
-                                break;
-                            }
-                        }
-                        log::info!(
-                            "Worktree {worktree_abs_path:?} is trusted, starting language server {}",
-                            adapter.name(),
-                        );
-                    }
-                    delegate.update_status(adapter.name(), BinaryStatus::Starting);
-                }
-                let mut env = delegate.shell_env().await;
-                env.extend(settings.env.unwrap_or_default());
-
-                Ok(LanguageServerBinary {
-                    path: delegate.resolve_relative_path(path),
-                    env: Some(env),
-                    arguments: settings
-                        .arguments
-                        .unwrap_or_default()
-                        .iter()
-                        .map(Into::into)
-                        .collect(),
-                })
-            });
-        }
-
-        let lsp_binary_options = LanguageServerBinaryOptions {
-            allow_path_lookup: !settings
-                .binary
-                .as_ref()
-                .and_then(|b| b.ignore_system_version)
-                .unwrap_or_default(),
-            allow_binary_download,
-            pre_release: settings
-                .fetch
-                .as_ref()
-                .and_then(|f| f.pre_release)
-                .unwrap_or(false),
-        };
-
         cx.spawn(async move |cx| {
             if let Some(mut wait_until_worktree_trust) = wait_until_worktree_trust {
                 let already_trusted = *wait_until_worktree_trust.borrow();
@@ -812,51 +751,45 @@ impl LocalLspStore {
                         adapter.name(),
                     );
                 }
+                delegate.update_status(adapter.name(), BinaryStatus::Starting);
             }
 
-            let (existing_binary, maybe_download_binary) = adapter
-                .clone()
-                .get_language_server_command(delegate.clone(), toolchain, lsp_binary_options, cx)
-                .await
-                .await;
-
-            delegate.update_status(adapter.name.clone(), BinaryStatus::None);
-
-            let mut binary = match (existing_binary, maybe_download_binary) {
-                (binary, None) => binary?,
-                (Err(_), Some(downloader)) => downloader.await?,
-                (Ok(existing_binary), Some(downloader)) => {
-                    let mut download_timeout = cx
-                        .background_executor()
-                        .timer(SERVER_DOWNLOAD_TIMEOUT)
-                        .fuse();
-                    let mut downloader = downloader.fuse();
-                    futures::select! {
-                        _ = download_timeout => {
-                            // Return existing binary and kick the existing work to the background.
-                            cx.spawn(async move |_| downloader.await).detach();
-                            Ok(existing_binary)
-                        },
-                        downloaded_or_existing_binary = downloader => {
-                            // If download fails, this results in the existing binary.
-                            downloaded_or_existing_binary
-                        }
-                    }?
+            let binary_settings = settings.binary.clone().unwrap_or_default();
+            let mut binary = if let Some(path) = binary_settings.path.map(PathBuf::from) {
+                LanguageServerBinary {
+                    path: delegate.resolve_relative_path(path),
+                    arguments: Vec::new(),
+                    env: None,
                 }
+            } else {
+                let Some(binary) = adapter
+                    .check_if_user_installed(&delegate, toolchain, cx)
+                    .await
+                else {
+                    anyhow::bail!(
+                        "language server {} is not installed. Install it and make sure it is on \
+                        your PATH, or set `lsp.{}.binary.path` in settings",
+                        adapter.name(),
+                        adapter.name(),
+                    );
+                };
+                log::info!(
+                    "found user-installed language server for {}. path: {:?}, arguments: {:?}",
+                    adapter.name(),
+                    binary.path,
+                    binary.arguments
+                );
+                binary
             };
+
             let mut shell_env = delegate.shell_env().await;
-
-            shell_env.extend(binary.env.unwrap_or_default());
-
-            if let Some(settings) = settings.binary.as_ref() {
-                if let Some(arguments) = &settings.arguments {
-                    binary.arguments = arguments.iter().map(Into::into).collect();
-                }
-                if let Some(env) = &settings.env {
-                    shell_env.extend(env.iter().map(|(k, v)| (k.clone(), v.clone())));
-                }
+            shell_env.extend(binary.env.take().unwrap_or_default());
+            if let Some(arguments) = binary_settings.arguments {
+                binary.arguments = arguments.into_iter().map(Into::into).collect();
             }
-
+            if let Some(env) = binary_settings.env {
+                shell_env.extend(env);
+            }
             binary.env = Some(shell_env);
             Ok(binary)
         })
@@ -4849,7 +4782,6 @@ impl LspStore {
         environment: Entity<ProjectEnvironment>,
         manifest_tree: Entity<ManifestTree>,
         languages: Arc<LanguageRegistry>,
-        http_client: Arc<dyn HttpClient>,
         fs: Arc<dyn Fs>,
         cx: &mut Context<Self>,
     ) -> Self {
@@ -4892,7 +4824,6 @@ impl LspStore {
                 buffer_snapshots: Default::default(),
                 prettier_store,
                 environment,
-                http_client,
                 fs,
                 yarn,
                 next_diagnostic_group_id: Default::default(),
@@ -6341,7 +6272,6 @@ impl LspStore {
             let environment = local.environment.clone();
             let weak = local.weak.clone();
             let worktree_store = local.worktree_store.clone();
-            let http_client = local.http_client.clone();
             let fs = local.fs.clone();
             move |worktree_id, cx: &mut App| {
                 let worktree = worktree_store.read(cx).worktree_for_id(worktree_id, cx)?;
@@ -6350,7 +6280,6 @@ impl LspStore {
                     &environment,
                     weak.clone(),
                     &worktree,
-                    http_client.clone(),
                     fs.clone(),
                     cx,
                 ))
@@ -9703,7 +9632,6 @@ impl LspStore {
                                         &local.environment,
                                         cx.weak_entity(),
                                         &worktree,
-                                        local.http_client.clone(),
                                         local.fs.clone(),
                                         cx,
                                     )
@@ -15113,10 +15041,6 @@ fn subscribe_to_binary_statuses(
                     let mut message = None;
                     let binary_status = match binary_status {
                         BinaryStatus::None => proto::ServerBinaryStatus::None,
-                        BinaryStatus::CheckingForUpdate => {
-                            proto::ServerBinaryStatus::CheckingForUpdate
-                        }
-                        BinaryStatus::Downloading => proto::ServerBinaryStatus::Downloading,
                         BinaryStatus::Starting => proto::ServerBinaryStatus::Starting,
                         BinaryStatus::Stopping => proto::ServerBinaryStatus::Stopping,
                         BinaryStatus::Stopped => proto::ServerBinaryStatus::Stopped,
@@ -16151,8 +16075,12 @@ impl SshLspAdapter {
     }
 }
 
-impl LspInstaller for SshLspAdapter {
-    type BinaryVersion = ();
+#[async_trait(?Send)]
+impl LspAdapter for SshLspAdapter {
+    fn name(&self) -> LanguageServerName {
+        self.name.clone()
+    }
+
     async fn check_if_user_installed(
         &self,
         _: &Arc<dyn LspAdapterDelegate>,
@@ -16160,39 +16088,6 @@ impl LspInstaller for SshLspAdapter {
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
         Some(self.binary.clone())
-    }
-
-    async fn cached_server_binary(
-        &self,
-        _: PathBuf,
-        _: &dyn LspAdapterDelegate,
-    ) -> Option<LanguageServerBinary> {
-        None
-    }
-
-    async fn fetch_latest_server_version(
-        &self,
-        _: &Arc<dyn LspAdapterDelegate>,
-        _: bool,
-        _: &mut AsyncApp,
-    ) -> Result<()> {
-        anyhow::bail!("SshLspAdapter does not support fetch_latest_server_version")
-    }
-
-    fn fetch_server_binary(
-        &self,
-        _: (),
-        _: PathBuf,
-        _: &Arc<dyn LspAdapterDelegate>,
-    ) -> impl Send + Future<Output = Result<LanguageServerBinary>> + use<> {
-        async { anyhow::bail!("SshLspAdapter does not support fetch_server_binary") }
-    }
-}
-
-#[async_trait(?Send)]
-impl LspAdapter for SshLspAdapter {
-    fn name(&self) -> LanguageServerName {
-        self.name.clone()
     }
 
     async fn initialization_options(
@@ -16239,7 +16134,6 @@ pub struct LocalLspAdapterDelegate {
     lsp_store: WeakEntity<LspStore>,
     worktree: worktree::Snapshot,
     fs: Arc<dyn Fs>,
-    http_client: Arc<dyn HttpClient>,
     language_registry: Arc<LanguageRegistry>,
     load_shell_env_task: Shared<Task<Option<HashMap<String, String>>>>,
 }
@@ -16250,7 +16144,6 @@ impl LocalLspAdapterDelegate {
         environment: &Entity<ProjectEnvironment>,
         lsp_store: WeakEntity<LspStore>,
         worktree: &Entity<Worktree>,
-        http_client: Arc<dyn HttpClient>,
         fs: Arc<dyn Fs>,
         cx: &mut App,
     ) -> Arc<Self> {
@@ -16261,7 +16154,6 @@ impl LocalLspAdapterDelegate {
             lsp_store,
             worktree: worktree.read(cx).snapshot(),
             fs,
-            http_client,
             language_registry,
             load_shell_env_task,
         })
@@ -16277,7 +16169,6 @@ impl LocalLspAdapterDelegate {
             &local.environment,
             local.weak.clone(),
             worktree,
-            local.http_client.clone(),
             local.fs.clone(),
             cx,
         )
@@ -16286,18 +16177,6 @@ impl LocalLspAdapterDelegate {
 
 #[async_trait]
 impl LspAdapterDelegate for LocalLspAdapterDelegate {
-    fn show_notification(&self, message: &str, cx: &mut App) {
-        self.lsp_store
-            .update(cx, |_, cx| {
-                cx.emit(LspStoreEvent::Notification(message.to_owned()))
-            })
-            .ok();
-    }
-
-    fn http_client(&self) -> Arc<dyn HttpClient> {
-        self.http_client.clone()
-    }
-
     fn worktree_id(&self) -> WorktreeId {
         self.worktree.id()
     }
@@ -16407,19 +16286,6 @@ impl LspAdapterDelegate for LocalLspAdapterDelegate {
             .map(|adapter| adapter.adapter.clone() as Arc<dyn LspAdapter>)
             .sorted_by_key(|adapter| adapter.name())
             .collect()
-    }
-
-    async fn language_server_download_dir(&self, name: &LanguageServerName) -> Option<Arc<Path>> {
-        let dir = self.language_registry.language_server_download_dir(name)?;
-
-        if !dir.exists() {
-            smol::fs::create_dir_all(&dir)
-                .await
-                .context("failed to create container directory")
-                .log_err()?;
-        }
-
-        Some(dir)
     }
 
     async fn read_text_file(&self, path: &RelPath) -> Result<String> {

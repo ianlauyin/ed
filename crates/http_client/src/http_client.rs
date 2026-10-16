@@ -1,9 +1,5 @@
 mod async_body;
 
-pub mod github;
-#[cfg(feature = "github-download")]
-pub mod github_download;
-
 pub use anyhow::{Result, anyhow};
 pub use async_body::{AsyncBody, Inner, Json};
 pub use http::{self, Method, Request, Response, StatusCode, Uri, request::Builder};

@@ -36,7 +36,6 @@ use util::post_inc;
 
 pub struct LanguageRegistry {
     state: RwLock<LanguageRegistryState>,
-    language_server_download_dir: Option<Arc<Path>>,
     executor: BackgroundExecutor,
     lsp_binary_status_tx: ServerStatusSender,
 }
@@ -109,7 +108,6 @@ impl LanguageRegistry {
                 version: 0,
                 reload_count: 0,
             }),
-            language_server_download_dir: None,
             lsp_binary_status_tx: Default::default(),
             executor,
         };
@@ -305,10 +303,6 @@ impl LanguageRegistry {
         for language in &state.languages {
             language.set_theme(theme.syntax());
         }
-    }
-
-    pub fn set_language_server_download_dir(&mut self, path: impl Into<Arc<Path>>) {
-        self.language_server_download_dir = Some(path.into());
     }
 
     pub fn language_for_name(
@@ -662,12 +656,6 @@ impl LanguageRegistry {
 
     pub fn next_language_server_id(&self) -> LanguageServerId {
         self.state.write().next_language_server_id()
-    }
-
-    pub fn language_server_download_dir(&self, name: &LanguageServerName) -> Option<Arc<Path>> {
-        self.language_server_download_dir
-            .as_ref()
-            .map(|dir| Arc::from(dir.join(name.0.as_ref())))
     }
 
     pub fn language_server_binary_statuses(

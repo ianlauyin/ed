@@ -356,14 +356,6 @@ pub fn embeddings_dir() -> &'static PathBuf {
     })
 }
 
-/// Returns the path to the languages directory.
-///
-/// This is where language servers are downloaded to for languages built-in to Zed.
-pub fn languages_dir() -> &'static PathBuf {
-    static LANGUAGES_DIR: OnceLock<PathBuf> = OnceLock::new();
-    LANGUAGES_DIR.get_or_init(|| data_dir().join("languages"))
-}
-
 /// Returns the path to the external agents directory
 ///
 /// This is where agent servers are downloaded to

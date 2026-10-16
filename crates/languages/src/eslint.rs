@@ -1,49 +1,28 @@
-use anyhow::{Context as _, Result};
+use anyhow::Result;
 use async_trait::async_trait;
 use gpui::AsyncApp;
-use http_client::{
-    github::{AssetKind, GitHubLspBinaryVersion, build_asset_url},
-    github_download::download_server_binary,
-};
-use language::{LspAdapter, LspAdapterDelegate, LspInstaller, Toolchain};
+use language::{LspAdapter, LspAdapterDelegate, Toolchain};
 use lsp::{CodeActionKind, LanguageServerBinary, LanguageServerName, Uri};
-use node_runtime::{NodeRuntime, read_package_installed_version};
+use node_runtime::read_package_installed_version;
 use project::Fs;
 use project::lsp_store::language_server_settings_for;
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
 use settings::SettingsLocation;
-use smol::{fs, stream::StreamExt};
 use std::{
-    ffi::OsString,
-    future::Future,
     path::{Path, PathBuf},
     sync::Arc,
 };
 use util::merge_json_value_into;
-use util::{fs::remove_matching, rel_path::RelPath};
-
-fn eslint_server_binary_arguments(server_path: &Path) -> Vec<OsString> {
-    vec![
-        "--max-old-space-size=8192".into(),
-        server_path.into(),
-        "--stdio".into(),
-    ]
-}
+use util::rel_path::RelPath;
 
 pub struct EsLintLspAdapter {
-    node: NodeRuntime,
     fs: Arc<dyn Fs>,
 }
 
 impl EsLintLspAdapter {
-    const CURRENT_VERSION: &'static str = "3.0.24";
-    const CURRENT_VERSION_TAG_NAME: &'static str = "release/3.0.24";
-
-    const GITHUB_ASSET_KIND: AssetKind = AssetKind::TarGz;
-
-    const SERVER_PATH: &'static str = "vscode-eslint/server/out/eslintServer.js";
+    const SERVER_BINARY_NAME: &'static str = "vscode-eslint-language-server";
     const SERVER_NAME: LanguageServerName = LanguageServerName::new_static("eslint");
 
     const FLAT_CONFIG_FILE_NAMES_V8_21: &'static [&'static str] = &["eslint.config.js"];
@@ -66,95 +45,8 @@ impl EsLintLspAdapter {
         ".eslintrc.json",
     ];
 
-    pub fn new(node: NodeRuntime, fs: Arc<dyn Fs>) -> Self {
-        EsLintLspAdapter { node, fs }
-    }
-
-    fn build_destination_path(container_dir: &Path) -> PathBuf {
-        container_dir.join(format!("vscode-eslint-{}", Self::CURRENT_VERSION))
-    }
-}
-
-impl LspInstaller for EsLintLspAdapter {
-    type BinaryVersion = GitHubLspBinaryVersion;
-
-    async fn fetch_latest_server_version(
-        &self,
-        _delegate: &Arc<dyn LspAdapterDelegate>,
-        _: bool,
-        _: &mut AsyncApp,
-    ) -> Result<GitHubLspBinaryVersion> {
-        let url = build_asset_url(
-            "microsoft/vscode-eslint",
-            Self::CURRENT_VERSION_TAG_NAME,
-            Self::GITHUB_ASSET_KIND,
-        )?;
-
-        Ok(GitHubLspBinaryVersion {
-            name: Self::CURRENT_VERSION.into(),
-            digest: None,
-            url,
-        })
-    }
-
-    fn fetch_server_binary(
-        &self,
-        version: GitHubLspBinaryVersion,
-        container_dir: PathBuf,
-        delegate: &Arc<dyn LspAdapterDelegate>,
-    ) -> impl Send + Future<Output = Result<LanguageServerBinary>> + use<> {
-        let delegate = delegate.clone();
-        let node = self.node.clone();
-
-        async move {
-            let destination_path = Self::build_destination_path(&container_dir);
-            let server_path = destination_path.join(Self::SERVER_PATH);
-
-            if fs::metadata(&server_path).await.is_err() {
-                remove_matching(&container_dir, |_| true).await;
-
-                download_server_binary(
-                    &*delegate.http_client(),
-                    &version.url,
-                    None,
-                    &destination_path,
-                    Self::GITHUB_ASSET_KIND,
-                )
-                .await?;
-
-                let mut dir = fs::read_dir(&destination_path).await?;
-                let first = dir.next().await.context("missing first file")??;
-                let repo_root = destination_path.join("vscode-eslint");
-                fs::rename(first.path(), &repo_root).await?;
-
-                node.run_npm_subcommand(Some(&repo_root), "install", &[])
-                    .await?;
-
-                node.run_npm_subcommand(Some(&repo_root), "run-script", &["compile"])
-                    .await?;
-            }
-
-            Ok(LanguageServerBinary {
-                path: node.binary_path().await?,
-                env: None,
-                arguments: eslint_server_binary_arguments(&server_path),
-            })
-        }
-    }
-
-    async fn cached_server_binary(
-        &self,
-        container_dir: PathBuf,
-        _: &dyn LspAdapterDelegate,
-    ) -> Option<LanguageServerBinary> {
-        let server_path =
-            Self::build_destination_path(&container_dir).join(EsLintLspAdapter::SERVER_PATH);
-        fs::metadata(&server_path).await.ok()?;
-        Some(LanguageServerBinary {
-            path: self.node.binary_path().await.ok()?,
-            env: None,
-            arguments: eslint_server_binary_arguments(&server_path),
-        })
+    pub fn new(fs: Arc<dyn Fs>) -> Self {
+        EsLintLspAdapter { fs }
     }
 }
 
@@ -312,6 +204,22 @@ impl LspAdapter for EsLintLspAdapter {
 
     fn name(&self) -> LanguageServerName {
         Self::SERVER_NAME
+    }
+
+    async fn check_if_user_installed(
+        &self,
+        delegate: &Arc<dyn LspAdapterDelegate>,
+        _: Option<Toolchain>,
+        _: &AsyncApp,
+    ) -> Option<LanguageServerBinary> {
+        let path = delegate.which(Self::SERVER_BINARY_NAME.as_ref()).await?;
+        let env = delegate.shell_env().await;
+
+        Some(LanguageServerBinary {
+            path,
+            env: Some(env),
+            arguments: vec!["--stdio".into()],
+        })
     }
 }
 

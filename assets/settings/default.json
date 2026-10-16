@@ -2208,7 +2208,7 @@
     "restore_unsaved_buffers": true,
     // Whether or not to skip worktree trust checks.
     // When trusted, project settings are synchronized automatically,
-    // language servers are downloaded and started automatically.
+    // language servers are started automatically.
     //
     // Default: false
     "trust_all_worktrees": false

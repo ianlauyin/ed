@@ -359,9 +359,7 @@ impl LanguageServerState {
                 .as_ref()
                 .and_then(|binary_status| match binary_status.status {
                     BinaryStatus::None => None,
-                    BinaryStatus::CheckingForUpdate
-                    | BinaryStatus::Downloading
-                    | BinaryStatus::Starting => Some((Color::Modified, "Starting…")),
+                    BinaryStatus::Starting => Some((Color::Modified, "Starting…")),
                     BinaryStatus::Stopping | BinaryStatus::Stopped => {
                         Some((Color::Disabled, "Stopped"))
                     }
@@ -977,10 +975,6 @@ impl LspButton {
                     {
                         let binary_status = match binary_status {
                             proto::ServerBinaryStatus::None => BinaryStatus::None,
-                            proto::ServerBinaryStatus::CheckingForUpdate => {
-                                BinaryStatus::CheckingForUpdate
-                            }
-                            proto::ServerBinaryStatus::Downloading => BinaryStatus::Downloading,
                             proto::ServerBinaryStatus::Starting => BinaryStatus::Starting,
                             proto::ServerBinaryStatus::Stopping => BinaryStatus::Stopping,
                             proto::ServerBinaryStatus::Stopped => BinaryStatus::Stopped,
@@ -1177,14 +1171,6 @@ impl LspButton {
                     BinaryStatus::None => {
                         can_restart_all = false;
                         can_stop_all |= true;
-                    }
-                    BinaryStatus::CheckingForUpdate => {
-                        can_restart_all = false;
-                        can_stop_all = false;
-                    }
-                    BinaryStatus::Downloading => {
-                        can_restart_all = false;
-                        can_stop_all = false;
                     }
                     BinaryStatus::Starting => {
                         can_restart_all = false;
