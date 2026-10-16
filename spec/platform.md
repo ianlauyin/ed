@@ -27,7 +27,7 @@ remote server supports macOS and Linux.
   abstraction crate; gpui holds an optional client used only to load remote images.
 - No proxy support: there is no `proxy` setting, environment proxy variables are
   ignored, and JSON language server proxy settings are not forwarded.
-- Ship only macOS default bindings and macOS variants of alternate keymaps.
+- Ship one macOS keymap constructed in Rust; alternate keymaps are removed.
 - The Linux remote server needs no display server, GPU, desktop integration, or fonts.
   It retains background execution, timers, and a foreground event loop for remote projects.
 - Linux remote data, configuration, and logs follow XDG directory settings.

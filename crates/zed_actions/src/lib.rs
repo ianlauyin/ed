@@ -31,21 +31,10 @@ pub struct OpenZedUrl {
 actions!(
     zed,
     [
-        /// Opens the settings JSON file.
-        #[action(deprecated_aliases = ["zed_actions::OpenSettings"])]
-        OpenSettingsFile,
         /// Opens the project tasks configuration.
         OpenProjectTasks,
         /// Opens the project tasks configuration with worktree setup guidance.
         OpenWorktreeSetupTasks,
-        /// Opens the default keymap file.
-        OpenDefaultKeymap,
-        /// Opens the user keymap file.
-        #[action(deprecated_aliases = ["zed_actions::OpenKeymap"])]
-        OpenKeymapFile,
-        /// Opens account settings.
-        /// Opens server settings.
-        OpenServerSettings,
         /// Quits the application.
         Quit,
         /// Shows information about Zed.
@@ -424,16 +413,6 @@ pub mod buffer_search {
         ]
     );
 }
-pub mod settings_profile_selector {
-    use gpui::Action;
-    use schemars::JsonSchema;
-    use serde::Deserialize;
-
-    #[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
-    #[action(namespace = settings_profile_selector)]
-    pub struct Toggle;
-}
-
 /// Opens the recent projects interface.
 #[derive(PartialEq, Clone, Deserialize, Default, JsonSchema, Action)]
 #[action(namespace = projects)]

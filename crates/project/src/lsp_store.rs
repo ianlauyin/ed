@@ -5443,11 +5443,7 @@ impl LspStore {
 
         let modeline_settings = {
             let settings_store = cx.global::<SettingsStore>();
-            let modeline_lines = settings_store
-                .raw_user_settings()
-                .and_then(|s| s.content.modeline_lines)
-                .or(settings_store.raw_default_settings().modeline_lines)
-                .unwrap_or(5);
+            let modeline_lines = settings_store.merged_settings().modeline_lines.unwrap_or(5);
 
             const MAX_MODELINE_BYTES: usize = 1024;
 

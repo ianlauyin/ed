@@ -22,21 +22,13 @@ fn init_git_hosting_provider_settings(cx: &mut App) {
 }
 
 fn update_git_hosting_providers_from_settings(cx: &mut App) {
-    let settings_store = cx.global::<SettingsStore>();
     let settings = GitHostingProviderSettings::get_global(cx);
     let provider_registry = GitHostingProviderRegistry::global(cx);
-
-    let local_values: Vec<GitHostingProviderConfig> = settings_store
-        .get_all_locals::<GitHostingProviderSettings>()
-        .into_iter()
-        .flat_map(|(_, _, providers)| providers.git_hosting_providers.clone())
-        .collect();
 
     let iter = settings
         .git_hosting_providers
         .clone()
         .into_iter()
-        .chain(local_values)
         .filter_map(|provider| {
             let url = Url::parse(&provider.base_url).log_err()?;
 

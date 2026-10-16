@@ -24,7 +24,6 @@ use settings::{SemanticTokenRules, Settings};
 use terminal::terminal_settings::TerminalSettings;
 
 use std::cmp::{Ordering, Reverse};
-use util::command::Stdio;
 
 use util::paths::PathStyle;
 use util::rel_path::RelPath;
@@ -1769,119 +1768,6 @@ impl LspAdapter for BasedPyrightLspAdapter {
 pub(crate) struct RuffLspAdapter;
 
 impl RuffLspAdapter {
-    fn convert_ruff_schema(raw_schema: &serde_json::Value) -> serde_json::Value {
-        let Some(schema_object) = raw_schema.as_object() else {
-            return raw_schema.clone();
-        };
-
-        let mut root_properties = serde_json::Map::new();
-
-        for (key, value) in schema_object {
-            let parts: Vec<&str> = key.split('.').collect();
-
-            if parts.is_empty() {
-                continue;
-            }
-
-            let mut current = &mut root_properties;
-
-            for (i, part) in parts.iter().enumerate() {
-                let is_last = i == parts.len() - 1;
-
-                if is_last {
-                    let mut schema_entry = serde_json::Map::new();
-
-                    if let Some(doc) = value.get("doc").and_then(|d| d.as_str()) {
-                        schema_entry.insert(
-                            "markdownDescription".to_string(),
-                            serde_json::Value::String(doc.to_string()),
-                        );
-                    }
-
-                    if let Some(default_val) = value.get("default") {
-                        schema_entry.insert("default".to_string(), default_val.clone());
-                    }
-
-                    if let Some(value_type) = value.get("value_type").and_then(|v| v.as_str()) {
-                        if value_type.contains('|') {
-                            let enum_values: Vec<serde_json::Value> = value_type
-                                .split('|')
-                                .map(|s| s.trim().trim_matches('"'))
-                                .filter(|s| !s.is_empty())
-                                .map(|s| serde_json::Value::String(s.to_string()))
-                                .collect();
-
-                            if !enum_values.is_empty() {
-                                schema_entry
-                                    .insert("type".to_string(), serde_json::json!("string"));
-                                schema_entry.insert(
-                                    "enum".to_string(),
-                                    serde_json::Value::Array(enum_values),
-                                );
-                            }
-                        } else if value_type.starts_with("list[") {
-                            schema_entry.insert("type".to_string(), serde_json::json!("array"));
-                            if let Some(item_type) = value_type
-                                .strip_prefix("list[")
-                                .and_then(|s| s.strip_suffix(']'))
-                            {
-                                let json_type = match item_type {
-                                    "str" => "string",
-                                    "int" => "integer",
-                                    "bool" => "boolean",
-                                    _ => "string",
-                                };
-                                schema_entry.insert(
-                                    "items".to_string(),
-                                    serde_json::json!({"type": json_type}),
-                                );
-                            }
-                        } else if value_type.starts_with("dict[") {
-                            schema_entry.insert("type".to_string(), serde_json::json!("object"));
-                        } else {
-                            let json_type = match value_type {
-                                "bool" => "boolean",
-                                "int" | "usize" => "integer",
-                                "str" => "string",
-                                _ => "string",
-                            };
-                            schema_entry.insert(
-                                "type".to_string(),
-                                serde_json::Value::String(json_type.to_string()),
-                            );
-                        }
-                    }
-
-                    current.insert(part.to_string(), serde_json::Value::Object(schema_entry));
-                } else {
-                    let next_current = current
-                        .entry(part.to_string())
-                        .or_insert_with(|| {
-                            serde_json::json!({
-                                "type": "object",
-                                "properties": {}
-                            })
-                        })
-                        .as_object_mut()
-                        .expect("should be an object")
-                        .entry("properties")
-                        .or_insert_with(|| serde_json::json!({}))
-                        .as_object_mut()
-                        .expect("properties should be an object");
-
-                    current = next_current;
-                }
-            }
-        }
-
-        serde_json::json!({
-            "type": "object",
-            "properties": root_properties
-        })
-    }
-}
-
-impl RuffLspAdapter {
     const SERVER_NAME: LanguageServerName = LanguageServerName::new_static("ruff");
 
     pub fn new() -> RuffLspAdapter {
@@ -1893,39 +1779,6 @@ impl RuffLspAdapter {
 impl LspAdapter for RuffLspAdapter {
     fn name(&self) -> LanguageServerName {
         Self::SERVER_NAME
-    }
-
-    async fn initialization_options_schema(
-        self: Arc<Self>,
-        delegate: &Arc<dyn LspAdapterDelegate>,
-        cx: &mut AsyncApp,
-    ) -> Option<serde_json::Value> {
-        let binary = self.check_if_user_installed(delegate, None, cx).await?;
-
-        let mut command = util::command::new_command(&binary.path);
-        command
-            .args(&["config", "--output-format", "json"])
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        let cmd = command
-            .spawn()
-            .map_err(|e| log::debug!("failed to spawn command {command:?}: {e}"))
-            .ok()?;
-        let output = cmd
-            .output()
-            .await
-            .map_err(|e| log::debug!("failed to execute command {command:?}: {e}"))
-            .ok()?;
-        if !output.status.success() {
-            return None;
-        }
-
-        let raw_schema: serde_json::Value = serde_json::from_slice(output.stdout.as_slice())
-            .map_err(|e| log::debug!("failed to parse ruff's JSON schema output: {e}"))
-            .ok()?;
-
-        let converted_schema = Self::convert_ruff_schema(&raw_schema);
-        Some(converted_schema)
     }
 
     async fn check_if_user_installed(

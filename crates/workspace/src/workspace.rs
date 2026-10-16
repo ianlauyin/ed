@@ -5901,14 +5901,8 @@ impl Workspace {
         let mut title = render_window_title_format(template, separator, &context);
         // Keep the normal title when a custom template resolves entirely to
         // empty or unknown placeholders.
-        if title.trim().is_empty()
-            && let Some(default_template) = cx
-                .global::<SettingsStore>()
-                .raw_default_settings()
-                .workspace
-                .window_title_format
-                .as_deref()
-        {
+        if title.trim().is_empty() {
+            let default_template = settings::DEFAULT_WINDOW_TITLE_FORMAT;
             let needs = WindowTitleNeeds::from_template(default_template);
             let context =
                 Self::window_title_context(&project, active_project_path.as_ref(), &needs, cx);

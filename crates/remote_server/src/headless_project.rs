@@ -29,7 +29,7 @@ use rpc::{
     proto::{self, REMOTE_SERVER_PEER_ID, REMOTE_SERVER_PROJECT_ID},
 };
 
-use settings::{Settings as _, SettingsLocation, initial_server_settings_content};
+use settings::{Settings as _, SettingsLocation};
 use std::{
     mem,
     num::NonZeroU64,
@@ -230,7 +230,6 @@ impl HeadlessProject {
         session.add_entity_request_handler(Self::handle_open_buffer_by_path);
         session.add_entity_request_handler(Self::handle_open_new_buffer);
         session.add_entity_request_handler(Self::handle_find_search_candidates);
-        session.add_entity_request_handler(Self::handle_open_server_settings);
         session.add_entity_request_handler(Self::handle_get_directory_environment);
         session.add_entity_request_handler(Self::handle_get_terminal_shell);
         session.add_entity_message_handler(Self::handle_toggle_lsp_logs);
@@ -891,59 +890,6 @@ impl HeadlessProject {
         })?;
 
         Ok(())
-    }
-
-    async fn handle_open_server_settings(
-        this: Entity<Self>,
-        _: TypedEnvelope<proto::OpenServerSettings>,
-        mut cx: AsyncApp,
-    ) -> Result<proto::OpenBufferResponse> {
-        let settings_path = paths::settings_file();
-        let (worktree, path) = this
-            .update(&mut cx, |this, cx| {
-                this.worktree_store.update(cx, |worktree_store, cx| {
-                    worktree_store.find_or_create_worktree(settings_path, false, cx)
-                })
-            })
-            .await?;
-
-        let (buffer, buffer_store) = this.update(&mut cx, |this, cx| {
-            let buffer = this.buffer_store.update(cx, |buffer_store, cx| {
-                buffer_store.open_buffer(
-                    ProjectPath {
-                        worktree_id: worktree.read(cx).id(),
-                        path,
-                    },
-                    cx,
-                )
-            });
-
-            (buffer, this.buffer_store.clone())
-        });
-
-        let buffer = buffer.await?;
-
-        let buffer_id = cx.update(|cx| {
-            if buffer.read(cx).is_empty() {
-                buffer.update(cx, |buffer, cx| {
-                    buffer.edit([(0..0, initial_server_settings_content())], None, cx)
-                });
-            }
-
-            let buffer_id = buffer.read(cx).remote_id();
-
-            buffer_store.update(cx, |buffer_store, cx| {
-                buffer_store
-                    .create_buffer_for_peer(&buffer, REMOTE_SERVER_PEER_ID, cx)
-                    .detach_and_log_err(cx);
-            });
-
-            buffer_id
-        });
-
-        Ok(proto::OpenBufferResponse {
-            buffer_id: buffer_id.to_proto(),
-        })
     }
 
     async fn handle_find_search_candidates(

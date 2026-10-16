@@ -213,9 +213,8 @@ impl JsonSchema for ActionWithArguments {
     /// The real schema, an `anyOf` of every registered action name that
     /// supports arguments, with action documentation and deprecation metadata,
     /// cannot be produced here because `JsonSchema::json_schema` receives no
-    /// runtime context. At the time of writing, it is instead built by
-    /// [`KeymapFile::generate_json_schema`], where all of the runtime
-    /// information is available.
+    /// runtime context. Consumers that expose editable action inputs supply
+    /// their schema from the action registry.
     fn json_schema(_: &mut SchemaGenerator) -> Schema {
         json_schema!(true)
     }

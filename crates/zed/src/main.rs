@@ -40,7 +40,7 @@ use parking_lot::Mutex;
 use project::{project_settings::ProjectSettings, trusted_worktrees};
 use recent_projects::{RemoteSettings, open_remote_project};
 use session::{AppSession, Session};
-use settings::{Settings, SettingsStore, watch_config_file};
+use settings::{Settings, SettingsStore};
 use settings_content::app_metadata::{AppCommitSha, AppVersion};
 use smol::future::poll_once;
 use std::{
@@ -63,8 +63,8 @@ use workspace::{
 };
 use zed::{
     OpenListener, OpenRequest, RawOpenRequest, app_menus, build_window_options,
-    derive_paths_with_position, handle_cli_connection, handle_keymap_file_changes,
-    initialize_workspace, open_paths_with_positions,
+    derive_paths_with_position, handle_cli_connection, initialize_keymap, initialize_workspace,
+    open_paths_with_positions,
 };
 
 use crate::zed::{CrashHandler, OpenRequestKind};
@@ -314,12 +314,6 @@ fn main() {
     }
 
     let fs = RealFs::new(git_binary_path, app.background_executor());
-    let (user_keymap_file_rx, user_keymap_watcher) = watch_config_file(
-        &app.background_executor(),
-        fs.clone(),
-        paths::keymap_file().clone(),
-    );
-
     let (shell_env_loaded_tx, shell_env_loaded_rx) = oneshot::channel();
     if !stdout_is_a_pty() {
         app.background_executor()
@@ -375,8 +369,7 @@ fn main() {
         }
         settings::init(cx);
         zlog_settings::init(cx);
-        zed::watch_settings_files(fs.clone(), cx);
-        handle_keymap_file_changes(user_keymap_file_rx, user_keymap_watcher, cx);
+        initialize_keymap(cx);
 
         let user_agent = format!(
             "Zed/{} ({}; {})",
@@ -495,7 +488,6 @@ fn main() {
         lsp_command_selector::init(cx);
         toolchain_selector::init(cx);
         theme_selector::init(cx);
-        settings_profile_selector::init(cx);
         language_tools::init(cx);
 
         title_bar::init(cx);
@@ -1383,7 +1375,7 @@ fn dump_all_gpui_actions() {
         deprecation_message: Option<&'static str>,
         documentation: Option<&'static str>,
     }
-    let mut generator = settings::KeymapFile::action_schema_generator();
+    let mut generator = settings::action_schema_generator();
     let mut actions = gpui::generate_list_of_all_registered_actions()
         .map(|action| {
             let schema = (action.json_schema)(&mut generator)

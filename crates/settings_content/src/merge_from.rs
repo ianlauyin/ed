@@ -1,14 +1,12 @@
 /// Trait for recursively merging settings structures.
 ///
-/// When Zed starts it loads settings from `default.json` to initialize
-/// everything. These may be further refined by loading the user's settings,
-/// and any settings profiles; and then further refined by loading any
-/// local project settings.
+/// Settings are constructed in Rust. Merging combines language conventions,
+/// per-language preferences, and temporary overrides of partial values.
 ///
 /// The default behaviour of merging is:
 /// * For objects with named keys (HashMap, structs, etc.). The values are merged deeply
-///   (so if the default settings has languages.JSON.prettier.allowed = true, and the user's settings has
-///    languages.JSON.tab_size = 4; the merged settings file will have both settings).
+///   (for example, a language's formatter preference and indentation convention
+///   are both retained when combining partial settings).
 /// * For options, a None value is ignored, but Some values are merged recursively.
 /// * For other types (including Vec), a merge overwrites the current value.
 ///

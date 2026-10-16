@@ -1,9 +1,13 @@
-mod base_keymap_setting;
+mod action_schema;
+mod action_sequence;
+mod built_in;
+mod built_in_keymap;
+mod built_in_semantic_token_rules;
 mod content_into_gpui;
 mod editable_setting_control;
 mod editorconfig_store;
 mod granted_write_path;
-mod keymap_file;
+mod keymap;
 mod settings_file;
 mod settings_store;
 
@@ -23,57 +27,27 @@ pub mod private {
     pub use inventory;
 }
 
-use gpui::{App, Global};
+use gpui::App;
 
-use std::env;
 use std::{borrow::Cow, fmt, str};
 use util::asset_str;
 
 pub use ::settings_content::*;
-pub use base_keymap_setting::*;
+pub use action_schema::*;
+pub use action_sequence::ActionSequence;
+pub use built_in_keymap::keymap as built_in_keymap;
 pub use content_into_gpui::IntoGpui;
 pub use editable_setting_control::*;
 pub use editorconfig_store::{
     Editorconfig, EditorconfigEvent, EditorconfigProperties, EditorconfigStore,
 };
 pub use granted_write_path::GrantedWritePath;
-pub use keymap_file::{
-    KeyBindingValidator, KeyBindingValidatorRegistration, KeybindSource, KeybindUpdateOperation,
-    KeybindUpdateTarget, KeymapFile, KeymapFileLoadResult,
-};
+pub use keymap::{KeyBindingSpec, built_in_key_bindings};
 pub use settings_file::*;
-pub use settings_json::*;
 pub use settings_store::{
-    DefaultSemanticTokenRules, InvalidSettingsError, LSP_SETTINGS_SCHEMA_URL_PREFIX,
-    LocalSettingsKind, LocalSettingsPath, Settings, SettingsFile, SettingsJsonSchemaParams,
-    SettingsKey, SettingsLocation, SettingsParseResult, SettingsStore,
+    DefaultSemanticTokenRules, InvalidSettingsError, LocalSettingsKind, LocalSettingsPath,
+    Settings, SettingsLocation, SettingsStore,
 };
-
-
-pub use keymap_file::ActionSequence;
-
-#[derive(Clone, Debug, PartialEq)]
-pub struct ActiveSettingsProfileName(pub String);
-
-impl Global for ActiveSettingsProfileName {}
-
-pub trait UserSettingsContentExt {
-    fn for_profile(&self, cx: &App) -> Option<&SettingsProfile>;
-    fn for_os(&self) -> Option<&SettingsContent>;
-}
-
-impl UserSettingsContentExt for UserSettingsContent {
-    fn for_profile(&self, cx: &App) -> Option<&SettingsProfile> {
-        let Some(active_profile) = cx.try_global::<ActiveSettingsProfileName>() else {
-            return None;
-        };
-        self.profiles.get(&active_profile.0)
-    }
-
-    fn for_os(&self) -> Option<&SettingsContent> {
-        self.platform_overrides.get_by_key(env::consts::OS)
-    }
-}
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash, PartialOrd, Ord, serde::Serialize)]
 pub struct WorktreeId(usize);
@@ -114,51 +88,15 @@ util::fs_embed! {
     pub struct SettingsAssets,
     crate_relative = "../../assets",
     root_relative = "assets",
-    include = ["settings/*", "keymaps/*"],
+    include = ["settings/*"],
     exclude = ["*.DS_Store"],
 }
 
+pub use built_in::DEFAULT_WINDOW_TITLE_FORMAT;
+
 pub fn init(cx: &mut App) {
-    let settings = SettingsStore::new(cx, &default_settings());
+    let settings = SettingsStore::new(cx, built_in::settings());
     cx.set_global(settings);
-    SettingsStore::observe_active_settings_profile_name(cx).detach();
-}
-
-pub fn default_settings() -> Cow<'static, str> {
-    asset_str::<SettingsAssets>("settings/default.json")
-}
-
-pub fn default_semantic_token_rules() -> Cow<'static, str> {
-    asset_str::<SettingsAssets>("settings/default_semantic_token_rules.json")
-}
-
-pub const DEFAULT_KEYMAP_PATH: &str = "keymaps/default-macos.json";
-
-pub fn default_keymap() -> Cow<'static, str> {
-    asset_str::<SettingsAssets>(DEFAULT_KEYMAP_PATH)
-}
-
-/// Specific keybinding overrides. Loaded after the base keymap so they win over
-/// conflicting base-keymap (and default `Editor`) bindings for the same chords,
-/// while still allowing user keymaps (loaded last) to override them. Shared
-/// across features - prefer adding a context block here over creating another
-/// override keymap file.
-pub const SPECIFIC_OVERRIDES_KEYMAP_PATH: &str = "keymaps/specific-overrides-macos.json";
-
-pub fn initial_user_settings_content() -> Cow<'static, str> {
-    asset_str::<SettingsAssets>("settings/initial_user_settings.json")
-}
-
-pub fn initial_server_settings_content() -> Cow<'static, str> {
-    asset_str::<SettingsAssets>("settings/initial_server_settings.json")
-}
-
-pub fn initial_project_settings_content() -> Cow<'static, str> {
-    asset_str::<SettingsAssets>("settings/initial_local_settings.json")
-}
-
-pub fn initial_keymap_content() -> Cow<'static, str> {
-    asset_str::<SettingsAssets>("keymaps/initial.json")
 }
 
 pub fn initial_tasks_content() -> Cow<'static, str> {

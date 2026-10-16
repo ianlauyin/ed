@@ -2,7 +2,7 @@ use crate::{settings_content::SettingsContent, settings_store::SettingsStore};
 use collections::HashSet;
 use fs::{Fs, PathEventKind};
 use futures::{StreamExt, channel::mpsc};
-use gpui::{App, BackgroundExecutor, ReadGlobal};
+use gpui::{App, BackgroundExecutor, ReadGlobal, UpdateGlobal};
 use std::{path::PathBuf, sync::Arc, time::Duration};
 
 pub const EMPTY_THEME_NAME: &str = "empty-theme";
@@ -105,18 +105,30 @@ pub fn watch_config_dir(
     rx
 }
 
+/// Apply a setting change for this session. The legacy helper name is retained
+/// for callers; settings are never persisted to a configuration file.
 pub fn update_settings_file(
-    fs: Arc<dyn Fs>,
+    _fs: Arc<dyn Fs>,
     cx: &App,
     update: impl 'static + Send + FnOnce(&mut SettingsContent, &App),
 ) {
-    SettingsStore::global(cx).update_settings_file(fs, update)
+    _ = update_settings_file_with_completion(_fs, cx, update);
 }
 
 pub fn update_settings_file_with_completion(
-    fs: Arc<dyn Fs>,
+    _fs: Arc<dyn Fs>,
     cx: &App,
     update: impl 'static + Send + FnOnce(&mut SettingsContent, &App),
 ) -> futures::channel::oneshot::Receiver<anyhow::Result<()>> {
-    SettingsStore::global(cx).update_settings_file_with_completion(fs, update)
+    let (tx, rx) = futures::channel::oneshot::channel();
+    cx.spawn(async move |cx| {
+        cx.update(|cx| {
+            let mut content = SettingsStore::global(cx).settings().clone();
+            update(&mut content, cx);
+            SettingsStore::update_global(cx, |store, cx| store.set_settings(content, cx));
+            _ = tx.send(Ok(()));
+        });
+    })
+    .detach();
+    rx
 }

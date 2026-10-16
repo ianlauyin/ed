@@ -5,14 +5,10 @@ use collections::{BTreeMap, HashMap};
 use gpui::Rgba;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use settings_json::parse_json_with_comments;
 use settings_macros::{MergeFrom, with_fallible_options};
 use util::serde::default_true;
 
-use crate::{
-    AllLanguageSettingsContent, DelayMs, ExtendingVec, ParseStatus, ProjectTerminalSettingsContent,
-    RootUserSettings, SplicingVec, fallible_options,
-};
+use crate::{AllLanguageSettingsContent, DelayMs, ExtendingVec, SplicingVec};
 
 #[with_fallible_options]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
@@ -24,15 +20,6 @@ impl IntoIterator for LspSettingsMap {
 
     fn into_iter(self) -> Self::IntoIter {
         self.0.into_iter()
-    }
-}
-
-impl RootUserSettings for ProjectSettingsContent {
-    fn parse_json(json: &str) -> (Option<Self>, ParseStatus) {
-        fallible_options::parse_json(json)
-    }
-    fn parse_json_with_comments(json: &str) -> anyhow::Result<Self> {
-        parse_json_with_comments(json)
     }
 }
 
@@ -56,8 +43,6 @@ pub struct ProjectSettingsContent {
     #[serde(default)]
     pub lsp: LspSettingsMap,
 
-    pub terminal: Option<ProjectTerminalSettingsContent>,
-
     pub load_direnv: Option<DirenvSettings>,
 
     /// The list of custom Git hosting providers.
@@ -67,7 +52,7 @@ pub struct ProjectSettingsContent {
 crate::fallible_options::flattened_deserialize!(ProjectSettingsContent {
     sections: { all_languages, worktree },
     options: {
-        terminal, load_direnv, git_hosting_providers,
+        load_direnv, git_hosting_providers,
     },
     defaults: { lsp },
 });

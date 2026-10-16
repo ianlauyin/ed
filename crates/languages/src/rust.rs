@@ -41,68 +41,6 @@ pub struct RustLspAdapter;
 const SERVER_NAME: LanguageServerName = LanguageServerName::new_static("rust-analyzer");
 
 impl RustLspAdapter {
-    fn convert_rust_analyzer_schema(raw_schema: &serde_json::Value) -> serde_json::Value {
-        let Some(schema_array) = raw_schema.as_array() else {
-            return raw_schema.clone();
-        };
-
-        let mut root_properties = serde_json::Map::new();
-
-        for item in schema_array {
-            if let Some(props) = item.get("properties").and_then(|p| p.as_object()) {
-                for (key, value) in props {
-                    let parts: Vec<&str> = key.split('.').collect();
-
-                    if parts.is_empty() {
-                        continue;
-                    }
-
-                    let parts_to_process = if parts.first() == Some(&"rust-analyzer") {
-                        &parts[1..]
-                    } else {
-                        &parts[..]
-                    };
-
-                    if parts_to_process.is_empty() {
-                        continue;
-                    }
-
-                    let mut current = &mut root_properties;
-
-                    for (i, part) in parts_to_process.iter().enumerate() {
-                        let is_last = i == parts_to_process.len() - 1;
-
-                        if is_last {
-                            current.insert(part.to_string(), value.clone());
-                        } else {
-                            let next_current = current
-                                .entry(part.to_string())
-                                .or_insert_with(|| {
-                                    serde_json::json!({
-                                        "type": "object",
-                                        "properties": {}
-                                    })
-                                })
-                                .as_object_mut()
-                                .expect("should be an object")
-                                .entry("properties")
-                                .or_insert_with(|| serde_json::json!({}))
-                                .as_object_mut()
-                                .expect("properties should be an object");
-
-                            current = next_current;
-                        }
-                    }
-                }
-            }
-        }
-
-        serde_json::json!({
-            "type": "object",
-            "properties": root_properties
-        })
-    }
-
     async fn rustup_rust_analyzer_for_worktree(
         delegate: &dyn LspAdapterDelegate,
     ) -> Option<PathBuf> {
@@ -530,40 +468,6 @@ impl LspAdapter for RustLspAdapter {
         }
 
         Some(label)
-    }
-
-    async fn initialization_options_schema(
-        self: Arc<Self>,
-        delegate: &Arc<dyn LspAdapterDelegate>,
-        cx: &mut AsyncApp,
-    ) -> Option<serde_json::Value> {
-        let binary = self.check_if_user_installed(delegate, None, cx).await?;
-
-        let mut command = util::command::new_command(&binary.path);
-        command
-            .arg("--print-config-schema")
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped());
-        let cmd = command
-            .spawn()
-            .map_err(|e| log::debug!("failed to spawn command {command:?}: {e}"))
-            .ok()?;
-        let output = cmd
-            .output()
-            .await
-            .map_err(|e| log::debug!("failed to execute command {command:?}: {e}"))
-            .ok()?;
-        if !output.status.success() {
-            return None;
-        }
-
-        let raw_schema: serde_json::Value = serde_json::from_slice(output.stdout.as_slice())
-            .map_err(|e| log::debug!("failed to parse rust-analyzer's JSON schema output: {e}"))
-            .ok()?;
-
-        // Convert rust-analyzer's array-based schema format to nested JSON Schema
-        let converted_schema = Self::convert_rust_analyzer_schema(&raw_schema);
-        Some(converted_schema)
     }
 
     async fn label_for_symbol(

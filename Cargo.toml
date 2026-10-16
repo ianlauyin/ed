@@ -15,7 +15,6 @@ members = [
     "crates/crashes",
     "crates/db",
     "crates/diagnostics",
-    "crates/docs_preprocessor",
     "crates/editor",
     "crates/encoding_selector",
     "crates/env_var",
@@ -88,9 +87,7 @@ members = [
     "crates/session",
     "crates/settings",
     "crates/settings_content",
-    "crates/settings_json",
     "crates/settings_macros",
-    "crates/settings_profile_selector",
     "crates/snippet",
     "crates/snippet_provider",
     "crates/snippets_ui",
@@ -226,9 +223,7 @@ search = { path = "crates/search" }
 session = { path = "crates/session" }
 settings = { path = "crates/settings" }
 settings_content = { path = "crates/settings_content" }
-settings_json = { path = "crates/settings_json", default-features = false }
 settings_macros = { path = "crates/settings_macros" }
-settings_profile_selector = { path = "crates/settings_profile_selector" }
 snippet = { path = "crates/snippet" }
 snippet_provider = { path = "crates/snippet_provider" }
 snippets_ui = { path = "crates/snippets_ui" }
@@ -356,7 +351,6 @@ indexmap = { version = "2.7.0", features = ["serde"] }
 indoc = "2"
 inventory = "0.3.19"
 itertools = "0.14.0"
-jsonschema = { version = "0.51", default-features = false }
 libc = "0.2"
 libsqlite3-sys = { version = "0.30.1", features = ["bundled"] }
 linkify = "0.10.0"
@@ -365,7 +359,6 @@ lru = "0.16"
 lsp-types = { git = "https://github.com/zed-industries/lsp-types", rev = "f1783e63a7f4eb4397bf51d4148b4895a1f7ab16" }
 mach2 = "0.6"
 markup5ever_rcdom = "0.39"
-mdbook = { version = "=0.4.40", default-features = false, features = ["search"] }
 merman = { version = "=0.8.0-alpha.5", default-features = false }
 minidumper = "0.11"
 nix = "0.30"
@@ -607,6 +600,8 @@ zed_actions = { codegen-units = 1 }
 debug = "line-tables-only"
 split-debuginfo = "packed"
 strip = true
+lto = "thin"
+codegen-units = 1
 
 [profile.release.package]
 zed = { codegen-units = 16 }

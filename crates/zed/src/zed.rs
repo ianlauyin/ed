@@ -14,7 +14,6 @@ use assets::Assets;
 use breadcrumbs::Breadcrumbs;
 use collections::VecDeque;
 use editor::{Editor, MultiBuffer};
-use futures::{StreamExt, channel::mpsc, select_biased};
 use git_ui::branch_diff::BranchDiffToolbar;
 use git_ui::commit_view::CommitViewToolbar;
 use git_ui::git_panel::GitPanel;
@@ -24,23 +23,21 @@ use git_ui::staged_diff::StagedDiffToolbar;
 use git_ui::unstaged_diff::UnstagedDiffToolbar;
 use git_ui_core::file_diff_view::FileDiffStyleToolbar;
 use gpui::{
-    Action, App, AppContext as _, ClipboardItem, Context, DismissEvent, Element, Entity,
-    FocusHandle, Focusable, Image, ImageFormat, KeyBinding, ParentElement, PathPromptOptions,
-    PromptLevel, ReadGlobal, SharedString, Size, Task, TaskExt, TitlebarOptions, UpdateGlobal,
-    WeakEntity, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions, actions,
-    image_cache, img, point, px, retain_all,
+    Action, App, AppContext as _, ClipboardItem, Context, DismissEvent, Entity, FocusHandle,
+    Focusable, Image, ImageFormat, ParentElement, PathPromptOptions, PromptLevel, ReadGlobal,
+    SharedString, Size, Task, TaskExt, TitlebarOptions, WeakEntity, Window, WindowBounds,
+    WindowHandle, WindowKind, WindowOptions, actions, img, point, px,
 };
 use image_viewer::ImageInfo;
 use language::Capability;
 use language_onboarding::BasedPyrightBanner;
 use language_tools::lsp_button::{self, LspButton};
 use language_tools::lsp_log_view::LspLogToolbarItemView;
-use markdown::{Markdown, MarkdownElement, MarkdownFont, MarkdownStyle};
 pub use open_listener::*;
 use outline_panel::OutlinePanel;
-use paths::{local_settings_file_relative_path, local_tasks_file_relative_path};
+use paths::local_tasks_file_relative_path;
 use project::{
-    DirectoryLister, ProjectItem,
+    DirectoryLister,
     project_settings::{SettingsObserver, SettingsObserverEvent},
 };
 use project_panel::ProjectPanel;
@@ -49,9 +46,7 @@ use recent_projects::open_remote_project;
 use rope::Rope;
 use search::project_search::ProjectSearchBar;
 use settings::{
-    BaseKeymap, DEFAULT_KEYMAP_PATH, DefaultOpenBehavior, InvalidSettingsError, KeybindSource,
-    KeymapFile, KeymapFileLoadResult, SPECIFIC_OVERRIDES_KEYMAP_PATH, Settings, SettingsFile,
-    SettingsStore, initial_project_settings_content, initial_tasks_content, update_settings_file,
+    DefaultOpenBehavior, Settings, SettingsStore, initial_tasks_content, update_settings_file,
 };
 use settings_content::app_metadata::{AppCommitSha, AppVersion};
 #[cfg(debug_assertions)]
@@ -67,7 +62,6 @@ use terminal_view::terminal_panel::{self, TerminalPanel};
 use theme::ActiveTheme;
 use theme_settings::ThemeSettings;
 use ui::{Navigable, NavigableEntry, PopoverMenuHandle, TintColor, prelude::*};
-use util::markdown::MarkdownString;
 use util::rel_path::RelPath;
 use util::{ResultExt, asset_str, maybe};
 use uuid::Uuid;
@@ -81,8 +75,7 @@ use workspace::{
 };
 use workspace::{CloseProject, CloseWindow, with_active_or_new_workspace};
 use zed_actions::{
-    About, GetMerch, OpenBrowser, OpenDocs, OpenProjectTasks, OpenServerSettings, OpenSettingsFile,
-    OpenStatusPage, OpenZedUrl, Quit,
+    About, GetMerch, OpenBrowser, OpenDocs, OpenProjectTasks, OpenStatusPage, OpenZedUrl, Quit,
 };
 
 const DOCS_URL: &str = "https://zed.dev/docs/";
@@ -102,14 +95,8 @@ actions!(
         HideOthers,
         /// Minimizes the current window.
         Minimize,
-        /// Opens the default settings file.
-        OpenDefaultSettings,
-        /// Opens project-specific settings file.
-        OpenProjectSettingsFile,
         /// Opens the tasks panel.
         OpenTasks,
-        /// Shows the default semantic token rules (read-only).
-        ShowDefaultSemanticTokenRules,
         /// Resets the application database.
         ResetDatabase,
         /// Shows all hidden windows.
@@ -191,67 +178,11 @@ pub fn init(cx: &mut App) {
             );
         });
     })
-    .on_action(|&zed_actions::OpenKeymapFile, cx| {
-        with_active_or_new_workspace(cx, |_, window, cx| {
-            open_settings_file(
-                paths::keymap_file(),
-                || settings::initial_keymap_content().as_ref().into(),
-                window,
-                cx,
-            );
-        });
-    })
-    .on_action(|_: &OpenSettingsFile, cx| {
-        with_active_or_new_workspace(cx, |_, window, cx| {
-            open_settings_file(
-                paths::settings_file(),
-                || settings::initial_user_settings_content().as_ref().into(),
-                window,
-                cx,
-            );
-        });
-    })
     .on_action(|_: &OpenTasks, cx| {
         with_active_or_new_workspace(cx, |_, window, cx| {
             open_settings_file(
                 paths::tasks_file(),
                 || settings::initial_tasks_content().as_ref().into(),
-                window,
-                cx,
-            );
-        });
-    })
-    .on_action(|_: &ShowDefaultSemanticTokenRules, cx| {
-        with_active_or_new_workspace(cx, |workspace, window, cx| {
-            open_bundled_file(
-                workspace,
-                settings::default_semantic_token_rules(),
-                "Default Semantic Token Rules",
-                "JSONC",
-                window,
-                cx,
-            );
-        });
-    })
-    .on_action(|_: &OpenDefaultSettings, cx| {
-        with_active_or_new_workspace(cx, |workspace, window, cx| {
-            open_bundled_file(
-                workspace,
-                settings::default_settings(),
-                "Default Settings",
-                "JSON",
-                window,
-                cx,
-            );
-        });
-    })
-    .on_action(|_: &zed_actions::OpenDefaultKeymap, cx| {
-        with_active_or_new_workspace(cx, |workspace, window, cx| {
-            open_bundled_file(
-                workspace,
-                settings::default_keymap(),
-                "Default Key Bindings",
-                "JSON",
                 window,
                 cx,
             );
@@ -492,7 +423,7 @@ fn register_actions(
     app_state: Arc<AppState>,
     workspace: &mut Workspace,
     _: &mut Window,
-    cx: &mut Context<Workspace>,
+    _cx: &mut Context<Workspace>,
 ) {
     workspace
         .register_action(|_, _: &OpenDocs, _, cx| cx.open_url(DOCS_URL))
@@ -792,7 +723,6 @@ fn register_actions(
                 }
             }
         })
-        .register_action(open_project_settings_file)
         .register_action(open_project_tasks_file)
         .register_action(open_worktree_setup_tasks_file)
         .register_action(
@@ -865,38 +795,6 @@ fn register_actions(
                 .detach_and_log_err(cx);
             }
         });
-
-    if workspace.project().read(cx).is_via_remote_server() {
-        workspace.register_action({
-            move |workspace, _: &OpenServerSettings, window, cx| {
-                let open_server_settings = workspace
-                    .project()
-                    .update(cx, |project, cx| project.open_server_settings(cx));
-
-                cx.spawn_in(window, async move |workspace, cx| {
-                    let buffer = open_server_settings.await?;
-
-                    workspace
-                        .update_in(cx, |workspace, window, cx| {
-                            workspace.open_path(
-                                buffer
-                                    .read(cx)
-                                    .project_path(cx)
-                                    .expect("Settings file must have a location"),
-                                None,
-                                true,
-                                window,
-                                cx,
-                            )
-                        })?
-                        .await?;
-
-                    anyhow::Ok(())
-                })
-                .detach_and_log_err(cx);
-            }
-        });
-    }
 
     #[cfg(debug_assertions)]
     workspace.register_action(|workspace, _: &ShowWorkspaceError, _, cx| {
@@ -1359,46 +1257,6 @@ fn open_log_file(workspace: &mut Workspace, window: &mut Window, cx: &mut Contex
     .detach();
 }
 
-fn notify_settings_errors(result: settings::SettingsParseResult, is_user: bool, cx: &mut App) {
-    if let settings::ParseStatus::Failed { error: err } = &result.parse_status {
-        let settings_type = if is_user { "user" } else { "global" };
-        log::error!("Failed to load {} settings: {err}", settings_type);
-    }
-
-    let error = match result.parse_status {
-        settings::ParseStatus::Failed { error } => Some(anyhow::format_err!(error)),
-        settings::ParseStatus::Success => None,
-        settings::ParseStatus::Unchanged => return,
-    };
-    let id = NotificationId::Named(format!("failed-to-parse-settings-{is_user}").into());
-
-    match error {
-        Some(error) => {
-            if let Some(InvalidSettingsError::LocalSettings { .. }) =
-                error.downcast_ref::<InvalidSettingsError>()
-            {
-                // Local settings errors are displayed by the projects
-            } else {
-                show_app_notification(id, cx, move |cx| {
-                    cx.new(|cx| {
-                        MessageNotification::new(format!("Invalid user settings file\n{error}"), cx)
-                            .primary_message("Open Settings File")
-                            .primary_icon(IconName::Settings)
-                            .primary_on_click(|window, cx| {
-                                window.dispatch_action(
-                                    zed_actions::OpenSettingsFile.boxed_clone(),
-                                    cx,
-                                );
-                                cx.emit(DismissEvent);
-                            })
-                    })
-                });
-            }
-        }
-        None => dismiss_app_notification(&id, cx),
-    }
-}
-
 fn init_global_config_error_notifications(cx: &mut App) {
     cx.observe_new(|_: &mut SettingsObserver, _, cx| {
         cx.subscribe_self::<SettingsObserverEvent>(|_, event, cx| {
@@ -1489,205 +1347,21 @@ fn init_reduce_motion(cx: &mut App) {
     cx.observe_global::<SettingsStore>(apply).detach();
 }
 
-pub fn watch_settings_files(fs: Arc<dyn fs::Fs>, cx: &mut App) {
-    SettingsStore::update_global(cx, move |store, cx| {
-        store.watch_settings_files(fs, cx, |settings_file, result, cx| {
-            let is_user = matches!(settings_file, SettingsFile::User);
-            notify_settings_errors(result, is_user, cx);
-        });
-    });
+pub fn initialize_keymap(cx: &mut App) {
+    reload_keymap(cx);
+    cx.on_keyboard_layout_change(reload_keymap).detach();
 }
 
-pub fn handle_keymap_file_changes(
-    mut user_keymap_file_rx: mpsc::UnboundedReceiver<String>,
-    user_keymap_watcher: gpui::Task<()>,
-    cx: &mut App,
-) {
-    let (base_keymap_tx, mut base_keymap_rx) = mpsc::unbounded();
-    let (keyboard_layout_tx, mut keyboard_layout_rx) = mpsc::unbounded();
-    let mut old_base_keymap = *BaseKeymap::get_global(cx);
-
-    cx.observe_global::<SettingsStore>(move |cx| {
-        let new_base_keymap = *BaseKeymap::get_global(cx);
-
-        if new_base_keymap != old_base_keymap {
-            old_base_keymap = new_base_keymap;
-
-            base_keymap_tx.unbounded_send(()).unwrap();
-        }
-    })
-    .detach();
-
-    {
-        let mut current_mapping = cx.keyboard_mapper().get_key_equivalents().cloned();
-        cx.on_keyboard_layout_change(move |cx| {
-            let next_mapping = cx.keyboard_mapper().get_key_equivalents();
-            if current_mapping.as_ref() != next_mapping {
-                current_mapping = next_mapping.cloned();
-                keyboard_layout_tx.unbounded_send(()).ok();
-            }
-        })
-        .detach();
-    }
-
-    load_default_keymap(cx);
-
-    struct KeymapParseErrorNotification;
-    let notification_id = NotificationId::unique::<KeymapParseErrorNotification>();
-
-    cx.spawn(async move |cx| {
-        let _user_keymap_watcher = user_keymap_watcher;
-        let mut user_keymap_content = String::new();
-        loop {
-            select_biased! {
-                _ = base_keymap_rx.next() => {},
-                _ = keyboard_layout_rx.next() => {},
-                content = user_keymap_file_rx.next() => {
-                    if let Some(content) = content {
-                        user_keymap_content = content;
-                    }
-                }
-            };
-            cx.update(|cx| {
-                let load_result = KeymapFile::load(&user_keymap_content, cx);
-                match load_result {
-                    KeymapFileLoadResult::Success { key_bindings } => {
-                        reload_keymaps(cx, key_bindings);
-                        dismiss_app_notification(&notification_id.clone(), cx);
-                    }
-                    KeymapFileLoadResult::SomeFailedToLoad {
-                        key_bindings,
-                        error_message,
-                    } => {
-                        if !key_bindings.is_empty() {
-                            reload_keymaps(cx, key_bindings);
-                        }
-                        show_keymap_file_load_error(notification_id.clone(), error_message, cx);
-                    }
-                    KeymapFileLoadResult::JsonParseFailure { error } => {
-                        show_keymap_file_json_error(notification_id.clone(), &error, cx)
-                    }
-                }
-            });
-        }
-    })
-    .detach();
-}
-
-fn show_keymap_file_json_error(
-    notification_id: NotificationId,
-    error: &anyhow::Error,
-    cx: &mut App,
-) {
-    let message: SharedString =
-        format!("JSON parse error in keymap file. Bindings not reloaded.\n\n{error}").into();
-    show_app_notification(notification_id, cx, move |cx| {
-        cx.new(|cx| {
-            MessageNotification::new(message.clone(), cx)
-                .primary_message("Open Keymap File")
-                .primary_icon(IconName::Settings)
-                .primary_on_click(|window, cx| {
-                    window.dispatch_action(zed_actions::OpenKeymapFile.boxed_clone(), cx);
-                    cx.emit(DismissEvent);
-                })
-        })
-    });
-}
-
-fn show_keymap_file_load_error(
-    notification_id: NotificationId,
-    error_message: MarkdownString,
-    cx: &mut App,
-) {
-    show_markdown_app_notification(
-        notification_id,
-        error_message,
-        "Open Keymap File".into(),
-        |window, cx| {
-            window.dispatch_action(zed_actions::OpenKeymapFile.boxed_clone(), cx);
-            cx.emit(DismissEvent);
-        },
-        cx,
-    )
-}
-
-fn show_markdown_app_notification<F>(
-    notification_id: NotificationId,
-    message: MarkdownString,
-    primary_button_message: SharedString,
-    primary_button_on_click: F,
-    cx: &mut App,
-) where
-    F: 'static + Send + Sync + Fn(&mut Window, &mut Context<MessageNotification>),
-{
-    let markdown = cx.new(|cx| Markdown::new(message.0.into(), None, None, cx));
-    let primary_button_on_click = Arc::new(primary_button_on_click);
-
-    show_app_notification(notification_id, cx, move |cx| {
-        let markdown = markdown.clone();
-        let primary_button_message = primary_button_message.clone();
-        let primary_button_on_click = primary_button_on_click.clone();
-
-        cx.new(move |cx| {
-            MessageNotification::new_from_builder(cx, move |window, cx| {
-                image_cache(retain_all("notification-cache"))
-                    .child(div().text_ui(cx).child(MarkdownElement::new(
-                        markdown.clone(),
-                        MarkdownStyle::themed(MarkdownFont::Editor, window, cx),
-                    )))
-                    .into_any()
-            })
-            .primary_message(primary_button_message)
-            .primary_icon(IconName::Settings)
-            .primary_on_click_arc(primary_button_on_click)
-        })
-    })
-}
-
-fn reload_menus(cx: &mut App) {
+fn reload_keymap(cx: &mut App) {
+    cx.clear_key_bindings();
+    let bindings = settings::built_in_key_bindings(cx);
+    cx.bind_keys(bindings);
     let menus = app_menus(cx);
     cx.set_menus(menus);
-}
-
-fn reload_keymaps(cx: &mut App, mut user_key_bindings: Vec<KeyBinding>) {
-    cx.clear_key_bindings();
-    load_default_keymap(cx);
-
-    for key_binding in &mut user_key_bindings {
-        key_binding.set_meta(KeybindSource::User.meta());
-    }
-    cx.bind_keys(user_key_bindings);
-    reload_menus(cx);
-    // On Windows, this is set in the `update_jump_list` method of the `HistoryManager`.
-
     cx.set_dock_menu(vec![gpui::MenuItem::action(
         "New Window",
         workspace::NewWindow,
     )]);
-}
-
-pub fn load_default_keymap(cx: &mut App) {
-    let base_keymap = *BaseKeymap::get_global(cx);
-    if base_keymap == BaseKeymap::None {
-        return;
-    }
-
-    cx.bind_keys(
-        KeymapFile::load_asset(DEFAULT_KEYMAP_PATH, Some(KeybindSource::Default), cx).unwrap(),
-    );
-
-    if let Some(asset_path) = base_keymap.asset_path() {
-        cx.bind_keys(KeymapFile::load_asset(asset_path, Some(KeybindSource::Base), cx).unwrap());
-    }
-
-    cx.bind_keys(
-        KeymapFile::load_asset(
-            SPECIFIC_OVERRIDES_KEYMAP_PATH,
-            Some(KeybindSource::Default),
-            cx,
-        )
-        .unwrap(),
-    );
 }
 
 /// Populates a freshly opened window according to the `on_new_window` setting.
@@ -1746,23 +1420,6 @@ pub fn open_new_ssh_project_from_project(
         .await
         .map(|_| ())
     })
-}
-
-fn open_project_settings_file(
-    workspace: &mut Workspace,
-    _: &OpenProjectSettingsFile,
-    window: &mut Window,
-    cx: &mut Context<Workspace>,
-) {
-    if let Some(task) = open_local_file(
-        workspace,
-        local_settings_file_relative_path(),
-        initial_project_settings_content(),
-        window,
-        cx,
-    ) {
-        task.detach_and_log_err(cx);
-    }
 }
 
 fn open_project_tasks_file(

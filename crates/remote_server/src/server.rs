@@ -5,14 +5,14 @@ pub use headless_project::{HeadlessAppState, HeadlessProject};
 use anyhow::{Context as _, Result, anyhow};
 use clap::Subcommand;
 use collections::HashMap;
-use fs::{Fs, RealFs};
+use fs::RealFs;
 use futures::{
     AsyncRead, AsyncWrite, AsyncWriteExt, FutureExt, SinkExt,
     channel::{mpsc, oneshot},
     select, select_biased,
 };
 use git::GitHostingProviderRegistry;
-use gpui::{App, AppContext as _, Entity, UpdateGlobal as _};
+use gpui::{App, AppContext as _, Entity};
 use language::LanguageRegistry;
 use net::async_net::{UnixListener, UnixStream};
 use node_runtime::{NodeBinaryOptions, NodeRuntime};
@@ -27,9 +27,9 @@ use remote::{
     protocol::{read_message, write_message},
     proxy::ProxyLaunchError,
 };
-use rpc::proto::{self, Envelope, REMOTE_SERVER_PROJECT_ID};
+use rpc::proto::{self, Envelope};
 use rpc::{AnyProtoClient, TypedEnvelope};
-use settings::{Settings, SettingsStore, watch_config_file};
+use settings::{Settings, SettingsStore};
 use settings_content::app_metadata::{AppCommitSha, AppVersion, SERVER_RELEASE, ServerRelease};
 use smol::{
     Timer,
@@ -719,7 +719,7 @@ pub fn execute_run(
 
         let project = cx.new(|cx| {
             let fs = RealFs::new(None, cx.background_executor().clone());
-            let node_settings_rx = initialize_settings(session.clone(), fs.clone(), cx);
+            let node_settings_rx = initialize_settings(cx);
 
             let node_runtime = NodeRuntime::new(shell_env_loaded_rx, node_settings_rx);
 
@@ -1183,41 +1183,7 @@ where
     }
 }
 
-fn initialize_settings(
-    session: AnyProtoClient,
-    fs: Arc<dyn Fs>,
-    cx: &mut App,
-) -> watch::Receiver<Option<NodeBinaryOptions>> {
-    let (user_settings_file_rx, watcher_task) =
-        watch_config_file(cx.background_executor(), fs, paths::settings_file().clone());
-
-    handle_settings_file_changes(user_settings_file_rx, watcher_task, cx, {
-        move |err, _cx| {
-            if let Some(e) = err {
-                log::info!("Server settings failed to change: {}", e);
-
-                session
-                    .send(proto::Toast {
-                        project_id: REMOTE_SERVER_PROJECT_ID,
-                        notification_id: "server-settings-failed".to_string(),
-                        message: format!(
-                            "Error in settings on remote host {:?}: {}",
-                            paths::settings_file(),
-                            e
-                        ),
-                    })
-                    .log_err();
-            } else {
-                session
-                    .send(proto::HideToast {
-                        project_id: REMOTE_SERVER_PROJECT_ID,
-                        notification_id: "server-settings-failed".to_string(),
-                    })
-                    .log_err();
-            }
-        }
-    });
-
+fn initialize_settings(cx: &mut App) -> watch::Receiver<Option<NodeBinaryOptions>> {
     let (mut tx, rx) = watch::channel(None);
     let mut node_settings = None;
     cx.observe_global::<SettingsStore>(move |cx| {
@@ -1247,35 +1213,4 @@ fn initialize_settings(
     .detach();
 
     rx
-}
-
-pub fn handle_settings_file_changes(
-    mut server_settings_file: mpsc::UnboundedReceiver<String>,
-    watcher_task: gpui::Task<()>,
-    cx: &mut App,
-    settings_changed: impl Fn(Option<anyhow::Error>, &mut App) + 'static,
-) {
-    let server_settings_content = cx
-        .foreground_executor()
-        .block_on(server_settings_file.next())
-        .unwrap();
-    SettingsStore::update_global(cx, |store, cx| {
-        store
-            .set_server_settings(&server_settings_content, cx)
-            .log_err();
-    });
-    cx.spawn(async move |cx| {
-        let _watcher_task = watcher_task;
-        while let Some(server_settings_content) = server_settings_file.next().await {
-            cx.update_global(|store: &mut SettingsStore, cx| {
-                let result = store.set_server_settings(&server_settings_content, cx);
-                if let Err(err) = &result {
-                    log::error!("Failed to load server settings: {err}");
-                }
-                settings_changed(result.err(), cx);
-                cx.refresh_windows();
-            });
-        }
-    })
-    .detach();
 }

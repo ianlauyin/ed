@@ -8,7 +8,6 @@ pub use settings::AlternateScroll;
 use settings::{
     IntoGpui, PathHyperlinkRegex, RegisterSetting, ShowScrollbar, TerminalBell, TerminalBlink,
     TerminalDockPosition, TerminalLineHeight, VenvSettings, WorkingDirectory,
-    merge_from::MergeFrom,
 };
 use task::Shell;
 use theme_settings::FontFamilyName;
@@ -81,9 +80,7 @@ fn settings_shell_to_task_shell(shell: settings::Shell) -> Shell {
 impl settings::Settings for TerminalSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let user_content = content.terminal.clone().unwrap();
-        // Note: we allow a subset of "terminal" settings in the project files.
-        let mut project_content = user_content.project.clone();
-        project_content.merge_from_option(content.project.terminal.as_ref());
+        let project_content = user_content.project.clone();
         TerminalSettings {
             shell: settings_shell_to_task_shell(project_content.shell.unwrap()),
             working_directory: project_content.working_directory.unwrap(),

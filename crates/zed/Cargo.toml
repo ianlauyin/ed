@@ -58,7 +58,6 @@ line_ending_selector.workspace = true
 lsp_command_selector.workspace = true
 log.workspace = true
 lsp_locations.workspace = true
-markdown.workspace = true
 markdown_preview.workspace = true
 menu.workspace = true
 mimalloc = { version = "0.1", optional = true }
@@ -79,7 +78,6 @@ serde.workspace = true
 serde_json.workspace = true
 session.workspace = true
 settings.workspace = true
-settings_profile_selector.workspace = true
 shellexpand.workspace = true
 smol.workspace = true
 snippet_provider.workspace = true

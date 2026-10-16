@@ -415,25 +415,6 @@ impl CachedLspAdapter {
             .unwrap_or_else(|| language_name.lsp_id())
     }
 
-    pub async fn initialization_options_schema(
-        &self,
-        delegate: &Arc<dyn LspAdapterDelegate>,
-        cx: &mut AsyncApp,
-    ) -> Option<serde_json::Value> {
-        self.adapter
-            .clone()
-            .initialization_options_schema(delegate, cx)
-            .await
-    }
-
-    pub async fn settings_schema(
-        &self,
-        delegate: &Arc<dyn LspAdapterDelegate>,
-        cx: &mut AsyncApp,
-    ) -> Option<serde_json::Value> {
-        self.adapter.clone().settings_schema(delegate, cx).await
-    }
-
     pub fn process_prompt_response(&self, context: &PromptResponseContext, cx: &mut AsyncApp) {
         self.adapter.process_prompt_response(context, cx)
     }
@@ -554,26 +535,6 @@ pub trait LspAdapter: 'static + Send + Sync {
         _cx: &mut AsyncApp,
     ) -> Result<Option<Value>> {
         Ok(None)
-    }
-
-    /// Returns the JSON schema of the initialization_options for the language server.
-    async fn initialization_options_schema(
-        self: Arc<Self>,
-        _delegate: &Arc<dyn LspAdapterDelegate>,
-        _cx: &mut AsyncApp,
-    ) -> Option<serde_json::Value> {
-        None
-    }
-
-    /// Returns the JSON schema of the settings for the language server.
-    /// This corresponds to the `settings` field in `LspSettings`, which is used
-    /// to respond to `workspace/configuration` requests from the language server.
-    async fn settings_schema(
-        self: Arc<Self>,
-        _delegate: &Arc<dyn LspAdapterDelegate>,
-        _cx: &mut AsyncApp,
-    ) -> Option<serde_json::Value> {
-        None
     }
 
     async fn workspace_configuration(

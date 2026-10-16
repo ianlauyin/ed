@@ -37,9 +37,9 @@ use git::{
     status::FileStatus,
 };
 use git::{
-    ExpandCommitEditor, GitHostingProviderRegistry, RestoreTrackedFiles, StageAll,
-    StashAll, StashApply, StashPop, StashStaged, StashTracked, ToggleCommitEditor,
-    ToggleFillCommitEditor, TrashUntrackedFiles, UnstageAll, ViewFile,
+    ExpandCommitEditor, GitHostingProviderRegistry, RestoreTrackedFiles, StageAll, StashAll,
+    StashApply, StashPop, StashStaged, StashTracked, ToggleCommitEditor, ToggleFillCommitEditor,
+    TrashUntrackedFiles, UnstageAll, ViewFile,
 };
 use gpui::{
     AbsoluteLength, Action, Anchor, AnyElement, AsyncWindowContext, ClickEvent, ClipboardItem,
@@ -4612,10 +4612,8 @@ impl GitPanel {
         if let Some(workspace) = self.workspace.upgrade() {
             let workspace = workspace.read(cx);
             let fs = workspace.app_state().fs.clone();
-            cx.update_global::<SettingsStore, _>(|store, _cx| {
-                store.update_settings_file(fs, move |settings, _cx| {
-                    settings.git_panel.get_or_insert_default().sort_by = Some(GitPanelSortBy::Path);
-                });
+            update_settings_file(fs, cx, move |settings, _cx| {
+                settings.git_panel.get_or_insert_default().sort_by = Some(GitPanelSortBy::Path);
             });
         }
     }
@@ -4624,10 +4622,8 @@ impl GitPanel {
         if let Some(workspace) = self.workspace.upgrade() {
             let workspace = workspace.read(cx);
             let fs = workspace.app_state().fs.clone();
-            cx.update_global::<SettingsStore, _>(|store, _cx| {
-                store.update_settings_file(fs, move |settings, _cx| {
-                    settings.git_panel.get_or_insert_default().sort_by = Some(GitPanelSortBy::Name);
-                });
+            update_settings_file(fs, cx, move |settings, _cx| {
+                settings.git_panel.get_or_insert_default().sort_by = Some(GitPanelSortBy::Name);
             });
         }
     }
@@ -4636,11 +4632,8 @@ impl GitPanel {
         if let Some(workspace) = self.workspace.upgrade() {
             let workspace = workspace.read(cx);
             let fs = workspace.app_state().fs.clone();
-            cx.update_global::<SettingsStore, _>(|store, _cx| {
-                store.update_settings_file(fs, move |settings, _cx| {
-                    settings.git_panel.get_or_insert_default().group_by =
-                        Some(GitPanelGroupBy::None);
-                });
+            update_settings_file(fs, cx, move |settings, _cx| {
+                settings.git_panel.get_or_insert_default().group_by = Some(GitPanelGroupBy::None);
             });
         }
     }
@@ -4654,11 +4647,8 @@ impl GitPanel {
         if let Some(workspace) = self.workspace.upgrade() {
             let workspace = workspace.read(cx);
             let fs = workspace.app_state().fs.clone();
-            cx.update_global::<SettingsStore, _>(|store, _cx| {
-                store.update_settings_file(fs, move |settings, _cx| {
-                    settings.git_panel.get_or_insert_default().group_by =
-                        Some(GitPanelGroupBy::Status);
-                });
+            update_settings_file(fs, cx, move |settings, _cx| {
+                settings.git_panel.get_or_insert_default().group_by = Some(GitPanelGroupBy::Status);
             });
         }
     }
@@ -4712,11 +4702,9 @@ impl GitPanel {
         if let Some(workspace) = self.workspace.upgrade() {
             let workspace = workspace.read(cx);
             let fs = workspace.app_state().fs.clone();
-            cx.update_global::<SettingsStore, _>(|store, _cx| {
-                store.update_settings_file(fs, move |settings, _cx| {
-                    settings.git_panel.get_or_insert_default().group_by =
-                        Some(GitPanelGroupBy::Staging);
-                });
+            update_settings_file(fs, cx, move |settings, _cx| {
+                settings.git_panel.get_or_insert_default().group_by =
+                    Some(GitPanelGroupBy::Staging);
             });
         }
     }
@@ -4726,10 +4714,8 @@ impl GitPanel {
         if let Some(workspace) = self.workspace.upgrade() {
             let workspace = workspace.read(cx);
             let fs = workspace.app_state().fs.clone();
-            cx.update_global::<SettingsStore, _>(|store, _cx| {
-                store.update_settings_file(fs, move |settings, _cx| {
-                    settings.git_panel.get_or_insert_default().tree_view = Some(!current_setting);
-                });
+            update_settings_file(fs, cx, move |settings, _cx| {
+                settings.git_panel.get_or_insert_default().tree_view = Some(!current_setting);
             })
         }
     }

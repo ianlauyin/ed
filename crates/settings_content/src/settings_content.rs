@@ -23,13 +23,12 @@ use serde::de::DeserializeOwned;
 pub use serde_helper::{
     serialize_f32_with_two_decimal_places, serialize_optional_f32_with_two_decimal_places,
 };
-use settings_json::parse_json_with_comments;
 pub use terminal::*;
 pub use theme::*;
 pub use title_bar::*;
 pub use workspace::*;
 
-use collections::{HashMap, IndexMap, IndexSet};
+use collections::{HashMap, IndexSet};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use settings_macros::{MergeFrom, with_fallible_options};
@@ -64,36 +63,6 @@ impl std::fmt::Display for PixelSetting {
     }
 }
 
-/// Defines a settings override struct where each field is
-/// `Option<Box<SettingsContent>>`, along with:
-/// - `OVERRIDE_KEYS`: a `&[&str]` of the field names (the JSON keys)
-/// - `get_by_key(&self, key) -> Option<&SettingsContent>`: accessor by key
-///
-/// The field list is the single source of truth for the override key strings.
-macro_rules! settings_overrides {
-    (
-        $(#[$attr:meta])*
-        pub struct $name:ident { $($field:ident),* $(,)? }
-    ) => {
-        $(#[$attr])*
-        pub struct $name {
-            $(pub $field: Option<Box<SettingsContent>>,)*
-        }
-
-        impl $name {
-            /// The JSON override keys, derived from the field names on this struct.
-            pub const OVERRIDE_KEYS: &[&str] = &[$(stringify!($field)),*];
-
-            /// Look up an override by its JSON key name.
-            pub fn get_by_key(&self, key: &str) -> Option<&SettingsContent> {
-                match key {
-                    $(stringify!($field) => self.$field.as_deref(),)*
-                    _ => None,
-                }
-            }
-        }
-    }
-}
 use std::hash::Hash;
 pub use util::serde::default_true;
 
@@ -198,13 +167,6 @@ pub struct SettingsContent {
 
     pub preview_tabs: Option<PreviewTabsSettingsContent>,
 
-    /// This base keymap settings adjusts the default keybindings in Zed to be similar
-    /// to other common code editors. By default, Zed's keymap closely follows VSCode's
-    /// keymap, with minor adjustments, this corresponds to the "VSCode" setting.
-    ///
-    /// Default: VSCode
-    pub base_keymap: Option<BaseKeymapContent>,
-
     /// Configuration for Diagnostics-related features.
     pub diagnostics: Option<DiagnosticsSettingsContent>,
 
@@ -277,7 +239,7 @@ fallible_options::flattened_deserialize!(SettingsContent {
     sections: { project, theme, workspace, editor, remote },
     options: {
         call_hierarchy, command_palette, file_finder, git_panel, tabs, tab_bar, tab_switcher, status_bar, preview_tabs,
-         base_keymap, diagnostics,
+         diagnostics,
         git,
         global_lsp_settings, image_viewer, markdown_preview, hide_mouse,
         log, line_indicator_format,   outline_panel, project_panel,
@@ -287,138 +249,8 @@ fallible_options::flattened_deserialize!(SettingsContent {
     defaults: {},
 });
 
-fallible_options::flattened_deserialize!(UserSettingsContent {
-    sections: { content, platform_overrides },
-    options: {},
-    defaults: { profiles },
-});
-
-// These impls are there to optimize builds by avoiding monomorphization downstream. Yes, they're repetitive, but using default impls
-// break the optimization, for whatever reason.
-pub trait RootUserSettings: Sized + DeserializeOwned {
-    fn parse_json(json: &str) -> (Option<Self>, ParseStatus);
-    fn parse_json_with_comments(json: &str) -> anyhow::Result<Self>;
-}
-
-impl RootUserSettings for SettingsContent {
-    fn parse_json(json: &str) -> (Option<Self>, ParseStatus) {
-        fallible_options::parse_json(json)
-    }
-    fn parse_json_with_comments(json: &str) -> anyhow::Result<Self> {
-        parse_json_with_comments(json)
-    }
-}
-// Explicit opt-in instead of blanket impl to avoid monomorphizing downstream. Just a hunch though.
-impl RootUserSettings for Option<SettingsContent> {
-    fn parse_json(json: &str) -> (Option<Self>, ParseStatus) {
-        fallible_options::parse_json(json)
-    }
-    fn parse_json_with_comments(json: &str) -> anyhow::Result<Self> {
-        parse_json_with_comments(json)
-    }
-}
-impl RootUserSettings for UserSettingsContent {
-    fn parse_json(json: &str) -> (Option<Self>, ParseStatus) {
-        fallible_options::parse_json(json)
-    }
-    fn parse_json_with_comments(json: &str) -> anyhow::Result<Self> {
-        parse_json_with_comments(json)
-    }
-}
-
-settings_overrides! {
-    #[with_fallible_options]
-    #[derive(Debug, Default, PartialEq, Clone, Serialize, Deserialize, JsonSchema, MergeFrom)]
-    pub struct PlatformOverrides { macos, linux, windows }
-}
-
-/// Determines what settings a profile starts from before applying its overrides.
-#[derive(
-    Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, MergeFrom,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum ProfileBase {
-    /// Apply profile settings on top of the user's current settings.
-    #[default]
-    User,
-    /// Apply profile settings on top of Zed's default settings, ignoring user customizations.
-    Default,
-}
-
-/// A named settings profile that can temporarily override settings.
-#[with_fallible_options]
-#[derive(Debug, Default, PartialEq, Clone, Serialize, Deserialize, JsonSchema, MergeFrom)]
-pub struct SettingsProfile {
-    /// What base settings to start from before applying this profile's overrides.
-    ///
-    /// - `user`: Apply on top of user's settings (default)
-    /// - `default`: Apply on top of Zed's default settings, ignoring user customizations
-    #[serde(default)]
-    pub base: ProfileBase,
-
-    /// The settings overrides for this profile.
-    #[serde(default)]
-    pub settings: Box<SettingsContent>,
-}
-
-#[with_fallible_options]
-#[derive(Debug, Default, PartialEq, Clone, Serialize, JsonSchema, MergeFrom)]
-pub struct UserSettingsContent {
-    #[serde(flatten)]
-    pub content: Box<SettingsContent>,
-
-    #[serde(flatten)]
-    pub platform_overrides: PlatformOverrides,
-
-    #[serde(default)]
-    pub profiles: IndexMap<String, SettingsProfile>,
-}
-
 pub struct LanguageDefaultsContent {
     pub all_languages: AllLanguageSettingsContent,
-}
-
-/// Base key bindings scheme. Base keymaps can be overridden with user keymaps.
-///
-/// Default: Zed
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    Default,
-    strum::VariantArray,
-)]
-pub enum BaseKeymapContent {
-    #[default]
-    Zed,
-    VSCode,
-    JetBrains,
-    SublimeText,
-    Atom,
-    TextMate,
-    Emacs,
-    Cursor,
-    None,
-}
-
-impl strum::VariantNames for BaseKeymapContent {
-    const VARIANTS: &'static [&'static str] = &[
-        "Zed",
-        "VSCode",
-        "JetBrains",
-        "Sublime Text",
-        "Atom",
-        "TextMate",
-        "Emacs",
-        "Cursor",
-        "None",
-    ];
 }
 
 #[derive(
@@ -1164,4 +996,12 @@ impl std::str::FromStr for DelayMs {
             .map(DelayMs)
             .with_context(|| format!("failed to parse delay duration: {s}"))
     }
+}
+
+/// Parse JSON with comments and report the path to invalid values.
+pub fn parse_json_with_comments<T: DeserializeOwned>(content: &str) -> anyhow::Result<T> {
+    let mut deserializer = serde_json_lenient::Deserializer::from_str(content);
+    let value = serde_path_to_error::deserialize(&mut deserializer)?;
+    deserializer.end()?;
+    Ok(value)
 }

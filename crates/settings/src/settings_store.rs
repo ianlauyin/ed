@@ -1,85 +1,31 @@
-use anyhow::{Context as _, Result};
-use collections::{BTreeMap, HashMap, TypeIdHashMap, btree_map, hash_map};
-use fs::Fs;
-use futures::{
-    FutureExt, StreamExt,
-    channel::{mpsc, oneshot},
-    future::LocalBoxFuture,
-};
+use anyhow::Result;
+use collections::{HashMap, TypeIdHashMap, hash_map};
 use gpui::{
-    App, AppContext, AsyncApp, BorrowAppContext, Entity, Global, SharedString, Task, UpdateGlobal,
+    App, AppContext, AsyncApp, BorrowAppContext, Entity, Global, SharedString, UpdateGlobal,
 };
 
-use paths::{local_settings_file_relative_path, task_file_name};
-use schemars::{JsonSchema, json_schema};
-use serde_json::Value;
-use settings_content::{CommandAliasTarget, ParseStatus};
 use std::{
     any::{Any, TypeId, type_name},
     fmt::Debug,
-    ops::Range,
     path::{Path, PathBuf},
-    rc::Rc,
     str,
     sync::Arc,
 };
-use util::{
-    ResultExt as _,
-    rel_path::RelPath,
-    schemars::{AllowTrailingCommas, DefaultDenyUnknownFields, replace_subschema},
-};
+use util::rel_path::RelPath;
 
 use crate::editorconfig_store::EditorconfigStore;
 
 use crate::{
-    ActiveSettingsProfileName, FileTypeMap, FontFamilyName, IconThemeName, LanguageSettingsContent,
-    LanguageToSettingsMap, LspSettings, LspSettingsMap, SemanticTokenRules, ThemeName,
-    UserSettingsContentExt, WorktreeId,
-    settings_content::{
-        ExtendingSet, LanguageDefaultsContent, ProfileBase, ProjectSettingsContent,
-        RootUserSettings, SettingsContent, UserSettingsContent, merge_from::MergeFrom,
-    },
+    SemanticTokenRules, WorktreeId,
+    settings_content::{LanguageDefaultsContent, SettingsContent, merge_from::MergeFrom},
 };
 
-use settings_json::{infer_json_indent_size, update_value_in_json_text};
-
-pub const LSP_SETTINGS_SCHEMA_URL_PREFIX: &str = "zed://schemas/settings/lsp/";
-
-// GPUI resolves these aliases, but they are not part of the platform font inventory.
-const VIRTUAL_FONT_NAMES: [&str; 5] = [
-    ".SystemUIFont",
-    ".ZedMono",
-    ".ZedSans",
-    "Zed Plex Mono",
-    "Zed Plex Sans",
-];
-
-pub trait SettingsKey: 'static + Send + Sync {
-    /// The name of a key within the JSON file from which this setting should
-    /// be deserialized. If this is `None`, then the setting will be deserialized
-    /// from the root object.
-    const KEY: Option<&'static str>;
-
-    const FALLBACK_KEY: Option<&'static str> = None;
-}
-
-/// A value that can be defined as a user setting.
-///
-/// Settings can be loaded from a combination of multiple JSON files.
+/// A typed view of the built-in settings.
 pub trait Settings: 'static + Send + Sync + Sized {
-    /// The name of the keys in the [`SettingsContent`] that should
-    /// always be written to a settings file, even if their value matches the default
-    /// value.
-    ///
-    /// This is useful for tagged [`SettingsContent`]s where the tag
-    /// is a "version" field that should always be persisted, even if the current
-    /// user settings match the current version of the settings.
-    const PRESERVED_KEYS: Option<&'static [&'static str]> = None;
-
-    /// Read the value from default.json.
+    /// Read the value from the merged built-in settings.
     ///
     /// This function *should* panic if default values are missing,
-    /// and you should add a default to default.json for documentation.
+    /// and the built-in constructor must supply all required values.
     fn from_settings(content: &SettingsContent) -> Self;
 
     #[track_caller]
@@ -151,69 +97,15 @@ pub struct SettingsLocation<'a> {
     pub path: &'a RelPath,
 }
 
+/// One complete application-wide configuration, with language conventions filled
+/// in from registered language metadata and no file-based settings layers.
 pub struct SettingsStore {
     setting_values: TypeIdHashMap<Box<dyn AnySettingValue>>,
-    default_settings: Rc<SettingsContent>,
-    user_settings: Option<UserSettingsContent>,
-    global_settings: Option<Box<SettingsContent>>,
-
-    language_defaults: Option<Box<SettingsContent>>,
-    server_settings: Option<Box<SettingsContent>>,
-
+    settings: SettingsContent,
+    language_defaults: Option<crate::AllLanguageSettingsContent>,
     language_semantic_token_rules: HashMap<SharedString, SemanticTokenRules>,
-
-    merged_settings: Rc<SettingsContent>,
-
-    last_user_settings_content: Option<String>,
-    last_global_settings_content: Option<String>,
-    local_settings: BTreeMap<(WorktreeId, Arc<RelPath>), SettingsContent>,
+    merged_settings: SettingsContent,
     pub editorconfig_store: Entity<EditorconfigStore>,
-
-    _settings_files_watcher: Option<Task<()>>,
-    _setting_file_updates: Task<()>,
-    setting_file_updates_tx:
-        mpsc::UnboundedSender<Box<dyn FnOnce(AsyncApp) -> LocalBoxFuture<'static, Result<()>>>>,
-    file_errors: BTreeMap<SettingsFile, SettingsParseResult>,
-}
-
-#[derive(Clone, PartialEq, Eq, Debug)]
-pub enum SettingsFile {
-    Default,
-    Global,
-    User,
-    Server,
-    /// Represents project settings in ssh projects as well as local projects
-    Project((WorktreeId, Arc<RelPath>)),
-}
-
-impl PartialOrd for SettingsFile {
-    fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(other))
-    }
-}
-
-/// Sorted in order of precedence
-impl Ord for SettingsFile {
-    fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        use SettingsFile::*;
-        use std::cmp::Ordering;
-        match (self, other) {
-            (User, User) => Ordering::Equal,
-            (Server, Server) => Ordering::Equal,
-            (Default, Default) => Ordering::Equal,
-            (Project((id1, rel_path1)), Project((id2, rel_path2))) => id1
-                .cmp(id2)
-                .then_with(|| rel_path1.cmp(rel_path2).reverse()),
-            (Project(_), _) => Ordering::Less,
-            (_, Project(_)) => Ordering::Greater,
-            (Server, _) => Ordering::Less,
-            (_, Server) => Ordering::Greater,
-            (User, _) => Ordering::Less,
-            (_, User) => Ordering::Greater,
-            (Global, _) => Ordering::Less,
-            (_, Global) => Ordering::Greater,
-        }
-    }
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
@@ -260,95 +152,35 @@ impl gpui::Global for DefaultSemanticTokenRules {}
 #[doc(hidden)]
 #[derive(Debug)]
 pub struct SettingValue<T> {
-    #[doc(hidden)]
     pub global_value: Option<T>,
-    #[doc(hidden)]
-    pub local_values: Vec<(WorktreeId, Arc<RelPath>, T)>,
 }
 
 #[doc(hidden)]
 pub trait AnySettingValue: 'static + Send + Sync {
     fn setting_type_name(&self) -> &'static str;
-
     fn from_settings(&self, s: &SettingsContent) -> Box<dyn Any>;
-
     fn value_for_path(&self, path: Option<SettingsLocation>) -> &dyn Any;
-    fn all_local_values(&self) -> Vec<(WorktreeId, Arc<RelPath>, &dyn Any)>;
     fn set_global_value(&mut self, value: Box<dyn Any>);
-    fn set_local_value(&mut self, root_id: WorktreeId, path: Arc<RelPath>, value: Box<dyn Any>);
-    fn clear_local_values(&mut self, root_id: WorktreeId);
-}
-
-/// Parameters that are used when generating some JSON schemas at runtime.
-pub struct SettingsJsonSchemaParams<'a> {
-    pub language_names: &'a [String],
-    pub font_names: &'a [String],
-    pub theme_names: &'a [SharedString],
-    pub icon_theme_names: &'a [SharedString],
-    pub lsp_adapter_names: &'a [String],
-    pub action_names: &'a [&'a str],
-    pub action_documentation: &'a HashMap<&'a str, &'a str>,
-    pub deprecations: &'a HashMap<&'a str, &'a str>,
-    pub deprecation_messages: &'a HashMap<&'a str, &'a str>,
 }
 
 impl SettingsStore {
-    pub fn new(cx: &mut App, default_settings: &str) -> Self {
-        Self::new_with_semantic_tokens(cx, default_settings)
-    }
-
-    pub fn new_with_semantic_tokens(cx: &mut App, default_settings: &str) -> Self {
-        let default_settings = Self::parse_default_settings(default_settings).unwrap();
-        Self::from_settings_content(cx, default_settings)
-    }
-
-    fn from_settings_content(cx: &mut App, default_settings: SettingsContent) -> Self {
-        let (setting_file_updates_tx, mut setting_file_updates_rx) = mpsc::unbounded();
+    pub fn new(cx: &mut App, settings: SettingsContent) -> Self {
         if !cx.has_global::<DefaultSemanticTokenRules>() {
-            cx.set_global::<DefaultSemanticTokenRules>(
-                crate::parse_json_with_comments::<SemanticTokenRules>(
-                    &crate::default_semantic_token_rules(),
-                )
-                .map(DefaultSemanticTokenRules)
-                .unwrap_or_default(),
-            );
+            cx.set_global(DefaultSemanticTokenRules(
+                crate::built_in_semantic_token_rules::rules(),
+            ));
         }
-        let default_settings: Rc<SettingsContent> = default_settings.into();
+        let merged_settings = settings.clone();
         let mut this = Self {
             setting_values: Default::default(),
-            default_settings: default_settings.clone(),
-            global_settings: None,
-            server_settings: None,
-            user_settings: None,
+            settings,
             language_defaults: None,
             language_semantic_token_rules: HashMap::default(),
-
-            merged_settings: default_settings,
-            last_user_settings_content: None,
-            last_global_settings_content: None,
-            local_settings: BTreeMap::default(),
+            merged_settings,
             editorconfig_store: cx.new(|_| EditorconfigStore::default()),
-            _settings_files_watcher: None,
-            setting_file_updates_tx,
-            _setting_file_updates: cx.spawn(async move |cx| {
-                while let Some(setting_file_update) = setting_file_updates_rx.next().await {
-                    (setting_file_update)(cx.clone()).await.log_err();
-                }
-            }),
-            file_errors: BTreeMap::default(),
         };
-
         this.load_settings_types();
-
         this
-    }
-
-    pub fn observe_active_settings_profile_name(cx: &mut App) -> gpui::Subscription {
-        cx.observe_global::<ActiveSettingsProfileName>(|cx| {
-            Self::update_global(cx, |store, cx| {
-                store.recompute_values(None, cx);
-            });
-        })
     }
 
     pub fn update<C, R>(cx: &mut C, f: impl FnOnce(&mut Self, &mut C) -> R) -> R
@@ -358,68 +190,10 @@ impl SettingsStore {
         cx.update_global(f)
     }
 
-    pub fn watch_settings_files(
-        &mut self,
-        fs: Arc<dyn Fs>,
-        cx: &mut App,
-        settings_changed: impl 'static + Fn(SettingsFile, SettingsParseResult, &mut App),
-    ) {
-        let (mut user_settings_file_rx, user_settings_watcher) = crate::watch_config_file(
-            cx.background_executor(),
-            fs.clone(),
-            paths::settings_file().clone(),
-        );
-        let (mut global_settings_file_rx, global_settings_watcher) = crate::watch_config_file(
-            cx.background_executor(),
-            fs,
-            paths::global_settings_file().clone(),
-        );
-
-        let global_content = cx
-            .foreground_executor()
-            .block_on(global_settings_file_rx.next())
-            .unwrap();
-        let user_content = cx
-            .foreground_executor()
-            .block_on(user_settings_file_rx.next())
-            .unwrap();
-
-        let result = self.set_user_settings(&user_content, cx);
-        settings_changed(SettingsFile::User, result, cx);
-        let result = self.set_global_settings(&global_content, cx);
-        settings_changed(SettingsFile::Global, result, cx);
-
-        self._settings_files_watcher = Some(cx.spawn(async move |cx| {
-            let _user_settings_watcher = user_settings_watcher;
-            let _global_settings_watcher = global_settings_watcher;
-            let mut settings_streams = futures::stream::select(
-                global_settings_file_rx.map(|content| (SettingsFile::Global, content)),
-                user_settings_file_rx.map(|content| (SettingsFile::User, content)),
-            );
-
-            while let Some((settings_file, content)) = settings_streams.next().await {
-                cx.update_global(|store: &mut SettingsStore, cx| {
-                    let result = match settings_file {
-                        SettingsFile::User => store.set_user_settings(&content, cx),
-                        SettingsFile::Global => store.set_global_settings(&content, cx),
-                        _ => return,
-                    };
-                    settings_changed(settings_file, result, cx);
-                    cx.refresh_windows();
-                });
-            }
-        }));
-    }
-
     /// Add a new type of setting to the store.
     pub fn register_setting<T: Settings>(&mut self) {
         self.register_setting_internal(&RegisteredSetting {
-            settings_value: || {
-                Box::new(SettingValue::<T> {
-                    global_value: None,
-                    local_values: Vec::new(),
-                })
-            },
+            settings_value: || Box::new(SettingValue::<T> { global_value: None }),
             from_settings: |content| Box::new(T::from_settings(content)),
             id: || TypeId::of::<T>(),
         });
@@ -470,27 +244,7 @@ impl SettingsStore {
             .and_then(|value| value.downcast_ref::<T>())
     }
 
-    /// Get all values from project specific settings
-    pub fn get_all_locals<T: Settings>(&self) -> Vec<(WorktreeId, Arc<RelPath>, &T)> {
-        self.setting_values
-            .get(&TypeId::of::<T>())
-            .unwrap_or_else(|| panic!("unregistered setting type {}", type_name::<T>()))
-            .all_local_values()
-            .into_iter()
-            .map(|(id, path, any)| {
-                (
-                    id,
-                    path,
-                    any.downcast_ref::<T>()
-                        .expect("wrong value type for setting"),
-                )
-            })
-            .collect()
-    }
-
-    /// Override the global value for a setting.
-    ///
-    /// The given value will be overwritten if the user settings file changes.
+    /// Override a typed setting until the next settings recomputation.
     pub fn override_global<T: Settings>(&mut self, value: T) {
         self.setting_values
             .get_mut(&TypeId::of::<T>())
@@ -498,463 +252,15 @@ impl SettingsStore {
             .set_global_value(Box::new(value))
     }
 
-    /// Get the user's settings content.
-    ///
-    /// For user-facing functionality use the typed setting interface.
-    /// (e.g. ProjectSettings::get_global(cx))
-    pub fn raw_user_settings(&self) -> Option<&UserSettingsContent> {
-        self.user_settings.as_ref()
+    /// Replace application-wide preferences without reading or writing a file.
+    pub fn set_settings(&mut self, settings: SettingsContent, cx: &mut App) {
+        self.settings = settings;
+        self.recompute_values();
+        cx.refresh_windows();
     }
 
-    /// Get the default settings content as a raw JSON value.
-    pub fn raw_default_settings(&self) -> &SettingsContent {
-        &self.default_settings
-    }
-
-    /// Get the configured settings profile names.
-    pub fn configured_settings_profiles(&self) -> impl Iterator<Item = &str> {
-        self.user_settings
-            .iter()
-            .flat_map(|settings| settings.profiles.keys().map(|k| k.as_str()))
-    }
-
-    pub async fn load_settings(fs: &Arc<dyn Fs>) -> Result<String> {
-        match fs.load(paths::settings_file()).await {
-            result @ Ok(_) => result,
-            Err(err) => {
-                if let Some(e) = err.downcast_ref::<std::io::Error>()
-                    && e.kind() == std::io::ErrorKind::NotFound
-                {
-                    return Ok(crate::initial_user_settings_content().to_string());
-                }
-                Err(err)
-            }
-        }
-    }
-
-    fn update_settings_file_inner(
-        &self,
-        fs: Arc<dyn Fs>,
-        update: Box<dyn Send + FnOnce(String, AsyncApp) -> Result<String>>,
-    ) -> oneshot::Receiver<Result<()>> {
-        let (tx, rx) = oneshot::channel::<Result<()>>();
-        self.setting_file_updates_tx
-            .unbounded_send(Box::new(move |cx: AsyncApp| {
-                async move {
-                    let res = async move {
-                        let old_text = Self::load_settings(&fs).await?;
-                        let new_text = update(old_text, cx.clone())?;
-
-                        let settings_path = paths::settings_file().as_path();
-                        if fs.is_file(settings_path).await {
-                            let resolved_path =
-                                fs.canonicalize(settings_path).await.with_context(|| {
-                                    format!(
-                                        "Failed to canonicalize settings path {:?}",
-                                        settings_path
-                                    )
-                                })?;
-
-                            fs.atomic_write(resolved_path.clone(), new_text.clone())
-                                .await
-                                .with_context(|| {
-                                    format!("Failed to write settings to file {:?}", resolved_path)
-                                })?;
-                        } else {
-                            fs.atomic_write(settings_path.to_path_buf(), new_text.clone())
-                                .await
-                                .with_context(|| {
-                                    format!("Failed to write settings to file {:?}", settings_path)
-                                })?;
-                        }
-
-                        cx.update_global(|store: &mut SettingsStore, cx| {
-                            store.set_user_settings(&new_text, cx).result().map(|_| ())
-                        })
-                    }
-                    .await;
-
-                    let new_res = match &res {
-                        Ok(_) => anyhow::Ok(()),
-                        Err(e) => Err(anyhow::anyhow!("{:?}", e)),
-                    };
-
-                    _ = tx.send(new_res);
-                    res
-                }
-                .boxed_local()
-            }))
-            .map_err(|err| anyhow::format_err!("Failed to update settings file: {}", err))
-            .log_with_level(log::Level::Warn);
-        return rx;
-    }
-
-    pub fn update_settings_file(
-        &self,
-        fs: Arc<dyn Fs>,
-        update: impl 'static + Send + FnOnce(&mut SettingsContent, &App),
-    ) {
-        _ = self.update_settings_file_with_completion(fs, update);
-    }
-
-    pub fn update_settings_file_with_completion(
-        &self,
-        fs: Arc<dyn Fs>,
-        update: impl 'static + Send + FnOnce(&mut SettingsContent, &App),
-    ) -> oneshot::Receiver<Result<()>> {
-        let mut update = Some(update);
-        self.update_settings_file_inner(
-            fs,
-            Box::new(move |old_text: String, cx: AsyncApp| {
-                cx.read_global(|store: &SettingsStore, cx| {
-                    store.new_text_for_update_inner(old_text, &mut |content| {
-                        (update.take().expect("called once"))(content, cx)
-                    })
-                })
-            }),
-        )
-    }
-
-    pub fn get_all_files(&self) -> Vec<SettingsFile> {
-        let mut files = Vec::from_iter(
-            self.local_settings
-                .keys()
-                // rev because these are sorted by path, so highest precedence is last
-                .rev()
-                .cloned()
-                .map(SettingsFile::Project),
-        );
-
-        if self.server_settings.is_some() {
-            files.push(SettingsFile::Server);
-        }
-        // ignoring profiles
-        // ignoring os profiles
-        // ignoring release channel profiles
-        // ignoring global
-        // ignoring language defaults
-
-        if self.user_settings.is_some() {
-            files.push(SettingsFile::User);
-        }
-        files.push(SettingsFile::Default);
-        files
-    }
-
-    pub fn get_content_for_file(&self, file: SettingsFile) -> Option<&SettingsContent> {
-        match file {
-            SettingsFile::User => self
-                .user_settings
-                .as_ref()
-                .map(|settings| settings.content.as_ref()),
-            SettingsFile::Default => Some(self.default_settings.as_ref()),
-            SettingsFile::Server => self.server_settings.as_deref(),
-            SettingsFile::Project(ref key) => self.local_settings.get(key),
-            SettingsFile::Global => self.global_settings.as_deref(),
-        }
-    }
-
-    pub fn get_overrides_for_field<T>(
-        &self,
-        target_file: SettingsFile,
-        get: fn(&SettingsContent) -> &Option<T>,
-    ) -> Vec<SettingsFile> {
-        let all_files = self.get_all_files();
-        let mut found_file = false;
-        let mut overrides = Vec::new();
-
-        for file in all_files.into_iter().rev() {
-            if !found_file {
-                found_file = file == target_file;
-                continue;
-            }
-
-            if let SettingsFile::Project((wt_id, ref path)) = file
-                && let SettingsFile::Project((target_wt_id, ref target_path)) = target_file
-                && (wt_id != target_wt_id || !target_path.starts_with(path))
-            {
-                // if requesting value from a local file, don't return values from local files in different worktrees
-                continue;
-            }
-
-            let Some(content) = self.get_content_for_file(file.clone()) else {
-                continue;
-            };
-            if get(content).is_some() {
-                overrides.push(file);
-            }
-        }
-
-        overrides
-    }
-
-    /// Checks the given file, and files that the passed file overrides for the given field.
-    /// Returns the first file found that contains the value.
-    /// The value will only be None if no file contains the value.
-    /// I.e. if no file contains the value, returns `(File::Default, None)`
-    pub fn get_value_from_file<'a, T: 'a>(
-        &'a self,
-        target_file: SettingsFile,
-        pick: fn(&'a SettingsContent) -> Option<T>,
-    ) -> (SettingsFile, Option<T>) {
-        self.get_value_from_file_inner(target_file, pick, true)
-    }
-
-    /// Same as `Self::get_value_from_file` except that it does not include the current file.
-    /// Therefore it returns the value that was potentially overloaded by the target file.
-    pub fn get_value_up_to_file<'a, T: 'a>(
-        &'a self,
-        target_file: SettingsFile,
-        pick: fn(&'a SettingsContent) -> Option<T>,
-    ) -> (SettingsFile, Option<T>) {
-        self.get_value_from_file_inner(target_file, pick, false)
-    }
-
-    fn get_value_from_file_inner<'a, T: 'a>(
-        &'a self,
-        target_file: SettingsFile,
-        pick: fn(&'a SettingsContent) -> Option<T>,
-        include_target_file: bool,
-    ) -> (SettingsFile, Option<T>) {
-        // todo(settings_ui): Add a metadata field for overriding the "overrides" tag, for contextually different settings
-        //  e.g. disable AI isn't overridden, or a vec that gets extended instead or some such
-
-        // todo(settings_ui) cache all files
-        let all_files = self.get_all_files();
-        let mut found_file = false;
-
-        for file in all_files.into_iter() {
-            if !found_file && file != SettingsFile::Default {
-                if file != target_file {
-                    continue;
-                }
-                found_file = true;
-                if !include_target_file {
-                    continue;
-                }
-            }
-
-            if let SettingsFile::Project((worktree_id, ref path)) = file
-                && let SettingsFile::Project((target_worktree_id, ref target_path)) = target_file
-                && (worktree_id != target_worktree_id || !target_path.starts_with(&path))
-            {
-                // if requesting value from a local file, don't return values from local files in different worktrees
-                continue;
-            }
-
-            let Some(content) = self.get_content_for_file(file.clone()) else {
-                continue;
-            };
-            if let Some(value) = pick(content) {
-                return (file, Some(value));
-            }
-        }
-
-        (SettingsFile::Default, None)
-    }
-
-    #[inline(always)]
-    fn parse_zed_settings<SettingsContentType: RootUserSettings>(
-        &mut self,
-        user_settings_content: &str,
-        file: SettingsFile,
-    ) -> (Option<SettingsContentType>, SettingsParseResult) {
-        let (settings, parse_status) = if user_settings_content.is_empty() {
-            SettingsContentType::parse_json("{}")
-        } else {
-            SettingsContentType::parse_json(user_settings_content)
-        };
-
-        let result = SettingsParseResult { parse_status };
-        self.file_errors.insert(file, result.clone());
-        return (settings, result);
-    }
-
-    pub fn error_for_file(&self, file: SettingsFile) -> Option<SettingsParseResult> {
-        self.file_errors
-            .get(&file)
-            .filter(|parse_result| parse_result.requires_user_action())
-            .cloned()
-    }
-}
-
-impl SettingsStore {
-    /// Updates the value of a setting in a JSON file, returning the new text
-    /// for that JSON file.
-    pub fn new_text_for_update(
-        &self,
-        old_text: String,
-        update: impl FnOnce(&mut SettingsContent),
-    ) -> Result<String> {
-        let mut update = Some(update);
-        self.new_text_for_update_inner(old_text, &mut |content| {
-            (update.take().expect("called once"))(content)
-        })
-    }
-
-    fn new_text_for_update_inner(
-        &self,
-        old_text: String,
-        update: &mut dyn FnMut(&mut SettingsContent),
-    ) -> Result<String> {
-        let edits = self.edits_for_update_inner(&old_text, update)?;
-        let mut new_text = old_text;
-        for (range, replacement) in edits.into_iter() {
-            new_text.replace_range(range, &replacement);
-        }
-        Ok(new_text)
-    }
-
-    /// Updates the value of a setting in a JSON file, returning a list
-    /// of edits to apply to the JSON file.
-    pub fn edits_for_update(
-        &self,
-        text: &str,
-        update: impl FnOnce(&mut SettingsContent),
-    ) -> Result<Vec<(Range<usize>, String)>> {
-        let mut update = Some(update);
-        self.edits_for_update_inner(text, &mut |content| {
-            (update.take().expect("called once"))(content)
-        })
-    }
-
-    fn edits_for_update_inner(
-        &self,
-        text: &str,
-        update: &mut dyn FnMut(&mut SettingsContent),
-    ) -> Result<Vec<(Range<usize>, String)>> {
-        let old_content = if text.trim().is_empty() {
-            UserSettingsContent::default()
-        } else {
-            let (old_content, parse_status) = UserSettingsContent::parse_json(text);
-            if let ParseStatus::Failed { error } = &parse_status {
-                log::error!("Failed to parse settings for update: {error}");
-            }
-            old_content
-                .context("Settings file could not be parsed. Fix syntax errors before updating.")?
-        };
-        let mut new_content = old_content.clone();
-        update(&mut new_content.content);
-
-        let old_value = serde_json::to_value(&old_content).unwrap();
-        let new_value = serde_json::to_value(new_content).unwrap();
-
-        let mut key_path = Vec::new();
-        let mut edits = Vec::new();
-        let tab_size = infer_json_indent_size(&text);
-        let mut text = text.to_string();
-        update_value_in_json_text(
-            &mut text,
-            &mut key_path,
-            tab_size,
-            &old_value,
-            &new_value,
-            &mut edits,
-        );
-        Ok(edits)
-    }
-
-    /// Mutates the default settings in place and recomputes all setting values.
-    pub fn update_default_settings(
-        &mut self,
-        cx: &mut App,
-        update: impl FnOnce(&mut SettingsContent),
-    ) {
-        let default_settings = Rc::make_mut(&mut self.default_settings);
-        update(default_settings);
-        self.recompute_values(None, cx);
-    }
-
-    /// Sets the default settings via a JSON string.
-    ///
-    /// The string should contain a JSON object with a default value for every setting.
-    pub fn set_default_settings(
-        &mut self,
-        default_settings_content: &str,
-        cx: &mut App,
-    ) -> Result<()> {
-        self.default_settings = Self::parse_default_settings(default_settings_content)?.into();
-        self.recompute_values(None, cx);
-        Ok(())
-    }
-
-    /// Parses the default settings JSON and folds any `dev`/`nightly`/`preview`/`stable`
-    /// release-channel overrides and `macos`/`linux`/`windows` platform overrides into
-    /// the returned [`SettingsContent`].
-    ///
-    /// Unlike user settings, default settings are used directly as the base for all
-    /// merges, so overrides must be resolved up front.
-    fn parse_default_settings(default_settings: &str) -> Result<SettingsContent> {
-        let parsed = UserSettingsContent::parse_json_with_comments(default_settings)?;
-        let mut merged = (*parsed.content).clone();
-        merged.merge_from_option(parsed.for_os());
-        Ok(merged)
-    }
-
-    /// Sets the user settings via a JSON string.
-    #[must_use]
-    pub fn set_user_settings(
-        &mut self,
-        user_settings_content: &str,
-        cx: &mut App,
-    ) -> SettingsParseResult {
-        if self.last_user_settings_content.as_deref() == Some(user_settings_content) {
-            return SettingsParseResult {
-                parse_status: ParseStatus::Unchanged,
-            };
-        }
-        self.last_user_settings_content = Some(user_settings_content.to_string());
-
-        let (settings, parse_result) = self
-            .parse_zed_settings::<UserSettingsContent>(user_settings_content, SettingsFile::User);
-
-        if let Some(settings) = settings {
-            self.user_settings = Some(settings);
-            self.recompute_values(None, cx);
-        }
-        return parse_result;
-    }
-
-    /// Sets the global settings via a JSON string.
-    #[must_use]
-    pub fn set_global_settings(
-        &mut self,
-        global_settings_content: &str,
-        cx: &mut App,
-    ) -> SettingsParseResult {
-        if self.last_global_settings_content.as_deref() == Some(global_settings_content) {
-            return SettingsParseResult {
-                parse_status: ParseStatus::Unchanged,
-            };
-        }
-        self.last_global_settings_content = Some(global_settings_content.to_string());
-
-        let (settings, parse_result) = self
-            .parse_zed_settings::<SettingsContent>(global_settings_content, SettingsFile::Global);
-
-        if let Some(settings) = settings {
-            self.global_settings = Some(Box::new(settings));
-            self.recompute_values(None, cx);
-        }
-        return parse_result;
-    }
-
-    pub fn set_server_settings(
-        &mut self,
-        server_settings_content: &str,
-        cx: &mut App,
-    ) -> Result<()> {
-        let settings = if server_settings_content.is_empty() {
-            None
-        } else {
-            Option::<SettingsContent>::parse_json_with_comments(server_settings_content)?
-        };
-
-        // Rewrite the server settings into a content type
-        self.server_settings = settings.map(|settings| Box::new(settings));
-
-        self.recompute_values(None, cx);
-        Ok(())
+    pub fn settings(&self) -> &SettingsContent {
+        &self.settings
     }
 
     /// Sets language-specific semantic token rules.
@@ -981,96 +287,19 @@ impl SettingsStore {
         self.language_semantic_token_rules.get(language)
     }
 
-    /// Add or remove a set of local settings via a JSON string.
+    /// EditorConfig remains a separate formatting convention. Zed project
+    /// settings received from older peers are ignored.
     pub fn set_local_settings(
         &mut self,
         root_id: WorktreeId,
         path: LocalSettingsPath,
         kind: LocalSettingsKind,
-        settings_content: Option<&str>,
+        content: Option<&str>,
         cx: &mut App,
-    ) -> std::result::Result<(), InvalidSettingsError> {
-        let content = settings_content
-            .map(|content| content.trim())
-            .filter(|content| !content.is_empty());
-        let mut zed_settings_changed = false;
-        match (path.clone(), kind, content) {
-            (LocalSettingsPath::InWorktree(directory_path), LocalSettingsKind::Tasks, _) => {
-                return Err(InvalidSettingsError::Tasks {
-                    message: "Attempted to submit tasks into the settings store".to_string(),
-                    path: directory_path
-                        .join(RelPath::from_unix_str(task_file_name()).unwrap())
-                        .as_std_path()
-                        .to_path_buf(),
-                });
-            }
-            (LocalSettingsPath::InWorktree(directory_path), LocalSettingsKind::Settings, None) => {
-                zed_settings_changed = self
-                    .local_settings
-                    .remove(&(root_id, directory_path.clone()))
-                    .is_some();
-                self.file_errors
-                    .remove(&SettingsFile::Project((root_id, directory_path)));
-            }
-            (
-                LocalSettingsPath::InWorktree(directory_path),
-                LocalSettingsKind::Settings,
-                Some(settings_contents),
-            ) => {
-                let (new_settings, parse_result) = self
-                    .parse_zed_settings::<ProjectSettingsContent>(
-                        settings_contents,
-                        SettingsFile::Project((root_id, directory_path.clone())),
-                    );
-                match parse_result.parse_status {
-                    ParseStatus::Success => Ok(()),
-                    ParseStatus::Unchanged => Ok(()),
-                    ParseStatus::Failed { error } => Err(InvalidSettingsError::LocalSettings {
-                        path: directory_path
-                            .join(local_settings_file_relative_path())
-                            .into(),
-                        message: error,
-                    }),
-                }?;
-                if let Some(new_settings) = new_settings {
-                    match self.local_settings.entry((root_id, directory_path)) {
-                        btree_map::Entry::Vacant(v) => {
-                            v.insert(SettingsContent {
-                                project: new_settings,
-                                ..Default::default()
-                            });
-                            zed_settings_changed = true;
-                        }
-                        btree_map::Entry::Occupied(mut o) => {
-                            if &o.get().project != &new_settings {
-                                o.insert(SettingsContent {
-                                    project: new_settings,
-                                    ..Default::default()
-                                });
-                                zed_settings_changed = true;
-                            }
-                        }
-                    }
-                }
-            }
-            (directory_path, LocalSettingsKind::Editorconfig, editorconfig_contents) => {
-                self.editorconfig_store.update(cx, |store, _| {
-                    store.set_configs(root_id, directory_path, editorconfig_contents)
-                })?;
-            }
-            (LocalSettingsPath::OutsideWorktree(path), kind, _) => {
-                log::error!(
-                    "OutsideWorktree path {:?} with kind {:?} is only supported by editorconfig",
-                    path,
-                    kind
-                );
-                return Ok(());
-            }
-        }
-        if let LocalSettingsPath::InWorktree(directory_path) = &path {
-            if zed_settings_changed {
-                self.recompute_values(Some((root_id, &directory_path)), cx);
-            }
+    ) -> Result<(), InvalidSettingsError> {
+        if kind == LocalSettingsKind::Editorconfig {
+            self.editorconfig_store
+                .update(cx, |store, _| store.set_configs(root_id, path, content))?;
         }
         Ok(())
     }
@@ -1078,327 +307,34 @@ impl SettingsStore {
     pub fn set_language_defaults(
         &mut self,
         content: LanguageDefaultsContent,
-        cx: &mut App,
+        _cx: &mut App,
     ) -> Result<()> {
-        self.language_defaults = Some(Box::new(SettingsContent {
-            project: ProjectSettingsContent {
-                all_languages: content.all_languages,
-                ..Default::default()
-            },
-            ..Default::default()
-        }));
-        self.recompute_values(None, cx);
+        self.language_defaults = Some(content.all_languages);
+        self.recompute_values();
         Ok(())
     }
 
-    /// Add or remove a set of local settings via a JSON string.
     pub fn clear_local_settings(&mut self, root_id: WorktreeId, cx: &mut App) -> Result<()> {
-        self.local_settings
-            .retain(|(worktree_id, _), _| worktree_id != &root_id);
-
         self.editorconfig_store
-            .update(cx, |store, _cx| store.remove_for_worktree(root_id));
-
-        for setting_value in self.setting_values.values_mut() {
-            setting_value.clear_local_values(root_id);
-        }
-        self.recompute_values(Some((root_id, RelPath::empty())), cx);
+            .update(cx, |store, _| store.remove_for_worktree(root_id));
         Ok(())
     }
 
-    pub fn local_settings(
-        &self,
-        root_id: WorktreeId,
-    ) -> impl '_ + Iterator<Item = (Arc<RelPath>, &ProjectSettingsContent)> {
-        self.local_settings
-            .range(
-                (root_id, RelPath::empty_arc())
-                    ..(
-                        WorktreeId::from_usize(root_id.to_usize() + 1),
-                        RelPath::empty_arc(),
-                    ),
-            )
-            .map(|((_, path), content)| (path.clone(), &content.project))
-    }
-
-    /// Configures common schema replacements shared between user and project
-    /// settings schemas.
-    ///
-    /// This sets up language-specific settings and LSP adapter settings that
-    /// are valid in both user and project settings.
-    fn configure_schema_generator(
-        generator: &mut schemars::SchemaGenerator,
-        params: &SettingsJsonSchemaParams,
-    ) {
-        let language_settings_content_ref = generator
-            .subschema_for::<LanguageSettingsContent>()
-            .to_value();
-
-        if !params.language_names.is_empty() {
-            replace_subschema::<LanguageToSettingsMap>(generator, || {
-                json_schema!({
-                    "type": "object",
-                    "errorMessage": "No language with this name is installed.",
-                    "properties": params.language_names.iter().map(|name| (name.clone(), language_settings_content_ref.clone())).collect::<serde_json::Map<_, _>>()
-                })
-            });
-
-            let file_type_patterns_ref =
-                generator.subschema_for::<ExtendingSet<String>>().to_value();
-            replace_subschema::<FileTypeMap>(generator, || {
-                json_schema!({
-                    "type": "object",
-                    "errorMessage": "No language with this name is installed.",
-                    "properties": params.language_names.iter().map(|name| (name.clone(), file_type_patterns_ref.clone())).collect::<serde_json::Map<_, _>>(),
-                    "additionalProperties": file_type_patterns_ref.clone()
-                })
-            });
-        }
-
-        generator.subschema_for::<LspSettings>();
-
-        let lsp_settings_definition = generator
-            .definitions()
-            .get("LspSettings")
-            .expect("LspSettings should be defined")
-            .clone();
-
-        if !params.lsp_adapter_names.is_empty() {
-            replace_subschema::<LspSettingsMap>(generator, || {
-                let mut lsp_properties = serde_json::Map::new();
-
-                for adapter_name in params.lsp_adapter_names {
-                    let mut base_lsp_settings = lsp_settings_definition
-                        .as_object()
-                        .expect("LspSettings should be an object")
-                        .clone();
-
-                    if let Some(properties) = base_lsp_settings.get_mut("properties") {
-                        if let Some(properties_object) = properties.as_object_mut() {
-                            properties_object.insert(
-                            "initialization_options".to_string(),
-                            serde_json::json!({
-                                "$ref": format!("{LSP_SETTINGS_SCHEMA_URL_PREFIX}{adapter_name}/initialization_options")
-                            }),
-                        );
-                            properties_object.insert(
-                            "settings".to_string(),
-                            serde_json::json!({
-                                "$ref": format!("{LSP_SETTINGS_SCHEMA_URL_PREFIX}{adapter_name}/settings")
-                            }),
-                        );
-                        }
-                    }
-
-                    lsp_properties.insert(
-                        adapter_name.clone(),
-                        serde_json::Value::Object(base_lsp_settings),
-                    );
+    fn recompute_values(&mut self) {
+        self.merged_settings = self.settings.clone();
+        if let Some(metadata) = &self.language_defaults {
+            let languages = &mut self.merged_settings.project.all_languages.languages.0;
+            for (name, defaults) in &metadata.languages.0 {
+                let mut language = defaults.clone();
+                if let Some(configured) = languages.get(name) {
+                    language.merge_from(configured);
                 }
-
-                json_schema!({
-                    "type": "object",
-                    "properties": lsp_properties
-                })
-            });
-        }
-    }
-
-    pub fn json_schema(params: &SettingsJsonSchemaParams) -> Value {
-        let mut generator = schemars::generate::SchemaSettings::draft2019_09()
-            .with_transform(DefaultDenyUnknownFields)
-            .with_transform(AllowTrailingCommas)
-            .into_generator();
-
-        UserSettingsContent::json_schema(&mut generator);
-        Self::configure_schema_generator(&mut generator, params);
-
-        if !params.font_names.is_empty() {
-            replace_subschema::<FontFamilyName>(&mut generator, || {
-                let mut font_names = params.font_names.to_vec();
-                font_names.extend(VIRTUAL_FONT_NAMES.map(str::to_string));
-                font_names.sort_unstable();
-                font_names.dedup();
-
-                json_schema!({
-                     "type": "string",
-                     "enum": font_names,
-                })
-            });
-        }
-
-        if !params.theme_names.is_empty() {
-            replace_subschema::<ThemeName>(&mut generator, || {
-                json_schema!({
-                    "type": "string",
-                    "enum": params.theme_names,
-                })
-            });
-        }
-
-        if !params.icon_theme_names.is_empty() {
-            replace_subschema::<IconThemeName>(&mut generator, || {
-                json_schema!({
-                    "type": "string",
-                    "enum": params.icon_theme_names,
-                })
-            });
-        }
-
-        if !params.action_names.is_empty() {
-            replace_subschema::<CommandAliasTarget>(&mut generator, || {
-                CommandAliasTarget::build_schema(
-                    params.action_names,
-                    params.action_documentation,
-                    params.deprecations,
-                    params.deprecation_messages,
-                )
-            });
-        }
-
-        generator
-            .root_schema_for::<UserSettingsContent>()
-            .to_value()
-    }
-
-    /// Generate JSON schema for project settings, including only settings valid
-    /// for project-level configurations.
-    pub fn project_json_schema(params: &SettingsJsonSchemaParams) -> Value {
-        let mut generator = schemars::generate::SchemaSettings::draft2019_09()
-            .with_transform(DefaultDenyUnknownFields)
-            .with_transform(AllowTrailingCommas)
-            .into_generator();
-
-        ProjectSettingsContent::json_schema(&mut generator);
-        Self::configure_schema_generator(&mut generator, params);
-
-        generator
-            .root_schema_for::<ProjectSettingsContent>()
-            .to_value()
-    }
-
-    fn recompute_values(
-        &mut self,
-        changed_local_path: Option<(WorktreeId, &RelPath)>,
-        cx: &mut App,
-    ) {
-        // Reload the global and local values for every setting.
-        let mut project_settings_stack = Vec::<SettingsContent>::new();
-        let mut paths_stack = Vec::<Option<(WorktreeId, &RelPath)>>::new();
-
-        if changed_local_path.is_none() {
-            let mut merged = self.default_settings.as_ref().clone();
-            merged.merge_from_option(self.language_defaults.as_deref());
-            merged.merge_from_option(self.global_settings.as_deref());
-            if let Some(user_settings) = self.user_settings.as_ref() {
-                let active_profile = user_settings.for_profile(cx);
-                let should_merge_user_settings =
-                    active_profile.is_none_or(|profile| profile.base == ProfileBase::User);
-
-                if should_merge_user_settings {
-                    merged.merge_from(&user_settings.content);
-                    merged.merge_from_option(user_settings.for_os());
-                }
-
-                if let Some(profile) = active_profile {
-                    merged.merge_from(&profile.settings);
-                }
-            }
-            merged.merge_from_option(self.server_settings.as_deref());
-
-            self.merged_settings = Rc::new(merged);
-
-            for setting_value in self.setting_values.values_mut() {
-                let value = setting_value.from_settings(&self.merged_settings);
-                setting_value.set_global_value(value);
+                languages.insert(name.clone(), language);
             }
         }
-
-        for ((root_id, directory_path), local_settings) in &self.local_settings {
-            // Build a stack of all of the local values for that setting.
-            while let Some(prev_entry) = paths_stack.last() {
-                if let Some((prev_root_id, prev_path)) = prev_entry
-                    && (root_id != prev_root_id || !directory_path.starts_with(prev_path))
-                {
-                    paths_stack.pop();
-                    project_settings_stack.pop();
-                    continue;
-                }
-                break;
-            }
-
-            paths_stack.push(Some((*root_id, directory_path.as_ref())));
-            let mut merged_local_settings = if let Some(deepest) = project_settings_stack.last() {
-                (*deepest).clone()
-            } else {
-                self.merged_settings.as_ref().clone()
-            };
-            merged_local_settings.merge_from(local_settings);
-
-            project_settings_stack.push(merged_local_settings);
-
-            // If a local settings file changed, then avoid recomputing local
-            // settings for any path outside of that directory.
-            if changed_local_path.is_some_and(|(changed_root_id, changed_local_path)| {
-                *root_id != changed_root_id || !directory_path.starts_with(changed_local_path)
-            }) {
-                continue;
-            }
-
-            for setting_value in self.setting_values.values_mut() {
-                let value = setting_value.from_settings(&project_settings_stack.last().unwrap());
-                setting_value.set_local_value(*root_id, directory_path.clone(), value);
-            }
-        }
-    }
-}
-
-/// The result of parsing a settings file
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub struct SettingsParseResult {
-    pub parse_status: ParseStatus,
-}
-
-impl Default for SettingsParseResult {
-    fn default() -> Self {
-        Self {
-            parse_status: ParseStatus::Success,
-        }
-    }
-}
-
-impl SettingsParseResult {
-    pub fn unwrap(self) {
-        self.result().unwrap()
-    }
-
-    pub fn expect(self, message: &str) {
-        self.result().expect(message)
-    }
-
-    /// Formats the ParseResult as a Result type. This is a lossy conversion
-    pub fn result(self) -> Result<()> {
-        match self.parse_status {
-            ParseStatus::Success | ParseStatus::Unchanged => Ok(()),
-            ParseStatus::Failed { error } => {
-                Err(anyhow::format_err!(error)).context("Failed to parse settings")
-            }
-        }
-    }
-
-    /// Returns true if there were any errors parsing the settings content
-    pub fn requires_user_action(&self) -> bool {
-        matches!(self.parse_status, ParseStatus::Failed { .. })
-    }
-
-    pub fn ok(self) -> Option<()> {
-        self.result().ok()
-    }
-
-    pub fn parse_error(&self) -> Option<String> {
-        match &self.parse_status {
-            ParseStatus::Failed { error } => Some(error.clone()),
-            ParseStatus::Success | ParseStatus::Unchanged => None,
+        for setting_value in self.setting_values.values_mut() {
+            let value = setting_value.from_settings(&self.merged_settings);
+            setting_value.set_global_value(value);
         }
     }
 }
@@ -1407,15 +343,6 @@ impl SettingsParseResult {
 pub enum InvalidSettingsError {
     LocalSettings {
         path: Arc<RelPath>,
-        message: String,
-    },
-    UserSettings {
-        message: String,
-    },
-    ServerSettings {
-        message: String,
-    },
-    DefaultSettings {
         message: String,
     },
     Editorconfig {
@@ -1432,9 +359,6 @@ impl std::fmt::Display for InvalidSettingsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             InvalidSettingsError::LocalSettings { message, .. }
-            | InvalidSettingsError::UserSettings { message }
-            | InvalidSettingsError::ServerSettings { message }
-            | InvalidSettingsError::DefaultSettings { message }
             | InvalidSettingsError::Tasks { message, .. }
             | InvalidSettingsError::Editorconfig { message, .. } => write!(f, "{message}"),
         }
@@ -1445,46 +369,21 @@ impl std::error::Error for InvalidSettingsError {}
 impl Debug for SettingsStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("SettingsStore")
-            .field(
-                "types",
-                &self
-                    .setting_values
-                    .values()
-                    .map(|value| value.setting_type_name())
-                    .collect::<Vec<_>>(),
-            )
-            .field("default_settings", &self.default_settings)
-            .field("user_settings", &self.user_settings)
-            .field("local_settings", &self.local_settings)
+            .field("settings", &self.settings)
             .finish_non_exhaustive()
     }
 }
 
 impl<T: Settings> AnySettingValue for SettingValue<T> {
     fn from_settings(&self, s: &SettingsContent) -> Box<dyn Any> {
-        Box::new(T::from_settings(s)) as _
+        Box::new(T::from_settings(s))
     }
 
     fn setting_type_name(&self) -> &'static str {
         type_name::<T>()
     }
 
-    fn all_local_values(&self) -> Vec<(WorktreeId, Arc<RelPath>, &dyn Any)> {
-        self.local_values
-            .iter()
-            .map(|(id, path, value)| (*id, path.clone(), value as _))
-            .collect()
-    }
-
-    fn value_for_path(&self, path: Option<SettingsLocation>) -> &dyn Any {
-        if let Some(SettingsLocation { worktree_id, path }) = path {
-            for (settings_root_id, settings_path, value) in self.local_values.iter().rev() {
-                if worktree_id == *settings_root_id && path.starts_with(settings_path) {
-                    return value;
-                }
-            }
-        }
-
+    fn value_for_path(&self, _path: Option<SettingsLocation>) -> &dyn Any {
         self.global_value
             .as_ref()
             .unwrap_or_else(|| panic!("no default value for setting {}", self.setting_type_name()))
@@ -1492,21 +391,5 @@ impl<T: Settings> AnySettingValue for SettingValue<T> {
 
     fn set_global_value(&mut self, value: Box<dyn Any>) {
         self.global_value = Some(*value.downcast().unwrap());
-    }
-
-    fn set_local_value(&mut self, root_id: WorktreeId, path: Arc<RelPath>, value: Box<dyn Any>) {
-        let value = *value.downcast().unwrap();
-        match self
-            .local_values
-            .binary_search_by_key(&(root_id, &path), |e| (e.0, &e.1))
-        {
-            Ok(ix) => self.local_values[ix].2 = value,
-            Err(ix) => self.local_values.insert(ix, (root_id, path, value)),
-        }
-    }
-
-    fn clear_local_values(&mut self, root_id: WorktreeId) {
-        self.local_values
-            .retain(|(worktree_id, _, _)| *worktree_id != root_id);
     }
 }

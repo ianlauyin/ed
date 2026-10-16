@@ -17,7 +17,7 @@ use serde::{Deserialize, Serialize};
 use settings::{DefaultOpenBehavior, Settings};
 use ui::{ButtonLike, Divider, DividerColor, KeyBinding, Vector, VectorName, prelude::*};
 use util::ResultExt;
-use zed_actions::{OpenKeymapFile, OpenSettingsFile, command_palette};
+use zed_actions::command_palette;
 
 #[derive(PartialEq, Clone, Debug, Deserialize, Serialize, JsonSchema, Action)]
 #[action(namespace = welcome)]
@@ -189,54 +189,35 @@ impl SectionEntry {
     }
 }
 
-const CONTENT: (Section<4>, Section<2>) = (
-    Section {
-        title: "Get Started",
-        entries: [
-            SectionEntry {
-                icon: IconName::Plus,
-                title: "New File",
-                action: &NewFile,
-                visibility_guard: SectionVisibility::Always,
-            },
-            SectionEntry {
-                icon: IconName::FolderOpen,
-                title: "Open Project",
-                action: &Open::DEFAULT,
-                visibility_guard: SectionVisibility::Always,
-            },
-            SectionEntry {
-                icon: IconName::CloudDownload,
-                title: "Clone Repository",
-                action: &GitClone,
-                visibility_guard: SectionVisibility::Always,
-            },
-            SectionEntry {
-                icon: IconName::ListCollapse,
-                title: "Open Command Palette",
-                action: &command_palette::Toggle,
-                visibility_guard: SectionVisibility::Always,
-            },
-        ],
-    },
-    Section {
-        title: "Configure",
-        entries: [
-            SectionEntry {
-                icon: IconName::Settings,
-                title: "Open Settings",
-                action: &OpenSettingsFile,
-                visibility_guard: SectionVisibility::Always,
-            },
-            SectionEntry {
-                icon: IconName::Keyboard,
-                title: "Customize Keymaps",
-                action: &OpenKeymapFile,
-                visibility_guard: SectionVisibility::Always,
-            },
-        ],
-    },
-);
+const CONTENT: Section<4> = Section {
+    title: "Get Started",
+    entries: [
+        SectionEntry {
+            icon: IconName::Plus,
+            title: "New File",
+            action: &NewFile,
+            visibility_guard: SectionVisibility::Always,
+        },
+        SectionEntry {
+            icon: IconName::FolderOpen,
+            title: "Open Project",
+            action: &Open::DEFAULT,
+            visibility_guard: SectionVisibility::Always,
+        },
+        SectionEntry {
+            icon: IconName::CloudDownload,
+            title: "Clone Repository",
+            action: &GitClone,
+            visibility_guard: SectionVisibility::Always,
+        },
+        SectionEntry {
+            icon: IconName::ListCollapse,
+            title: "Open Command Palette",
+            action: &command_palette::Toggle,
+            visibility_guard: SectionVisibility::Always,
+        },
+    ],
+};
 
 struct Section<const COLS: usize> {
     title: &'static str,
@@ -384,7 +365,7 @@ impl WelcomePage {
 
 impl Render for WelcomePage {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let (first_section, second_section) = CONTENT;
+        let first_section = CONTENT;
         let first_section_entries = first_section.entries.len();
 
         let recent_projects = self
@@ -410,9 +391,7 @@ impl Render for WelcomePage {
             self.render_recent_project_section(recent_projects)
                 .into_any_element()
         } else {
-            second_section
-                .render(first_section_entries, &self.focus_handle)
-                .into_any_element()
+            div().into_any_element()
         };
 
         let welcome_label = if self.fallback_to_recent_projects {
