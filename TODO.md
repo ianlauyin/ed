@@ -1,2 +1,3 @@
-- port codebook spell checker, fish, git firefly, log, sql, xml extension?
+- port codebook spell checker, fish, git firefly, log, xml extension?
 - remove cpp grammar?
+- remove direnv?

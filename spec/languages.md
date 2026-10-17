@@ -14,6 +14,9 @@
 - TOML support is built in (ported from `zed-extensions/toml`): native Tree-sitter
   grammar (`tree-sitter-toml-ng`, the maintained fork) for `.toml`, `Cargo.lock`,
   `Pipfile`, `uv.lock`. No language server is registered.
+- SQL support is built in (ported from `zed-extensions/sql`): native Tree-sitter
+  grammar (`DerekStride/tree-sitter-sql`, crate `tree-sitter-sequel`, pinned to the
+  extension's rev) for `.sql`. No language server is registered.
 - Jupyter notebooks and integrated REPL execution are removed, including kernel
   management, remote kernel launching, execution controls, settings, and shortcuts.
 - Python source editing remains supported. `.ipynb` files open as ordinary text.

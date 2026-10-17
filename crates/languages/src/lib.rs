@@ -219,6 +219,10 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
             ..Default::default()
         },
         LanguageInfo {
+            name: "sql",
+            ..Default::default()
+        },
+        LanguageInfo {
             name: "toml",
             ..Default::default()
         },

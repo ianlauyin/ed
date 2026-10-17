@@ -763,9 +763,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.4.3"
+version = "1.2.67"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "509591b7bcd67f4ef775afad7662703b4935daaa6ec0e5605cfb1090b32a2b6d"
+checksum = "e17dd265a7d0f31ef544e1b20e03add05d3b45b491b633b10d67145d2acc1a38"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -2601,6 +2601,7 @@ dependencies = [
  "tree-sitter-python",
  "tree-sitter-regex",
  "tree-sitter-rust",
+ "tree-sitter-sequel",
  "tree-sitter-toml-ng",
  "tree-sitter-typescript",
  "tree-sitter-yaml",
@@ -8659,6 +8660,15 @@ name = "tree-sitter-rust"
 version = "0.24.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "439e577dbe07423ec2582ac62c7531120dbfccfa6e5f92406f93dd271a120e45"
+dependencies = [
+ "cc",
+ "tree-sitter-language",
+]
+
+[[package]]
+name = "tree-sitter-sequel"
+version = "0.3.11"
+source = "git+https://github.com/DerekStride/tree-sitter-sql?rev=851e9cb257ba7c66cc8c14214a31c44d2f1e954e#851e9cb257ba7c66cc8c14214a31c44d2f1e954e"
 dependencies = [
  "cc",
  "tree-sitter-language",

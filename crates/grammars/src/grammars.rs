@@ -37,6 +37,7 @@ pub fn native_grammars() -> Vec<(&'static str, tree_sitter::Language)> {
         ("python", tree_sitter_python::LANGUAGE.into()),
         ("regex", tree_sitter_regex::LANGUAGE.into()),
         ("rust", tree_sitter_rust::LANGUAGE.into()),
+        ("sql", tree_sitter_sequel::LANGUAGE.into()),
         ("toml", tree_sitter_toml_ng::LANGUAGE.into()),
         ("tsx", tree_sitter_typescript::LANGUAGE_TSX.into()),
         (
