@@ -713,24 +713,48 @@ impl CommitView {
             "Expand Commit Description"
         };
 
+        let separator = || {
+            Label::new("•")
+                .size(LabelSize::Small)
+                .color(Color::Muted)
+                .alpha(0.5)
+        };
+
         v_flex()
             .w_full()
-            .py_2p5()
-            .gap_2()
+            .py_1p5()
+            .gap_1()
             .border_b_1()
             .border_color(cx.theme().colors().border_variant)
             .child(
                 h_flex()
                     .pr_2p5()
                     .w_full()
-                    .flex_wrap()
+                    .gap_2()
                     .justify_between()
                     .child(
-                        h_flex().child(h_flex().flex_none().w(gutter_width)).child(
-                            v_flex()
-                                .child(h_flex().gap_1().child(Label::new(author_name)).when(
-                                    has_more,
-                                    |this| {
+                        h_flex()
+                            .min_w_0()
+                            .child(h_flex().flex_none().w(gutter_width))
+                            .child(
+                                h_flex()
+                                    .min_w_0()
+                                    .gap_1p5()
+                                    .child(Label::new(author_name).size(LabelSize::Small))
+                                    .child(separator())
+                                    .child(
+                                        Label::new(date_string)
+                                            .color(Color::Muted)
+                                            .size(LabelSize::Small),
+                                    )
+                                    .child(separator())
+                                    .child(
+                                        Label::new(author_email)
+                                            .color(Color::Muted)
+                                            .size(LabelSize::Small)
+                                            .truncate(),
+                                    )
+                                    .when(has_more, |this| {
                                         this.child(
                                             Disclosure::new(
                                                 "commit-message-disclosure",
@@ -739,40 +763,19 @@ impl CommitView {
                                             .closed_icon(IconName::ExpandVertical)
                                             .opened_icon(IconName::FoldVertical)
                                             .tooltip(Tooltip::text(expand_tooltip))
-                                            .on_click(
-                                                cx.listener(|this, _, _, cx| {
-                                                    this.message_expanded = !this.message_expanded;
-                                                    cx.notify();
-                                                }),
-                                            ),
+                                            .on_click(cx.listener(|this, _, _, cx| {
+                                                this.message_expanded = !this.message_expanded;
+                                                cx.notify();
+                                            })),
                                         )
-                                    },
-                                ))
-                                .child(
-                                    h_flex()
-                                        .gap_1p5()
-                                        .child(
-                                            Label::new(date_string)
-                                                .color(Color::Muted)
-                                                .size(LabelSize::Small),
-                                        )
-                                        .child(
-                                            Label::new("•")
-                                                .size(LabelSize::Small)
-                                                .color(Color::Muted)
-                                                .alpha(0.5),
-                                        )
-                                        .child(
-                                            Label::new(author_email)
-                                                .color(Color::Muted)
-                                                .size(LabelSize::Small),
-                                        ),
-                                ),
-                        ),
+                                    }),
+                            ),
                     )
                     .when(self.stash.is_none(), |this| {
                         this.child(
                             Button::new("sha", "Commit SHA")
+                                .label_size(LabelSize::Small)
+                                .color(Color::Muted)
                                 .start_icon(
                                     Icon::new(copy_icon)
                                         .size(IconSize::Small)

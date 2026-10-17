@@ -33,9 +33,9 @@ use git::{
     status::FileStatus,
 };
 use git::{
-    ExpandCommitEditor, RestoreTrackedFiles, StageAll, StashAll,
-    StashApply, StashPop, StashStaged, StashTracked, ToggleCommitEditor, ToggleFillCommitEditor,
-    TrashUntrackedFiles, UnstageAll, ViewFile,
+    ExpandCommitEditor, RestoreTrackedFiles, StageAll, StashAll, StashApply, StashPop, StashStaged,
+    StashTracked, ToggleCommitEditor, ToggleFillCommitEditor, TrashUntrackedFiles, UnstageAll,
+    ViewFile,
 };
 use gpui::{
     AbsoluteLength, Action, Anchor, AnyElement, AsyncWindowContext, ClickEvent, ClipboardItem,
@@ -5456,18 +5456,16 @@ impl GitPanel {
                 );
                 match style {
                     Toast => this,
-                    ToastWithLog { output } => {
-                        this.action("View Log", move |window, cx| {
-                            let output = output.clone();
-                            let output =
-                                format!("stdout:\n{}\nstderr:\n{}", output.stdout, output.stderr);
-                            workspace_weak
-                                .update(cx, move |workspace, cx| {
-                                    open_output(operation, workspace, &output, window, cx)
-                                })
-                                .ok();
-                        })
-                    }
+                    ToastWithLog { output } => this.action("View Log", move |window, cx| {
+                        let output = output.clone();
+                        let output =
+                            format!("stdout:\n{}\nstderr:\n{}", output.stdout, output.stderr);
+                        workspace_weak
+                            .update(cx, move |workspace, cx| {
+                                open_output(operation, workspace, &output, window, cx)
+                            })
+                            .ok();
+                    }),
                 }
                 .dismiss_button(true)
             });
@@ -7969,7 +7967,7 @@ impl GitPanelMessageTooltip {
                     author_email: details.author_email.clone(),
                     commit_time: OffsetDateTime::from_unix_timestamp(details.commit_timestamp)?,
                     message: Some(ParsedCommitMessage {
-                        message: details.message.clone(),
+                        message: details.message,
                     }),
                     tag_names: Vec::new(),
                     boundary: false,

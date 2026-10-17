@@ -34,3 +34,9 @@ makes no HTTP requests.
 - The commit message editor uses `editor_background`, the same colour as the
   editor and terminal cards, so it reads as editable content against the
   chrome-coloured panel.
+
+## Commit view
+
+- The header is a single compact row: author, date and email (separated by
+  `•`) aligned with the editor text, with the "Commit SHA" copy button on the
+  same row at the right. The commit message sits directly below.
