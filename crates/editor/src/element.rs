@@ -2457,6 +2457,31 @@ impl EditorElement {
         None
     }
 
+    fn layout_gutter_hover_button(
+        &self,
+        gutter: &Gutter,
+        row: DisplayRow,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Option<AnyElement> {
+        if self.split_side == Some(SplitSide::Left) {
+            return None;
+        }
+
+        self.editor.update(cx, |editor, cx| {
+            gutter.layout_item_skipping_folds(
+                row,
+                |cx, _| {
+                    editor
+                        .render_gutter_hover_button(row, cx)
+                        .into_any_element()
+                },
+                window,
+                cx,
+            )
+        })
+    }
+
     fn layout_run_indicators(
         &self,
         gutter: &Gutter,
@@ -5296,6 +5321,10 @@ impl EditorElement {
                 test_indicator.paint(window, cx);
             }
 
+            for gutter_hover_button in layout.gutter_hover_buttons.iter_mut() {
+                gutter_hover_button.paint(window, cx);
+            }
+
             if let Some(diff_review_button) = layout.diff_review_button.as_mut() {
                 diff_review_button.paint(window, cx);
             }
@@ -6690,6 +6719,25 @@ struct Gutter<'a> {
 }
 
 impl Gutter<'_> {
+    fn layout_item_skipping_folds(
+        &self,
+        display_row: DisplayRow,
+        render_item: impl Fn(&mut Context<'_, Editor>, &mut Window) -> AnyElement,
+        window: &mut Window,
+        cx: &mut Context<'_, Editor>,
+    ) -> Option<AnyElement> {
+        let row = MultiBufferRow(
+            DisplayPoint::new(display_row, 0)
+                .to_point(self.snapshot)
+                .row,
+        );
+        if self.snapshot.is_line_folded(row) {
+            return None;
+        }
+
+        self.layout_item(display_row, render_item, window, cx)
+    }
+
     fn layout_item(
         &self,
         display_row: DisplayRow,
@@ -9295,6 +9343,23 @@ impl Element for EditorElement {
                         Vec::new()
                     };
 
+                    let editor = self.editor.read(cx);
+                    let copied_row = editor.gutter_copied_row.0;
+                    let hovered_row = editor
+                        .gutter_hover_button
+                        .0
+                        .filter(|button| button.is_active)
+                        .map(|button| button.display_row);
+                    // Keep the "copied" check visible after the mouse leaves its row.
+                    let gutter_hover_buttons = copied_row
+                        .into_iter()
+                        .chain(hovered_row.filter(|row| Some(*row) != copied_row))
+                        .filter(|row| {
+                            !(gutter_settings.runnables && run_indicator_rows.contains(row))
+                        })
+                        .filter_map(|row| self.layout_gutter_hover_button(&gutter, row, window, cx))
+                        .collect::<Vec<_>>();
+
                     let git_gutter_width = Self::gutter_strip_width(line_height, cx)
                         + gutter_dimensions
                             .git_blame_entries_width
@@ -9589,6 +9654,7 @@ impl Element for EditorElement {
                         diff_hunk_controls,
                         mouse_context_menu,
                         test_indicators,
+                        gutter_hover_buttons,
                         diff_review_button,
                         crease_toggles,
                         crease_trailers,
@@ -9802,6 +9868,7 @@ pub struct EditorLayout {
     navigation_overlay_paint_commands: Vec<NavigationOverlayPaintCommand>,
     selections: Vec<(PlayerColor, Vec<SelectionLayout>)>,
     test_indicators: Vec<AnyElement>,
+    gutter_hover_buttons: Vec<AnyElement>,
     diff_review_button: Option<AnyElement>,
     crease_toggles: Vec<Option<AnyElement>>,
     expand_toggles: Vec<Option<(AnyElement, gpui::Point<Pixels>)>>,

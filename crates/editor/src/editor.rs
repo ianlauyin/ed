@@ -849,6 +849,15 @@ enum ColumnarSelectionState {
     },
 }
 
+/// Copy-file-location button shown when hovering a gutter row.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+struct GutterHoverButton {
+    display_row: DisplayRow,
+    /// There's a small debounce between hovering over the line and showing the button.
+    /// We don't want to show it when moving the mouse from editor to e.g. project panel.
+    is_active: bool,
+}
+
 enum CodeActionsForSelection {
     None,
     Fetching(Shared<Task<Option<ActionFetchReady>>>),
@@ -1065,6 +1074,9 @@ pub struct Editor {
     last_horizontal_scrollbar_visible: bool,
     expect_bounds_change: Option<Bounds<Pixels>>,
     runnables: RunnableData,
+    gutter_hover_button: (Option<GutterHoverButton>, Option<Task<()>>),
+    /// Row whose gutter copy button shows the "copied" check, and the task that resets it.
+    gutter_copied_row: (Option<DisplayRow>, Option<Task<()>>),
     pub(crate) gutter_diff_review_indicator: (Option<PhantomDiffReviewIndicator>, Option<Task<()>>),
     pub(crate) diff_review_drag_state: Option<DiffReviewDragState>,
     /// Active diff review overlays. Multiple overlays can be open simultaneously
@@ -2240,6 +2252,8 @@ impl Editor {
             blame_subscription: None,
             pending_blame_hover_observation: None,
 
+            gutter_hover_button: (None, None),
+            gutter_copied_row: (None, None),
             gutter_diff_review_indicator: (None, None),
             diff_review_drag_state: None,
             diff_review_overlays: Vec::new(),
@@ -3762,6 +3776,9 @@ impl Editor {
 
         let mouse_position = window.mouse_position();
         if !position_map.text_hitbox.is_hovered(window) {
+            if self.gutter_hover_button.0.is_some() {
+                cx.notify();
+            }
             return;
         }
 
@@ -3886,6 +3903,23 @@ impl Editor {
                 Some(display_row)
             })
             .collect()
+    }
+
+    fn render_gutter_hover_button(&self, row: DisplayRow, cx: &mut Context<Self>) -> IconButton {
+        let (icon, color, tooltip) = if self.gutter_copied_row.0 == Some(row) {
+            (IconName::Check, Color::Success, "Copied!")
+        } else {
+            (IconName::Bookmark, Color::Info, "Copy File Location")
+        };
+        IconButton::new(("copy_file_location_button", row.0 as usize), icon)
+            .icon_size(IconSize::XSmall)
+            .size(ui::ButtonSize::None)
+            .icon_color(color)
+            .style(ButtonStyle::Transparent)
+            .on_click(cx.listener(move |editor, _: &ClickEvent, _window, cx| {
+                editor.copy_file_location_at_row(row, cx);
+            }))
+            .tooltip(Tooltip::text(tooltip))
     }
 
     fn gutter_context_menu(
@@ -7733,41 +7767,73 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         let selection = self.selections.newest::<Point>(&self.display_snapshot(cx));
-        let multi_buffer_snapshot = self.buffer.read(cx).snapshot(cx);
-
-        if let Some(file_location) = maybe!({
-            let (buffer, range) = multi_buffer_snapshot
-                .range_to_buffer_range(selection.range())
-                .or_else(|| {
-                    // A selection that spans multiple buffers has no single location,
-                    // so fall back to the buffer the latest cursor is in.
-                    let (buffer, point) =
-                        multi_buffer_snapshot.point_to_buffer_point(selection.head())?;
-                    Some((buffer, point..point))
-                })?;
-
-            let start_line = range.start.row + 1;
-            let end_line = range.end.row + 1;
-
-            let end_line = if range.end.column == 0 && end_line > start_line {
-                end_line - 1
-            } else {
-                end_line
-            };
-
-            let project = self.project()?.read(cx);
-            let file = buffer.file()?;
-            let path = file.path().display(project.path_style(cx));
-
-            let location = if start_line == end_line {
-                format!("{path}:{start_line}")
-            } else {
-                format!("{path}:{start_line}-{end_line}")
-            };
-            Some(location)
-        }) {
+        if let Some(file_location) = self.file_location(selection.range(), selection.head(), cx) {
             cx.write_to_clipboard(ClipboardItem::new_string(file_location));
         }
+    }
+
+    /// Copies `path:line` for the clicked gutter row, or `path:start-end` when the
+    /// newest selection spans multiple lines and covers that row.
+    fn copy_file_location_at_row(&mut self, row: DisplayRow, cx: &mut Context<Self>) {
+        let display_snapshot = self.display_snapshot(cx);
+        let point = display_snapshot.display_point_to_point(row.as_display_point(), Bias::Left);
+        let selection = self.selections.newest::<Point>(&display_snapshot);
+        let range = selection.range();
+        let range = if range.start.row != range.end.row
+            && (range.start.row..=range.end.row).contains(&point.row)
+        {
+            range
+        } else {
+            point..point
+        };
+        if let Some(file_location) = self.file_location(range, point, cx) {
+            cx.write_to_clipboard(ClipboardItem::new_string(file_location));
+            self.gutter_copied_row = (
+                Some(row),
+                Some(cx.spawn(async move |this, cx| {
+                    cx.background_executor()
+                        .timer(GUTTER_COPIED_STATE_DURATION)
+                        .await;
+                    this.update(cx, |this, cx| {
+                        this.gutter_copied_row = (None, None);
+                        cx.notify();
+                    })
+                    .ok();
+                })),
+            );
+            cx.notify();
+        }
+    }
+
+    fn file_location(&self, range: Range<Point>, cursor: Point, cx: &App) -> Option<String> {
+        let multi_buffer_snapshot = self.buffer.read(cx).snapshot(cx);
+        let (buffer, range) = multi_buffer_snapshot
+            .range_to_buffer_range(range)
+            .or_else(|| {
+                // A range that spans multiple buffers has no single location,
+                // so fall back to the buffer the cursor is in.
+                let (buffer, point) = multi_buffer_snapshot.point_to_buffer_point(cursor)?;
+                Some((buffer, point..point))
+            })?;
+
+        let start_line = range.start.row + 1;
+        let end_line = range.end.row + 1;
+
+        let end_line = if range.end.column == 0 && end_line > start_line {
+            end_line - 1
+        } else {
+            end_line
+        };
+
+        let project = self.project()?.read(cx);
+        let file = buffer.file()?;
+        let path = file.path().display(project.path_style(cx));
+
+        Some(if start_line == end_line {
+            format!("{path}:{start_line}")
+        } else {
+            format!("{path}:{start_line}-{end_line}")
+        })
     }
 
     pub fn insert_uuid_v4(
@@ -9337,6 +9403,7 @@ impl Editor {
                         modifiers: window.modifiers(),
                     },
                     &position_map,
+                    None,
                     window,
                     cx,
                 );
@@ -10605,8 +10672,6 @@ impl EditorSnapshot {
                 0.0.into()
             };
 
-            let show_runnables = self.show_runnables.unwrap_or(gutter_settings.runnables);
-
             let git_blame_entries_width =
                 self.git_blame_gutter_max_author_length
                     .map(|max_author_length| {
@@ -10626,7 +10691,10 @@ impl EditorSnapshot {
             let left_padding = git_blame_entries_width.unwrap_or(Pixels::ZERO)
                 + if !is_singleton {
                     ch_width * 4.0
-                } else if show_runnables {
+                // runnables and the copy-file-location hover button share this space;
+                // the hover button is always available, so only an explicit opt-out
+                // (e.g. previews) drops it
+                } else if self.show_runnables != Some(false) {
                     ch_width * 3.0
                 } else if show_git_gutter && show_line_numbers {
                     ch_width * 2.0
@@ -11257,6 +11325,8 @@ fn collapse_multiline_range(range: Range<Point>) -> Range<Point> {
         range.start..range.start
     }
 }
+
+const GUTTER_COPIED_STATE_DURATION: Duration = Duration::from_secs(2);
 
 const UPDATE_DEBOUNCE: Duration = Duration::from_millis(50);
 

@@ -63,5 +63,6 @@ migrator, or Vim/Helix mode.
   launch opens an empty editor like any other launch. The welcome page
   (`zed::ShowWelcome`) remains, without a "Return to Onboarding" button.
 - Bookmarks are removed: no bookmark actions, labels, navigation, project view,
-  gutter controls, or `gutter.bookmarks` setting. Existing saved bookmarks are
+  bookmark gutter markers, or `gutter.bookmarks` setting (the gutter hover
+  button now copies the file location; see editor.md). Existing saved bookmarks are
   discarded when the workspace database is upgraded.

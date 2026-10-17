@@ -15,13 +15,13 @@ use sum_tree::Bias;
 use text::SelectionGoal;
 use util::{RangeExt, debug_panic};
 
-use super::{EditorElement, EditorLayout, LineNumberLayout, PositionMap};
+use super::{EditorElement, EditorLayout, LineNumberLayout, PositionMap, SplitSide};
 use crate::{
     ColumnarMode, DisplayDiffHunk, DisplayPoint, DisplayRow, Editor, EditorSettings,
-    EditorSnapshot, JumpData, PhantomDiffReviewIndicator, SelectPhase, Selection,
-    SelectionDragState, display_map::ToDisplayPoint, editor_settings::DoubleClickInMultibuffer,
-    hover_popover::hover_at, inlays::inlay_hints::HintTarget, mouse_context_menu,
-    scroll::ScrollPixelOffset,
+    EditorSnapshot, GutterHoverButton, JumpData, PhantomDiffReviewIndicator, SelectPhase,
+    Selection, SelectionDragState, display_map::ToDisplayPoint,
+    editor_settings::DoubleClickInMultibuffer, hover_popover::hover_at,
+    inlays::inlay_hints::HintTarget, mouse_context_menu, scroll::ScrollPixelOffset,
 };
 
 impl EditorElement {
@@ -29,6 +29,7 @@ impl EditorElement {
         editor: &mut Editor,
         event: &MouseMoveEvent,
         position_map: &PositionMap,
+        split_side: Option<SplitSide>,
         window: &mut Window,
         cx: &mut Context<Editor>,
     ) {
@@ -114,6 +115,65 @@ impl EditorElement {
 
         if diff_review_indicator != editor.gutter_diff_review_indicator.0 {
             editor.gutter_diff_review_indicator.0 = diff_review_indicator;
+            cx.notify();
+        }
+
+        let gutter_hover_button = if gutter_hovered
+            && split_side != Some(SplitSide::Left)
+            && editor.show_runnables != Some(false)
+        {
+            let buffer_anchor = position_map
+                .snapshot
+                .display_point_to_anchor(valid_point, Bias::Left);
+
+            // The button copies a worktree-relative path, so it would be a no-op
+            // for buffers without a worktree file (e.g. untitled buffers).
+            if position_map
+                .snapshot
+                .buffer_snapshot()
+                .anchor_to_buffer_anchor(buffer_anchor)
+                .is_some_and(|(_, buffer_snapshot)| {
+                    project::File::from_dyn(buffer_snapshot.file()).is_some()
+                })
+            {
+                let is_visible = editor
+                    .gutter_hover_button
+                    .0
+                    .is_some_and(|button| button.is_active);
+
+                if !is_visible {
+                    editor.gutter_hover_button.1.get_or_insert_with(|| {
+                        cx.spawn(async move |this, cx| {
+                            cx.background_executor()
+                                .timer(Duration::from_millis(200))
+                                .await;
+
+                            this.update(cx, |this, cx| {
+                                if let Some(button) = this.gutter_hover_button.0.as_mut() {
+                                    button.is_active = true;
+                                    cx.notify();
+                                }
+                            })
+                            .ok();
+                        })
+                    });
+                }
+
+                Some(GutterHoverButton {
+                    display_row: valid_point.row(),
+                    is_active: is_visible,
+                })
+            } else {
+                editor.gutter_hover_button.1 = None;
+                None
+            }
+        } else {
+            editor.gutter_hover_button.1 = None;
+            None
+        };
+
+        if gutter_hover_button != editor.gutter_hover_button.0 {
+            editor.gutter_hover_button.0 = gutter_hover_button;
             cx.notify();
         }
 
@@ -336,6 +396,7 @@ impl EditorElement {
         window.on_mouse_event({
             let position_map = layout.position_map.clone();
             let editor = self.editor.clone();
+            let split_side = self.split_side;
 
             move |event: &MouseMoveEvent, phase, window, cx| {
                 if phase == DispatchPhase::Bubble {
@@ -349,7 +410,7 @@ impl EditorElement {
                             Self::mouse_dragged(editor, event, &position_map, window, cx)
                         }
 
-                        Self::mouse_moved(editor, event, &position_map, window, cx)
+                        Self::mouse_moved(editor, event, &position_map, split_side, window, cx)
                     });
                 }
             }
