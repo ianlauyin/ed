@@ -9,10 +9,6 @@ use std::{
 };
 
 use anyhow::Context as _;
-use command_palette_hooks::{
-    CommandInterceptItem, CommandInterceptResult, CommandPaletteFilter,
-    GlobalCommandPaletteInterceptor,
-};
 use command_palette_settings::CommandPaletteSettings;
 
 use fuzzy_nucleo::{StringMatch, StringMatchCandidate};
@@ -36,7 +32,6 @@ actions!(command_palette, [RemoveSelected]);
 
 pub fn init(cx: &mut App) {
     CommandPaletteSettings::register(cx);
-    command_palette_hooks::init(cx);
     cx.observe_new(CommandPalette::register).detach();
 }
 
@@ -103,43 +98,29 @@ impl CommandPalette {
             return;
         };
 
-        let entity = cx.weak_entity();
         workspace.toggle_modal(window, cx, move |window, cx| {
-            CommandPalette::new(previous_focus_handle, query, entity, window, cx)
+            CommandPalette::new(previous_focus_handle, query, window, cx)
         });
     }
 
     fn new(
         previous_focus_handle: FocusHandle,
         query: &str,
-        entity: WeakEntity<Workspace>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let filter = CommandPaletteFilter::try_global(cx);
-
         let commands = window
             .available_actions(cx)
             .into_iter()
-            .filter_map(|action| {
-                if filter.is_some_and(|filter| filter.is_hidden(&*action)) {
-                    return None;
-                }
-
-                Some(Command {
-                    name: SharedString::from(humanize_action_name(action.name())),
-                    action,
-                    usage: None,
-                })
+            .map(|action| Command {
+                name: SharedString::from(humanize_action_name(action.name())),
+                action,
+                usage: None,
             })
             .collect();
 
-        let delegate = CommandPaletteDelegate::new(
-            cx.entity().downgrade(),
-            entity,
-            commands,
-            previous_focus_handle,
-        );
+        let delegate =
+            CommandPaletteDelegate::new(cx.entity().downgrade(), commands, previous_focus_handle);
 
         let picker = cx.new(|cx| {
             // One-shot action; there's nothing to reopen.
@@ -195,7 +176,6 @@ impl Render for CommandPalette {
 pub struct CommandPaletteDelegate {
     latest_query: String,
     command_palette: WeakEntity<CommandPalette>,
-    workspace: WeakEntity<Workspace>,
     all_commands: Vec<Command>,
     commands: Vec<Command>,
     matches: Vec<StringMatch>,
@@ -203,7 +183,7 @@ pub struct CommandPaletteDelegate {
     previous_focus_handle: FocusHandle,
     updating_matches: Option<(
         Task<()>,
-        postage::dispatch::Receiver<(Vec<Command>, Vec<StringMatch>, CommandInterceptResult)>,
+        postage::dispatch::Receiver<(Vec<Command>, Vec<StringMatch>)>,
     )>,
     query_history: QueryHistory,
 }
@@ -318,13 +298,11 @@ impl Clone for Command {
 impl CommandPaletteDelegate {
     fn new(
         command_palette: WeakEntity<CommandPalette>,
-        workspace: WeakEntity<Workspace>,
         commands: Vec<Command>,
         previous_focus_handle: FocusHandle,
     ) -> Self {
         Self {
             command_palette,
-            workspace,
             all_commands: commands.clone(),
             matches: Vec::new(),
             commands,
@@ -339,46 +317,15 @@ impl CommandPaletteDelegate {
     fn matches_updated(
         &mut self,
         query: String,
-        mut commands: Vec<Command>,
-        mut matches: Vec<StringMatch>,
-        intercept_result: CommandInterceptResult,
+        commands: Vec<Command>,
+        matches: Vec<StringMatch>,
         _: &mut Context<Picker<Self>>,
     ) {
         self.updating_matches.take();
         self.latest_query = query;
 
-        let mut new_matches = Vec::new();
-
-        for CommandInterceptItem {
-            action,
-            string,
-            positions,
-        } in intercept_result.results
-        {
-            if let Some(idx) = matches
-                .iter()
-                .position(|m| commands[m.candidate_id].action.partial_eq(&*action))
-            {
-                matches.remove(idx);
-            }
-            let string = SharedString::from(string);
-            commands.push(Command {
-                name: string.clone(),
-                action,
-                usage: None,
-            });
-            new_matches.push(StringMatch {
-                candidate_id: commands.len() - 1,
-                string,
-                positions,
-                score: 0.0,
-            })
-        }
-        if !intercept_result.exclusive {
-            new_matches.append(&mut matches);
-        }
         self.commands = commands;
-        self.matches = new_matches;
+        self.matches = matches;
         if self.matches.is_empty() {
             self.selected_ix = 0;
         } else {
@@ -581,10 +528,6 @@ impl PickerDelegate for CommandPaletteDelegate {
             query = alias.as_ref().to_owned();
         }
 
-        let workspace = self.workspace.clone();
-
-        let intercept_task = GlobalCommandPaletteInterceptor::intercept(&query, workspace, cx);
-
         let (mut tx, mut rx) = postage::dispatch::channel(1);
 
         let query_str = query.as_str();
@@ -629,22 +572,14 @@ impl PickerDelegate for CommandPaletteDelegate {
                     }
                 });
 
-                let intercept_result = if let Some(task) = intercept_task {
-                    task.await
-                } else {
-                    CommandInterceptResult::default()
-                };
-
-                tx.send((commands, matches, intercept_result))
-                    .await
-                    .log_err();
+                tx.send((commands, matches)).await.log_err();
             }
         });
 
         self.updating_matches = Some((task, rx.clone()));
 
         cx.spawn_in(window, async move |picker, cx| {
-            let Some((commands, matches, intercept_result)) = rx.recv().await else {
+            let Some((commands, matches)) = rx.recv().await else {
                 return;
             };
 
@@ -652,7 +587,7 @@ impl PickerDelegate for CommandPaletteDelegate {
                 .update(cx, |picker, cx| {
                     picker
                         .delegate
-                        .matches_updated(query, commands, matches, intercept_result, cx)
+                        .matches_updated(query, commands, matches, cx)
                 })
                 .ok();
         })
@@ -673,8 +608,8 @@ impl PickerDelegate for CommandPaletteDelegate {
             .foreground_executor()
             .block_with_timeout(duration, rx.clone().recv())
         {
-            Ok(Some((commands, matches, interceptor_result))) => {
-                self.matches_updated(query, commands, matches, interceptor_result, cx);
+            Ok(Some((commands, matches))) => {
+                self.matches_updated(query, commands, matches, cx);
                 true
             }
             _ => {

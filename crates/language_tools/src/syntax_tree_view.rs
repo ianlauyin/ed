@@ -1,4 +1,3 @@
-use command_palette_hooks::CommandPaletteFilter;
 use editor::{
     Anchor, Editor, HighlightKey, MultiBufferOffset, SelectionEffects, scroll::Autoscroll,
 };
@@ -9,7 +8,7 @@ use gpui::{
     WeakEntity, Window, actions, div, rems, uniform_list,
 };
 use language::{Buffer, OwnedSyntaxLayer};
-use std::{any::TypeId, mem, ops::Range};
+use std::{mem, ops::Range};
 use theme::ActiveTheme;
 use tree_sitter::{Node, TreeCursor};
 use ui::{
@@ -31,60 +30,19 @@ actions!(
     ]
 );
 
-actions!(
-    syntax_tree_view,
-    [
-        /// Update the syntax tree view to show the last focused file.
-        UseActiveEditor
-    ]
-);
-
 pub fn init(cx: &mut App) {
-    let syntax_tree_actions = [TypeId::of::<UseActiveEditor>()];
-
-    CommandPaletteFilter::update_global(cx, |this, _| {
-        this.hide_action_types(&syntax_tree_actions);
-    });
-
-    cx.observe_new(move |workspace: &mut Workspace, _, _| {
-        workspace.register_action(move |workspace, _: &OpenSyntaxTreeView, window, cx| {
-            CommandPaletteFilter::update_global(cx, |this, _| {
-                this.show_action_types(&syntax_tree_actions);
-            });
-
+    cx.observe_new(|workspace: &mut Workspace, _, _| {
+        workspace.register_action(|workspace, _: &OpenSyntaxTreeView, window, cx| {
             let active_item = workspace.active_item(cx);
             let workspace_handle = workspace.weak_handle();
-            let syntax_tree_view = cx.new(|cx| {
-                cx.on_release(move |view: &mut SyntaxTreeView, cx| {
-                    if view
-                        .workspace_handle
-                        .read_with(cx, |workspace, cx| {
-                            workspace.item_of_type::<SyntaxTreeView>(cx).is_none()
-                        })
-                        .unwrap_or_default()
-                    {
-                        CommandPaletteFilter::update_global(cx, |this, _| {
-                            this.hide_action_types(&syntax_tree_actions);
-                        });
-                    }
-                })
-                .detach();
-
-                SyntaxTreeView::new(workspace_handle, active_item, window, cx)
-            });
+            let syntax_tree_view =
+                cx.new(|cx| SyntaxTreeView::new(workspace_handle, active_item, window, cx));
             workspace.split_item(
                 SplitDirection::Right,
                 Box::new(syntax_tree_view),
                 window,
                 cx,
             )
-        });
-        workspace.register_action(|workspace, _: &UseActiveEditor, window, cx| {
-            if let Some(tree_view) = workspace.item_of_type::<SyntaxTreeView>(cx) {
-                tree_view.update(cx, |view, cx| {
-                    view.update_active_editor(&Default::default(), window, cx)
-                })
-            }
         });
     })
     .detach();
@@ -197,17 +155,12 @@ impl SyntaxTreeView {
         {
             self.editor = None;
             // Try activating the last active editor if there is one
-            self.update_active_editor(&Default::default(), window, cx);
+            self.update_active_editor(window, cx);
             cx.notify();
         }
     }
 
-    fn update_active_editor(
-        &mut self,
-        _: &UseActiveEditor,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn update_active_editor(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(editor) = self.last_active_editor.take() else {
             return;
         };
@@ -695,7 +648,7 @@ impl SyntaxTreeToolbarItemView {
                             Tooltip::text(format!("Update view to '{active_tab_name}'"))
                         })
                         .on_click(cx.listener(|this, _, window, cx| {
-                            this.update_active_editor(&Default::default(), window, cx);
+                            this.update_active_editor(window, cx);
                         }))
                 })
             })

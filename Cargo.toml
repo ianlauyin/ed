@@ -10,13 +10,11 @@ members = [
     "crates/clock",
     "crates/collections",
     "crates/command_palette",
-    "crates/command_palette_hooks",
     "crates/component",
     "crates/db",
     "crates/diagnostics",
     "crates/editor",
     "crates/encoding_selector",
-    "crates/env_var",
     "crates/file_content",
     "crates/file_finder",
     "crates/file_icons",
@@ -78,7 +76,6 @@ members = [
     "crates/rope",
     "crates/rpc",
     "crates/scheduler",
-    "crates/schema_generator",
     "crates/search",
     "crates/session",
     "crates/settings",
@@ -99,7 +96,6 @@ members = [
     "crates/terminal_view",
     "crates/text",
     "crates/theme",
-    "crates/theme_importer",
     "crates/theme_selector",
     "crates/theme_settings",
     "crates/time_format",
@@ -140,7 +136,6 @@ cli = { path = "crates/cli", default-features = false }
 clock = { path = "crates/clock" }
 collections = { path = "crates/collections", version = "0.1.0" }
 command_palette = { path = "crates/command_palette" }
-command_palette_hooks = { path = "crates/command_palette_hooks" }
 component = { path = "crates/component" }
 db = { path = "crates/db" }
 derive_refineable = { path = "crates/refineable/derive_refineable" }
@@ -458,7 +453,6 @@ serde_urlencoded = "0.7"
 sha2 = "0.10"
 shellexpand = "3.1"
 shlex = "2.0"
-simplelog = { version = "0.12", default-features = false }
 slotmap = "1.0.6"
 smallvec = { version = "1.6", features = ["union", "const_new"] }
 smol = "2.0"
@@ -558,7 +552,6 @@ assets = { codegen-units = 1 }
 breadcrumbs = { codegen-units = 1 }
 collections = { codegen-units = 1 }
 command_palette = { codegen-units = 1 }
-command_palette_hooks = { codegen-units = 1 }
 file_content = { codegen-units = 1 }
 file_icons = { codegen-units = 1 }
 image_viewer = { codegen-units = 1 }

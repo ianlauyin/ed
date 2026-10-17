@@ -968,7 +968,6 @@ name = "command_palette"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "command_palette_hooks",
  "db",
  "fuzzy_nucleo",
  "gpui",
@@ -983,16 +982,6 @@ dependencies = [
  "util",
  "workspace",
  "zed_actions",
-]
-
-[[package]]
-name = "command_palette_hooks"
-version = "0.1.0"
-dependencies = [
- "collections",
- "derive_more",
- "gpui",
- "workspace",
 ]
 
 [[package]]
@@ -1691,13 +1680,6 @@ dependencies = [
  "env_filter",
  "jiff",
  "log",
-]
-
-[[package]]
-name = "env_var"
-version = "0.1.0"
-dependencies = [
- "gpui_shared_string",
 ]
 
 [[package]]
@@ -3598,7 +3580,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "collections",
- "command_palette_hooks",
  "editor",
  "gpui",
  "itertools 0.14.0",
@@ -6873,20 +6854,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "schema_generator"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "env_logger 0.11.8",
- "schemars",
- "serde_json",
- "settings",
- "theme",
- "theme_settings",
-]
-
-[[package]]
 name = "schemars"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7295,17 +7262,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7a9c6883ca9c3c7c90e888de77b7a5c849c779d25d74a1269b0218b14e8b136c"
 dependencies = [
  "log",
-]
-
-[[package]]
-name = "simplelog"
-version = "0.12.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "16257adbfaef1ee58b1363bdc0664c9b8e1e30aed86049635fb5f147d065a9c0"
-dependencies = [
- "log",
- "termcolor",
- "time",
 ]
 
 [[package]]
@@ -7968,27 +7924,6 @@ dependencies = [
  "syntax_theme",
  "thiserror 2.0.17",
  "uuid",
-]
-
-[[package]]
-name = "theme_importer"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "clap",
- "collections",
- "gpui",
- "indexmap",
- "log",
- "palette",
- "serde",
- "serde_json",
- "serde_json_lenient",
- "simplelog",
- "strum",
- "theme",
- "theme_settings",
- "vscode_theme",
 ]
 
 [[package]]
@@ -9087,15 +9022,6 @@ name = "version_check"
 version = "0.9.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "0b928f33d975fc6ad9f86c8f283853ad26bdd5b10b7f1542aa2fa15e2289105a"
-
-[[package]]
-name = "vscode_theme"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8b3666211944f2e6ba2c359bc9efc1891157e910b1b11c3900892ea9f18179d2"
-dependencies = [
- "serde",
-]
 
 [[package]]
 name = "vte"

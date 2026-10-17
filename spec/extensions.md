@@ -12,6 +12,8 @@ macOS; the remote server runs natively on macOS and Linux.
   built-in code/assets (`assets/themes/`); the user config `themes/` folder is
   never read or watched, so the theme set is fixed for the process lifetime.
 - Tree-sitter grammars are native only; Wasm grammars cannot be loaded.
+- The standalone VS Code theme importer is removed; this fork does not provide
+  a theme conversion tool.
 - Extension crates, host proxies, builders, adapters, settings, and remote
   install/sync messages are removed.
 - No Extensions page, menu item, keybinding, or install/update status.

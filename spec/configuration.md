@@ -51,7 +51,8 @@ migrator, or Vim/Helix mode.
 - The upstream documentation website preprocessor is removed; this fork does not
   build the upstream mdBook site.
 - The command palette has no "Add/Change Keybinding" flow; secondary confirm runs
-  the selected command.
+  the selected command. It lists every available action as-is: there is no
+  global action filter or query interceptor (`command_palette_hooks` is removed).
 - Snippets are built in (`snippet` crate): Rust has `main`, `async_main`,
   `tests`, `test`, and `async_test`. Language snippets are offered with global
   ones and do not require a project. The user snippets directory is not loaded or
