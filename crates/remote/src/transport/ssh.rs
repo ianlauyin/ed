@@ -8,12 +8,11 @@ use anyhow::{Context as _, Result, anyhow};
 use async_trait::async_trait;
 use collections::HashMap;
 use futures::{
-    AsyncReadExt as _, FutureExt as _,
+    FutureExt as _,
     channel::mpsc::{Sender, UnboundedReceiver, UnboundedSender},
     select_biased,
 };
 use gpui::{App, AppContext as _, AsyncApp, Task};
-use parking_lot::Mutex;
 use rpc::proto::Envelope;
 pub use settings_content::SshPortForwardOption;
 use std::{
@@ -26,8 +25,7 @@ use std::{
     },
     time::Duration,
 };
-use tempfile::TempDir;
-use util::command::{Child, Stdio};
+use util::command::Stdio;
 use util::{
     paths::{PathStyle, RemotePathBuf},
     rel_path::RelPath,
@@ -39,9 +37,7 @@ const SSH_CONNECTION_TIMEOUT: Duration = Duration::from_secs(17);
 
 pub(crate) struct SshRemoteConnection {
     socket: SshSocket,
-    master_process: Mutex<Option<MasterProcess>>,
-    /// Whether `kill()` has been called. Separate from `master_process` because
-    /// reused ControlMaster sessions start with `master_process` as `None`.
+    /// Whether `kill()` has been called.
     killed: AtomicBool,
     remote_binary_path: Option<Arc<RelPath>>,
     ssh_platform: RemotePlatform,
@@ -51,7 +47,6 @@ pub(crate) struct SshRemoteConnection {
     ssh_shell_kind: ShellKind,
     ssh_default_system_shell: String,
     ssh_home_dir: Option<String>,
-    _temp_dir: TempDir,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -137,10 +132,10 @@ impl From<settings_content::SshConnection> for SshConnectionOptions {
     }
 }
 
+/// Runs plain `ssh` commands against the destination. Connection reuse
+/// (ControlMaster/ControlPersist) is left entirely to the user's ssh config.
 struct SshSocket {
     connection_options: SshConnectionOptions,
-
-    socket_path: std::path::PathBuf,
     /// Extra environment variables needed for the ssh process
     envs: HashMap<String, String>,
 }
@@ -264,76 +259,10 @@ impl RemoteEnvironment {
     }
 }
 
-struct MasterProcess {
-    process: Child,
-}
-
-impl MasterProcess {
-    pub fn new(
-        additional_args: Vec<String>,
-        socket_path: &std::path::Path,
-        destination: &str,
-    ) -> Result<Self> {
-        let args = [
-            "-N",
-            "-o",
-            "ControlPersist=no",
-            "-o",
-            "ControlMaster=yes",
-            "-o",
-        ];
-
-        let mut master_process = util::command::new_command("ssh");
-        master_process
-            .kill_on_drop(true)
-            .stdin(Stdio::null())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .env("SSH_ASKPASS_REQUIRE", "force")
-            .env("SSH_ASKPASS", "/usr/bin/false")
-            .args(additional_args)
-            .args(args);
-
-        master_process.arg(format!("ControlPath={}", socket_path.display()));
-
-        let process = master_process.arg(&destination).spawn()?;
-
-        Ok(MasterProcess { process })
-    }
-
-    pub async fn wait_connected(&mut self) -> Result<()> {
-        let Some(mut stdout) = self.process.stdout.take() else {
-            anyhow::bail!("ssh process stdout capture failed");
-        };
-
-        let mut output = Vec::new();
-        stdout.read_to_end(&mut output).await?;
-        Ok(())
-    }
-}
-
-impl AsRef<Child> for MasterProcess {
-    fn as_ref(&self) -> &Child {
-        &self.process
-    }
-}
-
-impl AsMut<Child> for MasterProcess {
-    fn as_mut(&mut self) -> &mut Child {
-        &mut self.process
-    }
-}
-
 #[async_trait(?Send)]
 impl RemoteConnection for SshRemoteConnection {
     async fn kill(&self) -> Result<()> {
         self.killed.store(true, Ordering::Release);
-        let Some(mut process) = self.master_process.lock().take() else {
-            log::debug!("no master process to kill (external ControlMaster session)");
-            return Ok(());
-        };
-        process.as_mut().kill().ok();
-        process.as_mut().status().await?;
         Ok(())
     }
 
@@ -613,81 +542,6 @@ impl RemoteConnection for SshRemoteConnection {
     }
 }
 
-/// Check if the user already has an active SSH ControlMaster session for the
-/// given destination. See: https://github.com/zed-industries/zed/issues/45271
-async fn find_existing_control_master(
-    destination: &str,
-    additional_args: &[String],
-) -> Option<PathBuf> {
-    // Use `ssh -G` to resolve the user's effective SSH config for this host.
-    // This expands ControlPath tokens (%h, %p, %r, %C, etc.) into actual paths.
-    let output = match util::command::new_command("ssh")
-        .args(additional_args)
-        .arg("-G")
-        .arg(destination)
-        .stdin(Stdio::null())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::null())
-        .output()
-        .await
-    {
-        Ok(output) => output,
-        Err(e) => {
-            log::debug!("failed to run ssh -G: {e}");
-            return None;
-        }
-    };
-
-    if !output.status.success() {
-        log::debug!("ssh -G failed for {destination}, skipping ControlMaster reuse");
-        return None;
-    }
-
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let control_path = stdout.lines().find_map(|line| {
-        let path = line.strip_prefix("controlpath ")?.trim();
-        if path == "none" || path.is_empty() {
-            None
-        } else {
-            Some(PathBuf::from(path))
-        }
-    })?;
-
-    // Verify the master is actually alive by sending a control command.
-    let check = match util::command::new_command("ssh")
-        .args(additional_args)
-        .args(["-O", "check"])
-        .arg("-o")
-        .arg(format!("ControlPath={}", control_path.display()))
-        .arg(destination)
-        .stdin(Stdio::null())
-        .stdout(Stdio::null())
-        .stderr(Stdio::null())
-        .output()
-        .await
-    {
-        Ok(output) => output,
-        Err(e) => {
-            log::debug!("failed to run ssh -O check: {e}");
-            return None;
-        }
-    };
-
-    if check.status.success() {
-        log::info!(
-            "reusing existing SSH ControlMaster at {}",
-            control_path.display()
-        );
-        Some(control_path)
-    } else {
-        log::debug!(
-            "ControlMaster socket at {} is not alive, creating new connection",
-            control_path.display()
-        );
-        None
-    }
-}
-
 impl SshRemoteConnection {
     pub(crate) async fn new(
         connection_options: SshConnectionOptions,
@@ -695,78 +549,32 @@ impl SshRemoteConnection {
         delegate: Arc<dyn RemoteClientDelegate>,
         cx: &mut AsyncApp,
     ) -> Result<Self> {
-        let destination = connection_options.ssh_destination();
+        delegate.set_status(Some("Connecting"), cx);
+        let socket = SshSocket::new(connection_options);
 
-        let temp_dir = tempfile::Builder::new()
-            .prefix("zed-ssh-session")
-            .tempdir()?;
-
-        // On non-Windows, check if the user already has an active ControlMaster
-        // session for this host. If so, reuse it without authenticating again.
-
-        let reused_socket =
-            find_existing_control_master(&destination, &connection_options.additional_args()).await;
-
-        let (socket, master_process_option) = if let Some(reused_path) = reused_socket {
-            delegate.set_status(Some("Connecting (reusing session)"), cx);
-            log::info!("reusing existing ControlMaster, skipping authentication");
-            let socket = SshSocket::new(connection_options, reused_path).await?;
-            (socket, None)
-        } else {
-            delegate.set_status(Some("Connecting"), cx);
-
-            // Start the master SSH process, which does not do anything except
-            // for establish the connection and keep it open, allowing other ssh
-            // commands to reuse it via a control socket.
-            let socket_path = temp_dir.path().join("ssh.sock");
-            let mut master_process = MasterProcess::new(
-                connection_options.additional_args(),
-                &socket_path,
-                &destination,
-            )?;
-
-            let result = select_biased! {
-                _ = cx.background_executor().timer(SSH_CONNECTION_TIMEOUT).fuse() => {
-                    anyhow::bail!("connecting to host timed out")
-                }
-                result = master_process.wait_connected().fuse() => result,
-            };
-
-            if let Err(e) = result {
-                return Err(e.context("Failed to connect to host"));
+        let (is_windows, environment) = select_biased! {
+            _ = cx.background_executor().timer(SSH_CONNECTION_TIMEOUT).fuse() => {
+                anyhow::bail!("connecting to host timed out")
             }
-
-            if master_process.as_mut().try_status()?.is_some() {
-                let mut output = Vec::new();
-                let mut stderr = master_process.as_mut().stderr.take().unwrap();
-                stderr.read_to_end(&mut output).await?;
-
-                let error_message = format!(
-                    "failed to connect: {}",
-                    String::from_utf8_lossy(&output).trim()
-                );
-                anyhow::bail!(error_message);
-            }
-
-            let socket = SshSocket::new(connection_options, socket_path).await?;
-            (socket, Some(master_process))
-        };
-
-        let is_windows = match known_os {
-            Some(os) => os.is_windows(),
-            None => socket.probe_is_windows().await,
+            result = async {
+                let is_windows = match known_os {
+                    Some(os) => os.is_windows(),
+                    None => socket.probe_is_windows().await,
+                };
+                let environment = if is_windows {
+                    socket.environment_windows().await
+                } else {
+                    socket.environment_posix().await
+                };
+                environment.map(|environment| (is_windows, environment))
+            }.fuse() => result.context("Failed to connect to host")?,
         };
         log::info!("Remote is windows: {}", is_windows);
-
         let RemoteEnvironment {
             shell: ssh_shell,
             platform: ssh_platform,
             os_version: ssh_os_version,
-        } = if is_windows {
-            socket.environment_windows().await?
-        } else {
-            socket.environment_posix().await?
-        };
+        } = environment;
         log::info!("Remote shell discovered: {}", ssh_shell);
 
         let ssh_shell_kind = ShellKind::new(&ssh_shell, is_windows);
@@ -788,9 +596,7 @@ impl SshRemoteConnection {
 
         let mut this = Self {
             socket,
-            master_process: Mutex::new(master_process_option),
             killed: AtomicBool::new(false),
-            _temp_dir: temp_dir,
             remote_binary_path: None,
             ssh_path_style,
             ssh_platform,
@@ -880,12 +686,11 @@ impl SshRemoteConnection {
 }
 
 impl SshSocket {
-    async fn new(options: SshConnectionOptions, socket_path: PathBuf) -> Result<Self> {
-        Ok(Self {
+    fn new(options: SshConnectionOptions) -> Self {
+        Self {
             connection_options: options,
             envs: HashMap::default(),
-            socket_path,
-        })
+        }
     }
 
     // :WARNING: ssh unquotes arguments when executing on the remote :WARNING:
@@ -967,29 +772,18 @@ impl SshSocket {
             args.retain(|x| !deny_args.contains(&x.as_str()));
         }
 
-        let cmd = command
+        command
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
-            .args(args);
-        cmd.args(["-o", "ControlMaster=no", "-o"])
-            .arg(format!("ControlPath={}", self.socket_path.display()));
-        cmd
+            .args(args)
     }
 
     // Returns the SSH command-line options (without the destination) for building commands.
-    // This includes the ControlPath option to reuse the existing connection.
     // Note: The destination must be added separately after all options to ensure proper
     // SSH command structure: ssh [options] destination [command]
     fn ssh_command_options(&self) -> Vec<String> {
-        let mut arguments = self.connection_options.additional_args();
-        arguments.extend([
-            "-o".to_string(),
-            "ControlMaster=no".to_string(),
-            "-o".to_string(),
-            format!("ControlPath={}", self.socket_path.display()),
-        ]);
-        arguments
+        self.connection_options.additional_args()
     }
 
     async fn environment_posix(&self) -> Result<RemoteEnvironment> {

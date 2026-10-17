@@ -22,6 +22,10 @@ remote server supports macOS and Linux.
   authentication that works without user input, such as an SSH agent or cached
   credentials. Password/passphrase requests fail instead of opening a prompt.
   SSH host verification must also succeed without interactive confirmation.
+- SSH remotes run plain `ssh <args> <host> ...` for every command. The editor
+  starts no master process and passes no ControlMaster/ControlPath options;
+  connection reuse is left to the user's ssh config (e.g. `ControlMaster auto`
+  + `ControlPersist`). The initial connect times out after 17s.
 - The askpass crate, password dialogs, credential forwarding over RPC, and
   askpass helper modes are removed. Remote connection progress and cancellation
   remain available.

@@ -6428,7 +6428,6 @@ dependencies = [
  "serde_json",
  "settings_content",
  "smol",
- "tempfile",
  "thiserror 2.0.17",
  "urlencoding",
  "util",
