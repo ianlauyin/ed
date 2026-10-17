@@ -23,7 +23,6 @@
 .vscode
 .wrangler
 .perf-runs
-/assets/*licenses.*
 /crates/theme/schemas/theme.json
 /crates/zed/resources/flatpak/flatpak-cargo-sources.json
 /crates/project_panel/benches/linux_repo_snapshot.txt

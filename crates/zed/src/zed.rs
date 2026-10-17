@@ -9,7 +9,6 @@ mod quick_action_bar;
 
 use anyhow::Context as _;
 pub use app_menus::*;
-use assets::Assets;
 
 use breadcrumbs::Breadcrumbs;
 use collections::VecDeque;
@@ -55,7 +54,7 @@ use terminal_view::terminal_panel::{self, TerminalPanel};
 use theme::ActiveTheme;
 use theme_settings::ThemeSettings;
 use ui::{Navigable, NavigableEntry, PopoverMenuHandle, TintColor, prelude::*};
-use util::{ResultExt, asset_str, maybe};
+use util::{ResultExt, maybe};
 use uuid::Uuid;
 use workspace::Pane;
 use workspace::notifications::NotificationId;
@@ -65,11 +64,7 @@ use workspace::{
     notifications::simple_message_notification::MessageNotification, open_new,
 };
 use workspace::{CloseProject, CloseWindow, with_active_or_new_workspace};
-use zed_actions::{About, GetMerch, OpenBrowser, OpenDocs, OpenStatusPage, OpenZedUrl, Quit};
-
-const DOCS_URL: &str = "https://zed.dev/docs/";
-const STATUS_URL: &str = "https://status.zed.dev";
-const MERCH_URL: &str = "https://merch.zed.dev/";
+use zed_actions::{About, OpenBrowser, OpenZedUrl, Quit};
 
 actions!(
     zed,
@@ -149,19 +144,7 @@ pub fn init(cx: &mut App) {
         });
     }
 
-    cx.on_action(|_: &zed_actions::OpenLicenses, cx| {
-        with_active_or_new_workspace(cx, |workspace, window, cx| {
-            open_bundled_file(
-                workspace,
-                asset_str::<Assets>("licenses.md"),
-                "Open Source License Attribution",
-                "Markdown",
-                window,
-                cx,
-            );
-        });
-    })
-    .on_action(|_: &About, cx| {
+    cx.on_action(|_: &About, cx| {
         open_about_window(cx);
     });
 }
@@ -395,9 +378,6 @@ fn register_actions(
     _cx: &mut Context<Workspace>,
 ) {
     workspace
-        .register_action(|_, _: &OpenDocs, _, cx| cx.open_url(DOCS_URL))
-        .register_action(|_, _: &OpenStatusPage, _, cx| cx.open_url(STATUS_URL))
-        .register_action(|_, _: &GetMerch, _, cx| cx.open_url(MERCH_URL))
         .register_action(
             |workspace: &mut Workspace,
              _: &DumpAccessibilityTree,
