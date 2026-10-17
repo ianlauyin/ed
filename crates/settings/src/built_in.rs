@@ -442,7 +442,6 @@ fn workspace_settings() -> WorkspaceSettingsContent {
         close_on_file_delete: Some(false),
         use_system_window_tabs: Some(true),
         fullscreen_mode: Some(FullscreenMode::Native),
-        zoomed_padding: Some(true),
         close_panel_on_toggle: Some(false),
         window_title_format: Some(DEFAULT_WINDOW_TITLE_FORMAT.into()),
         window_title_separator: Some(" — ".into()),

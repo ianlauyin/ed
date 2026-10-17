@@ -168,6 +168,28 @@ use crate::{
 pub const SERIALIZATION_THROTTLE_TIME: Duration = Duration::from_millis(200);
 pub const MAX_RECENT_SELECTIONS: usize = 20;
 
+/// Space between the floating editor / terminal cards and the surrounding chrome.
+pub const CARD_GAP: Pixels = px(8.);
+/// Corner radius of the floating cards.
+pub const CARD_RADIUS: Pixels = px(10.);
+/// GPUI clips children to rectangles only, so the card's content is inset just enough
+/// (border + inset >= radius * (1 - 1/sqrt 2)) for square child corners to stay inside
+/// the rounded border.
+pub const CARD_INSET: Pixels = px(2.);
+
+/// Styles an element as an opaque, rounded "floating" card (editor area, terminal dock).
+pub fn card<E: Styled>(element: E, cx: &App) -> E {
+    let colors = cx.theme().colors();
+    element
+        .rounded(CARD_RADIUS)
+        .border_1()
+        .border_color(colors.border_variant)
+        .bg(colors.editor_background)
+        // Only a bottom inset: tab bars run edge to edge (they paint no background of their own
+        // and their tabs' corners match the card's), and panes inset their content sideways.
+        .pb(CARD_INSET)
+}
+
 /// Which optional window-title variables are actually referenced by the active
 /// template. Used to skip expensive lookups when the template doesn't need them.
 struct WindowTitleNeeds {
@@ -7196,6 +7218,12 @@ impl Workspace {
         // this, toggle_panel_focus cannot focus the panel when the dock is closed.
         let dock = dock.read(cx);
         if let Some(panel) = dock.visible_panel() {
+            // Separate the open dock from the center cards.
+            container = match position {
+                DockPosition::Left => container.pr(CARD_GAP),
+                DockPosition::Right => container.pl(CARD_GAP),
+                DockPosition::Bottom => container.pt(CARD_GAP),
+            };
             let size_state = dock.stored_panel_size_state(panel.as_ref());
             let min_size = panel.min_size(window, cx);
             if position.axis() == Axis::Horizontal {
@@ -7395,6 +7423,7 @@ impl Workspace {
                 this.track_focus(&self.region_focus_handles.editor)
             })
             .size_full()
+            .map(|this| card(this, cx))
             .child(self.center.render(
                 self.zoomed.as_ref(),
                 self.maximized_pane.as_ref(),
@@ -8029,9 +8058,9 @@ impl Render for Workspace {
                             .flex()
                             .flex_col()
                             .overflow_hidden()
-                            .border_t_1()
-                            .border_b_1()
-                            .border_color(colors.border)
+                            .px(CARD_GAP)
+                            // The status bar pads itself to center between the card and window edge.
+                            .when(!self.status_bar_visible(cx), |this| this.pb(CARD_GAP))
                             .child({
                                 let this = cx.entity();
                                 canvas(
@@ -8369,28 +8398,24 @@ impl Render for Workspace {
                                         })
                                         .into_any_element(),
                                 };
-                                let overlay = div()
-                                    .occlude()
-                                    .absolute()
-                                    .overflow_hidden()
-                                    .border_color(colors.border)
-                                    .bg(colors.background)
-                                    .child(zoomed_element)
-                                    .inset_0()
-                                    .shadow_lg();
-
-                                if !WorkspaceSettings::get_global(cx).zoomed_padding {
-                                    return Some(overlay);
-                                }
-
-                                Some(match self.zoomed_position {
-                                    Some(DockPosition::Left) => overlay.right_2().border_r_1(),
-                                    Some(DockPosition::Right) => overlay.left_2().border_l_1(),
-                                    Some(DockPosition::Bottom) => overlay.top_2().border_t_1(),
-                                    None => {
-                                        overlay.top_2().bottom_2().left_2().right_2().border_1()
-                                    }
-                                })
+                                // Whatever is zoomed (editor or any dock) covers exactly the card
+                                // area, so every zoomed view gets the same size.
+                                Some(
+                                    div()
+                                        .occlude()
+                                        .absolute()
+                                        .top_0()
+                                        .left(CARD_GAP)
+                                        .right(CARD_GAP)
+                                        .bottom(if self.status_bar_visible(cx) {
+                                            px(0.)
+                                        } else {
+                                            CARD_GAP
+                                        })
+                                        .map(|this| card(this, cx))
+                                        .child(zoomed_element)
+                                        .shadow_lg(),
+                                )
                             }))
                             .children(self.render_notifications(window, cx)),
                     )

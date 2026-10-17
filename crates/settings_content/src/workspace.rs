@@ -133,12 +133,6 @@ pub struct WorkspaceSettingsContent {
     ///
     /// Default: native
     pub fullscreen_mode: Option<FullscreenMode>,
-    /// Whether to show padding for zoomed panels.
-    /// When enabled, zoomed bottom panels will have some top padding,
-    /// while zoomed left/right panels will have padding to the right/left (respectively).
-    ///
-    /// Default: true
-    pub zoomed_padding: Option<bool>,
     /// Whether invoking a panel's `ToggleFocus` action while the panel is
     /// already focused closes the panel, instead of just moving focus back
     /// to the editor. This only applies to a panel's focus-toggle action, not

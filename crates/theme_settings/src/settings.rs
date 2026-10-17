@@ -523,6 +523,10 @@ impl ThemeSettings {
 
     /// Applies the theme overrides, if there are any, to the current theme.
     pub fn apply_theme_overrides(&self, mut arc_theme: Arc<Theme>) -> Arc<Theme> {
+        let mut theme = (*arc_theme).clone();
+        apply_floating_chrome(&mut theme);
+        arc_theme = Arc::new(theme);
+
         if let Some(experimental_theme_overrides) = &self.experimental_theme_overrides {
             let mut theme = (*arc_theme).clone();
             ThemeSettings::modify_theme(&mut theme, experimental_theme_overrides);
@@ -559,6 +563,58 @@ impl ThemeSettings {
             syntax_overrides(theme_overrides),
         );
     }
+}
+
+/// Floating-card look: everything around the editor and terminal cards (gaps, title bar,
+/// status bar, side docks) is one opaque chrome colour, the theme's panel background.
+/// Applied before user theme overrides so they can still adjust it.
+fn apply_floating_chrome(theme: &mut Theme) {
+    /// How far the editor / terminal content sits from the tab bar, in HSL lightness.
+    const CONTENT_CONTRAST: f32 = 0.05;
+
+    let is_light = theme.appearance.is_light();
+    let colors = &mut theme.styles.colors;
+    let chrome = colors.panel_background;
+    colors.background = chrome;
+    colors.title_bar_background = chrome;
+    colors.title_bar_inactive_background = chrome;
+    colors.status_bar_background = chrome;
+
+    // Content is darker than the tabs in dark themes and lighter in light themes. Only ever
+    // add contrast: themes that already have more are left alone.
+    let tab_l = colors.tab_bar_background.l;
+    let shift = if is_light {
+        ((tab_l + CONTENT_CONTRAST).min(1.) - colors.editor_background.l).max(0.)
+    } else {
+        ((tab_l - CONTENT_CONTRAST).max(0.) - colors.editor_background.l).min(0.)
+    };
+    let mut surfaces = vec![
+        &mut colors.editor_background,
+        &mut colors.editor_gutter_background,
+        &mut colors.editor_subheader_background,
+        &mut colors.toolbar_background,
+        &mut colors.terminal_background,
+        &mut colors.terminal_ansi_background,
+    ];
+    // Translucent active-line overlays already follow the background.
+    if colors.editor_active_line_background.a >= 1. {
+        surfaces.push(&mut colors.editor_active_line_background);
+    }
+    for color in surfaces {
+        color.l = (color.l + shift).clamp(0., 1.);
+    }
+
+    // Tab bars blend into the card; the active tab stands out from it by the same contrast.
+    let content = colors.editor_background;
+    let mut active_tab = content;
+    active_tab.l = if is_light {
+        (content.l - CONTENT_CONTRAST).max(0.)
+    } else {
+        (content.l + CONTENT_CONTRAST).min(1.)
+    };
+    colors.tab_bar_background = content;
+    colors.tab_inactive_background = content;
+    colors.tab_active_background = active_tab;
 }
 
 /// Observe changes to the adjusted buffer font size.

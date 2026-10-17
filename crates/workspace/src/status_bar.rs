@@ -150,7 +150,9 @@ impl Render for StatusBar {
             .w_full()
             .justify_between()
             .gap(DynamicSpacing::Base08.rems(cx))
-            .p(DynamicSpacing::Base04.rems(cx))
+            // Even gap above and below, matching the floating card gap.
+            .px(crate::CARD_GAP)
+            .py(crate::CARD_GAP - px(2.))
             .bg(cx.theme().colors().status_bar_background)
             .map(|el| match window.window_decorations() {
                 Decorations::Server => el,

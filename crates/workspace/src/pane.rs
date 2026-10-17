@@ -4541,6 +4541,8 @@ impl Render for Pane {
                 div()
                     .flex_1()
                     .relative()
+                    // Keeps square content corners inside the rounded card (see `card`).
+                    .px(crate::CARD_INSET)
                     .group("")
                     .overflow_hidden()
                     .on_drag_move::<DraggedTab>(cx.listener(Self::handle_drag_move))
