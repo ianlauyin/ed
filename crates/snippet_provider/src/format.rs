@@ -12,7 +12,7 @@ pub struct VsSnippetsFile {
 
 impl VsSnippetsFile {
     pub fn generate_json_schema() -> serde_json::Value {
-        let schema = schemars::generate::SchemaSettings::draft2019_09()
+        let schema = schemars::generate::SchemaSettings::draft2020_12()
             .with_transform(DefaultDenyUnknownFields)
             .with_transform(AllowTrailingCommas)
             .into_generator()

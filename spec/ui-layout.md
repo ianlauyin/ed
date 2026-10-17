@@ -41,6 +41,8 @@ because it hurt readability; an opaque window is also cheaper to composite.
   bottoms. The tab bar has no bottom line and no borders between tabs. It is
   inset 10px on the left (the card radius), so the first tab meets the card's
   straight top edge rather than its rounded corner.
+- Pane toolbars (search bars, breadcrumbs) have no bottom line either; they sit
+  flat inside the card.
 - GPUI only clips to rectangles, so the card insets its content by 3px on every
   side, keeping square content corners (editor background, scrollbars) inside
   the rounded edge. If the radius grows, the inset must grow so that

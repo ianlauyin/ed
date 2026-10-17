@@ -149,7 +149,7 @@ pub fn all_schema_file_associations(
 }
 
 fn generate_jsonc_schema() -> serde_json::Value {
-    let generator = schemars::generate::SchemaSettings::draft2019_09()
+    let generator = schemars::generate::SchemaSettings::draft2020_12()
         .with_transform(DefaultDenyUnknownFields)
         .with_transform(AllowTrailingCommas)
         .into_generator();

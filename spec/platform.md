@@ -48,6 +48,10 @@ Crates in the remote server's dependency tree must gate macOS-only build steps
 (e.g. `xcrun`, SDK probes) and macOS paths behind `target_os = "macos"`, keeping
 Linux branches for paths, crash handling, and LSP download assets. Upstream workflow
 generators that depended on removed release and deployment infrastructure are absent.
+macOS builds pass `-C force-unwind-tables=no` (`.cargo/config.toml`): rustc's
+default async unwind tables are not compact-unwind encodable, which bloats
+`__eh_frame` past ld's 16MB compact-unwind limit in dev builds. Panics and
+backtraces still work through sync CFI.
 
 ## Packaging
 

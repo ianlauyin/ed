@@ -132,7 +132,7 @@ impl LspAdapter for JsonLspAdapter {
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
         let path = delegate
-            .which("vscode-json-languageserver".as_ref())
+            .which("vscode-json-language-server".as_ref())
             .await?;
         let env = delegate.shell_env().await;
 

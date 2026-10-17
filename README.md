@@ -1,6 +1,6 @@
 # install lsp manualy
 
 ```sh
-# json
-npm install -g vscode-json-languageserver
+# json, css, eslint, html, markdown
+npm install -g vscode-langservers-extracted
 ```

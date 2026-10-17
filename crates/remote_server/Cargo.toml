@@ -4,7 +4,6 @@ description = "Daemon used for remote editing"
 edition.workspace = true
 version = "0.1.0"
 publish.workspace = true
-license = "GPL-3.0-or-later"
 
 [lints]
 workspace = true
