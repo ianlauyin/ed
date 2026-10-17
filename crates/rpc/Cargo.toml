@@ -3,7 +3,7 @@ description = "RPC transport for the editor and remote server"
 edition.workspace = true
 name = "rpc"
 version = "0.1.0"
-publish.workspace = true
+
 
 [lints]
 workspace = true

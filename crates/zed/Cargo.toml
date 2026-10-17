@@ -2,9 +2,7 @@
 description = "A focused single-user code editor."
 edition.workspace = true
 name = "zed"
-version = "1.27.0"
-publish.workspace = true
-authors = ["Zed Team <hi@zed.dev>"]
+version = "1.28.0"
 default-run = "ed"
 
 [lints]
