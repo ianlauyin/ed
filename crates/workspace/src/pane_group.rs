@@ -1305,8 +1305,8 @@ mod element {
                 child.layout_as_root(child_size.into(), window, cx);
                 child.prepaint_at(origin, window, cx);
 
-                origin = origin
-                    .apply_along(self.axis, |val| val + child_size.along(self.axis) + GAP);
+                origin =
+                    origin.apply_along(self.axis, |val| val + child_size.along(self.axis) + GAP);
 
                 let is_leaf_pane = self.is_leaf_pane_mask.get(ix).copied().unwrap_or(true);
 

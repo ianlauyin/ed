@@ -1,6 +1,6 @@
 pub use crate::commit_context_menu::{CopyCommitSha, CopyCommitTag, OpenCommitView};
 use crate::{
-    commit_context_menu::{CommitContextMenuData, CommitContextMenuSource, commit_context_menu},
+    commit_context_menu::{CommitContextMenuData, commit_context_menu},
     commit_view::CommitView,
     git_status_icon,
 };
@@ -2650,7 +2650,6 @@ impl GitGraph {
                     .map(|tag_name| SharedString::from(tag_name.to_string()))
                     .collect(),
             },
-            CommitContextMenuSource::GitGraph,
             ref_name,
             self.focus_handle.clone(),
             repository,

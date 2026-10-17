@@ -804,18 +804,7 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
     );
     add_bindings(
         &mut keymap,
-        Some("GitPanel"),
-        false,
-        [
-            KeyBindingSpec::new("cmd-1", "git_panel::ActivateChangesTab"),
-            KeyBindingSpec::new("cmd-2", "git_panel::ActivateHistoryTab"),
-        ],
-    );
-    add_bindings(
-        &mut keymap,
-        Some(
-            "GitPanel && (ChangesList || HistoryList) && !GitBranchSelector && !GitRepositorySelector",
-        ),
+        Some("GitPanel && ChangesList && !GitBranchSelector && !GitRepositorySelector"),
         true,
         [
             KeyBindingSpec::new("up", "menu::SelectPrevious"),

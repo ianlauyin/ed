@@ -26,7 +26,7 @@ pub mod welcome;
 pub mod workspace_error;
 mod workspace_settings;
 
-pub use dock::Panel;
+pub use dock::{Panel, PanelSecondaryButton};
 pub use multi_workspace::{
     CloseWorkspaceSidebar, DraggedSidebar, FocusWorkspaceSidebar, MoveProjectDown,
     MoveProjectToNewWindow, MoveProjectUp, MultiWorkspace, MultiWorkspaceEvent, NewThread,
@@ -7930,13 +7930,7 @@ impl Render for Workspace {
             && self.active_item(cx).is_some();
         let pad_zoomed_pane =
             self.centered_layout && self.zoomed.is_some() && self.zoomed_position.is_none();
-        let render_padding = |size| {
-            (size > 0.0).then(|| {
-                div()
-                    .h_full()
-                    .w(relative(size))
-            })
-        };
+        let render_padding = |size| (size > 0.0).then(|| div().h_full().w(relative(size)));
         let render_centered_paddings = |enabled: bool| {
             if !enabled {
                 return (None, None);
