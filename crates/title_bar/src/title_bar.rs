@@ -1,10 +1,11 @@
 mod application_menu;
+mod platform_title_bar;
 mod title_bar_settings;
 
 use crate::application_menu::{ApplicationMenu, show_menus};
 use arrayvec::ArrayVec;
 use git_ui_core::worktree_picker::WorktreePicker;
-pub use platform_title_bar::{self, PlatformTitleBar};
+pub use platform_title_bar::PlatformTitleBar;
 use project::{linked_worktree_short_name, repo_identity_path, repo_identity_path_if_local};
 
 use gpui::{

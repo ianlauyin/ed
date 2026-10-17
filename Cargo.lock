@@ -5611,16 +5611,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
-name = "platform_title_bar"
-version = "0.1.0"
-dependencies = [
- "gpui",
- "smallvec",
- "ui",
- "workspace",
-]
-
-[[package]]
 name = "plist"
 version = "1.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -8128,7 +8118,6 @@ dependencies = [
  "arrayvec",
  "git_ui_core",
  "gpui",
- "platform_title_bar",
  "project",
  "recent_projects",
  "remote",
