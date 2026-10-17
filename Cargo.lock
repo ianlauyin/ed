@@ -5822,25 +5822,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "925383efa346730478fb4838dbe9137d2a47675ad789c546d150a6e1dd4ab31c"
 
 [[package]]
-name = "prettier"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "collections",
- "fs",
- "gpui",
- "language",
- "log",
- "lsp",
- "node_runtime",
- "parking_lot",
- "paths",
- "serde",
- "serde_json",
- "util",
-]
-
-[[package]]
 name = "prettyplease"
 version = "0.2.37"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5934,7 +5915,6 @@ dependencies = [
  "path",
  "paths",
  "postage",
- "prettier",
  "rand 0.9.4",
  "regex",
  "remote",

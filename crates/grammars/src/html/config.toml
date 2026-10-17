@@ -13,7 +13,6 @@ brackets = [
     { start = "!--", end = " --", close = true, newline = false, not_in = ["comment", "string"] },
 ]
 completion_query_characters = ["-"]
-prettier_parser_name = "html"
 
 [overrides.default]
 linked_edit_characters = ["-"]
