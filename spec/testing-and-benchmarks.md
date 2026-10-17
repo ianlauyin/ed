@@ -37,3 +37,9 @@ another target in the same package must remain available.
 Default and all-feature workspace checks must have no unused-dependency warnings.
 Keep the workspace lint enabled; exceptions for dependencies shared between a
 library and its binary are confined to the affected target.
+Avoid duplicate major versions in `Cargo.lock` (e.g. only `bitflags` 2.x and
+one `png`); prefer bumping the dependent over accepting a second copy.
+LSP protocol types are vendored in `crates/lsp_types` (from the Zed fork of
+`lsp-types` 0.95.1, MIT) instead of a git dependency, so their dependencies follow
+the workspace. Upstream's newer `fluent_uri`-based releases are not adopted.
+Unused parts (LSIF, `proposed` extensions) are removed.
