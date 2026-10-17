@@ -1,6 +1,10 @@
+mod built_in;
+
 use anyhow::{Context as _, Result};
 use smallvec::SmallVec;
 use std::{collections::BTreeMap, ops::Range};
+
+pub use built_in::{SnippetDefinition, snippets_for};
 
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct Snippet {

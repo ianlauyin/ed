@@ -47,7 +47,7 @@ use buffer_store::{BufferStore, BufferStoreEvent};
 use clock::ReplicaId;
 use rpc::{ProjectId, TypedEnvelope, proto};
 
-use collections::{BTreeSet, HashMap, HashSet, IndexSet};
+use collections::{HashMap, HashSet, IndexSet};
 use debounced_delay::DebouncedDelay;
 
 pub use environment::ProjectEnvironment;
@@ -89,8 +89,6 @@ use search::{SearchInputKind, SearchQuery, SearchResult};
 use search_history::SearchHistory;
 use settings::{InvalidSettingsError, Settings, SettingsLocation, SettingsStore};
 use snippet::Snippet;
-pub use snippet_provider;
-use snippet_provider::SnippetProvider;
 use std::{
     borrow::Cow,
     collections::BTreeMap,
@@ -201,7 +199,6 @@ pub struct Project {
     search_history: SearchHistory,
     search_included_history: SearchHistory,
     search_excluded_history: SearchHistory,
-    snippets: Entity<SnippetProvider>,
     environment: Entity<ProjectEnvironment>,
     settings_observer: Entity<SettingsObserver>,
     toolchain_store: Option<Entity<ToolchainStore>>,
@@ -1055,9 +1052,7 @@ impl Project {
         flags: LocalProjectFlags,
         cx: &mut App,
     ) -> Entity<Self> {
-        cx.new(|cx: &mut Context<Self>| {
-            let snippets = SnippetProvider::new(fs.clone(), BTreeSet::from_iter([]), cx);
-            let worktree_store =
+        cx.new(|cx: &mut Context<Self>| {            let worktree_store =
                 cx.new(|cx| WorktreeStore::local(false, fs.clone(), WorktreeIdCounter::get(cx)));
             if flags.init_worktree_trust {
                 trusted_worktrees::track_worktree_trust(
@@ -1162,7 +1157,6 @@ impl Project {
 
                 _subscriptions: vec![cx.on_release(Self::release)],
                 active_entry: None,
-                snippets,
                 languages,
 
                 task_store,
@@ -1203,8 +1197,6 @@ impl Project {
         cx: &mut App,
     ) -> Entity<Self> {
         cx.new(|cx: &mut Context<Self>| {
-            let snippets = SnippetProvider::new(fs.clone(), BTreeSet::from_iter([]), cx);
-
             let (remote_proto, path_style, connection_options) =
                 remote.read_with(cx, |remote, _| {
                     (
@@ -1345,7 +1337,6 @@ impl Project {
                     }),
                 ],
                 active_entry: None,
-                snippets,
                 languages,
 
                 task_store,
@@ -1536,11 +1527,6 @@ impl Project {
     #[inline]
     pub fn task_store(&self) -> &Entity<TaskStore> {
         &self.task_store
-    }
-
-    #[inline]
-    pub fn snippets(&self) -> &Entity<SnippetProvider> {
-        &self.snippets
     }
 
     #[inline]

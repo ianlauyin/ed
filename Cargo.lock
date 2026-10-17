@@ -3461,12 +3461,10 @@ dependencies = [
  "gpui",
  "language",
  "parking_lot",
- "paths",
  "project",
  "schemars",
  "serde_json",
  "settings",
- "snippet_provider",
  "util",
 ]
 
@@ -5955,7 +5953,6 @@ dependencies = [
  "smallvec",
  "smol",
  "snippet",
- "snippet_provider",
  "sum_tree",
  "task",
  "terminal",
@@ -7447,42 +7444,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "smallvec",
-]
-
-[[package]]
-name = "snippet_provider"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "collections",
- "fs",
- "futures",
- "gpui",
- "parking_lot",
- "paths",
- "schemars",
- "serde",
- "serde_json",
- "serde_json_lenient",
- "snippet",
- "util",
-]
-
-[[package]]
-name = "snippets_ui"
-version = "0.1.0"
-dependencies = [
- "file_icons",
- "fuzzy",
- "gpui",
- "language",
- "open_path_prompt",
- "paths",
- "picker",
- "settings",
- "ui",
- "util",
- "workspace",
 ]
 
 [[package]]
@@ -10220,8 +10181,6 @@ dependencies = [
  "settings_content",
  "shellexpand",
  "smol",
- "snippet_provider",
- "snippets_ui",
  "svg_preview",
  "system_specs",
  "tab_switcher",

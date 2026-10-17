@@ -14,11 +14,6 @@ const SCHEMA_URI_PREFIX: &str = "zed://schemas/";
 const TSCONFIG_SCHEMA: &str = include_str!("schemas/tsconfig.json");
 const PACKAGE_JSON_SCHEMA: &str = include_str!("schemas/package.json");
 
-static SNIPPETS_SCHEMA: LazyLock<String> = LazyLock::new(|| {
-    serde_json::to_string(&snippet_provider::format::VsSnippetsFile::generate_json_schema())
-        .expect("VsSnippetsFile schema should serialize")
-});
-
 static JSONC_SCHEMA: LazyLock<String> = LazyLock::new(|| {
     serde_json::to_string(&generate_jsonc_schema()).expect("JSONC schema should serialize")
 });
@@ -57,7 +52,6 @@ fn resolve_static_schema(path: &str) -> Option<String> {
     match schema_name {
         "tsconfig" => Some(TSCONFIG_SCHEMA.to_string()),
         "package_json" => Some(PACKAGE_JSON_SCHEMA.to_string()),
-        "snippets" => Some(SNIPPETS_SCHEMA.clone()),
         "jsonc" => Some(JSONC_SCHEMA.clone()),
         "action" => {
             let normalized_action_name = match rest {
@@ -109,16 +103,6 @@ pub fn all_schema_file_associations(
     let jsonc_globs = extension_globs.chain(override_globs).collect::<Vec<_>>();
 
     let mut file_associations = serde_json::json!([
-        {
-            "fileMatch": [
-                schema_file_match(
-                    paths::snippets_dir()
-                        .join("*.json")
-                        .as_path()
-                )
-            ],
-            "url": format!("{SCHEMA_URI_PREFIX}snippets"),
-        },
         {
             "fileMatch": ["tsconfig.json"],
             "url": format!("{SCHEMA_URI_PREFIX}tsconfig")
@@ -208,13 +192,4 @@ fn root_schema_from_action_schema(
         .ensure_object()
         .extend(std::mem::take(action_schema.ensure_object()));
     schema
-}
-
-#[inline]
-fn schema_file_match(path: &std::path::Path) -> String {
-    path.strip_prefix(path.parent().unwrap().parent().unwrap())
-        .unwrap()
-        .display()
-        .to_string()
-        .replace('\\', "/")
 }

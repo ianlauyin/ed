@@ -371,7 +371,6 @@ fn main() {
         theme_settings::init(theme::LoadThemes::All(Box::new(Assets)), cx);
         command_palette::init(cx);
 
-        snippet_provider::init(cx);
         recent_projects::init(cx);
 
         load_embedded_fonts(cx);
@@ -391,7 +390,6 @@ fn main() {
         project_symbols::init(cx);
         project_panel::init(cx);
         outline_panel::init(cx);
-        snippets_ui::init(cx);
 
         search::init(cx);
         lsp_locations::init(cx);

@@ -5,10 +5,11 @@
 Settings are constructed entirely in Rust as one complete `SettingsContent`
 object shared by every project. There is no default-settings JSON or separate
 user/default settings layer. Language metadata supplies language conventions;
-explicit per-language values in code take precedence. Keymaps are also
-constructed in Rust, including the personal bindings. Changing persistent
-settings or shortcuts requires editing code and rebuilding. There is no settings
-UI, keymap editor, settings/keymap migrator, or Vim/Helix mode.
+explicit per-language values in code take precedence. Keymaps and snippets are
+also constructed in Rust, including the personal bindings and snippets.
+Changing persistent settings, shortcuts, or snippets requires editing code and
+rebuilding. There is no settings UI, keymap editor, snippet UI, settings/keymap
+migrator, or Vim/Helix mode.
 
 ## Behaviour
 
@@ -44,11 +45,15 @@ UI, keymap editor, settings/keymap migrator, or Vim/Helix mode.
   files and project settings messages cannot override them.
 - `zed://settings` URLs are not handled. Settings-file JSON schemas, completions,
   validation, and language-server configuration schema probing are removed.
-  JSON language support remains for source files, action inputs, and snippets.
+  JSON language support remains for source files and action inputs.
 - The upstream documentation website preprocessor is removed; this fork does not
   build the upstream mdBook site.
 - The command palette has no "Add/Change Keybinding" flow; secondary confirm runs
   the selected command.
+- Snippets are built in (`snippet` crate): Rust has `main`, `async_main`,
+  `tests`, `test`, and `async_test`. Language snippets are offered with global
+  ones and do not require a project. The user snippets directory is not loaded or
+  watched, and there is no snippet picker/configure action or snippets JSON schema.
 - `vim_mode`, `helix_mode`, and the `vim` settings section do not exist. There is
   no Vim keymap layer, mode indicator, Vim/Helix toggles (quick action bar), or Vim-style keybinding notation.
 - Journaling is removed: no journal entry command or `journal` settings section.

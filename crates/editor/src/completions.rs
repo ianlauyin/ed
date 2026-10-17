@@ -576,7 +576,6 @@ impl Editor {
 
         let snippets = if let Some(provider) = &provider
             && provider.show_snippets()
-            && let Some(project) = self.project()
         {
             let word_trigger = trigger.as_ref().is_some_and(|trigger| {
                 !trigger.is_empty()
@@ -587,9 +586,7 @@ impl Editor {
             let requires_strong_snippet_match = !menu_is_open && !trigger_in_words && word_trigger;
             let load_snippet_completions = !requires_strong_snippet_match
                 || query.as_ref().is_some_and(|query| {
-                    let project = project.read(cx);
                     has_strong_snippet_prefix_match(
-                        &project,
                         &buffer,
                         buffer_position,
                         &snippet_char_classifier,
@@ -599,15 +596,7 @@ impl Editor {
                 });
 
             if load_snippet_completions {
-                project.update(cx, |project, cx| {
-                    snippet_completions(
-                        project,
-                        &buffer,
-                        buffer_position,
-                        snippet_char_classifier,
-                        cx,
-                    )
-                })
+                snippet_completions(&buffer, buffer_position, snippet_char_classifier, cx)
             } else {
                 Task::ready(Ok(CompletionResponse {
                     completions: Vec::new(),
@@ -1152,7 +1141,6 @@ pub trait CompletionProvider {
 }
 
 fn has_strong_snippet_prefix_match(
-    project: &Project,
     buffer: &Entity<Buffer>,
     buffer_anchor: text::Anchor,
     classifier: &CharClassifier,
@@ -1166,11 +1154,9 @@ fn has_strong_snippet_prefix_match(
     let query = query.to_lowercase();
     let is_word_char = |character| classifier.is_word(character);
     let languages = buffer.read(cx).languages_at(buffer_anchor);
-    let snippet_store = project.snippets().read(cx);
 
     languages.iter().any(|language| {
-        snippet_store
-            .snippets_for(Some(language.snippet_scope_id()), cx)
+        snippet::snippets_for(Some(language.snippet_scope_id()))
             .iter()
             .flat_map(|snippet| snippet.prefix.iter())
             .flat_map(|prefix| snippet_candidate_suffixes(prefix, &is_word_char))
@@ -1179,20 +1165,18 @@ fn has_strong_snippet_prefix_match(
 }
 
 fn snippet_completions(
-    project: &Project,
     buffer: &Entity<Buffer>,
     buffer_anchor: text::Anchor,
     classifier: CharClassifier,
     cx: &mut App,
 ) -> Task<Result<CompletionResponse>> {
     let languages = buffer.read(cx).languages_at(buffer_anchor);
-    let snippet_store = project.snippets().read(cx);
 
     let scopes: Vec<_> = languages
         .iter()
         .filter_map(|language| {
             let language_name = language.snippet_scope_id();
-            let snippets = snippet_store.snippets_for(Some(language_name), cx);
+            let snippets = snippet::snippets_for(Some(language_name));
 
             if snippets.is_empty() {
                 None
