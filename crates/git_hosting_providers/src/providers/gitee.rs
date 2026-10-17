@@ -9,8 +9,7 @@ use git::{
 
 pub struct Gitee;
 
-impl Gitee {
-}
+impl Gitee {}
 
 impl GitHostingProvider for Gitee {
     fn name(&self) -> String {

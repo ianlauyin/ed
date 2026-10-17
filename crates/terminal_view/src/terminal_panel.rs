@@ -22,8 +22,8 @@ use settings::{Settings, TerminalDockPosition};
 use task::{RevealStrategy, RevealTarget, Shell, ShellBuilder, SpawnInTerminal, TaskId};
 use terminal::{Terminal, terminal_settings::TerminalSettings};
 use ui::{
-    Clickable, CommonAnimationExt, ContextMenu, FluentBuilder, PopoverMenu, Toggleable,
-    Tooltip, prelude::*,
+    Clickable, CommonAnimationExt, ContextMenu, FluentBuilder, PopoverMenu, Toggleable, Tooltip,
+    prelude::*,
 };
 use util::{ResultExt, TryFutureExt, defer};
 use workspace::{
@@ -123,18 +123,10 @@ impl TerminalPanel {
                             .menu(move |window, cx| {
                                 let focus_handle = focus_handle.clone();
                                 let menu = ContextMenu::build(window, cx, |menu, _, _| {
-                                    menu.context(focus_handle.clone())
-                                        .action(
-                                            "New Terminal",
-                                            workspace::NewTerminal::default().boxed_clone(),
-                                        )
-                                        // We want the focus to go back to terminal panel once task modal is dismissed,
-                                        // hence we focus that first. Otherwise, we'd end up without a focused element, as
-                                        // context menu will be gone the moment we spawn the modal.
-                                        .action(
-                                            "Spawn Task",
-                                            zed_actions::Spawn::modal().boxed_clone(),
-                                        )
+                                    menu.context(focus_handle.clone()).action(
+                                        "New Terminal",
+                                        workspace::NewTerminal::default().boxed_clone(),
+                                    )
                                 });
 
                                 Some(menu)

@@ -10230,45 +10230,44 @@ impl LspStore {
                 .to_file_path_ext(path_style)
                 .map_err(|()| anyhow!("can't convert URI to path"))?;
             let worktree = find_worktree_for_lsp_path(&lsp_store, &abs_path, cx).await?;
-            let (worktree, relative_path, source_ws) = if let Some((worktree, relative_path)) =
-                worktree
-            {
-                (worktree, relative_path, None)
-            } else {
-                let worktree = lsp_store
-                    .update(cx, |lsp_store, cx| {
-                        lsp_store.worktree_store.update(cx, |worktree_store, cx| {
-                            worktree_store.create_worktree(&abs_path, false, cx)
-                        })
-                    })?
-                    .await?;
-                let worktree_root = worktree.read_with(cx, |worktree, _| worktree.abs_path());
-                let source_ws = if worktree.read_with(cx, |worktree, _| worktree.is_local()) {
-                    lsp_store
-                        .update(cx, |lsp_store, cx| {
-                            if let Some(local) = lsp_store.as_local_mut() {
-                                local.register_language_server_for_invisible_worktree(
-                                    &worktree,
-                                    language_server_id,
-                                    cx,
-                                )
-                            }
-                            match lsp_store.language_server_statuses.get(&language_server_id) {
-                                Some(status) => status.worktree,
-                                None => None,
-                            }
-                        })
-                        .ok()
-                        .flatten()
-                        .zip(Some(worktree_root.clone()))
+            let (worktree, relative_path, source_ws) =
+                if let Some((worktree, relative_path)) = worktree {
+                    (worktree, relative_path, None)
                 } else {
-                    None
+                    let worktree = lsp_store
+                        .update(cx, |lsp_store, cx| {
+                            lsp_store.worktree_store.update(cx, |worktree_store, cx| {
+                                worktree_store.create_worktree(&abs_path, false, cx)
+                            })
+                        })?
+                        .await?;
+                    let worktree_root = worktree.read_with(cx, |worktree, _| worktree.abs_path());
+                    let source_ws = if worktree.read_with(cx, |worktree, _| worktree.is_local()) {
+                        lsp_store
+                            .update(cx, |lsp_store, cx| {
+                                if let Some(local) = lsp_store.as_local_mut() {
+                                    local.register_language_server_for_invisible_worktree(
+                                        &worktree,
+                                        language_server_id,
+                                        cx,
+                                    )
+                                }
+                                match lsp_store.language_server_statuses.get(&language_server_id) {
+                                    Some(status) => status.worktree,
+                                    None => None,
+                                }
+                            })
+                            .ok()
+                            .flatten()
+                            .zip(Some(worktree_root.clone()))
+                    } else {
+                        None
+                    };
+                    let relative_path =
+                        RelPath::new(abs_path.strip_prefix(worktree_root)?, PathStyle::local())?
+                            .into_arc();
+                    (worktree, relative_path, source_ws)
                 };
-                let relative_path =
-                    RelPath::new(abs_path.strip_prefix(worktree_root)?, PathStyle::local())?
-                        .into_arc();
-                (worktree, relative_path, source_ws)
-            };
             let project_path = ProjectPath {
                 worktree_id: worktree.read_with(cx, |worktree, _| worktree.id()),
                 path: relative_path,

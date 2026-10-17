@@ -90,6 +90,3 @@ log.workspace = true
 [dev-dependencies]
 gpui_platform = { workspace = true, features = ["font-kit"] }
 lyon = { version = "1.0", features = ["extra"] }
-
-[target.'cfg(target_os = "linux")'.dependencies]
-libc.workspace = true

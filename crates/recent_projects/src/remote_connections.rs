@@ -196,7 +196,6 @@ pub async fn open_remote_project(
                 None,
                 project::LocalProjectFlags {
                     init_worktree_trust: false,
-                    ..Default::default()
                 },
                 cx,
             );

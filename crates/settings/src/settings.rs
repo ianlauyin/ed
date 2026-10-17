@@ -29,8 +29,7 @@ pub mod private {
 
 use gpui::App;
 
-use std::{borrow::Cow, fmt, str};
-use util::asset_str;
+use std::fmt;
 
 pub use ::settings_content::*;
 pub use action_schema::*;
@@ -82,27 +81,9 @@ impl fmt::Display for WorktreeId {
     }
 }
 
-// Dev builds read the checkout's files at runtime instead of embedding them;
-// see the `assets` crate for the rationale.
-util::fs_embed! {
-    pub struct SettingsAssets,
-    crate_relative = "../../assets",
-    root_relative = "assets",
-    include = ["settings/*"],
-    exclude = ["*.DS_Store"],
-}
-
 pub use built_in::DEFAULT_WINDOW_TITLE_FORMAT;
 
 pub fn init(cx: &mut App) {
     let settings = SettingsStore::new(cx, built_in::settings());
     cx.set_global(settings);
-}
-
-pub fn initial_tasks_content() -> Cow<'static, str> {
-    asset_str::<SettingsAssets>("settings/initial_tasks.json")
-}
-
-pub fn initial_worktree_setup_tasks_content() -> Cow<'static, str> {
-    asset_str::<SettingsAssets>("settings/initial_worktree_setup_tasks.json")
 }

@@ -31,7 +31,7 @@ use std::{
     sync::Arc,
     time::Duration,
 };
-use task::TaskId;
+use task::SpawnInTerminal;
 use terminal::{
     Clear, Copy, Event, HoveredWord, MaybeNavigationTarget, Modes, MouseInputMode, Paste,
     PasteText, Point, Range, ScrollLineDown, ScrollLineUp, ScrollPageDown, ScrollPageUp,
@@ -94,7 +94,7 @@ pub struct SendKeystroke(String);
 actions!(
     terminal,
     [
-        /// Reruns the last executed task in the terminal.
+        /// Reruns this terminal's task in place.
         RerunTask,
     ]
 );
@@ -711,13 +711,14 @@ impl TerminalView {
         if self.read_only {
             return;
         }
-        let task = self
-            .terminal
-            .read(cx)
-            .task()
-            .map(|task| terminal_rerun_override(&task.spawned_task.id))
-            .unwrap_or_default();
-        window.dispatch_action(Box::new(task), cx);
+        if let Some(task) = self.terminal.read(cx).task() {
+            rerun_in_terminal(
+                self.workspace.clone(),
+                task.spawned_task.clone(),
+                window,
+                cx,
+            );
+        }
     }
 
     fn clear(&mut self, _: &Clear, _: &mut Window, cx: &mut Context<Self>) {
@@ -1160,7 +1161,8 @@ impl TerminalView {
             return None;
         }
 
-        let task_id = task.spawned_task.id.clone();
+        let workspace = self.workspace.clone();
+        let spawned_task = task.spawned_task.clone();
         Some(
             IconButton::new("rerun-icon", IconName::Rerun)
                 .icon_size(IconSize::Small)
@@ -1169,19 +1171,29 @@ impl TerminalView {
                 .shape(ui::IconButtonShape::Square)
                 .tooltip(move |_window, cx| Tooltip::for_action("Rerun task", &RerunTask, cx))
                 .on_click(move |_, window, cx| {
-                    window.dispatch_action(Box::new(terminal_rerun_override(&task_id)), cx);
+                    rerun_in_terminal(workspace.clone(), spawned_task.clone(), window, cx);
                 }),
         )
     }
 }
 
-fn terminal_rerun_override(task: &TaskId) -> zed_actions::Rerun {
-    zed_actions::Rerun {
-        task_id: Some(task.0.clone()),
-        allow_concurrent_runs: Some(true),
-        use_new_terminal: Some(false),
-        reevaluate_context: false,
-    }
+/// Spawns the terminal's task again, replacing the output in the same tab.
+fn rerun_in_terminal(
+    workspace: WeakEntity<Workspace>,
+    mut spawned_task: SpawnInTerminal,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    spawned_task.allow_concurrent_runs = true;
+    spawned_task.use_new_terminal = false;
+    // Deferred: spawning replaces this view's terminal, which must not happen mid-update.
+    window.defer(cx, move |window, cx| {
+        workspace
+            .update(cx, |workspace, cx| {
+                workspace.schedule_spawn_in_terminal(spawned_task, window, cx)
+            })
+            .ok();
+    });
 }
 
 fn subscribe_for_terminal_events(

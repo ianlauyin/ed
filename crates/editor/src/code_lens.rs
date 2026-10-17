@@ -113,19 +113,9 @@ fn schedule_task(
         .buffer(action.range.start.buffer_id)
         .and_then(|buffer| buffer.read(cx).language())
         .map(|language| language.name());
-    let task_source_kind = match language_name {
-        Some(language_name) => TaskSourceKind::Lsp {
-            server: action.server_id,
-            language_name: SharedString::from(language_name),
-        },
-        None => TaskSourceKind::AbsPath {
-            id_base: "code-lens".into(),
-            abs_path: task_template
-                .cwd
-                .as_ref()
-                .map(std::path::PathBuf::from)
-                .unwrap_or_default(),
-        },
+    let task_source_kind = TaskSourceKind::Lsp {
+        server: action.server_id,
+        language_name: language_name.map(SharedString::from).unwrap_or_default(),
     };
 
     let Some(resolved_task) =
@@ -150,9 +140,7 @@ fn schedule_task(
     workspace.update(cx, |workspace, cx| {
         if let Some((buffer_id, buffer_row)) = runnable_task_key {
             workspace.schedule_resolved_task_with_completion(
-                task_source_kind,
                 resolved_task,
-                false,
                 move |result, cx| {
                     editor_handle
                         .update(cx, |editor, cx| {
@@ -169,7 +157,7 @@ fn schedule_task(
                 cx,
             );
         } else {
-            workspace.schedule_resolved_task(task_source_kind, resolved_task, false, window, cx);
+            workspace.schedule_resolved_task(resolved_task, window, cx);
         }
     });
     true

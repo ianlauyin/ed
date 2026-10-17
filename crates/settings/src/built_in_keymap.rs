@@ -600,14 +600,7 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
         &mut keymap,
         Some("Workspace && !Terminal"),
         true,
-        [
-            KeyBindingSpec::new("cmd-n", "workspace::NewFile"),
-            KeyBindingSpec::new("cmd-shift-r", "task::Spawn"),
-            KeyBindingSpec::new("cmd-alt-r", "task::Rerun")
-                .with_input(json!({"reevaluate_context": false})),
-            KeyBindingSpec::new("ctrl-alt-shift-r", "task::Spawn")
-                .with_input(json!({"reveal_target": "center"})),
-        ],
+        [KeyBindingSpec::new("cmd-n", "workspace::NewFile")],
     );
     add_bindings(
         &mut keymap,
@@ -1211,7 +1204,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
                 "cmd-alt-shift-backspace",
                 "worktree_picker::ForceDeleteWorktree",
             ),
-            KeyBindingSpec::new("cmd-shift-c", "zed::OpenWorktreeSetupTasks"),
         ],
     );
     add_bindings(

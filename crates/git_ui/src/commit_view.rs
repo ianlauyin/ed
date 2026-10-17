@@ -13,10 +13,9 @@ use git::{
     parse_git_remote_url,
 };
 use gpui::{
-    App, AppContext as _, AsyncWindowContext, ClipboardItem, Context, Entity,
-    EventEmitter, FocusHandle, Focusable, InteractiveElement, IntoElement, ParentElement,
-    PromptLevel, Render, ScrollHandle, StatefulInteractiveElement as _, Styled, Task, WeakEntity,
-    Window, actions,
+    App, AppContext as _, AsyncWindowContext, ClipboardItem, Context, Entity, EventEmitter,
+    FocusHandle, Focusable, InteractiveElement, IntoElement, ParentElement, PromptLevel, Render,
+    ScrollHandle, StatefulInteractiveElement as _, Styled, Task, WeakEntity, Window, actions,
 };
 use language::{
     Buffer, Capability, DiskState, File, LanguageRegistry, LineEnding, OffsetRangeExt as _,
@@ -748,49 +747,49 @@ impl CommitView {
                     .flex_wrap()
                     .justify_between()
                     .child(
-                        h_flex()
-                            .child(h_flex().flex_none().w(gutter_width))
-                            .child(
-                                v_flex()
-                                    .child(h_flex().gap_1().child(Label::new(author_name)).when(
-                                        has_more,
-                                        |this| {
-                                            this.child(
-                                                Disclosure::new(
-                                                    "commit-message-disclosure",
-                                                    is_expanded,
-                                                )
-                                                .closed_icon(IconName::ExpandVertical)
-                                                .opened_icon(IconName::FoldVertical)
-                                                .tooltip(Tooltip::text(expand_tooltip))
-                                                .on_click(cx.listener(|this, _, _, cx| {
+                        h_flex().child(h_flex().flex_none().w(gutter_width)).child(
+                            v_flex()
+                                .child(h_flex().gap_1().child(Label::new(author_name)).when(
+                                    has_more,
+                                    |this| {
+                                        this.child(
+                                            Disclosure::new(
+                                                "commit-message-disclosure",
+                                                is_expanded,
+                                            )
+                                            .closed_icon(IconName::ExpandVertical)
+                                            .opened_icon(IconName::FoldVertical)
+                                            .tooltip(Tooltip::text(expand_tooltip))
+                                            .on_click(
+                                                cx.listener(|this, _, _, cx| {
                                                     this.message_expanded = !this.message_expanded;
                                                     cx.notify();
-                                                })),
-                                            )
-                                        },
-                                    ))
-                                    .child(
-                                        h_flex()
-                                            .gap_1p5()
-                                            .child(
-                                                Label::new(date_string)
-                                                    .color(Color::Muted)
-                                                    .size(LabelSize::Small),
-                                            )
-                                            .child(
-                                                Label::new("•")
-                                                    .size(LabelSize::Small)
-                                                    .color(Color::Muted)
-                                                    .alpha(0.5),
-                                            )
-                                            .child(
-                                                Label::new(author_email)
-                                                    .color(Color::Muted)
-                                                    .size(LabelSize::Small),
+                                                }),
                                             ),
-                                    ),
-                            ),
+                                        )
+                                    },
+                                ))
+                                .child(
+                                    h_flex()
+                                        .gap_1p5()
+                                        .child(
+                                            Label::new(date_string)
+                                                .color(Color::Muted)
+                                                .size(LabelSize::Small),
+                                        )
+                                        .child(
+                                            Label::new("•")
+                                                .size(LabelSize::Small)
+                                                .color(Color::Muted)
+                                                .alpha(0.5),
+                                        )
+                                        .child(
+                                            Label::new(author_email)
+                                                .color(Color::Muted)
+                                                .size(LabelSize::Small),
+                                        ),
+                                ),
+                        ),
                     )
                     .when(self.stash.is_none(), |this| {
                         this.child(

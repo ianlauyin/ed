@@ -111,7 +111,6 @@ pub struct SettingsStore {
 #[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
 pub enum LocalSettingsKind {
     Settings,
-    Tasks,
     Editorconfig,
 }
 
@@ -349,17 +348,12 @@ pub enum InvalidSettingsError {
         path: LocalSettingsPath,
         message: String,
     },
-    Tasks {
-        path: PathBuf,
-        message: String,
-    },
 }
 
 impl std::fmt::Display for InvalidSettingsError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             InvalidSettingsError::LocalSettings { message, .. }
-            | InvalidSettingsError::Tasks { message, .. }
             | InvalidSettingsError::Editorconfig { message, .. } => write!(f, "{message}"),
         }
     }

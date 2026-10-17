@@ -196,7 +196,7 @@ impl Editor {
         let workspace = self.workspace()?;
 
         match action {
-            CodeActionsItem::Task(task_source_kind, resolved_task) => {
+            CodeActionsItem::Task(_, resolved_task) => {
                 if let Some((buffer_id, buffer_row)) = runnable_task_key {
                     self.set_runnable_task_status(
                         buffer_id,
@@ -209,9 +209,7 @@ impl Editor {
                 workspace.update(cx, |workspace, cx| {
                     if let Some((buffer_id, buffer_row)) = runnable_task_key {
                         workspace.schedule_resolved_task_with_completion(
-                            task_source_kind,
                             resolved_task,
-                            false,
                             move |result, cx| {
                                 editor
                                     .update(cx, |editor, cx| {
@@ -228,13 +226,7 @@ impl Editor {
                             cx,
                         );
                     } else {
-                        workspace.schedule_resolved_task(
-                            task_source_kind,
-                            resolved_task,
-                            false,
-                            window,
-                            cx,
-                        );
+                        workspace.schedule_resolved_task(resolved_task, window, cx);
                     }
 
                     Some(Task::ready(Ok(())))

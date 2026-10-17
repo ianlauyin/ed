@@ -23,10 +23,10 @@ use git_ui::staged_diff::StagedDiffToolbar;
 use git_ui::unstaged_diff::UnstagedDiffToolbar;
 use git_ui_core::file_diff_view::FileDiffStyleToolbar;
 use gpui::{
-    Action, App, AppContext as _, ClipboardItem, Context, DismissEvent, Entity, FocusHandle,
-    Focusable, Image, ImageFormat, ParentElement, PathPromptOptions, PromptLevel, ReadGlobal,
-    SharedString, Size, Task, TaskExt, TitlebarOptions, WeakEntity, Window, WindowBounds,
-    WindowHandle, WindowKind, WindowOptions, actions, img, point, px,
+    App, AppContext as _, ClipboardItem, Context, Entity, FocusHandle, Focusable, Image,
+    ImageFormat, ParentElement, PathPromptOptions, PromptLevel, ReadGlobal, SharedString, Size,
+    Task, TaskExt, TitlebarOptions, WeakEntity, Window, WindowBounds, WindowHandle, WindowKind,
+    WindowOptions, actions, img, point, px,
 };
 use image_viewer::ImageInfo;
 use language::Capability;
@@ -35,26 +35,19 @@ use language_tools::lsp_button::{self, LspButton};
 use language_tools::lsp_log_view::LspLogToolbarItemView;
 pub use open_listener::*;
 use outline_panel::OutlinePanel;
-use paths::local_tasks_file_relative_path;
-use project::{
-    DirectoryLister,
-    project_settings::{SettingsObserver, SettingsObserverEvent},
-};
+use project::DirectoryLister;
 use project_panel::ProjectPanel;
 use quick_action_bar::QuickActionBar;
 use recent_projects::open_remote_project;
-use rope::Rope;
 use search::project_search::ProjectSearchBar;
-use settings::{
-    DefaultOpenBehavior, Settings, SettingsStore, initial_tasks_content, update_settings_file,
-};
+use settings::{DefaultOpenBehavior, Settings, SettingsStore, update_settings_file};
 use settings_content::app_metadata::AppVersion;
 #[cfg(debug_assertions)]
 use workspace::workspace_error::{ErrorAction, ErrorSeverity, WorkspaceError};
 
 use std::{
     borrow::Cow,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::Arc,
     sync::atomic::{self, AtomicBool},
 };
@@ -62,21 +55,17 @@ use terminal_view::terminal_panel::{self, TerminalPanel};
 use theme::ActiveTheme;
 use theme_settings::ThemeSettings;
 use ui::{Navigable, NavigableEntry, PopoverMenuHandle, TintColor, prelude::*};
-use util::rel_path::RelPath;
 use util::{ResultExt, asset_str, maybe};
 use uuid::Uuid;
 use workspace::Pane;
-use workspace::notifications::{NotificationId, dismiss_app_notification, show_app_notification};
+use workspace::notifications::NotificationId;
 
 use workspace::{
     AppState, MultiWorkspace, NewFile, NewWindow, OpenLog, Workspace, WorkspaceSettings,
-    create_and_open_local_file, notifications::simple_message_notification::MessageNotification,
-    open_new,
+    notifications::simple_message_notification::MessageNotification, open_new,
 };
 use workspace::{CloseProject, CloseWindow, with_active_or_new_workspace};
-use zed_actions::{
-    About, GetMerch, OpenBrowser, OpenDocs, OpenProjectTasks, OpenStatusPage, OpenZedUrl, Quit,
-};
+use zed_actions::{About, GetMerch, OpenBrowser, OpenDocs, OpenStatusPage, OpenZedUrl, Quit};
 
 const DOCS_URL: &str = "https://zed.dev/docs/";
 const STATUS_URL: &str = "https://status.zed.dev";
@@ -91,8 +80,6 @@ actions!(
         HideOthers,
         /// Minimizes the current window.
         Minimize,
-        /// Opens the tasks panel.
-        OpenTasks,
         /// Resets the application database.
         ResetDatabase,
         /// Shows all hidden windows.
@@ -169,16 +156,6 @@ pub fn init(cx: &mut App) {
                 asset_str::<Assets>("licenses.md"),
                 "Open Source License Attribution",
                 "Markdown",
-                window,
-                cx,
-            );
-        });
-    })
-    .on_action(|_: &OpenTasks, cx| {
-        with_active_or_new_workspace(cx, |_, window, cx| {
-            open_settings_file(
-                paths::tasks_file(),
-                || settings::initial_tasks_content().as_ref().into(),
                 window,
                 cx,
             );
@@ -270,7 +247,6 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
     init_cursor_hide_mode(cx);
     init_app_appearance(cx);
     init_reduce_motion(cx);
-    init_global_config_error_notifications(cx);
 
     cx.observe_new(|_: &mut MultiWorkspace, window, cx| {
         let Some(window) = window else {
@@ -716,8 +692,6 @@ fn register_actions(
                 }
             }
         })
-        .register_action(open_project_tasks_file)
-        .register_action(open_worktree_setup_tasks_file)
         .register_action(
             |workspace: &mut Workspace,
              _: &zed_actions::project_panel::ToggleFocus,
@@ -1228,41 +1202,6 @@ fn open_log_file(workspace: &mut Workspace, window: &mut Window, cx: &mut Contex
     .detach();
 }
 
-fn init_global_config_error_notifications(cx: &mut App) {
-    cx.observe_new(|_: &mut SettingsObserver, _, cx| {
-        cx.subscribe_self::<SettingsObserverEvent>(|_, event, cx| {
-            let (result, file_kind, on_click): (_, _, fn(&mut Window, &mut App)) = match event {
-                SettingsObserverEvent::GlobalTasksUpdated(result) => {
-                    (result, "tasks", |window, cx| {
-                        window.dispatch_action(OpenTasks.boxed_clone(), cx)
-                    })
-                }
-                _ => return,
-            };
-            let id = NotificationId::Named(format!("invalid-global-{file_kind}-file").into());
-            match result {
-                Ok(_) => dismiss_app_notification(&id, cx),
-                Err(error) => {
-                    let message = format!("Invalid global {file_kind} file\n{error}");
-                    show_app_notification(id, cx, move |cx| {
-                        cx.new(|cx| {
-                            MessageNotification::new(message.clone(), cx)
-                                .primary_message("Open File")
-                                .primary_icon(IconName::Settings)
-                                .primary_on_click(move |window, cx| {
-                                    on_click(window, cx);
-                                    cx.emit(DismissEvent);
-                                })
-                        })
-                    });
-                }
-            }
-        })
-        .detach();
-    })
-    .detach();
-}
-
 #[derive(Copy, Clone, Debug, settings::RegisterSetting)]
 struct CursorHideModeSetting(gpui::CursorHideMode);
 
@@ -1393,156 +1332,6 @@ pub fn open_new_ssh_project_from_project(
     })
 }
 
-fn open_project_tasks_file(
-    workspace: &mut Workspace,
-    _: &OpenProjectTasks,
-    window: &mut Window,
-    cx: &mut Context<Workspace>,
-) {
-    if let Some(task) = open_local_file(
-        workspace,
-        local_tasks_file_relative_path(),
-        initial_tasks_content(),
-        window,
-        cx,
-    ) {
-        task.detach_and_log_err(cx);
-    }
-}
-
-fn open_worktree_setup_tasks_file(
-    workspace: &mut Workspace,
-    _: &zed_actions::OpenWorktreeSetupTasks,
-    window: &mut Window,
-    cx: &mut Context<Workspace>,
-) {
-    // Kept harmless on purpose: tasks with the `create_worktree` hook run automatically
-    // when a worktree is created, so the example must be safe to save unedited.
-    const WORKTREE_SETUP_TASK_EXAMPLE: &str = r#"  {
-    // Runs automatically after Zed creates a new git worktree.
-    // $ZED_WORKTREE_ROOT is the new worktree's root directory, and
-    // $ZED_MAIN_GIT_WORKTREE is the original repository's working directory.
-    "label": "Set up new worktree",
-    "command": "echo \"Setting up $ZED_WORKTREE_ROOT — edit this command\"",
-    "cwd": "$ZED_WORKTREE_ROOT",
-    "hooks": ["create_worktree"]
-  }"#;
-
-    let Some(open_task) = open_local_file(
-        workspace,
-        local_tasks_file_relative_path(),
-        settings::initial_worktree_setup_tasks_content(),
-        window,
-        cx,
-    ) else {
-        return;
-    };
-
-    cx.spawn_in(window, async move |_, cx| {
-        let editor = open_task.await?;
-        editor.update_in(cx, |editor, window, cx| {
-            // Skip insertion if the file already mentions the hook (even in a comment,
-            // like the seeded template's example — uncommenting it beats duplicating it).
-            // `create_git_worktree` is a serde alias for the same hook.
-            let text = editor.text(cx);
-            if text.contains("create_worktree") || text.contains("create_git_worktree") {
-                return anyhow::Ok(());
-            }
-            tasks_ui::insert_task_json_into_editor(
-                editor,
-                WORKTREE_SETUP_TASK_EXAMPLE.to_string(),
-                window,
-                cx,
-            )
-        })?
-    })
-    .detach_and_log_err(cx);
-}
-
-fn open_local_file(
-    workspace: &mut Workspace,
-    settings_relative_path: &'static RelPath,
-    initial_contents: Cow<'static, str>,
-    window: &mut Window,
-    cx: &mut Context<Workspace>,
-) -> Option<gpui::Task<anyhow::Result<Entity<Editor>>>> {
-    let project = workspace.project().clone();
-    let worktree = project
-        .read(cx)
-        .visible_worktrees(cx)
-        .find_map(|tree| tree.read(cx).root_entry()?.is_dir().then_some(tree));
-    if let Some(worktree) = worktree {
-        let tree_id = worktree.read(cx).id();
-        Some(cx.spawn_in(window, async move |workspace, cx| {
-            // Check if the file actually exists on disk (even if it's excluded from worktree)
-            let file_exists = {
-                let full_path = worktree.read_with(cx, |tree, _| {
-                    tree.abs_path().join(settings_relative_path.as_std_path())
-                });
-
-                let fs = project.read_with(cx, |project, _| project.fs().clone());
-
-                fs.metadata(&full_path)
-                    .await
-                    .ok()
-                    .flatten()
-                    .is_some_and(|metadata| !metadata.is_dir && !metadata.is_fifo)
-            };
-
-            if !file_exists {
-                if let Some(dir_path) = settings_relative_path.parent()
-                    && worktree.read_with(cx, |tree, _| tree.entry_for_path(dir_path).is_none())
-                {
-                    project
-                        .update(cx, |project, cx| {
-                            project.create_entry((tree_id, dir_path), true, cx)
-                        })
-                        .await
-                        .context("worktree was removed")?;
-                }
-
-                if worktree.read_with(cx, |tree, _| {
-                    tree.entry_for_path(settings_relative_path).is_none()
-                }) {
-                    project
-                        .update(cx, |project, cx| {
-                            project.create_entry((tree_id, settings_relative_path), false, cx)
-                        })
-                        .await
-                        .context("worktree was removed")?;
-                }
-            }
-
-            let editor = workspace
-                .update_in(cx, |workspace, window, cx| {
-                    workspace.open_path((tree_id, settings_relative_path), None, true, window, cx)
-                })?
-                .await?
-                .downcast::<Editor>()
-                .context("unexpected item type: expected editor item")?;
-
-            editor.update(cx, |editor, cx| {
-                if let Some(buffer) = editor.buffer().read(cx).as_singleton()
-                    && buffer.read(cx).is_empty()
-                {
-                    buffer.update(cx, |buffer, cx| {
-                        buffer.edit([(0..0, initial_contents)], None, cx)
-                    });
-                }
-            });
-
-            anyhow::Ok(editor)
-        }))
-    } else {
-        struct NoOpenFolders;
-
-        workspace.show_notification(NotificationId::unique::<NoOpenFolders>(), cx, |cx| {
-            cx.new(|cx| MessageNotification::new("This project has no folders open.", cx))
-        });
-        None
-    }
-}
-
 fn open_bundled_file(
     workspace: &mut Workspace,
     text: Cow<'static, str>,
@@ -1607,50 +1396,6 @@ fn open_bundled_file(
                 })
             })?
             .await
-    })
-    .detach_and_log_err(cx);
-}
-
-fn open_settings_file(
-    abs_path: &'static Path,
-    default_content: impl FnOnce() -> Rope + Send + 'static,
-    window: &mut Window,
-    cx: &mut Context<Workspace>,
-) {
-    cx.spawn_in(window, async move |workspace, cx| {
-        workspace
-            .update_in(cx, |workspace, window, cx| {
-                workspace.with_local_workspace(window, cx, move |workspace, window, cx| {
-                    let project = workspace.project().clone();
-
-                    cx.spawn_in(window, async move |workspace, cx| {
-                        // Set up a dedicated worktree for settings, since
-                        // otherwise we're dropping and re-starting LSP servers
-                        // for each file inside on every settings file
-                        // close/open
-
-                        // TODO: Do note that all other external files (e.g.
-                        // drag and drop from OS) still have their worktrees
-                        // released on file close, causing LSP servers'
-                        // restarts.
-                        let (_worktree, _) = project
-                            .update(cx, |project, cx| {
-                                project.find_or_create_worktree(paths::config_dir(), false, cx)
-                            })
-                            .await?;
-
-                        workspace
-                            .update_in(cx, |_, window, cx| {
-                                create_and_open_local_file(abs_path, window, cx, default_content)
-                            })?
-                            .await?;
-                        anyhow::Ok(())
-                    })
-                })
-            })?
-            .await?
-            .await?;
-        anyhow::Ok(())
     })
     .detach_and_log_err(cx);
 }

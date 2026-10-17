@@ -1,9 +1,6 @@
 pub use crate::commit_context_menu::{CopyCommitSha, CopyCommitTag, OpenCommitView};
 use crate::{
-    commit_context_menu::{
-        CUSTOM_GIT_COMMANDS_DOCS_SLUG, CommitContextMenuData, CommitContextMenuSource,
-        commit_context_menu, git_context_menu_tasks, git_task_context,
-    },
+    commit_context_menu::{CommitContextMenuData, CommitContextMenuSource, commit_context_menu},
     commit_view::CommitView,
     git_status_icon,
 };
@@ -29,7 +26,7 @@ use markdown::{Markdown, MarkdownElement};
 use menu::{Cancel, SelectFirst, SelectLast, SelectNext, SelectPrevious};
 use picker::{Picker, PickerDelegate};
 use project::{
-    ProjectPath, TaskSourceKind,
+    ProjectPath,
     git_store::{
         CommitDataState, CommitDiff, CommitFile, GitGraphEvent, GitStore, GitStoreEvent,
         GraphDataResponse, Repository, RepositoryEvent, RepositoryId,
@@ -43,7 +40,6 @@ use std::{
     sync::{Arc, OnceLock},
     time::{Duration, Instant},
 };
-use task::ResolvedTask;
 use zed_actions::{
     buffer_search,
     search::{SelectNextMatch, SelectPreviousMatch, ToggleCaseSensitive},
@@ -52,9 +48,9 @@ use zed_actions::{
 use theme::AccentColors;
 use time::{OffsetDateTime, UtcOffset, format_description::BorrowedFormatItem};
 use ui::{
-    Chip, ColumnWidthConfig, CommonAnimationExt as _, ContextMenu, ContextMenuEntry, DiffStat,
-    Disclosure, Divider, HeaderResizeInfo, HighlightedLabel, IndentGuideColors, ListItem,
-    ListItemSpacing, RedistributableColumnsState, ScrollableHandle, Table, TableInteractionState,
+    Chip, ColumnWidthConfig, CommonAnimationExt as _, ContextMenu, DiffStat, Disclosure, Divider,
+    HeaderResizeInfo, HighlightedLabel, IndentGuideColors, ListItem, ListItemSpacing,
+    RedistributableColumnsState, ScrollableHandle, Table, TableInteractionState,
     TableRenderContext, TableResizeBehavior, Tooltip, WithScrollbar, bind_redistributable_columns,
     prelude::*, redistribute_hidden_fractions, redistribute_hidden_widths,
     render_redistributable_columns_resize_handles, render_table_header, table_row::TableRow,
@@ -1383,55 +1379,15 @@ struct GitGraphContextMenu {
 #[derive(Clone)]
 struct RefMenuEntry {
     ref_name: Option<SharedString>,
-    git_tasks: Vec<(TaskSourceKind, ResolvedTask)>,
 }
 
 impl RefMenuEntry {
-    fn add_entries(
-        self,
-        mut menu: ContextMenu,
-        git_graph: &Entity<GitGraph>,
-        window: &mut Window,
-    ) -> ContextMenu {
+    fn add_entries(self, mut menu: ContextMenu) -> ContextMenu {
         if let Some(ref_name) = self.ref_name {
             menu = menu.entry("Copy Ref Name", None, move |_window, cx| {
                 cx.write_to_clipboard(ClipboardItem::new_string(ref_name.to_string()));
             });
         }
-
-        menu = menu.separator().header("Custom Commands");
-
-        if self.git_tasks.is_empty() {
-            return menu.item(
-                ContextMenuEntry::new("Learn More")
-                    .icon(IconName::ArrowUpRight)
-                    .icon_color(Color::Muted)
-                    .icon_position(IconPosition::End)
-                    .handler(|_window, cx| {
-                        cx.open_url(&settings_content::app_metadata::docs_url(
-                            CUSTOM_GIT_COMMANDS_DOCS_SLUG,
-                            cx,
-                        ));
-                    }),
-            );
-        }
-
-        for (task_source_kind, resolved_task) in self.git_tasks {
-            let label = resolved_task.display_label().to_string();
-            menu = menu.entry(
-                label,
-                None,
-                window.handler_for(git_graph, move |this, window, cx| {
-                    this.schedule_git_task(
-                        task_source_kind.clone(),
-                        resolved_task.clone(),
-                        window,
-                        cx,
-                    );
-                }),
-            );
-        }
-
         menu
     }
 }
@@ -2607,26 +2563,6 @@ impl GitGraph {
         self.copy_commit_tag(selected_entry_index, window, cx);
     }
 
-    fn schedule_git_task(
-        &mut self,
-        task_source_kind: TaskSourceKind,
-        resolved_task: ResolvedTask,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.workspace
-            .update(cx, |workspace, cx| {
-                workspace.schedule_resolved_task(
-                    task_source_kind,
-                    resolved_task,
-                    false,
-                    window,
-                    cx,
-                );
-            })
-            .ok();
-    }
-
     fn deploy_ref_context_menu(
         &mut self,
         position: Point<Pixels>,
@@ -2635,15 +2571,14 @@ impl GitGraph {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(commit) = self.graph_data.commits.get(index) else {
+        if self.graph_data.commits.get(index).is_none() {
             return;
-        };
+        }
 
-        let ref_entry = self.ref_menu_entry(commit.data.sha, &name, cx);
-        let git_graph = cx.entity();
-        let context_menu = ContextMenu::build(window, cx, move |menu, window, _| {
+        let ref_entry = Self::ref_menu_entry(&name);
+        let context_menu = ContextMenu::build(window, cx, move |menu, _, _| {
             menu.header(format!("Ref {name}"))
-                .map(|menu| ref_entry.add_entries(menu, &git_graph, window))
+                .map(|menu| ref_entry.add_entries(menu))
         });
 
         self.set_context_menu(context_menu, position, Some(index), window, cx);
@@ -2660,22 +2595,20 @@ impl GitGraph {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(commit) = self.graph_data.commits.get(index) else {
+        if self.graph_data.commits.get(index).is_none() {
             return;
-        };
+        }
 
         let ref_entries = hidden_refs
             .into_iter()
-            .map(|name| (self.ref_menu_entry(commit.data.sha, &name, cx), name))
+            .map(|name| (Self::ref_menu_entry(&name), name))
             .collect::<Vec<_>>();
 
-        let git_graph = cx.entity();
         let context_menu = ContextMenu::build(window, cx, move |mut menu, _window, _| {
             menu = menu.header("Refs");
             for (ref_entry, name) in ref_entries {
-                let git_graph = git_graph.clone();
-                menu = menu.submenu(name, move |submenu, window, _cx| {
-                    ref_entry.clone().add_entries(submenu, &git_graph, window)
+                menu = menu.submenu(name, move |submenu, _window, _cx| {
+                    ref_entry.clone().add_entries(submenu)
                 });
             }
             menu
@@ -2684,22 +2617,12 @@ impl GitGraph {
         self.set_context_menu(context_menu, position, Some(index), window, cx);
     }
 
-    /// Resolves the data needed to populate a single ref's context-menu entries
-    /// (its short name and any custom git command tasks). Kept separate so the
-    /// same entries can be rendered both as a standalone menu and as a submenu.
-    fn ref_menu_entry(&self, sha: Oid, name: &SharedString, cx: &App) -> RefMenuEntry {
-        let ref_name = Self::ref_name_from_decoration(name);
-        let repository = self
-            .get_repository(cx)
-            .map(|repository| repository.downgrade());
-        let git_tasks = git_context_menu_tasks(
-            git_task_context(&repository, sha, ref_name.as_deref(), cx),
-            &self.workspace,
-            cx,
-        );
+    /// Resolves the data needed to populate a single ref's context-menu entries.
+    /// Kept separate so the same entries can be rendered both as a standalone
+    /// menu and as a submenu.
+    fn ref_menu_entry(name: &SharedString) -> RefMenuEntry {
         RefMenuEntry {
-            ref_name,
-            git_tasks,
+            ref_name: Self::ref_name_from_decoration(name),
         }
     }
 

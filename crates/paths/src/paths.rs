@@ -218,12 +218,6 @@ pub fn database_dir() -> &'static PathBuf {
     DATABASE_DIR.get_or_init(|| data_dir().join("db"))
 }
 
-/// Returns the path to the `tasks.json` file.
-pub fn tasks_file() -> &'static PathBuf {
-    static TASKS_FILE: OnceLock<PathBuf> = OnceLock::new();
-    TASKS_FILE.get_or_init(|| config_dir().join("tasks.json"))
-}
-
 /// Returns the path to the themes directory.
 ///
 /// This is where user themes are stored.
@@ -259,24 +253,6 @@ pub fn local_settings_file_relative_path() -> &'static RelPath {
     static CACHED: LazyLock<&'static RelPath> =
         LazyLock::new(|| RelPath::from_unix_str(".zed/settings.json").unwrap());
     *CACHED
-}
-
-/// Returns the relative path to a `tasks.json` file within a project.
-pub fn local_tasks_file_relative_path() -> &'static RelPath {
-    static CACHED: LazyLock<&'static RelPath> =
-        LazyLock::new(|| RelPath::from_unix_str(".zed/tasks.json").unwrap());
-    *CACHED
-}
-
-/// Returns the relative path to a `.vscode/tasks.json` file within a project.
-pub fn local_vscode_tasks_file_relative_path() -> &'static RelPath {
-    static CACHED: LazyLock<&'static RelPath> =
-        LazyLock::new(|| RelPath::from_unix_str(".vscode/tasks.json").unwrap());
-    *CACHED
-}
-
-pub fn task_file_name() -> &'static str {
-    "tasks.json"
 }
 
 pub fn user_ssh_config_file() -> PathBuf {

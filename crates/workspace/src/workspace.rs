@@ -8955,10 +8955,7 @@ pub fn open_workspace_by_id(
         app_state.languages.clone(),
         app_state.fs.clone(),
         None,
-        project::LocalProjectFlags {
-            init_worktree_trust: true,
-            ..project::LocalProjectFlags::default()
-        },
+        project::LocalProjectFlags::default(),
         cx,
     );
 

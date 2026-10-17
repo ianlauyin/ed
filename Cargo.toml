@@ -100,7 +100,6 @@ members = [
     "crates/tab_switcher",
     "crates/tabular_data_preview",
     "crates/task",
-    "crates/tasks_ui",
     "crates/terminal",
     "crates/terminal_view",
     "crates/text",
@@ -233,7 +232,6 @@ system_specs = { path = "crates/system_specs" }
 tab_switcher = { path = "crates/tab_switcher" }
 tabular_data_preview = { path = "crates/tabular_data_preview"}
 task = { path = "crates/task" }
-tasks_ui = { path = "crates/tasks_ui" }
 terminal = { path = "crates/terminal" }
 terminal_view = { path = "crates/terminal_view" }
 text = { path = "crates/text" }

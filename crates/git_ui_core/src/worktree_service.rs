@@ -1289,17 +1289,14 @@ async fn open_worktree_workspace(
             multi_workspace.add(new_workspace.clone(), window, cx);
         }
 
-        if is_creating_new_worktree {
+        if is_creating_new_worktree
+            && activate
+            && let Some(dock_position) = focused_dock
+        {
             new_workspace.update(cx, |workspace, cx| {
-                // Run create-worktree setup hooks regardless of foreground vs
-                // background — the worktree was created either way.
-                workspace.run_create_worktree_tasks(window, cx);
-
-                if activate && let Some(dock_position) = focused_dock {
-                    let dock = workspace.dock_at_position(dock_position);
-                    if let Some(panel) = dock.read(cx).active_panel() {
-                        panel.activation_focus_handle(cx).focus(window, cx);
-                    }
+                let dock = workspace.dock_at_position(dock_position);
+                if let Some(panel) = dock.read(cx).active_panel() {
+                    panel.activation_focus_handle(cx).focus(window, cx);
                 }
             });
         }

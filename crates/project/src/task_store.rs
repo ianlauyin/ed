@@ -1,7 +1,4 @@
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::{path::PathBuf, sync::Arc};
 
 use anyhow::Context as _;
 use collections::HashMap;
@@ -12,14 +9,13 @@ use language::{
     proto::{deserialize_anchor, serialize_anchor},
 };
 use rpc::{AnyProtoClient, TypedEnvelope, proto};
-use settings::{InvalidSettingsError, SettingsLocation};
 use task::{TaskContext, TaskVariables, VariableName};
 use text::{BufferId, OffsetRangeExt};
 use util::ResultExt;
 
 use crate::{
-    BasicContextProvider, Inventory, ProjectEnvironment, buffer_store::BufferStore,
-    git_store::GitStore, worktree_store::WorktreeStore,
+    BasicContextProvider, ProjectEnvironment, buffer_store::BufferStore, git_store::GitStore,
+    worktree_store::WorktreeStore,
 };
 
 // platform-dependent warning
@@ -30,7 +26,6 @@ pub enum TaskStore {
 
 pub struct StoreState {
     mode: StoreMode,
-    task_inventory: Entity<Inventory>,
     buffer_store: WeakEntity<BufferStore>,
     worktree_store: Entity<WorktreeStore>,
     git_store: Entity<GitStore>,
@@ -49,12 +44,6 @@ enum StoreMode {
 }
 
 impl EventEmitter<crate::Event> for TaskStore {}
-
-#[derive(Debug)]
-pub enum TaskSettingsLocation<'a> {
-    Global(&'a Path),
-    Worktree(SettingsLocation<'a>),
-}
 
 impl TaskStore {
     pub fn init(client: Option<&AnyProtoClient>) {
@@ -165,14 +154,13 @@ impl TaskStore {
         toolchain_store: Arc<dyn LanguageToolchainStore>,
         environment: Entity<ProjectEnvironment>,
         git_store: Entity<GitStore>,
-        cx: &mut Context<Self>,
+        _: &mut Context<Self>,
     ) -> Self {
         Self::Functional(StoreState {
             mode: StoreMode::Local {
                 downstream_client: None,
                 environment,
             },
-            task_inventory: Inventory::new(cx),
             buffer_store,
             git_store,
             toolchain_store,
@@ -187,14 +175,13 @@ impl TaskStore {
         upstream_client: AnyProtoClient,
         project_id: u64,
         git_store: Entity<GitStore>,
-        cx: &mut Context<Self>,
+        _: &mut Context<Self>,
     ) -> Self {
         Self::Functional(StoreState {
             mode: StoreMode::Remote {
                 upstream_client,
                 project_id,
             },
-            task_inventory: Inventory::new(cx),
             buffer_store,
             git_store,
             toolchain_store,
@@ -237,13 +224,6 @@ impl TaskStore {
         }
     }
 
-    pub fn task_inventory(&self) -> Option<&Entity<Inventory>> {
-        match self {
-            TaskStore::Functional(state) => Some(&state.task_inventory),
-            TaskStore::Noop => None,
-        }
-    }
-
     pub fn shared(&mut self, remote_id: u64, new_downstream_client: AnyProtoClient, _cx: &mut App) {
         if let Self::Functional(StoreState {
             mode: StoreMode::Local {
@@ -266,25 +246,6 @@ impl TaskStore {
         {
             *downstream_client = None;
         }
-    }
-
-    pub(super) fn update_user_tasks(
-        &self,
-        location: TaskSettingsLocation<'_>,
-        raw_tasks_json: Option<&str>,
-        cx: &mut Context<Self>,
-    ) -> Result<(), InvalidSettingsError> {
-        let task_inventory = match self {
-            TaskStore::Functional(state) => &state.task_inventory,
-            TaskStore::Noop => return Ok(()),
-        };
-        let raw_tasks_json = raw_tasks_json
-            .map(|json| json.trim())
-            .filter(|json| !json.is_empty());
-
-        task_inventory.update(cx, |inventory, _| {
-            inventory.update_file_based_tasks(location, raw_tasks_json)
-        })
     }
 }
 

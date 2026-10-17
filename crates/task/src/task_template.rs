@@ -4,7 +4,6 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::path::PathBuf;
-use util::schemars::{AllowTrailingCommas, DefaultDenyUnknownFields};
 use util::serde::default_true;
 use util::{ResultExt, truncate_and_remove_front};
 
@@ -19,7 +18,7 @@ use crate::{
 /// Template itself is not ready to spawn a task, it needs to be resolved with a [`TaskContext`] first, that
 /// contains all relevant Zed state in task variables.
 /// A single template may produce different tasks (or none) for different contexts.
-#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Default, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub struct TaskTemplate {
     /// Human readable name of the task to display in the UI.
@@ -61,7 +60,6 @@ pub struct TaskTemplate {
     /// Represents the tags which this template attaches to.
     /// Adding this removes this task from other UI and gives you ability to run it by tag.
     #[serde(default, deserialize_with = "non_empty_string_vec")]
-    #[schemars(length(min = 1))]
     pub tags: Vec<String>,
     /// Which shell to use when spawning the task.
     #[serde(default)]
@@ -75,20 +73,10 @@ pub struct TaskTemplate {
     /// Which edited buffers to save before running the task.
     #[serde(default)]
     pub save: SaveStrategy,
-    /// Hooks that this task runs when emitted.
-    #[serde(default)]
-    pub hooks: HashSet<TaskHook>,
 }
 
 /// What to do with the terminal pane and tab, after the command was started.
-#[derive(Clone, Copy, Debug, PartialEq, Hash, Eq, Serialize, Deserialize, JsonSchema)]
-#[serde(rename_all = "snake_case")]
-pub enum TaskHook {
-    #[serde(alias = "create_git_worktree")]
-    CreateWorktree,
-}
-
-/// What to do with the terminal pane and tab, after the command was started.
+// `JsonSchema` because `editor::SpawnNearestTask` takes it as action input.
 #[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum RevealStrategy {
@@ -102,7 +90,7 @@ pub enum RevealStrategy {
 }
 
 /// What to do with the terminal pane and tab, after the command has finished.
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum HideStrategy {
     /// Do nothing when the command finishes.
@@ -115,7 +103,7 @@ pub enum HideStrategy {
 }
 
 /// Which edited buffers to save before running a task.
-#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Default, Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 pub enum SaveStrategy {
     /// Save all edited buffers.
@@ -127,23 +115,9 @@ pub enum SaveStrategy {
     None,
 }
 
-/// A group of Tasks defined in a JSON file.
-#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+/// A group of task templates, provided by a language.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub struct TaskTemplates(pub Vec<TaskTemplate>);
-
-impl TaskTemplates {
-    pub const FILE_NAME: &str = "tasks.json";
-    /// Generates JSON schema of Tasks JSON template format.
-    pub fn generate_json_schema() -> serde_json::Value {
-        let schema = schemars::generate::SchemaSettings::draft2019_09()
-            .with_transform(DefaultDenyUnknownFields)
-            .with_transform(AllowTrailingCommas)
-            .into_generator()
-            .root_schema_for::<Self>();
-
-        serde_json::to_value(schema).unwrap()
-    }
-}
 
 impl TaskTemplate {
     /// Replaces all `VariableName` task variables in the task template string fields.

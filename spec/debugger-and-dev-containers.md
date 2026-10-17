@@ -11,9 +11,9 @@ transport that only served dev containers.
 
 - No debug panel, breakpoints (gutter, actions, persistence), inline values,
   active-debug-line highlight, debug code actions/scenarios, debug console, or
-  DAP log view. The "Run" menu only spawns and edits tasks.
+  DAP log view. There is no "Run" menu (see `tasks.md`).
 - `debug.json` (global and `.zed/`) and `.vscode/launch.json` are not read, and
-  have no JSON schema. Tasks (`tasks.json`, `.vscode/tasks.json`) are unaffected.
+  have no JSON schema.
 - Settings `dap`, `debugger`, `debuggers` (per language), `gutter.breakpoints`,
   `inlay_hints.show_value_hints`, `dev_container_connections`, `use_podman`, and
   `dev_container_use_buildkit` no longer exist. Theme keys `debugger.accent` and

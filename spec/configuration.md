@@ -31,7 +31,8 @@ UI, keymap editor, settings/keymap migrator, or Vim/Helix mode.
   The default-settings view is removed too.
 - User and bundled keymap JSON files are removed from the loading path. There is
   no keymap watcher, file editor/viewer action, base-keymap selection, or keymap
-  JSON schema. Task files and EditorConfig formatting conventions remain supported.
+  JSON schema. EditorConfig formatting conventions remain supported; task files
+  are not (see `tasks.md`).
 - The built-in keymap retains contexts, binding order, and keyboard-position
   equivalents. Changing the keyboard layout rebuilds the bindings and refreshes
   menu shortcuts.
@@ -43,7 +44,7 @@ UI, keymap editor, settings/keymap migrator, or Vim/Helix mode.
   files and project settings messages cannot override them.
 - `zed://settings` URLs are not handled. Settings-file JSON schemas, completions,
   validation, and language-server configuration schema probing are removed.
-  JSON language support remains for source files, action inputs, tasks, and snippets.
+  JSON language support remains for source files, action inputs, and snippets.
 - The upstream documentation website preprocessor is removed; this fork does not
   build the upstream mdBook site.
 - The command palette has no "Add/Change Keybinding" flow; secondary confirm runs

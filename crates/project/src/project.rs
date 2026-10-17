@@ -124,8 +124,7 @@ use worktree_store::{WorktreeStore, WorktreeStoreEvent};
 pub use fs::*;
 pub use language::Location;
 pub use task_inventory::{
-    BasicContextProvider, ContextProviderWithTasks, GIT_COMMAND_TASK_TAG, Inventory, TaskContexts,
-    TaskSourceKind,
+    BasicContextProvider, ContextProviderWithTasks, TaskSourceKind, language_task_templates,
 };
 
 pub use buffer_store::ProjectTransaction;
@@ -142,14 +141,12 @@ const MAX_PROJECT_SEARCH_HISTORY_SIZE: usize = 500;
 #[derive(Clone, Copy, Debug)]
 pub struct LocalProjectFlags {
     pub init_worktree_trust: bool,
-    pub watch_global_configs: bool,
 }
 
 impl Default for LocalProjectFlags {
     fn default() -> Self {
         Self {
             init_worktree_trust: true,
-            watch_global_configs: true,
         }
     }
 }
@@ -1130,15 +1127,8 @@ impl Project {
                 )
             });
 
-            let settings_observer = cx.new(|cx| {
-                SettingsObserver::new_local(
-                    fs.clone(),
-                    worktree_store.clone(),
-                    task_store.clone(),
-                    flags.watch_global_configs,
-                    cx,
-                )
-            });
+            let settings_observer =
+                cx.new(|cx| SettingsObserver::new_local(fs.clone(), worktree_store.clone(), cx));
             cx.subscribe(&settings_observer, Self::on_settings_observer_event)
                 .detach();
 
@@ -1320,13 +1310,7 @@ impl Project {
             });
 
             let settings_observer = cx.new(|cx| {
-                SettingsObserver::new_remote(
-                    fs.clone(),
-                    worktree_store.clone(),
-                    task_store.clone(),
-                    Some(remote_proto.clone()),
-                    cx,
-                )
+                SettingsObserver::new_remote(worktree_store.clone(), Some(remote_proto.clone()), cx)
             });
             cx.subscribe(&settings_observer, Self::on_settings_observer_event)
                 .detach();
@@ -2607,24 +2591,6 @@ impl Project {
                 }),
                 Err(_) => {}
             },
-            SettingsObserverEvent::LocalTasksUpdated(result) => match result {
-                Err(InvalidSettingsError::Tasks { message, path }) => {
-                    let message = format!("Failed to set local tasks in {path:?}:\n{message}");
-                    cx.emit(Event::Toast {
-                        notification_id: format!("local-tasks-{path:?}").into(),
-                        link: Some(ToastLink {
-                            label: "Open Tasks Documentation",
-                            url: "https://zed.dev/docs/tasks",
-                        }),
-                        message,
-                    });
-                }
-                Ok(path) => cx.emit(Event::HideToast {
-                    notification_id: format!("local-tasks-{path:?}").into(),
-                }),
-                Err(_) => {}
-            },
-            SettingsObserverEvent::GlobalTasksUpdated(_) => {}
         }
     }
 

@@ -31,10 +31,6 @@ pub struct OpenZedUrl {
 actions!(
     zed,
     [
-        /// Opens the project tasks configuration.
-        OpenProjectTasks,
-        /// Opens the project tasks configuration with worktree setup guidance.
-        OpenWorktreeSetupTasks,
         /// Quits the application.
         Quit,
         /// Shows information about Zed.
@@ -442,64 +438,6 @@ pub enum RevealTarget {
     /// In the terminal dock, "regular" terminal items' place.
     #[default]
     Dock,
-}
-
-/// Spawns a task with name or opens tasks modal.
-#[derive(Debug, PartialEq, Clone, Deserialize, JsonSchema, Action)]
-#[action(namespace = task)]
-#[serde(untagged)]
-pub enum Spawn {
-    /// Spawns a task by the name given.
-    ByName {
-        task_name: String,
-        #[serde(default)]
-        reveal_target: Option<RevealTarget>,
-    },
-    /// Spawns a task by the tag given.
-    ByTag {
-        task_tag: String,
-        #[serde(default)]
-        reveal_target: Option<RevealTarget>,
-    },
-    /// Spawns a task via modal's selection.
-    ViaModal {
-        /// Selected task's `reveal_target` property override.
-        #[serde(default)]
-        reveal_target: Option<RevealTarget>,
-    },
-}
-
-impl Spawn {
-    pub fn modal() -> Self {
-        Self::ViaModal {
-            reveal_target: None,
-        }
-    }
-}
-
-/// Reruns the last task.
-#[derive(PartialEq, Clone, Deserialize, Default, JsonSchema, Action)]
-#[action(namespace = task)]
-#[serde(deny_unknown_fields)]
-pub struct Rerun {
-    /// Controls whether the task context is reevaluated prior to execution of a task.
-    /// If it is not, environment variables such as ZED_COLUMN, ZED_FILE are gonna be the same as in the last execution of a task
-    /// If it is, these variables will be updated to reflect current state of editor at the time task::Rerun is executed.
-    /// default: false
-    #[serde(default)]
-    pub reevaluate_context: bool,
-    /// Overrides `allow_concurrent_runs` property of the task being reran.
-    /// Default: null
-    #[serde(default)]
-    pub allow_concurrent_runs: Option<bool>,
-    /// Overrides `use_new_terminal` property of the task being reran.
-    /// Default: null
-    #[serde(default)]
-    pub use_new_terminal: Option<bool>,
-
-    /// If present, rerun the task with this ID, otherwise rerun the last task.
-    #[serde(skip)]
-    pub task_id: Option<String>,
 }
 
 pub mod outline {

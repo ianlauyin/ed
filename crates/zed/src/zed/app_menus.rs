@@ -235,20 +235,6 @@ pub fn app_menus(_cx: &mut App) -> Vec<Menu> {
             ],
         },
         Menu {
-            name: "Run".into(),
-            disabled: false,
-            items: vec![
-                MenuItem::action(
-                    "Spawn Task",
-                    zed_actions::Spawn::ViaModal {
-                        reveal_target: None,
-                    },
-                ),
-                MenuItem::separator(),
-                MenuItem::action("Edit tasks.json…", zed_actions::OpenProjectTasks),
-            ],
-        },
-        Menu {
             name: "Window".into(),
             disabled: false,
             items: vec![

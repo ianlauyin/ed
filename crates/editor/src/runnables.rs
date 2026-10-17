@@ -351,7 +351,7 @@ impl Editor {
         let task_context = Self::build_tasks_context(&project, &buffer, buffer_row, &tasks, cx);
         cx.spawn_in(window, async move |_, cx| {
             let context = task_context.await.ok().flatten()?;
-            let (task_source_kind, mut resolved_task) = tasks.resolve(&context).next()?;
+            let (_, mut resolved_task) = tasks.resolve(&context).next()?;
 
             let resolved = &mut resolved_task.resolved;
             resolved.reveal = reveal_strategy;
@@ -369,9 +369,7 @@ impl Editor {
             workspace
                 .update_in(cx, |workspace, window, cx| {
                     workspace.schedule_resolved_task_with_completion(
-                        task_source_kind,
                         resolved_task,
-                        false,
                         move |result, cx| {
                             editor
                                 .update(cx, |editor, cx| {
@@ -747,56 +745,20 @@ impl Editor {
         runnable: &mut Runnable,
         cx: &mut App,
     ) -> Task<Vec<(TaskSourceKind, TaskTemplate)>> {
-        let (inventory, worktree_id, buffer) = project.read_with(cx, |project, cx| {
-            let buffer = project.buffer_for_id(runnable.buffer, cx);
-            let worktree_id = buffer
-                .as_ref()
-                .and_then(|buffer| buffer.read(cx).file())
-                .map(|file| file.worktree_id(cx));
-
-            (
-                project.task_store().read(cx).task_inventory().cloned(),
-                worktree_id,
-                buffer,
-            )
-        });
-
+        let buffer = project.read(cx).buffer_for_id(runnable.buffer, cx);
         let tags = mem::take(&mut runnable.tags);
-        let language = runnable.language.clone();
-        cx.spawn(async move |cx| {
-            let mut templates_with_tags = Vec::new();
-            if let Some(inventory) = inventory {
-                for RunnableTag(tag) in tags {
-                    let new_tasks = inventory.update(cx, |inventory, cx| {
-                        inventory.list_tasks(
-                            buffer.clone(),
-                            Some(language.clone()),
-                            worktree_id,
-                            cx,
-                        )
-                    });
-                    templates_with_tags.extend(new_tasks.await.into_iter().filter(
-                        move |(_, template)| {
-                            template.tags.iter().any(|source_tag| source_tag == &tag)
-                        },
-                    ));
-                }
-            }
-            templates_with_tags.sort_by_key(|(kind, _)| kind.to_owned());
-
-            if let Some((leading_tag_source, _)) = templates_with_tags.first() {
-                // Strongest source wins; if we have worktree tag binding, prefer that to
-                // global and language bindings;
-                // if we have a global binding, prefer that to language binding.
-                let first_mismatch = templates_with_tags
-                    .iter()
-                    .position(|(tag_source, _)| tag_source != leading_tag_source);
-                if let Some(index) = first_mismatch {
-                    templates_with_tags.truncate(index);
-                }
-            }
-
-            templates_with_tags
+        let templates = project::language_task_templates(buffer, runnable.language.clone(), cx);
+        cx.background_spawn(async move {
+            let templates = templates.await;
+            // Keep tag order: the first template is what a left click launches.
+            tags.iter()
+                .flat_map(|RunnableTag(tag)| {
+                    templates
+                        .iter()
+                        .filter(move |(_, template)| template.tags.iter().any(|t| t == tag))
+                        .cloned()
+                })
+                .collect()
         })
     }
 

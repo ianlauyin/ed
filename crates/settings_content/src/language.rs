@@ -914,10 +914,6 @@ pub struct LanguageTaskSettingsContent {
     /// Use LSP tasks over built-in language tasks.
     /// If no LSP tasks are returned due to error/timeout or regular execution,
     /// Built-in language tasks will be used instead.
-    ///
-    /// Other Zed tasks will still be shown:
-    /// * Zed task from either of the task config file
-    /// * Zed task from history (e.g. one-off task was spawned before)
     pub prefer_lsp: Option<bool>,
 }
 

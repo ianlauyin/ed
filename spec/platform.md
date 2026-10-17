@@ -30,6 +30,8 @@ remote server supports macOS and Linux.
 - Ship one macOS keymap constructed in Rust; alternate keymaps are removed.
 - The Linux remote server needs no display server, GPU, desktop integration, or fonts.
   It retains background execution, timers, and a foreground event loop for remote projects.
+- GPUI core has no direct `libc` dependency; native OS integration belongs in
+  platform-specific crates.
 - Linux remote data, configuration, and logs follow XDG directory settings.
 - Linux desktop, FreeBSD, Windows, and browser backends, packaging, and associated
   build/test/release tooling are removed.

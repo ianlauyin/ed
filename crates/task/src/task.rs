@@ -1,9 +1,7 @@
 //! Baseline interface of Tasks in Zed: all tasks in Zed are intended to use those for implementing their own logic.
 
 mod serde_helpers;
-pub mod static_source;
 mod task_template;
-mod vscode_format;
 
 use anyhow::Context as _;
 use collections::{HashMap, HashSet, hash_map};
@@ -15,12 +13,11 @@ use std::str::FromStr;
 use std::sync::Arc;
 
 pub use task_template::{
-    HideStrategy, RevealStrategy, SaveStrategy, TaskHook, TaskTemplate, TaskTemplates,
+    HideStrategy, RevealStrategy, SaveStrategy, TaskTemplate, TaskTemplates,
     substitute_variables_in_map, substitute_variables_in_str,
 };
 pub use util::shell::{Shell, ShellKind};
 pub use util::shell_builder::ShellBuilder;
-pub use vscode_format::VsCodeTaskFile;
 pub use zed_actions::RevealTarget;
 
 /// Task identifier, unique within the application.
@@ -384,64 +381,5 @@ pub fn shell_to_proto(shell: Shell) -> proto::Shell {
     };
     proto::Shell {
         shell_type: Some(shell_type),
-    }
-}
-
-type VsCodeEnvVariable = String;
-type VsCodeCommand = String;
-type ZedEnvVariable = String;
-
-struct EnvVariableReplacer {
-    variables: HashMap<VsCodeEnvVariable, ZedEnvVariable>,
-    commands: HashMap<VsCodeCommand, ZedEnvVariable>,
-}
-
-impl EnvVariableReplacer {
-    fn new(variables: HashMap<VsCodeEnvVariable, ZedEnvVariable>) -> Self {
-        Self {
-            variables,
-            commands: HashMap::default(),
-        }
-    }
-
-    // Replaces occurrences of VsCode-specific environment variables with Zed equivalents.
-    fn replace(&self, input: &str) -> String {
-        shellexpand::env_with_context_no_errors(&input, |var: &str| {
-            // Colons denote a default value in case the variable is not set. We want to preserve that default, as otherwise shellexpand will substitute it for us.
-            let colon_position = var.find(':').unwrap_or(var.len());
-            let (left, right) = var.split_at(colon_position);
-            if left == "env" && !right.is_empty() {
-                let variable_name = &right[1..];
-                return Some(format!("${{{variable_name}}}"));
-            } else if left == "command" && !right.is_empty() {
-                let command_name = &right[1..];
-                if let Some(replacement_command) = self.commands.get(command_name) {
-                    return Some(format!("${{{replacement_command}}}"));
-                }
-            }
-
-            let (variable_name, default) = (left, right);
-            let append_previous_default = |ret: &mut String| {
-                if !default.is_empty() {
-                    ret.push_str(default);
-                }
-            };
-            if let Some(substitution) = self.variables.get(variable_name) {
-                // Got a VSCode->Zed hit, perform a substitution
-                let mut name = format!("${{{substitution}");
-                append_previous_default(&mut name);
-                name.push('}');
-                return Some(name);
-            }
-            // This is an unknown variable.
-            // We should not error out, as they may come from user environment (e.g. $PATH). That means that the variable substitution might not be perfect.
-            // If there's a default, we need to return the string verbatim as otherwise shellexpand will apply that default for us.
-            if !default.is_empty() {
-                return Some(format!("${{{var}}}"));
-            }
-            // Else we can just return None and that variable will be left as is.
-            None
-        })
-        .into_owned()
     }
 }

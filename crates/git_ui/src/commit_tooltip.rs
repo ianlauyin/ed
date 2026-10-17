@@ -2,12 +2,12 @@ use crate::commit_view::CommitView;
 use anyhow::Result;
 use editor::hover_markdown_style;
 use git::blame::BlameEntry;
-use git::repository::CommitSummary;
 use git::commit::ParsedCommitMessage;
+use git::repository::CommitSummary;
 use git_ui_core::notifications::show_error_toast;
 use gpui::{
-    App, Element, Entity, MouseButton, ParentElement, Render,
-    ScrollHandle, StatefulInteractiveElement, Task, WeakEntity, Window, prelude::*,
+    App, Element, Entity, MouseButton, ParentElement, Render, ScrollHandle,
+    StatefulInteractiveElement, Task, WeakEntity, Window, prelude::*,
 };
 use markdown::{Markdown, MarkdownElement};
 use notifications::status_toast::StatusToast;

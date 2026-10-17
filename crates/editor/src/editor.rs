@@ -2017,21 +2017,6 @@ impl Editor {
                     _ => {}
                 },
             ));
-            if let Some(task_inventory) = project
-                .read(cx)
-                .task_store()
-                .read(cx)
-                .task_inventory()
-                .cloned()
-            {
-                project_subscriptions.push(cx.observe_in(
-                    &task_inventory,
-                    window,
-                    |editor, _, window, cx| {
-                        editor.refresh_runnables(None, window, cx);
-                    },
-                ));
-            };
 
             let git_store = project.read(cx).git_store().clone();
             let project = project.clone();
