@@ -28,4 +28,3 @@ template/variable/spawn types the run icon needs.
   worktree-creation setup tasks and the worktree picker's "Automate Setup"),
   git "Custom Commands" (`git-command` tagged tasks) in commit/ref context menus,
   the tasks JSON schema, and the "Run" app menu.
-- Remote peers sending task files are ignored like project settings files.

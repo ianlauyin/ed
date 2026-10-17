@@ -155,11 +155,7 @@ impl HeadlessProject {
             task_store.shared(REMOTE_SERVER_PROJECT_ID, session.clone(), cx);
             task_store
         });
-        let settings_observer = cx.new(|cx| {
-            let mut observer = SettingsObserver::new_local(fs.clone(), worktree_store.clone(), cx);
-            observer.shared(REMOTE_SERVER_PROJECT_ID, session.clone(), cx);
-            observer
-        });
+        let settings_observer = cx.new(|_| SettingsObserver::new_local());
 
         let lsp_store = cx.new(|cx| {
             let mut lsp_store = LspStore::new_local(

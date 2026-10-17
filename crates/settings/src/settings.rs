@@ -5,7 +5,6 @@ mod built_in_keymap;
 mod built_in_semantic_token_rules;
 mod content_into_gpui;
 mod editable_setting_control;
-mod editorconfig_store;
 mod granted_write_path;
 mod keymap;
 mod settings_file;
@@ -37,16 +36,10 @@ pub use action_sequence::ActionSequence;
 pub use built_in_keymap::keymap as built_in_keymap;
 pub use content_into_gpui::IntoGpui;
 pub use editable_setting_control::*;
-pub use editorconfig_store::{
-    Editorconfig, EditorconfigEvent, EditorconfigProperties, EditorconfigStore,
-};
 pub use granted_write_path::GrantedWritePath;
 pub use keymap::{KeyBindingSpec, built_in_key_bindings};
 pub use settings_file::*;
-pub use settings_store::{
-    DefaultSemanticTokenRules, InvalidSettingsError, LocalSettingsKind, LocalSettingsPath,
-    Settings, SettingsLocation, SettingsStore,
-};
+pub use settings_store::{DefaultSemanticTokenRules, Settings, SettingsLocation, SettingsStore};
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash, PartialOrd, Ord, serde::Serialize)]
 pub struct WorktreeId(usize);

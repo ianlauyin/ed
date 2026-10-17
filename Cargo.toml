@@ -291,7 +291,6 @@ dirs = "6.0"
 dispatch2 = { version = "0.3", default-features = false, features = ["std"] }
 documented = "0.10"
 dunce = "1.0"
-ec4rs = { version = "1.2", features = ["allow-empty-values"] }
 emojis = "0.9"
 encoding_rs = "0.8"
 env_logger = "0.11"

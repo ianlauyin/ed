@@ -58,8 +58,8 @@ use image_store::{ImageItemEvent, ImageStoreEvent};
 
 use ::git::{blame::Blame, status::FileStatus};
 use gpui::{
-    App, AppContext, AsyncApp, BorrowAppContext, Context, Entity, EventEmitter, Hsla, SharedString,
-    Task, TaskExt, WeakEntity, Window,
+    App, AppContext, AsyncApp, Context, Entity, EventEmitter, Hsla, SharedString, Task, TaskExt,
+    WeakEntity, Window,
 };
 use language::{
     Buffer, BufferEditSource, BufferEvent, Capability, CodeLabel, CursorShape, DiskState, Language,
@@ -76,7 +76,7 @@ use lsp_command::*;
 use lsp_store::{CompletionDocumentation, LspFormatTarget, OpenLspBufferHandle};
 pub use manifest_tree::ManifestProvidersStore;
 use parking_lot::Mutex;
-use project_settings::{ProjectSettings, SettingsObserver, SettingsObserverEvent};
+use project_settings::{ProjectSettings, SettingsObserver};
 
 use remote::{RemoteClient, RemoteConnectionOptions, same_remote_connection_identity};
 use rpc::{
@@ -85,7 +85,7 @@ use rpc::{
 };
 use search::{SearchInputKind, SearchQuery, SearchResult};
 use search_history::SearchHistory;
-use settings::{InvalidSettingsError, Settings, SettingsLocation, SettingsStore};
+use settings::{Settings, SettingsLocation};
 use snippet::Snippet;
 use std::{
     borrow::Cow,
@@ -1106,10 +1106,7 @@ impl Project {
                 )
             });
 
-            let settings_observer =
-                cx.new(|cx| SettingsObserver::new_local(fs.clone(), worktree_store.clone(), cx));
-            cx.subscribe(&settings_observer, Self::on_settings_observer_event)
-                .detach();
+            let settings_observer = cx.new(|_| SettingsObserver::new_local());
 
             let lsp_store = cx.new(|cx| {
                 LspStore::new_local(
@@ -1281,11 +1278,8 @@ impl Project {
                 )
             });
 
-            let settings_observer = cx.new(|cx| {
-                SettingsObserver::new_remote(worktree_store.clone(), Some(remote_proto.clone()), cx)
-            });
-            cx.subscribe(&settings_observer, Self::on_settings_observer_event)
-                .detach();
+            let settings_observer =
+                cx.new(|cx| SettingsObserver::new_remote(Some(remote_proto.clone()), cx));
 
             cx.subscribe(&remote, Self::on_remote_client_event).detach();
 
@@ -2521,30 +2515,6 @@ impl Project {
                 cx.emit(Event::DisconnectedFromRemote { server_not_running });
             }
             &remote::RemoteClientEvent::Reconnected => {}
-        }
-    }
-
-    fn on_settings_observer_event(
-        &mut self,
-        _: Entity<SettingsObserver>,
-        event: &SettingsObserverEvent,
-        cx: &mut Context<Self>,
-    ) {
-        match event {
-            SettingsObserverEvent::LocalSettingsUpdated(result) => match result {
-                Err(InvalidSettingsError::LocalSettings { message, path }) => {
-                    let message = format!("Failed to set local settings in {path:?}:\n{message}");
-                    cx.emit(Event::Toast {
-                        notification_id: format!("local-settings-{path:?}").into(),
-                        link: None,
-                        message,
-                    });
-                }
-                Ok(path) => cx.emit(Event::HideToast {
-                    notification_id: format!("local-settings-{path:?}").into(),
-                }),
-                Err(_) => {}
-            },
         }
     }
 
@@ -3985,14 +3955,6 @@ impl Project {
     ) -> Result<()> {
         this.update(&mut cx, |this, cx| {
             // Don't handle messages that were sent before the response to us joining the project
-
-            cx.update_global::<SettingsStore, _>(|store, cx| {
-                for worktree_metadata in &envelope.payload.worktrees {
-                    store
-                        .clear_local_settings(WorktreeId::from_proto(worktree_metadata.id), cx)
-                        .log_err();
-                }
-            });
 
             this.set_worktrees_from_proto(envelope.payload.worktrees, cx)?;
 

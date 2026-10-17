@@ -17,7 +17,6 @@ async-trait.workspace = true
 clock.workspace = true
 collections.workspace = true
 diffy.workspace = true
-ec4rs.workspace = true
 encoding_rs.workspace = true
 file_content.workspace = true
 fs.workspace = true

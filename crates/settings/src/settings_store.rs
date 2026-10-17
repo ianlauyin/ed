@@ -1,19 +1,13 @@
 use anyhow::Result;
 use collections::{HashMap, TypeIdHashMap, hash_map};
-use gpui::{
-    App, AppContext, AsyncApp, BorrowAppContext, Entity, Global, SharedString, UpdateGlobal,
-};
+use gpui::{App, AsyncApp, BorrowAppContext, Global, SharedString, UpdateGlobal};
 
 use std::{
     any::{Any, TypeId, type_name},
     fmt::Debug,
-    path::{Path, PathBuf},
     str,
-    sync::Arc,
 };
 use util::rel_path::RelPath;
-
-use crate::editorconfig_store::EditorconfigStore;
 
 use crate::{
     SemanticTokenRules, WorktreeId,
@@ -105,40 +99,6 @@ pub struct SettingsStore {
     language_defaults: Option<crate::AllLanguageSettingsContent>,
     language_semantic_token_rules: HashMap<SharedString, SemanticTokenRules>,
     merged_settings: SettingsContent,
-    pub editorconfig_store: Entity<EditorconfigStore>,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq, Hash)]
-pub enum LocalSettingsKind {
-    Settings,
-    Editorconfig,
-}
-
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
-pub enum LocalSettingsPath {
-    InWorktree(Arc<RelPath>),
-    OutsideWorktree(Arc<Path>),
-}
-
-impl LocalSettingsPath {
-    pub fn is_outside_worktree(&self) -> bool {
-        matches!(self, Self::OutsideWorktree(_))
-    }
-
-    pub fn to_proto(&self) -> String {
-        match self {
-            Self::InWorktree(path) => path.as_unix_str().to_owned(),
-            Self::OutsideWorktree(path) => path.to_string_lossy().to_string(),
-        }
-    }
-
-    pub fn from_proto(path: &str, is_outside_worktree: bool) -> anyhow::Result<Self> {
-        if is_outside_worktree {
-            Ok(Self::OutsideWorktree(PathBuf::from(path).into()))
-        } else {
-            Ok(Self::InWorktree(RelPath::from_unix_str(path)?.into()))
-        }
-    }
 }
 
 impl Global for SettingsStore {}
@@ -176,7 +136,6 @@ impl SettingsStore {
             language_defaults: None,
             language_semantic_token_rules: HashMap::default(),
             merged_settings,
-            editorconfig_store: cx.new(|_| EditorconfigStore::default()),
         };
         this.load_settings_types();
         this
@@ -286,23 +245,6 @@ impl SettingsStore {
         self.language_semantic_token_rules.get(language)
     }
 
-    /// EditorConfig remains a separate formatting convention. Zed project
-    /// settings received from older peers are ignored.
-    pub fn set_local_settings(
-        &mut self,
-        root_id: WorktreeId,
-        path: LocalSettingsPath,
-        kind: LocalSettingsKind,
-        content: Option<&str>,
-        cx: &mut App,
-    ) -> Result<(), InvalidSettingsError> {
-        if kind == LocalSettingsKind::Editorconfig {
-            self.editorconfig_store
-                .update(cx, |store, _| store.set_configs(root_id, path, content))?;
-        }
-        Ok(())
-    }
-
     pub fn set_language_defaults(
         &mut self,
         content: LanguageDefaultsContent,
@@ -310,12 +252,6 @@ impl SettingsStore {
     ) -> Result<()> {
         self.language_defaults = Some(content.all_languages);
         self.recompute_values();
-        Ok(())
-    }
-
-    pub fn clear_local_settings(&mut self, root_id: WorktreeId, cx: &mut App) -> Result<()> {
-        self.editorconfig_store
-            .update(cx, |store, _| store.remove_for_worktree(root_id));
         Ok(())
     }
 
@@ -337,28 +273,6 @@ impl SettingsStore {
         }
     }
 }
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum InvalidSettingsError {
-    LocalSettings {
-        path: Arc<RelPath>,
-        message: String,
-    },
-    Editorconfig {
-        path: LocalSettingsPath,
-        message: String,
-    },
-}
-
-impl std::fmt::Display for InvalidSettingsError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            InvalidSettingsError::LocalSettings { message, .. }
-            | InvalidSettingsError::Editorconfig { message, .. } => write!(f, "{message}"),
-        }
-    }
-}
-impl std::error::Error for InvalidSettingsError {}
 
 impl Debug for SettingsStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

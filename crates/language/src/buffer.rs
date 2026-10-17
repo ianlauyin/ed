@@ -2919,8 +2919,6 @@ impl Buffer {
                     {
                         apply_syntax_indent
                     } else {
-                        // The auto-indent setting is not present in editorconfigs, hence
-                        // we can avoid passing the file here.
                         let auto_indent_mode = LanguageSettings::resolve(
                             None,
                             language.map(|l| l.name()).as_ref(),

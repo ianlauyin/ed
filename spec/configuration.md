@@ -32,8 +32,10 @@ migrator, or Vim/Helix mode.
   The default-settings view is removed too.
 - User and bundled keymap JSON files are removed from the loading path. There is
   no keymap watcher, file editor/viewer action, base-keymap selection, or keymap
-  JSON schema. EditorConfig formatting conventions remain supported; task files
-  are not (see `tasks.md`).
+  JSON schema. Task files are not supported (see `tasks.md`).
+- EditorConfig is not supported: `.editorconfig` files are ignored, and language
+  settings come only from built-in settings and file modelines. There is no
+  project-local settings layer or worktree-settings sync with remote peers.
 - The built-in keymap retains contexts, binding order, and keyboard-position
   equivalents. Changing the keyboard layout rebuilds the bindings and refreshes
   menu shortcuts.
@@ -42,7 +44,7 @@ migrator, or Vim/Helix mode.
   Terminal `shift-enter` sends Escape followed by carriage return. The obsolete
   collaboration-panel unbind is omitted.
 - Remote projects receive the client's in-memory preferences; remote settings
-  files and project settings messages cannot override them.
+  files cannot override them.
 - `zed://settings` URLs are not handled. Settings-file JSON schemas, completions,
   validation, and language-server configuration schema probing are removed.
   JSON language support remains for source files and action inputs.

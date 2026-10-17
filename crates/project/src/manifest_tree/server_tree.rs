@@ -252,11 +252,8 @@ impl LanguageServerTree {
             worktree_id: manifest_location.worktree_id,
             path: &manifest_location.path,
         };
-        let settings = AllLanguageSettings::get(Some(settings_location), cx).language(
-            Some(settings_location),
-            Some(language_name),
-            cx,
-        );
+        let settings =
+            AllLanguageSettings::get(Some(settings_location), cx).language(Some(language_name));
         if !settings.enable_language_server {
             return Default::default();
         }

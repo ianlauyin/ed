@@ -180,22 +180,6 @@ message RestoreProjectEntryResponse {
   uint64 worktree_scan_id = 2;
 }
 
-message UpdateWorktreeSettings {
-  uint64 project_id = 1;
-  uint64 worktree_id = 2;
-  string path = 3;
-  optional string content = 4;
-  optional LocalSettingsKind kind = 5;
-  optional bool outside_worktree = 6;
-}
-
-enum LocalSettingsKind {
-  Settings = 0;
-  Tasks = 1;
-  Editorconfig = 2;
-  reserved 3; // Removed debugger.
-}
-
 message UpdateUserSettings {
   uint64 project_id = 1;
   string contents = 2;

@@ -2,12 +2,6 @@
 
 use crate::{Buffer, BufferSnapshot, File, LanguageName, LanguageServerName, ModelineSettings};
 use collections::{FxHashMap, HashMap, HashSet};
-use ec4rs::{
-    Properties as EditorconfigProperties,
-    property::{
-        EndOfLine, FinalNewline, IndentSize, IndentStyle, MaxLineLen, TabWidth, TrimTrailingWs,
-    },
-};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use gpui::{App, Modifiers, SharedString};
 use itertools::Itertools;
@@ -19,7 +13,7 @@ pub use settings::{
     REST_OF_LANGUAGE_SERVERS, RewrapBehavior, ShowWhitespaceSetting, SoftWrap, SoftWrapIndent,
     WordsCompletionMode,
 };
-use settings::{RegisterSetting, Settings, SettingsLocation, SettingsStore, merge_from::MergeFrom};
+use settings::{RegisterSetting, Settings, SettingsLocation, merge_from::MergeFrom};
 use std::{num::NonZeroU32, sync::Arc};
 use text::ToOffset;
 
@@ -275,11 +269,8 @@ impl LanguageSettings {
             path: f.path().as_ref(),
         });
 
-        let mut settings = AllLanguageSettings::get(location, cx).language(
-            location,
-            language.map(|l| l.name()).as_ref(),
-            cx,
-        );
+        let mut settings =
+            AllLanguageSettings::get(location, cx).language(language.map(|l| l.name()).as_ref());
 
         if let Some(modeline) = buffer.modeline() {
             merge_with_modeline(Arc::make_mut(&mut settings), modeline);
@@ -294,7 +285,7 @@ impl LanguageSettings {
         cx: &App,
     ) -> Arc<LanguageSettings> {
         let Some(buffer) = buffer else {
-            return AllLanguageSettings::get(None, cx).language(None, override_language, cx);
+            return AllLanguageSettings::get(None, cx).language(override_language);
         };
 
         if let Some(resolved) = buffer.resolved_settings()
@@ -319,8 +310,7 @@ impl LanguageSettings {
         });
         let buffer_language = buffer.language().map(|l| l.name());
         let language_name = override_language.or(buffer_language.as_ref());
-        let mut settings =
-            AllLanguageSettings::get(location, cx).language(location, language_name, cx);
+        let mut settings = AllLanguageSettings::get(location, cx).language(language_name);
 
         if let Some(modeline) = buffer.modeline() {
             merge_with_modeline(Arc::make_mut(&mut settings), modeline);
@@ -443,29 +433,12 @@ impl InlayHintSettings {
 
 impl AllLanguageSettings {
     /// Returns the [`LanguageSettings`] for the language with the specified name.
-    pub fn language(
-        &self,
-        location: Option<SettingsLocation<'_>>,
-        language_name: Option<&LanguageName>,
-        cx: &App,
-    ) -> Arc<LanguageSettings> {
+    pub fn language(&self, language_name: Option<&LanguageName>) -> Arc<LanguageSettings> {
         let settings = language_name
             .and_then(|name| self.languages.get(name))
             .unwrap_or(&self.defaults);
 
-        let editorconfig_properties = location.and_then(|location| {
-            cx.global::<SettingsStore>()
-                .editorconfig_store
-                .read(cx)
-                .properties(location.worktree_id, location.path)
-        });
-        if let Some(editorconfig_properties) = editorconfig_properties {
-            let mut settings = (**settings).clone();
-            merge_with_editorconfig(&mut settings, &editorconfig_properties);
-            Arc::new(settings)
-        } else {
-            Arc::clone(settings)
-        }
+        Arc::clone(settings)
     }
 }
 
@@ -503,59 +476,6 @@ fn merge_with_modeline(settings: &mut LanguageSettings, modeline: &ModelineSetti
     settings
         .ensure_final_newline_on_save
         .merge_from_option(modeline.ensure_final_newline.as_ref());
-}
-
-fn merge_with_editorconfig(settings: &mut LanguageSettings, cfg: &EditorconfigProperties) {
-    let preferred_line_length = cfg.get::<MaxLineLen>().ok().and_then(|v| match v {
-        MaxLineLen::Value(u) => Some(u as u32),
-        MaxLineLen::Off => None,
-    });
-    let tab_size = cfg.get::<IndentSize>().ok().and_then(|v| match v {
-        IndentSize::Value(u) => NonZeroU32::new(u as u32),
-        IndentSize::UseTabWidth => cfg.get::<TabWidth>().ok().and_then(|w| match w {
-            TabWidth::Value(u) => NonZeroU32::new(u as u32),
-        }),
-    });
-    let hard_tabs = cfg
-        .get::<IndentStyle>()
-        .map(|v| v.eq(&IndentStyle::Tabs))
-        .ok();
-    let ensure_final_newline_on_save = cfg
-        .get::<FinalNewline>()
-        .map(|v| match v {
-            FinalNewline::Value(b) => b,
-        })
-        .ok();
-    let remove_trailing_whitespace_on_save = cfg
-        .get::<TrimTrailingWs>()
-        .map(|v| match v {
-            TrimTrailingWs::Value(b) => b,
-        })
-        .ok();
-    let line_ending = cfg.get::<EndOfLine>().ok().and_then(|v| match v {
-        EndOfLine::Lf => Some(LineEndingSetting::EnforceLf),
-        EndOfLine::CrLf => Some(LineEndingSetting::EnforceCrlf),
-        EndOfLine::Cr => None,
-    });
-
-    settings
-        .preferred_line_length
-        .merge_from_option(preferred_line_length.as_ref());
-    settings.tab_size.merge_from_option(tab_size.as_ref());
-    settings.hard_tabs.merge_from_option(hard_tabs.as_ref());
-    // Avoid re-enabling destructive whitespace trimming when Zed settings have
-    // disabled it, e.g. for Markdown hard breaks.
-    if !matches!(remove_trailing_whitespace_on_save, Some(true))
-        || settings.remove_trailing_whitespace_on_save
-    {
-        settings
-            .remove_trailing_whitespace_on_save
-            .merge_from_option(remove_trailing_whitespace_on_save.as_ref());
-    }
-    settings
-        .ensure_final_newline_on_save
-        .merge_from_option(ensure_final_newline_on_save.as_ref());
-    settings.line_ending.merge_from_option(line_ending.as_ref());
 }
 
 impl settings::Settings for AllLanguageSettings {

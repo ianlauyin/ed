@@ -1,10 +1,7 @@
-use anyhow::Context as _;
 use collections::HashMap;
-use fs::Fs;
 use git::repository::DEFAULT_WORKTREE_DIRECTORY;
-use gpui::{AsyncApp, BorrowAppContext, Context, Entity, EventEmitter, Subscription};
+use gpui::{AsyncApp, Context, Entity, Subscription};
 use lsp::{DEFAULT_LSP_REQUEST_TIMEOUT_SECS, LanguageServerName};
-use paths::{EDITORCONFIG_NAME, local_settings_file_relative_path};
 use rpc::{
     AnyProtoClient, TypedEnvelope,
     proto::{self, REMOTE_SERVER_PROJECT_ID},
@@ -15,14 +12,10 @@ pub use settings::BinarySettings;
 pub use settings::DirenvSettings;
 pub use settings::LspSettings;
 use settings::{
-    EditorconfigEvent, InvalidSettingsError, LocalSettingsKind, LocalSettingsPath, RegisterSetting,
-    SemanticTokenRules, Settings, SettingsStore, parse_json_with_comments,
+    RegisterSetting, SemanticTokenRules, Settings, SettingsStore, parse_json_with_comments,
 };
-use std::{path::PathBuf, sync::Arc, time::Duration};
-use util::{ResultExt, rel_path::RelPath};
-use worktree::{PathChange, UpdatedEntriesSet, Worktree, WorktreeId};
-
-use crate::worktree_store::{WorktreeStore, WorktreeStoreEvent};
+use std::time::Duration;
+use util::ResultExt;
 
 #[derive(Debug, Clone, RegisterSetting)]
 pub struct ProjectSettings {
@@ -561,87 +554,24 @@ impl Settings for ProjectSettings {
     }
 }
 
-pub enum SettingsObserverMode {
-    Local(Arc<dyn Fs>),
-    Remote,
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum SettingsObserverEvent {
-    LocalSettingsUpdated(Result<PathBuf, InvalidSettingsError>),
-}
-
-impl EventEmitter<SettingsObserverEvent> for SettingsObserver {}
-
+/// Forwards user settings to the remote server. Project-local settings files
+/// are not loaded.
 pub struct SettingsObserver {
-    mode: SettingsObserverMode,
-    downstream_client: Option<AnyProtoClient>,
-    worktree_store: Entity<WorktreeStore>,
-    project_id: u64,
     _settings_watcher: Option<Subscription>,
-    _editorconfig_watcher: Option<Subscription>,
 }
 
-/// Observes EditorConfig conventions, and forwards changes to peers.
-/// Zed project settings files are not loaded.
 impl SettingsObserver {
     pub fn init(client: &AnyProtoClient) {
-        client.add_entity_message_handler(Self::handle_update_worktree_settings);
         client.add_entity_message_handler(Self::handle_update_user_settings);
     }
 
-    pub fn new_local(
-        fs: Arc<dyn Fs>,
-        worktree_store: Entity<WorktreeStore>,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        cx.subscribe(&worktree_store, Self::on_worktree_store_event)
-            .detach();
-
-        let editorconfig_store = cx.global::<SettingsStore>().editorconfig_store.clone();
-        let _editorconfig_watcher = cx.subscribe(
-            &editorconfig_store,
-            |this, _, event: &EditorconfigEvent, cx| {
-                let EditorconfigEvent::ExternalConfigChanged {
-                    path,
-                    content,
-                    affected_worktree_ids,
-                } = event;
-                for worktree_id in affected_worktree_ids {
-                    if let Some(worktree) = this
-                        .worktree_store
-                        .read(cx)
-                        .worktree_for_id(*worktree_id, cx)
-                    {
-                        this.update_settings(
-                            worktree,
-                            [(
-                                path.clone(),
-                                LocalSettingsKind::Editorconfig,
-                                content.clone(),
-                            )],
-                            cx,
-                        );
-                    }
-                }
-            },
-        );
-
+    pub fn new_local() -> Self {
         Self {
-            worktree_store,
-            mode: SettingsObserverMode::Local(fs),
-            downstream_client: None,
             _settings_watcher: None,
-            _editorconfig_watcher: Some(_editorconfig_watcher),
-            project_id: REMOTE_SERVER_PROJECT_ID,
         }
     }
 
-    pub fn new_remote(
-        worktree_store: Entity<WorktreeStore>,
-        upstream_client: Option<AnyProtoClient>,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    pub fn new_remote(upstream_client: Option<AnyProtoClient>, cx: &mut Context<Self>) -> Self {
         let settings_watcher = upstream_client.map(|upstream_client| {
             let mut last_settings = None;
             let mut send_settings = move |cx: &gpui::App| {
@@ -662,90 +592,8 @@ impl SettingsObserver {
         });
 
         Self {
-            worktree_store,
-            mode: SettingsObserverMode::Remote,
-            downstream_client: None,
-            project_id: REMOTE_SERVER_PROJECT_ID,
             _settings_watcher: settings_watcher,
-            _editorconfig_watcher: None,
         }
-    }
-
-    pub fn shared(
-        &mut self,
-        project_id: u64,
-        downstream_client: AnyProtoClient,
-        cx: &mut Context<Self>,
-    ) {
-        self.project_id = project_id;
-        self.downstream_client = Some(downstream_client.clone());
-
-        let store = cx.global::<SettingsStore>();
-        for worktree in self.worktree_store.read(cx).worktrees() {
-            let worktree_id = worktree.read(cx).id().to_proto();
-            for (path, content, _) in store
-                .editorconfig_store
-                .read(cx)
-                .local_editorconfig_settings(worktree.read(cx).id())
-            {
-                downstream_client
-                    .send(proto::UpdateWorktreeSettings {
-                        project_id,
-                        worktree_id,
-                        path: path.to_proto(),
-                        content: Some(content.to_owned()),
-                        kind: Some(
-                            local_settings_kind_to_proto(LocalSettingsKind::Editorconfig).into(),
-                        ),
-                        outside_worktree: Some(path.is_outside_worktree()),
-                    })
-                    .log_err();
-            }
-        }
-    }
-
-    pub fn unshared(&mut self, _: &mut Context<Self>) {
-        self.downstream_client = None;
-    }
-
-    async fn handle_update_worktree_settings(
-        this: Entity<Self>,
-        envelope: TypedEnvelope<proto::UpdateWorktreeSettings>,
-        mut cx: AsyncApp,
-    ) -> anyhow::Result<()> {
-        let kind = match envelope.payload.kind {
-            Some(kind) => proto::LocalSettingsKind::try_from(kind)
-                .ok()
-                .with_context(|| format!("unknown kind {kind}"))?,
-            None => proto::LocalSettingsKind::Settings,
-        };
-
-        let path = LocalSettingsPath::from_proto(
-            &envelope.payload.path,
-            envelope.payload.outside_worktree.unwrap_or(false),
-        )?;
-
-        this.update(&mut cx, |this, cx| {
-            let worktree_id = WorktreeId::from_proto(envelope.payload.worktree_id);
-            let Some(worktree) = this
-                .worktree_store
-                .read(cx)
-                .worktree_for_id(worktree_id, cx)
-            else {
-                return;
-            };
-
-            this.update_settings(
-                worktree,
-                [(
-                    path,
-                    local_settings_kind_from_proto(kind),
-                    envelope.payload.content,
-                )],
-                cx,
-            );
-        });
-        Ok(())
     }
 
     async fn handle_update_user_settings(
@@ -758,195 +606,5 @@ impl SettingsObserver {
             anyhow::Ok(())
         })?;
         Ok(())
-    }
-
-    fn on_worktree_store_event(
-        &mut self,
-        _: Entity<WorktreeStore>,
-        event: &WorktreeStoreEvent,
-        cx: &mut Context<Self>,
-    ) {
-        match event {
-            WorktreeStoreEvent::WorktreeAdded(worktree) => cx
-                .subscribe(worktree, |this, worktree, event, cx| {
-                    if let worktree::Event::UpdatedEntries(changes) = event {
-                        this.update_local_worktree_settings(&worktree, changes, cx)
-                    }
-                })
-                .detach(),
-            WorktreeStoreEvent::WorktreeRemoved(_, worktree_id) => {
-                cx.update_global::<SettingsStore, _>(|store, cx| {
-                    store.clear_local_settings(*worktree_id, cx).log_err();
-                });
-            }
-            _ => {}
-        }
-    }
-
-    fn update_local_worktree_settings(
-        &mut self,
-        worktree: &Entity<Worktree>,
-        changes: &UpdatedEntriesSet,
-        cx: &mut Context<Self>,
-    ) {
-        let SettingsObserverMode::Local(fs) = &self.mode else {
-            return;
-        };
-
-        let mut settings_contents = Vec::new();
-        for (path, _, change) in changes.iter() {
-            let (settings_dir, kind) =
-                if path.ends_with(RelPath::from_unix_str(EDITORCONFIG_NAME).unwrap()) {
-                    let Some(settings_dir) = path.parent().map(Arc::from) else {
-                        continue;
-                    };
-                    if matches!(change, PathChange::Loaded) || matches!(change, PathChange::Added) {
-                        let worktree_id = worktree.read(cx).id();
-                        let worktree_path = worktree.read(cx).abs_path();
-                        let fs = fs.clone();
-                        cx.update_global::<SettingsStore, _>(|store, cx| {
-                            store
-                                .editorconfig_store
-                                .update(cx, |editorconfig_store, cx| {
-                                    editorconfig_store.discover_local_external_configs_chain(
-                                        worktree_id,
-                                        worktree_path,
-                                        fs,
-                                        cx,
-                                    );
-                                });
-                        });
-                    }
-                    (settings_dir, LocalSettingsKind::Editorconfig)
-                } else {
-                    continue;
-                };
-
-            let removed = change == &PathChange::Removed;
-            let fs = fs.clone();
-            let abs_path = worktree.read(cx).absolutize(path);
-            settings_contents.push(async move {
-                (
-                    settings_dir,
-                    kind,
-                    if removed {
-                        None
-                    } else {
-                        Some(fs.load(&abs_path).await)
-                    },
-                )
-            });
-        }
-
-        if settings_contents.is_empty() {
-            return;
-        }
-
-        let worktree = worktree.clone();
-        cx.spawn(async move |this, cx| {
-            let settings_contents: Vec<(Arc<RelPath>, _, _)> =
-                futures::future::join_all(settings_contents).await;
-            cx.update(|cx| {
-                this.update(cx, |this, cx| {
-                    this.update_settings(
-                        worktree,
-                        settings_contents.into_iter().map(|(path, kind, content)| {
-                            (
-                                LocalSettingsPath::InWorktree(path),
-                                kind,
-                                content.and_then(|c| c.log_err()),
-                            )
-                        }),
-                        cx,
-                    )
-                })
-            })
-        })
-        .detach();
-    }
-
-    fn update_settings(
-        &mut self,
-        worktree: Entity<Worktree>,
-        settings_contents: impl IntoIterator<
-            Item = (LocalSettingsPath, LocalSettingsKind, Option<String>),
-        >,
-
-        cx: &mut Context<Self>,
-    ) {
-        let worktree_id = worktree.read(cx).id();
-        let remote_worktree_id = worktree.read(cx).id();
-        for (directory_path, kind, file_content) in settings_contents {
-            match (&directory_path, kind) {
-                // Ignore Zed project settings and task files, including messages from older peers.
-                (_, LocalSettingsKind::Settings) => continue,
-                (directory, LocalSettingsKind::Editorconfig) => {
-                    apply_local_settings(worktree_id, directory.clone(), kind, &file_content, cx);
-                }
-            };
-
-            if let Some(downstream_client) = &self.downstream_client {
-                downstream_client
-                    .send(proto::UpdateWorktreeSettings {
-                        project_id: self.project_id,
-                        worktree_id: remote_worktree_id.to_proto(),
-                        path: directory_path.to_proto(),
-                        content: file_content.clone(),
-                        kind: Some(local_settings_kind_to_proto(kind).into()),
-                        outside_worktree: Some(directory_path.is_outside_worktree()),
-                    })
-                    .log_err();
-            }
-        }
-    }
-}
-
-fn apply_local_settings(
-    worktree_id: WorktreeId,
-    path: LocalSettingsPath,
-    kind: LocalSettingsKind,
-    file_content: &Option<String>,
-    cx: &mut Context<'_, SettingsObserver>,
-) {
-    cx.update_global::<SettingsStore, _>(|store, cx| {
-        let result =
-            store.set_local_settings(worktree_id, path.clone(), kind, file_content.as_deref(), cx);
-
-        match result {
-            Err(InvalidSettingsError::LocalSettings { path, message }) => {
-                log::error!("Failed to set local settings in {path:?}: {message}");
-                cx.emit(SettingsObserverEvent::LocalSettingsUpdated(Err(
-                    InvalidSettingsError::LocalSettings { path, message },
-                )));
-            }
-            Err(e) => log::error!("Failed to set local settings: {e}"),
-            Ok(()) => {
-                let settings_path = match &path {
-                    LocalSettingsPath::InWorktree(rel_path) => rel_path
-                        .as_std_path()
-                        .join(local_settings_file_relative_path().as_std_path()),
-                    LocalSettingsPath::OutsideWorktree(abs_path) => abs_path.to_path_buf(),
-                };
-                cx.emit(SettingsObserverEvent::LocalSettingsUpdated(Ok(
-                    settings_path,
-                )))
-            }
-        }
-    })
-}
-
-pub fn local_settings_kind_from_proto(kind: proto::LocalSettingsKind) -> LocalSettingsKind {
-    match kind {
-        proto::LocalSettingsKind::Settings => LocalSettingsKind::Settings,
-        // Task files are no longer supported; treat them like ignored project settings.
-        proto::LocalSettingsKind::Tasks => LocalSettingsKind::Settings,
-        proto::LocalSettingsKind::Editorconfig => LocalSettingsKind::Editorconfig,
-    }
-}
-
-pub fn local_settings_kind_to_proto(kind: LocalSettingsKind) -> proto::LocalSettingsKind {
-    match kind {
-        LocalSettingsKind::Settings => proto::LocalSettingsKind::Settings,
-        LocalSettingsKind::Editorconfig => proto::LocalSettingsKind::Editorconfig,
     }
 }

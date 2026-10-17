@@ -288,9 +288,6 @@ pub struct LanguageSettingsContent {
     /// - `enforce_lf`: Enforce LF during format and save.
     /// - `enforce_crlf`: Enforce CRLF during format and save.
     ///
-    /// The EditorConfig `end_of_line` property overrides this setting and
-    /// behaves like `enforce_lf` or `enforce_crlf`.
-    ///
     /// Default: detect
     pub line_ending: Option<LineEndingSetting>,
     /// How to perform a buffer format.

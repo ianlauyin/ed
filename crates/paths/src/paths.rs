@@ -1,14 +1,10 @@
 //! Paths to locations used by ed.
 
 use std::path::{Path, PathBuf};
-use std::sync::{LazyLock, OnceLock};
+use std::sync::OnceLock;
 
 use util::paths::SanitizedPath;
 pub use util::paths::home_dir;
-use util::rel_path::RelPath;
-
-/// A default editorconfig file name to use when resolving project settings.
-pub const EDITORCONFIG_NAME: &str = ".editorconfig";
 
 /// The application name, used for the XDG data, config, cache, and state
 /// directories and the log file name. Must match the editor binary name.
@@ -146,13 +142,6 @@ pub fn local_settings_folder_name() -> &'static str {
 /// Returns the relative path to a `.vscode` folder within a project.
 pub fn local_vscode_folder_name() -> &'static str {
     ".vscode"
-}
-
-/// Returns the relative path to a `settings.json` file within a project.
-pub fn local_settings_file_relative_path() -> &'static RelPath {
-    static CACHED: LazyLock<&'static RelPath> =
-        LazyLock::new(|| RelPath::from_unix_str(".zed/settings.json").unwrap());
-    *CACHED
 }
 
 pub fn user_ssh_config_file() -> PathBuf {
