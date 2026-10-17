@@ -13,11 +13,7 @@ util::fs_embed! {
     root_relative = "assets",
     include = [
         "icons/**/*",
-        "images/**/*",
         "themes/**/*",
-        "sounds/**/*",
-        "prompts/**/*",
-        "*.md",
     ],
     exclude = ["themes/src/*", "*.DS_Store"],
 }
