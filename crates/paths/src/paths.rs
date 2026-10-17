@@ -218,14 +218,6 @@ pub fn database_dir() -> &'static PathBuf {
     DATABASE_DIR.get_or_init(|| data_dir().join("db"))
 }
 
-/// Returns the path to the themes directory.
-///
-/// This is where user themes are stored.
-pub fn themes_dir() -> &'static PathBuf {
-    static THEMES_DIR: OnceLock<PathBuf> = OnceLock::new();
-    THEMES_DIR.get_or_init(|| config_dir().join("themes"))
-}
-
 /// Returns the path to the default Prettier directory.
 pub fn default_prettier_dir() -> &'static PathBuf {
     static DEFAULT_PRETTIER_DIR: OnceLock<PathBuf> = OnceLock::new();

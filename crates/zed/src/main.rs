@@ -49,8 +49,7 @@ use std::{
     sync::{Arc, LazyLock},
     time::Duration,
 };
-use theme::{ActiveTheme, GlobalTheme, ThemeRegistry};
-use theme_settings::load_user_theme;
+use theme::{ActiveTheme, GlobalTheme};
 use util::ResultExt;
 use uuid::Uuid;
 use workspace::{
@@ -153,11 +152,6 @@ fn main() {
     // `zed --printenv` Outputs environment variables as JSON to stdout
     if args.printenv {
         util::shell_env::print_env();
-        return;
-    }
-
-    if args.dump_all_actions {
-        dump_all_gpui_actions();
         return;
     }
 
@@ -453,11 +447,8 @@ fn main() {
         })
         .detach();
 
-        let fs = app_state.fs.clone();
-        load_user_themes_in_background(fs.clone(), cx);
-        watch_themes(fs.clone(), cx);
         #[cfg(debug_assertions)]
-        watch_languages(fs.clone(), app_state.languages.clone(), cx);
+        watch_languages(app_state.fs.clone(), app_state.languages.clone(), cx);
 
         let menus = app_menus(cx);
         cx.set_menus(menus);
@@ -1112,9 +1103,6 @@ struct Args {
     #[arg(long)]
     system_specs: bool,
 
-    #[arg(long, hide = true)]
-    dump_all_actions: bool,
-
     /// Output current environment variables as JSON to stdout
     #[arg(long, hide = true)]
     printenv: bool,
@@ -1161,92 +1149,6 @@ fn load_embedded_fonts(cx: &App) {
         .unwrap();
 }
 
-/// Spawns a background task to load the user themes from the themes directory.
-fn load_user_themes_in_background(fs: Arc<dyn fs::Fs>, cx: &mut App) {
-    cx.spawn({
-        let fs = fs.clone();
-        async move |cx| {
-            let theme_registry = cx.update(|cx| ThemeRegistry::global(cx));
-            let themes_dir = paths::themes_dir().as_ref();
-            match fs
-                .metadata(themes_dir)
-                .await
-                .ok()
-                .flatten()
-                .map(|m| m.is_dir)
-            {
-                Some(is_dir) => {
-                    anyhow::ensure!(is_dir, "Themes dir path {themes_dir:?} is not a directory")
-                }
-                None => {
-                    fs.create_dir(themes_dir).await.with_context(|| {
-                        format!("Failed to create themes dir at path {themes_dir:?}")
-                    })?;
-                }
-            }
-
-            let mut theme_paths = fs
-                .read_dir(themes_dir)
-                .await
-                .with_context(|| format!("reading themes from {themes_dir:?}"))?;
-
-            while let Some(theme_path) = theme_paths.next().await {
-                let Some(theme_path) = theme_path.log_err() else {
-                    continue;
-                };
-                let Some(bytes) = fs
-                    .load_bytes(&theme_path)
-                    .await
-                    .with_context(|| format!("loading theme bytes from {theme_path:?}"))
-                    .log_err()
-                else {
-                    continue;
-                };
-
-                load_user_theme(&theme_registry, &bytes).log_err();
-            }
-
-            cx.update(theme_settings::reload_theme);
-            anyhow::Ok(())
-        }
-    })
-    .detach_and_log_err(cx);
-}
-
-/// Spawns a background task to watch the themes directory for changes.
-fn watch_themes(fs: Arc<dyn fs::Fs>, cx: &mut App) {
-    use std::time::Duration;
-    cx.spawn(async move |cx| {
-        let (mut events, _) = fs
-            .watch(paths::themes_dir(), Duration::from_millis(100))
-            .await;
-
-        while let Some(paths) = events.next().await {
-            for event in paths {
-                if fs
-                    .metadata(&event.path)
-                    .await
-                    .ok()
-                    .flatten()
-                    .is_some_and(|m| !m.is_dir)
-                {
-                    let theme_registry = cx.update(|cx| ThemeRegistry::global(cx));
-                    if let Some(bytes) = fs
-                        .load_bytes(&event.path)
-                        .await
-                        .with_context(|| format!("loading theme bytes from {:?}", event.path))
-                        .log_err()
-                        && load_user_theme(&theme_registry, &bytes).log_err().is_some()
-                    {
-                        cx.update(theme_settings::reload_theme);
-                    }
-                }
-            }
-        }
-    })
-    .detach()
-}
-
 #[cfg(debug_assertions)]
 fn watch_languages(fs: Arc<dyn fs::Fs>, languages: Arc<LanguageRegistry>, cx: &mut App) {
     use std::time::Duration;
@@ -1280,47 +1182,4 @@ fn watch_languages(fs: Arc<dyn fs::Fs>, languages: Arc<LanguageRegistry>, cx: &m
         }
     })
     .detach();
-}
-
-fn dump_all_gpui_actions() {
-    #[derive(Debug, serde::Serialize)]
-    struct ActionDef {
-        name: &'static str,
-        human_name: String,
-        schema: Option<serde_json::Value>,
-        deprecated_aliases: &'static [&'static str],
-        deprecation_message: Option<&'static str>,
-        documentation: Option<&'static str>,
-    }
-    let mut generator = settings::action_schema_generator();
-    let mut actions = gpui::generate_list_of_all_registered_actions()
-        .map(|action| {
-            let schema = (action.json_schema)(&mut generator)
-                .map(|s| serde_json::to_value(s).expect("Failed to serialize action schema"));
-            ActionDef {
-                name: action.name,
-                human_name: command_palette::humanize_action_name(action.name),
-                schema,
-                deprecated_aliases: action.deprecated_aliases,
-                deprecation_message: action.deprecation_message,
-                documentation: action.documentation,
-            }
-        })
-        .collect::<Vec<ActionDef>>();
-
-    actions.sort_by_key(|a| a.name);
-
-    let schema_definitions = serde_json::to_value(generator.definitions())
-        .expect("Failed to serialize schema definitions");
-
-    let output = serde_json::json!({
-        "actions": actions,
-        "schema_definitions": schema_definitions,
-    });
-
-    io::Write::write(
-        &mut std::io::stdout(),
-        serde_json::to_string_pretty(&output).unwrap().as_bytes(),
-    )
-    .unwrap();
 }

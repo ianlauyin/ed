@@ -11,7 +11,7 @@ mod settings;
 use std::sync::Arc;
 
 use ::settings::{IntoGpui, Settings, SettingsStore};
-use anyhow::{Context as _, Result};
+use anyhow::Context as _;
 use gpui::{App, Font, HighlightStyle, Pixels, Refineable, px};
 use gpui_util::ResultExt;
 use theme::{
@@ -234,35 +234,6 @@ pub fn load_bundled_themes(registry: &ThemeRegistry) {
         let refined = refine_theme_family(theme_family);
         registry.insert_theme_families([refined]);
     }
-}
-
-/// Loads a user theme from the given bytes into the registry.
-pub fn load_user_theme(registry: &ThemeRegistry, bytes: &[u8]) -> Result<()> {
-    let theme = deserialize_user_theme(bytes)?;
-    let refined = refine_theme_family(theme);
-    registry.insert_theme_families([refined]);
-    Ok(())
-}
-
-/// Deserializes a user theme from the given bytes.
-pub fn deserialize_user_theme(bytes: &[u8]) -> Result<ThemeFamilyContent> {
-    let theme_family: ThemeFamilyContent = serde_json_lenient::from_slice(bytes)?;
-
-    for theme in &theme_family.themes {
-        if theme
-            .style
-            .colors
-            .deprecated_scrollbar_thumb_background
-            .is_some()
-        {
-            log::warn!(
-                r#"Theme "{theme_name}" is using a deprecated style property: scrollbar_thumb.background. Use `scrollbar.thumb.background` instead."#,
-                theme_name = theme.name
-            )
-        }
-    }
-
-    Ok(theme_family)
 }
 
 /// Refines a [`ThemeFamilyContent`] and its [`ThemeContent`]s into a [`ThemeFamily`].

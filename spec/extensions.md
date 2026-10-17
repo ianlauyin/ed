@@ -7,8 +7,10 @@ macOS; the remote server runs natively on macOS and Linux.
 
 ## Behaviour
 
-- Languages, grammars, themes, icon themes, and language servers come only from
-  built-in code and user settings/files. Snippets come only from built-in code.
+- Languages, grammars, icon themes, and language servers come only from
+  built-in code and user settings/files. Snippets and themes come only from
+  built-in code/assets (`assets/themes/`); the user config `themes/` folder is
+  never read or watched, so the theme set is fixed for the process lifetime.
 - Tree-sitter grammars are native only; Wasm grammars cannot be loaded.
 - Extension crates, host proxies, builders, adapters, settings, and remote
   install/sync messages are removed.
