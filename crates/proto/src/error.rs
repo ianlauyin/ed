@@ -17,7 +17,7 @@
 /// message (or would be helpful to see in a structured format in the logs), you
 /// can use .with_tag():
 ///
-/// `return Err(Error::WrongReleaseChannel.with_tag("required", "stable").into())`
+/// `return Err(ErrorCode::NoSuchProject.with_tag("project_id", "42").into())`
 ///
 /// When handling an error you can use .error_code() to match which error it was
 /// and .error_tag() to read any tags.
@@ -27,8 +27,8 @@
 ///
 /// match err.error_code() {
 ///   ErrorCode::Forbidden => alert("I'm sorry I can't do that."),
-///   ErrorCode::WrongReleaseChannel =>
-///     alert(format!("You need to be on the {} release channel.", err.error_tag("required").unwrap())),
+///   ErrorCode::NoSuchProject =>
+///     alert(format!("Project {} does not exist.", err.error_tag("project_id").unwrap())),
 ///   ErrorCode::Internal => alert("Sorry, something went wrong"),
 /// }
 /// ```

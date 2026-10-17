@@ -48,7 +48,7 @@ use search::project_search::ProjectSearchBar;
 use settings::{
     DefaultOpenBehavior, Settings, SettingsStore, initial_tasks_content, update_settings_file,
 };
-use settings_content::app_metadata::{AppCommitSha, AppVersion};
+use settings_content::app_metadata::AppVersion;
 #[cfg(debug_assertions)]
 use workspace::workspace_error::{ErrorAction, ErrorSeverity, WorkspaceError};
 
@@ -892,7 +892,6 @@ fn open_about_window(cx: &mut App) {
         copy_entry: NavigableEntry,
         app_icon: Arc<Image>,
         message: SharedString,
-        commit: Option<SharedString>,
         full_version: SharedString,
     }
 
@@ -908,10 +907,6 @@ fn open_about_window(cx: &mut App) {
                 ""
             };
             let message: SharedString = format!("{app_name} {version} {debug}").into();
-            let commit = AppCommitSha::try_global(cx)
-                .map(|sha| sha.full())
-                .filter(|commit| !commit.is_empty())
-                .map(SharedString::from);
 
             Self {
                 focus_handle: cx.focus_handle(),
@@ -922,21 +917,12 @@ fn open_about_window(cx: &mut App) {
                     include_bytes!("../resources/app-icon.png").to_vec(),
                 )),
                 message,
-                commit,
                 full_version,
             }
         }
 
         fn copy_details(&self, window: &mut Window, cx: &mut Context<Self>) {
-            let content = match self.commit.as_ref() {
-                Some(commit) => {
-                    format!(
-                        "{}\nCommit: {}\nVersion: {}",
-                        self.message, commit, self.full_version
-                    )
-                }
-                None => format!("{}\nVersion: {}", self.message, self.full_version),
-            };
+            let content = format!("{}\nVersion: {}", self.message, self.full_version);
             cx.write_to_clipboard(ClipboardItem::new_string(content));
             window.remove_window();
         }
@@ -970,14 +956,6 @@ fn open_about_window(cx: &mut App) {
                             .items_center()
                             .child(img(self.app_icon.clone()).size_16().flex_none())
                             .child(Headline::new(self.message.clone()))
-                            .when_some(self.commit.clone(), |this, commit| {
-                                this.child(
-                                    Label::new("Commit")
-                                        .color(Color::Muted)
-                                        .size(LabelSize::XSmall),
-                                )
-                                .child(Label::new(commit).size(LabelSize::Small))
-                            })
                             .child(
                                 Label::new("Version")
                                     .color(Color::Muted)

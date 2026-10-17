@@ -29,7 +29,7 @@ use remote::{
 use rpc::AnyProtoClient;
 use rpc::proto::Envelope;
 use settings::{Settings, SettingsStore};
-use settings_content::app_metadata::{AppCommitSha, AppVersion, SERVER_RELEASE, ServerRelease};
+use settings_content::app_metadata::AppVersion;
 use smol::{
     channel::{Receiver, Sender},
     io::AsyncReadExt,
@@ -41,7 +41,7 @@ use std::{
     io::Write,
     mem,
     path::{Path, PathBuf},
-    sync::{Arc, LazyLock},
+    sync::Arc,
 };
 
 use std::{
@@ -81,7 +81,6 @@ pub enum Commands {
 
 pub fn run(command: Commands) -> anyhow::Result<()> {
     use anyhow::Context;
-    use settings_content::app_metadata::{SERVER_RELEASE, ServerRelease};
 
     match command {
         Commands::Run {
@@ -104,39 +103,11 @@ pub fn run(command: Commands) -> anyhow::Result<()> {
 
         Commands::Exec => execute_command(),
         Commands::Version => {
-            let release_channel = *SERVER_RELEASE;
-            match release_channel {
-                ServerRelease::Stable | ServerRelease::Preview => {
-                    println!("{}", env!("ZED_PKG_VERSION"))
-                }
-                ServerRelease::Nightly | ServerRelease::Dev => {
-                    let commit_sha =
-                        option_env!("ZED_COMMIT_SHA").unwrap_or(release_channel.dev_name());
-                    let build_id = option_env!("ZED_BUILD_ID");
-                    if let Some(build_id) = build_id {
-                        println!("{}+{}", build_id, commit_sha)
-                    } else {
-                        println!("{commit_sha}");
-                    }
-                }
-            };
+            println!("{}", env!("ZED_PKG_VERSION"));
             Ok(())
         }
     }
 }
-
-pub static VERSION: LazyLock<String> = LazyLock::new(|| match *SERVER_RELEASE {
-    ServerRelease::Stable | ServerRelease::Preview => env!("ZED_PKG_VERSION").to_owned(),
-    ServerRelease::Nightly | ServerRelease::Dev => {
-        let commit_sha = option_env!("ZED_COMMIT_SHA").unwrap_or("missing-zed-commit-sha");
-        let build_identifier = option_env!("ZED_BUILD_ID");
-        if let Some(build_id) = build_identifier {
-            format!("{build_id}+{commit_sha}")
-        } else {
-            commit_sha.to_owned()
-        }
-    }
-});
 
 fn execute_command() -> Result<()> {
     let mut stdin = File::from(std::io::stdin().as_fd().try_clone_to_owned()?);
@@ -601,12 +572,7 @@ pub fn execute_run(
     let git_hosting_provider_registry = Arc::new(GitHostingProviderRegistry::new());
     let run = move |cx: &mut App| {
         settings::init(cx);
-        let app_commit_sha = option_env!("ZED_COMMIT_SHA").map(|s| AppCommitSha::new(s.to_owned()));
-        let app_version = AppVersion::load(
-            env!("ZED_PKG_VERSION"),
-            option_env!("ZED_BUILD_ID"),
-            app_commit_sha,
-        );
+        let app_version = AppVersion::load(env!("ZED_PKG_VERSION"));
         settings_content::app_metadata::init(app_version, cx);
         gpui_tokio::init(cx);
 

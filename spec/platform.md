@@ -47,6 +47,18 @@ Crates in the remote server's dependency tree must gate macOS-only build steps
 Linux branches for paths, crash handling, and LSP download assets. Upstream workflow
 generators that depended on removed release and deployment infrastructure are absent.
 
+## Packaging
+
+- `install_remote_server.fish` runs on a Linux host with the build prerequisites
+  installed, builds the remote server in release mode, and installs it as
+  `~/.local/bin/ed_remote_server` for SSH editing.
+- `release.fish` builds `target/release/Zed.app` for the host Mac: `zed` and
+  `cli` binaries in `Contents/MacOS`, `crates/zed/resources/Info.plist` with the
+  Cargo.toml version, an icon generated from `app-icon@2x.png`, and `Document.icns`.
+- The bundle is for local use only: no codesigning, entitlements, provisioning
+  profiles, notarization, DMG, or universal binary. No `cargo-bundle` metadata.
+- Build scripts do not query git.
+
 ## macOS bindings
 
 - AppKit/Foundation access uses the `objc2` crate family only; neither the

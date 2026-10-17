@@ -45,9 +45,10 @@ actions are disabled and cannot be enabled through settings or environment varia
 Feedback actions, bug-report links, and feature-request/email menu entries are
 removed. Local database failures still display a diagnostic notification.
 
-The editor has a single application identity and icon, with no release-channel
-selection, branding, or channel-specific settings overrides. Build version and
-commit metadata remain available. Existing local database state remains in the
+The editor has a single application identity and icon. There is no
+release-channel concept anywhere (app, remote client, or remote server). The app
+version is the `zed` crate's Cargo.toml version; no commit SHA, build ID, or
+bundle type is embedded or shown. Existing local database state remains in the
 same directory.
 
 The ztracing instrumentation and Tracy integration are removed. The GPUI

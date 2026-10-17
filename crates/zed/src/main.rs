@@ -38,7 +38,7 @@ use project::{project_settings::ProjectSettings, trusted_worktrees};
 use recent_projects::{RemoteSettings, open_remote_project};
 use session::{AppSession, Session};
 use settings::{Settings, SettingsStore};
-use settings_content::app_metadata::{AppCommitSha, AppVersion};
+use settings_content::app_metadata::AppVersion;
 use std::{
     cell::RefCell,
     env,
@@ -192,15 +192,11 @@ fn main() {
 
     util::increase_open_file_limit().log_err();
 
-    let version = option_env!("ZED_BUILD_ID");
-    let app_commit_sha =
-        option_env!("ZED_COMMIT_SHA").map(|commit_sha| AppCommitSha::new(commit_sha.to_string()));
-    let app_version = AppVersion::load(env!("CARGO_PKG_VERSION"), version, app_commit_sha.clone());
+    let app_version = AppVersion::load(env!("CARGO_PKG_VERSION"));
 
     if args.system_specs {
         let system_specs = system_specs::SystemSpecs::new_stateless(
             app_version,
-            app_commit_sha,
             system_specs::platform::os_name(),
             system_specs::platform::os_version(),
         );
@@ -215,15 +211,7 @@ fn main() {
         .build_global()
         .unwrap();
 
-    log::info!(
-        "========== starting zed version {}, sha {} ==========",
-        app_version,
-        app_commit_sha
-            .as_ref()
-            .map(|sha| sha.short())
-            .as_deref()
-            .unwrap_or("unknown"),
-    );
+    log::info!("========== starting zed version {app_version} ==========");
 
     let app = build_application()
         .with_assets(Assets)
@@ -252,18 +240,7 @@ fn main() {
     }
 
     let git_hosting_provider_registry = Arc::new(GitHostingProviderRegistry::new());
-    let git_binary_path = if true && option_env!("ZED_BUNDLE").as_deref() == Some("true") {
-        app.path_for_auxiliary_executable("git")
-            .context("could not find git binary path")
-            .log_err()
-    } else {
-        None
-    };
-    if let Some(git_binary_path) = &git_binary_path {
-        log::info!("Using git binary path: {:?}", git_binary_path);
-    }
-
-    let fs = RealFs::new(git_binary_path, app.background_executor());
+    let fs = RealFs::new(None, app.background_executor());
     let (shell_env_loaded_tx, shell_env_loaded_rx) = oneshot::channel();
     if !stdout_is_a_pty() {
         app.background_executor()
@@ -314,9 +291,6 @@ fn main() {
 
         settings_content::app_metadata::init(app_version, cx);
         gpui_tokio::init(cx);
-        if let Some(app_commit_sha) = app_commit_sha {
-            AppCommitSha::set_global(app_commit_sha, cx);
-        }
         settings::init(cx);
         zlog_settings::init(cx);
         initialize_keymap(cx);

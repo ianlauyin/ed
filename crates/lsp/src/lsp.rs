@@ -1138,13 +1138,9 @@ impl LanguageServer {
             },
             trace: None,
             workspace_folders: Some(workspace_folders),
-            client_info: settings_content::app_metadata::ServerRelease::try_global(cx).map(|_| {
-                ClientInfo {
-                    name: "Zed".to_string(),
-                    version: Some(
-                        settings_content::app_metadata::AppVersion::global(cx).to_string(),
-                    ),
-                }
+            client_info: Some(ClientInfo {
+                name: "Zed".to_string(),
+                version: Some(settings_content::app_metadata::AppVersion::global(cx).to_string()),
             }),
             locale: None,
             ..InitializeParams::default()

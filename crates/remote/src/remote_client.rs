@@ -25,7 +25,6 @@ use rpc::{
     AnyProtoClient, ErrorExt, ProtoClient, ProtoMessageHandlerSet, RpcError,
     proto::{self, Envelope, EnvelopedMessage, PeerId, RequestMessage, build_typed_envelope},
 };
-use settings_content::app_metadata::ServerRelease;
 use std::{
     collections::VecDeque,
     fmt,
@@ -334,16 +333,10 @@ impl ConnectionIdentifier {
     // Must be less than about 100 characters
     //   https://unix.stackexchange.com/questions/367008/why-is-socket-path-length-limited-to-a-hundred-chars
     // So our strings should be at most 20 characters or so.
-    fn to_string(&self, cx: &App) -> String {
-        let identifier_prefix = match ServerRelease::global(cx) {
-            ServerRelease::Stable => "".to_string(),
-            release_channel => format!("{}-", release_channel.dev_name()),
-        };
+    fn to_string(&self) -> String {
         match self {
-            Self::Setup(setup_id) => format!("{identifier_prefix}setup-{setup_id}"),
-            Self::Workspace(workspace_id) => {
-                format!("{identifier_prefix}workspace-{workspace_id}",)
-            }
+            Self::Setup(setup_id) => format!("setup-{setup_id}"),
+            Self::Workspace(workspace_id) => format!("workspace-{workspace_id}"),
         }
     }
 }
@@ -384,7 +377,7 @@ impl RemoteClient {
         delegate: Arc<dyn RemoteClientDelegate>,
         cx: &mut App,
     ) -> Task<Result<Option<Entity<Self>>>> {
-        let unique_identifier = unique_identifier.to_string(cx);
+        let unique_identifier = unique_identifier.to_string();
         cx.spawn(async move |cx| {
             let success = Box::pin(async move {
                 let (outgoing_tx, outgoing_rx) = mpsc::unbounded::<Envelope>();
