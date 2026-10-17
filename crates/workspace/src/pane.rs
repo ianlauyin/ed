@@ -1,5 +1,5 @@
 use crate::{
-    CloseWindow, NewCenterTerminal, NewFile, NewTerminal, OpenInTerminal, OpenOptions,
+    CloseWindow, NewCenterTerminal, NewFile, NewTerminal, Open, OpenInTerminal, OpenOptions,
     OpenTerminal, OpenVisible, SplitDirection, ToggleFileFinder, ToggleProjectSymbols, ToggleZoom,
     Workspace, WorkspaceItemBuilder, ZoomIn, ZoomOut,
     focus_follows_mouse::FocusFollowsMouse as _,
@@ -47,8 +47,8 @@ use std::{
 use theme_settings::ThemeSettings;
 use ui::{
     ContextMenu, ContextMenuEntry, ContextMenuItem, DecoratedIcon, IconButtonShape, IconDecoration,
-    IconDecorationKind, Indicator, PopoverMenu, PopoverMenuHandle, Tab, TabBar, TabPosition,
-    Tooltip, prelude::*, right_click_menu,
+    IconDecorationKind, Indicator, KeyBinding, PopoverMenu, PopoverMenuHandle, Tab, TabBar,
+    TabPosition, Tooltip, prelude::*, right_click_menu,
 };
 use util::{
     ResultExt, debug_panic, markdown::MarkdownInlineCode, maybe, paths::PathStyle,
@@ -3777,6 +3777,44 @@ impl Pane {
             }))
     }
 
+    /// Keybinding hints shown in an empty pane, styled like the project search landing page.
+    fn render_empty_pane_hints(&self, cx: &App) -> impl IntoElement {
+        let focus_handle = self.focus_handle.clone();
+        let hint =
+            |id: &'static str, label: &'static str, icon: IconName, action: Box<dyn Action>| {
+                Button::new(id, label)
+                    .start_icon(Icon::new(icon).size(IconSize::Small))
+                    .key_binding(KeyBinding::for_action_in(
+                        action.as_ref(),
+                        &focus_handle,
+                        cx,
+                    ))
+                    .on_click(move |_event, window, cx| {
+                        window.dispatch_action(action.boxed_clone(), cx)
+                    })
+            };
+        v_flex()
+            .gap_1()
+            .child(hint(
+                "empty-pane-open-file",
+                "Open File",
+                IconName::FolderOpen,
+                Open::DEFAULT.boxed_clone(),
+            ))
+            .child(hint(
+                "empty-pane-go-to-file",
+                "Go to File",
+                IconName::MagnifyingGlass,
+                ToggleFileFinder::default().boxed_clone(),
+            ))
+            .child(hint(
+                "empty-pane-command-palette",
+                "Command Palette",
+                IconName::Command,
+                zed_actions::command_palette::Toggle.boxed_clone(),
+            ))
+    }
+
     pub fn render_menu_overlay(menu: &Entity<ContextMenu>) -> Div {
         div().absolute().bottom_0().right_0().size_0().child(
             deferred(anchored().anchor(Anchor::TopRight).child(menu.clone())).with_priority(1),
@@ -4579,6 +4617,8 @@ impl Render for Pane {
                                 ));
                             if has_worktrees || !self.should_display_welcome_page {
                                 placeholder
+                                    .items_center()
+                                    .child(self.render_empty_pane_hints(cx))
                             } else {
                                 if self.welcome_page.is_none() {
                                     let workspace = self.workspace.clone();
