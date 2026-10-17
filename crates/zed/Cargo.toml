@@ -57,7 +57,6 @@ menu.workspace = true
 mimalloc = { version = "0.1", optional = true }
 outline.workspace = true
 outline_panel.workspace = true
-parking_lot.workspace = true
 paths.workspace = true
 project.workspace = true
 project_panel.workspace = true

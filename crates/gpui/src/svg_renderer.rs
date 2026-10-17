@@ -7,7 +7,7 @@ use resvg::tiny_skia::Pixmap;
 use smallvec::SmallVec;
 use std::{
     hash::Hash,
-    sync::{Arc, LazyLock, OnceLock},
+    sync::{Arc, LazyLock},
 };
 
 #[cfg(target_os = "macos")]
@@ -117,24 +117,11 @@ impl SvgRenderer {
             Arc::new(db)
         });
 
-        // Build the enriched font DB lazily on first SVG render rather than
-        // eagerly at construction time. This avoids the expensive deep-clone
-        // of the system font database for code paths that never render SVGs
-        // (e.g. tests).
-        let enriched_fontdb: Arc<OnceLock<Arc<usvg::fontdb::Database>>> = Arc::new(OnceLock::new());
-
         let default_font_resolver = usvg::FontResolver::default_font_selector();
         let font_resolver = Box::new({
-            let asset_source = asset_source.clone();
             move |font: &usvg::Font, db: &mut Arc<usvg::fontdb::Database>| {
                 if db.is_empty() {
-                    let fontdb = enriched_fontdb.get_or_init(|| {
-                        let mut db = (**SYSTEM_FONT_DB).clone();
-                        load_bundled_fonts(&*asset_source, &mut db);
-                        fix_generic_font_families(&mut db);
-                        Arc::new(db)
-                    });
-                    *db = fontdb.clone();
+                    *db = SYSTEM_FONT_DB.clone();
                 }
                 if let Some(id) = default_font_resolver(font, db) {
                     return Some(id);
@@ -293,51 +280,4 @@ fn rasterize_tree(tree: &usvg::Tree, size: SvgSize) -> Result<Pixmap, usvg::Erro
     resvg::render(tree, transform, &mut pixmap.as_mut());
 
     Ok(pixmap)
-}
-
-fn load_bundled_fonts(asset_source: &dyn AssetSource, db: &mut usvg::fontdb::Database) {
-    let font_paths = [
-        "fonts/ibm-plex-sans/IBMPlexSans-Regular.ttf",
-        "fonts/lilex/Lilex-Regular.ttf",
-    ];
-    for path in font_paths {
-        match asset_source.load(path) {
-            Ok(Some(data)) => db.load_font_data(data.into_owned()),
-            Ok(None) => log::warn!("Bundled font not found: {path}"),
-            Err(error) => log::warn!("Failed to load bundled font {path}: {error}"),
-        }
-    }
-}
-
-// fontdb defaults generic families to Microsoft fonts ("Arial", "Times New Roman")
-// which aren't installed on most Linux systems. fontconfig normally overrides these,
-// but when it fails the defaults remain and all generic family queries return None.
-fn fix_generic_font_families(db: &mut usvg::fontdb::Database) {
-    use usvg::fontdb::{Family, Query};
-
-    let families_and_fallbacks: &[(Family<'_>, &str)] = &[
-        (Family::SansSerif, "IBM Plex Sans"),
-        // No serif font bundled; use sans-serif as best available fallback.
-        (Family::Serif, "IBM Plex Sans"),
-        (Family::Monospace, "Lilex"),
-        (Family::Cursive, "IBM Plex Sans"),
-        (Family::Fantasy, "IBM Plex Sans"),
-    ];
-
-    for (family, fallback_name) in families_and_fallbacks {
-        let query = Query {
-            families: &[*family],
-            ..Default::default()
-        };
-        if db.query(&query).is_none() {
-            match family {
-                Family::SansSerif => db.set_sans_serif_family(*fallback_name),
-                Family::Serif => db.set_serif_family(*fallback_name),
-                Family::Monospace => db.set_monospace_family(*fallback_name),
-                Family::Cursive => db.set_cursive_family(*fallback_name),
-                Family::Fantasy => db.set_fantasy_family(*fallback_name),
-                _ => {}
-            }
-        }
-    }
 }

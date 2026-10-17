@@ -1,7 +1,7 @@
 // This crate was essentially pulled out verbatim from main `zed` crate to avoid having to run RustEmbed macro whenever zed has to be rebuilt. It saves a second or two on an incremental build.
 
 use anyhow::Context as _;
-use gpui::{App, AssetSource, Result, SharedString};
+use gpui::{AssetSource, Result, SharedString};
 
 // Release builds embed the assets; dev builds read them from the checkout at
 // runtime so edits show up on the next launch without a rebuild and no
@@ -12,7 +12,6 @@ util::fs_embed! {
     crate_relative = "../../assets",
     root_relative = "assets",
     include = [
-        "fonts/**/*",
         "icons/**/*",
         "images/**/*",
         "themes/**/*",
@@ -40,32 +39,5 @@ impl AssetSource for Assets {
                 }
             })
             .collect())
-    }
-}
-
-impl Assets {
-    /// Populate the [`TextSystem`] of the given [`AppContext`] with all `.ttf` fonts in the `fonts` directory.
-    pub fn load_fonts(&self, cx: &App) -> anyhow::Result<()> {
-        let font_paths = self.list("fonts")?;
-        let mut embedded_fonts = Vec::new();
-        for font_path in font_paths {
-            if font_path.ends_with(".ttf") {
-                let font_bytes = cx
-                    .asset_source()
-                    .load(&font_path)?
-                    .expect("Assets should never return None");
-                embedded_fonts.push(font_bytes);
-            }
-        }
-
-        cx.text_system().add_fonts(embedded_fonts)
-    }
-
-    pub fn load_test_fonts(&self, cx: &App) {
-        cx.text_system()
-            .add_fonts(vec![
-                self.load("fonts/lilex/Lilex-Regular.ttf").unwrap().unwrap(),
-            ])
-            .unwrap()
     }
 }

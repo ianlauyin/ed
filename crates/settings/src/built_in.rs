@@ -450,7 +450,7 @@ fn workspace_settings() -> WorkspaceSettingsContent {
 fn theme_settings() -> Box<ThemeSettingsContent> {
     Box::new(ThemeSettingsContent {
         ui_font_size: Some(FontSize(16.0)),
-        ui_font_family: Some(FontFamilyName(".ZedSans".into())),
+        ui_font_family: Some(FontFamilyName(".SystemUIFont".into())),
         ui_font_fallbacks: None,
         ui_font_features: Some(FontFeaturesContent(
             [("calt".into(), 0)].into_iter().collect(),

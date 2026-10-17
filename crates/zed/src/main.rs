@@ -31,7 +31,6 @@ use project_panel::ProjectPanel;
 use remote::RemoteConnectionOptions;
 
 use assets::Assets;
-use parking_lot::Mutex;
 use project::trusted_worktrees;
 use recent_projects::{RemoteSettings, open_remote_project};
 use session::{AppSession, Session};
@@ -326,8 +325,6 @@ fn main() {
         command_palette::init(cx);
 
         recent_projects::init(cx);
-
-        load_embedded_fonts(cx);
 
         editor::init(cx);
         image_viewer::init(cx);
@@ -1080,30 +1077,6 @@ fn parse_url_arg(arg: &str, _cx: &App) -> String {
             }
         }
     }
-}
-
-fn load_embedded_fonts(cx: &App) {
-    let asset_source = cx.asset_source();
-    let font_paths = asset_source.list("fonts").unwrap();
-    let embedded_fonts = Mutex::new(Vec::new());
-    let executor = cx.background_executor();
-
-    cx.foreground_executor().block_on(executor.scoped(|scope| {
-        for font_path in &font_paths {
-            if !font_path.ends_with(".ttf") {
-                continue;
-            }
-
-            scope.spawn(async {
-                let font_bytes = asset_source.load(font_path).unwrap().unwrap();
-                embedded_fonts.lock().push(font_bytes);
-            });
-        }
-    }));
-
-    cx.text_system()
-        .add_fonts(embedded_fonts.into_inner())
-        .unwrap();
 }
 
 #[cfg(debug_assertions)]

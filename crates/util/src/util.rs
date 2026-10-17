@@ -770,7 +770,7 @@ macro_rules! __fs_embed {
 ///     pub struct Assets,
 ///     crate_relative = "../../assets",
 ///     root_relative = "assets",
-///     include = ["fonts/**/*", "themes/**/*", "*.md"],
+///     include = ["themes/**/*", "*.md"],
 ///     exclude = ["themes/src/*", "*.DS_Store"],
 /// }
 /// ```

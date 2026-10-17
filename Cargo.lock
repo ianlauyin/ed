@@ -9827,7 +9827,6 @@ dependencies = [
  "mimalloc",
  "outline",
  "outline_panel",
- "parking_lot",
  "paths",
  "project",
  "project_panel",

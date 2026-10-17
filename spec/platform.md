@@ -43,6 +43,8 @@ remote server supports macOS and Linux.
 - No proxy support: there is no `proxy` setting, environment proxy variables are
   ignored, and JSON language server proxy settings are not forwarded.
 - Ship one macOS keymap constructed in Rust; alternate keymaps are removed.
+- No bundled fonts: the UI defaults to the macOS system font (`.SystemUIFont`),
+  the minimap inherits the buffer font, and SVG/Mermaid text uses system fonts.
 - The Linux remote server needs no display server, GPU, desktop integration, or fonts.
   It retains background execution, timers, and a foreground event loop for remote projects.
 - GPUI core has no direct `libc` dependency; native OS integration belongs in
