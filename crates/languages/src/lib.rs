@@ -218,6 +218,10 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
             ..Default::default()
         },
         LanguageInfo {
+            name: "toml",
+            ..Default::default()
+        },
+        LanguageInfo {
             name: "yaml",
             adapters: vec![yaml_lsp_adapter],
             ..Default::default()

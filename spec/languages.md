@@ -11,6 +11,9 @@
 - HTML uses `vscode-html-language-server` (from `vscode-langservers-extracted`),
   started with `--stdio` and `provideFormatter: true`; `lsp.vscode-html-language-server.settings`
   is passed through as workspace configuration.
+- TOML support is built in (ported from `zed-extensions/toml`): native Tree-sitter
+  grammar (`tree-sitter-toml-ng`, the maintained fork) for `.toml`, `Cargo.lock`,
+  `Pipfile`, `uv.lock`. No language server is registered.
 - Jupyter notebooks and integrated REPL execution are removed, including kernel
   management, remote kernel launching, execution controls, settings, and shortcuts.
 - Python source editing remains supported. `.ipynb` files open as ordinary text.
