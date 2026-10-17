@@ -1280,214 +1280,6 @@ pub trait InteractiveElement: Sized {
 /// A trait for elements that want to use the standard GPUI interactivity features
 /// that require state.
 pub trait StatefulInteractiveElement: InteractiveElement {
-    /// Set the accessible role for this element.
-    ///
-    /// See the [accessibility guide](crate::_accessibility) for an overview.
-    fn role(mut self, role: accesskit::Role) -> Self {
-        debug_assert!(
-            role != accesskit::Role::GenericContainer,
-            "GenericContainer is filtered out of the a11y tree and has no effect"
-        );
-        self.interactivity().override_role = Some(role);
-        self
-    }
-
-    /// Set the author-provided identifier exposed to accessibility clients.
-    ///
-    /// Unlike the GPUI element ID, this value is visible outside the process.
-    /// Keep it stable and unique within its accessibility tree.
-    /// AccessKit maps it to platform identifiers where supported, including
-    /// UIA `AutomationId` on Windows, `AXIdentifier` on macOS, and AT-SPI
-    /// `AccessibleId` on Linux stacks whose deployed adapter exposes it.
-    fn accessibility_id(mut self, id: impl Into<SharedString>) -> Self {
-        self.interactivity().aria.author_id = Some(id.into());
-        self
-    }
-
-    /// Set the accessible label for this element.
-    fn aria_label(mut self, label: impl Into<SharedString>) -> Self {
-        self.interactivity().aria.label = Some(label.into());
-        self
-    }
-
-    /// Set the accessible description for this element. Unlike the label (which
-    /// names the element), the description provides supplementary information
-    /// that assistive technology announces after the name, role, and value -
-    /// for example a settings subtitle or a hint.
-    fn aria_description(mut self, description: impl Into<SharedString>) -> Self {
-        self.interactivity().aria.description = Some(description.into());
-        self
-    }
-
-    /// Set the keyboard shortcut(s) that activate this element, announced by
-    /// assistive technology (maps to AccessKit's `keyboard_shortcut`).
-    ///
-    /// Note that this does not create a keymap. It simply instructs assistive
-    /// technology what the keymap is.
-    fn aria_keyshortcuts(mut self, keyshortcuts: impl Into<SharedString>) -> Self {
-        self.interactivity().aria.keyshortcuts = Some(keyshortcuts.into());
-        self
-    }
-
-    /// Report this element as the focused node in the accessibility tree,
-    /// overriding the element that holds real keyboard focus — but only while
-    /// one of its ancestors actually holds focus.
-    ///
-    /// This implements the `aria-activedescendant` pattern for composite
-    /// widgets that keep keyboard focus on a container (e.g. a menu or
-    /// listbox) while a child is "selected": set this on the selected child so
-    /// assistive technology announces and highlights it as focused.
-    ///
-    /// The element must also have a [`role`][Self::role] (and an id) so it
-    /// produces an accessibility node. Unlike the web's container-side
-    /// `aria-activedescendant`, this is set on the descendant; GPUI honors it
-    /// only when a focused ancestor is present in the tree, so it is safe to
-    /// set unconditionally on the selected child — if the container isn't
-    /// focused, the claim is ignored.
-    fn aria_active_descendant(mut self) -> Self {
-        self.interactivity().report_active_descendant_focus = true;
-        self
-    }
-
-    /// Contribute synthetic accessibility nodes — nodes that don't correspond
-    /// to any element — as children of this element's a11y node. For example,
-    /// text runs describing an editor's text content.
-    ///
-    /// The closure is called after this element is prepainted, and only if it
-    /// contributed a node to the accessibility tree (i.e. it has an id and a
-    /// [`role`][StatefulInteractiveElement::role]).
-    ///
-    /// See [`Element::a11y_synthetic_children`] for details.
-    fn a11y_synthetic_children(
-        mut self,
-        f: impl FnOnce(&mut crate::A11ySubtreeBuilder) + 'static,
-    ) -> Self {
-        self.interactivity().a11y_synthetic_children = Some(Box::new(f));
-        self
-    }
-
-    /// Set the selected state for this element.
-    fn aria_selected(mut self, selected: bool) -> Self {
-        self.interactivity().aria.selected = Some(selected);
-        self
-    }
-
-    /// Set the expanded state for this element.
-    fn aria_expanded(mut self, expanded: bool) -> Self {
-        self.interactivity().aria.expanded = Some(expanded);
-        self
-    }
-
-    /// Set the toggled state for this element.
-    fn aria_toggled(mut self, toggled: accesskit::Toggled) -> Self {
-        self.interactivity().aria.toggled = Some(toggled);
-        self
-    }
-
-    /// Set the numeric value for this element.
-    fn aria_numeric_value(mut self, value: f64) -> Self {
-        self.interactivity().aria.numeric_value = Some(value);
-        self
-    }
-
-    /// Set the step by which assistive technology should expect the numeric
-    /// value of this element to change (e.g. when incrementing a spin button).
-    fn aria_numeric_value_step(mut self, step: f64) -> Self {
-        self.interactivity().aria.numeric_value_step = Some(step);
-        self
-    }
-
-    /// Set the string value of this element, e.g. the text content of a simple
-    /// text input.
-    fn aria_value(mut self, value: impl Into<SharedString>) -> Self {
-        self.interactivity().aria.value = Some(value.into());
-        self
-    }
-
-    /// Set the placeholder text reported to assistive technology for this
-    /// element, shown when a text input is empty.
-    fn aria_placeholder(mut self, placeholder: impl Into<SharedString>) -> Self {
-        self.interactivity().aria.placeholder = Some(placeholder.into());
-        self
-    }
-
-    /// Set the minimum numeric value for this element.
-    fn aria_min_numeric_value(mut self, value: f64) -> Self {
-        self.interactivity().aria.min_numeric_value = Some(value);
-        self
-    }
-
-    /// Set the maximum numeric value for this element.
-    fn aria_max_numeric_value(mut self, value: f64) -> Self {
-        self.interactivity().aria.max_numeric_value = Some(value);
-        self
-    }
-
-    /// Set the orientation of this element.
-    fn aria_orientation(mut self, orientation: accesskit::Orientation) -> Self {
-        self.interactivity().aria.orientation = Some(orientation);
-        self
-    }
-
-    /// Set the heading level of this element.
-    fn aria_level(mut self, level: usize) -> Self {
-        self.interactivity().aria.level = Some(level);
-        self
-    }
-
-    /// Set the position in set of this element.
-    fn aria_position_in_set(mut self, position: usize) -> Self {
-        self.interactivity().aria.position_in_set = Some(position);
-        self
-    }
-
-    /// Set the size of set for this element.
-    fn aria_size_of_set(mut self, size: usize) -> Self {
-        self.interactivity().aria.size_of_set = Some(size);
-        self
-    }
-
-    /// Set the row index for this element.
-    fn aria_row_index(mut self, index: usize) -> Self {
-        self.interactivity().aria.row_index = Some(index);
-        self
-    }
-
-    /// Set the column index for this element.
-    fn aria_column_index(mut self, index: usize) -> Self {
-        self.interactivity().aria.column_index = Some(index);
-        self
-    }
-
-    /// Set the row count for this element.
-    fn aria_row_count(mut self, count: usize) -> Self {
-        self.interactivity().aria.row_count = Some(count);
-        self
-    }
-
-    /// Set the column count for this element.
-    fn aria_column_count(mut self, count: usize) -> Self {
-        self.interactivity().aria.column_count = Some(count);
-        self
-    }
-
-    /// Register a handler for an accessibility action on this element.
-    /// The handler is called when a screen reader requests the given action.
-    ///
-    /// See the [accessibility guide](crate::_accessibility) for an overview.
-    #[inline(always)]
-    fn on_a11y_action(
-        mut self,
-        action: accesskit::Action,
-        listener: impl FnMut(Option<&accesskit::ActionData>, &mut crate::Window, &mut crate::App)
-        + 'static,
-    ) -> Self {
-        self.interactivity()
-            .a11y_action_listeners
-            .push((action, Box::new(listener)));
-        self
-    }
-
     /// Set this element to focusable.
     fn focusable(mut self) -> Self {
         self.interactivity().focusable = true;
@@ -1864,28 +1656,6 @@ impl Element for Div {
         self.interactivity.source_location()
     }
 
-    fn a11y_role(&self) -> Option<accesskit::Role> {
-        // Nodes with `GenericContainer` should never be reported to accesskit.
-        // Equivalent to an HTML div with no role.
-        self.interactivity
-            .override_role
-            .filter(|role| *role != accesskit::Role::GenericContainer)
-    }
-
-    fn write_a11y_info(&self, node: &mut accesskit::Node) {
-        self.interactivity.write_a11y_info(node);
-    }
-
-    fn a11y_synthetic_children(
-        &mut self,
-        _prepaint: &mut Self::PrepaintState,
-        builder: &mut crate::A11ySubtreeBuilder,
-    ) {
-        if let Some(f) = self.interactivity.a11y_synthetic_children.take() {
-            f(builder);
-        }
-    }
-
     #[cfg_attr(feature = "stacker", stacksafe::stacksafe)]
     fn request_layout(
         &mut self,
@@ -2054,30 +1824,6 @@ impl IntoElement for Div {
     }
 }
 
-#[derive(Default)]
-pub(crate) struct AriaProperties {
-    pub(crate) author_id: Option<SharedString>,
-    pub(crate) label: Option<SharedString>,
-    pub(crate) description: Option<SharedString>,
-    pub(crate) keyshortcuts: Option<SharedString>,
-    pub(crate) selected: Option<bool>,
-    pub(crate) expanded: Option<bool>,
-    pub(crate) toggled: Option<accesskit::Toggled>,
-    pub(crate) numeric_value: Option<f64>,
-    pub(crate) min_numeric_value: Option<f64>,
-    pub(crate) max_numeric_value: Option<f64>,
-    pub(crate) numeric_value_step: Option<f64>,
-    pub(crate) value: Option<SharedString>,
-    pub(crate) placeholder: Option<SharedString>,
-    pub(crate) orientation: Option<accesskit::Orientation>,
-    pub(crate) level: Option<usize>,
-    pub(crate) position_in_set: Option<usize>,
-    pub(crate) size_of_set: Option<usize>,
-    pub(crate) row_index: Option<usize>,
-    pub(crate) column_index: Option<usize>,
-    pub(crate) row_count: Option<usize>,
-    pub(crate) column_count: Option<usize>,
-}
 
 /// The interactivity struct. Powers all of the general-purpose
 /// interactivity in the `Div` element.
@@ -2141,13 +1887,6 @@ pub struct Interactivity {
     pub(crate) tab_index: Option<isize>,
     pub(crate) tab_group: bool,
     pub(crate) tab_stop: bool,
-
-    pub(crate) a11y_action_listeners:
-        Vec<(accesskit::Action, crate::window::a11y::A11yActionListener)>,
-    pub(crate) a11y_synthetic_children: Option<Box<dyn FnOnce(&mut crate::A11ySubtreeBuilder)>>,
-    pub(crate) report_active_descendant_focus: bool,
-    pub(crate) override_role: Option<accesskit::Role>,
-    pub(crate) aria: AriaProperties,
 
     #[cfg(debug_assertions)]
     pub(crate) source_location: Option<&'static core::panic::Location<'static>>,
@@ -2244,31 +1983,8 @@ impl Interactivity {
         if let Some(focus_handle) = self.tracked_focus_handle.as_ref() {
             window.set_focus_handle(focus_handle, cx);
 
-            if window.a11y.is_active() {
-                if let Some(global_id) = global_id {
-                    let node_id = global_id.accesskit_node_id();
-                    window.a11y.set_focusable(node_id, focus_handle.id);
-                    if focus_handle.is_focused(window) {
-                        window.a11y.set_focus(node_id);
-                    }
-                } else if focus_handle.is_focused(window) {
-                    // Focusable, but with no element id it can't have an
-                    // accessibility node, so screen readers fall back to the
-                    // whole window.
-                    window
-                        .a11y
-                        .note_focus_without_node(focus_handle.id, "it has no element id");
-                }
-            }
         }
 
-        if self.report_active_descendant_focus && window.a11y.is_active() {
-            if let Some(global_id) = global_id {
-                window
-                    .a11y
-                    .set_active_descendant(global_id.accesskit_node_id());
-            }
-        }
         window.with_optional_element_state::<InteractiveElementState, _>(
             global_id,
             |element_state, window| {
@@ -2505,21 +2221,6 @@ impl Interactivity {
                                         }
 
                                         self.paint_keyboard_listeners(window, cx);
-
-                                        if window.a11y.is_active() {
-                                            if let Some(global_id) = global_id {
-                                                if !self.a11y_action_listeners.is_empty() {
-                                                    let node_id = global_id.accesskit_node_id();
-                                                    for (action, listener) in
-                                                        self.a11y_action_listeners.drain(..)
-                                                    {
-                                                        window.on_a11y_action(
-                                                            node_id, action, listener,
-                                                        );
-                                                    }
-                                                }
-                                            }
-                                        }
 
                                         f(&style, window, cx);
 
@@ -3429,80 +3130,6 @@ impl Interactivity {
         style
     }
 
-    pub(crate) fn write_a11y_info(&self, node: &mut accesskit::Node) {
-        if let Some(id) = &self.aria.author_id {
-            node.set_author_id(id.to_string());
-        }
-        if let Some(label) = &self.aria.label {
-            node.set_label(label.to_string());
-        }
-        if let Some(description) = &self.aria.description {
-            node.set_description(description.to_string());
-        }
-        if let Some(keyshortcuts) = &self.aria.keyshortcuts {
-            node.set_keyboard_shortcut(keyshortcuts.to_string());
-        }
-        if let Some(selected) = self.aria.selected {
-            node.set_selected(selected);
-        }
-        if let Some(expanded) = self.aria.expanded {
-            node.set_expanded(expanded);
-        }
-        if let Some(toggled) = self.aria.toggled {
-            node.set_toggled(toggled);
-        }
-        if let Some(value) = self.aria.numeric_value {
-            node.set_numeric_value(value);
-        }
-        if let Some(value) = self.aria.min_numeric_value {
-            node.set_min_numeric_value(value);
-        }
-        if let Some(value) = self.aria.max_numeric_value {
-            node.set_max_numeric_value(value);
-        }
-        if let Some(step) = self.aria.numeric_value_step {
-            node.set_numeric_value_step(step);
-        }
-        if let Some(value) = &self.aria.value {
-            node.set_value(value.to_string());
-        }
-        if let Some(placeholder) = &self.aria.placeholder {
-            node.set_placeholder(placeholder.to_string());
-        }
-        if let Some(orientation) = self.aria.orientation {
-            node.set_orientation(orientation);
-        }
-        if let Some(level) = self.aria.level {
-            node.set_level(level);
-        }
-        if let Some(position) = self.aria.position_in_set {
-            node.set_position_in_set(position);
-        }
-        if let Some(size) = self.aria.size_of_set {
-            node.set_size_of_set(size);
-        }
-        if let Some(index) = self.aria.row_index {
-            node.set_row_index(index);
-        }
-        if let Some(index) = self.aria.column_index {
-            node.set_column_index(index);
-        }
-        if let Some(count) = self.aria.row_count {
-            node.set_row_count(count);
-        }
-        if let Some(count) = self.aria.column_count {
-            node.set_column_count(count);
-        }
-        if !self.click_listeners.is_empty() {
-            node.add_action(accesskit::Action::Click);
-        }
-        if self.tracked_focus_handle.is_some() || self.focusable {
-            node.add_action(accesskit::Action::Focus);
-        }
-        for (action, _) in &self.a11y_action_listeners {
-            node.add_action(*action);
-        }
-    }
 }
 
 /// The per-frame state of an interactive element. Used for tracking stateful interactions like clicks
@@ -4008,22 +3635,6 @@ where
 
     fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
         self.element.source_location()
-    }
-
-    fn a11y_role(&self) -> Option<accesskit::Role> {
-        self.element.a11y_role()
-    }
-
-    fn write_a11y_info(&self, node: &mut accesskit::Node) {
-        self.element.write_a11y_info(node);
-    }
-
-    fn a11y_synthetic_children(
-        &mut self,
-        prepaint: &mut Self::PrepaintState,
-        builder: &mut crate::A11ySubtreeBuilder,
-    ) {
-        self.element.a11y_synthetic_children(prepaint, builder);
     }
 
     fn request_layout(

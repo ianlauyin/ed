@@ -32,7 +32,6 @@ rasterization; without it the placeholder text system lays out text but renders 
 ### Additional Topics
 
 - [Ownership and data flow](_ownership_and_data_flow)
-- [Accessibility](_accessibility)
 
 ### Dependencies
 

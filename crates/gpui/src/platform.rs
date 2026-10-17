@@ -658,16 +658,6 @@ impl Tiling {
     }
 }
 
-/// Callbacks for the accessibility adapter.
-pub struct A11yCallbacks {
-    /// Called when the adapter is activated (a screen reader connects).
-    pub activation: Box<dyn Fn() -> Option<accesskit::TreeUpdate> + Send + 'static>,
-    /// Called when an action is requested by the screen reader.
-    pub action: Box<dyn Fn(accesskit::ActionRequest) + Send + 'static>,
-    /// Called when the adapter is deactivated (screen reader disconnects).
-    pub deactivation: Box<dyn Fn() + Send + 'static>,
-}
-
 #[derive(Debug, Copy, Clone, Eq, PartialEq, Default)]
 #[expect(missing_docs)]
 pub struct RequestFrameOptions {
@@ -921,14 +911,6 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
 
     fn play_system_bell(&self) {}
 
-    /// Initialize the accessibility adapter with callbacks.
-    fn a11y_init(&self, _callbacks: A11yCallbacks) {}
-
-    /// Provide a TreeUpdate to the accessibility adapter.
-    fn a11y_tree_update(&self, _tree_update: accesskit::TreeUpdate) {}
-
-    /// Inform the adapter of updated window bounds.
-    fn a11y_update_window_bounds(&self) {}
 }
 
 /// Type alias for runnables with metadata.

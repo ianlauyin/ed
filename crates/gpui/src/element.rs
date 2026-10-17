@@ -32,7 +32,7 @@
 //! your own custom layout algorithm or rendering a code editor.
 
 use crate::{
-    A11ySubtreeBuilder, App, ArenaBox, AvailableSpace, Bounds, Context, DispatchNodeId, ElementId,
+    App, ArenaBox, AvailableSpace, Bounds, Context, DispatchNodeId, ElementId,
     FocusHandle, LayoutId, Pixels, Point, Size, Style, Window, util::FluentBuilder,
     window::with_element_arena,
 };
@@ -63,7 +63,7 @@ pub trait Element: 'static + IntoElement {
     /// frames. This id must be unique among children of the first containing element with an id.
     fn id(&self) -> Option<ElementId>;
 
-    /// Source location where this element was constructed, used for accessibility debugging.
+    /// Source location where this element was constructed, used for debugging.
     fn source_location(&self) -> Option<&'static panic::Location<'static>>;
 
     /// Before an element can be painted, we need to know where it's going to be and how big it is.
@@ -97,38 +97,6 @@ pub trait Element: 'static + IntoElement {
         window: &mut Window,
         cx: &mut App,
     );
-
-    /// Returns the accessible role for this element, if any.
-    /// Elements that return `None` are not included in the accessibility tree.
-    ///
-    /// Note: inclusion in accessibility tree requires non-`None` [`id`][Element::id].
-    ///
-    /// See the [accessibility guide](crate::_accessibility) for an overview.
-    fn a11y_role(&self) -> Option<accesskit::Role> {
-        None
-    }
-
-    /// Write accessibility properties to the given node.
-    /// Called only when `a11y_role()` returns `Some`.
-    ///
-    /// See the [accessibility guide](crate::_accessibility) for an overview.
-    fn write_a11y_info(&self, _node: &mut accesskit::Node) {}
-
-    /// Add synthetic child nodes to an [`Element`] that has an
-    /// [`.id()`][Element::id] and a [`.role()`][Element::a11y_role].
-    ///
-    /// Some elements may want to inject accessibility nodes that do not
-    /// correspond to any GPUI element. For example, a custom text field element
-    /// may want to inject synthetic child nodes for the text content.
-    ///
-    /// See [Synthetic children](crate::_accessibility#synthetic-children) in
-    /// the accessibility guide for more detail.
-    fn a11y_synthetic_children(
-        &mut self,
-        _prepaint: &mut Self::PrepaintState,
-        _builder: &mut A11ySubtreeBuilder,
-    ) {
-    }
 
     /// Convert this element into a dynamically-typed [`AnyElement`].
     fn into_any(self) -> AnyElement {
@@ -242,10 +210,6 @@ impl GlobalElementId {
             ids: Arc::from(ids),
             hash,
         }
-    }
-
-    pub(crate) fn accesskit_node_id(&self) -> accesskit::NodeId {
-        accesskit::NodeId(self.hash)
     }
 }
 
@@ -392,44 +356,6 @@ impl<E: Element> Drawable<E> {
                 }
 
                 let bounds = window.layout_bounds(layout_id);
-                let mut pushed_a11y_node = false;
-                if window.a11y.is_active() {
-                    if let Some(global_id) = global_id.as_ref() {
-                        if let Some(role) = self.element.a11y_role() {
-                            let node_id = global_id.accesskit_node_id();
-                            let mut node = accesskit::Node::new(role);
-                            let scale = window.scale_factor();
-                            node.set_bounds(accesskit::Rect {
-                                x0: (bounds.origin.x.0 * scale) as f64,
-                                y0: (bounds.origin.y.0 * scale) as f64,
-                                x1: ((bounds.origin.x.0 + bounds.size.width.0) * scale) as f64,
-                                y1: ((bounds.origin.y.0 + bounds.size.height.0) * scale) as f64,
-                            });
-                            self.element.write_a11y_info(&mut node);
-                            window.a11y.node_bounds.insert(node_id, bounds);
-                            pushed_a11y_node = window.a11y.nodes.push(node_id, node);
-                            #[cfg(debug_assertions)]
-                            if pushed_a11y_node {
-                                let view = window
-                                    .a11y
-                                    .view_type_names
-                                    .get(&window.current_view())
-                                    .copied();
-                                let source_location = self.element.source_location();
-                                window.a11y.nodes.record_node_info(
-                                    node_id,
-                                    crate::window::a11y::debug::NodeDebugInfo {
-                                        synthetic: false,
-                                        view,
-                                        element_id: global_id.last().map(|id| format!("{id:?}")),
-                                        source_location,
-                                    },
-                                );
-                            }
-                        }
-                    }
-                }
-
                 let node_id = window.next_frame.dispatch_tree.push_node();
                 let mut prepaint = self.element.prepaint(
                     global_id.as_ref(),
@@ -439,32 +365,6 @@ impl<E: Element> Drawable<E> {
                     cx,
                 );
                 window.next_frame.dispatch_tree.pop_node();
-
-                if pushed_a11y_node {
-                    if let Some(global_id) = global_id.as_ref() {
-                        #[cfg(debug_assertions)]
-                        let creator = crate::window::a11y::debug::NodeCreator {
-                            view: window
-                                .a11y
-                                .view_type_names
-                                .get(&window.current_view())
-                                .copied(),
-                            element_id: global_id.last().map(|id| format!("{id:?}")),
-                            source_location: self.element.source_location(),
-                        };
-                        let mut builder = A11ySubtreeBuilder::new(
-                            global_id.accesskit_node_id(),
-                            &mut window.a11y.nodes,
-                        );
-                        #[cfg(debug_assertions)]
-                        {
-                            builder = builder.with_creator(creator);
-                        }
-                        self.element
-                            .a11y_synthetic_children(&mut prepaint, &mut builder);
-                    }
-                    window.a11y.nodes.pop();
-                }
 
                 if global_id.is_some() {
                     window.element_id_stack.pop();

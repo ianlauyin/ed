@@ -1349,7 +1349,6 @@ pub struct Workspace {
     toast_layer: Entity<ToastLayer>,
     titlebar_item: Option<AnyView>,
     titlebar_focus_handle: FocusHandle,
-    region_focus_handles: RegionFocusHandles,
     notifications: Notifications,
     suppressed_notifications: HashSet<NotificationId>,
     project: Entity<Project>,
@@ -1755,7 +1754,6 @@ impl Workspace {
             toast_layer,
             titlebar_item: None,
             titlebar_focus_handle: cx.focus_handle(),
-            region_focus_handles: RegionFocusHandles::new(cx),
             notifications: Notifications::default(),
             suppressed_notifications: HashSet::default(),
             left_dock,
@@ -7092,30 +7090,13 @@ impl Workspace {
             return None;
         }
 
-        // Expose each open dock as a landmark region so assistive technology
-        // can navigate to it, and so region navigation announces it. While a
-        // screen reader is active the wrapper is also the focus target for
-        // region navigation (it carries the landmark role and label), so
-        // focusing it announces the region instead of falling back to the whole
-        // window. We only make it focusable in that case so it never adds a
-        // hitbox or intercepts mouse focus for other users.
-        let (dock_element_id, dock_label) = match position {
-            DockPosition::Left => ("left-dock", "Left dock"),
-            DockPosition::Right => ("right-dock", "Right dock"),
-            DockPosition::Bottom => ("bottom-dock", "Bottom dock"),
+        let dock_element_id = match position {
+            DockPosition::Left => "left-dock",
+            DockPosition::Right => "right-dock",
+            DockPosition::Bottom => "bottom-dock",
         };
-        let dock_is_open = dock.read(cx).is_open();
-        let a11y_active = window.is_a11y_active();
-
         let mut container = div()
             .id(dock_element_id)
-            .when(dock_is_open, |this| {
-                this.role(gpui::Role::Complementary)
-                    .aria_label(dock_label)
-                    .when(a11y_active, |this| {
-                        this.track_focus(self.region_focus_handles.dock(position))
-                    })
-            })
             .flex()
             .overflow_hidden()
             .flex_none()
@@ -7178,12 +7159,11 @@ impl Workspace {
     /// Returns the currently-visible major window regions ("parts"), in a stable
     /// cyclic order: title bar, left dock, editor, right dock, bottom dock,
     /// status bar. Closed docks are skipped. Used by
-    /// [`FocusNextPart`]/[`FocusPreviousPart`] so keyboard and screen-reader
-    /// users can move between regions without a mouse.
+    /// [`FocusNextPart`]/[`FocusPreviousPart`] so keyboard users can move
+    /// between regions without a mouse.
     fn focusable_parts(&self, cx: &App) -> Vec<FocusablePart> {
         // The interactive focus target inside an open dock: the active panel, or
-        // the dock itself as a fallback. This is what region navigation focuses
-        // when no screen reader is active (preserving the previous behavior).
+        // the dock itself as a fallback.
         fn dock_content_handle(dock: &Entity<Dock>, cx: &App) -> FocusHandle {
             let dock = dock.read(cx);
             dock.active_panel()
@@ -7191,22 +7171,19 @@ impl Workspace {
                 .unwrap_or_else(|| dock.focus_handle(cx))
         }
 
-        let dock_part = |dock: &Entity<Dock>, wrapper: &FocusHandle| {
+        let dock_part = |dock: &Entity<Dock>| {
             dock.read(cx)
                 .is_open()
-                .then(|| FocusablePart::landmark(wrapper.clone(), dock_content_handle(dock, cx)))
+                .then(|| FocusablePart::landmark(dock_content_handle(dock, cx)))
         };
 
         let mut parts = Vec::new();
         if self.titlebar_item.is_some() {
-            // The title bar is an ARIA toolbar, so region navigation lands on
-            // its first control rather than the toolbar container.
+            // Region navigation lands on the title bar's first control rather
+            // than the toolbar container.
             parts.push(FocusablePart::toolbar(self.titlebar_focus_handle.clone()));
         }
-        parts.extend(dock_part(
-            &self.left_dock,
-            &self.region_focus_handles.left_dock,
-        ));
+        parts.extend(dock_part(&self.left_dock));
 
         let center_pane = self
             .last_active_center_pane
@@ -7214,20 +7191,13 @@ impl Workspace {
             .and_then(|pane| pane.upgrade())
             .unwrap_or_else(|| self.center.first_pane());
         parts.push(FocusablePart::landmark(
-            self.region_focus_handles.editor.clone(),
             center_pane.read(cx).focus_handle(cx),
         ));
 
-        parts.extend(dock_part(
-            &self.right_dock,
-            &self.region_focus_handles.right_dock,
-        ));
-        parts.extend(dock_part(
-            &self.bottom_dock,
-            &self.region_focus_handles.bottom_dock,
-        ));
-        // The status bar is an ARIA toolbar, so region navigation lands on its
-        // first control rather than the toolbar container.
+        parts.extend(dock_part(&self.right_dock));
+        parts.extend(dock_part(&self.bottom_dock));
+        // Region navigation lands on the status bar's first control rather than
+        // the toolbar container.
         parts.push(FocusablePart::toolbar(
             self.status_bar.read(cx).focus_handle(cx),
         ));
@@ -7252,8 +7222,7 @@ impl Workspace {
         let part = &parts[next_index];
         match &part.behavior {
             PartBehavior::Toolbar => {
-                // The ARIA toolbar pattern requires focus to rest on the first
-                // control, not the container. Focusing the tab-group container
+                // Focus rests on the first control, not the container. Focusing the tab-group container
                 // and advancing descends into its first control; if the toolbar
                 // has no focusable control, restore focus to the container so
                 // navigation doesn't escape into an unrelated region.
@@ -7267,17 +7236,8 @@ impl Workspace {
                     window.focus(&container, cx);
                 }
             }
-            PartBehavior::Landmark { content } => {
-                // Only redirect to the (otherwise non-focusable) wrapper when a
-                // screen reader is active, so it is announced as a landmark.
-                // Without a screen reader, focus the interactive content so
-                // sighted keyboard users land somewhere usable, unchanged from
-                // before this feature existed.
-                if window.is_a11y_active() {
-                    window.focus(&part.container, cx);
-                } else {
-                    window.focus(content, cx);
-                }
+            PartBehavior::Landmark => {
+                window.focus(&part.container, cx);
             }
         }
         cx.notify();
@@ -7285,8 +7245,7 @@ impl Workspace {
 
     /// Moves focus between the interactive controls within the title bar
     /// toolbar in response to arrow keys. Navigation is clamped to the title
-    /// bar so arrows move between items and stop at the ends (ARIA toolbar
-    /// semantics); Tab is still used to leave the toolbar.
+    /// bar so arrows move between items and stop at the ends; Tab is still used to leave the toolbar.
     fn move_titlebar_item_focus(
         &mut self,
         forward: bool,
@@ -7310,13 +7269,7 @@ impl Workspace {
         cx.notify();
     }
 
-    /// Renders the center pane group wrapped in a `Main` landmark so assistive
-    /// technology recognizes the editor as the main region and can navigate to
-    /// it. While a screen reader is active the wrapper is also the focus target
-    /// for region navigation (it carries the landmark role and label), so
-    /// focusing it announces "Editor" instead of falling back to the whole
-    /// window. We only make it focusable in that case so it never adds a hitbox
-    /// or intercepts mouse focus for other users.
+    /// Renders the center pane group.
     fn render_center(
         &self,
         render_cx: &PaneRenderContext,
@@ -7325,11 +7278,6 @@ impl Workspace {
     ) -> impl IntoElement {
         div()
             .id("editor-region")
-            .role(gpui::Role::Main)
-            .aria_label("Editor")
-            .when(window.is_a11y_active(), |this| {
-                this.track_focus(&self.region_focus_handles.editor)
-            })
             .size_full()
             .child(self.center.render(
                 self.zoomed.as_ref(),
@@ -7655,25 +7603,18 @@ enum ActivateInDirectionTarget {
 /// A focusable major window region used by region navigation
 /// ([`FocusNextPart`]/[`FocusPreviousPart`]).
 struct FocusablePart {
-    /// The region's container/ancestor handle. For landmark regions this is the
-    /// wrapper that carries the landmark role + label (and is only focusable
-    /// while a screen reader is active); for toolbars it is the toolbar
-    /// container.
+    /// The region's focus handle. For landmark regions this is the interactive
+    /// content; for toolbars it is the toolbar container.
     container: FocusHandle,
     behavior: PartBehavior,
 }
 
 enum PartBehavior {
-    /// An ARIA toolbar (title bar, status bar). Region navigation focuses the
-    /// container and descends to its first control, which is usable for
-    /// everyone, so this is not gated on assistive technology.
+    /// A toolbar (title bar, status bar). Region navigation focuses the
+    /// container and descends to its first control.
     Toolbar,
-    /// A landmark region (a dock or the editor). The wrapper carries the
-    /// landmark role + label, so when a screen reader is active we focus it so
-    /// it is announced. Otherwise we focus the interactive `content` so sighted
-    /// keyboard users land on something usable, exactly as before - and the
-    /// wrapper is left non-focusable so it never affects mouse focus.
-    Landmark { content: FocusHandle },
+    /// A dock or the editor. Region navigation focuses its content directly.
+    Landmark,
 }
 
 impl FocusablePart {
@@ -7684,57 +7625,16 @@ impl FocusablePart {
         }
     }
 
-    fn landmark(wrapper: FocusHandle, content: FocusHandle) -> Self {
+    fn landmark(content: FocusHandle) -> Self {
         Self {
-            container: wrapper,
-            behavior: PartBehavior::Landmark { content },
+            container: content,
+            behavior: PartBehavior::Landmark,
         }
     }
 
-    /// Whether focus currently lies within this region. Checks both the wrapper
-    /// (focused/ancestor when a screen reader is active) and, for landmarks, the
-    /// interactive content (focused when a screen reader is not active, since
-    /// the wrapper isn't in the focus tree then).
+    /// Whether focus currently lies within this region.
     fn contains_focused(&self, window: &Window, cx: &App) -> bool {
-        if self.container.contains_focused(window, cx) {
-            return true;
-        }
-        match &self.behavior {
-            PartBehavior::Landmark { content } => content.contains_focused(window, cx),
-            PartBehavior::Toolbar => false,
-        }
-    }
-}
-
-/// Focus handles for the landmark region wrappers (the docks and the editor).
-/// Region navigation ([`FocusNextPart`]/[`FocusPreviousPart`]) focuses these so
-/// it lands on the wrapper that actually carries the landmark role and label
-/// (e.g. `Main`/"Editor", `Complementary`/"Left dock"). Without them, region
-/// navigation would focus an inner element that has no accessibility node, and
-/// assistive technology would fall back to announcing the whole window.
-struct RegionFocusHandles {
-    left_dock: FocusHandle,
-    right_dock: FocusHandle,
-    bottom_dock: FocusHandle,
-    editor: FocusHandle,
-}
-
-impl RegionFocusHandles {
-    fn new(cx: &mut App) -> Self {
-        Self {
-            left_dock: cx.focus_handle(),
-            right_dock: cx.focus_handle(),
-            bottom_dock: cx.focus_handle(),
-            editor: cx.focus_handle(),
-        }
-    }
-
-    fn dock(&self, position: DockPosition) -> &FocusHandle {
-        match position {
-            DockPosition::Left => &self.left_dock,
-            DockPosition::Right => &self.right_dock,
-            DockPosition::Bottom => &self.bottom_dock,
-        }
+        self.container.contains_focused(window, cx)
     }
 }
 
@@ -7889,20 +7789,16 @@ impl Render for Workspace {
             .items_start()
             .text_color(colors.text)
             .overflow_hidden()
-            // Expose the title bar as an ARIA toolbar so region navigation
-            // (FocusNextPart) can reach the top bar's controls and assistive
-            // technology announces it as a toolbar. The contained controls form
-            // a tab group: region navigation lands on the first control (per
-            // the ARIA toolbar pattern), Tab steps through them, and arrow keys
-            // move between them once focus is inside.
+            // The title bar is a toolbar so region navigation (FocusNextPart)
+            // can reach its controls. The contained controls form a tab group:
+            // region navigation lands on the first control, Tab steps through
+            // them, and arrow keys move between them once focus is inside.
             .when_some(self.titlebar_item.clone(), |this, item| {
                 this.child(
                     div()
                         .id("titlebar-region")
                         .track_focus(&self.titlebar_focus_handle)
                         .tab_group()
-                        .role(gpui::Role::Toolbar)
-                        .aria_label("Title bar")
                         .on_key_down(cx.listener(
                             |workspace, event: &gpui::KeyDownEvent, window, cx| {
                                 if event.keystroke.modifiers.modified() {

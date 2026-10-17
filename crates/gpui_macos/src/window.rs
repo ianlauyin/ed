@@ -807,7 +807,6 @@ struct MacWindowState {
     simple_fullscreen_state: Option<SimpleFullscreenState>,
     activated_least_once: bool,
     closed: Arc<AtomicBool>,
-    accesskit_adapter: Option<accesskit_macos::SubclassingAdapter>,
     // The parent window if this window is a sheet (Dialog kind)
     sheet_parent: Option<id>,
 }
@@ -1245,7 +1244,6 @@ impl MacWindow {
                 simple_fullscreen_state: None,
                 activated_least_once: false,
                 closed: Arc::new(AtomicBool::new(false)),
-                accesskit_adapter: None,
                 sheet_parent: None,
             }));
             let mut window = Self(state, marker);
@@ -1407,15 +1405,6 @@ impl MacWindow {
 impl Drop for MacWindow {
     fn drop(&mut self) {
         let mut this = self.0.lock();
-        // `accesskit_macos::SubclassingAdapter::for_window` strong-retains the
-        // window's content view, and that content view keeps the `GPUIView` it
-        // hosts alive. Together with the `Arc<Mutex<MacWindowState>>` parked in
-        // both views' `windowState` ivar, that forms
-        // `MacWindowState -> adapter -> content view -> GPUIView -> MacWindowState`,
-        // a cycle the delegate/`frame_source` teardown below cannot break. Drop
-        // the adapter here so the native view, its `CAMetalLayer` and the
-        // renderer's command queue are actually released with the window.
-        drop(this.accesskit_adapter.take());
         this.renderer.destroy();
         let window = this.native_window;
         let sheet_parent = this.sheet_parent.take();
@@ -2272,58 +2261,6 @@ impl PlatformWindow for MacWindow {
         NSBeep()
     }
 
-    fn a11y_init(&self, callbacks: gpui::A11yCallbacks) {
-        let mut lock = self.0.lock();
-
-        let activation_handler = A11yActivationHandler {
-            callback: callbacks.activation,
-        };
-        let action_handler = A11yActionHandler(callbacks.action);
-
-        let adapter = unsafe {
-            accesskit_macos::SubclassingAdapter::for_window(
-                lock.native_window as *mut c_void,
-                activation_handler,
-                action_handler,
-            )
-        };
-
-        lock.accesskit_adapter = Some(adapter);
-    }
-
-    fn a11y_tree_update(&self, tree_update: accesskit::TreeUpdate) {
-        let events = {
-            let mut lock = self.0.lock();
-            lock.accesskit_adapter
-                .as_mut()
-                .and_then(|adapter| adapter.update_if_active(|| tree_update))
-        };
-        if let Some(events) = events {
-            events.raise();
-        }
-    }
-
-    fn a11y_update_window_bounds(&self) {
-        // macOS handles window bounds tracking automatically via NSAccessibility.
-    }
-}
-
-struct A11yActivationHandler {
-    callback: Box<dyn Fn() -> Option<accesskit::TreeUpdate> + Send + 'static>,
-}
-
-impl accesskit::ActivationHandler for A11yActivationHandler {
-    fn request_initial_tree(&mut self) -> Option<accesskit::TreeUpdate> {
-        (self.callback)()
-    }
-}
-
-struct A11yActionHandler(Box<dyn Fn(accesskit::ActionRequest) + Send + 'static>);
-
-impl accesskit::ActionHandler for A11yActionHandler {
-    fn do_action(&mut self, request: accesskit::ActionRequest) {
-        (self.0)(request);
-    }
 }
 
 impl rwh::HasWindowHandle for MacWindow {
@@ -3066,16 +3003,6 @@ fn window_did_change_key_status(this: &AnyObject, selector: Sel, _: id) {
 
     let executor = lock.foreground_executor.clone();
     drop(lock);
-
-    let a11y_events = {
-        let mut lock = window_state.lock();
-        lock.accesskit_adapter
-            .as_mut()
-            .and_then(|adapter| adapter.update_view_focus_state(is_active))
-    };
-    if let Some(events) = a11y_events {
-        events.raise();
-    }
 
     // When a window becomes active, trigger an immediate synchronous frame request to prevent
     // tab flicker when switching between windows in native tabs mode.

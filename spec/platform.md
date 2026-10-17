@@ -29,6 +29,11 @@ remote server supports macOS and Linux.
 - The askpass crate, password dialogs, credential forwarding over RPC, and
   askpass helper modes are removed. Remote connection progress and cancellation
   remain available.
+- No accessibility support: GPUI has no AccessKit integration, never registers
+  with the macOS accessibility API, and builds no accessibility tree. There are
+  no role/aria element APIs, no accessibility dev actions, and no
+  `ZED_EXPERIMENTAL_A11Y` switch. Region navigation (`FocusNextPart`) and
+  keyboard toolbar navigation still work and focus the interactive content.
 - Audio input and speech recognition are unsupported; the app requests no
   microphone or speech-recognition access. Background tasks use high, medium,
   or low priority, with no realtime audio scheduling.

@@ -153,21 +153,6 @@ impl Application {
         Self(App::new_app(platform, Arc::new(())))
     }
 
-    /// Builds an app with accessibility (AccessKit) integration forcibly
-    /// disabled.
-    ///
-    /// In this mode, accessibility APIs (e.g.
-    /// [`div().role()`][crate::StatefulInteractiveElement::role]) silently
-    /// no-op.
-    ///
-    /// See the [accessibility guide](crate::_accessibility) for an overview of
-    /// the features this disables.
-    pub fn new_inaccessible(platform: Rc<dyn Platform>) -> Self {
-        let this = Self::with_platform(platform);
-        this.0.borrow_mut().accessibility_force_disabled = true;
-        this
-    }
-
     /// Assigns the source of assets for the application.
     pub fn with_assets(self, asset_source: impl AssetSource) -> Self {
         let mut context_lock = self.0.borrow_mut();
@@ -554,9 +539,6 @@ pub struct App {
     pub(crate) reduce_motion: bool,
     /// Origin of the shared clock that phase-locks synced repeating animations.
     pub(crate) synced_animation_epoch: Instant,
-    /// Whether the app was created by [`Application::new_inaccessible`]. No
-    /// accesskit APIs will be called when this flag is set.
-    pub(crate) accessibility_force_disabled: bool,
     pending_updates: usize,
     quit_mode: QuitMode,
     quitting: bool,
@@ -641,7 +623,6 @@ impl App {
                 cursor_hide_mode: CursorHideMode::default(),
                 reduce_motion: false,
                 synced_animation_epoch,
-                accessibility_force_disabled: false,
 
                 #[cfg(debug_assertions)]
                 name: None,

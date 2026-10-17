@@ -25,7 +25,7 @@ building (`cargo check` / `cargo clippy`) and running the app.
 - The GPUI element inspector is removed from all builds, including its UI,
   command, keybinding, style schema, reflection macro, and Cargo features.
   Rendering carries no inspector state or IDs. Debug source locations remain
-  available for accessibility diagnostics and source navigation.
+  available for source navigation.
 
 ## Dependencies
 

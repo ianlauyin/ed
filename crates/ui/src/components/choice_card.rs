@@ -1,4 +1,4 @@
-use gpui::{BorderStyle, ClickEvent, Corners, Edges, Hsla, Role, Toggled, canvas, quad};
+use gpui::{BorderStyle, ClickEvent, Corners, Edges, Hsla, canvas, quad};
 
 use crate::{Checkbox, ToggleState, prelude::*};
 
@@ -26,7 +26,6 @@ pub struct ChoiceCard {
 
 impl ChoiceCard {
     /// A card for one of several mutually exclusive choices, with a radio indicator.
-    /// Place sibling cards in a `Role::RadioGroup` container.
     pub fn radio(
         id: impl Into<ElementId>,
         label: impl Into<SharedString>,
@@ -36,7 +35,6 @@ impl ChoiceCard {
     }
 
     /// A card for an independently toggled choice, with a checkbox indicator.
-    /// Place sibling cards in a `Role::Group` container.
     pub fn checkbox(
         id: impl Into<ElementId>,
         label: impl Into<SharedString>,
@@ -159,39 +157,25 @@ impl RenderOnce for ChoiceCard {
             )
         };
 
-        let (role, indicator) = match self.kind {
-            ChoiceCardKind::Radio => (
-                Role::RadioButton,
+        let indicator = match self.kind {
+            ChoiceCardKind::Radio => {
                 Self::render_radio_indicator(self.is_selected, border_color, editor_background)
-                    .into_any_element(),
-            ),
+                    .into_any_element()
+            }
             ChoiceCardKind::Checkbox => {
                 let checkbox_state = if self.is_selected {
                     ToggleState::Selected
                 } else {
                     ToggleState::Unselected
                 };
-                (
-                    Role::CheckBox,
-                    div()
-                        .child(Checkbox::new((self.id.clone(), "checkbox"), checkbox_state))
-                        .into_any_element(),
-                )
+                div()
+                    .child(Checkbox::new((self.id.clone(), "checkbox"), checkbox_state))
+                    .into_any_element()
             }
         };
 
         h_flex()
             .id(self.id)
-            .role(role)
-            .aria_label(self.label.clone())
-            .when_some(self.description.clone(), |this, description| {
-                this.aria_description(description)
-            })
-            .aria_toggled(if self.is_selected {
-                Toggled::True
-            } else {
-                Toggled::False
-            })
             .w_full()
             .min_h(rems_from_px(28_f32))
             .items_start()

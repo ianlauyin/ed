@@ -49,21 +49,15 @@ use std::{
     rc::Rc,
     sync::{
         Arc, Weak,
-        atomic::{AtomicBool, AtomicUsize, Ordering::SeqCst},
+        atomic::{AtomicUsize, Ordering::SeqCst},
     },
     thread::AccessError,
     time::Duration,
 };
 use uuid::Uuid;
 
-pub(crate) mod a11y;
 mod prompts;
 
-pub use a11y::A11ySubtreeBuilder;
-
-use self::a11y::A11y;
-
-use self::a11y::ROOT_NODE_ID;
 use crate::util::{
     atomic_incr_if_not_zero, ceil_to_device_pixel, floor_to_device_pixel, round_half_toward_zero,
     round_half_toward_zero_f64, round_stroke_to_device_pixel, round_to_device_pixel,
@@ -1189,7 +1183,6 @@ pub struct Window {
     /// The hitbox that has captured the pointer, if any.
     /// While captured, mouse events route to this hitbox regardless of hit testing.
     captured_hitbox: Option<HitboxId>,
-    pub(crate) a11y: A11y,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -1483,10 +1476,6 @@ impl Window {
             icon,
         } = options;
 
-        let initial_window_title = titlebar
-            .as_ref()
-            .and_then(|titlebar| titlebar.title.clone());
-
         let window_bounds = window_bounds.unwrap_or_else(|| default_bounds(display_id, cx));
         let mut platform_window = cx.platform.open_window(
             handle,
@@ -1533,89 +1522,6 @@ impl Window {
             WindowBounds::Fullscreen(_) => platform_window.toggle_fullscreen(),
             WindowBounds::Maximized(_) => platform_window.zoom(),
             WindowBounds::Windowed(_) => {}
-        }
-
-        let accessibility_force_disabled = cx.accessibility_force_disabled;
-        let a11y_active_flag = Arc::new(AtomicBool::new(false));
-
-        if !accessibility_force_disabled {
-            let mut initial_root_node = accesskit::Node::new(accesskit::Role::Window);
-            if let Some(title) = &initial_window_title {
-                initial_root_node.set_label(title.to_string());
-            }
-            let initial_tree = accesskit::TreeUpdate {
-                nodes: vec![(ROOT_NODE_ID, initial_root_node)],
-                tree: Some(accesskit::Tree::new(ROOT_NODE_ID)),
-                tree_id: accesskit::TreeId::ROOT,
-                focus: ROOT_NODE_ID,
-            };
-            let (activation_sender, activation_receiver) = async_channel::unbounded::<()>();
-            let (deactivation_sender, deactivation_receiver) = async_channel::unbounded::<()>();
-            let (action_sender, action_receiver) =
-                async_channel::unbounded::<accesskit::ActionRequest>();
-
-            platform_window.a11y_init(crate::A11yCallbacks {
-                activation: {
-                    let active_flag = a11y_active_flag.clone();
-                    Box::new(move || {
-                        log::info!("Accessibility activated");
-                        active_flag.store(true, SeqCst);
-                        activation_sender.send_blocking(()).log_err();
-                        Some(initial_tree.clone())
-                    })
-                },
-                action: Box::new(move |request| {
-                    action_sender.send_blocking(request).log_err();
-                }),
-                deactivation: {
-                    let active_flag = a11y_active_flag.clone();
-                    Box::new(move || {
-                        log::info!("Accessibility deactivated");
-                        active_flag.store(false, SeqCst);
-                        deactivation_sender.send_blocking(()).log_err();
-                    })
-                },
-            });
-
-            // A11y can be activated at any time, and so we cannot compute a
-            // correct `TreeUpdate` on-demand. When this happens, we return a
-            // default empty `TreeUpdate`.
-            //
-            // So we force a new frame, which will then send a correct `TreeUpdate`.
-            let mut async_cx = cx.to_async();
-            cx.foreground_executor()
-                .spawn(async move {
-                    while activation_receiver.recv().await.is_ok() {
-                        handle
-                            .update(&mut async_cx, |_, window, _| window.refresh())
-                            .log_err();
-                    }
-                })
-                .detach();
-
-            let mut async_cx = cx.to_async();
-            cx.foreground_executor()
-                .spawn(async move {
-                    while deactivation_receiver.recv().await.is_ok() {
-                        handle
-                            .update(&mut async_cx, |_, window, _| window.refresh())
-                            .log_err();
-                    }
-                })
-                .detach();
-
-            let mut async_cx = cx.to_async();
-            cx.foreground_executor()
-                .spawn(async move {
-                    while let Ok(request) = action_receiver.recv().await {
-                        handle
-                            .update(&mut async_cx, |_, window, cx| {
-                                window.handle_a11y_action(request, cx);
-                            })
-                            .log_err();
-                    }
-                })
-                .detach();
         }
 
         platform_window.on_close(Box::new({
@@ -1968,11 +1874,6 @@ impl Window {
             client_inset: None,
             image_cache_stack: Vec::new(),
             captured_hitbox: None,
-            a11y: A11y::new(
-                a11y_active_flag,
-                accessibility_force_disabled,
-                initial_window_title,
-            ),
         })
     }
 
@@ -2752,7 +2653,6 @@ impl Window {
     /// Updates the window's title at the platform level.
     pub fn set_window_title(&mut self, title: &str) {
         self.platform_window.set_title(title);
-        self.a11y.set_window_title(title.to_string());
     }
 
     /// Sets the position of the macOS traffic light buttons.
@@ -3284,11 +3184,6 @@ impl Window {
         self.invalidator.set_phase(DrawPhase::Prepaint);
         self.tooltip_bounds.take();
 
-        self.a11y.sync_active_flag();
-        if self.a11y.is_active() {
-            self.a11y.begin_frame();
-        }
-
         // Layout all root elements. Like the root element on the web, which
         // stretches to fill the viewport unless explicitly sized, window roots
         // fill the window when their size is `auto`.
@@ -3342,32 +3237,6 @@ impl Window {
             tooltip_element.paint(self, cx);
         }
 
-        // a11y may have been activated/deactivated halfway through the frame
-        let a11y_active_start_of_frame = self.a11y.is_active();
-        self.a11y.sync_active_flag();
-        let a11y_active_end_of_frame = self.a11y.is_active();
-
-        let should_send_a11y_update = a11y_active_start_of_frame && a11y_active_end_of_frame;
-
-        if a11y_active_start_of_frame {
-            // Harvest frame metadata for the debug dump while the live window
-            // and frame are still in scope.
-            let frame_info = crate::window::a11y::debug::FrameDebugInfo {
-                viewport_size: self.viewport_size,
-                scale_factor: self.scale_factor,
-                tab_stop_count: self.next_frame.tab_stops.tab_stop_count(),
-            };
-            // clear the builder state regardless
-            let tree_update = self.a11y.end_frame(frame_info);
-
-            if should_send_a11y_update {
-                log::debug!(
-                    "Sending a11y tree update: {} nodes",
-                    tree_update.nodes.len()
-                );
-                self.platform_window.a11y_tree_update(tree_update);
-            }
-        }
     }
 
     fn prepaint_tooltip(&mut self, cx: &mut App) -> Option<AnyElement> {
@@ -6436,115 +6305,6 @@ impl Window {
     /// with the window, for others it's just a simple global function call.
     pub fn play_system_bell(&self) {
         self.platform_window.play_system_bell()
-    }
-
-    /// Returns whether accessibility support is enabled for this window.
-    ///
-    /// This is false when the app was created with [`crate::Application::new_inaccessible`].
-    /// Unlike [`Self::is_a11y_active`], this does not depend on whether assistive
-    /// technology is currently connected, so it can be used to gate subscriptions
-    /// that are only needed for accessibility.
-    pub fn is_a11y_enabled(&self) -> bool {
-        self.a11y.is_enabled()
-    }
-
-    /// Returns whether accessibility features are active for this frame,
-    /// i.e. whether assistive technology (such as a screen reader) is
-    /// connected and an accessibility tree is being built.
-    ///
-    /// Use this to skip computing data during rendering that is only
-    /// observable through the accessibility tree. When accessibility is
-    /// activated, a redraw is forced, so gated work is recomputed before the
-    /// next tree update is sent to the platform.
-    ///
-    /// See the [accessibility guide](crate::_accessibility) for an overview.
-    pub fn is_a11y_active(&self) -> bool {
-        self.a11y.is_active()
-    }
-
-    /// Debug representation of the last frame's accessibility information.
-    pub fn debug_a11y_tree_json(&self) -> Option<String> {
-        self.a11y.debug_tree_json()
-    }
-
-    /// Register a listener for an accessibility action on a specific node.
-    /// The listener will be called when a screen reader requests the given
-    /// action on the node identified by `node_id`.
-    ///
-    /// See the [accessibility guide](crate::_accessibility) for an overview.
-    pub fn on_a11y_action(
-        &mut self,
-        node_id: accesskit::NodeId,
-        action: accesskit::Action,
-        listener: impl FnMut(Option<&accesskit::ActionData>, &mut Window, &mut App) + 'static,
-    ) {
-        self.a11y
-            .action_listeners
-            .entry(node_id)
-            .or_default()
-            .push((action, Box::new(listener)));
-    }
-
-    pub(crate) fn handle_a11y_action(&mut self, request: accesskit::ActionRequest, cx: &mut App) {
-        // Take listeners out temporarily so the closures can borrow Window
-        // mutably, then restore them afterward.
-        if let Some(mut listeners) = self.a11y.action_listeners.remove(&request.target_node) {
-            let extra_data = request.data.as_ref();
-            let mut matched = false;
-            for (action, listener) in &mut listeners {
-                if *action == request.action {
-                    listener(extra_data, self, cx);
-                    matched = true;
-                }
-            }
-            self.a11y
-                .action_listeners
-                .insert(request.target_node, listeners);
-            if matched {
-                return;
-            }
-        }
-
-        // Fall back to built-in action handling.
-        match request.action {
-            accesskit::Action::Click => {
-                if let Some(bounds) = self.a11y.node_bounds.get(&request.target_node).copied() {
-                    let center = bounds.center();
-                    let mouse_down = PlatformInput::MouseDown(crate::MouseDownEvent {
-                        button: MouseButton::Left,
-                        position: center,
-                        modifiers: Modifiers::default(),
-                        click_count: 1,
-                        first_mouse: false,
-                    });
-                    let mouse_up = PlatformInput::MouseUp(MouseUpEvent {
-                        button: MouseButton::Left,
-                        position: center,
-                        modifiers: Modifiers::default(),
-                        click_count: 1,
-                    });
-                    self.dispatch_event(mouse_down, cx);
-                    self.dispatch_event(mouse_up, cx);
-                }
-            }
-            accesskit::Action::Focus => {
-                if let Some(focus_id) = self.a11y.focus_ids.get(&request.target_node).copied()
-                    && let Some(handle) = FocusHandle::for_id(focus_id, &cx.focus_handles)
-                {
-                    self.focus(&handle, cx);
-                }
-            }
-            accesskit::Action::Blur => {
-                self.blur(cx);
-            }
-            _ => {
-                log::debug!(
-                    "Unhandled a11y action: {:?} on {:?}",
-                    request.action,
-                    request.target_node
-                );
-            }
-        }
     }
 
     #[inline(never)]

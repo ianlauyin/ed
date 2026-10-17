@@ -4,7 +4,7 @@ use crate::{
 };
 use gpui::{
     Anchor, AnyView, App, Context, Decorations, Entity, FocusHandle, Focusable, IntoElement,
-    ParentElement, Render, Role, SharedString, Styled, Subscription, WeakEntity, Window,
+    ParentElement, Render, SharedString, Styled, Subscription, WeakEntity, Window,
 };
 use settings::{SettingsContent, update_settings_file};
 use std::{any::TypeId, sync::Arc};
@@ -120,14 +120,9 @@ impl Render for StatusBar {
             .id("status-bar")
             .track_focus(&self.focus_handle)
             .key_context("StatusBar")
-            // Expose the status bar as an ARIA toolbar so assistive technology
-            // announces it as a toolbar and region navigation can reach its
-            // controls. The controls inside form a tab group: region navigation
-            // lands on the first control (per the ARIA toolbar pattern), Tab
-            // steps through them, and arrow keys move between them once focus is
-            // inside.
-            .role(Role::Toolbar)
-            .aria_label("Status bar")
+            // The controls inside form a tab group so region navigation can
+            // reach them: it lands on the first control, Tab steps through them,
+            // and arrow keys move between them once focus is inside.
             .tab_group()
             .on_key_down(
                 cx.listener(|status_bar, event: &gpui::KeyDownEvent, window, cx| {
@@ -255,7 +250,6 @@ impl StatusBar {
                 )
                 .icon_size(IconSize::Small)
                 .tab_index(0isize)
-                .aria_label("Open threads sidebar")
                 .when(has_notifications, |this| {
                     this.indicator(Indicator::dot().color(Color::Accent))
                         .indicator_border_color(Some(indicator_border))
@@ -450,7 +444,7 @@ impl StatusBar {
 
     /// Moves focus between the interactive controls within the status bar in
     /// response to arrow keys. Navigation is clamped to the status bar so
-    /// arrows move between items and stop at the ends (ARIA toolbar semantics);
+    /// arrows move between items and stop at the ends;
     /// Tab is still used to leave the toolbar.
     fn move_item_focus(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
         let previous = window.focused(cx);

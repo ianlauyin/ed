@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use component::{Component, ComponentScope, example_group_with_title, single_example};
-use gpui::{AnyElement, AnyView, ClickEvent, MouseButton, MouseDownEvent, Pixels, Role, px};
+use gpui::{AnyElement, AnyView, ClickEvent, MouseButton, MouseDownEvent, Pixels, px};
 use smallvec::SmallVec;
 
 use crate::{Disclosure, prelude::*};
@@ -59,11 +59,6 @@ pub struct ListItem {
     focused: Option<bool>,
     dock: Option<DockSide>,
     height: Option<DefiniteLength>,
-    aria_role: Option<Role>,
-    aria_label: Option<SharedString>,
-    aria_keyshortcuts: Option<SharedString>,
-    aria_checked: Option<bool>,
-    aria_active_descendant: bool,
 }
 
 impl ListItem {
@@ -95,58 +90,7 @@ impl ListItem {
             focused: None,
             dock: None,
             height: None,
-            aria_role: None,
-            aria_label: None,
-            aria_keyshortcuts: None,
-            aria_checked: None,
-            aria_active_descendant: false,
         }
-    }
-
-    /// Sets the accessible role reported to assistive technology (e.g.
-    /// [`Role::MenuItem`] when this item is part of a menu). When unset, the
-    /// item is not reported as a distinct node, matching list defaults.
-    pub fn aria_role(mut self, role: Role) -> Self {
-        self.aria_role = Some(role);
-        self
-    }
-
-    /// Sets the label announced by assistive technology. List items render
-    /// arbitrary children, so this should be set when a meaningful textual
-    /// label exists.
-    pub fn aria_label(mut self, label: impl Into<SharedString>) -> Self {
-        self.aria_label = Some(label.into());
-        self
-    }
-
-    /// Sets the keyboard shortcut announced by assistive technology for this
-    /// item, e.g. a menu item's accelerator. Requires [`Self::aria_role`] to be
-    /// set. Use a human-friendly display string (the accelerator shown to
-    /// sighted users), e.g. `"Ctrl-S"`.
-    pub fn aria_keyshortcuts(mut self, keyshortcuts: impl Into<SharedString>) -> Self {
-        self.aria_keyshortcuts = Some(keyshortcuts.into());
-        self
-    }
-
-    /// Sets the checked state reported to assistive technology, independent of
-    /// the visual disclosure [`Self::toggle`]. Use this for checkable items
-    /// such as a [`Role::MenuItemCheckBox`] entry so screen readers announce
-    /// "checked"/"not checked" accurately.
-    pub fn aria_checked(mut self, checked: bool) -> Self {
-        self.aria_checked = Some(checked);
-        self
-    }
-
-    /// Reports this item as the accessibility focus, overriding the element
-    /// that holds real keyboard focus. Requires [`Self::aria_role`] to be set.
-    ///
-    /// Use this on the selected item of a composite widget (e.g. a menu) that
-    /// keeps keyboard focus on its container. It is honored only while the
-    /// container actually holds focus, so it is safe to set unconditionally on
-    /// the selected item. See [`StatefulInteractiveElement::aria_active_descendant`].
-    pub fn aria_active_descendant(mut self) -> Self {
-        self.aria_active_descendant = true;
-        self
     }
 
     pub fn group_name(mut self, group_name: impl Into<SharedString>) -> Self {
@@ -333,30 +277,6 @@ impl RenderOnce for ListItem {
             .child(
                 h_flex()
                     .id("inner_list_item")
-                    // The accessible role/label live here, alongside the click
-                    // handler, so assistive technology reports one actionable
-                    // node (e.g. a menu item) rather than an inert container.
-                    .when_some(self.aria_role, |this, role| this.role(role))
-                    .when(
-                        self.aria_role.is_some() && self.aria_active_descendant,
-                        |this| this.aria_active_descendant(),
-                    )
-                    .when_some(self.aria_label, |this, label| this.aria_label(label))
-                    .when_some(self.aria_keyshortcuts, |this, keyshortcuts| {
-                        this.aria_keyshortcuts(keyshortcuts)
-                    })
-                    .when(self.aria_role.is_some(), |this| {
-                        this.aria_selected(self.selected).when_some(
-                            self.aria_checked.or(self.toggle),
-                            |this, toggled| {
-                                this.aria_toggled(if toggled {
-                                    gpui::Toggled::True
-                                } else {
-                                    gpui::Toggled::False
-                                })
-                            },
-                        )
-                    })
                     .group("list_item")
                     .w_full()
                     .relative()

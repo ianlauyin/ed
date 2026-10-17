@@ -2922,9 +2922,6 @@ impl OutlinePanel {
     ) -> AnyElement {
         h_flex()
             .id("expand-collapse")
-            .role(gpui::Role::Button)
-            .aria_label(if is_expanded { "Collapse" } else { "Expand" })
-            .aria_expanded(is_expanded)
             .flex_none()
             .cursor_pointer()
             .rounded_sm()

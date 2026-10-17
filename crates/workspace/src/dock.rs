@@ -1438,7 +1438,6 @@ impl Render for PanelButtons {
                     IconButton::new(button.id, button.icon)
                         .icon_size(IconSize::Small)
                         .tab_index(0isize)
-                        .aria_label(tooltip)
                         .tooltip({
                             let action = action.boxed_clone();
                             move |_window, cx| Tooltip::for_action(tooltip, &*action, cx)
@@ -1546,7 +1545,6 @@ impl Render for PanelButtons {
                             .icon_size(IconSize::Small)
                             .toggle_state(is_active_button)
                             .tab_index(0isize)
-                            .aria_label(icon_tooltip)
                             .on_click({
                                 let action = action.boxed_clone();
                                 move |_, window, cx| {
