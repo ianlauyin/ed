@@ -48,9 +48,6 @@ pub struct ProjectSettings {
     /// Configuration for Git-related features
     pub git: GitSettings,
 
-    /// Configuration for Node-related features
-    pub node: NodeBinarySettings,
-
     /// Configuration for how direnv configuration should be loaded
     pub load_direnv: DirenvSettings,
 
@@ -73,23 +70,6 @@ pub struct SessionSettings {
     ///
     /// Default: false
     pub trust_all_worktrees: bool,
-}
-
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
-pub struct NodeBinarySettings {
-    /// The path to the Node binary.
-    pub path: Option<String>,
-    /// The path to the npm binary Zed should use (defaults to `.path/../npm`).
-    pub npm_path: Option<String>,
-}
-
-impl From<settings::NodeBinarySettings> for NodeBinarySettings {
-    fn from(settings: settings::NodeBinarySettings) -> Self {
-        Self {
-            path: settings.path,
-            npm_path: settings.npm_path,
-        }
-    }
 }
 
 /// Common language server settings.
@@ -572,7 +552,6 @@ impl Settings for ProjectSettings {
                 },
             },
             git: git_settings,
-            node: content.node.clone().unwrap().into(),
             load_direnv: project.load_direnv.clone().unwrap(),
             session: SessionSettings {
                 restore_unsaved_buffers: content.session.unwrap().restore_unsaved_buffers.unwrap(),

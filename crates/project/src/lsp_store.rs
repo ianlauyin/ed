@@ -98,7 +98,6 @@ use lsp::{
     LspRequestFuture, MessageActionItem, MessageType, OneOf, RenameFilesParams, TextEdit, Uri,
     WillRenameFiles, WorkDoneProgressCancelParams, notification::DidRenameFiles,
 };
-use node_runtime::read_package_installed_version;
 use parking_lot::Mutex;
 use postage::{mpsc, sink::Sink, stream::Stream, watch};
 use rand::prelude::*;
@@ -16250,6 +16249,27 @@ pub(crate) fn collapse_newlines(text: &str, separator: &str) -> String {
 /// Converts the related information of a published diagnostic, putting the locations
 /// of the document it was published for into that document's coordinates so that they
 /// are converted and followed like the diagnostic's own range.
+/// Reads the version of an npm package installed in `node_module_directory`,
+/// returning `None` when the package is not installed there.
+pub async fn read_package_installed_version(
+    node_module_directory: PathBuf,
+    name: &str,
+) -> Result<Option<Version>> {
+    #[derive(serde::Deserialize)]
+    struct PackageJson {
+        version: Version,
+    }
+
+    let package_json_path = node_module_directory.join(name).join("package.json");
+    let contents = match smol::fs::read_to_string(package_json_path).await {
+        Ok(contents) => contents,
+        Err(err) if err.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+        Err(err) => return Err(err.into()),
+    };
+    let package_json: PackageJson = serde_json::from_str(&contents)?;
+    Ok(Some(package_json.version))
+}
+
 fn related_information_from_lsp(
     diagnostic: &lsp::Diagnostic,
     document_uri: &lsp::Uri,

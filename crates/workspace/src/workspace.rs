@@ -67,7 +67,6 @@ pub use item::{
 use itertools::Itertools;
 use language::{LanguageRegistry, Rope};
 pub use modal_layer::*;
-use node_runtime::NodeRuntime;
 use notifications::{
     DetachAndPromptErr, Notifications, dismiss_app_notification,
     simple_message_notification::MessageNotification,
@@ -1221,7 +1220,6 @@ pub struct AppState {
     pub workspace_store: Entity<WorkspaceStore>,
     pub fs: Arc<dyn fs::Fs>,
     pub build_window_options: fn(Option<Uuid>, &mut App) -> WindowOptions,
-    pub node_runtime: NodeRuntime,
     pub session: Entity<AppSession>,
 }
 
@@ -1886,7 +1884,6 @@ impl Workspace {
         cx: &mut App,
     ) -> Task<anyhow::Result<OpenResult>> {
         let project_handle = Project::local(
-            app_state.node_runtime.clone(),
             app_state.languages.clone(),
             app_state.fs.clone(),
             env,
@@ -8937,7 +8934,6 @@ pub fn open_workspace_by_id(
     cx: &mut App,
 ) -> Task<anyhow::Result<WindowHandle<MultiWorkspace>>> {
     let project_handle = Project::local(
-        app_state.node_runtime.clone(),
         app_state.languages.clone(),
         app_state.fs.clone(),
         None,
@@ -9301,7 +9297,6 @@ pub fn open_remote_project_with_new_connection(
         let project = cx.update(|cx| {
             project::Project::remote(
                 session,
-                app_state.node_runtime.clone(),
                 app_state.languages.clone(),
                 app_state.fs.clone(),
                 true,

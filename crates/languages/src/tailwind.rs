@@ -27,14 +27,13 @@ impl LspAdapter for TailwindLspAdapter {
         _: Option<Toolchain>,
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
-        let path = delegate.which(Self::SERVER_NAME.as_ref()).await?;
-        let env = delegate.shell_env().await;
-
-        Some(LanguageServerBinary {
-            path,
-            env: Some(env),
-            arguments: vec!["--stdio".into()],
-        })
+        crate::npx::node_server_binary(
+            delegate,
+            &["@tailwindcss/language-server"],
+            Self::SERVER_NAME.as_ref(),
+            &["--stdio"],
+        )
+        .await
     }
 
     async fn initialization_options(

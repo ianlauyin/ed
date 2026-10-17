@@ -112,7 +112,10 @@ mod tests {
 
         let command = resolve_command(Some(&root), Some(&path_env));
         assert_eq!(command.program, PathBuf::from("npx"));
-        assert_eq!(command.args, vec![OsString::from("--yes"), NPX_PACKAGE.into()]);
+        assert_eq!(
+            command.args,
+            vec![OsString::from("--yes"), NPX_PACKAGE.into()]
+        );
 
         let biome = path_dir.join("biome");
         std::fs::write(&biome, "").unwrap();

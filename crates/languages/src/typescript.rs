@@ -641,14 +641,15 @@ impl LspAdapter for TypeScriptLspAdapter {
         _: Option<Toolchain>,
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
-        let path = delegate.which(Self::SERVER_PACKAGE_NAME.as_ref()).await?;
-        let env = delegate.shell_env().await;
-
-        Some(LanguageServerBinary {
-            path,
-            env: Some(env),
-            arguments: vec!["--stdio".into()],
-        })
+        // The server only finds TypeScript in the workspace, so a `typescript`
+        // package installed alongside it by npx would go unused.
+        crate::npx::node_server_binary(
+            delegate,
+            &[Self::SERVER_PACKAGE_NAME],
+            Self::SERVER_PACKAGE_NAME,
+            &["--stdio"],
+        )
+        .await
     }
 
     fn code_action_kinds(&self) -> Option<Vec<CodeActionKind>> {

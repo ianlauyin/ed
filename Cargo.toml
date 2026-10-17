@@ -57,7 +57,6 @@ members = [
     "crates/mermaid_render",
     "crates/multi_buffer",
     "crates/net",
-    "crates/node_runtime",
     "crates/notifications",
     "crates/open_path_prompt",
     "crates/outline",
@@ -190,7 +189,6 @@ menu = { path = "crates/menu" }
 mermaid_render = { path = "crates/mermaid_render" }
 multi_buffer = { path = "crates/multi_buffer" }
 net = { path = "crates/net" }
-node_runtime = { path = "crates/node_runtime" }
 notifications = { path = "crates/notifications" }
 open_path_prompt = { path = "crates/open_path_prompt" }
 outline = { path = "crates/outline" }

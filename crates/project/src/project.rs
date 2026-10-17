@@ -75,7 +75,6 @@ pub use lsp_command::EditPredictionDefinition;
 use lsp_command::*;
 use lsp_store::{CompletionDocumentation, LspFormatTarget, OpenLspBufferHandle};
 pub use manifest_tree::ManifestProvidersStore;
-use node_runtime::NodeRuntime;
 use parking_lot::Mutex;
 use project_settings::{ProjectSettings, SettingsObserver, SettingsObserverEvent};
 
@@ -194,7 +193,6 @@ pub struct Project {
     git_diff_debouncer: DebouncedDelay<Self>,
     remotely_created_models: Arc<Mutex<RemotelyCreatedModels>>,
     terminals: Terminals,
-    node: Option<NodeRuntime>,
     search_history: SearchHistory,
     search_included_history: SearchHistory,
     search_excluded_history: SearchHistory,
@@ -1043,8 +1041,6 @@ pub enum PulledDiagnostics {
 
 impl Project {
     pub fn local(
-        node: NodeRuntime,
-
         languages: Arc<LanguageRegistry>,
         fs: Arc<dyn Fs>,
         env: Option<HashMap<String, String>>,
@@ -1159,7 +1155,6 @@ impl Project {
                 terminals: Terminals {
                     local_handles: Vec::new(),
                 },
-                node: Some(node),
                 search_history: Self::new_search_history(),
                 environment,
                 remotely_created_models: Default::default(),
@@ -1178,8 +1173,6 @@ impl Project {
 
     pub fn remote(
         remote: Entity<RemoteClient>,
-        node: NodeRuntime,
-
         languages: Arc<LanguageRegistry>,
         fs: Arc<dyn Fs>,
         init_worktree_trust: bool,
@@ -1338,7 +1331,6 @@ impl Project {
                 terminals: Terminals {
                     local_handles: Vec::new(),
                 },
-                node: Some(node),
                 search_history: Self::new_search_history(),
                 environment,
                 remotely_created_models: Default::default(),
@@ -1441,11 +1433,6 @@ impl Project {
 
     pub fn remote_client(&self) -> Option<Entity<RemoteClient>> {
         self.remote_client.clone()
-    }
-
-    #[inline]
-    pub fn node_runtime(&self) -> Option<&NodeRuntime> {
-        self.node.as_ref()
     }
 
     #[inline]

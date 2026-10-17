@@ -31,7 +31,6 @@ language.workspace = true
 log.workspace = true
 menu.workspace = true
 markdown.workspace = true
-node_runtime.workspace = true
 parking_lot.workspace = true
 project.workspace = true
 remote.workspace = true

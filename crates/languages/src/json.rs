@@ -131,16 +131,13 @@ impl LspAdapter for JsonLspAdapter {
         _: Option<Toolchain>,
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
-        let path = delegate
-            .which("vscode-json-language-server".as_ref())
-            .await?;
-        let env = delegate.shell_env().await;
-
-        Some(LanguageServerBinary {
-            path,
-            env: Some(env),
-            arguments: vec!["--stdio".into()],
-        })
+        crate::npx::node_server_binary(
+            delegate,
+            &["vscode-langservers-extracted"],
+            "vscode-json-language-server",
+            &["--stdio"],
+        )
+        .await
     }
 
     async fn initialization_options(

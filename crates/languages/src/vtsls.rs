@@ -9,21 +9,13 @@ use regex::Regex;
 use serde_json::Value;
 use serde_json::json;
 use settings::update_settings_file;
-use std::{
-    ffi::OsString,
-    path::Path,
-    sync::{Arc, LazyLock},
-};
+use std::sync::{Arc, LazyLock};
 use util::merge_json_value_into;
 
 const ACTION_ALWAYS: &str = "Always";
 const ACTION_NEVER: &str = "Never";
 const UPDATE_IMPORTS_MESSAGE_PATTERN: &str = "Update imports for";
 const VTSLS_SERVER_NAME: &str = "vtsls";
-
-fn typescript_server_binary_arguments(server_path: &Path) -> Vec<OsString> {
-    vec![server_path.into(), "--stdio".into()]
-}
 
 pub struct VtslsLspAdapter {
     fs: Arc<dyn Fs>,
@@ -85,13 +77,13 @@ impl LspAdapter for VtslsLspAdapter {
         _: Option<Toolchain>,
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
-        let env = delegate.shell_env().await;
-        let path = delegate.which(SERVER_NAME.as_ref()).await?;
-        Some(LanguageServerBinary {
-            path: path.clone(),
-            arguments: typescript_server_binary_arguments(&path),
-            env: Some(env),
-        })
+        crate::npx::node_server_binary(
+            delegate,
+            &["@vtsls/language-server"],
+            SERVER_NAME.as_ref(),
+            &["--stdio"],
+        )
+        .await
     }
 
     fn code_action_kinds(&self) -> Option<Vec<CodeActionKind>> {

@@ -8,7 +8,6 @@ use fs::Fs;
 use futures::{channel::oneshot, stream::StreamExt as _};
 use gpui::{App, AppContext as _, AsyncApp, Context, Entity, PromptLevel, Task, TaskExt};
 use language::{Buffer, BufferEvent, LanguageRegistry, proto::serialize_operation};
-use node_runtime::NodeRuntime;
 use project::{
     LspStore, LspStoreEvent, ManifestTree, ProjectEnvironment, ProjectPath, ToolchainStore,
     WorktreeId,
@@ -66,7 +65,6 @@ pub struct HeadlessProject {
 pub struct HeadlessAppState {
     pub session: AnyProtoClient,
     pub fs: Arc<dyn Fs>,
-    pub node_runtime: NodeRuntime,
     pub languages: Arc<LanguageRegistry>,
 }
 
@@ -91,7 +89,6 @@ impl HeadlessProject {
         HeadlessAppState {
             session,
             fs,
-            node_runtime: _,
             languages,
         }: HeadlessAppState,
         init_worktree_trust: bool,

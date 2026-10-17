@@ -19,18 +19,17 @@
 - Python source editing remains supported. `.ipynb` files open as ordinary text.
 - `editor::RestartLanguageServer` restarts the servers relevant to the current
   buffer, including servers previously stopped with `editor::StopLanguageServer`.
-- Node-based tooling requires system Node.js 22 or newer and npm, discovered
-  on the shell's `PATH` or selected through `node.path` and `node.npm_path`.
-  Both local and remote runtimes report missing or invalid installations and never
-  download or fall back to a managed Node.js runtime. Failed discovery can be retried
-  after fixing the installation; changes to configured paths invalidate discovery.
-- `node.ignore_system_version` is removed. npm package installation, custom CA
-  certificates, and user npm configuration remain supported.
-- The Node runtime does not accept or forward editor proxy settings to npm.
-  Network routing can use a system-wide TUN proxy when needed.
-- Language servers are never downloaded or installed by Zed. A server starts only
-  from `lsp.<server>.binary.path` or from a user installation the adapter finds
-  (`PATH`, project `node_modules`, or the active toolchain). A missing server is
+- There is no managed Node.js runtime and no `node` settings (`node.path`,
+  `node.npm_path` are removed). Node-based tooling uses `node`/`npx` from the
+  shell `PATH`, locally and on remote servers.
+- Language servers are never installed by Zed. A server starts from
+  `lsp.<server>.binary.path`, else from a user installation the adapter finds
+  (`PATH` or the active toolchain). Node-based servers (vtsls,
+  typescript-language-server, eslint, css/html/json, tailwindcss, yaml, bash,
+  pyright, basedpyright) then fall back to `npx --yes --package <pkg> <bin>`,
+  unpinned: npx prefers a version installed in the project, else the latest
+  release from npm's cache, downloading it on first use. typescript-language-server
+  still needs `typescript` installed in the workspace. A missing server is
   reported through the existing failed-server status ("Failed to run …" in the
   activity indicator, "Error" in the LSP menu) naming the server and the setting.
 - `lsp.<server>.fetch` and `lsp.<server>.binary.ignore_system_version` are removed;

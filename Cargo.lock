@@ -3660,7 +3660,6 @@ dependencies = [
  "language",
  "log",
  "lsp",
- "node_runtime",
  "parking_lot",
  "pet",
  "pet-conda",
@@ -4464,24 +4463,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "418abd1b6d34fbf6cae440dc874771b0525a604428704c76e48b29a5e67b8003"
 dependencies = [
  "memchr",
-]
-
-[[package]]
-name = "node_runtime"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "futures",
- "log",
- "paths",
- "semver",
- "serde",
- "serde_json",
- "smol",
- "thiserror 2.0.17",
- "util",
- "watch",
- "which",
 ]
 
 [[package]]
@@ -5910,7 +5891,6 @@ dependencies = [
  "log",
  "lsp",
  "markdown",
- "node_runtime",
  "parking_lot",
  "path",
  "paths",
@@ -6548,7 +6528,6 @@ dependencies = [
  "log",
  "lsp",
  "net",
- "node_runtime",
  "paths",
  "project",
  "rayon",
@@ -6565,7 +6544,6 @@ dependencies = [
  "thiserror 2.0.17",
  "toml_edit",
  "util",
- "watch",
  "worktree",
 ]
 
@@ -9964,7 +9942,6 @@ dependencies = [
  "log",
  "markdown",
  "menu",
- "node_runtime",
  "parking_lot",
  "project",
  "remote",
@@ -10147,7 +10124,6 @@ dependencies = [
  "markdown_preview",
  "menu",
  "mimalloc",
- "node_runtime",
  "outline",
  "outline_panel",
  "parking_lot",
@@ -10164,7 +10140,6 @@ dependencies = [
  "session",
  "settings",
  "settings_content",
- "shellexpand",
  "smol",
  "svg_preview",
  "system_specs",
@@ -10182,7 +10157,6 @@ dependencies = [
  "urlencoding",
  "util",
  "uuid",
- "watch",
  "which_key",
  "workspace",
  "zed_actions",

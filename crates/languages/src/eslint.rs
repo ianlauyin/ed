@@ -3,9 +3,8 @@ use async_trait::async_trait;
 use gpui::AsyncApp;
 use language::{LspAdapter, LspAdapterDelegate, Toolchain};
 use lsp::{CodeActionKind, LanguageServerBinary, LanguageServerName, Uri};
-use node_runtime::read_package_installed_version;
 use project::Fs;
-use project::lsp_store::language_server_settings_for;
+use project::lsp_store::{language_server_settings_for, read_package_installed_version};
 use semver::Version;
 use serde::{Deserialize, Serialize};
 use serde_json::{Value, json};
@@ -212,14 +211,13 @@ impl LspAdapter for EsLintLspAdapter {
         _: Option<Toolchain>,
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
-        let path = delegate.which(Self::SERVER_BINARY_NAME.as_ref()).await?;
-        let env = delegate.shell_env().await;
-
-        Some(LanguageServerBinary {
-            path,
-            env: Some(env),
-            arguments: vec!["--stdio".into()],
-        })
+        crate::npx::node_server_binary(
+            delegate,
+            &["vscode-langservers-extracted"],
+            Self::SERVER_BINARY_NAME,
+            &["--stdio"],
+        )
+        .await
     }
 }
 

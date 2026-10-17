@@ -27,14 +27,8 @@ impl LspAdapter for YamlLspAdapter {
         _: Option<Toolchain>,
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
-        let path = delegate.which(Self::SERVER_NAME.as_ref()).await?;
-        let env = delegate.shell_env().await;
-
-        Some(LanguageServerBinary {
-            path,
-            env: Some(env),
-            arguments: vec!["--stdio".into()],
-        })
+        let bin = Self::SERVER_NAME;
+        crate::npx::node_server_binary(delegate, &[bin.as_ref()], bin.as_ref(), &["--stdio"]).await
     }
 
     async fn workspace_configuration(

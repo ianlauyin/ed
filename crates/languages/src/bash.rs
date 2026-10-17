@@ -42,14 +42,13 @@ impl LspAdapter for BashLspAdapter {
         _: Option<Toolchain>,
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
-        let path = delegate.which(Self::PACKAGE_NAME.as_ref()).await?;
-        let env = delegate.shell_env().await;
-
-        Some(LanguageServerBinary {
-            path,
-            env: Some(env),
-            arguments: vec!["start".into()],
-        })
+        crate::npx::node_server_binary(
+            delegate,
+            &[Self::PACKAGE_NAME],
+            Self::PACKAGE_NAME,
+            &["start"],
+        )
+        .await
     }
 
     async fn workspace_configuration(

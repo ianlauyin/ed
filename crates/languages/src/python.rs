@@ -37,7 +37,7 @@ use std::{
     sync::Arc,
 };
 use task::{ShellKind, TaskTemplate, TaskTemplates, VariableName};
-use util::{ResultExt, maybe};
+use util::maybe;
 
 pub(crate) fn semantic_token_rules() -> SemanticTokenRules {
     let content = grammars::get_file("python/semantic_token_rules.json")
@@ -430,7 +430,7 @@ pub struct PyrightLspAdapter;
 
 impl PyrightLspAdapter {
     const SERVER_NAME: LanguageServerName = LanguageServerName::new_static("pyright");
-    const NODE_MODULE_RELATIVE_SERVER_PATH: &str = "pyright/langserver.index.js";
+    const BINARY_NAME: &'static str = "pyright-langserver";
 
     pub fn new() -> Self {
         PyrightLspAdapter
@@ -544,29 +544,13 @@ impl LspAdapter for PyrightLspAdapter {
         _: Option<Toolchain>,
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
-        if let Some(pyright_bin) = delegate.which("pyright-langserver".as_ref()).await {
-            let env = delegate.shell_env().await;
-            Some(LanguageServerBinary {
-                path: pyright_bin,
-                env: Some(env),
-                arguments: vec!["--stdio".into()],
-            })
-        } else {
-            let node = delegate.which("node".as_ref()).await?;
-            let (node_modules_path, _) = delegate
-                .npm_package_installed_version(Self::SERVER_NAME.as_ref())
-                .await
-                .log_err()??;
-
-            let path = node_modules_path.join(Self::NODE_MODULE_RELATIVE_SERVER_PATH);
-
-            let env = delegate.shell_env().await;
-            Some(LanguageServerBinary {
-                path: node,
-                env: Some(env),
-                arguments: vec![path.into(), "--stdio".into()],
-            })
-        }
+        crate::npx::node_server_binary(
+            delegate,
+            &[Self::SERVER_NAME.as_ref()],
+            Self::BINARY_NAME,
+            &["--stdio"],
+        )
+        .await
     }
 }
 
@@ -1603,7 +1587,6 @@ pub(crate) struct BasedPyrightLspAdapter;
 impl BasedPyrightLspAdapter {
     const SERVER_NAME: LanguageServerName = LanguageServerName::new_static("basedpyright");
     const BINARY_NAME: &'static str = "basedpyright-langserver";
-    const NODE_MODULE_RELATIVE_SERVER_PATH: &str = "basedpyright/langserver.index.js";
 
     pub(crate) fn new() -> Self {
         BasedPyrightLspAdapter
@@ -1738,30 +1721,13 @@ impl LspAdapter for BasedPyrightLspAdapter {
         _: Option<Toolchain>,
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
-        if let Some(path) = delegate.which(Self::BINARY_NAME.as_ref()).await {
-            let env = delegate.shell_env().await;
-            Some(LanguageServerBinary {
-                path,
-                env: Some(env),
-                arguments: vec!["--stdio".into()],
-            })
-        } else {
-            // TODO shouldn't this be self.node.binary_path()?
-            let node = delegate.which("node".as_ref()).await?;
-            let (node_modules_path, _) = delegate
-                .npm_package_installed_version(Self::SERVER_NAME.as_ref())
-                .await
-                .log_err()??;
-
-            let path = node_modules_path.join(Self::NODE_MODULE_RELATIVE_SERVER_PATH);
-
-            let env = delegate.shell_env().await;
-            Some(LanguageServerBinary {
-                path: node,
-                env: Some(env),
-                arguments: vec![path.into(), "--stdio".into()],
-            })
-        }
+        crate::npx::node_server_binary(
+            delegate,
+            &[Self::SERVER_NAME.as_ref()],
+            Self::BINARY_NAME,
+            &["--stdio"],
+        )
+        .await
     }
 }
 

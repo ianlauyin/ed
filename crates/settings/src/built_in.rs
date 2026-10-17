@@ -218,10 +218,6 @@ pub fn settings() -> SettingsContent {
             diagnostic_badges: Some(true),
             git_status_indicator: Some(false),
         }),
-        node: Some(NodeBinarySettings {
-            path: None,
-            npm_path: None,
-        }),
         reduce_motion: Some(ReduceMotionMode::Off),
         session: Some(SessionSettingsContent {
             restore_unsaved_buffers: Some(true),

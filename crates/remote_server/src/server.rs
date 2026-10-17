@@ -7,17 +7,14 @@ use clap::Subcommand;
 use collections::HashMap;
 use fs::RealFs;
 use futures::{
-    AsyncRead, AsyncWrite, AsyncWriteExt, FutureExt, SinkExt,
-    channel::{mpsc, oneshot},
-    select, select_biased,
+    AsyncRead, AsyncWrite, AsyncWriteExt, FutureExt, SinkExt, channel::mpsc, select, select_biased,
 };
 use git::GitHostingProviderRegistry;
 use gpui::{App, AppContext as _};
 use language::LanguageRegistry;
 use net::async_net::{UnixListener, UnixStream};
-use node_runtime::{NodeBinaryOptions, NodeRuntime};
 use paths::logs_dir;
-use project::{project_settings::ProjectSettings, trusted_worktrees};
+use project::trusted_worktrees;
 
 use remote::command::RemoteCommand;
 use remote::{
@@ -28,7 +25,6 @@ use remote::{
 };
 use rpc::AnyProtoClient;
 use rpc::proto::Envelope;
-use settings::{Settings, SettingsStore};
 use settings_content::app_metadata::AppVersion;
 use smol::{
     channel::{Receiver, Sender},
@@ -558,16 +554,11 @@ pub fn execute_run(
         .build_global()
         .unwrap();
 
-    let shell_env_loaded_rx = {
-        let (shell_env_loaded_tx, shell_env_loaded_rx) = oneshot::channel();
-        app.background_executor()
-            .spawn(async {
-                util::load_login_shell_environment().await.log_err();
-                shell_env_loaded_tx.send(()).ok();
-            })
-            .detach();
-        Some(shell_env_loaded_rx)
-    };
+    app.background_executor()
+        .spawn(async {
+            util::load_login_shell_environment().await.log_err();
+        })
+        .detach();
 
     let git_hosting_provider_registry = Arc::new(GitHostingProviderRegistry::new());
     let run = move |cx: &mut App| {
@@ -590,17 +581,12 @@ pub fn execute_run(
 
         let project = cx.new(|cx| {
             let fs = RealFs::new(None, cx.background_executor().clone());
-            let node_settings_rx = initialize_settings(cx);
-
-            let node_runtime = NodeRuntime::new(shell_env_loaded_rx, node_settings_rx);
-
             let languages = Arc::new(LanguageRegistry::new(cx.background_executor().clone()));
 
             HeadlessProject::new(
                 HeadlessAppState {
                     session: session.clone(),
                     fs,
-                    node_runtime,
                     languages,
                 },
                 true,
@@ -1025,36 +1011,4 @@ where
         writer.flush().await?;
         buffer.clear();
     }
-}
-
-fn initialize_settings(cx: &mut App) -> watch::Receiver<Option<NodeBinaryOptions>> {
-    let (mut tx, rx) = watch::channel(None);
-    let mut node_settings = None;
-    cx.observe_global::<SettingsStore>(move |cx| {
-        let new_node_settings = &ProjectSettings::get_global(cx).node;
-        if Some(new_node_settings) != node_settings.as_ref() {
-            log::info!("Got new node settings: {new_node_settings:?}");
-            let options = NodeBinaryOptions {
-                use_paths: new_node_settings.path.as_ref().map(|node_path| {
-                    let node_path = PathBuf::from(shellexpand::tilde(node_path).as_ref());
-                    let npm_path = new_node_settings
-                        .npm_path
-                        .as_ref()
-                        .map(|path| PathBuf::from(shellexpand::tilde(&path).as_ref()));
-                    (
-                        node_path.clone(),
-                        npm_path.unwrap_or_else(|| {
-                            let base_path = PathBuf::new();
-                            node_path.parent().unwrap_or(&base_path).join("npm")
-                        }),
-                    )
-                }),
-            };
-            node_settings = Some(new_node_settings.clone());
-            tx.send(Some(options)).ok();
-        }
-    })
-    .detach();
-
-    rx
 }
