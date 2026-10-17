@@ -170,7 +170,15 @@ impl Pasteboard {
                 [ClipboardEntry::Image(image)] => {
                     self.write_image(image);
                 }
-                [ClipboardEntry::ExternalPaths(_)] => {}
+                [ClipboardEntry::ExternalPaths(paths)] => {
+                    self.write_file_urls(paths, None);
+                }
+                [
+                    ClipboardEntry::ExternalPaths(paths),
+                    ClipboardEntry::String(string),
+                ] => {
+                    self.write_file_urls(paths, Some(string));
+                }
                 _ => {
                     // Agus NB: We're currently only writing string entries to the clipboard when we have more than one.
                     //
@@ -219,6 +227,31 @@ impl Pasteboard {
                 let metadata_bytes = ns_data(metadata.as_ptr(), metadata.len());
                 let _: bool =
                     msg_send![&*self.inner, setData: metadata_bytes, forType: &*self.metadata_type];
+            }
+        }
+    }
+
+    /// Writes one `public.file-url` item per path, the way Finder's Copy does, so
+    /// other apps (and other windows of ours) can paste the files themselves.
+    /// The optional string lands on the first item for plain-text consumers.
+    unsafe fn write_file_urls(&self, paths: &ExternalPaths, string: Option<&ClipboardString>) {
+        unsafe {
+            let _: NSInteger = msg_send![&*self.inner, clearContents];
+
+            let urls: id = msg_send![class!(NSMutableArray), array];
+            for path in paths.paths() {
+                let Some(path) = path.to_str() else {
+                    continue;
+                };
+                let url: id = msg_send![class!(NSURL), fileURLWithPath: ns_string(path)];
+                let _: () = msg_send![urls, addObject: url];
+            }
+            let _: bool = msg_send![&*self.inner, writeObjects: urls];
+
+            if let Some(string) = string {
+                let text_bytes = ns_data(string.text.as_ptr(), string.text.len());
+                let _: bool =
+                    msg_send![&*self.inner, setData: text_bytes, forType: NSPasteboardTypeString];
             }
         }
     }
@@ -321,5 +354,36 @@ impl UTType {
 
     pub fn inner_mut(&self) -> *mut AnyObject {
         self.0 as *mut _
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn writes_file_urls_readable_as_external_paths() {
+        let pasteboard =
+            unsafe { Pasteboard::new(msg_send![class!(NSPasteboard), pasteboardWithUniqueName]) };
+        let dir = std::env::temp_dir().canonicalize().unwrap();
+        let paths: SmallVec<[PathBuf; 2]> =
+            smallvec::smallvec![dir.join("a.txt"), dir.join("b.txt")];
+        let text = "a\nb".to_string();
+        pasteboard.write(ClipboardItem {
+            entries: vec![
+                ClipboardEntry::ExternalPaths(ExternalPaths(paths.clone())),
+                ClipboardEntry::String(ClipboardString {
+                    text: text.clone(),
+                    metadata: None,
+                }),
+            ],
+        });
+
+        let item = pasteboard.read().unwrap();
+        assert_eq!(
+            item.entries[0],
+            ClipboardEntry::ExternalPaths(ExternalPaths(paths))
+        );
+        assert_eq!(item.text(), Some(text));
     }
 }

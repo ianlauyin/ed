@@ -3640,7 +3640,12 @@ impl ProjectPanel {
     }
 
     fn paste(&mut self, _: &Paste, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(external_paths) = self.external_paths_from_system_clipboard(cx) {
+        // Files copied in another window (or Finder) arrive as external paths;
+        // files this panel copied itself go through the internal clipboard so
+        // cut-moves and "copy" renaming keep working.
+        if let Some(external_paths) = self.external_paths_from_system_clipboard(cx)
+            && self.internal_clipboard_paths(cx).as_deref() != Some(external_paths.paths())
+        {
             let target_entry_id = self
                 .selection
                 .map(|s| s.entry_id)
@@ -4418,9 +4423,53 @@ impl ProjectPanel {
                 )
             })
             .collect();
-        if !paths.is_empty() {
-            cx.write_to_clipboard(ClipboardItem::new_string(paths.join("\n")));
+        if paths.is_empty() {
+            return;
         }
+        let text = ClipboardItem::new_string(paths.join("\n"));
+        // Files also go on the clipboard as file URLs, so they can be pasted
+        // as files into another window's project panel or Finder.
+        let files = self.clipboard_file_paths(entries.iter().copied(), cx);
+        let item = if files.is_empty() {
+            text
+        } else {
+            ClipboardItem {
+                entries: [GpuiClipboardEntry::ExternalPaths(ExternalPaths(
+                    files.into_iter().collect(),
+                ))]
+                .into_iter()
+                .chain(text.entries)
+                .collect(),
+            }
+        };
+        cx.write_to_clipboard(item);
+    }
+
+    /// Paths of `entries` that exist on this machine: every local entry, plus
+    /// remote entries whose path is also visible here (e.g. a VM sharing the
+    /// host's folders at the same path).
+    fn clipboard_file_paths(
+        &self,
+        entries: impl IntoIterator<Item = SelectedEntry>,
+        cx: &App,
+    ) -> Vec<PathBuf> {
+        let project = self.project.read(cx);
+        entries
+            .into_iter()
+            .filter_map(|selection| {
+                let worktree = project.worktree_for_id(selection.worktree_id, cx)?.read(cx);
+                let entry = worktree.entry_for_id(selection.entry_id)?;
+                let path = worktree.absolutize(&entry.path);
+                (worktree.is_local() || path.exists()).then_some(path)
+            })
+            .collect()
+    }
+
+    /// The paths this panel last put on the system clipboard, used to tell
+    /// whether the system clipboard still holds what this panel copied.
+    fn internal_clipboard_paths(&self, cx: &App) -> Option<Vec<PathBuf>> {
+        let clipboard = self.clipboard.as_ref()?;
+        Some(self.clipboard_file_paths(clipboard.items().iter().copied(), cx))
     }
 
     fn external_paths_from_system_clipboard(&self, cx: &App) -> Option<ExternalPaths> {

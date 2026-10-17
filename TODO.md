@@ -1,3 +1,5 @@
 - port codebook spell checker, fish, git firefly, log, xml extension?
 - remove cpp grammar?
 - remove direnv?
+- review python venv, lsp handling
+- review ts project/lsp
