@@ -314,8 +314,6 @@ pub struct LocalLspStore {
         HashMap<LanguageServerId, RenamePathsWatchedForServer>,
     language_server_dynamic_registrations: HashMap<LanguageServerId, DynamicRegistrations>,
     initial_server_capabilities: HashMap<LanguageServerId, lsp::ServerCapabilities>,
-    supplementary_language_servers:
-        HashMap<LanguageServerId, (LanguageServerName, Arc<LanguageServer>)>,
     next_diagnostic_group_id: usize,
     diagnostics: HashMap<
         WorktreeId,
@@ -4320,8 +4318,6 @@ impl LocalLspStore {
     fn language_server_for_id(&self, id: LanguageServerId) -> Option<Arc<LanguageServer>> {
         if let Some(LanguageServerState::Running { server, .. }) = self.language_servers.get(&id) {
             Some(server.clone())
-        } else if let Some((_, server)) = self.supplementary_language_servers.get(&id) {
-            Some(Arc::clone(server))
         } else {
             None
         }
@@ -4567,9 +4563,7 @@ impl BufferLspData {
 #[derive(Debug)]
 pub enum LspStoreEvent {
     LanguageServerAdded(LanguageServerId, LanguageServerName, Option<WorktreeId>),
-    SupplementaryLanguageServerAdded(LanguageServerId, LanguageServerName),
     LanguageServerRemoved(LanguageServerId),
-    SupplementaryLanguageServerRemoved(LanguageServerId),
     LanguageServerUpdate {
         language_server_id: LanguageServerId,
         name: Option<LanguageServerName>,
@@ -4824,7 +4818,6 @@ impl LspStore {
                 weak: cx.weak_entity(),
                 worktree_store: worktree_store.clone(),
 
-                supplementary_language_servers: Default::default(),
                 languages: languages.clone(),
                 language_server_ids: Default::default(),
                 language_servers: Default::default(),
