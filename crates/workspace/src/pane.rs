@@ -4512,8 +4512,13 @@ impl Render for Pane {
                     cx.propagate();
                 }
             }))
-            .when(self.active_item().is_some() && display_tab_bar, |pane| {
-                pane.child((self.render_tab_bar.clone())(self, window, cx))
+            .when(display_tab_bar, |pane| {
+                if self.active_item().is_some() {
+                    pane.child((self.render_tab_bar.clone())(self, window, cx))
+                } else {
+                    // Keep the card's top edge where it sits when tabs are open.
+                    pane.child(div().flex_none().h(Tab::container_height(cx)))
+                }
             })
             .child({
                 let has_worktrees = project.read(cx).visible_worktrees(cx).next().is_some();

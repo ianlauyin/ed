@@ -43,6 +43,9 @@ because it hurt readability; an opaque window is also cheaper to composite.
   straight top edge rather than its rounded corner.
 - Pane toolbars (search bars, breadcrumbs) have no bottom line either; they sit
   flat inside the card.
+- An empty pane (hints or welcome page) leaves a blank strip of tab-bar height
+  above its card, so the card does not jump when the first tab opens or the
+  last one closes.
 - An empty pane keeps its card and shows centred keybinding hints (Open File,
   Go to File, Command Palette), styled like the project search landing page.
   Bindings are read from the keymap, and the welcome page still takes
