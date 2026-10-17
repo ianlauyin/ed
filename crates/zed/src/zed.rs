@@ -22,7 +22,7 @@ use git_ui::staged_diff::StagedDiffToolbar;
 use git_ui::unstaged_diff::UnstagedDiffToolbar;
 use git_ui_core::file_diff_view::FileDiffStyleToolbar;
 use gpui::{
-    App, AppContext as _, ClipboardItem, Context, Entity, FocusHandle, Focusable, Image,
+    App, AppContext as _, Context, Entity, FocusHandle, Focusable, Image,
     ImageFormat, ParentElement, PathPromptOptions, PromptLevel, ReadGlobal, SharedString, Size,
     Task, TaskExt, TitlebarOptions, WeakEntity, Window, WindowBounds, WindowHandle, WindowKind,
     WindowOptions, actions, img, point, px,
@@ -40,7 +40,6 @@ use quick_action_bar::QuickActionBar;
 use recent_projects::open_remote_project;
 use search::project_search::ProjectSearchBar;
 use settings::{DefaultOpenBehavior, Settings, SettingsStore, update_settings_file};
-use settings_content::app_metadata::AppVersion;
 #[cfg(debug_assertions)]
 use workspace::workspace_error::{ErrorAction, ErrorSeverity, WorkspaceError};
 
@@ -53,7 +52,7 @@ use std::{
 use terminal_view::terminal_panel::{self, TerminalPanel};
 use theme::ActiveTheme;
 use theme_settings::ThemeSettings;
-use ui::{Navigable, NavigableEntry, PopoverMenuHandle, TintColor, prelude::*};
+use ui::{PopoverMenuHandle, TintColor, prelude::*};
 use util::{ResultExt, maybe};
 use uuid::Uuid;
 use workspace::Pane;
@@ -761,18 +760,14 @@ fn initialize_pane(
 
 fn open_about_window(cx: &mut App) {
     struct AboutWindow {
-        focus_handle: FocusHandle,
-        ok_entry: NavigableEntry,
-        copy_entry: NavigableEntry,
+        ok_focus_handle: FocusHandle,
         app_icon: Arc<Image>,
         message: SharedString,
-        full_version: SharedString,
     }
 
     impl AboutWindow {
         fn new(cx: &mut Context<Self>) -> Self {
             let app_name = "ed";
-            let full_version: SharedString = AppVersion::global(cx).to_string().into();
             let version = env!("CARGO_PKG_VERSION");
 
             let debug = if cfg!(debug_assertions) {
@@ -783,113 +778,56 @@ fn open_about_window(cx: &mut App) {
             let message: SharedString = format!("{app_name} {version} {debug}").into();
 
             Self {
-                focus_handle: cx.focus_handle(),
-                ok_entry: NavigableEntry::focusable(cx),
-                copy_entry: NavigableEntry::focusable(cx),
+                ok_focus_handle: cx.focus_handle(),
                 app_icon: Arc::new(Image::from_bytes(
                     ImageFormat::Png,
                     include_bytes!("../resources/app-icon.png").to_vec(),
                 )),
                 message,
-                full_version,
             }
-        }
-
-        fn copy_details(&self, window: &mut Window, cx: &mut Context<Self>) {
-            let content = format!("{}\nVersion: {}", self.message, self.full_version);
-            cx.write_to_clipboard(ClipboardItem::new_string(content));
-            window.remove_window();
         }
     }
 
     impl Render for AboutWindow {
-        fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-            let ok_is_focused = self.ok_entry.focus_handle.contains_focused(window, cx);
-            let copy_is_focused = self.copy_entry.focus_handle.contains_focused(window, cx);
-
-            Navigable::new(
-                v_flex()
-                    .id("about-window")
-                    .track_focus(&self.focus_handle)
-                    .on_action(cx.listener(|_, _: &menu::Cancel, window, _cx| {
-                        window.remove_window();
-                    }))
-                    .min_w_0()
-                    .size_full()
-                    .bg(cx.theme().colors().editor_background)
-                    .text_color(cx.theme().colors().text)
-                    .p_4()
-                    .when(true, |this| this.pt_10())
-                    .gap_4()
-                    .text_center()
-                    .justify_between()
-                    .child(
-                        v_flex()
-                            .w_full()
-                            .gap_2()
-                            .items_center()
-                            .child(img(self.app_icon.clone()).size_16().flex_none())
-                            .child(Headline::new(self.message.clone()))
-                            .child(
-                                Label::new("Version")
-                                    .color(Color::Muted)
-                                    .size(LabelSize::XSmall),
-                            )
-                            .child(Label::new(self.full_version.clone()).size(LabelSize::Small)),
-                    )
-                    .child(
-                        h_flex()
-                            .w_full()
-                            .gap_1()
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .track_focus(&self.ok_entry.focus_handle)
-                                    .on_action(cx.listener(|_, _: &menu::Confirm, window, _cx| {
-                                        window.remove_window();
-                                    }))
-                                    .child(
-                                        Button::new("ok", "OK")
-                                            .full_width()
-                                            .style(ButtonStyle::OutlinedGhost)
-                                            .toggle_state(ok_is_focused)
-                                            .selected_style(ButtonStyle::Tinted(TintColor::Accent))
-                                            .on_click(cx.listener(|_, _, window, _cx| {
-                                                window.remove_window();
-                                            })),
-                                    ),
-                            )
-                            .child(
-                                div()
-                                    .flex_1()
-                                    .track_focus(&self.copy_entry.focus_handle)
-                                    .on_action(cx.listener(
-                                        |this, _: &menu::Confirm, window, cx| {
-                                            this.copy_details(window, cx);
-                                        },
-                                    ))
-                                    .child(
-                                        Button::new("copy", "Copy")
-                                            .full_width()
-                                            .style(ButtonStyle::Tinted(TintColor::Accent))
-                                            .toggle_state(copy_is_focused)
-                                            .selected_style(ButtonStyle::Tinted(TintColor::Accent))
-                                            .on_click(cx.listener(|this, _event, window, cx| {
-                                                this.copy_details(window, cx);
-                                            })),
-                                    ),
-                            ),
-                    )
-                    .into_any_element(),
-            )
-            .entry(self.ok_entry.clone())
-            .entry(self.copy_entry.clone())
+        fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+            v_flex()
+                .id("about-window")
+                .track_focus(&self.ok_focus_handle)
+                .on_action(cx.listener(|_, _: &menu::Cancel, window, _cx| {
+                    window.remove_window();
+                }))
+                .on_action(cx.listener(|_, _: &menu::Confirm, window, _cx| {
+                    window.remove_window();
+                }))
+                .size_full()
+                .bg(cx.theme().colors().editor_background)
+                .text_color(cx.theme().colors().text)
+                .p_4()
+                .pt_8()
+                .gap_3()
+                .items_center()
+                .justify_between()
+                .child(
+                    v_flex()
+                        .gap_2()
+                        .items_center()
+                        .child(img(self.app_icon.clone()).size_16().flex_none())
+                        .child(Headline::new(self.message.clone())),
+                )
+                .child(
+                    Button::new("ok", "OK")
+                        .width(px(96.))
+                        .style(ButtonStyle::Tinted(TintColor::Accent))
+                        .on_click(cx.listener(|_, _, window, _cx| {
+                            window.remove_window();
+                        })),
+                )
         }
     }
 
     impl Focusable for AboutWindow {
         fn focus_handle(&self, _cx: &App) -> FocusHandle {
-            self.ok_entry.focus_handle.clone()
+            self.ok_focus_handle.clone()
         }
     }
 
@@ -902,21 +840,21 @@ fn open_about_window(cx: &mut App) {
         existing
             .update(cx, |about_window, window, cx| {
                 window.activate_window();
-                about_window.ok_entry.focus_handle.focus(window, cx);
+                about_window.ok_focus_handle.focus(window, cx);
             })
             .log_err();
         return;
     }
 
     let window_size = Size {
-        width: px(440.),
-        height: px(300.),
+        width: px(280.),
+        height: px(200.),
     };
 
     cx.open_window(
         WindowOptions {
             titlebar: Some(TitlebarOptions {
-                title: Some("About Zed".into()),
+                title: Some("About ed".into()),
                 appears_transparent: true,
                 traffic_light_position: Some(point(px(12.), px(12.))),
             }),
@@ -929,7 +867,7 @@ fn open_about_window(cx: &mut App) {
         },
         |window, cx| {
             let about_window = cx.new(AboutWindow::new);
-            let focus_handle = about_window.read(cx).ok_entry.focus_handle.clone();
+            let focus_handle = about_window.read(cx).ok_focus_handle.clone();
             window.activate_window();
             focus_handle.focus(window, cx);
             about_window

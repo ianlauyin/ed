@@ -55,6 +55,9 @@ remote server supports macOS and Linux.
   `dev.ed`, menu/About/window-title name `ed`. It must not share any user
   data, bundle identity, or single-instance state with an installed upstream Zed.
   `paths::APP_NAME` must equal the binary name (compile-time assert).
+- The About window is compact: app icon, `ed <version>` headline, and a
+  single centered OK button (Enter/Escape close it). No separate version
+  label and no Copy button.
 - macOS and Linux use the same XDG layout; nothing is written under
   `~/Library`. Each base honours its `XDG_*_HOME` variable when absolute:
   - config `~/.config/ed`
