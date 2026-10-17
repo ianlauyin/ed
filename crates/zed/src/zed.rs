@@ -52,7 +52,7 @@ use std::{
 use terminal_view::terminal_panel::{self, TerminalPanel};
 use theme::ActiveTheme;
 use theme_settings::ThemeSettings;
-use ui::{PopoverMenuHandle, TintColor, prelude::*};
+use ui::{PopoverMenuHandle, prelude::*};
 use util::{ResultExt, maybe};
 use uuid::Uuid;
 use workspace::Pane;
@@ -817,7 +817,7 @@ fn open_about_window(cx: &mut App) {
                 .child(
                     Button::new("ok", "OK")
                         .width(px(96.))
-                        .style(ButtonStyle::Tinted(TintColor::Accent))
+                        .style(ButtonStyle::Outlined)
                         .on_click(cx.listener(|_, _, window, _cx| {
                             window.remove_window();
                         })),
