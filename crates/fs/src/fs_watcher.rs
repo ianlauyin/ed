@@ -783,6 +783,9 @@ pub struct OsWatcher {
     event_tx: async_channel::Sender<notify::Result<notify::Event>>,
     _dispatch_task: Task<()>,
     diagnostics: Arc<diagnostics::DiagnosticRecorder>,
+    // Closing the event channel can wake the dispatch task. Keep its scheduler
+    // alive through channel and task teardown, even when our owner drops first.
+    _executor: BackgroundExecutor,
 }
 
 impl OsWatcher {
@@ -823,6 +826,7 @@ impl OsWatcher {
             event_tx,
             _dispatch_task: dispatch_task,
             diagnostics: Default::default(),
+            _executor: executor,
         })
     }
 
