@@ -47,7 +47,7 @@ remote server supports macOS and Linux.
 - macOS and Linux use the same XDG layout; nothing is written under
   `~/Library`. Each base honours its `XDG_*_HOME` variable when absolute:
   - config `~/.config/ed`
-  - data (db, prettier, remote server state) `~/.local/share/ed`
+  - data (db, remote server state) `~/.local/share/ed`
   - state `~/.local/state/ed`, logs in `~/.local/state/ed/logs/ed.log`
   - cache/temp `~/.cache/ed`
   - `--user-data-dir` still overrides data (and config under it).

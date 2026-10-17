@@ -40,3 +40,17 @@
   `__virtual__` paths are not resolved, and the TypeScript servers only use
   `node_modules/typescript/lib` as the TypeScript SDK (never `.yarn/sdks`).
   Yarn remains usable as a package manager / task runner (`yarn.lock` detection).
+- Prettier is removed (no Prettier server, default Prettier install, plugins,
+  `prettier` language setting, or `"prettier"` formatter value). Built-in formatting
+  for web languages uses Biome instead:
+  - `formatter: "auto"` formats CSS, GraphQL, JavaScript, JSON, JSONC, TSX and
+    TypeScript with Biome; the list is hardcoded with no setting. Other languages
+    under `"auto"` use the primary language server.
+  - Biome resolves in order: nearest `node_modules/.bin/biome` above the file,
+    `biome` on the shell `PATH`, then `npx --yes @biomejs/biome`.
+  - Each format runs `biome format --stdin-file-path <path>` once, from the file's
+    directory, so the project's `biome.json` applies. Unsaved buffers use
+    `untitled.<ext>`. Editor settings such as `tab_size` are not passed to Biome.
+  - Format Selections formats the whole buffer and keeps only edits that overlap
+    the selections.
+  - As with other `"auto"` formatters, Biome failures are logged and not shown to the user.

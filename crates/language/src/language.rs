@@ -913,10 +913,6 @@ impl Language {
         self.config.name.snippet_scope_id()
     }
 
-    pub fn prettier_parser_name(&self) -> Option<&str> {
-        self.config.prettier_parser_name.as_deref()
-    }
-
     pub fn config(&self) -> &LanguageConfig {
         &self.config
     }

@@ -552,12 +552,6 @@ fn language_settings() -> AllLanguageSettingsContent {
             ensure_final_newline_on_save: Some(true),
             line_ending: Some(LineEndingSetting::Detect),
             formatter: Some(FormatterList::Single(Formatter::Auto)),
-            prettier: Some(PrettierSettingsContent {
-                allowed: Some(false),
-                parser: Some("".into()),
-                plugins: Some(Default::default()),
-                options: Some(Default::default()),
-            }),
             jsx_tag_auto_close: Some(JsxTagAutoCloseSettingsContent {
                 enabled: Some(true),
             }),
@@ -662,12 +656,6 @@ fn language_overrides() -> LanguageToSettingsMap {
             (
                 "Astro".into(),
                 LanguageSettingsContent {
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(true),
-                        plugins: Some(["prettier-plugin-astro".into()].into_iter().collect()),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
                     language_servers: Some(vec![
                         ConfiguredLanguageServer::from("astro-language-server"),
                         ConfiguredLanguageServer::from("..."),
@@ -676,24 +664,8 @@ fn language_overrides() -> LanguageToSettingsMap {
                 },
             ),
             (
-                "Blade".into(),
-                LanguageSettingsContent {
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(true),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                },
-            ),
-            (
                 "C".into(),
                 LanguageSettingsContent {
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(false),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
                     use_on_type_format: Some(false),
                     ..Default::default()
                 },
@@ -701,11 +673,6 @@ fn language_overrides() -> LanguageToSettingsMap {
             (
                 "C++".into(),
                 LanguageSettingsContent {
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(false),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
                     use_on_type_format: Some(false),
                     ..Default::default()
                 },
@@ -719,17 +686,6 @@ fn language_overrides() -> LanguageToSettingsMap {
                         ConfiguredLanguageServer::from("!omnisharp"),
                         ConfiguredLanguageServer::from("..."),
                     ]),
-                    ..Default::default()
-                },
-            ),
-            (
-                "CSS".into(),
-                LanguageSettingsContent {
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(true),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
                     ..Default::default()
                 },
             ),
@@ -816,17 +772,6 @@ fn language_overrides() -> LanguageToSettingsMap {
                 },
             ),
             (
-                "GraphQL".into(),
-                LanguageSettingsContent {
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(true),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                },
-            ),
-            (
                 "HEEx".into(),
                 LanguageSettingsContent {
                     language_servers: Some(vec![
@@ -837,17 +782,6 @@ fn language_overrides() -> LanguageToSettingsMap {
                         ConfiguredLanguageServer::from("!lexical"),
                         ConfiguredLanguageServer::from("..."),
                     ]),
-                    ..Default::default()
-                },
-            ),
-            (
-                "HTML".into(),
-                LanguageSettingsContent {
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(true),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
                     ..Default::default()
                 },
             ),
@@ -863,25 +797,8 @@ fn language_overrides() -> LanguageToSettingsMap {
                 },
             ),
             (
-                "Java".into(),
-                LanguageSettingsContent {
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(true),
-                        plugins: Some(["prettier-plugin-java".into()].into_iter().collect()),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                },
-            ),
-            (
                 "JavaScript".into(),
                 LanguageSettingsContent {
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(true),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
                     language_servers: Some(vec![
                         ConfiguredLanguageServer::from("!typescript-language-server"),
                         ConfiguredLanguageServer::from("vtsls"),
@@ -894,22 +811,6 @@ fn language_overrides() -> LanguageToSettingsMap {
                 "JSON".into(),
                 LanguageSettingsContent {
                     preferred_line_length: Some(120),
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(true),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                },
-            ),
-            (
-                "JSONC".into(),
-                LanguageSettingsContent {
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(true),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
                     ..Default::default()
                 },
             ),
@@ -940,12 +841,6 @@ fn language_overrides() -> LanguageToSettingsMap {
                     formatter: Some(FormatterList::Single(Formatter::LanguageServer(
                         Default::default(),
                     ))),
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(true),
-                        plugins: Some(["prettier-plugin-latex".into()].into_iter().collect()),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
                     language_servers: Some(vec![
                         ConfiguredLanguageServer::from("texlab"),
                         ConfiguredLanguageServer::from("..."),
@@ -959,11 +854,6 @@ fn language_overrides() -> LanguageToSettingsMap {
                     soft_wrap: Some(SoftWrap::EditorWidth),
                     preferred_line_length: Some(300),
                     remove_trailing_whitespace_on_save: Some(false),
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(true),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
                     allow_rewrap: Some(RewrapBehavior::Anywhere),
                     use_on_type_format: Some(false),
                     completions: Some(CompletionSettingsContent {
@@ -976,12 +866,6 @@ fn language_overrides() -> LanguageToSettingsMap {
             (
                 "PHP".into(),
                 LanguageSettingsContent {
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(true),
-                        parser: Some("php".into()),
-                        plugins: Some(["@prettier/plugin-php".into()].into_iter().collect()),
-                        options: Some(Default::default()),
-                    }),
                     language_servers: Some(vec![
                         ConfiguredLanguageServer::from("phpactor"),
                         ConfiguredLanguageServer::from("!intelephense"),
@@ -1064,17 +948,6 @@ fn language_overrides() -> LanguageToSettingsMap {
                 },
             ),
             (
-                "SCSS".into(),
-                LanguageSettingsContent {
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(true),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                },
-            ),
-            (
                 "Starlark".into(),
                 LanguageSettingsContent {
                     language_servers: Some(vec![
@@ -1089,12 +962,6 @@ fn language_overrides() -> LanguageToSettingsMap {
             (
                 "Svelte".into(),
                 LanguageSettingsContent {
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(true),
-                        plugins: Some(["prettier-plugin-svelte".into()].into_iter().collect()),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
                     language_servers: Some(vec![
                         ConfiguredLanguageServer::from("svelte-language-server"),
                         ConfiguredLanguageServer::from("..."),
@@ -1105,11 +972,6 @@ fn language_overrides() -> LanguageToSettingsMap {
             (
                 "TSX".into(),
                 LanguageSettingsContent {
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(true),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
                     language_servers: Some(vec![
                         ConfiguredLanguageServer::from("!typescript-language-server"),
                         ConfiguredLanguageServer::from("vtsls"),
@@ -1119,24 +981,8 @@ fn language_overrides() -> LanguageToSettingsMap {
                 },
             ),
             (
-                "Twig".into(),
-                LanguageSettingsContent {
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(true),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                },
-            ),
-            (
                 "TypeScript".into(),
                 LanguageSettingsContent {
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(true),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
                     language_servers: Some(vec![
                         ConfiguredLanguageServer::from("!typescript-language-server"),
                         ConfiguredLanguageServer::from("vtsls"),
@@ -1169,39 +1015,11 @@ fn language_overrides() -> LanguageToSettingsMap {
             (
                 "Vue.js".into(),
                 LanguageSettingsContent {
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(true),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
                     language_servers: Some(vec![
                         ConfiguredLanguageServer::from("vue-language-server"),
                         ConfiguredLanguageServer::from("vtsls"),
                         ConfiguredLanguageServer::from("..."),
                     ]),
-                    ..Default::default()
-                },
-            ),
-            (
-                "XML".into(),
-                LanguageSettingsContent {
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(true),
-                        plugins: Some(["@prettier/plugin-xml".into()].into_iter().collect()),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
-                    ..Default::default()
-                },
-            ),
-            (
-                "YAML".into(),
-                LanguageSettingsContent {
-                    prettier: Some(PrettierSettingsContent {
-                        allowed: Some(true),
-                        options: Some(Default::default()),
-                        ..Default::default()
-                    }),
                     ..Default::default()
                 },
             ),

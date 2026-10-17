@@ -10,8 +10,8 @@ use gpui::{App, AppContext as _, AsyncApp, Context, Entity, PromptLevel, Task, T
 use language::{Buffer, BufferEvent, LanguageRegistry, proto::serialize_operation};
 use node_runtime::NodeRuntime;
 use project::{
-    LspStore, LspStoreEvent, ManifestTree, PrettierStore, ProjectEnvironment, ProjectPath,
-    ToolchainStore, WorktreeId,
+    LspStore, LspStoreEvent, ManifestTree, ProjectEnvironment, ProjectPath, ToolchainStore,
+    WorktreeId,
     buffer_store::{BufferStore, BufferStoreEvent},
     git_store::GitStore,
     image_store::ImageId,
@@ -91,7 +91,7 @@ impl HeadlessProject {
         HeadlessAppState {
             session,
             fs,
-            node_runtime,
+            node_runtime: _,
             languages,
         }: HeadlessAppState,
         init_worktree_trust: bool,
@@ -146,16 +146,6 @@ impl HeadlessProject {
             store
         });
 
-        let prettier_store = cx.new(|cx| {
-            PrettierStore::new(
-                node_runtime.clone(),
-                fs.clone(),
-                languages.clone(),
-                worktree_store.clone(),
-                cx,
-            )
-        });
-
         let task_store = cx.new(|cx| {
             let mut task_store = TaskStore::local(
                 buffer_store.downgrade(),
@@ -178,7 +168,6 @@ impl HeadlessProject {
             let mut lsp_store = LspStore::new_local(
                 buffer_store.clone(),
                 worktree_store.clone(),
-                prettier_store.clone(),
                 toolchain_store
                     .read(cx)
                     .as_local_store()

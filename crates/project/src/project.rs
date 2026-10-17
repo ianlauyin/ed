@@ -1,3 +1,4 @@
+mod biome;
 pub mod buffer_store;
 pub mod color_extractor;
 pub mod debounced_delay;
@@ -6,7 +7,6 @@ pub mod image_store;
 pub mod lsp_command;
 pub mod lsp_store;
 pub mod manifest_tree;
-pub mod prettier_store;
 pub mod project_search;
 pub mod project_settings;
 pub mod search;
@@ -77,7 +77,6 @@ use lsp_store::{CompletionDocumentation, LspFormatTarget, OpenLspBufferHandle};
 pub use manifest_tree::ManifestProvidersStore;
 use node_runtime::NodeRuntime;
 use parking_lot::Mutex;
-pub use prettier_store::PrettierStore;
 use project_settings::{ProjectSettings, SettingsObserver, SettingsObserverEvent};
 
 use remote::{RemoteClient, RemoteConnectionOptions, same_remote_connection_identity};
@@ -1052,7 +1051,8 @@ impl Project {
         flags: LocalProjectFlags,
         cx: &mut App,
     ) -> Entity<Self> {
-        cx.new(|cx: &mut Context<Self>| {            let worktree_store =
+        cx.new(|cx: &mut Context<Self>| {
+            let worktree_store =
                 cx.new(|cx| WorktreeStore::local(false, fs.clone(), WorktreeIdCounter::get(cx)));
             if flags.init_worktree_trust {
                 trusted_worktrees::track_worktree_trust(
@@ -1090,16 +1090,6 @@ impl Project {
             cx.subscribe(&image_store, Self::on_image_store_event)
                 .detach();
 
-            let prettier_store = cx.new(|cx| {
-                PrettierStore::new(
-                    node.clone(),
-                    fs.clone(),
-                    languages.clone(),
-                    worktree_store.clone(),
-                    cx,
-                )
-            });
-
             let git_store = cx.new(|cx| {
                 GitStore::local(
                     &worktree_store,
@@ -1131,7 +1121,6 @@ impl Project {
                 LspStore::new_local(
                     buffer_store.clone(),
                     worktree_store.clone(),
-                    prettier_store.clone(),
                     toolchain_store
                         .read(cx)
                         .as_local_store()
