@@ -910,16 +910,19 @@ async fn target_info_from_abs_path(
     abs_path: &Path,
     project_env: Option<&HashMap<String, String>>,
 ) -> Result<Option<(Option<TargetInfo>, Arc<Path>)>> {
+    let directory = abs_path
+        .parent()
+        .ok_or_else(|| anyhow::anyhow!("failed to get parent directory"))?;
+    if !has_cargo_manifest(directory).await? {
+        return Ok(None);
+    }
+
     let mut command = util::command::new_command("cargo");
     if let Some(envs) = project_env {
         command.envs(envs);
     }
     let output = command
-        .current_dir(
-            abs_path
-                .parent()
-                .ok_or_else(|| anyhow::anyhow!("failed to get parent directory"))?,
-        )
+        .current_dir(directory)
         .arg("metadata")
         .arg("--no-deps")
         .arg("--format-version")
@@ -934,6 +937,18 @@ async fn target_info_from_abs_path(
 
     let metadata: CargoMetadata = serde_json::from_slice(&output.stdout)?;
     Ok(target_info_from_metadata(metadata, abs_path))
+}
+
+async fn has_cargo_manifest(directory: &Path) -> Result<bool> {
+    let resolved_directory = fs::canonicalize(directory).await?;
+    for ancestor in resolved_directory.ancestors() {
+        match fs::metadata(ancestor.join("Cargo.toml")).await {
+            Ok(_) => return Ok(true),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+    }
+    Ok(false)
 }
 
 fn target_info_from_metadata(
