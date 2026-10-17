@@ -18,3 +18,5 @@
   buffers without a worktree file, on rows with a run indicator, on the left
   side of a split diff, and in editors that hide runnables (previews).
   Singleton editors always reserve gutter space for it.
+  The gutter right-click menu has a matching "Copy File Location" entry with
+  the same row/selection behaviour.
