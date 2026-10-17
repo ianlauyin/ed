@@ -569,7 +569,7 @@ impl ThemeSettings {
 /// status bar, side docks) is one opaque chrome colour, the theme's panel background.
 /// Applied before user theme overrides so they can still adjust it.
 fn apply_floating_chrome(theme: &mut Theme) {
-    /// How far the editor / terminal content sits from the tab bar, in HSL lightness.
+    /// How far the editor / terminal content sits from the chrome, in HSL lightness.
     const CONTENT_CONTRAST: f32 = 0.05;
 
     let is_light = theme.appearance.is_light();
@@ -580,13 +580,12 @@ fn apply_floating_chrome(theme: &mut Theme) {
     colors.title_bar_inactive_background = chrome;
     colors.status_bar_background = chrome;
 
-    // Content is darker than the tabs in dark themes and lighter in light themes. Only ever
+    // Content is darker than the chrome in dark themes and lighter in light themes. Only ever
     // add contrast: themes that already have more are left alone.
-    let tab_l = colors.tab_bar_background.l;
     let shift = if is_light {
-        ((tab_l + CONTENT_CONTRAST).min(1.) - colors.editor_background.l).max(0.)
+        ((chrome.l + CONTENT_CONTRAST).min(1.) - colors.editor_background.l).max(0.)
     } else {
-        ((tab_l - CONTENT_CONTRAST).max(0.) - colors.editor_background.l).min(0.)
+        ((chrome.l - CONTENT_CONTRAST).max(0.) - colors.editor_background.l).min(0.)
     };
     let mut surfaces = vec![
         &mut colors.editor_background,
@@ -604,17 +603,11 @@ fn apply_floating_chrome(theme: &mut Theme) {
         color.l = (color.l + shift).clamp(0., 1.);
     }
 
-    // Tab bars blend into the card; the active tab stands out from it by the same contrast.
-    let content = colors.editor_background;
-    let mut active_tab = content;
-    active_tab.l = if is_light {
-        (content.l - CONTENT_CONTRAST).max(0.)
-    } else {
-        (content.l + CONTENT_CONTRAST).min(1.)
-    };
-    colors.tab_bar_background = content;
-    colors.tab_inactive_background = content;
-    colors.tab_active_background = active_tab;
+    // Tab bars sit on the chrome: inactive tabs blend into it, the active tab takes the card
+    // colour and joins the card below it.
+    colors.tab_bar_background = chrome;
+    colors.tab_inactive_background = chrome;
+    colors.tab_active_background = colors.editor_background;
 }
 
 /// Observe changes to the adjusted buffer font size.

@@ -1030,7 +1030,15 @@ mod element {
 
     use super::{HANDLE_HITBOX_SIZE, HORIZONTAL_MIN_SIZE, VERTICAL_MIN_SIZE};
 
-    const DIVIDER_SIZE: f32 = 1.0;
+    /// Split panes are separate cards, with the chrome showing through the gap between them.
+    const GAP: Pixels = crate::CARD_GAP;
+
+    /// The space shared out between the children, excluding the gaps between them.
+    fn children_size(bounds_size: Size<Pixels>, axis: Axis, len: usize) -> Size<Pixels> {
+        bounds_size.apply_along(axis, |size| {
+            (size - GAP * len.saturating_sub(1) as f32).max(px(0.))
+        })
+    }
 
     pub(super) fn pane_axis(
         axis: Axis,
@@ -1079,7 +1087,6 @@ mod element {
 
     struct PaneAxisHandleLayout {
         hitbox: Hitbox,
-        divider_bounds: Bounds<Pixels>,
     }
 
     impl PaneAxisElement {
@@ -1197,24 +1204,17 @@ mod element {
             window: &mut Window,
             _cx: &mut App,
         ) -> PaneAxisHandleLayout {
+            // The handle covers the gap after the pane, plus a little either side.
+            let handle_size = GAP + px(HANDLE_HITBOX_SIZE);
             let handle_bounds = Bounds {
                 origin: pane_bounds.origin.apply_along(axis, |origin| {
                     origin + pane_bounds.size.along(axis) - px(HANDLE_HITBOX_SIZE / 2.)
                 }),
-                size: pane_bounds
-                    .size
-                    .apply_along(axis, |_| px(HANDLE_HITBOX_SIZE)),
-            };
-            let divider_bounds = Bounds {
-                origin: pane_bounds
-                    .origin
-                    .apply_along(axis, |origin| origin + pane_bounds.size.along(axis)),
-                size: pane_bounds.size.apply_along(axis, |_| px(DIVIDER_SIZE)),
+                size: pane_bounds.size.apply_along(axis, |_| handle_size),
             };
 
             PaneAxisHandleLayout {
                 hitbox: window.insert_hitbox(handle_bounds, HitboxBehavior::BlockMouse),
-                divider_bounds,
             }
         }
     }
@@ -1278,7 +1278,8 @@ mod element {
             let total_flex = len as f32;
 
             let mut origin = bounds.origin;
-            let space_per_flex = bounds.size.along(self.axis) / total_flex;
+            let space_per_flex =
+                children_size(bounds.size, self.axis, len).along(self.axis) / total_flex;
 
             let mut bounding_boxes = self.bounding_boxes.lock();
             bounding_boxes.clear();
@@ -1304,7 +1305,8 @@ mod element {
                 child.layout_as_root(child_size.into(), window, cx);
                 child.prepaint_at(origin, window, cx);
 
-                origin = origin.apply_along(self.axis, |val| val + child_size.along(self.axis));
+                origin = origin
+                    .apply_along(self.axis, |val| val + child_size.along(self.axis) + GAP);
 
                 let is_leaf_pane = self.is_leaf_pane_mask.get(ix).copied().unwrap_or(true);
 
@@ -1359,20 +1361,10 @@ mod element {
                 .border_size
                 .and_then(|val| (val >= 0.).then_some(val));
 
+            let len = layout.children.len();
             for (ix, child) in &mut layout.children.iter_mut().enumerate() {
                 if overlay_opacity.is_some() || overlay_border.is_some() {
-                    // the overlay has to be painted in origin+1px with size width-1px
-                    // in order to accommodate the divider between panels
-                    let overlay_bounds = Bounds {
-                        origin: child
-                            .bounds
-                            .origin
-                            .apply_along(Axis::Horizontal, |val| val + px(1.)),
-                        size: child
-                            .bounds
-                            .size
-                            .apply_along(Axis::Horizontal, |val| val - px(1.)),
-                    };
+                    let overlay_bounds = child.bounds;
 
                     if overlay_opacity.is_some()
                         && child.is_leaf_pane
@@ -1412,11 +1404,6 @@ mod element {
                         window.set_cursor_style(cursor_style, &handle.hitbox);
                     }
 
-                    window.paint_quad(gpui::fill(
-                        handle.divider_bounds,
-                        cx.theme().colors().pane_group_border,
-                    ));
-
                     window.on_mouse_event({
                         let dragged_handle = layout.dragged_handle.clone();
                         let flexes = self.flexes.clone();
@@ -1453,7 +1440,7 @@ mod element {
                                     ix,
                                     axis,
                                     child_bounds.origin,
-                                    bounds.size,
+                                    children_size(bounds.size, axis, len),
                                     workspace.clone(),
                                     window,
                                     cx,

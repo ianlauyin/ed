@@ -168,27 +168,13 @@ use crate::{
 pub const SERIALIZATION_THROTTLE_TIME: Duration = Duration::from_millis(200);
 pub const MAX_RECENT_SELECTIONS: usize = 20;
 
-/// Space between the floating editor / terminal cards and the surrounding chrome.
+/// Space between the floating pane cards, and between them and the surrounding chrome.
 pub const CARD_GAP: Pixels = px(8.);
-/// Corner radius of the floating cards.
+/// Corner radius of the floating pane cards.
 pub const CARD_RADIUS: Pixels = px(10.);
 /// GPUI clips children to rectangles only, so the card's content is inset just enough
-/// (border + inset >= radius * (1 - 1/sqrt 2)) for square child corners to stay inside
-/// the rounded border.
-pub const CARD_INSET: Pixels = px(2.);
-
-/// Styles an element as an opaque, rounded "floating" card (editor area, terminal dock).
-pub fn card<E: Styled>(element: E, cx: &App) -> E {
-    let colors = cx.theme().colors();
-    element
-        .rounded(CARD_RADIUS)
-        .border_1()
-        .border_color(colors.border_variant)
-        .bg(colors.editor_background)
-        // Only a bottom inset: tab bars run edge to edge (they paint no background of their own
-        // and their tabs' corners match the card's), and panes inset their content sideways.
-        .pb(CARD_INSET)
-}
+/// (inset >= radius * (1 - 1/sqrt 2)) for square child corners to stay inside the rounded edge.
+pub const CARD_INSET: Pixels = px(3.);
 
 /// Which optional window-title variables are actually referenced by the active
 /// template. Used to skip expensive lookups when the template doesn't need them.
@@ -7423,7 +7409,6 @@ impl Workspace {
                 this.track_focus(&self.region_focus_handles.editor)
             })
             .size_full()
-            .map(|this| card(this, cx))
             .child(self.center.render(
                 self.zoomed.as_ref(),
                 self.maximized_pane.as_ref(),
@@ -7950,8 +7935,6 @@ impl Render for Workspace {
                 div()
                     .h_full()
                     .w(relative(size))
-                    .bg(cx.theme().colors().editor_background)
-                    .border_color(cx.theme().colors().pane_group_border)
             })
         };
         let render_centered_paddings = |enabled: bool| {
@@ -8412,7 +8395,7 @@ impl Render for Workspace {
                                         } else {
                                             CARD_GAP
                                         })
-                                        .map(|this| card(this, cx))
+                                        .bg(colors.background)
                                         .child(zoomed_element)
                                         .shadow_lg(),
                                 )

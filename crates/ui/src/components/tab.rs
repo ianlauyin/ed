@@ -138,7 +138,7 @@ impl RenderOnce for Tab {
             }
         };
 
-        // Rounded tabs filling the tab bar height.
+        // Tabs fill the tab bar height with rounded tops; the active one joins the card below.
         self.div
             .h(Tab::container_height(cx))
             .flex()
@@ -150,10 +150,7 @@ impl RenderOnce for Tab {
                     .group("")
                     .relative()
                     .h_full()
-                    // Top corners match the inner curve of the floating card (10px radius, 1px
-                    // border) so a tab in the card's corner sits flush against it.
-                    .rounded_t(px(9.))
-                    .rounded_b_md()
+                    .rounded_t(px(8.))
                     .bg(tab_bg)
                     .px(DynamicSpacing::Base12.px(cx))
                     .gap(DynamicSpacing::Base04.rems(cx))

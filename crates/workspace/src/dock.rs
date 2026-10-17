@@ -1327,13 +1327,8 @@ impl Render for Dock {
                     Axis::Horizontal => this.w_full().h_full().flex_row(),
                     Axis::Vertical => this.h_full().w_full().flex_col(),
                 })
-                // Side docks blend into the chrome; the bottom dock floats as a card like the editor.
-                .map(|this| match self.position() {
-                    DockPosition::Left | DockPosition::Right => {
-                        this.bg(cx.theme().colors().panel_background)
-                    }
-                    DockPosition::Bottom => crate::card(this, cx),
-                })
+                // Docks blend into the chrome; panes inside them (e.g. the terminal) draw their own cards.
+                .bg(cx.theme().colors().panel_background)
                 .child(
                     div()
                         .map(|this| match self.position().axis() {

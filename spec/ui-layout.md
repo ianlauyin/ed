@@ -13,35 +13,35 @@ because it hurt readability; an opaque window is also cheaper to composite.
 - The chrome is the active theme's `panel_background`. Before user theme
   overrides run, `background`, the title bar colours and `status_bar_background`
   are set to it. User `theme_overrides` can still change any of these.
-- Card content is derived from the tab bar colour instead of a new theme key:
+- Card content is derived from the chrome colour instead of a new theme key:
   the editor, gutter, toolbar and terminal backgrounds are shifted together so
-  the editor sits 5 points of HSL lightness below the tab bar (above it in light
+  the editor sits 5 points of HSL lightness below the chrome (above it in light
   themes). The shift only ever adds contrast; themes that already have more are
   left alone. Opaque active-line colours shift too; translucent ones already
   follow the background.
-- Tab bars and inactive tabs then take the card content colour, so the tab bar
-  blends into the card. The active tab is 5 points lighter than the content (5
-  points darker in light themes).
-- Side docks (project, outline, git panels) have no border; they blend into the
-  chrome.
-- The center pane group and the bottom dock are cards:
-  `editor_background` fill, a 1px `border_variant` border, and a 10px radius.
-- A zoomed view (editor or any dock) is a card that covers exactly the area the
-  cards occupy, overlaying the others, so every zoomed view has the same size.
+- Each pane is its own card: its tab bar sits on the chrome, and everything
+  below the tab bar is the card (`editor_background` fill, 10px radius, no
+  border). Tab bars and inactive tabs take the chrome colour, so only the active
+  tab stands out: it takes the card colour and joins the card below it, like a
+  browser tab. This replaced cards that wrapped the tab bar, where inactive tabs
+  shared the card colour and looked continuous with the active one.
+- Docks have no border and blend into the chrome. Panes inside them (the
+  terminal) draw their own cards; a non-pane panel docked at the bottom just
+  sits on the chrome.
+- Split panes are separate cards with an 8px gap between them (the chrome shows
+  through) instead of a divider line. The resize handle covers the gap.
+- A zoomed view (editor or any dock) covers exactly the area the cards occupy,
+  on the chrome, overlaying the others, so every zoomed view has the same size.
   The `zoomed_padding` setting is removed.
-- An 8px gap separates the cards from the window edges, from each other and from
-  open docks. There is no gap under the title bar. When the status bar is shown,
-  it replaces the bottom gap and pads its content evenly above and below, so the
-  icons sit centred between the card and the window edge.
-- Tabs are rounded and fill the tab bar's full height. The tab bar has no bottom
-  line and no borders between tabs.
-- GPUI only clips to rectangles. Cards inset their content by 2px at the bottom,
-  and panes inset everything below the tab bar by 2px on each side. With the 1px
-  border this keeps square content corners (editor background, scrollbars)
-  inside the rounded edge. If the radius grows, the inset must grow so that
-  border + inset >= radius × (1 − 1/√2).
-- Tab bars have no inset and paint no background of their own (the card colour
-  shows through), so tabs meet the card's top and side borders. Tab top corners
-  use a 9px radius, matching the card's inner curve, so a tab in the card's
-  corner sits flush. A pane with its tab bar hidden, or a non-pane panel docked
-  at the bottom, would show square corners at the top.
+- An 8px gap separates the cards from the window edges and from open docks.
+  There is no gap under the title bar. When the status bar is shown, it replaces
+  the bottom gap and pads its content evenly above and below, so the icons sit
+  centred between the card and the window edge.
+- Tabs fill the tab bar's full height with rounded top corners and square
+  bottoms. The tab bar has no bottom line and no borders between tabs. It is
+  inset 10px on the left (the card radius), so the first tab meets the card's
+  straight top edge rather than its rounded corner.
+- GPUI only clips to rectangles, so the card insets its content by 3px on every
+  side, keeping square content corners (editor background, scrollbars) inside
+  the rounded edge. If the radius grows, the inset must grow so that
+  inset >= radius × (1 − 1/√2).

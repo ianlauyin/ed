@@ -98,6 +98,9 @@ impl RenderOnce for TabBar {
             .flex_none()
             .w_full()
             .h(Tab::container_height(cx))
+            // Clears the card's rounded top-left corner, so the first tab meets the card's
+            // straight top edge (matches `workspace::CARD_RADIUS`).
+            .pl(px(10.))
             .when(!self.start_children.is_empty(), |this| {
                 this.child(
                     h_flex()
