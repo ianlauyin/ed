@@ -113,7 +113,7 @@ pub use workspace::searchable::Direction;
 
 use ::git::{Blame, status::FileStatus};
 use aho_corasick::{AhoCorasick, AhoCorasickBuilder, BuildError};
-use anyhow::{Context as _, Result, anyhow, bail};
+use anyhow::{Context as _, Result, bail};
 use blink_manager::BlinkManager;
 
 use code_context_menus::{
@@ -230,9 +230,9 @@ use util::{RangeExt, ResultExt, TryFutureExt, maybe, post_inc};
 use workspace::{
     Item as WorkspaceItem, ItemId, ItemNavHistory, NavigationEntry, OpenInTerminal, OpenTerminal,
     Pane, RestoreOnStartupBehavior, SERIALIZATION_THROTTLE_TIME, SplitDirection, TabBarSettings,
-    Toast, Workspace, WorkspaceId, WorkspaceSettings,
+    Workspace, WorkspaceId, WorkspaceSettings,
     item::{ItemBufferKind, ItemHandle, PreviewTabsSettings, SaveOptions},
-    notifications::{DetachAndPromptErr, NotificationId, NotifyResultExt, NotifyTaskExt},
+    notifications::{DetachAndPromptErr, NotifyResultExt, NotifyTaskExt},
     searchable::{SearchEvent, SelectSearchOptions},
 };
 pub use zed_actions::editor::RevealInFileManager;
@@ -3971,6 +3971,15 @@ impl Editor {
                         weak_editor
                             .update(cx, |this, cx| {
                                 this.toggle_git_blame(&Blame, window, cx);
+                            })
+                            .log_err();
+                    }
+                })
+                .entry("Copy File Location", Some(CopyFileLocation.boxed_clone()), {
+                    move |_window, cx| {
+                        weak_editor
+                            .update(cx, |this, cx| {
+                                this.copy_file_location_at_row(display_row, cx);
                             })
                             .log_err();
                     }

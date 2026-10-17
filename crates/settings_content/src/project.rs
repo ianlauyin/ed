@@ -44,15 +44,12 @@ pub struct ProjectSettingsContent {
     pub lsp: LspSettingsMap,
 
     pub load_direnv: Option<DirenvSettings>,
-
-    /// The list of custom Git hosting providers.
-    pub git_hosting_providers: Option<ExtendingVec<GitHostingProviderConfig>>,
 }
 
 crate::fallible_options::flattened_deserialize!(ProjectSettingsContent {
     sections: { all_languages, worktree },
     options: {
-        load_direnv, git_hosting_providers,
+        load_direnv,
     },
     defaults: { lsp },
 });
@@ -798,32 +795,3 @@ pub enum DiagnosticSeverityContent {
     All,
 }
 
-/// A custom Git hosting provider.
-#[with_fallible_options]
-#[derive(Debug, PartialEq, Clone, Serialize, Deserialize, JsonSchema, MergeFrom)]
-pub struct GitHostingProviderConfig {
-    /// The type of the provider.
-    ///
-    /// Must be one of `github`, `gitlab`, `bitbucket`, `gitea`, `forgejo`, `gerrit`, `sourcehut`, `tangled`, or `gitiles`.
-    pub provider: GitHostingProviderKind,
-
-    /// The base URL for the provider (e.g., "https://code.corp.big.com").
-    pub base_url: String,
-
-    /// The display name for the provider (e.g., "BigCorp GitHub").
-    pub name: String,
-}
-
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
-#[serde(rename_all = "snake_case")]
-pub enum GitHostingProviderKind {
-    Github,
-    Gitlab,
-    Bitbucket,
-    Gitea,
-    Forgejo,
-    Gerrit,
-    SourceHut,
-    Tangled,
-    Gitiles,
-}

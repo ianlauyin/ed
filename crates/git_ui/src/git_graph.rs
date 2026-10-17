@@ -8,8 +8,7 @@ use collections::{BTreeMap, HashMap, IndexSet};
 use editor::Editor;
 use file_icons::FileIcons;
 use git::{
-    BuildCommitPermalinkParams, GitHostingProviderRegistry, GitRemote, Oid, ParsedGitRemote,
-    parse_git_remote_url,
+    Oid,
     repository::{InitialGraphCommitData, LogOrder, LogSource, RepoPath, SearchCommitArgs},
     status::{FileStatus, StatusCode, TrackedStatus},
 };
@@ -2954,17 +2953,6 @@ impl GitGraph {
 
         let date_string = commit_timestamp.map(format_timestamp).unwrap_or_default();
 
-        let remote = repository.update(cx, |repo, cx| {
-            let remote_url = repo.default_remote_url()?;
-            let provider_registry = GitHostingProviderRegistry::default_global(cx);
-            let (provider, parsed) = parse_git_remote_url(provider_registry, &remote_url)?;
-            Some(GitRemote {
-                host: provider,
-                owner: parsed.owner.into(),
-                repo: parsed.repo.into(),
-            })
-        });
-
         let changed_files_count = self
             .selected_commit_diff
             .as_ref()
@@ -3222,42 +3210,6 @@ impl GitGraph {
                                             })
                                             .detach();
                                         })
-                                })
-                                .when_some(remote.clone(), |this, remote| {
-                                    let provider_name = remote.host.name();
-                                    let icon =
-                                        ui::git_hosting_provider_icon(provider_name.as_str());
-                                    let parsed_remote = ParsedGitRemote {
-                                        owner: remote.owner.as_ref().into(),
-                                        repo: remote.repo.as_ref().into(),
-                                    };
-                                    let params = BuildCommitPermalinkParams {
-                                        sha: full_sha.as_ref(),
-                                    };
-                                    let url = remote
-                                        .host
-                                        .build_commit_permalink(&parsed_remote, params)
-                                        .to_string();
-
-                                    this.child(
-                                        Button::new(
-                                            "view-on-provider",
-                                            format!("View on {}", provider_name),
-                                        )
-                                        .start_icon(
-                                            Icon::new(icon)
-                                                .size(IconSize::Small)
-                                                .color(Color::Muted),
-                                        )
-                                        .label_size(LabelSize::Small)
-                                        .truncate(true)
-                                        .color(Color::Muted)
-                                        .on_click(
-                                            move |_, _, cx| {
-                                                cx.open_url(&url);
-                                            },
-                                        ),
-                                    )
                                 }),
                         )
                     }),

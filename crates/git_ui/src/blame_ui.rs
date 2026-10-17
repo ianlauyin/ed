@@ -190,7 +190,6 @@ impl BlameRenderer for GitBlameRenderer {
                         .cursor_pointer()
                         .on_mouse_down(MouseButton::Right, {
                             let blame_entry = blame_entry.clone();
-                            let details = details.clone();
                             let editor = editor.clone();
                             let repository = repository.clone();
                             let workspace = workspace.clone();
@@ -199,7 +198,6 @@ impl BlameRenderer for GitBlameRenderer {
 
                                 deploy_blame_entry_context_menu(
                                     &blame_entry,
-                                    details.as_ref(),
                                     editor.clone(),
                                     repository.clone(),
                                     workspace.clone(),
@@ -327,10 +325,6 @@ impl BlameRenderer for GitBlameRenderer {
             })
             .unwrap_or("<no commit message>".into_any());
 
-        let pull_request = details
-            .as_ref()
-            .and_then(|details| details.pull_request.clone());
-
         let ui_font_size = ThemeSettings::get_global(cx).ui_font_size(cx);
         let message_max_height = window.line_height() * 12 + (ui_font_size / 0.4);
         let commit_summary = CommitSummary {
@@ -409,25 +403,6 @@ impl BlameRenderer for GitBlameRenderer {
                                             .gap_1()
                                             .min_w_0()
                                             .children(commit_tag_chips(&tag_names))
-                                            .when_some(pull_request, |this, pr| {
-                                                this.child(
-                                                    Button::new(
-                                                        "pull-request-button",
-                                                        format!("#{}", pr.number),
-                                                    )
-                                                    .color(Color::Muted)
-                                                    .start_icon(
-                                                        Icon::new(IconName::PullRequest)
-                                                            .size(IconSize::Small)
-                                                            .color(Color::Muted),
-                                                    )
-                                                    .on_click(move |_, _, cx| {
-                                                        cx.stop_propagation();
-                                                        cx.open_url(pr.url.as_str())
-                                                    }),
-                                                )
-                                                .child(Divider::vertical())
-                                            })
                                             .child(
                                                 Button::new(
                                                     "commit-sha-button",
@@ -499,7 +474,6 @@ impl BlameRenderer for GitBlameRenderer {
 
 fn deploy_blame_entry_context_menu(
     blame_entry: &BlameEntry,
-    details: Option<&ParsedCommitMessage>,
     editor: Entity<Editor>,
     repository: Entity<Repository>,
     workspace: WeakEntity<Workspace>,
@@ -520,14 +494,6 @@ fn deploy_blame_entry_context_menu(
             .entry("Copy Commit SHA", None, move |_, cx| {
                 cx.write_to_clipboard(ClipboardItem::new_string(sha.clone()));
             })
-            .when_some(
-                details.and_then(|details| details.permalink.clone()),
-                |this, url| {
-                    this.entry("Open Commit Permalink", None, move |_, cx| {
-                        cx.open_url(url.as_str())
-                    })
-                },
-            )
             .when(has_blame_targets, |this| this.separator())
             .when_some(blame_revision, |this, (revision, path)| {
                 let repository = repository.clone();

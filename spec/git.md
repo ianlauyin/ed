@@ -2,16 +2,26 @@
 
 ## Decision
 
-Git hosting providers are used only to build URLs locally (permalinks, commit
-links, pull request links). They make no network requests.
+Git support is local-only. There is no notion of a hosting provider (GitHub,
+GitLab, …): remote URLs are never parsed into web links, and the `git` crate
+makes no HTTP requests.
 
 ## Behaviour
 
+- No permalinks: the editor's Copy/Open Permalink to Line, the file
+  Copy/Open File Permalink actions and their menu entries are removed, along
+  with the matching RPCs.
+- No pull requests: the `git::CreatePullRequest` action is removed, and a
+  successful push only shows a toast with "View Log"; PR/MR links in push
+  output are not surfaced.
+- Commits show no remote links: blame and commit tooltips show no PR number,
+  the blame context menu has no "Open Commit Permalink", and the commit view
+  and git graph have no "View on <provider>" button. Remote branches in the
+  branch picker use a generic server icon.
+- The `git_hosting_providers` setting is removed.
 - Commit author avatars are removed everywhere (blame gutter, blame and commit
   tooltips, commit view, git graph). Authors are shown by
   name/email only.
-- `GitHostingProvider` has no avatar API; the `git` and `git_hosting_providers`
-  crates make no HTTP requests.
 - The `git.blame` settings group (`show_avatar`) is removed.
 
 ## Git panel

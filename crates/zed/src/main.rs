@@ -21,7 +21,6 @@ use db::kvp::KeyValueStore;
 use editor::Editor;
 use fs::{Fs, RealFs};
 use futures::{FutureExt, StreamExt, channel::oneshot};
-use git::GitHostingProviderRegistry;
 use git_ui::clone::clone_and_open;
 use gpui::{App, AppContext, Application, AsyncApp, QuitMode, Task, TaskExt, UpdateGlobal as _};
 use gpui_platform;
@@ -232,7 +231,6 @@ fn main() {
         return;
     }
 
-    let git_hosting_provider_registry = Arc::new(GitHostingProviderRegistry::new());
     let fs = RealFs::new(None, app.background_executor());
     if !stdout_is_a_pty() {
         app.background_executor()
@@ -299,9 +297,6 @@ fn main() {
         cx.set_http_client(gpui::HttpClient::new(http, Tokio::handle(cx)));
 
         <dyn Fs>::set_global(fs.clone(), cx);
-
-        GitHostingProviderRegistry::set_global(git_hosting_provider_registry, cx);
-        git_hosting_providers::init(cx);
 
         OpenListener::set_global(cx, open_listener.clone());
 

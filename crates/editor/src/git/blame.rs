@@ -3,7 +3,7 @@ use anyhow::{Context as _, Result};
 use collections::HashMap;
 
 use git::{
-    GitHostingProviderRegistry, Oid,
+    Oid,
     blame::{Blame, BlameEntry},
     commit::ParsedCommitMessage,
     repository::RepoPath,
@@ -315,19 +315,12 @@ impl GitBlame {
         highlighted_sha: Option<Oid>,
         cx: &mut Context<Self>,
     ) -> Self {
-        let remote_url = repository.read(cx).default_remote_url();
-        let provider_registry = GitHostingProviderRegistry::default_global(cx);
-
         let mut buffers = HashMap::default();
         for (buffer, blame) in blames {
             let snapshot = buffer.read(cx).snapshot();
             let buffer_edits = buffer.update(cx, |buffer, _| buffer.subscribe());
-            let (commit_details, commit_tag_names) = parse_commit_details(
-                blame.messages,
-                blame.tag_names,
-                remote_url.as_deref(),
-                &provider_registry,
-            );
+            let (commit_details, commit_tag_names) =
+                parse_commit_details(blame.messages, blame.tag_names);
             let entries = build_blame_entry_sum_tree(blame.entries, snapshot.max_point().row);
             buffers.insert(
                 snapshot.remote_id(),
@@ -627,10 +620,6 @@ impl GitBlame {
                                 .read(cx)
                                 .repository_and_path_for_buffer_id(id, cx);
 
-                            let remote_url = repository
-                                .as_ref()
-                                .and_then(|(repo, _)| repo.read(cx).default_remote_url());
-
                             let blame_buffer = if repository.is_some() {
                                 project.update(cx, |project, cx| {
                                     project.blame_buffer(&buffer, None, cx)
@@ -640,20 +629,18 @@ impl GitBlame {
                             };
 
                             Ok(async move {
-                                (id, snapshot, buffer_edits, blame_buffer.await, remote_url)
+                                (id, snapshot, buffer_edits, blame_buffer.await)
                             })
                         })
                         .collect::<Result<Vec<_>>>()
                 })?;
-                let provider_registry =
-                    cx.update(|cx| GitHostingProviderRegistry::default_global(cx));
                 let (results, errors) = cx
                     .background_spawn({
                         async move {
                             let blame = futures::future::join_all(blame).await;
                             let mut res = vec![];
                             let mut errors = vec![];
-                            for (id, snapshot, buffer_edits, blame, remote_url) in blame {
+                            for (id, snapshot, buffer_edits, blame) in blame {
                                 match blame {
                                     Ok(Some(Blame {
                                         entries,
@@ -665,12 +652,7 @@ impl GitBlame {
                                             snapshot.max_point().row,
                                         );
                                         let (commit_details, commit_tag_names) =
-                                            parse_commit_details(
-                                                messages,
-                                                tag_names,
-                                                remote_url.as_deref(),
-                                                &provider_registry,
-                                            );
+                                            parse_commit_details(messages, tag_names);
                                         res.push((
                                             id,
                                             snapshot,
@@ -764,8 +746,6 @@ const REGENERATE_ON_EDIT_DEBOUNCE_INTERVAL: Duration = Duration::from_secs(2);
 fn parse_commit_details(
     messages: HashMap<Oid, String>,
     tag_names: HashMap<Oid, Vec<String>>,
-    remote_url: Option<&str>,
-    provider_registry: &Arc<GitHostingProviderRegistry>,
 ) -> (
     HashMap<Oid, ParsedCommitMessage>,
     HashMap<Oid, Vec<SharedString>>,
@@ -773,13 +753,12 @@ fn parse_commit_details(
     let commit_details = messages
         .into_iter()
         .map(|(oid, message)| {
-            let parsed_commit_message = ParsedCommitMessage::parse(
-                oid.to_string(),
-                message,
-                remote_url,
-                Some(provider_registry.clone()),
-            );
-            (oid, parsed_commit_message)
+            (
+                oid,
+                ParsedCommitMessage {
+                    message: message.into(),
+                },
+            )
         })
         .collect();
     let commit_tag_names = tag_names

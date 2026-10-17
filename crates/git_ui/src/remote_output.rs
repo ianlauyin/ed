@@ -4,17 +4,6 @@ use git::repository::{Remote, RemoteCommandOutput};
 use ui::SharedString;
 use util::ResultExt as _;
 
-const PULL_REQUEST_HINTS: &[(&str, &str)] = &[
-    // GitHub: "Create a pull request for 'branch' on GitHub by visiting:"
-    ("Create a pull request", "Create Pull Request"),
-    // Bitbucket: "Create pull request for branch:"
-    ("Create pull request", "Create Pull Request"),
-    // GitLab: "To create a merge request for branch, visit:"
-    ("create a merge request", "Create Merge Request"),
-    // GitLab: "View merge request for branch:"
-    ("View merge request", "View Merge Request"),
-];
-
 #[derive(Clone)]
 pub enum RemoteAction {
     Fetch(Option<Remote>),
@@ -35,48 +24,11 @@ impl RemoteAction {
 pub enum SuccessStyle {
     Toast,
     ToastWithLog { output: RemoteCommandOutput },
-    PushPrLink { label: &'static str, url: String },
 }
 
 pub struct SuccessMessage {
     pub message: String,
     pub style: SuccessStyle,
-}
-
-fn extract_pull_request_link(output: &RemoteCommandOutput) -> Option<(&'static str, String)> {
-    let mut pending_label: Option<&'static str> = None;
-
-    for line in output.stderr.lines() {
-        let Some(remote_line) = line.trim_start().strip_prefix("remote:") else {
-            pending_label = None;
-            continue;
-        };
-
-        if let Some((_, label)) = PULL_REQUEST_HINTS
-            .iter()
-            .find(|(hint, _)| remote_line.contains(hint))
-        {
-            pending_label = Some(label);
-        }
-
-        if let Some(url) = extract_url(remote_line)
-            && let Some(label) = pending_label
-        {
-            return Some((label, url));
-        }
-    }
-
-    None
-}
-
-fn extract_url(line: &str) -> Option<String> {
-    let http_index = line.find("https://").or_else(|| line.find("http://"))?;
-    let url = line[http_index..]
-        .split_whitespace()
-        .next()?
-        .trim_end_matches(|character| matches!(character, ',' | '.' | ')' | ']' | '>'));
-
-    Some(url.to_string())
 }
 
 pub fn format_output(action: &RemoteAction, output: RemoteCommandOutput) -> SuccessMessage {
@@ -169,11 +121,6 @@ pub fn format_output(action: &RemoteAction, output: RemoteCommandOutput) -> Succ
                 SuccessMessage {
                     message: "Push: Everything is up-to-date".to_string(),
                     style: SuccessStyle::Toast,
-                }
-            } else if let Some((label, url)) = extract_pull_request_link(&output) {
-                SuccessMessage {
-                    message: format!("Pushed {} to {}", branch_name, remote_ref.name),
-                    style: SuccessStyle::PushPrLink { label, url },
                 }
             } else {
                 SuccessMessage {

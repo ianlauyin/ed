@@ -32,9 +32,8 @@ use futures::{
     stream::{FuturesOrdered, FuturesUnordered},
 };
 use git::{
-    BuildPermalinkParams, GitHostingProviderRegistry, Oid, RunHook,
+    Oid, RunHook,
     blame::Blame,
-    parse_git_remote_url,
     repository::{
         Branch, BranchesScanResult, CommitData, CommitDetails, CommitFileStatus, CommitOptions,
         CreateWorktreeTarget, DiffStatType, DiffType, FetchOptions, FileHistoryChangedFileSets,
@@ -65,7 +64,6 @@ use rpc::{
     AnyProtoClient, TypedEnvelope,
     proto::{self, git_reset, split_repository_update},
 };
-use serde::Deserialize;
 use settings::{GitDiffBaseSetting, Settings, SettingsLocation, SettingsStore, WorktreeId};
 use smallvec::SmallVec;
 use smol::future::yield_now;
@@ -771,23 +769,6 @@ pub enum RepositoryState {
     Remote(RemoteRepositoryState),
 }
 
-enum PermalinkTarget {
-    Buffer {
-        buffer_id: BufferId,
-        selection: Range<u32>,
-    },
-    File(ProjectPath),
-}
-
-impl PermalinkTarget {
-    fn selection(&self) -> Option<Range<u32>> {
-        match self {
-            Self::Buffer { selection, .. } => Some(selection.clone()),
-            Self::File(_) => None,
-        }
-    }
-}
-
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum GitGraphEvent {
     CountUpdated(usize),
@@ -1039,8 +1020,6 @@ impl GitStore {
         client.add_entity_request_handler(Self::handle_open_unstaged_diff);
         client.add_entity_request_handler(Self::handle_open_uncommitted_diff);
         client.add_entity_message_handler(Self::handle_update_diff_bases);
-        client.add_entity_request_handler(Self::handle_get_file_permalink);
-        client.add_entity_request_handler(Self::handle_get_permalink_to_line);
         client.add_entity_request_handler(Self::handle_blame_buffer);
         client.add_entity_request_handler(Self::handle_blame_buffer_at_revision);
         client.add_entity_message_handler(Self::handle_update_repository);
@@ -2219,146 +2198,6 @@ impl GitStore {
                 }
             }
         })
-    }
-
-    pub fn get_permalink_to_line(
-        &self,
-        buffer: &Entity<Buffer>,
-        selection: Range<u32>,
-        cx: &mut App,
-    ) -> Task<Result<url::Url>> {
-        let Some(file) = File::from_dyn(buffer.read(cx).file()) else {
-            return Task::ready(Err(anyhow!("buffer has no file")));
-        };
-
-        let project_path = ProjectPath {
-            worktree_id: file.worktree.read(cx).id(),
-            path: file.path.clone(),
-        };
-
-        if let Some((repo, repo_path)) =
-            self.repository_and_path_for_project_path(&project_path, cx)
-        {
-            return self.build_permalink(
-                repo,
-                repo_path,
-                PermalinkTarget::Buffer {
-                    buffer_id: buffer.read(cx).remote_id(),
-                    selection,
-                },
-                cx,
-            );
-        }
-
-        // If we're not in a Git repo, check whether this is a Rust source
-        // file in the Cargo registry (presumably opened with go-to-definition
-        // from a normal Rust file). If so, we can put together a permalink
-        // using crate metadata.
-        if buffer
-            .read(cx)
-            .language()
-            .is_none_or(|lang| lang.name() != "Rust")
-        {
-            return Task::ready(Err(anyhow!("no permalink available")));
-        }
-        let file_path = file.worktree.read(cx).absolutize(&file.path);
-        cx.spawn(async move |cx| {
-            let provider_registry = cx.update(GitHostingProviderRegistry::default_global);
-            get_permalink_in_rust_registry_src(provider_registry, file_path, selection)
-                .context("no permalink available")
-        })
-    }
-
-    pub fn get_file_permalink(
-        &self,
-        project_path: &ProjectPath,
-        cx: &mut App,
-    ) -> Task<Result<url::Url>> {
-        let Some((repo, repo_path)) = self.repository_and_path_for_project_path(project_path, cx)
-        else {
-            return Task::ready(Err(anyhow!("no permalink available")));
-        };
-        self.build_permalink(
-            repo,
-            repo_path,
-            PermalinkTarget::File(project_path.clone()),
-            cx,
-        )
-    }
-
-    fn build_permalink(
-        &self,
-        repo: Entity<Repository>,
-        repo_path: RepoPath,
-        target: PermalinkTarget,
-        cx: &mut App,
-    ) -> Task<Result<url::Url>> {
-        let branch = repo.read(cx).branch.clone();
-        let remote = branch
-            .as_ref()
-            .and_then(|b| b.upstream.as_ref())
-            .and_then(|b| b.remote_name())
-            .unwrap_or("origin")
-            .to_string();
-
-        let rx = repo.update(cx, |repo, _| {
-            repo.send_job("get_permalink", None, move |state, cx| async move {
-                match state {
-                    RepositoryState::Local(LocalRepositoryState { backend, .. }) => {
-                        let origin_url = backend
-                            .remote_url(&remote)
-                            .await
-                            .with_context(|| format!("remote \"{remote}\" not found"))?;
-
-                        let sha = backend.head_sha().await.context("reading HEAD SHA")?;
-
-                        let provider_registry =
-                            cx.update(GitHostingProviderRegistry::default_global);
-
-                        let (provider, remote) =
-                            parse_git_remote_url(provider_registry, &origin_url)
-                                .context("parsing Git remote URL")?;
-
-                        Ok(provider.build_permalink(
-                            remote,
-                            BuildPermalinkParams::new(&sha, &repo_path, target.selection()),
-                        ))
-                    }
-                    RepositoryState::Remote(RemoteRepositoryState { project_id, client }) => {
-                        let permalink = match target {
-                            PermalinkTarget::Buffer {
-                                buffer_id,
-                                selection,
-                            } => {
-                                client
-                                    .request(proto::GetPermalinkToLine {
-                                        project_id: project_id.to_proto(),
-                                        buffer_id: buffer_id.into(),
-                                        selection: Some(proto::Range {
-                                            start: selection.start as u64,
-                                            end: selection.end as u64,
-                                        }),
-                                    })
-                                    .await?
-                                    .permalink
-                            }
-                            PermalinkTarget::File(project_path) => {
-                                client
-                                    .request(proto::GetFilePermalink {
-                                        project_id: project_id.to_proto(),
-                                        path: Some(project_path.to_proto()),
-                                    })
-                                    .await?
-                                    .permalink
-                            }
-                        };
-
-                        url::Url::parse(&permalink).context("failed to parse permalink")
-                    }
-                }
-            })
-        });
-        cx.spawn(|_: &mut AsyncApp| async move { rx.await? })
     }
 
     fn downstream_client(&self) -> Option<(AnyProtoClient, ProjectId)> {
@@ -4875,52 +4714,6 @@ impl GitStore {
                 .collect(),
             messages: serialize_commit_messages(blame.messages),
             tag_names: serialize_commit_tag_names(blame.tag_names),
-        })
-    }
-
-    async fn handle_get_permalink_to_line(
-        this: Entity<Self>,
-        envelope: TypedEnvelope<proto::GetPermalinkToLine>,
-        mut cx: AsyncApp,
-    ) -> Result<proto::GetPermalinkToLineResponse> {
-        let buffer_id = BufferId::new(envelope.payload.buffer_id)?;
-        let selection = {
-            let selection = envelope
-                .payload
-                .selection
-                .context("no selection to get permalink for defined")?;
-            selection.start as u32..selection.end as u32
-        };
-        let buffer = this.read_with(&cx, |this, cx| {
-            this.buffer_store.read(cx).get_existing(buffer_id)
-        })?;
-        let permalink = this
-            .update(&mut cx, |this, cx| {
-                this.get_permalink_to_line(&buffer, selection, cx)
-            })
-            .await?;
-
-        Ok(proto::GetPermalinkToLineResponse {
-            permalink: permalink.to_string(),
-        })
-    }
-
-    async fn handle_get_file_permalink(
-        this: Entity<Self>,
-        envelope: TypedEnvelope<proto::GetFilePermalink>,
-        mut cx: AsyncApp,
-    ) -> Result<proto::GetFilePermalinkResponse> {
-        let path = envelope
-            .payload
-            .path
-            .context("GetFilePermalink requires a path")?;
-        let path = ProjectPath::from_proto(path).context("invalid file permalink path")?;
-        let permalink = this
-            .update(&mut cx, |this, cx| this.get_file_permalink(&path, cx))
-            .await?;
-
-        Ok(proto::GetFilePermalinkResponse {
-            permalink: permalink.to_string(),
         })
     }
 
@@ -9992,15 +9785,6 @@ impl Repository {
             let Some(state) = state.await.log_err() else {
                 return;
             };
-            if let Some(git_hosting_provider_registry) =
-                cx.update(|cx| GitHostingProviderRegistry::try_global(cx))
-            {
-                git_hosting_providers::register_additional_providers(
-                    git_hosting_provider_registry,
-                    state.backend.clone(),
-                )
-                .await;
-            }
             let state = RepositoryState::Local(state);
             let mut jobs = VecDeque::new();
             loop {
@@ -10758,57 +10542,6 @@ pub fn linked_worktree_short_name(
         path_style.file_name(parent)?.to_str()?.to_string()
     };
     Some(name.into())
-}
-
-fn get_permalink_in_rust_registry_src(
-    provider_registry: Arc<GitHostingProviderRegistry>,
-    path: PathBuf,
-    selection: Range<u32>,
-) -> Result<url::Url> {
-    #[derive(Deserialize)]
-    struct CargoVcsGit {
-        sha1: String,
-    }
-
-    #[derive(Deserialize)]
-    struct CargoVcsInfo {
-        git: CargoVcsGit,
-        path_in_vcs: String,
-    }
-
-    #[derive(Deserialize)]
-    struct CargoPackage {
-        repository: String,
-    }
-
-    #[derive(Deserialize)]
-    struct CargoToml {
-        package: CargoPackage,
-    }
-
-    let Some((dir, cargo_vcs_info_json)) = path.ancestors().skip(1).find_map(|dir| {
-        let json = std::fs::read_to_string(dir.join(".cargo_vcs_info.json")).ok()?;
-        Some((dir, json))
-    }) else {
-        bail!("No .cargo_vcs_info.json found in parent directories")
-    };
-    let cargo_vcs_info = serde_json::from_str::<CargoVcsInfo>(&cargo_vcs_info_json)?;
-    let cargo_toml = std::fs::read_to_string(dir.join("Cargo.toml"))?;
-    let manifest = toml::from_str::<CargoToml>(&cargo_toml)?;
-    let (provider, remote) = parse_git_remote_url(provider_registry, &manifest.package.repository)
-        .context("parsing package.repository field of manifest")?;
-    let path = PathBuf::from(cargo_vcs_info.path_in_vcs).join(path.strip_prefix(dir).unwrap());
-    let permalink = provider.build_permalink(
-        remote,
-        BuildPermalinkParams::new(
-            &cargo_vcs_info.git.sha1,
-            &RepoPath::from_rel_path(
-                &RelPath::new(&path, PathStyle::local()).context("invalid path")?,
-            ),
-            Some(selection),
-        ),
-    );
-    Ok(permalink)
 }
 
 fn serialize_blame_buffer_response(blame: Option<git::blame::Blame>) -> proto::BlameBufferResponse {

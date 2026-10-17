@@ -1,5 +1,5 @@
 use crate::{
-    Copy, CopyAndTrim, CopyPermalinkToLine, Cut, DisplayPoint, DisplaySnapshot, Editor,
+    Copy, CopyAndTrim, Cut, DisplayPoint, DisplaySnapshot, Editor,
     FindAllReferences, GoToDeclaration, GoToDefinition, GoToImplementation, GoToTypeDefinition,
     Paste, Rename, RevealInFileManager, SelectMode, SelectionEffects, SelectionExt, ToDisplayPoint,
     ToggleCodeActions,
@@ -289,11 +289,6 @@ pub fn deploy_context_menu(
                     !has_reveal_target,
                     "Open in Terminal",
                     Box::new(OpenInTerminal),
-                )
-                .action_disabled_when(
-                    !has_git_repo,
-                    "Copy Permalink to Line",
-                    Box::new(CopyPermalinkToLine),
                 )
                 .action_disabled_when(
                     !has_git_repo,

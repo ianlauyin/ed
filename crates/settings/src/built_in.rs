@@ -522,7 +522,6 @@ fn project_settings() -> ProjectSettingsContent {
             .collect(),
         ),
         load_direnv: Some(DirenvSettings::Direct),
-        git_hosting_providers: Some(ExtendingVec(vec![])),
     }
 }
 

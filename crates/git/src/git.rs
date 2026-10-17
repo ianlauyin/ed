@@ -1,12 +1,10 @@
 pub mod blame;
 pub mod commit;
-mod hosting_provider;
 mod remote;
 pub mod repository;
 pub mod stash;
 pub mod status;
 
-pub use crate::hosting_provider::*;
 pub use crate::remote::*;
 use anyhow::Result;
 use gpui::{Action, actions};
@@ -61,10 +59,6 @@ actions!(
         Blame,
         /// Shows the git history for the selected file, folder, or project.
         FileHistory,
-        /// Opens a permalink for the selected file on its Git hosting provider.
-        OpenFilePermalink,
-        /// Copies a permalink for the selected file on its Git hosting provider.
-        CopyFilePermalink,
         /// Opens the selected file in the editor without a diff view.
         ViewFile,
         /// Stages the current file.

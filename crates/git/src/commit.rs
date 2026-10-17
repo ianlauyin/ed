@@ -1,51 +1,12 @@
-use crate::{
-    BuildCommitPermalinkParams, GitHostingProviderRegistry, GitRemote, Oid, parse_git_remote_url,
-    repository::GitBinary, status::StatusCode,
-};
+use crate::{Oid, repository::GitBinary, status::StatusCode};
 use anyhow::{Context as _, Result};
 use collections::{HashMap, HashSet};
 use gpui::SharedString;
-use std::{str::FromStr, sync::Arc};
+use std::str::FromStr;
 
 #[derive(Clone, Debug, Default)]
 pub struct ParsedCommitMessage {
     pub message: SharedString,
-    pub permalink: Option<url::Url>,
-    pub pull_request: Option<crate::hosting_provider::PullRequest>,
-    pub remote: Option<GitRemote>,
-}
-
-impl ParsedCommitMessage {
-    pub fn parse(
-        sha: String,
-        message: String,
-        remote_url: Option<&str>,
-        provider_registry: Option<Arc<GitHostingProviderRegistry>>,
-    ) -> Self {
-        if let Some((hosting_provider, remote)) = provider_registry
-            .and_then(|reg| remote_url.and_then(|url| parse_git_remote_url(reg, url)))
-        {
-            let pull_request = hosting_provider.extract_pull_request(&remote, &message);
-            Self {
-                message: message.into(),
-                permalink: Some(
-                    hosting_provider
-                        .build_commit_permalink(&remote, BuildCommitPermalinkParams { sha: &sha }),
-                ),
-                pull_request,
-                remote: Some(GitRemote {
-                    host: hosting_provider,
-                    owner: remote.owner.into(),
-                    repo: remote.repo.into(),
-                }),
-            }
-        } else {
-            Self {
-                message: message.into(),
-                ..Default::default()
-            }
-        }
-    }
 }
 
 pub(crate) async fn get_messages(git: &GitBinary, shas: &[Oid]) -> Result<HashMap<Oid, String>> {

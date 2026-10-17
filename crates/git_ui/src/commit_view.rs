@@ -8,10 +8,6 @@ use editor::{
 use futures_lite::future::yield_now;
 use git::repository::{CommitDetails, RepoPath};
 use git::status::{FileStatus, StatusCode, TrackedStatus};
-use git::{
-    BuildCommitPermalinkParams, GitHostingProviderRegistry, GitRemote, ParsedGitRemote,
-    parse_git_remote_url,
-};
 use gpui::{
     App, AppContext as _, AsyncWindowContext, ClipboardItem, Context, Entity, EventEmitter,
     FocusHandle, Focusable, InteractiveElement, IntoElement, ParentElement, PromptLevel, Render,
@@ -82,7 +78,6 @@ pub struct CommitView {
     repository: Entity<Repository>,
     project: Entity<Project>,
     workspace: WeakEntity<Workspace>,
-    remote: Option<GitRemote>,
     is_shallow_boundary: bool,
     file_filter: Option<RepoPath>,
     _load_diff_task: Task<Result<()>>,
@@ -494,21 +489,6 @@ impl CommitView {
             anyhow::Ok(())
         });
 
-        let snapshot = repository.read(cx).snapshot();
-        let remote_url = snapshot
-            .remote_upstream_url
-            .as_ref()
-            .or(snapshot.remote_origin_url.as_ref());
-
-        let remote = remote_url.and_then(|url| {
-            let provider_registry = GitHostingProviderRegistry::default_global(cx);
-            parse_git_remote_url(provider_registry, url).map(|(host, parsed)| GitRemote {
-                host,
-                owner: parsed.owner.into(),
-                repo: parsed.repo.into(),
-            })
-        });
-
         Self {
             commit,
             editor,
@@ -520,7 +500,6 @@ impl CommitView {
             repository,
             project,
             workspace,
-            remote,
             is_shallow_boundary,
             file_filter,
             _load_diff_task: load_diff_task,
@@ -1329,7 +1308,6 @@ impl Item for CommitView {
                 repository: self.repository.clone(),
                 project: self.project.clone(),
                 workspace: self.workspace.clone(),
-                remote: self.remote.clone(),
                 is_shallow_boundary: self.is_shallow_boundary,
                 file_filter: self.file_filter.clone(),
                 _load_diff_task: Task::ready(Ok(())),
@@ -1383,20 +1361,6 @@ impl Render for CommitViewToolbar {
 
         let commit_sha = commit_view_ref.commit.sha.clone();
 
-        let remote_info = commit_view_ref.remote.as_ref().map(|remote| {
-            let provider = remote.host.name();
-            let parsed_remote = ParsedGitRemote {
-                owner: remote.owner.as_ref().into(),
-                repo: remote.repo.as_ref().into(),
-            };
-            let params = BuildCommitPermalinkParams { sha: &commit_sha };
-            let url = remote
-                .host
-                .build_commit_permalink(&parsed_remote, params)
-                .to_string();
-            (provider, url)
-        });
-
         let sha_for_graph = commit_sha.to_string();
 
         h_flex()
@@ -1444,14 +1408,6 @@ impl Render for CommitViewToolbar {
                             );
                         }),
                 )
-                .children(remote_info.map(|(provider_name, url)| {
-                    let icon = ui::git_hosting_provider_icon(provider_name.as_str());
-
-                    IconButton::new("view_on_provider", icon)
-                        .icon_size(IconSize::Small)
-                        .tooltip(Tooltip::text(format!("View on {}", provider_name)))
-                        .on_click(move |_, _, cx| cx.open_url(&url))
-                }))
             })
     }
 }

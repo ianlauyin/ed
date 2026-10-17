@@ -183,15 +183,6 @@ pub fn init(cx: &mut App) {
             return;
         }
 
-        workspace.register_action(
-            |workspace, _: &zed_actions::git::CreatePullRequest, window, cx| {
-                if let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) {
-                    panel.update(cx, |panel, cx| {
-                        panel.create_pull_request(window, cx);
-                    });
-                }
-            },
-        );
         workspace.register_action(|workspace, _: &git::Fetch, window, cx| {
             let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
                 return;

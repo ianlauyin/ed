@@ -2272,7 +2272,6 @@ dependencies = [
  "file_content",
  "futures",
  "gpui",
- "itertools 0.14.0",
  "log",
  "parking_lot",
  "regex",
@@ -2287,24 +2286,8 @@ dependencies = [
  "thiserror 2.0.17",
  "time",
  "url",
- "urlencoding",
  "util",
  "uuid",
-]
-
-[[package]]
-name = "git_hosting_providers"
-version = "0.1.0"
-dependencies = [
- "anyhow",
- "git",
- "gpui",
- "itertools 0.14.0",
- "regex",
- "settings",
- "url",
- "urlencoding",
- "util",
 ]
 
 [[package]]
@@ -5875,7 +5858,6 @@ dependencies = [
  "fuzzy",
  "fuzzy_nucleo",
  "git",
- "git_hosting_providers",
  "globset",
  "gpui",
  "image",
@@ -5907,8 +5889,6 @@ dependencies = [
  "task",
  "terminal",
  "text",
- "toml 0.9.8",
- "url",
  "util",
  "wax",
  "which",
@@ -6508,8 +6488,6 @@ dependencies = [
  "env_logger 0.11.8",
  "fs",
  "futures",
- "git",
- "git_hosting_providers",
  "gpui",
  "gpui_platform",
  "gpui_tokio",
@@ -10092,7 +10070,6 @@ dependencies = [
  "fs",
  "futures",
  "git",
- "git_hosting_providers",
  "git_ui",
  "git_ui_core",
  "go_to_line",

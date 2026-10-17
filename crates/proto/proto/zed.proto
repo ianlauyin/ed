@@ -170,9 +170,6 @@ message Envelope {
 
     OpenServerSettings open_server_settings = 263;
 
-    GetPermalinkToLine get_permalink_to_line = 264;
-    GetPermalinkToLineResponse get_permalink_to_line_response = 265;
-
     FlushBufferedMessages flush_buffered_messages = 267;
 
     LanguageServerPromptRequest language_server_prompt_request = 268;
@@ -397,8 +394,6 @@ message Envelope {
     RefreshDocumentSymbols refresh_document_symbols = 477;
     BlameBufferAtRevision blame_buffer_at_revision = 478;
     BlameBufferAtRevisionResponse blame_buffer_at_revision_response = 479;
-    GetFilePermalink get_file_permalink = 480;
-    GetFilePermalinkResponse get_file_permalink_response = 481;
 
     PrepareCallHierarchy prepare_call_hierarchy = 482;
     PrepareCallHierarchyResponse prepare_call_hierarchy_response = 483;
@@ -423,6 +418,8 @@ message Envelope {
   reserved 90;
   reserved 326 to 327; // Removed debugger.
   reserved 339 to 342; // Removed debugger.
+  reserved 264 to 265; // Removed permalinks.
+  reserved 480 to 481; // Removed permalinks.
   reserved 423 to 424; // Removed remote profiling.
   reserved 348; // Removed debugger.
   reserved 369 to 370; // Removed debugger.

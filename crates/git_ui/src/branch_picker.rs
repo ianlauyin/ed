@@ -2,9 +2,8 @@ use anyhow::Context as _;
 use editor::Editor;
 use fuzzy_nucleo::StringMatchCandidate;
 
-use collections::{HashMap, HashSet};
+use collections::HashSet;
 use git::repository::{Branch, delete_branch_flag};
-use git::{GitHostingProviderRegistry, parse_git_remote_url};
 use gpui::{
     Action, App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Global,
     InteractiveElement, IntoElement, Modifiers, ModifiersChangedEvent, ParentElement, PromptLevel,
@@ -279,9 +278,6 @@ impl BranchList {
         let default_branch_request = repository.clone().map(|repository| {
             repository.update(cx, |repository, _| repository.default_branch(false))
         });
-        let remote_urls_request = repository
-            .clone()
-            .map(|repository| repository.update(cx, |repository, _| repository.remote_urls()));
 
         let mut delegate = BranchListDelegate::new(
             workspace,
@@ -355,20 +351,6 @@ impl BranchList {
         })
         .detach_and_log_err(cx);
 
-        cx.spawn(async move |this, cx| {
-            let remote_urls = remote_urls_request
-                .context("No active repository")?
-                .await??;
-            let remote_provider_icons = cx.update(|cx| remote_provider_icons(&remote_urls, cx));
-            this.update(cx, |this, cx| {
-                this.picker.update(cx, |picker, cx| {
-                    picker.delegate.remote_provider_icons = remote_provider_icons;
-                    cx.notify();
-                });
-            })?;
-            anyhow::Ok(())
-        })
-        .detach_and_log_err(cx);
 
         Self {
             picker,
@@ -665,7 +647,6 @@ pub struct BranchListDelegate {
     restore_selected_branch: Option<SharedString>,
     show_footer: bool,
     hovered_delete_index: Option<usize>,
-    remote_provider_icons: HashMap<String, IconName>,
 }
 
 enum BranchSelectionBehavior {
@@ -1019,7 +1000,6 @@ impl BranchListDelegate {
             restore_selected_branch,
             show_footer: false,
             hovered_delete_index: None,
-            remote_provider_icons: HashMap::default(),
         }
     }
 
@@ -1216,26 +1196,6 @@ impl BranchListDelegate {
         })
         .detach();
     }
-}
-
-fn remote_provider_icons(
-    remote_urls: &HashMap<String, String>,
-    cx: &App,
-) -> HashMap<String, IconName> {
-    let Some(provider_registry) = GitHostingProviderRegistry::try_global(cx) else {
-        return HashMap::default();
-    };
-
-    remote_urls
-        .iter()
-        .filter_map(|(remote_name, remote_url)| {
-            let (provider, _) = parse_git_remote_url(provider_registry.clone(), remote_url)?;
-            Some((
-                remote_name.clone(),
-                ui::git_hosting_provider_icon(provider.name().as_str()),
-            ))
-        })
-        .collect()
 }
 
 impl PickerDelegate for BranchListDelegate {
@@ -1681,11 +1641,7 @@ impl PickerDelegate for BranchListDelegate {
                 if is_checked_branch {
                     IconName::Check
                 } else if branch.is_remote() {
-                    branch
-                        .remote_name()
-                        .and_then(|remote_name| self.remote_provider_icons.get(remote_name))
-                        .copied()
-                        .unwrap_or(IconName::Server)
+                    IconName::Server
                 } else {
                     IconName::GitBranch
                 }

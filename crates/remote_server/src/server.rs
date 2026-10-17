@@ -9,7 +9,6 @@ use fs::RealFs;
 use futures::{
     AsyncRead, AsyncWrite, AsyncWriteExt, FutureExt, SinkExt, channel::mpsc, select, select_biased,
 };
-use git::GitHostingProviderRegistry;
 use gpui::{App, AppContext as _};
 use language::LanguageRegistry;
 use net::async_net::{UnixListener, UnixStream};
@@ -560,7 +559,6 @@ pub fn execute_run(
         })
         .detach();
 
-    let git_hosting_provider_registry = Arc::new(GitHostingProviderRegistry::new());
     let run = move |cx: &mut App| {
         settings::init(cx);
         let app_version = AppVersion::load(env!("ZED_PKG_VERSION"));
@@ -573,9 +571,6 @@ pub fn execute_run(
         let session = start_server(listeners, log_rx, cx);
 
         trusted_worktrees::init(HashMap::default(), cx);
-
-        GitHostingProviderRegistry::set_global(git_hosting_provider_registry, cx);
-        git_hosting_providers::init(cx);
 
         json_schema_store::init(cx);
 

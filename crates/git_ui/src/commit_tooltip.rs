@@ -179,11 +179,6 @@ impl Render for CommitTooltip {
             })
             .unwrap_or("<no commit message>".into_any());
 
-        let pull_request = self
-            .commit
-            .message
-            .as_ref()
-            .and_then(|details| details.pull_request.clone());
         let tag_names = self.commit.tag_names.clone();
 
         let ui_font_size = ThemeSettings::get_global(cx).ui_font_size(cx);
@@ -268,25 +263,6 @@ impl Render for CommitTooltip {
                                         .gap_1()
                                         .min_w_0()
                                         .children(commit_tag_chips(&tag_names))
-                                        .when_some(pull_request, |this, pr| {
-                                            this.child(
-                                                Button::new(
-                                                    "pull-request-button",
-                                                    format!("#{}", pr.number),
-                                                )
-                                                .color(Color::Muted)
-                                                .start_icon(
-                                                    Icon::new(IconName::PullRequest)
-                                                        .size(IconSize::Small)
-                                                        .color(Color::Muted),
-                                                )
-                                                .on_click(move |_, _, cx| {
-                                                    cx.stop_propagation();
-                                                    cx.open_url(pr.url.as_str())
-                                                }),
-                                            )
-                                            .child(Divider::vertical())
-                                        })
                                         .child(
                                             Button::new(
                                                 "commit-sha-button",
