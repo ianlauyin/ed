@@ -45,21 +45,21 @@ trait InstalledApp {
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "zed",
+    name = "ed",
     disable_version_flag = true,
-    before_help = "The Zed CLI binary.
-This CLI is a separate binary that invokes Zed.
+    before_help = "The ed CLI binary.
+This CLI is a separate binary that invokes ed.
 
 Examples:
-    `zed`
-          Simply opens Zed
-    `zed --foreground`
+    `ed`
+          Simply opens ed
+    `ed --foreground`
           Runs in foreground (shows all logs)
-    `zed path-to-your-project`
-          Open your project in Zed
-    `zed -n path-to-file `
+    `ed path-to-your-project`
+          Open your project in ed
+    `ed -n path-to-file `
           Open file/folder in a new window",
-    after_help = "To read from stdin, append '-', e.g. 'ps axf | zed -'"
+    after_help = "To read from stdin, append '-', e.g. 'ps axf | ed -'"
 )]
 struct Args {
     /// Wait for all of the given paths to be opened/closed before exiting.
@@ -76,29 +76,28 @@ struct Args {
     /// Reuse an existing window, replacing its workspace
     #[arg(short, long, overrides_with_all = ["add", "new", "existing", "classic"], hide = true)]
     reuse: bool,
-    /// Open in existing Zed window
+    /// Open in existing ed window
     #[arg(short = 'e', long = "existing", overrides_with_all = ["add", "new", "reuse", "classic"])]
     existing: bool,
     /// Use the classic open behavior: new window for directories, reuse for files
     #[arg(long, hide = true, overrides_with_all = ["add", "new", "reuse", "existing"])]
     classic: bool,
     /// Sets a custom directory for all user data (e.g., database, extensions, logs).
-    /// This overrides the default platform-specific data directory location:
-    #[doc = "`~/Library/Application Support/Zed`."]
+    /// This overrides the default data directory location, `~/.local/share/ed`.
     #[arg(long, value_name = "DIR", value_hint = clap::ValueHint::DirPath)]
     user_data_dir: Option<String>,
-    /// The paths to open in Zed (space-separated).
+    /// The paths to open in ed (space-separated).
     ///
     /// Use `path:line:column` syntax to open a file at the given line and column.
     #[arg(trailing_var_arg = true, value_hint = clap::ValueHint::AnyPath)]
     paths_with_position: Vec<String>,
-    /// Print Zed's version and the app path.
+    /// Print ed's version and the app path.
     #[arg(short, long)]
     version: bool,
-    /// Run zed in the foreground (useful for debugging)
+    /// Run ed in the foreground (useful for debugging)
     #[arg(long)]
     foreground: bool,
-    /// Custom path to Zed.app or the zed binary
+    /// Custom path to ed.app or the ed binary
     #[arg(long)]
     zed: Option<PathBuf>,
     /// Run zed in dev-server mode
@@ -640,7 +639,7 @@ mod mac_os {
 
     impl InstalledApp for Bundle {
         fn zed_version_string(&self) -> String {
-            format!("Zed {} – {}", self.version(), self.path().display(),)
+            format!("ed {} – {}", self.version(), self.path().display(),)
         }
 
         fn launch(&self, url: String, user_data_dir: Option<&str>) -> anyhow::Result<()> {
@@ -658,7 +657,7 @@ mod mac_os {
                             kCFStringEncodingUTF8,
                             ptr::null(),
                         ));
-                        // equivalent to: open zed-cli:... -a /Applications/Zed\ Preview.app
+                        // equivalent to: open zed-cli:... -a /Applications/ed.app
                         let urls_to_open =
                             CFArray::from_copyable(&[url_to_open.as_concrete_TypeRef()]);
                         LSOpenFromURLSpec(
@@ -685,7 +684,7 @@ mod mac_os {
                         .parent()
                         .with_context(|| format!("Executable {executable:?} path has no parent"))?;
                     let subprocess_stdout_file = fs::File::create(
-                        executable_parent.join("zed_dev.log"),
+                        executable_parent.join("ed_dev.log"),
                     )
                     .with_context(|| format!("Log file creation in {executable_parent:?}"))?;
                     let subprocess_stdin_file =
@@ -717,7 +716,7 @@ mod mac_os {
             user_data_dir: Option<&str>,
         ) -> io::Result<ExitStatus> {
             let path = match self {
-                Bundle::App { app_bundle, .. } => app_bundle.join("Contents/MacOS/zed"),
+                Bundle::App { app_bundle, .. } => app_bundle.join("Contents/MacOS/ed"),
                 Bundle::LocalPath { executable, .. } => executable.clone(),
             };
 
@@ -731,7 +730,7 @@ mod mac_os {
 
         fn path(&self) -> PathBuf {
             match self {
-                Bundle::App { app_bundle, .. } => app_bundle.join("Contents/MacOS/zed"),
+                Bundle::App { app_bundle, .. } => app_bundle.join("Contents/MacOS/ed"),
                 Bundle::LocalPath { executable, .. } => executable.clone(),
             }
         }

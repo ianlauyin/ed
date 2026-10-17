@@ -440,7 +440,6 @@ fn workspace_settings() -> WorkspaceSettingsContent {
         on_last_window_closed: Some(OnLastWindowClosed::PlatformDefault),
         resize_all_panels_in_dock: Some(vec![DockPosition::Left]),
         close_on_file_delete: Some(false),
-        use_system_window_tabs: Some(true),
         fullscreen_mode: Some(FullscreenMode::Native),
         close_panel_on_toggle: Some(false),
         window_title_format: Some(DEFAULT_WINDOW_TITLE_FORMAT.into()),

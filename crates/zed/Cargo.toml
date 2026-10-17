@@ -5,13 +5,13 @@ name = "zed"
 version = "1.26.0"
 publish.workspace = true
 authors = ["Zed Team <hi@zed.dev>"]
-default-run = "zed"
+default-run = "ed"
 
 [lints]
 workspace = true
 
 [[bin]]
-name = "zed"
+name = "ed"
 path = "src/main.rs"
 
 [dependencies]
@@ -98,4 +98,3 @@ zlog.workspace = true
 zlog_settings.workspace = true
 
 [target.'cfg(target_os = "macos")'.dependencies]
-nix = { workspace = true, features = ["user"] }

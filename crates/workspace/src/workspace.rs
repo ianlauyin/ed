@@ -56,9 +56,8 @@ use gpui::{
     Bounds, ClipboardItem, Context, CursorStyle, Decorations, DragMoveEvent, Entity, EntityId,
     EventEmitter, FocusHandle, Focusable, Global, HitboxBehavior, Hsla, KeyContext, Keystroke,
     ManagedView, MouseButton, PathPromptOptions, Point, PromptLevel, Render, ResizeEdge, Size,
-    Stateful, Subscription, SystemWindowTabController, Task, TaskExt, Tiling, WeakEntity,
-    WindowBounds, WindowHandle, WindowId, WindowOptions, actions, canvas, point, relative, size,
-    transparent_black,
+    Stateful, Subscription, Task, TaskExt, Tiling, WeakEntity, WindowBounds, WindowHandle,
+    WindowId, WindowOptions, actions, canvas, point, relative, size, transparent_black,
 };
 pub use history_manager::*;
 pub use item::{
@@ -5928,11 +5927,6 @@ impl Workspace {
             return;
         }
         window.set_window_title(&title);
-        SystemWindowTabController::update_tab_title(
-            cx,
-            window.window_handle().window_id(),
-            SharedString::from(&title),
-        );
         self.last_window_title = Some(title);
     }
 
@@ -6012,7 +6006,7 @@ impl Workspace {
             file_stem,
             remote_name,
             remote_host,
-            app_name: if needs.app_name { "Zed" } else { "" },
+            app_name: if needs.app_name { "ed" } else { "" },
             branch,
         }
     }
@@ -7434,16 +7428,11 @@ impl Workspace {
             return;
         };
         let windows = cx.windows();
-        let next_window =
-            SystemWindowTabController::get_next_tab_group_window(cx, current_window_id).or_else(
-                || {
-                    windows
-                        .iter()
-                        .cycle()
-                        .skip_while(|window| window.window_id() != current_window_id)
-                        .nth(1)
-                },
-            );
+        let next_window = windows
+            .iter()
+            .cycle()
+            .skip_while(|window| window.window_id() != current_window_id)
+            .nth(1);
 
         if let Some(window) = next_window {
             window
@@ -7457,17 +7446,12 @@ impl Workspace {
             return;
         };
         let windows = cx.windows();
-        let prev_window =
-            SystemWindowTabController::get_prev_tab_group_window(cx, current_window_id).or_else(
-                || {
-                    windows
-                        .iter()
-                        .rev()
-                        .cycle()
-                        .skip_while(|window| window.window_id() != current_window_id)
-                        .nth(1)
-                },
-            );
+        let prev_window = windows
+            .iter()
+            .rev()
+            .cycle()
+            .skip_while(|window| window.window_id() != current_window_id)
+            .nth(1);
 
         if let Some(window) = prev_window {
             window

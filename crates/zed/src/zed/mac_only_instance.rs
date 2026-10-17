@@ -1,34 +1,11 @@
 use std::{
-    io::{Read, Write},
-    net::{Ipv4Addr, SocketAddr, SocketAddrV4, TcpListener, TcpStream},
-    thread,
-    time::Duration,
+    fs::{self, File, TryLockError},
+    sync::OnceLock,
 };
 
-use nix::unistd::getuid;
-
-const LOCALHOST: Ipv4Addr = Ipv4Addr::new(127, 0, 0, 1);
-const CONNECT_TIMEOUT: Duration = Duration::from_millis(10);
-const RECEIVE_TIMEOUT: Duration = Duration::from_millis(35);
-const SEND_TIMEOUT: Duration = Duration::from_millis(20);
-
-fn address() -> SocketAddr {
-    // Keep the established stable CLI endpoint, offset per user.
-    let port = 43937;
-    let uid = getuid().as_raw();
-    // Ensure that the user ID is not too large to avoid overflow when
-    // calculating the port number. This seems unlikely but it doesn't
-    // hurt to be safe.
-    let max_uid = u32::from(u16::MAX) - u32::from(port);
-    let wrapped_uid = (uid % max_uid) as u16;
-    let user_port = port + wrapped_uid;
-
-    SocketAddr::V4(SocketAddrV4::new(LOCALHOST, user_port))
-}
-
-fn instance_handshake() -> &'static str {
-    "Zed Editor Stable Instance Running"
-}
+/// Held for the lifetime of the process; the OS releases the lock on exit,
+/// so a crash never leaves a stale lock behind.
+static INSTANCE_LOCK: OnceLock<File> = OnceLock::new();
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum IsOnlyInstance {
@@ -36,67 +13,36 @@ pub enum IsOnlyInstance {
     No,
 }
 
+/// Takes an exclusive `flock` on `<state_dir>/ed.lock`. The lock lives under
+/// this app's own XDG state directory, so it is per user and never collides
+/// with an upstream Zed instance.
 pub fn ensure_only_instance() -> IsOnlyInstance {
-    if check_got_handshake() {
-        return IsOnlyInstance::No;
-    }
-
-    let listener = match TcpListener::bind(address()) {
-        Ok(listener) => listener,
-
+    let path = paths::state_dir().join(format!("{}.lock", paths::APP_NAME));
+    let file = match fs::create_dir_all(paths::state_dir()).and_then(|()| {
+        File::options()
+            .create(true)
+            .truncate(false)
+            .write(true)
+            .open(&path)
+    }) {
+        Ok(file) => file,
         Err(err) => {
-            log::warn!("Error binding to single instance port: {err}");
-            if check_got_handshake() {
-                return IsOnlyInstance::No;
-            }
-
-            // Avoid failing to start when some other application by chance already has
-            // a claim on the port. This is sub-par as any other instance that gets launched
-            // will be unable to communicate with this instance and will duplicate
-            log::warn!("Backup handshake request failed, continuing without handshake");
+            // Avoid failing to start when the lock file is unusable; a second
+            // instance may then start alongside this one.
+            log::warn!("Error opening single instance lock {path:?}: {err}");
             return IsOnlyInstance::Yes;
         }
     };
 
-    thread::Builder::new()
-        .name("EnsureSingleton".to_string())
-        .spawn(move || {
-            for stream in listener.incoming() {
-                let mut stream = match stream {
-                    Ok(stream) => stream,
-                    Err(_) => return,
-                };
-
-                _ = stream.set_nodelay(true);
-                _ = stream.set_read_timeout(Some(SEND_TIMEOUT));
-                _ = stream.write_all(instance_handshake().as_bytes());
-            }
-        })
-        .unwrap();
-
-    IsOnlyInstance::Yes
-}
-
-fn check_got_handshake() -> bool {
-    match TcpStream::connect_timeout(&address(), CONNECT_TIMEOUT) {
-        Ok(mut stream) => {
-            let mut buf = vec![0u8; instance_handshake().len()];
-
-            stream.set_read_timeout(Some(RECEIVE_TIMEOUT)).unwrap();
-            if let Err(err) = stream.read_exact(&mut buf) {
-                log::warn!("Connected to single instance port but failed to read: {err}");
-                return false;
-            }
-
-            if buf == instance_handshake().as_bytes() {
-                log::info!("Got instance handshake");
-                return true;
-            }
-
-            log::warn!("Got wrong instance handshake value");
-            false
+    match file.try_lock() {
+        Ok(()) => {
+            INSTANCE_LOCK.set(file).ok();
+            IsOnlyInstance::Yes
         }
-
-        Err(_) => false,
+        Err(TryLockError::WouldBlock) => IsOnlyInstance::No,
+        Err(TryLockError::Error(err)) => {
+            log::warn!("Error locking single instance lock {path:?}: {err}");
+            IsOnlyInstance::Yes
+        }
     }
 }

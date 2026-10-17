@@ -1,38 +1,28 @@
-mod system_window_tabs;
-
 use gpui::{
-    AnyElement, App, Context, Entity, Hsla, InteractiveElement, IntoElement, ParentElement,
+    AnyElement, App, Context, Hsla, InteractiveElement, IntoElement, ParentElement,
     StatefulInteractiveElement, Styled, WeakEntity, Window, WindowControlArea,
 };
 use smallvec::SmallVec;
 use std::mem;
-use system_window_tabs::SystemWindowTabs;
 use ui::{
     prelude::*,
     utils::{TRAFFIC_LIGHT_PADDING, platform_title_bar_height},
 };
 use workspace::{MultiWorkspace, SidebarRenderState, SidebarSide};
 
-pub use system_window_tabs::{
-    DraggedWindowTab, MergeAllWindows, MoveTabToNewWindow, ShowNextWindowTab, ShowPreviousWindowTab,
-};
-
 pub struct PlatformTitleBar {
     id: ElementId,
     children: SmallVec<[AnyElement; 2]>,
     should_move: bool,
-    system_window_tabs: Entity<SystemWindowTabs>,
     multi_workspace: Option<WeakEntity<MultiWorkspace>>,
 }
 
 impl PlatformTitleBar {
-    pub fn new(id: impl Into<ElementId>, cx: &mut Context<Self>) -> Self {
-        let system_window_tabs = cx.new(|_cx| SystemWindowTabs::new());
+    pub fn new(id: impl Into<ElementId>, _cx: &mut Context<Self>) -> Self {
         Self {
             id: id.into(),
             children: SmallVec::new(),
             should_move: false,
-            system_window_tabs,
             multi_workspace: None,
         }
     }
@@ -55,10 +45,6 @@ impl PlatformTitleBar {
         T: IntoIterator<Item = AnyElement>,
     {
         self.children = children.into_iter().collect();
-    }
-
-    pub fn init(cx: &mut App) {
-        SystemWindowTabs::init(cx);
     }
 
     fn sidebar_render_state(&self, cx: &App) -> SidebarRenderState {
@@ -128,10 +114,7 @@ impl Render for PlatformTitleBar {
                     .children(children),
             );
 
-        v_flex()
-            .w_full()
-            .child(title_bar)
-            .child(self.system_window_tabs.clone().into_any_element())
+        title_bar
     }
 }
 

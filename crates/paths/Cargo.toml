@@ -12,6 +12,5 @@ path = "src/paths.rs"
 doctest = false
 
 [dependencies]
-dirs.workspace = true
 ignore.workspace = true
 util.workspace = true

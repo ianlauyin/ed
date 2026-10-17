@@ -8,7 +8,11 @@ remote server supports macOS and Linux.
 
 ## Behaviour
 
-- The editor uses native macOS windows, Metal rendering, system menus, and window tabs.
+- The editor uses native macOS windows, Metal rendering, and system menus.
+- No native window tabs: every window stands alone (one window per project
+  group). Automatic tabbing is disabled app-wide at launch, so AppKit adds no
+  "Show Tab Bar" / "Merge All Windows" style menu items, and there is no
+  `use_system_window_tabs` setting or in-app window-tab strip.
 - The native menu bar has no Help menu.
 - CLI installation is manual. The editor has no CLI installer, installation menu
   item, or commands for installing the CLI or registering its URL scheme.
@@ -33,6 +37,30 @@ remote server supports macOS and Linux.
 - GPUI core has no direct `libc` dependency; native OS integration belongs in
   platform-specific crates.
 - Linux remote data, configuration, and logs follow XDG directory settings.
+
+## App identity and user directories
+
+- The app is named `ed`: binary `ed`, bundle `ed.app`, bundle identifier
+  `dev.ed`, menu/About/window-title name `ed`. It must not share any user
+  data, bundle identity, or single-instance state with an installed upstream Zed.
+  `paths::APP_NAME` must equal the binary name (compile-time assert).
+- macOS and Linux use the same XDG layout; nothing is written under
+  `~/Library`. Each base honours its `XDG_*_HOME` variable when absolute:
+  - config `~/.config/ed`
+  - data (db, prettier, remote server state) `~/.local/share/ed`
+  - state `~/.local/state/ed`, logs in `~/.local/state/ed/logs/ed.log`
+  - cache/temp `~/.cache/ed`
+  - `--user-data-dir` still overrides data (and config under it).
+- Single instance (release builds only): an exclusive `flock` on
+  `~/.local/state/ed/ed.lock`, held for the process lifetime. No TCP port, so it
+  cannot collide with Zed or other apps, and a crash leaves no stale lock.
+- Minimal macOS footprint: the bundle declares no privacy usage descriptions
+  (camera, contacts, AppleScript, etc.), so such requests from processes it
+  spawns are denied without a prompt. It is only an `Alternate` handler for
+  documents, never the default opener. AppKit defaults gpui needs are
+  registered in memory, never written to `~/Library/Preferences`.
+- Kept from upstream: `zed://`/`zed-cli://` URL schemes, `ZED_*` environment
+  variables, and the `.zed` project folder name.
 - Linux desktop, FreeBSD, Windows, and browser backends, packaging, and associated
   build/test/release tooling are removed.
 - Unsupported editor and CLI targets fail with a macOS-only diagnostic.
@@ -58,7 +86,7 @@ backtraces still work through sync CFI.
 - `install_remote_server.fish` runs on a Linux host with the build prerequisites
   installed, builds the remote server in release mode, and installs it as
   `~/.local/bin/ed_remote_server` for SSH editing.
-- `release.fish` builds `target/release/Zed.app` for the host Mac: `zed` and
+- `release.fish` builds `target/release/ed.app` for the host Mac: `ed` and
   `cli` binaries in `Contents/MacOS`, `crates/zed/resources/Info.plist` with the
   Cargo.toml version, an icon generated from `app-icon@2x.png`, and `Document.icns`.
 - App icon: Nord-dark rounded square with an inset screen showing `</>` in

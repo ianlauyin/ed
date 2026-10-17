@@ -180,8 +180,6 @@ pub fn build_window_options(display_uuid: Option<Uuid>, cx: &mut App) -> WindowO
         },
     };
 
-    let use_system_window_tabs = WorkspaceSettings::get_global(cx).use_system_window_tabs;
-
     WindowOptions {
         titlebar: Some(TitlebarOptions {
             title: None,
@@ -209,11 +207,6 @@ pub fn build_window_options(display_uuid: Option<Uuid>, cx: &mut App) -> WindowO
             width: px(360.0),
             height: px(240.0),
         }),
-        tabbing_identifier: if use_system_window_tabs {
-            Some(String::from("zed"))
-        } else {
-            None
-        },
         ..Default::default()
     }
 }
@@ -851,7 +844,7 @@ fn open_about_window(cx: &mut App) {
 
     impl AboutWindow {
         fn new(cx: &mut Context<Self>) -> Self {
-            let app_name = "Zed";
+            let app_name = "ed";
             let full_version: SharedString = AppVersion::global(cx).to_string().into();
             let version = env!("CARGO_PKG_VERSION");
 

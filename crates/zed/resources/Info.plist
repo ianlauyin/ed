@@ -5,17 +5,17 @@
 <key>CFBundleDevelopmentRegion</key>
 <string>English</string>
 <key>CFBundleDisplayName</key>
-<string>Zed</string>
+<string>ed</string>
 <key>CFBundleExecutable</key>
-<string>zed</string>
+<string>ed</string>
 <key>CFBundleIconFile</key>
-<string>Zed.icns</string>
+<string>ed.icns</string>
 <key>CFBundleIdentifier</key>
-<string>dev.zed.Zed</string>
+<string>dev.ed</string>
 <key>CFBundleInfoDictionaryVersion</key>
 <string>6.0</string>
 <key>CFBundleName</key>
-<string>Zed</string>
+<string>ed</string>
 <key>CFBundlePackageType</key>
 <string>APPL</string>
 <key>CFBundleShortVersionString</key>
@@ -26,7 +26,7 @@
 <array>
     <dict>
         <key>CFBundleURLName</key>
-        <string>Zed</string>
+        <string>ed</string>
         <key>CFBundleURLSchemes</key>
         <array>
             <string>zed</string>
@@ -43,26 +43,6 @@
 <array>
     <string>MacOSX</string>
 </array>
-<key>NSSystemAdministrationUsageDescription</key>
-<string>The operation being performed by a program in Zed requires elevated permission.</string>
-<key>NSAppleEventsUsageDescription</key>
-<string>An application in Zed wants to use AppleScript.</string>
-<key>NSBluetoothAlwaysUsageDescription</key>
-<string>An application in Zed wants to use Bluetooth.</string>
-<key>NSCalendarsUsageDescription</key>
-<string>An application in Zed wants to use Calendar data.</string>
-<key>NSCameraUsageDescription</key>
-<string>An application in Zed wants to use the camera.</string>
-<key>NSContactsUsageDescription</key>
-<string>An application in Zed wants to use your contacts.</string>
-<key>NSLocationAlwaysUsageDescription</key>
-<string>An application in Zed wants to use your location information, even in the background.</string>
-<key>NSLocationUsageDescription</key>
-<string>An application in Zed wants to use your location information.</string>
-<key>NSLocationWhenInUseUsageDescription</key>
-<string>An application in Zed wants to use your location information while active.</string>
-<key>NSRemindersUsageDescription</key>
-<string>An application in Zed wants to use your reminders.</string>
 <key>NSAutoFillRequiresTextContentTypeForOneTimeCodeOnMac</key>
 <true/>
 <key>CFBundleDocumentTypes</key>
@@ -86,7 +66,7 @@
         <key>CFBundleTypeIconFile</key>
         <string>Document</string>
         <key>CFBundleTypeName</key>
-        <string>Zed Text Document</string>
+        <string>ed Text Document</string>
         <key>CFBundleTypeRole</key>
         <string>Editor</string>
         <key>CFBundleTypeOSTypes</key>
@@ -94,7 +74,7 @@
             <string>****</string>
         </array>
         <key>LSHandlerRank</key>
-        <string>Default</string>
+        <string>Alternate</string>
         <key>CFBundleTypeExtensions</key>
         <array>
             <string>Gemfile</string>

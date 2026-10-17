@@ -5076,7 +5076,6 @@ dependencies = [
 name = "paths"
 version = "0.1.0"
 dependencies = [
- "dirs",
  "ignore",
  "util",
 ]
@@ -5676,12 +5675,9 @@ name = "platform_title_bar"
 version = "0.1.0"
 dependencies = [
  "gpui",
- "settings",
  "smallvec",
- "theme_settings",
  "ui",
  "workspace",
- "zed_actions",
 ]
 
 [[package]]
@@ -10160,7 +10156,6 @@ dependencies = [
  "markdown_preview",
  "menu",
  "mimalloc",
- "nix",
  "node_runtime",
  "outline",
  "outline_panel",

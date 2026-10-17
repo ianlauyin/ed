@@ -41,7 +41,6 @@ pub struct WorkspaceSettings {
     pub close_panel_on_toggle: bool,
     pub window_title_format: String,
     pub window_title_separator: String,
-    pub use_system_window_tabs: bool,
     pub fullscreen_mode: settings::FullscreenMode,
     pub window_decorations: settings::WindowDecorations,
     pub focus_follows_mouse: FocusFollowsMouse,
@@ -139,7 +138,6 @@ impl Settings for WorkspaceSettings {
             close_panel_on_toggle: workspace.close_panel_on_toggle.unwrap(),
             window_title_format: workspace.window_title_format.clone().unwrap(),
             window_title_separator: workspace.window_title_separator.clone().unwrap(),
-            use_system_window_tabs: workspace.use_system_window_tabs.unwrap(),
             fullscreen_mode: workspace.fullscreen_mode.unwrap(),
             window_decorations: workspace.window_decorations.unwrap(),
             focus_follows_mouse: FocusFollowsMouse {

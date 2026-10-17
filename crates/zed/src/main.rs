@@ -6,11 +6,11 @@ mod zed;
 // Ensure the binary name stays in sync with APP_NAME so that the paths used
 // at runtime (data dir, config dir, etc.) match what the binary is called.
 const _: () = assert!(
-    paths::APP_NAME_LOWERCASE
+    paths::APP_NAME
         .as_bytes()
         .eq_ignore_ascii_case(env!("CARGO_BIN_NAME").as_bytes()),
-    "paths::APP_NAME_LOWERCASE must match the binary name. \
-     Forks: update APP_NAME in crates/paths/src/paths.rs when renaming the binary.",
+    "paths::APP_NAME must match the binary name. \
+     Update APP_NAME in crates/paths/src/paths.rs when renaming the binary.",
 );
 
 use anyhow::{Context as _, Result};
@@ -78,7 +78,7 @@ fn build_application() -> Application {
 }
 
 fn files_not_created_on_launch(errors: HashMap<io::ErrorKind, Vec<&Path>>) {
-    let message = "Zed failed to launch";
+    let message = "ed failed to launch";
     let error_details = errors
         .into_iter()
         .flat_map(|(kind, paths)| {
@@ -140,7 +140,7 @@ fn fail_to_open_window_async(e: anyhow::Error, cx: &mut AsyncApp) {
 
 fn fail_to_open_window(e: anyhow::Error, _cx: &mut App) {
     zlog::error!("Failed to open window: {e:?}");
-    eprintln!("Zed failed to open a window: {e:?}.");
+    eprintln!("ed failed to open a window: {e:?}.");
     process::exit(1);
 }
 
@@ -194,7 +194,7 @@ fn main() {
             system_specs::platform::os_name(),
             system_specs::platform::os_version(),
         );
-        println!("Zed System Specs (from CLI):\n{}", system_specs);
+        println!("ed System Specs (from CLI):\n{}", system_specs);
         return;
     }
 
@@ -229,7 +229,7 @@ fn main() {
         }
     };
     if failed_single_instance_check {
-        println!("zed is already running");
+        println!("ed is already running");
         return;
     }
 
@@ -290,7 +290,7 @@ fn main() {
         initialize_keymap(cx);
 
         let user_agent = format!(
-            "Zed/{} ({}; {})",
+            "ed/{} ({}; {})",
             AppVersion::global(cx),
             std::env::consts::OS,
             std::env::consts::ARCH
@@ -1084,10 +1084,8 @@ struct Args {
 
     /// Sets a custom directory for all user data (e.g., database, extensions, logs).
     ///
-    /// This overrides the default platform-specific data directory location.
-    /// On macOS, the default is `~/Library/Application Support/Zed`.
-    /// On Linux/FreeBSD, the default is `$XDG_DATA_HOME/zed`.
-    /// On Windows, the default is `%LOCALAPPDATA%\Zed`.
+    /// This overrides the default data directory location, `$XDG_DATA_HOME/ed`
+    /// (`~/.local/share/ed`).
     #[arg(long, value_name = "DIR", verbatim_doc_comment)]
     user_data_dir: Option<String>,
 

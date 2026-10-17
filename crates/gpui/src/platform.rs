@@ -11,8 +11,8 @@ use crate::{
     FontId, FontMetrics, FontRun, ForegroundExecutor, GlyphId, GpuSpecs, Hsla, ImageSource, Keymap,
     LineLayout, MissingGlyphSink, Pixels, PlatformGestures, PlatformInput, Point, Priority,
     RenderGlyphParams, RenderImage, RenderImageParams, RenderSvgParams, Scene, ShapedGlyph,
-    ShapedRun, SharedString, Size, SvgRenderer, SystemWindowTab, Task, Window, WindowControlArea,
-    hash, point, px, size,
+    ShapedRun, SharedString, Size, SvgRenderer, Task, Window, WindowControlArea, hash, point, px,
+    size,
 };
 
 use anyhow::{Context as _, Result};
@@ -839,12 +839,6 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     fn get_title(&self) -> String {
         String::new()
     }
-    fn tabbed_windows(&self) -> Option<Vec<SystemWindowTab>> {
-        None
-    }
-    fn tab_bar_visible(&self) -> bool {
-        false
-    }
     fn set_edited(&mut self, _edited: bool) {}
     fn set_document_path(&self, _path: Option<&std::path::Path>) {}
     fn toggle_simple_fullscreen(&self) {}
@@ -855,15 +849,6 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     fn set_traffic_light_position(&self, _position: Point<Pixels>) {}
     fn show_character_palette(&self) {}
     fn titlebar_double_click(&self, _is_resizable: bool, _is_minimizable: bool) {}
-    fn on_move_tab_to_new_window(&self, _callback: Box<dyn FnMut()>) {}
-    fn on_merge_all_windows(&self, _callback: Box<dyn FnMut()>) {}
-    fn on_select_previous_tab(&self, _callback: Box<dyn FnMut()>) {}
-    fn on_select_next_tab(&self, _callback: Box<dyn FnMut()>) {}
-    fn on_toggle_tab_bar(&self, _callback: Box<dyn FnMut()>) {}
-    fn merge_all_windows(&self) {}
-    fn move_tab_to_new_window(&self) {}
-    fn toggle_window_tab_overview(&self) {}
-    fn set_tabbing_identifier(&self, _identifier: Option<String>) {}
 
     fn native_window_state(&self) -> Option<Vec<u8>> {
         None
@@ -2022,9 +2007,6 @@ pub struct WindowOptions {
 
     /// Icon image (X11 only)
     pub icon: Option<Arc<image::RgbaImage>>,
-
-    /// Tab group name, allows opening the window as a native tab on macOS 10.12+. Windows with the same tabbing identifier will be grouped together.
-    pub tabbing_identifier: Option<String>,
 }
 
 /// The variables that can be configured when creating a new window
@@ -2063,8 +2045,6 @@ pub struct WindowParams {
     pub app_id: Option<String>,
 
     pub window_min_size: Option<Size<Pixels>>,
-
-    pub tabbing_identifier: Option<String>,
 }
 
 /// Represents the status of how a window should be opened.
@@ -2125,7 +2105,6 @@ impl Default for WindowOptions {
             app_id: None,
             window_min_size: None,
             window_decorations: None,
-            tabbing_identifier: None,
         }
     }
 }

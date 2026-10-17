@@ -12,15 +12,14 @@ use crate::{
     renderer,
 };
 use block2::RcBlock;
-use dispatch2::DispatchQueue;
 use gpui::{
     AnyWindowHandle, BackgroundExecutor, Bounds, Capslock, CursorStyle, ExternalDragPayload,
     ExternalPaths, FileDropEvent, ForegroundExecutor, KeyDownEvent, Keystroke, Modifiers,
     ModifiersChangedEvent, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
     PlatformAtlas, PlatformDisplay, PlatformInput, PlatformInputHandler, PlatformWindow, Point,
-    PromptButton, PromptLevel, RequestFrameOptions, SharedString, Size, SystemWindowTab,
-    WindowAppearance, WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowKind,
-    WindowParams, WindowVisibility, point, px, size,
+    PromptButton, PromptLevel, RequestFrameOptions, Size, WindowAppearance,
+    WindowBackgroundAppearance, WindowBounds, WindowControlArea, WindowKind, WindowParams,
+    WindowVisibility, point, px, size,
 };
 
 use core_foundation::base::{CFRelease, CFTypeRef};
@@ -121,13 +120,7 @@ const NSDragOperationCopy: NSDragOperation = 1;
 const NSDragOperationMove: NSDragOperation = 16;
 const NSDRAGGING_CONTEXT_OUTSIDE_APPLICATION: NSInteger = 0;
 const NSDRAGGING_CONTEXT_WITHIN_APPLICATION: NSInteger = 1;
-#[derive(PartialEq)]
-pub enum UserTabbingPreference {
-    Never,
-    Always,
-    InFullScreen,
-}
-
+const NS_WINDOW_TABBING_MODE_DISALLOWED: NSInteger = 2;
 /// Instance variables shared by GPUI's window, panel and view classes.
 struct WindowStateIvars {
     /// A strong reference to the window's state, installed by `MacWindow::open` right after
@@ -265,31 +258,6 @@ macro_rules! define_window_class {
                 #[unsafe(method(addTitlebarAccessoryViewController:))]
                 fn add_titlebar_accessory_view_controller_(&self, view_controller: id) {
                     add_titlebar_accessory_view_controller(self, view_controller);
-                }
-
-                #[unsafe(method(moveTabToNewWindow:))]
-                fn move_tab_to_new_window_(&self, sender: id) {
-                    move_tab_to_new_window(self, sender);
-                }
-
-                #[unsafe(method(mergeAllWindows:))]
-                fn merge_all_windows_(&self, sender: id) {
-                    merge_all_windows(self, sender);
-                }
-
-                #[unsafe(method(selectNextTab:))]
-                fn select_next_tab_(&self, sender: id) {
-                    select_next_tab(self, sender);
-                }
-
-                #[unsafe(method(selectPreviousTab:))]
-                fn select_previous_tab_(&self, sender: id) {
-                    select_previous_tab(self, sender);
-                }
-
-                #[unsafe(method(toggleTabBar:))]
-                fn toggle_tab_bar_(&self, sender: id) {
-                    toggle_tab_bar(self, sender);
                 }
             }
 
@@ -837,11 +805,6 @@ struct MacWindowState {
     fullscreen_restore_bounds: Bounds<Pixels>,
     is_exiting_fullscreen: bool,
     simple_fullscreen_state: Option<SimpleFullscreenState>,
-    move_tab_to_new_window_callback: Option<Box<dyn FnMut()>>,
-    merge_all_windows_callback: Option<Box<dyn FnMut()>>,
-    select_next_tab_callback: Option<Box<dyn FnMut()>>,
-    select_previous_tab_callback: Option<Box<dyn FnMut()>>,
-    toggle_tab_bar_callback: Option<Box<dyn FnMut()>>,
     activated_least_once: bool,
     closed: Arc<AtomicBool>,
     accesskit_adapter: Option<accesskit_macos::SubclassingAdapter>,
@@ -1110,7 +1073,6 @@ impl MacWindow {
             show,
             display_id,
             window_min_size,
-            tabbing_identifier,
             ..
         }: WindowParams,
         cursor_visible: Arc<AtomicBool>,
@@ -1121,13 +1083,6 @@ impl MacWindow {
     ) -> Self {
         unsafe {
             let pool = autorelease_pool();
-
-            let allows_automatic_window_tabbing = tabbing_identifier.is_some();
-            if allows_automatic_window_tabbing {
-                let () = msg_send![class!(NSWindow), setAllowsAutomaticWindowTabbing: true];
-            } else {
-                let () = msg_send![class!(NSWindow), setAllowsAutomaticWindowTabbing: false];
-            }
 
             let mut style_mask;
             if let Some(titlebar) = titlebar.as_ref() {
@@ -1288,11 +1243,6 @@ impl MacWindow {
                 fullscreen_restore_bounds: Bounds::default(),
                 is_exiting_fullscreen: false,
                 simple_fullscreen_state: None,
-                move_tab_to_new_window_callback: None,
-                merge_all_windows_callback: None,
-                select_next_tab_callback: None,
-                select_previous_tab_callback: None,
-                toggle_tab_bar_callback: None,
                 activated_least_once: false,
                 closed: Arc::new(AtomicBool::new(false)),
                 accesskit_adapter: None,
@@ -1361,12 +1311,9 @@ impl MacWindow {
                         add_mouse_tracking_area(tracking_view);
                     }
 
-                    if let Some(tabbing_identifier) = tabbing_identifier {
-                        let tabbing_id = ns_string(tabbing_identifier.as_str());
-                        let _: () = msg_send![native_window, setTabbingIdentifier: tabbing_id];
-                    } else {
-                        let _: () = msg_send![native_window, setTabbingIdentifier:nil];
-                    }
+                    // Every window stands alone: no native window tabs.
+                    let _: () =
+                        msg_send![native_window, setTabbingMode: NS_WINDOW_TABBING_MODE_DISALLOWED];
                 }
                 // `AnchoredPopup` is rejected in `MacPlatform::open_window`, grouped here only
                 // for exhaustiveness.
@@ -1393,36 +1340,6 @@ impl MacWindow {
                         let _: () =
                             msg_send![parent, beginSheet: native_window, completionHandler: nil];
                         sheet_parent = Some(parent);
-                    }
-                }
-            }
-
-            if allows_automatic_window_tabbing
-                && !main_window.is_null()
-                && main_window != native_window
-            {
-                let main_window_is_fullscreen = ns_window(main_window)
-                    .styleMask()
-                    .contains(NSWindowStyleMask::FullScreen);
-                let user_tabbing_preference = Self::get_user_tabbing_preference()
-                    .unwrap_or(UserTabbingPreference::InFullScreen);
-                let should_add_as_tab = user_tabbing_preference == UserTabbingPreference::Always
-                    || user_tabbing_preference == UserTabbingPreference::InFullScreen
-                        && main_window_is_fullscreen;
-
-                if should_add_as_tab {
-                    let main_window_can_tab: bool =
-                        msg_send![main_window, respondsToSelector: sel!(addTabbedWindow:ordered:)];
-                    let main_window_visible: bool = msg_send![main_window, isVisible];
-
-                    if main_window_can_tab && main_window_visible {
-                        let _: () = msg_send![main_window, addTabbedWindow: native_window, ordered: NSWindowOrderingMode::Above];
-
-                        // Ensure the window is visible immediately after adding the tab, since the tab bar is updated with a new entry at this point.
-                        // Note: Calling orderFront here can break fullscreen mode (makes fullscreen windows exit fullscreen), so only do this if the main window is not fullscreen.
-                        if !main_window_is_fullscreen {
-                            let _: () = msg_send![native_window, orderFront: nil];
-                        }
                     }
                 }
             }
@@ -1483,29 +1400,6 @@ impl MacWindow {
             }
 
             window_handles
-        }
-    }
-
-    pub fn get_user_tabbing_preference() -> Option<UserTabbingPreference> {
-        unsafe {
-            let defaults: id = msg_send![class!(NSUserDefaults), standardUserDefaults];
-            let domain = ns_string("NSGlobalDomain");
-            let key = ns_string("AppleWindowTabbingMode");
-
-            let dict: id = msg_send![defaults, persistentDomainForName: domain];
-            let value: id = if !dict.is_null() {
-                msg_send![dict, objectForKey: key]
-            } else {
-                nil
-            };
-
-            let value_str = if !value.is_null() { value.to_str() } else { "" };
-
-            match value_str {
-                "manual" => Some(UserTabbingPreference::Never),
-                "always" => Some(UserTabbingPreference::Always),
-                _ => Some(UserTabbingPreference::InFullScreen),
-            }
         }
     }
 }
@@ -1586,63 +1480,6 @@ impl PlatformWindow for MacWindow {
                 })
             })
             .detach();
-    }
-
-    fn merge_all_windows(&self) {
-        let native_window = self.0.lock().native_window;
-        extern "C" fn merge_windows_async(context: *mut std::ffi::c_void) {
-            unsafe {
-                let native_window = context as id;
-                let _: () = msg_send![native_window, mergeAllWindows:nil];
-            }
-        }
-
-        unsafe {
-            DispatchQueue::main()
-                .exec_async_f(native_window as *mut std::ffi::c_void, merge_windows_async);
-        }
-    }
-
-    fn move_tab_to_new_window(&self) {
-        let native_window = self.0.lock().native_window;
-        extern "C" fn move_tab_async(context: *mut std::ffi::c_void) {
-            unsafe {
-                let native_window = context as id;
-                let _: () = msg_send![native_window, moveTabToNewWindow:nil];
-                let _: () = msg_send![native_window, makeKeyAndOrderFront: nil];
-            }
-        }
-
-        unsafe {
-            DispatchQueue::main()
-                .exec_async_f(native_window as *mut std::ffi::c_void, move_tab_async);
-        }
-    }
-
-    fn toggle_window_tab_overview(&self) {
-        let native_window = self.0.lock().native_window;
-        unsafe {
-            let _: () = msg_send![native_window, toggleTabOverview:nil];
-        }
-    }
-
-    fn set_tabbing_identifier(&self, tabbing_identifier: Option<String>) {
-        let native_window = self.0.lock().native_window;
-        unsafe {
-            let allows_automatic_window_tabbing = tabbing_identifier.is_some();
-            if allows_automatic_window_tabbing {
-                let () = msg_send![class!(NSWindow), setAllowsAutomaticWindowTabbing: true];
-            } else {
-                let () = msg_send![class!(NSWindow), setAllowsAutomaticWindowTabbing: false];
-            }
-
-            if let Some(tabbing_identifier) = tabbing_identifier {
-                let tabbing_id = ns_string(tabbing_identifier.as_str());
-                let _: () = msg_send![native_window, setTabbingIdentifier: tabbing_id];
-            } else {
-                let _: () = msg_send![native_window, setTabbingIdentifier:nil];
-            }
-        }
     }
 
     fn native_window_state(&self) -> Option<Vec<u8>> {
@@ -2196,62 +2033,6 @@ impl PlatformWindow for MacWindow {
 
     fn on_appearance_changed(&self, callback: Box<dyn FnMut()>) {
         self.0.lock().appearance_changed_callback = Some(callback);
-    }
-
-    fn tabbed_windows(&self) -> Option<Vec<SystemWindowTab>> {
-        unsafe {
-            let windows: id = msg_send![self.0.lock().native_window, tabbedWindows];
-            if windows.is_null() {
-                return None;
-            }
-
-            let count: NSUInteger = msg_send![windows, count];
-            let mut result = Vec::new();
-            for i in 0..count {
-                let window: id = msg_send![windows, objectAtIndex:i];
-                if msg_send![window, isKindOfClass: GPUIWindow::class()] {
-                    let handle = get_window_state(&*window).lock().handle;
-                    let title: id = msg_send![window, title];
-                    let title = SharedString::from(title.to_str().to_string());
-
-                    result.push(SystemWindowTab::new(title, handle));
-                }
-            }
-
-            Some(result)
-        }
-    }
-
-    fn tab_bar_visible(&self) -> bool {
-        unsafe {
-            let tab_group: id = msg_send![self.0.lock().native_window, tabGroup];
-            if tab_group.is_null() {
-                false
-            } else {
-                let tab_bar_visible: bool = msg_send![tab_group, isTabBarVisible];
-                tab_bar_visible
-            }
-        }
-    }
-
-    fn on_move_tab_to_new_window(&self, callback: Box<dyn FnMut()>) {
-        self.0.as_ref().lock().move_tab_to_new_window_callback = Some(callback);
-    }
-
-    fn on_merge_all_windows(&self, callback: Box<dyn FnMut()>) {
-        self.0.as_ref().lock().merge_all_windows_callback = Some(callback);
-    }
-
-    fn on_select_next_tab(&self, callback: Box<dyn FnMut()>) {
-        self.0.as_ref().lock().select_next_tab_callback = Some(callback);
-    }
-
-    fn on_select_previous_tab(&self, callback: Box<dyn FnMut()>) {
-        self.0.as_ref().lock().select_previous_tab_callback = Some(callback);
-    }
-
-    fn on_toggle_tab_bar(&self, callback: Box<dyn FnMut()>) {
-        self.0.as_ref().lock().toggle_tab_bar_callback = Some(callback);
     }
 
     fn draw(&self, scene: &gpui::Scene) {
@@ -3521,8 +3302,7 @@ fn get_frame(this: &AnyObject) -> NSRect {
 
 fn insert_text(this: &AnyObject, text: id, replacement_range: NSRange) {
     unsafe {
-        let is_attributed_string: bool =
-            msg_send![text, isKindOfClass: class!(NSAttributedString)];
+        let is_attributed_string: bool = msg_send![text, isKindOfClass: class!(NSAttributedString)];
         let text: id = if is_attributed_string {
             msg_send![text, string]
         } else {
@@ -3544,8 +3324,7 @@ fn set_marked_text(
     replacement_range: NSRange,
 ) {
     unsafe {
-        let is_attributed_string: bool =
-            msg_send![text, isKindOfClass: class!(NSAttributedString)];
+        let is_attributed_string: bool = msg_send![text, isKindOfClass: class!(NSAttributedString)];
         let text: id = if is_attributed_string {
             msg_send![text, string]
         } else {
@@ -3975,69 +3754,5 @@ fn add_titlebar_accessory_view_controller(this: &AnyObject, view_controller: id)
         let mut frame: NSRect = msg_send![accessory_view, frame];
         frame.size.height = 0.0;
         let _: () = msg_send![accessory_view, setFrame: frame];
-    }
-}
-
-fn move_tab_to_new_window(this: &AnyObject, _: id) {
-    unsafe {
-        let _: () = msg_send![super(this, class!(NSWindow)), moveTabToNewWindow:nil];
-
-        let window_state = get_window_state(this);
-        let mut lock = window_state.as_ref().lock();
-        if let Some(mut callback) = lock.move_tab_to_new_window_callback.take() {
-            drop(lock);
-            callback();
-            window_state.lock().move_tab_to_new_window_callback = Some(callback);
-        }
-    }
-}
-
-fn merge_all_windows(this: &AnyObject, _: id) {
-    unsafe {
-        let _: () = msg_send![super(this, class!(NSWindow)), mergeAllWindows:nil];
-
-        let window_state = get_window_state(this);
-        let mut lock = window_state.as_ref().lock();
-        if let Some(mut callback) = lock.merge_all_windows_callback.take() {
-            drop(lock);
-            callback();
-            window_state.lock().merge_all_windows_callback = Some(callback);
-        }
-    }
-}
-
-fn select_next_tab(this: &AnyObject, _id: id) {
-    let window_state = unsafe { get_window_state(this) };
-    let mut lock = window_state.as_ref().lock();
-    if let Some(mut callback) = lock.select_next_tab_callback.take() {
-        drop(lock);
-        callback();
-        window_state.lock().select_next_tab_callback = Some(callback);
-    }
-}
-
-fn select_previous_tab(this: &AnyObject, _id: id) {
-    let window_state = unsafe { get_window_state(this) };
-    let mut lock = window_state.as_ref().lock();
-    if let Some(mut callback) = lock.select_previous_tab_callback.take() {
-        drop(lock);
-        callback();
-        window_state.lock().select_previous_tab_callback = Some(callback);
-    }
-}
-
-fn toggle_tab_bar(this: &AnyObject, _id: id) {
-    unsafe {
-        let _: () = msg_send![super(this, class!(NSWindow)), toggleTabBar:nil];
-
-        let window_state = get_window_state(this);
-        let mut lock = window_state.as_ref().lock();
-        lock.move_traffic_light();
-
-        if let Some(mut callback) = lock.toggle_tab_bar_callback.take() {
-            drop(lock);
-            callback();
-            window_state.lock().toggle_tab_bar_callback = Some(callback);
-        }
     }
 }

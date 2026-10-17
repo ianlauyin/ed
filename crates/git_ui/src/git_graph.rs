@@ -2769,8 +2769,6 @@ impl GitGraph {
             .w_full()
             .p_1p5()
             .gap_1p5()
-            .border_b_1()
-            .border_color(color.border_variant)
             .child(
                 h_flex()
                     .h_8()

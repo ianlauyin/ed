@@ -1302,12 +1302,21 @@ fn will_finish_launching(_this: &AnyObject, _: id) {
         // We don't know exactly why. This disables the full heuristic controller.
         //
         // Adapted from: https://github.com/ghostty-org/ghostty/pull/8625
+        // Registered (in-memory) rather than set, so nothing is persisted to
+        // `~/Library/Preferences`.
         let name = ns_string("NSAutoFillHeuristicControllerEnabled");
-        let existing_value: id = msg_send![user_defaults, objectForKey: name];
-        if existing_value == nil {
-            let false_value: id = msg_send![class!(NSNumber), numberWithBool:false];
-            let _: () = msg_send![user_defaults, setObject: false_value, forKey: name];
-        }
+        let false_value: id = msg_send![class!(NSNumber), numberWithBool:false];
+        let dict: id = msg_send![
+            class!(NSDictionary),
+            dictionaryWithObject: false_value,
+            forKey: name
+        ];
+        let _: () = msg_send![user_defaults, registerDefaults: dict];
+
+        // No native window tabs. Disabling automatic tabbing before any window or
+        // menu exists also keeps AppKit from injecting "Show Tab Bar", "Show All
+        // Tabs", "Merge All Windows", etc. into the View and Window menus.
+        let () = msg_send![class!(NSWindow), setAllowsAutomaticWindowTabbing: false];
     }
 }
 
