@@ -17,16 +17,13 @@ use anyhow::{Context as _, Result};
 use clap::Parser;
 use cli::FORCE_CLI_MODE_ENV_VAR_NAME;
 use collections::HashMap;
-use crashes::InitCrashHandler;
 use db::kvp::KeyValueStore;
 use editor::Editor;
 use fs::{Fs, RealFs};
 use futures::{FutureExt, StreamExt, channel::oneshot};
 use git::GitHostingProviderRegistry;
 use git_ui::clone::clone_and_open;
-use gpui::{
-    App, AppContext, Application, AsyncApp, QuitMode, Task, TaskExt, UpdateGlobal as _, block_on,
-};
+use gpui::{App, AppContext, Application, AsyncApp, QuitMode, Task, TaskExt, UpdateGlobal as _};
 use gpui_platform;
 
 use gpui_tokio::Tokio;
@@ -42,7 +39,6 @@ use recent_projects::{RemoteSettings, open_remote_project};
 use session::{AppSession, Session};
 use settings::{Settings, SettingsStore};
 use settings_content::app_metadata::{AppCommitSha, AppVersion};
-use smol::future::poll_once;
 use std::{
     cell::RefCell,
     env,
@@ -67,7 +63,7 @@ use zed::{
     open_paths_with_positions,
 };
 
-use crate::zed::{CrashHandler, OpenRequestKind};
+use crate::zed::OpenRequestKind;
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -154,12 +150,6 @@ fn main() {
 
     let args = Args::parse();
 
-    // `zed --crash-handler` Makes zed operate in minidump crash handler mode
-    if let Some(socket) = &args.crash_handler {
-        crashes::crash_server(socket.as_path(), paths::logs_dir().clone());
-        return;
-    }
-
     // `zed --printenv` Outputs environment variables as JSON to stdout
     if args.printenv {
         util::shell_env::print_env();
@@ -198,6 +188,7 @@ fn main() {
             zlog::init_output_stdout();
         };
     }
+    install_panic_hook();
 
     util::increase_open_file_limit().log_err();
 
@@ -242,14 +233,12 @@ fn main() {
 
     let session_id = Uuid::new_v4().to_string();
     let session = app.background_executor().spawn(Session::new(
-        session_id.clone(),
+        session_id,
         KeyValueStore::from_app_db(&app_db),
     ));
-    let background_executor = app.background_executor();
-
     let (open_listener, mut open_rx) = OpenListener::new();
 
-    let failed_single_instance_check = if *zed_env_vars::ZED_STATELESS || cfg!(debug_assertions) {
+    let failed_single_instance_check = if cfg!(debug_assertions) {
         false
     } else {
         {
@@ -261,45 +250,6 @@ fn main() {
         println!("zed is already running");
         return;
     }
-
-    let should_install_crash_handler = matches!(
-        std::env::var("ZED_GENERATE_MINIDUMPS").as_deref(),
-        Ok("true" | "1")
-    );
-
-    let crash_handler = if should_install_crash_handler {
-        Some(
-            app.background_executor().spawn(crashes::init(
-                InitCrashHandler {
-                    session_id,
-                    // strip the build and channel information from the version string, we send them separately
-                    zed_version: semver::Version::new(
-                        app_version.major,
-                        app_version.minor,
-                        app_version.patch,
-                    )
-                    .to_string(),
-                    binary: "zed".to_string(),
-                    release_channel: settings_content::app_metadata::SERVER_RELEASE_NAME.clone(),
-                    commit_sha: app_commit_sha
-                        .as_ref()
-                        .map(|sha| sha.full())
-                        .unwrap_or_else(|| "no sha".to_owned()),
-                },
-                {
-                    let background_executor1 = app.background_executor();
-                    move |task| {
-                        background_executor1.spawn(task).detach();
-                    }
-                },
-                |pid| paths::temp_dir().join(format!("zed-crash-handler-{pid}")),
-                move |duration| background_executor.timer(duration),
-            )),
-        )
-    } else {
-        crashes::force_backtrace();
-        None
-    };
 
     let git_hosting_provider_registry = Arc::new(GitHostingProviderRegistry::new());
     let git_binary_path = if true && option_env!("ZED_BUNDLE").as_deref() == Some("true") {
@@ -540,24 +490,6 @@ fn main() {
 
         let menus = app_menus(cx);
         cx.set_menus(menus);
-
-        if let Some(mut crash_handler) = crash_handler {
-            let crash_handler2 = block_on(poll_once(&mut crash_handler));
-            match crash_handler2 {
-                Some(crash_handler) => {
-                    cx.set_global(CrashHandler(crash_handler));
-                }
-                None => {
-                    cx.spawn(async move |cx| {
-                        let client1 = crash_handler.await;
-                        cx.update(|cx| {
-                            cx.set_global(CrashHandler(client1));
-                        });
-                    })
-                    .detach();
-                }
-            }
-        }
 
         initialize_workspace(app_state.clone(), cx);
 
@@ -1127,6 +1059,25 @@ pub(crate) async fn restorable_workspace_locations(
     }
 }
 
+/// Logs panics with a backtrace, then exits so a panic on any thread takes the
+/// whole process down (and the macOS crash dialog never shows).
+fn install_panic_hook() {
+    let old_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        let backtrace = std::backtrace::Backtrace::force_capture();
+        let message = info.payload_as_str().unwrap_or("Box<Any>");
+        let location = info
+            .location()
+            .map_or_else(|| "<unknown>".to_owned(), |location| location.to_string());
+        let thread = std::thread::current();
+        let thread_name = thread.name().unwrap_or("<unnamed>");
+        log::error!("thread '{thread_name}' panicked at {location}:\n{message}\n{backtrace}");
+        zlog::flush();
+        old_hook(info);
+        std::process::exit(1);
+    }));
+}
+
 fn init_paths() -> HashMap<io::ErrorKind, Vec<&'static Path>> {
     [
         paths::config_dir(),
@@ -1189,11 +1140,6 @@ struct Args {
     /// clipboard`
     #[arg(long)]
     system_specs: bool,
-
-    /// Used for recording minidumps on crashes by having Zed run a separate
-    /// process communicating over a socket.
-    #[arg(long, hide = true)]
-    crash_handler: Option<PathBuf>,
 
     #[arg(long, hide = true)]
     dump_all_actions: bool,

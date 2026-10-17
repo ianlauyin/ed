@@ -12,6 +12,9 @@ UI, keymap editor, settings/keymap migrator, or Vim/Helix mode.
 
 ## Behaviour
 
+- Stateless mode is removed. Databases use persistent storage, with an in-memory
+  fallback only when storage cannot be opened. `ZED_STATELESS` has no effect;
+  single-instance checks are bypassed only in debug builds.
 - User, global, server, and `.zed/settings.json` files are not loaded, watched,
   created, or rewritten. There are no settings profiles or project overrides.
   Changing persistent preferences requires editing the built-in settings and

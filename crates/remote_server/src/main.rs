@@ -6,17 +6,12 @@
 use clap::Parser;
 use remote_server::Commands;
 use std::io::Write as _;
-use std::path::PathBuf;
 
 #[derive(Parser)]
 #[command(disable_version_flag = true)]
 struct Cli {
     #[command(subcommand)]
     command: Option<Commands>,
-    /// Used for recording minidumps on crashes by having the server run a separate
-    /// process communicating over a socket.
-    #[arg(long, hide = true)]
-    crash_handler: Option<PathBuf>,
     /// Used for loading the environment from the project.
     #[arg(long, hide = true)]
     printenv: bool,
@@ -24,11 +19,6 @@ struct Cli {
 
 fn main() -> anyhow::Result<()> {
     let cli = Cli::parse();
-
-    if let Some(socket) = &cli.crash_handler {
-        crashes::crash_server(socket.as_path(), paths::logs_dir().clone());
-        return Ok(());
-    }
 
     if cli.printenv {
         util::shell_env::print_env();

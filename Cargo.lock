@@ -1164,47 +1164,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "crash-context"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3748e166981fa3ba9dc54ff950ad0ed5ca4aab4b73eae21d9f539659fe806e28"
-dependencies = [
- "cfg-if",
- "libc",
- "mach2",
-]
-
-[[package]]
-name = "crash-handler"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c16fd44a8db657c3647d6b4c9eb4b41a43a2954947469ed90abcdb310c8eba96"
-dependencies = [
- "cfg-if",
- "crash-context",
- "libc",
- "mach2",
- "parking_lot",
-]
-
-[[package]]
-name = "crashes"
-version = "0.1.0"
-dependencies = [
- "async-process",
- "crash-handler",
- "libc",
- "log",
- "mach2",
- "minidumper",
- "parking_lot",
- "serde",
- "serde_json",
- "system_specs",
- "zstd",
-]
-
-[[package]]
 name = "crc32fast"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1342,16 +1301,6 @@ dependencies = [
  "sqlez",
  "sqlez_macros",
  "util",
- "uuid",
- "zed_env_vars",
-]
-
-[[package]]
-name = "debugid"
-version = "0.8.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bef552e6f588e446098f6ba40d89ac146c8c7b64aade83c051ee00bb5d2bc18d"
-dependencies = [
  "uuid",
 ]
 
@@ -1805,15 +1754,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "error-graph"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b920e777967421aa5f9bf34f842c0ab6ba19b3bdb4a082946093860f5858879"
-dependencies = [
- "serde",
-]
-
-[[package]]
 name = "etagere"
 version = "0.2.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1867,12 +1807,6 @@ dependencies = [
  "smallvec",
  "zune-inflate",
 ]
-
-[[package]]
-name = "failspot"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c942e64b20ecd39933d5ff938ca4fdb6ef0d298cc3855b231179a5ef0b24948d"
 
 [[package]]
 name = "fancy-regex"
@@ -2497,17 +2431,6 @@ dependencies = [
  "ui",
  "util",
  "workspace",
-]
-
-[[package]]
-name = "goblin"
-version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "daa0a64d21a7eb230583b4c5f4e23b7e4e57974f96620f42a7e75e08ae66d745"
-dependencies = [
- "log",
- "plain",
- "scroll",
 ]
 
 [[package]]
@@ -4426,65 +4349,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "6877bb514081ee2a7ff5ef9de3281f14a4dd4bceac4c09388074a6b5df8a139a"
 
 [[package]]
-name = "minidump-common"
-version = "0.26.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e16d10087ae9e375bad7a40e8ef5504bc08e808ccc6019067ff9de42a84570f"
-dependencies = [
- "bitflags 2.13.1",
- "debugid",
- "num-derive",
- "num-traits",
- "range-map",
- "scroll",
- "smart-default",
-]
-
-[[package]]
-name = "minidump-writer"
-version = "0.13.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f742d7445a9d4c63826d302dadbbcb607745560108e88b21c4014a9724d09dbe"
-dependencies = [
- "bitflags 2.13.1",
- "byteorder",
- "cfg-if",
- "crash-context",
- "error-graph",
- "failspot",
- "goblin",
- "libc",
- "log",
- "mach2",
- "memmap2",
- "minidump-common",
- "process-backend",
- "procfs-core",
- "scroll",
- "serde",
- "serde_json",
- "thiserror 2.0.17",
-]
-
-[[package]]
-name = "minidumper"
-version = "0.11.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c56279c70e341c9de54c18c804950595e76799e8ee627ff8931b64f795f09741"
-dependencies = [
- "cfg-if",
- "crash-context",
- "libc",
- "log",
- "minidump-writer",
- "parking_lot",
- "polling",
- "scroll",
- "thiserror 2.0.17",
- "uds",
-]
-
-[[package]]
 name = "minimal-lexical"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5217,7 +5081,6 @@ dependencies = [
 name = "paths"
 version = "0.1.0"
 dependencies = [
- "const_format",
  "dirs",
  "ignore",
  "util",
@@ -5814,12 +5677,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
-name = "plain"
-version = "0.2.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
-
-[[package]]
 name = "platform_title_bar"
 version = "0.1.0"
 dependencies = [
@@ -6030,40 +5887,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
-]
-
-[[package]]
-name = "process-backend"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "07c02e259a3522eccc4957ee6e922db4945648fb7730a41192d919518d06a530"
-dependencies = [
- "libc",
- "log",
- "process-reader",
- "serde",
- "thiserror 2.0.17",
-]
-
-[[package]]
-name = "process-reader"
-version = "0.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3024e1803f4b8c40cca8c1955243410354cb4d67f053af9210147416a7265535"
-dependencies = [
- "libc",
- "serde",
-]
-
-[[package]]
-name = "procfs-core"
-version = "0.18.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e6401bf7b6af22f78b563665d15a22e9aef27775b79b149a66ca022468a4e405"
-dependencies = [
- "bitflags 2.13.1",
- "hex",
- "serde",
 ]
 
 [[package]]
@@ -6515,15 +6338,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "range-map"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12a5a2d6c7039059af621472a4389be1215a816df61aa4d531cfe85264aee95f"
-dependencies = [
- "num-traits",
-]
-
-[[package]]
 name = "rav1e"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -6747,7 +6561,6 @@ dependencies = [
  "async-channel",
  "clap",
  "collections",
- "crashes",
  "env_logger 0.11.8",
  "fs",
  "futures",
@@ -7185,26 +6998,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "94143f37725109f92c262ed2cf5e59bce7498c01bcc1502d7b9afe439a4e9f49"
 
 [[package]]
-name = "scroll"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6ab8598aa408498679922eff7fa985c25d58a90771bd6be794434c5277eab1a6"
-dependencies = [
- "scroll_derive",
-]
-
-[[package]]
-name = "scroll_derive"
-version = "0.12.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1783eabc414609e28a5ba76aee5ddd52199f7107a0b24c2e9746a1ecc34a683d"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
-
-[[package]]
 name = "seahash"
 version = "4.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -7624,17 +7417,6 @@ name = "smallvec"
 version = "1.16.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ba467056f1b547ed52077911161fc86985becbc60e8e1857c8a144dab0def891"
-
-[[package]]
-name = "smart-default"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0eb01866308440fc64d6c44d9e86c5cc17adfe33c4d6eed55da9145044d0ffc1"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
 
 [[package]]
 name = "smol"
@@ -9090,15 +8872,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2896d95c02a80c6d6a5d6e953d479f5ddf2dfdb6a244441010e373ac0fb88971"
 
 [[package]]
-name = "uds"
-version = "0.4.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "885c31f06fce836457fe3ef09a59f83fe8db95d270b11cd78f40a4666c4d1661"
-dependencies = [
- "libc",
-]
-
-[[package]]
 name = "ui"
 version = "0.1.0"
 dependencies = [
@@ -10419,7 +10192,6 @@ dependencies = [
  "cli",
  "collections",
  "command_palette",
- "crashes",
  "db",
  "diagnostics",
  "editor",
@@ -10463,7 +10235,6 @@ dependencies = [
  "remote",
  "rope",
  "search",
- "semver",
  "serde",
  "serde_json",
  "session",
@@ -10494,7 +10265,6 @@ dependencies = [
  "which_key",
  "workspace",
  "zed_actions",
- "zed_env_vars",
  "zlog",
  "zlog_settings",
 ]
@@ -10531,13 +10301,6 @@ dependencies = [
  "schemars",
  "serde",
  "util",
-]
-
-[[package]]
-name = "zed_env_vars"
-version = "0.1.0"
-dependencies = [
- "env_var",
 ]
 
 [[package]]

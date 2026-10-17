@@ -82,10 +82,6 @@ const DOCS_URL: &str = "https://zed.dev/docs/";
 const STATUS_URL: &str = "https://status.zed.dev";
 const MERCH_URL: &str = "https://merch.zed.dev/";
 
-pub struct CrashHandler(pub Arc<crashes::Client>);
-
-impl gpui::Global for CrashHandler {}
-
 actions!(
     zed,
     [
@@ -320,9 +316,6 @@ pub fn initialize_workspace(app_state: Arc<AppState>, cx: &mut App) {
 
         if let Some(specs) = window.gpu_specs() {
             log::info!("Using GPU: {:?}", specs);
-            if let Some(crash_client) = cx.try_global::<CrashHandler>() {
-                crashes::set_gpu_info(&crash_client.0, specs);
-            }
         }
 
         let search_button = cx.new(|_| search::search_status_button::SearchButton::new());

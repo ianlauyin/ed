@@ -12,13 +12,12 @@ use futures::{
     select, select_biased,
 };
 use git::GitHostingProviderRegistry;
-use gpui::{App, AppContext as _, Entity};
+use gpui::{App, AppContext as _};
 use language::LanguageRegistry;
 use net::async_net::{UnixListener, UnixStream};
 use node_runtime::{NodeBinaryOptions, NodeRuntime};
 use paths::logs_dir;
 use project::{project_settings::ProjectSettings, trusted_worktrees};
-use proto::CrashReport;
 
 use remote::command::RemoteCommand;
 use remote::{
@@ -27,12 +26,11 @@ use remote::{
     protocol::{read_message, write_message},
     proxy::ProxyLaunchError,
 };
-use rpc::proto::{self, Envelope};
-use rpc::{AnyProtoClient, TypedEnvelope};
+use rpc::AnyProtoClient;
+use rpc::proto::Envelope;
 use settings::{Settings, SettingsStore};
 use settings_content::app_metadata::{AppCommitSha, AppVersion, SERVER_RELEASE, ServerRelease};
 use smol::{
-    Timer,
     channel::{Receiver, Sender},
     io::AsyncReadExt,
     stream::StreamExt as _,
@@ -395,62 +393,6 @@ fn init_logging_server(log_file_path: &Path) -> Result<Receiver<Vec<u8>>> {
 
     Ok(rx)
 }
-/// emitted event to the connected client over the proto channel.
-///
-/// events to the remote host using the platform it already detected during
-/// connection setup, so no OS metadata needs to be sent here.
-fn handle_crash_files_requests(project: &Entity<HeadlessProject>, client: &AnyProtoClient) {
-    client.add_request_handler(
-        project.downgrade(),
-        |_, _: TypedEnvelope<proto::GetCrashFiles>, _cx| async move {
-            let mut legacy_panics = Vec::new();
-            let mut crashes = Vec::new();
-            let mut children = smol::fs::read_dir(paths::logs_dir()).await?;
-            while let Some(child) = children.next().await {
-                let child = child?;
-                let child_path = child.path();
-
-                let extension = child_path.extension();
-                if extension == Some(OsStr::new("panic")) {
-                    let filename = if let Some(filename) = child_path.file_name() {
-                        filename.to_string_lossy()
-                    } else {
-                        continue;
-                    };
-
-                    if !filename.starts_with("zed") {
-                        continue;
-                    }
-
-                    let file_contents = smol::fs::read_to_string(&child_path)
-                        .await
-                        .context("error reading panic file")?;
-
-                    legacy_panics.push(file_contents);
-                    smol::fs::remove_file(&child_path)
-                        .await
-                        .context("error removing panic")
-                        .log_err();
-                } else if extension == Some(OsStr::new("dmp")) {
-                    let mut json_path = child_path.clone();
-                    json_path.set_extension("json");
-                    if let Ok(json_content) = smol::fs::read_to_string(&json_path).await {
-                        crashes.push(CrashReport {
-                            metadata: json_content,
-                            minidump_contents: smol::fs::read(&child_path).await?,
-                        });
-                        smol::fs::remove_file(&child_path).await.log_err();
-                        smol::fs::remove_file(&json_path).await.log_err();
-                    } else {
-                        log::error!("Couldn't find json metadata for crash: {child_path:?}");
-                    }
-                }
-            }
-
-            anyhow::Ok(proto::GetCrashFilesResponse { crashes })
-        },
-    );
-}
 
 struct ServerListeners {
     stdin: UnixListener,
@@ -622,36 +564,6 @@ pub fn execute_run(
 
     let app = gpui_platform::headless();
     let pid = std::process::id();
-    let id = pid.to_string();
-    let should_install_crash_handler = matches!(
-        std::env::var("ZED_GENERATE_MINIDUMPS").as_deref(),
-        Ok("true" | "1")
-    );
-
-    let crash_handler = if should_install_crash_handler {
-        Some(app.background_executor().spawn(crashes::init(
-            crashes::InitCrashHandler {
-                session_id: id,
-                zed_version: VERSION.to_owned(),
-                binary: "zed-remote-server".to_string(),
-                release_channel: settings_content::app_metadata::SERVER_RELEASE_NAME.clone(),
-                commit_sha: option_env!("ZED_COMMIT_SHA").unwrap_or("no_sha").to_owned(),
-            },
-            {
-                let background_executor = app.background_executor();
-                move |task| {
-                    background_executor.spawn(task).detach();
-                }
-            },
-            |pid| paths::temp_dir().join(format!("zed-remote-server-crash-handler-{pid}")),
-            // we are running outside gpui
-            #[allow(clippy::disallowed_methods)]
-            |duration| FutureExt::map(Timer::after(duration), |_| ()),
-        )))
-    } else {
-        crashes::force_backtrace();
-        None
-    };
     let log_rx = init_logging_server(&log_file)?;
     log::info!(
         "starting up with PID {}:\npid_file: {:?}, log_file: {:?}, stdin_socket: {:?}, stdout_socket: {:?}, stderr_socket: {:?}",
@@ -688,13 +600,6 @@ pub fn execute_run(
 
     let git_hosting_provider_registry = Arc::new(GitHostingProviderRegistry::new());
     let run = move |cx: &mut App| {
-        if let Some(crash_handler) = crash_handler {
-            cx.spawn(async move |_cx| {
-                let _crash_handler = crash_handler.await;
-                // cx.update(|cx| cx.set_global(CrashHandler(crash_handler)))
-            })
-            .detach();
-        }
         settings::init(cx);
         let app_commit_sha = option_env!("ZED_COMMIT_SHA").map(|s| AppCommitSha::new(s.to_owned()));
         let app_version = AppVersion::load(
@@ -736,8 +641,6 @@ pub fn execute_run(
                 cx,
             )
         });
-
-        handle_crash_files_requests(&project, &session);
 
         mem::forget(project);
     };
@@ -858,31 +761,6 @@ pub(crate) fn execute_proxy(
 
     let server_paths = ServerPaths::new(&identifier)?;
 
-    let id = std::process::id().to_string();
-    let should_install_crash_handler = matches!(
-        std::env::var("ZED_GENERATE_MINIDUMPS").as_deref(),
-        Ok("true" | "1")
-    );
-
-    if should_install_crash_handler {
-        smol::spawn(crashes::init(
-            crashes::InitCrashHandler {
-                session_id: id,
-                zed_version: VERSION.to_owned(),
-                binary: "zed-remote-proxy".to_string(),
-                release_channel: settings_content::app_metadata::SERVER_RELEASE_NAME.clone(),
-                commit_sha: option_env!("ZED_COMMIT_SHA").unwrap_or("no_sha").to_owned(),
-            },
-            |task| {
-                smol::spawn(task).detach();
-            },
-            |pid| paths::temp_dir().join(format!("zed-remote-server-proxy-crash-handler-{pid}")),
-            // we are running outside gpui
-            #[allow(clippy::disallowed_methods)]
-            |duration| FutureExt::map(Timer::after(duration), |_| ()),
-        ))
-        .detach();
-    };
     log::info!("starting proxy process. PID: {}", std::process::id());
     let server_pid = {
         let server_pid = check_pid_file(&server_paths.pid_file).map_err(|source| {

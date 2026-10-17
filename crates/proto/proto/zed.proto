@@ -16,7 +16,7 @@ import "project.proto";
 
 // Looking for a number? Search "// current max"
 message Envelope {
-  reserved 285, 286, 287, 401;
+  reserved 285, 286, 287, 361, 362, 401;
   uint32 id = 1;
   optional uint32 responding_to = 2;
   optional PeerId original_sender_id = 3;
@@ -281,9 +281,6 @@ message Envelope {
 
     GetDefaultBranch get_default_branch = 359;
     GetDefaultBranchResponse get_default_branch_response = 360;
-
-    GetCrashFiles get_crash_files = 361;
-    GetCrashFilesResponse get_crash_files_response = 362;
 
     GitClone git_clone = 363;
     GitCloneResponse git_clone_response = 364;

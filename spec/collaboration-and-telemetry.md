@@ -16,8 +16,9 @@ account visibility settings no longer expose or enable features.
 No usage events, activity metrics, machine identifiers, remote telemetry forwarding,
 hang reports, or automatic crash uploads are collected or sent. Telemetry settings,
 onboarding switches, and telemetry log actions are removed. Local diagnostic logs
-and manually requested performance reports remain available. Local minidumps may
-be explicitly enabled with `ZED_GENERATE_MINIDUMPS`.
+and manually requested performance reports remain available. There is no crash
+handler or minidump support: a panic logs its message and backtrace to the log
+(stdout when attached to a terminal) and exits the process.
 
 SSH editing remains supported, including transport and buffer synchronization.
 WSL transport, UI, settings, CLI requests, and saved connection restoration are removed.

@@ -26,7 +26,6 @@ clap.workspace = true
 cli.workspace = true
 collections.workspace = true
 command_palette.workspace = true
-crashes.workspace = true
 db.workspace = true
 diagnostics.workspace = true
 editor.workspace = true
@@ -43,7 +42,6 @@ gpui = { workspace = true, features = ["stacker"] }
 gpui_platform = { workspace = true, features = ["font-kit"] }
 gpui_tokio.workspace = true
 rayon.workspace = true
-semver.workspace = true
 system_specs.workspace = true
 tabular_data_preview.workspace = true
 
@@ -101,7 +99,6 @@ watch.workspace = true
 which_key.workspace = true
 workspace.workspace = true
 zed_actions.workspace = true
-zed_env_vars.workspace = true
 zlog.workspace = true
 zlog_settings.workspace = true
 

@@ -218,20 +218,6 @@ pub fn database_dir() -> &'static PathBuf {
     DATABASE_DIR.get_or_init(|| data_dir().join("db"))
 }
 
-/// Returns the path to the crashes directory, if it exists for the current platform.
-pub fn crashes_dir() -> &'static Option<PathBuf> {
-    static CRASHES_DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
-    CRASHES_DIR.get_or_init(|| {
-        cfg!(target_os = "macos").then_some(home_dir().join("Library/Logs/DiagnosticReports"))
-    })
-}
-
-/// Returns the path to the retired crashes directory, if it exists for the current platform.
-pub fn crashes_retired_dir() -> &'static Option<PathBuf> {
-    static CRASHES_RETIRED_DIR: OnceLock<Option<PathBuf>> = OnceLock::new();
-    CRASHES_RETIRED_DIR.get_or_init(|| crashes_dir().as_ref().map(|dir| dir.join("Retired")))
-}
-
 /// Returns the path to the `tasks.json` file.
 pub fn tasks_file() -> &'static PathBuf {
     static TASKS_FILE: OnceLock<PathBuf> = OnceLock::new();

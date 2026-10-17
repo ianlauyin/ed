@@ -22,7 +22,6 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::AtomicBool;
 use std::sync::{LazyLock, atomic::Ordering};
 use util::{ResultExt, maybe};
-use zed_env_vars::ZED_STATELESS;
 
 /// A migration registered via `static_connection!` and collected at link time.
 pub struct DomainMigration {
@@ -160,10 +159,6 @@ pub async fn open_db<M: Migrator + 'static>(
     db_dir: &Path,
     scope: impl DbScope,
 ) -> ThreadSafeConnection {
-    if *ZED_STATELESS {
-        return open_fallback_db::<M>().await;
-    }
-
     let db_path = db_path(db_dir, scope);
 
     let connection = maybe!(async {
