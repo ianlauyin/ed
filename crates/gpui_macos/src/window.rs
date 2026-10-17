@@ -3522,7 +3522,7 @@ fn get_frame(this: &AnyObject) -> NSRect {
 fn insert_text(this: &AnyObject, text: id, replacement_range: NSRange) {
     unsafe {
         let is_attributed_string: bool =
-            msg_send![text, isKindOfClass: [class!(NSAttributedString)]];
+            msg_send![text, isKindOfClass: class!(NSAttributedString)];
         let text: id = if is_attributed_string {
             msg_send![text, string]
         } else {
@@ -3545,7 +3545,7 @@ fn set_marked_text(
 ) {
     unsafe {
         let is_attributed_string: bool =
-            msg_send![text, isKindOfClass: [class!(NSAttributedString)]];
+            msg_send![text, isKindOfClass: class!(NSAttributedString)];
         let text: id = if is_attributed_string {
             msg_send![text, string]
         } else {
@@ -3905,9 +3905,20 @@ fn blurred_view_update_layer(this: &AnyObject) {
     }
 }
 
+/// Opaque `CGColor`, so a null color is sent with the `^{CGColor=}` encoding AppKit expects.
+#[repr(C)]
+struct CGColor {
+    _private: [u8; 0],
+}
+
+unsafe impl objc2::RefEncode for CGColor {
+    const ENCODING_REF: objc2::Encoding =
+        objc2::Encoding::Pointer(&objc2::Encoding::Struct("CGColor", &[]));
+}
+
 unsafe fn remove_layer_background(layer: id) {
     unsafe {
-        let _: () = msg_send![layer, setBackgroundColor:nil];
+        let _: () = msg_send![layer, setBackgroundColor: std::ptr::null::<CGColor>()];
 
         let class_name: id = msg_send![layer, className];
         if class_name.to_str() == "CAChameleonLayer" {
