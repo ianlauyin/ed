@@ -54,8 +54,6 @@ pub struct LogStore {
 
 struct ProjectState {
     _subscriptions: [Subscription; 2],
-    copilot_server_id: Option<LanguageServerId>,
-    copilot_log_subscription: Option<lsp::Subscription>,
 }
 
 pub trait Message: AsRef<str> {
@@ -203,7 +201,6 @@ pub enum LanguageServerKind {
     Local { project: WeakEntity<Project> },
     Remote { project: WeakEntity<Project> },
     LocalSsh { lsp_store: WeakEntity<LspStore> },
-    Supplementary { project: WeakEntity<Project> },
 }
 
 impl std::fmt::Debug for LanguageServerKind {
@@ -212,9 +209,6 @@ impl std::fmt::Debug for LanguageServerKind {
             LanguageServerKind::Local { .. } => write!(f, "LanguageServerKind::Local"),
             LanguageServerKind::Remote { .. } => write!(f, "LanguageServerKind::Remote"),
             LanguageServerKind::LocalSsh { .. } => write!(f, "LanguageServerKind::LocalSsh"),
-            LanguageServerKind::Supplementary { .. } => {
-                write!(f, "LanguageServerKind::Supplementary")
-            }
         }
     }
 }
@@ -242,9 +236,7 @@ impl LanguageServerLogKey {
 impl LanguageServerKind {
     pub fn project(&self) -> Option<&WeakEntity<Project>> {
         match self {
-            Self::Local { project }
-            | Self::Remote { project }
-            | Self::Supplementary { project } => Some(project),
+            Self::Local { project } | Self::Remote { project } => Some(project),
             Self::LocalSsh { .. } => None,
         }
     }
@@ -259,9 +251,6 @@ impl LanguageServerKind {
                 project: server_project,
             }
             | Self::Remote {
-                project: server_project,
-            }
-            | Self::Supplementary {
                 project: server_project,
             } => server_project == project,
             Self::LocalSsh {
@@ -462,8 +451,7 @@ impl LogStore {
                             .retain(|key, _| key.kind.project() != Some(&weak_project));
                     }),
                     cx.subscribe(project, move |log_store, project, event, cx| {
-                        let is_local = project.read(cx).is_local();
-                        let primary_server_kind = if is_local {
+                        let server_kind = if project.read(cx).is_local() {
                             LanguageServerKind::Local {
                                 project: project.downgrade(),
                             }
@@ -472,51 +460,13 @@ impl LogStore {
                                 project: project.downgrade(),
                             }
                         };
-                        let server_kind_for_id = |log_store: &LogStore, server_id| {
-                            // Remote project events carry host-side server IDs, which may
-                            // collide numerically with locally allocated supplementary
-                            // server IDs, so only local projects may resolve an ID to a
-                            // supplementary server.
-                            if is_local {
-                                let supplementary_server_kind = LanguageServerKind::Supplementary {
-                                    project: project.downgrade(),
-                                };
-                                let supplementary_server_key = LanguageServerLogKey::new(
-                                    supplementary_server_kind.clone(),
-                                    server_id,
-                                );
-                                if log_store
-                                    .language_servers
-                                    .contains_key(&supplementary_server_key)
-                                {
-                                    return supplementary_server_kind;
-                                }
-                            }
-                            primary_server_kind.clone()
-                        };
                         match event {
                             crate::Event::LanguageServerAdded(id, name, worktree_id) => {
                                 log_store.add_language_server(
-                                    primary_server_kind,
+                                    server_kind,
                                     *id,
                                     Some(name.clone()),
                                     *worktree_id,
-                                    project
-                                        .read(cx)
-                                        .lsp_store()
-                                        .read(cx)
-                                        .language_server_for_id(*id),
-                                    cx,
-                                );
-                            }
-                            crate::Event::SupplementaryLanguageServerAdded(id, name) => {
-                                log_store.add_language_server(
-                                    LanguageServerKind::Supplementary {
-                                        project: project.downgrade(),
-                                    },
-                                    *id,
-                                    Some(name.clone()),
-                                    None,
                                     project
                                         .read(cx)
                                         .lsp_store()
@@ -547,7 +497,7 @@ impl LogStore {
                                         .map(|status| status.name.clone())
                                 });
                                 log_store.add_language_server(
-                                    server_kind_for_id(log_store, *server_id),
+                                    server_kind,
                                     *server_id,
                                     name,
                                     worktree_id,
@@ -556,21 +506,10 @@ impl LogStore {
                                 );
                             }
                             crate::Event::LanguageServerRemoved(id) => {
-                                let server_key =
-                                    LanguageServerLogKey::new(primary_server_kind, *id);
-                                log_store.remove_language_server(&server_key, cx);
-                            }
-                            crate::Event::SupplementaryLanguageServerRemoved(id) => {
-                                let server_key = LanguageServerLogKey::new(
-                                    LanguageServerKind::Supplementary {
-                                        project: project.downgrade(),
-                                    },
-                                    *id,
-                                );
+                                let server_key = LanguageServerLogKey::new(server_kind, *id);
                                 log_store.remove_language_server(&server_key, cx);
                             }
                             crate::Event::LanguageServerLog(id, typ, message) => {
-                                let server_kind = server_kind_for_id(log_store, *id);
                                 let server_key =
                                     LanguageServerLogKey::new(server_kind.clone(), *id);
                                 log_store.add_language_server(
@@ -620,10 +559,7 @@ impl LogStore {
                                 enabled,
                                 toggled_log_kind,
                             } => {
-                                let server_key = LanguageServerLogKey::new(
-                                    server_kind_for_id(log_store, *server_id),
-                                    *server_id,
-                                );
+                                let server_key = LanguageServerLogKey::new(server_kind, *server_id);
                                 log_store.set_downstream_log_stream(
                                     &server_key,
                                     *peer_id,
@@ -643,8 +579,6 @@ impl LogStore {
                         }
                     }),
                 ],
-                copilot_server_id: None,
-                copilot_log_subscription: None,
             },
         );
     }
@@ -968,7 +902,6 @@ impl LogStore {
                             .upgrade()
                             .map(|project| project.read(cx).lsp_store()),
                         LanguageServerKind::LocalSsh { lsp_store } => lsp_store.upgrade(),
-                        LanguageServerKind::Supplementary { .. } => None,
                     }
                     .and_then(|lsp_store| lsp_store.read(cx).downstream_client());
                     if let Some((client, project_id)) = downstream_client {
@@ -1133,71 +1066,5 @@ impl LogStore {
                 enabled,
             })
             .log_err();
-    }
-
-    pub fn sync_copilot_for_project(
-        &mut self,
-        project: &WeakEntity<Project>,
-        server: Option<Arc<LanguageServer>>,
-        cx: &mut Context<Self>,
-    ) -> Option<()> {
-        let server_kind = LanguageServerKind::Supplementary {
-            project: project.clone(),
-        };
-        let current_server_id = server.as_ref().map(|server| server.server_id());
-        let current_server_matches = server.as_ref().is_some_and(|server| {
-            let server_key = LanguageServerLogKey::new(server_kind.clone(), server.server_id());
-            self.language_servers
-                .get(&server_key)
-                .and_then(|state| state.server())
-                .is_some_and(|current_server| Arc::ptr_eq(&current_server, server))
-        });
-        let project_state = self.projects.get_mut(project)?;
-        if project_state.copilot_server_id == current_server_id && current_server_matches {
-            return Some(());
-        }
-
-        project_state.copilot_log_subscription = None;
-        let previous_server_id = project_state.copilot_server_id.take();
-        if previous_server_id != current_server_id
-            && let Some(previous_server_id) = previous_server_id
-        {
-            let previous_server_key =
-                LanguageServerLogKey::new(server_kind.clone(), previous_server_id);
-            self.remove_language_server(&previous_server_key, cx);
-        }
-
-        let Some(server) = server else {
-            return Some(());
-        };
-        let server_id = server.server_id();
-        let server_key = LanguageServerLogKey::new(server_kind.clone(), server_id);
-        let weak_log_store = cx.weak_entity();
-        let log_subscription =
-            server.on_notification::<lsp::notification::LogMessage, _>(move |params, cx| {
-                weak_log_store
-                    .update(cx, |log_store, cx| {
-                        log_store.add_language_server_log(
-                            &server_key,
-                            MessageType::LOG,
-                            &params.message,
-                            cx,
-                        );
-                    })
-                    .ok();
-            });
-        self.add_language_server(
-            server_kind,
-            server_id,
-            Some(LanguageServerName::new_static("copilot")),
-            None,
-            Some(server),
-            cx,
-        );
-
-        let project_state = self.projects.get_mut(project)?;
-        project_state.copilot_server_id = Some(server_id);
-        project_state.copilot_log_subscription = Some(log_subscription);
-        Some(())
     }
 }

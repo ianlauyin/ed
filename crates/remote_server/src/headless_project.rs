@@ -351,27 +351,7 @@ impl HeadlessProject {
                     });
                 }
             }
-            LspStoreEvent::SupplementaryLanguageServerAdded(id, name) => {
-                let log_store = cx
-                    .try_global::<GlobalLogStore>()
-                    .map(|lsp_logs| lsp_logs.0.clone());
-                if let Some(log_store) = log_store {
-                    log_store.update(cx, |log_store, cx| {
-                        log_store.add_language_server(
-                            LanguageServerKind::LocalSsh {
-                                lsp_store: self.lsp_store.downgrade(),
-                            },
-                            *id,
-                            Some(name.clone()),
-                            None,
-                            lsp_store.read(cx).language_server_for_id(*id),
-                            cx,
-                        );
-                    });
-                }
-            }
-            LspStoreEvent::LanguageServerRemoved(id)
-            | LspStoreEvent::SupplementaryLanguageServerRemoved(id) => {
+            LspStoreEvent::LanguageServerRemoved(id) => {
                 let log_store = cx
                     .try_global::<GlobalLogStore>()
                     .map(|lsp_logs| lsp_logs.0.clone());

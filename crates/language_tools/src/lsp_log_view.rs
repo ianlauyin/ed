@@ -401,42 +401,25 @@ impl LspLogView {
             .language_servers
             .iter()
             .filter(|(key, _)| key.is_for_project(&project, &lsp_store))
-            .map(|(key, state)| match &key.kind {
-                LanguageServerKind::Local { .. }
-                | LanguageServerKind::Remote { .. }
-                | LanguageServerKind::LocalSsh { .. } => {
-                    let worktree_root_name = state
-                        .worktree_id
-                        .and_then(|id| self.project.read(cx).worktree_for_id(id, cx))
-                        .map(|worktree| worktree.read(cx).root_name_str().to_string())
-                        .unwrap_or_else(|| "Unknown worktree".to_string());
+            .map(|(key, state)| {
+                let worktree_root_name = state
+                    .worktree_id
+                    .and_then(|id| self.project.read(cx).worktree_for_id(id, cx))
+                    .map(|worktree| worktree.read(cx).root_name_str().to_string())
+                    .unwrap_or_else(|| "Unknown worktree".to_string());
 
-                    LogMenuItem {
-                        server_id: key.server_id,
-                        server_name: state.name.clone().unwrap_or(unknown_server.clone()),
-                        server_kind: key.kind.clone(),
-                        worktree_root_name,
-                        rpc_trace_enabled: self.enabled_streams.get(key).is_some_and(|streams| {
-                            streams.generation == state.generation
-                                && streams.log_kinds.contains(&LogKind::Rpc)
-                        }),
-                        selected_entry: self.active_entry_kind,
-                        trace_level: lsp::TraceValue::Off,
-                    }
-                }
-
-                LanguageServerKind::Supplementary { .. } => LogMenuItem {
+                LogMenuItem {
                     server_id: key.server_id,
                     server_name: state.name.clone().unwrap_or(unknown_server.clone()),
                     server_kind: key.kind.clone(),
-                    worktree_root_name: "supplementary".to_string(),
+                    worktree_root_name,
                     rpc_trace_enabled: self.enabled_streams.get(key).is_some_and(|streams| {
                         streams.generation == state.generation
                             && streams.log_kinds.contains(&LogKind::Rpc)
                     }),
                     selected_entry: self.active_entry_kind,
                     trace_level: lsp::TraceValue::Off,
-                },
+                }
             })
             .collect::<Vec<_>>();
         rows.sort_by_key(|row| row.server_id);
