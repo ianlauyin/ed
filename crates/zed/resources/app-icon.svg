@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 1024 1024">
+  <defs>
+    <linearGradient id="bezel" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#6A7488"/>
+      <stop offset="0.45" stop-color="#4C566A"/>
+      <stop offset="1" stop-color="#2E3440"/>
+    </linearGradient>
+    <linearGradient id="bezelEdge" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ECEFF4" stop-opacity="0.55"/>
+      <stop offset="0.5" stop-color="#ECEFF4" stop-opacity="0.08"/>
+      <stop offset="1" stop-color="#ECEFF4" stop-opacity="0.25"/>
+    </linearGradient>
+    <linearGradient id="screen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3B4252"/>
+      <stop offset="1" stop-color="#242933"/>
+    </linearGradient>
+    <radialGradient id="glowBg" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#88C0D0" stop-opacity="0.18"/>
+      <stop offset="1" stop-color="#88C0D0" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="shine" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ECEFF4" stop-opacity="0.10"/>
+      <stop offset="1" stop-color="#ECEFF4" stop-opacity="0"/>
+    </linearGradient>
+  </defs>
+
+  <!-- bezel -->
+  <rect x="88" y="100" width="848" height="848" rx="197" fill="#000" fill-opacity="0.05"/>
+  <rect x="92" y="104" width="840" height="840" rx="193" fill="#000" fill-opacity="0.05"/>
+  <rect x="96" y="108" width="832" height="832" rx="189" fill="#000" fill-opacity="0.05"/>
+  <rect x="100" y="100" width="824" height="824" rx="185" fill="url(#bezel)"/>
+  <rect x="102" y="102" width="820" height="820" rx="183" fill="none" stroke="url(#bezelEdge)" stroke-width="4"/>
+
+  <!-- inner screen -->
+  <rect x="172" y="172" width="680" height="680" rx="128" fill="#1F232B"/>
+  <rect x="178" y="180" width="668" height="666" rx="124" fill="url(#screen)"/>
+  <rect x="178" y="180" width="668" height="666" rx="124" fill="url(#glowBg)"/>
+  <path d="M302 180 H722 A124 124 0 0 1 846 304 V420 Q512 470 178 420 V304 A124 124 0 0 1 302 180 Z" fill="url(#shine)"/>
+
+  <!-- </> glyph -->
+  <g transform="translate(512 512) scale(0.9) translate(-512 -512)" fill="none" stroke="#88C0D0" stroke-opacity="0.06" stroke-width="110" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="390,392 270,512 390,632"/>
+    <line x1="560" y1="350" x2="464" y2="674"/>
+    <polyline points="634,392 754,512 634,632"/>
+  </g>
+  <g transform="translate(512 512) scale(0.9) translate(-512 -512)" fill="none" stroke="#88C0D0" stroke-opacity="0.08" stroke-width="90" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="390,392 270,512 390,632"/>
+    <line x1="560" y1="350" x2="464" y2="674"/>
+    <polyline points="634,392 754,512 634,632"/>
+  </g>
+  <g transform="translate(512 512) scale(0.9) translate(-512 -512)" fill="none" stroke="#88C0D0" stroke-opacity="0.12" stroke-width="72" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="390,392 270,512 390,632"/>
+    <line x1="560" y1="350" x2="464" y2="674"/>
+    <polyline points="634,392 754,512 634,632"/>
+  </g>
+  <g transform="translate(512 512) scale(0.9) translate(-512 -512)" fill="none" stroke="#88C0D0" stroke-width="52" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="390,392 270,512 390,632"/>
+    <line x1="560" y1="350" x2="464" y2="674"/>
+    <polyline points="634,392 754,512 634,632"/>
+  </g>
+</svg>

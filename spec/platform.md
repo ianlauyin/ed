@@ -61,6 +61,9 @@ backtraces still work through sync CFI.
 - `release.fish` builds `target/release/Zed.app` for the host Mac: `zed` and
   `cli` binaries in `Contents/MacOS`, `crates/zed/resources/Info.plist` with the
   Cargo.toml version, an icon generated from `app-icon@2x.png`, and `Document.icns`.
+- App icon: Nord-dark rounded square with an inset screen showing `</>` in
+  `#88C0D0`. Source is `crates/zed/resources/app-icon.svg`; the PNGs are rendered
+  from it at 512 and 1024 px.
 - The bundle is for local use only: no codesigning, entitlements, provisioning
   profiles, notarization, DMG, or universal binary. No `cargo-bundle` metadata.
 - Build scripts do not query git.
