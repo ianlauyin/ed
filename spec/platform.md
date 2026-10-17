@@ -9,6 +9,8 @@ remote server supports macOS and Linux.
 ## Behaviour
 
 - The editor uses native macOS windows, Metal rendering, and system menus.
+- Confirmation and error dialogs always use native macOS prompts. The custom
+  prompt renderer and `use_system_prompts` setting are removed.
 - No native window tabs: every window stands alone (one window per project
   group). Automatic tabbing is disabled app-wide at launch, so AppKit adds no
   "Show Tab Bar" / "Merge All Windows" style menu items, and there is no

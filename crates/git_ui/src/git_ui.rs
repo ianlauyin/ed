@@ -1,5 +1,4 @@
 use anyhow::anyhow;
-use commit_modal::CommitModal;
 use editor::{Editor, actions::DiffClipboardWithSelectionData};
 
 use workspace::{Toast, notifications::NotificationId};
@@ -39,7 +38,6 @@ use crate::{
 pub mod branch_diff;
 pub mod branch_picker;
 mod commit_context_menu;
-mod commit_modal;
 pub mod commit_tooltip;
 pub mod commit_view;
 mod conflict_view;
@@ -111,7 +109,6 @@ pub fn init(cx: &mut App) {
         staged_diff::StagedDiff::register(workspace, cx);
         unstaged_diff::UnstagedDiff::register(workspace, cx);
         branch_diff::BranchDiff::register(workspace, cx);
-        CommitModal::register(workspace);
         git_panel::register(workspace);
         repository_selector::register(workspace);
         git_picker::register(workspace);

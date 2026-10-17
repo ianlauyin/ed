@@ -429,7 +429,6 @@ fn workspace_settings() -> WorkspaceSettingsContent {
         when_closing_with_no_tabs: Some(CloseWindowWhenNoItems::PlatformDefault),
         accessible_mode: Some(false),
         use_system_path_prompts: Some(true),
-        use_system_prompts: Some(true),
         command_aliases: Default::default(),
         max_tabs: None,
         on_new_window: Some(OnNewWindow::Launchpad),

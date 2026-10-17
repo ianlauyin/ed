@@ -339,7 +339,6 @@ fn main() {
         diagnostics::init(cx);
 
         workspace::init(app_state.clone(), cx);
-        ui_prompt::init(cx);
 
         go_to_line::init(cx);
         file_finder::init(cx);

@@ -34,6 +34,10 @@ makes no HTTP requests.
 - The commit message editor uses `editor_background`, the same colour as the
   editor and terminal cards, so it reads as editable content against the
   chrome-coloured panel.
+- There is no commit modal: the commit editor lives only in the panel, with a
+  single top-right button that toggles filling the panel. `git::Commit` /
+  `git::Amend` from outside the editor open the panel and focus its commit
+  editor (amend loads the last commit message) instead of opening a modal.
 
 ## Commit view
 

@@ -1,6 +1,5 @@
 pub(crate) use git_ui_core::notifications::{open_output, show_error_toast};
 
-use crate::commit_modal::CommitModal;
 use crate::commit_tooltip::CommitTooltip;
 use crate::commit_view::CommitView;
 use crate::git_panel_settings::GitPanelScrollbarAccessor;
@@ -33,7 +32,7 @@ use git::{
     status::FileStatus,
 };
 use git::{
-    ExpandCommitEditor, RestoreTrackedFiles, StageAll, StashAll, StashApply, StashPop, StashStaged,
+    RestoreTrackedFiles, StageAll, StashAll, StashApply, StashPop, StashStaged,
     StashTracked, ToggleCommitEditor, ToggleFillCommitEditor, TrashUntrackedFiles, UnstageAll,
     ViewFile,
 };
@@ -486,8 +485,11 @@ pub fn register(workspace: &mut Workspace) {
             workspace.close_panel::<GitPanel>(window, cx);
         }
     });
-    workspace.register_action(|workspace, _: &ExpandCommitEditor, window, cx| {
-        CommitModal::toggle(workspace, None, window, cx)
+    workspace.register_action(|workspace, _: &Commit, window, cx| {
+        focus_commit_editor(workspace, false, window, cx);
+    });
+    workspace.register_action(|workspace, _: &Amend, window, cx| {
+        focus_commit_editor(workspace, true, window, cx);
     });
     workspace.register_action(|workspace, _: &ToggleFillCommitEditor, window, cx| {
         if let Some(panel) = workspace.panel::<GitPanel>(cx) {
@@ -514,6 +516,34 @@ pub fn register(workspace: &mut Workspace) {
                 panel.show_git_job_queue(window, cx);
             });
         }
+    });
+}
+
+/// Handles `git::Commit` / `git::Amend` dispatched outside the commit editor:
+/// opens the git panel and focuses its commit editor in the requested mode.
+fn focus_commit_editor(
+    workspace: &mut Workspace,
+    amend: bool,
+    window: &mut Window,
+    cx: &mut Context<Workspace>,
+) {
+    let Some(git_panel) = workspace.panel::<GitPanel>(cx) else {
+        return;
+    };
+    workspace.open_panel::<GitPanel>(window, cx);
+    git_panel.update(cx, |git_panel, cx| {
+        if amend {
+            if git_panel.head_commit(cx).is_some() && !git_panel.amend_pending() {
+                git_panel.set_amend_pending(true, cx);
+                git_panel.load_last_commit_message(cx);
+            }
+        } else if git_panel.amend_pending() {
+            git_panel.set_amend_pending(false, cx);
+        }
+        if git_panel.commit_editor_collapsed {
+            git_panel.toggle_commit_editor(&Default::default(), window, cx);
+        }
+        git_panel.focus_editor(&Default::default(), window, cx);
     });
 }
 
@@ -1114,7 +1144,6 @@ pub struct GitPanel {
     reopen_commit_buffer_task: Task<()>,
     pub(crate) workspace: WeakEntity<Workspace>,
     context_menu: Option<GitPanelContextMenu>,
-    modal_open: bool,
     show_placeholders: bool,
     commit_template: Option<GitCommitTemplate>,
     bulk_staging: Option<BulkStaging>,
@@ -1388,7 +1417,6 @@ impl GitPanel {
                 commit_template: None,
                 context_menu: None,
                 workspace: workspace.weak_handle(),
-                modal_open: false,
                 entry_count: 0,
                 bulk_staging: None,
                 stash_entries: Default::default(),
@@ -1920,11 +1948,6 @@ impl GitPanel {
             }
         }
         commit_messages
-    }
-
-    pub(crate) fn set_modal_open(&mut self, open: bool, cx: &mut Context<Self>) {
-        self.modal_open = open;
-        cx.notify();
     }
 
     fn dispatch_context(&self, window: &mut Window, cx: &Context<Self>) -> KeyContext {
@@ -5714,22 +5737,6 @@ impl GitPanel {
         cx.notify();
     }
 
-    fn expand_commit_editor(
-        &mut self,
-        _: &ExpandCommitEditor,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let workspace = self.workspace.clone();
-        window.defer(cx, move |window, cx| {
-            workspace
-                .update(cx, |workspace, cx| {
-                    CommitModal::toggle(workspace, None, window, cx)
-                })
-                .ok();
-        })
-    }
-
     fn render_git_changes_actions_menu(
         &self,
         id: impl Into<ElementId>,
@@ -5912,7 +5919,6 @@ impl GitPanel {
         let panel_editor_style =
             git_commit_editor_style(settings.git_commit_buffer_font_size(cx), cx);
 
-        let editor_focus_handle = self.commit_editor.focus_handle(cx);
         let branch = active_repository.read(cx).branch.clone();
         let head_commit = active_repository.read(cx).head_commit.clone();
 
@@ -5941,29 +5947,7 @@ impl GitPanel {
 
         let vertical_buttons = v_flex()
             .h_full()
-            .gap_px()
             .p_1p5()
-            .child(
-                IconButton::new("expand-commit-editor", IconName::MaximizeAlt)
-                    .icon_size(IconSize::Small)
-                    .icon_color(Color::Hidden)
-                    .hover_color(Color::Muted)
-                    .tooltip({
-                        move |_window, cx| {
-                            Tooltip::for_action_in(
-                                "Open Commit Modal",
-                                &git::ExpandCommitEditor,
-                                &editor_focus_handle,
-                                cx,
-                            )
-                        }
-                    })
-                    .on_click(cx.listener({
-                        move |_, _, window, cx| {
-                            window.dispatch_action(git::ExpandCommitEditor.boxed_clone(), cx)
-                        }
-                    })),
-            )
             .child({
                 let (icon, label) = if self.commit_editor_expanded {
                     (IconName::Minimize, "Collapse Commit Editor")
@@ -6125,7 +6109,7 @@ impl GitPanel {
                 ButtonLike::new_rounded_left(format!("split-button-left-{}", title))
                     .layer(ElevationIndex::ModalSurface)
                     .size(ButtonSize::Compact)
-                    .disabled(!can_commit || self.modal_open)
+                    .disabled(!can_commit)
                     .child(
                         Label::new(title)
                             .size(LabelSize::Small)
@@ -7745,7 +7729,6 @@ impl Render for GitPanel {
             .on_action(cx.listener(Self::view_staged_changes))
             .on_action(cx.listener(Self::focus_changes_list))
             .on_action(cx.listener(Self::focus_editor))
-            .on_action(cx.listener(Self::expand_commit_editor))
             .on_action(cx.listener(Self::toggle_commit_editor))
             .on_action(cx.listener(Self::set_sort_by_path))
             .on_action(cx.listener(Self::set_sort_by_name))

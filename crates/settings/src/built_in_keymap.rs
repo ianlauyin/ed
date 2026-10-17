@@ -719,17 +719,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
     );
     add_bindings(
         &mut keymap,
-        Some("Prompt"),
-        true,
-        [
-            KeyBindingSpec::new("left", "menu::SelectPrevious"),
-            KeyBindingSpec::new("right", "menu::SelectNext"),
-            KeyBindingSpec::new("h", "menu::SelectPrevious"),
-            KeyBindingSpec::new("l", "menu::SelectNext"),
-        ],
-    );
-    add_bindings(
-        &mut keymap,
         Some("ProjectSearchBar && !in_replace"),
         true,
         [KeyBindingSpec::new(
@@ -875,7 +864,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             KeyBindingSpec::new("tab", "git_panel::FocusChanges"),
             KeyBindingSpec::new("shift-tab", "git_panel::FocusChanges"),
             KeyBindingSpec::new("alt-up", "git_panel::FocusChanges"),
-            KeyBindingSpec::new("shift-escape", "git::ExpandCommitEditor"),
             KeyBindingSpec::new("alt-shift-escape", "git::ToggleFillCommitEditor"),
         ],
     );

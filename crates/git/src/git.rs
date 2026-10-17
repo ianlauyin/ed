@@ -115,8 +115,6 @@ actions!(
         Signoff,
         /// Cancels the current git operation.
         Cancel,
-        /// Expands the commit message editor.
-        ExpandCommitEditor,
         /// Toggles whether the commit message editor fills all the available
         /// vertical space within the git panel.
         ToggleFillCommitEditor,
