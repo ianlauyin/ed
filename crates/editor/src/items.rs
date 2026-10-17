@@ -1140,11 +1140,14 @@ impl SearchableItem for Editor {
         )
     }
 
-    fn clear_matches(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+    fn clear_matches(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self
             .clear_background_highlights(HighlightKey::BufferSearchHighlights, cx)
             .is_some()
         {
+            // Occurrence highlights are suppressed while search results show.
+            self.refresh_document_highlights(cx);
+            self.refresh_selected_text_highlights(&self.display_snapshot(cx), false, window, cx);
             cx.emit(SearchEvent::MatchesInvalidated);
         }
     }
@@ -1154,7 +1157,7 @@ impl SearchableItem for Editor {
         matches: &[Range<Anchor>],
         active_match_index: Option<usize>,
         _token: SearchToken,
-        _: &mut Window,
+        window: &mut Window,
         cx: &mut Context<Self>,
     ) {
         let existing_range = self
@@ -1162,6 +1165,7 @@ impl SearchableItem for Editor {
             .get(&HighlightKey::BufferSearchHighlights)
             .map(|(_, range)| range.as_ref());
         let updated = existing_range != Some(matches);
+        let had_matches = self.has_background_highlights(HighlightKey::BufferSearchHighlights);
         self.highlight_background(
             HighlightKey::BufferSearchHighlights,
             matches,
@@ -1174,6 +1178,11 @@ impl SearchableItem for Editor {
             },
             cx,
         );
+        if had_matches != !matches.is_empty() {
+            // Occurrence highlights are suppressed while search results show.
+            self.refresh_document_highlights(cx);
+            self.refresh_selected_text_highlights(&self.display_snapshot(cx), false, window, cx);
+        }
         if updated {
             cx.emit(SearchEvent::MatchesInvalidated);
         }
@@ -1282,7 +1291,7 @@ impl SearchableItem for Editor {
             Autoscroll::fit()
         };
         self.change_selections(
-            SelectionEffects::scroll(autoscroll).from_search(true),
+            SelectionEffects::scroll(autoscroll),
             window,
             cx,
             |s| {

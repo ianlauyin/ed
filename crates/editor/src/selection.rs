@@ -1511,7 +1511,6 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.last_selection_from_search = effects.from_search;
         window.invalidate_character_coordinates();
 
         // Copy selections to primary selection buffer
