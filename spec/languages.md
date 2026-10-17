@@ -5,6 +5,12 @@
   extensions, are recognized automatically.
 - Shell commands and `RUN` heredoc bodies use Bash syntax highlighting.
 - Dockerfile support does not register a language server or require external tools.
+- HTML support is built in (ported from upstream's `extensions/html`): native
+  Tree-sitter grammar for `.html`, `.htm`, `.shtml`, with JavaScript/CSS injected
+  into `<script>`, `<style>`, `style=` and `on*=` attributes.
+- HTML uses `vscode-html-language-server` (from `vscode-langservers-extracted`),
+  started with `--stdio` and `provideFormatter: true`; `lsp.vscode-html-language-server.settings`
+  is passed through as workspace configuration.
 - Jupyter notebooks and integrated REPL execution are removed, including kernel
   management, remote kernel launching, execution controls, settings, and shortcuts.
 - Python source editing remains supported. `.ipynb` files open as ordinary text.

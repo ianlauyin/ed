@@ -21,6 +21,7 @@ mod cpp;
 mod css;
 mod eslint;
 mod go;
+mod html;
 mod json;
 mod package_json;
 mod python;
@@ -64,6 +65,7 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
     let eslint_adapter = Arc::new(eslint::EsLintLspAdapter::new(fs.clone()));
     let go_context_provider = Arc::new(go::GoContextProvider);
     let go_lsp_adapter = Arc::new(go::GoLspAdapter);
+    let html_lsp_adapter = Arc::new(html::HtmlLspAdapter);
     let json_context_provider = Arc::new(JsonTaskProvider);
     let json_lsp_adapter = Arc::new(json::JsonLspAdapter::new(languages.clone()));
     let py_lsp_adapter = Arc::new(python::PyLspAdapter::new());
@@ -136,6 +138,11 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
             name: "gowork",
             adapters: vec![go_lsp_adapter],
             context: Some(go_context_provider),
+            ..Default::default()
+        },
+        LanguageInfo {
+            name: "html",
+            adapters: vec![html_lsp_adapter],
             ..Default::default()
         },
         LanguageInfo {
