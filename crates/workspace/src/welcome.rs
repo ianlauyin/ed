@@ -15,7 +15,7 @@ use menu::{SelectNext, SelectPrevious};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use settings::{DefaultOpenBehavior, Settings};
-use ui::{ButtonLike, Divider, DividerColor, KeyBinding, Vector, VectorName, prelude::*};
+use ui::{ButtonLike, Divider, DividerColor, KeyBinding, prelude::*};
 use util::ResultExt;
 use zed_actions::command_palette;
 
@@ -394,12 +394,6 @@ impl Render for WelcomePage {
             div().into_any_element()
         };
 
-        let welcome_label = if self.fallback_to_recent_projects {
-            "Welcome back to Zed"
-        } else {
-            "Welcome to Zed"
-        };
-
         h_flex()
             .key_context("Welcome")
             .track_focus(&self.focus_handle(cx))
@@ -418,22 +412,6 @@ impl Render for WelcomePage {
                     .gap_6()
                     .justify_center()
                     .overflow_y_scroll()
-                    .child(
-                        h_flex()
-                            .w_full()
-                            .justify_center()
-                            .mb_4()
-                            .gap_4()
-                            .child(Vector::square(VectorName::ZedLogo, rems_from_px(45_f32)))
-                            .child(
-                                v_flex().child(Headline::new(welcome_label)).child(
-                                    Label::new("The editor for what's next")
-                                        .size(LabelSize::Small)
-                                        .color(Color::Muted)
-                                        .italic(),
-                                ),
-                            ),
-                    )
                     .child(first_section.render(Default::default(), &self.focus_handle))
                     .child(second_section),
             )

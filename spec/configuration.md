@@ -61,7 +61,8 @@ migrator, or Vim/Helix mode.
   base keymap picker, or multibuffer hint toolbar. There is no VS Code/Cursor
   settings importer (actions or the underlying translation code). The first
   launch opens an empty editor like any other launch. The welcome page
-  (`zed::ShowWelcome`) remains, without a "Return to Onboarding" button.
+  (`zed::ShowWelcome`) remains, without a "Return to Onboarding" button or a
+  logo/title header: just the centred Get Started and Recent Projects lists.
 - Bookmarks are removed: no bookmark actions, labels, navigation, project view,
   bookmark gutter markers, or `gutter.bookmarks` setting (the gutter hover
   button now copies the file location; see editor.md). Existing saved bookmarks are
