@@ -3372,6 +3372,11 @@ impl Editor {
         if self.pending_rename.is_some() {
             return None;
         }
+        // Multibuffers (search / references results) already highlight their matches;
+        // symbol occurrence highlights on top of those are just noise.
+        if !self.buffer.read(cx).is_singleton() {
+            return None;
+        }
 
         let provider = self.semantics_provider.clone()?;
         let buffer = self.buffer.read(cx);
@@ -3504,6 +3509,10 @@ impl Editor {
             return None;
         }
         if !self.use_selection_highlight || !EditorSettings::get_global(cx).selection_highlight {
+            return None;
+        }
+        // Same as document highlights: no occurrence highlights in multibuffers.
+        if !self.buffer.read(cx).is_singleton() {
             return None;
         }
         // When the current selection was set by search navigation, suppress selection
