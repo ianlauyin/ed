@@ -215,13 +215,6 @@ impl Platform for HeadlessPlatform {
     fn app_path(&self) -> Result<PathBuf> {
         Ok(std::env::current_exe()?)
     }
-    fn path_for_auxiliary_executable(&self, name: &str) -> Result<PathBuf> {
-        Ok(self
-            .app_path()?
-            .parent()
-            .ok_or_else(|| anyhow!("missing executable directory"))?
-            .join(name))
-    }
     fn set_cursor_style(&self, _style: CursorStyle) {}
     fn hide_cursor_until_mouse_moves(&self) {}
     fn is_cursor_visible(&self) -> bool {

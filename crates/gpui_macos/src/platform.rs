@@ -1,6 +1,5 @@
 use crate::{
     AppleActivity, AppleDispatcher, MacDisplay, MacKeyboardLayout, MacKeyboardMapper, MacWindow,
-    NSStringExt,
     events::key_to_native,
     ns::{
         NSInteger, NSOperatingSystemVersion, NSUInteger, array_iter, autorelease_pool, drain, id,
@@ -48,7 +47,7 @@ use parking_lot::Mutex;
 use semver::Version;
 use std::{
     cell::Cell,
-    ffi::{CStr, OsStr, c_void},
+    ffi::{CStr, c_void},
     os::{raw::c_char, unix::ffi::OsStrExt},
     path::{Path, PathBuf},
     ptr,
@@ -1162,17 +1161,6 @@ impl Platform for MacPlatform {
         }
     }
 
-    fn path_for_auxiliary_executable(&self, name: &str) -> Result<PathBuf> {
-        unsafe {
-            let bundle: id = msg_send![class!(NSBundle), mainBundle];
-            anyhow::ensure!(!bundle.is_null(), "app is not running inside a bundle");
-            let name = ns_string(name);
-            let url: id = msg_send![bundle, URLForAuxiliaryExecutable: name];
-            anyhow::ensure!(!url.is_null(), "resource not found");
-            ns_url_to_path(url)
-        }
-    }
-
     /// Match cursor style to one of the styles available
     /// in macOS's [NSCursor](https://developer.apple.com/documentation/appkit/nscursor).
     fn set_cursor_style(&self, style: CursorStyle) {
@@ -1554,17 +1542,6 @@ fn handle_dock_menu(this: &AnyObject, _: id) -> id {
             nil
         }
     }
-}
-
-unsafe fn ns_url_to_path(url: id) -> Result<PathBuf> {
-    let path: *mut c_char = msg_send![url, fileSystemRepresentation];
-    anyhow::ensure!(!path.is_null(), "url is not a file path: {}", unsafe {
-        let absolute_string: id = msg_send![url, absoluteString];
-        absolute_string.to_str().to_string()
-    });
-    Ok(PathBuf::from(OsStr::from_bytes(unsafe {
-        CStr::from_ptr(path).to_bytes()
-    })))
 }
 
 #[link(name = "Carbon", kind = "framework")]

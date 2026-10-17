@@ -2260,7 +2260,6 @@ impl PlatformWindow for MacWindow {
     fn play_system_bell(&self) {
         NSBeep()
     }
-
 }
 
 impl rwh::HasWindowHandle for MacWindow {

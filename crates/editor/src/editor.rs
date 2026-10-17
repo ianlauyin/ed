@@ -3527,6 +3527,14 @@ impl Editor {
         if !self.buffer.read(cx).is_singleton() {
             return None;
         }
+        // LSP document highlights take precedence; selected-text highlights are only a
+        // fallback for files without a server that provides them (both at once is noise).
+        if let Some(provider) = self.semantics_provider.clone()
+            && let Some(buffer) = self.buffer.read(cx).as_singleton()
+            && provider.supports_document_highlights(&buffer, cx)
+        {
+            return None;
+        }
         // Same as document highlights: while buffer search shows results, only the matches
         // are highlighted (a literal selection highlight would also mark non-matches, e.g.
         // mid-line occurrences for `^something`).
@@ -10247,6 +10255,8 @@ pub trait SemanticsProvider {
 
     fn supports_semantic_tokens(&self, buffer: &Entity<Buffer>, cx: &mut App) -> bool;
 
+    fn supports_document_highlights(&self, buffer: &Entity<Buffer>, cx: &mut App) -> bool;
+
     fn document_highlights(
         &self,
         buffer: &Entity<Buffer>,
@@ -10331,6 +10341,15 @@ impl SemanticsProvider for WeakEntity<Project> {
         self.update(cx, |project, cx| {
             buffer.update(cx, |buffer, cx| {
                 project.any_language_server_supports_semantic_tokens(buffer, cx)
+            })
+        })
+        .unwrap_or(false)
+    }
+
+    fn supports_document_highlights(&self, buffer: &Entity<Buffer>, cx: &mut App) -> bool {
+        self.update(cx, |project, cx| {
+            buffer.update(cx, |buffer, cx| {
+                project.any_language_server_supports_document_highlights(buffer, cx)
             })
         })
         .unwrap_or(false)

@@ -575,7 +575,7 @@ pub fn execute_run(
         json_schema_store::init(cx);
 
         let project = cx.new(|cx| {
-            let fs = RealFs::new(None, cx.background_executor().clone());
+            let fs = RealFs::new(cx.background_executor().clone());
             let languages = Arc::new(LanguageRegistry::new(cx.background_executor().clone()));
 
             HeadlessProject::new(

@@ -225,7 +225,7 @@ fn main() {
         return;
     }
 
-    let fs = RealFs::new(None, app.background_executor());
+    let fs = RealFs::new(app.background_executor());
     if !stdout_is_a_pty() {
         app.background_executor()
             .spawn(async {

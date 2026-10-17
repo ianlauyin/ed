@@ -737,13 +737,13 @@ impl LocalRepositoryState {
             .background_spawn({
                 let fs = fs.clone();
                 async move {
-                    let system_git_binary_path = search_paths
+                    let git_binary_path = search_paths
                         .and_then(|search_paths| {
                             which::which_in("git", Some(search_paths), &work_directory_abs_path)
                                 .ok()
                         })
                         .or_else(|| which::which("git").ok());
-                    fs.open_repo(&dot_git_abs_path, system_git_binary_path.as_deref())
+                    fs.open_repo(&dot_git_abs_path, git_binary_path.as_deref())
                         .with_context(|| format!("opening repository at {dot_git_abs_path:?}"))
                 }
             })

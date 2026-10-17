@@ -6,6 +6,9 @@ Git support is local-only. There is no notion of a hosting provider (GitHub,
 GitLab, …): remote URLs are never parsed into web links, and the `git` crate
 makes no HTTP requests.
 
+No git binary is bundled. All git operations use the system `git` found on the
+repository's `$PATH`; if none is found, the repository is not opened.
+
 ## Behaviour
 
 - No permalinks: the editor's Copy/Open Permalink to Line, the file

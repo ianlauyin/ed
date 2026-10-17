@@ -1144,9 +1144,8 @@ pub struct RealGitRepository {
     pub common_dir: PathBuf,
     /// `None` only for bare repositories, which do not have a working directory.
     pub working_directory: Option<PathBuf>,
-    pub system_git_binary_path: Option<PathBuf>,
-    pub any_git_binary_path: PathBuf,
-    any_git_binary_help_output: Arc<Mutex<Option<SharedString>>>,
+    pub git_binary_path: PathBuf,
+    git_binary_help_output: Arc<Mutex<Option<SharedString>>>,
     executor: BackgroundExecutor,
     is_trusted: Arc<AtomicBool>,
 }
@@ -1182,16 +1181,12 @@ impl RefEdit {
 impl RealGitRepository {
     pub fn new(
         dotgit_path: &Path,
-        bundled_git_binary_path: Option<PathBuf>,
-        system_git_binary_path: Option<PathBuf>,
+        git_binary_path: Option<PathBuf>,
         executor: BackgroundExecutor,
     ) -> Result<Self> {
-        let any_git_binary_path = system_git_binary_path
-            .clone()
-            .or(bundled_git_binary_path)
-            .context("no git binary available")?;
+        let git_binary_path = git_binary_path.context("git not found on $PATH")?;
         log::info!(
-            "opening git repository at {dotgit_path:?} using git binary {any_git_binary_path:?}"
+            "opening git repository at {dotgit_path:?} using git binary {git_binary_path:?}"
         );
         let dotgit_parent = dotgit_path.parent().context(".git has no parent")?;
         let has_working_directory =
@@ -1242,10 +1237,9 @@ impl RealGitRepository {
             git_dir,
             common_dir,
             working_directory,
-            system_git_binary_path,
-            any_git_binary_path,
+            git_binary_path,
             executor,
-            any_git_binary_help_output: Arc::new(Mutex::new(None)),
+            git_binary_help_output: Arc::new(Mutex::new(None)),
             is_trusted: Arc::new(AtomicBool::new(false)),
         })
     }
@@ -1264,7 +1258,7 @@ impl RealGitRepository {
 
     fn git_binary_in_worktree(&self) -> Result<GitBinary> {
         Ok(GitBinary::new(
-            self.any_git_binary_path.clone(),
+            self.git_binary_path.clone(),
             self.working_directory()?,
             self.path(),
             self.executor.clone(),
@@ -1274,7 +1268,7 @@ impl RealGitRepository {
 
     fn git_binary(&self) -> GitBinary {
         GitBinary::new(
-            self.any_git_binary_path.clone(),
+            self.git_binary_path.clone(),
             self.command_directory(),
             self.path(),
             self.executor.clone(),
@@ -1294,8 +1288,8 @@ impl RealGitRepository {
             .boxed()
     }
 
-    async fn any_git_binary_help_output(&self) -> SharedString {
-        if let Some(output) = self.any_git_binary_help_output.lock().clone() {
+    async fn git_binary_help_output(&self) -> SharedString {
+        if let Some(output) = self.git_binary_help_output.lock().clone() {
             return output;
         }
         let git = self.git_binary();
@@ -1305,7 +1299,7 @@ impl RealGitRepository {
             .await
             .unwrap_or_default()
             .into();
-        *self.any_git_binary_help_output.lock() = Some(output.clone());
+        *self.git_binary_help_output.lock() = Some(output.clone());
         output
     }
 }
@@ -1327,19 +1321,8 @@ pub struct GitCommitTemplate {
 }
 
 pub async fn get_git_committer(cx: &AsyncApp) -> GitCommitter {
-    let git_binary_path =
-        if cfg!(target_os = "macos") && option_env!("ZED_BUNDLE").as_deref() == Some("true") {
-            cx.update(|cx| {
-                cx.path_for_auxiliary_executable("git")
-                    .context("could not find git binary path")
-                    .log_err()
-            })
-        } else {
-            None
-        };
-
     let git = GitBinary::new(
-        git_binary_path.unwrap_or(PathBuf::from("git")),
+        PathBuf::from("git"),
         paths::home_dir().clone(),
         paths::home_dir().join(".git"),
         cx.background_executor().clone(),
@@ -2307,7 +2290,7 @@ impl GitRepository for RealGitRepository {
         create: bool,
     ) -> BoxFuture<'_, Result<()>> {
         let git_binary = GitBinary::new(
-            self.any_git_binary_path.clone(),
+            self.git_binary_path.clone(),
             worktree_path,
             self.path(),
             self.executor.clone(),
@@ -2794,10 +2777,9 @@ impl GitRepository for RealGitRepository {
         let working_directory = self.command_directory();
         let git_directory = self.path();
         let executor = cx.background_executor().clone();
-        let git_binary_path = self.system_git_binary_path.clone();
+        let git_binary_path = self.git_binary_path.clone();
         let is_trusted = self.is_trusted();
         async move {
-            let git_binary_path = git_binary_path.context("git not found on $PATH, can't push")?;
             let git = GitBinary::new(
                 git_binary_path,
                 working_directory,
@@ -2834,10 +2816,9 @@ impl GitRepository for RealGitRepository {
         let working_directory = self.command_directory();
         let git_directory = self.path();
         let executor = cx.background_executor().clone();
-        let git_binary_path = self.system_git_binary_path.clone();
+        let git_binary_path = self.git_binary_path.clone();
         let is_trusted = self.is_trusted();
         async move {
-            let git_binary_path = git_binary_path.context("git not found on $PATH, can't pull")?;
             let git = GitBinary::new(
                 git_binary_path,
                 working_directory,
@@ -2872,11 +2853,10 @@ impl GitRepository for RealGitRepository {
         let working_directory = self.command_directory();
         let git_directory = self.path();
         let remote_name = format!("{}", fetch_options);
-        let git_binary_path = self.system_git_binary_path.clone();
+        let git_binary_path = self.git_binary_path.clone();
         let executor = cx.background_executor().clone();
         let is_trusted = self.is_trusted();
         async move {
-            let git_binary_path = git_binary_path.context("git not found on $PATH, can't fetch")?;
             let git = GitBinary::new(
                 git_binary_path,
                 working_directory,
@@ -3288,7 +3268,7 @@ impl GitRepository for RealGitRepository {
     ) -> BoxFuture<'_, Result<()>> {
         let git_binary = self.git_binary_in_worktree();
         let git_dir = self.git_dir.clone();
-        let help_output = self.any_git_binary_help_output();
+        let help_output = self.git_binary_help_output();
 
         // Note: Do not spawn these commands on the background thread, as this causes some git hooks to hang.
         async move {

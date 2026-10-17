@@ -8,6 +8,10 @@
   already highlight their matches, and stacking occurrence highlights on top
   made results unreadable. The selection itself and bracket highlights still
   show everywhere.
+- Only one kind of occurrence highlight shows at a time: if a language server
+  for the file supports document highlights, those are used and selected-text
+  highlights are off; otherwise selected-text highlights are the fallback.
+  Having both on the same page was messy.
 - In a single-file editor, both kinds of occurrence highlights are also
   suppressed while buffer search is showing matches, so only the matches are
   highlighted and nothing can be confused with them. They come back once the

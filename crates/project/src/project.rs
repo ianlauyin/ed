@@ -4412,6 +4412,40 @@ impl Project {
         })
     }
 
+    pub fn any_language_server_supports_document_highlights(
+        &self,
+        buffer: &Buffer,
+        cx: &mut App,
+    ) -> bool {
+        let Some(language) = buffer.language().cloned() else {
+            return false;
+        };
+        let lsp_store = self.lsp_store.read(cx);
+        let relevant_language_servers = lsp_store
+            .languages
+            .lsp_adapters(&language.name())
+            .into_iter()
+            .map(|lsp_adapter| lsp_adapter.name())
+            .collect::<HashSet<_>>();
+        lsp_store
+            .language_server_statuses()
+            .filter_map(|(server_id, server_status)| {
+                relevant_language_servers
+                    .contains(&server_status.name)
+                    .then_some(server_id)
+            })
+            .filter_map(|server_id| lsp_store.lsp_server_capabilities.get(&server_id))
+            .any(|capabilities| {
+                capabilities
+                    .document_highlight_provider
+                    .as_ref()
+                    .is_some_and(|capability| match capability {
+                        lsp::OneOf::Left(supported) => *supported,
+                        lsp::OneOf::Right(_) => true,
+                    })
+            })
+    }
+
     pub fn any_language_server_supports_semantic_tokens(
         &self,
         buffer: &Buffer,
