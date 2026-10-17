@@ -383,18 +383,6 @@ objc2-foundation = { version = "0.3.2", default-features = false, features = [
 objc2-security = { version = "0.3.2", default-features = false, features = ["std", "SecBase", "SecItem"] }
 objc2-metal = { version = "0.3.2", default-features = false }
 objc2-quartz-core = { version = "0.3.2", default-features = false, features = ["std", "CALayer", "CAMetalLayer"] }
-objc2-user-notifications = { version = "0.3", default-features = false, features = [
-    "std",
-    "block2",
-    "UNNotification",
-    "UNNotificationAction",
-    "UNNotificationCategory",
-    "UNNotificationContent",
-    "UNNotificationRequest",
-    "UNNotificationResponse",
-    "UNNotificationTrigger",
-    "UNUserNotificationCenter",
-] }
 ordered-float = "5"
 palette = { version = "0.7.5", default-features = false, features = ["std"] }
 parking_lot = "0.12.1"

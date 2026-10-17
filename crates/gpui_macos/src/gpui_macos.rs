@@ -10,7 +10,6 @@ mod events;
 mod keyboard;
 mod ns;
 mod pasteboard;
-mod system_notifications;
 
 use gpui_apple::metal_renderer as renderer;
 
