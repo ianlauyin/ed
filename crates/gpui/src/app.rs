@@ -335,7 +335,10 @@ type Listener = Box<dyn FnMut(&dyn Any, &mut App) -> bool + 'static>;
 type MissingGlyphCallback = Box<dyn FnMut(&[MissingGlyph], &mut App) + 'static>;
 pub(crate) type KeystrokeObserver =
     Box<dyn FnMut(&KeystrokeEvent, &mut Window, &mut App) -> bool + 'static>;
-type QuitHandler = Box<dyn FnOnce(&mut App) -> LocalBoxFuture<'static, ()> + 'static>;
+type QuitHandler = (
+    Box<dyn FnOnce(&mut App) -> LocalBoxFuture<'static, ()> + 'static>,
+    &'static std::panic::Location<'static>,
+);
 type WindowClosedHandler = Box<dyn FnMut(&mut App, WindowId)>;
 type ReleaseListener = Box<dyn FnOnce(&mut dyn Any, &mut App) + 'static>;
 type NewEntityListener = Box<dyn FnMut(AnyEntity, &mut Option<&mut Window>, &mut App) + 'static>;
@@ -719,9 +722,19 @@ impl App {
         // handlers. It's awaited alongside them, within `SHUTDOWN_TIMEOUT`.
 
         let mut futures: Vec<LocalBoxFuture<'static, ()>> = Vec::new();
+        let mut pending = Vec::new();
 
-        for observer in self.quit_observers.remove(&()) {
-            futures.push(observer(self));
+        for (observer, location) in self.quit_observers.remove(&()) {
+            let future = observer(self);
+            let done = Rc::new(Cell::new(false));
+            pending.push((location, done.clone()));
+            futures.push(
+                async move {
+                    future.await;
+                    done.set(true);
+                }
+                .boxed_local(),
+            );
         }
 
         self.windows.clear();
@@ -736,7 +749,15 @@ impl App {
             .block_with_timeout(SHUTDOWN_TIMEOUT, futures)
             .is_err()
         {
-            log::error!("timed out waiting on app_will_quit");
+            let stuck = pending
+                .iter()
+                .filter(|(_, done)| !done.get())
+                .map(|(location, _)| location.to_string())
+                .collect::<Vec<_>>();
+            log::error!(
+                "timed out after {SHUTDOWN_TIMEOUT:?} waiting on app_will_quit handlers: {}",
+                stuck.join(", ")
+            );
         };
 
         self.quitting = false;
@@ -2124,6 +2145,7 @@ impl App {
 
     /// Register a callback to be invoked when the application is about to quit.
     /// It is not possible to cancel the quit event at this point.
+    #[track_caller]
     pub fn on_app_quit<Fut>(
         &self,
         mut on_quit: impl FnMut(&mut App) -> Fut + 'static,
@@ -2133,10 +2155,13 @@ impl App {
     {
         let (subscription, activate) = self.quit_observers.insert(
             (),
-            Box::new(move |cx| {
-                let future = on_quit(cx);
-                future.boxed_local()
-            }),
+            (
+                Box::new(move |cx| {
+                    let future = on_quit(cx);
+                    future.boxed_local()
+                }),
+                std::panic::Location::caller(),
+            ),
         );
         activate();
         subscription

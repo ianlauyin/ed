@@ -31,12 +31,17 @@ release-note actions, and update indicators are removed. Updates are installed
 externally. The obsolete extension auto-update setting is also removed.
 
 SSH connections require an executable server installed by the user at
-`~/.local/bin/ed_remote_server` on the target host. Connection setup checks that
+`~/.local/bin/ed_server` on the target host. Connection setup checks that
 it runs, then uses it for the remote session and command execution. A missing or
 unusable binary fails the connection with an error naming the required path.
 The editor never downloads, builds, uploads, or installs a remote server.
 Remote-server release fetching and archive caching are removed. The obsolete
 `upload_binary_over_ssh` setting is removed.
+
+The remote server keeps no log file. Its log records are streamed to the client
+as JSON and re-logged into the editor's own log. The only file it writes is a
+panic report (`server-<id>-panic.log` in the remote logs dir, overwritten per
+panic), since a panicking server aborts before the record can be forwarded.
 
 Feature flags and local flag overrides are removed.
 Diff-review gutter controls and intentional panic/crash

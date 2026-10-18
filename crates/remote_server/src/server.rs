@@ -53,7 +53,7 @@ use util::{ResultExt, command::new_command};
 pub enum Commands {
     Run {
         #[arg(long)]
-        log_file: PathBuf,
+        panic_file: PathBuf,
         #[arg(long)]
         pid_file: PathBuf,
         #[arg(long)]
@@ -79,13 +79,13 @@ pub fn run(command: Commands) -> anyhow::Result<()> {
 
     match command {
         Commands::Run {
-            log_file,
+            panic_file,
             pid_file,
             stdin_socket,
             stdout_socket,
             stderr_socket,
         } => execute_run(
-            log_file,
+            panic_file,
             pid_file,
             stdin_socket,
             stdout_socket,
@@ -211,120 +211,31 @@ fn init_logging_proxy() {
         .init();
 }
 
-const REMOTE_SERVER_LOG_MAX_BYTES: u64 = 1024 * 1024;
-
-struct RotatingLogFile {
-    path: PathBuf,
-    file: File,
-    size_bytes: u64,
-}
-
-impl RotatingLogFile {
-    fn open(path: &Path) -> Result<Self> {
-        if std::fs::metadata(path)
-            .map(|metadata| metadata.len() >= REMOTE_SERVER_LOG_MAX_BYTES)
-            .unwrap_or(false)
-        {
-            rotate_log_file(path, &rotated_log_path(path))
-                .context("failed to rotate existing remote server log")?;
-        }
-
-        let file = open_log_file(path).context("failed to open remote server log")?;
-        let size_bytes = file
-            .metadata()
-            .context("failed to read remote server log metadata")?
-            .len();
-
-        Ok(Self {
-            path: path.to_path_buf(),
-            file,
-            size_bytes,
-        })
-    }
-
-    fn rotate(&mut self) -> std::io::Result<()> {
-        self.file.flush()?;
-        rotate_log_file(&self.path, &rotated_log_path(&self.path))?;
-        self.file = open_log_file(&self.path)?;
-        self.size_bytes = 0;
-        Ok(())
-    }
-}
-
-impl Write for RotatingLogFile {
-    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-        if self.size_bytes.saturating_add(buf.len() as u64) > REMOTE_SERVER_LOG_MAX_BYTES {
-            self.rotate()?;
-        }
-
-        self.file.write_all(buf)?;
-        self.size_bytes += buf.len() as u64;
-
-        Ok(buf.len())
-    }
-
-    fn flush(&mut self) -> std::io::Result<()> {
-        self.file.flush()
-    }
-}
-
-fn open_log_file(path: &Path) -> std::io::Result<File> {
-    std::fs::OpenOptions::new()
-        .create(true)
-        .append(true)
-        .open(path)
-}
-
-fn rotated_log_path(path: &Path) -> PathBuf {
-    path.with_extension("1.log")
-}
-
-fn rotate_log_file(path: &Path, rotated_path: &Path) -> std::io::Result<()> {
-    match std::fs::remove_file(rotated_path) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(error),
-    }
-
-    match std::fs::rename(path, rotated_path) {
-        Ok(()) => {}
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
-        Err(error) => return Err(error),
-    }
-
-    Ok(())
-}
-
-fn init_logging_server(log_file_path: &Path) -> Result<Receiver<Vec<u8>>> {
-    struct MultiWrite {
-        file: RotatingLogFile,
+/// Server logs are only forwarded to the client as JSON records; there is no log file.
+/// Panics are the exception: the process aborts before the record can be forwarded, so the
+/// panic hook also writes them to `panic_file_path`.
+fn init_logging_server(panic_file_path: PathBuf) -> Receiver<Vec<u8>> {
+    struct ChannelWrite {
         channel: Sender<Vec<u8>>,
         buffer: Vec<u8>,
     }
 
-    impl Write for MultiWrite {
+    impl Write for ChannelWrite {
         fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.file.write_all(buf)?;
             self.buffer.extend_from_slice(buf);
             Ok(buf.len())
         }
 
         fn flush(&mut self) -> std::io::Result<()> {
             self.channel
-                .send_blocking(self.buffer.clone())
-                .map_err(std::io::Error::other)?;
-            self.buffer.clear();
-            self.file.flush()
+                .send_blocking(std::mem::take(&mut self.buffer))
+                .map_err(std::io::Error::other)
         }
     }
 
-    let log_file = RotatingLogFile::open(log_file_path)
-        .context("Failed to open rotating remote server log file")?;
-
     let (tx, rx) = async_channel::unbounded();
 
-    let target = Box::new(MultiWrite {
-        file: log_file,
+    let target = Box::new(ChannelWrite {
         channel: tx,
         buffer: Vec::new(),
     });
@@ -340,6 +251,7 @@ fn init_logging_server(log_file_path: &Path) -> Result<Receiver<Vec<u8>>> {
         let thread_name = current_thread.name().unwrap_or("<unnamed>");
 
         let msg = format!("thread '{thread_name}' panicked at {location}:\n{message}\n{backtrace}");
+        std::fs::write(&panic_file_path, &msg).ok();
         log::error!("{msg}");
         old_hook(info);
     }));
@@ -357,7 +269,7 @@ fn init_logging_server(log_file_path: &Path) -> Result<Receiver<Vec<u8>>> {
         })
         .init();
 
-    Ok(rx)
+    rx
 }
 
 struct ServerListeners {
@@ -520,7 +432,7 @@ fn init_paths() -> anyhow::Result<()> {
 }
 
 pub fn execute_run(
-    log_file: PathBuf,
+    panic_file: PathBuf,
     pid_file: PathBuf,
     stdin_socket: PathBuf,
     stdout_socket: PathBuf,
@@ -530,12 +442,12 @@ pub fn execute_run(
 
     let app = gpui_platform::headless();
     let pid = std::process::id();
-    let log_rx = init_logging_server(&log_file)?;
+    let log_rx = init_logging_server(panic_file.clone());
     log::info!(
-        "starting up with PID {}:\npid_file: {:?}, log_file: {:?}, stdin_socket: {:?}, stdout_socket: {:?}, stderr_socket: {:?}",
+        "starting up with PID {}:\npid_file: {:?}, panic_file: {:?}, stdin_socket: {:?}, stdout_socket: {:?}, stderr_socket: {:?}",
         pid,
         pid_file,
-        log_file,
+        panic_file,
         stdin_socket,
         stdout_socket,
         stderr_socket
@@ -622,7 +534,7 @@ pub enum ServerPathError {
 
 #[derive(Clone, Debug)]
 struct ServerPaths {
-    log_file: PathBuf,
+    panic_file: PathBuf,
     pid_file: PathBuf,
     stdin_socket: PathBuf,
     stdout_socket: PathBuf,
@@ -648,14 +560,14 @@ impl ServerPaths {
         let stdin_socket = server_dir.join("stdin.sock");
         let stdout_socket = server_dir.join("stdout.sock");
         let stderr_socket = server_dir.join("stderr.sock");
-        let log_file = logs_dir().join(format!("server-{}.log", identifier));
+        let panic_file = logs_dir().join(format!("server-{}-panic.log", identifier));
 
         Ok(Self {
             pid_file,
             stdin_socket,
             stdout_socket,
             stderr_socket,
-            log_file,
+            panic_file,
         })
     }
 }
@@ -793,9 +705,8 @@ pub(crate) fn execute_proxy(
                 .context("reading stderr")?
             {
                 0 => {
-                    let error =
-                        std::io::Error::new(std::io::ErrorKind::UnexpectedEof, "stderr closed");
-                    Err(anyhow!(error))?;
+                    log::info!("stderr closed");
+                    return Ok(());
                 }
                 n => {
                     stderr.write_all(&stderr_buffer[..n]).await?;
@@ -919,8 +830,8 @@ fn spawn_server_normal(binary_name: &Path, paths: &ServerPaths) -> Result<(), Sp
         .stdout(util::command::Stdio::null())
         .stderr(util::command::Stdio::null())
         .arg("run")
-        .arg("--log-file")
-        .arg(&paths.log_file)
+        .arg("--panic-file")
+        .arg(&paths.panic_file)
         .arg("--pid-file")
         .arg(&paths.pid_file)
         .arg("--stdin-socket")
@@ -993,16 +904,34 @@ where
     R: AsyncRead + Unpin,
     W: AsyncWrite + Unpin,
 {
-    use remote::protocol::{read_message_raw, write_size_prefixed_buffer};
+    use remote::protocol::{MESSAGE_LEN_SIZE, message_len_from_buffer, write_size_prefixed_buffer};
 
-    let mut buffer = Vec::new();
+    let mut buffer = vec![0; MESSAGE_LEN_SIZE];
     loop {
-        read_message_raw(&mut reader, &mut buffer)
+        buffer.resize(MESSAGE_LEN_SIZE, 0);
+        let len = reader
+            .read(&mut buffer)
             .await
-            .with_context(|| format!("failed to read message from {}", socket_name))?;
+            .with_context(|| format!("failed to read message from {socket_name}"))?;
+        // EOF between messages means the peer closed the connection cleanly,
+        // e.g. the server exiting after `ShutdownRemoteServer`.
+        if len == 0 {
+            log::info!("{socket_name} closed");
+            return Ok(());
+        }
+        reader
+            .read_exact(&mut buffer[len..])
+            .await
+            .with_context(|| format!("failed to read message from {socket_name}"))?;
+        let message_len = message_len_from_buffer(&buffer);
+        buffer.resize(message_len as usize, 0);
+        reader
+            .read_exact(&mut buffer)
+            .await
+            .with_context(|| format!("failed to read message from {socket_name}"))?;
         write_size_prefixed_buffer(&mut writer, &mut buffer)
             .await
-            .with_context(|| format!("failed to write message to {}", socket_name))?;
+            .with_context(|| format!("failed to write message to {socket_name}"))?;
         writer.flush().await?;
         buffer.clear();
     }

@@ -59,17 +59,3 @@ pub async fn write_size_prefixed_buffer<S: AsyncWrite + Unpin>(
     stream.write_all(buffer).await?;
     Ok(())
 }
-
-pub async fn read_message_raw<S: AsyncRead + Unpin>(
-    stream: &mut S,
-    buffer: &mut Vec<u8>,
-) -> Result<()> {
-    buffer.resize(MESSAGE_LEN_SIZE, 0);
-    stream.read_exact(buffer).await?;
-
-    let message_len = message_len_from_buffer(buffer);
-    buffer.resize(message_len as usize, 0);
-    stream.read_exact(buffer).await?;
-
-    Ok(())
-}

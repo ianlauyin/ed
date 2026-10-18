@@ -1381,7 +1381,9 @@ impl MultiWorkspace {
     pub fn flush_serialization(&mut self, cx: &mut Context<Self>) -> Task<()> {
         self._serialize_task.take();
         let serialization = self.serialize_now(cx);
-        cx.spawn(async move |_, _| serialization.await)
+        // Background: the quit handler parks the main thread, so a foreground
+        // task would never run and the flush would always hit the timeout.
+        cx.background_spawn(serialization)
     }
 
     pub fn flush_pending_serialization(

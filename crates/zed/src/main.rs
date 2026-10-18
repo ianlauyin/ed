@@ -1,6 +1,5 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-mod watcher_debug;
 mod zed;
 
 // Ensure the binary name stays in sync with APP_NAME so that the paths used
@@ -308,8 +307,6 @@ fn main() {
             session: app_session,
         });
         AppState::set_global(app_state.clone(), cx);
-
-        watcher_debug::init(app_state.clone(), cx);
 
         theme_settings::init(theme::LoadThemes::All(Box::new(Assets)), cx);
         command_palette::init(cx);

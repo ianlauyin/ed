@@ -9742,14 +9742,13 @@ dependencies = [
 
 [[package]]
 name = "zed"
-version = "1.30.2"
+version = "1.30.3"
 dependencies = [
  "activity_indicator",
  "anyhow",
  "assets",
  "breadcrumbs",
  "call_hierarchy",
- "chrono",
  "clap",
  "cli",
  "collections",
@@ -9792,7 +9791,6 @@ dependencies = [
  "recent_projects",
  "remote",
  "search",
- "serde",
  "serde_json",
  "session",
  "settings",

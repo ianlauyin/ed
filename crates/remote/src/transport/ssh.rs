@@ -614,7 +614,7 @@ impl SshRemoteConnection {
     }
 
     async fn check_server_binary(&self) -> Result<Arc<RelPath>> {
-        let path = RelPath::from_unix_str(".local/bin/ed_remote_server").unwrap();
+        let path = RelPath::from_unix_str(".local/bin/ed_server").unwrap();
         self.socket
             .run_command(
                 self.ssh_shell_kind,
@@ -624,7 +624,7 @@ impl SshRemoteConnection {
             )
             .await
             .context(
-                "Could not run SSH remote server at ~/.local/bin/ed_remote_server. \
+                "Could not run SSH remote server at ~/.local/bin/ed_server. \
                  Ensure the binary exists and is executable on the target server",
             )?;
         Ok(path.into())

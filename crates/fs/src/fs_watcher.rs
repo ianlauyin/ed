@@ -3,9 +3,9 @@ use gpui::{BackgroundExecutor, Task};
 use notify::{Event, EventKind};
 use parking_lot::Mutex;
 use std::{
-    collections::HashMap,
+    collections::{HashMap, VecDeque},
     ops::DerefMut,
-    path::Path,
+    path::{Path, PathBuf},
     pin::Pin,
     sync::{Arc, LazyLock},
     time::{Duration, Instant},
@@ -14,12 +14,7 @@ use util::{ResultExt, paths::SanitizedPath};
 
 use crate::{Fs, PathEvent, PathEventKind, Watcher};
 
-mod diagnostics;
-pub use diagnostics::{
-    WatchDiagnosticEvent, WatchRecording, WatchRoot, WatchSnapshot, WatcherSnapshot,
-};
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OsWatcherKind {
     Native,
     Poll,
@@ -782,7 +777,6 @@ pub struct OsWatcher {
     backend: Mutex<Option<Box<dyn WatchBackend>>>,
     event_tx: async_channel::Sender<notify::Result<notify::Event>>,
     _dispatch_task: Task<()>,
-    diagnostics: Arc<diagnostics::DiagnosticRecorder>,
     // Closing the event channel can wake the dispatch task. Keep its scheduler
     // alive through channel and task teardown, even when our owner drops first.
     _executor: BackgroundExecutor,
@@ -812,7 +806,7 @@ impl OsWatcher {
         let dispatch_task = executor.spawn({
             let state = state.clone();
             async move {
-                let mut rescan_history = diagnostics::RescanHistory::default();
+                let mut rescan_history = RescanHistory::default();
                 while let Ok(first) = event_rx.recv().await {
                     dispatch_batch(kind, &state, &mut rescan_history, first, &event_rx);
                 }
@@ -825,7 +819,6 @@ impl OsWatcher {
             backend: Mutex::new(backend),
             event_tx,
             _dispatch_task: dispatch_task,
-            diagnostics: Default::default(),
             _executor: executor,
         })
     }
@@ -836,19 +829,7 @@ impl OsWatcher {
         &self,
     ) -> impl Fn(notify::Result<notify::Event>) + Send + Sync + 'static {
         let event_tx = self.event_tx.clone();
-        let diagnostics = self.diagnostics.clone();
-        let kind = self.kind;
         move |event| {
-            diagnostics.record(|| match &event {
-                Ok(event) => WatchDiagnosticEvent::from_notify_event(kind, event),
-                Err(error) => WatchDiagnosticEvent::new(
-                    kind,
-                    "error",
-                    &error.paths,
-                    format!("{error:?}"),
-                    false,
-                ),
-            });
             enqueue(&event_tx, event);
         }
     }
@@ -876,16 +857,6 @@ impl OsWatcher {
             self.rewatch_if_stale(&mut state, &path, &key)?;
         } else if !path_already_covered {
             if self.kind == OsWatcherKind::Native && state.is_native_watch_limit_cooldown_active() {
-                self.diagnostics.record(|| {
-                    WatchDiagnosticEvent::new(
-                        self.kind,
-                        "watch_skipped",
-                        &[path.as_path().to_owned()],
-                        "Native watch limit cooldown is active; registration will be retried"
-                            .into(),
-                        false,
-                    )
-                });
                 return Ok(None);
             }
 
@@ -955,8 +926,7 @@ impl OsWatcher {
 
     fn watch(&self, path: &Path) -> anyhow::Result<()> {
         self.ensure_backend()?;
-        let result = self
-            .backend
+        self.backend
             .lock()
             .as_mut()
             .expect("watcher backend initialized")
@@ -967,24 +937,7 @@ impl OsWatcher {
                 } else {
                     notify::RecursiveMode::NonRecursive
                 },
-            );
-        self.diagnostics.record(|| {
-            WatchDiagnosticEvent::new(
-                self.kind,
-                if result.is_ok() {
-                    "watch"
-                } else {
-                    "watch_error"
-                },
-                &[path.to_owned()],
-                match &result {
-                    Ok(()) => format!("recursive={}", self.recursive),
-                    Err(error) => format!("{error:?}"),
-                },
-                false,
-            )
-        });
-        result?;
+            )?;
         Ok(())
     }
 
@@ -995,22 +948,6 @@ impl OsWatcher {
             .as_mut()
             .map(|watcher| watcher.unwatch(path));
 
-        self.diagnostics.record(|| {
-            WatchDiagnosticEvent::new(
-                self.kind,
-                if matches!(&watcher, Some(Err(_))) {
-                    "unwatch_error"
-                } else {
-                    "unwatch"
-                },
-                &[path.to_owned()],
-                match &watcher {
-                    Some(Err(error)) => format!("{error:?}"),
-                    _ => String::new(),
-                },
-                false,
-            )
-        });
         match watcher {
             // inotify auto-removes a watch when its directory is deleted, so a
             // later unwatch races that and fails with a benign error. Either way
@@ -1038,36 +975,18 @@ impl OsWatcher {
                     // workloads like grep or language server indexing.
                     let config =
                         notify::Config::default().with_event_kinds(notify::EventKindMask::CORE);
-                    Box::new(
-                        <notify::RecommendedWatcher as notify::Watcher>::new(
-                            self.event_sink(),
-                            config,
-                        )
-                        .inspect_err(|error| self.record_backend_error(error))?,
-                    )
+                    Box::new(<notify::RecommendedWatcher as notify::Watcher>::new(
+                        self.event_sink(),
+                        config,
+                    )?)
                 }
                 OsWatcherKind::Poll => {
                     let config = notify::Config::default().with_poll_interval(*POLL_INTERVAL);
-                    Box::new(
-                        notify::PollWatcher::new(self.event_sink(), config)
-                            .inspect_err(|error| self.record_backend_error(error))?,
-                    )
+                    Box::new(notify::PollWatcher::new(self.event_sink(), config)?)
                 }
             });
         }
         Ok(())
-    }
-
-    fn record_backend_error(&self, error: &notify::Error) {
-        self.diagnostics.record(|| {
-            WatchDiagnosticEvent::new(
-                self.kind,
-                "backend_error",
-                &error.paths,
-                format!("{error:?}"),
-                false,
-            )
-        });
     }
 }
 
@@ -1154,10 +1073,43 @@ fn dispatch(
     }
 }
 
+const RESCAN_PATH_HISTORY_CAPACITY: usize = 10;
+
+#[derive(Default)]
+struct RescanHistory {
+    paths: VecDeque<PathBuf>,
+}
+
+impl RescanHistory {
+    fn record(&mut self, event: &notify::Event) -> Option<String> {
+        let report = event.need_rescan().then(|| {
+            // Capture before inserting the rescan so the report includes all ten
+            // preceding paths, even when this is the start of an overflow burst.
+            format!(
+                "reason={:?}, paths={:?}, recent_paths={:?}",
+                event.info().unwrap_or("unspecified"),
+                event.paths,
+                self.paths,
+            )
+        });
+        let first_path = event
+            .paths
+            .len()
+            .saturating_sub(RESCAN_PATH_HISTORY_CAPACITY);
+        for path in event.paths.iter().skip(first_path) {
+            if self.paths.len() == RESCAN_PATH_HISTORY_CAPACITY {
+                self.paths.pop_front();
+            }
+            self.paths.push_back(path.clone());
+        }
+        report
+    }
+}
+
 fn dispatch_batch(
     kind: OsWatcherKind,
     state: &Mutex<WatcherState>,
-    rescan_history: &mut diagnostics::RescanHistory,
+    rescan_history: &mut RescanHistory,
     first: notify::Result<notify::Event>,
     event_rx: &async_channel::Receiver<notify::Result<notify::Event>>,
 ) {

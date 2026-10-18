@@ -81,7 +81,9 @@ remote server supports macOS and Linux.
   build/test/release tooling are removed.
 - Unsupported editor and CLI targets fail with a macOS-only diagnostic.
 - System-specification reports are removed: no `--system-specs` flag or
-  copy-system-specs action. Filesystem-watcher exports omit OS metadata.
+  copy-system-specs action.
+- The filesystem-watcher debug window, recording API, and JSON exports are removed.
+  Filesystem watching and rescan error logging remain available.
 - File formats and protocol data may describe other operating systems, paths,
   line endings, or remote hosts; these do not imply editor host support.
 
@@ -103,7 +105,7 @@ backtraces still work through sync CFI.
 
 - `install_remote_server.fish` runs on a Linux host with the build prerequisites
   installed, builds the remote server in release mode, and installs it as
-  `~/.local/bin/ed_remote_server` for SSH editing.
+  `~/.local/bin/ed_server` for SSH editing.
 - `release.fish` builds `target/release/ed.app` for the host Mac: `ed` and
   `cli` binaries in `Contents/MacOS`, `crates/zed/resources/Info.plist` with the
   Cargo.toml version, an icon generated from `app-icon@2x.png`, and `Document.icns`.

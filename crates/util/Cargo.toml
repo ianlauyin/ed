@@ -11,10 +11,6 @@ workspace = true
 path = "src/util.rs"
 doctest = true
 
-[features]
-# Embed `fs_embed!` assets at compile time even in debug builds.
-debug-embed = ["rust-embed/debug-embed"]
-
 [dependencies]
 anyhow.workspace = true
 collections.workspace = true

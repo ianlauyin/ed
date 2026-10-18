@@ -4,7 +4,6 @@ description = "Daemon used for remote editing"
 edition.workspace = true
 version = "0.1.0"
 
-
 [lints]
 workspace = true
 
@@ -14,10 +13,6 @@ doctest = false
 
 [[bin]]
 name = "remote_server"
-
-[features]
-default = []
-debug-embed = ["util/debug-embed"]
 
 [dependencies]
 anyhow.workspace = true
