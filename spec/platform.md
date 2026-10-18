@@ -6,6 +6,9 @@ macOS is the only supported editor and CLI host. Both Apple Silicon and Intel
 Macs remain supported, with a minimum macOS version of 10.15.7. The headless
 remote server supports macOS and Linux.
 
+SSH remotes support only macOS and Linux, using Unix paths and shells. Windows
+remote detection, command execution, and proxy startup are removed.
+
 ## Behaviour
 
 - The editor uses native macOS windows, Metal rendering, and system menus.
@@ -40,6 +43,7 @@ remote server supports macOS and Linux.
 - HTTP uses the upstream `reqwest` crate directly (rustls with the platform
   certificate verifier), run on the app's Tokio runtime. There is no HTTP client
   abstraction crate; gpui holds an optional client used only to load remote images.
+  Low-level HTTP crates are transitive dependencies only.
 - No proxy support: there is no `proxy` setting, environment proxy variables are
   ignored, and JSON language server proxy settings are not forwarded.
 - Ship one macOS keymap constructed in Rust; alternate keymaps are removed.

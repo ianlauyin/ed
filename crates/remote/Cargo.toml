@@ -4,7 +4,6 @@ description = "Client-side subsystem for remote editing"
 edition.workspace = true
 version = "0.1.0"
 
-
 [lints]
 workspace = true
 
@@ -18,7 +17,6 @@ default = []
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
-base64.workspace = true
 collections.workspace = true
 futures.workspace = true
 gpui.workspace = true

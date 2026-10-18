@@ -42,6 +42,9 @@ migrator, or Vim/Helix mode.
 - The built-in keymap retains contexts, binding order, and keyboard-position
   equivalents. Changing the keyboard layout rebuilds the bindings and refreshes
   menu shortcuts.
+- Pending multi-stroke input is shown only by the status bar indicator; hovering
+  it or pressing `alt-/` mid-chord previews completing bindings. The which-key
+  popup and its `which_key` settings are removed.
 - Personal bindings are applied last: global `cmd-[`/`cmd-]` navigate backward/
   forward, Editor `f1` opens documentation and `cmd-shift-u` toggles case, and
   Terminal `shift-enter` sends Escape followed by carriage return. The obsolete

@@ -38,4 +38,3 @@ util.workspace = true
 workspace.workspace = true
 zed_actions.workspace = true
 itertools.workspace = true
-tracing.workspace = true

@@ -14,7 +14,6 @@ use workspace::{HideStatusItem, StatusBarSettings, StatusItemView, item::ItemHan
 use crate::{
     ShowPendingBindings, bindings_for_pending_input, map_pending_keystrokes,
     pending_bindings::{PendingBindingRow, PendingBindings, prepare_pending_bindings},
-    which_key_settings::WhichKeySettings,
 };
 
 const POPOVER_HIDE_DELAY: Duration = Duration::from_millis(300);
@@ -68,23 +67,14 @@ impl PendingKeystrokesIndicator {
             });
 
         let mut enabled = Self::enabled(cx);
-        let mut popover_enabled = Self::popover_enabled(cx);
         let settings_subscription =
             cx.observe_global_in::<SettingsStore>(window, move |this, window, cx| {
                 let new_enabled = Self::enabled(cx);
-                let new_popover_enabled = Self::popover_enabled(cx);
-                if new_enabled == enabled && new_popover_enabled == popover_enabled {
+                if new_enabled == enabled {
                     return;
                 }
 
                 enabled = new_enabled;
-                popover_enabled = new_popover_enabled;
-                if !new_popover_enabled {
-                    this.popover.pointer_over = false;
-                    this.popover.visible = false;
-                    this.popover.opened_by_keyboard = false;
-                    this.popover.hide_task.take();
-                }
                 if this.refresh_render_state(window, cx) {
                     cx.notify();
                 }
@@ -104,10 +94,6 @@ impl PendingKeystrokesIndicator {
     fn enabled(cx: &App) -> bool {
         let status_bar_settings = StatusBarSettings::get_global(cx);
         status_bar_settings.show && status_bar_settings.pending_keystrokes_indicator
-    }
-
-    fn popover_enabled(cx: &App) -> bool {
-        !WhichKeySettings::get_global(cx).enabled
     }
 
     fn refresh_render_state(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
@@ -195,7 +181,7 @@ impl PendingKeystrokesIndicator {
         if self.popover.opened_by_keyboard || self.popover.is_pointer_over() {
             self.popover.hide_task.take();
             let was_visible = self.popover.visible;
-            self.popover.visible = Self::popover_enabled(cx);
+            self.popover.visible = true;
             window.set_pending_input_timeout_paused(&cx.entity(), true, cx);
             if was_visible != self.popover.visible {
                 cx.notify();
@@ -230,7 +216,6 @@ impl PendingKeystrokesIndicator {
         if event.input_preference == InputPreference::CharacterInput
             || !window.has_pending_keystrokes()
             || !Self::enabled(cx)
-            || !Self::popover_enabled(cx)
         {
             return;
         }
@@ -260,19 +245,17 @@ impl Render for PendingKeystrokesIndicator {
             return div().hidden().into_any_element();
         };
 
-        if Self::popover_enabled(cx) {
-            let window_handle = window.window_handle();
-            let listener = cx.listener(move |this, event: &KeystrokeEvent, window, cx| {
-                if window.window_handle() == window_handle {
-                    this.handle_intercepted_keystroke(event, window, cx);
-                }
-            });
-            // Inactive workspaces in the same window keep their indicators alive. Storing the
-            // subscription in element state ensures only the rendered indicator intercepts input.
-            window.use_keyed_state("pending-keystrokes-interceptor", cx, |_, cx| {
-                cx.intercept_keystrokes(listener)
-            });
-        }
+        let window_handle = window.window_handle();
+        let listener = cx.listener(move |this, event: &KeystrokeEvent, window, cx| {
+            if window.window_handle() == window_handle {
+                this.handle_intercepted_keystroke(event, window, cx);
+            }
+        });
+        // Inactive workspaces in the same window keep their indicators alive. Storing the
+        // subscription in element state ensures only the rendered indicator intercepts input.
+        window.use_keyed_state("pending-keystrokes-interceptor", cx, |_, cx| {
+            cx.intercept_keystrokes(listener)
+        });
 
         let button = ButtonLike::new("pending-keystrokes-indicator")
             .on_click(|_, window, cx| {

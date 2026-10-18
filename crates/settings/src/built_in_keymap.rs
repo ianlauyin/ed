@@ -1048,12 +1048,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
     );
     add_bindings(
         &mut keymap,
-        Some("ZedPredictModal"),
-        true,
-        [KeyBindingSpec::new("escape", "menu::Cancel")],
-    );
-    add_bindings(
-        &mut keymap,
         Some("ConfigureContextServerModal > Editor"),
         true,
         [
@@ -1061,12 +1055,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             KeyBindingSpec::new("enter", "editor::Newline"),
             KeyBindingSpec::new("cmd-enter", "menu::Confirm"),
         ],
-    );
-    add_bindings(
-        &mut keymap,
-        Some("OnboardingAiConfigurationModal"),
-        true,
-        [KeyBindingSpec::new("escape", "menu::Cancel")],
     );
     add_bindings(
         &mut keymap,

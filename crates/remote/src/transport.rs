@@ -51,26 +51,11 @@ fn parse_platform(output: &str) -> Result<RemotePlatform> {
     Ok(RemotePlatform { os, arch })
 }
 
-/// The command (program + args) used to read a remote host's OS version, given
-/// its detected OS.
+/// Parses a remote host's OS version into a human-readable string.
 ///
-/// The output is parsed by [`parse_os_version`].
-pub(crate) fn os_version_command(os: RemoteOs) -> (&'static str, &'static [&'static str]) {
-    match os {
-        RemoteOs::Linux => ("cat", &["/etc/os-release"]),
-        RemoteOs::MacOs => ("sw_vers", &["-productVersion"]),
-        // Prints e.g. "Microsoft Windows [Version 10.0.19045.5011]".
-        RemoteOs::Windows => ("cmd.exe", &["/c", "ver"]),
-    }
-}
-
-/// Parses the output of [`os_version_command`] into a human-readable version
-/// string.
-///
-/// For Linux this is `"{ID} {VERSION_ID}"` (e.g. `"ubuntu 24.04"`); for macOS it
-/// is the product version (e.g. `"15.6.1"`); for Windows it is the
-/// `major.minor.build` version (e.g. `"10.0.19045"`). Returns `None` if nothing
-/// usable could be parsed.
+/// For Linux this is "{ID} {VERSION_ID}" (e.g. "ubuntu 24.04"); for macOS it
+/// is the product version (e.g. "15.6.1"). Returns `None` if nothing usable
+/// could be parsed.
 pub(crate) fn parse_os_version(os: RemoteOs, output: &str) -> Option<String> {
     let output = output.trim();
     if output.is_empty() {
@@ -86,24 +71,7 @@ pub(crate) fn parse_os_version(os: RemoteOs, output: &str) -> Option<String> {
                 .map(|line| line.trim().to_string())
                 .filter(|line| !line.is_empty())
         }
-        RemoteOs::Windows => parse_windows_version(output),
     }
-}
-
-/// Extracts a `major.minor.build` version from the output of `cmd.exe /c ver`,
-/// e.g. `"Microsoft Windows [Version 10.0.19045.5011]"` -> `"10.0.19045"`.
-///
-/// Scans for the first dotted run of integers (rather than relying on the
-/// surrounding, potentially localized, text) and drops the trailing revision.
-fn parse_windows_version(output: &str) -> Option<String> {
-    output
-        .split(|c: char| !c.is_ascii_digit() && c != '.')
-        .filter_map(|token| {
-            let parts: Vec<&str> = token.split('.').filter(|part| !part.is_empty()).collect();
-            (parts.len() >= 3 && parts.iter().all(|part| part.parse::<u32>().is_ok()))
-                .then(|| parts[..3].join("."))
-        })
-        .next()
 }
 
 /// Parses the output of `echo $SHELL` to determine the remote shell.

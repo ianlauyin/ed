@@ -354,7 +354,6 @@ fn main() {
         tabular_data_preview::init(cx);
         svg_preview::init(cx);
         json_schema_store::init(cx);
-        which_key::init(cx);
 
         cx.observe_global::<SettingsStore>({
             move |cx| {

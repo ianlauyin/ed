@@ -2937,7 +2937,7 @@ impl ProjectSearchBar {
         cx: &mut Context<Self>,
     ) {
         let Some(search) = &self.active_project_search else {
-            tracing::warn!("active_project_search was none");
+            log::warn!("active_project_search was none");
             return;
         };
 

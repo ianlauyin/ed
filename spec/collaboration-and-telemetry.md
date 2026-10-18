@@ -62,3 +62,7 @@ profiler panel or `instrumentation.performance_profiler` setting, FPS/frame debu
 overlay, input-latency histogram, hang monitor, or remote profiling RPC. GPUI has no
 `profiling` crate instrumentation (no puffin/optick/superluminal/tracy hooks).
 Diagnostic logs remain available.
+
+Editor and remote RPC code have no direct `tracing` dependency. Verbose RPC
+debug/trace output is removed; warnings and errors use `log` and the existing
+local logging pipeline. Third-party dependencies may still use `tracing` internally.

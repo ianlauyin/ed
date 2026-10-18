@@ -6348,7 +6348,6 @@ version = "0.1.0"
 dependencies = [
  "anyhow",
  "async-trait",
- "base64 0.22.1",
  "collections",
  "futures",
  "gpui",
@@ -6552,10 +6551,10 @@ dependencies = [
  "futures",
  "gpui",
  "gpui_util",
+ "log",
  "parking_lot",
  "proto",
  "serde",
- "tracing",
  "zstd",
 ]
 
@@ -6820,7 +6819,6 @@ dependencies = [
  "smol",
  "text",
  "theme_settings",
- "tracing",
  "ui",
  "util",
  "workspace",
@@ -8245,7 +8243,6 @@ version = "0.1.44"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "63e71662fa4b2a2c3a26f570f037eb95bb1f85397f3cd8076caed2f026a6d100"
 dependencies = [
- "log",
  "pin-project-lite",
  "tracing-attributes",
  "tracing-core",
@@ -9023,7 +9020,6 @@ dependencies = [
  "command_palette",
  "gpui",
  "settings",
- "theme_settings",
  "ui",
  "util",
  "workspace",
@@ -9742,7 +9738,7 @@ dependencies = [
 
 [[package]]
 name = "zed"
-version = "1.30.3"
+version = "1.30.4"
 dependencies = [
  "activity_indicator",
  "anyhow",

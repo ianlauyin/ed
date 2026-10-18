@@ -232,10 +232,6 @@ pub fn settings() -> SettingsContent {
             show_menus: Some(false),
             open_menus_on_hover: Some(false),
         }),
-        which_key: Some(WhichKeySettingsContent {
-            enabled: Some(false),
-            delay_ms: Some(1000),
-        }),
         modeline_lines: Some(5),
     }
 }

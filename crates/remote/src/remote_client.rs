@@ -45,7 +45,6 @@ use util::{
 pub enum RemoteOs {
     Linux,
     MacOs,
-    Windows,
 }
 
 impl RemoteOs {
@@ -53,19 +52,14 @@ impl RemoteOs {
         match self {
             RemoteOs::Linux => "linux",
             RemoteOs::MacOs => "macos",
-            RemoteOs::Windows => "windows",
         }
     }
 
-    pub fn is_windows(&self) -> bool {
-        matches!(self, RemoteOs::Windows)
-    }
     /// ignoring the compositor (as we run headless on remotes).
     pub fn display_name(&self) -> &'static str {
         match self {
             RemoteOs::Linux => "Linux",
             RemoteOs::MacOs => "macOS",
-            RemoteOs::Windows => "Windows",
         }
     }
 }
@@ -348,7 +342,7 @@ pub async fn connect(
 ) -> Result<Arc<dyn RemoteConnection>> {
     cx.update(|cx| {
         cx.update_default_global(|pool: &mut ConnectionPool, cx| {
-            pool.connect(connection_options.clone(), None, delegate.clone(), cx)
+            pool.connect(connection_options.clone(), delegate.clone(), cx)
         })
     })
     .await
@@ -629,12 +623,7 @@ impl RemoteClient {
             let (remote_connection, io_task) = match async {
                 let remote_connection = cx
                     .update_global(|pool: &mut ConnectionPool, cx| {
-                        pool.connect(
-                            connection_options,
-                            Some(remote_connection.remote_platform().os),
-                            delegate.clone(),
-                            cx,
-                        )
+                        pool.connect(connection_options, delegate.clone(), cx)
                     })
                     .await
                     .map_err(|error| error.cloned())?;
@@ -1096,7 +1085,6 @@ impl ConnectionPool {
     fn connect(
         &mut self,
         opts: RemoteConnectionOptions,
-        known_os: Option<RemoteOs>,
         delegate: Arc<dyn RemoteClientDelegate>,
         cx: &mut App,
     ) -> Shared<Task<Result<Arc<dyn RemoteConnection>, Arc<anyhow::Error>>>> {
@@ -1136,7 +1124,7 @@ impl ConnectionPool {
                 async move |cx| {
                     let connection = match opts.clone() {
                         RemoteConnectionOptions::Ssh(opts) => {
-                            SshRemoteConnection::new(opts, known_os, delegate, cx)
+                            SshRemoteConnection::new(opts, delegate, cx)
                                 .await
                                 .map(|connection| Arc::new(connection) as Arc<dyn RemoteConnection>)
                         }

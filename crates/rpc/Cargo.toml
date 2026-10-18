@@ -4,7 +4,6 @@ edition.workspace = true
 name = "rpc"
 version = "0.1.0"
 
-
 [lints]
 workspace = true
 
@@ -22,8 +21,8 @@ collections.workspace = true
 futures.workspace = true
 gpui = { workspace = true, optional = true }
 gpui_util.workspace = true
+log.workspace = true
 parking_lot.workspace = true
 proto.workspace = true
 serde.workspace = true
-tracing = { version = "0.1", default-features = false, features = ["std", "log"] }
 zstd.workspace = true

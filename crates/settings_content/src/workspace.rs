@@ -564,7 +564,6 @@ pub struct StatusBarSettingsContent {
     pub active_encoding_button: Option<EncodingDisplayOptions>,
     /// Whether to show an indicator while multi-stroke input is pending.
     /// If the input has a timeout, a countdown is shown and hovering the indicator pauses it.
-    /// Its binding preview popover is disabled when the which-key popup is enabled.
     ///
     /// Default: true
     pub pending_keystrokes_indicator: Option<bool>,
