@@ -98,7 +98,7 @@ pub fn run(command: Commands) -> anyhow::Result<()> {
 
         Commands::Exec => execute_command(),
         Commands::Version => {
-            println!("{}", env!("ZED_PKG_VERSION"));
+            println!("{}", env!("CARGO_PKG_VERSION"));
             Ok(())
         }
     }
@@ -473,7 +473,7 @@ pub fn execute_run(
 
     let run = move |cx: &mut App| {
         settings::init(cx);
-        let app_version = AppVersion::load(env!("ZED_PKG_VERSION"));
+        let app_version = AppVersion::load(env!("CARGO_PKG_VERSION"));
         settings_content::app_metadata::init(app_version, cx);
         gpui_tokio::init(cx);
 

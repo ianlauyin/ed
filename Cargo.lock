@@ -6414,7 +6414,6 @@ dependencies = [
  "task",
  "terminal",
  "thiserror 2.0.21",
- "toml_edit",
  "util",
  "worktree",
 ]
