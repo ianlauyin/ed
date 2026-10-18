@@ -20,32 +20,21 @@ util::fs_embed! {
 pub fn native_grammars() -> Vec<(&'static str, tree_sitter::Language)> {
     vec![
         ("bash", tree_sitter_bash::LANGUAGE.into()),
-        ("c", tree_sitter_c::LANGUAGE.into()),
-        ("cpp", tree_sitter_cpp::LANGUAGE.into()),
         ("css", tree_sitter_css::LANGUAGE.into()),
-        ("diff", tree_sitter_diff::LANGUAGE.into()),
-        ("dockerfile", tree_sitter_containerfile::LANGUAGE.into()),
         ("go", tree_sitter_go::LANGUAGE.into()),
-        ("gomod", tree_sitter_go_mod::LANGUAGE.into()),
-        ("gowork", tree_sitter_gowork::LANGUAGE.into()),
         ("html", tree_sitter_html::LANGUAGE.into()),
-        ("jsdoc", tree_sitter_jsdoc::LANGUAGE.into()),
         ("json", tree_sitter_json::LANGUAGE.into()),
         ("jsonc", tree_sitter_json::LANGUAGE.into()),
         ("markdown", tree_sitter_md::LANGUAGE.into()),
         ("markdown-inline", tree_sitter_md::INLINE_LANGUAGE.into()),
         ("python", tree_sitter_python::LANGUAGE.into()),
-        ("regex", tree_sitter_regex::LANGUAGE.into()),
         ("rust", tree_sitter_rust::LANGUAGE.into()),
-        ("sql", tree_sitter_sequel::LANGUAGE.into()),
-        ("toml", tree_sitter_toml_ng::LANGUAGE.into()),
         ("tsx", tree_sitter_typescript::LANGUAGE_TSX.into()),
         (
             "typescript",
             tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
         ),
         ("yaml", tree_sitter_yaml::LANGUAGE.into()),
-        ("gitcommit", tree_sitter_gitcommit::LANGUAGE.into()),
     ]
 }
 

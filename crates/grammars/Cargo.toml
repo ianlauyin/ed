@@ -19,24 +19,13 @@ util.workspace = true
 
 tree-sitter = { workspace = true, optional = true }
 tree-sitter-bash = { workspace = true, optional = true }
-tree-sitter-c = { workspace = true, optional = true }
-tree-sitter-containerfile = { workspace = true, optional = true }
-tree-sitter-cpp = { workspace = true, optional = true }
 tree-sitter-css = { workspace = true, optional = true }
-tree-sitter-diff = { workspace = true, optional = true }
-tree-sitter-gitcommit = { workspace = true, optional = true }
 tree-sitter-go = { workspace = true, optional = true }
-tree-sitter-go-mod = { workspace = true, optional = true }
-tree-sitter-gowork = { workspace = true, optional = true }
 tree-sitter-html = { workspace = true, optional = true }
-tree-sitter-jsdoc = { workspace = true, optional = true }
 tree-sitter-json = { workspace = true, optional = true }
 tree-sitter-md = { workspace = true, optional = true }
 tree-sitter-python = { workspace = true, optional = true }
-tree-sitter-regex = { workspace = true, optional = true }
 tree-sitter-rust = { workspace = true, optional = true }
-tree-sitter-sequel = { workspace = true, optional = true }
-tree-sitter-toml-ng = { workspace = true, optional = true }
 tree-sitter-typescript = { workspace = true, optional = true }
 tree-sitter-yaml = { workspace = true, optional = true }
 
@@ -44,24 +33,13 @@ tree-sitter-yaml = { workspace = true, optional = true }
 load-grammars = [
     "tree-sitter",
     "tree-sitter-bash",
-    "tree-sitter-c",
-    "tree-sitter-containerfile",
-    "tree-sitter-cpp",
     "tree-sitter-css",
-    "tree-sitter-diff",
-    "tree-sitter-gitcommit",
     "tree-sitter-go",
-    "tree-sitter-go-mod",
-    "tree-sitter-gowork",
     "tree-sitter-html",
-    "tree-sitter-jsdoc",
     "tree-sitter-json",
     "tree-sitter-md",
     "tree-sitter-python",
-    "tree-sitter-regex",
     "tree-sitter-rust",
-    "tree-sitter-sequel",
-    "tree-sitter-toml-ng",
     "tree-sitter-typescript",
     "tree-sitter-yaml",
 ]

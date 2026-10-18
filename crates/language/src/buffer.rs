@@ -8,8 +8,8 @@ pub use crate::{
     diagnostic_set::DiagnosticSet, proto,
 };
 use crate::{
-    LanguageScope, ModelineSettings, Outline, OutlineConfig, PLAIN_TEXT, RunnableTag, TextObject,
-    TreeSitterOptions,
+    FallbackHighlighter, LanguageScope, ModelineSettings, Outline, OutlineConfig, PLAIN_TEXT,
+    RunnableTag, TextObject, TreeSitterOptions,
     diagnostic_set::{DiagnosticEntry, DiagnosticEntryRef, DiagnosticGroup},
     language_settings::{AutoIndentMode, LanguageSettings},
     outline::OutlineItem,
@@ -139,6 +139,7 @@ pub struct Buffer {
     resolved_settings: Option<Arc<LanguageSettings>>,
     _settings_observer: Option<gpui::Subscription>,
     tree_sitter_data: Arc<TreeSitterData>,
+    fallback_highlighter: Option<Arc<FallbackHighlighter>>,
     encoding: &'static Encoding,
     has_bom: bool,
     reload_with_encoding_txns: HashMap<TransactionId, (&'static Encoding, bool)>,
@@ -191,6 +192,7 @@ pub struct BufferSnapshot {
     pub text: text::BufferSnapshot,
     pub(crate) syntax: SyntaxSnapshot,
     tree_sitter_data: Arc<TreeSitterData>,
+    fallback_highlighter: Option<Arc<FallbackHighlighter>>,
     diagnostics: TreeMap<LanguageServerId, DiagnosticSet>,
     remote_selections: TreeMap<ReplicaId, SelectionSet>,
     language: Option<Arc<Language>>,
@@ -1155,6 +1157,7 @@ impl Buffer {
         let mut this = Self {
             saved_mtime,
             tree_sitter_data: Arc::new(tree_sitter_data),
+            fallback_highlighter: None,
             saved_version: buffer.version(),
             preview_version: buffer.version(),
             reload_task: None,
@@ -1195,6 +1198,7 @@ impl Buffer {
             reload_with_encoding_txns: HashMap::default(),
         };
         this.resolved_settings = this.compute_resolved_settings(cx);
+        this.refresh_fallback_highlighter();
         this
     }
 
@@ -1237,6 +1241,8 @@ impl Buffer {
                 syntax.reparse(&text, None, language_registry, language);
             }
             let tree_sitter_data = TreeSitterData::new(&text);
+            let fallback_highlighter =
+                FallbackHighlighter::for_buffer(language.as_deref(), None, &text).map(Arc::new);
             BufferSnapshot {
                 text,
                 syntax,
@@ -1244,6 +1250,7 @@ impl Buffer {
                 diagnostics: Default::default(),
                 remote_selections: Default::default(),
                 tree_sitter_data: Arc::new(tree_sitter_data),
+                fallback_highlighter,
                 language,
                 non_text_state_update_count: 0,
                 capability: Capability::ReadOnly,
@@ -1269,6 +1276,7 @@ impl Buffer {
             text,
             syntax,
             tree_sitter_data: Arc::new(tree_sitter_data),
+            fallback_highlighter: None,
             file: None,
             diagnostics: Default::default(),
             remote_selections: Default::default(),
@@ -1301,6 +1309,7 @@ impl Buffer {
             text: text.clone(),
             syntax,
             tree_sitter_data,
+            fallback_highlighter: self.fallback_highlighter.clone(),
             file: self.file.clone(),
             remote_selections: self.remote_selections.clone(),
             diagnostics: self.diagnostics.clone(),
@@ -1330,6 +1339,7 @@ impl Buffer {
             if let Some(language_registry) = self.language_registry() {
                 branch.set_language_registry(language_registry);
             }
+            branch.refresh_fallback_highlighter();
 
             // Reparse the branch buffer so that we get syntax highlighting immediately.
             branch.reparse(cx, true);
@@ -1540,12 +1550,27 @@ impl Buffer {
         self.syntax_map.lock().clear(&self.text);
         Self::invalidate_tree_sitter_data(&mut self.tree_sitter_data, self.text.snapshot());
         let old_language = std::mem::replace(&mut self.language, language);
+        self.refresh_fallback_highlighter();
         self.refresh_resolved_settings(cx);
         self.was_changed();
         self.reparse(cx, may_block);
         let has_fresh_language =
             self.language.is_some() && old_language.is_none_or(|old| old == *PLAIN_TEXT);
         cx.emit(BufferEvent::LanguageChanged(has_fresh_language));
+    }
+
+    fn refresh_fallback_highlighter(&mut self) {
+        let file_name = self.file.as_ref().and_then(|file| file.path().file_name());
+        let highlighter =
+            FallbackHighlighter::for_buffer(self.language.as_deref(), file_name, &self.text);
+        let unchanged = match (&self.fallback_highlighter, &highlighter) {
+            (Some(old), Some(new)) => old.syntax_name() == new.syntax_name(),
+            (None, None) => true,
+            _ => false,
+        };
+        if !unchanged {
+            self.fallback_highlighter = highlighter.map(Arc::new);
+        }
     }
 
     /// Assign a language registry to the buffer. This allows the buffer to retrieve
@@ -1769,6 +1794,7 @@ impl Buffer {
 
         self.file = Some(new_file);
         if file_changed {
+            self.refresh_fallback_highlighter();
             self.refresh_resolved_settings(cx);
             self.was_changed();
             self.non_text_state_update_count += 1;
@@ -1782,6 +1808,12 @@ impl Buffer {
 
     pub fn base_buffer(&self) -> Option<Entity<Self>> {
         Some(self.branch_state.as_ref()?.base_buffer.clone())
+    }
+
+    /// Returns the name of the syntax used for fallback highlighting, if this
+    /// buffer has no tree-sitter grammar but a bundled syntax matches it.
+    pub fn fallback_syntax_name(&self) -> Option<&str> {
+        Some(self.fallback_highlighter.as_ref()?.syntax_name())
     }
 
     /// Returns the primary [`Language`] assigned to this [`Buffer`].
@@ -4087,6 +4119,9 @@ impl BufferSnapshot {
     }
 
     pub(crate) fn cached_highlight_runs(&self, range: Range<usize>) -> Option<Vec<HighlightRun>> {
+        if let Some(fallback_highlighter) = &self.fallback_highlighter {
+            return fallback_highlighter.highlight_runs(&self.text, range);
+        }
         self.language.as_ref()?.grammar()?;
         if range.is_empty() {
             return Some(Vec::new());
@@ -5460,6 +5495,7 @@ impl Clone for BufferSnapshot {
             diagnostics: self.diagnostics.clone(),
             language: self.language.clone(),
             tree_sitter_data: self.tree_sitter_data.clone(),
+            fallback_highlighter: self.fallback_highlighter.clone(),
             non_text_state_update_count: self.non_text_state_update_count,
             capability: self.capability,
             modeline: self.modeline.clone(),

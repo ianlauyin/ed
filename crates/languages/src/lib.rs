@@ -35,27 +35,6 @@ mod yaml;
 
 pub(crate) use package_json::{PackageJson, PackageJsonData};
 
-/// A shared grammar for plain text, exposed for reuse by downstream crates.
-#[cfg(feature = "tree-sitter-gitcommit")]
-pub static LANGUAGE_GIT_COMMIT: std::sync::LazyLock<Arc<Language>> =
-    std::sync::LazyLock::new(|| {
-        Arc::new(Language::new(
-            LanguageConfig {
-                name: "Git Commit".into(),
-                soft_wrap: Some(language::SoftWrap::EditorWidth),
-                matcher: (LanguageMatcher {
-                    path_suffixes: vec!["COMMIT_EDITMSG".into()],
-                    first_line_pattern: None,
-                    ..LanguageMatcher::default()
-                })
-                .into(),
-                line_comments: vec![Arc::from("#")],
-                ..LanguageConfig::default()
-            },
-            Some(tree_sitter_gitcommit::LANGUAGE.into()),
-        ))
-    });
-
 pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
     #[cfg(feature = "load-grammars")]
     languages.register_native_grammars(grammars::native_grammars());
@@ -111,10 +90,6 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
         LanguageInfo {
             name: "diff",
             adapters: vec![],
-            ..Default::default()
-        },
-        LanguageInfo {
-            name: "dockerfile",
             ..Default::default()
         },
         LanguageInfo {
@@ -209,34 +184,12 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
             ..Default::default()
         },
         LanguageInfo {
-            name: "jsdoc",
-            adapters: vec![typescript_lsp_adapter.clone(), vtsls_adapter.clone()],
-            ..Default::default()
-        },
-        LanguageInfo {
-            name: "regex",
-            adapters: vec![],
-            ..Default::default()
-        },
-        LanguageInfo {
-            name: "sql",
-            ..Default::default()
-        },
-        LanguageInfo {
-            name: "toml",
-            ..Default::default()
-        },
-        LanguageInfo {
             name: "yaml",
             adapters: vec![yaml_lsp_adapter],
             ..Default::default()
         },
         LanguageInfo {
             name: "gitcommit",
-            ..Default::default()
-        },
-        LanguageInfo {
-            name: "zed-keybind-context",
             ..Default::default()
         },
     ];

@@ -3,7 +3,7 @@ use gpui::{
     App, Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription, WeakEntity,
     Window, div,
 };
-use language::LanguageName;
+use language::{LanguageName, PLAIN_TEXT};
 use settings::Settings as _;
 use ui::{Button, ButtonCommon, Clickable, FluentBuilder, LabelSize, Tooltip};
 use workspace::{HideStatusItem, StatusBarSettings, StatusItemView, Workspace, item::ItemHandle};
@@ -29,10 +29,20 @@ impl ActiveBufferLanguage {
         self.active_language = Some(None);
 
         let editor = editor.read(cx);
-        if let Some(buffer) = editor.active_buffer(cx)
-            && let Some(language) = buffer.read(cx).language()
-        {
-            self.active_language = Some(Some(language.name()));
+        if let Some(buffer) = editor.active_buffer(cx) {
+            let buffer = buffer.read(cx);
+            let language = buffer
+                .language()
+                .filter(|language| **language != *PLAIN_TEXT)
+                .map(|language| language.name());
+            // Files with no registered language (e.g. TOML) still show
+            // the name of the syntax they are highlighted with.
+            self.active_language = Some(language.or_else(|| {
+                buffer
+                    .fallback_syntax_name()
+                    .map(LanguageName::new)
+                    .or_else(|| Some(buffer.language()?.name()))
+            }));
         }
 
         cx.notify();

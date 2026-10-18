@@ -303,6 +303,7 @@ impl LanguageRegistry {
         for language in &state.languages {
             language.set_theme(theme.syntax());
         }
+        crate::fallback_highlight::set_theme(theme.syntax());
     }
 
     pub fn language_for_name(

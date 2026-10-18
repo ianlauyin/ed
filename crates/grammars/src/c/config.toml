@@ -1,5 +1,4 @@
 name = "C"
-grammar = "c"
 path_suffixes = ["c"]
 line_comments = ["// "]
 decrease_indent_patterns = [

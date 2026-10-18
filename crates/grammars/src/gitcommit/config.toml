@@ -1,5 +1,4 @@
 name = "Git Commit"
-grammar = "gitcommit"
 path_suffixes = [
   "TAG_EDITMSG",
   "MERGE_MSG",

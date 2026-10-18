@@ -1,16 +1,9 @@
 ((comment) @injection.content
   (#set! injection.language "comment"))
 
-(((comment) @_jsdoc_comment
-  (#match? @_jsdoc_comment "(?s)^/[*][*][^*].*[*]/$")) @injection.content
-  (#set! injection.language "jsdoc"))
-
 (((comment) @_reference
   (#match? @_reference "^///\\s+<reference\\s+types=\"\\S+\"\\s*/>\\s*$")) @injection.content
   (#set! injection.language "html"))
-
-((regex) @injection.content
-  (#set! injection.language "regex"))
 
 (call_expression
   function: (identifier) @_name

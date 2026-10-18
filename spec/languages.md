@@ -1,22 +1,36 @@
 # Languages
 
-- Dockerfile support is built in and uses native Tree-sitter syntax highlighting.
-- Files named `Dockerfile`, `Containerfile`, or `dockerfile`, and files with those
-  extensions, are recognized automatically.
-- Shell commands and `RUN` heredoc bodies use Bash syntax highlighting.
-- Dockerfile support does not register a language server or require external tools.
-- HTML support is built in (ported from upstream's `extensions/html`): native
-  Tree-sitter grammar for `.html`, `.htm`, `.shtml`, with JavaScript/CSS injected
-  into `<script>`, `<style>`, `style=` and `on*=` attributes.
+- Tree-sitter grammars are only bundled for languages edited seriously: Bash,
+  CSS, Go, HTML (with injected JS/CSS), JavaScript, JSON/JSONC, Markdown,
+  Python, Rust, TSX, TypeScript, YAML. They drive highlighting plus
+  structure-aware features (auto-indent, brackets, outline, text objects,
+  runnables, string/comment scopes).
+- C, C++, Diff, Git Commit, Go Mod and Go Work are still registered languages
+  (file matching, comments, brackets, language servers such as clangd and
+  gopls, Diff's keep-trailing-whitespace settings, the Git Commit editor) but
+  have no grammar, so they get rough highlighting only and none of the
+  structure-aware features.
+- TOML, SQL, Dockerfile, JSDoc, Regex and the hidden Zed Keybind Context
+  languages are removed. Their files open as Plain Text and are still
+  highlighted by the fallback below.
+- Fallback highlighting: any buffer whose language has no tree-sitter grammar
+  (including plain text) is highlighted with the Sublime/TextMate syntaxes
+  bundled by `two-face` (syntect, Oniguruma regex). The syntax is picked by
+  file name/extension, then language name, then the first line (shebang).
+  TextMate scopes are mapped onto the theme's syntax captures (keyword,
+  string, comment, ...); accuracy is "good enough", not tree-sitter quality.
+  - Tokenization is lazy (only up to the rows being shown) and incremental:
+    an edit re-tokenizes from the nearest checkpoint until the parser state
+    converges with the state recorded before the edit.
+  - The status bar language button shows the fallback syntax name (e.g.
+    "TOML") when a buffer has no language or is Plain Text.
+  - Buffers over 1 MiB and lines over 4096 bytes are not highlighted.
+  - It obeys the same switch as tree-sitter highlighting
+    (`semantic_tokens: "full"` turns it off), and LSP semantic tokens layer on
+    top as usual.
 - HTML uses `vscode-html-language-server` (from `vscode-langservers-extracted`),
   started with `--stdio` and `provideFormatter: true`; `lsp.vscode-html-language-server.settings`
   is passed through as workspace configuration.
-- TOML support is built in (ported from `zed-extensions/toml`): native Tree-sitter
-  grammar (`tree-sitter-toml-ng`, the maintained fork) for `.toml`, `Cargo.lock`,
-  `Pipfile`, `uv.lock`. No language server is registered.
-- SQL support is built in (ported from `zed-extensions/sql`): native Tree-sitter
-  grammar (`DerekStride/tree-sitter-sql`, crate `tree-sitter-sequel`, pinned to the
-  extension's rev) for `.sql`. No language server is registered.
 - Jupyter notebooks and integrated REPL execution are removed, including kernel
   management, remote kernel launching, execution controls, settings, and shortcuts.
 - Python source editing remains supported. `.ipynb` files open as ordinary text.

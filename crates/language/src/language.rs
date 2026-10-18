@@ -10,6 +10,7 @@ mod available_languages;
 mod buffer;
 mod diagnostic;
 mod diagnostic_set;
+mod fallback_highlight;
 mod language_registry;
 
 pub mod language_settings;
@@ -87,6 +88,7 @@ use util::rel_path::RelPath;
 pub use available_languages::AvailableLanguage;
 pub use buffer::Operation;
 pub use buffer::*;
+pub use fallback_highlight::FallbackHighlighter;
 pub use diagnostic::{
     Diagnostic, DiagnosticMessage, DiagnosticSourceKind, RelatedInformation, RelatedLocation,
 };

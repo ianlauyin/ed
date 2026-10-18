@@ -11,10 +11,7 @@ workspace = true
 doctest = false
 
 [features]
-load-grammars = [
-    "grammars/load-grammars",
-    "tree-sitter-gitcommit",
-]
+load-grammars = ["grammars/load-grammars"]
 
 [dependencies]
 anyhow.workspace = true
@@ -51,6 +48,5 @@ smol.workspace = true
 snippet.workspace = true
 task.workspace = true
 terminal.workspace = true
-tree-sitter-gitcommit = { workspace = true, optional = true }
 url.workspace = true
 util.workspace = true
