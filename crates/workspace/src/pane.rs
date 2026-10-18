@@ -419,6 +419,8 @@ pub struct Pane {
         Option<Arc<dyn Fn(&mut Self, &dyn Any, &mut Window, &mut Context<Self>) -> bool>>,
     can_toggle_zoom: bool,
     should_display_tab_bar: Rc<dyn Fn(&Window, &mut Context<Pane>) -> bool>,
+    /// Whether the last render showed the tab bar strip above the card.
+    tab_bar_displayed: bool,
     should_display_welcome_page: bool,
     render_tab_bar_buttons: Rc<
         dyn Fn(
@@ -604,6 +606,7 @@ impl Pane {
             can_split_predicate: None,
             can_toggle_zoom: true,
             should_display_tab_bar: Rc::new(|_, cx| TabBarSettings::get_global(cx).show),
+            tab_bar_displayed: false,
             should_display_welcome_page: false,
             render_tab_bar_buttons: Rc::new(default_render_tab_bar_buttons),
             render_tab_bar: Rc::new(Self::render_tab_bar),
@@ -832,6 +835,10 @@ impl Pane {
         F: 'static + Fn(&Window, &mut Context<Pane>) -> bool,
     {
         self.should_display_tab_bar = Rc::new(should_display_tab_bar);
+    }
+
+    pub fn tab_bar_displayed(&self) -> bool {
+        self.tab_bar_displayed
     }
 
     pub fn set_should_display_welcome_page(&mut self, should_display_welcome_page: bool) {
@@ -4342,6 +4349,7 @@ impl Render for Pane {
 
         let should_display_tab_bar = self.should_display_tab_bar.clone();
         let display_tab_bar = should_display_tab_bar(window, cx);
+        self.tab_bar_displayed = display_tab_bar;
         let Some(project) = self.project.upgrade() else {
             return div().track_focus(&self.focus_handle(cx));
         };

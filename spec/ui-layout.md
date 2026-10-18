@@ -30,6 +30,9 @@ because it hurt readability; an opaque window is also cheaper to composite.
   sits on the chrome.
 - Split panes are separate cards with an 8px gap between them (the chrome shows
   through) instead of a divider line. The resize handle covers the gap.
+- Inactive-pane dimming (`active_pane_modifiers.inactive_opacity`) and the
+  active-pane border cover only the rounded card, never the tab bar, so tab
+  bars stay the plain chrome colour in every pane.
 - A zoomed view (editor or any dock) covers exactly the area the cards occupy,
   on the chrome, overlaying the others, so every zoomed view has the same size.
   The `zoomed_padding` setting is removed.

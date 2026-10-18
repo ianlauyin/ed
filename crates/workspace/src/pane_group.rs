@@ -868,7 +868,7 @@ impl PaneAxis {
         debug_assert!(self.members.len() == self.flexes.lock().len());
         let mut active_pane_ix = None;
         let mut contains_active_pane = false;
-        let mut is_leaf_pane = vec![false; self.members.len()];
+        let mut leaf_panes = vec![None; self.members.len()];
 
         let rendered_children = self
             .members
@@ -877,15 +877,13 @@ impl PaneAxis {
             .map(|(ix, member)| {
                 match member {
                     Member::Pane(pane) => {
-                        is_leaf_pane[ix] = true;
+                        leaf_panes[ix] = Some(pane.clone());
                         if pane == render_cx.active_pane() {
                             active_pane_ix = pane.read(cx).has_focus(window, cx).then_some(ix);
                             contains_active_pane = true;
                         }
                     }
-                    Member::Axis(_) => {
-                        is_leaf_pane[ix] = false;
-                    }
+                    Member::Axis(_) => {}
                 }
 
                 let result = member.render((basis + ix) * 10, zoomed, None, render_cx, window, cx);
@@ -903,7 +901,7 @@ impl PaneAxis {
             self.bounding_boxes.clone(),
             render_cx.workspace().clone(),
         )
-        .with_is_leaf_pane_mask(is_leaf_pane)
+        .with_leaf_panes(leaf_panes)
         .children(rendered_children)
         .with_active_pane(active_pane_ix)
         .into_any_element();
@@ -1013,7 +1011,7 @@ mod element {
     use std::{cell::RefCell, iter, rc::Rc, sync::Arc};
 
     use gpui::{
-        Along, AnyElement, App, Axis, BorderStyle, Bounds, Element, GlobalElementId,
+        Along, AnyElement, App, Axis, BorderStyle, Bounds, Element, Entity, GlobalElementId,
         HitboxBehavior, IntoElement, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement,
         Pixels, Point, Size, Style, WeakEntity, Window, px, relative, size,
     };
@@ -1021,10 +1019,10 @@ mod element {
     use parking_lot::Mutex;
     use settings::Settings;
     use smallvec::SmallVec;
-    use ui::prelude::*;
+    use ui::{Tab, prelude::*};
     use util::ResultExt;
 
-    use crate::Workspace;
+    use crate::{Pane, Workspace};
 
     use crate::WorkspaceSettings;
 
@@ -1055,7 +1053,7 @@ mod element {
             children: SmallVec::new(),
             active_pane_ix: None,
             workspace,
-            is_leaf_pane_mask: Vec::new(),
+            leaf_panes: Vec::new(),
         }
     }
 
@@ -1069,8 +1067,8 @@ mod element {
         children: SmallVec<[AnyElement; 2]>,
         active_pane_ix: Option<usize>,
         workspace: WeakEntity<Workspace>,
-        // Track which children are leaf panes (Member::Pane) vs axes (Member::Axis)
-        is_leaf_pane_mask: Vec<bool>,
+        // The pane of each child that is a leaf (Member::Pane), `None` for axes (Member::Axis)
+        leaf_panes: Vec<Option<Entity<Pane>>>,
     }
 
     pub struct PaneAxisLayout {
@@ -1082,7 +1080,8 @@ mod element {
         bounds: Bounds<Pixels>,
         element: AnyElement,
         handle: Option<PaneAxisHandleLayout>,
-        is_leaf_pane: bool,
+        /// For a leaf pane, its card: the pane's bounds below its tab bar.
+        card_bounds: Option<Bounds<Pixels>>,
     }
 
     struct PaneAxisHandleLayout {
@@ -1095,8 +1094,8 @@ mod element {
             self
         }
 
-        pub fn with_is_leaf_pane_mask(mut self, mask: Vec<bool>) -> Self {
-            self.is_leaf_pane_mask = mask;
+        pub fn with_leaf_panes(mut self, leaf_panes: Vec<Option<Entity<Pane>>>) -> Self {
+            self.leaf_panes = leaf_panes;
             self
         }
 
@@ -1308,13 +1307,27 @@ mod element {
                 origin =
                     origin.apply_along(self.axis, |val| val + child_size.along(self.axis) + GAP);
 
-                let is_leaf_pane = self.is_leaf_pane_mask.get(ix).copied().unwrap_or(true);
+                // Read after prepaint, so the pane has rendered this frame.
+                let card_bounds = self
+                    .leaf_panes
+                    .get(ix)
+                    .and_then(Option::as_ref)
+                    .map(|pane| {
+                        let mut card_bounds = child_bounds;
+                        if pane.read(cx).tab_bar_displayed() {
+                            let tab_bar_height = Tab::container_height(cx);
+                            card_bounds.origin.y += tab_bar_height;
+                            card_bounds.size.height =
+                                (card_bounds.size.height - tab_bar_height).max(px(0.));
+                        }
+                        card_bounds
+                    });
 
                 layout.children.push(PaneAxisChildLayout {
                     bounds: child_bounds,
                     element: child,
                     handle: None,
-                    is_leaf_pane,
+                    card_bounds,
                 })
             }
 
@@ -1363,23 +1376,21 @@ mod element {
 
             let len = layout.children.len();
             for (ix, child) in &mut layout.children.iter_mut().enumerate() {
-                if overlay_opacity.is_some() || overlay_border.is_some() {
-                    let overlay_bounds = child.bounds;
-
-                    if overlay_opacity.is_some()
-                        && child.is_leaf_pane
-                        && self.active_pane_ix != Some(ix)
-                    {
-                        window.paint_quad(gpui::fill(overlay_bounds, overlay_background));
+                // Only the card is dimmed / outlined, not the tab bar on the chrome above it.
+                if let Some(card_bounds) = child.card_bounds {
+                    if overlay_opacity.is_some() && self.active_pane_ix != Some(ix) {
+                        window.paint_quad(
+                            gpui::fill(card_bounds, overlay_background)
+                                .corner_radii(crate::CARD_RADIUS),
+                        );
                     }
 
                     if let Some(border) = overlay_border
                         && self.active_pane_ix == Some(ix)
-                        && child.is_leaf_pane
                     {
                         window.paint_quad(gpui::quad(
-                            overlay_bounds,
-                            0.,
+                            card_bounds,
+                            crate::CARD_RADIUS,
                             gpui::transparent_black(),
                             border,
                             cx.theme().colors().border_selected,
