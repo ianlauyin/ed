@@ -7203,7 +7203,6 @@ dependencies = [
  "log",
  "parking_lot",
  "path",
- "sqlformat",
  "thread_local",
  "uuid",
 ]
@@ -7213,18 +7212,7 @@ name = "sqlez_macros"
 version = "0.1.0"
 dependencies = [
  "sqlez",
- "sqlformat",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "sqlformat"
-version = "0.2.6"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7bba3a93db0cc4f7bdece8bb09e77e2e785c20bfebf79eb8340ed80708048790"
-dependencies = [
- "nom",
- "unicode_categories",
 ]
 
 [[package]]
@@ -8568,12 +8556,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ebc1c04c71510c7f702b52b7c350734c9ff1295c464a03335b00bb84fc54f853"
 
 [[package]]
-name = "unicode_categories"
-version = "0.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39ec24b3121d976906ece63c9daad25b85969647682eee313cb5779fdd69e14e"
-
-[[package]]
 name = "untrusted"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9721,7 +9703,7 @@ dependencies = [
 
 [[package]]
 name = "zed"
-version = "1.30.0"
+version = "1.30.1"
 dependencies = [
  "activity_indicator",
  "anyhow",

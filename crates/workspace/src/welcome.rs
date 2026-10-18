@@ -515,7 +515,7 @@ mod persistence {
     impl Domain for WelcomePagesDb {
         const NAME: &str = stringify!(WelcomePagesDb);
 
-        const MIGRATIONS: &[&str] = (&[sql!(
+        const SCHEMA: &str = sql!(
                     CREATE TABLE welcome_pages (
                         workspace_id INTEGER,
                         item_id INTEGER UNIQUE,
@@ -525,7 +525,7 @@ mod persistence {
                         FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
                         ON DELETE CASCADE
                     ) STRICT;
-        )]);
+        );
     }
 
     db::static_connection!(WelcomePagesDb, [WorkspaceDb]);

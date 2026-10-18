@@ -95,138 +95,67 @@ pub struct EditorDb(db::sqlez::thread_safe_connection::ThreadSafeConnection);
 impl Domain for EditorDb {
     const NAME: &str = stringify!(EditorDb);
 
-    // Current schema shape using pseudo-rust syntax:
-    // editors(
-    //   item_id: usize,
-    //   workspace_id: usize,
-    //   path: Option<PathBuf>,
-    //   scroll_top_row: usize,
-    //   scroll_vertical_offset: f32,
-    //   scroll_horizontal_offset: f32,
-    //   contents: Option<String>,
-    //   language: Option<String>,
-    //   mtime_seconds: Option<i64>,
-    //   mtime_nanos: Option<i32>,
-    // )
-    //
-    // editor_selections(
-    //   item_id: usize,
-    //   editor_id: usize,
-    //   workspace_id: usize,
-    //   start: usize,
-    //   end: usize,
-    // )
-    //
-    // editor_folds(
-    //   item_id: usize,
-    //   editor_id: usize,
-    //   workspace_id: usize,
-    //   start: usize,
-    //   end: usize,
-    //   start_fingerprint: Option<String>,
-    //   end_fingerprint: Option<String>,
-    // )
+    const SCHEMA: &str = sql!(
+        CREATE TABLE editors(
+            item_id INTEGER NOT NULL,
+            workspace_id INTEGER NOT NULL,
+            path BLOB,
+            scroll_top_row INTEGER NOT NULL DEFAULT 0,
+            scroll_horizontal_offset REAL NOT NULL DEFAULT 0,
+            scroll_vertical_offset REAL NOT NULL DEFAULT 0,
+            contents TEXT,
+            language TEXT,
+            mtime_seconds INTEGER DEFAULT NULL,
+            mtime_nanos INTEGER DEFAULT NULL,
+            buffer_path TEXT,
+            PRIMARY KEY(item_id, workspace_id),
+            FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
+            ON DELETE CASCADE
+            ON UPDATE CASCADE
+        ) STRICT;
 
-    const MIGRATIONS: &[&str] = &[
-        sql! (
-            CREATE TABLE editors(
-                item_id INTEGER NOT NULL,
-                workspace_id INTEGER NOT NULL,
-                path BLOB NOT NULL,
-                PRIMARY KEY(item_id, workspace_id),
-                FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
-                ON DELETE CASCADE
-                ON UPDATE CASCADE
-            ) STRICT;
-        ),
-        sql! (
-            ALTER TABLE editors ADD COLUMN scroll_top_row INTEGER NOT NULL DEFAULT 0;
-            ALTER TABLE editors ADD COLUMN scroll_horizontal_offset REAL NOT NULL DEFAULT 0;
-            ALTER TABLE editors ADD COLUMN scroll_vertical_offset REAL NOT NULL DEFAULT 0;
-        ),
-        sql! (
-            // Since sqlite3 doesn't support ALTER COLUMN, we create a new
-            // table, move the data over, drop the old table, rename new table.
-            CREATE TABLE new_editors_tmp (
-                item_id INTEGER NOT NULL,
-                workspace_id INTEGER NOT NULL,
-                path BLOB, // <-- No longer "NOT NULL"
-                scroll_top_row INTEGER NOT NULL DEFAULT 0,
-                scroll_horizontal_offset REAL NOT NULL DEFAULT 0,
-                scroll_vertical_offset REAL NOT NULL DEFAULT 0,
-                contents TEXT, // New
-                language TEXT, // New
-                PRIMARY KEY(item_id, workspace_id),
-                FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
-                ON DELETE CASCADE
-                ON UPDATE CASCADE
-            ) STRICT;
+        CREATE TABLE editor_selections (
+            item_id INTEGER NOT NULL,
+            editor_id INTEGER NOT NULL,
+            workspace_id INTEGER NOT NULL,
+            start INTEGER NOT NULL,
+            end INTEGER NOT NULL,
+            PRIMARY KEY(item_id),
+            FOREIGN KEY(editor_id, workspace_id) REFERENCES editors(item_id, workspace_id)
+            ON DELETE CASCADE
+        ) STRICT;
 
-            INSERT INTO new_editors_tmp(item_id, workspace_id, path, scroll_top_row, scroll_horizontal_offset, scroll_vertical_offset)
-            SELECT item_id, workspace_id, path, scroll_top_row, scroll_horizontal_offset, scroll_vertical_offset
-            FROM editors;
+        CREATE INDEX editor_selections_editor_id_workspace_id
+        ON editor_selections (editor_id, workspace_id);
 
-            DROP TABLE editors;
+        CREATE TABLE editor_folds (
+            item_id INTEGER NOT NULL,
+            editor_id INTEGER NOT NULL,
+            workspace_id INTEGER NOT NULL,
+            start INTEGER NOT NULL,
+            end INTEGER NOT NULL,
+            start_fingerprint TEXT,
+            end_fingerprint TEXT,
+            PRIMARY KEY(item_id),
+            FOREIGN KEY(editor_id, workspace_id) REFERENCES editors(item_id, workspace_id)
+            ON DELETE CASCADE
+        ) STRICT;
 
-            ALTER TABLE new_editors_tmp RENAME TO editors;
-        ),
-        sql! (
-            ALTER TABLE editors ADD COLUMN mtime_seconds INTEGER DEFAULT NULL;
-            ALTER TABLE editors ADD COLUMN mtime_nanos INTEGER DEFAULT NULL;
-        ),
-        sql! (
-            CREATE TABLE editor_selections (
-                item_id INTEGER NOT NULL,
-                editor_id INTEGER NOT NULL,
-                workspace_id INTEGER NOT NULL,
-                start INTEGER NOT NULL,
-                end INTEGER NOT NULL,
-                PRIMARY KEY(item_id),
-                FOREIGN KEY(editor_id, workspace_id) REFERENCES editors(item_id, workspace_id)
+        // Folds keyed by file path rather than editor, so they survive tab close and
+        // workspace cleanup.
+        CREATE TABLE file_folds (
+            workspace_id INTEGER NOT NULL,
+            path TEXT NOT NULL,
+            start INTEGER NOT NULL,
+            end INTEGER NOT NULL,
+            start_fingerprint TEXT,
+            end_fingerprint TEXT,
+            FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
                 ON DELETE CASCADE
-            ) STRICT;
-        ),
-        sql! (
-            ALTER TABLE editors ADD COLUMN buffer_path TEXT;
-            UPDATE editors SET buffer_path = CAST(path AS TEXT);
-        ),
-        sql! (
-            CREATE TABLE editor_folds (
-                item_id INTEGER NOT NULL,
-                editor_id INTEGER NOT NULL,
-                workspace_id INTEGER NOT NULL,
-                start INTEGER NOT NULL,
-                end INTEGER NOT NULL,
-                PRIMARY KEY(item_id),
-                FOREIGN KEY(editor_id, workspace_id) REFERENCES editors(item_id, workspace_id)
-                ON DELETE CASCADE
-            ) STRICT;
-        ),
-        sql! (
-            ALTER TABLE editor_folds ADD COLUMN start_fingerprint TEXT;
-            ALTER TABLE editor_folds ADD COLUMN end_fingerprint TEXT;
-        ),
-        // File-level fold persistence: store folds by file path instead of editor_id.
-        // This allows folds to survive tab close and workspace cleanup.
-        sql! (
-            CREATE TABLE file_folds (
-                workspace_id INTEGER NOT NULL,
-                path TEXT NOT NULL,
-                start INTEGER NOT NULL,
-                end INTEGER NOT NULL,
-                start_fingerprint TEXT,
-                end_fingerprint TEXT,
-                FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
-                    ON DELETE CASCADE
-                    ON UPDATE CASCADE,
-                PRIMARY KEY(workspace_id, path, start)
-            );
-        ),
-        sql!(
-            CREATE INDEX editor_selections_editor_id_workspace_id
-            ON editor_selections (editor_id, workspace_id);
-        ),
-    ];
+                ON UPDATE CASCADE,
+            PRIMARY KEY(workspace_id, path, start)
+        );
+    );
 }
 
 db::static_connection!(EditorDb, [WorkspaceDb]);

@@ -11,7 +11,7 @@ impl Connection {
     ///
     /// Note: If there are multiple statements that depend upon each other
     /// (such as those which make schema changes), preparation will fail.
-    /// Use a true migration instead.
+    /// Use a domain schema instead.
     pub fn exec<'a>(&'a self, query: &str) -> Result<impl 'a + FnMut() -> Result<()>> {
         let mut statement = Statement::prepare(self, query)?;
         Ok(move || statement.exec())
@@ -23,7 +23,7 @@ impl Connection {
     ///
     /// Note: If there are multiple statements that depend upon each other
     /// (such as those which make schema changes), preparation will fail.
-    /// Use a true migration instead.
+    /// Use a domain schema instead.
     pub fn exec_bound<'a, B: Bind>(
         &'a self,
         query: &str,
@@ -36,7 +36,7 @@ impl Connection {
     ///
     /// Note: If there are multiple statements that depend upon each other
     /// (such as those which make schema changes), preparation will fail.
-    /// Use a true migration instead.
+    /// Use a domain schema instead.
     pub fn select<'a, C: Column>(
         &'a self,
         query: &str,
@@ -49,7 +49,7 @@ impl Connection {
     ///
     /// Note: If there are multiple statements that depend upon each other
     /// (such as those which make schema changes), preparation will fail.
-    /// Use a true migration instead.
+    /// Use a domain schema instead.
     pub fn select_bound<'a, B: Bind, C: Column>(
         &'a self,
         query: &str,
@@ -64,7 +64,7 @@ impl Connection {
     ///
     /// Note: If there are multiple statements that depend upon each other
     /// (such as those which make schema changes), preparation will fail.
-    /// Use a true migration instead.
+    /// Use a domain schema instead.
     pub fn select_row<'a, C: Column>(
         &'a self,
         query: &str,
@@ -79,7 +79,7 @@ impl Connection {
     ///
     /// Note: If there are multiple statements that depend upon each other
     /// (such as those which make schema changes), preparation will fail.
-    /// Use a true migration instead.
+    /// Use a domain schema instead.
     pub fn select_row_bound<'a, B: Bind, C: Column>(
         &'a self,
         query: &str,

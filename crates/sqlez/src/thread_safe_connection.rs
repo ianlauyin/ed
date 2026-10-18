@@ -11,9 +11,9 @@ use std::{
 };
 use thread_local::ThreadLocal;
 
-use crate::{connection::Connection, domain::Migrator, util::UnboundedSyncSender};
+use crate::{connection::Connection, domain::Schema, util::UnboundedSyncSender};
 
-const MIGRATION_RETRIES: usize = 10;
+const SCHEMA_RETRIES: usize = 10;
 const CONNECTION_INITIALIZE_RETRIES: usize = 50;
 const CONNECTION_INITIALIZE_RETRY_DELAY: Duration = Duration::from_millis(1);
 
@@ -23,7 +23,7 @@ type WriteQueueConstructor = Box<dyn 'static + Send + FnMut() -> WriteQueue>;
 
 /// List of queues of tasks by database uri. This lets us serialize writes to the database
 /// and have a single worker thread per db file. This means many thread safe connections
-/// (possibly with different migrations) could all be communicating with the same background
+/// (possibly with different schemas) could all be communicating with the same background
 /// thread.
 static QUEUES: LazyLock<RwLock<HashMap<Arc<str>, WriteQueue>>> = LazyLock::new(Default::default);
 
@@ -41,14 +41,14 @@ pub struct ThreadSafeConnection {
 unsafe impl Send for ThreadSafeConnection {}
 unsafe impl Sync for ThreadSafeConnection {}
 
-pub struct ThreadSafeConnectionBuilder<M: Migrator + 'static = ()> {
+pub struct ThreadSafeConnectionBuilder<S: Schema = ()> {
     db_initialize_query: Option<&'static str>,
     write_queue_constructor: Option<WriteQueueConstructor>,
     connection: ThreadSafeConnection,
-    _migrator: PhantomData<*mut M>,
+    _schema: PhantomData<*mut S>,
 }
 
-impl<M: Migrator> ThreadSafeConnectionBuilder<M> {
+impl<S: Schema> ThreadSafeConnectionBuilder<S> {
     /// Sets the query to run every time a connection is opened. This must
     /// be infallible (EG only use pragma statements) and not cause writes.
     /// to the db or it will panic.
@@ -93,10 +93,9 @@ impl<M: Migrator> ThreadSafeConnectionBuilder<M> {
                     })?()?;
                 }
 
-                // Retry failed migrations in case they were run in parallel from different
-                // processes. This gives a best attempt at migrating before bailing
-                let mut migration_result =
-                    anyhow::Result::<()>::Err(anyhow::anyhow!("Migration never run"));
+                // Retry in case another process is creating the schema at the same time.
+                let mut schema_result =
+                    anyhow::Result::<()>::Err(anyhow::anyhow!("Schema never created"));
 
                 let foreign_keys_enabled: bool =
                     connection.select_row::<i32>("PRAGMA foreign_keys")?()
@@ -106,11 +105,11 @@ impl<M: Migrator> ThreadSafeConnectionBuilder<M> {
 
                 connection.exec("PRAGMA foreign_keys = OFF;")?()?;
 
-                for _ in 0..MIGRATION_RETRIES {
-                    migration_result = connection
-                        .with_savepoint("thread_safe_multi_migration", || M::migrate(connection));
+                let schema = S::statements();
+                for _ in 0..SCHEMA_RETRIES {
+                    schema_result = connection.ensure_schema(&schema);
 
-                    if migration_result.is_ok() {
+                    if schema_result.is_ok() {
                         break;
                     }
                 }
@@ -118,7 +117,7 @@ impl<M: Migrator> ThreadSafeConnectionBuilder<M> {
                 if foreign_keys_enabled {
                     connection.exec("PRAGMA foreign_keys = ON;")?()?;
                 }
-                migration_result
+                schema_result
             })
             .await?;
 
@@ -140,8 +139,8 @@ impl ThreadSafeConnection {
         false
     }
 
-    pub fn builder<M: Migrator>(uri: &str, persistent: bool) -> ThreadSafeConnectionBuilder<M> {
-        ThreadSafeConnectionBuilder::<M> {
+    pub fn builder<S: Schema>(uri: &str, persistent: bool) -> ThreadSafeConnectionBuilder<S> {
+        ThreadSafeConnectionBuilder::<S> {
             db_initialize_query: None,
             write_queue_constructor: None,
             connection: Self {
@@ -150,7 +149,7 @@ impl ThreadSafeConnection {
                 connection_initialize_query: None,
                 connections: Default::default(),
             },
-            _migrator: PhantomData,
+            _schema: PhantomData,
         }
     }
 
@@ -249,7 +248,7 @@ fn is_schema_lock_error(err: &anyhow::Error) -> bool {
 }
 
 impl ThreadSafeConnection {
-    /// Special constructor for ThreadSafeConnection which disallows db initialization and migrations.
+    /// Special constructor for ThreadSafeConnection which disallows db initialization and schema creation.
     /// This allows construction to be infallible and not write to the db.
     pub fn new(
         uri: &str,

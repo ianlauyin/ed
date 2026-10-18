@@ -2250,7 +2250,7 @@ mod persistence {
     impl Domain for MarkdownPreviewDb {
         const NAME: &str = stringify!(MarkdownPreviewDb);
 
-        const MIGRATIONS: &[&str] = &[sql!(
+        const SCHEMA: &str = sql!(
             CREATE TABLE markdown_previews (
                 workspace_id INTEGER,
                 item_id INTEGER,
@@ -2261,7 +2261,7 @@ mod persistence {
                 FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
                 ON DELETE CASCADE
             ) STRICT;
-        )];
+        );
     }
 
     db::static_connection!(MarkdownPreviewDb, [WorkspaceDb]);

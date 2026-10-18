@@ -4853,33 +4853,25 @@ mod persistence {
     impl Domain for GitGraphsDb {
         const NAME: &str = stringify!(GitGraphsDb);
 
-        const MIGRATIONS: &[&str] = &[
-            sql!(
-                CREATE TABLE git_graphs (
-                    workspace_id INTEGER,
-                    item_id INTEGER UNIQUE,
-                    is_open INTEGER DEFAULT FALSE,
+        const SCHEMA: &str = sql!(
+            CREATE TABLE git_graphs (
+                workspace_id INTEGER,
+                item_id INTEGER UNIQUE,
+                is_open INTEGER DEFAULT FALSE,
+                repo_working_path TEXT,
+                log_source_type TEXT,
+                log_source_value TEXT,
+                log_order TEXT,
+                selected_sha TEXT,
+                search_query TEXT,
+                search_case_sensitive INTEGER,
+                hidden_columns INTEGER,
 
-                    PRIMARY KEY(workspace_id, item_id),
-                    FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
-                    ON DELETE CASCADE
-                ) STRICT;
-            ),
-            sql!(
-                ALTER TABLE git_graphs ADD COLUMN repo_working_path TEXT;
-            ),
-            sql!(
-                ALTER TABLE git_graphs ADD COLUMN log_source_type TEXT;
-                ALTER TABLE git_graphs ADD COLUMN log_source_value TEXT;
-                ALTER TABLE git_graphs ADD COLUMN log_order TEXT;
-                ALTER TABLE git_graphs ADD COLUMN selected_sha TEXT;
-                ALTER TABLE git_graphs ADD COLUMN search_query TEXT;
-                ALTER TABLE git_graphs ADD COLUMN search_case_sensitive INTEGER;
-            ),
-            sql!(
-                ALTER TABLE git_graphs ADD COLUMN hidden_columns INTEGER;
-            ),
-        ];
+                PRIMARY KEY(workspace_id, item_id),
+                FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
+                ON DELETE CASCADE
+            ) STRICT;
+        );
     }
 
     db::static_connection!(GitGraphsDb, [WorkspaceDb]);

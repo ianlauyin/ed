@@ -632,32 +632,18 @@ pub(crate) mod persistence {
     impl Domain for ProjectDiffDb {
         const NAME: &str = stringify!(ProjectDiffDb);
 
-        // Legacy databases stored branch diffs under the "ProjectDiff" item
-        // kind, disambiguated by the `diff_base` column. Step 1 rewrites those
-        // item kinds so that each diff view owns its serialized kind.
-        const MIGRATIONS: &[&str] = &[
-            sql!(
-                CREATE TABLE project_diffs(
-                    workspace_id INTEGER,
-                    item_id INTEGER UNIQUE,
+        const SCHEMA: &str = sql!(
+            CREATE TABLE project_diffs(
+                workspace_id INTEGER,
+                item_id INTEGER UNIQUE,
 
-                    diff_base TEXT,
+                diff_base TEXT,
 
-                    PRIMARY KEY(workspace_id, item_id),
-                    FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
-                    ON DELETE CASCADE
-                ) STRICT;
-            ),
-            r#"
-                UPDATE items SET kind = 'BranchDiff'
-                WHERE kind = 'ProjectDiff' AND EXISTS (
-                    SELECT 1 FROM project_diffs
-                    WHERE project_diffs.item_id = items.item_id
-                    AND project_diffs.workspace_id = items.workspace_id
-                    AND project_diffs.diff_base LIKE '{"Merge"%'
-                );
-            "#,
-        ];
+                PRIMARY KEY(workspace_id, item_id),
+                FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
+                ON DELETE CASCADE
+            ) STRICT;
+        );
     }
 
     db::static_connection!(ProjectDiffDb, [WorkspaceDb]);

@@ -20,22 +20,19 @@ impl KeyValueStore {
 impl Domain for KeyValueStore {
     const NAME: &str = stringify!(KeyValueStore);
 
-    const MIGRATIONS: &[&str] = &[
-        sql!(
-            CREATE TABLE IF NOT EXISTS kv_store(
-                key TEXT PRIMARY KEY,
-                value TEXT NOT NULL
-            ) STRICT;
-        ),
-        sql!(
-            CREATE TABLE IF NOT EXISTS scoped_kv_store(
-                namespace TEXT NOT NULL,
-                key TEXT NOT NULL,
-                value TEXT NOT NULL,
-                PRIMARY KEY(namespace, key)
-            ) STRICT;
-        ),
-    ];
+    const SCHEMA: &str = sql!(
+        CREATE TABLE kv_store(
+            key TEXT PRIMARY KEY,
+            value TEXT NOT NULL
+        ) STRICT;
+
+        CREATE TABLE scoped_kv_store(
+            namespace TEXT NOT NULL,
+            key TEXT NOT NULL,
+            value TEXT NOT NULL,
+            PRIMARY KEY(namespace, key)
+        ) STRICT;
+    );
 }
 
 crate::static_connection!(KeyValueStore, []);
@@ -149,12 +146,12 @@ pub struct GlobalKeyValueStore(ThreadSafeConnection);
 
 impl Domain for GlobalKeyValueStore {
     const NAME: &str = stringify!(GlobalKeyValueStore);
-    const MIGRATIONS: &[&str] = &[sql!(
-        CREATE TABLE IF NOT EXISTS kv_store(
+    const SCHEMA: &str = sql!(
+        CREATE TABLE kv_store(
             key TEXT PRIMARY KEY,
             value TEXT NOT NULL
         ) STRICT;
-    )];
+    );
 }
 
 impl std::ops::Deref for GlobalKeyValueStore {

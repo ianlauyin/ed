@@ -7,3 +7,4 @@
 - mermaid: https://github.com/obsidianmd/pele?
 - no support for hard click touchpad (lookup), add or put right click menu
 - rethink cmd+J, terminal/central terminal behavior
+- add webkit tab to render html?

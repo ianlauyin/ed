@@ -36,14 +36,14 @@ pub struct CommandPaletteDB(ThreadSafeConnection);
 
 impl Domain for CommandPaletteDB {
     const NAME: &str = stringify!(CommandPaletteDB);
-    const MIGRATIONS: &[&str] = &[sql!(
-        CREATE TABLE IF NOT EXISTS command_invocations(
+    const SCHEMA: &str = sql!(
+        CREATE TABLE command_invocations(
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             command_name TEXT NOT NULL,
             user_query TEXT NOT NULL,
             last_invoked INTEGER DEFAULT (unixepoch())  NOT NULL
         ) STRICT;
-    )];
+    );
 }
 
 db::static_connection!(CommandPaletteDB, []);

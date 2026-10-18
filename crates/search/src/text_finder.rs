@@ -48,7 +48,7 @@ pub struct TextFinderDb(ThreadSafeConnection);
 impl Domain for TextFinderDb {
     const NAME: &str = stringify!(TextFinderDb);
 
-    const MIGRATIONS: &[&str] = &[sql!(
+    const SCHEMA: &str = sql!(
         CREATE TABLE text_finder_queries (
             workspace_id INTEGER PRIMARY KEY,
             query TEXT NOT NULL,
@@ -56,7 +56,7 @@ impl Domain for TextFinderDb {
             FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
             ON DELETE CASCADE
         ) STRICT;
-    )];
+    );
 }
 
 db::static_connection!(TextFinderDb, [WorkspaceDb]);

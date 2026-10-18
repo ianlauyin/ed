@@ -412,45 +412,18 @@ pub struct TerminalDb(ThreadSafeConnection);
 impl Domain for TerminalDb {
     const NAME: &str = stringify!(TerminalDb);
 
-    const MIGRATIONS: &[&str] = &[
-        sql!(
-            CREATE TABLE terminals (
-                workspace_id INTEGER,
-                item_id INTEGER UNIQUE,
-                working_directory BLOB,
-                PRIMARY KEY(workspace_id, item_id),
-                FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
-                ON DELETE CASCADE
-            ) STRICT;
-        ),
-        // Remove the unique constraint on the item_id table
-        // SQLite doesn't have a way of doing this automatically, so
-        // we have to do this silly copying.
-        sql!(
-            CREATE TABLE terminals2 (
-                workspace_id INTEGER,
-                item_id INTEGER,
-                working_directory BLOB,
-                PRIMARY KEY(workspace_id, item_id),
-                FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
-                ON DELETE CASCADE
-            ) STRICT;
-
-            INSERT INTO terminals2 (workspace_id, item_id, working_directory)
-            SELECT workspace_id, item_id, working_directory FROM terminals;
-
-            DROP TABLE terminals;
-
-            ALTER TABLE terminals2 RENAME TO terminals;
-        ),
-        sql! (
-            ALTER TABLE terminals ADD COLUMN working_directory_path TEXT;
-            UPDATE terminals SET working_directory_path = CAST(working_directory AS TEXT);
-        ),
-        sql! (
-            ALTER TABLE terminals ADD COLUMN custom_title TEXT;
-        ),
-    ];
+    const SCHEMA: &str = sql!(
+        CREATE TABLE terminals (
+            workspace_id INTEGER,
+            item_id INTEGER,
+            working_directory BLOB,
+            working_directory_path TEXT,
+            custom_title TEXT,
+            PRIMARY KEY(workspace_id, item_id),
+            FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
+            ON DELETE CASCADE
+        ) STRICT;
+    );
 }
 
 db::static_connection!(TerminalDb, [WorkspaceDb]);

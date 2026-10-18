@@ -17,12 +17,10 @@ pub fn sql(tokens: TokenStream) -> TokenStream {
 
     let error = SQLITE.sql_has_syntax_error(sql.trim());
 
-    let formatted_sql = sqlformat::format(&sql, &sqlformat::QueryParams::None, Default::default());
-
     if let Some((error, error_offset)) = error {
-        create_error(spans, error_offset, error, &formatted_sql)
+        create_error(spans, error_offset, error, &sql)
     } else {
-        format!("r#\"{formatted_sql}\"#").parse().unwrap()
+        format!("r#\"{sql}\"#").parse().unwrap()
     }
 }
 
@@ -30,7 +28,7 @@ fn create_error(
     spans: Vec<(usize, Span)>,
     error_offset: usize,
     error: String,
-    formatted_sql: &String,
+    sql: &str,
 ) -> TokenStream {
     let error_span = spans
         .into_iter()
@@ -38,7 +36,7 @@ fn create_error(
         .map(|(_, span)| span)
         .next()
         .unwrap_or_else(Span::call_site);
-    let error_text = format!("Sql Error: {}\nFor Query: {}", error, formatted_sql);
+    let error_text = format!("Sql Error: {}\nFor Query: {}", error, sql);
     TokenStream::from(Error::new(error_span.into(), error_text).into_compile_error())
 }
 

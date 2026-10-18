@@ -1095,7 +1095,7 @@ mod persistence {
     impl Domain for ImageViewerDb {
         const NAME: &str = stringify!(ImageViewerDb);
 
-        const MIGRATIONS: &[&str] = &[sql!(
+        const SCHEMA: &str = sql!(
                 CREATE TABLE image_viewers (
                     workspace_id INTEGER,
                     item_id INTEGER UNIQUE,
@@ -1106,7 +1106,7 @@ mod persistence {
                     FOREIGN KEY(workspace_id) REFERENCES workspaces(workspace_id)
                     ON DELETE CASCADE
                 ) STRICT;
-        )];
+        );
     }
 
     db::static_connection!(ImageViewerDb, [WorkspaceDb]);

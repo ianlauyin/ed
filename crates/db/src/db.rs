@@ -13,7 +13,7 @@ pub use sqlez;
 pub use sqlez_macros;
 pub use uuid;
 
-use sqlez::domain::Migrator;
+use sqlez::domain::Schema;
 use sqlez::thread_safe_connection::ThreadSafeConnection;
 use sqlez_macros::sql;
 use std::fs::create_dir_all;
@@ -23,15 +23,14 @@ use std::sync::atomic::AtomicBool;
 use std::sync::{LazyLock, atomic::Ordering};
 use util::{ResultExt, maybe};
 
-/// A migration registered via `static_connection!` and collected at link time.
-pub struct DomainMigration {
+/// A domain schema registered via `static_connection!` and collected at link time.
+pub struct DomainSchema {
     pub name: &'static str,
-    pub migrations: &'static [&'static str],
+    pub schema: &'static str,
     pub dependencies: &'static [&'static str],
-    pub should_allow_migration_change: fn(usize, &str, &str) -> bool,
 }
 
-inventory::collect!(DomainMigration);
+inventory::collect!(DomainSchema);
 
 /// The shared database connection backing all domain-specific DB wrappers.
 /// Set as a GPUI global per-App. Falls back to a shared LazyLock if not set.
@@ -39,27 +38,27 @@ pub struct AppDatabase(pub ThreadSafeConnection);
 
 impl Global for AppDatabase {}
 
-/// Migrator that runs all inventory-registered domain migrations.
-pub struct AppMigrator;
+/// Schema made of all inventory-registered domain schemas.
+pub struct AppSchema;
 
-impl Migrator for AppMigrator {
-    fn migrate(connection: &sqlez::connection::Connection) -> anyhow::Result<()> {
-        let registrations: Vec<&DomainMigration> = inventory::iter::<DomainMigration>().collect();
-        let sorted = topological_sort(&registrations);
-        for reg in &sorted {
-            let mut should_allow = reg.should_allow_migration_change;
-            connection.migrate(reg.name, reg.migrations, &mut should_allow)?;
-        }
-        Ok(())
+impl Schema for AppSchema {
+    fn statements() -> Vec<&'static str> {
+        // Sort by name first so the combined schema (and its hash) doesn't depend on link order.
+        let mut registrations: Vec<&DomainSchema> = inventory::iter::<DomainSchema>().collect();
+        registrations.sort_by_key(|reg| reg.name);
+        topological_sort(&registrations)
+            .into_iter()
+            .map(|reg| reg.schema)
+            .collect()
     }
 }
 
 impl AppDatabase {
-    /// Opens the production database and runs all inventory-registered
-    /// migrations in dependency order.
+    /// Opens the production database, creating all inventory-registered
+    /// domain schemas in dependency order.
     pub fn new() -> Self {
         let db_dir = database_dir();
-        let connection = gpui::block_on(open_db::<AppMigrator>(db_dir, AppDbScope));
+        let connection = gpui::block_on(open_db::<AppSchema>(db_dir, AppDbScope));
         Self(connection)
     }
 
@@ -75,14 +74,14 @@ impl AppDatabase {
     }
 }
 
-fn topological_sort<'a>(registrations: &[&'a DomainMigration]) -> Vec<&'a DomainMigration> {
-    let mut sorted: Vec<&DomainMigration> = Vec::new();
+fn topological_sort<'a>(registrations: &[&'a DomainSchema]) -> Vec<&'a DomainSchema> {
+    let mut sorted: Vec<&DomainSchema> = Vec::new();
     let mut visited: std::collections::HashSet<&str> = std::collections::HashSet::new();
 
     fn visit<'a>(
         name: &str,
-        registrations: &[&'a DomainMigration],
-        sorted: &mut Vec<&'a DomainMigration>,
+        registrations: &[&'a DomainSchema],
+        sorted: &mut Vec<&'a DomainSchema>,
         visited: &mut std::collections::HashSet<&'a str>,
     ) {
         if visited.contains(name) {
@@ -155,10 +154,7 @@ pub fn db_path(db_dir: &Path, scope: impl DbScope) -> PathBuf {
 /// This will retry a couple times if there are failures. If opening fails once, the db directory
 /// is moved to a backup folder and a new one is created. If that fails, a shared in memory db is created.
 /// In either case, static variables are set so that the user can be notified.
-pub async fn open_db<M: Migrator + 'static>(
-    db_dir: &Path,
-    scope: impl DbScope,
-) -> ThreadSafeConnection {
+pub async fn open_db<S: Schema>(db_dir: &Path, scope: impl DbScope) -> ThreadSafeConnection {
     let db_path = db_path(db_dir, scope);
 
     let connection = maybe!(async {
@@ -167,7 +163,7 @@ pub async fn open_db<M: Migrator + 'static>(
                 .context("Could not create db directory")
                 .log_err()?;
         }
-        open_main_db::<M>(&db_path).await
+        open_main_db::<S>(&db_path).await
     })
     .await;
 
@@ -179,12 +175,12 @@ pub async fn open_db<M: Migrator + 'static>(
     ALL_FILE_DB_FAILED.store(true, Ordering::Release);
 
     // If still failed, create an in memory db with a known name
-    open_fallback_db::<M>().await
+    open_fallback_db::<S>().await
 }
 
-async fn open_main_db<M: Migrator>(db_path: &Path) -> Option<ThreadSafeConnection> {
+async fn open_main_db<S: Schema>(db_path: &Path) -> Option<ThreadSafeConnection> {
     log::trace!("Opening database {}", db_path.display());
-    ThreadSafeConnection::builder::<M>(db_path.to_string_lossy().as_ref(), true)
+    ThreadSafeConnection::builder::<S>(db_path.to_string_lossy().as_ref(), true)
         .with_db_initialization_query(DB_INITIALIZE_QUERY)
         .with_connection_initialize_query(CONNECTION_INITIALIZE_QUERY)
         .build()
@@ -192,15 +188,15 @@ async fn open_main_db<M: Migrator>(db_path: &Path) -> Option<ThreadSafeConnectio
         .log_err()
 }
 
-async fn open_fallback_db<M: Migrator>() -> ThreadSafeConnection {
+async fn open_fallback_db<S: Schema>() -> ThreadSafeConnection {
     log::warn!("Opening fallback in-memory database");
-    ThreadSafeConnection::builder::<M>(FALLBACK_DB_NAME, false)
+    ThreadSafeConnection::builder::<S>(FALLBACK_DB_NAME, false)
         .with_db_initialization_query(DB_INITIALIZE_QUERY)
         .with_connection_initialize_query(CONNECTION_INITIALIZE_QUERY)
         .build()
         .await
         .expect(
-            "Fallback in memory database failed. Likely initialization queries or migrations have fundamental errors",
+            "Fallback in memory database failed. Likely initialization queries or schemas have fundamental errors",
         )
 }
 
@@ -208,7 +204,7 @@ async fn open_fallback_db<M: Migrator>() -> ThreadSafeConnection {
 ///
 /// Arguments:
 /// - type of connection wrapper
-/// - dependencies, whose migrations should be run prior to this domain's migrations
+/// - dependencies, whose schemas should be created before this domain's schema
 #[macro_export]
 macro_rules! static_connection {
     ($t:ident, [ $($d:ty),* ]) => {
@@ -236,11 +232,10 @@ macro_rules! static_connection {
         }
 
         $crate::inventory::submit! {
-            $crate::DomainMigration {
+            $crate::DomainSchema {
                 name: <$t as $crate::sqlez::domain::Domain>::NAME,
-                migrations: <$t as $crate::sqlez::domain::Domain>::MIGRATIONS,
+                schema: <$t as $crate::sqlez::domain::Domain>::SCHEMA,
                 dependencies: &[$(<$d as $crate::sqlez::domain::Domain>::NAME),*],
-                should_allow_migration_change: <$t as $crate::sqlez::domain::Domain>::should_allow_migration_change,
             }
         }
     }

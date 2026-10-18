@@ -16,6 +16,9 @@ migrator, or Vim/Helix mode.
 - Stateless mode is removed. Databases use persistent storage, with an in-memory
   fallback only when storage cannot be opened. `ZED_STATELESS` has no effect;
   single-instance checks are bypassed only in debug builds.
+- Database schemas are not migrated. Each domain declares only its current
+  schema; when the combined schema changes, the whole database is wiped and
+  recreated on next launch, losing all persisted state.
 - User, global, server, and `.zed/settings.json` files are not loaded, watched,
   created, or rewritten. There are no settings profiles or project overrides.
   Changing persistent preferences requires editing the built-in settings and
@@ -68,5 +71,4 @@ migrator, or Vim/Helix mode.
   logo/title header: just the centred Get Started and Recent Projects lists.
 - Bookmarks are removed: no bookmark actions, labels, navigation, project view,
   bookmark gutter markers, or `gutter.bookmarks` setting (the gutter hover
-  button now copies the file location; see editor.md). Existing saved bookmarks are
-  discarded when the workspace database is upgraded.
+  button now copies the file location; see editor.md).
