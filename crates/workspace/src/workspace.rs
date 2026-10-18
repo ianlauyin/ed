@@ -430,7 +430,6 @@ actions!(
         ToggleBottomDock,
         /// Toggles centered layout mode.
         ToggleCenteredLayout,
-        /// Toggles edit prediction feature globally for all files.
         /// Toggles the left dock.
         ToggleLeftDock,
         /// Toggles the right dock.

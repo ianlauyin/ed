@@ -137,7 +137,6 @@ impl DropdownMenu {
         self.chevron = false;
         self
     }
-
 }
 
 impl Disableable for DropdownMenu {
@@ -272,12 +271,6 @@ impl Component for DropdownMenu {
                 .submenu("Autofill", |menu, _, _| {
                     menu.entry("Contact…", None, |_, _| {})
                         .entry("Passwords…", None, |_, _| {})
-                })
-                .submenu_with_icon("Predict", IconName::ZedPredict, |menu, _, _| {
-                    menu.entry("Everywhere", None, |_, _| {})
-                        .entry("At Cursor", None, |_, _| {})
-                        .entry("Over Here", None, |_, _| {})
-                        .entry("Over There", None, |_, _| {})
                 })
         });
 

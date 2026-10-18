@@ -1602,7 +1602,6 @@ impl EditorElement {
         content_origin: gpui::Point<Pixels>,
         scroll_position: gpui::Point<ScrollOffset>,
         scroll_pixel_position: gpui::Point<ScrollPixelOffset>,
-        edit_prediction_popover_origin: Option<gpui::Point<Pixels>>,
         start_row: DisplayRow,
         end_row: DisplayRow,
         line_height: Pixels,
@@ -1721,24 +1720,12 @@ impl EditorElement {
                 cmp::max(padded_line, min_start)
             };
 
-            let behind_edit_prediction_popover = edit_prediction_popover_origin
-                .as_ref()
-                .is_some_and(|edit_prediction_popover_origin| {
-                    (pos_y..pos_y + line_height).contains(&edit_prediction_popover_origin.y)
-                });
-            let opacity = if behind_edit_prediction_popover {
-                0.5
-            } else {
-                1.0
-            };
-
             let mut element = h_flex()
                 .id(("diagnostic", row.0))
                 .h(line_height)
                 .w_full()
                 .px_1()
                 .rounded_xs()
-                .opacity(opacity)
                 .bg(severity_to_color(&diagnostic_to_render.severity)
                     .color(cx)
                     .opacity(0.05))
@@ -8457,7 +8444,6 @@ impl Element for EditorElement {
                             )
                         });
 
-                    let edit_prediction_popover_origin = None;
                     let mut inline_diagnostics = self.layout_inline_diagnostics(
                         &line_layouts,
                         &crease_trailers,
@@ -8465,7 +8451,6 @@ impl Element for EditorElement {
                         content_origin,
                         scroll_position,
                         scroll_pixel_position,
-                        edit_prediction_popover_origin,
                         start_row,
                         end_row,
                         line_height,

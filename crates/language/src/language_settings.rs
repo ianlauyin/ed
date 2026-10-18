@@ -32,7 +32,7 @@ pub fn all_language_settings<'a>(
 /// The settings for all languages.
 #[derive(Debug, Clone, RegisterSetting)]
 pub struct AllLanguageSettings {
-    /// The edit prediction settings.
+    /// The default language settings.
     pub defaults: Arc<LanguageSettings>,
     languages: HashMap<LanguageName, Arc<LanguageSettings>>,
     pub file_types: FxHashMap<Arc<str>, (GlobSet, Vec<String>)>,

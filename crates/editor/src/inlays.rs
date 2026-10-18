@@ -6,7 +6,6 @@
 //!
 //! Inlay examples in Zed:
 //! * inlay hints, received from LSP
-//! * inline predictions, showing the Zeta/Copilot/etc. predictions
 //! * document color values, if configured to be displayed as inlays
 //! * ... anything else, potentially.
 //!
@@ -78,14 +77,6 @@ impl Inlay {
             id: InlayId::Color(id),
             position,
             content: InlayContent::Color(color.into()),
-        }
-    }
-
-    pub fn edit_prediction<T: Into<Rope>>(id: usize, position: Anchor, text: T) -> Self {
-        Self {
-            id: InlayId::EditPrediction(id),
-            position,
-            content: InlayContent::Text(text.into()),
         }
     }
 

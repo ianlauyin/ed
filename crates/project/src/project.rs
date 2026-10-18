@@ -71,7 +71,6 @@ use lsp::{
     LanguageServerBinary, LanguageServerId, LanguageServerName, LanguageServerSelector,
     MessageActionItem,
 };
-pub use lsp_command::EditPredictionDefinition;
 use lsp_command::*;
 use lsp_store::{CompletionDocumentation, LspFormatTarget, OpenLspBufferHandle};
 pub use manifest_tree::ManifestProvidersStore;
@@ -405,7 +404,6 @@ pub enum PrepareRenameResponse {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum InlayId {
-    EditPrediction(usize),
     ReplResult(usize),
     // LSP
     Hint(usize),
@@ -415,7 +413,6 @@ pub enum InlayId {
 impl InlayId {
     pub fn id(&self) -> usize {
         match self {
-            Self::EditPrediction(id) => *id,
             Self::Hint(id) => *id,
             Self::Color(id) => *id,
             Self::ReplResult(id) => *id,
@@ -2937,19 +2934,6 @@ impl Project {
             let result = task.await;
             drop(guard);
             result
-        })
-    }
-
-    pub fn edit_prediction_definitions<T: ToPointUtf16>(
-        &mut self,
-        buffer: &Entity<Buffer>,
-        position: T,
-        include_type_definitions: bool,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<Vec<EditPredictionDefinition>>> {
-        let position = position.to_point_utf16(buffer.read(cx));
-        self.lsp_store.update(cx, |lsp_store, cx| {
-            lsp_store.edit_prediction_definitions(buffer, position, include_type_definitions, cx)
         })
     }
 

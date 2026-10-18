@@ -780,8 +780,6 @@ impl Editor {
 
                     if editor.completion_tasks.len() <= 1 {
                         // If there are no more completion tasks and the last menu was empty, we should hide it.
-                        // If it was already hidden and we don't show edit predictions in the menu,
-                        // we should also show the edit prediction when available.
                         editor.hide_context_menu(window, cx);
                     }
                 })

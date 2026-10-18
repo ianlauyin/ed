@@ -34,8 +34,6 @@ pub struct ModifiersContent {
 #[with_fallible_options]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, JsonSchema)]
 pub struct AllLanguageSettingsContent {
-    /// The edit prediction settings.
-
     /// The default language settings.
     #[serde(flatten)]
     pub defaults: LanguageSettingsContent,

@@ -483,7 +483,6 @@ pub struct EditorStyle {
     pub syntax: Arc<SyntaxTheme>,
     pub status: StatusColors,
     pub inlay_hints_style: HighlightStyle,
-    pub edit_prediction_styles: EditPredictionStyles,
     pub unnecessary_code_fade: f32,
     pub show_underlines: bool,
 }
@@ -504,10 +503,6 @@ impl Default for EditorStyle {
             // style and retrieve them directly from the theme.
             status: StatusColors::dark(),
             inlay_hints_style: HighlightStyle::default(),
-            edit_prediction_styles: EditPredictionStyles {
-                insertion: HighlightStyle::default(),
-                whitespace: HighlightStyle::default(),
-            },
             unnecessary_code_fade: Default::default(),
             show_underlines: true,
         }
@@ -6943,9 +6938,6 @@ impl Editor {
                                                     font_weight: Some(FontWeight::BOLD),
                                                     ..make_inlay_hints_style(cx.app)
                                                 },
-                                                edit_prediction_styles: make_suggestion_styles(
-                                                    cx.app,
-                                                ),
                                                 ..EditorStyle::default()
                                             },
                                         ))
@@ -9951,7 +9943,6 @@ impl Editor {
             syntax: cx.theme().syntax().clone(),
             status: cx.theme().status().clone(),
             inlay_hints_style: make_inlay_hints_style(cx),
-            edit_prediction_styles: make_suggestion_styles(cx),
             unnecessary_code_fade: settings.unnecessary_code_fade,
             show_underlines: self.diagnostics_enabled(),
         }
@@ -11369,17 +11360,4 @@ pub fn multibuffer_context_lines(cx: &App) -> u32 {
         .map(|settings| settings.excerpt_context_lines)
         .unwrap_or(2)
         .min(32)
-}
-
-pub fn make_suggestion_styles(cx: &App) -> EditPredictionStyles {
-    EditPredictionStyles {
-        insertion: HighlightStyle {
-            color: Some(cx.theme().status().predictive),
-            ..Default::default()
-        },
-        whitespace: HighlightStyle {
-            background_color: Some(cx.theme().status().created_background),
-            ..Default::default()
-        },
-    }
 }

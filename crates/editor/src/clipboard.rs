@@ -237,10 +237,6 @@ impl Editor {
                 });
             }
 
-            //   🤔                 |    ..     | show_in_menu |
-            // | ..                  |   true        true
-            // | had_edit_prediction |   false       true
-
             let trigger_in_words = true;
 
             this.trigger_completion_on_input(text, trigger_in_words, window, cx);
