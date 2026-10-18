@@ -28,3 +28,17 @@
   Singleton editors always reserve gutter space for it.
   The gutter right-click menu has a matching "Copy File Location" entry with
   the same row/selection behaviour.
+- No vertical scrollbar: the minimap is the vertical scroll widget. The
+  markers the scrollbar used to carry are drawn on the minimap, aligned with
+  the minimap row of their line (so clicking a marker lands on it): cursor
+  lines as a faint full-width band, git hunks as a thin bar on the left edge,
+  search/selection/symbol occurrences and diagnostics as two lanes on the
+  right edge. Which markers show is still driven by the `scrollbar.*` marker
+  settings. In files longer than the minimap, off-screen markers scroll in
+  with the minimap. Editors without a minimap have no vertical scroll widget.
+- The minimap runs the full card height. Its thumb's bottom-right corner is
+  concentric with the card (card radius − card inset), curving in as the
+  thumb nears the bottom, instead of shortening the minimap to dodge the
+  corner.
+- The horizontal scrollbar matches the `ui` scrollbars (project panel): no
+  track, a thin rounded thumb inset in a 14px hitbox.

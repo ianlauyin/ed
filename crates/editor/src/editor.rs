@@ -577,15 +577,16 @@ type GutterHighlight = (fn(&App) -> Hsla, Vec<Range<Anchor>>);
 
 #[derive(Default)]
 struct ScrollbarMarkerState {
-    scrollbar_size: Size<Pixels>,
+    /// Minimap width and line height the markers were laid out for.
+    track_size: Size<Pixels>,
     dirty: bool,
     markers: Arc<[PaintQuad]>,
     pending_refresh: Option<Task<Result<()>>>,
 }
 
 impl ScrollbarMarkerState {
-    fn should_refresh(&self, scrollbar_size: Size<Pixels>) -> bool {
-        self.pending_refresh.is_none() && (self.scrollbar_size != scrollbar_size || self.dirty)
+    fn should_refresh(&self, track_size: Size<Pixels>) -> bool {
+        self.pending_refresh.is_none() && (self.track_size != track_size || self.dirty)
     }
 }
 
