@@ -794,4 +794,3 @@ pub enum DiagnosticSeverityContent {
     Hint,
     All,
 }
-

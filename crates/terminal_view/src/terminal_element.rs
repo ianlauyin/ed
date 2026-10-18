@@ -3,20 +3,18 @@ use gpui::{
     AbsoluteLength, AnyElement, App, AvailableSpace, Bounds, ContentMask, DispatchPhase, Element,
     ElementId, Entity, FocusHandle, Font, FontFeatures, FontStyle, FontWeight, GlobalElementId,
     HighlightStyle, Hitbox, Hsla, InputHandler, InteractiveElement, Interactivity, IntoElement,
-    LayoutId, Length, ModifiersChangedEvent, MouseButton, MouseMoveEvent, Pixels,
-    Point as GpuiPoint, StatefulInteractiveElement, StrikethroughStyle, Styled, TextRun, TextStyle,
-    UTF16Selection, UnderlineStyle, WeakEntity, WhiteSpace, Window, div, fill, point, px, relative,
-    size,
+    LayoutId, ModifiersChangedEvent, MouseButton, MouseMoveEvent, Pixels, Point as GpuiPoint,
+    StatefulInteractiveElement, StrikethroughStyle, Styled, TextRun, TextStyle, UTF16Selection,
+    UnderlineStyle, WeakEntity, WhiteSpace, Window, div, fill, point, px, relative, size,
 };
 use itertools::Itertools;
 use language::CursorShape as EditorCursorShape;
 use settings::Settings;
 use std::time::Instant;
 use terminal::{
-    Cell, Color, Content, CursorShape, IndexedCell, Modes, MouseInputMode, NamedColor, Point,
-    Range, Terminal, TerminalBounds,
-    is_app_chosen_exact_color as terminal_is_app_chosen_exact_color, is_default_background_color,
-    terminal_settings::TerminalSettings,
+    Cell, Color, Content, CursorShape, IndexedCell, Modes, NamedColor, Point, Range, Terminal,
+    TerminalBounds, is_app_chosen_exact_color as terminal_is_app_chosen_exact_color,
+    is_default_background_color, terminal_settings::TerminalSettings,
 };
 use theme::{ActiveTheme, Theme};
 use theme_settings::ThemeSettings;
@@ -28,7 +26,7 @@ use workspace::Workspace;
 use std::mem;
 use std::{fmt::Debug, rc::Rc};
 
-use crate::{BlockContext, BlockProperties, ContentMode, TerminalMode, TerminalView};
+use crate::{BlockContext, BlockProperties, TerminalView};
 
 /// The information generated during layout that is necessary for painting.
 pub struct LayoutState {
@@ -45,7 +43,6 @@ pub struct LayoutState {
     hyperlink_tooltip: Option<AnyElement>,
     block_below_cursor_element: Option<AnyElement>,
     base_text_style: TextStyle,
-    content_mode: ContentMode,
 }
 
 /// Helper struct for converting terminal cursor points to displayed cursor points.
@@ -398,7 +395,6 @@ pub struct TerminalElement {
     focused: bool,
     cursor_visible: bool,
     interactivity: Interactivity,
-    mode: TerminalMode,
     block_below_cursor: Option<Rc<BlockProperties>>,
 }
 
@@ -419,7 +415,6 @@ impl TerminalElement {
         focused: bool,
         cursor_visible: bool,
         block_below_cursor: Option<Rc<BlockProperties>>,
-        mode: TerminalMode,
     ) -> TerminalElement {
         TerminalElement {
             terminal,
@@ -429,7 +424,6 @@ impl TerminalElement {
             focus: focus.clone(),
             cursor_visible,
             block_below_cursor,
-            mode,
             interactivity: Default::default(),
         }
         .track_focus(&focus)
@@ -940,13 +934,7 @@ impl TerminalElement {
         result
     }
 
-    fn register_mouse_listeners(
-        &mut self,
-        hitbox: &Hitbox,
-        content_mode: &ContentMode,
-        mouse_input_mode: MouseInputMode,
-        window: &mut Window,
-    ) {
+    fn register_mouse_listeners(&mut self, hitbox: &Hitbox, window: &mut Window) {
         let focus = self.focus.clone();
         let terminal = self.terminal.clone();
         let terminal_view = self.terminal_view.clone();
@@ -966,7 +954,7 @@ impl TerminalElement {
                     if scroll_top > Pixels::ZERO {
                         adjusted_event.position.y += scroll_top;
                     }
-                    terminal.mouse_down(&adjusted_event, mouse_input_mode, cx);
+                    terminal.mouse_down(&adjusted_event, cx);
                     cx.notify();
                 })
             }
@@ -991,12 +979,7 @@ impl TerminalElement {
                             if scroll_top > Pixels::ZERO {
                                 adjusted_event.position.y += scroll_top;
                             }
-                            terminal.mouse_drag(
-                                &adjusted_event,
-                                hitbox.bounds,
-                                mouse_input_mode,
-                                cx,
-                            );
+                            terminal.mouse_drag(&adjusted_event, hitbox.bounds, cx);
                             cx.notify();
                         }
                     })
@@ -1004,7 +987,7 @@ impl TerminalElement {
 
                 if hitbox.is_hovered(window) {
                     terminal.update(cx, |terminal, cx| {
-                        terminal.mouse_move(e, mouse_input_mode, cx);
+                        terminal.mouse_move(e, cx);
                     })
                 }
             }
@@ -1019,17 +1002,16 @@ impl TerminalElement {
                         return;
                     }
                     if button != MouseButton::Left
-                        && (mouse_input_mode == MouseInputMode::LocalSelection
-                            || !terminal
-                                .read(cx)
-                                .last_content
-                                .mode
-                                .intersects(Modes::MOUSE_MODE))
+                        && !terminal
+                            .read(cx)
+                            .last_content
+                            .mode
+                            .intersects(Modes::MOUSE_MODE)
                     {
                         return;
                     }
                     terminal.update(cx, |terminal, cx| {
-                        terminal.mouse_up(event, mouse_input_mode, cx);
+                        terminal.mouse_up(event, cx);
                         cx.notify();
                     });
                 }
@@ -1040,42 +1022,35 @@ impl TerminalElement {
                 let terminal = terminal.clone();
                 let focus = focus.clone();
                 move |event, window, cx| {
-                    if mouse_input_mode == MouseInputMode::LocalSelection
-                        || (button == MouseButton::Right
-                            && !terminal
-                                .read(cx)
-                                .last_content
-                                .mode
-                                .intersects(Modes::MOUSE_MODE))
+                    if button == MouseButton::Right
+                        && !terminal
+                            .read(cx)
+                            .last_content
+                            .mode
+                            .intersects(Modes::MOUSE_MODE)
                     {
                         return;
                     }
                     window.focus(&focus, cx);
                     terminal.update(cx, |terminal, cx| {
-                        terminal.mouse_down(event, mouse_input_mode, cx);
+                        terminal.mouse_down(event, cx);
                         cx.notify();
                     });
                 }
             });
         }
 
-        if content_mode.is_scrollable() {
-            self.interactivity.on_scroll_wheel({
-                let terminal_view = self.terminal_view.downgrade();
-                move |e, window, cx| {
-                    terminal_view
-                        .update(cx, |terminal_view, cx| {
-                            if matches!(terminal_view.mode, TerminalMode::Standalone)
-                                || terminal_view.focus_handle.is_focused(window)
-                            {
-                                terminal_view.scroll_wheel(e, cx);
-                                cx.notify();
-                            }
-                        })
-                        .ok();
-                }
-            });
-        }
+        self.interactivity.on_scroll_wheel({
+            let terminal_view = self.terminal_view.downgrade();
+            move |e, _, cx| {
+                terminal_view
+                    .update(cx, |terminal_view, cx| {
+                        terminal_view.scroll_wheel(e, cx);
+                        cx.notify();
+                    })
+                    .ok();
+            }
+        });
     }
 
     fn rem_size(&self, cx: &mut App) -> Option<Pixels> {
@@ -1117,37 +1092,11 @@ impl Element for TerminalElement {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        let height: Length = match self.terminal_view.read(cx).content_mode(window, cx) {
-            ContentMode::Inline {
-                displayed_lines,
-                total_lines: _,
-            } => {
-                let rem_size = window.rem_size();
-                let line_height = f32::from(window.text_style().font_size.to_pixels(rem_size))
-                    * TerminalSettings::get_global(cx).line_height.value();
-                // Round up to a whole device pixel to prevent pixel snapping from rounding down,
-                // which would result in the terminal being one row short after flooring.
-                let scale_factor = window.scale_factor().max(1.);
-                let height = displayed_lines as f32 * line_height;
-                px((height * scale_factor).ceil() / scale_factor).into()
-            }
-            ContentMode::Scrollable => {
-                if let TerminalMode::Embedded { .. } = &self.mode {
-                    let term = self.terminal.read(cx);
-                    if !term.scrolled_to_top() && !term.scrolled_to_bottom() && self.focused {
-                        self.interactivity.occlude_mouse();
-                    }
-                }
-
-                relative(1.).into()
-            }
-        };
-
         let layout_id =
             self.interactivity
                 .request_layout(global_id, window, cx, |mut style, window, cx| {
                     style.size.width = relative(1.).into();
-                    style.size.height = height;
+                    style.size.height = relative(1.).into();
 
                     window.request_layout(style, None, cx)
                 });
@@ -1199,16 +1148,11 @@ impl Element for TerminalElement {
 
                 let line_height = terminal_settings.line_height.value();
 
-                let font_size = match &self.mode {
-                    TerminalMode::Embedded { .. } => {
-                        window.text_style().font_size.to_pixels(window.rem_size())
-                    }
-                    TerminalMode::Standalone => terminal_settings
-                        .font_size
-                        .map_or(buffer_font_size, |size| {
-                            theme_settings::adjusted_font_size(size, cx)
-                        }),
-                };
+                let font_size = terminal_settings
+                    .font_size
+                    .map_or(buffer_font_size, |size| {
+                        theme_settings::adjusted_font_size(size, cx)
+                    });
 
                 let theme = cx.theme().clone();
 
@@ -1271,36 +1215,33 @@ impl Element for TerminalElement {
                     let mut origin = bounds.origin;
                     origin.x += gutter;
 
-                    if matches!(self.terminal_view.read(cx).mode, TerminalMode::Standalone) {
-                        let should_anchor_to_bottom = {
-                            let content = self.terminal.read(cx).last_content();
-                            content.mode.contains(Modes::ALT_SCREEN)
-                                || (content.scrolled_to_bottom && content.bottom_row_occupied)
-                        };
-                        let scale_factor = window.scale_factor();
-                        let line_height_pixels = px(line_height);
-                        let line_height_device_px = (f32::from(line_height_pixels) * scale_factor)
-                            .round()
-                            .max(1.0) as i32;
-                        let available_height_device_px =
-                            (f32::from(available_height) * scale_factor)
-                                .floor()
-                                .max(0.0) as i32;
+                    let should_anchor_to_bottom = {
+                        let content = self.terminal.read(cx).last_content();
+                        content.mode.contains(Modes::ALT_SCREEN)
+                            || (content.scrolled_to_bottom && content.bottom_row_occupied)
+                    };
+                    let scale_factor = window.scale_factor();
+                    let line_height_pixels = px(line_height);
+                    let line_height_device_px = (f32::from(line_height_pixels) * scale_factor)
+                        .round()
+                        .max(1.0) as i32;
+                    let available_height_device_px = (f32::from(available_height) * scale_factor)
+                        .floor()
+                        .max(0.0) as i32;
 
-                        let rows =
-                            ((available_height_device_px / line_height_device_px) as usize).max(1);
-                        let snapped_height_device_px = (rows as i32) * line_height_device_px;
-                        let padding_device_px =
-                            (available_height_device_px - snapped_height_device_px).max(0);
+                    let rows =
+                        ((available_height_device_px / line_height_device_px) as usize).max(1);
+                    let snapped_height_device_px = (rows as i32) * line_height_device_px;
+                    let padding_device_px =
+                        (available_height_device_px - snapped_height_device_px).max(0);
 
-                        let snapped_height =
-                            px(snapped_height_device_px as f32 / scale_factor.max(1.0));
-                        let padding = px(padding_device_px as f32 / scale_factor.max(1.0));
+                    let snapped_height =
+                        px(snapped_height_device_px as f32 / scale_factor.max(1.0));
+                    let padding = px(padding_device_px as f32 / scale_factor.max(1.0));
 
-                        size.height = snapped_height;
-                        if should_anchor_to_bottom {
-                            origin.y += padding;
-                        }
+                    size.height = snapped_height;
+                    if should_anchor_to_bottom {
+                        origin.y += padding;
                     }
 
                     // Snap to device pixels to avoid subpixel jitter while resizing.
@@ -1381,16 +1322,10 @@ impl Element for TerminalElement {
 
                 // then have that representation be converted to the appropriate highlight data structure
 
-                let content_mode = self.terminal_view.read(cx).content_mode(window, cx);
-
                 // Calculate the intersection of the terminal's bounds with the current
                 // content mask (the visible viewport after all parent clipping).
                 // This allows us to only render cells that are actually visible, which is
-                // critical for performance when terminals are inside scrollable containers
-                // like the Agent Panel thread view.
-                //
-                // This optimization is analogous to the editor optimization in PR #45077
-                // which fixed performance issues with large AutoHeight editors inside Lists.
+                // critical for performance when the terminal is partially clipped.
                 let content_bounds = dimensions.bounds;
                 let visible_bounds = window.content_mask().bounds;
                 let intersection = visible_bounds.intersect(&content_bounds);
@@ -1419,10 +1354,9 @@ impl Element for TerminalElement {
                     )
                 } else {
                     // Calculate which screen rows are visible based on pixel positions.
-                    // This works for both Scrollable and Inline modes because we filter
-                    // by screen position (enumerated line group index), not by the cell's
-                    // internal line number (which can be negative in Scrollable mode for
-                    // scrollback history).
+                    // We filter by screen position (enumerated line group index), not by the
+                    // cell's internal line number (which can be negative for scrollback
+                    // history).
                     let rows_above_viewport = f32::from(
                         (intersection.top() - content_bounds.top()).max(px(0.)) / line_height_px,
                     ) as usize;
@@ -1557,7 +1491,6 @@ impl Element for TerminalElement {
                     hyperlink_tooltip,
                     block_below_cursor_element,
                     base_text_style: text_style,
-                    content_mode,
                 }
             },
         )
@@ -1576,7 +1509,6 @@ impl Element for TerminalElement {
         window.with_content_mask(Some(ContentMask { bounds }), |window| {
             let terminal_view = self.terminal_view.read(cx);
             let scroll_top = terminal_view.scroll_top;
-            let mouse_input_mode = terminal_view.mouse_input_mode();
 
             let origin = layout.dimensions.bounds.origin - GpuiPoint::new(px(0.), scroll_top);
             let scale_factor = window.scale_factor();
@@ -1596,12 +1528,7 @@ impl Element for TerminalElement {
                 workspace: self.workspace.clone(),
             };
 
-            self.register_mouse_listeners(
-                &layout.hitbox,
-                &layout.content_mode,
-                mouse_input_mode,
-                window,
-            );
+            self.register_mouse_listeners(&layout.hitbox, window);
             if window.modifiers().secondary()
                 && bounds.contains(&window.mouse_position())
                 && self.terminal_view.read(cx).hover.is_some()
@@ -1761,13 +1688,10 @@ struct TerminalInputHandler {
 impl InputHandler for TerminalInputHandler {
     fn selected_text_range(
         &mut self,
-        ignore_disabled_input: bool,
+        _ignore_disabled_input: bool,
         _: &mut Window,
-        cx: &mut App,
+        _: &mut App,
     ) -> Option<UTF16Selection> {
-        if self.terminal_view.read(cx).is_read_only() && !ignore_disabled_input {
-            return None;
-        }
         // Always return a valid selection for IME positioning,
         // even in ALT_SCREEN mode (fullscreen TUI apps like opencode, vim, etc.)
         // The terminal still has a cursor position that should be used for IME candidate window placement.
@@ -1802,9 +1726,6 @@ impl InputHandler for TerminalInputHandler {
         window: &mut Window,
         cx: &mut App,
     ) {
-        if self.terminal_view.read(cx).is_read_only() {
-            return;
-        }
         self.terminal_view.update(cx, |view, view_cx| {
             view.clear_marked_text(view_cx);
             view.commit_text(text, view_cx);

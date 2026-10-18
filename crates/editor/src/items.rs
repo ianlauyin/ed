@@ -1290,14 +1290,9 @@ impl SearchableItem for Editor {
         } else {
             Autoscroll::fit()
         };
-        self.change_selections(
-            SelectionEffects::scroll(autoscroll),
-            window,
-            cx,
-            |s| {
-                s.select_ranges([range]);
-            },
-        )
+        self.change_selections(SelectionEffects::scroll(autoscroll), window, cx, |s| {
+            s.select_ranges([range]);
+        })
     }
 
     fn select_matches(

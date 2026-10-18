@@ -12,6 +12,9 @@ are removed. There is no `disable_ai` configuration option.
   assist, commit-message generation, or edit predictions.
 - No agent registry, agent servers, MCP context servers, model providers, or AI
   network initialization in local or remote projects.
+- No agent-only leftovers: no git checkpoints, diff review comments ("Send
+  Review to Agent"), agent font settings (`agent_ui_font_*`,
+  `agent_buffer_font_*`), or embedded/read-only terminal views.
 - AI actions and default keybindings are removed. Legacy AI bindings cannot
   shadow normal editor bindings.
 - Language-server completions, code actions, diagnostics, Git tools, and

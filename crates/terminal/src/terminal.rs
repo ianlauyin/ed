@@ -67,8 +67,7 @@ use crate::alacritty::{
     scroll_display, scroll_to_point, search_matches, selection_text, set_default_cursor_style,
     set_selection as set_term_selection, shrink_to_used, spawn_event_loop,
     toggle_vi_mode as toggle_term_vi_mode, total_lines, update_selection as update_term_selection,
-    update_selection_to_vi_cursor, update_vi_cursor_for_scroll, used_lines, vi_goto_point,
-    vi_motion,
+    update_selection_to_vi_cursor, update_vi_cursor_for_scroll, vi_goto_point, vi_motion,
 };
 use crate::mappings::colors::to_vte_rgb;
 use crate::mappings::keys::to_esc_str;
@@ -876,12 +875,6 @@ fn init_command_startup_marker_command(shell_kind: ShellKind, marker_id: u64) ->
 /// Task modes must be created with [`TerminalMode::task`] so their completion
 /// sender and receiver remain paired.
 pub struct TerminalMode(TerminalModeKind);
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum MouseInputMode {
-    ReportToTerminal,
-    LocalSelection,
-}
 
 enum TerminalModeKind {
     Interactive,
@@ -1918,10 +1911,6 @@ impl Terminal {
         screen_lines(&self.term.lock_unfair())
     }
 
-    pub fn used_lines(&self) -> usize {
-        used_lines(&self.term.lock_unfair())
-    }
-
     //To test:
     //- Activate match on terminal (scrolling and selection)
     //- Editor search snapping behavior
@@ -2394,15 +2383,13 @@ impl Terminal {
         }
     }
 
-    pub fn mouse_mode(&self, shift: bool, mode: MouseInputMode) -> bool {
-        mode == MouseInputMode::ReportToTerminal
-            && self.last_content.mode.intersects(Modes::MOUSE_MODE)
-            && !shift
+    pub fn mouse_mode(&self, shift: bool) -> bool {
+        self.last_content.mode.intersects(Modes::MOUSE_MODE) && !shift
     }
 
-    pub fn mouse_move(&mut self, e: &MouseMoveEvent, mode: MouseInputMode, cx: &mut Context<Self>) {
+    pub fn mouse_move(&mut self, e: &MouseMoveEvent, cx: &mut Context<Self>) {
         let position = e.position - self.last_content.terminal_bounds.bounds.origin;
-        if self.mouse_mode(e.modifiers.shift, mode) {
+        if self.mouse_mode(e.modifiers.shift) {
             // A ctrl/cmd press on a link suppressed its button-press report in
             // `mouse_down`. Since the app never saw the press, we must swallow
             // the whole gesture rather than forward later motion/release
@@ -2492,11 +2479,10 @@ impl Terminal {
         &mut self,
         e: &MouseMoveEvent,
         region: Bounds<Pixels>,
-        mode: MouseInputMode,
         cx: &mut Context<Self>,
     ) {
         let position = e.position - self.last_content.terminal_bounds.bounds.origin;
-        if !self.mouse_mode(e.modifiers.shift, mode) {
+        if !self.mouse_mode(e.modifiers.shift) {
             if let Some(hyperlink) = &self.mouse_down_hyperlink {
                 let point = grid_point(
                     position,
@@ -2559,7 +2545,7 @@ impl Terminal {
         Some(scroll_lines.clamp(-3, 3))
     }
 
-    pub fn mouse_down(&mut self, e: &MouseDownEvent, mode: MouseInputMode, cx: &mut Context<Self>) {
+    pub fn mouse_down(&mut self, e: &MouseDownEvent, cx: &mut Context<Self>) {
         let position = e.position - self.last_content.terminal_bounds.bounds.origin;
         let point = grid_point(
             position,
@@ -2570,7 +2556,7 @@ impl Terminal {
         if e.button == MouseButton::Left
             && e.modifiers.secondary()
             && (TerminalSettings::get_global(cx).open_links_in_mouse_mode
-                || !self.mouse_mode(e.modifiers.shift, mode))
+                || !self.mouse_mode(e.modifiers.shift))
         {
             self.mouse_down_hyperlink = self.find_hyperlink_at_point(point);
 
@@ -2579,7 +2565,7 @@ impl Terminal {
             }
         }
 
-        if self.mouse_mode(e.modifiers.shift, mode) {
+        if self.mouse_mode(e.modifiers.shift) {
             let bytes =
                 mouse_button_report(point, e.button, e.modifiers, true, self.last_content.mode);
 
@@ -2634,7 +2620,7 @@ impl Terminal {
         }
     }
 
-    pub fn mouse_up(&mut self, e: &MouseUpEvent, mode: MouseInputMode, cx: &Context<Self>) {
+    pub fn mouse_up(&mut self, e: &MouseUpEvent, cx: &Context<Self>) {
         let setting = TerminalSettings::get_global(cx);
 
         let position = e.position - self.last_content.terminal_bounds.bounds.origin;
@@ -2657,7 +2643,7 @@ impl Terminal {
                 return;
             }
 
-            if self.mouse_mode(e.modifiers.shift, mode) {
+            if self.mouse_mode(e.modifiers.shift) {
                 self.selection_phase = SelectionPhase::Ended;
                 self.last_mouse = None;
                 self.mouse_down_position = None;
@@ -2665,7 +2651,7 @@ impl Terminal {
             }
         }
 
-        if self.mouse_mode(e.modifiers.shift, mode) {
+        if self.mouse_mode(e.modifiers.shift) {
             let point = grid_point(
                 position,
                 self.last_content.terminal_bounds,
@@ -2707,13 +2693,8 @@ impl Terminal {
     }
 
     ///Scroll the terminal
-    pub fn scroll_wheel(
-        &mut self,
-        e: &ScrollWheelEvent,
-        scroll_multiplier: f32,
-        mode: MouseInputMode,
-    ) {
-        let mouse_mode = self.mouse_mode(e.shift, mode);
+    pub fn scroll_wheel(&mut self, e: &ScrollWheelEvent, scroll_multiplier: f32) {
+        let mouse_mode = self.mouse_mode(e.shift);
         let scroll_multiplier = if mouse_mode { 1. } else { scroll_multiplier };
 
         if let Some(scroll_lines) = self.determine_scroll_lines(e, scroll_multiplier)
@@ -2732,11 +2713,10 @@ impl Terminal {
                         self.write_to_pty(scroll);
                     }
                 };
-            } else if mode == MouseInputMode::ReportToTerminal
-                && self
-                    .last_content
-                    .mode
-                    .contains(Modes::ALT_SCREEN | Modes::ALTERNATE_SCROLL)
+            } else if self
+                .last_content
+                .mode
+                .contains(Modes::ALT_SCREEN | Modes::ALTERNATE_SCROLL)
                 && !e.shift
             {
                 self.write_to_pty(alt_scroll(scroll_lines));

@@ -321,10 +321,6 @@ impl CommitView {
             );
             editor.set_diff_hunk_renderer(Some(Arc::new(HiddenDiffHunkRenderer)), cx);
 
-            editor.rhs_editor().update(cx, |editor, cx| {
-                editor.set_show_diff_review_button(true, cx);
-            });
-
             editor
         });
         let commit_sha = Arc::<str>::from(commit.sha.as_ref());
@@ -763,10 +759,12 @@ impl CommitView {
                                             .closed_icon(IconName::ExpandVertical)
                                             .opened_icon(IconName::FoldVertical)
                                             .tooltip(Tooltip::text(expand_tooltip))
-                                            .on_click(cx.listener(|this, _, _, cx| {
-                                                this.message_expanded = !this.message_expanded;
-                                                cx.notify();
-                                            })),
+                                            .on_click(
+                                                cx.listener(|this, _, _, cx| {
+                                                    this.message_expanded = !this.message_expanded;
+                                                    cx.notify();
+                                                }),
+                                            ),
                                         )
                                     }),
                             ),
@@ -1281,8 +1279,7 @@ impl Item for CommitView {
                         cx,
                     );
                     editor.set_diff_hunk_renderer(Some(Arc::new(HiddenDiffHunkRenderer)), cx);
-                    editor.rhs_editor().update(cx, |editor, cx| {
-                        editor.set_show_diff_review_button(true, cx);
+                    editor.rhs_editor().update(cx, |editor, _| {
                         editor.register_addon(CommitDiffAddon {
                             file_statuses,
                             commit_view,

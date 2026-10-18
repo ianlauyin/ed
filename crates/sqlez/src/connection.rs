@@ -38,8 +38,8 @@ impl Connection {
             sqlite3_extended_result_codes(connection.sqlite3, 1);
 
             // Wait for the database lock to be released instead of failing
-            // immediately with SQLITE_BUSY. Some databases (e.g. the agent
-            // threads database) are shared between Zed instances, so transient
+            // immediately with SQLITE_BUSY. Some databases are shared between
+            // Zed instances, so transient
             // lock contention is expected; failing fast turns it into a
             // storm of dropped saves and retry churn.
             if !connection.sqlite3.is_null() {

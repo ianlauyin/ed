@@ -33,5 +33,4 @@ thiserror.workspace = true
 time.workspace = true
 url.workspace = true
 util.workspace = true
-uuid.workspace = true
 futures.workspace = true

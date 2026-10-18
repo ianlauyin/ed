@@ -22,10 +22,10 @@ use git_ui::staged_diff::StagedDiffToolbar;
 use git_ui::unstaged_diff::UnstagedDiffToolbar;
 use git_ui_core::file_diff_view::FileDiffStyleToolbar;
 use gpui::{
-    App, AppContext as _, Context, Entity, FocusHandle, Focusable, Image,
-    ImageFormat, ParentElement, PathPromptOptions, PromptLevel, ReadGlobal, SharedString, Size,
-    Task, TaskExt, TitlebarOptions, WeakEntity, Window, WindowBounds, WindowHandle, WindowKind,
-    WindowOptions, actions, img, point, px,
+    App, AppContext as _, Context, Entity, FocusHandle, Focusable, Image, ImageFormat,
+    ParentElement, PathPromptOptions, PromptLevel, ReadGlobal, SharedString, Size, Task, TaskExt,
+    TitlebarOptions, WeakEntity, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions,
+    actions, img, point, px,
 };
 use image_viewer::ImageInfo;
 use language::Capability;
@@ -580,14 +580,10 @@ fn register_actions(
                     update_settings_file(fs.clone(), cx, move |settings, _| {
                         settings.theme.ui_font_size = None;
                         settings.theme.buffer_font_size = None;
-                        settings.theme.agent_ui_font_size = None;
-                        settings.theme.agent_buffer_font_size = None;
                     });
                 } else {
                     theme_settings::reset_ui_font_size(cx);
                     theme_settings::reset_buffer_font_size(cx);
-                    theme_settings::reset_agent_ui_font_size(cx);
-                    theme_settings::reset_agent_buffer_font_size(cx);
                 }
             }
         })

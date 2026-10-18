@@ -1,19 +1,14 @@
 use crate::{
     branch_picker,
     diff_multibuffer::DiffMultibuffer,
-    project_diff::{
-        self, CompareWithBranch, DeployBranchDiff, ProjectDiff, render_send_review_to_agent_button,
-    },
+    project_diff::{self, CompareWithBranch, DeployBranchDiff, ProjectDiff},
 };
 use anyhow::{Context as _, Result, anyhow};
-use editor::{
-    Addon, Editor, EditorEvent, HiddenDiffHunkRenderer, SplittableEditor,
-    actions::SendReviewToAgent,
-};
+use editor::{Addon, Editor, EditorEvent, HiddenDiffHunkRenderer, SplittableEditor};
 use git::status::FileStatus;
 use gpui::{
-    Action, App, AppContext as _, Entity, EventEmitter, FocusHandle, Focusable, Render,
-    SharedString, Subscription, Task, WeakEntity,
+    App, AppContext as _, Entity, EventEmitter, FocusHandle, Focusable, Render, SharedString,
+    Subscription, Task, WeakEntity,
 };
 use language::{BufferId, Capability};
 use project::{
@@ -614,16 +609,6 @@ impl BranchDiffToolbar {
     fn branch_diff(&self, _: &App) -> Option<Entity<BranchDiff>> {
         self.branch_diff.as_ref()?.upgrade()
     }
-
-    fn dispatch_action(&self, action: &dyn Action, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(branch_diff) = self.branch_diff(cx) {
-            branch_diff.focus_handle(cx).focus(window, cx);
-        }
-        let action = action.boxed_clone();
-        cx.defer(move |cx| {
-            cx.dispatch_action(action.as_ref());
-        })
-    }
 }
 
 impl EventEmitter<ToolbarItemEvent> for BranchDiffToolbar {}
@@ -659,12 +644,6 @@ impl Render for BranchDiffToolbar {
         let Some(branch_diff) = self.branch_diff(cx) else {
             return div();
         };
-        let focus_handle = branch_diff.focus_handle(cx);
-        let review_count = branch_diff
-            .read(cx)
-            .diff
-            .read(cx)
-            .total_review_comment_count();
         let (additions, deletions) = branch_diff
             .read(cx)
             .diff
@@ -770,14 +749,5 @@ impl Render for BranchDiffToolbar {
                         Tooltip::text("Select Base Branch"),
                     ),
             )
-            .when(review_count > 0, |this| {
-                this.child(Divider::vertical()).child(
-                    render_send_review_to_agent_button(review_count, &focus_handle).on_click(
-                        cx.listener(|this, _, window, cx| {
-                            this.dispatch_action(&SendReviewToAgent, window, cx)
-                        }),
-                    ),
-                )
-            })
     }
 }

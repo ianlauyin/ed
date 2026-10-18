@@ -4,8 +4,8 @@ use crate::{
 };
 use gpui::{
     Action, Anchor, AnyElement, App, Bounds, DismissEvent, Entity, EventEmitter, FocusHandle,
-    Focusable, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point,
-    Size, Subscription, TaskExt, anchored, canvas, prelude::*, px, relative,
+    Focusable, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, Size,
+    Subscription, TaskExt, anchored, canvas, prelude::*, px, relative,
 };
 use menu::{SelectChild, SelectFirst, SelectLast, SelectNext, SelectParent, SelectPrevious};
 use std::time::Instant;
@@ -1415,9 +1415,9 @@ impl ContextMenu {
                 .disabled(true)
                 .child(Label::new(label.clone()))
                 .into_any_element(),
-            ContextMenuItem::Entry(entry) => self
-                .render_menu_entry(ix, entry, cx)
-                .into_any_element(),
+            ContextMenuItem::Entry(entry) => {
+                self.render_menu_entry(ix, entry, cx).into_any_element()
+            }
             ContextMenuItem::CustomEntry {
                 entry_render,
                 handler,
@@ -1496,13 +1496,7 @@ impl ContextMenu {
                 icon_color,
                 ..
             } => self
-                .render_submenu_item_trigger(
-                    ix,
-                    label.clone(),
-                    *icon,
-                    *icon_color,
-                    cx,
-                )
+                .render_submenu_item_trigger(ix, label.clone(), *icon, *icon_color, cx)
                 .into_any_element(),
         }
     }

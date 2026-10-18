@@ -1,7 +1,6 @@
 syntax = "proto3";
 package zed.messages;
 
-import "ai.proto";
 import "app.proto";
 import "buffer.proto";
 import "core.proto";
@@ -286,13 +285,6 @@ message Envelope {
     ResolveToolchain resolve_toolchain = 371;
     ResolveToolchainResponse resolve_toolchain_response = 372;
 
-    GetAgentServerCommand get_agent_server_command = 373;
-    AgentServerCommand agent_server_command = 374;
-
-    ExternalAgentsUpdated external_agents_updated = 375;
-    ExternalAgentLoadingStatusUpdated external_agent_loading_status_updated = 376;
-    NewExternalAgentVersionAvailable new_external_agent_version_available = 377;
-
     StashDrop stash_drop = 378;
     StashApply stash_apply = 379;
 
@@ -330,8 +322,6 @@ message Envelope {
 
     FindSearchCandidatesChunk find_search_candidates_chunk = 409;
     FindSearchCandidatesCancelled find_search_candidates_cancelled = 410;
-    GetContextServerCommand get_context_server_command = 411;
-    ContextServerCommand context_server_command = 412;
 
     AllocateWorktreeId allocate_worktree_id = 413;
     AllocateWorktreeIdResponse allocate_worktree_id_response = 414;
@@ -348,20 +338,10 @@ message Envelope {
 
     GitRemoveWorktree git_remove_worktree = 431;
     GitRenameWorktree git_rename_worktree = 432;
-    GitCreateCheckpoint git_create_checkpoint = 433;
-    GitCreateCheckpointResponse git_create_checkpoint_response = 434;
-    GitRestoreCheckpoint git_restore_checkpoint = 435;
-    GitCompareCheckpoints git_compare_checkpoints = 436;
-    GitCompareCheckpointsResponse git_compare_checkpoints_response = 437;
-    GitDiffCheckpoints git_diff_checkpoints = 438;
-    GitDiffCheckpointsResponse git_diff_checkpoints_response = 439;
     GitGetHeadSha git_get_head_sha = 440;
     GitGetHeadShaResponse git_get_head_sha_response = 441;
     GitRepairWorktrees git_repair_worktrees = 442;
     GitEditRef git_edit_ref = 443;
-    GitCreateArchiveCheckpoint git_create_archive_checkpoint = 444;
-    GitCreateArchiveCheckpointResponse git_create_archive_checkpoint_response = 445;
-    GitRestoreArchiveCheckpoint git_restore_archive_checkpoint = 446;
     GetCommitData get_commit_data = 447;
     GetCommitDataResponse get_commit_data_response = 448;
     SearchCommits search_commits = 449;
@@ -408,6 +388,10 @@ message Envelope {
   }
 
   reserved 317, 318; // Removed credential prompts.
+  reserved 373 to 377; // Removed agent servers.
+  reserved 411 to 412; // Removed context servers.
+  reserved 433 to 439; // Removed git checkpoints.
+  reserved 444 to 446; // Removed git checkpoints.
   reserved 426 to 428; // Removed kernel execution.
   reserved 459; // Removed telemetry event.
   reserved 87 to 88;

@@ -1,7 +1,7 @@
 use crate::{
-    Copy, CopyAndTrim, Cut, DisplayPoint, DisplaySnapshot, Editor,
-    FindAllReferences, GoToDeclaration, GoToDefinition, GoToImplementation, GoToTypeDefinition,
-    Paste, Rename, RevealInFileManager, SelectMode, SelectionEffects, SelectionExt, ToDisplayPoint,
+    Copy, CopyAndTrim, Cut, DisplayPoint, DisplaySnapshot, Editor, FindAllReferences,
+    GoToDeclaration, GoToDefinition, GoToImplementation, GoToTypeDefinition, Paste, Rename,
+    RevealInFileManager, SelectMode, SelectionEffects, SelectionExt, ToDisplayPoint,
     ToggleCodeActions,
     actions::{Format, FormatSelections},
     selections_collection::SelectionsCollection,

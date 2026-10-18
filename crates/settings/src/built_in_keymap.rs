@@ -167,7 +167,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             KeyBindingSpec::new("cmd-\"", "editor::ExpandAllDiffHunks"),
             KeyBindingSpec::new("cmd-alt-g b", "git::Blame"),
             KeyBindingSpec::new("cmd-alt-g m", "git::OpenModifiedFiles"),
-            KeyBindingSpec::new("cmd-alt-g r", "git::ReviewDiff"),
             KeyBindingSpec::new("cmd-i", "editor::ShowSignatureHelp"),
             KeyBindingSpec::new("ctrl-f12", "editor::GoToDeclaration"),
             KeyBindingSpec::new("alt-ctrl-f12", "editor::GoToDeclarationSplit"),

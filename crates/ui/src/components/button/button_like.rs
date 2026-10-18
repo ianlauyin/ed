@@ -572,7 +572,6 @@ impl ButtonLike {
         self.hoverable_tooltip = Some(Box::new(tooltip));
         self
     }
-
 }
 
 impl Disableable for ButtonLike {

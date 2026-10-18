@@ -2245,7 +2245,6 @@ dependencies = [
  "time",
  "url",
  "util",
- "uuid",
 ]
 
 [[package]]

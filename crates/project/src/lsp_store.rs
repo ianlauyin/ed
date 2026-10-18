@@ -14919,10 +14919,10 @@ fn lsp_workspace_diagnostics_refresh(
                                 None => return,
                             },
                             _ = inactivity_timer => {
-                                // Release everyone waiting on this refresh (e.g. the agent's
-                                // diagnostics tool), including waiters that queued up while the
-                                // request was in flight, so they can fall back to cached
-                                // diagnostics instead of waiting through every retry.
+                                // Release everyone waiting on this refresh, including waiters
+                                // that queued up while the request was in flight, so they can
+                                // fall back to cached diagnostics instead of waiting through
+                                // every retry.
                                 for tx in completion_txs
                                     .drain(..)
                                     .chain(queued_completion_txs.drain(..))

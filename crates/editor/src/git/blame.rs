@@ -628,9 +628,7 @@ impl GitBlame {
                                 Task::ready(Ok(None))
                             };
 
-                            Ok(async move {
-                                (id, snapshot, buffer_edits, blame_buffer.await)
-                            })
+                            Ok(async move { (id, snapshot, buffer_edits, blame_buffer.await) })
                         })
                         .collect::<Result<Vec<_>>>()
                 })?;

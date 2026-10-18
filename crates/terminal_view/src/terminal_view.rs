@@ -9,10 +9,10 @@ use editor::{
     ui_scrollbar_settings_from_raw,
 };
 use gpui::{
-    Action, AnyElement, App, ClipboardEntry, Corners, DismissEvent, Entity, EventEmitter,
-    ExternalPaths, FocusHandle, Focusable, Font, KeyContext, KeyDownEvent, Keystroke, MouseButton,
-    MouseDownEvent, Pixels, Point as GpuiPoint, Rems, Render, ScrollWheelEvent, Styled,
-    Subscription, Task, TaskExt, WeakEntity, actions, anchored, deferred, div,
+    Action, AnyElement, App, ClipboardEntry, DismissEvent, Entity, EventEmitter, ExternalPaths,
+    FocusHandle, Focusable, Font, KeyContext, KeyDownEvent, Keystroke, MouseButton, MouseDownEvent,
+    Pixels, Point as GpuiPoint, Render, ScrollWheelEvent, Styled, Subscription, Task, TaskExt,
+    WeakEntity, actions, anchored, deferred, div,
 };
 use menu;
 use persistence::TerminalDb;
@@ -33,10 +33,9 @@ use std::{
 };
 use task::SpawnInTerminal;
 use terminal::{
-    Clear, Copy, Event, HoveredWord, MaybeNavigationTarget, Modes, MouseInputMode, Paste,
-    PasteText, Point, Range, ScrollLineDown, ScrollLineUp, ScrollPageDown, ScrollPageUp,
-    ScrollToBottom, ScrollToTop, Search, ShowCharacterPalette, TaskState, TaskStatus, Terminal,
-    TerminalBounds, ToggleViMode,
+    Clear, Copy, Event, HoveredWord, MaybeNavigationTarget, Modes, Paste, PasteText, Point, Range,
+    ScrollLineDown, ScrollLineUp, ScrollPageDown, ScrollPageUp, ScrollToBottom, ScrollToTop,
+    Search, ShowCharacterPalette, TaskState, TaskStatus, Terminal, TerminalBounds, ToggleViMode,
     terminal_settings::{CursorShape, TerminalSettings},
 };
 use terminal_element::TerminalElement;
@@ -137,19 +136,6 @@ pub struct TerminalView {
     context_menu: Option<(Entity<ContextMenu>, GpuiPoint<Pixels>, Subscription)>,
     cursor_shape: CursorShape,
     blink_manager: Entity<BlinkManager>,
-    mode: TerminalMode,
-    /// Corner radii for the terminal's background, for when it's embedded in a
-    /// container with rounded corners.
-    ///
-    /// GPUI can't clip children to rounded corners, so without this the square
-    /// background paints over the container's corners. Only the background is
-    /// rounded, terminal content isn't clipped.
-    background_corner_radii: Option<Corners<Rems>>,
-    content_top_padding: Rems,
-    read_only: bool,
-    // Explicit override for whether workspace-specific context menu actions are shown.
-    // When `None`, visibility is derived from `mode` (hidden for embedded terminals).
-    show_workspace_actions: Option<bool>,
     blinking_terminal_enabled: bool,
     needs_serialize: bool,
     custom_title: Option<String>,
@@ -166,40 +152,6 @@ pub struct TerminalView {
     rename_editor_subscription: Option<Subscription>,
     _subscriptions: Vec<Subscription>,
     _terminal_subscriptions: Vec<Subscription>,
-}
-
-#[derive(Default, Clone)]
-pub enum TerminalMode {
-    #[default]
-    Standalone,
-    Embedded {
-        max_lines_when_unfocused: Option<usize>,
-    },
-}
-
-#[derive(Clone)]
-pub enum ContentMode {
-    Scrollable,
-    Inline {
-        displayed_lines: usize,
-        total_lines: usize,
-    },
-}
-
-impl ContentMode {
-    pub fn is_limited(&self) -> bool {
-        match self {
-            ContentMode::Scrollable => false,
-            ContentMode::Inline {
-                displayed_lines,
-                total_lines,
-            } => displayed_lines < total_lines,
-        }
-    }
-
-    pub fn is_scrollable(&self) -> bool {
-        matches!(self, ContentMode::Scrollable)
-    }
 }
 
 #[derive(Debug)]
@@ -297,11 +249,6 @@ impl TerminalView {
             blinking_terminal_enabled: false,
             hover: None,
             hover_tooltip_update: Task::ready(()),
-            mode: TerminalMode::Standalone,
-            background_corner_radii: None,
-            content_top_padding: Rems::ZERO,
-            read_only: false,
-            show_workspace_actions: None,
             workspace_id,
             show_breadcrumbs: TerminalSettings::get_global(cx).toolbar.breadcrumbs,
             block_below_cursor: None,
@@ -318,122 +265,8 @@ impl TerminalView {
         }
     }
 
-    /// Enable 'embedded' mode where the terminal displays the full content with an optional limit of lines.
-    pub fn set_embedded_mode(
-        &mut self,
-        max_lines_when_unfocused: Option<usize>,
-        cx: &mut Context<Self>,
-    ) {
-        self.mode = TerminalMode::Embedded {
-            max_lines_when_unfocused,
-        };
-        cx.notify();
-    }
-
-    /// Rounds the background without clipping terminal content to the corners.
-    pub fn set_background_corner_radii(
-        &mut self,
-        corner_radii: Option<Corners<Rems>>,
-        cx: &mut Context<Self>,
-    ) {
-        self.background_corner_radii = corner_radii;
-        cx.notify();
-    }
-
-    pub fn set_content_top_padding(&mut self, padding: Rems, cx: &mut Context<Self>) {
-        self.content_top_padding = padding;
-        cx.notify();
-    }
-
-    fn content_background_corner_radii(
-        &self,
-        content_mode: &ContentMode,
-        cx: &App,
-    ) -> Corners<Rems> {
-        let mut radii = self.background_corner_radii.unwrap_or_default();
-        if content_mode.is_scrollable()
-            && TerminalScrollbarSettingsWrapper.visibility(cx) != scrollbars::ShowScrollbar::Never
-        {
-            radii.top_right = Rems::ZERO;
-            radii.bottom_right = Rems::ZERO;
-        }
-        radii
-    }
-
-    pub fn is_read_only(&self) -> bool {
-        self.read_only
-    }
-
-    /// Fixes the view's input policy at construction, without restricting producer output
-    /// or local navigation.
-    pub fn with_read_only(mut self, read_only: bool) -> Self {
-        self.read_only = read_only;
-        self
-    }
-
-    fn mouse_input_mode(&self) -> MouseInputMode {
-        if self.read_only {
-            MouseInputMode::LocalSelection
-        } else {
-            MouseInputMode::ReportToTerminal
-        }
-    }
-
-    /// Explicitly override whether workspace-specific context menu actions (e.g. creating or
-    /// closing terminal tabs, inline assist) are shown.
-    ///
-    /// This lets hosts that aren't workspace panes (such as the agent panel) hide these
-    /// actions without `terminal_view` needing to know about those hosts. When never called,
-    /// visibility is derived from the terminal's `mode`.
-    pub fn set_show_workspace_actions(&mut self, show: bool, cx: &mut Context<Self>) {
-        self.show_workspace_actions = Some(show);
-        cx.notify();
-    }
-
-    fn shows_workspace_actions(&self) -> bool {
-        self.show_workspace_actions
-            .unwrap_or_else(|| !matches!(self.mode, TerminalMode::Embedded { .. }))
-    }
-
-    const MAX_EMBEDDED_LINES: usize = 1_000;
-
-    /// Returns the current `ContentMode` depending on the set `TerminalMode` and the current number of lines
-    ///
-    /// Note: Even in embedded mode, the terminal will fallback to scrollable when its content exceeds `MAX_EMBEDDED_LINES`
-    pub fn content_mode(&self, window: &Window, cx: &App) -> ContentMode {
-        match &self.mode {
-            TerminalMode::Standalone => ContentMode::Scrollable,
-            TerminalMode::Embedded {
-                max_lines_when_unfocused,
-            } => {
-                let terminal = self.terminal.read(cx);
-                let total_lines = terminal.total_lines();
-
-                if total_lines > Self::MAX_EMBEDDED_LINES {
-                    ContentMode::Scrollable
-                } else {
-                    let mut displayed_lines = terminal.used_lines().min(total_lines);
-
-                    if !self.focus_handle.is_focused(window)
-                        && let Some(max_lines) = max_lines_when_unfocused
-                    {
-                        displayed_lines = displayed_lines.min(*max_lines)
-                    }
-
-                    ContentMode::Inline {
-                        displayed_lines,
-                        total_lines,
-                    }
-                }
-            }
-        }
-    }
-
     /// Sets the marked (pre-edit) text from the IME.
     pub(crate) fn set_marked_text(&mut self, text: String, cx: &mut Context<Self>) {
-        if self.read_only {
-            return;
-        }
         if text.is_empty() {
             return self.clear_marked_text(cx);
         }
@@ -458,7 +291,7 @@ impl TerminalView {
 
     /// Commits (sends) the given text to the PTY. Called by InputHandler::replace_text_in_range.
     pub(crate) fn commit_text(&mut self, text: &str, cx: &mut Context<Self>) {
-        if !self.read_only && !text.is_empty() {
+        if !text.is_empty() {
             self.terminal.update(cx, |term, _| {
                 term.input(text.to_string().into_bytes());
             });
@@ -591,36 +424,25 @@ impl TerminalView {
     ) {
         let context_menu = ContextMenu::build(window, cx, |menu, _, _| {
             menu.context(self.focus_handle.clone())
-                .when(self.shows_workspace_actions(), |menu| {
-                    menu.action("New Terminal", Box::new(NewTerminal::default()))
-                        .action(
-                            "New Center Terminal",
-                            Box::new(NewCenterTerminal::default()),
-                        )
-                        .separator()
-                })
+                .action("New Terminal", Box::new(NewTerminal::default()))
+                .action(
+                    "New Center Terminal",
+                    Box::new(NewCenterTerminal::default()),
+                )
+                .separator()
                 .action("Copy", Box::new(Copy))
-                .when(
-                    !self.read_only && !matches!(self.mode, TerminalMode::Embedded { .. }),
-                    |menu| {
-                        menu.action("Paste", Box::new(Paste))
-                            .action("Paste Text", Box::new(PasteText))
-                    },
-                )
+                .action("Paste", Box::new(Paste))
+                .action("Paste Text", Box::new(PasteText))
                 .action("Select All", Box::new(SelectAll))
-                .when(
-                    !self.read_only && !matches!(self.mode, TerminalMode::Embedded { .. }),
-                    |menu| menu.action("Clear", Box::new(Clear)),
+                .action("Clear", Box::new(Clear))
+                .separator()
+                .action(
+                    "Close Terminal Tab",
+                    Box::new(CloseActiveItem {
+                        save_intent: None,
+                        close_pinned: true,
+                    }),
                 )
-                .when(self.shows_workspace_actions(), |menu| {
-                    menu.separator().action(
-                        "Close Terminal Tab",
-                        Box::new(CloseActiveItem {
-                            save_intent: None,
-                            close_pinned: true,
-                        }),
-                    )
-                })
         });
 
         window.focus(&context_menu.focus_handle(cx), cx);
@@ -681,9 +503,6 @@ impl TerminalView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if self.read_only {
-            return;
-        }
         if self
             .terminal
             .read(cx)
@@ -708,9 +527,6 @@ impl TerminalView {
     }
 
     fn rerun_task(&mut self, _: &RerunTask, window: &mut Window, cx: &mut Context<Self>) {
-        if self.read_only {
-            return;
-        }
         if let Some(task) = self.terminal.read(cx).task() {
             rerun_in_terminal(
                 self.workspace.clone(),
@@ -722,9 +538,6 @@ impl TerminalView {
     }
 
     fn clear(&mut self, _: &Clear, _: &mut Window, cx: &mut Context<Self>) {
-        if self.read_only {
-            return;
-        }
         self.scroll_top = px(0.);
         self.terminal.update(cx, |term, _| term.clear());
         cx.notify();
@@ -769,7 +582,6 @@ impl TerminalView {
             term.scroll_wheel(
                 event,
                 TerminalSettings::get_global(cx).scroll_multiplier.max(0.01),
-                self.mouse_input_mode(),
             )
         });
     }
@@ -895,14 +707,7 @@ impl TerminalView {
     }
 
     pub fn should_show_cursor(&self, focused: bool, cx: &mut Context<Self>) -> bool {
-        // Hide cursor when in embedded mode and not focused (read-only output like Agent panel)
-        if let TerminalMode::Embedded { .. } = &self.mode {
-            if !focused {
-                return false;
-            }
-        }
-
-        // For Standalone mode: always show cursor when not focused or in special modes
+        // Always show cursor when not focused or in special modes
         if !focused
             || self
                 .terminal
@@ -969,9 +774,6 @@ impl TerminalView {
 
     ///Attempt to paste the clipboard into the terminal
     fn paste(&mut self, _: &Paste, window: &mut Window, cx: &mut Context<Self>) {
-        if self.read_only {
-            return;
-        }
         let Some(clipboard) = cx.read_from_clipboard() else {
             return;
         };
@@ -1006,9 +808,6 @@ impl TerminalView {
 
     ///Attempt to paste the clipboard text into the terminal
     fn paste_text(&mut self, _: &PasteText, _: &mut Window, cx: &mut Context<Self>) {
-        if self.read_only {
-            return;
-        }
         let Some(clipboard) = cx.read_from_clipboard() else {
             return;
         };
@@ -1028,9 +827,6 @@ impl TerminalView {
     }
 
     pub fn add_paths_to_terminal(&self, paths: &[PathBuf], window: &mut Window, cx: &mut App) {
-        if self.read_only {
-            return;
-        }
         let mut text = paths
             .iter()
             .filter_map(|path| Some(format!(" {}", shlex::try_quote(path.to_str()?).ok()?)))
@@ -1043,9 +839,6 @@ impl TerminalView {
     }
 
     fn send_text(&mut self, text: &SendText, _: &mut Window, cx: &mut Context<Self>) {
-        if self.read_only {
-            return;
-        }
         self.clear_bell(cx);
         self.blink_manager.update(cx, BlinkManager::pause_blinking);
         self.terminal.update(cx, |term, _| {
@@ -1157,7 +950,7 @@ impl TerminalView {
     }
 
     fn rerun_button(&self, task: &TaskState) -> Option<IconButton> {
-        if self.read_only || !task.spawned_task.show_rerun {
+        if !task.spawned_task.show_rerun {
             return None;
         }
 
@@ -1367,9 +1160,6 @@ impl TerminalView {
     /// updates the cursor locally without sending data to the shell, so there's no
     /// shell output to automatically trigger a re-render.
     fn process_keystroke(&mut self, keystroke: &Keystroke, cx: &mut Context<Self>) -> bool {
-        if self.read_only && !self.terminal.read(cx).vi_mode_enabled() {
-            return false;
-        }
         let (handled, vi_mode_enabled) = self.terminal.update(cx, |term, cx| {
             (
                 term.try_keystroke(keystroke, TerminalSettings::get_global(cx).option_as_meta),
@@ -1403,9 +1193,7 @@ impl TerminalView {
     fn focus_in(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.terminal.update(cx, |terminal, _| {
             terminal.set_cursor_shape(self.cursor_shape);
-            if !self.read_only {
-                terminal.focus_in();
-            }
+            terminal.focus_in();
         });
 
         let should_blink = match TerminalSettings::get_global(cx).blinking {
@@ -1425,9 +1213,7 @@ impl TerminalView {
     fn focus_out(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
         self.blink_manager.update(cx, BlinkManager::disable);
         self.terminal.update(cx, |terminal, _| {
-            if !self.read_only {
-                terminal.focus_out();
-            }
+            terminal.focus_out();
             terminal.set_cursor_shape(CursorShape::Hollow);
         });
         cx.notify();
@@ -1454,8 +1240,6 @@ impl Render for TerminalView {
         let terminal_view_handle = cx.entity();
 
         let focused = self.focus_handle.is_focused(window);
-        let content_mode = self.content_mode(window, cx);
-        let content_corner_radii = self.content_background_corner_radii(&content_mode, cx);
 
         div()
             .id("terminal-view")
@@ -1486,11 +1270,7 @@ impl Render for TerminalView {
             .on_mouse_down(
                 MouseButton::Right,
                 cx.listener(|this, event: &MouseDownEvent, window, cx| {
-                    if !this
-                        .terminal
-                        .read(cx)
-                        .mouse_mode(event.modifiers.shift, this.mouse_input_mode())
-                    {
+                    if !this.terminal.read(cx).mouse_mode(event.modifiers.shift) {
                         let had_selection = this.terminal.read(cx).last_content.selection.is_some();
                         if !had_selection {
                             this.terminal.update(cx, |terminal, _| {
@@ -1516,21 +1296,10 @@ impl Render for TerminalView {
                     .id("terminal-view-container")
                     .size_full()
                     .bg(cx.theme().colors().editor_background)
-                    .when_some(self.background_corner_radii, |this, radii| {
-                        this.rounded_tl(radii.top_left)
-                            .rounded_tr(radii.top_right)
-                            .rounded_bl(radii.bottom_left)
-                            .rounded_br(radii.bottom_right)
-                    })
                     .child(
                         div()
                             .size_full()
-                            .pt(self.content_top_padding)
                             .bg(cx.theme().colors().terminal_background)
-                            .rounded_tl(content_corner_radii.top_left)
-                            .rounded_tr(content_corner_radii.top_right)
-                            .rounded_bl(content_corner_radii.bottom_left)
-                            .rounded_br(content_corner_radii.bottom_right)
                             .child(TerminalElement::new(
                                 terminal_handle,
                                 terminal_view_handle,
@@ -1539,20 +1308,19 @@ impl Render for TerminalView {
                                 focused,
                                 self.should_show_cursor(focused, cx),
                                 self.block_below_cursor.clone(),
-                                self.mode.clone(),
                             )),
                     )
-                    .when(content_mode.is_scrollable(), |div| {
-                        let colors = cx.theme().colors();
-                        div.custom_scrollbars(
-                            Scrollbars::for_settings::<TerminalScrollbarSettingsWrapper>()
-                                .show_along(ScrollAxes::Vertical)
-                                .with_track_along(ScrollAxes::Vertical, colors.terminal_background)
-                                .tracked_scroll_handle(&self.scroll_handle),
-                            window,
-                            cx,
-                        )
-                    }),
+                    .custom_scrollbars(
+                        Scrollbars::for_settings::<TerminalScrollbarSettingsWrapper>()
+                            .show_along(ScrollAxes::Vertical)
+                            .with_track_along(
+                                ScrollAxes::Vertical,
+                                cx.theme().colors().terminal_background,
+                            )
+                            .tracked_scroll_handle(&self.scroll_handle),
+                        window,
+                        cx,
+                    ),
             )
             .children(self.context_menu.as_ref().map(|(menu, position, _)| {
                 deferred(
@@ -1709,9 +1477,6 @@ impl Item for TerminalView {
         window: &mut Window,
         cx: &mut App,
     ) -> bool {
-        if self.read_only {
-            return false;
-        }
         let Some(project) = self.project.upgrade() else {
             return false;
         };

@@ -429,7 +429,6 @@ impl Switch {
         self.tab_index = Some(tab_index.into());
         self
     }
-
 }
 
 impl RenderOnce for Switch {

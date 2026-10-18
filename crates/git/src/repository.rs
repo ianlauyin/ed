@@ -40,7 +40,6 @@ use util::command::{Stdio, new_command};
 use util::paths::PathStyle;
 use util::rel_path::RelPath;
 use util::{ResultExt, paths};
-use uuid::Uuid;
 
 /// Format string used in graph log to get initial data for the git graph
 /// %H - Full commit hash
@@ -1038,40 +1037,6 @@ pub trait GitRepository: Send + Sync {
         path_prefixes: &[RepoPath],
     ) -> BoxFuture<'static, Result<crate::status::GitDiffStat>>;
 
-    /// Creates a checkpoint for the repository.
-    fn checkpoint(&self) -> BoxFuture<'static, Result<GitRepositoryCheckpoint>>;
-
-    /// Resets to a previously-created checkpoint.
-    fn restore_checkpoint(&self, checkpoint: GitRepositoryCheckpoint) -> BoxFuture<'_, Result<()>>;
-
-    /// Creates two detached commits capturing the current staged and unstaged
-    /// state without moving any branch. Returns (staged_sha, unstaged_sha).
-    fn create_archive_checkpoint(&self) -> BoxFuture<'_, Result<(String, String)>>;
-
-    /// Restores the working directory and index from archive checkpoint SHAs.
-    /// Assumes HEAD is already at the correct commit (original_commit_hash).
-    /// Restores the index to match staged_sha's tree, and the working
-    /// directory to match unstaged_sha's tree.
-    fn restore_archive_checkpoint(
-        &self,
-        staged_sha: String,
-        unstaged_sha: String,
-    ) -> BoxFuture<'_, Result<()>>;
-
-    /// Compares two checkpoints, returning true if they are equal
-    fn compare_checkpoints(
-        &self,
-        left: GitRepositoryCheckpoint,
-        right: GitRepositoryCheckpoint,
-    ) -> BoxFuture<'_, Result<bool>>;
-
-    /// Computes a diff between two checkpoints.
-    fn diff_checkpoints(
-        &self,
-        base_checkpoint: GitRepositoryCheckpoint,
-        target_checkpoint: GitRepositoryCheckpoint,
-    ) -> BoxFuture<'_, Result<String>>;
-
     fn load_commit_template(&self) -> BoxFuture<'_, Result<Option<GitCommitTemplate>>>;
 
     fn default_branch(
@@ -1260,8 +1225,6 @@ impl RealGitRepository {
         Ok(GitBinary::new(
             self.git_binary_path.clone(),
             self.working_directory()?,
-            self.path(),
-            self.executor.clone(),
             self.is_trusted(),
         ))
     }
@@ -1270,8 +1233,6 @@ impl RealGitRepository {
         GitBinary::new(
             self.git_binary_path.clone(),
             self.command_directory(),
-            self.path(),
-            self.executor.clone(),
             self.is_trusted(),
         )
     }
@@ -1304,11 +1265,6 @@ impl RealGitRepository {
     }
 }
 
-#[derive(Clone, Debug)]
-pub struct GitRepositoryCheckpoint {
-    pub commit_sha: Oid,
-}
-
 #[derive(Debug)]
 pub struct GitCommitter {
     pub name: Option<String>,
@@ -1321,13 +1277,7 @@ pub struct GitCommitTemplate {
 }
 
 pub async fn get_git_committer(cx: &AsyncApp) -> GitCommitter {
-    let git = GitBinary::new(
-        PathBuf::from("git"),
-        paths::home_dir().clone(),
-        paths::home_dir().join(".git"),
-        cx.background_executor().clone(),
-        true,
-    );
+    let git = GitBinary::new(PathBuf::from("git"), paths::home_dir().clone(), true);
 
     cx.background_spawn(async move {
         let name = git
@@ -2292,8 +2242,6 @@ impl GitRepository for RealGitRepository {
         let git_binary = GitBinary::new(
             self.git_binary_path.clone(),
             worktree_path,
-            self.path(),
-            self.executor.clone(),
             self.is_trusted(),
         );
 
@@ -2772,21 +2720,13 @@ impl GitRepository for RealGitRepository {
         remote_name: String,
         options: Option<PushOptions>,
         env: Arc<HashMap<String, String>>,
-        cx: AsyncApp,
+        _cx: AsyncApp,
     ) -> BoxFuture<'_, Result<RemoteCommandOutput>> {
         let working_directory = self.command_directory();
-        let git_directory = self.path();
-        let executor = cx.background_executor().clone();
         let git_binary_path = self.git_binary_path.clone();
         let is_trusted = self.is_trusted();
         async move {
-            let git = GitBinary::new(
-                git_binary_path,
-                working_directory,
-                git_directory,
-                executor.clone(),
-                is_trusted,
-            );
+            let git = GitBinary::new(git_binary_path, working_directory, is_trusted);
             let mut command = git.build_command(&["push"]);
             command
                 .envs(env.iter())
@@ -2811,21 +2751,13 @@ impl GitRepository for RealGitRepository {
         remote_name: String,
         rebase: bool,
         env: Arc<HashMap<String, String>>,
-        cx: AsyncApp,
+        _cx: AsyncApp,
     ) -> BoxFuture<'_, Result<RemoteCommandOutput>> {
         let working_directory = self.command_directory();
-        let git_directory = self.path();
-        let executor = cx.background_executor().clone();
         let git_binary_path = self.git_binary_path.clone();
         let is_trusted = self.is_trusted();
         async move {
-            let git = GitBinary::new(
-                git_binary_path,
-                working_directory,
-                git_directory,
-                executor.clone(),
-                is_trusted,
-            );
+            let git = GitBinary::new(git_binary_path, working_directory, is_trusted);
             let mut command = git.build_command(&["pull"]);
             command.envs(env.iter());
 
@@ -2848,22 +2780,14 @@ impl GitRepository for RealGitRepository {
         &self,
         fetch_options: FetchOptions,
         env: Arc<HashMap<String, String>>,
-        cx: AsyncApp,
+        _cx: AsyncApp,
     ) -> BoxFuture<'_, Result<RemoteCommandOutput>> {
         let working_directory = self.command_directory();
-        let git_directory = self.path();
         let remote_name = format!("{}", fetch_options);
         let git_binary_path = self.git_binary_path.clone();
-        let executor = cx.background_executor().clone();
         let is_trusted = self.is_trusted();
         async move {
-            let git = GitBinary::new(
-                git_binary_path,
-                working_directory,
-                git_directory,
-                executor.clone(),
-                is_trusted,
-            );
+            let git = GitBinary::new(git_binary_path, working_directory, is_trusted);
             let mut command = git.build_command(&["fetch", &remote_name]);
             command
                 .envs(env.iter())
@@ -2996,201 +2920,6 @@ impl GitRepository for RealGitRepository {
                     .filter_map(|line| line.strip_prefix("refs/remotes/"))
                     .map(SharedString::from)
                     .collect())
-            })
-            .boxed()
-    }
-
-    fn checkpoint(&self) -> BoxFuture<'static, Result<GitRepositoryCheckpoint>> {
-        let git = self.git_binary_in_worktree();
-        self.executor
-            .spawn(async move {
-                let mut git = git?.envs(checkpoint_author_envs());
-                git.with_temp_index(async |git| {
-                    let head_sha = git.run(&["rev-parse", "HEAD"]).await.ok();
-
-                    git.run(&["add", "--update"]).await?;
-                    let untracked_files = untracked_files_for_checkpoint(git).await?;
-                    add_files_to_index(git, &untracked_files).await?;
-                    let tree = git.run(&["write-tree"]).await?;
-                    let checkpoint_sha = if let Some(head_sha) = head_sha.as_deref() {
-                        git.run(&["commit-tree", &tree, "-p", head_sha, "-m", "Checkpoint"])
-                            .await?
-                    } else {
-                        git.run(&["commit-tree", &tree, "-m", "Checkpoint"]).await?
-                    };
-
-                    Ok(GitRepositoryCheckpoint {
-                        commit_sha: checkpoint_sha.parse()?,
-                    })
-                })
-                .await
-            })
-            .boxed()
-    }
-
-    fn restore_checkpoint(&self, checkpoint: GitRepositoryCheckpoint) -> BoxFuture<'_, Result<()>> {
-        let git = self.git_binary_in_worktree();
-        self.executor
-            .spawn(async move {
-                let git = git?;
-                git.run(&[
-                    "restore",
-                    "--source",
-                    &checkpoint.commit_sha.to_string(),
-                    "--worktree",
-                    ".",
-                ])
-                .await?;
-
-                // TODO: We don't track binary and large files anymore,
-                //       so the following call would delete them.
-                //       Implement an alternative way to track files added by agent.
-                //
-                // git.with_temp_index(async move |git| {
-                //     git.run(&["read-tree", &checkpoint.commit_sha.to_string()])
-                //         .await?;
-                //     git.run(&["clean", "-d", "--force"]).await
-                // })
-                // .await?;
-
-                Ok(())
-            })
-            .boxed()
-    }
-
-    fn create_archive_checkpoint(&self) -> BoxFuture<'_, Result<(String, String)>> {
-        let git = self.git_binary_in_worktree();
-        self.executor
-            .spawn(async move {
-                let mut git = git?.envs(checkpoint_author_envs());
-                let head_sha = git
-                    .run(&["rev-parse", "HEAD"])
-                    .await
-                    .context("failed to read HEAD")?;
-
-                // Capture the staged state: write-tree reads the current index
-                let staged_tree = git
-                    .run(&["write-tree"])
-                    .await
-                    .context("failed to write staged tree")?;
-                let staged_sha = git
-                    .run(&[
-                        "commit-tree",
-                        &staged_tree,
-                        "-p",
-                        &head_sha,
-                        "-m",
-                        "WIP staged",
-                    ])
-                    .await
-                    .context("failed to create staged commit")?;
-
-                // Capture the full state (staged + unstaged + untracked) using
-                // a temporary index so we don't disturb the real one.
-                let unstaged_sha = git
-                    .with_temp_index(async |git| {
-                        git.run(&["add", "--all"]).await?;
-                        let full_tree = git.run(&["write-tree"]).await?;
-                        let sha = git
-                            .run(&[
-                                "commit-tree",
-                                &full_tree,
-                                "-p",
-                                &staged_sha,
-                                "-m",
-                                "WIP unstaged",
-                            ])
-                            .await?;
-                        Ok(sha)
-                    })
-                    .await
-                    .context("failed to create unstaged commit")?;
-
-                Ok((staged_sha, unstaged_sha))
-            })
-            .boxed()
-    }
-
-    fn restore_archive_checkpoint(
-        &self,
-        staged_sha: String,
-        unstaged_sha: String,
-    ) -> BoxFuture<'_, Result<()>> {
-        let git = self.git_binary_in_worktree();
-        self.executor
-            .spawn(async move {
-                let git = git?;
-                // First, set the index AND working tree to match the unstaged
-                // tree. --reset -u computes a tree-level diff between the
-                // current index and unstaged_sha's tree and applies additions,
-                // modifications, and deletions to the working directory.
-                git.run(&["read-tree", "--reset", "-u", &unstaged_sha])
-                    .await
-                    .context("failed to restore working directory from unstaged commit")?;
-
-                // Then replace just the index with the staged tree. Without -u
-                // this doesn't touch the working directory, so the result is:
-                // working tree = unstaged state, index = staged state.
-                git.run(&["read-tree", &staged_sha])
-                    .await
-                    .context("failed to restore index from staged commit")?;
-
-                Ok(())
-            })
-            .boxed()
-    }
-
-    fn compare_checkpoints(
-        &self,
-        left: GitRepositoryCheckpoint,
-        right: GitRepositoryCheckpoint,
-    ) -> BoxFuture<'_, Result<bool>> {
-        let git = self.git_binary_in_worktree();
-        self.executor
-            .spawn(async move {
-                let git = git?;
-                let result = git
-                    .run(&[
-                        "diff-tree",
-                        "--quiet",
-                        &left.commit_sha.to_string(),
-                        &right.commit_sha.to_string(),
-                    ])
-                    .await;
-                match result {
-                    Ok(_) => Ok(true),
-                    Err(error) => {
-                        if let Some(GitBinaryCommandError { status, .. }) =
-                            error.downcast_ref::<GitBinaryCommandError>()
-                            && status.code() == Some(1)
-                        {
-                            return Ok(false);
-                        }
-
-                        Err(error)
-                    }
-                }
-            })
-            .boxed()
-    }
-
-    fn diff_checkpoints(
-        &self,
-        base_checkpoint: GitRepositoryCheckpoint,
-        target_checkpoint: GitRepositoryCheckpoint,
-    ) -> BoxFuture<'_, Result<String>> {
-        let git = self.git_binary_in_worktree();
-        self.executor
-            .spawn(async move {
-                let git = git?;
-                git.run(&[
-                    "diff",
-                    "--find-renames",
-                    "--patch",
-                    &base_checkpoint.commit_sha.to_string(),
-                    &target_checkpoint.commit_sha.to_string(),
-                ])
-                .await
             })
             .boxed()
     }
@@ -3709,117 +3438,9 @@ fn git_status_args(path_prefixes: &[RepoPath]) -> Vec<OsString> {
     args
 }
 
-/// Lists untracked files that should be included in a checkpoint, skipping
-/// commonly ignored file types and files over 2MB.
-async fn untracked_files_for_checkpoint(git: &GitBinary) -> Result<Vec<String>> {
-    const MAX_SIZE: u64 = 2 * 1024 * 1024; // 2 MB
-
-    // The extra checkpoint excludes are passed ad hoc via --exclude-from
-    // rather than by mutating .git/info/exclude, whose writes would trigger a
-    // rescan of the repository. The scratch file is placed directly in the
-    // .git directory with a .tmp extension so that the worktree scanner
-    // filters out the events it generates.
-    let excludes_file_path = git
-        .git_directory
-        .join(format!("checkpoint-excludes-{}.tmp", Uuid::new_v4()));
-
-    let delete_excludes_file = util::defer({
-        let excludes_file_path = excludes_file_path.clone();
-        let executor = git.executor.clone();
-        move || {
-            executor
-                .spawn(async move {
-                    smol::fs::remove_file(excludes_file_path).await.log_err();
-                })
-                .detach();
-        }
-    });
-
-    smol::fs::write(&excludes_file_path, include_str!("./checkpoint.gitignore")).await?;
-
-    let mut exclude_from_arg = OsString::from("--exclude-from=");
-    exclude_from_arg.push(&excludes_file_path);
-    let output = git
-        .run(&[
-            OsStr::new("ls-files"),
-            OsStr::new("--others"),
-            OsStr::new("--exclude-standard"),
-            OsStr::new("-z"),
-            exclude_from_arg.as_os_str(),
-        ])
-        .await;
-
-    smol::fs::remove_file(&excludes_file_path).await.ok();
-    delete_excludes_file.abort();
-    let output = output?;
-
-    let working_directory = git.working_directory.clone();
-    let size_checks = output
-        .split('\0')
-        .filter(|path| !path.is_empty())
-        .map(|path| {
-            let full_path = working_directory.join(path);
-            let path = path.to_string();
-            smol::spawn(async move {
-                match smol::fs::metadata(&full_path).await {
-                    Ok(metadata) if metadata.is_file() && metadata.len() >= MAX_SIZE => None,
-                    _ => Some(path),
-                }
-            })
-        })
-        .collect::<Vec<_>>();
-
-    let untracked_files = futures::future::join_all(size_checks)
-        .await
-        .into_iter()
-        .flatten()
-        .collect();
-    Ok(untracked_files)
-}
-
-async fn add_files_to_index(git: &GitBinary, files: &[String]) -> Result<()> {
-    if files.is_empty() {
-        return Ok(());
-    }
-
-    let mut process = git
-        .build_command(&["update-index", "--add", "-z", "--stdin"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()?;
-
-    let mut stdin = BufWriter::new(
-        process
-            .stdin
-            .take()
-            .context("no stdin for git update-index subprocess")?,
-    );
-    for file in files {
-        stdin.write_all(file.as_bytes()).await?;
-        stdin.write_all(b"\0").await?;
-    }
-    stdin.flush().await?;
-    drop(stdin);
-
-    let output = process.output().await?;
-    anyhow::ensure!(
-        output.status.success(),
-        GitBinaryCommandError {
-            stdout: String::from_utf8_lossy(&output.stdout).to_string(),
-            stderr: String::from_utf8_lossy(&output.stderr).to_string(),
-            status: output.status,
-        }
-    );
-    Ok(())
-}
-
 pub(crate) struct GitBinary {
     git_binary_path: PathBuf,
     working_directory: PathBuf,
-    git_directory: PathBuf,
-    executor: BackgroundExecutor,
-    index_file_path: Option<PathBuf>,
     envs: HashMap<String, String>,
     is_trusted: bool,
 }
@@ -3828,16 +3449,11 @@ impl GitBinary {
     pub(crate) fn new(
         git_binary_path: PathBuf,
         working_directory: PathBuf,
-        git_directory: PathBuf,
-        executor: BackgroundExecutor,
         is_trusted: bool,
     ) -> Self {
         Self {
             git_binary_path,
             working_directory,
-            git_directory,
-            executor,
-            index_file_path: None,
             envs: HashMap::default(),
             is_trusted,
         }
@@ -3846,45 +3462,6 @@ impl GitBinary {
     fn envs(mut self, envs: HashMap<String, String>) -> Self {
         self.envs = envs;
         self
-    }
-
-    pub async fn with_temp_index<R>(
-        &mut self,
-        f: impl AsyncFnOnce(&Self) -> Result<R>,
-    ) -> Result<R> {
-        let index_file_path = self.path_for_index_id(Uuid::new_v4());
-
-        let delete_temp_index = util::defer({
-            let index_file_path = index_file_path.clone();
-            let executor = self.executor.clone();
-            move || {
-                executor
-                    .spawn(async move {
-                        smol::fs::remove_file(index_file_path).await.log_err();
-                    })
-                    .detach();
-            }
-        });
-
-        // Copy the default index file so that Git doesn't have to rebuild the
-        // whole index from scratch. This might fail if this is an empty repository.
-        smol::fs::copy(self.git_directory.join("index"), &index_file_path)
-            .await
-            .ok();
-
-        self.index_file_path = Some(index_file_path.clone());
-        let result = f(self).await;
-        self.index_file_path = None;
-        let result = result?;
-
-        smol::fs::remove_file(index_file_path).await.ok();
-        delete_temp_index.abort();
-
-        Ok(result)
-    }
-
-    fn path_for_index_id(&self, id: Uuid) -> PathBuf {
-        self.git_directory.join(format!("index-{}.tmp", id))
     }
 
     pub async fn run<S>(&self, args: &[S]) -> Result<String>
@@ -3954,9 +3531,6 @@ impl GitBinary {
             command.args(args);
         }
 
-        if let Some(index_file_path) = self.index_file_path.as_ref() {
-            command.env("GIT_INDEX_FILE", index_file_path);
-        }
         command.envs(&self.envs);
         command
     }
@@ -4202,13 +3776,4 @@ fn parse_upstream_track(upstream_track: &str) -> Result<UpstreamTracking> {
         ahead,
         behind,
     }))
-}
-
-fn checkpoint_author_envs() -> HashMap<String, String> {
-    HashMap::from_iter([
-        ("GIT_AUTHOR_NAME".to_string(), "Zed".to_string()),
-        ("GIT_AUTHOR_EMAIL".to_string(), "hi@zed.dev".to_string()),
-        ("GIT_COMMITTER_NAME".to_string(), "Zed".to_string()),
-        ("GIT_COMMITTER_EMAIL".to_string(), "hi@zed.dev".to_string()),
-    ])
 }

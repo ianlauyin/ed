@@ -1555,8 +1555,6 @@ impl Workspace {
                     );
                 }
 
-                project::Event::AgentLocationChanged => {}
-
                 _ => {}
             }
             cx.notify()
@@ -2263,13 +2261,6 @@ impl Workspace {
             DockPosition::Bottom => &self.bottom_dock,
             DockPosition::Right => &self.right_dock,
         }
-    }
-
-    pub fn agent_panel_position(&self, cx: &App) -> Option<DockPosition> {
-        self.all_docks().into_iter().find_map(|dock| {
-            let dock = dock.read(cx);
-            dock.has_agent_panel(cx).then_some(dock.position())
-        })
     }
 
     pub fn panel_size_state<T: Panel>(&self, cx: &App) -> Option<dock::PanelSizeState> {
@@ -5376,7 +5367,7 @@ impl Workspace {
         // If this pane is in a dock, preserve that dock when dismissing zoomed items.
         // This prevents the dock from closing when focus events fire during window activation.
         // We also preserve any dock whose active panel itself has focus — this covers
-        // panels like AgentPanel that don't implement `pane()` but can still be zoomed.
+        // panels that don't implement `pane()` but can still be zoomed.
         let dock_to_preserve = self.all_docks().iter().find_map(|dock| {
             let dock_read = dock.read(cx);
             if let Some(panel) = dock_read.active_panel() {

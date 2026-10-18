@@ -92,7 +92,7 @@ pub struct ResetUiFontSize {
     pub persist: bool,
 }
 
-/// Resets all zoom levels (UI and buffer font sizes, including in the agent panel) to their default values.
+/// Resets all zoom levels (UI and buffer font sizes) to their default values.
 #[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
 #[action(namespace = zed)]
 #[serde(deny_unknown_fields)]

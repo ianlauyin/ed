@@ -18,10 +18,10 @@ use util::{RangeExt, debug_panic};
 use super::{EditorElement, EditorLayout, LineNumberLayout, PositionMap, SplitSide};
 use crate::{
     ColumnarMode, DisplayDiffHunk, DisplayPoint, DisplayRow, Editor, EditorSettings,
-    EditorSnapshot, GutterHoverButton, JumpData, PhantomDiffReviewIndicator, SelectPhase,
-    Selection, SelectionDragState, display_map::ToDisplayPoint,
-    editor_settings::DoubleClickInMultibuffer, hover_popover::hover_at,
-    inlays::inlay_hints::HintTarget, mouse_context_menu, scroll::ScrollPixelOffset,
+    EditorSnapshot, GutterHoverButton, JumpData, SelectPhase, Selection, SelectionDragState,
+    display_map::ToDisplayPoint, editor_settings::DoubleClickInMultibuffer,
+    hover_popover::hover_at, inlays::inlay_hints::HintTarget, mouse_context_menu,
+    scroll::ScrollPixelOffset,
 };
 
 impl EditorElement {
@@ -42,11 +42,6 @@ impl EditorElement {
 
         let point_for_position = position_map.point_for_position(event.position);
         let valid_point = point_for_position.nearest_valid;
-
-        // Update diff review drag state if we're dragging
-        if editor.diff_review_drag_state.is_some() {
-            editor.update_diff_review_drag(valid_point.row(), window, cx);
-        }
 
         let hovered_diff_control = position_map
             .diff_hunk_control_bounds
@@ -108,14 +103,6 @@ impl EditorElement {
             if !keyboard_grace {
                 editor.hide_blame_popover(false, cx);
             }
-        }
-
-        editor.gutter_diff_review_indicator.1 = None;
-        let diff_review_indicator: Option<PhantomDiffReviewIndicator> = None;
-
-        if diff_review_indicator != editor.gutter_diff_review_indicator.0 {
-            editor.gutter_diff_review_indicator.0 = diff_review_indicator;
-            cx.notify();
         }
 
         let gutter_hover_button = if gutter_hovered
@@ -810,13 +797,6 @@ impl EditorElement {
         window: &mut Window,
         cx: &mut Context<Editor>,
     ) {
-        // Handle diff review drag completion
-        if editor.diff_review_drag_state.is_some() {
-            editor.end_diff_review_drag(window, cx);
-            cx.stop_propagation();
-            return;
-        }
-
         let text_hitbox = &position_map.text_hitbox;
         let end_selection = editor.has_pending_selection();
         let pending_nonempty_selections = editor.has_pending_nonempty_selection();
