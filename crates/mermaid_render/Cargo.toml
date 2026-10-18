@@ -15,6 +15,19 @@ doctest = false
 anyhow.workspace = true
 gpui.workspace = true
 merman = { workspace = true, features = [
+    "diagram-class",
+    "diagram-er",
+    "diagram-flowchart",
+    "diagram-gantt",
+    "diagram-git-graph",
+    "diagram-journey",
+    "diagram-mindmap",
+    "diagram-pie",
+    "diagram-quadrant-chart",
+    "diagram-sequence",
+    "diagram-state",
+    "diagram-timeline",
+    "diagram-xychart",
     "layout-cytoscape",
     "svg",
 ] }

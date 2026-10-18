@@ -30,6 +30,9 @@
     syntax looked up by the injection's language name. Each injection is
     tokenized from its start, independently of the rest of the buffer;
     injections over 64 KiB are not highlighted.
+  - Search query inputs (buffer search, project search, text finder) are
+    highlighted with the bundled "Regular Expression" syntax while regex mode
+    is on, and stay unhighlighted otherwise.
   - It obeys the same switch as tree-sitter highlighting
     (`semantic_tokens: "full"` turns it off), and LSP semantic tokens layer on
     top as usual.

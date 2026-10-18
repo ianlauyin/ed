@@ -36,7 +36,7 @@ use gpui::{
     Modifiers, StyledText, Task, TextStyle, prelude::*,
 };
 use gpui::{Entity, FocusHandle, WeakEntity};
-use language::{Buffer, Language, LanguageAwareStyling};
+use language::{Buffer, LanguageAwareStyling};
 use picker::{Picker, PickerDelegate};
 use project::{Project, ProjectPath, Search};
 use project::{SearchResults, search::SearchQuery, search::SearchResult};
@@ -56,7 +56,7 @@ use workspace::pane::Pane;
 
 use super::{Fold, SearchMatch, Unfold};
 use crate::project_search::{ActiveSettings, ProjectSearch};
-use crate::{ProjectSearchView, SearchOption, SearchOptions};
+use crate::{ProjectSearchView, SearchOption, SearchOptions, highlight_query_as_regex};
 
 pub struct Delegate {
     pub(crate) project_search_view: Entity<ProjectSearchView>,
@@ -89,7 +89,6 @@ pub struct Delegate {
     pub(crate) selected_matches: Vec<SelectedMatch>,
     pub(crate) collapsed_paths: HashSet<ProjectPath>,
     pub(crate) query_editor: Option<Entity<Editor>>,
-    pub(crate) regex_language: Option<Arc<Language>>,
 }
 
 /// Wrapper with Eq is path + range equality
@@ -330,7 +329,6 @@ impl Delegate {
                 selected_matches: Vec::new(),
                 collapsed_paths: HashSet::default(),
                 query_editor: None,
-                regex_language: None,
             });
 
             this
@@ -599,21 +597,13 @@ impl Delegate {
     }
 
     pub(crate) fn adjust_query_regex_language(&self, cx: &mut App) {
-        let Some(query_buffer) = self
-            .query_editor
-            .as_ref()
-            .and_then(|query_editor| query_editor.read(cx).buffer().read(cx).as_singleton())
-        else {
-            return;
-        };
-        let language = if self.search_options.contains(SearchOptions::REGEX) {
-            self.regex_language.clone()
-        } else {
-            None
-        };
-        query_buffer.update(cx, |query_buffer, cx| {
-            query_buffer.set_language(language, cx);
-        });
+        if let Some(query_editor) = &self.query_editor {
+            highlight_query_as_regex(
+                query_editor,
+                self.search_options.contains(SearchOptions::REGEX),
+                cx,
+            );
+        }
     }
 }
 

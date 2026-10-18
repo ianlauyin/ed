@@ -232,7 +232,17 @@ impl FallbackHighlighter {
         if syntax.name == syntax_set.find_syntax_plain_text().name {
             return None;
         }
-        Some(Self {
+        Some(Self::new(syntax, text))
+    }
+
+    /// Highlights with the bundled syntax of the given name, regardless of the
+    /// buffer's language or file.
+    pub(crate) fn for_syntax_name(name: &str, text: &TextBufferSnapshot) -> Option<Self> {
+        Some(Self::new(SYNTAX_SET.find_syntax_by_name(name)?, text))
+    }
+
+    fn new(syntax: &'static SyntaxReference, text: &TextBufferSnapshot) -> Self {
+        Self {
             syntax,
             cache: Mutex::new(Cache {
                 version: text.version().clone(),
@@ -240,7 +250,7 @@ impl FallbackHighlighter {
                 frontier: 0,
                 line_text: String::new(),
             }),
-        })
+        }
     }
 
     pub fn syntax_name(&self) -> &str {
@@ -576,6 +586,23 @@ mod tests {
             runs.contains(&("return".into(), "keyword".into())),
             "{runs:?}"
         );
+    }
+
+    #[test]
+    fn test_highlights_regex_query() {
+        let theme = theme();
+        set_theme(&theme);
+        let buffer = TextBuffer::new(
+            ReplicaId::LOCAL,
+            BufferId::new(1).unwrap(),
+            r"^fn\s+(\w+)\(.*$",
+        );
+        let highlighter =
+            FallbackHighlighter::for_syntax_name("Regular Expression", &buffer.snapshot())
+                .unwrap();
+        let runs = highlighted(&highlighter, &buffer.snapshot(), &theme);
+        assert!(runs.iter().any(|(text, _)| text == "^"), "{runs:?}");
+        assert!(runs.iter().any(|(text, _)| text == r"\s"), "{runs:?}");
     }
 
     #[test]

@@ -180,16 +180,6 @@ fn main() {
 
     let app_version = AppVersion::load(env!("CARGO_PKG_VERSION"));
 
-    if args.system_specs {
-        let system_specs = system_specs::SystemSpecs::new_stateless(
-            app_version,
-            system_specs::platform::os_name(),
-            system_specs::platform::os_version(),
-        );
-        println!("ed System Specs (from CLI):\n{}", system_specs);
-        return;
-    }
-
     rayon::ThreadPoolBuilder::new()
         .num_threads(std::thread::available_parallelism().map_or(1, |n| n.get().div_ceil(2)))
         .stack_size(10 * 1024 * 1024)
@@ -344,8 +334,8 @@ fn main() {
         search::init(cx);
         lsp_locations::init(cx);
         cx.set_global(workspace::PaneSearchBarCallbacks {
-            setup_search_bar: |languages, toolbar, window, cx| {
-                let search_bar = cx.new(|cx| search::BufferSearchBar::new(languages, window, cx));
+            setup_search_bar: |toolbar, window, cx| {
+                let search_bar = cx.new(|cx| search::BufferSearchBar::new(window, cx));
                 toolbar.update(cx, |toolbar, cx| {
                     toolbar.add_item(search_bar, window, cx);
                 });
@@ -1048,14 +1038,6 @@ struct Args {
     /// Instructs zed to run as a dev server on this machine. (not implemented)
     #[arg(long)]
     dev_server_token: Option<String>,
-
-    /// Prints system specs.
-    ///
-    /// Useful for submitting issues on GitHub when encountering a bug that
-    /// prevents Zed from starting, so you can't run `zed: copy system specs to
-    /// clipboard`
-    #[arg(long)]
-    system_specs: bool,
 
     /// Output current environment variables as JSON to stdout
     #[arg(long, hide = true)]

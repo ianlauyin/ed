@@ -239,3 +239,18 @@ pub(crate) fn show_no_more_matches(window: &mut Window, cx: &mut App) {
         })
     });
 }
+
+/// Highlights a search query editor with the fallback regex syntax while regex
+/// mode is on.
+pub(crate) fn highlight_query_as_regex(
+    query_editor: &Entity<editor::Editor>,
+    regex: bool,
+    cx: &mut App,
+) {
+    let Some(query_buffer) = query_editor.read(cx).buffer().read(cx).as_singleton() else {
+        return;
+    };
+    query_buffer.update(cx, |query_buffer, cx| {
+        query_buffer.set_fallback_syntax(regex.then_some("Regular Expression"), cx);
+    });
+}

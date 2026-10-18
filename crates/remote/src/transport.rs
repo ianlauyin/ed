@@ -57,7 +57,6 @@ fn parse_platform(output: &str) -> Result<RemotePlatform> {
 /// The output is parsed by [`parse_os_version`].
 pub(crate) fn os_version_command(os: RemoteOs) -> (&'static str, &'static [&'static str]) {
     match os {
-        // Matches the `/etc/os-release` parsing in `system_specs::platform::os_version`.
         RemoteOs::Linux => ("cat", &["/etc/os-release"]),
         RemoteOs::MacOs => ("sw_vers", &["-productVersion"]),
         // Prints e.g. "Microsoft Windows [Version 10.0.19045.5011]".
@@ -66,7 +65,7 @@ pub(crate) fn os_version_command(os: RemoteOs) -> (&'static str, &'static [&'sta
 }
 
 /// Parses the output of [`os_version_command`] into a human-readable version
-/// string, matching the conventions used by `system_specs::platform::os_version`.
+/// string.
 ///
 /// For Linux this is `"{ID} {VERSION_ID}"` (e.g. `"ubuntu 24.04"`); for macOS it
 /// is the product version (e.g. `"15.6.1"`); for Windows it is the
@@ -95,8 +94,7 @@ pub(crate) fn parse_os_version(os: RemoteOs, output: &str) -> Option<String> {
 /// e.g. `"Microsoft Windows [Version 10.0.19045.5011]"` -> `"10.0.19045"`.
 ///
 /// Scans for the first dotted run of integers (rather than relying on the
-/// surrounding, potentially localized, text) and drops the trailing revision so
-/// the format matches `system_specs::platform::os_version` on Windows.
+/// surrounding, potentially localized, text) and drops the trailing revision.
 fn parse_windows_version(output: &str) -> Option<String> {
     output
         .split(|c: char| !c.is_ascii_digit() && c != '.')

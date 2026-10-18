@@ -2,7 +2,7 @@
 description = "A focused single-user code editor."
 edition.workspace = true
 name = "zed"
-version = "1.30.1"
+version = "1.30.2"
 default-run = "ed"
 
 [lints]
@@ -38,7 +38,6 @@ gpui = { workspace = true, features = ["stacker"] }
 gpui_platform = { workspace = true, features = ["font-kit"] }
 gpui_tokio.workspace = true
 rayon.workspace = true
-system_specs.workspace = true
 tabular_data_preview.workspace = true
 
 image_viewer.workspace = true

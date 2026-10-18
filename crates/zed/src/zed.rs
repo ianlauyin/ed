@@ -716,13 +716,7 @@ fn initialize_pane(
             toolbar.add_item(file_diff_style_toolbar, window, cx);
             let breadcrumbs = cx.new(|_| Breadcrumbs::new());
             toolbar.add_item(breadcrumbs, window, cx);
-            let buffer_search_bar = cx.new(|cx| {
-                search::BufferSearchBar::new(
-                    Some(workspace.project().read(cx).languages().clone()),
-                    window,
-                    cx,
-                )
-            });
+            let buffer_search_bar = cx.new(|cx| search::BufferSearchBar::new(window, cx));
             toolbar.add_item(buffer_search_bar.clone(), window, cx);
             let quick_action_bar =
                 cx.new(|cx| QuickActionBar::new(buffer_search_bar, workspace, cx));

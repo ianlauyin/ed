@@ -4,13 +4,13 @@ use crate::{
     SearchOption, SearchOptions, SearchSource, SelectNextMatch, SelectPreviousMatch,
     ToggleCaseSensitive, ToggleIncludeIgnored, ToggleRegex, ToggleReplace, ToggleWholeWord,
     buffer_search::Deploy,
+    highlight_query_as_regex,
     search_bar::{
         ActionButtonState, HistoryNavigationDirection, alignment_element, input_base_styles,
         render_action_button, render_text_input, should_navigate_history,
     },
     text_finder::TextFinder,
 };
-use anyhow::Context as _;
 use collections::HashMap;
 use editor::{
     Anchor, Editor, EditorEvent, EditorSettings, MAX_TAB_TITLE_LEN, MultiBuffer, PathKey,
@@ -28,7 +28,7 @@ use gpui::{
     actions, div,
 };
 use itertools::Itertools;
-use language::{Buffer, Language};
+use language::Buffer;
 use menu::Confirm;
 use multi_buffer;
 use project::{
@@ -377,7 +377,6 @@ pub struct ProjectSearchView {
     pending_replace_all: bool,
     pending_replace_next: bool,
     included_opened_only: bool,
-    regex_language: Option<Arc<Language>>,
     debounced_search: Option<Task<()>>,
     last_search_signature: Option<SearchSignature>,
     _subscriptions: Vec<Subscription>,
@@ -1618,22 +1617,6 @@ impl ProjectSearchView {
             });
         }));
 
-        let languages = project.read(cx).languages().clone();
-        cx.spawn(async move |project_search_view, cx| {
-            let regex_language = languages
-                .language_for_name("regex")
-                .await
-                .context("loading regex language")?;
-            project_search_view
-                .update(cx, |project_search_view, cx| {
-                    project_search_view.regex_language = Some(regex_language);
-                    project_search_view.adjust_query_regex_language(cx);
-                })
-                .ok();
-            anyhow::Ok(())
-        })
-        .detach_and_log_err(cx);
-
         // Check if Worktrees have all been previously indexed
         let mut this = ProjectSearchView {
             workspace,
@@ -1653,13 +1636,13 @@ impl ProjectSearchView {
             pending_replace_all: false,
             pending_replace_next: false,
             included_opened_only: false,
-            regex_language: None,
             debounced_search: None,
             last_search_signature: None,
             _subscriptions: subscriptions,
         };
 
         this.entity_changed(window, cx);
+        this.adjust_query_regex_language(cx);
         this
     }
 
@@ -2532,25 +2515,11 @@ impl ProjectSearchView {
     }
 
     fn adjust_query_regex_language(&self, cx: &mut App) {
-        let enable = self.search_options.contains(SearchOptions::REGEX);
-        let query_buffer = self
-            .query_editor
-            .read(cx)
-            .buffer()
-            .read(cx)
-            .as_singleton()
-            .expect("query editor should be backed by a singleton buffer");
-        if enable {
-            if let Some(regex_language) = self.regex_language.clone() {
-                query_buffer.update(cx, |query_buffer, cx| {
-                    query_buffer.set_language(Some(regex_language), cx);
-                })
-            }
-        } else {
-            query_buffer.update(cx, |query_buffer, cx| {
-                query_buffer.set_language(None, cx);
-            })
-        }
+        highlight_query_as_regex(
+            &self.query_editor,
+            self.search_options.contains(SearchOptions::REGEX),
+            cx,
+        );
     }
 }
 

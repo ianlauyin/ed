@@ -8,3 +8,12 @@
 - no support for hard click touchpad (lookup), add or put right click menu
 - rethink cmd+J, terminal/central terminal behavior
 - add webkit tab to render html?
+
+# mermaid test
+```mermaid
+graph TD
+    A[Start] --> B{Ready?}
+    B -- Yes --> C[Run Tests]
+    B -- No --> D[Fix Issues]
+    C --> E[Done]
+```

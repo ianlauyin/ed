@@ -1328,8 +1328,7 @@ pub fn new_terminal_pane(
 
         let toolbar = pane.toolbar().clone();
         if let Some(callbacks) = cx.try_global::<workspace::PaneSearchBarCallbacks>() {
-            let languages = Some(project.read(cx).languages().clone());
-            (callbacks.setup_search_bar)(languages, &toolbar, window, cx);
+            (callbacks.setup_search_bar)(&toolbar, window, cx);
         }
         let breadcrumbs = cx.new(|_| Breadcrumbs::new());
         toolbar.update(cx, |toolbar, cx| {

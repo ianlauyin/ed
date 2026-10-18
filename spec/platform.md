@@ -80,6 +80,8 @@ remote server supports macOS and Linux.
 - Linux desktop, FreeBSD, Windows, and browser backends, packaging, and associated
   build/test/release tooling are removed.
 - Unsupported editor and CLI targets fail with a macOS-only diagnostic.
+- System-specification reports are removed: no `--system-specs` flag or
+  copy-system-specs action. Filesystem-watcher exports omit OS metadata.
 - File formats and protocol data may describe other operating systems, paths,
   line endings, or remote hosts; these do not imply editor host support.
 

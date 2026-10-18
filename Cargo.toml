@@ -88,7 +88,6 @@ members = [
     "crates/sum_tree",
     "crates/svg_preview",
     "crates/syntax_theme",
-    "crates/system_specs",
     "crates/tab_switcher",
     "crates/tabular_data_preview",
     "crates/task",
@@ -206,7 +205,6 @@ sqlez_macros = { path = "crates/sqlez_macros" }
 sum_tree = { path = "crates/sum_tree" }
 svg_preview = { path = "crates/svg_preview" }
 syntax_theme = { path = "crates/syntax_theme" }
-system_specs = { path = "crates/system_specs" }
 tab_switcher = { path = "crates/tab_switcher" }
 tabular_data_preview = { path = "crates/tabular_data_preview"}
 task = { path = "crates/task" }
@@ -288,7 +286,6 @@ html5ever = "0.39"
 http = "1.1"
 http-body = "1.0"
 httparse = "1.10"
-human_bytes = "0.4.1"
 ignore = "0.4.22"
 # image's default features minus "avif", which only adds an encoder (rav1e);
 # decoding AVIF would additionally need the non-default "avif-native" feature.
@@ -321,7 +318,7 @@ log = { version = "0.4", default-features = false, features = ["std"] }
 lru = "0.16"
 mach2 = "0.6"
 markup5ever_rcdom = "0.39"
-merman = { version = "=0.8.0-alpha.5", default-features = false }
+merman = { version = "=0.9.0", default-features = false }
 nix = "0.30"
 nucleo = { package = "nucleo-matcher", version = "0.3" }
 objc2 = "0.6.5"
@@ -378,7 +375,6 @@ ordered-float = "5"
 palette = { version = "0.7.5", default-features = false, features = ["std"] }
 parking_lot = "0.12.1"
 pathfinder_geometry = "0.5"
-pciid-parser = "0.8.0"
 percent-encoding = "2.3.2"
 pet = { git = "https://github.com/zed-industries/python-environment-tools.git", rev = "5aad7164bfc2a58977b103c8ef8fdd7302ed2e9f" }
 pet-conda = { git = "https://github.com/zed-industries/python-environment-tools.git", rev = "5aad7164bfc2a58977b103c8ef8fdd7302ed2e9f" }

@@ -5,6 +5,7 @@ use crate::{
     SearchOptions, SearchSource, SelectAllMatches, SelectNextMatch, SelectPreviousMatch,
     ToggleCaseSensitive, ToggleRegex, ToggleReplace, ToggleSelection, ToggleWholeWord,
     buffer_search::registrar::WithResultsOrExternalQuery,
+    highlight_query_as_regex,
     search_bar::{
         ActionButtonState, HistoryNavigationDirection, alignment_element,
         filter_search_results_input, input_base_styles, render_action_button, render_text_input,
@@ -24,7 +25,6 @@ use gpui::{
     IntoElement, KeyContext, ParentElement as _, Render, ScrollHandle, Styled, Subscription, Task,
     TaskExt, WeakEntity, Window, div,
 };
-use language::{Language, LanguageRegistry};
 use project::{
     search::SearchQuery,
     search_history::{SearchHistory, SearchHistoryCursor},
@@ -89,7 +89,6 @@ pub struct BufferSearchBar {
     replace_enabled: bool,
     selection_search_enabled: Option<FilteredSearchRange>,
     scroll_handle: ScrollHandle,
-    regex_language: Option<Arc<Language>>,
     splittable_editor: Option<WeakEntity<SplittableEditor>>,
     _splittable_editor_subscription: Option<Subscription>,
 }
@@ -730,11 +729,7 @@ impl BufferSearchBar {
         ));
     }
 
-    pub fn new(
-        languages: Option<Arc<LanguageRegistry>>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
         let query_editor = cx.new(|cx| {
             let mut editor = Editor::auto_height(1, 4, window, cx);
             editor.set_use_autoclose(false);
@@ -748,38 +743,8 @@ impl BufferSearchBar {
             .detach();
 
         let search_options = SearchOptions::from_settings(&EditorSettings::get_global(cx).search);
-        if let Some(languages) = languages {
-            let query_buffer = query_editor
-                .read(cx)
-                .buffer()
-                .read(cx)
-                .as_singleton()
-                .expect("query editor should be backed by a singleton buffer");
 
-            query_buffer
-                .read(cx)
-                .set_language_registry(languages.clone());
-
-            cx.spawn(async move |buffer_search_bar, cx| {
-                use anyhow::Context as _;
-
-                let regex_language = languages
-                    .language_for_name("regex")
-                    .await
-                    .context("loading regex language")?;
-
-                buffer_search_bar
-                    .update(cx, |buffer_search_bar, cx| {
-                        buffer_search_bar.regex_language = Some(regex_language);
-                        buffer_search_bar.adjust_query_regex_language(cx);
-                    })
-                    .ok();
-                anyhow::Ok(())
-            })
-            .detach_and_log_err(cx);
-        }
-
-        Self {
+        let this = Self {
             query_editor,
             query_editor_focused: false,
             replacement_editor,
@@ -805,10 +770,11 @@ impl BufferSearchBar {
             replace_enabled: false,
             selection_search_enabled: None,
             scroll_handle: ScrollHandle::new(),
-            regex_language: None,
             splittable_editor: None,
             _splittable_editor_subscription: None,
-        }
+        };
+        this.adjust_query_regex_language(cx);
+        this
     }
 
     pub fn is_dismissed(&self) -> bool {
@@ -1820,26 +1786,11 @@ impl BufferSearchBar {
     }
 
     fn adjust_query_regex_language(&self, cx: &mut App) {
-        let enable = self.search_options.contains(SearchOptions::REGEX);
-        let query_buffer = self
-            .query_editor
-            .read(cx)
-            .buffer()
-            .read(cx)
-            .as_singleton()
-            .expect("query editor should be backed by a singleton buffer");
-
-        if enable {
-            if let Some(regex_language) = self.regex_language.clone() {
-                query_buffer.update(cx, |query_buffer, cx| {
-                    query_buffer.set_language(Some(regex_language), cx);
-                })
-            }
-        } else {
-            query_buffer.update(cx, |query_buffer, cx| {
-                query_buffer.set_language(None, cx);
-            })
-        }
+        highlight_query_as_regex(
+            &self.query_editor,
+            self.search_options.contains(SearchOptions::REGEX),
+            cx,
+        );
     }
 
     /// Updates the searchable item's search options to match the

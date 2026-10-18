@@ -8,7 +8,7 @@ use db::{
 use editor::Editor;
 use gpui::{
     App, AppContext, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
-    Modifiers, Subscription, Task, TaskExt as _, WeakEntity, actions,
+    Modifiers, Subscription, Task, WeakEntity, actions,
 };
 use language::Buffer;
 use picker::Picker;
@@ -424,7 +424,6 @@ impl TextFinder {
         cx: &mut Context<Self>,
     ) -> Self {
         let project = delegate.project(cx).clone();
-        let languages = project.read(cx).languages().clone();
         let preview = picker_preview::editor_preview(project, window, cx);
         let query_editor = cx.new(|cx| Editor::single_line(window, cx));
         let erased_query_editor = query_editor.update(cx, |editor, cx| editor.erased(cx));
@@ -452,26 +451,8 @@ impl TextFinder {
                 picker.set_query(&query, window, cx);
                 picker.select_query(window, cx);
             }
+            picker.delegate.adjust_query_regex_language(cx);
         });
-        cx.spawn({
-            let picker = picker.downgrade();
-            async move |_, cx| {
-                use anyhow::Context as _;
-
-                let regex_language = languages
-                    .language_for_name("regex")
-                    .await
-                    .context("loading regex language")?;
-                picker
-                    .update(cx, |picker, cx| {
-                        picker.delegate.regex_language = Some(regex_language);
-                        picker.delegate.adjust_query_regex_language(cx);
-                    })
-                    .ok();
-                anyhow::Ok(())
-            }
-        })
-        .detach_and_log_err(cx);
         let subscription = cx.subscribe(&picker, |_, _, _: &DismissEvent, cx| {
             cx.emit(DismissEvent);
         });

@@ -1,6 +1,8 @@
 use std::sync::atomic::{AtomicU64, Ordering};
 
 use anyhow::{Context as _, Result, anyhow};
+use merman::svg::{CssOverridePolicy, SvgOutputPolicy, SvgPipelinePreset, SvgRenderOptions};
+use merman::{Engine, OperationControl, RenderOutput, RenderRequest, Renderer, SvgRequest};
 
 use crate::{MermaidTheme, css_color};
 
@@ -10,24 +12,40 @@ pub(super) fn render_mermaid(source: &str, theme: &MermaidTheme) -> Result<Strin
     let diagram_id = format!("merman-{id}");
 
     let config = to_merman_config(theme);
-    let renderer = merman::svg::HeadlessRenderer::new()
-        .with_site_config(config)
-        .with_vendored_text_measurer()
-        .with_diagram_id(&diagram_id);
+    let renderer = Renderer::new().with_engine(Engine::new().with_site_config(config));
     // Apply merman's raster-safe pipeline before Zed-specific styling. The
     // pipeline handles generic rasterizer compatibility cleanup: foreignObject
     // fallback text, unsupported CSS removal, and invalid SVG attribute cleanup.
     // Zed also strips merman's existing `!important` declarations before
     // injecting its own theme CSS so host styling wins consistently in usvg/resvg.
-    let pipeline = merman::svg::SvgPipeline::resvg_safe()
-        .with_postprocessor(merman::svg::CssOverridePostprocessor::strip_existing_important());
+    let pipeline = SvgOutputPolicy {
+        preset: SvgPipelinePreset::ResvgSafe,
+        css_override_policy: CssOverridePolicy::StripExistingImportant,
+        // Merman's root canvas is transparent by default; keep the editor theme.
+        root_background_color: Some(css_color(theme.background)),
+        ..Default::default()
+    }
+    .pipeline();
 
-    let svg = renderer
-        .render_svg_with_pipeline_sync(source, &pipeline)
-        .context("merman render failed")?
-        .ok_or_else(|| anyhow!("merman returned no SVG for the given input"))?;
+    let output = renderer
+        .render(RenderRequest::svg(
+            source,
+            OperationControl::new(),
+            SvgRequest {
+                options: SvgRenderOptions {
+                    diagram_id: Some(diagram_id),
+                    ..Default::default()
+                },
+                pipeline: Some(pipeline),
+                ..Default::default()
+            },
+        ))
+        .context("merman render failed")?;
+    let RenderOutput::Svg(Some(svg)) = output else {
+        return Err(anyhow!("merman returned no SVG for the given input"));
+    };
 
-    Ok(svg)
+    Ok(svg.into_parts().0)
 }
 
 fn to_merman_config(theme: &MermaidTheme) -> merman::MermaidConfig {

@@ -69,8 +69,6 @@ struct WorktreeExclusions {
 #[derive(Serialize)]
 struct Export {
     zed_version: String,
-    os_name: String,
-    os_version: String,
     watcher: WatchSnapshot,
     worktree_scan_exclusions: Vec<WorktreeExclusions>,
     exclusion_scope: &'static str,
@@ -401,7 +399,6 @@ impl WatcherDebug {
         let watcher = recording.snapshot();
         let worktree_scan_exclusions = worktree_exclusions(&self.app_state, cx);
         let zed_version = AppVersion::global(cx).to_string();
-        let os_name = system_specs::platform::os_name();
         let directory = std::env::home_dir().unwrap_or_default();
         let path = cx.prompt_for_new_path(&directory, Some("filesystem-watcher.json"));
         let fs = self.app_state.fs.clone();
@@ -416,8 +413,6 @@ impl WatcherDebug {
                 cx.background_spawn(async move {
                     let export = Export {
                         zed_version,
-                        os_name,
-                        os_version: system_specs::platform::os_version(),
                         watcher,
                         worktree_scan_exclusions,
                         exclusion_scope: EXCLUSION_SCOPE,

@@ -140,6 +140,7 @@ pub struct Buffer {
     _settings_observer: Option<gpui::Subscription>,
     tree_sitter_data: Arc<TreeSitterData>,
     fallback_highlighter: Option<Arc<FallbackHighlighter>>,
+    fallback_syntax_override: Option<&'static str>,
     encoding: &'static Encoding,
     has_bom: bool,
     reload_with_encoding_txns: HashMap<TransactionId, (&'static Encoding, bool)>,
@@ -1158,6 +1159,7 @@ impl Buffer {
             saved_mtime,
             tree_sitter_data: Arc::new(tree_sitter_data),
             fallback_highlighter: None,
+            fallback_syntax_override: None,
             saved_version: buffer.version(),
             preview_version: buffer.version(),
             reload_task: None,
@@ -1559,10 +1561,26 @@ impl Buffer {
         cx.emit(BufferEvent::LanguageChanged(has_fresh_language));
     }
 
+    /// Highlights this buffer with the named bundled fallback syntax (e.g.
+    /// "Regular Expression") instead of picking one from its language or file.
+    pub fn set_fallback_syntax(&mut self, name: Option<&'static str>, cx: &mut Context<Self>) {
+        if self.fallback_syntax_override == name {
+            return;
+        }
+        self.fallback_syntax_override = name;
+        self.refresh_fallback_highlighter();
+        self.was_changed();
+        self.non_text_state_update_count += 1;
+        cx.notify();
+    }
+
     fn refresh_fallback_highlighter(&mut self) {
-        let file_name = self.file.as_ref().and_then(|file| file.path().file_name());
-        let highlighter =
-            FallbackHighlighter::for_buffer(self.language.as_deref(), file_name, &self.text);
+        let highlighter = if let Some(name) = self.fallback_syntax_override {
+            FallbackHighlighter::for_syntax_name(name, &self.text)
+        } else {
+            let file_name = self.file.as_ref().and_then(|file| file.path().file_name());
+            FallbackHighlighter::for_buffer(self.language.as_deref(), file_name, &self.text)
+        };
         let unchanged = match (&self.fallback_highlighter, &highlighter) {
             (Some(old), Some(new)) => old.syntax_name() == new.syntax_name(),
             (None, None) => true,

@@ -42,3 +42,13 @@
   corner.
 - The horizontal scrollbar matches the `ui` scrollbars (project panel): no
   track, a thin rounded thumb inset in a 14px hitbox.
+
+## Markdown diagrams
+
+- Mermaid rendering uses Merman 0.9 with default features disabled. Only the
+  diagram families supported by the Markdown preview are compiled: flowchart,
+  sequence, class, state, ER, Gantt, pie, git graph, mindmap, timeline, quadrant,
+  XY chart, and journey. Cytoscape layout remains available for mindmaps.
+- Rendering uses deterministic text measurement and raster-safe SVG output,
+  with native text fallbacks for HTML labels. Diagram canvases, text, and accents
+  follow the editor theme; upstream CSS cannot override the editor's styling.
