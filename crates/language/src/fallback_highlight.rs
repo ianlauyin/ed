@@ -25,6 +25,9 @@ const MAX_BUFFER_LEN: usize = 1024 * 1024;
 /// tokenization gets very slow on them (e.g. minified files).
 const MAX_LINE_LEN: u32 = 4096;
 const CHECKPOINT_INTERVAL: u32 = 16;
+/// Injections larger than this are left unhighlighted, as they are tokenized
+/// from their start for every chunk that is highlighted.
+const MAX_INJECTION_LEN: usize = 64 * 1024;
 
 static SYNTAX_SET: LazyLock<SyntaxSet> = LazyLock::new(two_face::syntax::extra_newlines);
 
@@ -384,7 +387,7 @@ impl Cache {
                 }
 
                 let checkpoint = (row % CHECKPOINT_INTERVAL == 0).then(|| Box::new(state.clone()));
-                let runs = self.tokenize_line(text, row, &mut state);
+                let runs = tokenize_line(&mut self.line_text, text, row, &mut state);
                 let line = Line {
                     runs,
                     checkpoint,
@@ -399,52 +402,106 @@ impl Cache {
             };
         }
     }
+}
 
-    fn tokenize_line(
-        &mut self,
-        text: &TextBufferSnapshot,
-        row: u32,
-        state: &mut Checkpoint,
-    ) -> SmallVec<[LineRun; 4]> {
-        let mut runs = SmallVec::new();
-        let line_len = text.line_len(row);
-        if line_len > MAX_LINE_LEN {
-            return runs;
-        }
-        self.line_text.clear();
-        self.line_text
-            .extend(text.text_for_range(Point::new(row, 0)..Point::new(row, line_len)));
-        self.line_text.push('\n');
-        let Ok(ops) = state.parse.parse_line(&self.line_text, &SYNTAX_SET) else {
-            return runs;
-        };
-
-        let mut push_run = |start: usize, end: usize, scopes: &ScopeStack| {
-            let end = end.min(line_len as usize);
-            if start >= end {
-                return;
-            }
-            let Some(class) = classify(scopes.as_slice()) else {
-                return;
-            };
-            match runs.last_mut() {
-                Some((_, last_end, last_class))
-                    if *last_class == class && *last_end == start as u32 =>
-                {
-                    *last_end = end as u32;
-                }
-                _ => runs.push((start as u32, end as u32, class)),
-            }
-        };
-        let mut start = 0;
-        for (offset, op) in ops {
-            push_run(start, offset, &state.scopes);
-            start = offset;
-            state.scopes.apply(&op).ok();
-        }
-        push_run(start, line_len as usize, &state.scopes);
-        runs
+fn tokenize_line(
+    line_text: &mut String,
+    text: &TextBufferSnapshot,
+    row: u32,
+    state: &mut Checkpoint,
+) -> SmallVec<[LineRun; 4]> {
+    let mut runs = SmallVec::new();
+    let line_len = text.line_len(row);
+    if line_len > MAX_LINE_LEN {
+        return runs;
     }
+    line_text.clear();
+    line_text.extend(text.text_for_range(Point::new(row, 0)..Point::new(row, line_len)));
+    line_text.push('\n');
+    let Ok(ops) = state.parse.parse_line(line_text, &SYNTAX_SET) else {
+        return runs;
+    };
+
+    let mut push_run = |start: usize, end: usize, scopes: &ScopeStack| {
+        let end = end.min(line_len as usize);
+        if start >= end {
+            return;
+        }
+        let Some(class) = classify(scopes.as_slice()) else {
+            return;
+        };
+        match runs.last_mut() {
+            Some((_, last_end, last_class))
+                if *last_class == class && *last_end == start as u32 =>
+            {
+                *last_end = end as u32;
+            }
+            _ => runs.push((start as u32, end as u32, class)),
+        }
+    };
+    let mut start = 0;
+    for (offset, op) in ops {
+        push_run(start, offset, &state.scopes);
+        start = offset;
+        state.scopes.apply(&op).ok();
+    }
+    push_run(start, line_len as usize, &state.scopes);
+    runs
+}
+
+/// Highlights the part of an injection (e.g. a Markdown code block) that lies
+/// in `range`, for an injected language without a tree-sitter grammar. The
+/// syntax is looked up by the injection's language name. Tokenizing starts at
+/// the beginning of the injection every time, so this is only meant for
+/// injections of moderate size.
+pub(crate) fn highlight_injection(
+    language_name: &str,
+    text: &TextBufferSnapshot,
+    content_range: Range<usize>,
+    range: Range<usize>,
+) -> Vec<(Range<usize>, HighlightId)> {
+    let mut runs = Vec::new();
+    if content_range.len() > MAX_INJECTION_LEN {
+        return runs;
+    }
+    let syntax_set = &*SYNTAX_SET;
+    let Some(syntax) = syntax_set
+        .find_syntax_by_token(language_name)
+        .filter(|syntax| syntax.name != syntax_set.find_syntax_plain_text().name)
+    else {
+        return runs;
+    };
+    let range = range.start.max(content_range.start)..range.end.min(content_range.end);
+    if range.is_empty() {
+        return runs;
+    }
+
+    let start_row = content_range.start.to_point(text).row;
+    let end_row = range.end.to_point(text).row;
+    let mut state = Checkpoint {
+        parse: ParseState::new(syntax),
+        scopes: ScopeStack::new(),
+    };
+    let mut line_text = String::new();
+    let highlight_map = HIGHLIGHT_MAP.read();
+    for row in start_row..=end_row {
+        let line_runs = tokenize_line(&mut line_text, text, row, &mut state);
+        let line_start = text.point_to_offset(Point::new(row, 0));
+        if line_start + (text.line_len(row) as usize) < range.start {
+            continue;
+        }
+        for (run_start, run_end, class) in line_runs {
+            let run_range = (line_start + run_start as usize).max(range.start)
+                ..(line_start + run_end as usize).min(range.end);
+            if run_range.is_empty() {
+                continue;
+            }
+            if let Some(highlight_id) = highlight_map.get(language_core::CaptureId(class as u32)) {
+                runs.push((run_range, highlight_id));
+            }
+        }
+    }
+    runs
 }
 
 #[cfg(test)]
@@ -518,6 +575,48 @@ mod tests {
         assert!(
             runs.contains(&("return".into(), "keyword".into())),
             "{runs:?}"
+        );
+    }
+
+    #[test]
+    fn test_highlights_injection() {
+        let theme = theme();
+        set_theme(&theme);
+        let source = "# q\n```sql\nSELECT 1\nFROM t;\n```\n";
+        let buffer = TextBuffer::new(ReplicaId::LOCAL, BufferId::new(1).unwrap(), source);
+        let text = buffer.snapshot();
+        let content_start = source.find("SELECT").unwrap();
+        let content_range = content_start..source.rfind("```").unwrap();
+        let from_row = source.find("FROM").unwrap();
+        let runs = |range: Range<usize>| {
+            highlight_injection("sql", &text, content_range.clone(), range)
+                .into_iter()
+                .map(|(range, id)| {
+                    (
+                        source[range].to_string(),
+                        theme.get_capture_name(id).unwrap().to_string(),
+                    )
+                })
+                .collect::<Vec<_>>()
+        };
+
+        let all = runs(0..source.len());
+        assert!(
+            all.contains(&("SELECT".into(), "keyword".into())),
+            "{all:?}"
+        );
+        assert!(all.contains(&("FROM".into(), "keyword".into())), "{all:?}");
+        // Only the requested range is returned, even though tokenizing
+        // starts at the beginning of the injection.
+        let tail = runs(from_row..source.len());
+        assert!(tail.iter().all(|(text, _)| text != "SELECT"), "{tail:?}");
+        assert!(
+            tail.contains(&("FROM".into(), "keyword".into())),
+            "{tail:?}"
+        );
+        assert!(
+            highlight_injection("no-such-language", &text, content_range, 0..source.len())
+                .is_empty()
         );
     }
 

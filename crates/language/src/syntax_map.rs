@@ -200,8 +200,11 @@ enum SyntaxLayerContent {
         language: Arc<Language>,
         included_sub_ranges: Option<Vec<Range<Anchor>>>,
     },
+    /// An injection whose language is unknown or has no grammar.
     Pending {
         language_name: Arc<str>,
+        /// The injected text, without the language name.
+        content_range: Range<Anchor>,
     },
 }
 
@@ -224,7 +227,7 @@ impl SyntaxLayerContent {
     fn language_name(&self) -> SharedString {
         match self {
             SyntaxLayerContent::Parsed { language, .. } => language.name().0,
-            SyntaxLayerContent::Pending { language_name } => {
+            SyntaxLayerContent::Pending { language_name, .. } => {
                 SharedString::from(language_name.clone())
             }
         }
@@ -581,14 +584,14 @@ impl SyntaxSnapshot {
                 .filter::<_, ()>(text, |summary| summary.contains_unknown_injections);
             cursor.next();
             while let Some(layer) = cursor.item() {
-                let SyntaxLayerContent::Pending { language_name } = &layer.content else {
+                let SyntaxLayerContent::Pending { language_name, .. } = &layer.content else {
                     unreachable!()
                 };
                 if registry
                     .language_for_name_or_extension(language_name)
                     .now_or_never()
                     .and_then(|language| language.ok())
-                    .is_some()
+                    .is_some_and(|language| language.grammar().is_some())
                 {
                     let range = layer.range.to_offset(text);
                     log::trace!("reparse range {range:?} for language {language_name:?}");
@@ -968,6 +971,13 @@ impl SyntaxSnapshot {
                 }
                 ParseStepLanguage::Pending { name } => SyntaxLayerContent::Pending {
                     language_name: name,
+                    content_range: match (step.included_ranges.first(), step.included_ranges.last())
+                    {
+                        (Some(first), Some(last)) => {
+                            text.anchor_before(first.start_byte)..text.anchor_after(last.end_byte)
+                        }
+                        _ => step.range.clone(),
+                    },
                 },
             };
 
@@ -1188,6 +1198,41 @@ impl SyntaxSnapshot {
 
     pub fn contains_unknown_injections(&self) -> bool {
         self.layers.summary().contains_unknown_injections
+    }
+
+    /// Returns the language names and content ranges of injections that
+    /// intersect `range` but have no tree-sitter grammar.
+    pub(crate) fn pending_injections(
+        &self,
+        range: Range<usize>,
+        buffer: &BufferSnapshot,
+    ) -> Vec<(Arc<str>, Range<usize>)> {
+        let start = buffer.anchor_before(range.start);
+        let end = buffer.anchor_after(range.end);
+        let mut cursor = self.layers.filter::<_, ()>(buffer, move |summary| {
+            // Like in `layers_for_range`, the summary's range is only
+            // meaningful when all its layers have the same depth.
+            summary.contains_unknown_injections
+                && (summary.max_depth > summary.min_depth
+                    || (summary.range.end.cmp(&start, buffer).is_ge()
+                        && summary.range.start.cmp(&end, buffer).is_le()))
+        });
+        cursor.next();
+        let mut injections = Vec::new();
+        while let Some(layer) = cursor.item() {
+            if let SyntaxLayerContent::Pending {
+                language_name,
+                content_range,
+            } = &layer.content
+            {
+                let content_range = content_range.to_offset(buffer);
+                if content_range.start < range.end && content_range.end > range.start {
+                    injections.push((language_name.clone(), content_range));
+                }
+            }
+            cursor.next();
+        }
+        injections
     }
 
     pub fn language_registry_version(&self) -> usize {
@@ -1740,10 +1785,13 @@ fn get_injections(
                 };
 
             if let Some(language_name) = language_name {
+                // Languages without a grammar stay pending, so that the
+                // injection can still get fallback highlighting.
                 let language = language_registry
                     .language_for_name_or_extension(&language_name)
                     .now_or_never()
-                    .and_then(|language| language.ok());
+                    .and_then(|language| language.ok())
+                    .filter(|language| language.grammar().is_some());
                 let range = text.anchor_before(step_range.start)..text.anchor_after(step_range.end);
 
                 if let Some(language) = language {

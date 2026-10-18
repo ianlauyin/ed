@@ -25,6 +25,11 @@
   - The status bar language button shows the fallback syntax name (e.g.
     "TOML") when a buffer has no language or is Plain Text.
   - Buffers over 1 MiB and lines over 4096 bytes are not highlighted.
+  - Injections (e.g. Markdown code blocks) whose language is unknown or has no
+    grammar (```sql, ```c, ```toml, ...) are highlighted the same way, with the
+    syntax looked up by the injection's language name. Each injection is
+    tokenized from its start, independently of the rest of the buffer;
+    injections over 64 KiB are not highlighted.
   - It obeys the same switch as tree-sitter highlighting
     (`semantic_tokens: "full"` turns it off), and LSP semantic tokens layer on
     top as usual.

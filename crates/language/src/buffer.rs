@@ -4183,7 +4183,7 @@ impl BufferSnapshot {
             .map(|&grammar| (Arc::clone(grammar), grammar.highlight_map()))
             .collect::<SmallVec<[(Arc<Grammar>, HighlightMap); 2]>>();
         let mut runs = Vec::<(Range<usize>, HighlightId)>::new();
-        for region in flattened_highlight_regions(captures, range) {
+        for region in flattened_highlight_regions(captures, range.clone()) {
             let highlight_id = region.stack.iter().rev().find_map(|capture| {
                 let (_, highlight_map) = sources.get(capture.grammar_index)?;
                 highlight_map.get(capture.capture_id)
@@ -4200,6 +4200,38 @@ impl BufferSnapshot {
                 }
                 _ => runs.push((region.range, highlight_id)),
             }
+        }
+        for (language_name, content_range) in self.syntax.pending_injections(range.clone(), self) {
+            let injection_runs = crate::fallback_highlight::highlight_injection(
+                &language_name,
+                &self.text,
+                content_range.clone(),
+                range.clone(),
+            );
+            if injection_runs.is_empty() {
+                continue;
+            }
+            // The injection replaces the host's highlights within its content.
+            let content_range =
+                content_range.start.max(range.start)..content_range.end.min(range.end);
+            let mut merged = Vec::with_capacity(runs.len() + injection_runs.len());
+            for (run_range, highlight_id) in runs {
+                if run_range.start < content_range.start {
+                    merged.push((
+                        run_range.start..run_range.end.min(content_range.start),
+                        highlight_id,
+                    ));
+                }
+                if run_range.end > content_range.end {
+                    merged.push((
+                        run_range.start.max(content_range.end)..run_range.end,
+                        highlight_id,
+                    ));
+                }
+            }
+            merged.extend(injection_runs);
+            merged.sort_unstable_by_key(|(run_range, _)| run_range.start);
+            runs = merged;
         }
         ResolvedHighlights {
             sources,
