@@ -42,6 +42,11 @@
   corner.
 - The horizontal scrollbar matches the `ui` scrollbars (project panel): no
   track, a thin rounded thumb inset in a 14px hitbox.
+- Text inside highlights (search matches, selections, etc.) is recolored to
+  keep `minimum_contrast_for_highlights` against the highlight background.
+  The Markdown preview applies the same rule to its search matches and
+  selection. Both use the shared `ui::utils::highlight_contrast` helpers, so
+  anything else that paints text highlights should go through them too.
 
 ## Markdown diagrams
 

@@ -11,7 +11,8 @@ use anyhow::{Context as _, Result};
 use editor::items::open_resolved_target;
 use editor::scroll::Autoscroll;
 use editor::{
-    Editor, EditorEvent, EditorSettingsScrollbarProxy, MultiBufferOffset, SelectionEffects,
+    Editor, EditorEvent, EditorSettings, EditorSettingsScrollbarProxy, MultiBufferOffset,
+    SelectionEffects,
 };
 use gpui::{
     Action, AnyElement, App, ClipboardItem, Context, Entity, EntityId, EventEmitter, FocusHandle,
@@ -1094,7 +1095,7 @@ impl MarkdownPreviewView {
             project = Some(project_entity);
         }
 
-        let markdown_style = if let Some(theme) = preview_theme {
+        let mut markdown_style = if let Some(theme) = preview_theme {
             MarkdownStyle::themed_with_overrides(
                 MarkdownFont::Preview,
                 theme.colors(),
@@ -1105,6 +1106,8 @@ impl MarkdownPreviewView {
         } else {
             MarkdownStyle::themed(MarkdownFont::Preview, window, cx)
         };
+        markdown_style.minimum_highlight_contrast =
+            EditorSettings::get_global(cx).minimum_contrast_for_highlights;
 
         let mut markdown_element = MarkdownElement::new(self.markdown.clone(), markdown_style)
             .input_focus_handle(self.focus_handle.clone())

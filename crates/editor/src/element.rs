@@ -84,7 +84,7 @@ use sum_tree::Bias;
 use text::{BufferId, ToPoint as _};
 use theme::{ActiveTheme, Appearance, PlayerColor};
 use theme_settings::BufferLineHeight;
-use ui::utils::ensure_minimum_contrast;
+use ui::utils::{ensure_highlight_contrast, merge_highlight_backgrounds};
 use ui::{ButtonLike, POPOVER_Y_PADDING, Tooltip, prelude::*, scrollbars::ShowScrollbar};
 use unicode_segmentation::UnicodeSegmentation;
 use util::{ResultExt, debug_panic};
@@ -2568,7 +2568,7 @@ impl EditorElement {
         selections: &[(PlayerColor, Vec<SelectionLayout>)],
         highlight_ranges: impl IntoIterator<Item = (Range<DisplayPoint>, Hsla)>,
         base_background: Hsla,
-    ) -> Vec<Vec<(Range<DisplayPoint>, Hsla)>> {
+    ) -> Vec<Vec<(Range<usize>, Hsla)>> {
         if rows.start >= rows.end {
             return Vec::new();
         }
@@ -2616,103 +2616,22 @@ impl EditorElement {
             if row_segments.is_empty() {
                 continue;
             }
-            let segments = mem::take(row_segments);
-            let merged = Self::merge_overlapping_ranges(segments, base_background);
-            *row_segments = merged;
+            *row_segments = merge_highlight_backgrounds(mem::take(row_segments), base_background);
         }
         per_row_map
-    }
-
-    /// Merge overlapping ranges by splitting at all range boundaries and blending colors where
-    /// multiple ranges overlap. The result contains non-overlapping ranges ordered from left to right.
-    ///
-    /// Expects `start.row() == end.row()` for each range.
-    fn merge_overlapping_ranges(
-        ranges: Vec<(Range<DisplayPoint>, Hsla)>,
-        base_background: Hsla,
-    ) -> Vec<(Range<DisplayPoint>, Hsla)> {
-        struct Boundary {
-            pos: DisplayPoint,
-            is_start: bool,
-            index: usize,
-            color: Hsla,
-        }
-
-        let mut boundaries: SmallVec<[Boundary; 16]> = SmallVec::with_capacity(ranges.len() * 2);
-        for (index, (range, color)) in ranges.iter().enumerate() {
-            debug_assert!(
-                range.start.row() == range.end.row(),
-                "expects single-row ranges"
-            );
-            if range.start < range.end {
-                boundaries.push(Boundary {
-                    pos: range.start,
-                    is_start: true,
-                    index,
-                    color: *color,
-                });
-                boundaries.push(Boundary {
-                    pos: range.end,
-                    is_start: false,
-                    index,
-                    color: *color,
-                });
-            }
-        }
-
-        if boundaries.is_empty() {
-            return Vec::new();
-        }
-
-        boundaries
-            .sort_unstable_by(|a, b| a.pos.cmp(&b.pos).then_with(|| a.is_start.cmp(&b.is_start)));
-
-        let mut processed_ranges: Vec<(Range<DisplayPoint>, Hsla)> = Vec::new();
-        let mut active_ranges: SmallVec<[(usize, Hsla); 8]> = SmallVec::new();
-
-        let mut i = 0;
-        let mut start_pos = boundaries[0].pos;
-
-        let boundaries_len = boundaries.len();
-        while i < boundaries_len {
-            let current_boundary_pos = boundaries[i].pos;
-            if start_pos < current_boundary_pos {
-                if !active_ranges.is_empty() {
-                    let mut color = base_background;
-                    for &(_, c) in &active_ranges {
-                        color = Hsla::blend(color, c);
-                    }
-                    if let Some((last_range, last_color)) = processed_ranges.last_mut() {
-                        if *last_color == color && last_range.end == start_pos {
-                            last_range.end = current_boundary_pos;
-                        } else {
-                            processed_ranges.push((start_pos..current_boundary_pos, color));
-                        }
-                    } else {
-                        processed_ranges.push((start_pos..current_boundary_pos, color));
-                    }
-                }
-            }
-            while i < boundaries_len && boundaries[i].pos == current_boundary_pos {
-                let active_range = &boundaries[i];
-                if active_range.is_start {
-                    let idx = active_range.index;
-                    let pos = active_ranges
-                        .binary_search_by_key(&idx, |(i, _)| *i)
-                        .unwrap_or_else(|p| p);
-                    active_ranges.insert(pos, (idx, active_range.color));
-                } else {
-                    let idx = active_range.index;
-                    if let Ok(pos) = active_ranges.binary_search_by_key(&idx, |(i, _)| *i) {
-                        active_ranges.remove(pos);
-                    }
-                }
-                i += 1;
-            }
-            start_pos = current_boundary_pos;
-        }
-
-        processed_ranges
+            .into_iter()
+            .map(|row_segments| {
+                row_segments
+                    .into_iter()
+                    .map(|(range, color)| {
+                        (
+                            range.start.column() as usize..range.end.column() as usize,
+                            color,
+                        )
+                    })
+                    .collect()
+            })
+            .collect()
     }
 
     fn layout_lines(
@@ -2721,7 +2640,7 @@ impl EditorElement {
         style: &EditorStyle,
         editor_width: Pixels,
         is_row_soft_wrapped: impl Copy + Fn(usize) -> bool,
-        bg_segments_per_row: &[Vec<(Range<DisplayPoint>, Hsla)>],
+        bg_segments_per_row: &[Vec<(Range<usize>, Hsla)>],
         window: &mut Window,
         cx: &mut App,
     ) -> Vec<LineWithInvisibles> {
@@ -6452,7 +6371,7 @@ impl LineWithInvisibles {
         editor_mode: &EditorMode,
         text_width: Pixels,
         is_row_soft_wrapped: impl Copy + Fn(usize) -> bool,
-        bg_segments_per_row: &[Vec<(Range<DisplayPoint>, Hsla)>],
+        bg_segments_per_row: &[Vec<(Range<usize>, Hsla)>],
         window: &mut Window,
         cx: &mut App,
     ) -> Vec<Self> {
@@ -6500,7 +6419,7 @@ impl LineWithInvisibles {
                     let text_runs: &[TextRun] = if segments.is_empty() {
                         &styles
                     } else {
-                        &Self::split_runs_by_bg_segments(&styles, segments, min_contrast, len)
+                        &ensure_highlight_contrast(&styles, segments, min_contrast, len)
                     };
                     let shaped_line = window.text_system().shape_line(
                         line.as_str().into(),
@@ -6597,7 +6516,7 @@ impl LineWithInvisibles {
                         let text_runs = if segments.is_empty() {
                             &styles
                         } else {
-                            &Self::split_runs_by_bg_segments(&styles, segments, min_contrast, len)
+                            &ensure_highlight_contrast(&styles, segments, min_contrast, len)
                         };
                         let shaped_line = window.text_system().shape_line(
                             line.clone().into(),
@@ -6728,80 +6647,6 @@ impl LineWithInvisibles {
 
     /// Takes text runs and non-overlapping left-to-right background ranges with color.
     /// Returns new text runs with adjusted contrast as per background ranges.
-    fn split_runs_by_bg_segments(
-        text_runs: &[TextRun],
-        bg_segments: &[(Range<DisplayPoint>, Hsla)],
-        min_contrast: f32,
-        start_col_offset: usize,
-    ) -> Vec<TextRun> {
-        let mut output_runs: Vec<TextRun> = Vec::with_capacity(text_runs.len());
-        let mut line_col = start_col_offset;
-        let mut segment_ix = 0usize;
-
-        for text_run in text_runs.iter() {
-            let run_start_col = line_col;
-            let run_end_col = run_start_col + text_run.len;
-            while segment_ix < bg_segments.len()
-                && (bg_segments[segment_ix].0.end.column() as usize) <= run_start_col
-            {
-                segment_ix += 1;
-            }
-            let mut cursor_col = run_start_col;
-            let mut local_segment_ix = segment_ix;
-            while local_segment_ix < bg_segments.len() {
-                let (range, segment_color) = &bg_segments[local_segment_ix];
-                let segment_start_col = range.start.column() as usize;
-                let segment_end_col = range.end.column() as usize;
-                if segment_start_col >= run_end_col {
-                    break;
-                }
-                if segment_start_col > cursor_col {
-                    let span_len = segment_start_col - cursor_col;
-                    output_runs.push(TextRun {
-                        len: span_len,
-                        font: text_run.font.clone(),
-                        color: text_run.color,
-                        background_color: text_run.background_color,
-                        underline: text_run.underline,
-                        strikethrough: text_run.strikethrough,
-                    });
-                    cursor_col = segment_start_col;
-                }
-                let segment_slice_end_col = segment_end_col.min(run_end_col);
-                if segment_slice_end_col > cursor_col {
-                    let new_text_color =
-                        ensure_minimum_contrast(text_run.color, *segment_color, min_contrast);
-                    output_runs.push(TextRun {
-                        len: segment_slice_end_col - cursor_col,
-                        font: text_run.font.clone(),
-                        color: new_text_color,
-                        background_color: text_run.background_color,
-                        underline: text_run.underline,
-                        strikethrough: text_run.strikethrough,
-                    });
-                    cursor_col = segment_slice_end_col;
-                }
-                if segment_end_col >= run_end_col {
-                    break;
-                }
-                local_segment_ix += 1;
-            }
-            if cursor_col < run_end_col {
-                output_runs.push(TextRun {
-                    len: run_end_col - cursor_col,
-                    font: text_run.font.clone(),
-                    color: text_run.color,
-                    background_color: text_run.background_color,
-                    underline: text_run.underline,
-                    strikethrough: text_run.strikethrough,
-                });
-            }
-            line_col = run_end_col;
-            segment_ix = local_segment_ix;
-        }
-        output_runs
-    }
-
     fn prepaint(
         &mut self,
         line_height: Pixels,

@@ -51,6 +51,7 @@ use parser::{
 use pulldown_cmark::{Alignment, BlockQuoteKind};
 use sum_tree::TreeMap;
 use theme::SyntaxTheme;
+use ui::utils::{ensure_highlight_contrast, merge_highlight_backgrounds};
 use ui::{Checkbox, CopyButton, ScrollAxes, Scrollbars, Tooltip, WithScrollbar, prelude::*};
 use util::ResultExt;
 
@@ -120,6 +121,10 @@ pub struct MarkdownStyle {
     pub block_quote_kind_colors: BlockQuoteKindColors,
     pub syntax: Arc<SyntaxTheme>,
     pub selection_background_color: Hsla,
+    /// Background behind the rendered markdown, used to blend translucent highlights.
+    pub highlight_base_background: Hsla,
+    /// Minimum APCA contrast for text inside search/selection highlights; 0 disables it.
+    pub minimum_highlight_contrast: f32,
     pub heading: StyleRefinement,
     pub heading_level_styles: Option<HeadingLevelStyles>,
     pub heading_border_color: Option<Hsla>,
@@ -151,6 +156,8 @@ impl Default for MarkdownStyle {
             block_quote_kind_colors: Default::default(),
             syntax: Arc::new(SyntaxTheme::default()),
             selection_background_color: Default::default(),
+            highlight_base_background: Default::default(),
+            minimum_highlight_contrast: 0.,
             heading: Default::default(),
             heading_level_styles: None,
             heading_border_color: None,
@@ -234,6 +241,7 @@ impl MarkdownStyle {
             base_text_style: text_style.clone(),
             syntax: syntax.clone(),
             selection_background_color: colors.element_selection_background,
+            highlight_base_background: colors.editor_background,
             rule_color: colors.border,
             block_quote_border_color: colors.border,
             block_quote_kind_colors: {
@@ -2506,6 +2514,8 @@ impl Element for MarkdownElement {
                     )
                 }),
                 next_search_highlight_ix: 0,
+                base_background: self.style.highlight_base_background,
+                minimum_contrast: self.style.minimum_highlight_contrast,
             }
         };
 
@@ -3669,6 +3679,8 @@ struct MarkdownHighlights {
     selection: Option<(Range<usize>, Hsla)>,
     /// Index of the first search highlight that may intersect the next line.
     next_search_highlight_ix: usize,
+    base_background: Hsla,
+    minimum_contrast: f32,
 }
 
 impl MarkdownHighlights {
@@ -4189,7 +4201,34 @@ impl MarkdownElementBuilder {
                     .highlights_for_line(first_mapping.source_index..self.current_source_index)
             })
             .unwrap_or_default();
-        let text = StyledText::new(line.text).with_runs(line.runs);
+        let runs = if highlights.is_empty()
+            || self.highlights.minimum_contrast <= 0.
+            || !self.highlights.base_background.is_opaque()
+        {
+            line.runs
+        } else {
+            let to_rendered = |source_index| {
+                rendered_index_for_source_index(
+                    &line.source_mappings,
+                    self.current_source_index,
+                    line.text.len(),
+                    source_index,
+                )
+            };
+            let backgrounds = merge_highlight_backgrounds(
+                highlights.iter().map(|(range, color)| {
+                    (to_rendered(range.start)..to_rendered(range.end), *color)
+                }),
+                self.highlights.base_background,
+            );
+            ensure_highlight_contrast(
+                &line.runs,
+                &backgrounds,
+                self.highlights.minimum_contrast,
+                0,
+            )
+        };
+        let text = StyledText::new(line.text).with_runs(runs);
         let rendered_line = Rc::new(RenderedLine {
             layout: text.layout().clone(),
             visible_bounds: Cell::new(None),
@@ -4498,18 +4537,12 @@ impl RenderedLine {
     }
 
     fn rendered_index_for_source_index(&self, source_index: usize) -> usize {
-        if source_index >= self.source_end {
-            return self.layout.len();
-        }
-
-        let mapping = match self
-            .source_mappings
-            .binary_search_by_key(&source_index, |probe| probe.source_index)
-        {
-            Ok(ix) => &self.source_mappings[ix],
-            Err(ix) => &self.source_mappings[ix - 1],
-        };
-        (mapping.rendered_index + (source_index - mapping.source_index)).min(self.layout.len())
+        rendered_index_for_source_index(
+            &self.source_mappings,
+            self.source_end,
+            self.layout.len(),
+            source_index,
+        )
     }
 
     fn source_index_for_rendered_index(&self, rendered_index: usize) -> usize {
@@ -4646,6 +4679,23 @@ impl RenderedLine {
 struct SourceMapping {
     rendered_index: usize,
     source_index: usize,
+}
+
+fn rendered_index_for_source_index(
+    mappings: &[SourceMapping],
+    source_end: usize,
+    rendered_len: usize,
+    source_index: usize,
+) -> usize {
+    if source_index >= source_end {
+        return rendered_len;
+    }
+
+    let mapping = match mappings.binary_search_by_key(&source_index, |probe| probe.source_index) {
+        Ok(ix) => &mappings[ix],
+        Err(ix) => &mappings[ix - 1],
+    };
+    (mapping.rendered_index + (source_index - mapping.source_index)).min(rendered_len)
 }
 
 fn source_range_for_rendered(
