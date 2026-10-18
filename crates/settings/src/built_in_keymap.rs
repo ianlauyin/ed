@@ -1279,7 +1279,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             .with_input(json!("\u{001b}\r"))
             .with_override()],
     );
-    // The old collab_panel::ToggleFocus unbind is obsolete: collaboration is removed.
     keymap
 }
 

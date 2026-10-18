@@ -16,9 +16,9 @@ use gpui::{App, Font, HighlightStyle, Pixels, Refineable, px};
 use gpui_util::ResultExt;
 use theme::{
     AccentColors, Appearance, AppearanceContent, DEFAULT_DARK_THEME, DEFAULT_ICON_THEME_NAME,
-    GlobalTheme, LoadThemes, PlayerColor, PlayerColors, StatusColors, SyntaxTheme,
-    SystemAppearance, SystemColors, Theme, ThemeColors, ThemeFamily, ThemeRegistry,
-    ThemeSettingsProvider, ThemeStyles, default_color_scales, try_parse_color,
+    GlobalTheme, LoadThemes, PlayerColor, StatusColors, SyntaxTheme, SystemAppearance,
+    SystemColors, Theme, ThemeColors, ThemeFamily, ThemeRegistry, ThemeSettingsProvider,
+    ThemeStyles, default_color_scales, try_parse_color,
 };
 
 pub use crate::schema::{
@@ -256,11 +256,11 @@ pub fn refine_theme(theme: &ThemeContent) -> Theme {
     theme::apply_status_color_defaults(&mut status_colors_refinement);
     refined_status_colors.refine(&status_colors_refinement);
 
-    let mut refined_player_colors = match theme.appearance {
-        AppearanceContent::Light => PlayerColors::light(),
-        AppearanceContent::Dark => PlayerColors::dark(),
+    let mut refined_player_color = match theme.appearance {
+        AppearanceContent::Light => PlayerColor::light(),
+        AppearanceContent::Dark => PlayerColor::dark(),
     };
-    merge_player_colors(&mut refined_player_colors, &theme.style.players);
+    merge_player_color(&mut refined_player_color, &theme.style.players);
 
     let mut refined_theme_colors = match theme.appearance {
         AppearanceContent::Light => ThemeColors::light(),
@@ -271,7 +271,7 @@ pub fn refine_theme(theme: &ThemeContent) -> Theme {
         &status_colors_refinement,
         theme.appearance == AppearanceContent::Light,
     );
-    theme::apply_theme_color_defaults(&mut theme_colors_refinement, &refined_player_colors);
+    theme::apply_theme_color_defaults(&mut theme_colors_refinement, &refined_player_color);
     refined_theme_colors.refine(&theme_colors_refinement);
 
     let mut refined_accent_colors = match theme.appearance {
@@ -316,48 +316,35 @@ pub fn refine_theme(theme: &ThemeContent) -> Theme {
             accents: refined_accent_colors,
             colors: refined_theme_colors,
             status: refined_status_colors,
-            player: refined_player_colors,
+            player: refined_player_color,
             syntax: syntax_theme,
         },
     }
 }
 
-/// Merges player color overrides into the given [`PlayerColors`].
-pub fn merge_player_colors(
-    player_colors: &mut PlayerColors,
+/// Merges player color overrides into the given [`PlayerColor`].
+///
+/// Only the first entry is used: it is the local player's color.
+pub fn merge_player_color(
+    player_color: &mut PlayerColor,
     user_player_colors: &[::settings::PlayerColorContent],
 ) {
-    if user_player_colors.is_empty() {
+    let Some(player) = user_player_colors.first() else {
         return;
+    };
+    if let Some(cursor) = player
+        .cursor
+        .as_ref()
+        .and_then(|color| try_parse_color(color).ok())
+    {
+        player_color.cursor = cursor;
     }
-
-    for (idx, player) in user_player_colors.iter().enumerate() {
-        let cursor = player
-            .cursor
-            .as_ref()
-            .and_then(|color| try_parse_color(color).ok());
-        let background = player
-            .background
-            .as_ref()
-            .and_then(|color| try_parse_color(color).ok());
-        let selection = player
-            .selection
-            .as_ref()
-            .and_then(|color| try_parse_color(color).ok());
-
-        if let Some(player_color) = player_colors.0.get_mut(idx) {
-            *player_color = PlayerColor {
-                cursor: cursor.unwrap_or(player_color.cursor),
-                background: background.unwrap_or(player_color.background),
-                selection: selection.unwrap_or(player_color.selection),
-            };
-        } else {
-            player_colors.0.push(PlayerColor {
-                cursor: cursor.unwrap_or_default(),
-                background: background.unwrap_or_default(),
-                selection: selection.unwrap_or_default(),
-            });
-        }
+    if let Some(selection) = player
+        .selection
+        .as_ref()
+        .and_then(|color| try_parse_color(color).ok())
+    {
+        player_color.selection = selection;
     }
 }
 

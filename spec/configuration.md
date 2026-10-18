@@ -47,8 +47,7 @@ migrator, or Vim/Helix mode.
   popup and its `which_key` settings are removed.
 - Personal bindings are applied last: global `cmd-[`/`cmd-]` navigate backward/
   forward, Editor `f1` opens documentation and `cmd-shift-u` toggles case, and
-  Terminal `shift-enter` sends Escape followed by carriage return. The obsolete
-  collaboration-panel unbind is omitted.
+  Terminal `shift-enter` sends Escape followed by carriage return.
 - Remote projects receive the client's in-memory preferences; remote settings
   files cannot override them.
 - `zed://settings` URLs are not handled. Settings-file JSON schemas, completions,

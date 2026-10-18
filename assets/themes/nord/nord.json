@@ -136,29 +136,7 @@
         "players": [
           {
             "cursor": "#eceff4",
-            "background": "#20242c",
             "selection": "#72819f80"
-          },
-          {
-            "cursor": "#88c0d0"
-          },
-          {
-            "cursor": "#81a1c1"
-          },
-          {
-            "cursor": "#bf616a"
-          },
-          {
-            "cursor": "#d08770"
-          },
-          {
-            "cursor": "#ebcb8b"
-          },
-          {
-            "cursor": "#a3be8c"
-          },
-          {
-            "cursor": "#b48ead"
           }
         ],
         "syntax": {

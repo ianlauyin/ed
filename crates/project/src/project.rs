@@ -4033,7 +4033,7 @@ impl Project {
         })
     }
 
-    // Collab sends UpdateWorktree protos as messages
+    // The remote server sends UpdateWorktree protos as messages
     async fn handle_update_worktree(
         this: Entity<Self>,
         envelope: TypedEnvelope<proto::UpdateWorktree>,

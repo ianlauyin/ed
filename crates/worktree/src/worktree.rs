@@ -891,17 +891,6 @@ impl Worktree {
         }
     }
 
-    pub fn stop_observing_updates(&mut self) {
-        match self {
-            Worktree::Local(this) => {
-                this.update_observer.take();
-            }
-            Worktree::Remote(this) => {
-                this.update_observer.take();
-            }
-        }
-    }
-
     pub fn wait_for_snapshot(
         &mut self,
         scan_id: usize,

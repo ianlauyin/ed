@@ -1,7 +1,7 @@
 #![allow(missing_docs)]
 
 use crate::schema::{status_colors_refinement, syntax_overrides, theme_colors_refinement};
-use crate::{merge_accent_colors, merge_player_colors};
+use crate::{merge_accent_colors, merge_player_color};
 use collections::HashMap;
 use gpui::{
     App, Context, Font, FontFallbacks, FontStyle, FontWeight, Global, Pixels, SharedString,
@@ -488,7 +488,7 @@ impl ThemeSettings {
         );
         base_theme.styles.colors.refine(&theme_color_refinement);
         base_theme.styles.status.refine(&status_color_refinement);
-        merge_player_colors(&mut base_theme.styles.player, &theme_overrides.players);
+        merge_player_color(&mut base_theme.styles.player, &theme_overrides.players);
         merge_accent_colors(&mut base_theme.styles.accents, &theme_overrides.accents);
         base_theme.styles.syntax = SyntaxTheme::merge(
             base_theme.styles.syntax.clone(),

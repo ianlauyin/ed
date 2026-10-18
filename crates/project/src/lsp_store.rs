@@ -3,8 +3,8 @@
 //!
 //! # Local/Remote LSP Stores
 //! This module is split up into three distinct parts:
-//! - [`LocalLspStore`], which is ran on the host machine (either project host or SSH host), that manages the lifecycle of language servers.
-//! - [`RemoteLspStore`], which is ran on the remote machine (project guests) which is mostly about passing through the requests via RPC.
+//! - [`LocalLspStore`], which is ran on the machine that hosts the files (local or the SSH host), that manages the lifecycle of language servers.
+//! - [`RemoteLspStore`], which is ran on the client of an SSH project, which is mostly about passing through the requests via RPC.
 //!   The remote stores don't really care about which language server they're running against - they don't usually get to decide which language server is going to responsible for handling their request.
 //! - [`LspStore`], which unifies the two under one consistent interface for interacting with language servers.
 //!
@@ -3870,7 +3870,7 @@ impl LocalLspStore {
 
                                 let most_recent_edit =
                                     version.and_then(|version| version.most_recent());
-                                // Check if the edit that triggered that edit has been made by this participant.
+                                // Check if the edit that triggered that edit has been made locally.
 
                                 if let Some(most_recent_edit) = most_recent_edit {
                                     cx.emit(LspStoreEvent::SnippetEdit {

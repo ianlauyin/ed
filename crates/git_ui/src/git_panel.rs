@@ -4700,7 +4700,7 @@ impl GitPanel {
         self.reopen_commit_buffer_task = cx.spawn_in(window, async move |git_panel, cx| {
             let result = async {
                 // Set up the buffer before awaiting the commit template as the
-                // request may never resolve (for example, a collab host that
+                // request may never resolve (for example, a remote server that
                 // doesn't know about `LoadCommitTemplate`) and must not block the
                 // commit editor from attaching to the shared buffer.
                 let buffer = load_buffer.await?;
@@ -7906,7 +7906,7 @@ pub(crate) fn git_commit_editor_style(font_size: gpui::Pixels, cx: &App) -> Edit
 
     EditorStyle {
         background: cx.theme().colors().editor_background,
-        local_player: cx.theme().players().local(),
+        local_player: cx.theme().player(),
         text: TextStyle {
             color: cx.theme().colors().text,
             font_family: settings.buffer_font.family.clone(),

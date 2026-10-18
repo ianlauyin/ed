@@ -100,7 +100,7 @@ impl LspStore {
             .text_documents
             .entry(method.to_owned())
             .or_default();
-        // Guests track registrations by id, so notify on any id-visible change; caches only
+        // Remote clients track registrations by id, so notify on any id-visible change; caches only
         // consume the (selector, options) value set, so refresh flags compare sets.
         let previous_registration = registrations.get(&registration_id);
         let registration_changed = previous_registration != Some(&new_registration);

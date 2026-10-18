@@ -3,7 +3,7 @@ use std::sync::Arc;
 use gpui::{FontStyle, FontWeight, HighlightStyle, Hsla, WindowBackgroundAppearance, hsla};
 
 use crate::{
-    AccentColors, Appearance, DEFAULT_DARK_THEME, PlayerColors, StatusColors,
+    AccentColors, Appearance, DEFAULT_DARK_THEME, PlayerColor, StatusColors,
     StatusColorsRefinement, SyntaxTheme, SystemColors, Theme, ThemeColors, ThemeColorsRefinement,
     ThemeFamily, ThemeStyles, default_color_scales,
 };
@@ -43,13 +43,10 @@ pub fn apply_status_color_defaults(status: &mut StatusColorsRefinement) {
     }
 }
 
-/// Applies default theme color values derived from player colors.
-pub fn apply_theme_color_defaults(
-    theme_colors: &mut ThemeColorsRefinement,
-    player_colors: &PlayerColors,
-) {
+/// Applies default theme color values derived from the player color.
+pub fn apply_theme_color_defaults(theme_colors: &mut ThemeColorsRefinement, player: &PlayerColor) {
     if theme_colors.element_selection_background.is_none() {
-        let mut selection = player_colors.local().selection;
+        let mut selection = player.selection;
         if selection.a == 1.0 {
             selection.a = 0.25;
         }
@@ -103,7 +100,7 @@ pub(crate) fn zed_default_dark() -> Theme {
         a: 0.80,
     };
 
-    let player = PlayerColors::dark();
+    let player = PlayerColor::dark();
     Theme {
         id: "one_dark".to_string(),
         name: DEFAULT_DARK_THEME.into(),
@@ -129,7 +126,7 @@ pub(crate) fn zed_default_dark() -> Theme {
                 element_active: hsla(220.0 / 360., 11.8 / 100., 20.0 / 100., 1.0),
                 element_selected: hsla(224.0 / 360., 11.3 / 100., 26.1 / 100., 1.0),
                 element_disabled: SystemColors::default().transparent,
-                element_selection_background: player.local().selection.alpha(0.25),
+                element_selection_background: player.selection.alpha(0.25),
                 drop_target_background: hsla(220.0 / 360., 8.3 / 100., 21.4 / 100., 1.0),
                 drop_target_border: hsla(221. / 360., 11. / 100., 86. / 100., 1.0),
                 ghost_element_background: SystemColors::default().transparent,

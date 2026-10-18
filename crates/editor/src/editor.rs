@@ -4008,7 +4008,7 @@ impl Editor {
 
     fn current_user_player_color(&self, cx: &mut App) -> PlayerColor {
         if self.read_only(cx) {
-            cx.theme().players().read_only()
+            cx.theme().player().read_only()
         } else {
             self.style.as_ref().unwrap().local_player
         }
@@ -9910,7 +9910,7 @@ impl Editor {
         EditorStyle {
             background,
             border: cx.theme().colors().border,
-            local_player: cx.theme().players().local(),
+            local_player: cx.theme().player(),
             text: text_style,
             scrollbar_width: EditorElement::SCROLLBAR_WIDTH,
             syntax: cx.theme().syntax().clone(),
@@ -11047,7 +11047,7 @@ impl ui_input::ErasedEditor for ErasedEditorImpl {
         };
         let editor_style = EditorStyle {
             background: theme_color.ghost_element_background,
-            local_player: cx.theme().players().local(),
+            local_player: cx.theme().player(),
             syntax: cx.theme().syntax().clone(),
             text: text_style,
             ..Default::default()

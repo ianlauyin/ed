@@ -1160,24 +1160,6 @@ impl GitStore {
         }
     }
 
-    pub fn unshared(&mut self, _cx: &mut Context<Self>) {
-        match &mut self.state {
-            GitStoreState::Local {
-                downstream: downstream_client,
-                ..
-            } => {
-                downstream_client.take();
-            }
-            GitStoreState::Remote {
-                downstream: downstream_client,
-                ..
-            } => {
-                downstream_client.take();
-            }
-        }
-        self.shared_diffs.clear();
-    }
-
     pub fn active_repository(&self) -> Option<Entity<Repository>> {
         self.active_repo_id
             .as_ref()

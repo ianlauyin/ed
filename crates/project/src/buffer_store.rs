@@ -1156,11 +1156,6 @@ impl BufferStore {
         self.downstream_client = Some((downstream_client, remote_id));
     }
 
-    pub fn unshared(&mut self, _cx: &mut Context<Self>) {
-        self.downstream_client.take();
-        self.forget_shared_buffers();
-    }
-
     pub fn discard_incomplete(&mut self) {
         self.opened_buffers
             .retain(|_, buffer| !matches!(buffer, OpenBuffer::Operations(_)));
@@ -1596,24 +1591,10 @@ impl BufferStore {
         })
     }
 
-    pub fn forget_shared_buffers(&mut self) {
-        self.shared_buffers.clear();
-    }
-
-    pub fn forget_shared_buffers_for(&mut self, peer_id: &proto::PeerId) {
-        self.shared_buffers.remove(peer_id);
-    }
-
     pub fn is_shared(&self, buffer_id: BufferId, _cx: &App) -> bool {
         self.shared_buffers
             .values()
             .any(|buffers| buffers.contains_key(&buffer_id))
-    }
-
-    pub fn update_peer_id(&mut self, old_peer_id: &proto::PeerId, new_peer_id: proto::PeerId) {
-        if let Some(buffers) = self.shared_buffers.remove(old_peer_id) {
-            self.shared_buffers.insert(new_peer_id, buffers);
-        }
     }
 
     pub fn has_shared_buffers(&self) -> bool {

@@ -63,8 +63,6 @@ pub enum Color {
     Muted,
     /// A color used for placeholder text in input fields.
     Placeholder,
-    /// A color associated with a specific player number.
-    Player(u32),
     /// A color used to indicate selected text or UI elements.
     Selected,
     /// A color used to indicate a successful operation or status.
@@ -100,7 +98,6 @@ impl Color {
             Color::Info => cx.theme().status().info,
             Color::Placeholder => cx.theme().colors().text_placeholder,
             Color::Accent => cx.theme().colors().text_accent,
-            Color::Player(i) => cx.theme().styles.player.color_for_participant(*i).cursor,
             Color::Error => cx.theme().status().error,
             Color::Selected => cx.theme().colors().text_accent,
             Color::Success => cx.theme().status().success,

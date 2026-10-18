@@ -81,12 +81,6 @@ pub enum ScanSymlinksSetting {
 #[with_fallible_options]
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct WorktreeSettingsContent {
-    /// Whether to prevent this project from being shared in public channels.
-    ///
-    /// Default: false
-    #[serde(default)]
-    pub prevent_sharing_in_public_channels: bool,
-
     /// Exclude files matching these glob patterns from file scans, file searches,
     /// and the project file tree. Takes precedence over `file_scan_inclusions`.
     ///

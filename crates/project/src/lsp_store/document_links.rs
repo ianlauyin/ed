@@ -273,8 +273,8 @@ impl LspStore {
         if let Some((client, project_id)) = self.upstream_client() {
             // No `for_servers` filter is forwarded: unlike its siblings, `GetDocumentLinks`
             // is answered from the host's own `fetch_document_links` cache with the full
-            // per-server map, to spare the LSP request (see collab's
-            // `test_lsp_document_links`), so filtering could not reduce the work anyway.
+            // per-server map, to spare the LSP request, so filtering could not reduce the
+            // work anyway.
             let request = GetDocumentLinks;
             if !self.is_capable_for_proto_request(buffer, &request, cx) {
                 return Task::ready(Ok(None));

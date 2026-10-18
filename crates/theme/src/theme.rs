@@ -258,10 +258,10 @@ impl Theme {
         &self.styles.accents
     }
 
-    /// Returns the [`PlayerColors`] for the theme.
+    /// Returns the local [`PlayerColor`] (cursor and selection) for the theme.
     #[inline(always)]
-    pub fn players(&self) -> &PlayerColors {
-        &self.styles.player
+    pub fn player(&self) -> PlayerColor {
+        self.styles.player
     }
 
     /// Returns the [`ThemeColors`] for the theme.

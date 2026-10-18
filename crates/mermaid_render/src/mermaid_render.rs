@@ -49,7 +49,7 @@
 //!
 //! We try to match the users theme, and also apply accent colors to diagrams to
 //! make them more visually interesting. Accent colors are derived from the
-//! `player_colors` in the Zed theme.
+//! `accents` in the Zed theme.
 //!
 //! There are three parts to color handling:
 //!

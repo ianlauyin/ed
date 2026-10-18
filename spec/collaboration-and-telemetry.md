@@ -13,6 +13,16 @@ The title bar retains project, worktree, Git, and platform window controls.
 These controls initialize independently of collaboration. Old collaboration and
 account visibility settings no longer expose or enable features.
 
+There are no collaborator replicas: buffers only ever see the local replica,
+the SSH remote server replica, and local branches. Dead sharing/unsharing APIs
+and the call-status-icon and public-channel-sharing settings are removed.
+
+The theme has a single local player color (cursor and selection). Themes and
+`theme_overrides` keep the `players` array format, but only the first entry is
+read. Places that need several distinct colors (git blame, Mermaid diagrams, debug
+ranges) use the theme's `accents` palette. The drag-and-drop cursor is the local
+cursor at half opacity.
+
 No usage events, activity metrics, machine identifiers, remote telemetry forwarding,
 hang reports, or automatic crash uploads are collected or sent. Telemetry settings,
 onboarding switches, and telemetry log actions are removed. Local diagnostic logs

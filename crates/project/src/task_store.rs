@@ -235,18 +235,6 @@ impl TaskStore {
             *downstream_client = Some((new_downstream_client, remote_id));
         }
     }
-
-    pub fn unshared(&mut self, _: &mut Context<Self>) {
-        if let Self::Functional(StoreState {
-            mode: StoreMode::Local {
-                downstream_client, ..
-            },
-            ..
-        }) = self
-        {
-            *downstream_client = None;
-        }
-    }
 }
 
 fn local_task_context_for_location(

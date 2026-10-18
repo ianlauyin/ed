@@ -8,8 +8,6 @@ use util::{
 
 #[derive(Clone, PartialEq, Eq, RegisterSetting)]
 pub struct WorktreeSettings {
-    /// Whether to prevent this project from being shared in public channels.
-    pub prevent_sharing_in_public_channels: bool,
     pub file_scan_exclusions: PathMatcher,
     pub file_scan_inclusions: PathMatcher,
     /// This field contains all ancestors of the `file_scan_inclusions`. It's used to
@@ -68,7 +66,6 @@ impl Settings for WorktreeSettings {
             file_scan_inclusion_matchers(file_scan_inclusions);
 
         Self {
-            prevent_sharing_in_public_channels: worktree.prevent_sharing_in_public_channels,
             file_scan_exclusions: valid_path_matchers(file_scan_exclusions, "file_scan_exclusions"),
             parent_dir_scan_inclusions,
             file_scan_inclusions,

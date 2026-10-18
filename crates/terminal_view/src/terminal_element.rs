@@ -1186,7 +1186,7 @@ impl Element for TerminalElement {
                 };
 
                 let text_system = cx.text_system();
-                let player_color = theme.players().local();
+                let player_color = theme.player();
                 let match_color = theme.colors().search_match_background;
                 let gutter;
                 let (dimensions, line_height_px) = {
@@ -1438,7 +1438,7 @@ impl Element for TerminalElement {
                             bounds.origin,
                             bounds.size.width,
                             bounds.size.height,
-                            theme.players().local().cursor,
+                            theme.player().cursor,
                             shape,
                             text,
                         )
@@ -1895,7 +1895,7 @@ pub fn convert_color(fg: &Color, theme: &Theme) -> Hsla {
             NamedColor::BrightWhite => colors.terminal_ansi_bright_white,
             NamedColor::Foreground => colors.terminal_foreground,
             NamedColor::Background => colors.terminal_ansi_background,
-            NamedColor::Cursor => theme.players().local().cursor,
+            NamedColor::Cursor => theme.player().cursor,
             NamedColor::DimBlack => colors.terminal_ansi_dim_black,
             NamedColor::DimRed => colors.terminal_ansi_dim_red,
             NamedColor::DimGreen => colors.terminal_ansi_dim_green,

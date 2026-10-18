@@ -3417,7 +3417,7 @@ pub fn get_color_at_index(index: usize, theme: &Theme) -> Hsla {
         // See: https://github.com/alacritty/alacritty/blob/master/alacritty_terminal/src/term/color.rs
         256 => colors.terminal_foreground,
         257 => colors.terminal_background,
-        258 => theme.players().local().cursor,
+        258 => theme.player().cursor,
         259 => colors.terminal_ansi_dim_black,
         260 => colors.terminal_ansi_dim_red,
         261 => colors.terminal_ansi_dim_green,

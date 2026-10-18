@@ -414,7 +414,6 @@ fn workspace_settings() -> WorkspaceSettingsContent {
             right_padding: Some(CenteredPaddingSettings(0.2)),
         }),
         confirm_quit: Some(false),
-        show_call_status_icon: Some(true),
         autosave: Some(AutosaveSetting::OnFocusChange),
         restore_on_startup: Some(RestoreOnStartupBehavior::LastSession),
         cli_default_open_behavior: Some(CliDefaultOpenBehavior::ExistingWindow),

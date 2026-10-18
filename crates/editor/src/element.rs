@@ -953,8 +953,9 @@ impl EditorElement {
                         false,
                         None,
                     );
-                    let absent_color = cx.theme().players().absent();
-                    selections.push((absent_color, vec![drag_cursor_layout]));
+                    let mut drop_color = cx.theme().player();
+                    drop_color.cursor = drop_color.cursor.opacity(0.5);
+                    selections.push((drop_color, vec![drag_cursor_layout]));
                 }
             }
 
@@ -1000,25 +1001,17 @@ impl EditorElement {
     ) -> Vec<(DisplayPoint, Hsla)> {
         let editor = self.editor.read(cx);
         let mut cursors = Vec::new();
-        let skip_local = false;
-        let mut add_cursor = |anchor: Anchor, color| {
+        let color = cx.theme().player().cursor;
+        let mut add_cursor = |anchor: Anchor| {
             cursors.push((anchor.to_display_point(&snapshot.display_snapshot), color));
         };
-        // Remote cursors
-
-        // Local cursors
-        if !skip_local {
-            let color = cx.theme().players().local().cursor;
-            editor
-                .selections
-                .disjoint_anchors()
-                .iter()
-                .for_each(|selection| {
-                    add_cursor(selection.head(), color);
-                });
-            if let Some(ref selection) = editor.selections.pending_anchor() {
-                add_cursor(selection.head(), color);
-            }
+        editor
+            .selections
+            .disjoint_anchors()
+            .iter()
+            .for_each(|selection| add_cursor(selection.head()));
+        if let Some(ref selection) = editor.selections.pending_anchor() {
+            add_cursor(selection.head());
         }
         cursors
     }
@@ -6003,9 +5996,13 @@ impl EditorElement {
                     ..excerpt_buffer_snapshot.anchor_before(buffer_range.end);
                 selections.extend(debug_ranges.ranges.iter().flat_map(|debug_range| {
                     debug_range.ranges.iter().filter_map(|range| {
-                        let player_color = theme
-                            .players()
-                            .color_for_participant(debug_range.occurrence_index as u32 + 1);
+                        let accent = theme
+                            .accents()
+                            .color_for_index(debug_range.occurrence_index as u32 + 1);
+                        let player_color = PlayerColor {
+                            cursor: accent,
+                            selection: accent.opacity(0.25),
+                        };
                         if range.start.buffer_id != excerpt_buffer_snapshot.remote_id() {
                             return None;
                         }
@@ -6381,7 +6378,7 @@ fn render_blame_entry(
     cx: &mut App,
 ) -> Option<AnyElement> {
     let index: u32 = blame_entry.sha.into();
-    let mut sha_color = cx.theme().players().color_for_participant(index).cursor;
+    let mut sha_color = cx.theme().accents().color_for_index(index);
 
     // If the last color we used is the same as the one we get for this line, but
     // the commit SHAs are different, then we try again to get a different color.
@@ -6389,7 +6386,7 @@ fn render_blame_entry(
         && sha != blame_entry.sha
         && color == sha_color
     {
-        sha_color = cx.theme().players().color_for_participant(index + 1).cursor;
+        sha_color = cx.theme().accents().color_for_index(index + 1);
     }
     last_used_color.replace((sha_color, blame_entry.sha));
 

@@ -3346,12 +3346,6 @@ impl Buffer {
         });
     }
 
-    /// Removes the selections for a given peer.
-    pub fn remove_peer(&mut self, replica_id: ReplicaId, cx: &mut Context<Self>) {
-        self.remote_selections.remove(&replica_id);
-        cx.notify();
-    }
-
     /// Undoes the most recent transaction.
     pub fn undo(&mut self, cx: &mut Context<Self>) -> Option<TransactionId> {
         let was_dirty = self.is_dirty();

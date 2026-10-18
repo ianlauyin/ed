@@ -6,7 +6,7 @@ use std::sync::Arc;
 use strum::{AsRefStr, EnumIter, IntoEnumIterator};
 
 use crate::{
-    AccentColors, ActiveTheme, PlayerColors, StatusColors, StatusColorsRefinement, SyntaxTheme,
+    AccentColors, ActiveTheme, PlayerColor, StatusColors, StatusColorsRefinement, SyntaxTheme,
     SystemColors,
 };
 
@@ -631,7 +631,7 @@ pub struct ThemeStyles {
     #[refineable]
     pub status: StatusColors,
 
-    pub player: PlayerColors,
+    pub player: PlayerColor,
 
     pub syntax: Arc<SyntaxTheme>,
 }

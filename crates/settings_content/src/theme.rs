@@ -530,6 +530,7 @@ pub struct ThemeStyleContent {
     #[serde(flatten, default)]
     pub status: StatusColorsContent,
 
+    /// The local cursor and selection colors. Only the first entry is used.
     #[serde(default)]
     pub players: Vec<PlayerColorContent>,
 
@@ -544,7 +545,6 @@ pub struct AccentContent(pub Option<ThemeColor>);
 #[derive(Debug, Clone, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
 pub struct PlayerColorContent {
     pub cursor: Option<ThemeColor>,
-    pub background: Option<ThemeColor>,
     pub selection: Option<ThemeColor>,
 }
 

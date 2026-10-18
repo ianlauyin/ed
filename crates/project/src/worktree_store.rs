@@ -1246,24 +1246,6 @@ impl WorktreeStore {
         }
     }
 
-    pub fn unshared(&mut self, cx: &mut Context<Self>) {
-        self.retain_worktrees = false;
-        self.downstream_client.take();
-
-        // When not shared, only retain the visible worktrees
-        for worktree_handle in self.worktrees.iter_mut() {
-            if let WorktreeHandle::Strong(worktree) = worktree_handle {
-                let is_visible = worktree.update(cx, |worktree, _| {
-                    worktree.stop_observing_updates();
-                    worktree.is_visible()
-                });
-                if !is_visible {
-                    *worktree_handle = WorktreeHandle::Weak(worktree.downgrade());
-                }
-            }
-        }
-    }
-
     pub async fn handle_create_project_entry(
         this: Entity<Self>,
         envelope: TypedEnvelope<proto::CreateProjectEntry>,
