@@ -9906,7 +9906,7 @@ impl Editor {
             status: cx.theme().status().clone(),
             inlay_hints_style: make_inlay_hints_style(cx),
             unnecessary_code_fade: settings.unnecessary_code_fade,
-            show_underlines: self.diagnostics_enabled(),
+            show_underlines: !self.mode.is_minimap(),
         }
     }
 
