@@ -11,8 +11,8 @@ use anyhow::{Context as _, Result};
 use editor::items::open_resolved_target;
 use editor::scroll::Autoscroll;
 use editor::{
-    Editor, EditorEvent, EditorSettings, EditorSettingsScrollbarProxy, MultiBufferOffset,
-    SelectionEffects,
+    Editor, EditorEvent, EditorSettings, EditorSettingsScrollbarProxy, MAX_TAB_TITLE_LEN,
+    MultiBufferOffset, SelectionEffects,
 };
 use gpui::{
     Action, AnyElement, App, ClipboardItem, Context, Entity, EntityId, EventEmitter, FocusHandle,
@@ -1655,8 +1655,34 @@ impl Item for MarkdownPreviewView {
 
     fn tab_content(&self, params: TabContentParams, _window: &Window, cx: &App) -> AnyElement {
         let preview = self.self_handle.clone();
+        let editor = self
+            .active_editor
+            .as_ref()
+            .map(|editor_state| editor_state.editor.read(cx));
+        let max_title_len = params.max_title_len.unwrap_or(MAX_TAB_TITLE_LEN);
+
+        // Like editor tabs, the title is only the file name, since `tab_content_text` can be a
+        // full path for files outside the project. The directories needed to tell apart files
+        // with the same name are shown in the description.
+        let title = match editor {
+            Some(editor) if params.truncate_title_middle => format!("Preview {}", editor.title(cx)),
+            Some(editor) => format!(
+                "Preview {}",
+                util::truncate_and_trailoff(&editor.title(cx), max_title_len)
+            ),
+            None => "Markdown Preview".to_string(),
+        };
+        let description = editor
+            .zip(params.detail)
+            .and_then(|(editor, detail)| editor.tab_description(detail, cx))
+            .map(|description| util::truncate_and_trailoff(&description, max_title_len));
+
         h_flex()
+            .gap_1()
             .when(!params.selected, |tab| tab.track_focus(&self.focus_handle))
+            .when(params.truncate_title_middle, |this| {
+                this.w_full().min_w_0().overflow_hidden()
+            })
             .on_action(move |action: &CloseAndReturnToEditor, window, cx| {
                 preview
                     .update(cx, |preview, cx| {
@@ -1665,21 +1691,43 @@ impl Item for MarkdownPreviewView {
                     .ok();
             })
             .child(
-                Label::new(self.tab_content_text(params.detail.unwrap_or_default(), cx))
+                Label::new(title)
                     .single_line()
-                    .color(params.text_color()),
+                    .color(params.text_color())
+                    .when(params.truncate_title_middle, |this| {
+                        this.truncate_middle().flex_1()
+                    }),
             )
+            .when_some(description, |this, description| {
+                this.child(
+                    Label::new(description)
+                        .single_line()
+                        .size(LabelSize::XSmall)
+                        .when(params.truncate_title_middle, |this| {
+                            this.truncate_start().flex_shrink()
+                        })
+                        .color(Color::Muted),
+                )
+            })
             .into_any_element()
     }
 
-    fn tab_content_text(&self, _detail: usize, cx: &App) -> SharedString {
+    fn tab_content_text(&self, detail: usize, cx: &App) -> SharedString {
         self.active_editor
             .as_ref()
             .map(|editor_state| {
-                let buffer = editor_state.editor.read(cx).buffer().read(cx);
-                let title = buffer.title(cx);
-                format!("Preview {}", title).into()
+                let title = editor_state.editor.read(cx).tab_content_text(detail, cx);
+                format!("Preview {title}").into()
             })
+            .unwrap_or_else(|| SharedString::from("Markdown Preview"))
+    }
+
+    // Save As writes the source file, so suggest its name rather than the tab text, which can be a
+    // full path for files outside the project.
+    fn suggested_filename(&self, cx: &App) -> SharedString {
+        self.active_editor
+            .as_ref()
+            .map(|editor_state| editor_state.editor.read(cx).suggested_filename(cx))
             .unwrap_or_else(|| SharedString::from("Markdown Preview"))
     }
 
