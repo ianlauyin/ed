@@ -102,10 +102,6 @@ pub struct WorkspaceSettingsContent {
     /// Values: empty_tab, launchpad
     /// Default: launchpad
     pub on_new_window: Option<OnNewWindow>,
-    /// What to do when the last window is closed
-    ///
-    /// Default: auto (nothing on macOS, "app quit" otherwise)
-    pub on_last_window_closed: Option<OnLastWindowClosed>,
     /// Whether to resize all the panels in a dock when resizing the dock.
     ///
     /// Default: ["left"]
@@ -721,28 +717,6 @@ pub enum OnNewWindow {
     JsonSchema,
     MergeFrom,
     PartialEq,
-    Debug,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum OnLastWindowClosed {
-    /// Match platform conventions by default, so don't quit on macOS, and quit on other platforms
-    #[default]
-    PlatformDefault,
-    /// Quit the application the last window is closed
-    QuitApp,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
     Eq,
     Debug,
     strum::VariantArray,
@@ -757,15 +731,6 @@ pub enum TextRenderingMode {
     Subpixel,
     /// Use grayscale text rendering.
     Grayscale,
-}
-
-impl OnLastWindowClosed {
-    pub fn is_quit_app(&self) -> bool {
-        match self {
-            OnLastWindowClosed::PlatformDefault => false,
-            OnLastWindowClosed::QuitApp => true,
-        }
-    }
 }
 
 #[with_fallible_options]

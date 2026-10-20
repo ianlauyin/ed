@@ -18,6 +18,9 @@ remote detection, command execution, and proxy startup are removed.
   group). Automatic tabbing is disabled app-wide at launch, so AppKit adds no
   "Show Tab Bar" / "Merge All Windows" style menu items, and there is no
   `use_system_window_tabs` setting or in-app window-tab strip.
+- Closing the last window quits the app (it never lingers windowless in the
+  Dock); the last workspace stays in the session for restore. There is no
+  `on_last_window_closed` setting.
 - The native menu bar has no Help menu.
 - CLI installation is manual. The editor has no CLI installer, installation menu
   item, or commands for installing the CLI or registering its URL scheme.

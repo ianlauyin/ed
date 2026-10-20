@@ -427,7 +427,6 @@ fn workspace_settings() -> WorkspaceSettingsContent {
         command_aliases: Default::default(),
         max_tabs: None,
         on_new_window: Some(OnNewWindow::Launchpad),
-        on_last_window_closed: Some(OnLastWindowClosed::PlatformDefault),
         resize_all_panels_in_dock: Some(vec![DockPosition::Left]),
         close_on_file_delete: Some(false),
         fullscreen_mode: Some(FullscreenMode::Native),

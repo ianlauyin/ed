@@ -149,7 +149,7 @@ use uuid::Uuid;
 pub use workspace_settings::{
     AccessibleMode, AutosaveSetting, BottomDockLayout, EncodingDisplayOptions, FocusFollowsMouse,
     RestoreOnStartupBehavior, StatusBarSettings, TabBarSettings, WorkspaceSettings,
-    closing_last_window_quits_app, observe_accessible_mode,
+    observe_accessible_mode,
 };
 use zed_actions::theme::ToggleMode;
 
@@ -3140,27 +3140,25 @@ impl Workspace {
                 }
             })?;
 
-            let (remaining_workspaces, closing_last_window_quits) = cx.update(|window, cx| {
+            let remaining_workspaces = cx.update(|window, cx| {
                 let current_window = window.window_handle();
-                let remaining_workspaces =
-                    cx.windows()
-                        .into_iter()
-                        .filter(|window| *window != current_window)
-                        .filter_map(|window| window.downcast::<MultiWorkspace>())
-                        .filter_map(|multi_workspace| {
-                            multi_workspace.read(cx).ok().map(|multi_workspace| {
-                                multi_workspace.workspace().read(cx).removing
-                            })
-                        })
-                        .filter(|removing| !removing)
-                        .count();
-
-                (remaining_workspaces, closing_last_window_quits_app(cx))
+                cx.windows()
+                    .into_iter()
+                    .filter(|window| *window != current_window)
+                    .filter_map(|window| window.downcast::<MultiWorkspace>())
+                    .filter_map(|multi_workspace| {
+                        multi_workspace
+                            .read(cx)
+                            .ok()
+                            .map(|multi_workspace| multi_workspace.workspace().read(cx).removing)
+                    })
+                    .filter(|removing| !removing)
+                    .count()
             })?;
 
-            let save_last_workspace = close_intent != CloseIntent::ReplaceWindow
-                && remaining_workspaces == 0
-                && closing_last_window_quits;
+            // Closing the last window quits the app, so keep it in the session.
+            let save_last_workspace =
+                close_intent != CloseIntent::ReplaceWindow && remaining_workspaces == 0;
 
             // Hot-exit silently writes dirty buffers to the DB; only allow it
             // if the workspace will be reachable again, either via session
