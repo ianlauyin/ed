@@ -640,16 +640,6 @@ fn language_overrides() -> LanguageToSettingsMap {
     LanguageToSettingsMap(
         [
             (
-                "Astro".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("astro-language-server"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
-                    ..Default::default()
-                },
-            ),
-            (
                 "C".into(),
                 LanguageSettingsContent {
                     use_on_type_format: Some(false),
@@ -664,75 +654,10 @@ fn language_overrides() -> LanguageToSettingsMap {
                 },
             ),
             (
-                "CSharp".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("roslyn"),
-                        ConfiguredLanguageServer::from("!csharp-ls"),
-                        ConfiguredLanguageServer::from("!omnisharp"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
-                    ..Default::default()
-                },
-            ),
-            (
-                "Dart".into(),
-                LanguageSettingsContent {
-                    tab_size: Some(std::num::NonZeroU32::new(2).unwrap()),
-                    ..Default::default()
-                },
-            ),
-            (
                 "Diff".into(),
                 LanguageSettingsContent {
                     remove_trailing_whitespace_on_save: Some(false),
                     ensure_final_newline_on_save: Some(false),
-                    ..Default::default()
-                },
-            ),
-            (
-                "EEx".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("elixir-ls"),
-                        ConfiguredLanguageServer::from("!expert"),
-                        ConfiguredLanguageServer::from("!dexter"),
-                        ConfiguredLanguageServer::from("!next-ls"),
-                        ConfiguredLanguageServer::from("!lexical"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
-                    ..Default::default()
-                },
-            ),
-            (
-                "Elixir".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("elixir-ls"),
-                        ConfiguredLanguageServer::from("!expert"),
-                        ConfiguredLanguageServer::from("!dexter"),
-                        ConfiguredLanguageServer::from("!next-ls"),
-                        ConfiguredLanguageServer::from("!lexical"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
-                    ..Default::default()
-                },
-            ),
-            (
-                "Elm".into(),
-                LanguageSettingsContent {
-                    tab_size: Some(std::num::NonZeroU32::new(4).unwrap()),
-                    ..Default::default()
-                },
-            ),
-            (
-                "Erlang".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("erlang-ls"),
-                        ConfiguredLanguageServer::from("!elp"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
                     ..Default::default()
                 },
             ),
@@ -757,68 +682,9 @@ fn language_overrides() -> LanguageToSettingsMap {
                 },
             ),
             (
-                "HEEx".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("elixir-ls"),
-                        ConfiguredLanguageServer::from("!expert"),
-                        ConfiguredLanguageServer::from("!dexter"),
-                        ConfiguredLanguageServer::from("!next-ls"),
-                        ConfiguredLanguageServer::from("!lexical"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
-                    ..Default::default()
-                },
-            ),
-            (
-                "HTML+ERB".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("herb"),
-                        ConfiguredLanguageServer::from("!ruby-lsp"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
-                    ..Default::default()
-                },
-            ),
-            (
                 "JSON".into(),
                 LanguageSettingsContent {
                     preferred_line_length: Some(120),
-                    ..Default::default()
-                },
-            ),
-            (
-                "JS+ERB".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("!ruby-lsp"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
-                    ..Default::default()
-                },
-            ),
-            (
-                "Kotlin".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("!kotlin-language-server"),
-                        ConfiguredLanguageServer::from("kotlin-lsp"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
-                    ..Default::default()
-                },
-            ),
-            (
-                "LaTeX".into(),
-                LanguageSettingsContent {
-                    formatter: Some(FormatterList::Single(Formatter::LanguageServer(
-                        Default::default(),
-                    ))),
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("texlab"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
                     ..Default::default()
                 },
             ),
@@ -838,19 +704,6 @@ fn language_overrides() -> LanguageToSettingsMap {
                 },
             ),
             (
-                "PHP".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("phpactor"),
-                        ConfiguredLanguageServer::from("!intelephense"),
-                        ConfiguredLanguageServer::from("!phptools"),
-                        ConfiguredLanguageServer::from("!phpantom"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
-                    ..Default::default()
-                },
-            ),
-            (
                 "Plain Text".into(),
                 LanguageSettingsContent {
                     soft_wrap: Some(SoftWrap::EditorWidth),
@@ -859,18 +712,6 @@ fn language_overrides() -> LanguageToSettingsMap {
                         words: Some(WordsCompletionMode::Disabled),
                         ..Default::default()
                     }),
-                    ..Default::default()
-                },
-            ),
-            (
-                "Proto".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("buf"),
-                        ConfiguredLanguageServer::from("!protols"),
-                        ConfiguredLanguageServer::from("!protobuf-language-server"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
                     ..Default::default()
                 },
             ),
@@ -896,87 +737,8 @@ fn language_overrides() -> LanguageToSettingsMap {
                 },
             ),
             (
-                "Ruby".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("solargraph"),
-                        ConfiguredLanguageServer::from("!ruby-lsp"),
-                        ConfiguredLanguageServer::from("!rubocop"),
-                        ConfiguredLanguageServer::from("!sorbet"),
-                        ConfiguredLanguageServer::from("!steep"),
-                        ConfiguredLanguageServer::from("!kanayago"),
-                        ConfiguredLanguageServer::from("!fuzzy-ruby-server"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
-                    ..Default::default()
-                },
-            ),
-            (
                 "Rust".into(),
                 LanguageSettingsContent {
-                    ..Default::default()
-                },
-            ),
-            (
-                "Starlark".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("starpls"),
-                        ConfiguredLanguageServer::from("!buck2-lsp"),
-                        ConfiguredLanguageServer::from("!tilt"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
-                    ..Default::default()
-                },
-            ),
-            (
-                "Svelte".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("svelte-language-server"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
-                    ..Default::default()
-                },
-            ),
-            (
-                "Typst".into(),
-                LanguageSettingsContent {
-                    allow_rewrap: Some(RewrapBehavior::Anywhere),
-                    ..Default::default()
-                },
-            ),
-            (
-                "SystemVerilog".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("slang"),
-                        ConfiguredLanguageServer::from("!verible"),
-                        ConfiguredLanguageServer::from("!veridian"),
-                        ConfiguredLanguageServer::from("!svls"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
-                    use_on_type_format: Some(false),
-                    ..Default::default()
-                },
-            ),
-            (
-                "YAML+ERB".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("!ruby-lsp"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
-                    ..Default::default()
-                },
-            ),
-            (
-                "Zig".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("zls"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
                     ..Default::default()
                 },
             ),
