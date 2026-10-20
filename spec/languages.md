@@ -100,8 +100,13 @@
   `emmet-language-server` adapters, Emmet abbreviation actions and the
   editor's inline input block are removed.
 - Grammar configs cannot scope language servers to syntax regions
-  (`scope_opt_in_language_servers` / `opt_into_language_servers` removed); which
-  servers run for a language is decided in code only.
+  (`scope_opt_in_language_servers` / `opt_into_language_servers` removed).
+- Which servers run for a language, and their order, is decided in code only:
+  every adapter registered for the language runs, in registration order (the
+  first is the primary server). The `languages.<lang>.language_servers` setting
+  (`"!name"` / `"..."` syntax) is removed, as are "available" adapters that only
+  start when named in settings. `enable_language_server: false` still turns all
+  servers off for a language.
 - No direnv integration (`load_direnv` removed). A project's environment is the
   login shell's environment captured after `cd` into the worktree, so shell
   hooks (direnv, mise, asdf) still apply if configured in the user's shell.

@@ -27,7 +27,6 @@ globset.workspace = true
 gpui.workspace = true
 imara-diff.workspace = true
 language_core.workspace = true
-itertools.workspace = true
 log.workspace = true
 lsp.workspace = true
 parking_lot.workspace = true

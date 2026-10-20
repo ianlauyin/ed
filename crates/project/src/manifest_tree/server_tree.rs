@@ -236,32 +236,10 @@ impl LanguageServerTree {
         if !settings.enable_language_server {
             return Default::default();
         }
-        let available_lsp_adapters = self.languages.lsp_adapters(language_name);
-        let available_language_servers = available_lsp_adapters
-            .iter()
-            .filter(|lsp_adapter| !lsp_adapter.is_opt_in_for(language_name))
-            .map(|lsp_adapter| lsp_adapter.name.clone())
-            .collect::<Vec<_>>();
-
-        let desired_language_servers =
-            settings.customized_language_servers(&available_language_servers);
-        let adapters_with_settings = desired_language_servers
+        self.languages
+            .lsp_adapters(language_name)
             .into_iter()
-            .filter_map(|desired_adapter| {
-                let adapter = if let Some(adapter) = available_lsp_adapters
-                    .iter()
-                    .find(|adapter| adapter.name == desired_adapter)
-                {
-                    Some(adapter.clone())
-                } else if let Some(adapter) =
-                    self.languages.load_available_lsp_adapter(&desired_adapter)
-                {
-                    self.languages
-                        .register_lsp_adapter(language_name.clone(), adapter.adapter.clone());
-                    Some(adapter)
-                } else {
-                    None
-                }?;
+            .map(|adapter| {
                 let adapter_settings = crate::lsp_store::language_server_settings_for(
                     settings_location,
                     &adapter.name,
@@ -269,24 +247,9 @@ impl LanguageServerTree {
                 )
                 .cloned()
                 .unwrap_or_default();
-                Some((adapter.name(), (adapter_settings, adapter)))
+                (adapter.name(), (adapter_settings, adapter))
             })
-            .collect::<IndexMap<_, _>>();
-        // After starting all the language servers, reorder them to reflect the desired order
-        // based on the settings.
-        //
-        // This is done, in part, to ensure that language servers loaded at different points
-        // (e.g., native vs extension) still end up in the right order at the end, rather than
-        // it being based on which language server happened to be loaded in first.
-        self.languages.reorder_language_servers(
-            language_name,
-            adapters_with_settings
-                .values()
-                .map(|(_, adapter)| adapter.clone())
-                .collect(),
-        );
-
-        adapters_with_settings
+            .collect()
     }
 
     /// Server Tree is built up incrementally via queries for distinct paths of the worktree.

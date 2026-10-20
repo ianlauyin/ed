@@ -338,12 +338,6 @@ impl CachedLspAdapter {
         self.adapter.name()
     }
 
-    /// Returns whether the language server only starts for the given language
-    /// when it is explicitly listed in the `language_servers` setting.
-    pub fn is_opt_in_for(&self, language: &LanguageName) -> bool {
-        self.adapter.is_opt_in_for(language)
-    }
-
     pub async fn find_binary(
         &self,
         delegate: &Arc<dyn LspAdapterDelegate>,
@@ -571,13 +565,6 @@ pub trait LspAdapter: 'static + Send + Sync {
 
     fn language_ids(&self) -> HashMap<LanguageName, String> {
         HashMap::default()
-    }
-
-    /// Whether the `...` wildcard in the `language_servers` setting excludes this
-    /// language server for the given language, so that it only starts when
-    /// listed explicitly.
-    fn is_opt_in_for(&self, _language: &LanguageName) -> bool {
-        false
     }
 
     /// Support custom initialize params.

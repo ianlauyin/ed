@@ -542,7 +542,6 @@ fn language_settings() -> AllLanguageSettingsContent {
                 enabled: Some(true),
             }),
             enable_language_server: Some(true),
-            language_servers: Some(vec![ConfiguredLanguageServer::from("...")]),
             semantic_tokens: Some(SemanticTokens::Combined),
             document_folding_ranges: Some(DocumentFoldingRanges::Off),
             document_symbols: Some(DocumentSymbols::On),
@@ -723,11 +722,6 @@ fn language_overrides() -> LanguageToSettingsMap {
                             name: "ruff".into(),
                         },
                     ))),
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("ty"),
-                        ConfiguredLanguageServer::from("ruff"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
                     code_actions_on_format: Some(
                         [("source.organizeImports.ruff".into(), true)]
                             .into_iter()

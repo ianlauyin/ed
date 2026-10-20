@@ -9576,38 +9576,6 @@ impl LspStore {
         }
     }
 
-    fn try_register_remote_adapter_locally(
-        &self,
-        server_name: &LanguageServerName,
-        language_name: &LanguageName,
-    ) {
-        let already_registered = self
-            .languages
-            .lsp_adapters(language_name)
-            .iter()
-            .any(|adapter| adapter.name() == *server_name);
-
-        if already_registered {
-            return;
-        }
-
-        if let Some(adapter) = self.languages.load_available_lsp_adapter(server_name) {
-            log::info!(
-                "Registering LSP adapter '{}' for language '{}' on local client",
-                server_name.0,
-                language_name.0
-            );
-            self.languages
-                .register_lsp_adapter(language_name.clone(), adapter.adapter.clone());
-        } else {
-            log::warn!(
-                "LSP adapter '{}' for language '{}' not available locally",
-                server_name.0,
-                language_name.0
-            );
-        }
-    }
-
     // A path's diagnostics are dropped per server, through the same merge machinery that
     // applies them: buffer sets, worktree diagnostics, summaries, downstream propagation
     // and the DiagnosticsUpdated event all follow from one call.
@@ -10775,10 +10743,6 @@ impl LspStore {
             let server_name = LanguageServerName::from_proto(server.name.clone());
             let language_name = server.language_name.map(LanguageName::from_proto);
             lsp_store.insert_synced_server_capabilities(server_id, &envelope.payload.capabilities);
-
-            if let Some(ref lang_name) = language_name {
-                lsp_store.try_register_remote_adapter_locally(&server_name, lang_name);
-            }
 
             lsp_store.language_server_statuses.insert(
                 server_id,

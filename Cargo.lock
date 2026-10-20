@@ -3332,7 +3332,6 @@ dependencies = [
  "globset",
  "gpui",
  "imara-diff",
- "itertools 0.14.0",
  "language_core",
  "log",
  "lsp",

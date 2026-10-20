@@ -1,17 +1,15 @@
 //! Provides `language`-related settings.
 
-use crate::{Buffer, BufferSnapshot, File, LanguageName, LanguageServerName, ModelineSettings};
+use crate::{Buffer, BufferSnapshot, File, LanguageName, ModelineSettings};
 use collections::{FxHashMap, HashMap, HashSet};
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use gpui::{App, Modifiers, SharedString};
-use itertools::Itertools;
 use settings::{DocumentFoldingRanges, DocumentSymbols, IntoGpui, SemanticTokens};
 
 pub use settings::{
-    AutoIndentMode, CompletionSettingsContent, ConfiguredLanguageServer, FormatOnSave, Formatter,
-    FormatterList, InlayHintKind, LanguageSettingsContent, LineEndingSetting, LspInsertMode,
-    REST_OF_LANGUAGE_SERVERS, RewrapBehavior, ShowWhitespaceSetting, SoftWrap, SoftWrapIndent,
-    WordsCompletionMode,
+    AutoIndentMode, CompletionSettingsContent, FormatOnSave, Formatter, FormatterList,
+    InlayHintKind, LanguageSettingsContent, LineEndingSetting, LspInsertMode, RewrapBehavior,
+    ShowWhitespaceSetting, SoftWrap, SoftWrapIndent, WordsCompletionMode,
 };
 use settings::{RegisterSetting, Settings, SettingsLocation, merge_from::MergeFrom};
 use std::{num::NonZeroU32, sync::Arc};
@@ -85,13 +83,6 @@ pub struct LanguageSettings {
     pub jsx_tag_auto_close: bool,
     /// Whether to use language servers to provide code intelligence.
     pub enable_language_server: bool,
-    /// The list of language servers to use (or disable) for this language.
-    ///
-    /// This array should consist of language server IDs, as well as the following
-    /// special tokens:
-    /// - `"!<language_server_id>"` - A language server ID prefixed with a `!` will be disabled.
-    /// - `"..."` - A placeholder to refer to the **rest** of the registered language servers for this language.
-    pub language_servers: Vec<ConfiguredLanguageServer>,
     /// Controls how semantic tokens from language servers are used for syntax highlighting.
     pub semantic_tokens: SemanticTokens,
     /// Controls whether folding ranges from language servers are used instead of
@@ -318,54 +309,6 @@ impl LanguageSettings {
 
         settings
     }
-
-    /// Returns the customized list of language servers from the list of
-    /// available language servers.
-    pub fn customized_language_servers(
-        &self,
-        available_language_servers: &[LanguageServerName],
-    ) -> Vec<LanguageServerName> {
-        Self::resolve_language_servers(&self.language_servers, available_language_servers)
-    }
-
-    pub(crate) fn resolve_language_servers(
-        configured_language_servers: &[ConfiguredLanguageServer],
-        available_language_servers: &[LanguageServerName],
-    ) -> Vec<LanguageServerName> {
-        let (disabled_language_servers, enabled_language_servers): (
-            Vec<LanguageServerName>,
-            Vec<LanguageServerName>,
-        ) = configured_language_servers
-            .iter()
-            .partition_map(|language_server| {
-                let name = LanguageServerName(language_server.name.clone().into());
-                if language_server.disabled {
-                    itertools::Either::Left(name)
-                } else {
-                    itertools::Either::Right(name)
-                }
-            });
-
-        let rest = available_language_servers
-            .iter()
-            .filter(|&available_language_server| {
-                !disabled_language_servers.contains(available_language_server)
-                    && !enabled_language_servers.contains(available_language_server)
-            })
-            .cloned()
-            .collect::<Vec<_>>();
-
-        enabled_language_servers
-            .into_iter()
-            .flat_map(|language_server| {
-                if language_server.0.as_ref() == REST_OF_LANGUAGE_SERVERS {
-                    rest.clone()
-                } else {
-                    vec![language_server]
-                }
-            })
-            .collect::<Vec<_>>()
-    }
 }
 
 // The settings for inlay hints.
@@ -513,7 +456,6 @@ impl settings::Settings for AllLanguageSettings {
                 formatter: settings.formatter.unwrap(),
                 jsx_tag_auto_close: settings.jsx_tag_auto_close.unwrap().enabled.unwrap(),
                 enable_language_server: settings.enable_language_server.unwrap(),
-                language_servers: settings.language_servers.unwrap(),
                 semantic_tokens: settings.semantic_tokens.unwrap(),
                 document_folding_ranges: settings.document_folding_ranges.unwrap(),
                 document_symbols: settings.document_symbols.unwrap(),

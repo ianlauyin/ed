@@ -6,7 +6,7 @@ use crate::{
     task_context::ContextProvider,
 };
 use anyhow::{Result, anyhow};
-use collections::{FxHashMap, HashMap, HashSet, hash_map};
+use collections::{FxHashMap, HashMap, hash_map};
 pub use language_core::{
     BinaryStatus, LanguageName, LanguageQueries, LanguageServerStatusUpdate, QueryFile,
     QueryFileContents, QueryFiles, ServerHealth,
@@ -48,8 +48,6 @@ struct LanguageRegistryState {
     grammars: HashMap<Arc<str>, tree_sitter::Language>,
     lsp_adapters: HashMap<LanguageName, Vec<Arc<CachedLspAdapter>>>,
     all_lsp_adapters: HashMap<LanguageServerName, Arc<CachedLspAdapter>>,
-    available_lsp_adapters:
-        HashMap<LanguageServerName, Arc<dyn Fn() -> Arc<CachedLspAdapter> + 'static + Send + Sync>>,
     loading_languages: HashMap<LanguageId, Vec<oneshot::Sender<Result<Arc<Language>>>>>,
     subscription: (watch::Sender<()>, watch::Receiver<()>),
     theme: Option<Arc<Theme>>,
@@ -101,7 +99,6 @@ impl LanguageRegistry {
                 loading_languages: Default::default(),
                 lsp_adapters: Default::default(),
                 all_lsp_adapters: Default::default(),
-                available_lsp_adapters: HashMap::default(),
                 subscription: watch::channel(),
                 theme: Default::default(),
                 version: 0,
@@ -117,70 +114,6 @@ impl LanguageRegistry {
     /// Clears out all of the loaded languages and reload them from scratch.
     pub fn reload(&self) {
         self.state.write().reload();
-    }
-
-    /// Reorders the list of language servers for the given language.
-    ///
-    /// Uses the provided list of ordered [`CachedLspAdapters`] as the desired order.
-    ///
-    /// Any existing language servers not present in `ordered_lsp_adapters` will be
-    /// appended to the end.
-    pub fn reorder_language_servers(
-        &self,
-        language: &LanguageName,
-        ordered_lsp_adapters: Vec<Arc<CachedLspAdapter>>,
-    ) {
-        self.state
-            .write()
-            .reorder_language_servers(language, ordered_lsp_adapters);
-    }
-
-    /// Registers an available language server adapter.
-    ///
-    /// The language server is registered under the language server name, but
-    /// not bound to a particular language.
-    ///
-    /// When a language wants to load this particular language server, it will
-    /// invoke the `load` function.
-    pub fn register_available_lsp_adapter(
-        &self,
-        name: LanguageServerName,
-        adapter: Arc<dyn LspAdapter>,
-    ) {
-        let mut state = self.state.write();
-
-        state.available_lsp_adapters.insert(
-            name,
-            Arc::new(move || CachedLspAdapter::new(adapter.clone())),
-        );
-    }
-
-    /// Loads the language server adapter for the language server with the given name.
-    pub fn load_available_lsp_adapter(
-        &self,
-        name: &LanguageServerName,
-    ) -> Option<Arc<CachedLspAdapter>> {
-        let state = self.state.read();
-        let load_lsp_adapter = state.available_lsp_adapters.get(name)?;
-
-        Some(load_lsp_adapter())
-    }
-
-    /// Checks if a language server adapter with the given name is available to be loaded.
-    pub fn is_lsp_adapter_available(&self, name: &LanguageServerName) -> bool {
-        let state = self.state.read();
-        state.available_lsp_adapters.contains_key(name)
-    }
-
-    /// Returns the names of all available LSP adapters (registered via `register_available_lsp_adapter`).
-    /// These are adapters that are not bound to a specific language but can be enabled via settings.
-    pub fn available_lsp_adapter_names(&self) -> Vec<LanguageServerName> {
-        self.state
-            .read()
-            .available_lsp_adapters
-            .keys()
-            .cloned()
-            .collect()
     }
 
     pub fn register_lsp_adapter(&self, language_name: LanguageName, adapter: Arc<dyn LspAdapter>) {
@@ -696,36 +629,6 @@ impl LanguageRegistryState {
         self.reload_count += 1;
         self.available_languages.mark_all_unloaded();
         *self.subscription.0.borrow_mut() = ();
-    }
-
-    /// Reorders the list of language servers for the given language.
-    ///
-    /// Uses the provided list of ordered [`CachedLspAdapters`] as the desired order.
-    ///
-    /// Any existing language servers not present in `ordered_lsp_adapters` will be
-    /// appended to the end.
-    fn reorder_language_servers(
-        &mut self,
-        language_name: &LanguageName,
-        ordered_lsp_adapters: Vec<Arc<CachedLspAdapter>>,
-    ) {
-        let Some(lsp_adapters) = self.lsp_adapters.get_mut(language_name) else {
-            return;
-        };
-
-        let ordered_lsp_adapter_ids = ordered_lsp_adapters
-            .iter()
-            .map(|lsp_adapter| lsp_adapter.name.clone())
-            .collect::<HashSet<_>>();
-
-        let mut new_lsp_adapters = ordered_lsp_adapters;
-        for adapter in lsp_adapters.iter() {
-            if !ordered_lsp_adapter_ids.contains(&adapter.name) {
-                new_lsp_adapters.push(adapter.clone());
-            }
-        }
-
-        *lsp_adapters = new_lsp_adapters;
     }
 
     /// Mark the given language as having been loaded, so that the

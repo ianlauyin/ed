@@ -1,4 +1,4 @@
-use std::{borrow::Cow, num::NonZeroU32};
+use std::num::NonZeroU32;
 
 use collections::HashMap;
 use schemars::JsonSchema;
@@ -59,9 +59,7 @@ impl merge_from::MergeFrom for AllLanguageSettingsContent {
         // all default language-specific settings.
         self.defaults.merge_from(&other.defaults);
         for language_settings in self.languages.0.values_mut() {
-            let language_servers = language_settings.language_servers.take();
             language_settings.merge_from(&other.defaults);
-            language_settings.language_servers = language_servers;
         }
 
         // A user's language-specific settings override default language-specific settings.
@@ -70,7 +68,6 @@ impl merge_from::MergeFrom for AllLanguageSettingsContent {
                 existing.merge_from(&user_language_settings);
             } else {
                 let mut new_settings = self.defaults.clone();
-                new_settings.language_servers = None;
                 new_settings.merge_from(&user_language_settings);
 
                 self.languages.0.insert(language_name.clone(), new_settings);
@@ -131,65 +128,6 @@ pub enum SoftWrap {
     /// Soft wrap line at the preferred line length or the editor width (whichever is smaller).
     #[serde(alias = "preferred_line_length")]
     Bounded,
-}
-
-pub const REST_OF_LANGUAGE_SERVERS: &str = "...";
-
-#[derive(Clone, Debug, PartialEq, Eq, JsonSchema)]
-#[schemars(with = "String")]
-pub struct ConfiguredLanguageServer {
-    pub name: Arc<str>,
-    pub disabled: bool,
-}
-
-impl ConfiguredLanguageServer {
-    const DISABLED_CHAR: char = '!';
-
-    pub fn new(name: impl Into<Arc<str>>) -> Self {
-        Self {
-            name: name.into(),
-            disabled: false,
-        }
-    }
-
-    pub fn new_disabled(name: impl Into<Arc<str>>) -> Self {
-        Self {
-            name: name.into(),
-            disabled: true,
-        }
-    }
-}
-
-impl From<&str> for ConfiguredLanguageServer {
-    fn from(value: &str) -> Self {
-        match value.strip_prefix(Self::DISABLED_CHAR) {
-            Some(name) => Self::new_disabled(name),
-            None => Self::new(value),
-        }
-    }
-}
-
-impl Serialize for ConfiguredLanguageServer {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde::Serializer,
-    {
-        if self.disabled {
-            serializer.collect_str(&format_args!("{}{}", Self::DISABLED_CHAR, self.name))
-        } else {
-            serializer.serialize_str(&self.name)
-        }
-    }
-}
-
-impl<'de> Deserialize<'de> for ConfiguredLanguageServer {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let value = Cow::<'de, str>::deserialize(deserializer)?;
-        Ok(Self::from(value.as_ref()))
-    }
 }
 
 #[derive(
@@ -298,15 +236,6 @@ pub struct LanguageSettingsContent {
     ///
     /// Default: true
     pub enable_language_server: Option<bool>,
-    /// The list of language servers to use (or disable) for this language.
-    ///
-    /// This array should consist of language server IDs, as well as the following
-    /// special tokens:
-    /// - `"!<language_server_id>"` - A language server ID prefixed with a `!` will be disabled.
-    /// - `"..."` - A placeholder to refer to the **rest** of the registered language servers for this language.
-    ///
-    /// Default: ["..."]
-    pub language_servers: Option<Vec<ConfiguredLanguageServer>>,
     /// Controls how semantic tokens from language servers are used for syntax highlighting.
     ///
     /// Options:
