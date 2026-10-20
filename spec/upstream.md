@@ -10,7 +10,8 @@ changes are ported selectively by cherry-picking from the `upstream` remote
 
 - Snapshot base: upstream `7dc397b61b` (v1.25.0, 2026-10-14). Find newer
   candidates with `git log 7dc397b61b..upstream/main`, skipping commits already
-  cherry-picked (`git cherry-pick -x` records the upstream hash).
+  ported. Match ports by the upstream PR number in the subject (`(#12345)`), not
+  only the `-x` trailer: some earlier ports were made without it.
 - Port fixes to crates and behaviour the fork keeps; skip commits that only touch
   removed crates or platforms (agent/ACP, collab, extensions, sidebar,
   Windows/Linux/iOS, debugger).
