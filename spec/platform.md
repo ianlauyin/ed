@@ -113,11 +113,17 @@ backtraces still work through sync CFI.
 - `release.fish` builds `target/release/ed.app` for the host Mac: `ed` and
   `cli` binaries in `Contents/MacOS`, `crates/zed/resources/Info.plist` with the
   Cargo.toml version, an icon generated from `app-icon@2x.png`, and `Document.icns`.
+- `release.fish` signs `cli` and the bundle with a self-signed keychain identity
+  (`ed-local`, or `ED_SIGN_IDENTITY`) and stops with setup instructions when it is
+  missing. A stable signature keeps macOS privacy grants across rebuilds; ad-hoc
+  signatures change every build, so Local Network access is lost and `ssh` to
+  LAN/VM hosts (e.g. Apple container machines on 192.168.64.x) fails with
+  `Undefined error: 0`. `Info.plist` carries `NSLocalNetworkUsageDescription`.
 - App icon: Nord-dark rounded square with an inset screen showing `</>` in
   `#88C0D0`. Source is `crates/zed/resources/app-icon.svg`; the PNGs are rendered
   from it at 512 and 1024 px.
-- The bundle is for local use only: no codesigning, entitlements, provisioning
-  profiles, notarization, DMG, or universal binary. No `cargo-bundle` metadata.
+- The bundle is for local use only: no Developer ID signing, entitlements,
+  hardened runtime, provisioning profiles, notarization, DMG, or universal binary. No `cargo-bundle` metadata.
 - Build scripts do not query git.
 
 ## macOS bindings

@@ -37,6 +37,8 @@
 <string>public.app-category.developer-tools</string>
 <key>LSMinimumSystemVersion</key>
 <string>10.15.7</string>
+<key>NSLocalNetworkUsageDescription</key>
+<string>ed connects to SSH remote hosts on your local network.</string>
 <key>NSHighResolutionCapable</key>
 <true/>
 <key>CFBundleSupportedPlatforms</key>
