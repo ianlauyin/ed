@@ -318,7 +318,6 @@ impl LspStore {
         } else {
             let symbols_task = self.request_filtered_lsp_locally(
                 buffer,
-                None::<usize>,
                 GetDocumentSymbols,
                 for_servers.as_ref(),
                 cx,

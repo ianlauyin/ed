@@ -710,7 +710,6 @@ impl Language {
                 &self.config.name,
                 &self.config.overrides,
                 &mut self.config.brackets,
-                &self.config.scope_opt_in_language_servers,
             )?;
             self.grammar = Some(Arc::new(grammar));
         }
@@ -1036,20 +1035,6 @@ impl LanguageScope {
 
     pub fn should_autoclose_before(&self, c: char) -> bool {
         c.is_whitespace() || self.language.config.autoclose_before.contains(c)
-    }
-
-    pub fn language_allowed(&self, name: &LanguageServerName) -> bool {
-        let config = &self.language.config;
-        let opt_in_servers = &config.scope_opt_in_language_servers;
-        if opt_in_servers.contains(&name.0) {
-            if let Some(over) = self.config_override() {
-                over.opt_into_language_servers.contains(&name.0)
-            } else {
-                false
-            }
-        } else {
-            true
-        }
     }
 
     pub fn override_name(&self) -> Option<&str> {

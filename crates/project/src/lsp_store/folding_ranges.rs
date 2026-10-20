@@ -300,7 +300,6 @@ impl LspStore {
         } else {
             let folding_task = self.request_filtered_lsp_locally(
                 buffer,
-                None::<usize>,
                 GetFoldingRanges,
                 for_servers.as_ref(),
                 cx,

@@ -513,7 +513,6 @@ fn project_settings() -> ProjectSettingsContent {
             .into_iter()
             .collect(),
         ),
-        load_direnv: Some(DirenvSettings::Direct),
     }
 }
 
@@ -714,7 +713,6 @@ fn language_overrides() -> LanguageToSettingsMap {
                         ConfiguredLanguageServer::from("!dexter"),
                         ConfiguredLanguageServer::from("!next-ls"),
                         ConfiguredLanguageServer::from("!lexical"),
-                        ConfiguredLanguageServer::from("!emmet-language-server"),
                         ConfiguredLanguageServer::from("..."),
                     ]),
                     ..Default::default()

@@ -24,8 +24,6 @@ mod npx;
 mod package_json;
 mod python;
 mod rust;
-mod tailwind;
-mod tailwindcss;
 mod typescript;
 mod vtsls;
 mod yaml;
@@ -48,8 +46,6 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
     let python_context_provider = Arc::new(python::PythonContextProvider);
     let rust_context_provider = Arc::new(rust::RustContextProvider);
     let rust_lsp_adapter = Arc::new(rust::RustLspAdapter);
-    let tailwind_adapter = Arc::new(tailwind::TailwindLspAdapter);
-    let tailwindcss_adapter = Arc::new(tailwindcss::TailwindCssLspAdapter);
     let typescript_context = Arc::new(typescript::TypeScriptContextProvider::new(fs.clone()));
     let typescript_lsp_adapter = Arc::new(typescript::TypeScriptLspAdapter::new(fs.clone()));
     let vtsls_adapter = Arc::new(vtsls::VtslsLspAdapter::new(fs.clone()));
@@ -194,26 +190,18 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
 
     // Register globally available language servers.
     //
-    // This will allow users to add support for a built-in language server (e.g., Tailwind)
+    // This will allow users to add support for a built-in language server (e.g., ESLint)
     // for a given language via the `language_servers` setting:
     //
     // ```json
     // {
     //   "languages": {
     //     "My Language": {
-    //       "language_servers": ["tailwindcss-language-server", "..."]
+    //       "language_servers": ["eslint", "..."]
     //     }
     //   }
     // }
     // ```
-    languages.register_available_lsp_adapter(
-        LanguageServerName("tailwindcss-language-server".into()),
-        tailwind_adapter.clone(),
-    );
-    languages.register_available_lsp_adapter(
-        LanguageServerName("tailwindcss-intellisense-css".into()),
-        tailwindcss_adapter,
-    );
     languages.register_available_lsp_adapter(
         LanguageServerName("eslint".into()),
         eslint_adapter.clone(),
@@ -223,29 +211,6 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
         LanguageServerName("typescript-language-server".into()),
         typescript_lsp_adapter,
     );
-
-    // Register Tailwind for the existing languages that should have it by default.
-    //
-    // This can be driven by the `language_servers` setting once we have a way for
-    // extensions to provide their own default value for that setting.
-    let tailwind_languages = [
-        "Astro",
-        "CSS",
-        "ERB",
-        "HTML+ERB",
-        "HEEx",
-        "HTML",
-        "JavaScript",
-        "TypeScript",
-        "PHP",
-        "Svelte",
-        "TSX",
-        "Vue.js",
-    ];
-
-    for language in tailwind_languages {
-        languages.register_lsp_adapter(language.into(), tailwind_adapter.clone());
-    }
 
     let eslint_languages = ["TSX", "TypeScript", "JavaScript", "Vue.js", "Svelte"];
     for language in eslint_languages {

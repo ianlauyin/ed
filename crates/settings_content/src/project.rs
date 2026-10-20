@@ -42,15 +42,11 @@ pub struct ProjectSettingsContent {
     /// Default: null
     #[serde(default)]
     pub lsp: LspSettingsMap,
-
-    pub load_direnv: Option<DirenvSettings>,
 }
 
 crate::fallible_options::flattened_deserialize!(ProjectSettingsContent {
     sections: { all_languages, worktree },
-    options: {
-        load_direnv,
-    },
+    options: {},
     defaults: { lsp },
 });
 
@@ -749,18 +745,6 @@ pub struct InlineDiagnosticsSettingsContent {
     pub min_column: Option<u32>,
 
     pub max_severity: Option<DiagnosticSeverityContent>,
-}
-
-#[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
-#[serde(rename_all = "snake_case")]
-pub enum DirenvSettings {
-    /// Load direnv configuration through a shell hook
-    ShellHook,
-    /// Load direnv configuration directly using `direnv export json`
-    #[default]
-    Direct,
-    /// Do not load direnv configuration
-    Disabled,
 }
 
 #[derive(

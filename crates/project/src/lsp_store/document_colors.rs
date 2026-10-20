@@ -405,7 +405,6 @@ impl LspStore {
         } else {
             let document_colors_task = self.request_filtered_lsp_locally(
                 buffer,
-                None::<usize>,
                 GetDocumentColor,
                 for_servers.as_ref(),
                 cx,

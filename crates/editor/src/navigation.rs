@@ -45,9 +45,6 @@ impl Editor {
         if self.take_rename(true, window, cx).is_some() {
             return;
         }
-        if self.cycle_inline_input_history(InlineInputHistoryDirection::Older, window, cx) {
-            return;
-        }
 
         if self.mode.is_single_line() {
             cx.propagate();
@@ -263,9 +260,6 @@ impl Editor {
 
     pub fn move_down(&mut self, _: &MoveDown, window: &mut Window, cx: &mut Context<Self>) {
         if self.take_rename(true, window, cx).is_some() {
-            return;
-        }
-        if self.cycle_inline_input_history(InlineInputHistoryDirection::Newer, window, cx) {
             return;
         }
 

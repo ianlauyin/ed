@@ -20,11 +20,8 @@ brackets = [
 ]
 word_characters = ["#", "$"]
 tab_size = 2
-scope_opt_in_language_servers = ["tailwindcss-language-server"]
 
 [overrides.string]
-completion_query_characters = ["-", "."]
-opt_into_language_servers = ["tailwindcss-language-server"]
 prefer_label_for_snippet = true
 
 [overrides.function_name_before_type_arguments]

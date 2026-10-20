@@ -18,7 +18,6 @@ brackets = [
     { start = "/*", end = " */", close = true, newline = false, not_in = ["string", "comment"] },
 ]
 word_characters = ["#", "$"]
-scope_opt_in_language_servers = ["tailwindcss-language-server", "emmet-language-server"]
 tab_size = 2
 
 [jsx_tag_auto_close]
@@ -34,11 +33,8 @@ linked_edit_characters = [".", "-"]
 [overrides.element]
 line_comments = { remove = true }
 block_comment = { start = "{/*", prefix = "", end = "*/}", tab_size = 1 }
-opt_into_language_servers = ["emmet-language-server"]
 
 [overrides.string]
-completion_query_characters = ["-", "."]
-opt_into_language_servers = ["tailwindcss-language-server"]
 prefer_label_for_snippet = true
 
 [overrides.function_name_before_type_arguments]

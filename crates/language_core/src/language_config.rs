@@ -96,9 +96,6 @@ pub struct LanguageConfig {
     #[serde(default, deserialize_with = "deserialize_regex_vec")]
     #[schemars(schema_with = "regex_vec_json_schema")]
     pub rewrap_prefixes: Vec<Regex>,
-    /// A list of language servers that are allowed to run on subranges of a given language.
-    #[serde(default)]
-    pub scope_opt_in_language_servers: Vec<SharedString>,
     #[serde(default)]
     pub overrides: HashMap<String, LanguageConfigOverride>,
     /// A list of characters that Zed should treat as word characters for the
@@ -170,7 +167,6 @@ impl Default for LanguageConfig {
             ordered_list: Default::default(),
             task_list: Default::default(),
             rewrap_prefixes: Default::default(),
-            scope_opt_in_language_servers: Default::default(),
             overrides: Default::default(),
             word_characters: Default::default(),
             collapsed_placeholder: Default::default(),
@@ -364,8 +360,6 @@ pub struct LanguageConfigOverride {
     pub completion_query_characters: Override<HashSet<char>>,
     #[serde(default)]
     pub linked_edit_characters: Override<HashSet<char>>,
-    #[serde(default)]
-    pub opt_into_language_servers: Vec<SharedString>,
     #[serde(default)]
     pub prefer_label_for_snippet: Option<bool>,
 }

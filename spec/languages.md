@@ -64,7 +64,7 @@
 - Language servers are never installed by Zed. A server starts from
   `lsp.<server>.binary.path`, else from a user installation the adapter finds
   (`PATH`, or the project). Node-based servers (vtsls,
-  typescript-language-server, eslint, css/html/json, tailwindcss, yaml, bash)
+  typescript-language-server, eslint, css/html/json, yaml, bash)
   then fall back to `npx --yes --package <pkg> <bin>`,
   unpinned: npx prefers a version installed in the project, else the latest
   release from npm's cache, downloading it on first use. typescript-language-server
@@ -74,6 +74,15 @@
 - `lsp.<server>.fetch` and `lsp.<server>.binary.ignore_system_version` are removed;
   `binary.arguments` and `binary.env` still apply to whichever binary is used.
 - Server binary statuses no longer include checking-for-update or downloading.
+- No Tailwind CSS or Emmet support: the `tailwindcss-language-server` and
+  `emmet-language-server` adapters, Emmet abbreviation actions and the
+  editor's inline input block are removed.
+- Grammar configs cannot scope language servers to syntax regions
+  (`scope_opt_in_language_servers` / `opt_into_language_servers` removed); which
+  servers run for a language is decided in code only.
+- No direnv integration (`load_direnv` removed). A project's environment is the
+  login shell's environment captured after `cd` into the worktree, so shell
+  hooks (direnv, mise, asdf) still apply if configured in the user's shell.
 - Yarn Plug'n'Play is not supported. LSP locations inside `.zip` archives or Yarn
   `__virtual__` paths are not resolved, and the TypeScript servers only use
   `node_modules/typescript/lib` as the TypeScript SDK (never `.yarn/sdks`).

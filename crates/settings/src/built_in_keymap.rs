@@ -644,12 +644,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
     );
     add_bindings(
         &mut keymap,
-        Some("Editor && inline_input"),
-        true,
-        [KeyBindingSpec::new("enter", "menu::Confirm")],
-    );
-    add_bindings(
-        &mut keymap,
         Some("Editor && showing_completions"),
         true,
         [

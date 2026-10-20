@@ -378,7 +378,7 @@ impl ActivityIndicator {
     }
 
     fn primary_content(&mut self, cx: &mut Context<Self>) -> Option<Content> {
-        // Show if any direnv calls failed
+        // Show if loading the project environment failed
         if let Some(message) = self.pending_environment_error(cx) {
             return Some(Content {
                 icon: ActivityIcon::Icon(IconName::Warning),

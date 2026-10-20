@@ -336,7 +336,6 @@ impl LspStore {
         } else {
             let links_task = self.request_filtered_lsp_locally(
                 buffer,
-                None::<usize>,
                 GetDocumentLinks,
                 for_servers.as_ref(),
                 cx,

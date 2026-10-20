@@ -334,13 +334,8 @@ impl LspStore {
                 Ok(Some(code_lens_actions))
             })
         } else {
-            let code_lens_actions_task = self.request_filtered_lsp_locally(
-                buffer,
-                None::<usize>,
-                GetCodeLens,
-                for_servers.as_ref(),
-                cx,
-            );
+            let code_lens_actions_task =
+                self.request_filtered_lsp_locally(buffer, GetCodeLens, for_servers.as_ref(), cx);
             cx.background_spawn(async move {
                 Ok(Some(code_lens_actions_task.await.into_iter().collect()))
             })

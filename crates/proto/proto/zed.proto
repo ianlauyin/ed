@@ -368,8 +368,6 @@ message Envelope {
     GetIncomingCallsResponse get_incoming_calls_response = 485;
     GetOutgoingCalls get_outgoing_calls = 486;
     GetOutgoingCallsResponse get_outgoing_calls_response = 487;
-    LspExtExpandAbbreviation lsp_ext_expand_abbreviation = 488;
-    LspExtExpandAbbreviationResponse lsp_ext_expand_abbreviation_response = 489;
     LanguageServerShowDocumentRequest language_server_show_document_request = 490;
     ExecuteLspCommand execute_lsp_command = 491;
     ExecuteLspCommandResponse execute_lsp_command_response = 492;
@@ -383,6 +381,7 @@ message Envelope {
   reserved 273 to 277, 371, 372; // Removed toolchains.
   reserved 411 to 412; // Removed context servers.
   reserved 433 to 439; // Removed git checkpoints.
+  reserved 488, 489; // Removed emmet.
   reserved 444 to 446; // Removed git checkpoints.
   reserved 426 to 428; // Removed kernel execution.
   reserved 459; // Removed telemetry event.
