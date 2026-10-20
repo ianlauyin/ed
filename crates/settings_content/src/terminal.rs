@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use collections::{HashMap, HashSet};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -22,12 +20,11 @@ pub struct ProjectTerminalSettingsContent {
     ///
     /// Default: {}
     pub env: Option<HashMap<String, String>>,
-    /// Activates the python virtual environment, if one is found, in the
-    /// terminal's working directory (as resolved by the working_directory
-    /// setting). Set this to "off" to disable this behavior.
+    /// Puts the worktree's `.venv` in front of `PATH` (and sets `VIRTUAL_ENV`)
+    /// in terminals and tasks opened inside that worktree.
     ///
-    /// Default: on
-    pub detect_venv: Option<VenvSettings>,
+    /// Default: true
+    pub detect_venv: Option<bool>,
     /// Regexes used to identify paths for hyperlink navigation.
     ///
     /// Default:
@@ -486,67 +483,6 @@ pub enum TerminalBell {
     Off,
 }
 
-#[derive(
-    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, MergeFrom,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum CondaManager {
-    /// Automatically detect the conda manager
-    #[default]
-    Auto,
-    /// Use conda
-    Conda,
-    /// Use mamba
-    Mamba,
-    /// Use micromamba
-    Micromamba,
-}
-
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
-#[serde(rename_all = "snake_case")]
-pub enum VenvSettings {
-    #[default]
-    Off,
-    On {
-        /// Default directories to search for virtual environments, relative
-        /// to the current working directory. We recommend overriding this
-        /// in your project's settings, rather than globally.
-        activate_script: Option<ActivateScript>,
-        venv_name: Option<String>,
-        directories: Option<Vec<PathBuf>>,
-        /// Preferred Conda manager to use when activating Conda environments.
-        ///
-        /// Default: auto
-        conda_manager: Option<CondaManager>,
-    },
-}
-#[with_fallible_options]
-pub struct VenvSettingsContent<'a> {
-    pub activate_script: ActivateScript,
-    pub venv_name: &'a str,
-    pub directories: &'a [PathBuf],
-    pub conda_manager: CondaManager,
-}
-
-impl VenvSettings {
-    pub fn as_option(&self) -> Option<VenvSettingsContent<'_>> {
-        match self {
-            VenvSettings::Off => None,
-            VenvSettings::On {
-                activate_script,
-                venv_name,
-                directories,
-                conda_manager,
-            } => Some(VenvSettingsContent {
-                activate_script: activate_script.unwrap_or(ActivateScript::Default),
-                venv_name: venv_name.as_deref().unwrap_or(""),
-                directories: directories.as_deref().unwrap_or(&[]),
-                conda_manager: conda_manager.unwrap_or(CondaManager::Auto),
-            }),
-        }
-    }
-}
-
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, JsonSchema)]
 #[serde(transparent)]
 pub struct PathHyperlinkRegexes(pub Vec<PathHyperlinkRegex>);
@@ -610,16 +546,4 @@ pub enum TerminalDockPosition {
     Left,
     Bottom,
     Right,
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
-#[serde(rename_all = "snake_case")]
-pub enum ActivateScript {
-    #[default]
-    Default,
-    Csh,
-    Fish,
-    Nushell,
-    PowerShell,
-    Pyenv,
 }

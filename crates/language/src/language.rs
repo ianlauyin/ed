@@ -22,7 +22,6 @@ mod runnable;
 mod syntax_map;
 mod task_context;
 mod text_diff;
-mod toolchain;
 
 pub use crate::language_settings::{AutoIndentMode, IndentGuideSettings};
 use anyhow::Result;
@@ -78,10 +77,6 @@ pub use text_diff::{
     word_diff_ranges,
 };
 use theme::SyntaxTheme;
-pub use toolchain::{
-    LanguageToolchainStore, LocalLanguageToolchainStore, Toolchain, ToolchainList, ToolchainLister,
-    ToolchainMetadata, ToolchainScope,
-};
 use tree_sitter::{self, QueryCursor};
 use util::rel_path::RelPath;
 
@@ -352,12 +347,9 @@ impl CachedLspAdapter {
     pub async fn check_if_user_installed(
         &self,
         delegate: &Arc<dyn LspAdapterDelegate>,
-        toolchain: Option<Toolchain>,
         cx: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
-        self.adapter
-            .check_if_user_installed(delegate, toolchain, cx)
-            .await
+        self.adapter.check_if_user_installed(delegate, cx).await
     }
 
     pub fn code_action_kinds(&self) -> Option<Vec<CodeActionKind>> {
@@ -446,13 +438,12 @@ pub trait LspAdapterDelegate: Send + Sync {
 pub trait LspAdapter: 'static + Send + Sync {
     fn name(&self) -> LanguageServerName;
 
-    /// Locates the language server binary installed by the user (on `PATH`, in the
-    /// project, or in the active toolchain). Language servers are never downloaded,
+    /// Locates the language server binary installed by the user (on `PATH` or in the
+    /// project). Language servers are never installed by the editor,
     /// so returning `None` means the server is not available.
     async fn check_if_user_installed(
         &self,
         _delegate: &Arc<dyn LspAdapterDelegate>,
-        _toolchain: Option<Toolchain>,
         _cx: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
         None
@@ -542,7 +533,6 @@ pub trait LspAdapter: 'static + Send + Sync {
     async fn workspace_configuration(
         self: Arc<Self>,
         _: &Arc<dyn LspAdapterDelegate>,
-        _: Option<Toolchain>,
         _: Option<Uri>,
         _cx: &mut AsyncApp,
     ) -> Result<Value> {
@@ -635,7 +625,6 @@ pub struct Language {
     pub(crate) config: LanguageConfig,
     pub(crate) grammar: Option<Arc<Grammar>>,
     pub(crate) context_provider: Option<Arc<dyn ContextProvider>>,
-    pub(crate) toolchain: Option<Arc<dyn ToolchainLister>>,
     pub(crate) manifest_name: Option<ManifestName>,
 }
 
@@ -658,18 +647,12 @@ impl Language {
             config,
             grammar: ts_language.map(|ts_language| Arc::new(Grammar::new(ts_language))),
             context_provider: None,
-            toolchain: None,
             manifest_name: None,
         }
     }
 
     pub fn with_context_provider(mut self, provider: Option<Arc<dyn ContextProvider>>) -> Self {
         self.context_provider = provider;
-        self
-    }
-
-    pub fn with_toolchain_lister(mut self, provider: Option<Arc<dyn ToolchainLister>>) -> Self {
-        self.toolchain = provider;
         self
     }
 
@@ -778,10 +761,6 @@ impl Language {
 
     pub fn context_provider(&self) -> Option<Arc<dyn ContextProvider>> {
         self.context_provider.clone()
-    }
-
-    pub fn toolchain_lister(&self) -> Option<Arc<dyn ToolchainLister>> {
-        self.toolchain.clone()
     }
 
     pub fn highlight_text<'a>(

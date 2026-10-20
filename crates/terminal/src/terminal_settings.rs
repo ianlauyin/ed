@@ -7,7 +7,7 @@ pub use settings::AlternateScroll;
 
 use settings::{
     IntoGpui, PathHyperlinkRegex, RegisterSetting, ShowScrollbar, TerminalBell, TerminalBlink,
-    TerminalDockPosition, TerminalLineHeight, VenvSettings, WorkingDirectory,
+    TerminalDockPosition, TerminalLineHeight, WorkingDirectory,
 };
 use task::Shell;
 use theme_settings::FontFamilyName;
@@ -41,7 +41,7 @@ pub struct TerminalSettings {
     pub flexible: bool,
     pub default_width: Pixels,
     pub default_height: Pixels,
-    pub detect_venv: VenvSettings,
+    pub detect_venv: bool,
     pub max_scroll_history_lines: Option<usize>,
     pub scroll_multiplier: f32,
     pub toolbar: Toolbar,

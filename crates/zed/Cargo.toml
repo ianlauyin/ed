@@ -2,7 +2,7 @@
 description = "A focused single-user code editor."
 edition.workspace = true
 name = "zed"
-version = "1.31.0"
+version = "1.31.1"
 default-run = "ed"
 
 [lints]
@@ -42,7 +42,6 @@ tabular_data_preview.workspace = true
 image_viewer.workspace = true
 json_schema_store.workspace = true
 language.workspace = true
-language_onboarding.workspace = true
 language_selector.workspace = true
 language_tools.workspace = true
 languages = { workspace = true, features = ["load-grammars"] }
@@ -74,7 +73,6 @@ theme.workspace = true
 theme_selector.workspace = true
 theme_settings.workspace = true
 title_bar.workspace = true
-toolchain_selector.workspace = true
 ui.workspace = true
 url.workspace = true
 urlencoding.workspace = true

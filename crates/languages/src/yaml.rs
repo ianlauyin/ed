@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use gpui::AsyncApp;
-use language::{LspAdapter, LspAdapterDelegate, Toolchain, language_settings::AllLanguageSettings};
+use language::{LspAdapter, LspAdapterDelegate, language_settings::AllLanguageSettings};
 use lsp::{LanguageServerBinary, LanguageServerName, Uri};
 use project::lsp_store::language_server_settings;
 use serde_json::Value;
@@ -24,7 +24,6 @@ impl LspAdapter for YamlLspAdapter {
     async fn check_if_user_installed(
         &self,
         delegate: &Arc<dyn LspAdapterDelegate>,
-        _: Option<Toolchain>,
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
         let bin = Self::SERVER_NAME;
@@ -34,7 +33,6 @@ impl LspAdapter for YamlLspAdapter {
     async fn workspace_configuration(
         self: Arc<Self>,
         delegate: &Arc<dyn LspAdapterDelegate>,
-        _: Option<Toolchain>,
         _: Option<Uri>,
         cx: &mut AsyncApp,
     ) -> Result<Value> {

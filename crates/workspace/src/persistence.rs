@@ -1,17 +1,12 @@
 pub mod model;
 
-use std::{
-    collections::BTreeMap,
-    path::{Path, PathBuf},
-    str::FromStr,
-    sync::Arc,
-};
+use std::path::{Path, PathBuf};
 
 use chrono::{DateTime, NaiveDateTime, Utc};
 use fs::Fs;
 
 use anyhow::{Context as _, Result, bail};
-use collections::{HashMap, HashSet, IndexSet};
+use collections::{HashMap, HashSet};
 use db::{
     kvp::KeyValueStore,
     query,
@@ -24,7 +19,6 @@ use project::{
     trusted_worktrees::{DbTrustedPaths, RemoteHostLocation},
 };
 
-use language::{LanguageName, Toolchain, ToolchainScope};
 use remote::{
     RemoteConnectionIdentity, RemoteConnectionOptions, SshConnectionOptions,
     remote_connection_identity,
@@ -37,7 +31,7 @@ use sqlez::{
 };
 
 use ui::{App, SharedString, px};
-use util::{ResultExt, maybe, rel_path::RelPath};
+use util::{ResultExt, maybe};
 use uuid::Uuid;
 
 use crate::{
@@ -501,29 +495,6 @@ impl Domain for WorkspaceDb {
             host_name TEXT
         ) STRICT;
 
-        CREATE TABLE toolchains (
-            workspace_id INTEGER,
-            worktree_root_path TEXT NOT NULL,
-            language_name TEXT NOT NULL,
-            name TEXT NOT NULL,
-            path TEXT NOT NULL,
-            raw_json TEXT NOT NULL,
-            relative_worktree_path TEXT NOT NULL,
-            PRIMARY KEY (workspace_id, worktree_root_path, language_name, relative_worktree_path)
-        ) STRICT;
-
-        CREATE TABLE user_toolchains (
-            remote_connection_id INTEGER,
-            workspace_id INTEGER NOT NULL,
-            worktree_root_path TEXT NOT NULL,
-            relative_worktree_path TEXT NOT NULL,
-            language_name TEXT NOT NULL,
-            name TEXT NOT NULL,
-            path TEXT NOT NULL,
-            raw_json TEXT NOT NULL,
-            PRIMARY KEY (workspace_id, worktree_root_path, relative_worktree_path, language_name, name, path, raw_json)
-        ) STRICT;
-
         CREATE TABLE recent_navigation_history (
             workspace_id INTEGER NOT NULL,
             path BLOB NOT NULL,
@@ -674,7 +645,6 @@ impl WorkspaceDb {
             docks,
             session_id: None,
             window_id,
-            user_toolchains: self.user_toolchains(workspace_id, remote_connection_id),
             recent_navigation_history: self.recent_navigation_history(workspace_id),
         })
     }
@@ -777,7 +747,6 @@ impl WorkspaceDb {
             docks,
             session_id: None,
             window_id,
-            user_toolchains: self.user_toolchains(workspace_id, remote_connection_id),
             recent_navigation_history: self.recent_navigation_history(workspace_id),
         })
     }
@@ -793,79 +762,6 @@ impl WorkspaceDb {
         .context("Loading recent navigation history")
         .log_err()
         .unwrap_or_default()
-    }
-
-    fn user_toolchains(
-        &self,
-        workspace_id: WorkspaceId,
-        remote_connection_id: Option<RemoteConnectionId>,
-    ) -> BTreeMap<ToolchainScope, IndexSet<Toolchain>> {
-        type RowKind = (WorkspaceId, String, String, String, String, String, String);
-
-        let toolchains: Vec<RowKind> = self
-            .select_bound(sql! {
-                SELECT workspace_id, worktree_root_path, relative_worktree_path,
-                language_name, name, path, raw_json
-                FROM user_toolchains WHERE remote_connection_id IS ?1 AND (
-                      workspace_id IN (0, ?2)
-                )
-            })
-            .and_then(|mut statement| {
-                (statement)((remote_connection_id.map(|id| id.0), workspace_id))
-            })
-            .unwrap_or_default();
-        let mut ret = BTreeMap::<_, IndexSet<_>>::default();
-
-        for (
-            _workspace_id,
-            worktree_root_path,
-            relative_worktree_path,
-            language_name,
-            name,
-            path,
-            raw_json,
-        ) in toolchains
-        {
-            // INTEGER's that are primary keys (like workspace ids, remote connection ids and such) start at 1, so we're safe to
-            let scope = if _workspace_id == WorkspaceId(0) {
-                debug_assert_eq!(worktree_root_path, String::default());
-                debug_assert_eq!(relative_worktree_path, String::default());
-                ToolchainScope::Global
-            } else {
-                debug_assert_eq!(workspace_id, _workspace_id);
-                debug_assert_eq!(
-                    worktree_root_path == String::default(),
-                    relative_worktree_path == String::default()
-                );
-
-                let Some(relative_path) = RelPath::from_unix_str(&relative_worktree_path).log_err()
-                else {
-                    continue;
-                };
-                if worktree_root_path != String::default()
-                    && relative_worktree_path != String::default()
-                {
-                    ToolchainScope::Subproject(
-                        Arc::from(worktree_root_path.as_ref()),
-                        relative_path.into(),
-                    )
-                } else {
-                    ToolchainScope::Project
-                }
-            };
-            let Ok(as_json) = serde_json::from_str(&raw_json) else {
-                continue;
-            };
-            let toolchain = Toolchain {
-                name: SharedString::from(name),
-                path: SharedString::from(path),
-                language_name: LanguageName::from_proto(language_name),
-                as_json,
-            };
-            ret.entry(scope).or_default().insert(toolchain);
-        }
-
-        ret
     }
 
     pub(crate) async fn save_workspace(&self, workspace: SerializedWorkspace) {
@@ -889,29 +785,6 @@ impl WorkspaceDb {
                     DELETE FROM pane_groups WHERE workspace_id = ?1;
                     DELETE FROM panes WHERE workspace_id = ?1;))?(workspace.id)
                     .context("Clearing old panes")?;
-
-                conn.exec_bound(
-                    sql!(
-                        DELETE FROM user_toolchains WHERE workspace_id = ?1;
-                    )
-                )?(workspace.id).context("Clearing old user toolchains")?;
-
-                for (scope, toolchains) in workspace.user_toolchains {
-                    for toolchain in toolchains {
-                        let query = sql!(INSERT OR REPLACE INTO user_toolchains(remote_connection_id, workspace_id, worktree_root_path, relative_worktree_path, language_name, name, path, raw_json) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8));
-                        let (workspace_id, worktree_root_path, relative_worktree_path) = match scope {
-                            ToolchainScope::Subproject(ref worktree_root_path, ref path) => (Some(workspace.id), Some(worktree_root_path.to_string_lossy().into_owned()), Some(path.as_unix_str().to_owned())),
-                            ToolchainScope::Project => (Some(workspace.id), None, None),
-                            ToolchainScope::Global => (None, None, None),
-                        };
-                        let args = (remote_connection_id, workspace_id.unwrap_or(WorkspaceId(0)), worktree_root_path.unwrap_or_default(), relative_worktree_path.unwrap_or_default(),
-                        toolchain.language_name.as_ref().to_owned(), toolchain.name.to_string(), toolchain.path.to_string(), toolchain.as_json.to_string());
-                        if let Err(err) = conn.exec_bound(query)?(args) {
-                            log::error!("{err}");
-                            continue;
-                        }
-                    }
-                }
 
                 // Clear out old workspaces with the same paths.
                 // Skip this for empty workspaces - they are identified by workspace_id, not paths.
@@ -1685,81 +1558,6 @@ impl WorkspaceDb {
             SET session_id = ?2, window_id = ?3
             WHERE workspace_id = ?1
         }
-    }
-
-    pub(crate) async fn toolchains(
-        &self,
-        workspace_id: WorkspaceId,
-    ) -> Result<Vec<(Toolchain, Arc<Path>, Arc<RelPath>)>> {
-        self.write(move |this| {
-            let mut select = this
-                .select_bound(sql!(
-                    SELECT
-                        name, path, worktree_root_path, relative_worktree_path, language_name, raw_json
-                    FROM toolchains
-                    WHERE workspace_id = ?
-                ))
-                .context("select toolchains")?;
-
-            let toolchain: Vec<(String, String, String, String, String, String)> =
-                select(workspace_id)?;
-
-            Ok(toolchain
-                .into_iter()
-                .filter_map(
-                    |(name, path, worktree_root_path, relative_worktree_path, language, json)| {
-                        Some((
-                            Toolchain {
-                                name: name.into(),
-                                path: path.into(),
-                                language_name: LanguageName::new(&language),
-                                as_json: serde_json::Value::from_str(&json).ok()?,
-                            },
-                           Arc::from(worktree_root_path.as_ref()),
-                            RelPath::from_unix_str(&relative_worktree_path).log_err()?.into(),
-                        ))
-                    },
-                )
-                .collect())
-        })
-        .await
-    }
-
-    pub async fn set_toolchain(
-        &self,
-        workspace_id: WorkspaceId,
-        worktree_root_path: Arc<Path>,
-        relative_worktree_path: Arc<RelPath>,
-        toolchain: Toolchain,
-    ) -> Result<()> {
-        log::debug!(
-            "Setting toolchain for workspace, worktree: {worktree_root_path:?}, relative path: {relative_worktree_path:?}, toolchain: {}",
-            toolchain.name
-        );
-        self.write(move |conn| {
-            let mut insert = conn
-                .exec_bound(sql!(
-                    INSERT INTO toolchains(workspace_id, worktree_root_path, relative_worktree_path, language_name, name, path, raw_json) VALUES (?, ?, ?, ?, ?,  ?, ?)
-                    ON CONFLICT DO
-                    UPDATE SET
-                        name = ?5,
-                        path = ?6,
-                        raw_json = ?7
-                ))
-                .context("Preparing insertion")?;
-
-            insert((
-                workspace_id,
-                worktree_root_path.to_string_lossy().into_owned(),
-                relative_worktree_path.as_unix_str(),
-                toolchain.language_name.as_ref(),
-                toolchain.name.as_ref(),
-                toolchain.path.as_ref(),
-                toolchain.as_json.to_string(),
-            ))?;
-
-            Ok(())
-        }).await
     }
 
     pub(crate) async fn save_trusted_worktrees(

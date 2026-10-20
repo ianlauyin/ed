@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use collections::HashMap;
 use gpui::AsyncApp;
-use language::{LanguageName, LspAdapter, LspAdapterDelegate, PromptResponseContext, Toolchain};
+use language::{LanguageName, LspAdapter, LspAdapterDelegate, PromptResponseContext};
 use lsp::{CodeActionKind, LanguageServerBinary, LanguageServerName, Uri};
 use project::{Fs, lsp_store::language_server_settings};
 use regex::Regex;
@@ -74,7 +74,6 @@ impl LspAdapter for VtslsLspAdapter {
     async fn check_if_user_installed(
         &self,
         delegate: &Arc<dyn LspAdapterDelegate>,
-        _: Option<Toolchain>,
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
         crate::npx::node_server_binary(
@@ -135,7 +134,6 @@ impl LspAdapter for VtslsLspAdapter {
     async fn workspace_configuration(
         self: Arc<Self>,
         delegate: &Arc<dyn LspAdapterDelegate>,
-        _: Option<Toolchain>,
         _: Option<Uri>,
         cx: &mut AsyncApp,
     ) -> Result<Value> {

@@ -9,7 +9,6 @@ import "git.proto";
 import "image.proto";
 import "lsp.proto";
 import "task.proto";
-import "toolchain.proto";
 import "worktree.proto";
 import "project.proto";
 
@@ -174,12 +173,6 @@ message Envelope {
 
     UpdateGitBranch update_git_branch = 272;
 
-    ListToolchains list_toolchains = 273;
-    ListToolchainsResponse list_toolchains_response = 274;
-    ActivateToolchain activate_toolchain = 275;
-    ActiveToolchain active_toolchain = 276;
-    ActiveToolchainResponse active_toolchain_response = 277;
-
     GetPathMetadata get_path_metadata = 278;
     GetPathMetadataResponse get_path_metadata_response = 279;
 
@@ -282,8 +275,6 @@ message Envelope {
     UpdateUserSettings update_user_settings = 368;
 
 
-    ResolveToolchain resolve_toolchain = 371;
-    ResolveToolchainResponse resolve_toolchain_response = 372;
 
     StashDrop stash_drop = 378;
     StashApply stash_apply = 379;
@@ -389,6 +380,7 @@ message Envelope {
 
   reserved 317, 318; // Removed credential prompts.
   reserved 373 to 377; // Removed agent servers.
+  reserved 273 to 277, 371, 372; // Removed toolchains.
   reserved 411 to 412; // Removed context servers.
   reserved 433 to 439; // Removed git checkpoints.
   reserved 444 to 446; // Removed git checkpoints.

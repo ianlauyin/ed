@@ -993,7 +993,6 @@ impl TerminalBuilder {
             mouse_down_hyperlink: None,
             #[cfg(windows)]
             shell_program: None,
-            activation_script: Vec::new(),
             template: CopyTemplate {
                 shell: Shell::System,
                 env: HashMap::default(),
@@ -1034,7 +1033,6 @@ impl TerminalBuilder {
         is_remote_terminal: bool,
         window_id: u64,
         cx: &App,
-        activation_script: Vec<String>,
         path_style: PathStyle,
     ) -> Task<Result<TerminalBuilder>> {
         let version = settings_content::app_metadata::AppVersion::global(cx);
@@ -1110,9 +1108,6 @@ impl TerminalBuilder {
             };
             let terminal_title_override =
                 shell_params.as_ref().and_then(|e| e.title_override.clone());
-
-            // Remote commands use SSH, which is treated as a POSIX shell.
-            let shell_kind = shell.shell_kind(false);
 
             let scrolling_history = if task.is_some() {
                 // Tasks like `cargo build --all` may produce a lot of output, ergo allow maximum scrolling.
@@ -1217,7 +1212,6 @@ impl TerminalBuilder {
                 )
             };
 
-            let no_task = task.is_none();
             let terminal = Terminal {
                 task,
                 terminal_type,
@@ -1251,7 +1245,6 @@ impl TerminalBuilder {
                 mouse_down_hyperlink: None,
                 #[cfg(windows)]
                 shell_program,
-                activation_script: activation_script.clone(),
                 template: CopyTemplate {
                     shell,
                     env,
@@ -1284,27 +1277,6 @@ impl TerminalBuilder {
                 },
                 pending_cwd_boundary: None,
             };
-
-            if !activation_script.is_empty() && no_task {
-                for activation_script in activation_script {
-                    terminal.write_to_pty(activation_script.into_bytes());
-                    // Simulate enter key press
-                    // NOTE(PowerShell): using `\r\n` will put PowerShell in a continuation mode (infamous >> character)
-                    // and generally mess up the rendering.
-                    terminal.write_to_pty(b"\x0d");
-                }
-                // In order to clear the screen at this point, we have two options:
-                // 1. We can send a shell-specific command such as "clear" or "cls"
-                // 2. We can "echo" a marker message that we will then catch when handling a Wakeup event
-                //    and clear the screen using `terminal.clear()` method
-                // We cannot issue a `terminal.clear()` command at this point as alacritty is evented
-                // and while we have sent the activation script to the pty, it will be executed asynchronously.
-                // Therefore, we somehow need to wait for the activation script to finish executing before we
-                // can proceed with clearing the screen.
-                terminal.write_to_pty(shell_kind.clear_screen_command().as_bytes());
-                // Simulate enter key press
-                terminal.write_to_pty(b"\x0d");
-            }
 
             Ok(TerminalBuilder {
                 terminal,
@@ -1430,7 +1402,6 @@ pub struct Terminal {
     mouse_down_hyperlink: Option<HyperlinkMatch>,
 
     template: CopyTemplate,
-    activation_script: Vec<String>,
     child_exited: Option<ExitStatus>,
     keyboard_input_sent: bool,
     init_command_startup_marker: Option<String>,
@@ -3100,7 +3071,6 @@ impl Terminal {
             self.is_remote_terminal,
             self.template.window_id,
             cx,
-            self.activation_script.clone(),
             self.path_style,
         )
     }

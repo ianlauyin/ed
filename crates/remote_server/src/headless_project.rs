@@ -9,8 +9,7 @@ use futures::{channel::oneshot, stream::StreamExt as _};
 use gpui::{App, AppContext as _, AsyncApp, Context, Entity, PromptLevel, Task, TaskExt};
 use language::{Buffer, BufferEvent, LanguageRegistry, proto::serialize_operation};
 use project::{
-    LspStore, LspStoreEvent, ManifestTree, ProjectEnvironment, ProjectPath, ToolchainStore,
-    WorktreeId,
+    LspStore, LspStoreEvent, ManifestTree, ProjectEnvironment, ProjectPath, WorktreeId,
     buffer_store::{BufferStore, BufferStoreEvent},
     git_store::GitStore,
     image_store::ImageId,
@@ -55,9 +54,6 @@ pub struct HeadlessProject {
     pub languages: Arc<LanguageRegistry>,
     pub git_store: Entity<GitStore>,
     pub environment: Entity<ProjectEnvironment>,
-    // Used mostly to keep alive the toolchain store for RPC handlers.
-    // Local variant is used within LSP store, but that's a separate entity.
-    pub _toolchain_store: Entity<ToolchainStore>,
     search_buffer_batches: async_channel::Sender<SearchBufferBatch>,
     _search_buffer_sender: Task<()>,
 }
@@ -115,15 +111,6 @@ impl HeadlessProject {
         let environment =
             cx.new(|cx| ProjectEnvironment::new(None, worktree_store.downgrade(), None, true, cx));
         let manifest_tree = ManifestTree::new(worktree_store.clone(), cx);
-        let toolchain_store = cx.new(|cx| {
-            ToolchainStore::local(
-                languages.clone(),
-                worktree_store.clone(),
-                environment.clone(),
-                manifest_tree.clone(),
-                cx,
-            )
-        });
 
         let buffer_store = cx.new(|cx| {
             let mut buffer_store = BufferStore::local(worktree_store.clone(), cx);
@@ -147,7 +134,6 @@ impl HeadlessProject {
             let mut task_store = TaskStore::local(
                 buffer_store.downgrade(),
                 worktree_store.clone(),
-                toolchain_store.read(cx).as_language_toolchain_store(),
                 environment.clone(),
                 git_store.clone(),
                 cx,
@@ -161,11 +147,6 @@ impl HeadlessProject {
             let mut lsp_store = LspStore::new_local(
                 buffer_store.clone(),
                 worktree_store.clone(),
-                toolchain_store
-                    .read(cx)
-                    .as_local_store()
-                    .expect("Toolchain store to be local")
-                    .clone(),
                 environment.clone(),
                 manifest_tree,
                 languages.clone(),
@@ -191,7 +172,6 @@ impl HeadlessProject {
         session.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &cx.entity());
         session.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &lsp_store);
         session.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &task_store);
-        session.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &toolchain_store);
         session.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &settings_observer);
         session.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &git_store);
 
@@ -223,7 +203,6 @@ impl HeadlessProject {
         SettingsObserver::init(&session);
         LspStore::init(&session);
         TaskStore::init(Some(&session));
-        ToolchainStore::init(&session);
         GitStore::init(&session);
 
         let (search_buffer_batches, batches) = async_channel::bounded::<SearchBufferBatch>(1);
@@ -292,7 +271,6 @@ impl HeadlessProject {
             languages,
             git_store,
             environment,
-            _toolchain_store: toolchain_store,
             search_buffer_batches,
             _search_buffer_sender: search_buffer_sender,
         }

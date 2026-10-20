@@ -581,7 +581,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             KeyBindingSpec::new("cmd-alt-s", "workspace::SaveAll"),
             KeyBindingSpec::new("cmd-k n", "encoding_selector::Toggle"),
             KeyBindingSpec::new("cmd-k m", "language_selector::Toggle"),
-            KeyBindingSpec::new("cmd-k cmd-m", "toolchain::AddToolchain"),
             KeyBindingSpec::new("cmd-k cmd-left", "workspace::ActivatePaneLeft"),
             KeyBindingSpec::new("cmd-k cmd-right", "workspace::ActivatePaneRight"),
             KeyBindingSpec::new("cmd-k cmd-up", "workspace::ActivatePaneUp"),
@@ -928,15 +927,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
         [KeyBindingSpec::new(
             "tab",
             "lsp_command_selector::ToggleArgumentsFocus",
-        )],
-    );
-    add_bindings(
-        &mut keymap,
-        Some("ToolchainSelector"),
-        true,
-        [KeyBindingSpec::new(
-            "cmd-shift-a",
-            "toolchain::AddToolchain",
         )],
     );
     add_bindings(

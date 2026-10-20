@@ -40,8 +40,9 @@ migrator, or Vim/Helix mode.
   settings come only from built-in settings and file modelines. There is no
   project-local settings layer or worktree-settings sync with remote peers.
 - The built-in keymap retains contexts, binding order, and keyboard-position
-  equivalents. Changing the keyboard layout rebuilds the bindings and refreshes
-  menu shortcuts.
+  equivalents. The keymap, menu bar, and dock menu are built once at startup
+  against the keyboard layout active at launch; switching layouts mid-session
+  takes effect after a restart.
 - Pending multi-stroke input is shown only by the status bar indicator; hovering
   it or pressing `alt-/` mid-chord previews completing bindings. The which-key
   popup and its `which_key` settings are removed.

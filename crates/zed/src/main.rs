@@ -53,9 +53,8 @@ use workspace::{
     WorkspaceSettings, WorkspaceStore, notifications::NotificationId, restore_multiworkspace,
 };
 use zed::{
-    OpenListener, OpenRequest, RawOpenRequest, app_menus, build_window_options,
-    derive_paths_with_position, handle_cli_connection, initialize_keymap, initialize_workspace,
-    open_paths_with_positions,
+    OpenListener, OpenRequest, RawOpenRequest, build_window_options, derive_paths_with_position,
+    handle_cli_connection, initialize_keymap, initialize_workspace, open_paths_with_positions,
 };
 
 use crate::zed::OpenRequestKind;
@@ -344,7 +343,6 @@ fn main() {
         language_selector::init(cx);
         line_ending_selector::init(cx);
         lsp_command_selector::init(cx);
-        toolchain_selector::init(cx);
         theme_selector::init(cx);
         language_tools::init(cx);
 
@@ -391,9 +389,6 @@ fn main() {
 
         #[cfg(debug_assertions)]
         watch_languages(app_state.fs.clone(), app_state.languages.clone(), cx);
-
-        let menus = app_menus(cx);
-        cx.set_menus(menus);
 
         initialize_workspace(app_state.clone(), cx);
 

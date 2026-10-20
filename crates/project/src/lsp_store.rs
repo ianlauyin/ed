@@ -49,7 +49,6 @@ use crate::{
         ManifestTree,
     },
     project_settings::{BinarySettings, LspSettings, ProjectSettings},
-    toolchain_store::{LocalToolchainStore, ToolchainStoreEvent},
     trusted_worktrees::{PathTrust, TrustedWorktrees, TrustedWorktreesEvent},
     worktree_store::{WorktreeStore, WorktreeStoreEvent},
 };
@@ -76,7 +75,7 @@ use language::{
     DiagnosticSourceKind, Diff, File as _, Language, LanguageAwareStyling, LanguageName,
     LanguageRegistry, LocalFile, LspAdapter, LspAdapterDelegate, ManifestDelegate, ManifestName,
     ModelineSettings, Patch, PointUtf16, RelatedInformation, RelatedLocation, TextBufferSnapshot,
-    ToOffset, ToPointUtf16, Toolchain, Transaction, Unclipped,
+    ToOffset, ToPointUtf16, Transaction, Unclipped,
     language_settings::{
         AllLanguageSettings, FormatOnSave, Formatter, LanguageSettings, LineEndingSetting,
         all_language_settings,
@@ -272,7 +271,6 @@ struct LanguageServerSeedSettings {
 struct LanguageServerSeed {
     worktree_id: WorktreeId,
     name: LanguageServerName,
-    toolchain: Option<Toolchain>,
     settings: LanguageServerSeedSettings,
 }
 
@@ -300,7 +298,6 @@ struct DocumentSelectorContext {
 pub struct LocalLspStore {
     weak: WeakEntity<LspStore>,
     pub worktree_store: Entity<WorktreeStore>,
-    toolchain_store: Entity<LocalToolchainStore>,
     environment: Entity<ProjectEnvironment>,
     fs: Arc<dyn Fs>,
     languages: Arc<LanguageRegistry>,
@@ -407,7 +404,6 @@ impl LocalLspStore {
                 binary: disposition.settings.binary.clone(),
                 initialization_options: disposition.settings.initialization_options.clone(),
             },
-            toolchain: disposition.toolchain.clone(),
         };
         if start_mode == LanguageServerStartMode::Explicit {
             self.language_server_start_overrides
@@ -471,7 +467,6 @@ impl LocalLspStore {
 
         let worktree_id = worktree.id();
         let worktree_abs_path = worktree.abs_path();
-        let toolchain = key.toolchain.clone();
         let override_options = settings.initialization_options.clone();
 
         let stderr_capture = Arc::new(Mutex::new(Some(String::new())));
@@ -526,7 +521,6 @@ impl LocalLspStore {
             worktree_abs_path.clone(),
             adapter.clone(),
             settings,
-            toolchain.clone(),
             delegate.clone(),
             wait_until_worktree_trust,
             cx,
@@ -581,7 +575,6 @@ impl LocalLspStore {
                     let workspace_config = Self::workspace_configuration_for_adapter(
                         adapter.adapter.clone(),
                         &delegate,
-                        toolchain,
                         None,
                         cx,
                     )
@@ -720,7 +713,6 @@ impl LocalLspStore {
         worktree_abs_path: Arc<Path>,
         adapter: Arc<CachedLspAdapter>,
         settings: Arc<LspSettings>,
-        toolchain: Option<Toolchain>,
         delegate: Arc<dyn LspAdapterDelegate>,
         wait_until_worktree_trust: Option<watch::Receiver<bool>>,
         cx: &mut App,
@@ -755,10 +747,7 @@ impl LocalLspStore {
                     env: None,
                 }
             } else {
-                let Some(binary) = adapter
-                    .check_if_user_installed(&delegate, toolchain, cx)
-                    .await
-                else {
+                let Some(binary) = adapter.check_if_user_installed(&delegate, cx).await else {
                     anyhow::bail!(
                         "language server {} is not installed. Install it and make sure it is on \
                         your PATH, or set `lsp.{}.binary.path` in settings",
@@ -835,23 +824,11 @@ impl LocalLspStore {
             .on_request::<lsp::request::WorkspaceConfiguration, _, _>({
                 let adapter = adapter.adapter.clone();
                 let delegate = delegate.clone();
-                let this = lsp_store.clone();
                 move |params, cx| {
                     let adapter = adapter.clone();
                     let delegate = delegate.clone();
-                    let this = this.clone();
                     let mut cx = cx.clone();
                     async move {
-                        let toolchain_for_id = this
-                            .update(&mut cx, |this, _| {
-                                this.as_local()?.language_server_ids.iter().find_map(
-                                    |(seed, value)| {
-                                        (value.id == server_id).then(|| seed.toolchain.clone())
-                                    },
-                                )
-                            })?
-                            .context("Expected the LSP store to be in a local mode")?;
-
                         let mut scope_uri_to_workspace_config = BTreeMap::new();
                         for item in &params.items {
                             let scope_uri = item.scope_uri.clone();
@@ -864,7 +841,6 @@ impl LocalLspStore {
                             let workspace_config = Self::workspace_configuration_for_adapter(
                                 adapter.clone(),
                                 &delegate,
-                                toolchain_for_id.clone(),
                                 scope_uri,
                                 &mut cx,
                             )
@@ -4281,13 +4257,12 @@ impl LocalLspStore {
     async fn workspace_configuration_for_adapter(
         adapter: Arc<dyn LspAdapter>,
         delegate: &Arc<dyn LspAdapterDelegate>,
-        toolchain: Option<Toolchain>,
         requested_uri: Option<Uri>,
         cx: &mut AsyncApp,
     ) -> Result<serde_json::Value> {
         let mut workspace_config = adapter
             .clone()
-            .workspace_configuration(delegate, toolchain, requested_uri, cx)
+            .workspace_configuration(delegate, requested_uri, cx)
             .await?;
 
         for other_adapter in delegate.registered_lsp_adapters() {
@@ -4791,7 +4766,6 @@ impl LspStore {
     pub fn new_local(
         buffer_store: Entity<BufferStore>,
         worktree_store: Entity<WorktreeStore>,
-        toolchain_store: Entity<LocalToolchainStore>,
         environment: Entity<ProjectEnvironment>,
         manifest_tree: Entity<ManifestTree>,
         languages: Arc<LanguageRegistry>,
@@ -4801,8 +4775,6 @@ impl LspStore {
         cx.subscribe(&buffer_store, Self::on_buffer_store_event)
             .detach();
         cx.subscribe(&worktree_store, Self::on_worktree_store_event)
-            .detach();
-        cx.subscribe(&toolchain_store, Self::on_toolchain_store_event)
             .detach();
         cx.observe_global::<SettingsStore>(Self::on_settings_changed)
             .detach();
@@ -4841,12 +4813,7 @@ impl LspStore {
                         .shutdown_language_servers_on_quit()
                 }),
                 _binary_status_task: binary_status_task,
-                lsp_tree: LanguageServerTree::new(
-                    manifest_tree,
-                    languages.clone(),
-                    toolchain_store.clone(),
-                ),
-                toolchain_store,
+                lsp_tree: LanguageServerTree::new(manifest_tree, languages.clone()),
                 registered_buffers: HashMap::default(),
                 buffers_opened_in_servers: HashMap::default(),
                 buffer_pull_diagnostics_result_ids: HashMap::default(),
@@ -5020,17 +4987,6 @@ impl LspStore {
             | WorktreeStoreEvent::WorktreeUpdatedGitRepositories(..)
             | WorktreeStoreEvent::WorktreeDeletedEntry(..)
             | WorktreeStoreEvent::WorktreeUpdatedRootRepoCommonDir(..) => {}
-        }
-    }
-
-    fn on_toolchain_store_event(
-        &mut self,
-        _: Entity<LocalToolchainStore>,
-        event: &ToolchainStoreEvent,
-        _: &mut Context<Self>,
-    ) {
-        if let ToolchainStoreEvent::ToolchainActivated = event {
-            self.request_workspace_config_refresh()
         }
     }
 
@@ -6276,11 +6232,6 @@ impl LspStore {
                                         .initialization_options
                                         .clone(),
                                 },
-                                toolchain: local.toolchain_store.read(cx).active_toolchain(
-                                    path.worktree_id,
-                                    &path.path,
-                                    language.name(),
-                                ),
                             };
                             if local.can_start_language_server(&key.name) {
                                 local.language_server_ids.remove(&key);
@@ -9463,13 +9414,11 @@ impl LspStore {
                                     let adapter = adapter.clone();
                                     let server = server.clone();
                                     refreshed_servers.insert(server.name());
-                                    let toolchain = seed.toolchain.clone();
                                     Some(cx.spawn(async move |_, cx| {
                                         let settings =
                                             LocalLspStore::workspace_configuration_for_adapter(
                                                 adapter.adapter.clone(),
                                                 &delegate,
-                                                toolchain,
                                                 None,
                                                 cx,
                                             )
@@ -9505,7 +9454,7 @@ impl LspStore {
         mut external_refresh_requests: watch::Receiver<()>,
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
-        // Multiple things can happen when a workspace environment (selected toolchain + settings) change:
+        // Multiple things can happen when workspace settings change:
         // - We might shut down a language server if it's no longer enabled for a given language (and there are no buffers using it otherwise).
         // - We might also shut it down when the workspace configuration of all of the users of a given language server converges onto that of the other.
         // - In the same vein, we might also decide to start a new language server if the workspace configuration *diverges* from the other.
@@ -15799,7 +15748,6 @@ impl LspAdapter for SshLspAdapter {
     async fn check_if_user_installed(
         &self,
         _: &Arc<dyn LspAdapterDelegate>,
-        _: Option<Toolchain>,
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
         Some(self.binary.clone())

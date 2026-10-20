@@ -90,7 +90,6 @@ use project::{
     WorktreeSettings,
     git_store::{GitStoreEvent, RepositoryEvent},
     project_settings::ProjectSettings,
-    toolchain_store::ToolchainStoreEvent,
     trusted_worktrees::{RemoteHostLocation, TrustedWorktrees, TrustedWorktreesEvent},
 };
 use remote::{
@@ -1561,20 +1560,6 @@ impl Workspace {
         })
         .detach();
 
-        if let Some(toolchain_store) = project.read(cx).toolchain_store() {
-            cx.subscribe_in(
-                &toolchain_store,
-                window,
-                |workspace, _, event, window, cx| match event {
-                    ToolchainStoreEvent::CustomToolchainsModified => {
-                        workspace.serialize_workspace(window, cx);
-                    }
-                    _ => {}
-                },
-            )
-            .detach();
-        }
-
         cx.on_focus_lost(window, |this, window, cx| {
             let focus_handle = window
                 .focus_lost_restore_target(cx)
@@ -1858,43 +1843,6 @@ impl Workspace {
             } else {
                 db.next_id().await.unwrap_or_else(|_| Default::default())
             };
-
-            let toolchains = db.toolchains(workspace_id).await?;
-
-            for (toolchain, worktree_path, path) in toolchains {
-                let toolchain_path = PathBuf::from(toolchain.path.clone().to_string());
-                let Some(worktree_id) = project_handle.read_with(cx, |this, cx| {
-                    this.find_worktree(&worktree_path, cx)
-                        .and_then(|(worktree, rel_path)| {
-                            if rel_path.is_empty() {
-                                Some(worktree.read(cx).id())
-                            } else {
-                                None
-                            }
-                        })
-                }) else {
-                    // We did not find a worktree with a given path, but that's whatever.
-                    continue;
-                };
-                if !app_state.fs.is_file(toolchain_path.as_path()).await {
-                    continue;
-                }
-
-                project_handle
-                    .update(cx, |this, cx| {
-                        this.activate_toolchain(ProjectPath { worktree_id, path }, toolchain, cx)
-                    })
-                    .await;
-            }
-            if let Some(workspace) = serialized_workspace.as_ref() {
-                project_handle.update(cx, |this, cx| {
-                    for (scope, toolchains) in &workspace.user_toolchains {
-                        for toolchain in toolchains {
-                            this.add_toolchain(toolchain.clone(), scope.clone(), cx);
-                        }
-                    }
-                });
-            }
 
             let window_to_replace = match open_mode {
                 OpenMode::NewWindow => None,
@@ -6256,12 +6204,6 @@ impl Workspace {
 
         match self.workspace_location(cx) {
             WorkspaceLocation::Location(location, paths) => {
-                let user_toolchains = self
-                    .project
-                    .read(cx)
-                    .user_toolchains(cx)
-                    .unwrap_or_default();
-
                 let center_group = build_serialized_pane_group(&self.center.root, window, cx);
                 let docks = build_serialized_docks(self, window, cx);
                 let default_docks = (paths.is_empty()
@@ -6283,7 +6225,6 @@ impl Workspace {
                     centered_layout: self.centered_layout,
                     session_id: self.session_id.clone(),
                     window_id: Some(window.window_handle().window_id().as_u64()),
-                    user_toolchains,
                     recent_navigation_history,
                 };
 
@@ -9230,29 +9171,6 @@ async fn open_remote_project_inner(
         }
         new_workspace
     })?;
-
-    let db = cx.update(|cx| WorkspaceDb::global(cx));
-    let toolchains = db.toolchains(workspace_id).await?;
-    for (toolchain, worktree_path, path) in toolchains {
-        project
-            .update(cx, |this, cx| {
-                let Some(worktree_id) =
-                    this.find_worktree(&worktree_path, cx)
-                        .and_then(|(worktree, rel_path)| {
-                            if rel_path.is_empty() {
-                                Some(worktree.read(cx).id())
-                            } else {
-                                None
-                            }
-                        })
-                else {
-                    return Task::ready(None);
-                };
-
-                this.activate_toolchain(ProjectPath { worktree_id, path }, toolchain, cx)
-            })
-            .await;
-    }
 
     let items = window
         .update(cx, |_, window, cx| {

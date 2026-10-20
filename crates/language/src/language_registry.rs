@@ -1,7 +1,7 @@
 use crate::available_languages::AvailableLanguage;
 use crate::{
     CachedLspAdapter, File, Language, LanguageConfig, LanguageId, LanguageMatcher,
-    LanguageServerName, LspAdapter, ManifestName, PLAIN_TEXT, ToolchainLister,
+    LanguageServerName, LspAdapter, ManifestName, PLAIN_TEXT,
     available_languages::AvailableLanguages, language_settings::all_language_settings,
     task_context::ContextProvider,
 };
@@ -83,7 +83,6 @@ pub struct LoadedLanguage {
     pub config: LanguageConfig,
     pub queries: LanguageQueries,
     pub context_provider: Option<Arc<dyn ContextProvider>>,
-    pub toolchain_provider: Option<Arc<dyn ToolchainLister>>,
     pub manifest_name: Option<ManifestName>,
 }
 
@@ -475,7 +474,6 @@ impl LanguageRegistry {
 
                                 Language::new_with_id(language_id, loaded_language.config, grammar)
                                     .with_context_provider(loaded_language.context_provider)
-                                    .with_toolchain_lister(loaded_language.toolchain_provider)
                                     .with_manifest(loaded_language.manifest_name)
                                     .with_queries(loaded_language.queries)
                             } else {
@@ -486,8 +484,7 @@ impl LanguageRegistry {
                                         None,
                                     )
                                     .with_context_provider(loaded_language.context_provider)
-                                    .with_manifest(loaded_language.manifest_name)
-                                    .with_toolchain_lister(loaded_language.toolchain_provider),
+                                    .with_manifest(loaded_language.manifest_name),
                                 )
                             }
                         }

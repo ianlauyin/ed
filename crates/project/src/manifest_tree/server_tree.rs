@@ -14,7 +14,7 @@ use std::{
 use collections::IndexMap;
 use gpui::{App, Entity};
 use language::{
-    CachedLspAdapter, LanguageName, LanguageRegistry, ManifestDelegate, ManifestName, Toolchain,
+    CachedLspAdapter, LanguageName, LanguageRegistry, ManifestDelegate, ManifestName,
     language_settings::AllLanguageSettings,
 };
 use lsp::LanguageServerName;
@@ -22,10 +22,7 @@ use settings::{Settings, SettingsLocation, WorktreeId};
 use std::sync::OnceLock;
 use util::rel_path::RelPath;
 
-use crate::{
-    LanguageServerId, ProjectPath, project_settings::LspSettings,
-    toolchain_store::LocalToolchainStore,
-};
+use crate::{LanguageServerId, ProjectPath, project_settings::LspSettings};
 
 use super::ManifestTree;
 
@@ -41,7 +38,6 @@ pub struct LanguageServerTree {
     manifest_tree: Entity<ManifestTree>,
     pub(crate) instances: BTreeMap<WorktreeId, ServersForWorktree>,
     languages: Arc<LanguageRegistry>,
-    toolchains: Entity<LocalToolchainStore>,
 }
 
 /// A node in language server tree represents either:
@@ -57,7 +53,6 @@ pub(crate) struct LaunchDisposition {
     /// Path to the root directory of a subproject.
     pub(crate) path: ProjectPath,
     pub(crate) settings: Arc<LspSettings>,
-    pub(crate) toolchain: Option<Toolchain>,
 }
 
 impl LanguageServerTreeNode {
@@ -102,19 +97,13 @@ pub struct InnerTreeNode {
 }
 
 impl InnerTreeNode {
-    fn new(
-        server_name: LanguageServerName,
-        path: ProjectPath,
-        settings: LspSettings,
-        toolchain: Option<Toolchain>,
-    ) -> Self {
+    fn new(server_name: LanguageServerName, path: ProjectPath, settings: LspSettings) -> Self {
         InnerTreeNode {
             id: Default::default(),
             disposition: Arc::new(LaunchDisposition {
                 server_name,
                 path,
                 settings: settings.into(),
-                toolchain,
             }),
         }
     }
@@ -128,13 +117,11 @@ impl LanguageServerTree {
     pub(crate) fn new(
         manifest_tree: Entity<ManifestTree>,
         languages: Arc<LanguageRegistry>,
-        toolchains: Entity<LocalToolchainStore>,
     ) -> Self {
         Self {
             manifest_tree,
             instances: Default::default(),
             languages,
-            toolchains,
         }
     }
 
@@ -163,7 +150,7 @@ impl LanguageServerTree {
     ) -> impl Iterator<Item = LanguageServerTreeNode> + 'a {
         let manifest_location = self.manifest_location_for_path(&path, manifest_name, delegate, cx);
         let adapters = self.adapters_for_language(&manifest_location, &language_name, cx);
-        self.init_with_adapters(manifest_location, language_name, adapters, cx)
+        self.init_with_adapters(manifest_location, language_name, adapters)
     }
 
     fn init_with_adapters<'a>(
@@ -171,7 +158,6 @@ impl LanguageServerTree {
         root_path: ProjectPath,
         language_name: LanguageName,
         adapters: IndexMap<LanguageServerName, (LspSettings, Arc<CachedLspAdapter>)>,
-        cx: &'a App,
     ) -> impl Iterator<Item = LanguageServerTreeNode> + 'a {
         adapters.into_iter().map(move |(_, (settings, adapter))| {
             let root_path = root_path.clone();
@@ -184,17 +170,10 @@ impl LanguageServerTree {
                 .or_default()
                 .entry(adapter.name());
             let new_node = || {
-                let toolchain = self.toolchains.read(cx).active_toolchain(
-                    root_path.worktree_id,
-                    &root_path.path,
-                    language_name.clone(),
-                );
-
                 Arc::new(InnerTreeNode::new(
                     adapter.name(),
                     root_path.clone(),
                     settings,
-                    toolchain,
                 ))
             };
             let (node, languages) = match inner_node {
@@ -385,11 +364,8 @@ impl ServerTreeRebase {
                 })
             })
             .collect();
-        let new_tree = LanguageServerTree::new(
-            old_tree.manifest_tree.clone(),
-            old_tree.languages.clone(),
-            old_tree.toolchains.clone(),
-        );
+        let new_tree =
+            LanguageServerTree::new(old_tree.manifest_tree.clone(), old_tree.languages.clone());
         Self {
             old_contents,
             all_server_ids,
@@ -413,7 +389,7 @@ impl ServerTreeRebase {
             .adapters_for_language(&manifest, &language_name, cx);
 
         self.new_tree
-            .init_with_adapters(manifest, language_name, adapters, cx)
+            .init_with_adapters(manifest, language_name, adapters)
             .filter_map(|node| {
                 // Inspect result of the query and initialize it ourselves before
                 // handing it off to the caller.
@@ -433,8 +409,7 @@ impl ServerTreeRebase {
                         // Only compare settings that require server restart.
                         // Dynamic settings (settings.settings) can be updated via DidChangeConfiguration
                         // without restarting the server.
-                        disposition.toolchain == old_node.disposition.toolchain
-                            && disposition.settings.binary == old_node.disposition.settings.binary
+                        disposition.settings.binary == old_node.disposition.settings.binary
                             && disposition.settings.initialization_options
                                 == old_node.disposition.settings.initialization_options
                     })

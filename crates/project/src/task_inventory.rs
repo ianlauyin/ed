@@ -6,8 +6,7 @@ use anyhow::Result;
 use collections::HashMap;
 use gpui::{App, AppContext as _, Entity, SharedString, Task};
 use language::{
-    Buffer, ContextLocation, ContextProvider, Language, LanguageToolchainStore,
-    language_settings::LanguageSettings,
+    Buffer, ContextLocation, ContextProvider, Language, language_settings::LanguageSettings,
 };
 use lsp::LanguageServerId;
 use task::{TaskTemplate, TaskTemplates, TaskVariables, VariableName};
@@ -91,7 +90,6 @@ impl ContextProvider for BasicContextProvider {
         _: &TaskVariables,
         location: ContextLocation<'_>,
         _: Option<HashMap<String, String>>,
-        _: Arc<dyn LanguageToolchainStore>,
         cx: &mut App,
     ) -> Task<Result<TaskVariables>> {
         let location = location.file_location;

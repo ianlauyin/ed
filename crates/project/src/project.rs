@@ -13,7 +13,6 @@ pub mod search;
 pub mod task_inventory;
 pub mod task_store;
 pub mod terminals;
-pub mod toolchain_store;
 pub mod trusted_worktrees;
 pub mod worktree_store;
 
@@ -47,7 +46,7 @@ use buffer_store::{BufferStore, BufferStoreEvent};
 use clock::ReplicaId;
 use rpc::{ProjectId, TypedEnvelope, proto};
 
-use collections::{HashMap, HashSet, IndexSet};
+use collections::{HashMap, HashSet};
 use debounced_delay::DebouncedDelay;
 
 pub use environment::ProjectEnvironment;
@@ -63,8 +62,8 @@ use gpui::{
 };
 use language::{
     Buffer, BufferEditSource, BufferEvent, Capability, CodeLabel, DiskState, Language,
-    LanguageName, LanguageRegistry, PointUtf16, ToOffset, ToPointUtf16, Toolchain,
-    ToolchainMetadata, ToolchainScope, Transaction, Unclipped, language_settings::InlayHintKind,
+    LanguageRegistry, PointUtf16, ToOffset, ToPointUtf16, Transaction, Unclipped,
+    language_settings::InlayHintKind,
 };
 use lsp::{
     CodeActionKind, CompletionContext, CompletionItemKind, DocumentHighlightKind, InsertTextMode,
@@ -88,7 +87,6 @@ use settings::{Settings, SettingsLocation};
 use snippet::Snippet;
 use std::{
     borrow::Cow,
-    collections::BTreeMap,
     ffi::OsString,
     future::Future,
     ops::Range,
@@ -103,7 +101,7 @@ use task_store::TaskStore;
 use terminals::Terminals;
 use text::{Anchor, BufferId, Rope};
 use util::{
-    ResultExt as _, maybe,
+    ResultExt as _,
     path_list::PathList,
     paths::{PathStyle, SanitizedPath},
     rel_path::RelPath,
@@ -130,7 +128,6 @@ pub use lsp_store::{
     LanguageServerToQuery, LspStore, LspStoreEvent, ProgressToken,
     SERVER_PROGRESS_THROTTLE_TIMEOUT,
 };
-pub use toolchain_store::{ToolchainStore, Toolchains};
 const MAX_PROJECT_SEARCH_HISTORY_SIZE: usize = 500;
 
 #[derive(Clone, Copy, Debug)]
@@ -197,7 +194,6 @@ pub struct Project {
     search_excluded_history: SearchHistory,
     environment: Entity<ProjectEnvironment>,
     settings_observer: Entity<SettingsObserver>,
-    toolchain_store: Option<Entity<ToolchainStore>>,
     downloading_files: Arc<Mutex<HashMap<(WorktreeId, String), DownloadingFile>>>,
     last_worktree_paths: WorktreePaths,
 }
@@ -1053,15 +1049,6 @@ impl Project {
                 ProjectEnvironment::new(env, worktree_store.downgrade(), None, false, cx)
             });
             let manifest_tree = ManifestTree::new(worktree_store.clone(), cx);
-            let toolchain_store = cx.new(|cx| {
-                ToolchainStore::local(
-                    languages.clone(),
-                    worktree_store.clone(),
-                    environment.clone(),
-                    manifest_tree.clone(),
-                    cx,
-                )
-            });
 
             let buffer_store = cx.new(|cx| BufferStore::local(worktree_store.clone(), cx));
             cx.subscribe(&buffer_store, Self::on_buffer_store_event)
@@ -1086,7 +1073,6 @@ impl Project {
                 TaskStore::local(
                     buffer_store.downgrade(),
                     worktree_store.clone(),
-                    toolchain_store.read(cx).as_language_toolchain_store(),
                     environment.clone(),
                     git_store.clone(),
                     cx,
@@ -1099,11 +1085,6 @@ impl Project {
                 LspStore::new_local(
                     buffer_store.clone(),
                     worktree_store.clone(),
-                    toolchain_store
-                        .read(cx)
-                        .as_local_store()
-                        .expect("Toolchain store to be local")
-                        .clone(),
                     environment.clone(),
                     manifest_tree,
                     languages.clone(),
@@ -1143,8 +1124,6 @@ impl Project {
 
                 search_included_history: Self::new_search_history(),
                 search_excluded_history: Self::new_search_history(),
-
-                toolchain_store: Some(toolchain_store),
 
                 downloading_files: Default::default(),
                 last_worktree_paths: WorktreePaths::default(),
@@ -1210,14 +1189,6 @@ impl Project {
             });
             cx.subscribe(&buffer_store, Self::on_buffer_store_event)
                 .detach();
-            let toolchain_store = cx.new(|cx| {
-                ToolchainStore::remote(
-                    REMOTE_SERVER_PROJECT_ID,
-                    worktree_store.clone(),
-                    remote.read(cx).proto_client(),
-                    cx,
-                )
-            });
 
             let environment = cx.new(|cx| {
                 ProjectEnvironment::new(
@@ -1256,7 +1227,6 @@ impl Project {
                 TaskStore::remote(
                     buffer_store.downgrade(),
                     worktree_store.clone(),
-                    toolchain_store.read(cx).as_language_toolchain_store(),
                     remote.read(cx).proto_client(),
                     REMOTE_SERVER_PROJECT_ID,
                     git_store.clone(),
@@ -1316,7 +1286,6 @@ impl Project {
                 search_included_history: Self::new_search_history(),
                 search_excluded_history: Self::new_search_history(),
 
-                toolchain_store: Some(toolchain_store),
                 downloading_files: Default::default(),
                 last_worktree_paths: WorktreePaths::default(),
             };
@@ -1350,7 +1319,6 @@ impl Project {
             LspStore::init(&remote_proto);
             SettingsObserver::init(&remote_proto);
             TaskStore::init(Some(&remote_proto));
-            ToolchainStore::init(&remote_proto);
             GitStore::init(&remote_proto);
 
             this
@@ -2741,117 +2709,6 @@ impl Project {
         })
     }
 
-    pub fn available_toolchains(
-        &self,
-        path: ProjectPath,
-        language_name: LanguageName,
-        cx: &App,
-    ) -> Task<Option<Toolchains>> {
-        if let Some(toolchain_store) = self.toolchain_store.as_ref().map(Entity::downgrade) {
-            cx.spawn(async move |cx| {
-                toolchain_store
-                    .update(cx, |this, cx| this.list_toolchains(path, language_name, cx))
-                    .ok()?
-                    .await
-            })
-        } else {
-            Task::ready(None)
-        }
-    }
-
-    pub async fn toolchain_metadata(
-        languages: Arc<LanguageRegistry>,
-        language_name: LanguageName,
-    ) -> Option<ToolchainMetadata> {
-        languages
-            .language_for_name(language_name.as_ref())
-            .await
-            .ok()?
-            .toolchain_lister()
-            .map(|lister| lister.meta())
-    }
-
-    pub fn add_toolchain(
-        &self,
-        toolchain: Toolchain,
-        scope: ToolchainScope,
-        cx: &mut Context<Self>,
-    ) {
-        maybe!({
-            self.toolchain_store.as_ref()?.update(cx, |this, cx| {
-                this.add_toolchain(toolchain, scope, cx);
-            });
-            Some(())
-        });
-    }
-
-    pub fn remove_toolchain(
-        &self,
-        toolchain: Toolchain,
-        scope: ToolchainScope,
-        cx: &mut Context<Self>,
-    ) {
-        maybe!({
-            self.toolchain_store.as_ref()?.update(cx, |this, cx| {
-                this.remove_toolchain(toolchain, scope, cx);
-            });
-            Some(())
-        });
-    }
-
-    pub fn user_toolchains(
-        &self,
-        cx: &App,
-    ) -> Option<BTreeMap<ToolchainScope, IndexSet<Toolchain>>> {
-        Some(self.toolchain_store.as_ref()?.read(cx).user_toolchains())
-    }
-
-    pub fn resolve_toolchain(
-        &self,
-        path: PathBuf,
-        language_name: LanguageName,
-        cx: &App,
-    ) -> Task<Result<Toolchain>> {
-        if let Some(toolchain_store) = self.toolchain_store.as_ref().map(Entity::downgrade) {
-            cx.spawn(async move |cx| {
-                toolchain_store
-                    .update(cx, |this, cx| {
-                        this.resolve_toolchain(path, language_name, cx)
-                    })?
-                    .await
-            })
-        } else {
-            Task::ready(Err(anyhow!("This project does not support toolchains")))
-        }
-    }
-
-    pub fn toolchain_store(&self) -> Option<Entity<ToolchainStore>> {
-        self.toolchain_store.clone()
-    }
-    pub fn activate_toolchain(
-        &self,
-        path: ProjectPath,
-        toolchain: Toolchain,
-        cx: &mut App,
-    ) -> Task<Option<()>> {
-        let Some(toolchain_store) = self.toolchain_store.clone() else {
-            return Task::ready(None);
-        };
-        toolchain_store.update(cx, |this, cx| this.activate_toolchain(path, toolchain, cx))
-    }
-    pub fn active_toolchain(
-        &self,
-        path: ProjectPath,
-        language_name: LanguageName,
-        cx: &App,
-    ) -> Task<Option<Toolchain>> {
-        let Some(toolchain_store) = self.toolchain_store.clone() else {
-            return Task::ready(None);
-        };
-        toolchain_store
-            .read(cx)
-            .active_toolchain(path, language_name, cx)
-    }
     pub fn language_server_statuses<'a>(
         &'a self,
         cx: &'a App,

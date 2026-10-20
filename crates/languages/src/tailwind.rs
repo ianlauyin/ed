@@ -2,7 +2,7 @@ use anyhow::Result;
 use async_trait::async_trait;
 use collections::HashMap;
 use gpui::AsyncApp;
-use language::{LanguageName, LspAdapter, LspAdapterDelegate, Toolchain};
+use language::{LanguageName, LspAdapter, LspAdapterDelegate};
 use lsp::{LanguageServerBinary, LanguageServerName, Uri};
 use project::lsp_store::language_server_settings;
 use serde_json::{Value, json};
@@ -24,7 +24,6 @@ impl LspAdapter for TailwindLspAdapter {
     async fn check_if_user_installed(
         &self,
         delegate: &Arc<dyn LspAdapterDelegate>,
-        _: Option<Toolchain>,
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
         crate::npx::node_server_binary(
@@ -49,7 +48,6 @@ impl LspAdapter for TailwindLspAdapter {
     async fn workspace_configuration(
         self: Arc<Self>,
         delegate: &Arc<dyn LspAdapterDelegate>,
-        _: Option<Toolchain>,
         _: Option<Uri>,
         cx: &mut AsyncApp,
     ) -> Result<Value> {

@@ -242,7 +242,7 @@ fn terminal_settings() -> Option<TerminalSettingsContent> {
             shell: Some(Shell::System),
             working_directory: Some(WorkingDirectory::CurrentProjectDirectory),
             env: Some(Default::default()),
-            detect_venv: Some(VenvSettings::Off),
+            detect_venv: Some(true),
             path_hyperlink_regexes: Some(
                 PathHyperlinkRegexes(
                     vec![
@@ -897,12 +897,8 @@ fn language_overrides() -> LanguageToSettingsMap {
                         },
                     ))),
                     language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("basedpyright"),
+                        ConfiguredLanguageServer::from("ty"),
                         ConfiguredLanguageServer::from("ruff"),
-                        ConfiguredLanguageServer::from("!ty"),
-                        ConfiguredLanguageServer::from("!pyrefly"),
-                        ConfiguredLanguageServer::from("!pyright"),
-                        ConfiguredLanguageServer::from("!pylsp"),
                         ConfiguredLanguageServer::from("..."),
                     ]),
                     code_actions_on_format: Some(

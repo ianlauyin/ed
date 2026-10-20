@@ -4,7 +4,7 @@ use collections::HashMap;
 use gpui::{App, AsyncApp, Entity, Task};
 use language::{
     Buffer, ContextProvider, LanguageName, LanguageRegistry, LocalFile as _, LspAdapter,
-    LspAdapterDelegate, Toolchain,
+    LspAdapterDelegate,
 };
 use lsp::{LanguageServerBinary, LanguageServerName, Uri};
 use project::lsp_store::language_server_settings;
@@ -128,7 +128,6 @@ impl LspAdapter for JsonLspAdapter {
     async fn check_if_user_installed(
         &self,
         delegate: &Arc<dyn LspAdapterDelegate>,
-        _: Option<Toolchain>,
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
         crate::npx::node_server_binary(
@@ -153,7 +152,6 @@ impl LspAdapter for JsonLspAdapter {
     async fn workspace_configuration(
         self: Arc<Self>,
         delegate: &Arc<dyn LspAdapterDelegate>,
-        _: Option<Toolchain>,
         requested_uri: Option<Uri>,
         cx: &mut AsyncApp,
     ) -> Result<Value> {

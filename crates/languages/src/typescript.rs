@@ -6,8 +6,7 @@ use futures::future::join_all;
 use gpui::{App, AppContext, AsyncApp, Entity, Task};
 use itertools::Itertools as _;
 use language::{
-    Buffer, ContextLocation, ContextProvider, File, LanguageName, LanguageToolchainStore,
-    LspAdapter, LspAdapterDelegate, Toolchain,
+    Buffer, ContextLocation, ContextProvider, File, LanguageName, LspAdapter, LspAdapterDelegate,
 };
 use lsp::{CodeActionKind, LanguageServerBinary, LanguageServerName, Uri};
 use project::{Fs, lsp_store::language_server_settings};
@@ -475,7 +474,6 @@ impl ContextProvider for TypeScriptContextProvider {
         current_vars: &task::TaskVariables,
         location: ContextLocation<'_>,
         _project_env: Option<HashMap<String, String>>,
-        _toolchains: Arc<dyn LanguageToolchainStore>,
         cx: &mut App,
     ) -> Task<Result<task::TaskVariables>> {
         let mut vars = task::TaskVariables::default();
@@ -638,7 +636,6 @@ impl LspAdapter for TypeScriptLspAdapter {
     async fn check_if_user_installed(
         &self,
         delegate: &Arc<dyn LspAdapterDelegate>,
-        _: Option<Toolchain>,
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
         // The server only finds TypeScript in the workspace, so a `typescript`
@@ -726,7 +723,6 @@ impl LspAdapter for TypeScriptLspAdapter {
     async fn workspace_configuration(
         self: Arc<Self>,
         delegate: &Arc<dyn LspAdapterDelegate>,
-        _: Option<Toolchain>,
         _: Option<Uri>,
         cx: &mut AsyncApp,
     ) -> Result<Value> {

@@ -3,27 +3,25 @@ use collections::HashMap;
 use gpui::{App, AppContext as _, Context, Entity, Task, WeakEntity};
 
 use futures::{FutureExt, future::Shared};
-use itertools::Itertools as _;
-use language::LanguageName;
 use remote::{Interactive, RemoteClient};
 use rpc::proto;
 use settings::{Settings, SettingsLocation};
 use std::{
-    borrow::Cow,
     path::{Path, PathBuf},
     sync::Arc,
     time::Duration,
 };
-use task::{Shell, ShellBuilder, ShellKind, SpawnInTerminal};
+use task::{Shell, ShellBuilder, SpawnInTerminal};
 use terminal::{
     Terminal, TerminalBuilder, TerminalMode, insert_zed_terminal_env,
     terminal_settings::TerminalSettings,
 };
 use util::{
-    command::new_std_command, get_default_system_shell, get_system_shell, maybe, rel_path::RelPath,
+    command::new_std_command, get_default_system_shell, get_system_shell, paths::PathStyle,
+    rel_path::RelPath,
 };
 
-use crate::{Project, ProjectPath};
+use crate::Project;
 
 pub struct Terminals {
     pub(crate) local_handles: Vec<WeakEntity<terminal::Terminal>>,
@@ -62,6 +60,26 @@ impl Project {
         }
     }
 
+    /// The `.venv` directory at the root of the worktree containing `path`, when
+    /// `terminal.detect_venv` is on.
+    fn project_venv(
+        &self,
+        path: Option<&Path>,
+        settings: &TerminalSettings,
+        cx: &App,
+    ) -> Option<PathBuf> {
+        if !settings.detect_venv {
+            return None;
+        }
+        let (worktree, _) = self.find_worktree(path?, cx)?;
+        let worktree = worktree.read(cx);
+        let venv = RelPath::from_unix_str(".venv").ok()?;
+        worktree
+            .entry_for_path(venv)
+            .filter(|entry| entry.is_dir())
+            .map(|_| worktree.absolutize(venv))
+    }
+
     pub fn create_terminal_task(
         &mut self,
         spawn_task: SpawnInTerminal,
@@ -91,7 +109,7 @@ impl Project {
             });
         }
         let settings = TerminalSettings::get(settings_location, cx).clone();
-        let detect_venv = settings.detect_venv.as_option().is_some();
+        let venv = self.project_venv(path.as_deref(), &settings, cx);
 
         let terminal_mode = TerminalMode::task(spawn_task.clone());
 
@@ -105,137 +123,46 @@ impl Project {
             None => get_system_shell(),
         };
         let path_style = self.path_style(cx);
-        let shell_kind = ShellKind::new(&shell, path_style.is_windows());
 
         // Prepare a task for resolving the environment
         let env_task =
             self.resolve_directory_environment(&shell, path.clone(), remote_client.clone(), cx);
 
-        // Scope the toolchain lookup to the worktree the terminal is being
-        // spawned in. Previously this iterated the active editor's worktree
-        // and then every visible worktree, so a Python toolchain persisted
-        // for worktree A would leak into a terminal opened in worktree B and
-        // inject (e.g.) `conda activate base` into a shell that has no
-        // business with conda.
-        let project_path_contexts: Vec<ProjectPath> = path
-            .as_ref()
-            .and_then(|p| self.find_worktree(p, cx))
-            .map(|(worktree, relative_path)| ProjectPath {
-                worktree_id: worktree.read(cx).id(),
-                path: relative_path,
-            })
-            .into_iter()
-            .collect();
-        let toolchains = project_path_contexts
-            .into_iter()
-            .filter(|_| detect_venv)
-            .map(|p| self.active_toolchain(p, LanguageName::new_static("Python"), cx))
-            .collect::<Vec<_>>();
-        let lang_registry = self.languages.clone();
         cx.spawn(async move |project, cx| {
             let mut env = env_task.await.unwrap_or_default();
             env.extend(settings.env);
 
-            let activation_script = maybe!(async {
-                for toolchain in toolchains {
-                    let Some(toolchain) = toolchain.await else {
-                        continue;
-                    };
-                    let language = lang_registry
-                        .language_for_name(&toolchain.language_name.0)
-                        .await
-                        .ok();
-                    let lister = language?.toolchain_lister()?;
-                    let future =
-                        cx.update(|cx| lister.activation_script(&toolchain, shell_kind, cx));
-                    return Some(future.await);
-                }
-                None
-            })
-            .await
-            .unwrap_or_default();
+            if let Some(venv) = &venv {
+                add_venv_to_env(&mut env, venv, path_style);
+            }
 
             let builder = project
                 .update(cx, move |_, cx| {
-                    let format_to_run = |spawn_task: &SpawnInTerminal| {
-                        format_task_for_activation(
-                            spawn_task,
-                            shell_kind,
-                            &shell,
-                            path_style.is_windows(),
-                        )
-                    };
-
                     let (shell, env) = {
-                        let to_run =
-                            (!activation_script.is_empty()).then(|| format_to_run(&spawn_task));
                         env.extend(spawn_task.env);
                         match remote_client {
-                            Some(remote_client) => match activation_script.clone() {
-                                activation_script if !activation_script.is_empty() => {
-                                    let separator = shell_kind.sequential_commands_separator();
-                                    let activation_script =
-                                        activation_script.join(&format!("{separator} "));
-                                    let to_run = to_run.expect("activation command was formatted");
-
-                                    let arg = format!("{activation_script}{separator} {to_run}");
-                                    let args = shell_kind.args_for_shell(true, arg);
-                                    let shell = remote_client
-                                        .read(cx)
-                                        .shell()
-                                        .unwrap_or_else(get_default_system_shell);
-
-                                    create_remote_shell(
-                                        Some((&shell, &args)),
-                                        env,
-                                        path,
-                                        remote_client,
-                                        cx,
-                                    )?
-                                }
-                                _ => create_remote_shell(
-                                    spawn_task
-                                        .command
-                                        .as_ref()
-                                        .map(|command| (command, &spawn_task.args)),
-                                    env,
-                                    path,
-                                    remote_client,
-                                    cx,
-                                )?,
-                            },
-                            None => match activation_script.clone() {
-                                activation_script if !activation_script.is_empty() => {
-                                    let separator = shell_kind.sequential_commands_separator();
-                                    let activation_script =
-                                        activation_script.join(&format!("{separator} "));
-                                    let to_run = to_run.expect("activation command was formatted");
-
-                                    let arg = format!("{activation_script}{separator} {to_run}");
-                                    let args = shell_kind.args_for_shell(true, arg);
-
-                                    (
-                                        Shell::WithArguments {
-                                            program: shell,
-                                            args,
-                                            title_override: None,
-                                        },
-                                        env,
-                                    )
-                                }
-                                _ => (
-                                    if let Some(program) = spawn_task.command {
-                                        Shell::WithArguments {
-                                            program,
-                                            args: spawn_task.args,
-                                            title_override: None,
-                                        }
-                                    } else {
-                                        Shell::System
-                                    },
-                                    env,
-                                ),
-                            },
+                            Some(remote_client) => create_remote_shell(
+                                spawn_task
+                                    .command
+                                    .as_ref()
+                                    .map(|command| (command, &spawn_task.args)),
+                                env,
+                                path,
+                                remote_client,
+                                cx,
+                            )?,
+                            None => (
+                                if let Some(program) = spawn_task.command {
+                                    Shell::WithArguments {
+                                        program,
+                                        args: spawn_task.args,
+                                        title_override: None,
+                                    }
+                                } else {
+                                    Shell::System
+                                },
+                                env,
+                            ),
                         }
                     };
                     anyhow::Ok(TerminalBuilder::new(
@@ -251,7 +178,6 @@ impl Project {
                         is_via_remote,
                         cx.entity_id().as_u64(),
                         cx,
-                        activation_script,
                         path_style,
                     ))
                 })??
@@ -329,26 +255,9 @@ impl Project {
             });
         }
         let settings = TerminalSettings::get(settings_location, cx).clone();
-        let detect_venv = settings.detect_venv.as_option().is_some();
+        let venv = self.project_venv(path.as_deref(), &settings, cx);
         let local_path = if is_via_remote { None } else { path.clone() };
 
-        // See create_terminal_task: scope the toolchain lookup to the
-        // worktree the terminal is opened in, not the active editor's
-        // worktree or other visible worktrees.
-        let project_path_contexts: Vec<ProjectPath> = path
-            .as_ref()
-            .and_then(|p| self.find_worktree(p, cx))
-            .map(|(worktree, relative_path)| ProjectPath {
-                worktree_id: worktree.read(cx).id(),
-                path: relative_path,
-            })
-            .into_iter()
-            .collect();
-        let toolchains = project_path_contexts
-            .into_iter()
-            .filter(|_| detect_venv)
-            .map(|p| self.active_toolchain(p, LanguageName::new_static("Python"), cx))
-            .collect::<Vec<_>>();
         let remote_client = if force_local {
             None
         } else {
@@ -364,15 +273,11 @@ impl Project {
                         .map(|settings_location| settings_location.worktree_id.to_proto()),
                 })
         });
-        let shell = match &remote_client {
+        let env_shell = match &remote_client {
             Some(remote_client) => remote_client
                 .read(cx)
                 .shell()
                 .unwrap_or_else(get_default_system_shell),
-            None => settings.shell.program(),
-        };
-        let env_shell = match &remote_client {
-            Some(_) => shell.clone(),
             None => get_system_shell(),
         };
 
@@ -382,7 +287,6 @@ impl Project {
         let env_task =
             self.resolve_directory_environment(&env_shell, path.clone(), remote_client.clone(), cx);
 
-        let lang_registry = self.languages.clone();
         cx.spawn(async move |project, cx| {
             let remote_shell = if let Some(remote_shell_request) = remote_shell_request {
                 let response = remote_shell_request
@@ -400,29 +304,12 @@ impl Project {
             } else {
                 None
             };
-            let shell_program = remote_shell.as_ref().map(Shell::program).unwrap_or(shell);
-            let shell_kind = ShellKind::new(&shell_program, path_style.is_windows());
             let mut env = env_task.await.unwrap_or_default();
             env.extend(settings.env);
 
-            let activation_script = maybe!(async {
-                for toolchain in toolchains {
-                    let Some(toolchain) = toolchain.await else {
-                        continue;
-                    };
-                    let language = lang_registry
-                        .language_for_name(&toolchain.language_name.0)
-                        .await
-                        .ok();
-                    let lister = language?.toolchain_lister()?;
-                    let future =
-                        cx.update(|cx| lister.activation_script(&toolchain, shell_kind, cx));
-                    return Some(future.await);
-                }
-                None
-            })
-            .await
-            .unwrap_or_default();
+            if let Some(venv) = &venv {
+                add_venv_to_env(&mut env, venv, path_style);
+            }
 
             let builder = project
                 .update(cx, move |_, cx| {
@@ -455,7 +342,6 @@ impl Project {
                         is_via_remote,
                         cx.entity_id().as_u64(),
                         cx,
-                        activation_script,
                         path_style,
                     ))
                 })??
@@ -680,69 +566,22 @@ fn create_remote_shell(
     ))
 }
 
-fn format_task_for_activation(
-    spawn_task: &SpawnInTerminal,
-    shell_kind: ShellKind,
-    shell: &str,
-    is_windows: bool,
-) -> String {
-    if let Some(command) = &spawn_task.command {
-        let command = shell_kind.prepend_command_prefix(command);
-        let command = shell_kind.try_quote_prefix_aware(&command);
-        let args = spawn_task
-            .args
-            .iter()
-            .enumerate()
-            .filter_map(|(index, arg)| {
-                quote_prepared_task_arg_for_activation(
-                    spawn_task, shell_kind, arg, index, is_windows,
-                )
-            });
-
-        command.into_iter().chain(args).join(" ")
+/// Puts the project `.venv` in front of `PATH` and sets `VIRTUAL_ENV`, so its
+/// executables win in any shell without sourcing an activation script.
+fn add_venv_to_env(env: &mut HashMap<String, String>, venv: &Path, path_style: PathStyle) {
+    let (bin_dir, separator) = if path_style.is_windows() {
+        ("Scripts", ";")
     } else {
-        // todo: this breaks for remotes to windows
-        format!("exec {shell} -l")
-    }
-}
-
-fn quote_prepared_task_arg_for_activation<'a>(
-    spawn_task: &SpawnInTerminal,
-    shell_kind: ShellKind,
-    arg: &'a str,
-    index: usize,
-    is_windows: bool,
-) -> Option<Cow<'a, str>> {
-    if spawn_task.shell.shell_kind(is_windows) == ShellKind::Cmd
-        && index >= 2
-        && spawn_task
-            .args
-            .get(index - 2)
-            .is_some_and(|arg| arg.eq_ignore_ascii_case("/S"))
-        && spawn_task
-            .args
-            .get(index - 1)
-            .is_some_and(|arg| arg.eq_ignore_ascii_case("/C"))
-    {
-        // The /C argument is already a cmd command string from prepare_task_for_spawn.
-        // Quoting it again for venv activation makes cmd see the quotes as literals.
-        return quote_cmd_command_arg_for_outer_shell(arg, shell_kind).map(Cow::Owned);
-    }
-
-    shell_kind.try_quote(arg)
-}
-
-fn quote_cmd_command_arg_for_outer_shell(arg: &str, shell_kind: ShellKind) -> Option<String> {
-    match shell_kind {
-        ShellKind::PowerShell | ShellKind::Pwsh => Some(format!("'{}'", arg.replace('\'', "''"))),
-        ShellKind::Cmd => Some(arg.to_string()),
-        ShellKind::Posix
-        | ShellKind::Csh
-        | ShellKind::Tcsh
-        | ShellKind::Fish
-        | ShellKind::Nushell
-        | ShellKind::Rc
-        | ShellKind::Xonsh
-        | ShellKind::Elvish => shell_kind.try_quote(arg).map(Cow::into_owned),
-    }
+        ("bin", ":")
+    };
+    let bin = venv.join(bin_dir).to_string_lossy().into_owned();
+    let path = match env.get("PATH") {
+        Some(path) if !path.is_empty() => format!("{bin}{separator}{path}"),
+        _ => bin,
+    };
+    env.insert("PATH".to_owned(), path);
+    env.insert(
+        "VIRTUAL_ENV".to_owned(),
+        venv.to_string_lossy().into_owned(),
+    );
 }

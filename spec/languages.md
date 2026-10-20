@@ -42,6 +42,20 @@
 - Jupyter notebooks and integrated REPL execution are removed, including kernel
   management, remote kernel launching, execution controls, settings, and shortcuts.
 - Python source editing remains supported. `.ipynb` files open as ordinary text.
+- Python tooling is uv-only:
+  - The only Python language servers are `ty` (types, completions) and `ruff`
+    (lint, format, organize imports); both run by default and `ruff` is the
+    formatter. pyright, basedpyright and pylsp are removed.
+  - Each resolves from the worktree's `.venv/bin`, then `PATH`, then
+    `uvx <tool> server` (latest release from uv's cache).
+  - There is no toolchain/virtual-environment discovery, selector, status bar
+    item or persisted toolchain. The only environment Zed knows is `.venv` at
+    the worktree root; ty finds it on its own.
+  - Built-in Python tasks (run file/module/selection, pytest/unittest) run
+    through `uv run python …` from the worktree root.
+  - `terminal.detect_venv` (bool, default true): terminals and tasks opened in a
+    worktree with a `.venv` get `VIRTUAL_ENV` set and `.venv/bin` prepended to
+    `PATH`; no activation script is run.
 - `editor::RestartLanguageServer` restarts the servers relevant to the current
   buffer, including servers previously stopped with `editor::StopLanguageServer`.
 - There is no managed Node.js runtime and no `node` settings (`node.path`,
@@ -49,9 +63,9 @@
   shell `PATH`, locally and on remote servers.
 - Language servers are never installed by Zed. A server starts from
   `lsp.<server>.binary.path`, else from a user installation the adapter finds
-  (`PATH` or the active toolchain). Node-based servers (vtsls,
-  typescript-language-server, eslint, css/html/json, tailwindcss, yaml, bash,
-  pyright, basedpyright) then fall back to `npx --yes --package <pkg> <bin>`,
+  (`PATH`, or the project). Node-based servers (vtsls,
+  typescript-language-server, eslint, css/html/json, tailwindcss, yaml, bash)
+  then fall back to `npx --yes --package <pkg> <bin>`,
   unpinned: npx prefers a version installed in the project, else the latest
   release from npm's cache, downloading it on first use. typescript-language-server
   still needs `typescript` installed in the workspace. A missing server is

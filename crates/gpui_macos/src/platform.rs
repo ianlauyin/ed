@@ -217,6 +217,7 @@ pub(crate) struct MacPlatformState {
     finish_launching: Option<Box<dyn FnOnce()>>,
     dock_menu: Option<id>,
     menus: Option<Vec<OwnedMenu>>,
+    keyboard_layout_id: String,
     keyboard_mapper: Rc<MacKeyboardMapper>,
     /// Mirrors `[NSCursor setHiddenUntilMouseMoves:]` state, which AppKit doesn't expose.
     cursor_visible: Arc<AtomicBool>,
@@ -312,6 +313,7 @@ impl MacPlatform {
             on_system_wake: None,
             system_power_observers_registered: false,
             menus: None,
+            keyboard_layout_id: keyboard_layout.id().to_string(),
             keyboard_mapper,
             cursor_visible: Arc::new(AtomicBool::new(true)),
         });
@@ -1374,6 +1376,12 @@ fn on_keyboard_layout_change(this: &AnyObject, _: id) {
     let platform = unsafe { get_mac_platform(this) };
     let mut lock = platform.0.lock();
     let keyboard_layout = MacKeyboardLayout::new();
+    // The notification also fires when an input method (e.g. Pinyin) toggles or the input
+    // context changes without the layout changing, so only react to a real layout change.
+    if keyboard_layout.id() == lock.keyboard_layout_id {
+        return;
+    }
+    lock.keyboard_layout_id = keyboard_layout.id().to_string();
     lock.keyboard_mapper = Rc::new(MacKeyboardMapper::new(keyboard_layout.id()));
     if let Some(mut callback) = lock.on_keyboard_layout_change.take() {
         drop(lock);

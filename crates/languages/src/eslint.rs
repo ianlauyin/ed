@@ -1,7 +1,7 @@
 use anyhow::Result;
 use async_trait::async_trait;
 use gpui::AsyncApp;
-use language::{LspAdapter, LspAdapterDelegate, Toolchain};
+use language::{LspAdapter, LspAdapterDelegate};
 use lsp::{CodeActionKind, LanguageServerBinary, LanguageServerName, Uri};
 use project::Fs;
 use project::lsp_store::{language_server_settings_for, read_package_installed_version};
@@ -97,7 +97,6 @@ impl LspAdapter for EsLintLspAdapter {
     async fn workspace_configuration(
         self: Arc<Self>,
         delegate: &Arc<dyn LspAdapterDelegate>,
-        _: Option<Toolchain>,
         requested_uri: Option<Uri>,
         cx: &mut AsyncApp,
     ) -> Result<Value> {
@@ -208,7 +207,6 @@ impl LspAdapter for EsLintLspAdapter {
     async fn check_if_user_installed(
         &self,
         delegate: &Arc<dyn LspAdapterDelegate>,
-        _: Option<Toolchain>,
         _: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
         crate::npx::node_server_binary(

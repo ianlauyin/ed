@@ -130,7 +130,6 @@ impl LspAdapter for RustLspAdapter {
     async fn check_if_user_installed(
         &self,
         delegate: &Arc<dyn LspAdapterDelegate>,
-        _: Option<Toolchain>,
         cx: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
         let delegate = delegate.clone();
@@ -605,7 +604,6 @@ impl ContextProvider for RustContextProvider {
         task_variables: &TaskVariables,
         location: ContextLocation<'_>,
         project_env: Option<HashMap<String, String>>,
-        _: Arc<dyn LanguageToolchainStore>,
         cx: &mut gpui::App,
     ) -> Task<Result<TaskVariables>> {
         let local_abs_path = location

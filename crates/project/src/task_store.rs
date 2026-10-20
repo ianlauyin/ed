@@ -5,7 +5,7 @@ use collections::HashMap;
 use fs::Fs;
 use gpui::{App, AsyncApp, Context, Entity, EventEmitter, Task, WeakEntity};
 use language::{
-    ContextLocation, ContextProvider as _, LanguageToolchainStore, Location,
+    ContextLocation, ContextProvider as _, Location,
     proto::{deserialize_anchor, serialize_anchor},
 };
 use rpc::{AnyProtoClient, TypedEnvelope, proto};
@@ -29,7 +29,6 @@ pub struct StoreState {
     buffer_store: WeakEntity<BufferStore>,
     worktree_store: Entity<WorktreeStore>,
     git_store: Entity<GitStore>,
-    toolchain_store: Arc<dyn LanguageToolchainStore>,
 }
 
 enum StoreMode {
@@ -151,7 +150,6 @@ impl TaskStore {
     pub fn local(
         buffer_store: WeakEntity<BufferStore>,
         worktree_store: Entity<WorktreeStore>,
-        toolchain_store: Arc<dyn LanguageToolchainStore>,
         environment: Entity<ProjectEnvironment>,
         git_store: Entity<GitStore>,
         _: &mut Context<Self>,
@@ -163,7 +161,6 @@ impl TaskStore {
             },
             buffer_store,
             git_store,
-            toolchain_store,
             worktree_store,
         })
     }
@@ -171,7 +168,6 @@ impl TaskStore {
     pub fn remote(
         buffer_store: WeakEntity<BufferStore>,
         worktree_store: Entity<WorktreeStore>,
-        toolchain_store: Arc<dyn LanguageToolchainStore>,
         upstream_client: AnyProtoClient,
         project_id: u64,
         git_store: Entity<GitStore>,
@@ -184,7 +180,6 @@ impl TaskStore {
             },
             buffer_store,
             git_store,
-            toolchain_store,
             worktree_store,
         })
     }
@@ -200,7 +195,6 @@ impl TaskStore {
                 StoreMode::Local { environment, .. } => local_task_context_for_location(
                     state.worktree_store.clone(),
                     state.git_store.clone(),
-                    state.toolchain_store.clone(),
                     environment.clone(),
                     captured_variables,
                     location,
@@ -216,7 +210,6 @@ impl TaskStore {
                     state.git_store.clone(),
                     captured_variables,
                     location,
-                    state.toolchain_store.clone(),
                     cx,
                 ),
             },
@@ -240,7 +233,6 @@ impl TaskStore {
 fn local_task_context_for_location(
     worktree_store: Entity<WorktreeStore>,
     git_store: Entity<GitStore>,
-    toolchain_store: Arc<dyn LanguageToolchainStore>,
     environment: Entity<ProjectEnvironment>,
     captured_variables: TaskVariables,
     location: Location,
@@ -268,7 +260,6 @@ fn local_task_context_for_location(
                     location,
                     project_env.clone(),
                     BasicContextProvider::new(worktree_store, git_store),
-                    toolchain_store,
                     cx,
                 )
             })
@@ -292,7 +283,6 @@ fn remote_task_context_for_location(
     git_store: Entity<GitStore>,
     captured_variables: TaskVariables,
     location: Location,
-    toolchain_store: Arc<dyn LanguageToolchainStore>,
     cx: &mut App,
 ) -> Task<anyhow::Result<Option<TaskContext>>> {
     cx.spawn(async move |cx| {
@@ -309,7 +299,6 @@ fn remote_task_context_for_location(
                         file_location: &location,
                     },
                     None,
-                    toolchain_store,
                     cx,
                 )
             })
@@ -383,7 +372,6 @@ fn combine_task_variables(
     location: Location,
     project_env: Option<HashMap<String, String>>,
     baseline: BasicContextProvider,
-    toolchain_store: Arc<dyn LanguageToolchainStore>,
     cx: &mut App,
 ) -> Task<anyhow::Result<TaskVariables>> {
     let language_context_provider = location
@@ -403,7 +391,6 @@ fn combine_task_variables(
                         file_location: &location,
                     },
                     project_env.clone(),
-                    toolchain_store.clone(),
                     cx,
                 )
             })
@@ -422,7 +409,6 @@ fn combine_task_variables(
                             file_location: &location,
                         },
                         project_env,
-                        toolchain_store,
                         cx,
                     )
                 })
