@@ -20,10 +20,20 @@ pub(crate) async fn node_server_binary(
         });
     }
 
+    npx_binary(delegate, packages, bin, arguments).await
+}
+
+/// Runs `bin` from `packages` through `npx`, ignoring any `bin` on the shell `PATH`.
+pub(crate) async fn npx_binary(
+    delegate: &Arc<dyn LspAdapterDelegate>,
+    packages: &[&str],
+    bin: &str,
+    arguments: &[&str],
+) -> Option<LanguageServerBinary> {
     let npx = delegate.which("npx".as_ref()).await?;
     Some(LanguageServerBinary {
         path: npx,
-        env: Some(env),
+        env: Some(delegate.shell_env().await),
         arguments: npx_arguments(packages, bin, arguments),
     })
 }
@@ -46,19 +56,14 @@ mod tests {
     #[test]
     fn runs_bin_from_requested_packages() {
         assert_eq!(
-            npx_arguments(
-                &["typescript-language-server", "typescript"],
-                "typescript-language-server",
-                &["--stdio"],
-            ),
+            npx_arguments(&["typescript@^7"], "tsc", &["--lsp", "--stdio"],),
             [
                 "--yes",
                 "--package",
-                "typescript-language-server",
-                "--package",
-                "typescript",
-                "typescript-language-server",
-                "--stdio",
+                "typescript@^7",
+                "tsc",
+                "--lsp",
+                "--stdio"
             ]
         );
     }

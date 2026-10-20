@@ -344,12 +344,12 @@ impl CachedLspAdapter {
         self.adapter.is_opt_in_for(language)
     }
 
-    pub async fn check_if_user_installed(
+    pub async fn find_binary(
         &self,
         delegate: &Arc<dyn LspAdapterDelegate>,
         cx: &AsyncApp,
-    ) -> Option<LanguageServerBinary> {
-        self.adapter.check_if_user_installed(delegate, cx).await
+    ) -> Result<LanguageServerBinary> {
+        self.adapter.find_binary(delegate, cx).await
     }
 
     pub fn code_action_kinds(&self) -> Option<Vec<CodeActionKind>> {
@@ -439,6 +439,29 @@ pub trait LspAdapter: 'static + Send + Sync {
         _cx: &AsyncApp,
     ) -> Option<LanguageServerBinary> {
         None
+    }
+
+    /// The executable [`Self::check_if_user_installed`] looks for, named in the error
+    /// when the server is not installed.
+    fn binary_name(&self) -> String {
+        self.name().0.to_string()
+    }
+
+    /// Finds the binary to start the server with. Adapters override this instead of
+    /// [`Self::check_if_user_installed`] to explain why the server can't start.
+    async fn find_binary(
+        &self,
+        delegate: &Arc<dyn LspAdapterDelegate>,
+        cx: &AsyncApp,
+    ) -> Result<LanguageServerBinary> {
+        let Some(binary) = self.check_if_user_installed(delegate, cx).await else {
+            anyhow::bail!(
+                "language server {} is not installed: `{}` was not found on your PATH",
+                self.name(),
+                self.binary_name(),
+            );
+        };
+        Ok(binary)
     }
 
     fn process_diagnostics(&self, _: &mut lsp::PublishDiagnosticsParams, _: LanguageServerId) {}

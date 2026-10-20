@@ -21,7 +21,6 @@ pub mod log_store;
 pub mod lsp_ext_command;
 pub mod rust_analyzer_ext;
 mod semantic_tokens;
-pub mod vue_language_server_ext;
 
 use self::code_lens::CodeLensData;
 use self::document_colors::DocumentColorData;
@@ -738,29 +737,13 @@ impl LocalLspStore {
             }
 
             let binary_settings = settings.binary.clone().unwrap_or_default();
-            let mut binary = if let Some(path) = binary_settings.path.map(PathBuf::from) {
-                LanguageServerBinary {
-                    path: delegate.resolve_relative_path(path),
-                    arguments: Vec::new(),
-                    env: None,
-                }
-            } else {
-                let Some(binary) = adapter.check_if_user_installed(&delegate, cx).await else {
-                    anyhow::bail!(
-                        "language server {} is not installed. Install it and make sure it is on \
-                        your PATH, or set `lsp.{}.binary.path` in settings",
-                        adapter.name(),
-                        adapter.name(),
-                    );
-                };
-                log::info!(
-                    "found user-installed language server for {}. path: {:?}, arguments: {:?}",
-                    adapter.name(),
-                    binary.path,
-                    binary.arguments
-                );
-                binary
-            };
+            let mut binary = adapter.find_binary(&delegate, cx).await?;
+            log::info!(
+                "found user-installed language server for {}. path: {:?}, arguments: {:?}",
+                adapter.name(),
+                binary.path,
+                binary.arguments
+            );
 
             let mut shell_env = delegate.shell_env().await;
             shell_env.extend(binary.env.take().unwrap_or_default());
@@ -1219,7 +1202,6 @@ impl LocalLspStore {
             })
             .detach();
 
-        vue_language_server_ext::register_requests(lsp_store.clone(), language_server);
         json_language_server_ext::register_requests(lsp_store.clone(), language_server);
         rust_analyzer_ext::register_notifications(lsp_store, language_server);
     }

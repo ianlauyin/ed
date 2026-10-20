@@ -13,8 +13,8 @@ pub use language::*;
 use crate::json::JsonTaskProvider;
 
 mod bash;
+mod biome;
 mod css;
-mod eslint;
 mod go;
 mod html;
 mod json;
@@ -22,8 +22,8 @@ mod npx;
 mod package_json;
 mod python;
 mod rust;
+mod tsgo;
 mod typescript;
-mod vtsls;
 mod yaml;
 
 pub(crate) use package_json::{PackageJson, PackageJsonData};
@@ -34,7 +34,7 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
 
     let bash_lsp_adapter = Arc::new(bash::BashLspAdapter);
     let css_lsp_adapter = Arc::new(css::CssLspAdapter);
-    let eslint_adapter = Arc::new(eslint::EsLintLspAdapter::new(fs.clone()));
+    let biome_lsp_adapter = Arc::new(biome::BiomeLspAdapter::new(fs.clone()));
     let go_context_provider = Arc::new(go::GoContextProvider);
     let go_lsp_adapter = Arc::new(go::GoLspAdapter);
     let html_lsp_adapter = Arc::new(html::HtmlLspAdapter);
@@ -44,8 +44,7 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
     let rust_context_provider = Arc::new(rust::RustContextProvider);
     let rust_lsp_adapter = Arc::new(rust::RustLspAdapter);
     let typescript_context = Arc::new(typescript::TypeScriptContextProvider::new(fs.clone()));
-    let typescript_lsp_adapter = Arc::new(typescript::TypeScriptLspAdapter::new(fs.clone()));
-    let vtsls_adapter = Arc::new(vtsls::VtslsLspAdapter::new(fs.clone()));
+    let tsgo_lsp_adapter = Arc::new(tsgo::TsgoLspAdapter::new(fs));
     let yaml_lsp_adapter = Arc::new(yaml::YamlLspAdapter);
 
     let built_in_languages = [
@@ -67,7 +66,7 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
         },
         LanguageInfo {
             name: "css",
-            adapters: vec![css_lsp_adapter],
+            adapters: vec![css_lsp_adapter, biome_lsp_adapter.clone()],
             ..Default::default()
         },
         LanguageInfo {
@@ -106,13 +105,13 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
         },
         LanguageInfo {
             name: "json",
-            adapters: vec![json_lsp_adapter.clone()],
+            adapters: vec![json_lsp_adapter.clone(), biome_lsp_adapter.clone()],
             context: Some(json_context_provider.clone()),
             ..Default::default()
         },
         LanguageInfo {
             name: "jsonc",
-            adapters: vec![json_lsp_adapter],
+            adapters: vec![json_lsp_adapter, biome_lsp_adapter.clone()],
             context: Some(json_context_provider),
             ..Default::default()
         },
@@ -145,19 +144,19 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
         },
         LanguageInfo {
             name: "tsx",
-            adapters: vec![typescript_lsp_adapter.clone(), vtsls_adapter.clone()],
+            adapters: vec![tsgo_lsp_adapter.clone(), biome_lsp_adapter.clone()],
             context: Some(typescript_context.clone()),
             ..Default::default()
         },
         LanguageInfo {
             name: "typescript",
-            adapters: vec![typescript_lsp_adapter.clone(), vtsls_adapter.clone()],
+            adapters: vec![tsgo_lsp_adapter.clone(), biome_lsp_adapter.clone()],
             context: Some(typescript_context.clone()),
             ..Default::default()
         },
         LanguageInfo {
             name: "javascript",
-            adapters: vec![typescript_lsp_adapter.clone(), vtsls_adapter.clone()],
+            adapters: vec![tsgo_lsp_adapter, biome_lsp_adapter],
             context: Some(typescript_context),
             ..Default::default()
         },
@@ -182,35 +181,6 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
             registration.semantic_token_rules,
             cx,
         );
-    }
-
-    // Register globally available language servers.
-    //
-    // This will allow users to add support for a built-in language server (e.g., ESLint)
-    // for a given language via the `language_servers` setting:
-    //
-    // ```json
-    // {
-    //   "languages": {
-    //     "My Language": {
-    //       "language_servers": ["eslint", "..."]
-    //     }
-    //   }
-    // }
-    // ```
-    languages.register_available_lsp_adapter(
-        LanguageServerName("eslint".into()),
-        eslint_adapter.clone(),
-    );
-    languages.register_available_lsp_adapter(LanguageServerName("vtsls".into()), vtsls_adapter);
-    languages.register_available_lsp_adapter(
-        LanguageServerName("typescript-language-server".into()),
-        typescript_lsp_adapter,
-    );
-
-    let eslint_languages = ["TSX", "TypeScript", "JavaScript", "Vue.js", "Svelte"];
-    for language in eslint_languages {
-        languages.register_lsp_adapter(language.into(), eslint_adapter.clone());
     }
 
     let mut subscription = languages.subscribe();

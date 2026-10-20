@@ -782,17 +782,6 @@ fn language_overrides() -> LanguageToSettingsMap {
                 },
             ),
             (
-                "JavaScript".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("!typescript-language-server"),
-                        ConfiguredLanguageServer::from("vtsls"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
-                    ..Default::default()
-                },
-            ),
-            (
                 "JSON".into(),
                 LanguageSettingsContent {
                     preferred_line_length: Some(120),
@@ -951,28 +940,6 @@ fn language_overrides() -> LanguageToSettingsMap {
                 },
             ),
             (
-                "TSX".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("!typescript-language-server"),
-                        ConfiguredLanguageServer::from("vtsls"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
-                    ..Default::default()
-                },
-            ),
-            (
-                "TypeScript".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("!typescript-language-server"),
-                        ConfiguredLanguageServer::from("vtsls"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
-                    ..Default::default()
-                },
-            ),
-            (
                 "Typst".into(),
                 LanguageSettingsContent {
                     allow_rewrap: Some(RewrapBehavior::Anywhere),
@@ -990,17 +957,6 @@ fn language_overrides() -> LanguageToSettingsMap {
                         ConfiguredLanguageServer::from("..."),
                     ]),
                     use_on_type_format: Some(false),
-                    ..Default::default()
-                },
-            ),
-            (
-                "Vue.js".into(),
-                LanguageSettingsContent {
-                    language_servers: Some(vec![
-                        ConfiguredLanguageServer::from("vue-language-server"),
-                        ConfiguredLanguageServer::from("vtsls"),
-                        ConfiguredLanguageServer::from("..."),
-                    ]),
                     ..Default::default()
                 },
             ),

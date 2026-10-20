@@ -257,7 +257,6 @@ impl Default for LspSettings {
     Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom, Hash,
 )]
 pub struct BinarySettings {
-    pub path: Option<String>,
     pub arguments: Option<Vec<String>>,
     pub env: Option<BTreeMap<String, String>>,
 }

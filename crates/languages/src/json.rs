@@ -125,6 +125,10 @@ impl LspAdapter for JsonLspAdapter {
         LanguageServerName("json-language-server".into())
     }
 
+    fn binary_name(&self) -> String {
+        "vscode-json-language-server".into()
+    }
+
     async fn check_if_user_installed(
         &self,
         delegate: &Arc<dyn LspAdapterDelegate>,
