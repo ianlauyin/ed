@@ -498,7 +498,6 @@ fn project_settings() -> ProjectSettingsContent {
             ])),
             hidden_files: Some(SplicingVec(vec!["**/.*".into()])),
             read_only_files: Some(SplicingVec(vec![])),
-            ..Default::default()
         },
         lsp: LspSettingsMap(
             [(

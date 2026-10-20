@@ -47,7 +47,7 @@ use theme_settings::ThemeSettings;
 use ui::{
     ContextMenu, ContextMenuEntry, ContextMenuItem, DecoratedIcon, IconButtonShape, IconDecoration,
     IconDecorationKind, Indicator, KeyBinding, PopoverMenu, PopoverMenuHandle, Tab, TabBar,
-    TabPosition, Tooltip, prelude::*, right_click_menu,
+    TabPosition, TabStyle, Tooltip, prelude::*, right_click_menu,
 };
 use util::{
     ResultExt, debug_panic, markdown::MarkdownInlineCode, maybe, paths::PathStyle,
@@ -421,6 +421,7 @@ pub struct Pane {
     should_display_tab_bar: Rc<dyn Fn(&Window, &mut Context<Pane>) -> bool>,
     /// Whether the last render showed the tab bar strip above the card.
     tab_bar_displayed: bool,
+    tab_style: TabStyle,
     should_display_welcome_page: bool,
     render_tab_bar_buttons: Rc<
         dyn Fn(
@@ -607,6 +608,7 @@ impl Pane {
             can_toggle_zoom: true,
             should_display_tab_bar: Rc::new(|_, cx| TabBarSettings::get_global(cx).show),
             tab_bar_displayed: false,
+            tab_style: TabStyle::Folder,
             should_display_welcome_page: false,
             render_tab_bar_buttons: Rc::new(default_render_tab_bar_buttons),
             render_tab_bar: Rc::new(Self::render_tab_bar),
@@ -839,6 +841,11 @@ impl Pane {
 
     pub fn tab_bar_displayed(&self) -> bool {
         self.tab_bar_displayed
+    }
+
+    /// Pill tabs sit inside the card instead of on the chrome above it.
+    pub fn set_tab_style(&mut self, tab_style: TabStyle) {
+        self.tab_style = tab_style;
     }
 
     pub fn set_should_display_welcome_page(&mut self, should_display_welcome_page: bool) {
@@ -2904,6 +2911,7 @@ impl Pane {
 
         let capability = item.capability(cx);
         let tab = Tab::new(ix)
+            .style(self.tab_style)
             .position(if is_first_item {
                 TabPosition::First
             } else if is_last_item {
@@ -3405,6 +3413,12 @@ impl Pane {
             })
     }
 
+    /// The floating card: rounded, card-coloured, with square content corners kept inside.
+    fn card_style<E: Styled>(cx: &App) -> impl FnOnce(E) -> E + use<E> {
+        let bg = cx.theme().colors().editor_background;
+        move |el| el.rounded(crate::CARD_RADIUS).bg(bg).p(crate::CARD_INSET)
+    }
+
     fn render_tab_bar(&mut self, window: &mut Window, cx: &mut Context<Pane>) -> AnyElement {
         if self.workspace.upgrade().is_none() {
             return gpui::Empty.into_any();
@@ -3550,7 +3564,7 @@ impl Pane {
     ) -> AnyElement {
         let tab_bar = self
             .configure_tab_bar_start(
-                TabBar::new("tab_bar"),
+                TabBar::new("tab_bar").style(self.tab_style),
                 navigate_backward,
                 navigate_forward,
                 window,
@@ -3588,7 +3602,7 @@ impl Pane {
     ) -> AnyElement {
         let pinned_tab_bar = self
             .configure_tab_bar_start(
-                TabBar::new("pinned_tab_bar"),
+                TabBar::new("pinned_tab_bar").style(self.tab_style),
                 navigate_backward,
                 navigate_forward,
                 window,
@@ -3607,11 +3621,9 @@ impl Pane {
             .flex_none()
             .child(pinned_tab_bar)
             .child(
-                TabBar::new("unpinned_tab_bar").child(self.render_unpinned_tabs_container(
-                    unpinned_tabs,
-                    tab_count,
-                    cx,
-                )),
+                TabBar::new("unpinned_tab_bar")
+                    .style(self.tab_style)
+                    .child(self.render_unpinned_tabs_container(unpinned_tabs, tab_count, cx)),
             )
             .into_any_element()
     }
@@ -4349,7 +4361,8 @@ impl Render for Pane {
 
         let should_display_tab_bar = self.should_display_tab_bar.clone();
         let display_tab_bar = should_display_tab_bar(window, cx);
-        self.tab_bar_displayed = display_tab_bar;
+        let pill_tabs = self.tab_style == TabStyle::Pill;
+        self.tab_bar_displayed = display_tab_bar && !pill_tabs;
         let Some(project) = self.project.upgrade() else {
             return div().track_focus(&self.focus_handle(cx));
         };
@@ -4520,7 +4533,7 @@ impl Render for Pane {
                     cx.propagate();
                 }
             }))
-            .when(display_tab_bar, |pane| {
+            .when(display_tab_bar && !pill_tabs, |pane| {
                 if self.active_item().is_some() {
                     pane.child((self.render_tab_bar.clone())(self, window, cx))
                 } else {
@@ -4531,14 +4544,12 @@ impl Render for Pane {
             .child({
                 let has_worktrees = project.read(cx).visible_worktrees(cx).next().is_some();
                 // main content
-                div()
+                let content = div()
                     .flex_1()
+                    .min_h_0()
                     .relative()
                     // Everything below the tab bar is the floating card.
-                    .rounded(crate::CARD_RADIUS)
-                    .bg(cx.theme().colors().editor_background)
-                    // Keeps square content corners inside the rounded card.
-                    .p(crate::CARD_INSET)
+                    .when(!pill_tabs, |div| div.map(Self::card_style(cx)))
                     .group("")
                     .overflow_hidden()
                     .on_drag_move::<DraggedTab>(cx.listener(Self::handle_drag_move))
@@ -4637,7 +4648,22 @@ impl Render for Pane {
                                     }
                                 }
                             }),
-                    )
+                    );
+                if pill_tabs {
+                    // Pill tabs sit inside the card, above the content (and outside its
+                    // split drop zones).
+                    v_flex()
+                        .flex_1()
+                        .min_h_0()
+                        .map(Self::card_style(cx))
+                        .when(display_tab_bar && self.active_item().is_some(), |card| {
+                            card.child((self.render_tab_bar.clone())(self, window, cx))
+                        })
+                        .child(content)
+                        .into_any_element()
+                } else {
+                    content.into_any_element()
+                }
             })
             .on_mouse_down(
                 MouseButton::Navigate(NavigationDirection::Back),

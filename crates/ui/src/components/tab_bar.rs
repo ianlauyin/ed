@@ -1,8 +1,8 @@
 use gpui::{AnyElement, ScrollHandle};
 use smallvec::SmallVec;
 
-use crate::Tab;
 use crate::prelude::*;
+use crate::{Tab, TabStyle};
 
 #[derive(IntoElement, RegisterComponent)]
 pub struct TabBar {
@@ -11,6 +11,7 @@ pub struct TabBar {
     children: SmallVec<[AnyElement; 2]>,
     end_children: SmallVec<[AnyElement; 2]>,
     scroll_handle: Option<ScrollHandle>,
+    style: TabStyle,
 }
 
 impl TabBar {
@@ -21,7 +22,13 @@ impl TabBar {
             children: SmallVec::new(),
             end_children: SmallVec::new(),
             scroll_handle: None,
+            style: TabStyle::Folder,
         }
+    }
+
+    pub fn style(mut self, style: TabStyle) -> Self {
+        self.style = style;
+        self
     }
 
     pub fn track_scroll(mut self, scroll_handle: &ScrollHandle) -> Self {
@@ -98,9 +105,13 @@ impl RenderOnce for TabBar {
             .flex_none()
             .w_full()
             .h(Tab::container_height(cx))
-            // Clears the card's rounded top-left corner, so the first tab meets the card's
-            // straight top edge (matches `workspace::CARD_RADIUS`).
-            .pl(px(10.))
+            .map(|this| match self.style {
+                // Clears the card's rounded top-left corner, so the first tab meets the card's
+                // straight top edge (matches `workspace::CARD_RADIUS`).
+                TabStyle::Folder => this.pl(px(10.)),
+                // Pills sit inside the card, already inset from its edge.
+                TabStyle::Pill => this.pl(DynamicSpacing::Base04.px(cx)),
+            })
             .when(!self.start_children.is_empty(), |this| {
                 this.child(
                     h_flex()

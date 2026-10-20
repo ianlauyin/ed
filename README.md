@@ -1,4 +1,4 @@
-# install lsp manualy
+# install lsp manualy, or it will be run by npx
 
 ```sh
 # json, css, eslint, html, markdown

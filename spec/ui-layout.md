@@ -44,6 +44,11 @@ because it hurt readability; an opaque window is also cheaper to composite.
   bottoms. The tab bar has no bottom line and no borders between tabs. It is
   inset 10px on the left (the card radius), so the first tab meets the card's
   straight top edge rather than its rounded corner.
+- The terminal panel's panes use pill tabs instead: the whole pane, tab bar
+  included, is one card, and tabs are rounded buttons inside its top edge.
+  Only the active pill has a background (`ghost_element_selected`); inactive
+  ones show `ghost_element_hover` on hover. Split drop zones cover only the
+  content below the pills, and inactive-pane dimming covers the whole card.
 - Pane toolbars (search bars, breadcrumbs) have no bottom line either; they sit
   flat inside the card.
 - An empty pane (hints or welcome page) leaves a blank strip of tab-bar height

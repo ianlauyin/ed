@@ -29,10 +29,21 @@ pub enum TabCloseSide {
     End,
 }
 
+/// How a [`Tab`] (and its [`TabBar`](crate::TabBar)) is drawn.
+#[derive(Debug, Default, PartialEq, Eq, Clone, Copy)]
+pub enum TabStyle {
+    /// Fills the tab bar height with rounded tops; the active tab joins the card below.
+    #[default]
+    Folder,
+    /// A rounded button inside the card; the active one is highlighted.
+    Pill,
+}
+
 #[derive(IntoElement, RegisterComponent)]
 pub struct Tab {
     div: Stateful<Div>,
     selected: bool,
+    style: TabStyle,
     position: TabPosition,
     close_side: TabCloseSide,
     start_slot: Option<AnyElement>,
@@ -45,6 +56,7 @@ impl Tab {
         Self {
             div: div().id(id.into()),
             selected: false,
+            style: TabStyle::Folder,
             position: TabPosition::First,
             close_side: TabCloseSide::End,
             start_slot: None,
@@ -55,6 +67,11 @@ impl Tab {
 
     pub fn position(mut self, position: TabPosition) -> Self {
         self.position = position;
+        self
+    }
+
+    pub fn style(mut self, style: TabStyle) -> Self {
+        self.style = style;
         self
     }
 
@@ -79,6 +96,10 @@ impl Tab {
 
     pub fn container_height(cx: &App) -> Pixels {
         DynamicSpacing::Base32.px(cx)
+    }
+
+    pub fn pill_height(cx: &App) -> Pixels {
+        DynamicSpacing::Base24.px(cx)
     }
 }
 
@@ -137,6 +158,40 @@ impl RenderOnce for Tab {
                 TabCloseSide::Start => (end_slot, start_slot),
             }
         };
+
+        if self.style == TabStyle::Pill {
+            let (text_color, bg) = if self.selected {
+                (
+                    cx.theme().colors().text,
+                    Some(cx.theme().colors().ghost_element_selected),
+                )
+            } else {
+                (cx.theme().colors().text_muted, None)
+            };
+            let hover_bg = cx.theme().colors().ghost_element_hover;
+            return self
+                .div
+                .h(Tab::container_height(cx))
+                .flex()
+                .items_center()
+                .pr(DynamicSpacing::Base04.px(cx))
+                .cursor_pointer()
+                .child(
+                    h_flex()
+                        .group("")
+                        .relative()
+                        .h(Tab::pill_height(cx))
+                        .rounded_full()
+                        .when_some(bg, |this, bg| this.bg(bg))
+                        .when(!self.selected, |this| this.hover(|s| s.bg(hover_bg)))
+                        .px(DynamicSpacing::Base08.px(cx))
+                        .gap(DynamicSpacing::Base04.rems(cx))
+                        .text_color(text_color)
+                        .child(start_slot)
+                        .children(self.children)
+                        .child(end_slot),
+                );
+        }
 
         // Tabs fill the tab bar height with rounded tops; the active one joins the card below.
         self.div

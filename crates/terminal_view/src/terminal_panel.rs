@@ -1295,6 +1295,7 @@ pub fn new_terminal_pane(
         pane.set_can_navigate(false, cx);
         pane.display_nav_history_buttons(None);
         pane.set_should_display_tab_bar(|_, _| true);
+        pane.set_tab_style(ui::TabStyle::Pill);
         pane.set_zoom_out_on_close(false);
 
         let split_closure_terminal_panel = terminal_panel.downgrade();
