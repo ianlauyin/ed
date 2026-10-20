@@ -6,10 +6,12 @@
   structure-aware features (auto-indent, brackets, outline, text objects,
   runnables, string/comment scopes).
 - C, C++, Diff, Git Commit, Go Mod and Go Work are still registered languages
-  (file matching, comments, brackets, language servers such as clangd and
-  gopls, Diff's keep-trailing-whitespace settings, the Git Commit editor) but
-  have no grammar, so they get rough highlighting only and none of the
+  (file matching, comments, brackets, gopls for Go Mod/Work, Diff's
+  keep-trailing-whitespace settings, the Git Commit editor) but have no
+  grammar, so they get rough highlighting only and none of the
   structure-aware features.
+- C/C++ have no built-in language server: clangd support (adapter, semantic
+  token rules, inactive regions, switch source/header) is removed.
 - TOML, SQL, Dockerfile, JSDoc, Regex and the hidden Zed Keybind Context
   languages are removed. Their files open as Plain Text and are still
   highlighted by the fallback below.

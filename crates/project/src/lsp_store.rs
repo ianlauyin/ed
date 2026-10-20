@@ -9,7 +9,6 @@
 //! - [`LspStore`], which unifies the two under one consistent interface for interacting with language servers.
 //!
 //! Most of the interesting work happens at the local layer, as bulk of the complexity is with managing the lifecycle of language servers. The actual implementation of the LSP protocol is handled by [`lsp`] crate.
-pub mod clangd_ext;
 pub mod code_lens;
 mod document_colors;
 mod document_links;
@@ -805,11 +804,8 @@ impl LocalLspStore {
                                     ),
                                     registration_id: None,
                                 }],
-                                |_, diagnostic, _cx| match diagnostic.source_kind {
-                                    DiagnosticSourceKind::Other | DiagnosticSourceKind::Pushed => {
-                                        adapter.retain_old_diagnostic(diagnostic)
-                                    }
-                                    DiagnosticSourceKind::Pulled => true,
+                                |_, diagnostic, _cx| {
+                                    diagnostic.source_kind == DiagnosticSourceKind::Pulled
                                 },
                                 cx,
                             )
@@ -1225,8 +1221,7 @@ impl LocalLspStore {
 
         vue_language_server_ext::register_requests(lsp_store.clone(), language_server);
         json_language_server_ext::register_requests(lsp_store.clone(), language_server);
-        rust_analyzer_ext::register_notifications(lsp_store.clone(), language_server);
-        clangd_ext::register_notifications(lsp_store, language_server, adapter);
+        rust_analyzer_ext::register_notifications(lsp_store, language_server);
     }
 
     fn shutdown_language_servers_on_quit(&mut self) -> impl Future<Output = ()> + use<> {
@@ -4717,9 +4712,6 @@ impl LspStore {
         );
         client.add_entity_request_handler(
             Self::handle_lsp_command::<lsp_ext_command::GetLspRunnables>,
-        );
-        client.add_entity_request_handler(
-            Self::handle_lsp_command::<lsp_ext_command::SwitchSourceHeader>,
         );
     }
 
@@ -12691,10 +12683,6 @@ impl LspStore {
                 .as_ref()
                 .is_some_and(|tags| tags.contains(&DiagnosticTag::UNNECESSARY));
 
-            let underline = self
-                .language_server_adapter_for_id(server_id)
-                .is_none_or(|adapter| adapter.underline_diagnostic(diagnostic));
-
             if is_supporting {
                 supporting_diagnostics.insert(
                     (source, diagnostic.code.clone(), range),
@@ -12747,7 +12735,7 @@ impl LspStore {
                         is_primary: true,
                         is_disk_based,
                         is_unnecessary,
-                        underline,
+                        underline: true,
                         data: diagnostic.data.clone(),
                         registration_id: registration_id.clone(),
                     },
@@ -12782,7 +12770,7 @@ impl LspStore {
                                     is_primary: false,
                                     is_disk_based,
                                     is_unnecessary: false,
-                                    underline,
+                                    underline: true,
                                     data: diagnostic.data.clone(),
                                     registration_id: registration_id.clone(),
                                 },

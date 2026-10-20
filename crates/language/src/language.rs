@@ -364,14 +364,6 @@ impl CachedLspAdapter {
         self.adapter.process_diagnostics(params, server_id)
     }
 
-    pub fn retain_old_diagnostic(&self, previous_diagnostic: &Diagnostic) -> bool {
-        self.adapter.retain_old_diagnostic(previous_diagnostic)
-    }
-
-    pub fn underline_diagnostic(&self, diagnostic: &lsp::Diagnostic) -> bool {
-        self.adapter.underline_diagnostic(diagnostic)
-    }
-
     pub fn diagnostic_message_to_markdown(&self, message: &str) -> Option<String> {
         self.adapter.diagnostic_message_to_markdown(message)
     }
@@ -450,21 +442,6 @@ pub trait LspAdapter: 'static + Send + Sync {
     }
 
     fn process_diagnostics(&self, _: &mut lsp::PublishDiagnosticsParams, _: LanguageServerId) {}
-
-    /// When processing new `lsp::PublishDiagnosticsParams` diagnostics, whether to retain previous one(s) or not.
-    fn retain_old_diagnostic(&self, _previous_diagnostic: &Diagnostic) -> bool {
-        false
-    }
-
-    /// Whether to underline a given diagnostic or not, when rendering in the editor.
-    ///
-    /// https://microsoft.github.io/language-server-protocol/specifications/lsp/3.17/specification/#diagnosticTag
-    /// states that
-    /// > Clients are allowed to render diagnostics with this tag faded out instead of having an error squiggle.
-    /// for the unnecessary diagnostics, so do not underline them.
-    fn underline_diagnostic(&self, _diagnostic: &lsp::Diagnostic) -> bool {
-        true
-    }
 
     /// Post-processes completions provided by the language server.
     async fn process_completions(&self, _: &mut [lsp::CompletionItem]) {}

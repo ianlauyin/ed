@@ -146,9 +146,6 @@ message Envelope {
     AddWorktree add_worktree = 222;
     AddWorktreeResponse add_worktree_response = 223;
 
-    LspExtSwitchSourceHeader lsp_ext_switch_source_header = 241;
-    LspExtSwitchSourceHeaderResponse lsp_ext_switch_source_header_response = 242;
-
     FindSearchCandidates find_search_candidates = 243;
 
     CloseBuffer close_buffer = 245;
@@ -378,6 +375,7 @@ message Envelope {
 
   reserved 317, 318; // Removed credential prompts.
   reserved 373 to 377; // Removed agent servers.
+  reserved 241, 242; // Removed clangd switch source/header.
   reserved 273 to 277, 371, 372; // Removed toolchains.
   reserved 411 to 412; // Removed context servers.
   reserved 433 to 439; // Removed git checkpoints.

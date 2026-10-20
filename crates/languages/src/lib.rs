@@ -13,8 +13,6 @@ pub use language::*;
 use crate::json::JsonTaskProvider;
 
 mod bash;
-mod c;
-mod cpp;
 mod css;
 mod eslint;
 mod go;
@@ -35,7 +33,6 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
     languages.register_native_grammars(grammars::native_grammars());
 
     let bash_lsp_adapter = Arc::new(bash::BashLspAdapter);
-    let c_lsp_adapter = Arc::new(c::CLspAdapter);
     let css_lsp_adapter = Arc::new(css::CssLspAdapter);
     let eslint_adapter = Arc::new(eslint::EsLintLspAdapter::new(fs.clone()));
     let go_context_provider = Arc::new(go::GoContextProvider);
@@ -60,13 +57,12 @@ pub fn init(languages: Arc<LanguageRegistry>, fs: Arc<dyn Fs>, cx: &mut App) {
         },
         LanguageInfo {
             name: "c",
-            adapters: vec![c_lsp_adapter.clone()],
+            adapters: vec![],
             ..Default::default()
         },
         LanguageInfo {
             name: "cpp",
-            adapters: vec![c_lsp_adapter],
-            semantic_token_rules: Some(cpp::semantic_token_rules()),
+            adapters: vec![],
             ..Default::default()
         },
         LanguageInfo {
