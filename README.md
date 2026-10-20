@@ -1,4 +1,4 @@
-# install lsp manualy, or it will be run by npx
+# install lsp manualy, or it will be run by npx/uvx
 
 ```sh
 # json, css, html
@@ -7,4 +7,8 @@ npm install -g vscode-langservers-extracted
 npm install -D typescript@^7
 # lint (js/ts/json/css) and formatting
 npm install -D @biomejs/biome
+
+# python
+uv tool install ruff
+uv tool install ty
 ```
