@@ -7,6 +7,7 @@ use gpui::{
 };
 use objc2::{Message as _, rc::Retained, runtime::ProtocolObject};
 use objc2_core_foundation::CGSize;
+use objc2_core_graphics::{CGColorSpace, kCGColorSpaceDisplayP3};
 use objc2_foundation::{NSRange, NSString};
 use objc2_metal::{
     MTLBlendFactor, MTLBlendOperation, MTLBuffer, MTLClearColor, MTLCommandBuffer,
@@ -181,6 +182,11 @@ impl MetalRenderer {
     fn configure_layer(layer: &CAMetalLayer, device: &Device, transparent: bool) {
         layer.setDevice(Some(device));
         layer.setPixelFormat(MTLPixelFormat::BGRA8Unorm);
+        // Tag output as Display P3 so color values render with the wide gamut of Mac displays
+        // and look the same on external monitors and in screenshots.
+        layer.setColorspace(
+            CGColorSpace::with_name(Some(unsafe { kCGColorSpaceDisplayP3 })).as_deref(),
+        );
         // Support direct-to-display rendering if the window is not transparent
         // https://developer.apple.com/documentation/metal/managing-your-game-window-for-metal-in-macos
         layer.setOpaque(!transparent);

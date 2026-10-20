@@ -37,6 +37,7 @@ font-kit = { workspace = true, optional = true, features = ["source"] }
 log.workspace = true
 objc2.workspace = true
 objc2-core-foundation = { workspace = true, features = ["std", "CFCGTypes", "CFData", "CFDictionary", "CFString", "CFNumber", "CFBase"] }
+objc2-core-graphics.workspace = true
 objc2-core-text = { workspace = true, optional = true }
 objc2-metal = { workspace = true, features = [
     "std",
@@ -59,7 +60,7 @@ objc2-metal = { workspace = true, features = [
     "MTLTypes",
 ] }
 objc2-foundation = { workspace = true, features = ["NSArray", "NSError", "NSRange", "NSString", "NSThread", "NSNotification", "NSOperation", "NSProcessInfo", "block2"] }
-objc2-quartz-core = { workspace = true, features = ["objc2-core-foundation", "objc2-metal"] }
+objc2-quartz-core = { workspace = true, features = ["objc2-core-foundation", "objc2-core-graphics", "objc2-metal"] }
 objc2-security.workspace = true
 parking_lot.workspace = true
 pathfinder_geometry = { workspace = true, optional = true }
