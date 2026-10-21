@@ -182,8 +182,10 @@ impl MetalRenderer {
     fn configure_layer(layer: &CAMetalLayer, device: &Device, transparent: bool) {
         layer.setDevice(Some(device));
         layer.setPixelFormat(MTLPixelFormat::BGRA8Unorm);
-        // Tag output as Display P3 so color values render with the wide gamut of Mac displays
-        // and look the same on external monitors and in screenshots.
+        // Tag output as Display P3: color values (authored as sRGB hex) are deliberately
+        // interpreted as P3, matching the untagged look on Mac panels. Neutrals are unchanged,
+        // saturated colors render more vivid than sRGB; macOS converts to each monitor's
+        // profile so the look is consistent across displays and screenshots.
         layer.setColorspace(
             CGColorSpace::with_name(Some(unsafe { kCGColorSpaceDisplayP3 })).as_deref(),
         );

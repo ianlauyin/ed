@@ -12,9 +12,11 @@ remote detection, command execution, and proxy startup are removed.
 ## Behaviour
 
 - The editor uses native macOS windows, Metal rendering, and system menus.
-- Window output is always tagged Display P3 (no setting): theme colors render
-  with the wide gamut of Mac displays, consistently across monitors and
-  screenshots.
+- Window output is always tagged Display P3 (no setting). Theme hex values are
+  interpreted as P3, not sRGB: a deliberate appearance choice matching the
+  untagged look on Mac panels. Grays are unchanged; saturated colors look more
+  vivid than their sRGB hex. macOS color-manages to each monitor, so the look
+  is consistent across displays and screenshots (clipped on sRGB monitors).
 - Confirmation and error dialogs always use native macOS prompts. The custom
   prompt renderer and `use_system_prompts` setting are removed.
 - No native window tabs: every window stands alone (one window per project
