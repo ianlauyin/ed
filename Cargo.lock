@@ -1806,9 +1806,9 @@ dependencies = [
 name = "file_icons"
 version = "0.1.0"
 dependencies = [
+ "collections",
  "gpui",
  "settings_content",
- "theme",
  "util",
 ]
 
@@ -7274,11 +7274,9 @@ dependencies = [
  "refineable",
  "schemars",
  "serde",
- "serde_json_lenient",
  "strum",
  "syntax_theme",
  "thiserror 2.0.21",
- "uuid",
 ]
 
 [[package]]

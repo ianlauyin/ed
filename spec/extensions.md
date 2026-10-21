@@ -7,10 +7,13 @@ macOS; the remote server runs natively on macOS and Linux.
 
 ## Behaviour
 
-- Languages, grammars, icon themes, and language servers come only from
-  built-in code and user settings/files. Snippets and themes come only from
+- Languages, grammars, and language servers come only from built-in code and
+  user settings/files. Snippets and themes come only from
   built-in code/assets (`assets/themes/`); the user config `themes/` folder is
   never read or watched, so the theme set is fixed for the process lifetime.
+- There are no icon themes: no `icon_theme` setting, selector, or menu item.
+  File/folder/chevron icons are one hardcoded set (`file_icons` crate,
+  `assets/icons/file_icons/`); to change icons, replace the asset files.
 - Tree-sitter grammars are native only; Wasm grammars cannot be loaded.
 - The standalone VS Code theme importer is removed; this fork does not provide
   a theme conversion tool.

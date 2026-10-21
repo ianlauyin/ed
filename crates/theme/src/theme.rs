@@ -13,8 +13,6 @@ mod color_space;
 mod default_colors;
 mod fallback_themes;
 mod font_family_cache;
-mod icon_theme;
-mod icon_theme_schema;
 mod registry;
 mod scale;
 mod schema;
@@ -37,8 +35,6 @@ pub use crate::color_space::*;
 pub use crate::default_colors::*;
 pub use crate::fallback_themes::{apply_status_color_defaults, apply_theme_color_defaults};
 pub use crate::font_family_cache::*;
-pub use crate::icon_theme::*;
-pub use crate::icon_theme_schema::*;
 pub use crate::registry::*;
 pub use crate::scale::*;
 pub use crate::schema::*;
@@ -140,8 +136,7 @@ pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
             .map(|m| themes.get(&m.name).unwrap())
             .unwrap()
     });
-    let icon_theme = themes.default_icon_theme().unwrap();
-    cx.set_global(GlobalTheme { theme, icon_theme });
+    cx.set_global(GlobalTheme { theme });
 }
 
 /// Implementing this trait allows accessing the active theme.
@@ -311,24 +306,16 @@ impl Theme {
     }
 }
 
-/// Deserializes an icon theme from the given bytes.
-pub fn deserialize_icon_theme(bytes: &[u8]) -> anyhow::Result<IconThemeFamilyContent> {
-    let icon_theme_family: IconThemeFamilyContent = serde_json_lenient::from_slice(bytes)?;
-
-    Ok(icon_theme_family)
-}
-
 /// The active theme.
 pub struct GlobalTheme {
     theme: Arc<Theme>,
-    icon_theme: Arc<IconTheme>,
 }
 impl Global for GlobalTheme {}
 
 impl GlobalTheme {
-    /// Creates a new [`GlobalTheme`] with the given theme and icon theme.
-    pub fn new(theme: Arc<Theme>, icon_theme: Arc<IconTheme>) -> Self {
-        Self { theme, icon_theme }
+    /// Creates a new [`GlobalTheme`] with the given theme.
+    pub fn new(theme: Arc<Theme>) -> Self {
+        Self { theme }
     }
 
     /// Updates the active theme.
@@ -336,18 +323,8 @@ impl GlobalTheme {
         cx.update_global::<Self, _>(|this, _| this.theme = theme);
     }
 
-    /// Updates the active icon theme.
-    pub fn update_icon_theme(cx: &mut App, icon_theme: Arc<IconTheme>) {
-        cx.update_global::<Self, _>(|this, _| this.icon_theme = icon_theme);
-    }
-
     /// Returns the active theme.
     pub fn theme(cx: &App) -> &Arc<Theme> {
         &cx.global::<Self>().theme
-    }
-
-    /// Returns the active icon theme.
-    pub fn icon_theme(cx: &App) -> &Arc<IconTheme> {
-        &cx.global::<Self>().icon_theme
     }
 }

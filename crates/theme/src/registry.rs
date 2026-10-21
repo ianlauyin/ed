@@ -1,8 +1,5 @@
+use std::fmt::Debug;
 use std::sync::Arc;
-use std::{
-    fmt::Debug,
-    path::{Path, PathBuf},
-};
 
 use anyhow::Result;
 use collections::HashMap;
@@ -10,10 +7,7 @@ use gpui::{App, AssetSource, Global, SharedString};
 use parking_lot::RwLock;
 use thiserror::Error;
 
-use crate::{
-    Appearance, AppearanceContent, ChevronIcons, DEFAULT_ICON_THEME_NAME, DirectoryIcons,
-    IconDefinition, IconTheme, Theme, ThemeFamily, default_icon_theme, deserialize_icon_theme,
-};
+use crate::{Appearance, Theme, ThemeFamily};
 
 /// The metadata for a theme.
 #[derive(Debug, Clone)]
@@ -28,11 +22,6 @@ pub struct ThemeMeta {
 #[derive(Debug, Error, Clone)]
 #[error("theme not found: {0}")]
 pub struct ThemeNotFoundError(pub SharedString);
-
-/// An error indicating that the icon theme with the given name was not found.
-#[derive(Debug, Error, Clone)]
-#[error("icon theme not found: {0}")]
-pub struct IconThemeNotFoundError(pub SharedString);
 
 /// The global [`ThemeRegistry`].
 ///
@@ -61,20 +50,12 @@ impl Global for GlobalThemeRegistry {}
 
 struct ThemeRegistryState {
     themes: HashMap<SharedString, Arc<Theme>>,
-    icon_themes: HashMap<SharedString, Arc<IconTheme>>,
-    loaded_icon_theme: Option<LoadedIconTheme>,
 }
 
 /// The registry for themes.
 pub struct ThemeRegistry {
     state: RwLock<ThemeRegistryState>,
     assets: Box<dyn AssetSource>,
-}
-
-struct LoadedIconTheme {
-    path: PathBuf,
-    icons_root_dir: PathBuf,
-    contents: Vec<u8>,
 }
 
 impl ThemeRegistry {
@@ -110,8 +91,6 @@ impl ThemeRegistry {
         let registry = Self {
             state: RwLock::new(ThemeRegistryState {
                 themes: HashMap::default(),
-                icon_themes: HashMap::default(),
-                loaded_icon_theme: None,
             }),
             assets,
         };
@@ -119,13 +98,6 @@ impl ThemeRegistry {
         // We're loading the Zed default theme, as we need a theme to be loaded
         // for tests.
         registry.insert_theme_families([crate::fallback_themes::zed_default_themes()]);
-
-        let default_icon_theme = crate::default_icon_theme();
-        registry
-            .state
-            .write()
-            .icon_themes
-            .insert(default_icon_theme.name.clone(), default_icon_theme);
 
         registry
     }
@@ -186,146 +158,6 @@ impl ThemeRegistry {
             .get(name)
             .ok_or_else(|| ThemeNotFoundError(name.to_string().into()))
             .cloned()
-    }
-
-    /// Returns the default icon theme.
-    pub fn default_icon_theme(&self) -> Result<Arc<IconTheme>, IconThemeNotFoundError> {
-        self.get_icon_theme(DEFAULT_ICON_THEME_NAME)
-    }
-
-    /// Returns the metadata of all icon themes in the registry.
-    pub fn list_icon_themes(&self) -> Vec<ThemeMeta> {
-        self.state
-            .read()
-            .icon_themes
-            .values()
-            .map(|theme| ThemeMeta {
-                name: theme.name.clone(),
-                appearance: theme.appearance,
-            })
-            .collect()
-    }
-
-    /// Returns the icon theme with the specified name.
-    pub fn get_icon_theme(&self, name: &str) -> Result<Arc<IconTheme>, IconThemeNotFoundError> {
-        self.state
-            .read()
-            .icon_themes
-            .get(name)
-            .ok_or_else(|| IconThemeNotFoundError(name.to_string().into()))
-            .cloned()
-    }
-
-    /// Removes the icon themes with the given names from the registry.
-    pub fn remove_icon_themes(&self, icon_themes_to_remove: &[SharedString]) {
-        let mut state = self.state.write();
-        if !icon_themes_to_remove.is_empty() {
-            state.loaded_icon_theme = None;
-        }
-        state
-            .icon_themes
-            .retain(|name, _| !icon_themes_to_remove.contains(name))
-    }
-
-    /// Loads the icon theme from the icon theme family and adds it to the registry.
-    ///
-    /// The `icons_root_dir` parameter indicates the root directory from which
-    /// the relative paths to icons in the theme should be resolved against.
-    pub fn load_icon_theme(
-        &self,
-        path: &Path,
-        icons_root_dir: &Path,
-        contents: Vec<u8>,
-    ) -> Result<()> {
-        if self
-            .state
-            .read()
-            .loaded_icon_theme
-            .as_ref()
-            .is_some_and(|loaded| {
-                loaded.path == path
-                    && loaded.icons_root_dir == icons_root_dir
-                    && loaded.contents == contents
-            })
-        {
-            return Ok(());
-        }
-
-        let icon_theme_family = deserialize_icon_theme(&contents)?;
-        let resolve_icon_path = |path: SharedString| {
-            icons_root_dir
-                .join(path.as_ref())
-                .to_string_lossy()
-                .to_string()
-                .into()
-        };
-
-        let default_icon_theme = default_icon_theme();
-
-        let mut state = self.state.write();
-        for icon_theme in icon_theme_family.themes {
-            let mut file_stems = default_icon_theme.file_stems.clone();
-            file_stems.extend(icon_theme.file_stems);
-
-            let mut file_suffixes = default_icon_theme.file_suffixes.clone();
-            file_suffixes.extend(icon_theme.file_suffixes);
-
-            let mut named_directory_icons = default_icon_theme.named_directory_icons.clone();
-            named_directory_icons.extend(icon_theme.named_directory_icons.into_iter().map(
-                |(key, value)| {
-                    (
-                        key,
-                        DirectoryIcons {
-                            collapsed: value.collapsed.map(resolve_icon_path),
-                            expanded: value.expanded.map(resolve_icon_path),
-                        },
-                    )
-                },
-            ));
-
-            let icon_theme = IconTheme {
-                id: uuid::Uuid::new_v4().to_string(),
-                name: icon_theme.name.into(),
-                appearance: match icon_theme.appearance {
-                    AppearanceContent::Light => Appearance::Light,
-                    AppearanceContent::Dark => Appearance::Dark,
-                },
-                directory_icons: DirectoryIcons {
-                    collapsed: icon_theme.directory_icons.collapsed.map(resolve_icon_path),
-                    expanded: icon_theme.directory_icons.expanded.map(resolve_icon_path),
-                },
-                named_directory_icons,
-                chevron_icons: ChevronIcons {
-                    collapsed: icon_theme.chevron_icons.collapsed.map(resolve_icon_path),
-                    expanded: icon_theme.chevron_icons.expanded.map(resolve_icon_path),
-                },
-                file_stems,
-                file_suffixes,
-                file_icons: icon_theme
-                    .file_icons
-                    .into_iter()
-                    .map(|(key, icon)| {
-                        (
-                            key,
-                            IconDefinition {
-                                path: resolve_icon_path(icon.path),
-                            },
-                        )
-                    })
-                    .collect(),
-            };
-
-            state
-                .icon_themes
-                .insert(icon_theme.name.clone(), Arc::new(icon_theme));
-        }
-        state.loaded_icon_theme = Some(LoadedIconTheme {
-            path: path.to_path_buf(),
-            icons_root_dir: icons_root_dir.to_path_buf(),
-            contents,
-        });
-
-        Ok(())
     }
 }
 

@@ -15,10 +15,10 @@ use anyhow::Context as _;
 use gpui::{App, Font, HighlightStyle, Pixels, Refineable, px};
 use gpui_util::ResultExt;
 use theme::{
-    AccentColors, Appearance, AppearanceContent, DEFAULT_DARK_THEME, DEFAULT_ICON_THEME_NAME,
-    GlobalTheme, LoadThemes, PlayerColor, StatusColors, SyntaxTheme, SystemAppearance,
-    SystemColors, Theme, ThemeColors, ThemeFamily, ThemeRegistry, ThemeSettingsProvider,
-    ThemeStyles, default_color_scales, try_parse_color,
+    AccentColors, Appearance, AppearanceContent, DEFAULT_DARK_THEME, GlobalTheme, LoadThemes,
+    PlayerColor, StatusColors, SyntaxTheme, SystemAppearance, SystemColors, Theme, ThemeColors,
+    ThemeFamily, ThemeRegistry, ThemeSettingsProvider, ThemeStyles, default_color_scales,
+    try_parse_color,
 };
 
 pub use crate::schema::{
@@ -28,13 +28,13 @@ pub use crate::schema::{
 };
 use crate::settings::adjust_buffer_font_size;
 pub use crate::settings::{
-    BufferLineHeight, FontFamilyName, GitCommitBufferFontSize, IconThemeName, IconThemeSelection,
-    MarkdownPreviewFontSize, ThemeAppearanceMode, ThemeName, ThemeSelection, ThemeSettings,
+    BufferLineHeight, FontFamilyName, GitCommitBufferFontSize, MarkdownPreviewFontSize,
+    ThemeAppearanceMode, ThemeName, ThemeSelection, ThemeSettings,
     adjust_git_commit_buffer_font_size, adjust_markdown_preview_font_size, adjust_ui_font_size,
     adjusted_font_size, appearance_to_mode, buffer_line_height_from_settings, clamp_font_size,
     default_theme, observe_buffer_font_size_adjustment, reset_buffer_font_size,
     reset_git_commit_buffer_font_size, reset_markdown_preview_font_size, reset_ui_font_size,
-    set_icon_theme, set_mode, set_theme, setup_ui_font,
+    set_mode, set_theme, setup_ui_font,
 };
 pub use theme::UiDensity;
 
@@ -78,9 +78,7 @@ pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
     }
 
     let theme = configured_theme(cx);
-    let icon_theme = configured_icon_theme(cx);
     GlobalTheme::update_theme(cx, theme);
-    GlobalTheme::update_icon_theme(cx, icon_theme);
 
     let settings = ThemeSettings::get_global(cx);
 
@@ -91,7 +89,6 @@ pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
     let mut prev_markdown_preview_font_size_settings =
         settings.markdown_preview_font_size_settings();
     let mut prev_theme_name = settings.theme.name(SystemAppearance::global(cx).0);
-    let mut prev_icon_theme_name = settings.icon_theme.name(SystemAppearance::global(cx).0);
     let mut prev_theme_overrides = (
         settings.experimental_theme_overrides.clone(),
         settings.theme_overrides.clone(),
@@ -105,7 +102,6 @@ pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
         let git_commit_buffer_font_size_settings = settings.git_commit_buffer_font_size_settings();
         let markdown_preview_font_size_settings = settings.markdown_preview_font_size_settings();
         let theme_name = settings.theme.name(SystemAppearance::global(cx).0);
-        let icon_theme_name = settings.icon_theme.name(SystemAppearance::global(cx).0);
         let theme_overrides = (
             settings.experimental_theme_overrides.clone(),
             settings.theme_overrides.clone(),
@@ -136,11 +132,6 @@ pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
             prev_theme_overrides = theme_overrides;
             reload_theme(cx);
         }
-
-        if icon_theme_name != prev_icon_theme_name {
-            prev_icon_theme_name = icon_theme_name;
-            reload_icon_theme(cx);
-        }
     })
     .detach();
 }
@@ -164,33 +155,10 @@ fn configured_theme(cx: &mut App) -> Arc<Theme> {
     theme_settings.apply_theme_overrides(theme)
 }
 
-fn configured_icon_theme(cx: &mut App) -> Arc<theme::IconTheme> {
-    let themes = ThemeRegistry::default_global(cx);
-    let theme_settings = ThemeSettings::get_global(cx);
-    let system_appearance = SystemAppearance::global(cx);
-
-    let icon_theme_name = theme_settings.icon_theme.name(*system_appearance);
-
-    match themes.get_icon_theme(&icon_theme_name.0) {
-        Ok(theme) => theme,
-        Err(err) => {
-            log::error!("{err}");
-            themes.get_icon_theme(DEFAULT_ICON_THEME_NAME).unwrap()
-        }
-    }
-}
-
 /// Reloads the current theme from settings.
 pub fn reload_theme(cx: &mut App) {
     let theme = configured_theme(cx);
     GlobalTheme::update_theme(cx, theme);
-    cx.refresh_windows();
-}
-
-/// Reloads the current icon theme from settings.
-pub fn reload_icon_theme(cx: &mut App) {
-    let icon_theme = configured_icon_theme(cx);
-    GlobalTheme::update_icon_theme(cx, icon_theme);
     cx.refresh_windows();
 }
 

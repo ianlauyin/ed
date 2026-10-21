@@ -458,9 +458,6 @@ fn theme_settings() -> Box<ThemeSettingsContent> {
         git_commit_buffer_font_size: Some(FontSize(12.0)),
         mermaid_font_family: None,
         theme: Some(ThemeSelection::Static(ThemeName("Nord".into()))),
-        icon_theme: Some(IconThemeSelection::Static(IconThemeName(
-            "Zed (Default)".into(),
-        ))),
         unnecessary_code_fade: Some(CodeFade(0.3)),
         ..Default::default()
     })

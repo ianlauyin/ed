@@ -1,15 +1,16 @@
-use std::sync::Arc;
+mod icons;
+
 use std::{path::Path, str};
 
 use gpui::{App, SharedString};
 use settings_content::FolderIndicator;
-use theme::{GlobalTheme, IconTheme, ThemeRegistry};
 use util::paths::PathExt;
 
+use crate::icons::ICONS;
+
+/// File and folder icons for panels and pickers, from the built-in set in `icons.rs`.
 #[derive(Debug)]
-pub struct FileIcons {
-    icon_theme: Arc<IconTheme>,
-}
+pub struct FileIcons;
 
 /// What a panel draws ahead of a directory's name, in render order.
 #[derive(Debug, Default, Clone, PartialEq, Eq)]
@@ -19,21 +20,13 @@ pub struct FolderIndicators {
 }
 
 impl FileIcons {
-    pub fn get(cx: &App) -> Self {
-        Self {
-            icon_theme: GlobalTheme::icon_theme(cx).clone(),
-        }
-    }
-
     pub fn get_icon(path: &Path, cx: &App) -> Option<SharedString> {
-        let this = Self::get(cx);
-
         let get_icon_from_suffix = |suffix: &str| -> Option<SharedString> {
-            this.icon_theme
+            ICONS
                 .file_stems
                 .get(suffix)
-                .or_else(|| this.icon_theme.file_suffixes.get(suffix))
-                .and_then(|typ| this.get_icon_for_type(typ, cx))
+                .or_else(|| ICONS.file_suffixes.get(suffix))
+                .and_then(|typ| Self::get_icon_for_type(typ, cx))
         };
         // TODO: Associate a type with the languages and have the file's language
         //       override these associations
@@ -91,90 +84,25 @@ impl FileIcons {
                 return maybe_path;
             }
         }
-        this.get_icon_for_type("default", cx)
+        Self::get_icon_for_type("default", cx)
     }
 
-    fn default_icon_theme(cx: &App) -> Option<Arc<IconTheme>> {
-        let theme_registry = ThemeRegistry::global(cx);
-        theme_registry.default_icon_theme().ok()
+    pub fn get_icon_for_type(typ: &str, _cx: &App) -> Option<SharedString> {
+        ICONS.file_icons.get(typ).cloned()
     }
 
-    pub fn get_icon_for_type(&self, typ: &str, cx: &App) -> Option<SharedString> {
-        fn get_icon_for_type(icon_theme: &Arc<IconTheme>, typ: &str) -> Option<SharedString> {
-            icon_theme
-                .file_icons
-                .get(typ)
-                .map(|icon_definition| icon_definition.path.clone())
-        }
-
-        get_icon_for_type(GlobalTheme::icon_theme(cx), typ).or_else(|| {
-            Self::default_icon_theme(cx).and_then(|icon_theme| get_icon_for_type(&icon_theme, typ))
-        })
+    pub fn get_folder_icon(expanded: bool, path: &Path, _cx: &App) -> Option<SharedString> {
+        let named = path
+            .file_name()
+            .and_then(|name| name.to_str())
+            .map(str::trim)
+            .filter(|name| !name.is_empty())
+            .and_then(|name| ICONS.named_directories.get(name));
+        Some(named.unwrap_or(&ICONS.directory).get(expanded))
     }
 
-    pub fn get_folder_icon(expanded: bool, path: &Path, cx: &App) -> Option<SharedString> {
-        fn get_folder_icon(
-            icon_theme: &Arc<IconTheme>,
-            path: &Path,
-            expanded: bool,
-        ) -> Option<SharedString> {
-            let name = path.file_name()?.to_str()?.trim();
-            if name.is_empty() {
-                return None;
-            }
-
-            let directory_icons = icon_theme.named_directory_icons.get(name)?;
-
-            if expanded {
-                directory_icons.expanded.clone()
-            } else {
-                directory_icons.collapsed.clone()
-            }
-        }
-
-        get_folder_icon(GlobalTheme::icon_theme(cx), path, expanded)
-            .or_else(|| {
-                Self::default_icon_theme(cx)
-                    .and_then(|icon_theme| get_folder_icon(&icon_theme, path, expanded))
-            })
-            .or_else(|| {
-                // If we can't find a specific folder icon for the folder at the given path, fall back to the generic folder
-                // icon.
-                Self::get_generic_folder_icon(expanded, cx)
-            })
-    }
-
-    fn get_generic_folder_icon(expanded: bool, cx: &App) -> Option<SharedString> {
-        fn get_generic_folder_icon(
-            icon_theme: &Arc<IconTheme>,
-            expanded: bool,
-        ) -> Option<SharedString> {
-            if expanded {
-                icon_theme.directory_icons.expanded.clone()
-            } else {
-                icon_theme.directory_icons.collapsed.clone()
-            }
-        }
-
-        get_generic_folder_icon(GlobalTheme::icon_theme(cx), expanded).or_else(|| {
-            Self::default_icon_theme(cx)
-                .and_then(|icon_theme| get_generic_folder_icon(&icon_theme, expanded))
-        })
-    }
-
-    pub fn get_chevron_icon(expanded: bool, cx: &App) -> Option<SharedString> {
-        fn get_chevron_icon(icon_theme: &Arc<IconTheme>, expanded: bool) -> Option<SharedString> {
-            if expanded {
-                icon_theme.chevron_icons.expanded.clone()
-            } else {
-                icon_theme.chevron_icons.collapsed.clone()
-            }
-        }
-
-        get_chevron_icon(GlobalTheme::icon_theme(cx), expanded).or_else(|| {
-            Self::default_icon_theme(cx)
-                .and_then(|icon_theme| get_chevron_icon(&icon_theme, expanded))
-        })
+    pub fn get_chevron_icon(expanded: bool, _cx: &App) -> Option<SharedString> {
+        Some(ICONS.chevron.get(expanded))
     }
 
     /// Resolves what a panel should draw ahead of a directory's name. Shared by every

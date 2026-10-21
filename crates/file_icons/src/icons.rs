@@ -1,68 +1,37 @@
-use std::sync::{Arc, LazyLock};
+use std::sync::LazyLock;
 
 use collections::HashMap;
 use gpui::SharedString;
 
-use crate::Appearance;
-
-/// A family of icon themes.
-pub struct IconThemeFamily {
-    /// The unique ID for the icon theme family.
-    pub id: String,
-    /// The name of the icon theme family.
-    pub name: SharedString,
-    /// The author of the icon theme family.
-    pub author: SharedString,
-    /// The list of icon themes in the family.
-    pub themes: Vec<IconTheme>,
-}
-
-/// An icon theme.
-#[derive(Debug, PartialEq)]
-pub struct IconTheme {
-    /// The unique ID for the icon theme.
-    pub id: String,
-    /// The name of the icon theme.
-    pub name: SharedString,
-    /// The appearance of the icon theme (e.g., light or dark).
-    pub appearance: Appearance,
-    /// The icons used for directories.
-    pub directory_icons: DirectoryIcons,
-    /// The icons used for named directories.
-    pub named_directory_icons: HashMap<String, DirectoryIcons>,
-    /// The icons used for chevrons.
-    pub chevron_icons: ChevronIcons,
-    /// The mapping of file stems to their associated icon keys.
+/// The built-in file icon set. To change icons, replace the SVGs under
+/// `assets/icons/file_icons/` or edit the tables below.
+pub(crate) struct Icons {
+    pub directory: FolderIcons,
+    pub named_directories: HashMap<String, FolderIcons>,
+    pub chevron: FolderIcons,
+    /// File stem → icon key.
     pub file_stems: HashMap<String, String>,
-    /// The mapping of file suffixes to their associated icon keys.
+    /// File suffix → icon key.
     pub file_suffixes: HashMap<String, String>,
-    /// The mapping of icon keys to icon definitions.
-    pub file_icons: HashMap<String, IconDefinition>,
+    /// Icon key → icon path.
+    pub file_icons: HashMap<String, SharedString>,
 }
 
-/// The icons used for directories.
-#[derive(Debug, PartialEq, Clone)]
-pub struct DirectoryIcons {
-    /// The path to the icon to use for a collapsed directory.
-    pub collapsed: Option<SharedString>,
-    /// The path to the icon to use for an expanded directory.
-    pub expanded: Option<SharedString>,
+/// Collapsed / expanded icon pair.
+#[derive(Clone)]
+pub(crate) struct FolderIcons {
+    pub collapsed: SharedString,
+    pub expanded: SharedString,
 }
 
-/// The icons used for chevrons.
-#[derive(Debug, PartialEq)]
-pub struct ChevronIcons {
-    /// The path to the icon to use for a collapsed chevron.
-    pub collapsed: Option<SharedString>,
-    /// The path to the icon to use for an expanded chevron.
-    pub expanded: Option<SharedString>,
-}
-
-/// An icon definition.
-#[derive(Debug, PartialEq)]
-pub struct IconDefinition {
-    /// The path to the icon file.
-    pub path: SharedString,
+impl FolderIcons {
+    pub fn get(&self, expanded: bool) -> SharedString {
+        if expanded {
+            self.expanded.clone()
+        } else {
+            self.collapsed.clone()
+        }
+    }
 }
 
 const FILE_STEMS_BY_ICON_KEY: &[(&str, &[&str])] = &[
@@ -418,37 +387,20 @@ fn icon_keys_by_association(
     icon_keys_by_association
 }
 
-/// The name of the default icon theme.
-pub const DEFAULT_ICON_THEME_NAME: &str = "Zed (Default)";
-
-static DEFAULT_ICON_THEME: LazyLock<Arc<IconTheme>> = LazyLock::new(|| {
-    Arc::new(IconTheme {
-        id: "zed".into(),
-        name: DEFAULT_ICON_THEME_NAME.into(),
-        appearance: Appearance::Dark,
-        directory_icons: DirectoryIcons {
-            collapsed: Some("icons/file_icons/folder.svg".into()),
-            expanded: Some("icons/file_icons/folder_open.svg".into()),
-        },
-        named_directory_icons: HashMap::default(),
-        chevron_icons: ChevronIcons {
-            collapsed: Some("icons/file_icons/chevron_right.svg".into()),
-            expanded: Some("icons/file_icons/chevron_down.svg".into()),
-        },
-        file_stems: icon_keys_by_association(FILE_STEMS_BY_ICON_KEY),
-        file_suffixes: icon_keys_by_association(FILE_SUFFIXES_BY_ICON_KEY),
-        file_icons: HashMap::from_iter(FILE_ICONS.iter().map(|(ty, path)| {
-            (
-                ty.to_string(),
-                IconDefinition {
-                    path: (*path).into(),
-                },
-            )
-        })),
-    })
+pub(crate) static ICONS: LazyLock<Icons> = LazyLock::new(|| Icons {
+    directory: FolderIcons {
+        collapsed: "icons/file_icons/folder.svg".into(),
+        expanded: "icons/file_icons/folder_open.svg".into(),
+    },
+    named_directories: HashMap::default(),
+    chevron: FolderIcons {
+        collapsed: "icons/file_icons/chevron_right.svg".into(),
+        expanded: "icons/file_icons/chevron_down.svg".into(),
+    },
+    file_stems: icon_keys_by_association(FILE_STEMS_BY_ICON_KEY),
+    file_suffixes: icon_keys_by_association(FILE_SUFFIXES_BY_ICON_KEY),
+    file_icons: FILE_ICONS
+        .iter()
+        .map(|(ty, path)| (ty.to_string(), (*path).into()))
+        .collect(),
 });
-
-/// Returns the default icon theme.
-pub fn default_icon_theme() -> Arc<IconTheme> {
-    DEFAULT_ICON_THEME.clone()
-}
