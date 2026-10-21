@@ -1197,7 +1197,7 @@ impl Buffer {
             reload_with_encoding_txns: HashMap::default(),
         };
         this.resolved_settings = this.compute_resolved_settings(cx);
-        this.refresh_fallback_highlighter();
+        this.refresh_fallback_highlighter(cx);
         this
     }
 
@@ -1337,7 +1337,7 @@ impl Buffer {
             if let Some(language_registry) = self.language_registry() {
                 branch.set_language_registry(language_registry);
             }
-            branch.refresh_fallback_highlighter();
+            branch.refresh_fallback_highlighter(cx);
 
             // Reparse the branch buffer so that we get syntax highlighting immediately.
             branch.reparse(cx, true);
@@ -1540,7 +1540,7 @@ impl Buffer {
         self.syntax_map.lock().clear(&self.text);
         Self::invalidate_tree_sitter_data(&mut self.tree_sitter_data, self.text.snapshot());
         let old_language = std::mem::replace(&mut self.language, language);
-        self.refresh_fallback_highlighter();
+        self.refresh_fallback_highlighter(cx);
         self.refresh_resolved_settings(cx);
         self.was_changed();
         self.reparse(cx, may_block);
@@ -1556,17 +1556,19 @@ impl Buffer {
             return;
         }
         self.fallback_syntax_override = name;
-        self.refresh_fallback_highlighter();
+        self.refresh_fallback_highlighter(cx);
         self.was_changed();
         self.non_text_state_update_count += 1;
         cx.notify();
     }
 
-    fn refresh_fallback_highlighter(&mut self) {
+    fn refresh_fallback_highlighter(&mut self, cx: &App) {
         let highlighter = if let Some(name) = self.fallback_syntax_override {
             FallbackHighlighter::for_syntax_name(name, &self.text)
         } else {
-            let file_name = self.file.as_ref().and_then(|file| file.path().file_name());
+            // `file_name` (not `path`) so a file opened as its own worktree root
+            // still has a name to detect the syntax from.
+            let file_name = self.file.as_ref().map(|file| file.file_name(cx));
             FallbackHighlighter::for_buffer(self.language.as_deref(), file_name, &self.text)
         };
         let unchanged = match (&self.fallback_highlighter, &highlighter) {
@@ -1800,7 +1802,7 @@ impl Buffer {
 
         self.file = Some(new_file);
         if file_changed {
-            self.refresh_fallback_highlighter();
+            self.refresh_fallback_highlighter(cx);
             self.refresh_resolved_settings(cx);
             self.was_changed();
             self.non_text_state_update_count += 1;
