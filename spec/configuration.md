@@ -49,8 +49,10 @@ migrator, or Vim/Helix mode.
 - Personal bindings are applied last: global `cmd-[`/`cmd-]` navigate backward/
   forward, Editor `f1` opens documentation and `cmd-shift-u` toggles case, and
   Terminal `shift-enter` sends Escape followed by carriage return.
-- Remote projects receive the client's in-memory preferences; remote settings
-  files cannot override them.
+- Remote projects receive the client's in-memory preferences on connect and
+  after every runtime change, so server-side behaviour (formatting, language
+  servers, scanning, git) follows the client; remote settings files cannot
+  override them.
 - `zed://settings` URLs are not handled. Settings-file JSON schemas, completions,
   validation, and language-server configuration schema probing are removed.
   JSON language support remains for source files and action inputs.

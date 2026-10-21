@@ -74,7 +74,7 @@ use lsp_command::*;
 use lsp_store::{CompletionDocumentation, LspFormatTarget, OpenLspBufferHandle};
 pub use manifest_tree::ManifestProvidersStore;
 use parking_lot::Mutex;
-use project_settings::{ProjectSettings, SettingsObserver};
+use project_settings::ProjectSettings;
 
 use remote::{RemoteClient, RemoteConnectionOptions, same_remote_connection_identity};
 use rpc::{
@@ -83,7 +83,7 @@ use rpc::{
 };
 use search::{SearchInputKind, SearchQuery, SearchResult};
 use search_history::SearchHistory;
-use settings::{Settings, SettingsLocation};
+use settings::{Settings, SettingsLocation, SettingsStore};
 use snippet::Snippet;
 use std::{
     borrow::Cow,
@@ -193,7 +193,6 @@ pub struct Project {
     search_included_history: SearchHistory,
     search_excluded_history: SearchHistory,
     environment: Entity<ProjectEnvironment>,
-    settings_observer: Entity<SettingsObserver>,
     downloading_files: Arc<Mutex<HashMap<(WorktreeId, String), DownloadingFile>>>,
     last_worktree_paths: WorktreePaths,
 }
@@ -1079,8 +1078,6 @@ impl Project {
                 )
             });
 
-            let settings_observer = cx.new(|_| SettingsObserver::new_local());
-
             let lsp_store = cx.new(|cx| {
                 LspStore::new_local(
                     buffer_store.clone(),
@@ -1109,7 +1106,6 @@ impl Project {
 
                 task_store,
 
-                settings_observer,
                 fs,
                 remote_client: None,
 
@@ -1234,9 +1230,6 @@ impl Project {
                 )
             });
 
-            let settings_observer =
-                cx.new(|cx| SettingsObserver::new_remote(Some(remote_proto.clone()), cx));
-
             cx.subscribe(&remote, Self::on_remote_client_event).detach();
 
             let this = Self {
@@ -1249,6 +1242,7 @@ impl Project {
 
                 _subscriptions: vec![
                     cx.on_release(Self::release),
+                    Self::sync_settings_to_remote(remote_proto.clone(), cx),
                     cx.on_app_quit(|this, cx| {
                         let shutdown = this.remote_client.take().and_then(|client| {
                             client.update(cx, |client, cx| {
@@ -1271,7 +1265,6 @@ impl Project {
 
                 task_store,
 
-                settings_observer,
                 fs,
                 remote_client: Some(remote.clone()),
                 buffers_needing_diff: Default::default(),
@@ -1295,7 +1288,6 @@ impl Project {
             remote_proto.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &this.buffer_store);
             remote_proto.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &this.worktree_store);
             remote_proto.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &this.lsp_store);
-            remote_proto.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &this.settings_observer);
             remote_proto.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &this.git_store);
 
             remote_proto.add_entity_message_handler(Self::handle_create_buffer_for_peer);
@@ -1317,7 +1309,6 @@ impl Project {
             BufferStore::init(&remote_proto);
             WorktreeStore::init_remote(&remote_proto);
             LspStore::init(&remote_proto);
-            SettingsObserver::init(&remote_proto);
             TaskStore::init(Some(&remote_proto));
             GitStore::init(&remote_proto);
 
@@ -1330,6 +1321,28 @@ impl Project {
             Some(MAX_PROJECT_SEARCH_HISTORY_SIZE),
             search_history::QueryInsertionBehavior::AlwaysInsert,
         )
+    }
+
+    /// Sends the in-memory settings to the remote server now and whenever they change.
+    fn sync_settings_to_remote(
+        client: AnyProtoClient,
+        cx: &mut Context<Self>,
+    ) -> gpui::Subscription {
+        let mut last_settings = None;
+        let mut send_settings = move |cx: &App| {
+            let settings = cx.global::<SettingsStore>().settings();
+            if last_settings.as_ref() != Some(settings) {
+                client
+                    .send(proto::UpdateUserSettings {
+                        project_id: REMOTE_SERVER_PROJECT_ID,
+                        contents: serde_json::to_string(settings).unwrap(),
+                    })
+                    .log_err();
+                last_settings = Some(settings.clone());
+            }
+        };
+        send_settings(cx);
+        cx.observe_global::<SettingsStore>(move |_, cx| send_settings(cx))
     }
 
     fn release(&mut self, cx: &mut App) {

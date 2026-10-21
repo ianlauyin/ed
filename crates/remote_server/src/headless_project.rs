@@ -16,7 +16,6 @@ use project::{
     lsp_store::log_store::{
         self, GlobalLogStore, LanguageServerKind, LanguageServerLogKey, LogKind,
     },
-    project_settings::SettingsObserver,
     search::SearchQuery,
     task_store::TaskStore,
     trusted_worktrees::{PathTrust, RemoteHostLocation, TrustedWorktrees},
@@ -27,7 +26,7 @@ use rpc::{
     proto::{self, REMOTE_SERVER_PEER_ID, REMOTE_SERVER_PROJECT_ID},
 };
 
-use settings::{Settings as _, SettingsLocation};
+use settings::{Settings as _, SettingsLocation, SettingsStore, parse_json_with_comments};
 use std::{
     mem,
     num::NonZeroU64,
@@ -49,7 +48,6 @@ pub struct HeadlessProject {
     pub lsp_store: Entity<LspStore>,
     pub task_store: Entity<TaskStore>,
 
-    pub settings_observer: Entity<SettingsObserver>,
     pub next_entry_id: Arc<AtomicUsize>,
     pub languages: Arc<LanguageRegistry>,
     pub git_store: Entity<GitStore>,
@@ -141,7 +139,6 @@ impl HeadlessProject {
             task_store.shared(REMOTE_SERVER_PROJECT_ID, session.clone(), cx);
             task_store
         });
-        let settings_observer = cx.new(|_| SettingsObserver::new_local());
 
         let lsp_store = cx.new(|cx| {
             let mut lsp_store = LspStore::new_local(
@@ -172,7 +169,6 @@ impl HeadlessProject {
         session.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &cx.entity());
         session.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &lsp_store);
         session.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &task_store);
-        session.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &settings_observer);
         session.subscribe_to_entity(REMOTE_SERVER_PROJECT_ID, &git_store);
 
         session.add_request_handler(cx.weak_entity(), Self::handle_list_remote_directory);
@@ -189,6 +185,7 @@ impl HeadlessProject {
         session.add_entity_request_handler(Self::handle_get_directory_environment);
         session.add_entity_request_handler(Self::handle_get_terminal_shell);
         session.add_entity_message_handler(Self::handle_toggle_lsp_logs);
+        session.add_entity_message_handler(Self::handle_update_user_settings);
         session.add_entity_request_handler(Self::handle_open_image_by_path);
         session.add_entity_request_handler(Self::handle_trust_worktrees);
         session.add_entity_request_handler(Self::handle_restrict_worktrees);
@@ -200,7 +197,6 @@ impl HeadlessProject {
 
         BufferStore::init(&session);
         WorktreeStore::init(&session);
-        SettingsObserver::init(&session);
         LspStore::init(&session);
         TaskStore::init(Some(&session));
         GitStore::init(&session);
@@ -261,7 +257,6 @@ impl HeadlessProject {
         HeadlessProject {
             next_entry_id: Default::default(),
             session,
-            settings_observer,
             fs,
             worktree_store,
             buffer_store,
@@ -784,6 +779,17 @@ impl HeadlessProject {
 
         Ok(proto::OpenBufferResponse {
             buffer_id: buffer_id.to_proto(),
+        })
+    }
+
+    async fn handle_update_user_settings(
+        _: Entity<Self>,
+        envelope: TypedEnvelope<proto::UpdateUserSettings>,
+        cx: AsyncApp,
+    ) -> Result<()> {
+        cx.update_global(|settings_store: &mut SettingsStore, cx| {
+            settings_store.set_settings(parse_json_with_comments(&envelope.payload.contents)?, cx);
+            anyhow::Ok(())
         })
     }
 

@@ -1,20 +1,12 @@
 use collections::HashMap;
 use git::repository::DEFAULT_WORKTREE_DIRECTORY;
-use gpui::{AsyncApp, Context, Entity, Subscription};
 use lsp::{DEFAULT_LSP_REQUEST_TIMEOUT_SECS, LanguageServerName};
-use rpc::{
-    AnyProtoClient, TypedEnvelope,
-    proto::{self, REMOTE_SERVER_PROJECT_ID},
-};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 pub use settings::BinarySettings;
 pub use settings::LspSettings;
-use settings::{
-    RegisterSetting, SemanticTokenRules, Settings, SettingsStore, parse_json_with_comments,
-};
+use settings::{RegisterSetting, SemanticTokenRules, Settings};
 use std::time::Duration;
-use util::ResultExt;
 
 #[derive(Debug, Clone, RegisterSetting)]
 pub struct ProjectSettings {
@@ -546,60 +538,5 @@ impl Settings for ProjectSettings {
                 trust_all_worktrees: content.session.unwrap().trust_all_worktrees.unwrap(),
             },
         }
-    }
-}
-
-/// Forwards user settings to the remote server. Project-local settings files
-/// are not loaded.
-pub struct SettingsObserver {
-    _settings_watcher: Option<Subscription>,
-}
-
-impl SettingsObserver {
-    pub fn init(client: &AnyProtoClient) {
-        client.add_entity_message_handler(Self::handle_update_user_settings);
-    }
-
-    pub fn new_local() -> Self {
-        Self {
-            _settings_watcher: None,
-        }
-    }
-
-    pub fn new_remote(upstream_client: Option<AnyProtoClient>, cx: &mut Context<Self>) -> Self {
-        let settings_watcher = upstream_client.map(|upstream_client| {
-            let mut last_settings = None;
-            let mut send_settings = move |cx: &gpui::App| {
-                if let Some(store) = cx.try_global::<SettingsStore>()
-                    && last_settings.as_ref() != Some(store.settings())
-                {
-                    upstream_client
-                        .send(proto::UpdateUserSettings {
-                            project_id: REMOTE_SERVER_PROJECT_ID,
-                            contents: serde_json::to_string(store.settings()).unwrap(),
-                        })
-                        .log_err();
-                    last_settings = Some(store.settings().clone());
-                }
-            };
-            send_settings(cx);
-            cx.observe_global::<SettingsStore>(move |_, cx| send_settings(cx))
-        });
-
-        Self {
-            _settings_watcher: settings_watcher,
-        }
-    }
-
-    async fn handle_update_user_settings(
-        _: Entity<Self>,
-        envelope: TypedEnvelope<proto::UpdateUserSettings>,
-        cx: AsyncApp,
-    ) -> anyhow::Result<()> {
-        cx.update_global(|settings_store: &mut SettingsStore, cx| {
-            settings_store.set_settings(parse_json_with_comments(&envelope.payload.contents)?, cx);
-            anyhow::Ok(())
-        })?;
-        Ok(())
     }
 }
