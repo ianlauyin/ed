@@ -1,4 +1,3 @@
-- add codebook spell checker
 - rethink highlight / search matched result / selection visual design
 - review markdown, reimpl?
   * mermaid: https://github.com/obsidianmd/pele?
