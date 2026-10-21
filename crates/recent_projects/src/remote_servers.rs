@@ -1,34 +1,28 @@
-use crate::{
-    remote_connections::{
-        Connection, RemoteConnectionModal, RemoteConnectionPrompt, RemoteSettings, SshConnection,
-        SshConnectionHeader, connect, determine_paths_with_positions, open_remote_project,
-    },
-    ssh_config::parse_ssh_config_hosts,
+use crate::remote_connections::{
+    Connection, RemoteConnectionModal, RemoteConnectionPrompt, RemoteSettings, SshConnection,
+    SshConnectionHeader, connect, determine_paths_with_positions, open_remote_project,
 };
 mod filter;
 
 use editor::Editor;
 use filter::{FilterData, FilteredServer};
-use futures::{FutureExt, StreamExt as _, channel::oneshot, future::Shared};
+use futures::{FutureExt, channel::oneshot, future::Shared};
 use gpui::{
     Action, AnyElement, App, ClipboardItem, Context, DismissEvent, Entity, EventEmitter,
     FocusHandle, Focusable, PromptLevel, Subscription, Task, TaskExt, WeakEntity, Window,
 };
-use log::{debug, info};
+use log::info;
 use open_path_prompt::OpenPathDelegate;
-use paths::{global_ssh_config_file, user_ssh_config_file};
 use picker::{Picker, PickerDelegate, PickerEditorPosition};
-use project::{Fs, Project};
+use project::Project;
 use remote::{
     RemoteClient, RemoteConnectionOptions, SshConnectionOptions,
     remote_client::ConnectionIdentifier,
 };
 use settings::{
     RemoteProject, RemoteSettingsContent, Settings as _, SettingsStore, update_settings_file,
-    watch_config_file,
 };
 use std::{
-    borrow::Cow,
     collections::BTreeSet,
     path::PathBuf,
     sync::{Arc, atomic::AtomicBool},
@@ -54,8 +48,6 @@ pub struct RemoteServerProjects {
     default_picker: Entity<Picker<RemoteServerPickerDelegate>>,
     workspace: WeakEntity<Workspace>,
     retained_connections: Vec<Entity<RemoteClient>>,
-    ssh_config_updates: Task<()>,
-    ssh_config_servers: BTreeSet<SharedString>,
     create_new_window: bool,
     _subscriptions: Vec<Subscription>,
     allow_dismissal: bool,
@@ -163,16 +155,9 @@ impl ProjectPicker {
                     let Ok(Some(paths)) = rx.await else {
                         workspace
                             .update_in(cx, |workspace, window, cx| {
-                                let fs = workspace.project().read(cx).fs().clone();
                                 let weak = cx.entity().downgrade();
                                 workspace.toggle_modal(window, cx, |window, cx| {
-                                    RemoteServerProjects::new(
-                                        create_new_window,
-                                        fs,
-                                        window,
-                                        weak,
-                                        cx,
-                                    )
+                                    RemoteServerProjects::new(create_new_window, window, weak, cx)
                                 });
                             })
                             .log_err()?;
@@ -335,9 +320,6 @@ enum RemoteEntry {
         connection: Connection,
         index: ServerIndex,
     },
-    SshConfig {
-        host: SharedString,
-    },
 }
 
 impl RemoteEntry {
@@ -346,7 +328,6 @@ impl RemoteEntry {
             Self::Project { connection, .. } => match connection {
                 Connection::Ssh(c) => c.nickname.as_deref().unwrap_or(&c.host),
             },
-            Self::SshConfig { host, .. } => host,
         }
     }
 
@@ -364,16 +345,9 @@ impl RemoteEntry {
         }
     }
 
-    fn connection(&self) -> Cow<'_, Connection> {
+    fn connection(&self) -> &Connection {
         match self {
-            Self::Project { connection, .. } => Cow::Borrowed(connection),
-            Self::SshConfig { host, .. } => Cow::Owned(
-                SshConnection {
-                    host: host.to_string(),
-                    ..SshConnection::default()
-                }
-                .into(),
-            ),
+            Self::Project { connection, .. } => connection,
         }
     }
 }
@@ -388,11 +362,8 @@ struct DefaultState {
 }
 
 impl DefaultState {
-    fn new(ssh_config_servers: &BTreeSet<SharedString>, cx: &mut App) -> Self {
-        let ssh_settings = RemoteSettings::get_global(cx);
-        let read_ssh_config = ssh_settings.read_ssh_config;
-
-        let ssh_servers = ssh_settings
+    fn new(cx: &mut App) -> Self {
+        let ssh_servers = RemoteSettings::get_global(cx)
             .ssh_connections()
             .enumerate()
             .map(|(index, connection)| {
@@ -410,25 +381,7 @@ impl DefaultState {
                 }
             });
 
-        let mut servers = ssh_servers.collect::<Vec<RemoteEntry>>();
-
-        if read_ssh_config {
-            let mut extra_servers_from_config = ssh_config_servers.clone();
-            for server in &servers {
-                if let RemoteEntry::Project {
-                    connection: Connection::Ssh(ssh_options),
-                    ..
-                } = server
-                {
-                    extra_servers_from_config.remove(&SharedString::new(ssh_options.host.clone()));
-                }
-            }
-            servers.extend(
-                extra_servers_from_config
-                    .into_iter()
-                    .map(|host| RemoteEntry::SshConfig { host }),
-            );
-        }
+        let servers = ssh_servers.collect::<Vec<RemoteEntry>>();
 
         let filter_data = Arc::new(FilterData::build(&servers));
         Self {
@@ -476,7 +429,7 @@ impl Mode {
     /// The default mode is backed by [`RemoteServerProjects::default_picker`],
     /// which is rebuilt from settings independently, so this just selects the
     /// variant and ignores its arguments.
-    fn default_mode(_ssh_config_servers: &BTreeSet<SharedString>, _cx: &mut App) -> Self {
+    fn default_mode() -> Self {
         Self::Default
     }
 }
@@ -519,14 +472,10 @@ struct RemoteServerPickerDelegate {
 }
 
 impl RemoteServerPickerDelegate {
-    fn new(
-        remote_server_projects: WeakEntity<RemoteServerProjects>,
-        ssh_config_servers: &BTreeSet<SharedString>,
-        cx: &mut App,
-    ) -> Self {
+    fn new(remote_server_projects: WeakEntity<RemoteServerProjects>, cx: &mut App) -> Self {
         let mut this = Self {
             remote_server_projects,
-            state: DefaultState::new(ssh_config_servers, cx),
+            state: DefaultState::new(cx),
             matches: Vec::new(),
             selected_index: 0,
             query: String::new(),
@@ -535,8 +484,8 @@ impl RemoteServerPickerDelegate {
         this
     }
 
-    fn reload(&mut self, ssh_config_servers: &BTreeSet<SharedString>, cx: &mut App) {
-        self.state = DefaultState::new(ssh_config_servers, cx);
+    fn reload(&mut self, cx: &mut App) {
+        self.state = DefaultState::new(cx);
         // Settings/ssh-config changes are rare, so re-applying the active query
         // synchronously here is fine; the per-keystroke path filters off-thread.
         self.state.filter_sync(self.query.trim());
@@ -581,11 +530,6 @@ impl RemoteServerPickerDelegate {
                         server: server_index,
                     });
                 }
-                RemoteEntry::SshConfig { .. } => {
-                    matches.push(RemoteMatch::OpenFolder {
-                        server: server_index,
-                    });
-                }
             }
         };
 
@@ -596,7 +540,6 @@ impl RemoteServerPickerDelegate {
                         RemoteEntry::Project { projects, .. } => {
                             (0..projects.len()).map(|p| (p, Vec::new())).collect()
                         }
-                        RemoteEntry::SshConfig { .. } => Vec::new(),
                     };
                     push_server(
                         &mut matches,
@@ -643,7 +586,7 @@ impl RemoteServerPickerDelegate {
         host_positions: &[usize],
     ) -> Option<AnyElement> {
         let server = self.state.servers.get(server_index)?;
-        let connection = server.connection().into_owned();
+        let connection = server.connection().clone();
         let (main_label, aux_label) = match &connection {
             Connection::Ssh(connection) => {
                 if let Some(nickname) = connection.nickname.clone() {
@@ -833,21 +776,6 @@ impl PickerDelegate for RemoteServerPickerDelegate {
                             })
                             .ok();
                     }
-                    RemoteEntry::SshConfig { host, .. } => {
-                        let host = host.clone();
-                        let connection = server_entry.connection().into_owned();
-                        remote_server_projects
-                            .update(cx, |this, cx| {
-                                let new_ix = this.create_host_from_ssh_config(&host, cx);
-                                this.create_remote_project(
-                                    new_ix.into(),
-                                    connection.into(),
-                                    window,
-                                    cx,
-                                );
-                            })
-                            .ok();
-                    }
                 }
             }
             RemoteMatch::ViewServerOptions { server } => {
@@ -904,10 +832,7 @@ impl PickerDelegate for RemoteServerPickerDelegate {
                 let server_entry = self.state.servers.get(*server)?;
                 let RemoteEntry::Project {
                     projects, index, ..
-                } = server_entry
-                else {
-                    return None;
-                };
+                } = server_entry;
                 let project_entry = projects.get(*project)?;
                 let server_ix = *index;
                 let remote_project = project_entry.project.clone();
@@ -1005,15 +930,13 @@ impl PickerDelegate for RemoteServerPickerDelegate {
 impl RemoteServerProjects {
     pub fn new(
         create_new_window: bool,
-        fs: Arc<dyn Fs>,
         window: &mut Window,
         workspace: WeakEntity<Workspace>,
         cx: &mut Context<Self>,
     ) -> Self {
         Self::new_inner(
-            Mode::default_mode(&BTreeSet::new(), cx),
+            Mode::default_mode(),
             create_new_window,
-            fs,
             window,
             workspace,
             cx,
@@ -1021,7 +944,6 @@ impl RemoteServerProjects {
     }
 
     pub fn popover(
-        fs: Arc<dyn Fs>,
         workspace: WeakEntity<Workspace>,
         create_new_window: Option<bool>,
         window: &mut Window,
@@ -1030,7 +952,7 @@ impl RemoteServerProjects {
         let create_new_window =
             create_new_window.unwrap_or_else(|| crate::default_open_in_new_window(cx));
         cx.new(|cx| {
-            let server = Self::new(create_new_window, fs, window, workspace, cx);
+            let server = Self::new(create_new_window, window, workspace, cx);
             server.focus_handle(cx).focus(window, cx);
             server
         })
@@ -1039,7 +961,6 @@ impl RemoteServerProjects {
     fn new_inner(
         mode: Mode,
         create_new_window: bool,
-        fs: Arc<dyn Fs>,
         window: &mut Window,
         workspace: WeakEntity<Workspace>,
         cx: &mut Context<Self>,
@@ -1050,30 +971,11 @@ impl RemoteServerProjects {
         // entity can't be read here; start with conservative defaults and refresh
         // the real flags via `defer_in` once construction completes.
         let default_picker = cx.new(|cx| {
-            let delegate =
-                RemoteServerPickerDelegate::new(remote_server_projects, &BTreeSet::new(), cx);
+            let delegate = RemoteServerPickerDelegate::new(remote_server_projects, cx);
             Picker::list(delegate, window, cx).embedded()
         });
-        let mut read_ssh_config = RemoteSettings::get_global(cx).read_ssh_config;
-        let ssh_config_updates = if read_ssh_config {
-            spawn_ssh_config_watch(fs.clone(), window, cx)
-        } else {
-            Task::ready(())
-        };
-
         let settings_subscription =
-            cx.observe_global_in::<SettingsStore>(window, move |recent_projects, window, cx| {
-                let new_read_ssh_config = RemoteSettings::get_global(cx).read_ssh_config;
-                if read_ssh_config != new_read_ssh_config {
-                    read_ssh_config = new_read_ssh_config;
-                    if read_ssh_config {
-                        recent_projects.ssh_config_updates =
-                            spawn_ssh_config_watch(fs.clone(), window, cx);
-                    } else {
-                        recent_projects.ssh_config_servers.clear();
-                        recent_projects.ssh_config_updates = Task::ready(());
-                    }
-                }
+            cx.observe_global_in::<SettingsStore>(window, |recent_projects, window, cx| {
                 recent_projects.refresh_default_picker(window, cx);
             });
 
@@ -1091,8 +993,6 @@ impl RemoteServerProjects {
             default_picker,
             workspace,
             retained_connections: Vec::new(),
-            ssh_config_updates,
-            ssh_config_servers: BTreeSet::new(),
             create_new_window,
             _subscriptions: vec![settings_subscription, dismiss_subscription],
             allow_dismissal: true,
@@ -1109,8 +1009,7 @@ impl RemoteServerProjects {
         cx: &mut Context<Self>,
         workspace: WeakEntity<Workspace>,
     ) -> Self {
-        let fs = project.read(cx).fs().clone();
-        let mut this = Self::new(create_new_window, fs, window, workspace.clone(), cx);
+        let mut this = Self::new(create_new_window, window, workspace.clone(), cx);
         this.mode = Mode::ProjectPicker(ProjectPicker::new(
             create_new_window,
             index,
@@ -1176,7 +1075,7 @@ impl RemoteServerProjects {
 
                         this.retained_connections.push(client);
                         this.add_ssh_server(connection_options, cx);
-                        this.mode = Mode::default_mode(&this.ssh_config_servers, cx);
+                        this.mode = Mode::default_mode();
                         this.focus_handle(cx).focus(window, cx);
                         cx.notify()
                     })
@@ -1274,9 +1173,8 @@ impl RemoteServerProjects {
                     let Some(Some(session)) = session else {
                         return workspace.update_in(cx, |workspace, window, cx| {
                             let weak = cx.entity().downgrade();
-                            let fs = workspace.project().read(cx).fs().clone();
                             workspace.toggle_modal(window, cx, |window, cx| {
-                                RemoteServerProjects::new(create_new_window, fs, window, weak, cx)
+                                RemoteServerProjects::new(create_new_window, window, weak, cx)
                             });
                         });
                     };
@@ -1351,7 +1249,7 @@ impl RemoteServerProjects {
                         connection.nickname = text;
                     }
                 });
-                self.mode = Mode::default_mode(&self.ssh_config_servers, cx);
+                self.mode = Mode::default_mode();
                 self.focus_handle.focus(window, cx);
             }
         }
@@ -1374,7 +1272,7 @@ impl RemoteServerProjects {
             }
             _ => {
                 self.allow_dismissal = true;
-                self.mode = Mode::default_mode(&self.ssh_config_servers, cx);
+                self.mode = Mode::default_mode();
                 self.focus_handle(cx).focus(window, cx);
                 cx.notify();
             }
@@ -1384,9 +1282,8 @@ impl RemoteServerProjects {
     /// Rebuilds the default picker's data from the latest settings/ssh-config
     /// and re-applies the current filter query.
     fn refresh_default_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let ssh_config_servers = self.ssh_config_servers.clone();
         self.default_picker.update(cx, |picker, cx| {
-            picker.delegate.reload(&ssh_config_servers, cx);
+            picker.delegate.reload(cx);
             picker.refresh(window, cx);
         });
     }
@@ -1644,7 +1541,7 @@ impl RemoteServerProjects {
                                 .id("ssh-options-copy-server-address")
                                 .track_focus(&last_entry.focus_handle)
                                 .on_action(cx.listener(|this, _: &menu::Confirm, window, cx| {
-                                    this.mode = Mode::default_mode(&this.ssh_config_servers, cx);
+                                    this.mode = Mode::default_mode();
                                     cx.focus_self(window);
                                     cx.notify();
                                 }))
@@ -1660,8 +1557,7 @@ impl RemoteServerProjects {
                                         )
                                         .child(Label::new("Go Back"))
                                         .on_click(cx.listener(|this, _, window, cx| {
-                                            this.mode =
-                                                Mode::default_mode(&this.ssh_config_servers, cx);
+                                            this.mode = Mode::default_mode();
                                             cx.focus_self(window);
                                             cx.notify()
                                         })),
@@ -1796,7 +1692,7 @@ impl RemoteServerProjects {
                                 this.delete_ssh_server(index, cx);
                             });
                             remote_servers.update(cx, |this, cx| {
-                                this.mode = Mode::default_mode(&this.ssh_config_servers, cx);
+                                this.mode = Mode::default_mode();
                                 cx.notify();
                             });
                         }
@@ -1887,94 +1783,6 @@ impl RemoteServerProjects {
             .child(self.default_picker.clone())
             .into_any_element()
     }
-
-    fn create_host_from_ssh_config(
-        &mut self,
-        ssh_config_host: &SharedString,
-        cx: &mut Context<'_, Self>,
-    ) -> SshServerIndex {
-        let new_ix = RemoteSettings::get_global(cx).ssh_connections().count();
-
-        self.add_ssh_server(
-            SshConnectionOptions {
-                host: ssh_config_host.to_string().into(),
-                ..SshConnectionOptions::default()
-            },
-            cx,
-        );
-        self.mode = Mode::default_mode(&self.ssh_config_servers, cx);
-        SshServerIndex(new_ix)
-    }
-}
-
-fn spawn_ssh_config_watch(
-    fs: Arc<dyn Fs>,
-    window: &mut Window,
-    cx: &Context<RemoteServerProjects>,
-) -> Task<()> {
-    enum ConfigSource {
-        User(String),
-        Global(String),
-    }
-
-    let mut streams = Vec::new();
-    let mut tasks = Vec::new();
-
-    // Setup User Watcher
-    let user_path = user_ssh_config_file();
-    info!("SSH: Watching User Config at: {:?}", user_path);
-
-    // We clone 'fs' here because we might need it again for the global watcher.
-    let (user_s, user_t) = watch_config_file(cx.background_executor(), fs.clone(), user_path);
-    streams.push(user_s.map(ConfigSource::User).boxed());
-    tasks.push(user_t);
-
-    // Setup Global Watcher
-    if let Some(gp) = global_ssh_config_file() {
-        info!("SSH: Watching Global Config at: {:?}", gp);
-        let (global_s, global_t) =
-            watch_config_file(cx.background_executor(), fs, gp.to_path_buf());
-        streams.push(global_s.map(ConfigSource::Global).boxed());
-        tasks.push(global_t);
-    } else {
-        debug!("SSH: No Global Config defined.");
-    }
-
-    // Combine into a single stream so that only one is parsed at once.
-    let mut merged_stream = futures::stream::select_all(streams);
-
-    cx.spawn_in(window, async move |remote_server_projects, cx| {
-        let _tasks = tasks; // Keeps the background watchers alive
-        let mut global_hosts = BTreeSet::default();
-        let mut user_hosts = BTreeSet::default();
-
-        while let Some(event) = merged_stream.next().await {
-            match event {
-                ConfigSource::Global(content) => {
-                    global_hosts = parse_ssh_config_hosts(&content);
-                }
-                ConfigSource::User(content) => {
-                    user_hosts = parse_ssh_config_hosts(&content);
-                }
-            }
-
-            // Sync to Model
-            if remote_server_projects
-                .update_in(cx, |project, window, cx| {
-                    project.ssh_config_servers = global_hosts
-                        .iter()
-                        .chain(user_hosts.iter())
-                        .map(SharedString::from)
-                        .collect();
-                    project.refresh_default_picker(window, cx);
-                    cx.notify();
-                })
-                .is_err()
-            {
-                return;
-            }
-        }
-    })
 }
 
 fn get_text(element: &Entity<Editor>, cx: &mut App) -> String {

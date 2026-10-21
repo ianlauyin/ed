@@ -763,7 +763,6 @@ pub enum ImageFileSizeUnit {
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
 pub struct RemoteSettingsContent {
     pub ssh_connections: Option<Vec<SshConnection>>,
-    pub read_ssh_config: Option<bool>,
 }
 
 #[with_fallible_options]

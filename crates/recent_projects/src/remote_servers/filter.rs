@@ -92,7 +92,7 @@ impl FilterData {
                         candidates.push(StringMatchCandidate::new(candidates.len(), combined));
                     }
                 }
-                RemoteEntry::Project { .. } | RemoteEntry::SshConfig { .. } => {
+                RemoteEntry::Project { .. } => {
                     meta.push(CandidateMeta {
                         server_index,
                         project_index: None,

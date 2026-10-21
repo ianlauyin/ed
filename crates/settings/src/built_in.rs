@@ -11,7 +11,6 @@ pub fn settings() -> SettingsContent {
         editor: editor_settings(),
         remote: RemoteSettingsContent {
             ssh_connections: Some(vec![]),
-            read_ssh_config: Some(true),
         },
         command_palette: Some(CommandPaletteSettingsContent {
             use_command_history: Some(true),

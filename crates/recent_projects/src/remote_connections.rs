@@ -26,8 +26,6 @@ pub use remote_connection::{
 #[derive(RegisterSetting)]
 pub struct RemoteSettings {
     pub ssh_connections: ExtendingVec<SshConnection>,
-    /// Whether to read ~/.ssh/config for ssh connection sources.
-    pub read_ssh_config: bool,
 }
 
 impl RemoteSettings {
@@ -90,7 +88,6 @@ impl Settings for RemoteSettings {
         let remote = &content.remote;
         Self {
             ssh_connections: remote.ssh_connections.clone().unwrap_or_default().into(),
-            read_ssh_config: remote.read_ssh_config.unwrap(),
         }
     }
 }

@@ -15,7 +15,6 @@ doctest = false
 anyhow.workspace = true
 collections.workspace = true
 fs.workspace = true
-futures.workspace = true
 gpui.workspace = true
 inventory.workspace = true
 schemars.workspace = true

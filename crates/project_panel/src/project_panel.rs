@@ -939,7 +939,7 @@ impl ProjectPanel {
                             .open_path_preview(
                                 ProjectPath {
                                     worktree_id,
-                                    path: file_path.clone(),
+                                    path: file_path,
                                 },
                                 None,
                                 focus_opened_item,

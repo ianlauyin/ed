@@ -1,6 +1,6 @@
 //! Paths to locations used by ed.
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::sync::OnceLock;
 
 use util::paths::SanitizedPath;
@@ -132,14 +132,6 @@ pub fn old_log_file() -> &'static PathBuf {
 pub fn database_dir() -> &'static PathBuf {
     static DATABASE_DIR: OnceLock<PathBuf> = OnceLock::new();
     DATABASE_DIR.get_or_init(|| data_dir().join("db"))
-}
-
-pub fn user_ssh_config_file() -> PathBuf {
-    home_dir().join(".ssh/config")
-}
-
-pub fn global_ssh_config_file() -> Option<&'static Path> {
-    Some(Path::new("/etc/ssh/ssh_config"))
 }
 
 pub fn global_gitignore_path() -> Option<PathBuf> {

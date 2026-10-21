@@ -380,10 +380,8 @@ impl TitleBar {
         Some(
             PopoverMenu::new("remote-project-menu")
                 .menu(move |window, cx| {
-                    let workspace_entity = workspace.upgrade()?;
-                    let fs = workspace_entity.read(cx).project().read(cx).fs().clone();
+                    workspace.upgrade()?;
                     Some(recent_projects::RemoteServerProjects::popover(
-                        fs,
                         workspace.clone(),
                         None,
                         window,

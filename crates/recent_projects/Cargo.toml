@@ -25,7 +25,6 @@ gpui.workspace = true
 log.workspace = true
 menu.workspace = true
 open_path_prompt.workspace = true
-paths.workspace = true
 picker.workspace = true
 project.workspace = true
 remote.workspace = true

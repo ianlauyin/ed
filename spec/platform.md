@@ -40,6 +40,8 @@ remote detection, command execution, and proxy startup are removed.
 - The askpass crate, password dialogs, credential forwarding over RPC, and
   askpass helper modes are removed. Remote connection progress and cancellation
   remain available.
+- The remote servers modal lists only hosts added manually in the editor; ssh
+  config `Host` entries are never read or suggested.
 - No accessibility support: GPUI has no AccessKit integration, never registers
   with the macOS accessibility API, and builds no accessibility tree. There are
   no role/aria element APIs, no accessibility dev actions, and no

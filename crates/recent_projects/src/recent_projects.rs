@@ -2,7 +2,6 @@ pub mod disconnected_overlay;
 mod remote_connections;
 mod remote_servers;
 pub mod sidebar_recent_projects;
-mod ssh_config;
 
 use std::{
     path::{Path, PathBuf},
@@ -355,9 +354,8 @@ pub fn init(cx: &mut App) {
                 return;
             }
             let handle = cx.entity().downgrade();
-            let fs = workspace.project().read(cx).fs().clone();
             workspace.toggle_modal(window, cx, |window, cx| {
-                RemoteServerProjects::new(create_new_window, fs, window, handle, cx)
+                RemoteServerProjects::new(create_new_window, window, handle, cx)
             })
         });
     });
