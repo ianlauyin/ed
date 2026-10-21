@@ -46,6 +46,7 @@ mod split;
 pub mod split_editor_view;
 
 mod signature_help;
+mod spell_check;
 
 mod clipboard;
 mod code_actions;
@@ -1109,6 +1110,7 @@ pub struct Editor {
     sticky_headers_task: Task<()>,
     sticky_headers: Option<Vec<OutlineItem<Anchor>>>,
     pub(crate) colorize_brackets_task: Task<()>,
+    spell_check: Option<spell_check::SpellCheckState>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -2036,6 +2038,12 @@ impl Editor {
         if let Some(project) = project.clone() {
             code_action_providers.push(Rc::new(project) as Rc<_>);
         }
+        let spell_check = spell_check::SpellCheckState::for_mode(&mode);
+        if let Some(spell_check) = &spell_check {
+            code_action_providers.push(Rc::new(
+                spell_check.code_actions(cx.entity().downgrade(), project.is_some()),
+            ) as Rc<_>);
+        }
 
         let mut editor = Self {
             focus_handle,
@@ -2254,6 +2262,7 @@ impl Editor {
             sticky_headers_task: Task::ready(()),
             sticky_headers: None,
             colorize_brackets_task: Task::ready(()),
+            spell_check,
         };
 
         if let Some(project) = editor.project.clone() {
@@ -8512,6 +8521,7 @@ impl Editor {
                 self.refresh_matching_bracket_highlights(&snapshot, cx);
                 self.refresh_outline_symbols_at_cursor(cx);
                 self.refresh_sticky_headers(&snapshot, cx);
+                self.refresh_spell_check(cx);
 
                 if let Some(buffer) = edited_buffer {
                     if buffer.read(cx).file().is_none() {
@@ -8558,6 +8568,7 @@ impl Editor {
                 self.bracket_fetched_tree_sitter_chunks
                     .retain(|range, _| range.start.buffer_id != buffer_id);
                 self.colorize_brackets(false, cx);
+                self.refresh_spell_check(cx);
                 self.refresh_selected_text_highlights(&self.display_snapshot(cx), true, window, cx);
                 self.semantic_token_state.invalidate_buffer(&buffer_id);
                 cx.emit(EditorEvent::BufferRangesUpdated {
@@ -8609,6 +8620,7 @@ impl Editor {
                 self.refresh_runnables(Some(*buffer_id), window, cx);
                 self.refresh_selected_text_highlights(&self.display_snapshot(cx), true, window, cx);
                 self.colorize_brackets(true, cx);
+                self.refresh_spell_check(cx);
                 jsx_tag_auto_close::refresh_enabled_in_any_buffer(self, multibuffer, cx);
 
                 cx.emit(EditorEvent::Reparsed(*buffer_id));
@@ -8633,6 +8645,7 @@ impl Editor {
                     self.refresh_document_highlights(cx);
                 }
                 jsx_tag_auto_close::refresh_enabled_in_any_buffer(self, multibuffer, cx);
+                self.refresh_spell_check(cx);
                 cx.emit(EditorEvent::Reparsed(*buffer_id));
 
                 cx.notify();
@@ -8886,6 +8899,7 @@ impl Editor {
             self.accent_data = new_accents;
             self.colorize_brackets(true, cx);
         }
+        self.refresh_spell_check(cx);
 
         self.invalidate_semantic_tokens(None);
         self.refresh_semantic_tokens(None, false, cx);
@@ -9908,6 +9922,7 @@ impl Editor {
     fn do_update_data_on_scroll(&mut self, window: &mut Window, cx: &mut Context<'_, Self>) {
         self.register_visible_buffers(cx);
         self.colorize_brackets(false, cx);
+        self.refresh_spell_check(cx);
         self.refresh_inlay_hints(InlayHintRefreshReason::NewLinesShown, cx);
         self.resolve_visible_code_lenses(cx);
 

@@ -5159,6 +5159,43 @@ impl BufferSnapshot {
         })
     }
 
+    /// Returns the `@spell` and `@nospell` capture ranges of the spell check
+    /// queries of every syntax layer intersecting `range`. Captured nodes may
+    /// extend beyond `range`.
+    pub fn spell_check_ranges<T: ToOffset>(
+        &self,
+        range: Range<T>,
+    ) -> (Vec<Range<usize>>, Vec<Range<usize>>) {
+        let offset_range = range.start.to_offset(self)..range.end.to_offset(self);
+        let mut syntax_matches = self.syntax.matches(offset_range, self, |grammar| {
+            grammar
+                .spell_check_config
+                .as_ref()
+                .map(|config| &config.query)
+        });
+        let configs = syntax_matches
+            .grammars()
+            .iter()
+            .map(|grammar| grammar.spell_check_config.as_ref())
+            .collect::<Vec<_>>();
+
+        let mut spell = Vec::new();
+        let mut nospell = Vec::new();
+        while let Some(mat) = syntax_matches.peek() {
+            if let Some(config) = configs[mat.grammar_index] {
+                for capture in mat.captures {
+                    if Some(capture.index) == config.spell_capture_ix {
+                        spell.push(capture.node.byte_range());
+                    } else if Some(capture.index) == config.nospell_capture_ix {
+                        nospell.push(capture.node.byte_range());
+                    }
+                }
+            }
+            syntax_matches.advance();
+        }
+        (spell, nospell)
+    }
+
     pub fn injections_intersecting_range<T: ToOffset>(
         &self,
         range: Range<T>,

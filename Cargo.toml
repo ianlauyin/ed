@@ -79,6 +79,7 @@ members = [
     "crates/settings_content",
     "crates/settings_macros",
     "crates/snippet",
+    "crates/spell_check",
     "crates/sqlez",
     "crates/sqlez_macros",
     "crates/streaming_diff",
@@ -193,6 +194,7 @@ settings = { path = "crates/settings" }
 settings_content = { path = "crates/settings_content" }
 settings_macros = { path = "crates/settings_macros" }
 snippet = { path = "crates/snippet" }
+spell_check = { path = "crates/spell_check" }
 sqlez = { path = "crates/sqlez" }
 sqlez_macros = { path = "crates/sqlez_macros" }
 sum_tree = { path = "crates/sum_tree" }
@@ -407,6 +409,7 @@ shlex = "2.0"
 slotmap = "1.0.6"
 smallvec = { version = "1.6", features = ["union", "const_new"] }
 smol = "2.0"
+spellbook = "0.4"
 stacksafe = "1.0"
 streaming-iterator = "0.1"
 strsim = "0.11"

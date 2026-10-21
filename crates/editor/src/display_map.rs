@@ -184,6 +184,7 @@ pub enum HighlightKey {
     Rename,
     SearchWithinRange,
     SelectedTextHighlight,
+    SpellCheck,
     SyntaxTreeView(usize),
     VimExchange,
 }

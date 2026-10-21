@@ -9,8 +9,8 @@ pub mod language_config;
 pub use grammar::{
     BracketsConfig, BracketsPatternConfig, Grammar, GrammarId, HighlightsConfig, IndentConfig,
     InjectionConfig, InjectionPatternConfig, NEXT_GRAMMAR_ID, OutlineConfig, OverrideConfig,
-    OverrideEntry, ParseableLanguage, RedactionConfig, RunnableCapture, RunnableConfig, TextObject,
-    TextObjectConfig,
+    OverrideEntry, ParseableLanguage, RedactionConfig, RunnableCapture, RunnableConfig,
+    SpellCheckConfig, TextObject, TextObjectConfig,
 };
 pub use highlight_map::{CaptureId, HighlightId, HighlightMap};
 pub use language_config::{

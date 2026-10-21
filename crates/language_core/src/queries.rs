@@ -25,6 +25,8 @@ pub enum QueryFile {
     Runnables,
     #[strum(serialize = "textobjects.scm")]
     TextObjects,
+    #[strum(serialize = "spellcheck.scm")]
+    SpellCheck,
 }
 
 impl QueryFile {
@@ -45,6 +47,7 @@ bitflags::bitflags! {
         const REDACTIONS = 1 << 6;
         const RUNNABLES = 1 << 7;
         const TEXT_OBJECTS = 1 << 9;
+        const SPELL_CHECK = 1 << 10;
     }
 }
 
@@ -66,6 +69,7 @@ impl From<QueryFile> for QueryFiles {
             QueryFile::Redactions => Self::REDACTIONS,
             QueryFile::Runnables => Self::RUNNABLES,
             QueryFile::TextObjects => Self::TEXT_OBJECTS,
+            QueryFile::SpellCheck => Self::SPELL_CHECK,
         }
     }
 }
@@ -123,6 +127,7 @@ pub struct LanguageQueries {
     pub redactions: Option<Cow<'static, str>>,
     pub runnables: Option<Cow<'static, str>>,
     pub text_objects: Option<Cow<'static, str>>,
+    pub spell_check: Option<Cow<'static, str>>,
 }
 
 impl LanguageQueries {
@@ -143,6 +148,7 @@ impl LanguageQueries {
                 QueryFile::Redactions => &mut queries.redactions,
                 QueryFile::Runnables => &mut queries.runnables,
                 QueryFile::TextObjects => &mut queries.text_objects,
+                QueryFile::SpellCheck => &mut queries.spell_check,
             };
             *field = Some(contents);
         }
