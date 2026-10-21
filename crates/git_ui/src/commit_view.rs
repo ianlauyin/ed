@@ -1045,10 +1045,6 @@ impl language::File for GitBlob {
         unimplemented!()
     }
 
-    fn is_private(&self) -> bool {
-        false
-    }
-
     fn can_open(&self) -> bool {
         !self.is_binary
     }

@@ -372,7 +372,6 @@ struct IndexTextFile {
     path_style: PathStyle,
     file_name: String,
     worktree_id: WorktreeId,
-    is_private: bool,
 }
 
 impl IndexTextFile {
@@ -383,7 +382,6 @@ impl IndexTextFile {
             path_style: file.path_style(cx),
             file_name: file.file_name(cx).to_string(),
             worktree_id: file.worktree_id(cx),
-            is_private: file.is_private(),
         }
     }
 }
@@ -426,10 +424,6 @@ impl language::File for IndexTextFile {
             is_deleted: false,
             is_historic: true,
         }
-    }
-
-    fn is_private(&self) -> bool {
-        self.is_private
     }
 }
 

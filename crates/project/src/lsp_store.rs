@@ -135,7 +135,6 @@ use util::{
     ConnectionResult, ResultExt as _, debug_panic, defer, maybe, merge_json_value_into,
     paths::{PathStyle, SanitizedPath, UrlExt},
     post_inc,
-    redact::redact_command,
     rel_path::{RelPath, RelPathBuf},
     union_json_value_into,
 };
@@ -674,12 +673,9 @@ impl LocalLspStore {
                                 },
                             },
                         );
-                        log::error!(
-                            "Failed to start language server {server_name:?}: {}",
-                            redact_command(&format!("{err:?}"))
-                        );
+                        log::error!("Failed to start language server {server_name:?}: {err:?}");
                         if !log.is_empty() {
-                            log::error!("server stderr: {}", redact_command(&log));
+                            log::error!("server stderr: {log}");
                         }
                         None
                     }
@@ -11662,22 +11658,13 @@ impl LspStore {
             .await?;
 
         this.update(&mut cx, |this, cx| {
-            let is_private = buffer
-                .read(cx)
-                .file()
-                .map(|f| f.is_private())
-                .unwrap_or_default();
-            if is_private {
-                Err(anyhow!(rpc::ErrorCode::UnsharedItem))
-            } else {
-                this.buffer_store
-                    .update(cx, |buffer_store, cx| {
-                        buffer_store.create_buffer_for_peer(&buffer, peer_id, cx)
-                    })
-                    .detach_and_log_err(cx);
-                let buffer_id = buffer.read(cx).remote_id().to_proto();
-                Ok(proto::OpenBufferForSymbolResponse { buffer_id })
-            }
+            this.buffer_store
+                .update(cx, |buffer_store, cx| {
+                    buffer_store.create_buffer_for_peer(&buffer, peer_id, cx)
+                })
+                .detach_and_log_err(cx);
+            let buffer_id = buffer.read(cx).remote_id().to_proto();
+            Ok(proto::OpenBufferForSymbolResponse { buffer_id })
         })
     }
 

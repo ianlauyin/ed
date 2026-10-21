@@ -8,7 +8,7 @@ use serde::{Deserialize, Serialize};
 use settings_macros::{MergeFrom, with_fallible_options};
 use util::serde::default_true;
 
-use crate::{AllLanguageSettingsContent, DelayMs, ExtendingVec, SplicingVec};
+use crate::{AllLanguageSettingsContent, DelayMs, SplicingVec};
 
 #[with_fallible_options]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
@@ -155,10 +155,6 @@ pub struct WorktreeSettingsContent {
     ///
     /// Default: 5
     pub file_scan_depth: Option<u32>,
-
-    /// Treat the files matching these globs as `.env` files.
-    /// Default: ["**/.env*", "**/*.pem", "**/*.key", "**/*.cert", "**/*.crt", "**/secrets.yml"]
-    pub private_files: Option<ExtendingVec<String>>,
 
     /// Treat files and folders matching these glob patterns as hidden, including
     /// files inside matching folders. To hide these entries, run
