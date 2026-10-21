@@ -1994,41 +1994,17 @@ impl Editor {
 
             let git_store = project.read(cx).git_store().clone();
             let project = project.clone();
-            project_subscriptions.push(cx.subscribe(
-                &git_store,
-                move |this, git_store, event, cx| {
-                    let buffers = match event {
-                        GitStoreEvent::RepositoryAdded | GitStoreEvent::DiffBaseChanged(None) => {
-                            this.buffer.read(cx).all_buffers()
-                        }
-                        GitStoreEvent::DiffBaseChanged(Some(repo_id)) => this
-                            .buffer
-                            .read(cx)
-                            .all_buffers()
-                            .into_iter()
-                            .filter(|buffer| {
-                                git_store
-                                    .read(cx)
-                                    .repository_and_path_for_buffer_id(
-                                        buffer.read(cx).remote_id(),
-                                        cx,
-                                    )
-                                    .is_some_and(|(repo, _)| repo.read(cx).id == *repo_id)
-                            })
-                            .collect(),
-                        _ => return,
-                    };
-                    if buffers.is_empty() {
-                        return;
-                    }
-                    let task = this.update_uncommitted_diff_for_buffer(&project, buffers, cx);
-                    if matches!(event, GitStoreEvent::DiffBaseChanged(Some(_))) {
-                        task.detach();
-                    } else {
-                        this.load_diff_task = Some(task.shared());
-                    }
-                },
-            ));
+            project_subscriptions.push(cx.subscribe(&git_store, move |this, _, event, cx| {
+                if !matches!(event, GitStoreEvent::RepositoryAdded) {
+                    return;
+                }
+                let buffers = this.buffer.read(cx).all_buffers();
+                if buffers.is_empty() {
+                    return;
+                }
+                let task = this.update_uncommitted_diff_for_buffer(&project, buffers, cx);
+                this.load_diff_task = Some(task.shared());
+            }));
         }
 
         let buffer_snapshot = multi_buffer.read(cx).snapshot(cx);

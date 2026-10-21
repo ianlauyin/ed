@@ -288,7 +288,7 @@ impl TabMatch {
                 let git_status = project
                     .git_store()
                     .read(cx)
-                    .display_status_for_project_path(&path, cx)
+                    .status_for_project_path(&path, cx)
                     .map(|status| status.summary())
                     .unwrap_or_default();
                 Some(entry_git_aware_label_color(

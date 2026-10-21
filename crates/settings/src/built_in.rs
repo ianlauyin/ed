@@ -120,7 +120,6 @@ pub fn settings() -> SettingsContent {
                 show_full_file: Some(true),
             }),
             hunk_style: Some(GitHunkStyleSetting::StagedHollow),
-            diff_base: Some(GitDiffBaseSetting::Head),
             path_style: Some(GitPathStyle::FileNameFirst),
             show_stage_restore_buttons: Some(true),
             worktree_directory: Some("../worktrees".into()),

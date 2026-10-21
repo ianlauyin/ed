@@ -3152,7 +3152,7 @@ impl OutlinePanel {
                 outline_panel.fs_entries_update_pending = false;
                 let auto_fold_dirs = OutlinePanelSettings::get_global(cx).auto_fold_dirs;
                 let git_store = outline_panel.project.read(cx).git_store().clone();
-                let repo_snapshots = git_store.read(cx).display_repo_snapshots(cx);
+                let repo_snapshots = git_store.read(cx).repo_snapshots(cx);
                 let editor = active_editor.read(cx);
                 let snapshot = editor.buffer().read(cx).snapshot(cx);
                 let mut buffer_excerpts = IndexMap::<BufferId, BufferExcerpts>::default();
@@ -3165,9 +3165,7 @@ impl OutlinePanel {
                     buffer_excerpts
                         .entry(buffer_id)
                         .or_insert_with(|| {
-                            let status = git_store
-                                .read(cx)
-                                .display_status_for_buffer_id(buffer_id, cx);
+                            let status = git_store.read(cx).status_for_buffer_id(buffer_id, cx);
                             let file = File::from_dyn(buffer.file());
                             let is_deleted = file.is_some_and(|file| {
                                 is_deleted_file(

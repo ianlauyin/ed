@@ -49,10 +49,12 @@ migrator, or Vim/Helix mode.
 - Personal bindings are applied last: global `cmd-[`/`cmd-]` navigate backward/
   forward, Editor `f1` opens documentation and `cmd-shift-u` toggles case, and
   Terminal `shift-enter` sends Escape followed by carriage return.
-- Remote projects receive the client's in-memory preferences on connect and
-  after every runtime change, so server-side behaviour (formatting, language
-  servers, scanning, git) follows the client; remote settings files cannot
-  override them.
+- Settings are not synced to remote servers. Client and remote server are built
+  from the same code and both start from the built-in settings; runtime setting
+  changes only affect client-side UI (docks, font sizes, theme, panel
+  sorting/filters), so no server-side behaviour can diverge. Remote settings
+  files are not loaded. Any new runtime toggle for a server-side setting
+  (formatting, language servers, scanning, git) would need sync reintroduced.
 - `zed://settings` URLs are not handled. Settings-file JSON schemas, completions,
   validation, and language-server configuration schema probing are removed.
   JSON language support remains for source files and action inputs.

@@ -32,9 +32,8 @@ use git::{
     status::FileStatus,
 };
 use git::{
-    RestoreTrackedFiles, StageAll, StashAll, StashApply, StashPop, StashStaged,
-    StashTracked, ToggleCommitEditor, ToggleFillCommitEditor, TrashUntrackedFiles, UnstageAll,
-    ViewFile,
+    RestoreTrackedFiles, StageAll, StashAll, StashApply, StashPop, StashStaged, StashTracked,
+    ToggleCommitEditor, ToggleFillCommitEditor, TrashUntrackedFiles, UnstageAll, ViewFile,
 };
 use gpui::{
     AbsoluteLength, Action, Anchor, AnyElement, AsyncWindowContext, ClickEvent, ClipboardItem,
@@ -1363,9 +1362,7 @@ impl GitPanel {
                             .ok();
                     }
                     GitStoreEvent::RepositoryUpdated(_, _, _) => {}
-                    GitStoreEvent::JobsUpdated
-                    | GitStoreEvent::ConflictsUpdated
-                    | GitStoreEvent::DiffBaseChanged(_) => {}
+                    GitStoreEvent::JobsUpdated | GitStoreEvent::ConflictsUpdated => {}
                 },
             )
             .detach();
@@ -5945,37 +5942,34 @@ impl GitPanel {
             false
         };
 
-        let vertical_buttons = v_flex()
-            .h_full()
-            .p_1p5()
-            .child({
-                let (icon, label) = if self.commit_editor_expanded {
-                    (IconName::Minimize, "Collapse Commit Editor")
-                } else {
-                    (IconName::Maximize, "Expand Commit Editor")
-                };
-                let focus_handle = self.focus_handle.clone();
+        let vertical_buttons = v_flex().h_full().p_1p5().child({
+            let (icon, label) = if self.commit_editor_expanded {
+                (IconName::Minimize, "Collapse Commit Editor")
+            } else {
+                (IconName::Maximize, "Expand Commit Editor")
+            };
+            let focus_handle = self.focus_handle.clone();
 
-                IconButton::new("fill-commit-editor", icon)
-                    .icon_size(IconSize::Small)
-                    .icon_color(Color::Hidden)
-                    .hover_color(Color::Muted)
-                    .tooltip({
-                        move |_window, cx| {
-                            Tooltip::for_action_in(
-                                label,
-                                &git::ToggleFillCommitEditor,
-                                &focus_handle,
-                                cx,
-                            )
-                        }
-                    })
-                    .on_click(cx.listener({
-                        move |_, _, window, cx| {
-                            window.dispatch_action(git::ToggleFillCommitEditor.boxed_clone(), cx)
-                        }
-                    }))
-            });
+            IconButton::new("fill-commit-editor", icon)
+                .icon_size(IconSize::Small)
+                .icon_color(Color::Hidden)
+                .hover_color(Color::Muted)
+                .tooltip({
+                    move |_window, cx| {
+                        Tooltip::for_action_in(
+                            label,
+                            &git::ToggleFillCommitEditor,
+                            &focus_handle,
+                            cx,
+                        )
+                    }
+                })
+                .on_click(cx.listener({
+                    move |_, _, window, cx| {
+                        window.dispatch_action(git::ToggleFillCommitEditor.boxed_clone(), cx)
+                    }
+                }))
+        });
 
         let collapsed = self.commit_editor_collapsed;
         let toggle_commit_editor_button = {

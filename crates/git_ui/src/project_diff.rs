@@ -1,5 +1,4 @@
 use crate::{
-    branch_diff::BranchDiff,
     diff_multibuffer::DiffMultibuffer,
     git_panel::{GitPanel, GitPanelAddon, GitStatusEntry},
     staged_diff::StagedDiff,
@@ -27,7 +26,6 @@ use project::{
 };
 use schemars::JsonSchema;
 use serde::Deserialize;
-use settings::GitDiffBaseSetting;
 use std::any::{Any, TypeId};
 use std::sync::Arc;
 use ui::{DiffStat, Divider, Tooltip, prelude::*};
@@ -42,14 +40,8 @@ use zed_actions::git as git_actions;
 actions!(
     git,
     [
-        /// Shows the diff against the configured diff base: working changes
-        /// relative to HEAD, or all branch changes relative to the default
-        /// branch, following the `git.diff_base` setting.
-        Diff,
         /// Shows working changes relative to HEAD.
-        DiffHead,
-        /// Toggles the git diff base between HEAD and the default branch.
-        ToggleDiffBase,
+        Diff,
         /// Adds files to the git staging area.
         Add,
         LeaderAndFollower,
@@ -75,22 +67,6 @@ pub struct ProjectDiff {
 impl ProjectDiff {
     pub(crate) fn register(workspace: &mut Workspace, cx: &mut Context<Workspace>) {
         workspace.register_action(Self::deploy);
-        workspace.register_action(|workspace, _: &DiffHead, window, cx| {
-            Self::deploy_at(workspace, None, window, cx);
-        });
-        workspace.register_action(|workspace, _: &ToggleDiffBase, _window, cx| {
-            settings::update_settings_file(
-                workspace.app_state().fs.clone(),
-                cx,
-                move |settings, _| {
-                    let git = settings.git.get_or_insert_default();
-                    git.diff_base = Some(match git.diff_base.unwrap_or_default() {
-                        GitDiffBaseSetting::Head => GitDiffBaseSetting::DefaultBranch,
-                        GitDiffBaseSetting::DefaultBranch => GitDiffBaseSetting::Head,
-                    });
-                },
-            );
-        });
         workspace.register_action(
             |workspace, _: &git_actions::ViewUncommittedChanges, window, cx| {
                 Self::deploy_at(workspace, None, window, cx);
@@ -118,11 +94,6 @@ impl ProjectDiff {
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) {
-        let project = workspace.project().clone();
-        if project.read(cx).git_store().read(cx).diff_base() == GitDiffBaseSetting::DefaultBranch {
-            BranchDiff::deploy_branch_diff(workspace, window, cx);
-            return;
-        }
         Self::deploy_at(workspace, None, window, cx)
     }
 

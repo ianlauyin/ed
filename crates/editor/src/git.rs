@@ -1812,7 +1812,7 @@ impl Editor {
             git_store.update(cx, |git_store, cx| {
                 for buffer in buffers {
                     if project::File::from_dyn(buffer.read(cx).file()).is_some() {
-                        tasks.push(git_store.open_display_diff(buffer, cx));
+                        tasks.push(git_store.open_uncommitted_diff(buffer, cx));
                     }
                 }
             });

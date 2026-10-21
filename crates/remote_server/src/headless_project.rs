@@ -26,7 +26,7 @@ use rpc::{
     proto::{self, REMOTE_SERVER_PEER_ID, REMOTE_SERVER_PROJECT_ID},
 };
 
-use settings::{Settings as _, SettingsLocation, SettingsStore, parse_json_with_comments};
+use settings::{Settings as _, SettingsLocation};
 use std::{
     mem,
     num::NonZeroU64,
@@ -185,7 +185,6 @@ impl HeadlessProject {
         session.add_entity_request_handler(Self::handle_get_directory_environment);
         session.add_entity_request_handler(Self::handle_get_terminal_shell);
         session.add_entity_message_handler(Self::handle_toggle_lsp_logs);
-        session.add_entity_message_handler(Self::handle_update_user_settings);
         session.add_entity_request_handler(Self::handle_open_image_by_path);
         session.add_entity_request_handler(Self::handle_trust_worktrees);
         session.add_entity_request_handler(Self::handle_restrict_worktrees);
@@ -779,17 +778,6 @@ impl HeadlessProject {
 
         Ok(proto::OpenBufferResponse {
             buffer_id: buffer_id.to_proto(),
-        })
-    }
-
-    async fn handle_update_user_settings(
-        _: Entity<Self>,
-        envelope: TypedEnvelope<proto::UpdateUserSettings>,
-        cx: AsyncApp,
-    ) -> Result<()> {
-        cx.update_global(|settings_store: &mut SettingsStore, cx| {
-            settings_store.set_settings(parse_json_with_comments(&envelope.payload.contents)?, cx);
-            anyhow::Ok(())
         })
     }
 

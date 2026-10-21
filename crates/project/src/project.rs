@@ -83,7 +83,7 @@ use rpc::{
 };
 use search::{SearchInputKind, SearchQuery, SearchResult};
 use search_history::SearchHistory;
-use settings::{Settings, SettingsLocation, SettingsStore};
+use settings::{Settings, SettingsLocation};
 use snippet::Snippet;
 use std::{
     borrow::Cow,
@@ -1242,7 +1242,6 @@ impl Project {
 
                 _subscriptions: vec![
                     cx.on_release(Self::release),
-                    Self::sync_settings_to_remote(remote_proto.clone(), cx),
                     cx.on_app_quit(|this, cx| {
                         let shutdown = this.remote_client.take().and_then(|client| {
                             client.update(cx, |client, cx| {
@@ -1321,28 +1320,6 @@ impl Project {
             Some(MAX_PROJECT_SEARCH_HISTORY_SIZE),
             search_history::QueryInsertionBehavior::AlwaysInsert,
         )
-    }
-
-    /// Sends the in-memory settings to the remote server now and whenever they change.
-    fn sync_settings_to_remote(
-        client: AnyProtoClient,
-        cx: &mut Context<Self>,
-    ) -> gpui::Subscription {
-        let mut last_settings = None;
-        let mut send_settings = move |cx: &App| {
-            let settings = cx.global::<SettingsStore>().settings();
-            if last_settings.as_ref() != Some(settings) {
-                client
-                    .send(proto::UpdateUserSettings {
-                        project_id: REMOTE_SERVER_PROJECT_ID,
-                        contents: serde_json::to_string(settings).unwrap(),
-                    })
-                    .log_err();
-                last_settings = Some(settings.clone());
-            }
-        };
-        send_settings(cx);
-        cx.observe_global::<SettingsStore>(move |_, cx| send_settings(cx))
     }
 
     fn release(&mut self, cx: &mut App) {
