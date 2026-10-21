@@ -43,6 +43,21 @@ pub fn buffer_text_style(cx: &App) -> gpui::TextStyle {
     }
 }
 
+pub fn ui_text_style(cx: &App) -> gpui::TextStyle {
+    let settings = theme::theme_settings(cx);
+    let ui_font = settings.ui_font(cx);
+    gpui::TextStyle {
+        color: cx.theme().colors().text,
+        font_family: ui_font.family.clone(),
+        font_features: ui_font.features.clone(),
+        font_fallbacks: ui_font.fallbacks.clone(),
+        font_size: gpui::AbsoluteLength::from(crate::TextSize::Default.rems(cx)),
+        font_weight: ui_font.weight,
+        line_height: gpui::relative(1.),
+        ..gpui::TextStyle::default()
+    }
+}
+
 /// Returns the platform-appropriate label for the "reveal in file manager" action.
 pub fn reveal_in_file_manager_label(is_remote: bool) -> &'static str {
     if true && !is_remote {

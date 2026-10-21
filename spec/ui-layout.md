@@ -62,3 +62,6 @@ because it hurt readability; an opaque window is also cheaper to composite.
   side, keeping square content corners (editor background, scrollbars) inside
   the rounded edge. If the radius grows, the inset must grow so that
   inset >= radius × (1 − 1/√2).
+- Symbols in the outline panel and the editor's outline modal render in the UI
+  font at the project panel's label size, not the buffer font. Syntax highlight
+  colours are kept.

@@ -12,7 +12,7 @@ use gpui::{
 use language::{OffsetRangeExt, Outline, OutlineItem, OutlineSearchEntry};
 use picker::{MatchLocation, Picker, PickerDelegate, PreviewUpdate};
 use theme::ActiveTheme;
-use ui::{ListItem, ListItemSpacing, prelude::*, utils::buffer_text_style};
+use ui::{ListItem, ListItemSpacing, prelude::*, utils::ui_text_style};
 use workspace::{DismissDecision, ModalView};
 
 pub fn init(cx: &mut App) {
@@ -473,14 +473,14 @@ pub fn render_item<T, M: IntoIterator<Item = Range<usize>>>(
         .into_iter()
         .map(|range| (range, highlight_style));
 
-    let text_style = buffer_text_style(cx);
-    let buffer_font_size = text_style.font_size;
+    let text_style = ui_text_style(cx);
+    let ui_font_size = text_style.font_size;
     let highlights = gpui::combine_highlights(
         custom_highlights,
         outline_item.highlight_ranges.iter().cloned(),
     );
 
-    div().text_size(buffer_font_size).child(
+    div().text_size(ui_font_size).child(
         StyledText::new(outline_item.text.clone()).with_default_highlights(&text_style, highlights),
     )
 }
