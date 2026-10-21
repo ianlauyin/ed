@@ -4366,18 +4366,6 @@ impl Project {
         self.worktree_store.read(cx).path_style()
     }
 
-    pub fn contains_local_settings_file(
-        &self,
-        worktree_id: WorktreeId,
-        rel_path: &RelPath,
-        cx: &App,
-    ) -> bool {
-        self.worktree_for_id(worktree_id, cx)
-            .map_or(false, |worktree| {
-                worktree.read(cx).entry_for_path(rel_path).is_some()
-            })
-    }
-
     pub fn worktree_paths(&self, cx: &App) -> WorktreePaths {
         self.worktree_store.read(cx).paths(cx)
     }

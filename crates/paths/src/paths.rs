@@ -134,16 +134,6 @@ pub fn database_dir() -> &'static PathBuf {
     DATABASE_DIR.get_or_init(|| data_dir().join("db"))
 }
 
-/// Returns the relative path to a `.zed` folder within a project.
-pub fn local_settings_folder_name() -> &'static str {
-    ".zed"
-}
-
-/// Returns the relative path to a `.vscode` folder within a project.
-pub fn local_vscode_folder_name() -> &'static str {
-    ".vscode"
-}
-
 pub fn user_ssh_config_file() -> PathBuf {
     home_dir().join(".ssh/config")
 }
