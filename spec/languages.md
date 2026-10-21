@@ -15,6 +15,10 @@
 - TOML, SQL, Dockerfile, JSDoc, Regex and the hidden Zed Keybind Context
   languages are removed. Their files open as Plain Text and are still
   highlighted by the fallback below.
+- A buffer's language comes only from its file (name/extension, first
+  line, modeline) or a manual pick in the language selector. Untitled buffers
+  are never detected from their contents (no ML detection, no
+  `language_detection` setting) and stay Plain Text until saved or picked.
 - Fallback highlighting: any buffer whose language has no tree-sitter grammar
   (including plain text) is highlighted with the Sublime/TextMate syntaxes
   bundled by `two-face` (syntect, Oniguruma regex). The syntax is picked by

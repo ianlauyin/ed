@@ -733,7 +733,6 @@ impl SerializableItem for Editor {
             } => window.spawn(cx, {
                 let project = project.clone();
                 async move |cx| {
-                    let content_language_detection_enabled = language.is_none();
                     let language_registry =
                         project.read_with(cx, |project, _| project.languages().clone());
 
@@ -756,9 +755,6 @@ impl SerializableItem for Editor {
 
                     // Then set the text so that the dirty bit is set correctly
                     buffer.update(cx, |buffer, cx| {
-                        if content_language_detection_enabled {
-                            buffer.set_content_language_detection_enabled(true);
-                        }
                         buffer.set_language_registry(language_registry);
                         buffer.set_text(contents, cx);
                         if let Some(entry) = buffer.peek_undo_stack() {
@@ -848,18 +844,12 @@ impl SerializableItem for Editor {
             SerializedEditor {
                 abs_path: None,
                 contents: None,
-                language,
                 ..
             } => window.spawn(cx, async move |cx| {
                 let buffer = project
                     .update(cx, |project, cx| project.create_buffer(None, true, cx))
                     .await
                     .context("Failed to create buffer")?;
-                if language.is_none() {
-                    buffer.update(cx, |buffer, _| {
-                        buffer.set_content_language_detection_enabled(true);
-                    });
-                }
 
                 cx.update(|window, cx| {
                     cx.new(|cx| {
@@ -913,8 +903,6 @@ impl SerializableItem for Editor {
 
         let is_dirty = buffer.read(cx).is_dirty();
         let mtime = buffer.read(cx).saved_mtime();
-        let content_language_detection_enabled =
-            buffer.read(cx).content_language_detection_enabled();
 
         let snapshot = buffer.read(cx).snapshot();
 
@@ -922,13 +910,9 @@ impl SerializableItem for Editor {
         Some(cx.background_spawn(async move {
             let (contents, language) = if serialize_dirty_buffers && is_dirty {
                 let contents = snapshot.text();
-                let language = snapshot.language().and_then(|language| {
-                    if content_language_detection_enabled && *language == *PLAIN_TEXT {
-                        None
-                    } else {
-                        Some(language.name().to_string())
-                    }
-                });
+                let language = snapshot
+                    .language()
+                    .map(|language| language.name().to_string());
                 (Some(contents), language)
             } else {
                 (None, None)

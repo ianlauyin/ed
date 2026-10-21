@@ -5248,8 +5248,6 @@ impl LspStore {
                             let buffer = handle.read(cx);
                             if buffer.language().is_none()
                                 || buffer.language() == Some(&*language::PLAIN_TEXT)
-                                || (buffer.file().is_some()
-                                    && buffer.content_language_detection_enabled())
                             {
                                 buffers_to_detect.push(handle);
                             } else {
@@ -5389,9 +5387,6 @@ impl LspStore {
             if let Some(Ok(Ok(new_language))) =
                 self.languages.load_language(language_id).now_or_never()
             {
-                buffer_handle.update(cx, |buffer, _| {
-                    buffer.set_content_language_detection_enabled(false);
-                });
                 self.set_language_for_buffer(buffer_handle, new_language, cx);
             }
         } else {

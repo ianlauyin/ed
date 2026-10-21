@@ -376,7 +376,6 @@ fn editor_settings() -> EditorSettingsContent {
             search_on_type: Some(true),
         }),
         auto_signature_help: Some(false),
-        language_detection: Some(true),
         show_signature_help_after_edits: Some(false),
         minimum_contrast_for_highlights: Some(MinimumContrast(45.0)),
         go_to_definition_fallback: Some(GoToDefinitionFallback::FindAllReferences),
