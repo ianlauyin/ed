@@ -47,6 +47,10 @@
   The Markdown preview applies the same rule to its search matches and
   selection. Both use the shared `ui::utils::highlight_contrast` helpers, so
   anything else that paints text highlights should go through them too.
+- Line endings default to `enforce_lf`: every file is converted to LF on
+  format/save. There is no line-ending selector or status bar indicator; to
+  keep CRLF for specific files, set `line_ending` (e.g. `detect`) per language
+  or project.
 
 ## Markdown diagrams
 

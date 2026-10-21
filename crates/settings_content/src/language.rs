@@ -224,7 +224,7 @@ pub struct LanguageSettingsContent {
     /// - `enforce_lf`: Enforce LF during format and save.
     /// - `enforce_crlf`: Enforce CRLF during format and save.
     ///
-    /// Default: detect
+    /// Default: enforce_lf
     pub line_ending: Option<LineEndingSetting>,
     /// How to perform a buffer format.
     ///

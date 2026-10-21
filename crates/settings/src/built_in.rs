@@ -70,7 +70,6 @@ pub fn settings() -> SettingsContent {
             show_active_file: Some(false),
             active_language_button: Some(true),
             cursor_position_button: Some(true),
-            line_endings_button: Some(false),
             active_encoding_button: Some(EncodingDisplayOptions::NonUtf8),
             pending_keystrokes_indicator: Some(true),
         }),
@@ -532,7 +531,7 @@ fn language_settings() -> AllLanguageSettingsContent {
             format_on_save: Some(FormatOnSave::On),
             remove_trailing_whitespace_on_save: Some(true),
             ensure_final_newline_on_save: Some(true),
-            line_ending: Some(LineEndingSetting::Detect),
+            line_ending: Some(LineEndingSetting::EnforceLf),
             formatter: Some(FormatterList::Single(Formatter::Auto)),
             jsx_tag_auto_close: Some(JsxTagAutoCloseSettingsContent {
                 enabled: Some(true),

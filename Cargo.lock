@@ -3547,19 +3547,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "line_ending_selector"
-version = "0.1.0"
-dependencies = [
- "editor",
- "gpui",
- "language",
- "picker",
- "project",
- "ui",
- "workspace",
-]
-
-[[package]]
 name = "link-section"
 version = "0.19.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -9096,7 +9083,6 @@ dependencies = [
  "language_selector",
  "language_tools",
  "languages",
- "line_ending_selector",
  "log",
  "lsp_command_selector",
  "lsp_locations",
