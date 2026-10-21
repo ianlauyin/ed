@@ -128,13 +128,6 @@ pub struct EditorSettingsContent {
     ///
     /// Default: alt
     pub multi_cursor_modifier: Option<MultiCursorModifier>,
-    /// Hide the values of variables in `private` files, as defined by the
-    /// private_files setting. This only changes the visual representation,
-    /// the values are still present in the file and can be selected / copied / pasted
-    ///
-    /// Default: false
-    pub redact_private_values: Option<bool>,
-
     /// How many lines to expand the multibuffer excerpts by default
     ///
     /// Default: 3

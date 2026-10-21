@@ -189,8 +189,7 @@ use scroll::{Autoscroll, ScrollAnchor, ScrollManager, SharedScrollAnchor};
 use selections_collection::{MutableSelectionsCollection, SelectionsCollection};
 use serde::{Deserialize, Serialize};
 use settings::{
-    GitGutterSetting, RelativeLineNumbers, Settings, SettingsLocation, SettingsStore,
-    update_settings_file,
+    GitGutterSetting, RelativeLineNumbers, Settings, SettingsStore, update_settings_file,
 };
 use smallvec::{SmallVec, smallvec};
 use snippet::Snippet;
@@ -8337,37 +8336,6 @@ impl Editor {
             }
         }
         results
-    }
-
-    /// Get the text ranges corresponding to the redaction query
-    pub fn redacted_ranges(
-        &self,
-        search_range: Range<Anchor>,
-        display_snapshot: &DisplaySnapshot,
-        cx: &App,
-    ) -> Vec<Range<DisplayPoint>> {
-        display_snapshot
-            .buffer_snapshot()
-            .redacted_ranges(search_range, |file| {
-                if let Some(file) = file {
-                    file.is_private()
-                        && EditorSettings::get(
-                            Some(SettingsLocation {
-                                worktree_id: file.worktree_id(cx),
-                                path: file.path().as_ref(),
-                            }),
-                            cx,
-                        )
-                        .redact_private_values
-                } else {
-                    false
-                }
-            })
-            .map(|range| {
-                range.start.to_display_point(display_snapshot)
-                    ..range.end.to_display_point(display_snapshot)
-            })
-            .collect()
     }
 
     pub fn highlight_text_key(

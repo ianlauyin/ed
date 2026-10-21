@@ -59,7 +59,6 @@ pub struct Grammar {
     pub error_query: Option<Query>,
     pub highlights_config: Option<HighlightsConfig>,
     pub brackets_config: Option<BracketsConfig>,
-    pub redactions_config: Option<RedactionConfig>,
     pub spell_check_config: Option<SpellCheckConfig>,
     pub runnable_config: Option<RunnableConfig>,
     pub indents_config: Option<IndentConfig>,
@@ -140,11 +139,6 @@ pub struct InjectionConfig {
     pub language_capture_ix: Option<u32>,
     pub host_capture_ix: Option<u32>,
     pub patterns: Vec<InjectionPatternConfig>,
-}
-
-pub struct RedactionConfig {
-    pub query: Query,
-    pub redaction_capture_ix: u32,
 }
 
 /// `@spell` marks text to spell check; `@nospell` carves text out of it, even
@@ -289,7 +283,6 @@ impl Grammar {
             indents_config: None,
             injection_config: None,
             override_config: None,
-            redactions_config: None,
             spell_check_config: None,
             runnable_config: None,
             error_query,
@@ -368,11 +361,6 @@ impl Grammar {
                     &mut config.brackets,
                 )
                 .context("Error loading override query")?;
-        }
-        if let Some(query) = queries.redactions {
-            self = self
-                .with_redaction_query(query.as_ref(), name)
-                .context("Error loading redaction query")?;
         }
         if let Some(query) = queries.spell_check {
             self = self
@@ -739,28 +727,6 @@ impl Grammar {
             query,
             values: override_configs_by_id,
         });
-        Ok(self)
-    }
-
-    pub fn with_redaction_query(
-        mut self,
-        source: &str,
-        language_name: &LanguageName,
-    ) -> Result<Self> {
-        let query = Query::new(&self.parseable_language()?, source)?;
-        let mut redaction_capture_ix = 0;
-        if populate_capture_indices(
-            &query,
-            language_name,
-            "redactions",
-            &[],
-            &mut [Capture::Required("redact", &mut redaction_capture_ix)],
-        ) {
-            self.redactions_config = Some(RedactionConfig {
-                query,
-                redaction_capture_ix,
-            });
-        }
         Ok(self)
     }
 

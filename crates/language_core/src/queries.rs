@@ -19,8 +19,6 @@ pub enum QueryFile {
     Injections,
     #[strum(serialize = "overrides.scm")]
     Overrides,
-    #[strum(serialize = "redactions.scm")]
-    Redactions,
     #[strum(serialize = "runnables.scm")]
     Runnables,
     #[strum(serialize = "textobjects.scm")]
@@ -44,7 +42,6 @@ bitflags::bitflags! {
         const INDENTS = 1 << 3;
         const INJECTIONS = 1 << 4;
         const OVERRIDES = 1 << 5;
-        const REDACTIONS = 1 << 6;
         const RUNNABLES = 1 << 7;
         const TEXT_OBJECTS = 1 << 9;
         const SPELL_CHECK = 1 << 10;
@@ -66,7 +63,6 @@ impl From<QueryFile> for QueryFiles {
             QueryFile::Indents => Self::INDENTS,
             QueryFile::Injections => Self::INJECTIONS,
             QueryFile::Overrides => Self::OVERRIDES,
-            QueryFile::Redactions => Self::REDACTIONS,
             QueryFile::Runnables => Self::RUNNABLES,
             QueryFile::TextObjects => Self::TEXT_OBJECTS,
             QueryFile::SpellCheck => Self::SPELL_CHECK,
@@ -124,7 +120,6 @@ pub struct LanguageQueries {
     pub outline: Option<Cow<'static, str>>,
     pub injections: Option<Cow<'static, str>>,
     pub overrides: Option<Cow<'static, str>>,
-    pub redactions: Option<Cow<'static, str>>,
     pub runnables: Option<Cow<'static, str>>,
     pub text_objects: Option<Cow<'static, str>>,
     pub spell_check: Option<Cow<'static, str>>,
@@ -145,7 +140,6 @@ impl LanguageQueries {
                 QueryFile::Indents => &mut queries.indents,
                 QueryFile::Injections => &mut queries.injections,
                 QueryFile::Overrides => &mut queries.overrides,
-                QueryFile::Redactions => &mut queries.redactions,
                 QueryFile::Runnables => &mut queries.runnables,
                 QueryFile::TextObjects => &mut queries.text_objects,
                 QueryFile::SpellCheck => &mut queries.spell_check,

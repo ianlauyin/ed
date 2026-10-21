@@ -51,6 +51,9 @@
   format/save. There is no line-ending selector or status bar indicator; to
   keep CRLF for specific files, set `line_ending` (e.g. `detect`) per language
   or project.
+- Private values are never redacted: there is no `redact_private_values`
+  setting and no `redactions.scm` queries. `private_files` still marks files
+  private in the worktree but does not change how they are shown.
 
 ## Markdown diagrams
 

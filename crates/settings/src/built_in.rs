@@ -345,7 +345,6 @@ fn editor_settings() -> EditorSettingsContent {
         seed_search_query_from_cursor: Some(SeedQuerySetting::Always),
         use_smartcase_search: Some(false),
         multi_cursor_modifier: Some(MultiCursorModifier::Alt),
-        redact_private_values: Some(false),
         expand_excerpt_lines: Some(5),
         excerpt_context_lines: Some(5),
         middle_click_paste: Some(true),

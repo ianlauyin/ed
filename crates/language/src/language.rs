@@ -42,10 +42,10 @@ pub use language_core::{
     BracketsPatternConfig, CodeLabel, CodeLabelBuilder, DecreaseIndentConfig, Grammar, GrammarId,
     HighlightsConfig, IndentConfig, InjectionConfig, InjectionPatternConfig, JsxTagAutoCloseConfig,
     LanguageConfig, LanguageConfigOverride, LanguageId, LanguageMatcher, OrderedListConfig,
-    OutlineConfig, Override, OverrideConfig, OverrideEntry, RedactionConfig, RunnableCapture,
-    RunnableConfig, SoftWrap, Symbol, TaskListConfig, TextObject, TextObjectConfig,
-    WrapCharactersConfig, default_true, deserialize_regex, deserialize_regex_vec,
-    regex_json_schema, regex_vec_json_schema, serialize_regex,
+    OutlineConfig, Override, OverrideConfig, OverrideEntry, RunnableCapture, RunnableConfig,
+    SoftWrap, Symbol, TaskListConfig, TextObject, TextObjectConfig, WrapCharactersConfig,
+    default_true, deserialize_regex, deserialize_regex_vec, regex_json_schema,
+    regex_vec_json_schema, serialize_regex,
 };
 pub use language_registry::{
     LanguageLoader, LanguageName, LanguageServerStatusUpdate, LoadedLanguage, ServerHealth,
@@ -703,10 +703,6 @@ impl Language {
             self.grammar = Some(Arc::new(grammar));
         }
         Ok(self)
-    }
-
-    pub fn with_redaction_query(self, source: &str) -> Result<Self> {
-        self.with_grammar_query_and_name(|grammar, name| grammar.with_redaction_query(source, name))
     }
 
     fn with_grammar_query(
