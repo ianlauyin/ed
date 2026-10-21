@@ -12,7 +12,7 @@ const _: () = assert!(
      Update APP_NAME in crates/paths/src/paths.rs when renaming the binary.",
 );
 
-use anyhow::{Context as _, Result};
+use anyhow::Result;
 use clap::Parser;
 use cli::FORCE_CLI_MODE_ENV_VAR_NAME;
 use collections::HashMap;
@@ -20,13 +20,11 @@ use db::kvp::KeyValueStore;
 use editor::Editor;
 use fs::{Fs, RealFs};
 use futures::{FutureExt, StreamExt, channel::oneshot};
-use git_ui::clone::clone_and_open;
 use gpui::{App, AppContext, Application, AsyncApp, QuitMode, Task, TaskExt, UpdateGlobal as _};
 use gpui_platform;
 
 use gpui_tokio::Tokio;
 use language::LanguageRegistry;
-use project_panel::ProjectPanel;
 use remote::RemoteConnectionOptions;
 
 use assets::Assets;
@@ -434,14 +432,6 @@ fn main() {
             .ok()
             .and_then(|request| OpenRequest::parse(request, cx).log_err())
         {
-            Some(request) if request.is_focus_app_only() => cx.spawn({
-                let app_state = app_state.clone();
-                async move |cx| {
-                    if let Err(e) = restore_or_create_workspace(app_state, cx).await {
-                        fail_to_open_window_async(e, cx)
-                    }
-                }
-            }),
             Some(request) => {
                 handle_open_request(request, app_state.clone(), cx);
                 Task::ready(())
@@ -513,160 +503,8 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
                 cx.spawn(async move |cx| handle_cli_connection(connection, app_state, cx).await)
                     .detach();
             }
-            OpenRequestKind::FocusApp => {
-                cx.spawn(async move |cx| {
-                    if workspace::activate_any_workspace_window(cx).is_some() {
-                        return anyhow::Ok(());
-                    }
-                    restore_or_create_workspace(app_state, cx).await
-                })
-                .detach_and_log_err(cx);
-            }
             OpenRequestKind::DockMenuAction { index } => {
                 cx.perform_dock_menu_action(index);
-            }
-            OpenRequestKind::BuiltinJsonSchema { schema_path } => {
-                workspace::with_active_or_new_workspace(cx, |_workspace, window, cx| {
-                    cx.spawn_in(window, async move |workspace, cx| {
-                        let res = async move {
-                            let json = app_state.languages.language_for_name("JSONC").await.ok();
-                            let lsp_store = workspace.update(cx, |workspace, cx| {
-                                workspace
-                                    .project()
-                                    .update(cx, |project, _| project.lsp_store())
-                            })?;
-                            let uri = format!("zed://schemas/{}", schema_path);
-                            let json_schema_content =
-                                json_schema_store::handle_schema_request(lsp_store, uri, cx)
-                                    .await?;
-                            let json_schema_value: serde_json::Value =
-                                serde_json::from_str(&json_schema_content)
-                                    .context("Failed to parse JSON Schema")?;
-                            let json_schema_content =
-                                serde_json::to_string_pretty(&json_schema_value)
-                                    .context("Failed to serialize JSON Schema as JSON")?;
-                            let buffer_task = workspace.update(cx, |workspace, cx| {
-                                workspace.project().update(cx, |project, cx| {
-                                    project.create_buffer(json, false, cx)
-                                })
-                            })?;
-
-                            let buffer = buffer_task.await?;
-
-                            workspace.update_in(cx, |workspace, window, cx| {
-                                buffer.update(cx, |buffer, cx| {
-                                    buffer.edit([(0..0, json_schema_content)], None, cx);
-                                    buffer.edit(
-                                        [(0..0, format!("// {} JSON Schema\n", schema_path))],
-                                        None,
-                                        cx,
-                                    );
-                                });
-
-                                workspace.add_item_to_active_pane(
-                                    Box::new(cx.new(|cx| {
-                                        let mut editor =
-                                            editor::Editor::for_buffer(buffer, None, window, cx);
-                                        editor.set_read_only(true);
-                                        editor
-                                    })),
-                                    None,
-                                    true,
-                                    window,
-                                    cx,
-                                );
-                            })
-                        }
-                        .await;
-                        res.context("Failed to open builtin JSON Schema").log_err();
-                    })
-                    .detach();
-                });
-            }
-            OpenRequestKind::GitClone { repo_url } => {
-                workspace::with_active_or_new_workspace(cx, |_workspace, window, cx| {
-                    if window.is_window_active() {
-                        clone_and_open(
-                            repo_url,
-                            cx.weak_entity(),
-                            window,
-                            cx,
-                            Arc::new(|workspace: &mut workspace::Workspace, window, cx| {
-                                workspace.focus_panel::<ProjectPanel>(window, cx);
-                            }),
-                        );
-                        return;
-                    }
-
-                    let subscription = Rc::new(RefCell::new(None));
-                    subscription.replace(Some(cx.observe_in(&cx.entity(), window, {
-                        let subscription = subscription.clone();
-                        let repo_url = repo_url;
-                        move |_, workspace_entity, window, cx| {
-                            if window.is_window_active() && subscription.take().is_some() {
-                                clone_and_open(
-                                    repo_url.clone(),
-                                    workspace_entity.downgrade(),
-                                    window,
-                                    cx,
-                                    Arc::new(|workspace: &mut workspace::Workspace, window, cx| {
-                                        workspace.focus_panel::<ProjectPanel>(window, cx);
-                                    }),
-                                );
-                            }
-                        }
-                    })));
-                });
-            }
-            OpenRequestKind::GitCommit { sha } => {
-                let base_open_options = zed::open_options_for_request(
-                    request.open_behavior,
-                    &workspace::SerializedWorkspaceLocation::Local,
-                    cx,
-                );
-                cx.spawn(async move |cx| {
-                    let paths_with_position =
-                        derive_paths_with_position(app_state.fs.as_ref(), request.open_paths).await;
-                    let (workspace, _results) = open_paths_with_positions(
-                        &paths_with_position,
-                        &[],
-                        false,
-                        app_state,
-                        base_open_options,
-                        cx,
-                    )
-                    .await?;
-
-                    workspace
-                        .update(cx, |multi_workspace, window, cx| {
-                            multi_workspace
-                                .workspace()
-                                .clone()
-                                .update(cx, |workspace, cx| {
-                                    let Some(repo) =
-                                        workspace.project().read(cx).active_repository(cx)
-                                    else {
-                                        log::error!("no active repository found for commit view");
-                                        return Err(anyhow::anyhow!("no active repository found"));
-                                    };
-
-                                    git_ui::commit_view::CommitView::open(
-                                        sha,
-                                        repo.downgrade(),
-                                        workspace.weak_handle(),
-                                        None,
-                                        None,
-                                        window,
-                                        cx,
-                                    );
-                                    Ok(())
-                                })
-                        })
-                        .log_err();
-
-                    anyhow::Ok(())
-                })
-                .detach_and_log_err(cx);
             }
         }
 
@@ -687,7 +525,6 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
 
     let mut task = None;
     if !request.open_paths.is_empty() || !request.diff_paths.is_empty() {
-        let app_state = app_state.clone();
         let base_open_options = zed::open_options_for_request(
             request.open_behavior,
             &workspace::SerializedWorkspaceLocation::Local,
@@ -1011,7 +848,7 @@ struct Args {
     /// Use `path:line:row` syntax to open a file at a specific location.
     /// Non-existing paths and directories will ignore `:line:row` suffix.
     ///
-    /// URLs can either be `file://` or `zed://` scheme, or relative to <https://zed.dev>.
+    /// URLs can be `file://` or `ssh://` scheme.
     paths_or_urls: Vec<String>,
 
     /// Pairs of file paths to diff. Can be specified multiple times.
@@ -1040,8 +877,7 @@ fn parse_url_arg(arg: &str, _cx: &App) -> String {
         Ok(path) => format!("file://{}", path.display()),
         Err(_) => {
             if arg.starts_with("file://")
-                || arg.starts_with("zed://")
-                || arg.starts_with("zed-cli://")
+                || arg.starts_with("ed-cli://")
                 || arg.starts_with("ssh://")
             {
                 arg.into()

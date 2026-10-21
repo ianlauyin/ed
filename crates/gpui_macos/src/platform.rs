@@ -839,56 +839,6 @@ impl Platform for MacPlatform {
         }
     }
 
-    fn register_url_scheme(&self, scheme: &str) -> Task<anyhow::Result<()>> {
-        use objc2_foundation::{NSBundle, NSError, NSString};
-
-        // API only available post Monterey
-        // https://developer.apple.com/documentation/appkit/nsworkspace/3753004-setdefaultapplicationaturl
-        let (done_tx, done_rx) = oneshot::channel();
-        if Self::os_version() < Version::new(12, 0, 0) {
-            return Task::ready(Err(anyhow!(
-                "macOS 12.0 or later is required to register URL schemes"
-            )));
-        }
-
-        let Some(bundle_id) = NSBundle::mainBundle().bundleIdentifier() else {
-            return Task::ready(Err(anyhow!("Can only register URL scheme in bundled apps")));
-        };
-
-        let workspace = NSWorkspace::sharedWorkspace();
-        let Some(app) = workspace.URLForApplicationWithBundleIdentifier(&bundle_id) else {
-            return Task::ready(Err(anyhow!(
-                "Cannot register URL scheme until app is installed"
-            )));
-        };
-
-        let scheme = NSString::from_str(scheme);
-
-        let done_tx = Cell::new(Some(done_tx));
-        let handler = RcBlock::new(move |error: *mut NSError| {
-            let result = if let Some(error) = unsafe { error.as_ref() } {
-                Err(anyhow!(
-                    "Failed to register: {}",
-                    error.localizedDescription()
-                ))
-            } else {
-                Ok(())
-            };
-
-            if let Some(done_tx) = done_tx.take() {
-                _ = done_tx.send(result);
-            }
-        });
-
-        workspace.setDefaultApplicationAtURL_toOpenURLsWithScheme_completionHandler(
-            &app,
-            &scheme,
-            Some(&handler),
-        );
-
-        self.background_executor().spawn(async { done_rx.await? })
-    }
-
     fn on_open_urls(&self, callback: Box<dyn FnMut(Vec<String>)>) {
         self.0.lock().open_urls = Some(callback);
     }

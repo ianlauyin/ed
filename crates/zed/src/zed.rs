@@ -4,7 +4,6 @@ pub(crate) mod mac_only_instance;
 
 pub(crate) mod move_to_applications;
 mod open_listener;
-mod open_url_modal;
 mod quick_action_bar;
 
 use anyhow::Context as _;
@@ -23,7 +22,7 @@ use git_ui::unstaged_diff::UnstagedDiffToolbar;
 use git_ui_core::file_diff_view::FileDiffStyleToolbar;
 use gpui::{
     App, AppContext as _, Context, Entity, FocusHandle, Focusable, Image, ImageFormat,
-    ParentElement, PathPromptOptions, PromptLevel, ReadGlobal, SharedString, Size, Task, TaskExt,
+    ParentElement, PathPromptOptions, PromptLevel, SharedString, Size, Task, TaskExt,
     TitlebarOptions, WeakEntity, Window, WindowBounds, WindowHandle, WindowKind, WindowOptions,
     actions, img, point, px,
 };
@@ -62,7 +61,7 @@ use workspace::{
     notifications::simple_message_notification::MessageNotification, open_new,
 };
 use workspace::{CloseProject, CloseWindow, with_active_or_new_workspace};
-use zed_actions::{About, OpenBrowser, OpenZedUrl, Quit};
+use zed_actions::{About, OpenBrowser, Quit};
 
 actions!(
     zed,
@@ -81,14 +80,6 @@ actions!(
         ToggleFullScreen,
         /// Zooms the window.
         Zoom,
-    ]
-);
-
-actions!(
-    dev,
-    [
-        /// Opens a prompt to enter a URL to open.
-        OpenUrlPrompt,
     ]
 );
 
@@ -338,17 +329,6 @@ fn register_actions(
             } else {
                 window.toggle_fullscreen();
             }
-        })
-        .register_action(|_, action: &OpenZedUrl, _, cx| {
-            OpenListener::global(cx).open(RawOpenRequest {
-                urls: vec![String::from(&*action.url)],
-                ..Default::default()
-            })
-        })
-        .register_action(|workspace, _: &OpenUrlPrompt, window, cx| {
-            workspace.toggle_modal(window, cx, |window, cx| {
-                open_url_modal::OpenUrlModal::new(window, cx)
-            });
         })
         .register_action(|workspace, action: &OpenBrowser, _window, cx| {
             // Parse and validate the URL to ensure it's properly formatted

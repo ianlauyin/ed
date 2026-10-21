@@ -22,17 +22,6 @@
 <string>0.0.0</string>
 <key>CFBundleVersion</key>
 <string>0.0.0</string>
-<key>CFBundleURLTypes</key>
-<array>
-    <dict>
-        <key>CFBundleURLName</key>
-        <string>ed</string>
-        <key>CFBundleURLSchemes</key>
-        <array>
-            <string>zed</string>
-        </array>
-    </dict>
-</array>
 <key>LSApplicationCategoryType</key>
 <string>public.app-category.developer-tools</string>
 <key>LSMinimumSystemVersion</key>

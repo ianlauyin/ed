@@ -20,7 +20,6 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
-use ui::SharedString;
 use util::ResultExt;
 use util::debug_panic;
 use util::paths::PathWithPosition;
@@ -46,18 +45,8 @@ pub enum OpenRequestKind {
             Box<dyn CliResponseSink>,
         ),
     ),
-    FocusApp,
     DockMenuAction {
         index: usize,
-    },
-    BuiltinJsonSchema {
-        schema_path: String,
-    },
-    GitClone {
-        repo_url: SharedString,
-    },
-    GitCommit {
-        sha: String,
     },
 }
 
@@ -65,32 +54,15 @@ impl std::fmt::Debug for OpenRequestKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::CliConnection(_) => write!(f, "CliConnection(..)"),
-            Self::FocusApp => write!(f, "FocusApp"),
             Self::DockMenuAction { index } => f
                 .debug_struct("DockMenuAction")
                 .field("index", index)
                 .finish(),
-            Self::BuiltinJsonSchema { schema_path } => f
-                .debug_struct("BuiltinJsonSchema")
-                .field("schema_path", schema_path)
-                .finish(),
-            Self::GitClone { repo_url } => f
-                .debug_struct("GitClone")
-                .field("repo_url", repo_url)
-                .finish(),
-            Self::GitCommit { sha } => f.debug_struct("GitCommit").field("sha", sha).finish(),
         }
     }
 }
 
 impl OpenRequest {
-    pub fn is_focus_app_only(&self) -> bool {
-        matches!(self.kind, Some(OpenRequestKind::FocusApp))
-            && self.open_paths.is_empty()
-            && self.diff_paths.is_empty()
-            && self.remote_connection.is_none()
-    }
-
     pub fn parse(request: RawOpenRequest, cx: &App) -> Result<Self> {
         let mut this = Self::default();
 
@@ -99,7 +71,7 @@ impl OpenRequest {
         this.open_behavior = request.open_behavior;
 
         for url in request.urls {
-            if let Some(server_name) = url.strip_prefix("zed-cli://") {
+            if let Some(server_name) = url.strip_prefix("ed-cli://") {
                 this.kind = Some(OpenRequestKind::CliConnection(connect_to_cli(server_name)?));
             } else if let Some(action_index) = url.strip_prefix("zed-dock-action://") {
                 this.kind = Some(OpenRequestKind::DockMenuAction {
@@ -107,21 +79,6 @@ impl OpenRequest {
                 });
             } else if let Some(file) = url.strip_prefix("file://") {
                 this.parse_file_path(file)
-            } else if let Some(file) = url.strip_prefix("zed://file") {
-                this.parse_file_path(file)
-            } else if let Some(file) = url.strip_prefix("zed://ssh") {
-                let ssh_url = "ssh:/".to_string() + file;
-                this.parse_ssh_file_path(&ssh_url, cx)?
-            } else if url == "zed://" || url == "zed://open" || url == "zed://open/" {
-                this.kind = Some(OpenRequestKind::FocusApp);
-            } else if let Some(schema_path) = url.strip_prefix("zed://schemas/") {
-                this.kind = Some(OpenRequestKind::BuiltinJsonSchema {
-                    schema_path: schema_path.to_string(),
-                });
-            } else if let Some(clone_path) = url.strip_prefix("zed://git/clone") {
-                this.parse_git_clone_url(clone_path)?
-            } else if let Some(commit_path) = url.strip_prefix("zed://git/commit/") {
-                this.parse_git_commit_url(commit_path)?
             } else if url.starts_with("ssh://") {
                 this.parse_ssh_file_path(&url, cx)?
             } else {
@@ -136,48 +93,6 @@ impl OpenRequest {
         if let Some(decoded) = urlencoding::decode(file).log_err() {
             self.open_paths.push(decoded.into_owned())
         }
-    }
-
-    fn parse_git_clone_url(&mut self, clone_path: &str) -> Result<()> {
-        // Format: /?repo=<url> or ?repo=<url>
-        let clone_path = clone_path.strip_prefix('/').unwrap_or(clone_path);
-
-        let query = clone_path
-            .strip_prefix('?')
-            .context("invalid git clone url: missing query string")?;
-
-        let repo_url = url::form_urlencoded::parse(query.as_bytes())
-            .find_map(|(key, value)| (key == "repo").then_some(value))
-            .filter(|s| !s.is_empty())
-            .context("invalid git clone url: missing repo query parameter")?
-            .to_string()
-            .into();
-
-        self.kind = Some(OpenRequestKind::GitClone { repo_url });
-
-        Ok(())
-    }
-
-    fn parse_git_commit_url(&mut self, commit_path: &str) -> Result<()> {
-        // Format: <sha>?repo=<path>
-        let (sha, query) = commit_path
-            .split_once('?')
-            .context("invalid git commit url: missing query string")?;
-        anyhow::ensure!(!sha.is_empty(), "invalid git commit url: missing sha");
-
-        let repo = url::form_urlencoded::parse(query.as_bytes())
-            .find_map(|(key, value)| (key == "repo").then_some(value))
-            .filter(|s| !s.is_empty())
-            .context("invalid git commit url: missing repo query parameter")?
-            .to_string();
-
-        self.open_paths.push(repo);
-
-        self.kind = Some(OpenRequestKind::GitCommit {
-            sha: sha.to_string(),
-        });
-
-        Ok(())
     }
 
     fn parse_ssh_file_path(&mut self, file: &str, cx: &App) -> Result<()> {

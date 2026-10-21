@@ -55,7 +55,7 @@ migrator, or Vim/Helix mode.
   sorting/filters), so no server-side behaviour can diverge. Remote settings
   files are not loaded. Any new runtime toggle for a server-side setting
   (formatting, language servers, scanning, git) would need sync reintroduced.
-- `zed://settings` URLs are not handled. Settings-file JSON schemas, completions,
+- Settings-file JSON schemas, completions,
   validation, and language-server configuration schema probing are removed.
   JSON language support remains for source files and action inputs.
 - The upstream documentation website preprocessor is removed; this fork does not

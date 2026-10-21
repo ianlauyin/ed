@@ -5,8 +5,10 @@
 - no support for hard click touchpad (lookup), add or put right click menu
 - rethink cmd+J, terminal/central terminal behavior
 - add webkit tab to render html?
-- simplify setting, no need for SettingsObserver?
 - retire chrono
+- think about keymap/shortcut key, only need simple ones (retire which_key), cmd+enter = expand window
+- remove settingContent entirely? just hard code into code
+- add workspace scoped UI settings, like title or border color, do i really need this? to distingish project
 
 # mermaid test
 ```mermaid

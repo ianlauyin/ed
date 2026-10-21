@@ -2,7 +2,7 @@
 description = "A focused single-user code editor."
 edition.workspace = true
 name = "zed"
-version = "1.32.0"
+version = "1.33.0"
 default-run = "ed"
 
 [lints]
@@ -61,7 +61,6 @@ recent_projects.workspace = true
 settings_content.workspace = true
 remote.workspace = true
 search.workspace = true
-serde_json.workspace = true
 session.workspace = true
 settings.workspace = true
 smol.workspace = true

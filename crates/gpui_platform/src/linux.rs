@@ -167,11 +167,6 @@ impl Platform for HeadlessPlatform {
     }
     fn open_url(&self, _url: &str) {}
     fn on_open_urls(&self, _callback: Box<dyn FnMut(Vec<String>)>) {}
-    fn register_url_scheme(&self, _url: &str) -> Task<Result<()>> {
-        Task::ready(Err(anyhow!(
-            "URL schemes are unavailable on the remote server"
-        )))
-    }
     fn prompt_for_paths(
         &self,
         _options: PathPromptOptions,

@@ -87,8 +87,13 @@ remote detection, command execution, and proxy startup are removed.
   spawns are denied without a prompt. It is only an `Alternate` handler for
   documents, never the default opener. AppKit defaults gpui needs are
   registered in memory, never written to `~/Library/Preferences`.
-- Kept from upstream: `zed://`/`zed-cli://` URL schemes, `ZED_*` environment
-  variables, and the `.zed` project folder name.
+- No `zed://` URL scheme: the bundle registers no URL types, there is no
+  open-URL prompt or `OpenZedUrl` action, and terminal links don't match
+  `zed://`. The app only accepts `file://`, `ssh://`, the CLI's `ed-cli://`
+  handshake (delivered directly to the bundle, not via scheme registration),
+  and dock-menu actions.
+- Kept from upstream: `ZED_*` environment variables and the `.zed` project
+  folder name.
 - Linux desktop, FreeBSD, Windows, and browser backends, packaging, and associated
   build/test/release tooling are removed.
 - Unsupported editor and CLI targets fail with a macOS-only diagnostic.
