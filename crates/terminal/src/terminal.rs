@@ -609,7 +609,6 @@ pub fn insert_zed_terminal_env(
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Event {
     TitleChanged,
-    BreadcrumbsChanged,
     OutputReplaced,
     CloseTerminal,
     Bell,
@@ -981,7 +980,6 @@ impl TerminalBuilder {
             matches: Vec::new(),
 
             selection_head: None,
-            breadcrumb_text: String::new(),
             scroll_px: px(0.),
             next_link_id: 0,
             selection_phase: SelectionPhase::Ended,
@@ -1230,7 +1228,6 @@ impl TerminalBuilder {
                 matches: Vec::new(),
 
                 selection_head: None,
-                breadcrumb_text: String::new(),
                 scroll_px: px(0.),
                 next_link_id: 0,
                 selection_phase: SelectionPhase::Ended,
@@ -1388,7 +1385,6 @@ pub struct Terminal {
     pub last_content: Content,
     pub selection_head: Option<Point>,
 
-    pub breadcrumb_text: String,
     title_override: Option<String>,
     scroll_px: Pixels,
     next_link_id: usize,
@@ -1489,17 +1485,7 @@ impl Terminal {
 
     fn process_event(&mut self, event: TerminalBackendEvent, cx: &mut Context<Self>) {
         match event {
-            TerminalBackendEvent::Title(title) => {
-                // ignore default shell program title change as windows always sends those events
-                // and it would end up showing the shell executable path in breadcrumbs
-
-                self.breadcrumb_text = title;
-                cx.emit(Event::BreadcrumbsChanged);
-            }
-            TerminalBackendEvent::ResetTitle => {
-                self.breadcrumb_text = String::new();
-                cx.emit(Event::BreadcrumbsChanged);
-            }
+            TerminalBackendEvent::Title(_) | TerminalBackendEvent::ResetTitle => {}
             TerminalBackendEvent::ClipboardStore(data) => {
                 cx.write_to_clipboard(ClipboardItem::new_string(data))
             }
@@ -1851,7 +1837,6 @@ impl Terminal {
         self.mouse_down_position = None;
         self.matches.clear();
         self.selection_head = None;
-        self.breadcrumb_text.clear();
         self.scroll_px = px(0.);
         self.next_link_id = 0;
         self.selection_phase = SelectionPhase::Ended;
@@ -1868,7 +1853,6 @@ impl Terminal {
         cx.emit(Event::BlinkChanged(
             self.term.lock().cursor_style().blinking,
         ));
-        cx.emit(Event::BreadcrumbsChanged);
         cx.emit(Event::NewNavigationTarget(None));
         cx.emit(Event::OutputReplaced);
         Ok(())

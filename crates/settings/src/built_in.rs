@@ -31,7 +31,6 @@ pub fn settings() -> SettingsContent {
             dock: Some(DockPosition::Left),
             default_width: Some(PixelSetting(360.0)),
             status_style: Some(StatusStyle::Icon),
-            file_icons: Some(false),
             folder_indicator: Some(FolderIndicator::Icon),
             scrollbar: Some(ScrollbarSettings {
                 ..Default::default()
@@ -42,8 +41,6 @@ pub fn settings() -> SettingsContent {
             collapse_untracked_diff: Some(false),
             tree_view: Some(true),
             diff_stats: Some(true),
-            show_count_badge: Some(false),
-            starts_open: Some(false),
             commit_title_max_length: Some(0),
             entry_primary_click_action: Some(GitPanelClickBehavior::ProjectDiff),
             commit_editor: Some(GitPanelCommitEditor::Expanded),
@@ -67,7 +64,6 @@ pub fn settings() -> SettingsContent {
         }),
         status_bar: Some(StatusBarSettingsContent {
             show: Some(true),
-            show_active_file: Some(false),
             active_language_button: Some(true),
             cursor_position_button: Some(true),
             active_encoding_button: Some(EncodingDisplayOptions::NonUtf8),
@@ -192,7 +188,6 @@ pub fn settings() -> SettingsContent {
             indent_size: Some(PixelSetting(20.0)),
             auto_reveal_entries: Some(true),
             auto_fold_dirs: Some(true),
-            bold_folder_labels: Some(false),
             starts_open: Some(true),
             scrollbar: Some(ProjectPanelScrollbarSettingsContent {
                 show: None,
@@ -227,8 +222,6 @@ pub fn settings() -> SettingsContent {
             show_branch_name: Some(true),
             show_worktree_name: Some(true),
             show_project_items: Some(true),
-            show_menus: Some(false),
-            open_menus_on_hover: Some(false),
         }),
         modeline_lines: Some(5),
     }
@@ -275,21 +268,15 @@ fn terminal_settings() -> Option<TerminalSettingsContent> {
         open_links_in_mouse_mode: Some(true),
         button: Some(true),
         dock: Some(TerminalDockPosition::Bottom),
-        starts_open: Some(false),
         flexible: Some(true),
         default_width: Some(PixelSetting(640.0)),
         default_height: Some(PixelSetting(320.0)),
         max_scroll_history_lines: Some(10000),
         scroll_multiplier: Some(1.0),
-        toolbar: Some(TerminalToolbarContent {
-            breadcrumbs: Some(false),
-        }),
         scrollbar: Some(ScrollbarSettingsContent {
             show: None,
         }),
         minimum_contrast: Some(45.0),
-        show_count_badge: Some(false),
-        bell: Some(TerminalBell::Off),
         ..Default::default()
     })
 }
@@ -419,7 +406,6 @@ fn workspace_settings() -> WorkspaceSettingsContent {
         reveal_if_open: Some(false),
         drop_target_size: Some(0.2),
         when_closing_with_no_tabs: Some(CloseWindowWhenNoItems::PlatformDefault),
-        accessible_mode: Some(false),
         use_system_path_prompts: Some(true),
         command_aliases: Default::default(),
         max_tabs: None,

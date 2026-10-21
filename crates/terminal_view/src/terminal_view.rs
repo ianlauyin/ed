@@ -10,7 +10,7 @@ use editor::{
 };
 use gpui::{
     Action, AnyElement, App, ClipboardEntry, DismissEvent, Entity, EventEmitter, ExternalPaths,
-    FocusHandle, Focusable, Font, KeyContext, KeyDownEvent, Keystroke, MouseButton, MouseDownEvent,
+    FocusHandle, Focusable, KeyContext, KeyDownEvent, Keystroke, MouseButton, MouseDownEvent,
     Pixels, Point as GpuiPoint, Render, ScrollWheelEvent, Styled, Subscription, Task, TaskExt,
     WeakEntity, actions, anchored, deferred, div,
 };
@@ -19,9 +19,7 @@ use persistence::TerminalDb;
 use project::{Project, ProjectEntryId, search::SearchQuery};
 use schemars::JsonSchema;
 use serde::Deserialize;
-use settings::{
-    SeedQuerySetting, Settings, SettingsStore, TerminalBell, TerminalBlink, WorkingDirectory,
-};
+use settings::{SeedQuerySetting, Settings, SettingsStore, TerminalBlink, WorkingDirectory};
 use std::{
     any::Any,
     cmp,
@@ -49,11 +47,9 @@ use ui::{
 };
 use util::ResultExt;
 use workspace::{
-    CloseActiveItem, DraggedSelection, DraggedTab, NewCenterTerminal, NewTerminal, Pane,
-    ToolbarItemLocation, Workspace, WorkspaceId, delete_unloaded_items,
-    item::{
-        HighlightedText, Item, ItemEvent, SerializableItem, TabContentParams, TabTooltipContent,
-    },
+    CloseActiveItem, DraggedSelection, DraggedTab, NewCenterTerminal, NewTerminal, Pane, Workspace,
+    WorkspaceId, delete_unloaded_items,
+    item::{Item, ItemEvent, SerializableItem, TabContentParams, TabTooltipContent},
     register_serializable_item,
     searchable::{
         Direction, SearchEvent, SearchOptions, SearchToken, SearchableItem, SearchableItemHandle,
@@ -142,7 +138,6 @@ pub struct TerminalView {
     hover: Option<HoverTarget>,
     hover_tooltip_update: Task<()>,
     workspace_id: Option<WorkspaceId>,
-    show_breadcrumbs: bool,
     block_below_cursor: Option<Rc<BlockProperties>>,
     scroll_top: Pixels,
     scroll_handle: TerminalScrollHandle,
@@ -250,7 +245,6 @@ impl TerminalView {
             hover: None,
             hover_tooltip_update: Task::ready(()),
             workspace_id,
-            show_breadcrumbs: TerminalSettings::get_global(cx).toolbar.breadcrumbs,
             block_below_cursor: None,
             scroll_top: Pixels::ZERO,
             scroll_handle,
@@ -465,9 +459,6 @@ impl TerminalView {
 
     fn settings_changed(&mut self, cx: &mut Context<Self>) {
         let settings = TerminalSettings::get_global(cx);
-        let breadcrumb_visibility_changed = self.show_breadcrumbs != settings.toolbar.breadcrumbs;
-        self.show_breadcrumbs = settings.toolbar.breadcrumbs;
-
         let should_blink = match settings.blinking {
             TerminalBlink::Off => false,
             TerminalBlink::On => true,
@@ -490,10 +481,6 @@ impl TerminalView {
                 BlinkManager::disable
             },
         );
-
-        if breadcrumb_visibility_changed {
-            cx.emit(ItemEvent::UpdateBreadcrumbs);
-        }
         cx.notify();
     }
 
@@ -1032,9 +1019,6 @@ fn subscribe_for_terminal_events(
 
                 Event::Bell => {
                     terminal_view.has_bell = true;
-                    if let TerminalBell::System = TerminalSettings::get_global(cx).bell {
-                        window.play_system_bell();
-                    }
                     cx.emit(Event::Wakeup);
                 }
 
@@ -1116,7 +1100,6 @@ fn subscribe_for_terminal_events(
                         cx,
                     ),
                 },
-                Event::BreadcrumbsChanged => cx.emit(ItemEvent::UpdateBreadcrumbs),
                 Event::CloseTerminal => cx.emit(ItemEvent::CloseItem),
                 Event::SelectionsChanged => {
                     window.invalidate_character_coordinates();
@@ -1692,24 +1675,6 @@ impl Item for TerminalView {
         _: &App,
     ) -> Option<Box<dyn SearchableItemHandle>> {
         Some(Box::new(handle.clone()))
-    }
-
-    fn breadcrumb_location(&self, cx: &App) -> ToolbarItemLocation {
-        if self.show_breadcrumbs && !self.terminal().read(cx).breadcrumb_text.trim().is_empty() {
-            ToolbarItemLocation::PrimaryLeft
-        } else {
-            ToolbarItemLocation::Hidden
-        }
-    }
-
-    fn breadcrumbs(&self, cx: &App) -> Option<(Vec<HighlightedText>, Option<Font>)> {
-        Some((
-            vec![HighlightedText {
-                text: self.terminal().read(cx).breadcrumb_text.clone().into(),
-                highlights: vec![],
-            }],
-            None,
-        ))
     }
 
     fn added_to_workspace(

@@ -1629,10 +1629,6 @@ impl Panel for TerminalPanel {
         true
     }
 
-    fn starts_open(&self, _: &Window, cx: &App) -> bool {
-        TerminalSettings::get_global(cx).starts_open
-    }
-
     fn set_position(
         &mut self,
         position: DockPosition,
@@ -1701,23 +1697,6 @@ impl Panel for TerminalPanel {
             this.add_terminal_shell(false, kind, RevealStrategy::Always, window, cx)
                 .detach_and_log_err(cx)
         })
-    }
-
-    fn icon_label(&self, _window: &Window, cx: &App) -> Option<String> {
-        if !TerminalSettings::get_global(cx).show_count_badge {
-            return None;
-        }
-        let count = self
-            .center
-            .panes()
-            .into_iter()
-            .map(|pane| pane.read(cx).items_len())
-            .sum::<usize>();
-        if count == 0 {
-            None
-        } else {
-            Some(count.to_string())
-        }
     }
 
     fn persistent_name() -> &'static str {

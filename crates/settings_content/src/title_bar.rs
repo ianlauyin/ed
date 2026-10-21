@@ -23,12 +23,4 @@ pub struct TitleBarSettingsContent {
     ///
     /// Default: true
     pub show_project_items: Option<bool>,
-    /// Whether to show the menus in the title bar.
-    ///
-    /// Default: false
-    pub show_menus: Option<bool>,
-    /// Whether to automatically open the menus in the title bar on hover.
-    ///
-    /// Default: false
-    pub open_menus_on_hover: Option<bool>,
 }

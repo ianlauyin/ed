@@ -2,7 +2,7 @@ mod application_menu;
 mod platform_title_bar;
 mod title_bar_settings;
 
-use crate::application_menu::{ApplicationMenu, show_menus};
+use crate::application_menu::ApplicationMenu;
 use arrayvec::ArrayVec;
 use git_ui_core::worktree_picker::WorktreePicker;
 pub use platform_title_bar::PlatformTitleBar;
@@ -22,12 +22,9 @@ use settings::Settings as _;
 use std::path::Path;
 use theme::ActiveTheme;
 use title_bar_settings::TitleBarSettings;
-use ui::{
-    ButtonLike, IconWithIndicator, Indicator, PopoverMenu, TintColor, Tooltip, prelude::*,
-    utils::platform_title_bar_height,
-};
+use ui::{ButtonLike, IconWithIndicator, Indicator, PopoverMenu, TintColor, Tooltip, prelude::*};
 use util::ResultExt;
-use workspace::{AccessibleMode, MultiWorkspace, ToggleWorktreeSecurity, Workspace};
+use workspace::{MultiWorkspace, ToggleWorktreeSecurity, Workspace};
 
 use zed_actions::OpenRemote;
 
@@ -96,8 +93,6 @@ impl Render for TitleBar {
 
         let title_bar_settings = *TitleBarSettings::get_global(cx);
         let is_git_enabled = ProjectSettings::get_global(cx).git.enabled.status;
-
-        let show_menus = show_menus(cx);
 
         let mut children = <ArrayVec<_, 5>>::new();
 
@@ -171,19 +166,12 @@ impl Render for TitleBar {
                     let mut render_project_items = title_bar_settings.show_branch_name
                         || title_bar_settings.show_project_items;
                     title_bar
-                        .when_some(
-                            self.application_menu.clone().filter(|_| !show_menus),
-                            |title_bar, menu| {
-                                // Hide the project/branch items to make room when the
-                                // menu bar is expanded -- except in accessible mode,
-                                // where the menu bar is always expanded but those
-                                // controls must still remain reachable.
-                                render_project_items &= !menu
-                                    .update(cx, |menu, cx| menu.all_menus_shown(cx))
-                                    || cx.accessible_mode();
-                                title_bar.child(menu)
-                            },
-                        )
+                        .when_some(self.application_menu.clone(), |title_bar, menu| {
+                            // Hide the project/branch items to make room when the
+                            // menu bar is expanded.
+                            render_project_items &= !menu.read(cx).all_menus_shown();
+                            title_bar.child(menu)
+                        })
                         .children(self.render_restricted_mode(cx))
                         .when(render_project_items, |title_bar| {
                             title_bar
@@ -208,39 +196,10 @@ impl Render for TitleBar {
                 .into_any_element(),
         );
 
-        if show_menus {
-            self.platform_titlebar.update(cx, |this, _| {
-                this.set_children(
-                    self.application_menu
-                        .clone()
-                        .map(|menu| menu.into_any_element()),
-                );
-            });
-
-            let height = platform_title_bar_height(window);
-            let title_bar_color = self.platform_titlebar.update(cx, |platform_titlebar, cx| {
-                platform_titlebar.title_bar_color(window, cx)
-            });
-
-            v_flex()
-                .w_full()
-                .child(self.platform_titlebar.clone().into_any_element())
-                .child(
-                    h_flex()
-                        .bg(title_bar_color)
-                        .h(height)
-                        .pl_2()
-                        .justify_between()
-                        .w_full()
-                        .children(children),
-                )
-                .into_any_element()
-        } else {
-            self.platform_titlebar.update(cx, |this, _| {
-                this.set_children(children);
-            });
-            self.platform_titlebar.clone().into_any_element()
-        }
+        self.platform_titlebar.update(cx, |this, _| {
+            this.set_children(children);
+        });
+        self.platform_titlebar.clone().into_any_element()
     }
 }
 

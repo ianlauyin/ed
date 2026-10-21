@@ -25,7 +25,15 @@ migrator, or Vim/Helix mode.
   rebuilding. Existing settings controls affect only the running session.
 - Built-in preferences preserve the applicable values from the personal Zed
   configuration, including language overrides and Rust language-server options.
-  Entries for removed features are omitted.
+  Entries for removed features are omitted. Preferences that were always off
+  are removed as settings and hardcoded:
+  - title bar: no expanded menu bar, no open-on-hover menus;
+  - terminal: no title breadcrumbs, no count badge, no bell sound (the tab
+    still marks the bell), does not open on startup;
+  - git panel: no file icons, no count badge, does not open on startup;
+  - project panel: folder labels are not bold;
+  - status bar: no active file name item;
+  - no accessible mode.
 - Semantic token fallback mappings are constructed in Rust. Personal rules take
   precedence over language/extension rules, which take precedence over fallback
   mappings. Rule order and theme-style fallback order are preserved. There is no

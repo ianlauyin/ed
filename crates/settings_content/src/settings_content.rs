@@ -287,11 +287,6 @@ pub struct GitPanelSettingsContent {
     /// Default: icon
     pub status_style: Option<StatusStyle>,
 
-    /// Whether to show file icons in the git panel.
-    ///
-    /// Default: false
-    pub file_icons: Option<bool>,
-
     /// What to show for directories in the git panel.
     ///
     /// Default: icon
@@ -332,16 +327,6 @@ pub struct GitPanelSettingsContent {
     ///
     /// Default: true
     pub diff_stats: Option<bool>,
-
-    /// Whether to show a badge on the git panel icon with the count of uncommitted changes.
-    ///
-    /// Default: false
-    pub show_count_badge: Option<bool>,
-
-    /// Whether the git panel should open on startup.
-    ///
-    /// Default: false
-    pub starts_open: Option<bool>,
 
     /// Maximum length of the commit message title before a warning is shown.
     /// Set to 0 to disable.

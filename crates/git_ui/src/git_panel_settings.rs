@@ -20,7 +20,6 @@ pub struct GitPanelSettings {
     pub dock: DockPosition,
     pub default_width: Pixels,
     pub status_style: StatusStyle,
-    pub file_icons: bool,
     pub folder_indicator: FolderIndicator,
     pub scrollbar: ScrollbarSettings,
     pub fallback_branch_name: String,
@@ -29,8 +28,6 @@ pub struct GitPanelSettings {
     pub collapse_untracked_diff: bool,
     pub tree_view: bool,
     pub diff_stats: bool,
-    pub show_count_badge: bool,
-    pub starts_open: bool,
     pub commit_title_max_length: usize,
     pub entry_primary_click_action: GitPanelClickBehavior,
     pub commit_editor: GitPanelCommitEditor,
@@ -64,7 +61,6 @@ impl Settings for GitPanelSettings {
             dock: git_panel.dock.unwrap().into(),
             default_width: git_panel.default_width.unwrap().into_gpui(),
             status_style: git_panel.status_style.unwrap(),
-            file_icons: git_panel.file_icons.unwrap(),
             folder_indicator: git_panel.folder_indicator.unwrap(),
             scrollbar: ScrollbarSettings {
                 show: git_panel
@@ -79,8 +75,6 @@ impl Settings for GitPanelSettings {
             collapse_untracked_diff: git_panel.collapse_untracked_diff.unwrap(),
             tree_view: git_panel.tree_view.unwrap(),
             diff_stats: git_panel.diff_stats.unwrap(),
-            show_count_badge: git_panel.show_count_badge.unwrap(),
-            starts_open: git_panel.starts_open.unwrap(),
             commit_title_max_length: git_panel.commit_title_max_length.unwrap(),
             entry_primary_click_action: git_panel.entry_primary_click_action.unwrap(),
             commit_editor: git_panel.commit_editor.unwrap(),

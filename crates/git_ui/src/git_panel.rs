@@ -1263,7 +1263,6 @@ impl GitPanel {
             let mut was_sort_by = GitPanelSettings::get_global(cx).sort_by;
             let mut was_group_by = GitPanelSettings::get_global(cx).group_by;
             let mut was_tree_view = GitPanelSettings::get_global(cx).tree_view;
-            let mut was_file_icons = GitPanelSettings::get_global(cx).file_icons;
             let mut was_folder_indicator = GitPanelSettings::get_global(cx).folder_indicator;
             let mut was_diff_stats = GitPanelSettings::get_global(cx).diff_stats;
             let mut was_commit_editor = GitPanelSettings::get_global(cx).commit_editor;
@@ -1272,7 +1271,6 @@ impl GitPanel {
                 let sort_by = settings.sort_by;
                 let group_by = settings.group_by;
                 let tree_view = settings.tree_view;
-                let file_icons = settings.file_icons;
                 let folder_indicator = settings.folder_indicator;
                 let diff_stats = settings.diff_stats;
                 let commit_editor = settings.commit_editor;
@@ -1309,13 +1307,12 @@ impl GitPanel {
                 if (diff_stats != was_diff_stats) || update_entries {
                     this.update_visible_entries(window, cx);
                 }
-                if file_icons != was_file_icons || folder_indicator != was_folder_indicator {
+                if folder_indicator != was_folder_indicator {
                     cx.notify();
                 }
                 was_sort_by = sort_by;
                 was_group_by = group_by;
                 was_tree_view = tree_view;
-                was_file_icons = file_icons;
                 was_folder_indicator = folder_indicator;
                 was_diff_stats = diff_stats;
                 was_commit_editor = commit_editor;
@@ -7005,12 +7002,6 @@ impl GitPanel {
         let marked = self.marked_entries.contains(&entry.repo_path);
         let status_style = settings.status_style;
         let status = entry.status;
-        let file_icon = if settings.file_icons {
-            FileIcons::get_icon(entry.repo_path.as_std_path(), cx)
-        } else {
-            None
-        };
-
         let has_conflict = status.is_conflicted();
         let is_modified = status.is_modified();
         let is_deleted = status.is_deleted();
@@ -7087,36 +7078,10 @@ impl GitPanel {
             )
         };
 
-        let folder_indicator = settings.folder_indicator;
         let name_row = h_flex()
             .min_w_0()
             .flex_1()
             .gap_1()
-            .when(settings.file_icons, |this| {
-                let icon = file_icon
-                    .map(Icon::from_path)
-                    .unwrap_or_else(|| Icon::new(IconName::File))
-                    .size(IconSize::Small)
-                    .color(Color::Muted);
-                let reserves_chevron_slot =
-                    tree_view && folder_indicator.shows_chevron() && folder_indicator.shows_icon();
-                if reserves_chevron_slot {
-                    this.child(
-                        h_flex()
-                            .flex_none()
-                            .gap_0p5()
-                            .child(
-                                h_flex()
-                                    .size(IconSize::Small.rems())
-                                    .invisible()
-                                    .flex_none(),
-                            )
-                            .child(icon),
-                    )
-                } else {
-                    this.child(icon)
-                }
-            })
             .when(status_style != StatusStyle::LabelColor, |el| {
                 el.child(git_status_icon(status))
             })
@@ -7853,14 +7818,6 @@ impl Panel for GitPanel {
         Some("Git Panel")
     }
 
-    fn icon_label(&self, _: &Window, cx: &App) -> Option<String> {
-        if !GitPanelSettings::get_global(cx).show_count_badge {
-            return None;
-        }
-        let total = self.changes_count;
-        (total > 0).then(|| total.to_string())
-    }
-
     fn secondary_button(&self, _: &Window, _: &App) -> Option<workspace::PanelSecondaryButton> {
         Some(workspace::PanelSecondaryButton {
             id: "git-graph-button",
@@ -7872,10 +7829,6 @@ impl Panel for GitPanel {
 
     fn toggle_action(&self) -> Box<dyn Action> {
         Box::new(ToggleFocus)
-    }
-
-    fn starts_open(&self, _: &Window, cx: &App) -> bool {
-        GitPanelSettings::get_global(cx).starts_open
     }
 
     fn activation_priority(&self) -> u32 {

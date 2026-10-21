@@ -6,16 +6,11 @@ use serde::{Deserialize, Serialize};
 pub use settings::AlternateScroll;
 
 use settings::{
-    IntoGpui, PathHyperlinkRegex, RegisterSetting, ShowScrollbar, TerminalBell, TerminalBlink,
+    IntoGpui, PathHyperlinkRegex, RegisterSetting, ShowScrollbar, TerminalBlink,
     TerminalDockPosition, TerminalLineHeight, WorkingDirectory,
 };
 use task::Shell;
 use theme_settings::FontFamilyName;
-
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-pub struct Toolbar {
-    pub breadcrumbs: bool,
-}
 
 #[derive(Clone, Debug, Deserialize, RegisterSetting)]
 pub struct TerminalSettings {
@@ -37,20 +32,16 @@ pub struct TerminalSettings {
     pub open_links_in_mouse_mode: bool,
     pub button: bool,
     pub dock: TerminalDockPosition,
-    pub starts_open: bool,
     pub flexible: bool,
     pub default_width: Pixels,
     pub default_height: Pixels,
     pub detect_venv: bool,
     pub max_scroll_history_lines: Option<usize>,
     pub scroll_multiplier: f32,
-    pub toolbar: Toolbar,
     pub scrollbar: ScrollbarSettings,
     pub minimum_contrast: f32,
     pub path_hyperlink_regexes: Vec<String>,
     pub path_hyperlink_timeout_ms: u64,
-    pub show_count_badge: bool,
-    pub bell: TerminalBell,
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
@@ -107,16 +98,12 @@ impl settings::Settings for TerminalSettings {
             open_links_in_mouse_mode: user_content.open_links_in_mouse_mode.unwrap(),
             button: user_content.button.unwrap(),
             dock: user_content.dock.unwrap(),
-            starts_open: user_content.starts_open.unwrap(),
             default_width: user_content.default_width.unwrap().into_gpui(),
             default_height: user_content.default_height.unwrap().into_gpui(),
             flexible: user_content.flexible.unwrap(),
             detect_venv: project_content.detect_venv.unwrap(),
             scroll_multiplier: user_content.scroll_multiplier.unwrap(),
             max_scroll_history_lines: user_content.max_scroll_history_lines,
-            toolbar: Toolbar {
-                breadcrumbs: user_content.toolbar.unwrap().breadcrumbs.unwrap(),
-            },
             scrollbar: ScrollbarSettings {
                 show: user_content.scrollbar.unwrap().show,
             },
@@ -132,8 +119,6 @@ impl settings::Settings for TerminalSettings {
                 })
                 .collect(),
             path_hyperlink_timeout_ms: project_content.path_hyperlink_timeout_ms.unwrap(),
-            show_count_badge: user_content.show_count_badge.unwrap(),
-            bell: user_content.bell.unwrap(),
         }
     }
 }

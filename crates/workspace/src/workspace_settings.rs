@@ -2,14 +2,13 @@ use std::{num::NonZeroUsize, time::Duration};
 
 use crate::DockPosition;
 use collections::HashMap;
-use gpui::{App, Subscription};
 use serde::Deserialize;
+use settings::CommandAliasTarget;
 pub use settings::{
     AutosaveSetting, BottomDockLayout, EncodingDisplayOptions, InactiveOpacity,
     PaneSplitDirectionHorizontal, PaneSplitDirectionVertical, RegisterSetting,
     RestoreOnStartupBehavior, Settings,
 };
-use settings::{CommandAliasTarget, SettingsStore};
 
 #[derive(RegisterSetting)]
 pub struct WorkspaceSettings {
@@ -27,7 +26,6 @@ pub struct WorkspaceSettings {
     pub reveal_if_open: bool,
     pub drop_target_size: f32,
     pub use_system_path_prompts: bool,
-    pub accessible_mode: bool,
     pub command_aliases: HashMap<String, CommandAliasTarget>,
     pub max_tabs: Option<NonZeroUsize>,
     pub when_closing_with_no_tabs: settings::CloseWindowWhenNoItems,
@@ -109,7 +107,6 @@ impl Settings for WorkspaceSettings {
             reveal_if_open: workspace.reveal_if_open.unwrap(),
             drop_target_size: workspace.drop_target_size.unwrap(),
             use_system_path_prompts: workspace.use_system_path_prompts.unwrap(),
-            accessible_mode: workspace.accessible_mode.unwrap(),
             command_aliases: workspace.command_aliases.clone(),
             max_tabs: workspace.max_tabs,
             when_closing_with_no_tabs: workspace.when_closing_with_no_tabs.unwrap(),
@@ -146,39 +143,6 @@ impl Settings for WorkspaceSettings {
     }
 }
 
-/// Provides convenient access to whether "accessible mode" is enabled, mirroring
-/// [`theme::ActiveTheme`] for the active theme. Import this trait to call
-/// `cx.accessible_mode()`.
-pub trait AccessibleMode {
-    /// Returns whether accessible mode is enabled.
-    fn accessible_mode(&self) -> bool;
-}
-
-impl AccessibleMode for App {
-    fn accessible_mode(&self) -> bool {
-        WorkspaceSettings::get_global(self).accessible_mode
-    }
-}
-
-/// Observes changes to the accessible-mode setting, invoking `callback` with the
-/// new value whenever it changes. Mirrors the common
-/// `cx.observe_global::<SettingsStore>` pattern, but only fires when the value
-/// actually changes. The returned [`Subscription`] must be retained for the
-/// callback to keep firing.
-pub fn observe_accessible_mode(
-    cx: &mut App,
-    mut callback: impl FnMut(bool, &mut App) + 'static,
-) -> Subscription {
-    let mut last = cx.accessible_mode();
-    cx.observe_global::<SettingsStore>(move |cx| {
-        let current = cx.accessible_mode();
-        if current != last {
-            last = current;
-            callback(current, cx);
-        }
-    })
-}
-
 impl Settings for TabBarSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let tab_bar = content.tab_bar.clone().unwrap();
@@ -194,7 +158,6 @@ impl Settings for TabBarSettings {
 #[derive(Deserialize, RegisterSetting)]
 pub struct StatusBarSettings {
     pub show: bool,
-    pub show_active_file: bool,
     pub active_language_button: bool,
     pub cursor_position_button: bool,
     pub active_encoding_button: EncodingDisplayOptions,
@@ -206,7 +169,6 @@ impl Settings for StatusBarSettings {
         let status_bar = content.status_bar.clone().unwrap();
         StatusBarSettings {
             show: status_bar.show.unwrap(),
-            show_active_file: status_bar.show_active_file.unwrap(),
             active_language_button: status_bar.active_language_button.unwrap(),
             cursor_position_button: status_bar.cursor_position_button.unwrap(),
             active_encoding_button: status_bar.active_encoding_button.unwrap(),

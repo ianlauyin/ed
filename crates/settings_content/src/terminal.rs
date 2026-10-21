@@ -177,10 +177,6 @@ pub struct TerminalSettingsContent {
     /// Default: true
     pub button: Option<bool>,
     pub dock: Option<TerminalDockPosition>,
-    /// Whether the terminal panel should open on startup.
-    ///
-    /// Default: false
-    pub starts_open: Option<bool>,
     /// Whether the terminal panel should use flexible (proportional) sizing.
     ///
     /// Default: true
@@ -205,8 +201,6 @@ pub struct TerminalSettingsContent {
     ///
     /// Default: 1.0
     pub scroll_multiplier: Option<f32>,
-    /// Toolbar related settings
-    pub toolbar: Option<TerminalToolbarContent>,
     /// Scrollbar-related settings
     pub scrollbar: Option<ScrollbarSettingsContent>,
     /// The minimum APCA perceptual contrast between foreground and background colors.
@@ -225,14 +219,6 @@ pub struct TerminalSettingsContent {
     /// Default: 45
     #[serde(serialize_with = "crate::serialize_optional_f32_with_two_decimal_places")]
     pub minimum_contrast: Option<f32>,
-    /// Whether to show a badge on the terminal panel icon with the count of open terminals.
-    ///
-    /// Default: false
-    pub show_count_badge: Option<bool>,
-    /// What to do when the `BEL` character (`\a`) is printed to terminal.
-    ///
-    /// Default: "system"
-    pub bell: Option<TerminalBell>,
 }
 
 crate::fallible_options::flattened_deserialize!(TerminalSettingsContent {
@@ -240,9 +226,9 @@ crate::fallible_options::flattened_deserialize!(TerminalSettingsContent {
     options: {
         font_size, font_family, font_fallbacks, line_height, font_features, font_weight,
         cursor_shape, blinking, alternate_scroll, option_as_meta, copy_on_select,
-        keep_selection_on_copy, open_links_in_mouse_mode, button, dock, starts_open, flexible,
-        default_width, default_height, max_scroll_history_lines, scroll_multiplier, toolbar,
-        scrollbar, minimum_contrast, show_count_badge, bell,
+        keep_selection_on_copy, open_links_in_mouse_mode, button, dock, flexible,
+        default_width, default_height, max_scroll_history_lines, scroll_multiplier,
+        scrollbar, minimum_contrast,
     },
     defaults: {},
 });
@@ -443,43 +429,6 @@ pub enum TerminalBlink {
 #[serde(rename_all = "snake_case")]
 pub enum AlternateScroll {
     On,
-    Off,
-}
-
-// Toolbar related settings
-#[with_fallible_options]
-#[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
-pub struct TerminalToolbarContent {
-    /// Whether to display the terminal title in breadcrumbs inside the terminal pane.
-    /// Only shown if the terminal title is not empty.
-    ///
-    /// The shell running in the terminal needs to be configured to emit the title.
-    /// Example: `echo -e "\e]2;New Title\007";`
-    ///
-    /// Default: true
-    pub breadcrumbs: Option<bool>,
-}
-
-#[derive(
-    Copy,
-    Clone,
-    Debug,
-    Default,
-    PartialEq,
-    Eq,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum TerminalBell {
-    /// Play an OS-specific alert sound.
-    #[default]
-    System,
-    /// Do not play any sound.
     Off,
 }
 

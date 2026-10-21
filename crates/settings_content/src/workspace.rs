@@ -77,11 +77,6 @@ pub struct WorkspaceSettingsContent {
     ///
     /// Default: auto ("on" on macOS, "off" otherwise)
     pub when_closing_with_no_tabs: Option<CloseWindowWhenNoItems>,
-    /// Whether to optimize Zed's interface for assistive technology such as
-    /// screen readers.
-    ///
-    /// Default: false
-    pub accessible_mode: Option<bool>,
     /// Whether to use the system provided dialogs for Open and Save As.
     /// When set to false, Zed will use the built-in keyboard-first pickers.
     ///
@@ -534,10 +529,6 @@ pub struct StatusBarSettingsContent {
     /// Default: true
     #[serde(rename = "experimental.show")]
     pub show: Option<bool>,
-    /// Whether to show the name of the active file in the status bar.
-    ///
-    /// Default: false
-    pub show_active_file: Option<bool>,
     /// Whether to display the active language button in the status bar.
     ///
     /// Default: true
@@ -798,10 +789,6 @@ pub struct ProjectPanelSettingsContent {
     ///
     /// Default: true
     pub auto_fold_dirs: Option<bool>,
-    /// Whether to show folder names with bold text in the project panel.
-    ///
-    /// Default: false
-    pub bold_folder_labels: Option<bool>,
     /// Whether the project panel should open on startup.
     ///
     /// Default: true
