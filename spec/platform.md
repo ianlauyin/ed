@@ -89,9 +89,9 @@ remote detection, command execution, and proxy startup are removed.
   registered in memory, never written to `~/Library/Preferences`.
 - No `zed://` URL scheme: the bundle registers no URL types, there is no
   open-URL prompt or `OpenZedUrl` action, and terminal links don't match
-  `zed://`. The app only accepts `file://`, `ssh://`, the CLI's `ed-cli://`
-  handshake (delivered directly to the bundle, not via scheme registration),
-  and dock-menu actions.
+  `zed://`. The app only accepts `file://`, `ssh://`, and the CLI's `ed-cli://`
+  handshake (delivered directly to the bundle, not via scheme registration).
+  Dock-menu items dispatch their actions directly through AppKit, not via URLs.
 - Kept from upstream: `ZED_*` environment variables and the `.zed` project
   folder name.
 - Linux desktop, FreeBSD, Windows, and browser backends, packaging, and associated

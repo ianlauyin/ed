@@ -503,9 +503,6 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
                 cx.spawn(async move |cx| handle_cli_connection(connection, app_state, cx).await)
                     .detach();
             }
-            OpenRequestKind::DockMenuAction { index } => {
-                cx.perform_dock_menu_action(index);
-            }
         }
 
         return;

@@ -45,19 +45,12 @@ pub enum OpenRequestKind {
             Box<dyn CliResponseSink>,
         ),
     ),
-    DockMenuAction {
-        index: usize,
-    },
 }
 
 impl std::fmt::Debug for OpenRequestKind {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::CliConnection(_) => write!(f, "CliConnection(..)"),
-            Self::DockMenuAction { index } => f
-                .debug_struct("DockMenuAction")
-                .field("index", index)
-                .finish(),
         }
     }
 }
@@ -73,10 +66,6 @@ impl OpenRequest {
         for url in request.urls {
             if let Some(server_name) = url.strip_prefix("ed-cli://") {
                 this.kind = Some(OpenRequestKind::CliConnection(connect_to_cli(server_name)?));
-            } else if let Some(action_index) = url.strip_prefix("zed-dock-action://") {
-                this.kind = Some(OpenRequestKind::DockMenuAction {
-                    index: action_index.parse()?,
-                });
             } else if let Some(file) = url.strip_prefix("file://") {
                 this.parse_file_path(file)
             } else if url.starts_with("ssh://") {
