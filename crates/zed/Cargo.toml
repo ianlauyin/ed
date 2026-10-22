@@ -2,7 +2,7 @@
 description = "A focused single-user code editor."
 edition.workspace = true
 name = "zed"
-version = "1.33.0"
+version = "1.34.0"
 default-run = "ed"
 
 [lints]
