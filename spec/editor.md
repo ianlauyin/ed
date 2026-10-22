@@ -54,6 +54,8 @@
 - No sticky scroll: enclosing outline items are never pinned to the top of
   the editor (removed with its `sticky_scroll` setting). Multibuffer sticky
   buffer headers are a separate feature and remain.
+- No mouse-wheel zoom: Cmd/Ctrl+scroll scrolls like a plain scroll and never
+  changes the buffer font size (removed with its `mouse_wheel_zoom` setting).
 - The gutter has no settings: line numbers (with space reserved for 4
   digits), runnables, fold toggles and default-width git diff strips are
   always shown. There is no `gutter` settings block and no

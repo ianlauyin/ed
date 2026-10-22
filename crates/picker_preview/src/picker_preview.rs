@@ -79,7 +79,6 @@ impl EditorPreview {
             editor.disable_inline_diagnostics();
             editor.disable_diagnostics(cx);
             editor.disable_expand_excerpt_buttons(cx);
-            editor.disable_mouse_wheel_zoom();
             editor.set_show_gutter(true, cx); // needed for line numbers
             editor.set_show_line_numbers(true, cx);
             editor.set_show_code_actions(false, cx);

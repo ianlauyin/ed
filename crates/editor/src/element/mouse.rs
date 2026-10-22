@@ -401,72 +401,51 @@ impl EditorElement {
                 if phase == DispatchPhase::Bubble && hitbox.should_handle_scroll(window) {
                     delta = delta.coalesce(event.delta);
 
-                    if event.modifiers.secondary()
-                        && editor.read(cx).enable_mouse_wheel_zoom
-                        && EditorSettings::get_global(cx).mouse_wheel_zoom
-                    {
-                        let delta_y = match event.delta {
-                            ScrollDelta::Pixels(pixels) => pixels.y.into(),
-                            ScrollDelta::Lines(lines) => lines.y,
+                    let scroll_sensitivity = {
+                        if event.modifiers.alt {
+                            fast_scroll_sensitivity
+                        } else {
+                            base_scroll_sensitivity
+                        }
+                    };
+
+                    editor.update(cx, |editor, cx| {
+                        let line_height = position_map.line_height;
+                        let glyph_width = position_map.em_layout_width;
+                        let delta = match delta {
+                            gpui::ScrollDelta::Pixels(mut pixels) => {
+                                //Trackpad
+                                editor
+                                    .scroll_manager
+                                    .filter_scroll_delta(&mut pixels, event.touch_phase);
+                                pixels
+                            }
+
+                            gpui::ScrollDelta::Lines(lines) => {
+                                //Not trackpad
+                                point(lines.x * glyph_width, lines.y * line_height)
+                            }
                         };
 
-                        if delta_y > 0.0 {
-                            theme_settings::increase_buffer_font_size(cx);
-                        } else if delta_y < 0.0 {
-                            theme_settings::decrease_buffer_font_size(cx);
+                        let current_scroll_position = position_map.snapshot.scroll_position();
+                        let x = (current_scroll_position.x * ScrollPixelOffset::from(glyph_width)
+                            - ScrollPixelOffset::from(delta.x * scroll_sensitivity))
+                            / ScrollPixelOffset::from(glyph_width);
+                        let y = (current_scroll_position.y * ScrollPixelOffset::from(line_height)
+                            - ScrollPixelOffset::from(delta.y * scroll_sensitivity))
+                            / ScrollPixelOffset::from(line_height);
+                        let mut scroll_position =
+                            point(x, y).clamp(&point(0., 0.), &position_map.scroll_max);
+                        let forbid_vertical_scroll = editor.scroll_manager.forbid_vertical_scroll();
+                        if forbid_vertical_scroll {
+                            scroll_position.y = current_scroll_position.y;
                         }
 
-                        cx.stop_propagation();
-                    } else {
-                        let scroll_sensitivity = {
-                            if event.modifiers.alt {
-                                fast_scroll_sensitivity
-                            } else {
-                                base_scroll_sensitivity
-                            }
-                        };
-
-                        editor.update(cx, |editor, cx| {
-                            let line_height = position_map.line_height;
-                            let glyph_width = position_map.em_layout_width;
-                            let delta = match delta {
-                                gpui::ScrollDelta::Pixels(mut pixels) => {
-                                    //Trackpad
-                                    editor
-                                        .scroll_manager
-                                        .filter_scroll_delta(&mut pixels, event.touch_phase);
-                                    pixels
-                                }
-
-                                gpui::ScrollDelta::Lines(lines) => {
-                                    //Not trackpad
-                                    point(lines.x * glyph_width, lines.y * line_height)
-                                }
-                            };
-
-                            let current_scroll_position = position_map.snapshot.scroll_position();
-                            let x = (current_scroll_position.x
-                                * ScrollPixelOffset::from(glyph_width)
-                                - ScrollPixelOffset::from(delta.x * scroll_sensitivity))
-                                / ScrollPixelOffset::from(glyph_width);
-                            let y = (current_scroll_position.y
-                                * ScrollPixelOffset::from(line_height)
-                                - ScrollPixelOffset::from(delta.y * scroll_sensitivity))
-                                / ScrollPixelOffset::from(line_height);
-                            let mut scroll_position =
-                                point(x, y).clamp(&point(0., 0.), &position_map.scroll_max);
-                            let forbid_vertical_scroll =
-                                editor.scroll_manager.forbid_vertical_scroll();
-                            if forbid_vertical_scroll {
-                                scroll_position.y = current_scroll_position.y;
-                            }
-
-                            if scroll_position != current_scroll_position {
-                                editor.scroll(scroll_position, window, cx);
-                                cx.stop_propagation();
-                            }
-                        });
-                    }
+                        if scroll_position != current_scroll_position {
+                            editor.scroll(scroll_position, window, cx);
+                            cx.stop_propagation();
+                        }
+                    });
                 }
             }
         });

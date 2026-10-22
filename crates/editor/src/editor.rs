@@ -934,7 +934,6 @@ pub struct Editor {
     enable_lsp_data: bool,
     needs_initial_data_update: bool,
     enable_runnables: bool,
-    enable_mouse_wheel_zoom: bool,
     search_results_hold: Option<SearchResultsHold>,
     show_line_numbers: bool,
     show_git_diff_gutter: Option<bool>,
@@ -1651,7 +1650,6 @@ impl Editor {
         clone.read_only = self.read_only;
         clone.buffers_with_disabled_indent_guides =
             self.buffers_with_disabled_indent_guides.clone();
-        clone.enable_mouse_wheel_zoom = self.enable_mouse_wheel_zoom;
         clone.enable_lsp_data = self.enable_lsp_data;
         clone.needs_initial_data_update = self.enable_lsp_data;
         clone.enable_runnables = self.enable_runnables;
@@ -1997,7 +1995,6 @@ impl Editor {
             enable_lsp_data: full_mode,
             needs_initial_data_update: full_mode,
             enable_runnables: full_mode,
-            enable_mouse_wheel_zoom: full_mode,
             show_git_diff_gutter: None,
             show_code_actions: None,
             show_runnables: None,
@@ -9657,10 +9654,6 @@ impl Editor {
 
     fn disable_runnables(&mut self) {
         self.enable_runnables = false;
-    }
-
-    pub fn disable_mouse_wheel_zoom(&mut self) {
-        self.enable_mouse_wheel_zoom = false;
     }
 
     fn update_data_on_scroll(

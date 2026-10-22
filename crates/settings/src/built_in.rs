@@ -295,7 +295,6 @@ fn editor_settings() -> EditorSettingsContent {
         autoscroll_on_clicks: Some(false),
         horizontal_scroll_margin: Some(5.0),
         scroll_sensitivity: Some(1.0),
-        mouse_wheel_zoom: Some(false),
         fast_scroll_sensitivity: Some(4.0),
         seed_search_query_from_cursor: Some(SeedQuerySetting::Always),
         use_smartcase_search: Some(false),
