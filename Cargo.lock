@@ -5196,7 +5196,6 @@ dependencies = [
  "language",
  "log",
  "lsp",
- "markdown",
  "parking_lot",
  "path",
  "paths",

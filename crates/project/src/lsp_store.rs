@@ -8700,71 +8700,6 @@ impl LspStore {
         })
     }
 
-    pub fn signature_help<T: ToPointUtf16>(
-        &mut self,
-        buffer: &Entity<Buffer>,
-        position: T,
-        cx: &mut Context<Self>,
-    ) -> Task<Option<Vec<SignatureHelp>>> {
-        let position = position.to_point_utf16(buffer.read(cx));
-
-        if let Some((client, upstream_project_id)) = self.upstream_client() {
-            let request = GetSignatureHelp { position };
-            if !self.is_capable_for_proto_request(buffer, &request, cx) {
-                return Task::ready(None);
-            }
-            let request_timeout = ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout();
-            let request_task = client.request_lsp(
-                upstream_project_id,
-                None,
-                request_timeout,
-                cx.background_executor().clone(),
-                request.to_proto(upstream_project_id, buffer.read(cx)),
-            );
-            let buffer = buffer.clone();
-            cx.spawn(async move |weak_lsp_store, cx| {
-                let lsp_store = weak_lsp_store.upgrade()?;
-                let signatures = join_all(
-                    request_task
-                        .await
-                        .log_err()
-                        .flatten()
-                        .map(|response| response.payload)
-                        .unwrap_or_default()
-                        .into_iter()
-                        .map(|response| {
-                            let response = GetSignatureHelp { position }.response_from_proto(
-                                response.response,
-                                lsp_store.clone(),
-                                buffer.clone(),
-                                cx.clone(),
-                            );
-                            async move { response.await.log_err().flatten() }
-                        }),
-                )
-                .await
-                .into_iter()
-                .flatten()
-                .collect();
-                Some(signatures)
-            })
-        } else {
-            let all_actions_task =
-                self.request_multiple_lsp_locally(buffer, GetSignatureHelp { position }, cx);
-            cx.background_spawn(async move {
-                Some(
-                    all_actions_task
-                        .await
-                        .into_iter()
-                        .flat_map(|(_, actions)| actions)
-                        .collect::<Vec<_>>(),
-                )
-            })
-        }
-    }
-
     pub fn hover(
         &mut self,
         buffer: &Entity<Buffer>,
@@ -10259,17 +10194,6 @@ impl LspStore {
                     sender_id,
                     lsp_request_id,
                     get_code_actions,
-                    &mut cx,
-                )
-                .await?;
-            }
-            Request::GetSignatureHelp(get_signature_help) => {
-                Self::query_lsp_locally::<GetSignatureHelp>(
-                    lsp_store,
-                    server_id,
-                    sender_id,
-                    lsp_request_id,
-                    get_signature_help,
                     &mut cx,
                 )
                 .await?;

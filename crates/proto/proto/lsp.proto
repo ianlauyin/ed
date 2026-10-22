@@ -356,50 +356,6 @@ message GetCodeActionsResponse {
   repeated VectorClockEntry version = 2;
 }
 
-message GetSignatureHelp {
-  uint64 project_id = 1;
-  uint64 buffer_id = 2;
-  Anchor position = 3;
-  repeated VectorClockEntry version = 4;
-}
-
-message GetSignatureHelpResponse {
-  optional SignatureHelp signature_help = 1;
-}
-
-message SignatureHelp {
-  repeated SignatureInformation signatures = 1;
-  optional uint32 active_signature = 2;
-  optional uint32 active_parameter = 3;
-}
-
-message SignatureInformation {
-  string label = 1;
-  optional Documentation documentation = 2;
-  repeated ParameterInformation parameters = 3;
-  optional uint32 active_parameter = 4;
-}
-
-message Documentation {
-  oneof content {
-    string value = 1;
-    MarkupContent markup_content = 2;
-  }
-}
-
-message ParameterInformation {
-  oneof label {
-    string simple = 1;
-    LabelOffsets label_offsets = 2;
-  }
-  optional Documentation documentation = 3;
-}
-
-message LabelOffsets {
-  uint32 start = 1;
-  uint32 end = 2;
-}
-
 message GetHover {
   uint64 project_id = 1;
   uint64 buffer_id = 2;
@@ -994,7 +950,6 @@ message LspQuery {
     GetDocumentColor get_document_color = 4;
     GetHover get_hover = 5;
     GetCodeActions get_code_actions = 6;
-    GetSignatureHelp get_signature_help = 7;
     GetCodeLens get_code_lens = 8;
     GetDocumentDiagnostics get_document_diagnostics = 9;
     GetDefinition get_definition = 10;
@@ -1010,6 +965,7 @@ message LspQuery {
     GetIncomingCalls get_incoming_calls = 23;
     GetOutgoingCalls get_outgoing_calls = 24;
   }
+  reserved 7; // Removed signature help.
 }
 
 message LspQueryResponse {
@@ -1023,7 +979,6 @@ message LspResponse {
   oneof response {
     GetHoverResponse get_hover_response = 1;
     GetCodeActionsResponse get_code_actions_response = 2;
-    GetSignatureHelpResponse get_signature_help_response = 3;
     GetCodeLensResponse get_code_lens_response = 4;
     GetDocumentDiagnosticsResponse get_document_diagnostics_response = 5;
     GetDocumentColorResponse get_document_color_response = 6;
@@ -1042,6 +997,7 @@ message LspResponse {
     GetOutgoingCallsResponse get_outgoing_calls_response = 22;
   }
   uint64 server_id = 7;
+  reserved 3; // Removed signature help.
 }
 
 message AllLanguageServers {}

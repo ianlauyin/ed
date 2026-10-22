@@ -54,6 +54,10 @@
   buffer headers are a separate feature and remain.
 - Gutter line numbers are always absolute. Relative line numbers are removed
   (no `relative_line_numbers` setting, no `editor::ToggleRelativeLineNumbers`).
+- No signature help: no popup, actions, keybindings or settings. The LSP
+  `textDocument/signatureHelp` request isn't sent, the client capability isn't
+  advertised, and there are no proto messages for it. Use go-to-definition or
+  hover to see a function's parameters.
 - Text inside highlights (search matches, selections, etc.) is recolored to
   keep `minimum_contrast_for_highlights` against the highlight background.
   The Markdown preview applies the same rule to its search matches and

@@ -167,7 +167,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             KeyBindingSpec::new("cmd-\"", "editor::ExpandAllDiffHunks"),
             KeyBindingSpec::new("cmd-alt-g b", "git::Blame"),
             KeyBindingSpec::new("cmd-alt-g m", "git::OpenModifiedFiles"),
-            KeyBindingSpec::new("cmd-i", "editor::ShowSignatureHelp"),
             KeyBindingSpec::new("ctrl-f12", "editor::GoToDeclaration"),
             KeyBindingSpec::new("alt-ctrl-f12", "editor::GoToDeclarationSplit"),
         ],
@@ -684,15 +683,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             KeyBindingSpec::new("ctrl-n", "editor::ContextMenuNext"),
             KeyBindingSpec::new("pageup", "editor::ContextMenuFirst"),
             KeyBindingSpec::new("pagedown", "editor::ContextMenuLast"),
-        ],
-    );
-    add_bindings(
-        &mut keymap,
-        Some("Editor && showing_signature_help && !showing_completions"),
-        false,
-        [
-            KeyBindingSpec::new("up", "editor::SignatureHelpPrevious"),
-            KeyBindingSpec::new("down", "editor::SignatureHelpNext"),
         ],
     );
     add_bindings(

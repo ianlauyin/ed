@@ -495,14 +495,6 @@ impl Editor {
                 on_type_format_task.detach_and_log_err(cx);
             }
 
-            let editor_settings = EditorSettings::get_global(cx);
-            if bracket_inserted
-                && (editor_settings.auto_signature_help
-                    || editor_settings.show_signature_help_after_edits)
-            {
-                this.show_signature_help(&ShowSignatureHelp, window, cx);
-            }
-
             let trigger_in_words = true;
             if this.hard_wrap.is_some() {
                 let latest: Range<Point> = this.selections.newest(&map).range();

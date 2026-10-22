@@ -45,7 +45,6 @@ pub mod semantic_tokens;
 mod split;
 pub mod split_editor_view;
 
-mod signature_help;
 mod spell_check;
 
 mod clipboard;
@@ -236,7 +235,6 @@ use crate::{
     scroll::ScrollOffset,
     selections_collection::resolve_selections_wrapping_blocks,
     semantic_tokens::SemanticTokenState,
-    signature_help::{SignatureHelpHiddenBy, SignatureHelpState},
 };
 
 pub const FILE_HEADER_HEIGHT: u32 = 2;
@@ -962,8 +960,6 @@ pub struct Editor {
     completion_tasks: Vec<(CompletionId, Task<()>)>,
     inline_blame_popover: Option<InlineBlamePopover>,
     inline_blame_popover_show_task: Option<Task<()>>,
-    signature_help_state: SignatureHelpState,
-    auto_signature_help: Option<bool>,
     find_all_references_task_sources: Vec<Anchor>,
     next_completion_id: CompletionId,
     code_actions_for_selection: CodeActionsForSelection,
@@ -2039,8 +2035,6 @@ impl Editor {
             completion_tasks: Vec::new(),
             inline_blame_popover: None,
             inline_blame_popover_show_task: None,
-            signature_help_state: SignatureHelpState::default(),
-            auto_signature_help: None,
             find_all_references_task_sources: Vec::new(),
             next_completion_id: 0,
             code_action_providers,
@@ -2208,7 +2202,6 @@ impl Editor {
             |editor, _, e: &EditorEvent, window, cx| match e {
                 EditorEvent::ScrollPositionChanged { local, .. } => {
                     if *local {
-                        editor.hide_signature_help(cx, SignatureHelpHiddenBy::Escape);
                         editor.hide_blame_popover(true, cx);
                         let snapshot = editor.snapshot(window, cx);
                         let new_anchor = editor
@@ -2354,10 +2347,6 @@ impl Editor {
                 }
             }
             None => {}
-        }
-
-        if self.signature_help_state.has_multiple_signatures() {
-            key_context.add("showing_signature_help");
         }
 
         // Disable vim contexts when a sub-editor (e.g. rename/inline assistant) is focused.
@@ -3061,7 +3050,6 @@ impl Editor {
         dismissed |= self.take_rename(false, window, cx).is_some();
         dismissed |= self.hide_blame_popover(true, cx);
         dismissed |= hide_hover(self, cx);
-        dismissed |= self.hide_signature_help(cx, SignatureHelpHiddenBy::Escape);
         dismissed |= self.hide_context_menu(window, cx).is_some();
         dismissed |= self.mouse_context_menu.take().is_some();
         dismissed |= self.snippet_stack.pop().is_some();
@@ -6582,38 +6570,6 @@ impl Editor {
     ) {
         if let Some(context_menu) = self.context_menu.borrow_mut().as_mut() {
             context_menu.select_last(self.completion_provider.as_deref(), window, cx);
-        }
-    }
-
-    pub fn signature_help_prev(
-        &mut self,
-        _: &SignatureHelpPrevious,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(popover) = self.signature_help_state.popover_mut() {
-            if popover.current_signature == 0 {
-                popover.current_signature = popover.signatures.len() - 1;
-            } else {
-                popover.current_signature -= 1;
-            }
-            cx.notify();
-        }
-    }
-
-    pub fn signature_help_next(
-        &mut self,
-        _: &SignatureHelpNext,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(popover) = self.signature_help_state.popover_mut() {
-            if popover.current_signature + 1 == popover.signatures.len() {
-                popover.current_signature = 0;
-            } else {
-                popover.current_signature += 1;
-            }
-            cx.notify();
         }
     }
 

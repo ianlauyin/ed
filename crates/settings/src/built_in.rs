@@ -341,8 +341,6 @@ fn editor_settings() -> EditorSettingsContent {
             center_on_match: Some(false),
             search_on_type: Some(true),
         }),
-        auto_signature_help: Some(false),
-        show_signature_help_after_edits: Some(false),
         minimum_contrast_for_highlights: Some(MinimumContrast(45.0)),
         go_to_definition_fallback: Some(GoToDefinitionFallback::FindAllReferences),
         lsp_results_location: Some(OpenResultsIn::MultiBuffer),

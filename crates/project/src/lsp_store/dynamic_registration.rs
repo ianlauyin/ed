@@ -680,25 +680,6 @@ impl LspStore {
                         |capabilities| &mut capabilities.hover_provider,
                     )?;
                 }
-                "textDocument/signatureHelp" => {
-                    let document_selector =
-                        parse_text_document_registration(reg.register_options.as_ref())?;
-                    if let Some(caps) = reg
-                        .register_options
-                        .map(serde_json::from_value)
-                        .transpose()?
-                    {
-                        self.register_dynamic_text_document_capability(
-                            &server,
-                            &reg.method,
-                            reg.id,
-                            caps,
-                            document_selector,
-                            cx,
-                            |capabilities| &mut capabilities.signature_help_provider,
-                        )?;
-                    }
-                }
                 "textDocument/didChange" => {
                     if let Some(sync_kind) = reg
                         .register_options
@@ -1095,14 +1076,6 @@ impl LspStore {
                         unreg,
                         cx,
                         |capabilities| &mut capabilities.hover_provider,
-                    )?;
-                }
-                "textDocument/signatureHelp" => {
-                    self.unregister_dynamic_text_document_capability(
-                        &server,
-                        unreg,
-                        cx,
-                        |capabilities| &mut capabilities.signature_help_provider,
                     )?;
                 }
                 "textDocument/semanticTokens" => {

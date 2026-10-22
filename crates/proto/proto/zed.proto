@@ -138,9 +138,6 @@ message Envelope {
     LinkedEditingRange linked_editing_range = 209;
     LinkedEditingRangeResponse linked_editing_range_response = 210;
 
-    GetSignatureHelp get_signature_help = 217;
-    GetSignatureHelpResponse get_signature_help_response = 218;
-
     ListRemoteDirectory list_remote_directory = 219;
     ListRemoteDirectoryResponse list_remote_directory_response = 220;
     AddWorktree add_worktree = 222;
@@ -390,6 +387,7 @@ message Envelope {
   reserved 264 to 265; // Removed permalinks.
   reserved 480 to 481; // Removed permalinks.
   reserved 423 to 424; // Removed remote profiling.
+  reserved 217, 218; // Removed signature help.
   reserved 348; // Removed debugger.
   reserved 369 to 370; // Removed debugger.
   reserved 102 to 103;

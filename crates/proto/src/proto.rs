@@ -98,8 +98,6 @@ messages!(
     (GetProjectSymbolsResponse, Background),
     (GetReferences, Background),
     (GetReferencesResponse, Background),
-    (GetSignatureHelp, Background),
-    (GetSignatureHelpResponse, Background),
     (GetTerminalShell, Background),
     (GetTerminalShellResponse, Background),
     (GetTypeDefinition, Background),
@@ -321,7 +319,6 @@ request_messages!(
     (GetHover, GetHoverResponse),
     (GetProjectSymbols, GetProjectSymbolsResponse),
     (GetReferences, GetReferencesResponse),
-    (GetSignatureHelp, GetSignatureHelpResponse),
     (OpenUnstagedDiff, OpenUnstagedDiffResponse),
     (OpenUncommittedDiff, OpenUncommittedDiffResponse),
     (GetTypeDefinition, GetTypeDefinitionResponse),
@@ -460,7 +457,6 @@ lsp_messages!(
     (GetDocumentLinks, GetDocumentLinksResponse, true),
     (GetHover, GetHoverResponse, true),
     (GetCodeActions, GetCodeActionsResponse, true),
-    (GetSignatureHelp, GetSignatureHelpResponse, true),
     (GetCodeLens, GetCodeLensResponse, true),
     (GetDocumentDiagnostics, GetDocumentDiagnosticsResponse, true),
     (GetDefinition, GetDefinitionResponse, true),
@@ -515,7 +511,6 @@ entity_messages!(
     GetHover,
     GetProjectSymbols,
     GetReferences,
-    GetSignatureHelp,
     OpenUnstagedDiff,
     OpenUncommittedDiff,
     GetTypeDefinition,
@@ -802,7 +797,6 @@ impl LspQuery {
         match self.request {
             Some(lsp_query::Request::GetHover(_)) => ("GetHover", false),
             Some(lsp_query::Request::GetCodeActions(_)) => ("GetCodeActions", true),
-            Some(lsp_query::Request::GetSignatureHelp(_)) => ("GetSignatureHelp", false),
             Some(lsp_query::Request::GetCodeLens(_)) => ("GetCodeLens", true),
             Some(lsp_query::Request::GetDocumentDiagnostics(_)) => {
                 ("GetDocumentDiagnostics", false)
