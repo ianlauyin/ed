@@ -107,12 +107,6 @@ pub struct EditorSettingsContent {
     /// Default: 4.0
     #[serde(serialize_with = "crate::serialize_optional_f32_with_two_decimal_places")]
     pub fast_scroll_sensitivity: Option<f32>,
-    /// Whether the line numbers on editors gutter are relative or not.
-    /// When "enabled" shows relative number of buffer lines, when "wrapped" shows
-    /// relative number of display lines.
-    ///
-    /// Default: "disabled"
-    pub relative_line_numbers: Option<RelativeLineNumbers>,
     /// When to populate a new search's query based on the text under the cursor.
     ///
     /// Default: always
@@ -268,26 +262,6 @@ pub struct EditorSettingsContent {
 
 #[derive(
     Debug,
-    Clone,
-    Copy,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum RelativeLineNumbers {
-    Disabled,
-    Enabled,
-    Wrapped,
-}
-
-#[derive(
-    Debug,
     Default,
     Clone,
     Copy,
@@ -326,21 +300,6 @@ pub enum CompletionMenuItemKind {
     #[default]
     Off,
     Symbol,
-}
-
-impl RelativeLineNumbers {
-    pub fn enabled(&self) -> bool {
-        match self {
-            RelativeLineNumbers::Enabled | RelativeLineNumbers::Wrapped => true,
-            RelativeLineNumbers::Disabled => false,
-        }
-    }
-    pub fn wrapped(&self) -> bool {
-        match self {
-            RelativeLineNumbers::Enabled | RelativeLineNumbers::Disabled => false,
-            RelativeLineNumbers::Wrapped => true,
-        }
-    }
 }
 
 #[with_fallible_options]

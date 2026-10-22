@@ -324,7 +324,6 @@ fn editor_settings() -> EditorSettingsContent {
         scroll_sensitivity: Some(1.0),
         mouse_wheel_zoom: Some(false),
         fast_scroll_sensitivity: Some(4.0),
-        relative_line_numbers: Some(RelativeLineNumbers::Disabled),
         seed_search_query_from_cursor: Some(SeedQuerySetting::Always),
         use_smartcase_search: Some(false),
         multi_cursor_modifier: Some(MultiCursorModifier::Alt),

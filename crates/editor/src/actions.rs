@@ -864,8 +864,6 @@ actions!(
         SwapSelectionEnds,
         /// Sets a mark at the current position.
         SetMark,
-        /// Toggles relative line numbers display.
-        ToggleRelativeLineNumbers,
         /// Toggles diff display for selected hunks.
         #[action(deprecated_aliases = ["editor::ToggleHunkDiff"])]
         ToggleSelectedDiffHunks,

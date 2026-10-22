@@ -579,7 +579,6 @@ impl EditorElement {
         register_action(editor, window, Editor::toggle_tab_bar);
         register_action(editor, window, Editor::toggle_breadcrumb);
         register_action(editor, window, Editor::toggle_line_numbers);
-        register_action(editor, window, Editor::toggle_relative_line_numbers);
         register_action(editor, window, Editor::toggle_indent_guides);
 
         if editor.read(cx).lsp_data_enabled() {
@@ -2380,7 +2379,6 @@ impl EditorElement {
         &self,
         gutter: &Gutter<'_>,
         active_rows: &BTreeMap<DisplayRow, LineHighlightSpec>,
-        current_selection_head: Option<DisplayRow>,
         window: &mut Window,
         cx: &mut App,
     ) -> Arc<HashMap<MultiBufferRow, LineNumberLayout>> {
@@ -2392,21 +2390,6 @@ impl EditorElement {
             return Arc::default();
         }
 
-        let relative = self.editor.read(cx).relative_line_numbers(cx);
-
-        let relative_line_numbers_enabled = relative.enabled();
-        let relative_rows = if relative_line_numbers_enabled
-            && let Some(current_selection_head) = current_selection_head
-        {
-            gutter.snapshot.calculate_relative_line_numbers(
-                &gutter.range,
-                current_selection_head,
-                relative.wrapped(),
-            )
-        } else {
-            Default::default()
-        };
-
         let mut line_number = String::new();
         let segments = gutter
             .row_infos
@@ -2415,14 +2398,8 @@ impl EditorElement {
             .flat_map(|(ix, row_info)| {
                 let display_row = DisplayRow(gutter.range.start.0 + ix as u32);
                 line_number.clear();
-                let non_relative_number = if relative.wrapped() {
-                    row_info.buffer_row.or(row_info.wrapped_buffer_row)? + 1
-                } else {
-                    row_info.buffer_row? + 1
-                };
-                let relative_number = relative_rows.get(&display_row);
-                if !(relative_line_numbers_enabled && relative_number.is_some())
-                    && !gutter.snapshot.number_deleted_lines
+                let number = row_info.buffer_row? + 1;
+                if !gutter.snapshot.number_deleted_lines
                     && row_info
                         .diff_status
                         .is_some_and(|status| status.is_deleted())
@@ -2430,7 +2407,6 @@ impl EditorElement {
                     return None;
                 }
 
-                let number = relative_number.unwrap_or(&non_relative_number);
                 write!(&mut line_number, "{number}").unwrap();
 
                 let spec = active_rows.get(&display_row);
@@ -7746,7 +7722,6 @@ impl Element for EditorElement {
                         cx,
                     );
 
-                    // relative rows are based on newest selection, even outside the visible area
                     let current_selection_head = self.editor.update(cx, |editor, cx| {
                         (editor.selections.count() != 0).then(|| {
                             let newest = editor
@@ -7782,13 +7757,7 @@ impl Element for EditorElement {
                         row_infos: &row_infos,
                     };
 
-                    let line_numbers = self.layout_line_numbers(
-                        &gutter,
-                        &active_rows,
-                        current_selection_head,
-                        window,
-                        cx,
-                    );
+                    let line_numbers = self.layout_line_numbers(&gutter, &active_rows, window, cx);
 
                     let mut expand_toggles =
                         window.with_element_namespace("expand_toggles", |window| {

@@ -187,9 +187,7 @@ use rpc::{ErrorCode, ErrorExt};
 use scroll::{Autoscroll, ScrollAnchor, ScrollManager, SharedScrollAnchor};
 use selections_collection::{MutableSelectionsCollection, SelectionsCollection};
 use serde::{Deserialize, Serialize};
-use settings::{
-    GitGutterSetting, RelativeLineNumbers, Settings, SettingsStore, update_settings_file,
-};
+use settings::{GitGutterSetting, Settings, SettingsStore, update_settings_file};
 use smallvec::{SmallVec, smallvec};
 use snippet::Snippet;
 use std::{
@@ -943,7 +941,6 @@ pub struct Editor {
     enable_mouse_wheel_zoom: bool,
     search_results_hold: Option<SearchResultsHold>,
     show_line_numbers: Option<bool>,
-    use_relative_line_numbers: Option<bool>,
     show_git_diff_gutter: Option<bool>,
     show_code_actions: Option<bool>,
     show_runnables: Option<bool>,
@@ -2013,7 +2010,6 @@ impl Editor {
             show_gutter: full_mode,
             search_results_hold: None,
             show_line_numbers: (!full_mode).then_some(false),
-            use_relative_line_numbers: None,
             disable_expand_excerpt_buttons: !full_mode,
             delegate_expand_excerpts: false,
             delegate_open_excerpts: false,
@@ -10517,98 +10513,6 @@ impl EditorSnapshot {
         } else {
             GutterDimensions::default()
         }
-    }
-
-    /// Returns the line delta from `base` to `line` in the multibuffer, ignoring wrapped lines.
-    ///
-    /// This is positive if `base` is before `line`.
-    fn relative_line_delta(
-        &self,
-        current_selection_head: DisplayRow,
-        first_visible_row: DisplayRow,
-        consider_wrapped_lines: bool,
-    ) -> i64 {
-        let current_selection_head = current_selection_head.as_display_point().to_point(self);
-        let first_visible_row = first_visible_row.as_display_point().to_point(self);
-
-        if consider_wrapped_lines {
-            let wrap_snapshot = self.wrap_snapshot();
-            let base_wrap_row = wrap_snapshot
-                .make_wrap_point(current_selection_head, Bias::Left)
-                .row();
-            let wrap_row = wrap_snapshot
-                .make_wrap_point(first_visible_row, Bias::Left)
-                .row();
-
-            wrap_row.0 as i64 - base_wrap_row.0 as i64
-        } else {
-            let fold_snapshot = self.fold_snapshot();
-            let base_fold_row = fold_snapshot
-                .to_fold_point(self.to_inlay_point(current_selection_head), Bias::Left)
-                .row();
-            let fold_row = fold_snapshot
-                .to_fold_point(self.to_inlay_point(first_visible_row), Bias::Left)
-                .row();
-
-            fold_row as i64 - base_fold_row as i64
-        }
-    }
-
-    /// Returns the unsigned relative line number to display for each row in `rows`.
-    ///
-    /// Wrapped rows are excluded from the hashmap if `count_relative_lines` is `false`.
-    pub fn calculate_relative_line_numbers(
-        &self,
-        rows: &Range<DisplayRow>,
-        current_selection_head: DisplayRow,
-        count_wrapped_lines: bool,
-    ) -> HashMap<DisplayRow, u32> {
-        let mut row_infos = self
-            .row_infos(rows.start)
-            .take(rows.len())
-            .enumerate()
-            .map(|(index, row_info)| (DisplayRow(rows.start.0 + index as u32), row_info))
-            .filter(|(_row, row_info)| {
-                row_info.buffer_row.is_some()
-                    || (count_wrapped_lines && row_info.wrapped_buffer_row.is_some())
-            })
-            .peekable();
-
-        // We find the first row that actually passes the filter and calculate its
-        // delta independently. This ensures accuracy when scrolling, as the first
-        // visible row in `rows` might be a wrap part that is filtered out, which
-        // would otherwise offset the counter for subsequent lines if we used
-        // `rows.start` as the base for enumeration.
-        let Some((first_row, _)) = row_infos.peek() else {
-            return HashMap::default();
-        };
-
-        let mut current_delta =
-            self.relative_line_delta(current_selection_head, *first_row, count_wrapped_lines);
-
-        row_infos
-            .filter_map(|(row, row_info)| {
-                let is_deleted = row_info
-                    .diff_status
-                    .is_some_and(|status| status.is_deleted());
-
-                if !self.number_deleted_lines && is_deleted {
-                    // Even if we don't number this line, it still counts as a unit
-                    // of distance for the relative numbers of lines below it.
-                    current_delta += 1;
-                    return None;
-                }
-
-                // We want to ensure here that the current line has absolute
-                // numbering, even if we are in a soft-wrapped line. With the
-                // exception that if we are in a deleted line, we should number this
-                // relative with 0, as otherwise it would have no line number at all
-                let relative_line_number = current_delta.unsigned_abs() as u32;
-                current_delta += 1;
-
-                (relative_line_number != 0 || is_deleted).then_some((row, relative_line_number))
-            })
-            .collect()
     }
 }
 

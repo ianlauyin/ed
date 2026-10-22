@@ -9,7 +9,7 @@ pub use settings::{
     MultiCursorModifier, OpenResultsIn, ScrollBeyondLastLine, SeedQuerySetting, ShowMinimap,
     SnippetSortOrder,
 };
-use settings::{RegisterSetting, RelativeLineNumbers, Settings};
+use settings::{RegisterSetting, Settings};
 use ui::scrollbars::ShowScrollbar;
 
 /// Imports from the VSCode settings at
@@ -37,7 +37,6 @@ pub struct EditorSettings {
     pub scroll_sensitivity: f32,
     pub mouse_wheel_zoom: bool,
     pub fast_scroll_sensitivity: f32,
-    pub relative_line_numbers: RelativeLineNumbers,
     pub seed_search_query_from_cursor: SeedQuerySetting,
     pub use_smartcase_search: bool,
     pub multi_cursor_modifier: MultiCursorModifier,
@@ -213,7 +212,6 @@ impl Settings for EditorSettings {
             scroll_sensitivity: editor.scroll_sensitivity.unwrap(),
             mouse_wheel_zoom: editor.mouse_wheel_zoom.unwrap(),
             fast_scroll_sensitivity: editor.fast_scroll_sensitivity.unwrap(),
-            relative_line_numbers: editor.relative_line_numbers.unwrap(),
             seed_search_query_from_cursor: editor.seed_search_query_from_cursor.unwrap(),
             use_smartcase_search: editor.use_smartcase_search.unwrap(),
             multi_cursor_modifier: editor.multi_cursor_modifier.unwrap(),

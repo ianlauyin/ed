@@ -91,23 +91,6 @@ impl Editor {
         EditorSettings::get_global(cx).gutter.line_numbers
     }
 
-    pub fn relative_line_numbers(&self, cx: &App) -> RelativeLineNumbers {
-        match (
-            self.use_relative_line_numbers,
-            EditorSettings::get_global(cx).relative_line_numbers,
-        ) {
-            (None, setting) => setting,
-            (Some(false), _) => RelativeLineNumbers::Disabled,
-            (Some(true), RelativeLineNumbers::Wrapped) => RelativeLineNumbers::Wrapped,
-            (Some(true), _) => RelativeLineNumbers::Enabled,
-        }
-    }
-
-    pub fn set_relative_line_number(&mut self, is_relative: Option<bool>, cx: &mut Context<Self>) {
-        self.use_relative_line_numbers = is_relative;
-        cx.notify();
-    }
-
     pub fn set_show_gutter(&mut self, show_gutter: bool, cx: &mut Context<Self>) {
         self.show_gutter = show_gutter;
         cx.notify();
@@ -330,16 +313,6 @@ impl Editor {
     pub(super) fn has_indent_guides_disabled_for_buffer(&self, buffer_id: BufferId) -> bool {
         self.buffers_with_disabled_indent_guides
             .contains(&buffer_id)
-    }
-
-    pub(super) fn toggle_relative_line_numbers(
-        &mut self,
-        _: &ToggleRelativeLineNumbers,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let is_relative = self.relative_line_numbers(cx);
-        self.set_relative_line_number(Some(!is_relative.enabled()), cx)
     }
 
     pub(super) fn set_number_deleted_lines(&mut self, number: bool, cx: &mut Context<Self>) {
