@@ -292,11 +292,6 @@ pub struct GitPanelSettingsContent {
     /// Default: icon
     pub folder_indicator: Option<FolderIndicator>,
 
-    /// How and when the scrollbar should be displayed.
-    ///
-    /// Default: auto
-    pub scrollbar: Option<ScrollbarSettings>,
-
     /// What the default branch name should be when
     /// `init.defaultBranch` is not set in git
     ///
@@ -458,14 +453,6 @@ pub enum StatusStyle {
 }
 
 #[with_fallible_options]
-#[derive(
-    Copy, Clone, Default, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq,
-)]
-pub struct ScrollbarSettings {
-    pub show: Option<ShowScrollbar>,
-}
-
-#[with_fallible_options]
 #[derive(Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, PartialEq)]
 pub struct CommandPaletteSettingsContent {
     /// Whether to use command history ranking for sorting in the command palette.
@@ -615,8 +602,6 @@ pub struct OutlinePanelSettingsContent {
     pub auto_fold_dirs: Option<bool>,
     /// Settings related to indent guides in the outline panel.
     pub indent_guides: Option<IndentGuidesSettingsContent>,
-    /// Scrollbar-related settings
-    pub scrollbar: Option<ScrollbarSettingsContent>,
     /// Default depth to expand outline items in the current file.
     /// The default depth to which outline entries are expanded on reveal.
     /// - Set to 0 to collapse all items that have children

@@ -48,7 +48,9 @@
   track, a thin rounded thumb inset in a 14px hitbox.
   It auto-shows while scrolling or when the buffer has markers (git hunks,
   highlights, diagnostics, off-screen cursors). Panels and the terminal
-  default their scrollbars to `auto` instead of inheriting from the editor.
+  default their scrollbars to `auto` instead of inheriting from the editor;
+  panels and the terminal have no `scrollbar` setting (always `auto`), and
+  the project panel always scrolls horizontally for long file names.
 - No sticky scroll: enclosing outline items are never pinned to the top of
   the editor (removed with its `sticky_scroll` setting). Multibuffer sticky
   buffer headers are a separate feature and remain.

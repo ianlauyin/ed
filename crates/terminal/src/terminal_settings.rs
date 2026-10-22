@@ -6,8 +6,8 @@ use serde::{Deserialize, Serialize};
 pub use settings::AlternateScroll;
 
 use settings::{
-    IntoGpui, PathHyperlinkRegex, RegisterSetting, ShowScrollbar, TerminalBlink,
-    TerminalDockPosition, TerminalLineHeight, WorkingDirectory,
+    IntoGpui, PathHyperlinkRegex, RegisterSetting, TerminalBlink, TerminalDockPosition,
+    TerminalLineHeight, WorkingDirectory,
 };
 use task::Shell;
 use theme_settings::FontFamilyName;
@@ -38,18 +38,9 @@ pub struct TerminalSettings {
     pub detect_venv: bool,
     pub max_scroll_history_lines: Option<usize>,
     pub scroll_multiplier: f32,
-    pub scrollbar: ScrollbarSettings,
     pub minimum_contrast: f32,
     pub path_hyperlink_regexes: Vec<String>,
     pub path_hyperlink_timeout_ms: u64,
-}
-
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-pub struct ScrollbarSettings {
-    /// When to show the scrollbar in the terminal.
-    ///
-    /// Default: inherits editor scrollbar settings
-    pub show: Option<ShowScrollbar>,
 }
 
 fn settings_shell_to_task_shell(shell: settings::Shell) -> Shell {
@@ -104,9 +95,6 @@ impl settings::Settings for TerminalSettings {
             detect_venv: project_content.detect_venv.unwrap(),
             scroll_multiplier: user_content.scroll_multiplier.unwrap(),
             max_scroll_history_lines: user_content.max_scroll_history_lines,
-            scrollbar: ScrollbarSettings {
-                show: user_content.scrollbar.unwrap().show,
-            },
             minimum_contrast: user_content.minimum_contrast.unwrap(),
             path_hyperlink_regexes: project_content
                 .path_hyperlink_regexes

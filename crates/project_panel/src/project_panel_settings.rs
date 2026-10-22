@@ -1,4 +1,3 @@
-use editor::ui_scrollbar_settings_from_raw;
 use gpui::Pixels;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -7,7 +6,6 @@ use settings::{
     ProjectPanelSortOrder, ProjectPanelTitleTooltipDelay, RegisterSetting, Settings,
     ShowDiagnostics, ShowIndentGuides,
 };
-use ui::scrollbars::{ScrollbarVisibility, ShowScrollbar};
 
 #[derive(Deserialize, Debug, Clone, Copy, PartialEq, RegisterSetting)]
 pub struct ProjectPanelSettings {
@@ -26,7 +24,6 @@ pub struct ProjectPanelSettings {
     pub auto_reveal_entries: bool,
     pub auto_fold_dirs: bool,
     pub starts_open: bool,
-    pub scrollbar: ScrollbarSettings,
     pub show_diagnostics: ShowDiagnostics,
     pub hide_root: bool,
     pub hide_hidden: bool,
@@ -41,19 +38,6 @@ pub struct ProjectPanelSettings {
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
 pub struct IndentGuidesSettings {
     pub show: ShowIndentGuides,
-}
-
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-pub struct ScrollbarSettings {
-    /// When to show the scrollbar in the project panel.
-    ///
-    /// Default: inherits editor scrollbar settings
-    pub show: Option<ShowScrollbar>,
-    /// Whether to allow horizontal scrolling in the project panel.
-    /// When false, the view is locked to the leftmost position and long file names are clipped.
-    ///
-    /// Default: true
-    pub horizontal_scroll: bool,
 }
 
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
@@ -77,18 +61,6 @@ impl AutoOpenSettings {
     #[inline]
     pub fn should_open_on_drop(self) -> bool {
         self.on_drop
-    }
-}
-
-#[derive(Default)]
-pub(crate) struct ProjectPanelScrollbarProxy;
-
-impl ScrollbarVisibility for ProjectPanelScrollbarProxy {
-    fn visibility(&self, cx: &ui::App) -> ShowScrollbar {
-        ProjectPanelSettings::get_global(cx)
-            .scrollbar
-            .show
-            .unwrap_or_default()
     }
 }
 
@@ -120,13 +92,6 @@ impl Settings for ProjectPanelSettings {
             auto_reveal_entries: project_panel.auto_reveal_entries.unwrap(),
             auto_fold_dirs: project_panel.auto_fold_dirs.unwrap(),
             starts_open: project_panel.starts_open.unwrap(),
-            scrollbar: {
-                let scrollbar = project_panel.scrollbar.unwrap();
-                ScrollbarSettings {
-                    show: scrollbar.show.map(ui_scrollbar_settings_from_raw),
-                    horizontal_scroll: scrollbar.horizontal_scroll.unwrap(),
-                }
-            },
             show_diagnostics: project_panel.show_diagnostics.unwrap(),
             hide_root: project_panel.hide_root.unwrap(),
             hide_hidden: project_panel.hide_hidden.unwrap(),

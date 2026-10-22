@@ -201,8 +201,6 @@ pub struct TerminalSettingsContent {
     ///
     /// Default: 1.0
     pub scroll_multiplier: Option<f32>,
-    /// Scrollbar-related settings
-    pub scrollbar: Option<ScrollbarSettingsContent>,
     /// The minimum APCA perceptual contrast between foreground and background colors.
     ///
     /// APCA (Accessible Perceptual Contrast Algorithm) is more accurate than WCAG 2.x,
@@ -228,7 +226,7 @@ crate::fallible_options::flattened_deserialize!(TerminalSettingsContent {
         cursor_shape, blinking, alternate_scroll, option_as_meta, copy_on_select,
         keep_selection_on_copy, open_links_in_mouse_mode, button, dock, flexible,
         default_width, default_height, max_scroll_history_lines, scroll_multiplier,
-        scrollbar, minimum_contrast,
+        minimum_contrast,
     },
     defaults: {},
 });
@@ -294,17 +292,6 @@ pub enum WorkingDirectory {
     /// If this path is not a valid directory the terminal will default to
     /// this platform's home directory  (if it can be found).
     Always { directory: String },
-}
-
-#[with_fallible_options]
-#[derive(
-    Clone, Copy, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq, Default,
-)]
-pub struct ScrollbarSettingsContent {
-    /// When to show the scrollbar in the terminal.
-    ///
-    /// Default: auto
-    pub show: Option<ShowScrollbar>,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, JsonSchema, MergeFrom, Default)]

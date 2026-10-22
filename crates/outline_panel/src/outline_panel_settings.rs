@@ -1,8 +1,6 @@
-use editor::ui_scrollbar_settings_from_raw;
-use gpui::{App, Pixels};
+use gpui::Pixels;
 pub use settings::{DockSide, FolderIndicator, Settings, ShowIndentGuides};
 use settings::{IntoGpui, RegisterSetting};
-use ui::scrollbars::{ScrollbarVisibility, ShowScrollbar};
 
 #[derive(Debug, Clone, Copy, PartialEq, RegisterSetting)]
 pub struct OutlinePanelSettings {
@@ -16,34 +14,13 @@ pub struct OutlinePanelSettings {
     pub indent_guides: IndentGuidesSettings,
     pub auto_reveal_entries: bool,
     pub auto_fold_dirs: bool,
-    pub scrollbar: ScrollbarSettings,
     pub expand_outlines_with_depth: usize,
     pub multi_buffer_hide_symbols: bool,
 }
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct ScrollbarSettings {
-    /// When to show the scrollbar in the project panel.
-    ///
-    /// Default: inherits editor scrollbar settings
-    pub show: Option<ShowScrollbar>,
-}
-
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub struct IndentGuidesSettings {
     pub show: ShowIndentGuides,
-}
-
-#[derive(Default)]
-pub(crate) struct OutlinePanelSettingsScrollbarProxy;
-
-impl ScrollbarVisibility for OutlinePanelSettingsScrollbarProxy {
-    fn visibility(&self, cx: &App) -> ShowScrollbar {
-        OutlinePanelSettings::get_global(cx)
-            .scrollbar
-            .show
-            .unwrap_or_default()
-    }
 }
 
 impl Settings for OutlinePanelSettings {
@@ -69,13 +46,6 @@ impl Settings for OutlinePanelSettings {
             },
             auto_reveal_entries: panel.auto_reveal_entries.unwrap(),
             auto_fold_dirs: panel.auto_fold_dirs.unwrap(),
-            scrollbar: ScrollbarSettings {
-                show: panel
-                    .scrollbar
-                    .unwrap()
-                    .show
-                    .map(ui_scrollbar_settings_from_raw),
-            },
             expand_outlines_with_depth: panel.expand_outlines_with_depth.unwrap(),
             multi_buffer_hide_symbols: panel.multi_buffer_hide_symbols.unwrap(),
         }

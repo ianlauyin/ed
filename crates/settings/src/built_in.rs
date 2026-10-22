@@ -31,9 +31,6 @@ pub fn settings() -> SettingsContent {
             default_width: Some(PixelSetting(360.0)),
             status_style: Some(StatusStyle::Icon),
             folder_indicator: Some(FolderIndicator::Icon),
-            scrollbar: Some(ScrollbarSettings {
-                ..Default::default()
-            }),
             fallback_branch_name: Some("main".into()),
             sort_by: Some(GitPanelSortBy::Path),
             group_by: Some(GitPanelGroupBy::Status),
@@ -170,7 +167,6 @@ pub fn settings() -> SettingsContent {
             indent_guides: Some(IndentGuidesSettingsContent {
                 show: Some(ShowIndentGuides::Always),
             }),
-            scrollbar: Some(ScrollbarSettingsContent { show: None }),
             expand_outlines_with_depth: Some(100),
             multi_buffer_hide_symbols: Some(false),
         }),
@@ -188,10 +184,6 @@ pub fn settings() -> SettingsContent {
             auto_reveal_entries: Some(true),
             auto_fold_dirs: Some(true),
             starts_open: Some(true),
-            scrollbar: Some(ProjectPanelScrollbarSettingsContent {
-                show: None,
-                horizontal_scroll: Some(true),
-            }),
             show_diagnostics: Some(ShowDiagnostics::All),
             indent_guides: Some(ProjectPanelIndentGuidesSettings {
                 show: Some(ShowIndentGuides::Always),
@@ -272,9 +264,6 @@ fn terminal_settings() -> Option<TerminalSettingsContent> {
         default_height: Some(PixelSetting(320.0)),
         max_scroll_history_lines: Some(10000),
         scroll_multiplier: Some(1.0),
-        scrollbar: Some(ScrollbarSettingsContent {
-            show: None,
-        }),
         minimum_contrast: Some(45.0),
         ..Default::default()
     })
@@ -550,16 +539,7 @@ fn language_settings() -> AllLanguageSettingsContent {
             [
                 (
                     "JSONC".into(),
-                    ExtendingSet(
-                        [
-                            "**/.zed/*.json".into(),
-                            "**/.vscode/**/*.json".into(),
-                            "**/{zed,Zed}/{settings,keymap,tasks,debug}.json".into(),
-                            "tsconfig*.json".into(),
-                        ]
-                        .into_iter()
-                        .collect(),
-                    ),
+                    ExtendingSet(["tsconfig*.json".into()].into_iter().collect()),
                 ),
                 (
                     "Markdown".into(),

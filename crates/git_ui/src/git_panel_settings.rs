@@ -1,18 +1,9 @@
-use editor::ui_scrollbar_settings_from_raw;
 use gpui::Pixels;
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
 use settings::{
     FolderIndicator, GitPanelClickBehavior, GitPanelCommitEditor, GitPanelGroupBy, GitPanelSortBy,
     IntoGpui, RegisterSetting, Settings, StatusStyle,
 };
-use ui::scrollbars::{ScrollbarVisibility, ShowScrollbar};
 use workspace::dock::DockPosition;
-
-#[derive(Copy, Clone, Debug, Serialize, Deserialize, JsonSchema, PartialEq, Eq)]
-pub struct ScrollbarSettings {
-    pub show: Option<ShowScrollbar>,
-}
 
 #[derive(Debug, Clone, PartialEq, RegisterSetting)]
 pub struct GitPanelSettings {
@@ -21,7 +12,6 @@ pub struct GitPanelSettings {
     pub default_width: Pixels,
     pub status_style: StatusStyle,
     pub folder_indicator: FolderIndicator,
-    pub scrollbar: ScrollbarSettings,
     pub fallback_branch_name: String,
     pub sort_by: GitPanelSortBy,
     pub group_by: GitPanelGroupBy,
@@ -33,18 +23,6 @@ pub struct GitPanelSettings {
     pub commit_editor: GitPanelCommitEditor,
 }
 
-#[derive(Default)]
-pub(crate) struct GitPanelScrollbarAccessor;
-
-impl ScrollbarVisibility for GitPanelScrollbarAccessor {
-    fn visibility(&self, cx: &ui::App) -> ShowScrollbar {
-        GitPanelSettings::get_global(cx)
-            .scrollbar
-            .show
-            .unwrap_or_default()
-    }
-}
-
 impl Settings for GitPanelSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let git_panel = content.git_panel.clone().unwrap();
@@ -54,13 +32,6 @@ impl Settings for GitPanelSettings {
             default_width: git_panel.default_width.unwrap().into_gpui(),
             status_style: git_panel.status_style.unwrap(),
             folder_indicator: git_panel.folder_indicator.unwrap(),
-            scrollbar: ScrollbarSettings {
-                show: git_panel
-                    .scrollbar
-                    .unwrap()
-                    .show
-                    .map(ui_scrollbar_settings_from_raw),
-            },
             fallback_branch_name: git_panel.fallback_branch_name.unwrap(),
             sort_by: git_panel.sort_by.unwrap(),
             group_by: git_panel.group_by.unwrap(),

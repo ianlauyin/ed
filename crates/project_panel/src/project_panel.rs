@@ -85,10 +85,7 @@ use zed_actions::{
     workspace::OpenWithSystem,
 };
 
-use crate::{
-    project_panel_settings::ProjectPanelScrollbarProxy,
-    undo::{Change, UndoManager},
-};
+use crate::undo::{Change, UndoManager};
 
 const PROJECT_PANEL_KEY: &str = "ProjectPanel";
 const NEW_ENTRY_ID: ProjectEntryId = ProjectEntryId::MAX;
@@ -7464,7 +7461,6 @@ impl Render for ProjectPanel {
         let panel_settings = ProjectPanelSettings::get_global(cx);
         let indent_size = panel_settings.indent_size;
         let show_indent_guides = panel_settings.indent_guides.show == ShowIndentGuides::Always;
-        let horizontal_scroll = panel_settings.scrollbar.horizontal_scroll;
         let show_sticky_entries = {
             if panel_settings.sticky_scroll {
                 let is_scrollable = self.scroll_handle.is_scrollable();
@@ -7860,14 +7856,10 @@ impl Render for ProjectPanel {
                                 })
                             })
                             .with_sizing_behavior(ListSizingBehavior::Infer)
-                            .with_horizontal_sizing_behavior(if horizontal_scroll {
-                                ListHorizontalSizingBehavior::Unconstrained
-                            } else {
-                                ListHorizontalSizingBehavior::FitList
-                            })
-                            .when(horizontal_scroll, |list| {
-                                list.with_width_from_item(self.state.max_width_item_index)
-                            })
+                            .with_horizontal_sizing_behavior(
+                                ListHorizontalSizingBehavior::Unconstrained,
+                            )
+                            .with_width_from_item(self.state.max_width_item_index)
                             .track_scroll(&self.scroll_handle),
                         )
                         .child(
@@ -8033,18 +8025,13 @@ impl Render for ProjectPanel {
                         .size_full(),
                 )
                 .custom_scrollbars(
-                    {
-                        let mut scrollbars =
-                            Scrollbars::for_settings::<ProjectPanelScrollbarProxy>()
-                                .tracked_scroll_handle(&self.scroll_handle);
-                        if horizontal_scroll {
-                            scrollbars = scrollbars.with_track_along(
-                                ScrollAxes::Horizontal,
-                                cx.theme().colors().panel_background,
-                            );
-                        }
-                        scrollbars.notify_content()
-                    },
+                    Scrollbars::new(ScrollAxes::Both)
+                        .tracked_scroll_handle(&self.scroll_handle)
+                        .with_track_along(
+                            ScrollAxes::Horizontal,
+                            cx.theme().colors().panel_background,
+                        )
+                        .notify_content(),
                     window,
                     cx,
                 )

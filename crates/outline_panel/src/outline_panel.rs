@@ -60,8 +60,6 @@ use workspace::{
 };
 use worktree::{PathProgress, PathTarget, WorktreeId};
 
-use crate::outline_panel_settings::OutlinePanelSettingsScrollbarProxy;
-
 actions!(
     outline_panel,
     [
@@ -5429,7 +5427,7 @@ impl OutlinePanel {
                 .size_full()
                 .child(list_contents.size_full().flex_shrink_1())
                 .custom_scrollbars(
-                    Scrollbars::for_settings::<OutlinePanelSettingsScrollbarProxy>()
+                    Scrollbars::new(ScrollAxes::Both)
                         .tracked_scroll_handle(&self.scroll_handle.clone())
                         .with_track_along(
                             ScrollAxes::Horizontal,

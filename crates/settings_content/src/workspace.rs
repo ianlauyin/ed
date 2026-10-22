@@ -7,7 +7,7 @@ use settings_macros::{MergeFrom, with_fallible_options};
 
 use crate::{
     CenteredPaddingSettings, CommandAliasTarget, DelayMs, DockPosition, DockSide, InactiveOpacity,
-    ShowIndentGuides, ShowScrollbar, serialize_optional_f32_with_two_decimal_places,
+    ShowIndentGuides, serialize_optional_f32_with_two_decimal_places,
 };
 
 #[with_fallible_options]
@@ -793,8 +793,6 @@ pub struct ProjectPanelSettingsContent {
     ///
     /// Default: true
     pub starts_open: Option<bool>,
-    /// Scrollbar-related settings
-    pub scrollbar: Option<ProjectPanelScrollbarSettingsContent>,
     /// Which files containing diagnostic errors/warnings to mark in the project panel.
     ///
     /// Default: all
@@ -997,23 +995,6 @@ impl From<ProjectPanelSortOrder> for util::paths::SortOrder {
             ProjectPanelSortOrder::Unicode => Self::Unicode,
         }
     }
-}
-
-#[with_fallible_options]
-#[derive(
-    Copy, Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq, Default,
-)]
-pub struct ProjectPanelScrollbarSettingsContent {
-    /// When to show the scrollbar in the project panel.
-    ///
-    /// Default: auto
-    pub show: Option<ShowScrollbar>,
-    /// Whether to allow horizontal scrolling in the project panel.
-    /// When false, the view is locked to the leftmost position and
-    /// long file names are clipped.
-    ///
-    /// Default: true
-    pub horizontal_scroll: Option<bool>,
 }
 
 #[with_fallible_options]

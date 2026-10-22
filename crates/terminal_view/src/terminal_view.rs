@@ -4,9 +4,7 @@ pub mod terminal_panel;
 mod terminal_path_like_target;
 pub mod terminal_scrollbar;
 
-use editor::{
-    Editor, actions::SelectAll, blink_manager::BlinkManager, ui_scrollbar_settings_from_raw,
-};
+use editor::{Editor, actions::SelectAll, blink_manager::BlinkManager};
 use gpui::{
     Action, AnyElement, App, ClipboardEntry, DismissEvent, Entity, EventEmitter, ExternalPaths,
     FocusHandle, Focusable, KeyContext, KeyDownEvent, Keystroke, MouseButton, MouseDownEvent,
@@ -39,11 +37,7 @@ use terminal_element::TerminalElement;
 use terminal_panel::TerminalPanel;
 use terminal_path_like_target::{hover_path_like_target, open_path_like_target};
 use terminal_scrollbar::TerminalScrollHandle;
-use ui::{
-    ContextMenu, Divider, ScrollAxes, Scrollbars, Tooltip, WithScrollbar,
-    prelude::*,
-    scrollbars::{self, ScrollbarVisibility},
-};
+use ui::{ContextMenu, Divider, ScrollAxes, Scrollbars, Tooltip, WithScrollbar, prelude::*};
 use util::ResultExt;
 use workspace::{
     CloseActiveItem, DraggedSelection, DraggedTab, NewCenterTerminal, NewTerminal, Pane, Workspace,
@@ -1122,19 +1116,6 @@ fn regex_search_for_query(query: &SearchQuery) -> Option<Search> {
     }
 }
 
-#[derive(Default)]
-struct TerminalScrollbarSettingsWrapper;
-
-impl ScrollbarVisibility for TerminalScrollbarSettingsWrapper {
-    fn visibility(&self, cx: &App) -> scrollbars::ShowScrollbar {
-        TerminalSettings::get_global(cx)
-            .scrollbar
-            .show
-            .map(ui_scrollbar_settings_from_raw)
-            .unwrap_or_default()
-    }
-}
-
 impl TerminalView {
     /// Attempts to process a keystroke in the terminal. Returns true if handled.
     ///
@@ -1293,7 +1274,7 @@ impl Render for TerminalView {
                             )),
                     )
                     .custom_scrollbars(
-                        Scrollbars::for_settings::<TerminalScrollbarSettingsWrapper>()
+                        Scrollbars::new(ScrollAxes::Both)
                             .show_along(ScrollAxes::Vertical)
                             .with_track_along(
                                 ScrollAxes::Vertical,
