@@ -1428,7 +1428,7 @@ fn render_code_lenses(
         .px_2()
         .py_1()
         .gap_x_2()
-        .font_buffer(cx)
+        .font_ui(cx)
         .text_sm()
         .text_color(lens_color)
         .when(has_content_below, |this| {

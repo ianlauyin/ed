@@ -71,6 +71,8 @@
   resolved alongside the hover request. Always on whenever a language server
   provides lenses: there is no `code_lens` setting, `editor::ToggleCodeLens`
   action or quick action bar toggle.
+- The hover popover's code lens row renders in the UI font, like the outline
+  panel; the signature and docs below it use the shared hover markdown style.
 - The selections menu in the editor toolbar is always shown: there is no
   `toolbar.selections_menu` setting, `editor::ToggleSelectionMenu` action or
   quick action bar toggle.
