@@ -8387,7 +8387,7 @@ fn restore_native_window_state(
 }
 
 actions!(
-    zed,
+    ed,
     [
         /// Opens the Zed log file.
         OpenLog,

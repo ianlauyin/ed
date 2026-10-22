@@ -74,7 +74,7 @@ impl KeyContextView {
                         "".to_string()
                     };
                     let mut name = binding.action().name();
-                    if name == "zed::NoAction" {
+                    if name == "ed::NoAction" {
                         name = "(null)"
                     }
 
@@ -127,7 +127,7 @@ impl KeyContextView {
         if let Some(last_action) = a {
             last_action.partial_eq(b)
         } else {
-            b.name() == "zed::NoAction"
+            b.name() == "ed::NoAction"
         }
     }
 }

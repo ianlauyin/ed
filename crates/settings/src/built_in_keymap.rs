@@ -34,18 +34,18 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             KeyBindingSpec::new("cmd-shift-w", "workspace::CloseWindow"),
             KeyBindingSpec::new("shift-escape", "workspace::ToggleZoom"),
             KeyBindingSpec::new("cmd-o", "workspace::Open"),
-            KeyBindingSpec::new("cmd-=", "zed::IncreaseBufferFontSize")
+            KeyBindingSpec::new("cmd-=", "ed::IncreaseBufferFontSize")
                 .with_input(json!({"persist": false})),
-            KeyBindingSpec::new("cmd-+", "zed::IncreaseBufferFontSize")
+            KeyBindingSpec::new("cmd-+", "ed::IncreaseBufferFontSize")
                 .with_input(json!({"persist": false})),
-            KeyBindingSpec::new("cmd--", "zed::DecreaseBufferFontSize")
+            KeyBindingSpec::new("cmd--", "ed::DecreaseBufferFontSize")
                 .with_input(json!({"persist": false})),
-            KeyBindingSpec::new("cmd-0", "zed::ResetBufferFontSize")
+            KeyBindingSpec::new("cmd-0", "ed::ResetBufferFontSize")
                 .with_input(json!({"persist": false})),
-            KeyBindingSpec::new("cmd-q", "zed::Quit"),
-            KeyBindingSpec::new("cmd-h", "zed::Hide"),
-            KeyBindingSpec::new("alt-cmd-h", "zed::HideOthers"),
-            KeyBindingSpec::new("cmd-m", "zed::Minimize"),
+            KeyBindingSpec::new("cmd-q", "ed::Quit"),
+            KeyBindingSpec::new("cmd-h", "ed::Hide"),
+            KeyBindingSpec::new("alt-cmd-h", "ed::HideOthers"),
+            KeyBindingSpec::new("cmd-m", "ed::Minimize"),
             KeyBindingSpec::new("ctrl-cmd-l", "lsp_tool::ToggleMenu"),
             KeyBindingSpec::new("ctrl-cmd-s", "workspace::ToggleWorktreeSecurity"),
         ],
@@ -518,8 +518,8 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             KeyBindingSpec::new("f6", "workspace::FocusNextPart"),
             KeyBindingSpec::new("shift-f6", "workspace::FocusPreviousPart"),
             KeyBindingSpec::new("cmd-f6", "workspace::FocusNextPart"),
-            KeyBindingSpec::new("fn-f", "zed::ToggleFullScreen"),
-            KeyBindingSpec::new("ctrl-cmd-f", "zed::ToggleFullScreen"),
+            KeyBindingSpec::new("fn-f", "ed::ToggleFullScreen"),
+            KeyBindingSpec::new("ctrl-cmd-f", "ed::ToggleFullScreen"),
             KeyBindingSpec::new("alt-cmd-o", "projects::OpenRecent"),
             KeyBindingSpec::new("ctrl-r", "projects::OpenRecent"),
             KeyBindingSpec::new("ctrl-cmd-o", "projects::OpenRemote")
@@ -1071,13 +1071,13 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
         true,
         [
             KeyBindingSpec::new("cmd-n", "workspace::NewFile"),
-            KeyBindingSpec::new("cmd-=", "zed::IncreaseUiFontSize")
+            KeyBindingSpec::new("cmd-=", "ed::IncreaseUiFontSize")
                 .with_input(json!({"persist": false})),
-            KeyBindingSpec::new("cmd-+", "zed::IncreaseUiFontSize")
+            KeyBindingSpec::new("cmd-+", "ed::IncreaseUiFontSize")
                 .with_input(json!({"persist": false})),
-            KeyBindingSpec::new("cmd--", "zed::DecreaseUiFontSize")
+            KeyBindingSpec::new("cmd--", "ed::DecreaseUiFontSize")
                 .with_input(json!({"persist": false})),
-            KeyBindingSpec::new("cmd-0", "zed::ResetUiFontSize")
+            KeyBindingSpec::new("cmd-0", "ed::ResetUiFontSize")
                 .with_input(json!({"persist": false})),
             KeyBindingSpec::new("cmd-1", "welcome::OpenRecentProject").with_input(json!(0)),
             KeyBindingSpec::new("cmd-2", "welcome::OpenRecentProject").with_input(json!(1)),

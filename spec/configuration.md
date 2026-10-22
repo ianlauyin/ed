@@ -71,6 +71,9 @@ migrator, or Vim/Helix mode.
 - The command palette has no "Add/Change Keybinding" flow; secondary confirm runs
   the selected command. It lists every available action as-is: there is no
   global action filter or query interceptor (`command_palette_hooks` is removed).
+- App-level actions (quit, about, font size, welcome, `NoAction`/`Unbind`, ...)
+  use the `ed` namespace (`ed::Quit`, shown as "ed: quit"), not upstream's
+  `zed`. Keymaps using `zed::*` names do not resolve.
 - Snippets are built in (`snippet` crate): Rust has `main`, `async_main`,
   `tests`, `test`, and `async_test`. Language snippets are offered with global
   ones and do not require a project. The user snippets directory is not loaded or
@@ -78,11 +81,11 @@ migrator, or Vim/Helix mode.
 - `vim_mode`, `helix_mode`, and the `vim` settings section do not exist. There is
   no Vim keymap layer, mode indicator, Vim/Helix toggles (quick action bar), or Vim-style keybinding notation.
 - Journaling is removed: no journal entry command or `journal` settings section.
-- Onboarding is removed: no first-launch onboarding page, `zed::OpenOnboarding`,
+- Onboarding is removed: no first-launch onboarding page, `ed::OpenOnboarding`,
   base keymap picker, or multibuffer hint toolbar. There is no VS Code/Cursor
   settings importer (actions or the underlying translation code). The first
   launch opens an empty editor like any other launch. The welcome page
-  (`zed::ShowWelcome`) remains, without a "Return to Onboarding" button or a
+  (`ed::ShowWelcome`) remains, without a "Return to Onboarding" button or a
   logo/title header: just the centred Get Started and Recent Projects lists.
 - Bookmarks are removed: no bookmark actions, labels, navigation, project view,
   bookmark gutter markers, or `gutter.bookmarks` setting (the gutter hover

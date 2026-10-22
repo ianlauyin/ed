@@ -64,7 +64,7 @@ use workspace::{CloseProject, CloseWindow, with_active_or_new_workspace};
 use zed_actions::{About, OpenBrowser, Quit};
 
 actions!(
-    zed,
+    ed,
     [
         /// Hides the application window.
         Hide,

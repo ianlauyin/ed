@@ -14,14 +14,14 @@ pub fn init() {}
 
 /// Opens a URL in the system's default web browser.
 #[derive(Clone, PartialEq, Deserialize, JsonSchema, Action)]
-#[action(namespace = zed)]
+#[action(namespace = ed)]
 #[serde(deny_unknown_fields)]
 pub struct OpenBrowser {
     pub url: Arc<str>,
 }
 
 actions!(
-    zed,
+    ed,
     [
         /// Quits the application.
         Quit,
@@ -32,7 +32,7 @@ actions!(
 
 /// Decreases the font size in the editor buffer.
 #[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
-#[action(namespace = zed)]
+#[action(namespace = ed)]
 #[serde(deny_unknown_fields)]
 pub struct DecreaseBufferFontSize {
     #[serde(default)]
@@ -41,7 +41,7 @@ pub struct DecreaseBufferFontSize {
 
 /// Increases the font size in the editor buffer.
 #[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
-#[action(namespace = zed)]
+#[action(namespace = ed)]
 #[serde(deny_unknown_fields)]
 pub struct IncreaseBufferFontSize {
     #[serde(default)]
@@ -50,7 +50,7 @@ pub struct IncreaseBufferFontSize {
 
 /// Resets the buffer font size to the default value.
 #[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
-#[action(namespace = zed)]
+#[action(namespace = ed)]
 #[serde(deny_unknown_fields)]
 pub struct ResetBufferFontSize {
     #[serde(default)]
@@ -59,7 +59,7 @@ pub struct ResetBufferFontSize {
 
 /// Decreases the font size of the user interface.
 #[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
-#[action(namespace = zed)]
+#[action(namespace = ed)]
 #[serde(deny_unknown_fields)]
 pub struct DecreaseUiFontSize {
     #[serde(default)]
@@ -68,7 +68,7 @@ pub struct DecreaseUiFontSize {
 
 /// Increases the font size of the user interface.
 #[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
-#[action(namespace = zed)]
+#[action(namespace = ed)]
 #[serde(deny_unknown_fields)]
 pub struct IncreaseUiFontSize {
     #[serde(default)]
@@ -77,7 +77,7 @@ pub struct IncreaseUiFontSize {
 
 /// Resets the UI font size to the default value.
 #[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
-#[action(namespace = zed)]
+#[action(namespace = ed)]
 #[serde(deny_unknown_fields)]
 pub struct ResetUiFontSize {
     #[serde(default)]
@@ -86,7 +86,7 @@ pub struct ResetUiFontSize {
 
 /// Resets all zoom levels (UI and buffer font sizes) to their default values.
 #[derive(PartialEq, Clone, Default, Debug, Deserialize, JsonSchema, Action)]
-#[action(namespace = zed)]
+#[action(namespace = ed)]
 #[serde(deny_unknown_fields)]
 pub struct ResetAllZoom {
     #[serde(default)]

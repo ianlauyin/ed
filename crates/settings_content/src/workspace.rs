@@ -105,7 +105,7 @@ pub struct WorkspaceSettingsContent {
     ///
     /// Default: false
     pub close_on_file_delete: Option<bool>,
-    /// Which fullscreen mode the `zed::ToggleFullScreen` action enters (macOS only).
+    /// Which fullscreen mode the `ed::ToggleFullScreen` action enters (macOS only).
     ///
     /// Default: native
     pub fullscreen_mode: Option<FullscreenMode>,
