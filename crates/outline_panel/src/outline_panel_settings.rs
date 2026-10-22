@@ -1,4 +1,4 @@
-use editor::{EditorSettings, ui_scrollbar_settings_from_raw};
+use editor::ui_scrollbar_settings_from_raw;
 use gpui::{App, Pixels};
 pub use settings::{DockSide, FolderIndicator, Settings, ShowIndentGuides};
 use settings::{IntoGpui, RegisterSetting};
@@ -42,7 +42,7 @@ impl ScrollbarVisibility for OutlinePanelSettingsScrollbarProxy {
         OutlinePanelSettings::get_global(cx)
             .scrollbar
             .show
-            .unwrap_or_else(|| EditorSettings::get_global(cx).scrollbar.show)
+            .unwrap_or_default()
     }
 }
 

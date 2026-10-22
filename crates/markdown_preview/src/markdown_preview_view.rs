@@ -11,8 +11,7 @@ use anyhow::{Context as _, Result};
 use editor::items::open_resolved_target;
 use editor::scroll::Autoscroll;
 use editor::{
-    Editor, EditorEvent, EditorSettings, EditorSettingsScrollbarProxy, MAX_TAB_TITLE_LEN,
-    MultiBufferOffset, SelectionEffects,
+    Editor, EditorEvent, EditorSettings, MAX_TAB_TITLE_LEN, MultiBufferOffset, SelectionEffects,
 };
 use gpui::{
     Action, AnyElement, App, ClipboardItem, Context, Entity, EntityId, EventEmitter, FocusHandle,
@@ -2006,9 +2005,7 @@ impl Render for MarkdownPreviewView {
                 ),
             )
             .custom_scrollbars(
-                Scrollbars::for_settings::<EditorSettingsScrollbarProxy>()
-                    .show_along(ScrollAxes::Vertical)
-                    .tracked_scroll_handle(&self.scroll_handle),
+                Scrollbars::new(ScrollAxes::Vertical).tracked_scroll_handle(&self.scroll_handle),
                 window,
                 cx,
             )

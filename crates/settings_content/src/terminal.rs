@@ -303,7 +303,7 @@ pub enum WorkingDirectory {
 pub struct ScrollbarSettingsContent {
     /// When to show the scrollbar in the terminal.
     ///
-    /// Default: inherits editor scrollbar settings
+    /// Default: auto
     pub show: Option<ShowScrollbar>,
 }
 

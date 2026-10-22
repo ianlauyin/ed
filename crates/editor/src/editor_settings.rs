@@ -1,14 +1,13 @@
 use core::num;
 
-use gpui::App;
 use language::CursorShape;
 use project::project_settings::DiagnosticSeverity;
 pub use settings::{
     CodeLens, CompletionDetailAlignment, CompletionMenuItemKind, CurrentLineHighlight, DelayMs,
     DiffViewStyle, DisplayIn, DocumentColorsRenderMode, DoubleClickInMultibuffer, GitGutterWidth,
     GoToDefinitionFallback, GoToDefinitionScrollStrategy, MinimapThumb, MinimapThumbBorder,
-    MultiCursorModifier, OpenResultsIn, ScrollBeyondLastLine, ScrollbarDiagnostics,
-    SeedQuerySetting, ShowMinimap, SnippetSortOrder,
+    MultiCursorModifier, OpenResultsIn, ScrollBeyondLastLine, SeedQuerySetting, ShowMinimap,
+    SnippetSortOrder,
 };
 use settings::{RegisterSetting, RelativeLineNumbers, Settings};
 use ui::scrollbars::ShowScrollbar;
@@ -29,7 +28,6 @@ pub struct EditorSettings {
     pub hover_popover_sticky: bool,
     pub hover_popover_hiding_delay: DelayMs,
     pub toolbar: Toolbar,
-    pub scrollbar: Scrollbar,
     pub minimap: Minimap,
     pub gutter: Gutter,
     pub scroll_beyond_last_line: ScrollBeyondLastLine,
@@ -98,18 +96,6 @@ pub struct Toolbar {
     pub code_actions: bool,
 }
 
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct Scrollbar {
-    pub show: ShowScrollbar,
-    pub git_diff: bool,
-    pub selected_text: bool,
-    pub selected_symbol: bool,
-    pub search_results: bool,
-    pub diagnostics: ScrollbarDiagnostics,
-    pub cursors: bool,
-    pub axes: ScrollbarAxes,
-}
-
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub struct Minimap {
     pub show: ShowMinimap,
@@ -145,20 +131,6 @@ pub struct Gutter {
     pub runnables: bool,
     pub folds: bool,
     pub git_gutter_width: settings::GitGutterWidth,
-}
-
-/// Forcefully enable or disable the scrollbar for each axis
-#[derive(Copy, Clone, Debug, PartialEq, Eq)]
-pub struct ScrollbarAxes {
-    /// When false, forcefully disables the horizontal scrollbar. Otherwise, obey other settings.
-    ///
-    /// Default: true
-    pub horizontal: bool,
-
-    /// When false, forcefully disables the vertical scrollbar. Otherwise, obey other settings.
-    ///
-    /// Default: true
-    pub vertical: bool,
 }
 
 /// Whether to allow drag and drop text selection in buffer.
@@ -198,10 +170,8 @@ impl Settings for EditorSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let editor = content.editor.clone();
         let cursor_animation = editor.cursor_animation.unwrap();
-        let scrollbar = editor.scrollbar.unwrap();
         let minimap = editor.minimap.unwrap();
         let gutter = editor.gutter.unwrap();
-        let axes = scrollbar.axes.unwrap();
         let toolbar = editor.toolbar.unwrap();
         let search = editor.search.unwrap();
         let drag_and_drop_selection = editor.drag_and_drop_selection.unwrap();
@@ -227,26 +197,6 @@ impl Settings for EditorSettings {
                 selections_menu: toolbar.selections_menu.unwrap(),
 
                 code_actions: toolbar.code_actions.unwrap(),
-            },
-            scrollbar: Scrollbar {
-                show: scrollbar.show.map(ui_scrollbar_settings_from_raw).unwrap(),
-                git_diff: scrollbar.git_diff.unwrap()
-                    && content
-                        .git
-                        .as_ref()
-                        .unwrap()
-                        .enabled
-                        .unwrap()
-                        .is_git_diff_enabled(),
-                selected_text: scrollbar.selected_text.unwrap(),
-                selected_symbol: scrollbar.selected_symbol.unwrap(),
-                search_results: scrollbar.search_results.unwrap(),
-                diagnostics: scrollbar.diagnostics.unwrap(),
-                cursors: scrollbar.cursors.unwrap(),
-                axes: ScrollbarAxes {
-                    horizontal: axes.horizontal.unwrap(),
-                    vertical: axes.vertical.unwrap(),
-                },
             },
             minimap: Minimap {
                 show: minimap.show.unwrap(),
@@ -319,15 +269,6 @@ impl Settings for EditorSettings {
                 show_full_file: file_diff.show_full_file.unwrap(),
             },
         }
-    }
-}
-
-#[derive(Default)]
-pub struct EditorSettingsScrollbarProxy;
-
-impl ui::scrollbars::ScrollbarVisibility for EditorSettingsScrollbarProxy {
-    fn visibility(&self, cx: &App) -> ShowScrollbar {
-        EditorSettings::get_global(cx).scrollbar.show
     }
 }
 

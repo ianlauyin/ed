@@ -1006,7 +1006,7 @@ impl From<ProjectPanelSortOrder> for util::paths::SortOrder {
 pub struct ProjectPanelScrollbarSettingsContent {
     /// When to show the scrollbar in the project panel.
     ///
-    /// Default: inherits editor scrollbar settings
+    /// Default: auto
     pub show: Option<ShowScrollbar>,
     /// Whether to allow horizontal scrolling in the project panel.
     /// When false, the view is locked to the leftmost position and

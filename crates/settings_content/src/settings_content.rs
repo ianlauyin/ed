@@ -294,7 +294,7 @@ pub struct GitPanelSettingsContent {
 
     /// How and when the scrollbar should be displayed.
     ///
-    /// Default: inherits editor scrollbar settings
+    /// Default: auto
     pub scrollbar: Option<ScrollbarSettings>,
 
     /// What the default branch name should be when

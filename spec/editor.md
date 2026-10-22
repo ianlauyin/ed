@@ -33,15 +33,19 @@
   the minimap row of their line (so clicking a marker lands on it): cursor
   lines as a faint full-width band, git hunks as a thin bar on the left edge,
   search/selection/symbol occurrences and diagnostics as two lanes on the
-  right edge. Which markers show is still driven by the `scrollbar.*` marker
-  settings. In files longer than the minimap, off-screen markers scroll in
-  with the minimap. Editors without a minimap have no vertical scroll widget.
+  right edge. All marker kinds are always on (git hunks only when git diff is
+  enabled); there are no editor `scrollbar` settings. In files longer than
+  the minimap, off-screen markers scroll in with the minimap. Editors without
+  a minimap have no vertical scroll widget.
 - The minimap runs the full card height. Its thumb's bottom-right corner is
   concentric with the card (card radius − card inset), curving in as the
   thumb nears the bottom, instead of shortening the minimap to dodge the
   corner.
 - The horizontal scrollbar matches the `ui` scrollbars (project panel): no
   track, a thin rounded thumb inset in a 14px hitbox.
+  It auto-shows while scrolling or when the buffer has markers (git hunks,
+  highlights, diagnostics, off-screen cursors). Panels and the terminal
+  default their scrollbars to `auto` instead of inheriting from the editor.
 - Text inside highlights (search matches, selections, etc.) is recolored to
   keep `minimum_contrast_for_highlights` against the highlight background.
   The Markdown preview applies the same rule to its search matches and

@@ -13,6 +13,7 @@ use gpui::{
 };
 use itertools::Itertools;
 use multi_buffer::MultiBufferPoint;
+use project::project_settings::ProjectSettings;
 use settings::Settings;
 use theme::ActiveTheme;
 use workspace::item::{Item as _, ItemBufferKind};
@@ -24,9 +25,7 @@ use super::{
 use crate::{
     DisplayRow, Editor, EditorSettings, EditorSnapshot, MINIMAP_FONT_SIZE, Point, RowExt as _,
     display_map::{HighlightKey, ToDisplayPoint},
-    editor_settings::{
-        Minimap, MinimapThumb, MinimapThumbBorder, ScrollbarDiagnostics, ShowMinimap,
-    },
+    editor_settings::{Minimap, MinimapThumb, MinimapThumbBorder, ShowMinimap},
     scroll::{ScrollOffset, ScrollPixelOffset, ScrollbarThumbState},
 };
 
@@ -185,17 +184,12 @@ impl EditorElement {
     pub(super) fn get_minimap_width(
         &self,
         minimap_settings: &Minimap,
-        scrollbars_shown: bool,
         text_width: Pixels,
         em_width: Pixels,
         font_size: Pixels,
         rem_size: Pixels,
         cx: &App,
     ) -> Option<Pixels> {
-        if minimap_settings.show == ShowMinimap::Auto && !scrollbars_shown {
-            return None;
-        }
-
         let minimap_font_size = self.editor.read_with(cx, |editor, cx| {
             editor.minimap().map(|minimap_editor| {
                 minimap_editor
@@ -230,7 +224,7 @@ impl EditorElement {
             width: bounds.size.width,
             line_height: minimap.minimap_line_height,
         };
-        let fast_markers = self.collect_fast_minimap_markers(layout, track, cx);
+        let fast_markers = self.collect_fast_minimap_markers(layout, track);
         // Refresh slow markers in the background. Below, we paint whatever
         // markers have already been computed.
         self.refresh_slow_minimap_markers(layout, track, window, cx);
@@ -258,10 +252,9 @@ impl EditorElement {
         &self,
         layout: &EditorLayout,
         track: MinimapMarkerTrack,
-        cx: &mut App,
     ) -> Vec<PaintQuad> {
         const LIMIT: usize = 100;
-        if !EditorSettings::get_global(cx).scrollbar.cursors || layout.cursors.len() > LIMIT {
+        if layout.cursors.len() > LIMIT {
             return vec![];
         }
         let cursor_ranges = layout
@@ -285,8 +278,7 @@ impl EditorElement {
     ) {
         self.editor.update(cx, |editor, cx| {
             let is_singleton = editor.buffer_kind(cx) == ItemBufferKind::Singleton;
-            let scrollbar_settings = EditorSettings::get_global(cx).scrollbar;
-            let show_git_diff_markers = scrollbar_settings.git_diff
+            let show_git_diff_markers = ProjectSettings::get_global(cx).git.enabled.diff
                 && (is_singleton || editor.allow_git_diff_scrollbar_markers);
             if !is_singleton && !show_git_diff_markers {
                 editor.scrollbar_marker_state.dirty = true;
@@ -361,9 +353,9 @@ impl EditorElement {
                                     == HighlightKey::DocumentHighlightRead
                                     || *background_highlight_id
                                         == HighlightKey::DocumentHighlightWrite;
-                                if (is_search_highlights && scrollbar_settings.search_results)
-                                    || (is_text_highlights && scrollbar_settings.selected_text)
-                                    || (is_symbol_occurrences && scrollbar_settings.selected_symbol)
+                                if is_search_highlights
+                                    || is_text_highlights
+                                    || is_symbol_occurrences
                                 {
                                     let mut color = theme.status().info;
                                     if is_symbol_occurrences {
@@ -388,37 +380,10 @@ impl EditorElement {
                                 }
                             }
 
-                            if is_singleton
-                                && scrollbar_settings.diagnostics != ScrollbarDiagnostics::None
-                            {
+                            if is_singleton {
                                 let diagnostics = snapshot
                                     .buffer_snapshot()
                                     .diagnostics_in_range::<Point>(Point::zero()..max_point)
-                                    // Don't show diagnostics the user doesn't care about
-                                    .filter(|diagnostic| {
-                                        match (
-                                            scrollbar_settings.diagnostics,
-                                            diagnostic.diagnostic.severity,
-                                        ) {
-                                            (ScrollbarDiagnostics::All, _) => true,
-                                            (
-                                                ScrollbarDiagnostics::Error,
-                                                lsp::DiagnosticSeverity::ERROR,
-                                            ) => true,
-                                            (
-                                                ScrollbarDiagnostics::Warning,
-                                                lsp::DiagnosticSeverity::ERROR
-                                                | lsp::DiagnosticSeverity::WARNING,
-                                            ) => true,
-                                            (
-                                                ScrollbarDiagnostics::Information,
-                                                lsp::DiagnosticSeverity::ERROR
-                                                | lsp::DiagnosticSeverity::WARNING
-                                                | lsp::DiagnosticSeverity::INFORMATION,
-                                            ) => true,
-                                            (_, _) => false,
-                                        }
-                                    })
                                     // We want to sort by severity, in order to paint the most severe diagnostics last.
                                     .sorted_by_key(|diagnostic| {
                                         std::cmp::Reverse(diagnostic.diagnostic.severity)

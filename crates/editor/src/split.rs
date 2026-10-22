@@ -711,7 +711,6 @@ impl SplittableEditor {
             );
             editor.set_diff_hunk_action_target(Some(rhs_editor));
             editor.set_delegate_open_excerpts(true);
-            editor.set_show_vertical_scrollbar(false, cx);
             editor.disable_lsp_data();
             editor.disable_runnables();
             editor.disable_diagnostics(cx);

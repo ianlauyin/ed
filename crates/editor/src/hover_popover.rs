@@ -2,7 +2,6 @@ use crate::{
     Anchor, AnchorRangeExt, DisplayPoint, DisplayRow, Editor, EditorSettings, EditorSnapshot,
     GlobalDiagnosticRenderer, HighlightKey, Hover,
     display_map::{ToDisplayPoint, is_invisible},
-    editor_settings::EditorSettingsScrollbarProxy,
     hover_links::{InlayHighlight, RangeInEditor},
     movement::TextLayoutDetails,
     scroll::ScrollAmount,
@@ -27,7 +26,7 @@ use std::{
 use std::{ops::Range, sync::Arc, time::Duration};
 use std::{path::PathBuf, rc::Rc};
 use theme_settings::ThemeSettings;
-use ui::{CopyButton, Scrollbars, WithScrollbar, prelude::*, theme_is_transparent};
+use ui::{CopyButton, ScrollAxes, Scrollbars, WithScrollbar, prelude::*, theme_is_transparent};
 use url::Url;
 use util::TryFutureExt;
 use workspace::{OpenOptions, OpenVisible, Workspace};
@@ -1365,8 +1364,7 @@ impl InfoPopover {
                         ),
                 )
                 .custom_scrollbars(
-                    Scrollbars::for_settings::<EditorSettingsScrollbarProxy>()
-                        .tracked_scroll_handle(&self.scroll_handle),
+                    Scrollbars::new(ScrollAxes::Both).tracked_scroll_handle(&self.scroll_handle),
                     window,
                     cx,
                 )
@@ -1499,7 +1497,7 @@ impl DiagnosticPopover {
                         CopyButton::new("copy-diagnostic", message).tooltip_label("Copy Diagnostic")
                     }))
                     .custom_scrollbars(
-                        Scrollbars::for_settings::<EditorSettingsScrollbarProxy>()
+                        Scrollbars::new(ScrollAxes::Both)
                             .tracked_scroll_handle(&self.scroll_handle),
                         window,
                         cx,

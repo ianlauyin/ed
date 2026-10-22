@@ -24,7 +24,6 @@ use crate::{
     },
     editor_settings::{
         CurrentLineHighlight, DocumentColorsRenderMode, GitGutterWidth, ScrollBeyondLastLine,
-        ScrollbarDiagnostics,
     },
     git::blame::{BlameRenderer, GitBlame, GlobalBlameRenderer},
     hover_popover::{
@@ -85,7 +84,7 @@ use text::{BufferId, ToPoint as _};
 use theme::{ActiveTheme, Appearance, PlayerColor};
 use theme_settings::BufferLineHeight;
 use ui::utils::{ensure_highlight_contrast, merge_highlight_backgrounds};
-use ui::{ButtonLike, POPOVER_Y_PADDING, Tooltip, prelude::*, scrollbars::ShowScrollbar};
+use ui::{ButtonLike, POPOVER_Y_PADDING, Tooltip, prelude::*};
 use unicode_segmentation::UnicodeSegmentation;
 use util::{ResultExt, debug_panic};
 use workspace::{
@@ -1363,9 +1362,7 @@ impl EditorElement {
         window: &mut Window,
         cx: &mut App,
     ) -> Option<EditorScrollbars> {
-        let show_horizontal = self.editor.read(cx).show_scrollbars.horizontal
-            && EditorSettings::get_global(cx).scrollbar.axes.horizontal;
-        if !show_horizontal || self.style.scrollbar_width.is_zero() {
+        if !self.editor.read(cx).show_horizontal_scrollbar || self.style.scrollbar_width.is_zero() {
             return None;
         }
 
@@ -1377,38 +1374,30 @@ impl EditorElement {
             });
         }
 
-        let editor_settings = EditorSettings::get_global(cx);
-        let scrollbar_settings = editor_settings.scrollbar;
-        let show_scrollbars = match scrollbar_settings.show {
-            ShowScrollbar::Auto => {
-                let editor = self.editor.read(cx);
-                let is_singleton = editor.buffer_kind(cx) == ItemBufferKind::Singleton;
-                let supports_git_diff_markers =
-                    is_singleton || editor.allow_git_diff_scrollbar_markers;
-                // Git
-                (supports_git_diff_markers && scrollbar_settings.git_diff && snapshot.buffer_snapshot().has_diff_hunks())
-                ||
-                // Buffer Search Results
-                (is_singleton && scrollbar_settings.search_results && editor.has_background_highlights(HighlightKey::BufferSearchHighlights))
-                ||
-                // Selected Text Occurrences
-                (is_singleton && scrollbar_settings.selected_text && editor.has_background_highlights(HighlightKey::SelectedTextHighlight))
-                ||
-                // Selected Symbol Occurrences
-                (is_singleton && scrollbar_settings.selected_symbol && (editor.has_background_highlights(HighlightKey::DocumentHighlightRead) || editor.has_background_highlights(HighlightKey::DocumentHighlightWrite)))
-                ||
-                // Diagnostics
-                (is_singleton && scrollbar_settings.diagnostics != ScrollbarDiagnostics::None && snapshot.buffer_snapshot().has_diagnostics())
-                ||
-                // Cursors out of sight
-                non_visible_cursors
-                ||
-                // Scrollmanager
-                editor.scroll_manager.scrollbars_visible()
-            }
-            ShowScrollbar::System => self.editor.read(cx).scroll_manager.scrollbars_visible(),
-            ShowScrollbar::Always => true,
-            ShowScrollbar::Never => return None,
+        let show_scrollbars = {
+            let editor = self.editor.read(cx);
+            let is_singleton = editor.buffer_kind(cx) == ItemBufferKind::Singleton;
+            let supports_git_diff_markers = is_singleton || editor.allow_git_diff_scrollbar_markers;
+            // Git
+            (supports_git_diff_markers && ProjectSettings::get_global(cx).git.enabled.diff && snapshot.buffer_snapshot().has_diff_hunks())
+            ||
+            // Buffer Search Results
+            (is_singleton && editor.has_background_highlights(HighlightKey::BufferSearchHighlights))
+            ||
+            // Selected Text Occurrences
+            (is_singleton && editor.has_background_highlights(HighlightKey::SelectedTextHighlight))
+            ||
+            // Selected Symbol Occurrences
+            (is_singleton && (editor.has_background_highlights(HighlightKey::DocumentHighlightRead) || editor.has_background_highlights(HighlightKey::DocumentHighlightWrite)))
+            ||
+            // Diagnostics
+            (is_singleton && snapshot.buffer_snapshot().has_diagnostics())
+            ||
+            // Cursors out of sight
+            non_visible_cursors
+            ||
+            // Scrollmanager
+            editor.scroll_manager.scrollbars_visible()
         };
 
         // The horizontal scrollbar is usually slightly offset to align nicely with
@@ -7413,11 +7402,9 @@ impl Element for EditorElement {
                     let text_width = bounds.size.width - gutter_dimensions.width;
 
                     let settings = EditorSettings::get_global(cx);
-                    let scrollbars_shown = settings.scrollbar.show != ShowScrollbar::Never;
                     let minimap_width = self
                         .get_minimap_width(
                             &settings.minimap,
-                            scrollbars_shown,
                             text_width,
                             em_width,
                             font_size,

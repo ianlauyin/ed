@@ -5,8 +5,7 @@ mod terminal_path_like_target;
 pub mod terminal_scrollbar;
 
 use editor::{
-    Editor, EditorSettings, actions::SelectAll, blink_manager::BlinkManager,
-    ui_scrollbar_settings_from_raw,
+    Editor, actions::SelectAll, blink_manager::BlinkManager, ui_scrollbar_settings_from_raw,
 };
 use gpui::{
     Action, AnyElement, App, ClipboardEntry, DismissEvent, Entity, EventEmitter, ExternalPaths,
@@ -1132,7 +1131,7 @@ impl ScrollbarVisibility for TerminalScrollbarSettingsWrapper {
             .scrollbar
             .show
             .map(ui_scrollbar_settings_from_raw)
-            .unwrap_or_else(|| EditorSettings::get_global(cx).scrollbar.show)
+            .unwrap_or_default()
     }
 }
 

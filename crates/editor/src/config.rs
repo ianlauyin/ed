@@ -113,16 +113,6 @@ impl Editor {
         cx.notify();
     }
 
-    pub fn set_show_vertical_scrollbar(&mut self, show: bool, cx: &mut Context<Self>) {
-        self.show_scrollbars.vertical = show;
-        cx.notify();
-    }
-
-    pub fn set_show_horizontal_scrollbar(&mut self, show: bool, cx: &mut Context<Self>) {
-        self.show_scrollbars.horizontal = show;
-        cx.notify();
-    }
-
     pub fn set_minimap_visibility(
         &mut self,
         minimap_visibility: MinimapVisibility,
@@ -166,7 +156,7 @@ impl Editor {
     }
 
     pub fn disable_scrollbars_and_minimap(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.set_show_scrollbars(false, cx);
+        self.show_horizontal_scrollbar = false;
         self.set_minimap_visibility(MinimapVisibility::Disabled, window, cx);
     }
 
@@ -217,14 +207,6 @@ impl Editor {
 
     pub fn set_show_runnables(&mut self, show_runnables: bool, cx: &mut Context<Self>) {
         self.show_runnables = Some(show_runnables);
-        cx.notify();
-    }
-
-    fn set_show_scrollbars(&mut self, show: bool, cx: &mut Context<Self>) {
-        self.show_scrollbars = ScrollbarAxes {
-            horizontal: show,
-            vertical: show,
-        };
         cx.notify();
     }
 

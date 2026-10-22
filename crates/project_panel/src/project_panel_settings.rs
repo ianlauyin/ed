@@ -1,4 +1,4 @@
-use editor::{EditorSettings, ui_scrollbar_settings_from_raw};
+use editor::ui_scrollbar_settings_from_raw;
 use gpui::Pixels;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -88,7 +88,7 @@ impl ScrollbarVisibility for ProjectPanelScrollbarProxy {
         ProjectPanelSettings::get_global(cx)
             .scrollbar
             .show
-            .unwrap_or_else(|| EditorSettings::get_global(cx).scrollbar.show)
+            .unwrap_or_default()
     }
 }
 

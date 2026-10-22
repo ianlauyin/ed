@@ -302,19 +302,6 @@ fn editor_settings() -> EditorSettingsContent {
             selections_menu: Some(true),
             code_actions: Some(false),
         }),
-        scrollbar: Some(ScrollbarContent {
-            show: Some(ShowScrollbar::Auto),
-            git_diff: Some(true),
-            search_results: Some(true),
-            selected_text: Some(true),
-            selected_symbol: Some(true),
-            diagnostics: Some(ScrollbarDiagnostics::All),
-            cursors: Some(true),
-            axes: Some(ScrollbarAxesContent {
-                horizontal: Some(true),
-                vertical: Some(true),
-            }),
-        }),
         minimap: Some(MinimapContent {
             show: Some(ShowMinimap::Always),
             display_in: Some(DisplayIn::ActiveEditor),

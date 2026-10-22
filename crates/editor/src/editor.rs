@@ -75,9 +75,8 @@ pub use display_map::{
 };
 pub use editor_settings::{
     CompletionDetailAlignment, CompletionMenuItemKind, CurrentLineHighlight, DiffViewStyle,
-    DocumentColorsRenderMode, EditorSettings, EditorSettingsScrollbarProxy, OpenResultsIn,
-    ScrollBeyondLastLine, ScrollbarAxes, SearchSettings, ShowMinimap,
-    ui_scrollbar_settings_from_raw,
+    DocumentColorsRenderMode, EditorSettings, OpenResultsIn, ScrollBeyondLastLine, SearchSettings,
+    ShowMinimap, ui_scrollbar_settings_from_raw,
 };
 pub use element::{
     CursorLayout, EditorElement, HighlightedRange, HighlightedRangeLine, PointForPosition,
@@ -931,7 +930,7 @@ pub struct Editor {
     mode: EditorMode,
     breadcrumbs_visibility: BreadcrumbsVisibility,
     show_gutter: bool,
-    show_scrollbars: ScrollbarAxes,
+    show_horizontal_scrollbar: bool,
     minimap_visibility: MinimapVisibility,
     offset_content: bool,
     disable_expand_excerpt_buttons: bool,
@@ -2080,10 +2079,7 @@ impl Editor {
             blink_manager: blink_manager.clone(),
             cursor_animations: CursorAnimationStates::default(),
             show_local_selections: true,
-            show_scrollbars: ScrollbarAxes {
-                horizontal: full_mode,
-                vertical: full_mode,
-            },
+            show_horizontal_scrollbar: full_mode,
             minimap_visibility: MinimapVisibility::for_mode(&mode, cx),
             offset_content: !matches!(mode, EditorMode::SingleLine),
             breadcrumbs_visibility: BreadcrumbsVisibility::from_settings(cx),

@@ -121,9 +121,8 @@ impl TableView {
     pub fn new(window: &Window, cx: &mut Context<Self>) -> Self {
         let contents = TableLikeContent::default();
         let table_interaction_state = cx.new(|cx| {
-            TableInteractionState::new(cx).with_custom_scrollbar(ui::Scrollbars::for_settings::<
-                editor::EditorSettingsScrollbarProxy,
-            >())
+            TableInteractionState::new(cx)
+                .with_custom_scrollbar(ui::Scrollbars::new(ui::ScrollAxes::Both))
         });
         let row_height = window.pixel_snap(window.line_height());
 
