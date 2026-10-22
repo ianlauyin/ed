@@ -1,7 +1,7 @@
 use crate::{
     DisplayPoint, DisplayRow, Editor, EditorMode, EditorSettings, LineWithInvisibles, RowExt,
     SelectionEffects,
-    display_map::{DisplaySnapshot, ToDisplayPoint},
+    display_map::ToDisplayPoint,
     editor_settings::GoToDefinitionScrollStrategy,
     scroll::{ScrollOffset, WasScrolled},
 };
@@ -230,17 +230,11 @@ impl Editor {
             target_bottom = target_top + 1.;
         }
 
-        let visible_sticky_headers =
-            self.visible_sticky_header_count_for_point(&display_map, target_point, cx);
-
         let was_autoscrolled = match strategy {
             AutoscrollStrategy::Fit | AutoscrollStrategy::Newest => {
-                let (margin_top, margin_bottom) = self.fit_autoscroll_margins(
-                    visible_lines,
-                    target_bottom - target_top,
-                    visible_sticky_headers,
-                );
-                let target_top = (target_top - margin_top - visible_sticky_headers as f64).max(0.0);
+                let (margin_top, margin_bottom) =
+                    self.fit_autoscroll_margins(visible_lines, target_bottom - target_top);
+                let target_top = (target_top - margin_top).max(0.0);
                 let target_bottom = target_bottom + margin_bottom;
 
                 let start_row = scroll_position.y;
@@ -303,14 +297,12 @@ impl Editor {
         &self,
         visible_lines: ScrollOffset,
         target_height: ScrollOffset,
-        visible_sticky_headers: usize,
     ) -> (ScrollOffset, ScrollOffset) {
         if matches!(self.mode, EditorMode::AutoHeight { .. }) {
             return (0., 0.);
         }
 
-        let available_margin_space =
-            (visible_lines - target_height - visible_sticky_headers as f64).max(0.);
+        let available_margin_space = (visible_lines - target_height).max(0.);
         let top_space = (available_margin_space / 2.).floor();
 
         // Keep the rounding remainder below the target so large margins leave no
@@ -319,54 +311,6 @@ impl Editor {
             top_space.min(self.scroll_manager.vertical_scroll_margin),
             (available_margin_space - top_space).min(self.scroll_manager.vertical_scroll_margin),
         )
-    }
-
-    pub(crate) fn visible_sticky_header_count_for_point(
-        &self,
-        display_map: &DisplaySnapshot,
-        target_point: DisplayPoint,
-        cx: &App,
-    ) -> usize {
-        let sticky_scroll = EditorSettings::get_global(cx).sticky_scroll;
-        if !sticky_scroll.enabled {
-            return 0;
-        }
-
-        let Some(buffer_snapshot) = display_map.buffer_snapshot().as_singleton() else {
-            return 0;
-        };
-
-        let point = target_point.to_point(display_map);
-        let mut item_ranges = buffer_snapshot
-            .outline_ranges_containing(point..point)
-            .collect::<Vec<_>>();
-        item_ranges.sort_by_key(|item_range| item_range.start);
-
-        let mut previous_sticky_row = None;
-        let mut num_visible_sticky_headers = 0;
-
-        for item_range in item_ranges {
-            let sticky_row = display_map
-                .point_to_display_point(item_range.start, Bias::Left)
-                .row();
-            if sticky_row >= target_point.row() {
-                break;
-            }
-            if previous_sticky_row.replace(sticky_row) == Some(sticky_row) {
-                continue;
-            }
-
-            let end_row = display_map
-                .point_to_display_point(item_range.end, Bias::Left)
-                .row();
-            if end_row <= target_point.row() {
-                continue;
-            }
-
-            num_visible_sticky_headers += 1;
-        }
-
-        num_visible_sticky_headers
     }
 
     pub(crate) fn autoscroll_horizontally(

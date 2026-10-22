@@ -46,6 +46,9 @@
   It auto-shows while scrolling or when the buffer has markers (git hunks,
   highlights, diagnostics, off-screen cursors). Panels and the terminal
   default their scrollbars to `auto` instead of inheriting from the editor.
+- No sticky scroll: enclosing outline items are never pinned to the top of
+  the editor (removed with its `sticky_scroll` setting). Multibuffer sticky
+  buffer headers are a separate feature and remain.
 - Text inside highlights (search matches, selections, etc.) is recolored to
   keep `minimum_contrast_for_highlights` against the highlight background.
   The Markdown preview applies the same rule to its search matches and

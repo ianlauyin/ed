@@ -6610,31 +6610,6 @@ impl LineWithInvisibles {
         cx: &mut App,
     ) {
         let line_y = f32::from(line_height) * Pixels::from(row.as_f64() - scroll_position.y);
-        self.prepaint_with_custom_offset(
-            line_height,
-            scroll_pixel_position,
-            content_origin,
-            line_y,
-            text_align,
-            content_width,
-            line_elements,
-            window,
-            cx,
-        );
-    }
-
-    fn prepaint_with_custom_offset(
-        &mut self,
-        line_height: Pixels,
-        scroll_pixel_position: gpui::Point<ScrollPixelOffset>,
-        content_origin: gpui::Point<Pixels>,
-        line_y: Pixels,
-        text_align: TextAlign,
-        content_width: Pixels,
-        line_elements: &mut SmallVec<[AnyElement; 1]>,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
         let mut fragment_origin = content_origin
             + point(
                 self.alignment_offset(text_align, content_width)
@@ -6673,30 +6648,8 @@ impl LineWithInvisibles {
         window: &mut Window,
         cx: &mut App,
     ) {
-        self.draw_with_custom_offset(
-            layout,
-            row,
-            content_origin,
-            layout.position_map.line_height
-                * (row.as_f64() - layout.position_map.scroll_position.y) as f32,
-            whitespace_setting,
-            selection_ranges,
-            window,
-            cx,
-        );
-    }
-
-    fn draw_with_custom_offset(
-        &self,
-        layout: &EditorLayout,
-        row: DisplayRow,
-        content_origin: gpui::Point<Pixels>,
-        line_y: Pixels,
-        whitespace_setting: ShowWhitespaceSetting,
-        selection_ranges: &[Range<DisplayPoint>],
-        window: &mut Window,
-        cx: &mut App,
-    ) {
+        let line_y = layout.position_map.line_height
+            * (row.as_f64() - layout.position_map.scroll_position.y) as f32;
         let line_height = layout.position_map.line_height;
         let mut fragment_origin = content_origin
             + point(
@@ -7367,7 +7320,6 @@ impl Element for EditorElement {
         };
 
         let is_minimap = self.editor.read(cx).mode.is_minimap();
-        let is_singleton = self.editor.read(cx).buffer_kind(cx) == ItemBufferKind::Singleton;
 
         if !is_minimap {
             let focus_handle = self.editor.focus_handle(cx);
@@ -8133,29 +8085,6 @@ impl Element for EditorElement {
                         scroll_position.x * f64::from(em_layout_width),
                         scroll_position.y * f64::from(line_height),
                     );
-                    let sticky_headers = if !is_minimap
-                        && is_singleton
-                        && EditorSettings::get_global(cx).sticky_scroll.enabled
-                    {
-                        let relative = self.editor.read(cx).relative_line_numbers(cx);
-                        self.layout_sticky_headers(
-                            &snapshot,
-                            editor_width,
-                            is_row_soft_wrapped,
-                            line_height,
-                            scroll_pixel_position,
-                            content_origin,
-                            &gutter_dimensions,
-                            &gutter_hitbox,
-                            &text_hitbox,
-                            relative,
-                            current_selection_head,
-                            window,
-                            cx,
-                        )
-                    } else {
-                        None
-                    };
                     let indent_guides =
                         if scroll_pixel_position != preliminary_scroll_pixel_position {
                             self.layout_indent_guides(
@@ -8562,11 +8491,6 @@ impl Element for EditorElement {
 
                     let mode = snapshot.mode.clone();
 
-                    let sticky_scroll_header_height = sticky_headers
-                        .as_ref()
-                        .and_then(|headers| headers.lines.last())
-                        .map_or(Pixels::ZERO, |last| last.offset + line_height);
-
                     let has_sticky_buffer_header =
                         sticky_buffer_header.is_some() || sticky_header_excerpt_id.is_some();
                     let sticky_header_height = if has_sticky_buffer_header {
@@ -8590,9 +8514,9 @@ impl Element for EditorElement {
                         };
                         let header_bottom_padding =
                             BUFFER_HEADER_PADDING.to_pixels(window.rem_size());
-                        sticky_scroll_header_height + offset - header_bottom_padding
+                        offset - header_bottom_padding
                     } else {
-                        sticky_scroll_header_height
+                        Pixels::ZERO
                     };
 
                     let (diff_hunk_controls, diff_hunk_control_bounds) =
@@ -8695,7 +8619,6 @@ impl Element for EditorElement {
                         tab_invisible,
                         space_invisible,
                         sticky_buffer_header,
-                        sticky_headers,
                         expand_toggles,
                         text_align: self.style.text.text_align,
                         content_width: text_hitbox.size.width,
@@ -8741,57 +8664,33 @@ impl Element for EditorElement {
                 window.with_content_mask(Some(ContentMask { bounds }), |window| {
                     self.paint_mouse_listeners(layout, window, cx);
 
-                    // Mask the editor behind sticky scroll headers. Important
-                    // for transparent backgrounds.
-                    let below_sticky_headers_mask = layout
-                        .sticky_headers
-                        .as_ref()
-                        .and_then(|h| h.lines.last())
-                        .map(|last| ContentMask {
-                            bounds: Bounds {
-                                origin: point(
-                                    bounds.origin.x,
-                                    bounds.origin.y + last.offset + layout.position_map.line_height,
-                                ),
-                                size: size(
-                                    bounds.size.width,
-                                    (bounds.size.height
-                                        - last.offset
-                                        - layout.position_map.line_height)
-                                        .max(Pixels::ZERO),
-                                ),
-                            },
+                    self.paint_background(layout, window, cx);
+
+                    self.paint_indent_guides(layout, window, cx);
+
+                    if layout.gutter_hitbox.size.width > Pixels::ZERO {
+                        self.paint_blamed_display_rows(layout, window, cx);
+                        self.paint_line_numbers(layout, window, cx);
+                    }
+
+                    self.paint_text(layout, window, cx);
+
+                    if !layout.spacer_blocks.is_empty() {
+                        window.with_element_namespace("blocks", |window| {
+                            self.paint_spacer_blocks(layout, window, cx);
                         });
+                    }
 
-                    window.with_content_mask(below_sticky_headers_mask, |window| {
-                        self.paint_background(layout, window, cx);
+                    if layout.gutter_hitbox.size.width > Pixels::ZERO {
+                        self.paint_gutter_highlights(layout, window, cx);
+                        self.paint_gutter_indicators(layout, window, cx);
+                    }
 
-                        self.paint_indent_guides(layout, window, cx);
-
-                        if layout.gutter_hitbox.size.width > Pixels::ZERO {
-                            self.paint_blamed_display_rows(layout, window, cx);
-                            self.paint_line_numbers(layout, window, cx);
-                        }
-
-                        self.paint_text(layout, window, cx);
-
-                        if !layout.spacer_blocks.is_empty() {
-                            window.with_element_namespace("blocks", |window| {
-                                self.paint_spacer_blocks(layout, window, cx);
-                            });
-                        }
-
-                        if layout.gutter_hitbox.size.width > Pixels::ZERO {
-                            self.paint_gutter_highlights(layout, window, cx);
-                            self.paint_gutter_indicators(layout, window, cx);
-                        }
-
-                        if !layout.blocks.is_empty() {
-                            window.with_element_namespace("blocks", |window| {
-                                self.paint_non_spacer_blocks(layout, window, cx);
-                            });
-                        }
-                    });
+                    if !layout.blocks.is_empty() {
+                        window.with_element_namespace("blocks", |window| {
+                            self.paint_non_spacer_blocks(layout, window, cx);
+                        });
+                    }
 
                     window.with_element_namespace("blocks", |window| {
                         if let Some(mut sticky_header) = layout.sticky_buffer_header.take() {
@@ -8799,7 +8698,6 @@ impl Element for EditorElement {
                         }
                     });
 
-                    self.paint_sticky_headers(layout, window, cx);
                     self.paint_minimap(layout, window, cx);
                     self.paint_scrollbars(layout, window, cx);
                     self.paint_mouse_context_menu(layout, window, cx);
@@ -8910,7 +8808,6 @@ pub struct EditorLayout {
     tab_invisible: ShapedLine,
     space_invisible: ShapedLine,
     sticky_buffer_header: Option<AnyElement>,
-    sticky_headers: Option<header::StickyHeaders>,
     document_colors: Option<(DocumentColorsRenderMode, Vec<(Range<DisplayPoint>, Hsla)>)>,
     text_align: TextAlign,
     content_width: Pixels,
@@ -9295,52 +9192,6 @@ impl PositionMap {
         };
 
         let mut exact_unclipped = DisplayPoint::new(DisplayRow(row), column);
-        let previous_valid = self.snapshot.clip_point(exact_unclipped, Bias::Left);
-        let next_valid = self.snapshot.clip_point(exact_unclipped, Bias::Right);
-
-        let nearest_valid = if previous_valid == next_valid {
-            previous_valid
-        } else {
-            match self.snapshot.inlay_bias_at(exact_unclipped) {
-                Some(Bias::Left) => next_valid,
-                Some(Bias::Right) => previous_valid,
-                None => previous_valid,
-            }
-        };
-
-        let column_overshoot_after_line_end =
-            (x_overshoot_after_line_end / self.em_layout_width) as u32;
-        *exact_unclipped.column_mut() += column_overshoot_after_line_end;
-        PointForPosition {
-            previous_valid,
-            next_valid,
-            nearest_valid,
-            exact_unclipped,
-            column_overshoot_after_line_end,
-        }
-    }
-
-    fn point_for_position_on_line(
-        &self,
-        position: gpui::Point<Pixels>,
-        row: DisplayRow,
-        line: &LineWithInvisibles,
-    ) -> PointForPosition {
-        let text_bounds = self.text_hitbox.bounds;
-        let scroll_position = self.scroll_position;
-        let position = position - text_bounds.origin;
-        let x = position.x + (scroll_position.x as f32 * self.em_layout_width);
-
-        let alignment_offset = line.alignment_offset(self.text_align, self.content_width);
-        let x_relative_to_text = x - alignment_offset;
-        let (column, x_overshoot_after_line_end) =
-            if let Some(ix) = line.index_for_x(x_relative_to_text) {
-                (ix as u32, px(0.))
-            } else {
-                (line.len as u32, px(0.).max(x_relative_to_text - line.width))
-            };
-
-        let mut exact_unclipped = DisplayPoint::new(row, column);
         let previous_valid = self.snapshot.clip_point(exact_unclipped, Bias::Left);
         let next_valid = self.snapshot.clip_point(exact_unclipped, Bias::Right);
 

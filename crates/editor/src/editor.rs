@@ -208,7 +208,7 @@ use std::{
     time::{Duration, Instant},
 };
 use task::TaskVariables;
-use text::{BufferId, FromAnchor, OffsetUtf16, Rope, ToOffset as _, ToPoint as _};
+use text::{BufferId, FromAnchor, OffsetUtf16, Rope, ToOffset as _};
 use theme::{
     AccentColors, ActiveTheme, GlobalTheme, PlayerColor, StatusColors, SyntaxTheme, Theme,
 };
@@ -1105,8 +1105,6 @@ pub struct Editor {
     lsp_document_symbols: HashMap<BufferId, Vec<OutlineItem<text::Anchor>>>,
     refresh_outline_symbols_at_cursor_at_cursor_task: Task<()>,
     outline_symbols_at_cursor: Option<(BufferId, Vec<OutlineItem<Anchor>>)>,
-    sticky_headers_task: Task<()>,
-    sticky_headers: Option<Vec<OutlineItem<Anchor>>>,
     pub(crate) colorize_brackets_task: Task<()>,
     spell_check: Option<spell_check::SpellCheckState>,
 }
@@ -1689,77 +1687,6 @@ impl Editor {
         Editor::new_internal(mode, buffer, project, None, window, cx)
     }
 
-    pub fn refresh_sticky_headers(
-        &mut self,
-        display_snapshot: &DisplaySnapshot,
-        cx: &mut Context<Editor>,
-    ) {
-        if !self.mode.is_full() {
-            return;
-        }
-        let multi_buffer = display_snapshot.buffer_snapshot().clone();
-        let scroll_anchor = self
-            .scroll_manager
-            .native_anchor(display_snapshot, cx)
-            .anchor;
-        let Some(buffer_snapshot) = multi_buffer.as_singleton() else {
-            return;
-        };
-
-        let buffer = buffer_snapshot.clone();
-        let Some((buffer_visible_start, _)) = multi_buffer.anchor_to_buffer_anchor(scroll_anchor)
-        else {
-            return;
-        };
-        let buffer_visible_start = buffer_visible_start.to_point(&buffer);
-        let max_row = buffer.max_point().row;
-        let start_row = buffer_visible_start.row.min(max_row);
-        let end_row = (buffer_visible_start.row + 10).min(max_row);
-
-        let syntax = self.style(cx).syntax.clone();
-        let background_task = cx.background_spawn(async move {
-            buffer
-                .outline_items_containing(
-                    Point::new(start_row, 0)..Point::new(end_row, 0),
-                    true,
-                    Some(syntax.as_ref()),
-                )
-                .into_iter()
-                .filter_map(|outline_item| {
-                    Some(OutlineItem {
-                        depth: outline_item.depth,
-                        range: multi_buffer
-                            .buffer_anchor_range_to_anchor_range(outline_item.range)?,
-                        selection_range: multi_buffer
-                            .buffer_anchor_range_to_anchor_range(outline_item.selection_range)?,
-                        source_range_for_text: multi_buffer.buffer_anchor_range_to_anchor_range(
-                            outline_item.source_range_for_text,
-                        )?,
-                        text: outline_item.text,
-                        highlight_ranges: outline_item.highlight_ranges,
-                        name_ranges: outline_item.name_ranges,
-                        body_range: outline_item.body_range.and_then(|range| {
-                            multi_buffer.buffer_anchor_range_to_anchor_range(range)
-                        }),
-                        annotation_range: outline_item.annotation_range.and_then(|range| {
-                            multi_buffer.buffer_anchor_range_to_anchor_range(range)
-                        }),
-                    })
-                })
-                .collect()
-        });
-        self.sticky_headers_task = cx.spawn(async move |this, cx| {
-            let sticky_headers = background_task.await;
-            this.update(cx, |this, cx| {
-                if this.sticky_headers.as_ref() != Some(&sticky_headers) {
-                    this.sticky_headers = Some(sticky_headers);
-                    cx.notify();
-                }
-            })
-            .ok();
-        });
-    }
-
     fn new_internal(
         mode: EditorMode,
         multi_buffer: Entity<MultiBuffer>,
@@ -2254,8 +2181,6 @@ impl Editor {
             lsp_document_symbols: HashMap::default(),
             refresh_outline_symbols_at_cursor_at_cursor_task: Task::ready(()),
             outline_symbols_at_cursor: None,
-            sticky_headers_task: Task::ready(()),
-            sticky_headers: None,
             colorize_brackets_task: Task::ready(()),
             spell_check,
         };
@@ -2302,7 +2227,6 @@ impl Editor {
 
                         editor.update_data_on_scroll(true, window, cx);
                     }
-                    editor.refresh_sticky_headers(&editor.snapshot(window, cx), cx);
                 }
                 EditorEvent::Edited { .. } => {
                     let display_map = editor.display_snapshot(cx);
@@ -8484,7 +8408,6 @@ impl Editor {
                 let snapshot = self.snapshot(window, cx);
                 self.refresh_matching_bracket_highlights(&snapshot, cx);
                 self.refresh_outline_symbols_at_cursor(cx);
-                self.refresh_sticky_headers(&snapshot, cx);
                 self.refresh_spell_check(cx);
 
                 if let Some(buffer) = edited_buffer {
