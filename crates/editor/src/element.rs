@@ -5974,7 +5974,10 @@ impl Gutter<'_> {
         let git_gutter_width = EditorElement::gutter_strip_width(self.line_height, cx)
             + self.dimensions.git_blame_entries_width.unwrap_or_default();
 
-        let x = git_gutter_width + px(2.);
+        // center in the slot between the git strip and the line numbers, so the gap to the
+        // numbers stays even once they fill their column (4+ digit files)
+        let slack = self.dimensions.left_padding - git_gutter_width - indicator_size.width;
+        let x = git_gutter_width + (slack / 2.).max(Pixels::ZERO);
 
         let mut y = Pixels::from(
             (row.as_f64() - self.scroll_position.y) * ScrollPixelOffset::from(self.line_height),

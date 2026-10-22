@@ -25,7 +25,10 @@
   after the mouse leaves, matching the shared copy-button feedback. The button is hidden for
   buffers without a worktree file, on rows with a run indicator, on the left
   side of a split diff, and in editors that hide runnables (previews).
-  Singleton editors always reserve gutter space for it.
+  Singleton editors always reserve gutter space for it. The button (like run
+  indicators, which share the slot) is centered between the git strip and the
+  line numbers, so the gap stays even when numbers fill their column (1000+
+  line files).
   The gutter right-click menu has a matching "Copy File Location" entry with
   the same row/selection behaviour.
 - No vertical scrollbar: the minimap is the vertical scroll widget. The
