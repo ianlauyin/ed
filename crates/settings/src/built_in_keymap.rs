@@ -405,7 +405,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             KeyBindingSpec::new("cmd-k ctrl-cmd-d", "editor::SelectPrevious")
                 .with_input(json!({"replace_newest": true})),
             KeyBindingSpec::new("cmd-k cmd-i", "editor::Hover"),
-            KeyBindingSpec::new("cmd-k cmd-b", "editor::BlameHover"),
             KeyBindingSpec::new("cmd-/", "editor::ToggleComments")
                 .with_input(json!({"advance_downwards": false, "comment_empty_lines": true})),
             KeyBindingSpec::new("cmd-k cmd-/", "editor::ToggleBlockComments"),

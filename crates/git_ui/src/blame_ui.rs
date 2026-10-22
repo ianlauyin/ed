@@ -1,29 +1,17 @@
 use crate::{
-    commit_tooltip::{CommitTooltip, commit_tag_chips, shallow_boundary_notice},
+    commit_tooltip::CommitTooltip,
     commit_view::{CommitView, GitBlob, build_buffer, worktree_id_for_repo_path},
 };
 use anyhow::Context as _;
-use editor::{BlameRenderer, Editor, GitBlame, MultiBuffer, hover_markdown_style};
-use git::{
-    Oid,
-    blame::BlameEntry,
-    commit::ParsedCommitMessage,
-    repository::{CommitSummary, RepoPath},
-};
+use editor::{BlameRenderer, Editor, GitBlame, MultiBuffer};
+use git::{Oid, blame::BlameEntry, commit::ParsedCommitMessage, repository::RepoPath};
 use gpui::{
-    ClipboardItem, Entity, Hsla, MouseButton, Pixels, Rems, ScrollHandle, Subscription, TextStyle,
-    TextStyleRefinement, UnderlineStyle, WeakEntity, prelude::*,
+    ClipboardItem, Entity, Hsla, MouseButton, Pixels, Rems, Subscription, TextStyle, WeakEntity,
+    prelude::*,
 };
-use markdown::{Markdown, MarkdownElement};
-use project::{
-    git_store::Repository,
-    project_settings::{InlineBlameLocation, ProjectSettings},
-};
-use settings::Settings as _;
+use project::git_store::Repository;
 use std::sync::Arc;
-use theme_settings::ThemeSettings;
-use time::OffsetDateTime;
-use ui::{ContextMenu, CopyButton, Divider, prelude::*, tooltip_container};
+use ui::{ContextMenu, prelude::*};
 use util::paths::PathStyle;
 use workspace::{Workspace, notifications::NotifyTaskExt as _};
 
@@ -32,104 +20,6 @@ const GIT_BLAME_GUTTER_MARGIN: Rems = rems(0.5);
 const GIT_BLAME_GUTTER_GAP: Rems = rems(0.5);
 
 pub struct GitBlameRenderer;
-
-fn format_blame_text(blame_entry: &BlameEntry, cx: &App) -> String {
-    let relative_timestamp = blame_entry_relative_timestamp(blame_entry);
-    let author = blame_entry.author.as_deref().unwrap_or_default();
-    let summary_enabled = ProjectSettings::get_global(cx)
-        .git
-        .inline_blame
-        .show_commit_summary;
-
-    match blame_entry.summary.as_ref() {
-        Some(summary) if summary_enabled => {
-            format!("{author}, {relative_timestamp} - {summary}")
-        }
-        _ => format!("{author}, {relative_timestamp}"),
-    }
-}
-
-#[derive(Default)]
-pub struct GitBlameStatus {
-    text: Option<SharedString>,
-    active_editor: Option<Entity<Editor>>,
-    _subscriptions: Vec<Subscription>,
-}
-
-impl GitBlameStatus {
-    fn update(&mut self, editor: Entity<Editor>, _window: &mut Window, cx: &mut Context<Self>) {
-        let inline_blame = ProjectSettings::get_global(cx).git.inline_blame;
-        let text =
-            if inline_blame.enabled && inline_blame.location == InlineBlameLocation::StatusBar {
-                editor
-                    .update(cx, |editor, cx| editor.active_git_blame_entry(cx))
-                    .map(|blame_entry| SharedString::from(format_blame_text(&blame_entry, cx)))
-            } else {
-                None
-            };
-
-        if text != self.text {
-            self.text = text;
-            cx.notify();
-        }
-    }
-}
-
-impl Render for GitBlameStatus {
-    fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let inline_blame = ProjectSettings::get_global(cx).git.inline_blame;
-        if !inline_blame.enabled || inline_blame.location != InlineBlameLocation::StatusBar {
-            return div();
-        }
-
-        div().when_some(self.text.clone(), |el, text| {
-            el.child(
-                Button::new("git-blame-status", text.clone())
-                    .label_size(LabelSize::Small)
-                    .start_icon(
-                        Icon::new(IconName::FileGit)
-                            .size(IconSize::Small)
-                            .color(Color::Hint),
-                    )
-                    .on_click(cx.listener(|this, _, window, cx| {
-                        if let Some(editor) = this.active_editor.clone() {
-                            let focus_handle = gpui::Focusable::focus_handle(editor.read(cx), cx);
-                            focus_handle.dispatch_action(
-                                &editor::actions::OpenGitBlameCommit,
-                                window,
-                                cx,
-                            );
-                        }
-                    }))
-                    .tooltip(ui::Tooltip::text(text)),
-            )
-        })
-    }
-}
-
-impl workspace::StatusItemView for GitBlameStatus {
-    fn set_active_pane_item(
-        &mut self,
-        active_pane_item: Option<&dyn workspace::item::ItemHandle>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(editor) = active_pane_item.and_then(|item| item.act_as::<Editor>(cx)) {
-            self.active_editor = Some(editor.clone());
-            self._subscriptions = vec![cx.observe_in(&editor, window, Self::update)];
-            self.update(editor, window, cx);
-        } else {
-            self.text = None;
-            self.active_editor = None;
-            self._subscriptions.clear();
-            cx.notify();
-        }
-    }
-
-    fn hide_setting(&self, _: &App) -> Option<workspace::HideStatusItem> {
-        None
-    }
-}
 
 impl BlameRenderer for GitBlameRenderer {
     fn max_author_length(&self) -> usize {
@@ -243,203 +133,6 @@ impl BlameRenderer for GitBlameRenderer {
         )
     }
 
-    fn render_inline_blame_entry(
-        &self,
-        style: &TextStyle,
-        blame_entry: BlameEntry,
-        cx: &mut App,
-    ) -> Option<AnyElement> {
-        let text = format_blame_text(&blame_entry, cx);
-
-        Some(
-            h_flex()
-                .id("inline-blame")
-                .w_full()
-                .font(style.font())
-                .text_color(cx.theme().status().hint)
-                .line_height(style.line_height)
-                .child(Icon::new(IconName::FileGit).color(Color::Hint))
-                .child(text)
-                .gap_2()
-                .into_any(),
-        )
-    }
-
-    fn render_blame_entry_popover(
-        &self,
-        blame: BlameEntry,
-        scroll_handle: ScrollHandle,
-        details: Option<ParsedCommitMessage>,
-        tag_names: Vec<SharedString>,
-        markdown: Entity<Markdown>,
-        repository: Entity<Repository>,
-        workspace: WeakEntity<Workspace>,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Option<AnyElement> {
-        let commit_time = blame
-            .committer_time
-            .and_then(|t| OffsetDateTime::from_unix_timestamp(t).ok())
-            .unwrap_or(OffsetDateTime::now_utc());
-
-        let sha: SharedString = blame.sha.to_string().into();
-        let author: SharedString = blame
-            .author
-            .clone()
-            .unwrap_or("<no name>".to_string())
-            .into();
-        let author_email = blame.author_mail.as_deref().unwrap_or_default();
-
-        let short_commit_id = sha
-            .get(..git::SHORT_SHA_LENGTH)
-            .map(|sha| sha.to_string().into())
-            .unwrap_or_else(|| sha.clone());
-        let local_offset = time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
-        let absolute_timestamp = time_format::format_localized_timestamp(
-            commit_time,
-            OffsetDateTime::now_utc(),
-            local_offset,
-            time_format::TimestampFormat::MediumAbsolute,
-        );
-        let link_color = cx.theme().colors().text_accent;
-        let markdown_style = {
-            let mut style = hover_markdown_style(window, cx);
-            style.link.refine(&TextStyleRefinement {
-                color: Some(link_color),
-                underline: Some(UnderlineStyle {
-                    color: Some(link_color.opacity(0.4)),
-                    thickness: px(1.0),
-                    ..Default::default()
-                }),
-                ..Default::default()
-            });
-            style
-        };
-
-        let message = details
-            .as_ref()
-            .map(|_| {
-                MarkdownElement::new(markdown.clone(), markdown_style)
-                    .scroll_handle(scroll_handle.clone())
-                    .into_any()
-            })
-            .unwrap_or("<no commit message>".into_any());
-
-        let ui_font_size = ThemeSettings::get_global(cx).ui_font_size(cx);
-        let message_max_height = window.line_height() * 12 + (ui_font_size / 0.4);
-        let commit_summary = CommitSummary {
-            sha: sha.clone(),
-            subject: details
-                .as_ref()
-                .and_then(|details| {
-                    Some(
-                        details
-                            .message
-                            .split('\n')
-                            .next()?
-                            .trim_end()
-                            .to_string()
-                            .into(),
-                    )
-                })
-                .unwrap_or_default(),
-            commit_timestamp: commit_time.unix_timestamp(),
-            author_name: author.clone(),
-            has_parent: false,
-        };
-        let boundary_notice = blame
-            .boundary
-            .then(|| shallow_boundary_notice(repository.clone(), workspace.clone(), window, cx))
-            .flatten();
-
-        Some(
-            tooltip_container(cx, |this, cx| {
-                this.occlude()
-                    .on_mouse_move(|_, _, cx| cx.stop_propagation())
-                    .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
-                    .child(
-                        v_flex()
-                            .w(gpui::rems(30.))
-                            .child(
-                                h_flex()
-                                    .pb_1()
-                                    .gap_2()
-                                    .overflow_x_hidden()
-                                    .flex_wrap()
-                                    .border_b_1()
-                                    .border_color(cx.theme().colors().border_variant)
-                                    .child(author)
-                                    .when(!author_email.is_empty(), |this| {
-                                        this.child(
-                                            div()
-                                                .text_color(cx.theme().colors().text_muted)
-                                                .child(author_email.to_owned()),
-                                        )
-                                    }),
-                            )
-                            .children(boundary_notice)
-                            .child(
-                                div()
-                                    .id("inline-blame-commit-message")
-                                    .track_scroll(&scroll_handle)
-                                    .py_1p5()
-                                    .max_h(message_max_height)
-                                    .overflow_y_scroll()
-                                    .child(message),
-                            )
-                            .child(
-                                h_flex()
-                                    .text_color(cx.theme().colors().text_muted)
-                                    .w_full()
-                                    .justify_between()
-                                    .pt_1()
-                                    .gap_1()
-                                    .flex_wrap()
-                                    .border_t_1()
-                                    .border_color(cx.theme().colors().border_variant)
-                                    .child(absolute_timestamp)
-                                    .child(
-                                        h_flex()
-                                            .gap_1()
-                                            .min_w_0()
-                                            .children(commit_tag_chips(&tag_names))
-                                            .child(
-                                                Button::new(
-                                                    "commit-sha-button",
-                                                    short_commit_id.clone(),
-                                                )
-                                                .color(Color::Muted)
-                                                .start_icon(
-                                                    Icon::new(IconName::FileGit)
-                                                        .size(IconSize::Small)
-                                                        .color(Color::Muted),
-                                                )
-                                                .on_click(move |_, window, cx| {
-                                                    CommitView::open(
-                                                        commit_summary.sha.clone().into(),
-                                                        repository.downgrade(),
-                                                        workspace.clone(),
-                                                        None,
-                                                        None,
-                                                        window,
-                                                        cx,
-                                                    );
-                                                    cx.stop_propagation();
-                                                }),
-                                            )
-                                            .child(Divider::vertical())
-                                            .child(
-                                                CopyButton::new("copy-blame-sha", sha.to_string())
-                                                    .tooltip_label("Copy SHA"),
-                                            ),
-                                    ),
-                            ),
-                    )
-            })
-            .into_any_element(),
-        )
-    }
-
     fn open_blame_commit(
         &self,
         blame_entry: BlameEntry,
@@ -526,7 +219,6 @@ fn deploy_blame_entry_context_menu(
     });
 
     editor.update(cx, move |editor, cx| {
-        editor.hide_blame_popover(false, cx);
         editor.deploy_mouse_context_menu(position, context_menu, window, cx);
         cx.notify();
     });

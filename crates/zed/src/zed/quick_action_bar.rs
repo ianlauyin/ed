@@ -104,7 +104,6 @@ impl Render for QuickActionBar {
             && editor_value.diagnostics_max_severity != DiagnosticSeverity::Off;
         let supports_inline_diagnostics = editor_value.inline_diagnostics_enabled();
         let inline_diagnostics_enabled = editor_value.show_inline_diagnostics();
-        let git_blame_inline_enabled = editor_value.git_blame_inline_enabled();
         let show_git_blame_gutter = editor_value.show_git_blame_gutter();
         let show_line_numbers = editor_value.line_numbers_enabled(cx);
 
@@ -454,28 +453,7 @@ impl Render for QuickActionBar {
                             menu = menu.separator();
 
                             menu = menu.toggleable_entry(
-                                "Inline Git Blame",
-                                git_blame_inline_enabled,
-                                IconPosition::Start,
-                                Some(editor::actions::ToggleGitBlameInline.boxed_clone()),
-                                {
-                                    let editor = editor.clone();
-                                    move |window, cx| {
-                                        editor
-                                            .update(cx, |editor, cx| {
-                                                editor.toggle_git_blame_inline(
-                                                    &editor::actions::ToggleGitBlameInline,
-                                                    window,
-                                                    cx,
-                                                )
-                                            })
-                                            .ok();
-                                    }
-                                },
-                            );
-
-                            menu = menu.toggleable_entry(
-                                "Column Git Blame",
+                                "Git Blame",
                                 show_git_blame_gutter,
                                 IconPosition::Start,
                                 Some(git::Blame.boxed_clone()),

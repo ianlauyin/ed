@@ -237,11 +237,6 @@ pub struct GitSettings {
     ///
     /// Default: 0
     pub gutter_debounce: u64,
-    /// Whether or not to show git blame data inline in
-    /// the currently focused line.
-    ///
-    /// Default: on
-    pub inline_blame: InlineBlameSettings,
     /// Which information to show in the branch picker.
     ///
     /// Default: on
@@ -291,63 +286,6 @@ impl From<settings::GitPathStyle> for GitPathStyle {
         match style {
             settings::GitPathStyle::FileNameFirst => GitPathStyle::FileNameFirst,
             settings::GitPathStyle::FilePathFirst => GitPathStyle::FilePathFirst,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
-pub enum InlineBlameLocation {
-    #[default]
-    Inline,
-    StatusBar,
-}
-
-impl From<settings::InlineBlameLocation> for InlineBlameLocation {
-    fn from(location: settings::InlineBlameLocation) -> Self {
-        match location {
-            settings::InlineBlameLocation::Inline => InlineBlameLocation::Inline,
-            settings::InlineBlameLocation::StatusBar => InlineBlameLocation::StatusBar,
-        }
-    }
-}
-
-#[derive(Clone, Copy, Debug)]
-pub struct InlineBlameSettings {
-    /// Whether or not to show git blame data inline in
-    /// the currently focused line.
-    ///
-    /// Default: true
-    pub enabled: bool,
-    /// Whether to only show the inline blame information
-    /// after a delay once the cursor stops moving.
-    ///
-    /// Default: 0
-    pub delay_ms: settings::DelayMs,
-    /// Where to render the blame information when enabled.
-    ///
-    /// Default: inline
-    pub location: InlineBlameLocation,
-    /// The amount of padding between the end of the source line and the start
-    /// of the inline blame in units of columns.
-    ///
-    /// Default: 7
-    pub padding: u32,
-    /// The minimum column number to show the inline blame information at
-    ///
-    /// Default: 0
-    pub min_column: u32,
-    /// Whether to show commit summary as part of the inline blame.
-    ///
-    /// Default: false
-    pub show_commit_summary: bool,
-}
-
-impl GitSettings {
-    pub fn inline_blame_delay(&self) -> Option<Duration> {
-        if self.inline_blame.delay_ms.0 > 0 {
-            Some(Duration::from_millis(self.inline_blame.delay_ms.0))
-        } else {
-            None
         }
     }
 }
@@ -442,17 +380,6 @@ impl Settings for ProjectSettings {
             enabled: git_enabled,
             git_gutter: git.git_gutter.unwrap(),
             gutter_debounce: git.gutter_debounce.unwrap_or_default(),
-            inline_blame: {
-                let inline = git.inline_blame.unwrap();
-                InlineBlameSettings {
-                    enabled: inline.enabled.unwrap(),
-                    delay_ms: inline.delay_ms.unwrap(),
-                    location: inline.location.unwrap().into(),
-                    padding: inline.padding.unwrap(),
-                    min_column: inline.min_column.unwrap(),
-                    show_commit_summary: inline.show_commit_summary.unwrap(),
-                }
-            },
             branch_picker: {
                 let branch_picker = git.branch_picker.unwrap();
                 BranchPickerSettings {

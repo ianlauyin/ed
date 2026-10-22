@@ -9,12 +9,11 @@ use git::{
     repository::RepoPath,
 };
 use gpui::{
-    AnyElement, App, AppContext as _, Context, Entity, Hsla, Pixels, ScrollHandle, SharedString,
-    Subscription, Task, TextStyle, WeakEntity, Window,
+    AnyElement, App, AppContext as _, Context, Entity, Hsla, Pixels, SharedString, Subscription,
+    Task, TextStyle, WeakEntity, Window,
 };
 use itertools::Itertools;
 use language::{Bias, Buffer, BufferSnapshot, Edit};
-use markdown::Markdown;
 use multi_buffer::{MultiBuffer, RowInfo};
 use project::{
     Project, ProjectItem as _,
@@ -128,26 +127,6 @@ pub trait BlameRenderer {
         _: &mut App,
     ) -> Option<AnyElement>;
 
-    fn render_inline_blame_entry(
-        &self,
-        _: &TextStyle,
-        _: BlameEntry,
-        _: &mut App,
-    ) -> Option<AnyElement>;
-
-    fn render_blame_entry_popover(
-        &self,
-        _: BlameEntry,
-        _: ScrollHandle,
-        _: Option<ParsedCommitMessage>,
-        _: Vec<SharedString>,
-        _: Entity<Markdown>,
-        _: Entity<Repository>,
-        _: WeakEntity<Workspace>,
-        _: &mut Window,
-        _: &mut App,
-    ) -> Option<AnyElement>;
-
     fn open_blame_commit(
         &self,
         _: BlameEntry,
@@ -185,30 +164,6 @@ impl BlameRenderer for () {
         _: Entity<Editor>,
         _: usize,
         _: Hsla,
-        _: &mut Window,
-        _: &mut App,
-    ) -> Option<AnyElement> {
-        None
-    }
-
-    fn render_inline_blame_entry(
-        &self,
-        _: &TextStyle,
-        _: BlameEntry,
-        _: &mut App,
-    ) -> Option<AnyElement> {
-        None
-    }
-
-    fn render_blame_entry_popover(
-        &self,
-        _: BlameEntry,
-        _: ScrollHandle,
-        _: Option<ParsedCommitMessage>,
-        _: Vec<SharedString>,
-        _: Entity<Markdown>,
-        _: Entity<Repository>,
-        _: WeakEntity<Workspace>,
         _: &mut Window,
         _: &mut App,
     ) -> Option<AnyElement> {

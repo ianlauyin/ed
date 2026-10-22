@@ -97,14 +97,6 @@ pub fn settings() -> SettingsContent {
             }),
             git_gutter: Some(GitGutterSetting::TrackedFiles),
             gutter_debounce: Some(0),
-            inline_blame: Some(InlineBlameSettings {
-                enabled: Some(true),
-                delay_ms: Some(DelayMs(0)),
-                location: Some(InlineBlameLocation::StatusBar),
-                padding: Some(7),
-                min_column: Some(0),
-                show_commit_summary: Some(false),
-            }),
             branch_picker: Some(BranchPickerSettingsContent {
                 show_author_name: Some(true),
             }),

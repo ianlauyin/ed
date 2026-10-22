@@ -38,30 +38,29 @@ use crate::{
 };
 use buffer_diff::{DiffHunkStatus, DiffHunkStatusKind};
 use collections::{BTreeMap, BTreeSet, HashMap, HashSet};
-use git::{Oid, blame::BlameEntry, commit::ParsedCommitMessage};
+use git::{Oid, blame::BlameEntry};
 use gpui::{
     Action, Along, AnyElement, App, AvailableSpace, Axis as ScrollbarAxis, BorderStyle, Bounds,
     ClipboardItem, ContentMask, Context, Corners, CursorStyle, DispatchPhase, Edges, Element,
     ElementInputHandler, Entity, Focusable as _, Font, FontId, FontWeight, GlobalElementId, Hitbox,
     HitboxBehavior, Hsla, InteractiveElement, IntoElement, IsZero, ModifiersChangedEvent,
     MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, Pixels, ScaledPixels,
-    ScrollHandle, ShapedLine, SharedString, Size, StatefulInteractiveElement, Style, Styled,
-    StyledText, TaskExt, TextAlign, TextRun, TextStyleRefinement, UnderlineStyle, WeakEntity,
-    Window, div, fill, outline, pattern_slash, point, px, quad, relative, size, solid_background,
-    transparent_black, underline_y_offset,
+    ShapedLine, SharedString, Size, StatefulInteractiveElement, Style, Styled, StyledText, TaskExt,
+    TextAlign, TextRun, TextStyleRefinement, UnderlineStyle, Window, div, fill, outline,
+    pattern_slash, point, px, quad, relative, size, solid_background, transparent_black,
+    underline_y_offset,
 };
 use itertools::Itertools;
 use language::{
     Diagnostic, HighlightedText, IndentGuideSettings, LanguageAwareStyling,
     language_settings::ShowWhitespaceSetting,
 };
-use markdown::Markdown;
 use multi_buffer::{
     Anchor, ExcerptRange, ExpandExcerptDirection, ExpandInfo, MultiBufferOffset, MultiBufferRow,
     MultiBufferSnapshot, RowInfo, ToOffset,
 };
 
-use project::project_settings::{InlineBlameLocation, ProjectSettings};
+use project::project_settings::ProjectSettings;
 use settings::{
     GitGutterSetting, GitHunkStyleSetting, IndentGuideBackgroundColoring, IndentGuideColoring,
     Settings,
@@ -135,13 +134,6 @@ struct SelectionLayout {
     range: Range<DisplayPoint>,
     active_rows: Range<DisplayRow>,
     user_name: Option<SharedString>,
-}
-
-struct InlineBlameLayout {
-    element: AnyElement,
-    bounds: Bounds<Pixels>,
-    buffer_id: BufferId,
-    entry: BlameEntry,
 }
 
 #[derive(Debug, Clone, Copy)]
@@ -386,7 +378,6 @@ impl EditorElement {
         register_action(editor, window, Editor::select_page_down);
         register_action(editor, window, Editor::select_page_up);
         register_action(editor, window, Editor::cancel);
-        register_action(editor, window, Editor::blame_hover);
         register_action(editor, window, Editor::next_snippet_tabstop);
         register_action(editor, window, Editor::previous_snippet_tabstop);
         register_action(editor, window, Editor::copy);
@@ -604,7 +595,6 @@ impl EditorElement {
         register_action(editor, window, Editor::copy_highlight_json);
         register_action(editor, window, Editor::copy_file_location);
         register_action(editor, window, Editor::toggle_git_blame);
-        register_action(editor, window, Editor::toggle_git_blame_inline);
         if editor.read(cx).blame().is_some() {
             register_action(editor, window, Editor::open_git_blame_commit);
             if editor.update(cx, |editor, cx| {
@@ -1767,179 +1757,6 @@ impl EditorElement {
             cx,
         );
         Some(button)
-    }
-
-    fn layout_inline_blame(
-        &self,
-        display_row: DisplayRow,
-        row_info: &RowInfo,
-        line_layout: &LineWithInvisibles,
-        crease_trailer: Option<&CreaseTrailerLayout>,
-        em_width: Pixels,
-        content_origin: gpui::Point<Pixels>,
-        scroll_position: gpui::Point<ScrollOffset>,
-        scroll_pixel_position: gpui::Point<ScrollPixelOffset>,
-        line_height: Pixels,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Option<InlineBlameLayout> {
-        if !self
-            .editor
-            .update(cx, |editor, cx| editor.render_git_blame_inline(window, cx))
-        {
-            return None;
-        }
-
-        let editor = self.editor.read(cx);
-        let blame = editor.blame.clone()?;
-        let padding = ProjectSettings::get_global(cx).git.inline_blame.padding as f32 * em_width;
-        let (buffer_id, entry) = blame
-            .update(cx, |blame, cx| {
-                blame.blame_for_rows(&[*row_info], cx).next()
-            })
-            .flatten()?;
-
-        let mut element = render_inline_blame_entry(entry.clone(), &self.style, cx)?;
-
-        let start_y =
-            content_origin.y + line_height * ((display_row.as_f64() - scroll_position.y) as f32);
-
-        let start_x = {
-            let line_end = if let Some(crease_trailer) = crease_trailer {
-                crease_trailer.bounds.right()
-            } else {
-                Pixels::from(
-                    ScrollPixelOffset::from(content_origin.x + line_layout.width)
-                        - scroll_pixel_position.x,
-                )
-            };
-
-            let padded_line_end = line_end + padding;
-
-            let min_column_in_pixels = column_pixels(
-                &self.style,
-                ProjectSettings::get_global(cx).git.inline_blame.min_column as usize,
-                window,
-            );
-            let min_start = Pixels::from(
-                ScrollPixelOffset::from(content_origin.x + min_column_in_pixels)
-                    - scroll_pixel_position.x,
-            );
-
-            cmp::max(padded_line_end, min_start)
-        };
-
-        let absolute_offset = point(start_x, start_y);
-        let size = element.layout_as_root(AvailableSpace::min_size(), window, cx);
-        let bounds = Bounds::new(absolute_offset, size);
-
-        element.prepaint_as_root(absolute_offset, AvailableSpace::min_size(), window, cx);
-
-        Some(InlineBlameLayout {
-            element,
-            bounds,
-            buffer_id,
-            entry,
-        })
-    }
-
-    fn layout_blame_popover(
-        &self,
-        editor_snapshot: &EditorSnapshot,
-        text_hitbox: &Hitbox,
-        line_height: Pixels,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
-        if !self.editor.read(cx).inline_blame_popover.is_some() {
-            return;
-        }
-
-        let Some(blame) = self.editor.read(cx).blame.clone() else {
-            return;
-        };
-        let cursor_point = self
-            .editor
-            .read(cx)
-            .selections
-            .newest::<language::Point>(&editor_snapshot.display_snapshot)
-            .head();
-
-        let Some((buffer, buffer_point)) = editor_snapshot
-            .buffer_snapshot()
-            .point_to_buffer_point(cursor_point)
-        else {
-            return;
-        };
-
-        let row_info = RowInfo {
-            buffer_id: Some(buffer.remote_id()),
-            buffer_row: Some(buffer_point.row),
-            ..Default::default()
-        };
-
-        let Some((buffer_id, blame_entry)) = blame
-            .update(cx, |blame, cx| blame.blame_for_rows(&[row_info], cx).next())
-            .flatten()
-        else {
-            return;
-        };
-
-        let Some((popover_state, target_point)) = self.editor.read_with(cx, |editor, _| {
-            editor
-                .inline_blame_popover
-                .as_ref()
-                .map(|state| (state.popover_state.clone(), state.position))
-        }) else {
-            return;
-        };
-
-        let workspace = self
-            .editor
-            .read_with(cx, |editor, _| editor.workspace().map(|w| w.downgrade()));
-
-        let maybe_element = workspace.and_then(|workspace| {
-            render_blame_entry_popover(
-                blame_entry,
-                popover_state.scroll_handle,
-                popover_state.commit_message,
-                popover_state.markdown,
-                workspace,
-                &blame,
-                buffer_id,
-                window,
-                cx,
-            )
-        });
-
-        if let Some(mut element) = maybe_element {
-            let size = element.layout_as_root(AvailableSpace::min_size(), window, cx);
-            let overall_height = size.height + HOVER_POPOVER_GAP;
-            let popover_origin = if target_point.y > overall_height {
-                point(target_point.x, target_point.y - size.height)
-            } else {
-                point(
-                    target_point.x,
-                    target_point.y + line_height + HOVER_POPOVER_GAP,
-                )
-            };
-
-            let horizontal_offset = (text_hitbox.top_right().x
-                - POPOVER_RIGHT_OFFSET
-                - (popover_origin.x + size.width))
-                .min(Pixels::ZERO);
-
-            let origin = point(popover_origin.x + horizontal_offset, popover_origin.y);
-            let popover_bounds = Bounds::new(origin, size);
-
-            self.editor.update(cx, |editor, _| {
-                if let Some(state) = &mut editor.inline_blame_popover {
-                    state.popover_bounds = Some(popover_bounds);
-                }
-            });
-
-            window.defer_draw(element, origin, 2, None);
-        }
     }
 
     fn layout_blame_entries(
@@ -5126,7 +4943,6 @@ impl EditorElement {
                 self.paint_navigation_overlays(layout, window, cx);
                 self.paint_cursors(layout, window, cx);
                 self.paint_inline_diagnostics(layout, window, cx);
-                self.paint_inline_blame(layout, window, cx);
                 self.paint_inline_code_actions(layout, window, cx);
                 self.paint_diff_hunk_controls(layout, window, cx);
                 window.with_element_namespace("crease_trailers", |window| {
@@ -5564,14 +5380,6 @@ impl EditorElement {
     ) {
         for mut inline_diagnostic in layout.inline_diagnostics.drain() {
             inline_diagnostic.1.paint(window, cx);
-        }
-    }
-
-    fn paint_inline_blame(&mut self, layout: &mut EditorLayout, window: &mut Window, cx: &mut App) {
-        if let Some(mut blame_layout) = layout.inline_blame_layout.take() {
-            window.paint_layer(layout.position_map.text_hitbox.bounds, |window| {
-                blame_layout.element.paint(window, cx);
-            })
         }
     }
 
@@ -6025,47 +5833,6 @@ fn apply_dirty_filename_style(
         StyledText::new(text)
             .with_default_highlights(text_style, highlight)
             .into_any(),
-    )
-}
-
-fn render_inline_blame_entry(
-    blame_entry: BlameEntry,
-    style: &EditorStyle,
-    cx: &mut App,
-) -> Option<AnyElement> {
-    let renderer = cx.global::<GlobalBlameRenderer>().0.clone();
-    renderer.render_inline_blame_entry(&style.text, blame_entry, cx)
-}
-
-fn render_blame_entry_popover(
-    blame_entry: BlameEntry,
-    scroll_handle: ScrollHandle,
-    commit_message: Option<ParsedCommitMessage>,
-    markdown: Entity<Markdown>,
-    workspace: WeakEntity<Workspace>,
-    blame: &Entity<GitBlame>,
-    buffer: BufferId,
-    window: &mut Window,
-    cx: &mut App,
-) -> Option<AnyElement> {
-    if markdown.read(cx).is_parsing() {
-        return None;
-    }
-
-    let renderer = cx.global::<GlobalBlameRenderer>().0.clone();
-    let blame = blame.read(cx);
-    let repository = blame.repository(cx, buffer)?;
-    let tag_names = blame.tag_names_for_entry(buffer, &blame_entry);
-    renderer.render_blame_entry_popover(
-        blame_entry,
-        scroll_handle,
-        commit_message,
-        tag_names,
-        markdown,
-        repository,
-        workspace,
-        window,
-        cx,
     )
 }
 
@@ -7715,41 +7482,6 @@ impl Element for EditorElement {
                         return self.prepaint(None, bounds, request_layout, window, cx);
                     }
 
-                    let longest_line_blame_width = self
-                        .editor
-                        .update(cx, |editor, cx| {
-                            if !editor.show_git_blame_inline {
-                                return None;
-                            }
-                            // Blame is only painted inline for the Inline location, so
-                            // reserving scroll room for it in other locations would let
-                            // the editor scroll into blank space.
-                            if ProjectSettings::get_global(cx).git.inline_blame.location
-                                != InlineBlameLocation::Inline
-                            {
-                                return None;
-                            }
-                            let blame = editor.blame.as_ref()?;
-                            let (_, blame_entry) = blame
-                                .update(cx, |blame, cx| {
-                                    let row_infos =
-                                        snapshot.row_infos(snapshot.longest_row()).next()?;
-                                    blame.blame_for_rows(&[row_infos], cx).next()
-                                })
-                                .flatten()?;
-                            let mut element = render_inline_blame_entry(blame_entry, style, cx)?;
-                            let inline_blame_padding =
-                                ProjectSettings::get_global(cx).git.inline_blame.padding as f32
-                                    * em_advance;
-                            Some(
-                                element
-                                    .layout_as_root(AvailableSpace::min_size(), window, cx)
-                                    .width
-                                    + inline_blame_padding,
-                            )
-                        })
-                        .unwrap_or(Pixels::ZERO);
-
                     let longest_line_width = layout_line(
                         snapshot.longest_row(),
                         &snapshot,
@@ -7768,7 +7500,6 @@ impl Element for EditorElement {
                             longest_line_width,
                             Pixels::from(max_row.as_f64() * f64::from(line_height)),
                         ),
-                        longest_line_blame_width,
                         EditorSettings::get_global(cx),
                         scroll_beyond_last_line,
                     );
@@ -7947,7 +7678,7 @@ impl Element for EditorElement {
                             )
                         });
 
-                    let mut inline_diagnostics = self.layout_inline_diagnostics(
+                    let inline_diagnostics = self.layout_inline_diagnostics(
                         &line_layouts,
                         &crease_trailers,
                         &row_block_types,
@@ -7963,7 +7694,6 @@ impl Element for EditorElement {
                         cx,
                     );
 
-                    let mut inline_blame_layout = None;
                     let mut inline_code_actions = None;
                     if let Some(newest_selection_head) = newest_selection_head {
                         let display_row = newest_selection_head.row();
@@ -7980,42 +7710,6 @@ impl Element for EditorElement {
                                 window,
                                 cx,
                             );
-
-                            let line_ix = display_row.minus(start_row) as usize;
-                            if let (Some(row_info), Some(line_layout), Some(crease_trailer)) = (
-                                row_infos.get(line_ix),
-                                line_layouts.get(line_ix),
-                                crease_trailers.get(line_ix),
-                            ) {
-                                let crease_trailer_layout = crease_trailer.as_ref();
-                                if let Some(layout) = self.layout_inline_blame(
-                                    display_row,
-                                    row_info,
-                                    line_layout,
-                                    crease_trailer_layout,
-                                    em_width,
-                                    content_origin,
-                                    scroll_position,
-                                    scroll_pixel_position,
-                                    line_height,
-                                    window,
-                                    cx,
-                                ) {
-                                    inline_blame_layout = Some(layout);
-                                    // Blame overrides inline diagnostics
-                                    inline_diagnostics.remove(&display_row);
-                                }
-                            } else {
-                                log::error!(
-                                    "bug: line_ix {} is out of bounds - row_infos.len(): {}, \
-                                    line_layouts.len(): {}, \
-                                    crease_trailers.len(): {}",
-                                    line_ix,
-                                    row_infos.len(),
-                                    line_layouts.len(),
-                                    crease_trailers.len(),
-                                );
-                            }
                         }
                     }
 
@@ -8217,8 +7911,6 @@ impl Element for EditorElement {
                             window,
                             cx,
                         );
-
-                        self.layout_blame_popover(&snapshot, &hitbox, line_height, window, cx);
                     }
 
                     let mouse_context_menu = self.layout_mouse_context_menu(
@@ -8378,9 +8070,6 @@ impl Element for EditorElement {
                         content_origin,
                         gutter_hitbox: gutter_hitbox.clone(),
                         text_hitbox: text_hitbox.clone(),
-                        inline_blame_bounds: inline_blame_layout
-                            .as_ref()
-                            .map(|layout| (layout.bounds, layout.buffer_id, layout.entry.clone())),
                         display_hunks: display_hunks.clone(),
                         diff_hunk_control_bounds,
                     });
@@ -8418,7 +8107,6 @@ impl Element for EditorElement {
                         blamed_display_rows,
                         inline_diagnostics,
                         point_diagnostic_underline_offset,
-                        inline_blame_layout,
                         inline_code_actions,
                         blocks,
                         spacer_blocks,
@@ -8555,7 +8243,6 @@ impl ScrollbarLayoutInformation {
         editor_bounds: Bounds<Pixels>,
         glyph_grid_cell: Size<Pixels>,
         document_size: Size<Pixels>,
-        longest_line_blame_width: Pixels,
         settings: &EditorSettings,
         scroll_beyond_last_line: ScrollBeyondLastLine,
     ) -> Self {
@@ -8567,7 +8254,7 @@ impl ScrollbarLayoutInformation {
             }
         };
 
-        let overscroll = size(longest_line_blame_width, vertical_overscroll);
+        let overscroll = size(Pixels::ZERO, vertical_overscroll);
 
         ScrollbarLayoutInformation {
             editor_bounds,
@@ -8604,7 +8291,6 @@ pub struct EditorLayout {
     blamed_display_rows: Option<Vec<AnyElement>>,
     inline_diagnostics: HashMap<DisplayRow, AnyElement>,
     point_diagnostic_underline_offset: Pixels,
-    inline_blame_layout: Option<InlineBlameLayout>,
     inline_code_actions: Option<AnyElement>,
     blocks: Vec<BlockLayout>,
     spacer_blocks: Vec<BlockLayout>,
@@ -8912,7 +8598,6 @@ pub(crate) struct PositionMap {
     pub content_origin: gpui::Point<Pixels>,
     pub text_hitbox: Hitbox,
     pub gutter_hitbox: Hitbox,
-    pub inline_blame_bounds: Option<(Bounds<Pixels>, BufferId, BlameEntry)>,
     pub display_hunks: Vec<(DisplayDiffHunk, Option<Hitbox>)>,
     pub diff_hunk_control_bounds: Vec<(DisplayRow, Bounds<Pixels>)>,
 }

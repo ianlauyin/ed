@@ -423,8 +423,6 @@ actions!(
         ApplyDiffHunk,
         /// Deletes the character before the cursor.
         Backspace,
-        /// Shows git blame information for the current line.
-        BlameHover,
         /// Cancels the current operation.
         Cancel,
         /// Cancels the running flycheck operation.
@@ -828,8 +826,6 @@ actions!(
         Backtab,
         /// Toggles the case of selected text.
         ToggleCase,
-        /// Toggles inline git blame display.
-        ToggleGitBlameInline,
         /// Opens the git commit for the blame at cursor.
         OpenGitBlameCommit,
         /// Opens a blame of the file at the revision of the blame entry at cursor.

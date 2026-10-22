@@ -58,8 +58,6 @@ pub mod stash_picker;
 pub mod text_diff_view;
 pub mod unstaged_diff;
 
-pub use blame_ui::GitBlameStatus;
-
 pub fn init(cx: &mut App) {
     editor::set_blame_renderer(blame_ui::GitBlameRenderer, cx);
     commit_view::init(cx);

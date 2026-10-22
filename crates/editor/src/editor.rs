@@ -82,7 +82,6 @@ pub use element::{
     file_status_label_color, render_breadcrumb_text,
 };
 pub(crate) use git::DisplayDiffHunk;
-use git::InlineBlamePopover;
 pub use git::blame::{BlameRenderer, GitBlame};
 pub use git::{
     DefaultDiffHunkRenderer, DiffHunkRenderer, HiddenDiffHunkRenderer,
@@ -132,10 +131,10 @@ use gpui::{
     ClipboardEntry, ClipboardItem, Context, DispatchPhase, Entity, EntityId, EntityInputHandler,
     EventEmitter, FocusHandle, FocusOutEvent, Focusable, FontId, FontStyle, FontWeight, Global,
     HighlightStyle, Hsla, IsZero, KeyContext, Modifiers, MouseButton, MouseDownEvent,
-    MouseMoveEvent, PaintQuad, ParentElement, Pixels, PressureStage, Render, ScrollHandle,
-    SharedString, Size, Styled, Subscription, Task, TextRun, TextStyle, TextStyleRefinement,
-    UTF16Selection, UnderlineStyle, UniformListScrollHandle, WeakEntity, WeakFocusHandle, Window,
-    div, point, prelude::*, px, relative, size,
+    MouseMoveEvent, PaintQuad, ParentElement, Pixels, PressureStage, Render, SharedString, Size,
+    Styled, Subscription, Task, TextRun, TextStyle, TextStyleRefinement, UTF16Selection,
+    UnderlineStyle, UniformListScrollHandle, WeakEntity, WeakFocusHandle, Window, div, point,
+    prelude::*, px, relative, size,
 };
 use hover_links::{HoverLink, HoveredLinkState, find_file};
 use hover_popover::{HoverState, hide_hover};
@@ -160,7 +159,6 @@ use lsp::{
     CodeActionKind, CompletionItemKind, CompletionTriggerKind, InsertTextFormat, InsertTextMode,
     LanguageServerId,
 };
-use markdown::Markdown;
 use mouse_context_menu::MouseContextMenu;
 use movement::TextLayoutDetails;
 use multi_buffer::{
@@ -956,8 +954,6 @@ pub struct Editor {
     context_menu_options: Option<ContextMenuOptions>,
     mouse_context_menu: Option<MouseContextMenu>,
     completion_tasks: Vec<(CompletionId, Task<()>)>,
-    inline_blame_popover: Option<InlineBlamePopover>,
-    inline_blame_popover_show_task: Option<Task<()>>,
     find_all_references_task_sources: Vec<Anchor>,
     next_completion_id: CompletionId,
     code_actions_for_selection: CodeActionsForSelection,
@@ -1014,14 +1010,10 @@ pub struct Editor {
     auto_replace_emoji_shortcode: bool,
     jsx_tag_auto_close_enabled_in_any_buffer: bool,
     show_git_blame_gutter: bool,
-    show_git_blame_inline: bool,
-    show_git_blame_inline_delay_task: Option<Task<()>>,
-    git_blame_inline_enabled: bool,
     buffer_serialization: Option<BufferSerialization>,
     show_selection_menu: Option<bool>,
     blame: Option<Entity<GitBlame>>,
     blame_subscription: Option<Subscription>,
-    pending_blame_hover_observation: Option<Subscription>,
     custom_context_menu: Option<
         Box<
             dyn 'static
@@ -2024,8 +2016,6 @@ impl Editor {
             context_menu_options: None,
             mouse_context_menu: None,
             completion_tasks: Vec::new(),
-            inline_blame_popover: None,
-            inline_blame_popover_show_task: None,
             find_all_references_task_sources: Vec::new(),
             next_completion_id: 0,
             code_action_providers,
@@ -2082,11 +2072,7 @@ impl Editor {
             in_leading_whitespace: false,
             custom_context_menu: None,
             show_git_blame_gutter: false,
-            show_git_blame_inline: false,
             show_selection_menu: None,
-            show_git_blame_inline_delay_task: None,
-            git_blame_inline_enabled: full_mode
-                && ProjectSettings::get_global(cx).git.inline_blame.enabled,
             buffer_serialization: is_minimap.not().then(|| {
                 BufferSerialization::new(
                     ProjectSettings::get_global(cx)
@@ -2096,7 +2082,6 @@ impl Editor {
             }),
             blame: None,
             blame_subscription: None,
-            pending_blame_hover_observation: None,
 
             gutter_hover_button: (None, None),
             gutter_copied_row: (None, None),
@@ -2191,7 +2176,6 @@ impl Editor {
             |editor, _, e: &EditorEvent, window, cx| match e {
                 EditorEvent::ScrollPositionChanged { local, .. } => {
                     if *local {
-                        editor.hide_blame_popover(true, cx);
                         let snapshot = editor.snapshot(window, cx);
                         let new_anchor = editor
                             .scroll_manager
@@ -2243,10 +2227,6 @@ impl Editor {
         if full_mode {
             let should_auto_hide_scrollbars = cx.should_auto_hide_scrollbars();
             cx.set_global(ScrollbarAutoHide(should_auto_hide_scrollbars));
-
-            if editor.git_blame_inline_enabled {
-                editor.start_git_blame_inline(false, window, cx);
-            }
 
             editor.minimap =
                 editor.create_minimap(EditorSettings::get_global(cx).minimap, window, cx);
@@ -3034,7 +3014,6 @@ impl Editor {
         let mut dismissed = false;
 
         dismissed |= self.take_rename(false, window, cx).is_some();
-        dismissed |= self.hide_blame_popover(true, cx);
         dismissed |= hide_hover(self, cx);
         dismissed |= self.hide_context_menu(window, cx).is_some();
         dismissed |= self.mouse_context_menu.take().is_some();
@@ -8613,12 +8592,11 @@ impl Editor {
             cx.emit(EditorEvent::BreadcrumbsChanged);
         }
 
-        let (restore_unsaved_buffers, show_inline_diagnostics, inline_blame_enabled) = {
+        let (restore_unsaved_buffers, show_inline_diagnostics) = {
             let project_settings = ProjectSettings::get_global(cx);
             (
                 project_settings.session.restore_unsaved_buffers,
                 project_settings.diagnostics.inline.enabled,
-                project_settings.git.inline_blame.enabled,
             )
         };
         self.buffer_serialization = self
@@ -8629,10 +8607,6 @@ impl Editor {
             if self.show_inline_diagnostics != show_inline_diagnostics {
                 self.show_inline_diagnostics = show_inline_diagnostics;
                 self.refresh_inline_diagnostics(false, window, cx);
-            }
-
-            if self.git_blame_inline_enabled != inline_blame_enabled {
-                self.toggle_git_blame_inline_internal(false, window, cx);
             }
 
             let minimap_settings = EditorSettings::get_global(cx).minimap;

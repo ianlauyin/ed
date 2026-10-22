@@ -26,6 +26,11 @@ repository's `$PATH`; if none is found, the repository is not opened.
   tooltips, commit view, git graph). Authors are shown by
   name/email only.
 - The `git.blame` settings group (`show_avatar`) is removed.
+- No inline blame: the cursor-line blame (end of line or status bar), the
+  `git.inline_blame` settings, `editor::ToggleGitBlameInline` and the "Inline
+  Git Blame" menu toggle are removed. The `editor::BlameHover` cursor popover
+  is removed too. The only blame UI is the gutter (`git::Blame`, menu entry
+  "Git Blame").
 - The diff base is always HEAD: gutter hunks, file status colours and
   `git::Diff` show working changes. The `git.diff_base` setting, the
   `git::DiffHead`/`git::ToggleDiffBase` actions and the "Diff Against Default

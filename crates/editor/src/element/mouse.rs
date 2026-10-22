@@ -76,35 +76,6 @@ impl EditorElement {
             cx.notify();
         }
 
-        if text_hovered
-            && let Some((bounds, buffer_id, blame_entry)) = &position_map.inline_blame_bounds
-        {
-            let mouse_over_inline_blame = bounds.contains(&event.position);
-            let mouse_over_popover = editor
-                .inline_blame_popover
-                .as_ref()
-                .and_then(|state| state.popover_bounds)
-                .is_some_and(|bounds| bounds.contains(&event.position));
-            let keyboard_grace = editor
-                .inline_blame_popover
-                .as_ref()
-                .is_some_and(|state| state.keyboard_grace);
-
-            if mouse_over_inline_blame || mouse_over_popover {
-                editor.show_blame_popover(*buffer_id, blame_entry, event.position, false, cx);
-            } else if !keyboard_grace {
-                editor.hide_blame_popover(false, cx);
-            }
-        } else {
-            let keyboard_grace = editor
-                .inline_blame_popover
-                .as_ref()
-                .is_some_and(|state| state.keyboard_grace);
-            if !keyboard_grace {
-                editor.hide_blame_popover(false, cx);
-            }
-        }
-
         let gutter_hover_button = if gutter_hovered
             && split_side != Some(SplitSide::Left)
             && editor.show_runnables != Some(false)

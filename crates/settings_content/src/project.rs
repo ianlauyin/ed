@@ -442,11 +442,6 @@ pub struct GitSettings {
     ///
     /// Default: 0
     pub gutter_debounce: Option<u64>,
-    /// Whether or not to show git blame data inline in
-    /// the currently focused line.
-    ///
-    /// Default: on
-    pub inline_blame: Option<InlineBlameSettings>,
     /// Which information to show in the branch picker.
     ///
     /// Default: on
@@ -527,61 +522,6 @@ pub enum GitGutterSetting {
     TrackedFiles,
     /// Hide git gutter
     Hide,
-}
-
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum InlineBlameLocation {
-    /// Show git blame inline at the current line.
-    #[default]
-    Inline,
-    /// Show git blame in the status bar at the bottom of the window.
-    StatusBar,
-}
-
-#[with_fallible_options]
-#[derive(Clone, Copy, Debug, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
-#[serde(rename_all = "snake_case")]
-pub struct InlineBlameSettings {
-    /// Whether or not to show git blame data inline in
-    /// the currently focused line.
-    ///
-    /// Default: true
-    pub enabled: Option<bool>,
-    /// Whether to only show the inline blame information
-    /// after a delay once the cursor stops moving.
-    ///
-    /// Default: 0
-    pub delay_ms: Option<DelayMs>,
-    /// Where to render the blame information when enabled.
-    ///
-    /// Default: inline
-    pub location: Option<InlineBlameLocation>,
-    /// The amount of padding between the end of the source line and the start
-    /// of the inline blame in units of columns.
-    ///
-    /// Default: 7
-    pub padding: Option<u32>,
-    /// The minimum column number to show the inline blame information at
-    ///
-    /// Default: 0
-    pub min_column: Option<u32>,
-    /// Whether to show commit summary as part of the inline blame.
-    ///
-    /// Default: false
-    pub show_commit_summary: Option<bool>,
 }
 
 #[with_fallible_options]

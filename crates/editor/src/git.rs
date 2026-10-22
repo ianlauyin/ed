@@ -1,10 +1,7 @@
 pub(super) mod blame;
 
 use super::*;
-use ::git::{
-    Oid, Restore, blame::BlameEntry, commit::ParsedCommitMessage, repository::RepoPath,
-    status::FileStatus,
-};
+use ::git::{Oid, Restore, blame::BlameEntry, repository::RepoPath, status::FileStatus};
 use buffer_diff::{BufferDiff, DiffHunkStatus, DiffHunkStatusKind};
 use project::git_store::Repository;
 
@@ -120,21 +117,6 @@ pub(super) enum DisplayDiffHunk {
         status: DiffHunkStatus,
         word_diffs: Vec<Range<MultiBufferOffset>>,
     },
-}
-
-#[derive(Clone)]
-pub(super) struct InlineBlamePopoverState {
-    pub(super) scroll_handle: ScrollHandle,
-    pub(super) commit_message: Option<ParsedCommitMessage>,
-    pub(super) markdown: Entity<Markdown>,
-}
-
-pub(super) struct InlineBlamePopover {
-    pub(super) position: gpui::Point<Pixels>,
-    pub(super) hide_task: Option<Task<()>>,
-    pub(super) popover_bounds: Option<Bounds<Pixels>>,
-    pub(super) popover_state: InlineBlamePopoverState,
-    pub(super) keyboard_grace: bool,
 }
 
 impl Editor {
@@ -281,42 +263,8 @@ impl Editor {
         self.diff_hunk_action_target = target;
     }
 
-    pub fn git_blame_inline_enabled(&self) -> bool {
-        self.git_blame_inline_enabled
-    }
-
     pub fn blame(&self) -> Option<&Entity<GitBlame>> {
         self.blame.as_ref()
-    }
-
-    pub fn active_git_blame_entry(&self, cx: &mut App) -> Option<BlameEntry> {
-        if !self.show_git_blame_inline
-            || self.newest_selection_head_on_empty_line(cx)
-            || !self.has_blame_entries(cx)
-        {
-            return None;
-        }
-
-        let blame = self.blame.as_ref()?;
-        let snapshot = self.display_snapshot(cx);
-        let cursor = self.selections.newest::<Point>(&snapshot).head();
-        let (buffer, point) = snapshot.buffer_snapshot().point_to_buffer_point(cursor)?;
-
-        blame
-            .update(cx, |blame, cx| {
-                blame
-                    .blame_for_rows(
-                        &[RowInfo {
-                            buffer_id: Some(buffer.remote_id()),
-                            buffer_row: Some(point.row),
-                            ..Default::default()
-                        }],
-                        cx,
-                    )
-                    .next()
-            })
-            .flatten()
-            .map(|(_, entry)| entry)
     }
 
     pub fn show_git_blame_gutter(&self) -> bool {
@@ -347,52 +295,6 @@ impl Editor {
         }
 
         cx.notify();
-    }
-
-    pub fn toggle_git_blame_inline(
-        &mut self,
-        _: &ToggleGitBlameInline,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.toggle_git_blame_inline_internal(true, window, cx);
-        cx.notify();
-    }
-
-    /// Hides the inline blame popover element, in case it's already visible, or
-    /// interrupts the task meant to show it, in case the task is running.
-    ///
-    /// When `ignore_timeout` is set to `true`, the popover is hidden
-    /// immediately, otherwise it'll be hidden after a short delay.
-    ///
-    /// Returns `true` if the popover was visible and was hidden, `false`
-    /// otherwise.
-    pub fn hide_blame_popover(&mut self, ignore_timeout: bool, cx: &mut Context<Self>) -> bool {
-        self.inline_blame_popover_show_task.take();
-
-        if let Some(state) = &mut self.inline_blame_popover {
-            if ignore_timeout {
-                self.inline_blame_popover.take();
-                cx.notify();
-            } else {
-                state.hide_task = Some(cx.spawn(async move |editor, cx| {
-                    cx.background_executor()
-                        .timer(std::time::Duration::from_millis(100))
-                        .await;
-
-                    editor
-                        .update(cx, |editor, cx| {
-                            editor.inline_blame_popover.take();
-                            cx.notify();
-                        })
-                        .ok();
-                }));
-            }
-
-            true
-        } else {
-            false
-        }
     }
 
     pub fn git_restore(&mut self, _: &Restore, window: &mut Window, cx: &mut Context<Self>) {
@@ -464,73 +366,6 @@ impl Editor {
         self.buffer.update(cx, |buffer, cx| {
             buffer.expand_diff_hunks(vec![Anchor::Min..Anchor::Max], cx)
         });
-    }
-
-    pub(super) fn blame_hover(
-        &mut self,
-        _: &BlameHover,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let just_started = self.blame.is_none();
-        if just_started {
-            self.start_git_blame(true, window, cx);
-        }
-        let Some(blame) = self.blame.as_ref() else {
-            return;
-        };
-
-        if just_started && !blame.read(cx).has_generated_entries() {
-            let subscription = cx.observe_in(blame, window, |editor, blame, window, cx| {
-                if blame.read(cx).has_generated_entries() {
-                    editor.pending_blame_hover_observation.take();
-                    editor.show_blame_hover_popover(window, cx);
-                }
-            });
-            self.pending_blame_hover_observation = Some(subscription);
-            return;
-        }
-
-        self.show_blame_hover_popover(window, cx);
-    }
-
-    fn show_blame_hover_popover(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let snapshot = self.snapshot(window, cx);
-        let cursor = self
-            .selections
-            .newest::<Point>(&snapshot.display_snapshot)
-            .head();
-        let Some((buffer, point)) = snapshot.buffer_snapshot().point_to_buffer_point(cursor) else {
-            return;
-        };
-
-        let Some(blame) = self.blame.as_ref() else {
-            return;
-        };
-
-        let row_info = RowInfo {
-            buffer_id: Some(buffer.remote_id()),
-            buffer_row: Some(point.row),
-            ..Default::default()
-        };
-        let Some((buffer, blame_entry)) = blame
-            .update(cx, |blame, cx| blame.blame_for_rows(&[row_info], cx).next())
-            .flatten()
-        else {
-            return;
-        };
-
-        let anchor = self.selections.newest_anchor().head();
-        let position = self.to_pixel_point(anchor, &snapshot, window, cx);
-        if let (Some(position), Some(last_bounds)) = (position, self.last_bounds) {
-            self.show_blame_popover(
-                buffer,
-                &blame_entry,
-                position + last_bounds.origin,
-                true,
-                cx,
-            );
-        };
     }
 
     pub(super) fn restore_file(
@@ -1029,128 +864,8 @@ impl Editor {
         self.open_git_blame_commit_internal(window, cx);
     }
 
-    pub(super) fn toggle_git_blame_inline_internal(
-        &mut self,
-        user_triggered: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self.git_blame_inline_enabled {
-            self.git_blame_inline_enabled = false;
-            self.show_git_blame_inline = false;
-            self.show_git_blame_inline_delay_task.take();
-        } else {
-            self.git_blame_inline_enabled = true;
-            self.start_git_blame_inline(user_triggered, window, cx);
-        }
-
-        cx.notify();
-    }
-
-    pub(super) fn start_git_blame_inline(
-        &mut self,
-        user_triggered: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.start_git_blame(user_triggered, window, cx);
-
-        if ProjectSettings::get_global(cx)
-            .git
-            .inline_blame_delay()
-            .is_some()
-        {
-            self.start_inline_blame_timer(window, cx);
-        } else {
-            self.show_git_blame_inline = true
-        }
-    }
-
     pub(super) fn render_git_blame_gutter(&self, cx: &App) -> bool {
         !self.mode().is_minimap() && self.show_git_blame_gutter && self.has_blame_entries(cx)
-    }
-
-    pub(super) fn render_git_blame_inline(&self, window: &Window, cx: &App) -> bool {
-        ProjectSettings::get_global(cx).git.inline_blame.location
-            == project::project_settings::InlineBlameLocation::Inline
-            && self.show_git_blame_inline
-            && (self.focus_handle.is_focused(window) || self.inline_blame_popover.is_some())
-            && !self.newest_selection_head_on_empty_line(cx)
-            && self.has_blame_entries(cx)
-    }
-
-    pub(super) fn start_inline_blame_timer(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(delay) = ProjectSettings::get_global(cx).git.inline_blame_delay() {
-            self.show_git_blame_inline = false;
-
-            self.show_git_blame_inline_delay_task =
-                Some(cx.spawn_in(window, async move |this, cx| {
-                    cx.background_executor().timer(delay).await;
-
-                    this.update(cx, |this, cx| {
-                        this.show_git_blame_inline = true;
-                        cx.notify();
-                    })
-                    .log_err();
-                }));
-        }
-    }
-
-    pub(super) fn show_blame_popover(
-        &mut self,
-        buffer: BufferId,
-        blame_entry: &BlameEntry,
-        position: gpui::Point<Pixels>,
-        ignore_timeout: bool,
-        cx: &mut Context<Self>,
-    ) {
-        if let Some(state) = &mut self.inline_blame_popover {
-            state.hide_task.take();
-        } else {
-            let blame_popover_delay = EditorSettings::get_global(cx).hover_popover_delay.0;
-            let blame_entry = blame_entry.clone();
-            let show_task = cx.spawn(async move |editor, cx| {
-                if !ignore_timeout {
-                    cx.background_executor()
-                        .timer(std::time::Duration::from_millis(blame_popover_delay))
-                        .await;
-                }
-                editor
-                    .update(cx, |editor, cx| {
-                        editor.inline_blame_popover_show_task.take();
-                        let Some(blame) = editor.blame.as_ref() else {
-                            return;
-                        };
-                        let blame = blame.read(cx);
-                        let details = blame.details_for_entry(buffer, &blame_entry);
-                        let markdown = cx.new(|cx| {
-                            Markdown::new(
-                                details
-                                    .as_ref()
-                                    .map(|message| message.message.clone())
-                                    .unwrap_or_default(),
-                                None,
-                                None,
-                                cx,
-                            )
-                        });
-                        editor.inline_blame_popover = Some(InlineBlamePopover {
-                            position,
-                            hide_task: None,
-                            popover_bounds: None,
-                            popover_state: InlineBlamePopoverState {
-                                scroll_handle: ScrollHandle::new(),
-                                commit_message: details,
-                                markdown,
-                            },
-                            keyboard_grace: ignore_timeout,
-                        });
-                        cx.notify();
-                    })
-                    .ok();
-            });
-            self.inline_blame_popover_show_task = Some(show_task);
-        }
     }
 
     pub(super) fn go_to_prev_hunk(
@@ -1449,14 +1164,6 @@ impl Editor {
             .is_some_and(|blame| blame.read(cx).has_generated_entries())
     }
 
-    fn newest_selection_head_on_empty_line(&self, cx: &App) -> bool {
-        let cursor_anchor = self.selections.newest_anchor().head();
-
-        let snapshot = self.buffer.read(cx).snapshot(cx);
-        let buffer_row = MultiBufferRow(cursor_anchor.to_point(&snapshot).row);
-
-        snapshot.line_len(buffer_row) == 0
-    }
     fn hunk_after_position(
         &mut self,
         snapshot: &EditorSnapshot,
