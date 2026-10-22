@@ -842,8 +842,6 @@ actions!(
         ToggleSemanticHighlights,
         /// Toggles inline diagnostics display.
         ToggleInlineDiagnostics,
-        /// Toggles line numbers display.
-        ToggleLineNumbers,
         /// Toggles the minimap display.
         ToggleMinimap,
         /// Swaps the start and end of the current selection.
@@ -853,8 +851,6 @@ actions!(
         /// Toggles diff display for selected hunks.
         #[action(deprecated_aliases = ["editor::ToggleHunkDiff"])]
         ToggleSelectedDiffHunks,
-        /// Toggles the selection menu.
-        ToggleSelectionMenu,
         /// Toggles soft wrap mode.
         ToggleSoftWrap,
         /// Toggles the tab bar display.

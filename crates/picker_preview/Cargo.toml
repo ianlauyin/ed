@@ -21,6 +21,5 @@ multi_buffer.workspace = true
 picker.workspace = true
 project.workspace = true
 rope.workspace = true
-settings.workspace = true
 ui.workspace = true
 util.workspace = true

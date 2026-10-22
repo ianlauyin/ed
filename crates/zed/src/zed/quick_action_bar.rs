@@ -96,7 +96,6 @@ impl Render for QuickActionBar {
         let supports_semantic_tokens =
             editor.update(cx, |editor, cx| editor.supports_semantic_tokens(cx));
         let editor_value = editor.read(cx);
-        let selection_menu_enabled = editor_value.selection_menu_enabled(cx);
         let inlay_hints_enabled = editor_value.inlay_hints_enabled();
         let semantic_highlights_enabled = editor_value.semantic_highlights_enabled();
         let is_full = editor_value.mode().is_full();
@@ -105,7 +104,6 @@ impl Render for QuickActionBar {
         let supports_inline_diagnostics = editor_value.inline_diagnostics_enabled();
         let inline_diagnostics_enabled = editor_value.show_inline_diagnostics();
         let show_git_blame_gutter = editor_value.show_git_blame_gutter();
-        let show_line_numbers = editor_value.line_numbers_enabled(cx);
 
         let supports_minimap = editor_value.supports_minimap(cx);
         let minimap_enabled = supports_minimap && editor_value.minimap().is_some();
@@ -200,7 +198,7 @@ impl Render for QuickActionBar {
                 }))
         });
 
-        let editor_selections_dropdown = selection_menu_enabled.then(|| {
+        let editor_selections_dropdown = {
             let has_diff_hunks = editor
                 .read(cx)
                 .buffer()
@@ -271,7 +269,7 @@ impl Render for QuickActionBar {
                     });
                     Some(menu)
                 })
-        });
+        };
 
         let editor_focus_handle = editor.focus_handle(cx);
         let editor = editor.downgrade();
@@ -404,51 +402,7 @@ impl Render for QuickActionBar {
                                     }
                                     menu = menu.item(inline_diagnostics_item)
                                 }
-
-                                menu = menu.separator();
                             }
-
-                            menu = menu.toggleable_entry(
-                                "Line Numbers",
-                                show_line_numbers,
-                                IconPosition::Start,
-                                Some(editor::actions::ToggleLineNumbers.boxed_clone()),
-                                {
-                                    let editor = editor.clone();
-                                    move |window, cx| {
-                                        editor
-                                            .update(cx, |editor, cx| {
-                                                editor.toggle_line_numbers(
-                                                    &editor::actions::ToggleLineNumbers,
-                                                    window,
-                                                    cx,
-                                                );
-                                            })
-                                            .ok();
-                                    }
-                                },
-                            );
-
-                            menu = menu.toggleable_entry(
-                                "Selection Menu",
-                                selection_menu_enabled,
-                                IconPosition::Start,
-                                Some(editor::actions::ToggleSelectionMenu.boxed_clone()),
-                                {
-                                    let editor = editor.clone();
-                                    move |window, cx| {
-                                        editor
-                                            .update(cx, |editor, cx| {
-                                                editor.toggle_selection_menu(
-                                                    &editor::actions::ToggleSelectionMenu,
-                                                    window,
-                                                    cx,
-                                                )
-                                            })
-                                            .ok();
-                                    }
-                                },
-                            );
 
                             menu = menu.separator();
 
@@ -486,7 +440,7 @@ impl Render for QuickActionBar {
             .children(self.render_preview_button(cx))
             .children(search_button)
             .children(code_actions_dropdown)
-            .children(editor_selections_dropdown)
+            .child(editor_selections_dropdown)
             .child(editor_settings_dropdown)
     }
 }

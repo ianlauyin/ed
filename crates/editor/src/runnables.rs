@@ -17,8 +17,8 @@ use text::{BufferId, OffsetRangeExt as _, ToOffset as _, ToPoint as _};
 use ui::{Clickable as _, Color, IconButton, IconSize, Toggleable as _};
 
 use crate::{
-    CodeActionSource, Editor, EditorSettings, EditorStyle, RangeToAnchorExt, SpawnNearestTask,
-    ToggleCodeActions, UPDATE_DEBOUNCE,
+    CodeActionSource, Editor, EditorStyle, RangeToAnchorExt, SpawnNearestTask, ToggleCodeActions,
+    UPDATE_DEBOUNCE,
     display_map::{DisplayPoint, DisplayRow},
 };
 
@@ -135,10 +135,7 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !self.mode().is_full()
-            || !EditorSettings::get_global(cx).gutter.runnables
-            || !self.enable_runnables
-        {
+        if !self.mode().is_full() || !self.enable_runnables {
             self.clear_runnables(None);
             return;
         }

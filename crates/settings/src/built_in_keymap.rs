@@ -162,7 +162,6 @@ pub fn keymap() -> Vec<KeyBindingSpec> {
             KeyBindingSpec::new("ctrl-shift-v", "editor::MovePageUp")
                 .with_input(json!({"center_cursor": true})),
             KeyBindingSpec::new("ctrl-cmd-space", "editor::ShowCharacterPalette"),
-            KeyBindingSpec::new("cmd-;", "editor::ToggleLineNumbers"),
             KeyBindingSpec::new("cmd-'", "editor::ToggleSelectedDiffHunks"),
             KeyBindingSpec::new("cmd-\"", "editor::ExpandAllDiffHunks"),
             KeyBindingSpec::new("cmd-alt-g b", "git::Blame"),

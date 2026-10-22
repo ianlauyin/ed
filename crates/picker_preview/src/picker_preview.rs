@@ -10,12 +10,11 @@ use language::{Bias, Buffer, HighlightedText, HighlightedTextBuilder, ToPoint};
 use picker::{MatchLocation, PreviewBackend, PreviewLayout, PreviewSource, PreviewUpdate};
 use project::{Project, Symbol};
 use rope::Point;
-use settings::Settings;
 use ui::{ActiveTheme, Color, div, prelude::*, v_flex};
 use util::ResultExt as _;
 use util::rel_path::RelPath;
 
-use editor::{Editor, EditorSettings, RowHighlightOptions, display_map::HighlightKey};
+use editor::{Editor, RowHighlightOptions, display_map::HighlightKey};
 use multi_buffer::{MultiBuffer, MultiBufferOffset};
 
 pub fn editor_preview(
@@ -70,7 +69,6 @@ impl EditorPreview {
             let capability = language::Capability::ReadWrite; // Later narrowed per buffer
             let multi_buffer = cx.new(|_| MultiBuffer::without_headers(capability));
             let mut editor = Editor::for_multibuffer(multi_buffer, None, window, cx);
-            let editor_settings = EditorSettings::get_global(cx).clone();
 
             // We want editing to happen in the multibuffer not in the modal. The editor acts
             // as one big <send to multibuffer> button.
@@ -82,8 +80,8 @@ impl EditorPreview {
             editor.disable_diagnostics(cx);
             editor.disable_expand_excerpt_buttons(cx);
             editor.disable_mouse_wheel_zoom();
-            editor.set_show_gutter(editor_settings.gutter.line_numbers, cx); // needed for line numbers
-            editor.set_show_line_numbers(editor_settings.gutter.line_numbers, cx);
+            editor.set_show_gutter(true, cx); // needed for line numbers
+            editor.set_show_line_numbers(true, cx);
             editor.set_show_code_actions(false, cx);
             editor.set_show_runnables(false, cx);
             editor.set_show_git_diff_gutter(false, cx);

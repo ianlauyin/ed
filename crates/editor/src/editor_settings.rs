@@ -4,7 +4,7 @@ use language::CursorShape;
 use project::project_settings::DiagnosticSeverity;
 pub use settings::{
     CompletionDetailAlignment, CompletionMenuItemKind, CurrentLineHighlight, DelayMs,
-    DiffViewStyle, DisplayIn, DocumentColorsRenderMode, DoubleClickInMultibuffer, GitGutterWidth,
+    DiffViewStyle, DisplayIn, DocumentColorsRenderMode, DoubleClickInMultibuffer,
     GoToDefinitionFallback, GoToDefinitionScrollStrategy, MinimapThumb, MinimapThumbBorder,
     MultiCursorModifier, OpenResultsIn, ScrollBeyondLastLine, SeedQuerySetting, ShowMinimap,
     SnippetSortOrder,
@@ -29,7 +29,6 @@ pub struct EditorSettings {
     pub hover_popover_hiding_delay: DelayMs,
     pub toolbar: Toolbar,
     pub minimap: Minimap,
-    pub gutter: Gutter,
     pub scroll_beyond_last_line: ScrollBeyondLastLine,
     pub vertical_scroll_margin: f64,
     pub autoscroll_on_clicks: bool,
@@ -81,8 +80,6 @@ pub struct FileDiffSettings {
 pub struct Toolbar {
     pub breadcrumbs: bool,
     pub quick_actions: bool,
-    pub selections_menu: bool,
-
     pub code_actions: bool,
 }
 
@@ -112,15 +109,6 @@ impl Minimap {
             ..self
         }
     }
-}
-
-#[derive(Copy, Clone, Debug, PartialEq)]
-pub struct Gutter {
-    pub min_line_number_digits: usize,
-    pub line_numbers: bool,
-    pub runnables: bool,
-    pub folds: bool,
-    pub git_gutter_width: settings::GitGutterWidth,
 }
 
 /// Whether to allow drag and drop text selection in buffer.
@@ -161,7 +149,6 @@ impl Settings for EditorSettings {
         let editor = content.editor.clone();
         let cursor_animation = editor.cursor_animation.unwrap();
         let minimap = editor.minimap.unwrap();
-        let gutter = editor.gutter.unwrap();
         let toolbar = editor.toolbar.unwrap();
         let search = editor.search.unwrap();
         let drag_and_drop_selection = editor.drag_and_drop_selection.unwrap();
@@ -183,7 +170,6 @@ impl Settings for EditorSettings {
             toolbar: Toolbar {
                 breadcrumbs: toolbar.breadcrumbs.unwrap(),
                 quick_actions: toolbar.quick_actions.unwrap(),
-                selections_menu: toolbar.selections_menu.unwrap(),
 
                 code_actions: toolbar.code_actions.unwrap(),
             },
@@ -194,13 +180,6 @@ impl Settings for EditorSettings {
                 thumb_border: minimap.thumb_border.unwrap(),
                 current_line_highlight: minimap.current_line_highlight,
                 max_width_columns: minimap.max_width_columns.unwrap(),
-            },
-            gutter: Gutter {
-                min_line_number_digits: gutter.min_line_number_digits.unwrap(),
-                line_numbers: gutter.line_numbers.unwrap(),
-                runnables: gutter.runnables.unwrap(),
-                folds: gutter.folds.unwrap(),
-                git_gutter_width: gutter.git_gutter_width.unwrap(),
             },
             scroll_beyond_last_line: editor.scroll_beyond_last_line.unwrap(),
             vertical_scroll_margin: editor.vertical_scroll_margin.unwrap() as f64,

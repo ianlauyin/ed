@@ -4929,7 +4929,6 @@ dependencies = [
  "picker",
  "project",
  "rope",
- "settings",
  "ui",
  "util",
 ]

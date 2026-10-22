@@ -239,6 +239,8 @@ pub const BUFFER_HEADER_PADDING: Rems = rems(0.25);
 pub const MULTI_BUFFER_EXCERPT_HEADER_HEIGHT: u32 = 1;
 const CURSOR_BLINK_INTERVAL: Duration = Duration::from_millis(500);
 const MAX_LINE_LEN: usize = 1024;
+/// Reserve gutter space for this many line number digits, to avoid resizes as files grow.
+pub(crate) const MIN_LINE_NUMBER_DIGITS: usize = 4;
 const MIN_NAVIGATION_HISTORY_ROW_DELTA: i64 = 10;
 const MAX_SELECTION_HISTORY_LEN: usize = 1024;
 
@@ -934,7 +936,7 @@ pub struct Editor {
     enable_runnables: bool,
     enable_mouse_wheel_zoom: bool,
     search_results_hold: Option<SearchResultsHold>,
-    show_line_numbers: Option<bool>,
+    show_line_numbers: bool,
     show_git_diff_gutter: Option<bool>,
     show_code_actions: Option<bool>,
     show_runnables: Option<bool>,
@@ -1011,7 +1013,6 @@ pub struct Editor {
     jsx_tag_auto_close_enabled_in_any_buffer: bool,
     show_git_blame_gutter: bool,
     buffer_serialization: Option<BufferSerialization>,
-    show_selection_menu: Option<bool>,
     blame: Option<Entity<GitBlame>>,
     blame_subscription: Option<Subscription>,
     custom_context_menu: Option<
@@ -1128,7 +1129,7 @@ pub struct EditorSnapshot {
     show_gutter: bool,
     offset_content: bool,
     sticky_line_number_digits: usize,
-    show_line_numbers: Option<bool>,
+    show_line_numbers: bool,
     number_deleted_lines: bool,
     show_git_diff_gutter: Option<bool>,
     show_code_actions: Option<bool>,
@@ -1989,7 +1990,7 @@ impl Editor {
             breadcrumbs_visibility: BreadcrumbsVisibility::from_settings(cx),
             show_gutter: full_mode,
             search_results_hold: None,
-            show_line_numbers: (!full_mode).then_some(false),
+            show_line_numbers: full_mode,
             disable_expand_excerpt_buttons: !full_mode,
             delegate_expand_excerpts: false,
             delegate_open_excerpts: false,
@@ -2072,7 +2073,6 @@ impl Editor {
             in_leading_whitespace: false,
             custom_context_menu: None,
             show_git_blame_gutter: false,
-            show_selection_menu: None,
             buffer_serialization: is_minimap.not().then(|| {
                 BufferSerialization::new(
                     ProjectSettings::get_global(cx)
@@ -2421,25 +2421,6 @@ impl Editor {
                     .and_then(|file| file.as_local().map(|file| file.abs_path(cx)))
             }
         })
-    }
-
-    pub fn selection_menu_enabled(&self, cx: &App) -> bool {
-        self.show_selection_menu
-            .unwrap_or_else(|| EditorSettings::get_global(cx).toolbar.selections_menu)
-    }
-
-    pub fn toggle_selection_menu(
-        &mut self,
-        _: &ToggleSelectionMenu,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.show_selection_menu = self
-            .show_selection_menu
-            .map(|show_selections_menu| !show_selections_menu)
-            .or_else(|| Some(!EditorSettings::get_global(cx).toolbar.selections_menu));
-
-        cx.notify();
     }
 
     pub fn new_file(
@@ -10342,16 +10323,11 @@ impl EditorSnapshot {
                     GitGutterSetting::TrackedFiles
                 )
             });
-            let gutter_settings = EditorSettings::get_global(cx).gutter;
-            let show_line_numbers = self
-                .show_line_numbers
-                .unwrap_or(gutter_settings.line_numbers);
+            let show_line_numbers = self.show_line_numbers;
             let line_gutter_width = if show_line_numbers {
                 // Avoid flicker-like gutter resizes when the line number gains another digit by
-                // only resizing the gutter on files with > 10**min_line_number_digits lines.
-                let min_digits = gutter_settings
-                    .min_line_number_digits
-                    .max(self.sticky_line_number_digits);
+                // only resizing the gutter on files with > 10**MIN_LINE_NUMBER_DIGITS lines.
+                let min_digits = MIN_LINE_NUMBER_DIGITS.max(self.sticky_line_number_digits);
                 let min_width_for_number_on_gutter = ch_advance * min_digits as f32;
                 self.max_line_number_width(style, window)
                     .max(min_width_for_number_on_gutter)
@@ -10391,7 +10367,7 @@ impl EditorSnapshot {
                     px(0.)
                 };
 
-            let shows_folds = is_singleton && gutter_settings.folds;
+            let shows_folds = is_singleton;
 
             let right_padding = if shows_folds && show_line_numbers {
                 ch_width * 4.0

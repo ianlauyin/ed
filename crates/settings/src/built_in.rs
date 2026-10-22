@@ -280,7 +280,6 @@ fn editor_settings() -> EditorSettingsContent {
         toolbar: Some(ToolbarContent {
             breadcrumbs: Some(true),
             quick_actions: Some(true),
-            selections_menu: Some(true),
             code_actions: Some(false),
         }),
         minimap: Some(MinimapContent {
@@ -290,13 +289,6 @@ fn editor_settings() -> EditorSettingsContent {
             thumb_border: Some(MinimapThumbBorder::None),
             current_line_highlight: None,
             max_width_columns: Some(std::num::NonZeroU32::new(80).unwrap()),
-        }),
-        gutter: Some(GutterContent {
-            line_numbers: Some(true),
-            min_line_number_digits: Some(4),
-            runnables: Some(true),
-            folds: Some(true),
-            git_gutter_width: Some(GitGutterWidth::Default),
         }),
         scroll_beyond_last_line: Some(ScrollBeyondLastLine::OnePage),
         vertical_scroll_margin: Some(3.0),

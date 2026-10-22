@@ -13,7 +13,7 @@ use crate::{
     ContextMenuPlacement, CursorShape, CustomBlockId, DisplayDiffHunk, DisplayPoint, DisplayRow,
     Editor, EditorMode, EditorSettings, EditorSnapshot, EditorStyle, FILE_HEADER_HEIGHT,
     FocusedBlock, GutterDimensions, HalfPageDown, HalfPageUp, HandleInput, InlayHintRefreshReason,
-    LineDown, LineHighlight, LineUp, MAX_LINE_LEN, PageDown, PageUp, Point, RowExt, RowRangeExt,
+    LineDown, LineHighlight, LineUp, MAX_LINE_LEN, MIN_LINE_NUMBER_DIGITS, PageDown, PageUp, Point, RowExt, RowRangeExt,
     Selection, SelectionDragState, SizingBehavior, SoftWrap, ToPoint,
     code_context_menus::{CodeActionsMenu, MENU_ASIDE_MAX_WIDTH, MENU_ASIDE_MIN_WIDTH, MENU_GAP},
     column_pixels,
@@ -23,7 +23,7 @@ use crate::{
         HighlightKey, HighlightedChunk, ToDisplayPoint,
     },
     editor_settings::{
-        CurrentLineHighlight, DocumentColorsRenderMode, GitGutterWidth, ScrollBeyondLastLine,
+        CurrentLineHighlight, DocumentColorsRenderMode, ScrollBeyondLastLine,
     },
     git::blame::{BlameRenderer, GitBlame, GlobalBlameRenderer},
     hover_popover::{
@@ -569,7 +569,6 @@ impl EditorElement {
         register_action(editor, window, Editor::toggle_soft_wrap);
         register_action(editor, window, Editor::toggle_tab_bar);
         register_action(editor, window, Editor::toggle_breadcrumb);
-        register_action(editor, window, Editor::toggle_line_numbers);
         register_action(editor, window, Editor::toggle_indent_guides);
 
         if editor.read(cx).lsp_data_enabled() {
@@ -1414,7 +1413,6 @@ impl EditorElement {
         crease_toggles: &mut [Option<AnyElement>],
         line_height: Pixels,
         gutter_dimensions: &GutterDimensions,
-        gutter_settings: crate::editor_settings::Gutter,
         scroll_position: gpui::Point<ScrollOffset>,
         start_row: DisplayRow,
         gutter_hitbox: &Hitbox,
@@ -1423,7 +1421,6 @@ impl EditorElement {
     ) {
         for (ix, crease_toggle) in crease_toggles.iter_mut().enumerate() {
             if let Some(crease_toggle) = crease_toggle {
-                debug_assert!(gutter_settings.folds);
                 let available_space = size(
                     AvailableSpace::MinContent,
                     AvailableSpace::Definite(line_height * 0.55),
@@ -1531,7 +1528,6 @@ impl EditorElement {
                         gutter_hitbox.bounds,
                         hunk,
                         snapshot,
-                        cx,
                     );
                     *hitbox = Some(window.insert_hitbox(hunk_bounds, HitboxBehavior::BlockMouse));
                 }
@@ -2125,7 +2121,7 @@ impl EditorElement {
             .ilog10()
             + 1;
 
-        let git_gutter_width = Self::gutter_strip_width(line_height, cx)
+        let git_gutter_width = Self::gutter_strip_width(line_height)
             + gutter_dimensions
                 .git_blame_entries_width
                 .unwrap_or_default();
@@ -2148,7 +2144,7 @@ impl EditorElement {
 
                 let editor = self.editor.clone();
                 let is_wide = max_line_number_length
-                    >= EditorSettings::get_global(cx).gutter.min_line_number_digits as u32
+                    >= MIN_LINE_NUMBER_DIGITS as u32
                     && row_info
                         .buffer_row
                         .is_some_and(|row| (row + 1).ilog10() + 1 == max_line_number_length)
@@ -2195,10 +2191,7 @@ impl EditorElement {
         window: &mut Window,
         cx: &mut App,
     ) -> Arc<HashMap<MultiBufferRow, LineNumberLayout>> {
-        let include_line_numbers = gutter
-            .snapshot
-            .show_line_numbers
-            .unwrap_or_else(|| EditorSettings::get_global(cx).gutter.line_numbers);
+        let include_line_numbers = gutter.snapshot.show_line_numbers;
         if !include_line_numbers {
             return Arc::default();
         }
@@ -2281,8 +2274,7 @@ impl EditorElement {
         window: &mut Window,
         cx: &mut App,
     ) -> Vec<Option<AnyElement>> {
-        let include_fold_statuses = EditorSettings::get_global(cx).gutter.folds
-            && snapshot.mode.is_full()
+        let include_fold_statuses = snapshot.mode.is_full()
             && snapshot.display_snapshot.companion_snapshot().is_none()
             && self.editor.read(cx).buffer_kind(cx) == ItemBufferKind::Singleton;
         if include_fold_statuses {
@@ -4411,7 +4403,6 @@ impl EditorElement {
                             layout.gutter_hitbox.bounds,
                             hunk,
                             &layout.position_map.snapshot,
-                            cx,
                         );
                         Some((
                             hunk_bounds,
@@ -4499,32 +4490,13 @@ impl EditorElement {
 
     const DEFAULT_STRIP_WIDTH_RATIO: f32 = 0.275;
     const DELETED_MARKER_WIDTH_RATIO: f32 = 0.35 / Self::DEFAULT_STRIP_WIDTH_RATIO;
-    const MIN_DELETED_MARKER_WIDTH_RATIO: f32 = 0.2;
 
-    fn gutter_strip_width(line_height: Pixels, cx: &App) -> Pixels {
-        match EditorSettings::get_global(cx).gutter.git_gutter_width {
-            GitGutterWidth::Custom(width) => px(*width),
-            GitGutterWidth::Default => (Self::DEFAULT_STRIP_WIDTH_RATIO * line_height).floor(),
-        }
+    fn gutter_strip_width(line_height: Pixels) -> Pixels {
+        (Self::DEFAULT_STRIP_WIDTH_RATIO * line_height).floor()
     }
 
-    fn deleted_marker_base_width(setting: GitGutterWidth, line_height: Pixels) -> Pixels {
-        match setting {
-            GitGutterWidth::Custom(width) => {
-                let scaled_width = px(*width * Self::DELETED_MARKER_WIDTH_RATIO);
-                if scaled_width > Pixels::ZERO {
-                    let default_strip_width = Self::DEFAULT_STRIP_WIDTH_RATIO * line_height;
-                    let boost_factor = (1.0 - *width / f32::from(default_strip_width)).max(0.0);
-                    scaled_width + line_height * Self::MIN_DELETED_MARKER_WIDTH_RATIO * boost_factor
-                } else {
-                    Pixels::ZERO
-                }
-            }
-            GitGutterWidth::Default => {
-                (Self::DEFAULT_STRIP_WIDTH_RATIO * line_height * Self::DELETED_MARKER_WIDTH_RATIO)
-                    .floor()
-            }
-        }
+    fn deleted_marker_base_width(line_height: Pixels) -> Pixels {
+        (Self::DEFAULT_STRIP_WIDTH_RATIO * line_height * Self::DELETED_MARKER_WIDTH_RATIO).floor()
     }
 
     fn diff_hunk_bounds(
@@ -4533,10 +4505,9 @@ impl EditorElement {
         gutter_bounds: Bounds<Pixels>,
         hunk: &DisplayDiffHunk,
         snapshot: &EditorSnapshot,
-        cx: &App,
     ) -> Bounds<Pixels> {
         let scroll_top = scroll_position.y * ScrollPixelOffset::from(line_height);
-        let gutter_strip_width = Self::gutter_strip_width(line_height, cx);
+        let gutter_strip_width = Self::gutter_strip_width(line_height);
 
         match hunk {
             DisplayDiffHunk::Folded { display_row, .. } => {
@@ -4562,10 +4533,7 @@ impl EditorElement {
                             .into();
                     let end_y = start_y + line_height;
 
-                    let width = Self::deleted_marker_base_width(
-                        EditorSettings::get_global(cx).gutter.git_gutter_width,
-                        line_height,
-                    );
+                    let width = Self::deleted_marker_base_width(line_height);
                     let highlight_origin = gutter_bounds.origin + point(px(0.), start_y);
                     let highlight_size = size(width, end_y - start_y);
                     Bounds::new(highlight_origin, highlight_size)
@@ -5613,7 +5581,7 @@ impl Gutter<'_> {
             AvailableSpace::Definite(self.line_height),
         );
         let indicator_size = button.layout_as_root(available_space, window, cx);
-        let git_gutter_width = EditorElement::gutter_strip_width(self.line_height, cx)
+        let git_gutter_width = EditorElement::gutter_strip_width(self.line_height)
             + self.dimensions.git_blame_entries_width.unwrap_or_default();
 
         // center in the slot between the git strip and the line numbers, so the gap to the
@@ -7835,8 +7803,6 @@ impl Element for EditorElement {
                         cx,
                     );
 
-                    let gutter_settings = EditorSettings::get_global(cx).gutter;
-
                     let context_menu_layout =
                         if let Some(newest_selection_head) = newest_selection_head {
                             let newest_selection_point =
@@ -7874,11 +7840,8 @@ impl Element for EditorElement {
                         cx,
                     );
 
-                    let test_indicators = if gutter_settings.runnables {
-                        self.layout_run_indicators(&gutter, &run_indicator_rows, window, cx)
-                    } else {
-                        Vec::new()
-                    };
+                    let test_indicators =
+                        self.layout_run_indicators(&gutter, &run_indicator_rows, window, cx);
 
                     let editor = self.editor.read(cx);
                     let copied_row = editor.gutter_copied_row.0;
@@ -7891,9 +7854,7 @@ impl Element for EditorElement {
                     let gutter_hover_buttons = copied_row
                         .into_iter()
                         .chain(hovered_row.filter(|row| Some(*row) != copied_row))
-                        .filter(|row| {
-                            !(gutter_settings.runnables && run_indicator_rows.contains(row))
-                        })
+                        .filter(|row| !run_indicator_rows.contains(row))
                         .filter_map(|row| self.layout_gutter_hover_button(&gutter, row, window, cx))
                         .collect::<Vec<_>>();
 
@@ -7926,7 +7887,6 @@ impl Element for EditorElement {
                             &mut crease_toggles,
                             line_height,
                             &gutter_dimensions,
-                            gutter_settings,
                             scroll_position,
                             start_row,
                             &gutter_hitbox,

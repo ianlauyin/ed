@@ -54,6 +54,10 @@
 - No sticky scroll: enclosing outline items are never pinned to the top of
   the editor (removed with its `sticky_scroll` setting). Multibuffer sticky
   buffer headers are a separate feature and remain.
+- The gutter has no settings: line numbers (with space reserved for 4
+  digits), runnables, fold toggles and default-width git diff strips are
+  always shown. There is no `gutter` settings block and no
+  `editor::ToggleLineNumbers` action, keybinding or quick action bar toggle.
 - Gutter line numbers are always absolute. Relative line numbers are removed
   (no `relative_line_numbers` setting, no `editor::ToggleRelativeLineNumbers`).
 - No signature help: no popup, actions, keybindings or settings. The LSP
@@ -67,6 +71,9 @@
   resolved alongside the hover request. Always on whenever a language server
   provides lenses: there is no `code_lens` setting, `editor::ToggleCodeLens`
   action or quick action bar toggle.
+- The selections menu in the editor toolbar is always shown: there is no
+  `toolbar.selections_menu` setting, `editor::ToggleSelectionMenu` action or
+  quick action bar toggle.
 - Run/test code lenses are never requested: gutter runnables cover them.
   rust-analyzer isn't told the client supports `rust-analyzer.runSingle` (so
   it omits "Run" / "Run Test" lenses), and gopls's `test` codelens is left at
