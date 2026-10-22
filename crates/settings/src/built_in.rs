@@ -351,7 +351,6 @@ fn editor_settings() -> EditorSettingsContent {
             enabled: Some(true),
             delay: Some(DelayMs(300)),
         }),
-        code_lens: Some(CodeLens::Off),
         lsp_document_colors: Some(DocumentColorsRenderMode::Inlay),
         lsp_document_links: Some(true),
         completion_menu_scrollbar: Some(ShowScrollbar::Never),

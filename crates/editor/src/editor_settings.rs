@@ -3,7 +3,7 @@ use core::num;
 use language::CursorShape;
 use project::project_settings::DiagnosticSeverity;
 pub use settings::{
-    CodeLens, CompletionDetailAlignment, CompletionMenuItemKind, CurrentLineHighlight, DelayMs,
+    CompletionDetailAlignment, CompletionMenuItemKind, CurrentLineHighlight, DelayMs,
     DiffViewStyle, DisplayIn, DocumentColorsRenderMode, DoubleClickInMultibuffer, GitGutterWidth,
     GoToDefinitionFallback, GoToDefinitionScrollStrategy, MinimapThumb, MinimapThumbBorder,
     MultiCursorModifier, OpenResultsIn, ScrollBeyondLastLine, SeedQuerySetting, ShowMinimap,
@@ -53,7 +53,6 @@ pub struct EditorSettings {
     pub diagnostics_max_severity: Option<DiagnosticSeverity>,
     pub inline_code_actions: bool,
     pub drag_and_drop_selection: DragAndDropSelection,
-    pub code_lens: CodeLens,
     pub lsp_document_colors: DocumentColorsRenderMode,
     pub lsp_document_links: bool,
     pub minimum_contrast_for_highlights: f32,
@@ -237,7 +236,6 @@ impl Settings for EditorSettings {
                 enabled: drag_and_drop_selection.enabled.unwrap(),
                 delay: drag_and_drop_selection.delay.unwrap(),
             },
-            code_lens: editor.code_lens.unwrap(),
             lsp_document_colors: editor.lsp_document_colors.unwrap(),
             lsp_document_links: editor.lsp_document_links.unwrap(),
             minimum_contrast_for_highlights: editor.minimum_contrast_for_highlights.unwrap().0,

@@ -1,6 +1,7 @@
 use crate::{
     Anchor, AnchorRangeExt, DisplayPoint, DisplayRow, Editor, EditorSettings, EditorSnapshot,
     GlobalDiagnosticRenderer, HighlightKey, Hover,
+    code_lens::HoverCodeLens,
     display_map::{ToDisplayPoint, is_invisible},
     hover_links::{InlayHighlight, RangeInEditor},
     movement::TextLayoutDetails,
@@ -195,6 +196,7 @@ pub fn hover_at_inlay(
                 editor.hover_state.info_popovers = vec![InfoPopover {
                     symbol_range,
                     fallback_state: None,
+                    code_lenses: Vec::new(),
                     parsed_content,
                     scroll_handle: ScrollHandle::new(),
                     keyboard_grace: Rc::new(RefCell::new(false)),
@@ -287,6 +289,12 @@ fn show_hover(
             };
 
             let hover_request = cx.update(|_, cx| provider.hover(&buffer, buffer_position, cx))?;
+            let code_lens_task = this
+                .update(cx, |editor, cx| {
+                    editor.hover_code_lenses(&buffer, buffer_position, cx)
+                })
+                .ok()
+                .flatten();
 
             if let Some(delay) = delay {
                 delay.await;
@@ -444,6 +452,7 @@ fn show_hover(
                 info_popovers.push(InfoPopover {
                     symbol_range: RangeInEditor::Text(range),
                     fallback_state: None,
+                    code_lenses: Vec::new(),
                     parsed_content,
                     scroll_handle,
                     keyboard_grace: Rc::new(RefCell::new(ignore_timeout)),
@@ -474,6 +483,11 @@ fn show_hover(
                 None => Vec::new(),
             };
 
+            // Lenses go into the first hover popover only.
+            let mut code_lenses = match code_lens_task {
+                Some(task) => task.await,
+                None => Vec::new(),
+            };
             let buffer_snapshot = snapshot.buffer_snapshot();
             for hover_result in hovers_response {
                 // Create symbol range of anchors for highlighting and filtering of future requests.
@@ -505,6 +519,7 @@ fn show_hover(
                 info_popovers.push(InfoPopover {
                     symbol_range: RangeInEditor::Text(range),
                     fallback_state,
+                    code_lenses: std::mem::take(&mut code_lenses),
                     parsed_content,
                     scroll_handle,
                     keyboard_grace: Rc::new(RefCell::new(ignore_timeout)),
@@ -532,6 +547,7 @@ fn show_hover(
                 info_popovers.push(InfoPopover {
                     symbol_range: RangeInEditor::Text(multi_buffer_range),
                     fallback_state: None,
+                    code_lenses: Vec::new(),
                     parsed_content,
                     scroll_handle,
                     keyboard_grace: Rc::new(RefCell::new(ignore_timeout)),
@@ -1264,6 +1280,7 @@ pub struct InfoPopover {
     pub keyboard_grace: Rc<RefCell<bool>>,
     pub anchor: Option<Anchor>,
     pub last_bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
+    code_lenses: Vec<HoverCodeLens>,
     fallback_state: Option<FallbackHoverState>,
     _subscription: Option<Subscription>,
 }
@@ -1333,6 +1350,14 @@ impl InfoPopover {
                 *keyboard_grace = false;
                 cx.stop_propagation();
             })
+            .when(!self.code_lenses.is_empty(), |this| {
+                this.child(render_code_lenses(
+                    &self.code_lenses,
+                    max_size.width,
+                    self.parsed_content.is_some(),
+                    cx,
+                ))
+            })
             .when_some(self.parsed_content.clone(), |this, markdown| {
                 this.child(
                     div()
@@ -1381,6 +1406,53 @@ impl InfoPopover {
         cx.notify();
         self.scroll_handle.set_offset(current);
     }
+}
+
+fn render_code_lenses(
+    code_lenses: &[HoverCodeLens],
+    max_width: Pixels,
+    has_content_below: bool,
+    cx: &mut Context<Editor>,
+) -> AnyElement {
+    let colors = cx.theme().colors();
+    let lens_color = colors
+        .editor_code_lens_foreground
+        .unwrap_or(colors.text_muted);
+    let hover_color = colors.text;
+    let border_color = colors.border_variant;
+    let editor = cx.entity().downgrade();
+    h_flex()
+        .id("info-code-lenses")
+        .max_w(max_width)
+        .flex_wrap()
+        .px_2()
+        .py_1()
+        .gap_x_2()
+        .font_buffer(cx)
+        .text_sm()
+        .text_color(lens_color)
+        .when(has_content_below, |this| {
+            this.border_b_1().border_color(border_color)
+        })
+        .children(code_lenses.iter().enumerate().map(|(ix, lens)| {
+            div()
+                .id(ix)
+                .child(lens.title.clone())
+                .when_some(lens.action.clone(), |this, action| {
+                    let editor = editor.clone();
+                    this.cursor_pointer()
+                        .hover(move |style| style.text_color(hover_color))
+                        .on_click(move |_, window, cx| {
+                            editor
+                                .update(cx, |editor, cx| {
+                                    hide_hover(editor, cx);
+                                    editor.run_code_lens_action(action.clone(), window, cx);
+                                })
+                                .ok();
+                        })
+                })
+        }))
+        .into_any_element()
 }
 
 pub struct DiagnosticPopover {

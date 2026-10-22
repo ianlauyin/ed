@@ -586,7 +586,6 @@ impl EditorElement {
             if editor.read(cx).can_accept_inlay_hint(cx) {
                 register_action(editor, window, Editor::accept_inlay_hint);
             }
-            register_action(editor, window, Editor::toggle_code_lens_action);
             register_action(editor, window, Editor::toggle_semantic_highlights);
             register_action(editor, window, Editor::toggle_diagnostics);
         }

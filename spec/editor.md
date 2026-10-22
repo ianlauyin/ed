@@ -58,6 +58,18 @@
   `textDocument/signatureHelp` request isn't sent, the client capability isn't
   advertised, and there are no proto messages for it. Use go-to-definition or
   hover to see a function's parameters.
+- Code lenses only appear in the hover popover: never as lines in the editor
+  or in the code action menu. Lenses whose range covers the hovered position
+  (i.e. hovering a definition's name) show as a clickable row at the top of
+  the LSP hover popover, above the signature and docs; they're fetched and
+  resolved alongside the hover request. Always on whenever a language server
+  provides lenses: there is no `code_lens` setting, `editor::ToggleCodeLens`
+  action or quick action bar toggle.
+- Run/test code lenses are never requested: gutter runnables cover them.
+  rust-analyzer isn't told the client supports `rust-analyzer.runSingle` (so
+  it omits "Run" / "Run Test" lenses), and gopls's `test` codelens is left at
+  its default (off). Lens commands handled client-side are limited to showing
+  locations.
 - Text inside highlights (search matches, selections, etc.) is recolored to
   keep `minimum_contrast_for_highlights` against the highlight background.
   The Markdown preview applies the same rule to its search matches and
