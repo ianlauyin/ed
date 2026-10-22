@@ -501,6 +501,7 @@ cleanup
 clear
 clearfix
 cleartimeout
+cli
 click
 client
 cline
@@ -638,6 +639,7 @@ cover
 coverspec
 cpp
 cpt
+cpu
 cr
 cr2
 cr3
@@ -3443,6 +3445,7 @@ titlebar
 titlecase
 tl
 tldr
+tls
 tm
 tmp
 tmpdir
