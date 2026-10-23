@@ -20,3 +20,11 @@
 - Duplicate copies the selected entries next to themselves ("copy" renaming)
   without touching either clipboard: a pending Copy/Cut and the system
   clipboard survive it.
+
+## Moving entries
+
+- When a drag-and-drop move or an undo/redo rename fails because the
+  destination already exists, the error names both paths and says that a file
+  or folder already exists there. Detection uses the error kind
+  (`io::ErrorKind::AlreadyExists` locally, `ErrorCode::AlreadyExists` from a
+  remote server), never the message text.

@@ -98,7 +98,7 @@ impl ErrorExt for anyhow::Error {
         if let Some(rpc_error) = self.downcast_ref::<RpcError>() {
             rpc_error.to_proto()
         } else {
-            ErrorCode::Internal
+            code_for_untyped_error(self)
                 .message(format!("{self:#}").lines().fold(String::new(), |mut message, line| {
                     if !message.is_empty() {
                         message.push(' ');
@@ -116,6 +116,17 @@ impl ErrorExt for anyhow::Error {
         } else {
             anyhow::anyhow!("{self:#}")
         }
+    }
+}
+
+/// Remote peers only see the proto code, so typed local failures that callers explain (e.g. "already exists") keep
+/// their kind across the wire. Message text is never inspected.
+fn code_for_untyped_error(error: &anyhow::Error) -> ErrorCode {
+    let io_error_kind =
+        error.chain().find_map(|cause| cause.downcast_ref::<std::io::Error>()).map(std::io::Error::kind);
+    match io_error_kind {
+        Some(std::io::ErrorKind::AlreadyExists) => ErrorCode::AlreadyExists,
+        _ => ErrorCode::Internal,
     }
 }
 

@@ -608,7 +608,7 @@ impl Fs for RealFs {
             if options.ignore_if_exists {
                 return Ok(());
             } else {
-                anyhow::bail!("{target:?} already exists");
+                return Err(io::Error::new(io::ErrorKind::AlreadyExists, format!("{target:?} already exists")).into());
             }
         }
 
