@@ -231,7 +231,6 @@ fn terminal_settings() -> Option<TerminalSettingsContent> {
         open_links_in_mouse_mode: Some(true),
         button: Some(true),
         dock: Some(TerminalDockPosition::Bottom),
-        flexible: Some(true),
         default_width: Some(PixelSetting(640.0)),
         default_height: Some(PixelSetting(320.0)),
         max_scroll_history_lines: Some(10000),

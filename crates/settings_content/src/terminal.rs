@@ -183,10 +183,6 @@ pub struct TerminalSettingsContent {
     /// Default: true
     pub button: Option<bool>,
     pub dock: Option<TerminalDockPosition>,
-    /// Whether the terminal panel should use flexible (proportional) sizing.
-    ///
-    /// Default: true
-    pub flexible: Option<bool>,
     /// Default width when the terminal is docked to the left or right.
     ///
     /// Default: 640
@@ -230,7 +226,7 @@ crate::fallible_options::flattened_deserialize!(TerminalSettingsContent {
     options: {
         font_size, font_family, font_fallbacks, line_height, font_features, font_weight,
         cursor_shape, blinking, alternate_scroll, option_as_meta, copy_on_select,
-        keep_selection_on_copy, open_links_in_mouse_mode, button, dock, flexible,
+        keep_selection_on_copy, open_links_in_mouse_mode, button, dock,
         default_width, default_height, max_scroll_history_lines, scroll_multiplier,
         minimum_contrast,
     },

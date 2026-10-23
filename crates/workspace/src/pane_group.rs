@@ -98,10 +98,6 @@ impl PaneGroup {
         }
     }
 
-    pub fn full_height_column_count(&self) -> usize {
-        self.root.full_height_column_count()
-    }
-
     pub fn pane_at_pixel_position(&self, coordinate: Point<Pixels>) -> Option<&Entity<Pane>> {
         match &self.root {
             Member::Pane(pane) => Some(pane),
@@ -293,13 +289,6 @@ impl Member {
             Member::Pane(entity) => entity.update(cx, |pane, _| {
                 pane.in_center_group = in_center_group;
             }),
-        }
-    }
-
-    fn full_height_column_count(&self) -> usize {
-        match self {
-            Member::Pane(_) => 1,
-            Member::Axis(axis) => axis.full_height_column_count(),
         }
     }
 }
@@ -738,13 +727,6 @@ impl PaneAxis {
             }
         }
         None
-    }
-
-    fn full_height_column_count(&self) -> usize {
-        match self.axis {
-            Axis::Horizontal => self.members.iter().map(Member::full_height_column_count).sum::<usize>().max(1),
-            Axis::Vertical => self.members.iter().map(Member::full_height_column_count).max().unwrap_or(1),
-        }
     }
 
     fn render(
