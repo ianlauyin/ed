@@ -530,7 +530,12 @@ impl CursorAnimationState {
             .target_geometry
             .map(|geometry| geometry.width.max(geometry.height) * MAX_TRAIL_DISTANCE_FACTOR)
             .unwrap_or_default();
-        self.active = self.corners.iter_mut().any(|corner| corner.update(elapsed_seconds, max_trail_distance));
+        // Every corner must advance each frame, so don't short-circuit with `any`.
+        let mut active = false;
+        for corner in &mut self.corners {
+            active |= corner.update(elapsed_seconds, max_trail_distance);
+        }
+        self.active = active;
 
         if !self.active
             && let Some(target_geometry) = self.target_geometry
