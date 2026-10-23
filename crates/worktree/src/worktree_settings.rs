@@ -1,10 +1,11 @@
 use std::path::Path;
 
-use settings::{RegisterSetting, ScanSymlinksSetting, Settings};
-use util::{
-    paths::{PathMatcher, PathStyle},
-    rel_path::RelPath,
-};
+use settings::RegisterSetting;
+use settings::ScanSymlinksSetting;
+use settings::Settings;
+use util::paths::PathMatcher;
+use util::paths::PathStyle;
+use util::rel_path::RelPath;
 
 #[derive(Clone, PartialEq, Eq, RegisterSetting)]
 pub struct WorktreeSettings {
@@ -21,21 +22,15 @@ pub struct WorktreeSettings {
 
 impl WorktreeSettings {
     pub fn is_path_excluded(&self, path: &RelPath) -> bool {
-        path.ancestors()
-            .any(|ancestor| self.file_scan_exclusions.is_match(ancestor))
+        path.ancestors().any(|ancestor| self.file_scan_exclusions.is_match(ancestor))
     }
 
     pub fn is_path_always_included(&self, path: &RelPath, is_dir: bool) -> bool {
-        if is_dir {
-            self.parent_dir_scan_inclusions.is_match(path)
-        } else {
-            self.file_scan_inclusions.is_match(path)
-        }
+        if is_dir { self.parent_dir_scan_inclusions.is_match(path) } else { self.file_scan_inclusions.is_match(path) }
     }
 
     pub fn is_path_hidden(&self, path: &RelPath) -> bool {
-        path.ancestors()
-            .any(|ancestor| self.hidden_files.is_match(ancestor))
+        path.ancestors().any(|ancestor| self.hidden_files.is_match(ancestor))
     }
 
     pub fn is_path_read_only(&self, path: &RelPath) -> bool {
@@ -55,8 +50,7 @@ impl Settings for WorktreeSettings {
         let hidden_files = worktree.hidden_files.unwrap().0;
         let read_only_files = worktree.read_only_files.unwrap_or_default().0;
         let scan_symlinks = worktree.scan_symlinks.unwrap();
-        let (file_scan_inclusions, parent_dir_scan_inclusions) =
-            file_scan_inclusion_matchers(file_scan_inclusions);
+        let (file_scan_inclusions, parent_dir_scan_inclusions) = file_scan_inclusion_matchers(file_scan_inclusions);
 
         Self {
             file_scan_exclusions: valid_path_matchers(file_scan_exclusions, "file_scan_exclusions"),
@@ -85,22 +79,13 @@ fn file_scan_inclusion_matchers(mut values: Vec<String>) -> (PathMatcher, PathMa
     });
     let parent_inclusions = values
         .iter()
-        .filter(|pattern| {
-            !errors.iter().any(|error| {
-                error
-                    .glob()
-                    .is_none_or(|invalid| invalid == pattern.as_str())
-            })
-        })
+        .filter(|pattern| !errors.iter().any(|error| error.glob().is_none_or(|invalid| invalid == pattern.as_str())))
         .flat_map(|pattern| inclusion_parent_patterns(pattern, PathStyle::local()))
         .collect();
     for error in errors {
         log::error!("Failed to compile patterns in `file_scan_inclusions`: {error}");
     }
-    (
-        inclusions,
-        valid_path_matchers(parent_inclusions, "file_scan_inclusions"),
-    )
+    (inclusions, valid_path_matchers(parent_inclusions, "file_scan_inclusions"))
 }
 
 fn inclusion_parent_patterns(pattern: &str, path_style: PathStyle) -> Vec<String> {
@@ -124,12 +109,7 @@ fn inclusion_parent_patterns(pattern: &str, path_style: PathStyle) -> Vec<String
             }
         }
         if let Some(start) = class_start {
-            let first_content = start
-                + 1
-                + usize::from(matches!(
-                    pattern.as_bytes().get(start + 1),
-                    Some(b'!' | b'^')
-                ));
+            let first_content = start + 1 + usize::from(matches!(pattern.as_bytes().get(start + 1), Some(b'!' | b'^')));
             if character == ']' && index > first_content {
                 class_start = None;
             }
