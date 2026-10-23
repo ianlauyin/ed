@@ -98,8 +98,10 @@ const CORNER: f64 = 8.0;
 /// columns.
 const LEAN: f64 = 30.0;
 /// Label widths that fit the gap between two columns, and where there is room to spare.
-const NARROW: f64 = 88.0;
+pub(crate) const NARROW: f64 = 88.0;
 const WIDE: f64 = 160.0;
+/// The space a label's background adds to the width of its text.
+pub(crate) const LABEL_PAD: f64 = 8.0;
 /// The shared person shape: a head of radius 13 centered 14 below the top, over a body that
 /// starts 26 below it.
 pub(crate) const HEAD: f64 = 26.0;

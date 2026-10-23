@@ -17,6 +17,7 @@ use crate::diagrams::common::fit_width::runs_across;
 use crate::diagrams::common::fit_width::tighten;
 use crate::diagrams::common::fit_width::turn_to_fit;
 use crate::diagrams::common::generics::parse_generic_types;
+use crate::layout::components::wrap_components;
 use crate::layout::compound::CEdge;
 use crate::layout::compound::CNode;
 use crate::layout::compound::Dir;
@@ -136,6 +137,10 @@ struct Card {
     text: String,
     x: f64,
     y: f64,
+    w: f64,
+    h: f64,
+    /// The node the text sits beside, which it moves with.
+    parent: usize,
 }
 
 /// Measures a member's shown text at `size`.
@@ -644,7 +649,7 @@ fn draw(db: &ClassDb, config: &Value, options: &Options, turned: bool, tight: bo
     let mut max_x = layout.width;
     let mut max_y = layout.height;
     let mut cards: Vec<Card> = Vec::new();
-    let mut card = |raw: &str, width: f64, x: f64, y: f64, side: i32, after: bool| {
+    let mut card = |parent: usize, raw: &str, width: f64, x: f64, y: f64, side: i32, after: bool| {
         if raw.is_empty() {
             return;
         }
@@ -657,7 +662,7 @@ fn draw(db: &ClassDb, config: &Value, options: &Options, turned: bool, tight: bo
             cx += if after { 1.0 } else { -1.0 } * (9.0 + width / 2.0);
             cy += if side == 0 { -1.0 } else { 1.0 } * (3.0 + tiny_height / 2.0);
         }
-        cards.push(Card { text: entities::decode(raw).into_owned(), x: cx, y: cy });
+        cards.push(Card { text: entities::decode(raw).into_owned(), x: cx, y: cy, w: width, h: tiny_height, parent });
         min_x = min_x.min(cx - width / 2.0);
         max_x = max_x.max(cx + width / 2.0);
         min_y = min_y.min(cy - tiny_height / 2.0);
@@ -665,7 +670,7 @@ fn draw(db: &ClassDb, config: &Value, options: &Options, turned: bool, tight: bo
     };
     let mut loop_seen = vec![0usize; n];
     let mut loop_at = vec![0usize; cedges.len()];
-    for (i, ce) in cedges.iter().enumerate() {
+    for (i, ce) in cedges.iter_mut().enumerate() {
         let Some(edge) = drawn.get(i) else { continue };
         let s_room = start_room.get(i).copied().unwrap_or(0.0);
         let e_room = end_room.get(i).copied().unwrap_or(0.0);
@@ -683,13 +688,16 @@ fn draw(db: &ClassDb, config: &Value, options: &Options, turned: bool, tight: bo
             };
             let x = c.x + view.w / 2.0;
             let spread = (view.h / 2.0 - 4.0).min(8.0 + to_f64(k) * 6.0);
-            card(&edge.start_label_right, s_room, x, c.y - spread, 1, false);
-            card(&edge.end_label_left, e_room, x, c.y + spread, 1, true);
+            card(ce.src, &edge.start_label_right, s_room, x, c.y - spread, 1, false);
+            card(ce.dst, &edge.end_label_left, e_room, x, c.y + spread, 1, true);
+            ce.label_x = c.x + view.w / 2.0 + LOOP + to_f64(k) * 8.0 + 4.0 + ce.label_w / 2.0;
+            ce.label_y = c.y;
         } else if route.len() >= 6 {
             let last = route.len() - 3;
             let from = starts.get(i).copied().flatten();
             let to = ends.get(i).copied().flatten();
             card(
+                ce.src,
                 &edge.start_label_right,
                 s_room,
                 route.first().copied().unwrap_or(0.0),
@@ -698,6 +706,7 @@ fn draw(db: &ClassDb, config: &Value, options: &Options, turned: bool, tight: bo
                 from.is_none_or(|end| end.after),
             );
             card(
+                ce.dst,
                 &edge.end_label_left,
                 e_room,
                 route.get(last).copied().unwrap_or(0.0),
@@ -705,6 +714,38 @@ fn draw(db: &ClassDb, config: &Value, options: &Options, turned: bool, tight: bo
                 to.map_or(0, |end| end.side),
                 to.is_none_or(|end| end.after),
             );
+        }
+    }
+
+    // Disconnected parts that are too wide together go in rows.
+    if let Some(available) = options.max_width.filter(|&available| available > 0.0)
+        && max_x - min_x + 2.0 * pad > available
+    {
+        let mut all = cnodes.clone();
+        all.extend(cards.iter().map(|item| CNode {
+            x: item.x,
+            y: item.y,
+            ..cnode(item.w, item.h, i32::try_from(item.parent).unwrap_or(-1))
+        }));
+        let wrapped = wrap_components(
+            &mut all,
+            &mut cedges,
+            f64::max(1.0, available - 2.0 * pad),
+            number_option(conf, "nodeSpacing", NODE_SEP),
+        );
+        if let Some(wrapped) = wrapped {
+            for (c, moved) in cnodes.iter_mut().zip(&all) {
+                c.x = moved.x;
+                c.y = moved.y;
+            }
+            for (item, moved) in cards.iter_mut().zip(all.get(cnodes.len()..).unwrap_or(&[])) {
+                item.x = moved.x;
+                item.y = moved.y;
+            }
+            min_x = 0.0;
+            min_y = 0.0;
+            max_x = wrapped.width;
+            max_y = wrapped.height;
         }
     }
 
@@ -856,8 +897,6 @@ fn draw(db: &ClassDb, config: &Value, options: &Options, turned: bool, tight: bo
             push_num(&mut d, x + end_trim);
             d.push(',');
             push_num(&mut d, y + spread);
-            ce.label_x = c.x + view.w / 2.0 + reach + 4.0 + ce.label_w / 2.0;
-            ce.label_y = c.y;
             EdgePath { d, edx: -1.0, edy: 0.0, ex: x, ey: y + spread, sdx: -1.0, sdy: 0.0, sx: x, sy: y - spread }
         } else {
             for point in ce.route.chunks_mut(3) {

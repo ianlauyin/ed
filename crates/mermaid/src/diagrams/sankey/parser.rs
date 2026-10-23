@@ -6,6 +6,7 @@ use super::lexer::T;
 use super::lexer::Token;
 use super::lexer::tokenize;
 use crate::error::Error;
+use crate::text::entities::decode;
 use crate::text::label::trim;
 
 /// A blank as Mermaid's sankeyUtils strips it: JavaScript's `\s` without line breaks.
@@ -193,6 +194,15 @@ impl<'s> Parser<'s, '_> {
     }
 
     fn name(&mut self) -> Result<String, Error> {
-        Ok(unescape(trim(self.field()?)))
+        let start = self.tokens.get(self.i).map_or(self.src.len(), |token| token.start);
+        let name = unescape(trim(self.field()?));
+        // Entity codes can encode characters the lexer leaves out.
+        if decode(&name)
+            .chars()
+            .any(|c| matches!(c, '\0'..='\x08' | '\x0b' | '\x0c' | '\x0e'..='\x1f' | '\u{fffe}' | '\u{ffff}'))
+        {
+            return Err(Error::syntax("sankey", self.src, start, "Invalid XML character in node name", false));
+        }
+        Ok(name)
     }
 }

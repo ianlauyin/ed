@@ -1168,7 +1168,9 @@ fn draw(db: &SeqDb, config: &Value, options: &Options, tight: bool) -> Rendered 
                     ));
                     labels_out.push_str("</g>");
                 }
-                line_y = bottom;
+                // A label taller than the loop reaches below it, so the next row starts under the
+                // label.
+                line_y = bottom.max(f64::midpoint(top, bottom) + label.height / 2.0);
             } else {
                 let (Some(a), Some(b)) = (cols.get(a_at), cols.get(b_at)) else {
                     continue;

@@ -9,6 +9,7 @@ use super::layout::HEAD_TOP;
 use super::layout::layout_c4;
 use super::route::Form;
 use super::route::HEAD;
+use super::route::LABEL_PAD;
 use super::route::LANE;
 use super::route::Lanes;
 use super::route::Route;
@@ -284,7 +285,7 @@ fn draw(db: &C4Db, options: &Options, tight: bool, gap: f64) -> Result<(Rendered
         let label = layout_label(Some(&text), false, small, r.room, 0, None);
         let techn_text = rel.techn.as_deref().filter(|techn| !techn.is_empty()).map(|techn| ["[", techn, "]"].concat());
         let techn = layout_label(techn_text.as_deref(), false, small, r.room, ITALIC, None);
-        let lw = label.width.max(techn.width) + 8.0;
+        let lw = label.width.max(techn.width) + LABEL_PAD;
         let lh = label.height + techn.height;
         if lh == 0.0 {
             continue;

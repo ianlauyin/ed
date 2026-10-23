@@ -251,7 +251,10 @@ fn draw(model: &TimelineDb, config: &Value, options: &Options, vertical: bool) -
             for &i in &group.periods {
                 let color = color_of(group, i);
                 let h = period_labels.get(i).map_or(0.0, chip_height);
-                let cy = y + h / 2.0;
+                // A period and its first event share one center line, so the line between them
+                // runs straight.
+                let first = events_of(i).first().map_or(h, event_height);
+                let cy = y + h.max(first) / 2.0;
                 let mut d = String::from("M");
                 push_num(&mut d, left + col_w);
                 d.push(',');
@@ -259,7 +262,7 @@ fn draw(model: &TimelineDb, config: &Value, options: &Options, vertical: bool) -
                 d.push('H');
                 push_num(&mut d, axis_x);
                 let mut cards = String::new();
-                let mut ey = y;
+                let mut ey = cy - first / 2.0;
                 let mut last = cy;
                 for label in events_of(i) {
                     let eh = event_height(label);
@@ -284,7 +287,7 @@ fn draw(model: &TimelineDb, config: &Value, options: &Options, vertical: bool) -
                     push_num(&mut d, last);
                 }
                 open_period(&mut body, i);
-                period_svg(&mut body, i, &color, left, y, h);
+                period_svg(&mut body, i, &color, left, cy - h / 2.0, h);
                 body.push_str("<path class=\"ondine-edge\" d=\"");
                 body.push_str(&d);
                 body.push('"');
@@ -293,7 +296,7 @@ fn draw(model: &TimelineDb, config: &Value, options: &Options, vertical: bool) -
                 dot(&mut body, axis_x, cy, &color);
                 body.push_str(&cards);
                 body.push_str("</g>");
-                y = (y + h).max(ey - EVENT_GAP) + GAP;
+                y = (cy + h / 2.0).max(ey - EVENT_GAP) + GAP;
             }
             if group.periods.is_empty() {
                 y += GAP - SECTION_GAP - 4.0;

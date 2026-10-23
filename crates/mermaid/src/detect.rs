@@ -1,7 +1,6 @@
 //! Picks the diagram type from preprocessed source with Mermaid's detectors. Port of Pele's
 //! `src/detect.ts`.
 
-use crate::util::chars::has;
 use crate::util::chars::is_space;
 use crate::util::chars::is_word;
 
@@ -27,7 +26,7 @@ fn ends_or(s: &str, at: usize, extra: char) -> bool {
 /// Returns the diagram type, using Pele's type names, or `None` when no detector matches.
 /// Detectors run in the order Mermaid registers them, and the first match wins.
 pub(crate) fn detect(cleaned: &str) -> Option<&'static str> {
-    // Every detector but one anchors at `^\s*`.
+    // Every detector anchors at `^\s*`.
     let s = cleaned.trim_start_matches(space);
     let starts = |prefix: &str| s.starts_with(prefix);
 
@@ -43,10 +42,7 @@ pub(crate) fn detect(cleaned: &str) -> Option<&'static str> {
     if starts("agentflow-beta") && boundary(s, 14) {
         return Some("agentflow");
     }
-    // Mermaid's pattern anchors only its first alternative, so the others match anywhere.
-    if starts("C4Context")
-        || ["C4Container", "C4Component", "C4Dynamic", "C4Deployment"].iter().any(|name| has(cleaned, name))
-    {
+    if ["C4Context", "C4Container", "C4Component", "C4Dynamic", "C4Deployment"].iter().any(|name| starts(name)) {
         return Some("c4");
     }
 

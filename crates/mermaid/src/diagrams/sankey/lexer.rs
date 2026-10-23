@@ -1,8 +1,8 @@
 //! The sankey lexer: Mermaid's CSV grammar for sankey rows. Port of Pele's
 //! `src/diagrams/sankey/lexer.ts`.
 //!
-//! Pele reads UTF-16 code units. This port reads UTF-8 bytes: every token but the keyword is
-//! printable ASCII, so any other character stops the lexer at the same place.
+//! Pele reads UTF-16 code units. This port reads UTF-8: text runs step by character, and every
+//! other token is ASCII.
 
 use crate::util::chars::is_word;
 
@@ -60,9 +60,10 @@ enum S {
     Initial,
 }
 
-/// RFC 4180 TEXTDATA: printable ASCII except the double quote and the comma.
-fn is_text_data(c: u8) -> bool {
-    (32..=126).contains(&c) && c != b'"' && c != b','
+/// RFC 4180 TEXTDATA extended to Unicode: printable ASCII except the double quote and the comma,
+/// and anything past Latin-1's controls that XML allows.
+fn is_text_data(c: char) -> bool {
+    matches!(c, ' '..='~' | '\u{a0}'..='\u{d7ff}' | '\u{e000}'..='\u{fffd}' | '\u{10000}'..) && c != '"' && c != ','
 }
 
 /// The end of `word` when the source at `p` spells it in any case and no word character follows,
@@ -100,6 +101,7 @@ pub(crate) fn tokenize<'a>(src: &'a str) -> Vec<Token<'a>> {
         e
     };
     let at = |i: usize| bytes.get(i).copied();
+    let char_at = |i: usize| src.get(i..).and_then(|rest| rest.chars().next());
 
     while p < n {
         let Some(c) = at(p) else {
@@ -115,10 +117,10 @@ pub(crate) fn tokenize<'a>(src: &'a str) -> Vec<Token<'a>> {
                 p = emit(&mut tokens, T::Dquote, p, p + 1);
                 continue;
             }
-            while let Some(d) = at(q) {
-                if is_text_data(d) || d == b',' || d == b'\r' || d == b'\n' {
-                    q += 1;
-                } else if d == b'"' && at(q + 1) == Some(b'"') {
+            while let Some(d) = char_at(q) {
+                if is_text_data(d) || matches!(d, ',' | '\r' | '\n') {
+                    q += d.len_utf8();
+                } else if d == '"' && at(q + 1) == Some(b'"') {
                     q += 2;
                 } else {
                     break;
@@ -150,8 +152,8 @@ pub(crate) fn tokenize<'a>(src: &'a str) -> Vec<Token<'a>> {
                 p = emit(&mut tokens, T::Dquote, p, p + 1);
                 continue;
             }
-            while at(q).is_some_and(is_text_data) {
-                q += 1;
+            while let Some(d) = char_at(q).filter(|&d| is_text_data(d)) {
+                q += d.len_utf8();
             }
             p = emit(&mut tokens, T::NonEscapedText, p, q);
         }

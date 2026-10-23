@@ -297,6 +297,11 @@ fn by_flow(views: &[View<'_>], appear: &[f64], a: usize, b: usize) -> std::cmp::
 )]
 fn draw(db: &StateDb, config: &Value, options: &Options, turned: bool) -> Rendered {
     let graph = &db.graph;
+    // State diagrams follow the flowchart curve.
+    let curve = match get(config, "flowchart").and_then(|flow| get(flow, "curve")) {
+        Some(Value::String(curve)) => Some(curve.as_str()),
+        _ => None,
+    };
     let size = options.font_size;
     let small = js_round(size * 0.875);
     let wrap_width = number_option(config, "wrappingWidth", 200.0);
@@ -670,8 +675,8 @@ fn draw(db: &StateDb, config: &Value, options: &Options, turned: bool) -> Render
             node_sep: number_option(config, "nodeSpacing", NODE_SEP),
             port_sep: 20.0,
             rank_sep: number_option(config, "rankSpacing", RANK_SEP),
-            straight: false,
-            tracks: false,
+            straight: curve == Some("linear"),
+            tracks: matches!(curve, Some("step" | "stepBefore" | "stepAfter")),
         },
     );
 
@@ -1017,7 +1022,7 @@ fn draw(db: &StateDb, config: &Value, options: &Options, turned: bool) -> Render
                     route.extend(point);
                 }
             }
-            route_path(&route, None, 0.0, marker_trim(end_type), Some(leaves), Some(arrives))
+            route_path(&route, curve, 0.0, marker_trim(end_type), Some(leaves), Some(arrives))
         };
 
         edges_out.push_str(if note {

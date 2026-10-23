@@ -5,8 +5,11 @@ use super::db::C4Db;
 use super::route::Box;
 use super::route::Form;
 use super::route::HEAD;
+use super::route::LABEL_PAD;
 use super::route::LANE;
+use super::route::NARROW;
 use super::types::C4Element;
+use crate::svg::edges::ARROW;
 use crate::text::label::Label;
 use crate::text::label::layout_label;
 use crate::text::label::trim;
@@ -16,7 +19,9 @@ const SHAPE_W: f64 = 216.0;
 const SHAPE_MIN_H: f64 = 64.0;
 const PAD_X: f64 = 14.0;
 const PAD_Y: f64 = 12.0;
-const GAP_X: f64 = 100.0;
+/// Room between two columns for the label of a line across them, clear of an arrowhead on either
+/// side, with an arrowhead's length to spare for a word a little wider than the label room.
+const GAP_X: f64 = NARROW + LABEL_PAD + 3.0 * ARROW;
 const GAP_Y: f64 = 88.0;
 /// Room for a relation to run along the inside of a boundary.
 pub(crate) const GROUP_PAD: f64 = LANE + 8.0;

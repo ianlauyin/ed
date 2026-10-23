@@ -261,8 +261,9 @@ pub(crate) fn render(model: &QuadrantDb, config: &Value, options: &Options) -> R
         circles.push(circle);
     }
 
-    // A label goes below its point, or above, right or left of it when that is the first place
-    // that is inside the chart and free. A second round lets it cross the gaps between quadrants.
+    // A label goes below its point, or above, right or left of it, or below its quadrant's title,
+    // when that is the first place that is inside the chart and free. A second round lets it
+    // cross the gaps between quadrants.
     // Large charts skip the search for a free place.
     let careful = dots.len() <= CAREFUL;
     if careful {
@@ -276,20 +277,37 @@ pub(crate) fn render(model: &QuadrantDb, config: &Value, options: &Options) -> R
         let half_w = text.width / 2.0;
         let half_h = text.size * 0.6 + (text.height - text.line_height) / 2.0;
         let away = dot.reach + text_pad;
-        let spots = [cx, cy + away + half_h, cx, cy - away - half_h, cx + away + half_w, cy, cx - away - half_w, cy];
+        let inset = away.min(f64::max(0.0, (tile_w - text.width) / 2.0));
+        let quadrant = if cx < left + w / 2.0 {
+            if cy < top + h / 2.0 { 1 } else { 2 }
+        } else if cy < top + h / 2.0 {
+            0
+        } else {
+            3
+        };
+        let title_bottom = taken.get(8 + 4 * quadrant + 3).copied().unwrap_or(f64::NAN);
+        let below = f64::max(cy + away, title_bottom + text_pad) + half_h;
+        let spots =
+            [cx, cy + away + half_h, cx, cy - away - half_h, cx + away + half_w, cy, cx - away - half_w, cy, cx, below];
         let mut tx = cx;
         let mut ty = spots[1];
         let mut found = false;
-        for k in (0..16).step_by(2) {
-            let spot = k % 8;
+        for k in (0..20).step_by(2) {
+            let spot = k % 10;
             let at = spots.get(spot).copied().unwrap_or(f64::NAN);
-            let x = if spot < 4 && text.width < w { at.max(left + half_w).min(left + w - half_w) } else { at };
+            // A label moved below a title keeps clear of the plot's edge.
+            let margin = if spot == 8 { inset } else { 0.0 };
+            let x = if (spot < 4 || spot == 8) && text.width < w {
+                at.max(left + half_w + margin).min(left + w - half_w - margin)
+            } else {
+                at
+            };
             let y = spots.get(spot + 1).copied().unwrap_or(f64::NAN);
             if x - half_w < left || x + half_w > left + w || y - half_h < top || y + half_h > top + h {
                 continue;
             }
-            let free =
-                !careful || is_clear(&taken, if k < 8 { 0 } else { 8 }, x - half_w, y - half_h, x + half_w, y + half_h);
+            let free = !careful
+                || is_clear(&taken, if k < 10 { 0 } else { 8 }, x - half_w, y - half_h, x + half_w, y + half_h);
             if !found || free {
                 tx = x;
                 ty = y;
