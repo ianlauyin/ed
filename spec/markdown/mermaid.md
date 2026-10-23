@@ -3,8 +3,9 @@
 - Mermaid is compiled to SVG by `crates/mermaid`, which has no dependencies.
   It started as a copy of Ondine (a Rust port of Obsidian's Pele) and is owned
   here: Ondine and Pele are references for porting fixes, not upstreams to
-  merge. It has no Cargo features: every diagram type is always compiled and
-  renders; a diagram that fails to compile shows its source.
+  merge (porting progress: `mermaid_upstream.md`). It has no Cargo
+  features: every diagram type is always compiled and renders; a diagram
+  that fails to compile shows its source.
 - `mermaid::render(source, &Options, &Theme)` takes typed `mermaid::Options`
   (font size, padding, max width, auto direction / breakpoint, source and
   output limits, max edges, and the gantt `now`), not JSON. The SVG is only
