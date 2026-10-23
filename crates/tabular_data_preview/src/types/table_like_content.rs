@@ -1,6 +1,8 @@
 use ui::table_row::TableRow;
 
-use crate::types::{DataRow, LineNumber, TableCell};
+use crate::types::DataRow;
+use crate::types::LineNumber;
+use crate::types::TableCell;
 
 /// Generic container struct of table-like data (CSV, TSV, etc)
 #[derive(Clone)]

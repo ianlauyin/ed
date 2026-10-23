@@ -164,7 +164,7 @@ impl TableView {
             // content that did not originate from a text buffer, such as a database result set).
             RowIdentifiers::SrcLines => match self.engine.contents.line_numbers.get(*data_row) {
                 Some(line) => line
-                    .display_string(if self.settings.multiline_cells_effectively_enabled() {
+                    .display_string(if self.settings.multiline_cells_enabled {
                         RowIdentDisplayMode::Vertical
                     } else {
                         RowIdentDisplayMode::Horizontal

@@ -18,7 +18,6 @@ use workspace::Workspace;
 
 use crate::parser::EditorState;
 pub use crate::table_view::CellSelection;
-pub use crate::table_view::PerformanceMetrics;
 pub use crate::table_view::TableView;
 
 mod parser;

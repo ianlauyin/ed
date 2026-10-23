@@ -7,10 +7,6 @@
 //! via [`TableView::set_contents`], whether that content comes from the CSV parser or from some
 //! other producer (e.g. a database result set).
 
-use std::collections::HashMap;
-use std::time::Duration;
-use std::time::Instant;
-
 use gpui::App;
 use gpui::AppContext;
 use gpui::Entity;
@@ -61,47 +57,6 @@ impl CellSelection {
     }
 }
 
-#[derive(Debug, Default)]
-pub struct PerformanceMetrics {
-    /// Map of timing metrics with their duration and measurement time.
-    pub timings: HashMap<&'static str, (Duration, Instant)>,
-    /// List of display indices that were rendered in the current frame.
-    pub rendered_indices: Vec<usize>,
-}
-
-impl PerformanceMetrics {
-    pub fn record<F, R>(&mut self, name: &'static str, mut f: F) -> R
-    where
-        F: FnMut() -> R,
-    {
-        let start_time = Instant::now();
-        let ret = f();
-        let duration = start_time.elapsed();
-        self.timings.insert(name, (duration, Instant::now()));
-        ret
-    }
-
-    /// Displays all metrics sorted A-Z in format: `{name}: {took}ms {ago}s ago`
-    pub fn display(&self) -> String {
-        let mut metrics = self.timings.iter().collect::<Vec<_>>();
-        metrics.sort_by_key(|&(name, _)| *name);
-        metrics
-            .iter()
-            .map(|(name, (duration, time))| {
-                let took = duration.as_secs_f32() * 1000.;
-                let ago = time.elapsed().as_secs();
-                format!("{name}: {took:.3}ms {ago}s ago")
-            })
-            .collect::<Vec<_>>()
-            .join("\n")
-    }
-
-    /// Get timing for a specific metric
-    pub fn get_timing(&self, name: &str) -> Option<Duration> {
-        self.timings.get(name).map(|(duration, _)| *duration)
-    }
-}
-
 pub struct TableView {
     pub(crate) engine: TableDataEngine,
     pub(crate) focus_handle: FocusHandle,
@@ -111,8 +66,6 @@ pub struct TableView {
     /// Stored here so that a new change cancels the previous in-flight computation.
     pub(crate) filter_sort_task: Option<Task<()>>,
     pub(crate) settings: TableViewSettings,
-    /// Performance metrics for debugging and monitoring grid operations.
-    pub(crate) performance_metrics: PerformanceMetrics,
     pub(crate) list_state: ListState,
     /// Cached row height, refreshed from the actual text line height on every render.
     /// Used to size not-yet-rendered rows for the scrollbar without a full `.measure_all()`
@@ -145,7 +98,6 @@ impl TableView {
             }),
             filter_sort_task: None,
             settings: TableViewSettings::default(),
-            performance_metrics: PerformanceMetrics::default(),
             list_state: gpui::ListState::new(contents.rows.len(), ListAlignment::Top, px(1.))
                 .with_uniform_item_height(row_height + px(1.0)),
             row_height,

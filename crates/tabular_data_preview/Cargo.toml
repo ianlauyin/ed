@@ -24,8 +24,5 @@ schemars.workspace = true
 text.workspace = true
 util.workspace = true
 
-[features]
-dev-tools = []
-
 [lints]
 workspace = true

@@ -1,8 +1,5 @@
-use std::ops::Range;
-
 use gpui::AnyElement;
 use gpui::Entity;
-use gpui::Hsla;
 use ui::ColumnWidthConfig;
 use ui::ResizableColumnsState;
 use ui::Table;
@@ -11,12 +8,10 @@ use ui::div;
 use ui::prelude::*;
 
 use crate::TableView;
-use crate::settings::RowRenderMechanism;
 use crate::types::AnyColumn;
 use crate::types::DataCellId;
 use crate::types::DisplayCellId;
 use crate::types::DisplayRow;
-use crate::types::TableCell;
 
 impl TableView {
     pub(crate) fn create_table(
@@ -48,59 +43,22 @@ impl TableView {
             .header(headers)
             .disable_base_style()
             .pin_cols(1)
-            .map(|table| {
-                let row_identifier_text_color = cx.theme().colors().editor_line_number;
-                match self.settings.rendering_with {
-                    RowRenderMechanism::VariableList => {
-                        table.variable_row_height_list(row_count, self.list_state.clone(), {
-                            cx.processor(move |this, display_row: usize, _window, cx| {
-                                this.performance_metrics.rendered_indices.push(display_row);
-                                // The mapping may be transiently stale while a filter/sort task is in-flight. Return an empty row rather than panicking
-                                Self::render_single_table_row(
-                                    this,
-                                    cols,
-                                    DisplayRow(display_row),
-                                    row_identifier_text_color,
-                                    this.row_height,
-                                    cx,
-                                )
-                                .unwrap_or_default()
-                            })
-                        })
-                    }
-                    RowRenderMechanism::UniformList => table.uniform_list("tabular-data-table", row_count, {
-                        cx.processor(move |this, range: Range<usize>, _window, cx| {
-                            this.performance_metrics.rendered_indices.extend(range.clone());
-
-                            let row_height = this.row_height;
-                            range
-                                .filter_map(|display_index| {
-                                    Self::render_single_table_row(
-                                        this,
-                                        cols,
-                                        DisplayRow(display_index),
-                                        row_identifier_text_color,
-                                        row_height,
-                                        cx,
-                                    )
-                                })
-                                .collect()
-                        })
-                    }),
-                }
-            })
+            .variable_row_height_list(
+                row_count,
+                self.list_state.clone(),
+                cx.processor(move |this, display_row: usize, _window, cx| {
+                    // The mapping may be transiently stale while a filter/sort task is in-flight. Return an empty row rather than panicking
+                    Self::render_single_table_row(this, cols, DisplayRow(display_row), cx).unwrap_or_default()
+                }),
+            )
             .into_any_element()
     }
 
     /// Render a single table row
-    ///
-    /// Used both by UniformList and VariableRowHeightList
     fn render_single_table_row(
         this: &TableView,
         cols: usize,
         display_row: DisplayRow,
-        row_identifier_text_color: Hsla,
-        row_height: Pixels,
         cx: &Context<TableView>,
     ) -> Option<UncheckedTableRow<AnyElement>> {
         // Get the actual row index from our sorted indices
@@ -126,8 +84,8 @@ impl TableView {
 
             let cell = div()
                 .size_full()
-                .when(!this.settings.multiline_cells_effectively_enabled(), |div| {
-                    div.whitespace_nowrap().text_ellipsis().h(row_height).overflow_hidden()
+                .when(!this.settings.multiline_cells_enabled, |div| {
+                    div.whitespace_nowrap().text_ellipsis().h(this.row_height).overflow_hidden()
                 })
                 .child(TableView::create_selectable_cell(
                     display_cell_id,
@@ -136,26 +94,8 @@ impl TableView {
                     cx,
                 ));
 
-            elements.push(
-                div()
-                    .size_full()
-                    .when_some(cell_bg, |div, color| div.bg(color))
-                    .when(this.settings.show_debug_info, |parent| {
-                        parent.child(div().text_color(row_identifier_text_color).child(match table_cell {
-                            TableCell::Real { position: pos, .. } => {
-                                let slv = pos.start.timestamp().value;
-                                let so = pos.start.offset;
-                                let elv = pos.end.timestamp().value;
-                                let eo = pos.end.offset;
-                                format!("Pos {so}(L{slv})-{eo}(L{elv})")
-                            }
-                            TableCell::Virtual => "Virtual cell".into(),
-                            TableCell::Generated(_) => "Generated cell".into(),
-                        }))
-                    })
-                    .child(cell)
-                    .into_any_element(),
-            );
+            elements
+                .push(div().size_full().when_some(cell_bg, |div, color| div.bg(color)).child(cell).into_any_element());
         }
 
         Some(elements)

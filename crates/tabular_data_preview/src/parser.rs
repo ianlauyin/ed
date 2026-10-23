@@ -153,7 +153,6 @@ impl TabularDataPreviewPane {
                 log::debug!("Parsed {} rows", parsed_contents.rows.len());
                 view.parse_error = None;
                 view.table.update(cx, |table, cx| {
-                    table.performance_metrics.timings.insert("Parsing", (parse_duration, Instant::now()));
                     // `set_contents` recomputes filters/widths/mapping and clears the loading state.
                     table.set_contents(parsed_contents, cx);
                 });

@@ -1,6 +1,8 @@
 use ui::table_row::TableRow;
 
-use crate::types::{AnyColumn, DataRow, TableCell};
+use crate::types::AnyColumn;
+use crate::types::DataRow;
+use crate::types::TableCell;
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
 pub enum SortDirection {
@@ -27,16 +29,8 @@ pub fn sort_data_rows(
         let row_b = &content_rows[*b];
 
         // TODO: Decide how to handle nulls (on top or on bottom)
-        let val_a = row_a
-            .get(sorting.col_idx)
-            .and_then(|tc| tc.display_value())
-            .map(|tc| tc.as_str())
-            .unwrap_or("");
-        let val_b = row_b
-            .get(sorting.col_idx)
-            .and_then(|tc| tc.display_value())
-            .map(|tc| tc.as_str())
-            .unwrap_or("");
+        let val_a = row_a.get(sorting.col_idx).and_then(|tc| tc.display_value()).map(|tc| tc.as_str()).unwrap_or("");
+        let val_b = row_b.get(sorting.col_idx).and_then(|tc| tc.display_value()).map(|tc| tc.as_str()).unwrap_or("");
 
         let cmp = val_a.cmp(val_b);
         match sorting.direction {

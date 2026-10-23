@@ -1,9 +1,22 @@
 //! Table Cell Rendering
 
-use gpui::{AnyElement, ClipboardItem, ElementId, MouseButton, StatefulInteractiveElement};
-use ui::{Color, Divider, Label, LabelSize, SharedString, Tooltip, div, prelude::*};
+use gpui::AnyElement;
+use gpui::ClipboardItem;
+use gpui::ElementId;
+use gpui::MouseButton;
+use gpui::StatefulInteractiveElement;
+use ui::Color;
+use ui::Divider;
+use ui::Label;
+use ui::LabelSize;
+use ui::SharedString;
+use ui::Tooltip;
+use ui::div;
+use ui::prelude::*;
 
-use crate::{TableView, settings::VerticalAlignment, types::DisplayCellId};
+use crate::TableView;
+use crate::settings::VerticalAlignment;
+use crate::types::DisplayCellId;
 
 /// Adds a right-click-to-copy handler and a tooltip showing `text` plus `hint`
 /// (e.g. "Right click to copy content") to a `Stateful` element.
@@ -65,6 +78,5 @@ fn create_table_cell(
             VerticalAlignment::Center => div.items_center(),
         })
         .font_buffer(cx);
-    with_copy_on_right_click(cell, cell_content.clone(), "Right click to copy content")
-        .child(div().child(cell_content))
+    with_copy_on_right_click(cell, cell_content.clone(), "Right click to copy content").child(div().child(cell_content))
 }

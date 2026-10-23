@@ -10,7 +10,6 @@
 - add workspace scoped UI settings, like title or border color, do i really need this? to distingish project
 - add complete rust / clippy lint
 - review async crates, replace with modern tokio?
-- remove `feature = "dev-tools"`
 
 # mermaid test
 ```mermaid

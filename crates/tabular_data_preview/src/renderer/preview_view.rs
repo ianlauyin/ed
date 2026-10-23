@@ -1,8 +1,9 @@
-use ui::{SpinnerLabel, div, prelude::*};
-
-use crate::TableView;
+use ui::SpinnerLabel;
+use ui::div;
+use ui::prelude::*;
 
 use super::settings::settings_popover_menu;
+use crate::TableView;
 
 impl Render for TableView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
@@ -16,7 +17,6 @@ impl Render for TableView {
             // item's prior size as a hint rather than dropping straight to a fresh guess.
             self.list_state.remeasure();
         }
-        let render_prep_start = std::time::Instant::now();
         let table_with_settings = v_flex()
             .key_context("TableView")
             .size_full()
@@ -31,11 +31,7 @@ impl Render for TableView {
                         .child(
                             // Settings stay reachable even before the table (and its own
                             // header-embedded settings trigger) has anything to render.
-                            h_flex()
-                                .w_full()
-                                .justify_end()
-                                .p_1()
-                                .child(settings_popover_menu(cx.entity())),
+                            h_flex().w_full().justify_end().p_1().child(settings_popover_menu(cx.entity())),
                         )
                         .child(
                             div()
@@ -47,12 +43,7 @@ impl Render for TableView {
                                 .font_buffer(cx)
                                 .text_color(cx.theme().colors().text_muted)
                                 .when(is_loading, |div| {
-                                    div.child(
-                                        h_flex()
-                                            .gap_2()
-                                            .child(SpinnerLabel::new())
-                                            .child("Loading…"),
-                                    )
+                                    div.child(h_flex().gap_2().child(SpinnerLabel::new()).child("Loading…"))
                                 })
                                 .when(!is_loading, |div| div.child("No data to display")),
                         )
@@ -61,33 +52,6 @@ impl Render for TableView {
                     self.create_table(&self.column_widths, cx)
                 }
             });
-        self.performance_metrics.timings.insert(
-            "render_prep",
-            (render_prep_start.elapsed(), std::time::Instant::now()),
-        );
-
-        let div = div()
-            .relative()
-            .w_full()
-            .h_full()
-            .child(table_with_settings);
-
-        #[cfg(feature = "dev-tools")]
-        let show_perf_metrics_overlay = self.settings.show_perf_metrics_overlay;
-
-        #[cfg(feature = "dev-tools")]
-        let div = div.when(show_perf_metrics_overlay, |div| {
-            div.child(self.render_performance_metrics_overlay(cx))
-        });
-
-        #[cfg(feature = "dev-tools")]
-        if !show_perf_metrics_overlay {
-            self.performance_metrics.rendered_indices.clear();
-        }
-
-        #[cfg(not(feature = "dev-tools"))]
-        self.performance_metrics.rendered_indices.clear();
-
-        div
+        div().relative().w_full().h_full().child(table_with_settings)
     }
 }
