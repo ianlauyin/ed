@@ -456,7 +456,7 @@ impl Render for BranchList {
                             return;
                         }
                         this.picker.update(cx, |this, cx| {
-                            this.cancel(&Default::default(), window, cx);
+                            this.cancel(&menu::Cancel, window, cx);
                         })
                     })
                 })
@@ -845,8 +845,8 @@ impl BranchListDelegate {
             branch_list_error: None,
             default_branch: None,
             selected_index: 0,
-            last_query: Default::default(),
-            modifiers: Default::default(),
+            last_query: String::default(),
+            modifiers: Modifiers::default(),
             branch_filter,
             branch_filter_menu_handle: PopoverMenuHandle::default(),
             state: PickerState::List,
@@ -1176,7 +1176,7 @@ impl PickerDelegate for BranchListDelegate {
                     fuzzy_nucleo::Case::Smart,
                     fuzzy_nucleo::LengthPenalty::On,
                     10000,
-                    &Default::default(),
+                    &std::sync::atomic::AtomicBool::default(),
                     cx.background_executor().clone(),
                 )
                 .await

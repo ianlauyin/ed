@@ -451,7 +451,7 @@ impl Scrollbars {
             get_visibility,
             scrollable_handle: Handle::Untracked(ScrollHandle::new),
             tracked_entity: None,
-            visibility: show_along.apply_to(Default::default(), ReservedSpace::Thumb),
+            visibility: show_along.apply_to(Point::default(), ReservedSpace::Thumb),
             style: None,
             reveal_policy: ScrollbarRevealPolicy::default(),
             track_color: None,
@@ -689,7 +689,7 @@ impl<T: ScrollableHandle> ScrollbarState<T> {
 
         let show_behavior = ShowBehavior::from_setting((config.get_visibility)(cx), cx);
         ScrollbarState {
-            thumb_state: Default::default(),
+            thumb_state: ThumbState::default(),
             notify_id: config.tracked_entity.map(|id| id.unwrap_or(parent_id)),
             manually_added,
             scroll_handle,
@@ -898,7 +898,7 @@ impl<T: ScrollableHandle> ScrollbarState<T> {
 
 impl<T: ScrollableHandle> Render for ScrollbarState<T> {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        ScrollbarElement { state: cx.entity(), origin: Default::default() }
+        ScrollbarElement { state: cx.entity(), origin: Point::default() }
     }
 }
 

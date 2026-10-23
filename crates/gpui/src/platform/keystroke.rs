@@ -407,7 +407,7 @@ impl Modifiers {
 
     /// Returns [`Modifiers`] with no modifiers.
     pub fn none() -> Modifiers {
-        Default::default()
+        Modifiers::default()
     }
 
     /// Returns [`Modifiers`] with just the command key.

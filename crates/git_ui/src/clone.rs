@@ -117,25 +117,30 @@ pub fn clone_and_open(
                             let destination_path = destination_dir.clone();
                             let on_success = on_success.clone();
 
-                            workspace::open_new(Default::default(), app_state, cx, move |workspace, window, cx| {
-                                cx.activate(true);
+                            workspace::open_new(
+                                workspace::OpenOptions::default(),
+                                app_state,
+                                cx,
+                                move |workspace, window, cx| {
+                                    cx.activate(true);
 
-                                let create_task = workspace.project().update(cx, |project, cx| {
-                                    project.create_worktree(destination_path.as_path(), true, cx)
-                                });
+                                    let create_task = workspace.project().update(cx, |project, cx| {
+                                        project.create_worktree(destination_path.as_path(), true, cx)
+                                    });
 
-                                let workspace_weak = cx.weak_entity();
-                                cx.spawn_in(window, async move |_window, cx| {
-                                    if create_task.await.log_err().is_some() {
-                                        workspace_weak
-                                            .update_in(cx, |workspace, window, cx| {
-                                                (on_success)(workspace, window, cx);
-                                            })
-                                            .ok();
-                                    }
-                                })
-                                .detach();
-                            })
+                                    let workspace_weak = cx.weak_entity();
+                                    cx.spawn_in(window, async move |_window, cx| {
+                                        if create_task.await.log_err().is_some() {
+                                            workspace_weak
+                                                .update_in(cx, |workspace, window, cx| {
+                                                    (on_success)(workspace, window, cx);
+                                                })
+                                                .ok();
+                                        }
+                                    })
+                                    .detach();
+                                },
+                            )
                             .detach();
                         })
                         .ok();

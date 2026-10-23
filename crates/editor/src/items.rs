@@ -1656,7 +1656,7 @@ fn compute_format_target(
     let mut fall_back_to_full_format = false;
     let mut modified_ranges: Vec<Range<Point>> = Vec::new();
 
-    for buffer_entity in buffers.iter() {
+    for buffer_entity in buffers {
         let buffer = buffer_entity.read(cx);
         let settings = LanguageSettings::for_buffer(buffer, cx);
         match settings.format_on_save {

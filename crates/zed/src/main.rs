@@ -346,7 +346,7 @@ fn main() {
 
         cx.observe_global::<SettingsStore>({
             move |cx| {
-                for &mut window in cx.windows().iter_mut() {
+                for &mut window in &mut cx.windows() {
                     let background_appearance = cx.theme().window_background_appearance();
                     window.update(cx, |_, window, _| window.set_background_appearance(background_appearance)).ok();
                 }
@@ -577,9 +577,14 @@ pub(crate) async fn restore_or_create_workspace(app_state: Arc<AppState>, cx: &m
             if !toast_shown {
                 log::error!("All workspace restorations failed. Opening fallback empty workspace.");
                 cx.update(|cx| {
-                    workspace::open_new(Default::default(), app_state.clone(), cx, |workspace, _window, cx| {
-                        workspace.show_toast(Toast::new(NotificationId::unique::<()>(), message), cx);
-                    })
+                    workspace::open_new(
+                        workspace::OpenOptions::default(),
+                        app_state.clone(),
+                        cx,
+                        |workspace, _window, cx| {
+                            workspace.show_toast(Toast::new(NotificationId::unique::<()>(), message), cx);
+                        },
+                    )
                 })
                 .await?;
             }
@@ -591,26 +596,31 @@ pub(crate) async fn restore_or_create_workspace(app_state: Arc<AppState>, cx: &m
         // check, Zed would exit silently.
         if cx.update(|cx| cx.windows().is_empty()) {
             cx.update(|cx| {
-                workspace::open_new(Default::default(), app_state.clone(), cx, |workspace, window, cx| {
-                    let restore_on_startup = WorkspaceSettings::get_global(cx).restore_on_startup;
-                    match restore_on_startup {
-                        workspace::RestoreOnStartupBehavior::Launchpad => {}
-                        _ => {
-                            Editor::new_file(workspace, &Default::default(), window, cx);
+                workspace::open_new(
+                    workspace::OpenOptions::default(),
+                    app_state.clone(),
+                    cx,
+                    |workspace, window, cx| {
+                        let restore_on_startup = WorkspaceSettings::get_global(cx).restore_on_startup;
+                        match restore_on_startup {
+                            workspace::RestoreOnStartupBehavior::Launchpad => {}
+                            _ => {
+                                Editor::new_file(workspace, &workspace::NewFile, window, cx);
+                            }
                         }
-                    }
-                })
+                    },
+                )
             })
             .await?;
         }
     } else {
         cx.update(|cx| {
-            workspace::open_new(Default::default(), app_state, cx, |workspace, window, cx| {
+            workspace::open_new(workspace::OpenOptions::default(), app_state, cx, |workspace, window, cx| {
                 let restore_on_startup = WorkspaceSettings::get_global(cx).restore_on_startup;
                 match restore_on_startup {
                     workspace::RestoreOnStartupBehavior::Launchpad => {}
                     _ => {
-                        Editor::new_file(workspace, &Default::default(), window, cx);
+                        Editor::new_file(workspace, &workspace::NewFile, window, cx);
                     }
                 }
             })

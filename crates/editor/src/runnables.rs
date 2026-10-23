@@ -445,7 +445,7 @@ impl Editor {
                 if !tasks.context_range.contains(&crate::BufferOffset(starting_offset)) {
                     continue;
                 }
-                for (capture_name, value) in tasks.extra_variables.iter() {
+                for (capture_name, value) in &tasks.extra_variables {
                     variables.insert(VariableName::Custom(capture_name.to_owned().into()), value.clone());
                 }
             }

@@ -612,7 +612,7 @@ impl Editor {
         let new_screen_top = new_screen_top.to_offset(&snapshot, Bias::Left);
         let new_anchor = snapshot.buffer_snapshot().anchor_before(new_screen_top);
 
-        self.set_scroll_anchor(ScrollAnchor { anchor: new_anchor, offset: Default::default() }, window, cx);
+        self.set_scroll_anchor(ScrollAnchor { anchor: new_anchor, offset: gpui::Point::default() }, window, cx);
     }
 
     pub(crate) fn set_scroll_position_internal(

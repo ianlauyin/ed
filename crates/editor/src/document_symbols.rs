@@ -210,7 +210,7 @@ impl Editor {
                         let syntax = cx.theme().syntax().clone();
                         let display_snapshot = editor.display_map.update(cx, |map, cx| map.snapshot(cx));
                         let mut highlighted_results = results;
-                        for (buffer_id, items) in highlighted_results.iter_mut() {
+                        for (buffer_id, items) in &mut highlighted_results {
                             let language = editor
                                 .buffer
                                 .read(cx)

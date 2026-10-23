@@ -127,7 +127,7 @@ fn parse_tabstop<'a>(
 
     tabstops
         .entry(tabstop_index)
-        .or_insert_with(|| TabStop { ranges: Default::default(), choices })
+        .or_insert_with(|| TabStop { ranges: SmallVec::default(), choices })
         .ranges
         .push(tabstop_start.cast_signed()..text.len().cast_signed());
     Ok(source)

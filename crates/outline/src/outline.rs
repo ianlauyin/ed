@@ -54,7 +54,7 @@ pub fn init(cx: &mut App) {
                 return;
             };
 
-            toggle(editor, &Default::default(), window, cx);
+            toggle(editor, &zed_actions::outline::ToggleOutline, window, cx);
         })
         .ok();
 }
@@ -216,7 +216,7 @@ impl OutlineViewDelegate {
     ) -> Self {
         Self {
             outline_view,
-            matches: Default::default(),
+            matches: Vec::default(),
             selected_match_index: 0,
             prev_scroll_position: Some(editor.update(cx, |editor, cx| editor.scroll_position(cx))),
             active_editor: editor,
@@ -321,8 +321,8 @@ impl PickerDelegate for OutlineViewDelegate {
                         OutlineSearchEntry::Match(StringMatch {
                             candidate_id: index,
                             score: Default::default(),
-                            positions: Default::default(),
-                            string: Default::default(),
+                            positions: Vec::default(),
+                            string: SharedString::default(),
                         })
                     })
                     .collect()

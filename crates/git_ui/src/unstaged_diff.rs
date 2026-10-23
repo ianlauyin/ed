@@ -494,7 +494,7 @@ impl UnstagedDiffToolbar {
                     return;
                 };
                 panel.update(cx, |panel, cx| {
-                    panel.stage_all(&Default::default(), window, cx);
+                    panel.stage_all(&StageAll, window, cx);
                 });
             })
             .ok();

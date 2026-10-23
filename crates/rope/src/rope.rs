@@ -334,7 +334,7 @@ impl Rope {
         }
         let (start, _, item) = self.chunks.find::<Dimensions<usize, OffsetUtf16>, _>((), &offset, Bias::Left);
         let overshoot = offset - start.0;
-        start.1 + item.map_or(Default::default(), |chunk| chunk.as_slice().offset_to_offset_utf16(overshoot))
+        start.1 + item.map_or(OffsetUtf16::default(), |chunk| chunk.as_slice().offset_to_offset_utf16(overshoot))
     }
 
     pub fn offset_utf16_to_offset(&self, offset: OffsetUtf16) -> usize {
@@ -1052,7 +1052,7 @@ pub struct Lines<'a> {
     reversed: bool,
 }
 
-impl<'a> Lines<'a> {
+impl Lines<'_> {
     #[allow(
         clippy::should_implement_trait,
         reason = "lends a line borrowed from `self`, which `Iterator` can't express"
@@ -1131,7 +1131,7 @@ pub struct ChunkSummary {
 
 impl sum_tree::ContextLessSummary for ChunkSummary {
     fn zero() -> Self {
-        Default::default()
+        ChunkSummary::default()
     }
 
     fn add_summary(&mut self, summary: &Self) {
@@ -1243,7 +1243,7 @@ impl<'a> From<&'a str> for TextSummary {
 
 impl sum_tree::ContextLessSummary for TextSummary {
     fn zero() -> Self {
-        Default::default()
+        TextSummary::default()
     }
 
     fn add_summary(&mut self, summary: &Self) {
@@ -1322,7 +1322,7 @@ impl<D1: TextDimension, D2: TextDimension> TextDimension for Dimensions<D1, D2, 
 
 impl<'a> sum_tree::Dimension<'a, ChunkSummary> for TextSummary {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        TextSummary::default()
     }
 
     fn add_summary(&mut self, summary: &'a ChunkSummary, _: ()) {
@@ -1370,7 +1370,7 @@ impl TextDimension for usize {
 
 impl<'a> sum_tree::Dimension<'a, ChunkSummary> for OffsetUtf16 {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        OffsetUtf16::default()
     }
 
     fn add_summary(&mut self, summary: &'a ChunkSummary, _: ()) {
@@ -1394,7 +1394,7 @@ impl TextDimension for OffsetUtf16 {
 
 impl<'a> sum_tree::Dimension<'a, ChunkSummary> for Point {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        Point::default()
     }
 
     fn add_summary(&mut self, summary: &'a ChunkSummary, _: ()) {
@@ -1418,7 +1418,7 @@ impl TextDimension for Point {
 
 impl<'a> sum_tree::Dimension<'a, ChunkSummary> for PointUtf16 {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        PointUtf16::default()
     }
 
     fn add_summary(&mut self, summary: &'a ChunkSummary, _: ()) {

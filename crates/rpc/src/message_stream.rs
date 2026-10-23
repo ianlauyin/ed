@@ -5,6 +5,7 @@ use std::io;
 use std::time::Instant;
 
 pub use ::proto::*;
+use async_tungstenite::tungstenite::Bytes;
 use async_tungstenite::tungstenite::Message as WebSocketMessage;
 use futures::SinkExt as _;
 use futures::StreamExt as _;
@@ -50,10 +51,10 @@ where
                 self.stream.send(WebSocketMessage::Binary(buffer.into())).await?;
             }
             Message::Ping => {
-                self.stream.send(WebSocketMessage::Ping(Default::default())).await?;
+                self.stream.send(WebSocketMessage::Ping(Bytes::default())).await?;
             }
             Message::Pong => {
-                self.stream.send(WebSocketMessage::Pong(Default::default())).await?;
+                self.stream.send(WebSocketMessage::Pong(Bytes::default())).await?;
             }
         }
 

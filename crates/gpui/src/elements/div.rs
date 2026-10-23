@@ -1919,7 +1919,7 @@ impl Interactivity {
             // places here.
             let padded_content_size = self.content_size + padding_size;
             let scroll_max =
-                Point::from(padded_content_size - bounds.size).map(round_to_two_decimals).max(&Default::default());
+                Point::from(padded_content_size - bounds.size).map(round_to_two_decimals).max(&Point::default());
             // Clamp scroll offset in case scroll max is smaller now (e.g., if children
             // were removed or the bounds became larger).
             let mut scroll_offset = scroll_offset.borrow_mut();
@@ -3331,7 +3331,7 @@ pub struct ScrollAnchor {
 impl ScrollAnchor {
     /// Creates a [ScrollAnchor] associated with a given [ScrollHandle].
     pub fn for_handle(handle: ScrollHandle) -> Self {
-        Self { handle, last_origin: Default::default() }
+        Self { handle, last_origin: Rc::default() }
     }
     /// Request scroll to this item on the next frame.
     pub fn scroll_to(&self, window: &mut Window, _cx: &mut App) {

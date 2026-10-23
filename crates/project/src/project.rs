@@ -1091,17 +1091,17 @@ impl Project {
                 fs,
                 remote_client: None,
 
-                buffers_needing_diff: Default::default(),
+                buffers_needing_diff: HashSet::default(),
                 git_diff_debouncer: DebouncedDelay::new(),
                 terminals: Terminals { local_handles: Vec::new() },
                 search_history: Self::new_search_history(),
                 environment,
-                remotely_created_models: Default::default(),
+                remotely_created_models: Arc::default(),
 
                 search_included_history: Self::new_search_history(),
                 search_excluded_history: Self::new_search_history(),
 
-                downloading_files: Default::default(),
+                downloading_files: Arc::default(),
                 last_worktree_paths: WorktreePaths::default(),
             }
         })
@@ -1227,17 +1227,17 @@ impl Project {
 
                 fs,
                 remote_client: Some(remote.clone()),
-                buffers_needing_diff: Default::default(),
+                buffers_needing_diff: HashSet::default(),
                 git_diff_debouncer: DebouncedDelay::new(),
                 terminals: Terminals { local_handles: Vec::new() },
                 search_history: Self::new_search_history(),
                 environment,
-                remotely_created_models: Default::default(),
+                remotely_created_models: Arc::default(),
 
                 search_included_history: Self::new_search_history(),
                 search_excluded_history: Self::new_search_history(),
 
-                downloading_files: Default::default(),
+                downloading_files: Arc::default(),
                 last_worktree_paths: WorktreePaths::default(),
             };
 
@@ -2949,7 +2949,7 @@ impl Project {
             if let Some(buffer_worktree_id) = buffer_worktree_id
                 && let Some((worktree, _)) = worktrees_with_ids.iter().find(|(_, id)| *id == buffer_worktree_id)
             {
-                for candidate in candidates.iter() {
+                for candidate in &candidates {
                     if let Some(path) = Self::resolve_path_in_worktree(worktree, candidate, cx) {
                         return Some(path);
                     }
@@ -2959,7 +2959,7 @@ impl Project {
                 if Some(id) == buffer_worktree_id {
                     continue;
                 }
-                for candidate in candidates.iter() {
+                for candidate in &candidates {
                     if let Some(path) = Self::resolve_path_in_worktree(&worktree, candidate, cx) {
                         return Some(path);
                     }
@@ -3251,7 +3251,7 @@ impl Project {
             .payload
             .actions
             .into_iter()
-            .map(|action| MessageActionItem { title: action, properties: Default::default() })
+            .map(|action| MessageActionItem { title: action, properties: std::collections::HashMap::default() })
             .collect();
         this.update(&mut cx, |_, cx| {
             cx.emit(Event::LanguageServerPrompt(LanguageServerPromptRequest::new(

@@ -1965,7 +1965,7 @@ impl GitStore {
     fn on_repository_event(&mut self, repo: Entity<Repository>, event: &RepositoryEvent, cx: &mut Context<Self>) {
         let id = repo.read(cx).id;
         let repo_snapshot = repo.read(cx).snapshot.clone();
-        for (buffer_id, diff) in self.diffs.iter() {
+        for (buffer_id, diff) in &self.diffs {
             if let Some((buffer_repo, repo_path)) = self.repository_and_path_for_buffer_id(*buffer_id, cx)
                 && buffer_repo == repo
             {
@@ -3953,29 +3953,29 @@ impl GitStore {
 impl BufferGitState {
     fn new(_git_store: WeakEntity<GitStore>, _cx: &mut Context<Self>) -> Self {
         Self {
-            unstaged_diff: Default::default(),
-            staged_diff: Default::default(),
-            uncommitted_diff: Default::default(),
-            oid_diffs: Default::default(),
-            recalculate_diff_task: Default::default(),
-            language: Default::default(),
-            language_registry: Default::default(),
+            unstaged_diff: Option::default(),
+            staged_diff: Option::default(),
+            uncommitted_diff: Option::default(),
+            oid_diffs: HashMap::default(),
+            recalculate_diff_task: Option::default(),
+            language: Option::default(),
+            language_registry: Option::default(),
             recalculating_tx: postage::watch::channel_with(false).0,
             hunk_staging_operation_count: 0,
             hunk_staging_operation_count_as_of_write: 0,
-            head_text: Default::default(),
-            index_text: Default::default(),
+            head_text: Option::default(),
+            index_text: Option::default(),
             pending_index_edits: Some(Vec::new()),
-            oid_texts: Default::default(),
+            oid_texts: HashMap::default(),
             head_text_buffer: WeakEntity::new_invalid(),
             index_text_buffer: WeakEntity::new_invalid(),
             index_text_buffer_language_enabled: Default::default(),
             head_changed: Default::default(),
             index_changed: Default::default(),
             language_changed: Default::default(),
-            conflict_updated_futures: Default::default(),
-            conflict_set: Default::default(),
-            reparse_conflict_markers_task: Default::default(),
+            conflict_updated_futures: Vec::default(),
+            conflict_set: Option::default(),
+            reparse_conflict_markers_task: Option::default(),
         }
     }
 
@@ -4597,7 +4597,7 @@ impl RepositorySnapshot {
 
         Self {
             id,
-            statuses_by_path: Default::default(),
+            statuses_by_path: SumTree::default(),
             repository_dir_abs_path,
             dot_git_abs_path,
             common_dir_abs_path,
@@ -4607,10 +4607,10 @@ impl RepositorySnapshot {
             branch_list_error: None,
             head_commit: None,
             scan_id: 0,
-            merge: Default::default(),
+            merge: MergeDetails::default(),
             remote_origin_url: None,
             remote_upstream_url: None,
-            stash_entries: Default::default(),
+            stash_entries: GitStash::default(),
             linked_worktrees: Arc::from([]),
             path_style,
         }
@@ -4623,7 +4623,7 @@ impl RepositorySnapshot {
             branch_list_error: self.branch_list_error.as_ref().map(|error| error.to_string()),
             head_commit_details: self.head_commit.as_ref().map(commit_details_to_proto),
             updated_statuses: self.statuses_by_path.iter().map(|entry| entry.to_proto()).collect(),
-            removed_statuses: Default::default(),
+            removed_statuses: Vec::default(),
             current_merge_conflicts: self
                 .merge
                 .merge_heads_by_conflicted_path
@@ -5009,17 +5009,17 @@ impl Repository {
             object_read_limiter,
             snapshot,
             unshallow_state: UnshallowState::default(),
-            pending_ops: Default::default(),
+            pending_ops: SumTree::default(),
             repository_state: Task::ready(Err("not yet initialized".into())).shared(),
             _worker_task: Task::ready(()),
             commit_message_buffer: None,
-            paths_needing_status_update: Default::default(),
+            paths_needing_status_update: Vec::default(),
             job_sender: mpsc::unbounded().0,
             job_id: 0,
-            active_jobs: Default::default(),
+            active_jobs: HashMap::default(),
             job_debug_queue: job_debug_queue::GitJobDebugQueue::new(),
-            initial_graph_data: Default::default(),
-            commit_data: Default::default(),
+            initial_graph_data: HashMap::default(),
+            commit_data: HashMap::default(),
             commit_data_handler: CommitDataHandlerState::Closed,
         };
         repo.respawn_local_worker(project_environment, fs, is_trusted, cx);
@@ -5060,16 +5060,16 @@ impl Repository {
             commit_message_buffer: None,
             git_store,
             object_read_limiter,
-            pending_ops: Default::default(),
-            paths_needing_status_update: Default::default(),
+            pending_ops: SumTree::default(),
+            paths_needing_status_update: Vec::default(),
             job_sender,
             _worker_task: worker_task,
             repository_state,
-            active_jobs: Default::default(),
+            active_jobs: HashMap::default(),
             job_debug_queue: job_debug_queue::GitJobDebugQueue::new(),
             job_id: 0,
-            initial_graph_data: Default::default(),
-            commit_data: Default::default(),
+            initial_graph_data: HashMap::default(),
+            commit_data: HashMap::default(),
             commit_data_handler: CommitDataHandlerState::Closed,
         }
     }
@@ -9009,8 +9009,8 @@ fn status_to_proto(status: FileStatus) -> proto::GitFileStatus {
     use proto::git_file_status::Variant;
 
     let variant = match status {
-        FileStatus::Untracked => Variant::Untracked(Default::default()),
-        FileStatus::Ignored => Variant::Ignored(Default::default()),
+        FileStatus::Untracked => Variant::Untracked(proto::git_file_status::Untracked::default()),
+        FileStatus::Ignored => Variant::Ignored(proto::git_file_status::Ignored::default()),
         FileStatus::Unmerged(UnmergedStatus { first_head, second_head }) => Variant::Unmerged(Unmerged {
             first_head: unmerged_status_to_proto(first_head),
             second_head: unmerged_status_to_proto(second_head),

@@ -568,7 +568,7 @@ pub enum ScrollDelta {
 
 impl Default for ScrollDelta {
     fn default() -> Self {
-        Self::Lines(Default::default())
+        Self::Lines(Point::default())
     }
 }
 

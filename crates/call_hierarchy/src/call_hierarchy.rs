@@ -160,7 +160,7 @@ pub async fn fetch_calls(
 
     attach_labels(&mut calls, project, cx).await;
     cx.update(|_, cx| {
-        for call in calls.iter_mut() {
+        for call in &mut calls {
             call.display = compute_call_display(call, cx);
         }
         calls.sort_by_cached_key(|call| {
@@ -851,7 +851,7 @@ async fn load_and_apply_calls(
             let settings = ThemeSettings::get_global(cx);
             let buffer_font_size = settings.buffer_font_size(cx);
             let path_font_size = TextSize::Small.rems(cx).to_pixels(window.rem_size());
-            for call in calls.iter_mut() {
+            for call in &mut calls {
                 let signature = call.display.label_text.clone().unwrap_or_else(|| call.display.full_signature.clone());
                 let signature_width = shaped_width(signature, settings.buffer_font.clone(), buffer_font_size, window);
                 let path_width = call

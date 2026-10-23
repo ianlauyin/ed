@@ -548,7 +548,7 @@ fn register_actions(app_state: Arc<AppState>, workspace: &mut Workspace, _: &mut
         .register_action({
             let app_state = app_state.clone();
             move |_, _: &NewWindow, _, cx| {
-                open_new(Default::default(), app_state.clone(), cx, |workspace, window, cx| {
+                open_new(workspace::OpenOptions::default(), app_state.clone(), cx, |workspace, window, cx| {
                     cx.activate(true);
                     initialize_new_window(workspace, window, cx);
                 })
@@ -574,8 +574,8 @@ fn register_actions(app_state: Arc<AppState>, workspace: &mut Workspace, _: &mut
         .register_action({
             let app_state = app_state.clone();
             move |_, _: &NewFile, _, cx| {
-                open_new(Default::default(), app_state.clone(), cx, |workspace, window, cx| {
-                    Editor::new_file(workspace, &Default::default(), window, cx)
+                open_new(workspace::OpenOptions::default(), app_state.clone(), cx, |workspace, window, cx| {
+                    Editor::new_file(workspace, &NewFile, window, cx)
                 })
                 .detach_and_log_err(cx);
             }
@@ -884,7 +884,7 @@ fn open_log_file(workspace: &Workspace, window: &Window, cx: &Context<Workspace>
                         paths::log_file().display()
                     ));
                     let last_multi_buffer_offset = editor.buffer().read(cx).len(cx);
-                    editor.change_selections(Default::default(), window, cx, |s| {
+                    editor.change_selections(editor::SelectionEffects::default(), window, cx, |s| {
                         s.select_ranges(Some(last_multi_buffer_offset..last_multi_buffer_offset));
                     });
                     editor

@@ -208,7 +208,7 @@ impl<T> Outline<T> {
             Case::Smart,
             LengthPenalty::On,
             100,
-            &Default::default(),
+            &std::sync::atomic::AtomicBool::default(),
             executor,
         )
         .await;

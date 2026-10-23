@@ -694,7 +694,7 @@ impl PickerDelegate for TabSwitcherDelegate {
         };
 
         self.restored_items = true;
-        for (pane, index) in self.original_items.iter() {
+        for (pane, index) in &self.original_items {
             pane.update(cx, |this, cx| {
                 this.activate_item(*index, false, false, window, cx);
             })
@@ -716,7 +716,7 @@ impl PickerDelegate for TabSwitcherDelegate {
 
     fn dismissed(&mut self, window: &mut Window, cx: &mut Context<Picker<TabSwitcherDelegate>>) {
         if !self.restored_items {
-            for (pane, index) in self.original_items.iter() {
+            for (pane, index) in &self.original_items {
                 pane.update(cx, |this, cx| {
                     this.activate_item(*index, false, false, window, cx);
                 })

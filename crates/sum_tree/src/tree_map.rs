@@ -1,6 +1,14 @@
-use std::{cmp::Ordering, fmt::Debug};
+use std::cmp::Ordering;
+use std::fmt::Debug;
 
-use crate::{Bias, ContextLessSummary, Dimension, Edit, Item, KeyedItem, SeekTarget, SumTree};
+use crate::Bias;
+use crate::ContextLessSummary;
+use crate::Dimension;
+use crate::Edit;
+use crate::Item;
+use crate::KeyedItem;
+use crate::SeekTarget;
+use crate::SumTree;
 
 /// A cheaply-cloneable ordered map based on a [SumTree](crate::SumTree).
 #[derive(Clone, PartialEq, Eq)]
@@ -40,12 +48,7 @@ where
 
 impl<K: Clone + Ord, V: Clone> TreeMap<K, V> {
     pub fn from_ordered_entries(entries: impl IntoIterator<Item = (K, V)>) -> Self {
-        let tree = SumTree::from_iter(
-            entries
-                .into_iter()
-                .map(|(key, value)| MapEntry { key, value }),
-            (),
-        );
+        let tree = SumTree::from_iter(entries.into_iter().map(|(key, value)| MapEntry { key, value }), ());
         Self(tree)
     }
 
@@ -58,15 +61,9 @@ impl<K: Clone + Ord, V: Clone> TreeMap<K, V> {
     }
 
     pub fn get(&self, key: &K) -> Option<&V> {
-        let (.., item) = self
-            .0
-            .find::<MapKeyRef<'_, K>, _>((), &MapKeyRef(Some(key)), Bias::Left);
+        let (.., item) = self.0.find::<MapKeyRef<'_, K>, _>((), &MapKeyRef(Some(key)), Bias::Left);
         if let Some(item) = item {
-            if Some(key) == item.key().0.as_ref() {
-                Some(&item.value)
-            } else {
-                None
-            }
+            if Some(key) == item.key().0.as_ref() { Some(&item.value) } else { None }
         } else {
             None
         }
@@ -77,16 +74,11 @@ impl<K: Clone + Ord, V: Clone> TreeMap<K, V> {
     }
 
     pub fn insert_or_replace(&mut self, key: K, value: V) -> Option<V> {
-        self.0
-            .insert_or_replace(MapEntry { key, value }, ())
-            .map(|it| it.value)
+        self.0.insert_or_replace(MapEntry { key, value }, ()).map(|it| it.value)
     }
 
     pub fn extend(&mut self, iter: impl IntoIterator<Item = (K, V)>) {
-        let edits: Vec<_> = iter
-            .into_iter()
-            .map(|(key, value)| Edit::Insert(MapEntry { key, value }))
-            .collect();
+        let edits: Vec<_> = iter.into_iter().map(|(key, value)| Edit::Insert(MapEntry { key, value })).collect();
         self.0.edit(edits, ());
     }
 
@@ -192,12 +184,7 @@ impl<K: Clone + Ord, V: Clone> TreeMap<K, V> {
     pub fn insert_tree(&mut self, other: TreeMap<K, V>) {
         let edits = other
             .iter()
-            .map(|(key, value)| {
-                Edit::Insert(MapEntry {
-                    key: key.to_owned(),
-                    value: value.to_owned(),
-                })
-            })
+            .map(|(key, value)| Edit::Insert(MapEntry { key: key.to_owned(), value: value.to_owned() }))
             .collect();
 
         self.0.edit(edits, ());
@@ -221,11 +208,7 @@ impl<'a, K: Clone + Ord, T: MapSeekTarget<K>> SeekTarget<'a, MapKey<K>, MapKeyRe
     for MapSeekTargetAdaptor<'_, T>
 {
     fn cmp(&self, cursor_location: &MapKeyRef<K>, _: ()) -> Ordering {
-        if let Some(key) = &cursor_location.0 {
-            MapSeekTarget::cmp_cursor(self.0, key)
-        } else {
-            Ordering::Greater
-        }
+        if let Some(key) = &cursor_location.0 { MapSeekTarget::cmp_cursor(self.0, key) } else { Ordering::Greater }
     }
 }
 
@@ -245,7 +228,7 @@ where
     V: Clone,
 {
     fn default() -> Self {
-        Self(Default::default())
+        Self(SumTree::default())
     }
 }
 
@@ -278,7 +261,7 @@ where
     K: Clone,
 {
     fn zero() -> Self {
-        Default::default()
+        MapKey::default()
     }
 
     fn add_summary(&mut self, summary: &Self) {
@@ -291,7 +274,7 @@ where
     K: Clone + Ord,
 {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        MapKeyRef::default()
     }
 
     fn add_summary(&mut self, summary: &'a MapKey<K>, _: ()) {
@@ -313,7 +296,7 @@ where
     K: Clone + Ord,
 {
     fn default() -> Self {
-        Self(Default::default())
+        Self(TreeMap::default())
     }
 }
 
@@ -322,9 +305,7 @@ where
     K: Clone + Ord,
 {
     pub fn from_ordered_entries(entries: impl IntoIterator<Item = K>) -> Self {
-        Self(TreeMap::from_ordered_entries(
-            entries.into_iter().map(|key| (key, ())),
-        ))
+        Self(TreeMap::from_ordered_entries(entries.into_iter().map(|key| (key, ()))))
     }
 
     pub fn is_empty(&self) -> bool {

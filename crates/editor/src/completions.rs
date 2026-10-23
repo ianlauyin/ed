@@ -493,14 +493,14 @@ impl Editor {
             } else {
                 Task::ready(Ok(CompletionResponse {
                     completions: Vec::new(),
-                    display_options: Default::default(),
+                    display_options: CompletionDisplayOptions::default(),
                     is_incomplete: false,
                 }))
             }
         } else {
             Task::ready(Ok(CompletionResponse {
                 completions: Vec::new(),
-                display_options: Default::default(),
+                display_options: CompletionDisplayOptions::default(),
                 is_incomplete: false,
             }))
         };
@@ -1012,7 +1012,7 @@ fn snippet_completions(
             });
         }
 
-        for (_scope, snippets) in scopes.into_iter() {
+        for (_scope, snippets) in scopes {
             // Sort snippets by word count to match longer snippet prefixes first.
             let mut sorted_snippet_candidates = snippets
                 .iter()
@@ -1072,7 +1072,7 @@ fn snippet_completions(
                         buffer_window.chars().any(|c| c.is_uppercase()),
                         true,
                         MAX_RESULTS - matches.len(), // always prioritize longer snippets
-                        &Default::default(),
+                        &std::sync::atomic::AtomicBool::default(),
                         executor.clone(),
                     )
                     .await

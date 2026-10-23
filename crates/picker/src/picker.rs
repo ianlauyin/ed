@@ -810,7 +810,7 @@ impl<D: PickerDelegate> Picker<D> {
     }
 
     pub fn editor_move_up(&mut self, _: &MoveUp, window: &mut Window, cx: &mut Context<Self>) {
-        self.select_previous(&Default::default(), window, cx);
+        self.select_previous(&menu::SelectPrevious, window, cx);
     }
 
     fn select_previous(&mut self, _: &menu::SelectPrevious, window: &mut Window, cx: &mut Context<Self>) {
@@ -829,7 +829,7 @@ impl<D: PickerDelegate> Picker<D> {
     }
 
     pub fn editor_move_down(&mut self, _: &MoveDown, window: &mut Window, cx: &mut Context<Self>) {
-        self.select_next(&Default::default(), window, cx);
+        self.select_next(&menu::SelectNext, window, cx);
     }
 
     pub fn select_first(&mut self, _: &menu::SelectFirst, window: &mut Window, cx: &mut Context<Self>) {

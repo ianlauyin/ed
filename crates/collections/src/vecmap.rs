@@ -126,7 +126,7 @@ pub enum EntryRef<'key, 'map, K, V> {
     Vacant(VacantEntryRef<'key, 'map, K, V>),
 }
 
-impl<'key, 'map, K, V> EntryRef<'key, 'map, K, V> {
+impl<K, V> EntryRef<'_, '_, K, V> {
     pub const fn key(&self) -> &K {
         match self {
             EntryRef::Occupied(entry) => entry.key,
@@ -135,7 +135,7 @@ impl<'key, 'map, K, V> EntryRef<'key, 'map, K, V> {
     }
 }
 
-impl<'key, 'map, K, V> EntryRef<'key, 'map, K, V>
+impl<'map, K, V> EntryRef<'_, 'map, K, V>
 where
     K: Clone,
 {

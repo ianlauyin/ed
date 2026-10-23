@@ -1,4 +1,7 @@
-use proc_macro::{Delimiter, Span, TokenStream, TokenTree};
+use proc_macro::Delimiter;
+use proc_macro::Span;
+use proc_macro::TokenStream;
+use proc_macro::TokenTree;
 use syn::Error;
 
 static SQLITE: std::sync::LazyLock<sqlez::thread_safe_connection::ThreadSafeConnection> =
@@ -24,12 +27,7 @@ pub fn sql(tokens: TokenStream) -> TokenStream {
     }
 }
 
-fn create_error(
-    spans: Vec<(usize, Span)>,
-    error_offset: usize,
-    error: String,
-    sql: &str,
-) -> TokenStream {
+fn create_error(spans: Vec<(usize, Span)>, error_offset: usize, error: String, sql: &str) -> TokenStream {
     let error_span = spans
         .into_iter()
         .skip_while(|(offset, _)| offset <= &error_offset)
@@ -58,7 +56,7 @@ fn make_sql(tokens: TokenStream) -> (Vec<(usize, Span)>, String) {
 /// This allows our token search in token_at_offset to resolve
 /// ambiguity of '(tokens)' vs. '( token )', due to sqlite requiring byte offsets
 fn flatten_stream(tokens: TokenStream, result: &mut Vec<(String, Span)>) {
-    for token_tree in tokens.into_iter() {
+    for token_tree in tokens {
         match token_tree {
             TokenTree::Group(group) => {
                 // push open delimiter

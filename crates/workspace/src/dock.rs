@@ -453,7 +453,7 @@ impl Dock {
             Self {
                 position,
                 workspace: workspace.downgrade(),
-                panel_entries: Default::default(),
+                panel_entries: Vec::default(),
                 active_panel_index: None,
                 is_open: false,
                 focus_handle: focus_handle.clone(),

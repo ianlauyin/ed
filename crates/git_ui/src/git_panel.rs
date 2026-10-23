@@ -525,12 +525,12 @@ pub fn register(workspace: &mut Workspace) {
     });
     workspace.register_action(|workspace, _: &ToggleFillCommitEditor, window, cx| {
         if let Some(panel) = workspace.panel::<GitPanel>(cx) {
-            panel.update(cx, |panel, cx| panel.toggle_fill_commit_editor(&Default::default(), window, cx));
+            panel.update(cx, |panel, cx| panel.toggle_fill_commit_editor(&ToggleFillCommitEditor, window, cx));
         }
     });
     workspace.register_action(|workspace, _: &ToggleCommitEditor, window, cx| {
         if let Some(panel) = workspace.panel::<GitPanel>(cx) {
-            panel.update(cx, |panel, cx| panel.toggle_commit_editor(&Default::default(), window, cx));
+            panel.update(cx, |panel, cx| panel.toggle_commit_editor(&ToggleCommitEditor, window, cx));
         }
     });
     workspace.register_action(|workspace, _: &git::Init, window, cx| {
@@ -564,9 +564,9 @@ fn focus_commit_editor(workspace: &mut Workspace, amend: bool, window: &mut Wind
             git_panel.set_amend_pending(false, cx);
         }
         if git_panel.commit_editor_collapsed {
-            git_panel.toggle_commit_editor(&Default::default(), window, cx);
+            git_panel.toggle_commit_editor(&ToggleCommitEditor, window, cx);
         }
-        git_panel.focus_editor(&Default::default(), window, cx);
+        git_panel.focus_editor(&FocusEditor, window, cx);
     });
 }
 
@@ -1251,7 +1251,7 @@ impl GitPanel {
                 if commit_editor != was_commit_editor {
                     let collapsed = commit_editor == GitPanelCommitEditor::Collapsed;
                     if collapsed != this.commit_editor_collapsed {
-                        this.toggle_commit_editor(&Default::default(), window, cx);
+                        this.toggle_commit_editor(&ToggleCommitEditor, window, cx);
                     }
                 }
                 if tree_view != was_tree_view {
@@ -1379,7 +1379,7 @@ impl GitPanel {
                 workspace: workspace.weak_handle(),
                 entry_count: 0,
                 bulk_staging: None,
-                stash_entries: Default::default(),
+                stash_entries: GitStash::default(),
                 _commit_message_buffer_subscription: None,
                 git_access: None,
                 commit_menu_handle: PopoverMenuHandle::default(),
@@ -2405,14 +2405,14 @@ impl GitPanel {
         };
         match action {
             GitPanelClickBehavior::ProjectDiff => {
-                self.open_diff(&Default::default(), window, cx);
+                self.open_diff(&menu::Confirm, window, cx);
                 self.focus_handle.focus(window, cx);
             }
             GitPanelClickBehavior::FileDiff => {
-                self.open_solo_diff(&Default::default(), window, cx);
+                self.open_solo_diff(&menu::SecondaryConfirm, window, cx);
             }
             GitPanelClickBehavior::ViewFile => {
-                self.view_file(&Default::default(), window, cx);
+                self.view_file(&ViewFile, window, cx);
             }
         }
     }
@@ -3278,7 +3278,7 @@ impl GitPanel {
         });
         let editor = cx.new(|cx| Editor::for_buffer(buffer, None, window, cx));
         let wrapped_message = editor.update(cx, |editor, cx| {
-            editor.select_all(&Default::default(), window, cx);
+            editor.select_all(&editor::actions::SelectAll, window, cx);
             editor.rewrap(
                 RewrapOptions {
                     override_language_settings: false,
@@ -4813,7 +4813,8 @@ impl GitPanel {
             let operation = action.name();
 
             let status_toast = StatusToast::new(message, cx, move |this, _cx| {
-                use remote_output::SuccessStyle::*;
+                use remote_output::SuccessStyle::Toast;
+                use remote_output::SuccessStyle::ToastWithLog;
                 let this = this.icon(Icon::new(IconName::GitBranch).size(IconSize::Small).color(Color::Muted));
                 match style {
                     Toast => this,
@@ -5023,7 +5024,7 @@ impl GitPanel {
         // Filling the panel and being hidden are mutually exclusive states, so
         // collapsing has to undo the fill rather than leave it dangling.
         if self.commit_editor_collapsed && self.commit_editor_expanded {
-            self.toggle_fill_commit_editor(&Default::default(), window, cx);
+            self.toggle_fill_commit_editor(&ToggleFillCommitEditor, window, cx);
         }
         self.serialize(cx);
         cx.notify();

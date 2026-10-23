@@ -44,13 +44,13 @@ impl Editor {
     ) {
         match self.next_scroll_position {
             NextScrollCursorCenterTopBottom::Center => {
-                self.scroll_cursor_center(&Default::default(), window, cx);
+                self.scroll_cursor_center(&ScrollCursorCenter, window, cx);
             }
             NextScrollCursorCenterTopBottom::Top => {
-                self.scroll_cursor_top(&Default::default(), window, cx);
+                self.scroll_cursor_top(&ScrollCursorTop, window, cx);
             }
             NextScrollCursorCenterTopBottom::Bottom => {
-                self.scroll_cursor_bottom(&Default::default(), window, cx);
+                self.scroll_cursor_bottom(&ScrollCursorBottom, window, cx);
             }
         }
 

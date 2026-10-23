@@ -316,7 +316,7 @@ impl DiffBufferList {
                 return output;
             };
 
-            for (path, branch_diff) in tree_diff.entries.iter() {
+            for (path, branch_diff) in &tree_diff.entries {
                 if seen.contains(path) {
                     continue;
                 }

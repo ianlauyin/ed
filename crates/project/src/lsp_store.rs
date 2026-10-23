@@ -764,7 +764,7 @@ impl LocalLspStore {
         self.language_servers.insert(server_id, state);
         self.language_server_ids
             .entry(key)
-            .or_insert(UnifiedLanguageServer { id: server_id, project_roots: Default::default() });
+            .or_insert(UnifiedLanguageServer { id: server_id, project_roots: HashSet::default() });
         server_id
     }
 
@@ -1350,7 +1350,7 @@ impl LocalLspStore {
                         .collect::<Vec<_>>()
                 })
             })?;
-            for (_, language_server) in adapters_and_servers.iter() {
+            for (_, language_server) in &adapters_and_servers {
                 let actions = Self::get_server_code_actions_from_action_kinds(
                     &lsp_store,
                     language_server.server_id(),
@@ -2259,7 +2259,7 @@ impl LocalLspStore {
                             text_document: text_document.clone(),
                             range,
                             options: lsp_command::lsp_formatting_options(settings),
-                            work_done_progress_params: Default::default(),
+                            work_done_progress_params: lsp::WorkDoneProgressParams::default(),
                         },
                         request_timeout,
                     )
@@ -2363,7 +2363,7 @@ impl LocalLspStore {
                     lsp::DocumentFormattingParams {
                         text_document,
                         options: lsp_command::lsp_formatting_options(settings),
-                        work_done_progress_params: Default::default(),
+                        work_done_progress_params: lsp::WorkDoneProgressParams::default(),
                     },
                     request_timeout,
                 )
@@ -2411,7 +2411,7 @@ impl LocalLspStore {
                         text_document: text_document.clone(),
                         range: lsp::Range::new(buffer_start, buffer_end),
                         options: lsp_command::lsp_formatting_options(settings),
-                        work_done_progress_params: Default::default(),
+                        work_done_progress_params: lsp::WorkDoneProgressParams::default(),
                     },
                     request_timeout,
                 )
@@ -2628,7 +2628,7 @@ impl LocalLspStore {
             let path = ProjectPath { worktree_id: old_file.worktree_id(cx), path: old_file.path.clone() };
             for server_id in self.language_server_ids_for_project_path(path, language, cx) {
                 buffer.update_diagnostics(server_id, DiagnosticSet::new([], buffer), cx);
-                buffer.set_completion_triggers(server_id, Default::default(), cx);
+                buffer.set_completion_triggers(server_id, BTreeSet::default(), cx);
             }
         });
     }
@@ -2761,7 +2761,7 @@ impl LocalLspStore {
         origin_seed.worktree_id = worktree_id;
         self.language_server_ids
             .entry(origin_seed)
-            .or_insert_with(|| UnifiedLanguageServer { id: language_server_id, project_roots: Default::default() });
+            .or_insert_with(|| UnifiedLanguageServer { id: language_server_id, project_roots: HashSet::default() });
     }
 
     fn language_server_line_length_limit_exceeded(buffer: &Buffer, cx: &App) -> Option<(u32, u32)> {
@@ -3004,7 +3004,7 @@ impl LocalLspStore {
             }
 
             for &server_id in &detached_servers {
-                buffer.set_completion_triggers(server_id, Default::default(), cx);
+                buffer.set_completion_triggers(server_id, BTreeSet::default(), cx);
                 if let Some(opened_in_servers) = self.buffers_opened_in_servers.get_mut(&buffer_id) {
                     opened_in_servers.remove(&server_id);
                 }
@@ -4318,22 +4318,22 @@ impl LspStore {
                 worktree_store: worktree_store.clone(),
 
                 languages: languages.clone(),
-                language_server_ids: Default::default(),
-                language_servers: Default::default(),
-                last_workspace_edits_by_language_server: Default::default(),
-                language_server_watched_paths: Default::default(),
-                language_server_paths_watched_for_rename: Default::default(),
-                language_server_dynamic_registrations: Default::default(),
+                language_server_ids: HashMap::default(),
+                language_servers: HashMap::default(),
+                last_workspace_edits_by_language_server: HashMap::default(),
+                language_server_watched_paths: HashMap::default(),
+                language_server_paths_watched_for_rename: HashMap::default(),
+                language_server_dynamic_registrations: HashMap::default(),
                 initial_server_capabilities: HashMap::default(),
-                buffers_being_formatted: Default::default(),
+                buffers_being_formatted: HashSet::default(),
                 buffers_to_refresh_hash_set: HashSet::default(),
                 buffers_to_refresh_queue: VecDeque::new(),
                 _background_diagnostics_worker: Task::ready(()).shared(),
-                buffer_snapshots: Default::default(),
+                buffer_snapshots: HashMap::default(),
                 environment,
                 fs,
                 next_diagnostic_group_id: Default::default(),
-                diagnostics: Default::default(),
+                diagnostics: HashMap::default(),
                 _subscription: cx
                     .on_app_quit(|this, _| this.as_local_mut().unwrap().shutdown_language_servers_on_quit()),
                 _binary_status_task: binary_status_task,
@@ -4353,7 +4353,7 @@ impl LspStore {
             buffer_store,
             worktree_store,
             languages: languages.clone(),
-            language_server_statuses: Default::default(),
+            language_server_statuses: BTreeMap::default(),
             nonce: StdRng::from_os_rng().random(),
             diagnostic_summaries: HashMap::default(),
             lsp_server_capabilities: HashMap::default(),
@@ -4416,7 +4416,7 @@ impl LspStore {
             buffer_store,
             worktree_store,
             languages: languages.clone(),
-            language_server_statuses: Default::default(),
+            language_server_statuses: BTreeMap::default(),
             nonce: StdRng::from_os_rng().random(),
             diagnostic_summaries: HashMap::default(),
             lsp_server_capabilities: HashMap::default(),
@@ -7721,7 +7721,7 @@ impl LspStore {
             let mut requested_servers = BTreeSet::new();
             let request_timeout = ProjectSettings::get_global(cx).global_lsp_settings.get_request_timeout();
 
-            for (seed, state) in local.language_server_ids.iter() {
+            for (seed, state) in &local.language_server_ids {
                 let Some(worktree_handle) = self.worktree_store.read(cx).worktree_for_id(seed.worktree_id, cx) else {
                     continue;
                 };
@@ -8314,9 +8314,9 @@ impl LspStore {
             .log_err();
     }
 
-    pub fn merge_diagnostic_entries<'a>(
+    pub fn merge_diagnostic_entries(
         &mut self,
-        diagnostic_updates: Vec<DocumentDiagnosticsUpdate<'a, DocumentDiagnostics>>,
+        diagnostic_updates: Vec<DocumentDiagnosticsUpdate<'_, DocumentDiagnostics>>,
         merge: impl Fn(&lsp::Uri, &Diagnostic, &App) -> bool + Clone,
         cx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
@@ -9279,9 +9279,9 @@ impl LspStore {
                     language_name,
                     server_version: None,
                     server_readable_version: None,
-                    pending_work: Default::default(),
+                    pending_work: BTreeMap::default(),
                     has_pending_diagnostic_updates: false,
-                    progress_tokens: Default::default(),
+                    progress_tokens: HashSet::default(),
                     worktree: server.worktree_id.map(WorktreeId::from_proto),
                     binary: None,
                     configuration: None,
@@ -9496,7 +9496,9 @@ impl LspStore {
         cx.emit(LspStoreEvent::LanguageServerUpdate {
             language_server_id,
             name: self.language_server_adapter_for_id(language_server_id).map(|adapter| adapter.name()),
-            message: proto::update_language_server::Variant::DiskBasedDiagnosticsUpdating(Default::default()),
+            message: proto::update_language_server::Variant::DiskBasedDiagnosticsUpdating(
+                proto::LspDiskBasedDiagnosticsUpdating::default(),
+            ),
         })
     }
 
@@ -9509,7 +9511,9 @@ impl LspStore {
         cx.emit(LspStoreEvent::LanguageServerUpdate {
             language_server_id,
             name: self.language_server_adapter_for_id(language_server_id).map(|adapter| adapter.name()),
-            message: proto::update_language_server::Variant::DiskBasedDiagnosticsUpdated(Default::default()),
+            message: proto::update_language_server::Variant::DiskBasedDiagnosticsUpdated(
+                proto::LspDiskBasedDiagnosticsUpdated::default(),
+            ),
         })
     }
 
@@ -10496,13 +10500,13 @@ impl LspStore {
             for buffer in buffer_store.buffers() {
                 buffer.update(cx, |buffer, cx| {
                     buffer.update_diagnostics(server_id, DiagnosticSet::new([], buffer), cx);
-                    buffer.set_completion_triggers(server_id, Default::default(), cx);
+                    buffer.set_completion_triggers(server_id, BTreeSet::default(), cx);
                 });
             }
         });
 
         let mut cleared_paths: Vec<ProjectPath> = Vec::new();
-        for (worktree_id, summaries) in self.diagnostic_summaries.iter_mut() {
+        for (worktree_id, summaries) in &mut self.diagnostic_summaries {
             summaries.retain(|path, summaries_by_server_id| {
                 if summaries_by_server_id.remove(&server_id).is_some() {
                     if let Some((client, project_id)) = self.downstream_client.clone() {
@@ -11044,9 +11048,9 @@ impl LspStore {
                 language_name: Some(language_name.clone()),
                 server_version: language_server.version(),
                 server_readable_version: language_server.readable_version(),
-                pending_work: Default::default(),
+                pending_work: BTreeMap::default(),
                 has_pending_diagnostic_updates: false,
-                progress_tokens: Default::default(),
+                progress_tokens: HashSet::default(),
                 worktree: Some(key.worktree_id),
                 binary: Some(language_server.binary().clone()),
                 configuration: Some(language_server.configuration().clone()),
@@ -11355,8 +11359,8 @@ impl LspStore {
             start: Some(proto::PointUtf16 { row: symbol.range.start.0.row, column: symbol.range.start.0.column }),
             end: Some(proto::PointUtf16 { row: symbol.range.end.0.row, column: symbol.range.end.0.column }),
             worktree_id: Default::default(),
-            path: Default::default(),
-            signature: Default::default(),
+            path: String::default(),
+            signature: Vec::default(),
             container_name: symbol.container_name.clone(),
         };
         match &symbol.path {
@@ -11829,12 +11833,12 @@ impl LspStore {
         });
 
         let local = self.as_local().context("Expected LSP Store to be local")?;
-        for (worktree_id, diagnostics_for_tree) in local.diagnostics.iter() {
+        for (worktree_id, diagnostics_for_tree) in &local.diagnostics {
             let Some(worktree) = self.worktree_store.read(cx).worktree_for_id(*worktree_id, cx) else {
                 continue;
             };
 
-            for (rel_path, diagnostics_by_server_id) in diagnostics_for_tree.iter() {
+            for (rel_path, diagnostics_by_server_id) in diagnostics_for_tree {
                 if let Ok(ix) = diagnostics_by_server_id.binary_search_by_key(&server_id, |e| e.0) {
                     let has_matching_registration = diagnostics_by_server_id[ix]
                         .1
@@ -12578,7 +12582,7 @@ fn lsp_workspace_diagnostics_refresh(
                             lsp::WorkspaceDiagnosticParams {
                                 previous_result_ids,
                                 identifier: identifier.clone(),
-                                work_done_progress_params: Default::default(),
+                                work_done_progress_params: lsp::WorkDoneProgressParams::default(),
                                 partial_result_params: lsp::PartialResultParams {
                                     partial_result_token: Some(lsp::ProgressToken::String(token)),
                                 },

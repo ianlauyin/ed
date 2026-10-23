@@ -441,7 +441,7 @@ async fn open_workspaces(
         cx.update(|cx| {
             let open_options = OpenOptions { env, ..Default::default() };
             workspace::open_new(open_options, app_state, cx, |workspace, window, cx| {
-                Editor::new_file(workspace, &Default::default(), window, cx)
+                Editor::new_file(workspace, &workspace::NewFile, window, cx)
             })
             .detach_and_log_err(cx);
         });

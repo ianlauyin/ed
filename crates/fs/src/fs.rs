@@ -444,7 +444,7 @@ impl RealFs {
             next_job_id: Arc::new(AtomicUsize::new(0)),
             job_event_subscribers: Arc::new(Mutex::new(Vec::new())),
             trash: Arc::new(Mutex::new(SlotMap::with_key())),
-            is_case_sensitive: Default::default(),
+            is_case_sensitive: std::sync::atomic::AtomicU8::default(),
         })
     }
 }

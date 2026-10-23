@@ -83,11 +83,11 @@ impl Editor {
         self.go_to_diagnostic_at_cursor(Direction::Prev, action.severity, window, cx);
     }
 
-    fn diagnostics_before_cursor<'a>(
-        buffer: &'a MultiBufferSnapshot,
+    fn diagnostics_before_cursor(
+        buffer: &MultiBufferSnapshot,
         cursor: MultiBufferOffset,
         severity: GoToDiagnosticSeverityFilter,
-    ) -> impl Iterator<Item = DiagnosticEntryRef<'a, MultiBufferOffset>> {
+    ) -> impl Iterator<Item = DiagnosticEntryRef<'_, MultiBufferOffset>> {
         buffer
             .diagnostics_in_range(MultiBufferOffset(0)..cursor)
             .filter(move |entry| entry.range.start <= cursor)
@@ -96,11 +96,11 @@ impl Editor {
             .filter(|entry| !entry.diagnostic.is_unnecessary)
     }
 
-    fn diagnostics_after_cursor<'a>(
-        buffer: &'a MultiBufferSnapshot,
+    fn diagnostics_after_cursor(
+        buffer: &MultiBufferSnapshot,
         cursor: MultiBufferOffset,
         severity: GoToDiagnosticSeverityFilter,
-    ) -> impl Iterator<Item = DiagnosticEntryRef<'a, MultiBufferOffset>> {
+    ) -> impl Iterator<Item = DiagnosticEntryRef<'_, MultiBufferOffset>> {
         buffer
             .diagnostics_in_range(cursor..buffer.len())
             .filter(move |entry| entry.range.start >= cursor)
@@ -172,7 +172,7 @@ impl Editor {
         if snapshot.intersects_fold(diagnostic.range.start) {
             self.unfold_ranges(std::slice::from_ref(&diagnostic.range), true, false, cx);
         }
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.select_ranges(vec![diagnostic.range.start..diagnostic.range.start])
         });
         self.activate_diagnostics(buffer_id, diagnostic, window, cx);

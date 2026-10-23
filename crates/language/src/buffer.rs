@@ -1142,19 +1142,19 @@ impl Buffer {
             non_text_state_update_count: 0,
             sync_parse_timeout: Some(Duration::from_millis(1)),
             parse_status: watch::channel(ParseStatus::Idle),
-            autoindent_requests: Default::default(),
-            wait_for_autoindent_txs: Default::default(),
-            pending_autoindent: Default::default(),
+            autoindent_requests: Vec::default(),
+            wait_for_autoindent_txs: Vec::default(),
+            pending_autoindent: Option::default(),
             language: None,
-            remote_selections: Default::default(),
-            diagnostics: Default::default(),
+            remote_selections: TreeMap::default(),
+            diagnostics: TreeMap::default(),
             diagnostics_timestamp: Lamport::MIN,
-            completion_triggers: Default::default(),
-            completion_triggers_per_language_server: Default::default(),
+            completion_triggers: BTreeSet::default(),
+            completion_triggers_per_language_server: HashMap::default(),
             completion_triggers_timestamp: Lamport::MIN,
             deferred_ops: OperationQueue::new(),
             has_conflict: false,
-            change_bits: Default::default(),
+            change_bits: Vec::default(),
             modeline: None,
             _subscriptions: Vec::new(),
             resolved_settings: None,
@@ -1200,7 +1200,7 @@ impl Buffer {
         let entity_id = cx.reserve_entity::<Self>().entity_id();
         let buffer_id = entity_id.as_non_zero_u64().into();
         async move {
-            let text = TextBuffer::new_normalized(ReplicaId::LOCAL, buffer_id, Default::default(), text);
+            let text = TextBuffer::new_normalized(ReplicaId::LOCAL, buffer_id, LineEnding::default(), text);
             let text = text.into_snapshot();
             let mut syntax = SyntaxMap::new(&text).snapshot();
             if let Some(language) = language.clone() {
@@ -1213,8 +1213,8 @@ impl Buffer {
                 text,
                 syntax,
                 file: None,
-                diagnostics: Default::default(),
-                remote_selections: Default::default(),
+                diagnostics: TreeMap::default(),
+                remote_selections: TreeMap::default(),
                 tree_sitter_data: Arc::new(tree_sitter_data),
                 fallback_highlighter,
                 language,
@@ -1229,7 +1229,7 @@ impl Buffer {
     pub fn build_empty_snapshot(cx: &mut App) -> BufferSnapshot {
         let entity_id = cx.reserve_entity::<Self>().entity_id();
         let buffer_id = entity_id.as_non_zero_u64().into();
-        let text = TextBuffer::new_normalized(ReplicaId::LOCAL, buffer_id, Default::default(), Rope::new());
+        let text = TextBuffer::new_normalized(ReplicaId::LOCAL, buffer_id, LineEnding::default(), Rope::new());
         let text = text.into_snapshot();
         let syntax = SyntaxMap::new(&text).snapshot();
         let tree_sitter_data = TreeSitterData::new(&text);
@@ -1239,8 +1239,8 @@ impl Buffer {
             tree_sitter_data: Arc::new(tree_sitter_data),
             fallback_highlighter: None,
             file: None,
-            diagnostics: Default::default(),
-            remote_selections: Default::default(),
+            diagnostics: TreeMap::default(),
+            remote_selections: TreeMap::default(),
             language: None,
             non_text_state_update_count: 0,
             capability: Capability::ReadOnly,
@@ -1286,10 +1286,7 @@ impl Buffer {
         let this = cx.entity();
         cx.new(|cx| {
             let mut branch = Self {
-                branch_state: Some(BufferBranchState {
-                    base_buffer: this.clone(),
-                    merged_operations: Default::default(),
-                }),
+                branch_state: Some(BufferBranchState { base_buffer: this.clone(), merged_operations: Vec::default() }),
                 language: self.language.clone(),
                 has_conflict: self.has_conflict,
                 has_unsaved_edits: Cell::new(self.has_unsaved_edits.get_mut().clone()),
@@ -2534,7 +2531,7 @@ impl Buffer {
     /// this replica.
     pub fn remove_active_selections(&mut self, cx: &mut Context<Self>) {
         if self.remote_selections.get(&self.text.replica_id()).is_none_or(|set| !set.selections.is_empty()) {
-            self.set_active_selections(Arc::default(), false, Default::default(), cx);
+            self.set_active_selections(Arc::default(), false, CursorShape::default(), cx);
         }
     }
 
@@ -2882,7 +2879,7 @@ impl Buffer {
                 }
             })
             .collect::<Vec<_>>();
-        for operation in buffer_ops.iter() {
+        for operation in &buffer_ops {
             self.send_operation(Operation::Buffer(operation.clone()), false, cx);
         }
         self.text.apply_ops(buffer_ops);
@@ -3906,12 +3903,10 @@ impl BufferSnapshot {
 
             if let Some(range) = range
                 && smallest_range_and_depth.as_ref().is_none_or(|(smallest_range, smallest_range_depth)| {
-                    if layer.depth > *smallest_range_depth {
-                        true
-                    } else if layer.depth == *smallest_range_depth {
-                        range.len() < smallest_range.len()
-                    } else {
-                        false
+                    match layer.depth.cmp(smallest_range_depth) {
+                        Ordering::Greater => true,
+                        Ordering::Equal => range.len() < smallest_range.len(),
+                        Ordering::Less => false,
                     }
                 })
             {
@@ -4540,7 +4535,7 @@ impl BufferSnapshot {
                     let byte_range = capture.node.byte_range();
 
                     let mut found = false;
-                    for (range, existing) in captures.iter_mut() {
+                    for (range, existing) in &mut captures {
                         if existing == &text_object {
                             range.start = range.start.min(byte_range.start);
                             range.end = range.end.max(byte_range.end);

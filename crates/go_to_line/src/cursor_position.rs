@@ -91,7 +91,7 @@ impl CursorPosition {
         Self {
             position: None,
             context: None,
-            selected_count: Default::default(),
+            selected_count: SelectionStats::default(),
             workspace: workspace.weak_handle(),
             update_position: Task::ready(()),
             _observe_active_editor: None,

@@ -144,7 +144,7 @@ impl PlatformTextSystem for AppleTextSystem {
         let Some(descriptors) = descriptors else {
             return names;
         };
-        for descriptor in descriptors.into_iter() {
+        for descriptor in &descriptors {
             names.extend(lenient_font_attributes::family_name(&descriptor));
         }
         if let Ok(fonts_in_memory) = self.0.read().memory_source.all_families() {
@@ -180,7 +180,7 @@ impl PlatformTextSystem for AppleTextSystem {
                 &font_kit::properties::Properties {
                     style: fontkit_style(font.style),
                     weight: fontkit_weight(font.weight),
-                    stretch: Default::default(),
+                    stretch: font_kit::properties::Stretch::default(),
                 },
             )?;
 
@@ -545,7 +545,7 @@ impl AppleTextSystemState {
         let glyph_runs = line.glyph_runs();
         let mut runs = <Vec<ShapedRun>>::with_capacity(glyph_runs.len() as usize);
         let mut ix_converter = StringIndexConverter::new(text);
-        for run in glyph_runs.into_iter() {
+        for run in &glyph_runs {
             let attributes = run.attributes().unwrap();
             let font = unsafe { attributes.get(kCTFontAttributeName).downcast::<CTFont>().unwrap() };
             let font_id = self.id_for_native_font(font);

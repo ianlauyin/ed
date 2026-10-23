@@ -62,7 +62,7 @@ pub fn register_editor(editor: &mut Editor, buffer: Entity<MultiBuffer>, cx: &Co
         return;
     }
 
-    editor.register_addon(ConflictAddon { buffers: Default::default() });
+    editor.register_addon(ConflictAddon { buffers: HashMap::default() });
 
     if is_singleton {
         let buffers = buffer.read(cx).all_buffers();

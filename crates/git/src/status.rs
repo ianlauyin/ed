@@ -334,7 +334,7 @@ impl From<FileStatus> for GitSummary {
 
 impl sum_tree::ContextLessSummary for GitSummary {
     fn zero() -> Self {
-        Default::default()
+        GitSummary::default()
     }
 
     fn add_summary(&mut self, rhs: &Self) {

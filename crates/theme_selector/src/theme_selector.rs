@@ -165,7 +165,7 @@ impl ThemeSelectorDelegate {
             .map(|(id, meta)| StringMatch {
                 candidate_id: id,
                 score: 0.0,
-                positions: Default::default(),
+                positions: Vec::default(),
                 string: meta.name.to_string(),
             })
             .collect();
@@ -400,7 +400,16 @@ impl PickerDelegate for ThemeSelectorDelegate {
                     })
                     .collect()
             } else {
-                match_strings(&candidates, &query, false, true, 100, &Default::default(), background).await
+                match_strings(
+                    &candidates,
+                    &query,
+                    false,
+                    true,
+                    100,
+                    &std::sync::atomic::AtomicBool::default(),
+                    background,
+                )
+                .await
             };
 
             this.update(cx, |this, cx| {

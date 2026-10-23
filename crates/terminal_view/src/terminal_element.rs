@@ -407,7 +407,7 @@ impl TerminalElement {
             focus: focus.clone(),
             cursor_visible,
             block_below_cursor,
-            interactivity: Default::default(),
+            interactivity: Interactivity::default(),
         }
         .track_focus(&focus)
     }

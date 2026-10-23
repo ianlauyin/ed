@@ -425,7 +425,7 @@ impl SearchQuery {
         const YIELD_INTERVAL: usize = 20000;
 
         if self.as_str().is_empty() {
-            return Default::default();
+            return Vec::default();
         }
 
         let range_offset = subrange.as_ref().map(|r| r.start).unwrap_or(0);

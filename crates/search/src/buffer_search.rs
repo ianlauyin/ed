@@ -355,7 +355,7 @@ impl Render for BufferSearchBar {
                     el.child(render_action_button(
                         "buffer-search-nav-button",
                         IconName::SelectAll,
-                        Default::default(),
+                        Option::default(),
                         "Select All Matches",
                         &SelectAllMatches,
                         query_focus.clone(),
@@ -367,7 +367,7 @@ impl Render for BufferSearchBar {
                 el.child(render_action_button(
                     "buffer-search",
                     IconName::Close,
-                    Default::default(),
+                    Option::default(),
                     "Close Search Bar",
                     &Dismiss,
                     focus_handle.clone(),
@@ -397,7 +397,7 @@ impl Render for BufferSearchBar {
                 .child(render_action_button(
                     "buffer-search-replace-button",
                     IconName::ReplaceNext,
-                    Default::default(),
+                    Option::default(),
                     "Replace Next Match",
                     &ReplaceNext,
                     focus_handle.clone(),
@@ -405,7 +405,7 @@ impl Render for BufferSearchBar {
                 .child(render_action_button(
                     "buffer-search-replace-button",
                     IconName::ReplaceAll,
-                    Default::default(),
+                    Option::default(),
                     "Replace All Matches",
                     &ReplaceAll,
                     focus_handle,
@@ -441,7 +441,7 @@ impl Render for BufferSearchBar {
                     .child(render_action_button(
                         "buffer-search",
                         IconName::Close,
-                        Default::default(),
+                        Option::default(),
                         "Close Search Bar",
                         &Dismiss,
                         focus_handle.clone(),
@@ -594,7 +594,7 @@ impl ToolbarItemView for BufferSearchBar {
                 return ToolbarItemLocation::PrimaryLeft;
             } else if !self.is_dismissed() {
                 if is_project_search {
-                    self.dismiss(&Default::default(), window, cx);
+                    self.dismiss(&Dismiss, window, cx);
                 } else {
                     return self.deployed_toolbar_location(cx);
                 }
@@ -723,7 +723,7 @@ impl BufferSearchBar {
             active_searchable_item_subscriptions: None,
             pending_external_query: None,
             active_match_index: None,
-            searchable_items_with_matches: Default::default(),
+            searchable_items_with_matches: HashMap::default(),
             default_options: search_options,
             configured_options: search_options,
             search_options,
@@ -734,7 +734,7 @@ impl BufferSearchBar {
                 Some(MAX_BUFFER_SEARCH_HISTORY_SIZE),
                 project::search_history::QueryInsertionBehavior::ReplacePreviousIfContains,
             ),
-            search_history_cursor: Default::default(),
+            search_history_cursor: SearchHistoryCursor::default(),
             active_search: None,
             replace_enabled: false,
             selection_search_enabled: None,
@@ -985,7 +985,7 @@ impl BufferSearchBar {
 
     pub fn select_query(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.query_editor.update(cx, |query_editor, cx| {
-            query_editor.select_all(&Default::default(), window, cx);
+            query_editor.select_all(&editor::actions::SelectAll, window, cx);
         });
     }
 

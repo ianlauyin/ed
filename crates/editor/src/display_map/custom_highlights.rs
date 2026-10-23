@@ -1,10 +1,17 @@
+use std::cmp;
+use std::ops::Range;
+
 use collections::BTreeMap;
 use gpui::HighlightStyle;
-use language::{Chunk, LanguageAwareStyling};
-use multi_buffer::{MultiBufferChunks, MultiBufferOffset, MultiBufferSnapshot};
-use std::{cmp, ops::Range};
+use language::Chunk;
+use language::LanguageAwareStyling;
+use multi_buffer::MultiBufferChunks;
+use multi_buffer::MultiBufferOffset;
+use multi_buffer::MultiBufferSnapshot;
 
-use crate::display_map::{HighlightKey, SemanticTokensHighlights, TextHighlights};
+use crate::display_map::HighlightKey;
+use crate::display_map::SemanticTokensHighlights;
+use crate::display_map::TextHighlights;
 
 pub struct CustomHighlightsChunks<'a> {
     buffer_chunks: MultiBufferChunks<'a>,
@@ -47,7 +54,7 @@ impl<'a> CustomHighlightsChunks<'a> {
             offset: range.start,
             text_highlights,
             highlight_endpoints,
-            active_highlights: Default::default(),
+            active_highlights: BTreeMap::default(),
             multibuffer_snapshot,
             semantic_token_highlights,
         }
@@ -89,9 +96,7 @@ fn create_highlight_endpoints(
                 .binary_search_by(|probe| probe.end.cmp(&start, buffer).then(cmp::Ordering::Less))
                 .unwrap_or_else(|i| i);
             let end_ix = ranges[start_ix..]
-                .binary_search_by(|probe| {
-                    probe.start.cmp(&end, buffer).then(cmp::Ordering::Greater)
-                })
+                .binary_search_by(|probe| probe.start.cmp(&end, buffer).then(cmp::Ordering::Greater))
                 .unwrap_or_else(|i| i);
 
             let ranges_ = &ranges[start_ix..][..end_ix];
@@ -100,12 +105,9 @@ fn create_highlight_endpoints(
             highlight_endpoints.reserve(2 * ranges_.len());
 
             let mut iter = ranges_.iter();
-            buffer.summaries_for_anchors_cb(
-                ranges_.iter().map(|r| &r.start),
-                |start: MultiBufferOffset| {
-                    text_highlights_scratch.push((start, iter.next().unwrap().end));
-                },
-            );
+            buffer.summaries_for_anchors_cb(ranges_.iter().map(|r| &r.start), |start: MultiBufferOffset| {
+                text_highlights_scratch.push((start, iter.next().unwrap().end));
+            });
             text_highlights_scratch.sort_by(|a, b| a.1.cmp(&b.1, buffer));
             let mut iter = text_highlights_scratch.iter();
             buffer.summaries_for_anchors_cb(
@@ -115,16 +117,8 @@ fn create_highlight_endpoints(
                     if start == end {
                         return;
                     }
-                    highlight_endpoints.push(HighlightEndpoint {
-                        offset: start,
-                        tag,
-                        style: Some(style),
-                    });
-                    highlight_endpoints.push(HighlightEndpoint {
-                        offset: end,
-                        tag,
-                        style: None,
-                    });
+                    highlight_endpoints.push(HighlightEndpoint { offset: start, tag, style: Some(style) });
+                    highlight_endpoints.push(HighlightEndpoint { offset: end, tag, style: None });
                 },
             );
         }
@@ -134,28 +128,14 @@ fn create_highlight_endpoints(
         let end = buffer.anchor_after(range.end);
         let mut semantic_highlights_scratch = Vec::new();
         for buffer_id in buffer.buffer_ids_for_range(range.clone()) {
-            let Some((semantic_token_highlights, interner)) =
-                semantic_token_highlights.get(&buffer_id)
-            else {
+            let Some((semantic_token_highlights, interner)) = semantic_token_highlights.get(&buffer_id) else {
                 continue;
             };
             let start_ix = semantic_token_highlights
-                .binary_search_by(|probe| {
-                    probe
-                        .range
-                        .end
-                        .cmp(&start, buffer)
-                        .then(cmp::Ordering::Less)
-                })
+                .binary_search_by(|probe| probe.range.end.cmp(&start, buffer).then(cmp::Ordering::Less))
                 .unwrap_or_else(|i| i);
             let end_ix = semantic_token_highlights[start_ix..]
-                .binary_search_by(|probe| {
-                    probe
-                        .range
-                        .start
-                        .cmp(&end, buffer)
-                        .then(cmp::Ordering::Greater)
-                })
+                .binary_search_by(|probe| probe.range.start.cmp(&end, buffer).then(cmp::Ordering::Greater))
                 .unwrap_or_else(|i| i);
 
             let ranges_ = &semantic_token_highlights[start_ix..][..end_ix];
@@ -173,9 +153,7 @@ fn create_highlight_endpoints(
             semantic_highlights_scratch.sort_by(|a, b| a.1.range.end.cmp(&b.1.range.end, buffer));
             let mut iter = semantic_highlights_scratch.iter();
             buffer.summaries_for_anchors_cb(
-                semantic_highlights_scratch
-                    .iter()
-                    .map(|(_, token)| &token.range.end),
+                semantic_highlights_scratch.iter().map(|(_, token)| &token.range.end),
                 |end: MultiBufferOffset| {
                     let (start, token) = iter.next().unwrap();
                     if *start == end {
@@ -233,13 +211,7 @@ impl<'a> Iterator for CustomHighlightsChunks<'a> {
         let chars = chunk.chars & mask;
         let tabs = chunk.tabs & mask;
         let newlines = chunk.newlines & mask;
-        let mut prefix = Chunk {
-            text: prefix,
-            chars,
-            tabs,
-            newlines,
-            ..chunk.clone()
-        };
+        let mut prefix = Chunk { text: prefix, chars, tabs, newlines, ..chunk.clone() };
 
         chunk.chars = chunk.chars.unbounded_shr(split_idx as u32);
         chunk.tabs = chunk.tabs.unbounded_shr(split_idx as u32);
@@ -248,12 +220,8 @@ impl<'a> Iterator for CustomHighlightsChunks<'a> {
         if !self.active_highlights.is_empty() {
             let mut active_highlights = self.active_highlights.iter().peekable();
             while let Some((tag, style)) = active_highlights.next() {
-                let overridden_by_later_semantic_token =
-                    matches!(tag, HighlightKey::SemanticToken(_))
-                        && matches!(
-                            active_highlights.peek(),
-                            Some((HighlightKey::SemanticToken(_), _))
-                        );
+                let overridden_by_later_semantic_token = matches!(tag, HighlightKey::SemanticToken(_))
+                    && matches!(active_highlights.peek(), Some((HighlightKey::SemanticToken(_), _)));
                 if overridden_by_later_semantic_token {
                     continue;
                 }

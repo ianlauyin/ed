@@ -110,7 +110,7 @@ impl TransformSummary {
 
 impl sum_tree::ContextLessSummary for TransformSummary {
     fn zero() -> Self {
-        Default::default()
+        TransformSummary::default()
     }
 
     fn add_summary(&mut self, other: &Self) {
@@ -177,7 +177,7 @@ where
 
 impl<'a> sum_tree::Dimension<'a, TransformSummary> for InlayOffset {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        InlayOffset::default()
     }
 
     fn add_summary(&mut self, summary: &'a TransformSummary, _: ()) {
@@ -206,7 +206,7 @@ impl Sub for InlayPoint {
 
 impl<'a> sum_tree::Dimension<'a, TransformSummary> for InlayPoint {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        InlayPoint::default()
     }
 
     fn add_summary(&mut self, summary: &'a TransformSummary, _: ()) {
@@ -216,7 +216,7 @@ impl<'a> sum_tree::Dimension<'a, TransformSummary> for InlayPoint {
 
 impl<'a> sum_tree::Dimension<'a, TransformSummary> for MultiBufferOffset {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        MultiBufferOffset::default()
     }
 
     fn add_summary(&mut self, summary: &'a TransformSummary, _: ()) {
@@ -226,7 +226,7 @@ impl<'a> sum_tree::Dimension<'a, TransformSummary> for MultiBufferOffset {
 
 impl<'a> sum_tree::Dimension<'a, TransformSummary> for Point {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        Point::default()
     }
 
     fn add_summary(&mut self, summary: &'a TransformSummary, _: ()) {
@@ -506,7 +506,7 @@ impl Iterator for InlayBufferRows<'_> {
             self.buffer_rows.next().unwrap()
         } else {
             match self.transforms.item()? {
-                Transform::Inlay(_) => Default::default(),
+                Transform::Inlay(_) => RowInfo::default(),
                 Transform::Isomorphic(_) => self.buffer_rows.next().unwrap(),
             }
         };
@@ -572,7 +572,7 @@ impl InlayMap {
             let mut new_transforms = SumTree::default();
             push_isomorphic(&mut new_transforms, buffer_snapshot.text_summary());
             if new_transforms.is_empty() {
-                new_transforms.push(Transform::Isomorphic(Default::default()), ());
+                new_transforms.push(Transform::Isomorphic(MBTextSummary::default()), ());
             }
 
             let mut inlay_edits = Patch::default();
@@ -667,7 +667,7 @@ impl InlayMap {
 
             new_transforms.append(cursor.suffix(), ());
             if new_transforms.is_empty() {
-                new_transforms.push(Transform::Isomorphic(Default::default()), ());
+                new_transforms.push(Transform::Isomorphic(MBTextSummary::default()), ());
             }
 
             drop(cursor);

@@ -103,7 +103,7 @@ pub struct InnerTreeNode {
 impl InnerTreeNode {
     fn new(server_name: LanguageServerName, path: ProjectPath, settings: LspSettings) -> Self {
         InnerTreeNode {
-            id: Default::default(),
+            id: OnceLock::default(),
             disposition: Arc::new(LaunchDisposition { server_name, path, settings: settings.into() }),
         }
     }
@@ -115,7 +115,7 @@ impl InnerTreeNode {
 
 impl LanguageServerTree {
     pub(crate) fn new(manifest_tree: Entity<ManifestTree>, languages: Arc<LanguageRegistry>) -> Self {
-        Self { manifest_tree, instances: Default::default(), languages }
+        Self { manifest_tree, instances: BTreeMap::default(), languages }
     }
 
     /// Get all initialized language server IDs for a given path.
@@ -146,12 +146,12 @@ impl LanguageServerTree {
         self.init_with_adapters(manifest_location, language_name, adapters)
     }
 
-    fn init_with_adapters<'a>(
-        &'a mut self,
+    fn init_with_adapters(
+        &mut self,
         root_path: ProjectPath,
         language_name: LanguageName,
         adapters: IndexMap<LanguageServerName, (LspSettings, Arc<CachedLspAdapter>)>,
-    ) -> impl Iterator<Item = LanguageServerTreeNode> + 'a {
+    ) -> impl Iterator<Item = LanguageServerTreeNode> + '_ {
         adapters.into_iter().map(move |(_, (settings, adapter))| {
             let root_path = root_path.clone();
             let inner_node = self
@@ -177,11 +177,11 @@ impl LanguageServerTree {
         })
     }
 
-    fn get_with_adapters<'a>(
-        &'a self,
+    fn get_with_adapters(
+        &self,
         root_path: ProjectPath,
         adapters: IndexMap<LanguageServerName, (LspSettings, Arc<CachedLspAdapter>)>,
-    ) -> impl Iterator<Item = LanguageServerId> + 'a {
+    ) -> impl Iterator<Item = LanguageServerId> + '_ {
         adapters.into_iter().filter_map(move |(_, (_, adapter))| {
             let root_path = root_path.clone();
             let inner_node =
@@ -212,7 +212,7 @@ impl LanguageServerTree {
             SettingsLocation { worktree_id: manifest_location.worktree_id, path: &manifest_location.path };
         let settings = AllLanguageSettings::get(Some(settings_location), cx).language(Some(language_name));
         if !settings.enable_language_server {
-            return Default::default();
+            return IndexMap::default();
         }
         self.languages
             .lsp_adapters(language_name)

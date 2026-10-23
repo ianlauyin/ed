@@ -423,7 +423,7 @@ pub fn merge_non_null_json_value_into(source: serde_json::Value, target: &mut se
         let target_object = if let Value::Object(target) = target {
             target
         } else {
-            *target = Value::Object(Default::default());
+            *target = Value::Object(serde_json::Map::default());
             target.as_object_mut().unwrap()
         };
         for (key, value) in source_object {

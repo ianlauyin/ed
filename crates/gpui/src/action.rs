@@ -245,12 +245,12 @@ pub(crate) struct ActionRegistry {
 impl Default for ActionRegistry {
     fn default() -> Self {
         let mut this = ActionRegistry {
-            by_name: Default::default(),
-            names_by_type_id: Default::default(),
-            documentation: Default::default(),
-            all_names: Default::default(),
-            deprecated_aliases: Default::default(),
-            deprecation_messages: Default::default(),
+            by_name: HashMap::default(),
+            names_by_type_id: TypeIdHashMap::default(),
+            documentation: HashMap::default(),
+            all_names: Vec::default(),
+            deprecated_aliases: HashMap::default(),
+            deprecation_messages: HashMap::default(),
         };
 
         this.load_actions();

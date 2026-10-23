@@ -402,7 +402,7 @@ impl TextLayout {
         let line_height = window.pixel_snap(text_style.line_height.to_pixels(font_size.into(), window.rem_size()));
 
         let runs = if let Some(runs) = runs { runs } else { vec![text_style.to_run(text.len())] };
-        window.request_measured_layout(Default::default(), {
+        window.request_measured_layout(crate::Style::default(), {
             let element_state = self.clone();
 
             move |known_dimensions, available_space, window, cx| {
@@ -501,7 +501,7 @@ impl TextLayout {
                     .log_err()
                 else {
                     element_state.0.borrow_mut().replace(TextLayoutInner {
-                        lines: Default::default(),
+                        lines: SmallVec::default(),
                         len: 0,
                         line_height,
                         wrap_width,
@@ -697,9 +697,9 @@ impl TextLayout {
     pub fn wrapped_text(&self) -> String {
         let mut accumulator = String::new();
 
-        for wrapped in self.0.borrow().as_ref().unwrap().lines.iter() {
+        for wrapped in &self.0.borrow().as_ref().unwrap().lines {
             let mut seen = 0;
-            for boundary in wrapped.layout.wrap_boundaries.iter() {
+            for boundary in &wrapped.layout.wrap_boundaries {
                 let index = wrapped.layout.unwrapped_layout.runs[boundary.run_ix].glyphs[boundary.glyph_ix].index;
 
                 accumulator.push_str(&wrapped.text[seen..index]);

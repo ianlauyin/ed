@@ -56,7 +56,7 @@ impl History {
             let id = self.next_transaction_id.tick();
             self.undo_stack.push(Transaction {
                 id,
-                buffer_transactions: Default::default(),
+                buffer_transactions: HashMap::default(),
                 first_edit_at: now,
                 last_edit_at: now,
                 suppress_grouping: false,
@@ -430,7 +430,7 @@ impl MultiBuffer {
 
         while let Some(transaction) = self.history.pop_redo() {
             let mut redone = false;
-            for (buffer_id, buffer_transaction_id) in transaction.buffer_transactions.iter_mut() {
+            for (buffer_id, buffer_transaction_id) in &mut transaction.buffer_transactions {
                 if let Some(BufferState { buffer, .. }) = self.buffers.get(buffer_id) {
                     redone |= buffer.update(cx, |buffer, cx| {
                         let redo_to = *buffer_transaction_id;

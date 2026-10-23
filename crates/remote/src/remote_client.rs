@@ -1179,7 +1179,7 @@ impl ChannelClient {
             max_received: AtomicU32::new(0),
             response_channels: ResponseChannels::default(),
             stream_response_channels: StreamResponseChannels::default(),
-            message_handlers: Default::default(),
+            message_handlers: Mutex::default(),
             buffer: Mutex::new(VecDeque::new()),
             name,
             executor: cx.background_executor().clone(),

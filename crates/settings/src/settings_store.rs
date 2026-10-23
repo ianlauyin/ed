@@ -133,7 +133,7 @@ impl SettingsStore {
         }
         let merged_settings = settings.clone();
         let mut this = Self {
-            setting_values: Default::default(),
+            setting_values: TypeIdHashMap::default(),
             settings,
             language_defaults: None,
             language_semantic_token_rules: HashMap::default(),

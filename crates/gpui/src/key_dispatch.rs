@@ -500,7 +500,7 @@ impl DispatchTree {
         mut input: SmallVec<[Keystroke; 1]>,
         dispatch_path: &SmallVec<[DispatchNodeId; 32]>,
     ) -> (SmallVec<[Keystroke; 1]>, SmallVec<[Replay; 1]>) {
-        let mut to_replay: SmallVec<[Replay; 1]> = Default::default();
+        let mut to_replay: SmallVec<[Replay; 1]> = SmallVec::default();
         for last in (0..input.len()).rev() {
             let (bindings, _, _) = self.bindings_for_input(&input[0..=last], dispatch_path);
             if !bindings.is_empty() {

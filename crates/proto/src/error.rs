@@ -87,19 +87,11 @@ pub trait ErrorExt {
 
 impl ErrorExt for anyhow::Error {
     fn error_code(&self) -> ErrorCode {
-        if let Some(rpc_error) = self.downcast_ref::<RpcError>() {
-            rpc_error.code
-        } else {
-            ErrorCode::Internal
-        }
+        if let Some(rpc_error) = self.downcast_ref::<RpcError>() { rpc_error.code } else { ErrorCode::Internal }
     }
 
     fn error_tag(&self, k: &str) -> Option<&str> {
-        if let Some(rpc_error) = self.downcast_ref::<RpcError>() {
-            rpc_error.error_tag(k)
-        } else {
-            None
-        }
+        if let Some(rpc_error) = self.downcast_ref::<RpcError>() { rpc_error.error_tag(k) } else { None }
     }
 
     fn to_proto(&self) -> crate::Error {
@@ -107,17 +99,13 @@ impl ErrorExt for anyhow::Error {
             rpc_error.to_proto()
         } else {
             ErrorCode::Internal
-                .message(
-                    format!("{self:#}")
-                        .lines()
-                        .fold(String::new(), |mut message, line| {
-                            if !message.is_empty() {
-                                message.push(' ');
-                            }
-                            message.push_str(line);
-                            message
-                        }),
-                )
+                .message(format!("{self:#}").lines().fold(String::new(), |mut message, line| {
+                    if !message.is_empty() {
+                        message.push(' ');
+                    }
+                    message.push_str(line);
+                    message
+                }))
                 .to_proto()
         }
     }
@@ -133,13 +121,7 @@ impl ErrorExt for anyhow::Error {
 
 impl From<ErrorCode> for anyhow::Error {
     fn from(value: ErrorCode) -> Self {
-        RpcError {
-            request: None,
-            code: value,
-            msg: format!("{:?}", value),
-            tags: Default::default(),
-        }
-        .into()
+        RpcError { request: None, code: value, msg: format!("{:?}", value), tags: Vec::default() }.into()
     }
 }
 
@@ -212,11 +194,7 @@ impl ErrorExt for RpcError {
     }
 
     fn to_proto(&self) -> crate::Error {
-        crate::Error {
-            code: self.code as i32,
-            message: self.msg.clone(),
-            tags: self.tags.clone(),
-        }
+        crate::Error { code: self.code as i32, message: self.msg.clone(), tags: self.tags.clone() }
     }
 
     fn cloned(&self) -> anyhow::Error {
@@ -246,11 +224,6 @@ impl std::fmt::Display for RpcError {
 
 impl From<ErrorCode> for RpcError {
     fn from(code: ErrorCode) -> Self {
-        RpcError {
-            request: None,
-            code,
-            msg: format!("{:?}", code),
-            tags: Default::default(),
-        }
+        RpcError { request: None, code, msg: format!("{:?}", code), tags: Vec::default() }
     }
 }

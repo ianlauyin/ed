@@ -254,7 +254,7 @@ impl HeadlessProject {
         });
 
         HeadlessProject {
-            next_entry_id: Default::default(),
+            next_entry_id: Arc::default(),
             session,
             fs,
             worktree_store,

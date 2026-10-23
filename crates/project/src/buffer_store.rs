@@ -750,7 +750,7 @@ impl BufferStore {
     pub fn local(worktree_store: Entity<WorktreeStore>, cx: &mut Context<Self>) -> Self {
         Self {
             state: BufferStoreState::Local(LocalBufferStore {
-                local_buffer_ids_by_entry_id: Default::default(),
+                local_buffer_ids_by_entry_id: HashMap::default(),
                 worktree_store: worktree_store.clone(),
                 _subscription: cx.subscribe(&worktree_store, |this, _, event, cx| {
                     if let WorktreeStoreEvent::WorktreeAdded(worktree) = event {
@@ -760,15 +760,15 @@ impl BufferStore {
                 }),
             }),
             downstream_client: None,
-            opened_buffers: Default::default(),
-            path_to_buffer_id: Default::default(),
-            shared_buffers: Default::default(),
+            opened_buffers: HashMap::default(),
+            path_to_buffer_id: HashMap::default(),
+            shared_buffers: HashMap::default(),
             pending_buffer_shares: HashMap::default(),
             next_buffer_share_id: 0,
-            loading_buffers: Default::default(),
-            non_searchable_buffers: Default::default(),
+            loading_buffers: HashMap::default(),
+            non_searchable_buffers: HashSet::default(),
             worktree_store,
-            project_search: Default::default(),
+            project_search: RemoteProjectSearchState::default(),
         }
     }
 
@@ -780,22 +780,22 @@ impl BufferStore {
     ) -> Self {
         Self {
             state: BufferStoreState::Remote(RemoteBufferStore {
-                loading_remote_buffers_by_id: Default::default(),
-                remote_buffer_listeners: Default::default(),
+                loading_remote_buffers_by_id: HashMap::default(),
+                remote_buffer_listeners: HashMap::default(),
                 project_id: remote_id,
                 upstream_client,
                 worktree_store: worktree_store.clone(),
             }),
             downstream_client: None,
-            opened_buffers: Default::default(),
-            path_to_buffer_id: Default::default(),
-            loading_buffers: Default::default(),
-            shared_buffers: Default::default(),
+            opened_buffers: HashMap::default(),
+            path_to_buffer_id: HashMap::default(),
+            loading_buffers: HashMap::default(),
+            shared_buffers: HashMap::default(),
             pending_buffer_shares: HashMap::default(),
             next_buffer_share_id: 0,
-            non_searchable_buffers: Default::default(),
+            non_searchable_buffers: HashSet::default(),
             worktree_store,
-            project_search: Default::default(),
+            project_search: RemoteProjectSearchState::default(),
         }
     }
 
@@ -1498,7 +1498,7 @@ impl BufferStore {
         cx: &mut Context<Self>,
     ) -> proto::ProjectTransaction {
         let mut serialized_transaction =
-            proto::ProjectTransaction { buffer_ids: Default::default(), transactions: Default::default() };
+            proto::ProjectTransaction { buffer_ids: Vec::default(), transactions: Vec::default() };
         for (buffer, transaction) in project_transaction.0 {
             self.create_buffer_for_peer(&buffer, peer_id, cx).detach_and_log_err(cx);
             serialized_transaction.buffer_ids.push(buffer.read(cx).remote_id().into());

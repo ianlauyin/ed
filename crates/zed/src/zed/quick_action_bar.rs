@@ -87,8 +87,8 @@ impl QuickActionBar {
             active_item: None,
             buffer_search_bar,
             show: true,
-            toggle_selections_handle: Default::default(),
-            toggle_settings_handle: Default::default(),
+            toggle_selections_handle: PopoverMenuHandle::default(),
+            toggle_settings_handle: PopoverMenuHandle::default(),
             workspace: workspace.weak_handle(),
         };
         this.apply_settings(cx);

@@ -13,7 +13,7 @@ struct StackEntry<'a, T: Item, D> {
     position: D,
 }
 
-impl<'a, T: Item, D> StackEntry<'a, T, D> {
+impl<T: Item, D> StackEntry<'_, T, D> {
     #[inline]
     const fn index(&self) -> usize {
         self.index as usize
@@ -360,7 +360,7 @@ where
     }
 }
 
-impl<'a, 'b, T, D> Cursor<'a, 'b, T, D>
+impl<'a, T, D> Cursor<'a, '_, T, D>
 where
     T: Item,
     D: Dimension<'a, T::Summary>,
@@ -507,7 +507,7 @@ where
 
 impl<'a, T: Item> Iter<'a, T> {
     pub(crate) fn new(tree: &'a SumTree<T>) -> Self {
-        Self { tree, stack: Default::default() }
+        Self { tree, stack: ArrayVec::default() }
     }
 }
 
@@ -572,7 +572,7 @@ impl<'a, T: Item> Iterator for Iter<'a, T> {
     }
 }
 
-impl<'a, 'b, T: Item, D> Iterator for Cursor<'a, 'b, T, D>
+impl<'a, T: Item, D> Iterator for Cursor<'a, '_, T, D>
 where
     D: Dimension<'a, T::Summary>,
 {
@@ -633,7 +633,7 @@ where
     }
 }
 
-impl<'a, 'b, F, T: Item, U> Iterator for FilterCursor<'a, 'b, F, T, U>
+impl<'a, F, T: Item, U> Iterator for FilterCursor<'a, '_, F, T, U>
 where
     F: FnMut(&T::Summary) -> bool,
     U: Dimension<'a, T::Summary>,

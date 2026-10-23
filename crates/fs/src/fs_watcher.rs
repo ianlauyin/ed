@@ -1,6 +1,5 @@
 use std::collections::HashMap;
 use std::collections::VecDeque;
-use std::ops::DerefMut;
 use std::path::Path;
 use std::path::PathBuf;
 use std::pin::Pin;
@@ -47,7 +46,7 @@ pub(crate) async fn watch(
     latency: Duration,
 ) -> (Pin<Box<dyn Send + Stream<Item = Vec<PathEvent>>>>, Arc<dyn Watcher>) {
     let (tx, rx) = async_channel::unbounded();
-    let pending_paths: Arc<Mutex<Vec<PathEvent>>> = Default::default();
+    let pending_paths: Arc<Mutex<Vec<PathEvent>>> = Arc::default();
 
     let watcher: Arc<dyn Watcher> =
         Arc::new(FsWatcher::new(native_watcher, poll_watcher, fs.clone(), executor.clone(), tx, pending_paths.clone()));
@@ -132,8 +131,8 @@ impl FsWatcher {
             executor,
             tx,
             pending_path_events,
-            registrations: Default::default(),
-            pending_registrations: Default::default(),
+            registrations: Arc::default(),
+            pending_registrations: Arc::default(),
         }
     }
 
@@ -200,7 +199,7 @@ impl Drop for FsWatcher {
         let mut registrations = HashMap::new();
         {
             let old = &mut self.registrations.lock();
-            std::mem::swap(old.deref_mut(), &mut registrations);
+            std::mem::swap(&mut **old, &mut registrations);
         }
 
         for (_, registration) in registrations {
@@ -730,10 +729,10 @@ impl OsWatcher {
     ) -> Arc<Self> {
         let (event_tx, event_rx) = async_channel::unbounded();
         let state = Arc::new(Mutex::new(WatcherState {
-            watchers: Default::default(),
-            paths: Default::default(),
+            watchers: HashMap::default(),
+            paths: WatchPaths::default(),
             cooldown_until: None,
-            last_registration: Default::default(),
+            last_registration: WatcherRegistrationId::default(),
         }));
         let dispatch_task = executor.spawn({
             let state = state.clone();

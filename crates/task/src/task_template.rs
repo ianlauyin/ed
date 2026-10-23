@@ -1,16 +1,27 @@
-use anyhow::{Context as _, bail};
-use collections::{HashMap, HashSet};
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
 use std::path::PathBuf;
-use util::serde::default_true;
-use util::{ResultExt, truncate_and_remove_front};
 
-use crate::{
-    ResolvedTask, RevealTarget, Shell, SpawnInTerminal, TaskContext, TaskId, VariableName,
-    ZED_VARIABLE_NAME_PREFIX, serde_helpers::non_empty_string_vec,
-};
+use anyhow::Context as _;
+use anyhow::bail;
+use collections::HashMap;
+use collections::HashSet;
+use schemars::JsonSchema;
+use serde::Deserialize;
+use serde::Serialize;
+use sha2::Digest;
+use sha2::Sha256;
+use util::ResultExt;
+use util::serde::default_true;
+use util::truncate_and_remove_front;
+
+use crate::ResolvedTask;
+use crate::RevealTarget;
+use crate::Shell;
+use crate::SpawnInTerminal;
+use crate::TaskContext;
+use crate::TaskId;
+use crate::VariableName;
+use crate::ZED_VARIABLE_NAME_PREFIX;
+use crate::serde_helpers::non_empty_string_vec;
 
 /// A template definition of a Zed task to run.
 /// May use the [`VariableName`] to get the corresponding substitutions into its fields.
@@ -205,12 +216,8 @@ impl TaskTemplate {
             &mut substituted_variables,
         )?;
 
-        let task_hash = to_hex_hash(self)
-            .context("hashing task template")
-            .log_err()?;
-        let variables_hash = to_hex_hash(&task_variables)
-            .context("hashing task variables")
-            .log_err()?;
+        let task_hash = to_hex_hash(self).context("hashing task template").log_err()?;
+        let variables_hash = to_hex_hash(&task_variables).context("hashing task variables").log_err()?;
         let id = TaskId(format!("{id_base}_{task_hash}_{variables_hash}"));
 
         let env = {
@@ -243,14 +250,11 @@ impl TaskTemplate {
                 cwd,
                 full_label,
                 label: human_readable_label,
-                command_label: args_with_substitutions.iter().fold(
-                    command.clone(),
-                    |mut command_label, arg| {
-                        command_label.push(' ');
-                        command_label.push_str(arg);
-                        command_label
-                    },
-                ),
+                command_label: args_with_substitutions.iter().fold(command.clone(), |mut command_label, arg| {
+                    command_label.push(' ');
+                    command_label.push_str(arg);
+                    command_label
+                }),
                 command: Some(command),
                 args: args_with_substitutions,
                 env,
@@ -280,13 +284,9 @@ impl TaskTemplate {
         Self::collect_unknown_variables(&self.label, &mut variables);
         Self::collect_unknown_variables(&self.command, &mut variables);
 
-        self.args
-            .iter()
-            .for_each(|arg| Self::collect_unknown_variables(arg, &mut variables));
+        self.args.iter().for_each(|arg| Self::collect_unknown_variables(arg, &mut variables));
 
-        self.env
-            .values()
-            .for_each(|value| Self::collect_unknown_variables(value, &mut variables));
+        self.env.values().for_each(|value| Self::collect_unknown_variables(value, &mut variables));
 
         if let Some(cwd) = &self.cwd {
             Self::collect_unknown_variables(cwd, &mut variables);
@@ -321,12 +321,7 @@ const MAX_DISPLAY_VARIABLE_LENGTH: usize = 15;
 fn truncate_variables(task_variables: &HashMap<String, &str>) -> HashMap<String, String> {
     task_variables
         .iter()
-        .map(|(key, value)| {
-            (
-                key.clone(),
-                truncate_and_remove_front(value, MAX_DISPLAY_VARIABLE_LENGTH),
-            )
-        })
+        .map(|(key, value)| (key.clone(), truncate_and_remove_front(value, MAX_DISPLAY_VARIABLE_LENGTH)))
         .collect()
 }
 
@@ -352,12 +347,7 @@ pub fn substitute_variables_in_str(template_str: &str, context: &TaskContext) ->
             (key_string, value.as_str())
         })
         .collect::<HashMap<_, _>>();
-    substitute_all_template_variables_in_str(
-        template_str,
-        &task_variables,
-        &variable_names,
-        &mut substituted_variables,
-    )
+    substitute_all_template_variables_in_str(template_str, &task_variables, &variable_names, &mut substituted_variables)
 }
 fn substitute_all_template_variables_in_str<A: AsRef<str>>(
     template_str: &str,
@@ -411,12 +401,8 @@ fn substitute_all_template_variables_in_vec(
 ) -> Option<Vec<String>> {
     let mut expanded = Vec::with_capacity(template_strs.len());
     for variable in template_strs {
-        let new_value = substitute_all_template_variables_in_str(
-            variable,
-            task_variables,
-            variable_names,
-            substituted_variables,
-        )?;
+        let new_value =
+            substitute_all_template_variables_in_str(variable, task_variables, variable_names, substituted_variables)?;
 
         if !new_value.is_empty() || variable.is_empty() {
             expanded.push(new_value);
@@ -457,20 +443,12 @@ fn substitute_all_template_variables_in_map(
     variable_names: &HashMap<String, VariableName>,
     substituted_variables: &mut HashSet<VariableName>,
 ) -> Option<HashMap<String, String>> {
-    let mut new_map: HashMap<String, String> = Default::default();
+    let mut new_map: HashMap<String, String> = HashMap::default();
     for (key, value) in keys_and_values {
-        let new_value = substitute_all_template_variables_in_str(
-            value,
-            task_variables,
-            variable_names,
-            substituted_variables,
-        )?;
-        let new_key = substitute_all_template_variables_in_str(
-            key,
-            task_variables,
-            variable_names,
-            substituted_variables,
-        )?;
+        let new_value =
+            substitute_all_template_variables_in_str(value, task_variables, variable_names, substituted_variables)?;
+        let new_key =
+            substitute_all_template_variables_in_str(key, task_variables, variable_names, substituted_variables)?;
         new_map.insert(new_key, new_value);
     }
 

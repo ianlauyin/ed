@@ -92,9 +92,9 @@ impl Editor {
                 selection.range()
             };
             if display_map.folds_in_range(range).next().is_some() {
-                self.unfold_lines(&Default::default(), window, cx)
+                self.unfold_lines(&UnfoldLines, window, cx)
             } else {
-                self.fold(&Default::default(), window, cx)
+                self.fold(&actions::Fold, window, cx)
             }
         } else {
             let multi_buffer_snapshot = self.buffer.read(cx).snapshot(cx);
@@ -134,9 +134,9 @@ impl Editor {
             selection.range()
         };
         if display_map.folds_in_range(range).next().is_some() {
-            self.unfold_recursive(&Default::default(), window, cx)
+            self.unfold_recursive(&UnfoldRecursive, window, cx)
         } else {
-            self.fold_recursive(&Default::default(), window, cx)
+            self.fold_recursive(&FoldRecursive, window, cx)
         }
     }
 

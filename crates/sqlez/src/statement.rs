@@ -46,7 +46,7 @@ pub enum SqlType {
 impl<'a> Statement<'a> {
     pub fn prepare<T: AsRef<str>>(connection: &'a Connection, query: T) -> Result<Self> {
         let mut statement =
-            Self { raw_statements: Default::default(), current_statement: 0, connection, phantom: PhantomData };
+            Self { raw_statements: Vec::default(), current_statement: 0, connection, phantom: PhantomData };
         let sql = CString::new(query.as_ref()).context("Error creating cstr")?;
         let mut remaining_sql = sql.as_c_str();
         while {
@@ -86,7 +86,7 @@ impl<'a> Statement<'a> {
 
     pub fn reset(&mut self) {
         unsafe {
-            for raw_statement in self.raw_statements.iter() {
+            for raw_statement in &self.raw_statements {
                 sqlite3_reset(*raw_statement);
             }
         }
@@ -106,7 +106,7 @@ impl<'a> Statement<'a> {
     fn bind_index_with(&self, index: i32, bind: &dyn Fn(&*mut sqlite3_stmt)) -> Result<()> {
         let mut any_succeed = false;
         unsafe {
-            for raw_statement in self.raw_statements.iter() {
+            for raw_statement in &self.raw_statements {
                 if index <= sqlite3_bind_parameter_count(*raw_statement) {
                     bind(raw_statement);
                     self.connection.last_error().with_context(|| format!("Failed to bind value at index {index}"))?;
@@ -341,7 +341,7 @@ impl<'a> Statement<'a> {
 impl Drop for Statement<'_> {
     fn drop(&mut self) {
         unsafe {
-            for raw_statement in self.raw_statements.iter() {
+            for raw_statement in &self.raw_statements {
                 sqlite3_finalize(*raw_statement);
             }
         }

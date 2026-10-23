@@ -286,7 +286,7 @@ impl Member {
     pub fn mark_positions(&mut self, in_center_group: bool, cx: &mut App) {
         match self {
             Member::Axis(pane_axis) => {
-                for member in pane_axis.members.iter_mut() {
+                for member in &mut pane_axis.members {
                     member.mark_positions(in_center_group, cx);
                 }
             }
@@ -365,8 +365,12 @@ impl PaneLeaderDecorator for PaneRenderContext<'_> {
 
 impl Member {
     fn new_axis(old_pane: Entity<Pane>, new_pane: Entity<Pane>, direction: SplitDirection) -> Self {
-        use Axis::*;
-        use SplitDirection::*;
+        use Axis::Horizontal;
+        use Axis::Vertical;
+        use SplitDirection::Down;
+        use SplitDirection::Left;
+        use SplitDirection::Right;
+        use SplitDirection::Up;
 
         let axis = match direction {
             Up | Down => Vertical,
@@ -475,7 +479,7 @@ impl Member {
         match self {
             Self::Axis(axis) => {
                 axis.axis = axis.axis.invert();
-                for member in axis.members.iter_mut() {
+                for member in &mut axis.members {
                     member.invert_pane_axies();
                 }
             }
@@ -596,7 +600,7 @@ impl PaneAxis {
 
     fn reset_pane_sizes(&self) {
         *self.flexes.lock() = vec![1.; self.members.len()];
-        for member in self.members.iter() {
+        for member in &self.members {
             if let Member::Axis(axis) = member {
                 axis.reset_pane_sizes();
             }
@@ -684,7 +688,7 @@ impl PaneAxis {
     }
 
     fn swap(&mut self, from: &Entity<Pane>, to: &Entity<Pane>) {
-        for member in self.members.iter_mut() {
+        for member in &mut self.members {
             match member {
                 Member::Axis(axis) => axis.swap(from, to),
                 Member::Pane(pane) => {

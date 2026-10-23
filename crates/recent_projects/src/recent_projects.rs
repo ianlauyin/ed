@@ -722,7 +722,7 @@ impl PickerDelegate for RecentProjectsDelegate {
                         candidate_id: id,
                         score: 0.0,
                         positions: Vec::new(),
-                        string: Default::default(),
+                        string: SharedString::default(),
                     }));
                 }
             } else {
@@ -745,7 +745,7 @@ impl PickerDelegate for RecentProjectsDelegate {
                             candidate_id: id,
                             score: 0.0,
                             positions: Vec::new(),
-                            string: Default::default(),
+                            string: SharedString::default(),
                         }));
                     }
                 }

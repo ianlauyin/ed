@@ -496,16 +496,16 @@ pub fn init(cx: &mut App) {
 
     cx.on_action(move |_: &workspace::NewFile, cx| {
         let app_state = workspace::AppState::global(cx);
-        workspace::open_new(Default::default(), app_state, cx, |workspace, window, cx| {
-            Editor::new_file(workspace, &Default::default(), window, cx)
+        workspace::open_new(workspace::OpenOptions::default(), app_state, cx, |workspace, window, cx| {
+            Editor::new_file(workspace, &workspace::NewFile, window, cx)
         })
         .detach_and_log_err(cx);
     })
     .on_action(move |_: &workspace::NewWindow, cx| {
         let app_state = workspace::AppState::global(cx);
-        workspace::open_new(Default::default(), app_state, cx, |workspace, window, cx| {
+        workspace::open_new(workspace::OpenOptions::default(), app_state, cx, |workspace, window, cx| {
             cx.activate(true);
-            Editor::new_file(workspace, &Default::default(), window, cx)
+            Editor::new_file(workspace, &workspace::NewFile, window, cx)
         })
         .detach_and_log_err(cx);
     });
@@ -1974,10 +1974,10 @@ impl Editor {
             show_indent_guides,
             buffers_with_disabled_indent_guides: HashSet::default(),
             highlight_order: 0,
-            highlighted_rows: Default::default(),
+            highlighted_rows: TypeIdHashMap::default(),
             background_highlights: HashMap::default(),
             navigation_overlays: HashMap::default(),
-            gutter_highlights: Default::default(),
+            gutter_highlights: TypeIdHashMap::default(),
             allow_git_diff_scrollbar_markers: false,
             scrollbar_marker_state: ScrollbarMarkerState::default(),
             active_indent_guides_state: ActiveIndentGuidesState::default(),
@@ -2062,7 +2062,7 @@ impl Editor {
                     ]
                 }
             } else {
-                Default::default()
+                Vec::default()
             },
             runnables: RunnableData::new(),
             pull_diagnostics_task: Task::ready(()),
@@ -2073,13 +2073,13 @@ impl Editor {
             inlay_hints: None,
             next_color_inlay_id: 0,
             post_scroll_update: Task::ready(()),
-            linked_edit_ranges: Default::default(),
+            linked_edit_ranges: linked_editing_ranges::LinkedEditingRanges::default(),
             in_project_search: false,
             previous_search_ranges: None,
             breadcrumb_header: None,
             focused_block: None,
             next_scroll_position: NextScrollCursorCenterTopBottom::default(),
-            addons: Default::default(),
+            addons: TypeIdHashMap::default(),
             registered_buffers: HashMap::default(),
             _scroll_cursor_center_top_bottom_task: Task::ready(()),
             selection_mark_mode: false,
@@ -2640,7 +2640,7 @@ impl Editor {
                 None,
                 FILE_HEADER_HEIGHT,
                 MULTI_BUFFER_EXCERPT_HEADER_HEIGHT,
-                Default::default(),
+                FoldPlaceholder::default(),
                 DiagnosticSeverity::Off,
                 cx,
             )
@@ -2829,7 +2829,7 @@ impl Editor {
 
         let cancelling_group =
             self.selections.pending_anchor().is_none() && self.selections.disjoint_anchors().len() > 1;
-        if self.mode.is_full() && self.change_selections(Default::default(), window, cx, |s| s.try_cancel()) {
+        if self.mode.is_full() && self.change_selections(SelectionEffects::default(), window, cx, |s| s.try_cancel()) {
             if cancelling_group {
                 self.add_selections_state = None;
             }
@@ -3192,8 +3192,8 @@ impl Editor {
                     false,
                     false,
                     false,
-                    Default::default(),
-                    Default::default(),
+                    util::paths::PathMatcher::default(),
+                    util::paths::PathMatcher::default(),
                     false,
                     None,
                 ) else {
@@ -3724,7 +3724,7 @@ impl Editor {
                 .collect::<Vec<_>>()
         });
         if let Some(tabstop) = tabstops.first() {
-            self.change_selections(Default::default(), window, cx, |s| {
+            self.change_selections(SelectionEffects::default(), window, cx, |s| {
                 // Reverse order so that the first range is the newest created selection.
                 // Completions will use it and autoscroll will prioritize it.
                 s.select_ranges(tabstop.ranges.iter().rev().cloned());
@@ -3825,7 +3825,7 @@ impl Editor {
                 }
             }
             if let Some(current_ranges) = snippet.ranges.get(snippet.active_index) {
-                self.change_selections(Default::default(), window, cx, |s| {
+                self.change_selections(SelectionEffects::default(), window, cx, |s| {
                     // Reverse order so that the first range is the newest created selection.
                     // Completions will use it and autoscroll will prioritize it.
                     s.select_ranges(current_ranges.iter().rev().cloned())
@@ -3892,7 +3892,7 @@ impl Editor {
                 }
             }
 
-            this.change_selections(Default::default(), window, cx, |s| s.select(selections));
+            this.change_selections(SelectionEffects::default(), window, cx, |s| s.select(selections));
             this.insert("", window, cx);
             linked_edits.apply_with_left_expansion(cx);
 
@@ -3905,7 +3905,7 @@ impl Editor {
             return;
         }
         self.transact(window, cx, |this, window, cx| {
-            this.change_selections(Default::default(), window, cx, |s| {
+            this.change_selections(SelectionEffects::default(), window, cx, |s| {
                 s.move_with(&mut |map, selection| {
                     if selection.is_empty() {
                         let cursor = movement::right(map, selection.head());
@@ -4079,7 +4079,7 @@ impl Editor {
 
         self.transact(window, cx, |this, window, cx| {
             this.buffer.update(cx, |b, cx| b.edit(edits, None, cx));
-            this.change_selections(Default::default(), window, cx, |s| s.select(selections));
+            this.change_selections(SelectionEffects::default(), window, cx, |s| s.select(selections));
         });
     }
 
@@ -4109,7 +4109,7 @@ impl Editor {
 
         self.transact(window, cx, |this, window, cx| {
             this.buffer.update(cx, |b, cx| b.edit(edits, None, cx));
-            this.change_selections(Default::default(), window, cx, |s| s.select(selections));
+            this.change_selections(SelectionEffects::default(), window, cx, |s| s.select(selections));
         });
     }
 
@@ -4242,7 +4242,7 @@ impl Editor {
                 buffer.edit(deletion_ranges.into_iter().map(|range| (range, empty_str.clone())), None, cx);
             });
             let selections = this.selections.all::<MultiBufferOffset>(&this.display_snapshot(cx));
-            this.change_selections(Default::default(), window, cx, |s| s.select(selections));
+            this.change_selections(SelectionEffects::default(), window, cx, |s| s.select(selections));
         });
     }
 
@@ -4263,7 +4263,7 @@ impl Editor {
                 buffer.autoindent_ranges(selections, cx);
             });
             let selections = this.selections.all::<MultiBufferOffset>(&this.display_snapshot(cx));
-            this.change_selections(Default::default(), window, cx, |s| s.select(selections));
+            this.change_selections(SelectionEffects::default(), window, cx, |s| s.select(selections));
         });
     }
 
@@ -4331,7 +4331,7 @@ impl Editor {
                 })
                 .collect();
 
-            this.change_selections(Default::default(), window, cx, |s| {
+            this.change_selections(SelectionEffects::default(), window, cx, |s| {
                 s.select(new_selections);
             });
         });
@@ -4449,7 +4449,9 @@ impl Editor {
                 }
             }
 
-            this.change_selections(Default::default(), window, cx, |s| s.select_anchor_ranges(cursor_positions));
+            this.change_selections(SelectionEffects::default(), window, cx, |s| {
+                s.select_anchor_ranges(cursor_positions)
+            });
         });
     }
 
@@ -4523,7 +4525,7 @@ impl Editor {
         let mut edits = Vec::new();
         let mut boundaries = Vec::new();
 
-        for selection in self.selections.all_adjusted(&self.display_snapshot(cx)).iter() {
+        for selection in &self.selections.all_adjusted(&self.display_snapshot(cx)) {
             let Some(wrap_config) =
                 snapshot.language_at(selection.start).and_then(|lang| lang.config().wrap_characters.clone())
             else {
@@ -4553,14 +4555,14 @@ impl Editor {
             });
 
             let mut new_selections = Vec::with_capacity(boundaries.len() * 2);
-            for (start_before, end_after, start_prefix_len, end_suffix_len) in boundaries.into_iter() {
+            for (start_before, end_after, start_prefix_len, end_suffix_len) in boundaries {
                 let open_offset = start_before.to_offset(&buffer) + start_prefix_len;
                 let close_offset = end_after.to_offset(&buffer).saturating_sub_usize(end_suffix_len);
                 new_selections.push(open_offset..open_offset);
                 new_selections.push(close_offset..close_offset);
             }
 
-            this.change_selections(Default::default(), window, cx, |s| {
+            this.change_selections(SelectionEffects::default(), window, cx, |s| {
                 s.select_ranges(new_selections);
             });
 
@@ -4905,7 +4907,7 @@ impl Editor {
             this.buffer.update(cx, |buffer, cx| {
                 buffer.edit(edits, None, cx);
             });
-            this.change_selections(Default::default(), window, cx, |s| {
+            this.change_selections(SelectionEffects::default(), window, cx, |s| {
                 s.select(new_selections);
             });
         });
@@ -4983,7 +4985,7 @@ impl Editor {
                 })
                 .collect();
 
-            this.change_selections(Default::default(), window, cx, |s| {
+            this.change_selections(SelectionEffects::default(), window, cx, |s| {
                 s.select(new_selections);
             });
 
@@ -5320,7 +5322,7 @@ impl Editor {
                 buffer.edit(edits, None, cx);
             });
 
-            this.change_selections(Default::default(), window, cx, |s| {
+            this.change_selections(SelectionEffects::default(), window, cx, |s| {
                 s.select(new_selections);
             });
 
@@ -5352,7 +5354,7 @@ impl Editor {
             this.buffer.update(cx, |buffer, cx| {
                 buffer.edit(edits, None, cx);
             });
-            this.change_selections(Default::default(), window, cx, |s| {
+            this.change_selections(SelectionEffects::default(), window, cx, |s| {
                 s.select_anchor_ranges([last_edit_start..last_edit_end]);
             });
         });
@@ -5568,7 +5570,7 @@ impl Editor {
                 }
             });
             this.fold_creases(refold_creases, true, window, cx);
-            this.change_selections(Default::default(), window, cx, |s| {
+            this.change_selections(SelectionEffects::default(), window, cx, |s| {
                 s.select(new_selections);
             })
         });
@@ -5652,7 +5654,7 @@ impl Editor {
                 }
             });
             this.fold_creases(refold_creases, true, window, cx);
-            this.change_selections(Default::default(), window, cx, |s| s.select(new_selections));
+            this.change_selections(SelectionEffects::default(), window, cx, |s| s.select(new_selections));
         });
     }
 
@@ -5662,8 +5664,8 @@ impl Editor {
         }
         let text_layout_details = &self.text_layout_details(window, cx);
         self.transact(window, cx, |this, window, cx| {
-            let edits = this.change_selections(Default::default(), window, cx, |s| {
-                let mut edits: Vec<(Range<MultiBufferOffset>, String)> = Default::default();
+            let edits = this.change_selections(SelectionEffects::default(), window, cx, |s| {
+                let mut edits: Vec<(Range<MultiBufferOffset>, String)> = Vec::default();
                 s.move_with(&mut |display_map, selection| {
                     if !selection.is_empty() {
                         return;
@@ -5703,7 +5705,7 @@ impl Editor {
             });
             this.buffer.update(cx, |buffer, cx| buffer.edit(edits, None, cx));
             let selections = this.selections.all::<MultiBufferOffset>(&this.display_snapshot(cx));
-            this.change_selections(Default::default(), window, cx, |s| {
+            this.change_selections(SelectionEffects::default(), window, cx, |s| {
                 s.select(selections);
             });
         });
@@ -5873,7 +5875,7 @@ impl Editor {
                         if rename_selection_range.end.0 > old_name.len() {
                             editor.select_all(&SelectAll, window, cx);
                         } else {
-                            editor.change_selections(Default::default(), window, cx, |s| {
+                            editor.change_selections(SelectionEffects::default(), window, cx, |s| {
                                 s.select_ranges([rename_selection_range]);
                             });
                         }
@@ -9252,7 +9254,7 @@ impl ui_input::ErasedEditor for ErasedEditorImpl {
 
     fn select_all(&self, window: &mut Window, cx: &mut App) {
         self.0.update(cx, |editor, cx| {
-            editor.select_all(&Default::default(), window, cx);
+            editor.select_all(&SelectAll, window, cx);
         });
     }
 
@@ -9287,7 +9289,7 @@ impl ui_input::ErasedEditor for ErasedEditorImpl {
 }
 impl<T> Default for InvalidationStack<T> {
     fn default() -> Self {
-        Self(Default::default())
+        Self(Vec::default())
     }
 }
 
@@ -9333,7 +9335,7 @@ pub fn styled_runs_for_code_label<'a>(
         } else if let Some(style) = syntax_theme.get(*highlight_id).copied() {
             style
         } else {
-            return Default::default();
+            return SmallVec::default();
         };
 
         let mut runs = SmallVec::<[(Range<usize>, HighlightStyle); 3]>::new();

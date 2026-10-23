@@ -26,7 +26,12 @@ pub(crate) trait PrefixExt {
 impl PrefixExt for Prefix<'_> {
     #[inline]
     fn len(&self) -> usize {
-        use self::Prefix::*;
+        use self::Prefix::DeviceNS;
+        use self::Prefix::Disk;
+        use self::Prefix::UNC;
+        use self::Prefix::Verbatim;
+        use self::Prefix::VerbatimDisk;
+        use self::Prefix::VerbatimUNC;
         fn os_str_len(s: &OsStr) -> usize {
             s.as_encoded_bytes().len()
         }

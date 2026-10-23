@@ -134,7 +134,7 @@ impl Editor {
                 });
 
                 let selections = this.selections.all::<MultiBufferOffset>(&this.display_snapshot(cx));
-                this.change_selections(Default::default(), window, cx, |s| s.select(selections));
+                this.change_selections(SelectionEffects::default(), window, cx, |s| s.select(selections));
             } else {
                 let clipboard_is_url = is_standalone_url(&clipboard_text);
 
@@ -187,7 +187,7 @@ impl Editor {
                     anchors
                 });
 
-                this.change_selections(Default::default(), window, cx, |s| {
+                this.change_selections(SelectionEffects::default(), window, cx, |s| {
                     s.select_anchors(selection_anchors);
                 });
             }
@@ -336,7 +336,7 @@ impl Editor {
         }
 
         self.transact(window, cx, |this, window, cx| {
-            this.change_selections(Default::default(), window, cx, |s| {
+            this.change_selections(SelectionEffects::default(), window, cx, |s| {
                 s.select(selections);
             });
             this.insert("", window, cx);

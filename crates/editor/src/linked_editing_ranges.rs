@@ -107,7 +107,7 @@ pub(super) fn refresh_linked_ranges(editor: &mut Editor, window: &Window, cx: &C
                         });
                         _current_selection_contains_range?;
                         // Now link every range as each-others sibling.
-                        let mut siblings: HashMap<Range<Anchor>, Vec<_>> = Default::default();
+                        let mut siblings: HashMap<Range<Anchor>, Vec<_>> = HashMap::default();
                         let mut insert_sorted_anchor = |key: &Range<Anchor>, value: &Range<Anchor>| {
                             siblings.entry(key.clone()).or_default().push(value.clone());
                         };
@@ -138,7 +138,7 @@ pub(super) fn refresh_linked_ranges(editor: &mut Editor, window: &Window, cx: &C
                 for (buffer_id, ranges) in highlights.into_iter().flatten() {
                     this.linked_edit_ranges.0.entry(buffer_id).or_default().extend(ranges);
                 }
-                for (buffer_id, values) in this.linked_edit_ranges.0.iter_mut() {
+                for (buffer_id, values) in &mut this.linked_edit_ranges.0 {
                     let Some(snapshot) =
                         this.buffer.read(cx).buffer(*buffer_id).map(|buffer| buffer.read(cx).snapshot())
                     else {

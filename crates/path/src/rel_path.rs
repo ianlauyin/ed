@@ -57,7 +57,7 @@ impl RelPath {
     /// processing `..` components, and removing trailing separators. It does
     /// not allocate unless it's necessary to reformat the path.
     #[track_caller]
-    pub fn new<'a>(path: &'a Path, path_style: PathStyle) -> Result<Cow<'a, Self>> {
+    pub fn new(path: &Path, path_style: PathStyle) -> Result<Cow<'_, Self>> {
         let mut path = path.to_str().context("non utf-8 path")?;
 
         let (prefixes, suffixes): (&[_], &[_]) = match path_style {
@@ -109,7 +109,7 @@ impl RelPath {
     }
 
     #[track_caller]
-    pub fn new_test<'a>(path: &'a str) -> Cow<'a, Self> {
+    pub fn new_test(path: &str) -> Cow<'_, Self> {
         Self::new(Path::new(path), PathStyle::Unix).unwrap()
     }
 
@@ -540,7 +540,7 @@ impl<'a> Iterator for RelPathAncestors<'a> {
     }
 }
 
-impl<'a> DoubleEndedIterator for RelPathAncestors<'a> {
+impl DoubleEndedIterator for RelPathAncestors<'_> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if self.done {
             return None;
@@ -559,7 +559,7 @@ impl<'a> DoubleEndedIterator for RelPathAncestors<'a> {
     }
 }
 
-impl<'a> DoubleEndedIterator for RelPathComponents<'a> {
+impl DoubleEndedIterator for RelPathComponents<'_> {
     fn next_back(&mut self) -> Option<Self::Item> {
         if let Some(sep_ix) = self.0.rfind(SEPARATOR) {
             let (head, tail) = self.0.split_at(sep_ix);

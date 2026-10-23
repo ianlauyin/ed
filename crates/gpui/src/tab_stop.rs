@@ -269,7 +269,7 @@ mod sum_tree_impl {
         }
     }
 
-    impl<'a, 'b> SeekTarget<'a, TabStopOrderNodeSummary, TabStopNode> for &'b TabStopNode {
+    impl SeekTarget<'_, TabStopOrderNodeSummary, TabStopNode> for &TabStopNode {
         fn cmp(
             &self,
             cursor_location: &TabStopNode,

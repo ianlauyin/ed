@@ -82,7 +82,7 @@ pub struct ManifestTree {
 impl ManifestTree {
     pub fn new(worktree_store: Entity<WorktreeStore>, cx: &mut App) -> Entity<Self> {
         cx.new(|cx| Self {
-            root_points: Default::default(),
+            root_points: HashMap::default(),
             _subscriptions: [
                 cx.subscribe(&worktree_store, Self::on_worktree_store_event),
                 cx.observe_global::<SettingsStore>(|this, cx| {
@@ -110,7 +110,7 @@ impl ManifestTree {
             Entry::Occupied(occupied_entry) => occupied_entry.get().clone(),
             Entry::Vacant(vacant_entry) => {
                 let Some(worktree) = self.worktree_store.read(cx).worktree_for_id(*worktree_id, cx) else {
-                    return Default::default();
+                    return Option::default();
                 };
                 let roots = WorktreeRoots::new(self.worktree_store.clone(), worktree, cx);
                 vacant_entry.insert(roots).clone()

@@ -1438,7 +1438,7 @@ impl Workspace {
                 }
 
                 project::Event::DeletedEntry(_, entry_id) => {
-                    for pane in this.panes.iter() {
+                    for pane in &this.panes {
                         pane.update(cx, |pane, cx| pane.handle_deleted_project_item(*entry_id, window, cx));
                     }
                 }
@@ -1614,7 +1614,7 @@ impl Workspace {
             previous_dock_drag_coordinates: None,
             center,
             panes: vec![center_pane.clone()],
-            panes_by_item: Default::default(),
+            panes_by_item: HashMap::default(),
             active_pane: center_pane.clone(),
             last_active_center_pane: Some(center_pane.downgrade()),
 
@@ -1631,11 +1631,11 @@ impl Workspace {
             _panels_task: None,
             project: project.clone(),
 
-            dispatching_keystrokes: Default::default(),
+            dispatching_keystrokes: Rc::default(),
             window_edited: false,
             last_window_title: None,
             last_window_title_settings: None,
-            dirty_items: Default::default(),
+            dirty_items: HashMap::default(),
 
             database_id: workspace_id,
             app_state,
@@ -1646,9 +1646,9 @@ impl Workspace {
 
             _subscriptions: subscriptions,
             pane_history_timestamp,
-            workspace_actions: Default::default(),
+            workspace_actions: Vec::default(),
             // This data will be incorrect, but it will be overwritten by the time it needs to be used.
-            bounds: Default::default(),
+            bounds: Bounds::default(),
             centered_layout: false,
             bounds_save_task_queued: None,
             on_prompt_for_new_path: None,
@@ -1682,14 +1682,19 @@ impl Workspace {
         open_mode: OpenMode,
         cx: &mut App,
     ) -> Task<anyhow::Result<OpenResult>> {
-        let project_handle =
-            Project::local(app_state.languages.clone(), app_state.fs.clone(), env, Default::default(), cx);
+        let project_handle = Project::local(
+            app_state.languages.clone(),
+            app_state.fs.clone(),
+            env,
+            project::LocalProjectFlags::default(),
+            cx,
+        );
 
         let db = WorkspaceDb::global(cx);
         let kvp = db::kvp::KeyValueStore::global(cx);
         cx.spawn(async move |cx| {
             let mut paths_to_open = Vec::with_capacity(abs_paths.len());
-            for path in abs_paths.into_iter() {
+            for path in abs_paths {
                 if let Ok(canonical) = app_state.fs.canonicalize(&path).await {
                     paths_to_open.push(canonical)
                 } else {
@@ -1706,7 +1711,7 @@ impl Workspace {
             // Get project paths for all of the abs_paths
             let mut project_paths: Vec<(PathBuf, Option<ProjectPath>)> = Vec::with_capacity(paths_to_open.len());
 
-            for path in paths_to_open.into_iter() {
+            for path in paths_to_open {
                 if let Some((_, project_entry)) = cx
                     .update(|cx| Workspace::project_path_for_path(project_handle.clone(), &path, true, cx))
                     .await
@@ -1721,7 +1726,7 @@ impl Workspace {
             let workspace_id = if let Some(serialized_workspace) = serialized_workspace.as_ref() {
                 serialized_workspace.id
             } else {
-                db.next_id().await.unwrap_or_else(|_| Default::default())
+                db.next_id().await.unwrap_or_else(|_| WorkspaceId::default())
             };
 
             let window_to_replace = match open_mode {
@@ -2930,7 +2935,7 @@ impl Workspace {
                             }
                         }
 
-                        *keystrokes.borrow_mut() = Default::default();
+                        *keystrokes.borrow_mut() = DispatchingKeystrokes::default();
                         log::error!("over 100 keystrokes passed to send_keystrokes");
                     })
                     .shared(),
@@ -3731,7 +3736,7 @@ impl Workspace {
     }
 
     pub fn close_panel<T: Panel>(&self, window: &mut Window, cx: &mut Context<Self>) {
-        for dock in self.all_docks().iter() {
+        for dock in &self.all_docks() {
             dock.update(cx, |dock, cx| {
                 if dock.panel::<T>().is_some() {
                     dock.set_open(false, window, cx)
@@ -5319,7 +5324,7 @@ impl Workspace {
     fn remove_panes(&mut self, member: Member, window: &mut Window, cx: &mut Context<Workspace>) {
         match member {
             Member::Axis(PaneAxis { members, .. }) => {
-                for child in members.iter() {
+                for child in &members {
                     self.remove_panes(child.clone(), window, cx)
                 }
             }
@@ -5414,7 +5419,7 @@ impl Workspace {
                     identity_paths: Some(identity_paths_hint),
                     center_group,
                     window_bounds,
-                    display: Default::default(),
+                    display: Option::default(),
                     docks,
                     centered_layout: self.centered_layout,
                     session_id: self.session_id.clone(),
@@ -5485,7 +5490,7 @@ impl Workspace {
 
             // We use into_iter() here so that the references to the items are moved into
             // the tasks and not kept alive while we're sleeping.
-            for (_, item) in unique_items.into_iter() {
+            for (_, item) in unique_items {
                 if let Ok(Some(task)) = this.update(cx, |workspace, cx| item.serialize(workspace, false, cx)) {
                     cx.background_spawn(async move { task.await.log_err() }).detach();
                 }
@@ -5575,13 +5580,11 @@ impl Workspace {
 
                 let docks = serialized_workspace.docks;
 
-                for (dock, serialized_dock) in [
+                for (dock, serialized_dock) in &mut [
                     (&mut workspace.right_dock, docks.right),
                     (&mut workspace.left_dock, docks.left),
                     (&mut workspace.bottom_dock, docks.bottom),
-                ]
-                .iter_mut()
-                {
+                ] {
                     dock.update(cx, |dock, cx| {
                         dock.restore_serialized_state(serialized_dock.clone(), window, cx);
                     });
@@ -5984,7 +5987,7 @@ impl Workspace {
     }
 
     fn add_workspace_actions_listeners(&self, mut div: Div, window: &mut Window, cx: &mut Context<Self>) -> Div {
-        for action in self.workspace_actions.iter() {
+        for action in &self.workspace_actions {
             div = (action)(div, self, window, cx)
         }
         div
@@ -6968,7 +6971,7 @@ impl Render for Workspace {
 
 impl WorkspaceStore {
     pub fn new(_cx: &mut Context<Self>) -> Self {
-        Self { workspaces: Default::default() }
+        Self { workspaces: HashSet::default() }
     }
 
     pub fn workspaces(&self) -> impl Iterator<Item = &WeakEntity<Workspace>> {
@@ -7694,8 +7697,8 @@ pub fn create_and_open_local_file(
     cx.spawn_in(window, async move |workspace, cx| {
         let fs = workspace.read_with(cx, |workspace, _| workspace.app_state().fs.clone())?;
         if !fs.is_file(path).await {
-            fs.create_file(path, Default::default()).await?;
-            fs.save(path, &default_content(), Default::default()).await?;
+            fs.create_file(path, fs::CreateOptions::default()).await?;
+            fs.save(path, &default_content(), language::LineEnding::default()).await?;
         }
 
         workspace

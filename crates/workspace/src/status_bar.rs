@@ -213,8 +213,8 @@ impl StatusBar {
         cx: &mut Context<Self>,
     ) -> Self {
         let this = Self {
-            left_items: Default::default(),
-            right_items: Default::default(),
+            left_items: Vec::default(),
+            right_items: Vec::default(),
             active_pane: active_pane.clone(),
             multi_workspace,
             focus_handle: cx.focus_handle(),

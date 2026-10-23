@@ -85,7 +85,7 @@ impl Render for PickerPrompt {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex().child(self.picker.clone()).on_mouse_down_out(cx.listener(|this, _, window, cx| {
             this.picker.update(cx, |this, cx| {
-                this.cancel(&Default::default(), window, cx);
+                this.cancel(&menu::Cancel, window, cx);
             })
         }))
     }
@@ -173,7 +173,7 @@ impl PickerDelegate for PickerPromptDelegate {
                     true,
                     true,
                     10000,
-                    &Default::default(),
+                    &std::sync::atomic::AtomicBool::default(),
                     cx.background_executor().clone(),
                 )
                 .await

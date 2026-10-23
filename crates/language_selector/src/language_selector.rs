@@ -1,22 +1,44 @@
 mod active_buffer_language;
 
+use std::ops::Not as _;
+use std::path::Path;
+use std::sync::Arc;
+
 pub use active_buffer_language::ActiveBufferLanguage;
 use anyhow::Context as _;
 use editor::Editor;
-use fuzzy::{StringMatch, StringMatchCandidate, match_strings};
-use gpui::{
-    App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, ParentElement,
-    Render, TaskExt, WeakEntity, Window, actions,
-};
-use language::{Buffer, LanguageMatcher, LanguageName, LanguageRegistry};
+use fuzzy::StringMatch;
+use fuzzy::StringMatchCandidate;
+use fuzzy::match_strings;
+use gpui::App;
+use gpui::Context;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::ParentElement;
+use gpui::Render;
+use gpui::TaskExt;
+use gpui::WeakEntity;
+use gpui::Window;
+use gpui::actions;
+use language::Buffer;
+use language::LanguageMatcher;
+use language::LanguageName;
+use language::LanguageRegistry;
 use open_path_prompt::file_finder_settings::FileFinderSettings;
-use picker::{Picker, PickerDelegate};
+use picker::Picker;
+use picker::PickerDelegate;
 use project::Project;
 use settings::Settings;
-use std::{ops::Not as _, path::Path, sync::Arc};
-use ui::{HighlightedLabel, ListItem, ListItemSpacing, prelude::*};
+use ui::HighlightedLabel;
+use ui::ListItem;
+use ui::ListItemSpacing;
+use ui::prelude::*;
 use util::ResultExt;
-use workspace::{ModalView, Workspace};
+use workspace::ModalView;
+use workspace::Workspace;
 
 actions!(
     language_selector,
@@ -35,32 +57,19 @@ pub struct LanguageSelector {
 }
 
 impl LanguageSelector {
-    fn register(
-        workspace: &mut Workspace,
-        _window: Option<&mut Window>,
-        _: &mut Context<Workspace>,
-    ) {
+    fn register(workspace: &mut Workspace, _window: Option<&mut Window>, _: &mut Context<Workspace>) {
         workspace.register_action(move |workspace, _: &Toggle, window, cx| {
             Self::toggle(workspace, window, cx);
         });
     }
 
-    fn toggle(
-        workspace: &mut Workspace,
-        window: &mut Window,
-        cx: &mut Context<Workspace>,
-    ) -> Option<()> {
+    fn toggle(workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace>) -> Option<()> {
         let registry = workspace.app_state().languages.clone();
-        let buffer = workspace
-            .active_item(cx)?
-            .act_as::<Editor>(cx)?
-            .read(cx)
-            .active_buffer(cx)?;
+        let buffer = workspace.active_item(cx)?.act_as::<Editor>(cx)?.read(cx).active_buffer(cx)?;
         let project = workspace.project().clone();
 
-        workspace.toggle_modal(window, cx, move |window, cx| {
-            LanguageSelector::new(buffer, project, registry, window, cx)
-        });
+        workspace
+            .toggle_modal(window, cx, move |window, cx| LanguageSelector::new(buffer, project, registry, window, cx));
         Some(())
     }
 
@@ -71,10 +80,7 @@ impl LanguageSelector {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let current_language_name = buffer
-            .read(cx)
-            .language()
-            .map(|language| language.name().as_ref().to_string());
+        let current_language_name = buffer.read(cx).language().map(|language| language.name().as_ref().to_string());
         let delegate = LanguageSelectorDelegate::new(
             cx.entity().downgrade(),
             buffer,
@@ -90,9 +96,7 @@ impl LanguageSelector {
 
 impl Render for LanguageSelector {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        v_flex()
-            .key_context("LanguageSelector")
-            .child(self.picker.clone())
+        v_flex().key_context("LanguageSelector").child(self.picker.clone())
     }
 }
 
@@ -128,21 +132,15 @@ impl LanguageSelectorDelegate {
             .language_names()
             .into_iter()
             .filter_map(|name| {
-                language_registry
-                    .available_language_for_name(name.as_ref())?
-                    .hidden()
-                    .not()
-                    .then_some(name)
+                language_registry.available_language_for_name(name.as_ref())?.hidden().not().then_some(name)
             })
             .enumerate()
             .map(|(candidate_id, name)| StringMatchCandidate::new(candidate_id, name.as_ref()))
             .collect::<Vec<_>>();
 
-        let current_language_candidate_index = current_language_name.as_ref().and_then(|name| {
-            candidates
-                .iter()
-                .position(|candidate| candidate.string == *name)
-        });
+        let current_language_candidate_index = current_language_name
+            .as_ref()
+            .and_then(|name| candidates.iter().position(|candidate| candidate.string == *name));
 
         Self {
             language_selector,
@@ -161,13 +159,11 @@ impl LanguageSelectorDelegate {
         let buffer_language = self.buffer.read(cx).language();
         let need_icon = FileFinderSettings::get_global(cx).file_icons;
 
-        if let Some(buffer_language) = buffer_language
-            .filter(|buffer_language| buffer_language.name().as_ref() == mat.string.as_str())
+        if let Some(buffer_language) =
+            buffer_language.filter(|buffer_language| buffer_language.name().as_ref() == mat.string.as_str())
         {
             label.push_str(" (current)");
-            let icon = need_icon
-                .then(|| self.language_icon(&buffer_language.config().matcher, cx))
-                .flatten();
+            let icon = need_icon.then(|| self.language_icon(&buffer_language.config().matcher, cx)).flatten();
             (label, icon)
         } else {
             let icon = need_icon
@@ -175,9 +171,7 @@ impl LanguageSelectorDelegate {
                     let language_name = LanguageName::new(mat.string.as_str());
                     self.language_registry
                         .available_language_for_name(language_name.as_ref())
-                        .and_then(|available_language| {
-                            self.language_icon(available_language.matcher(), cx)
-                        })
+                        .and_then(|available_language| self.language_icon(available_language.matcher(), cx))
                 })
                 .flatten();
             (label, icon)
@@ -188,9 +182,7 @@ impl LanguageSelectorDelegate {
         matcher
             .path_suffixes
             .iter()
-            .find_map(|extension| {
-                file_icons::FileIcons::get_icon(Path::new(extension.as_str()), cx)
-            })
+            .find_map(|extension| file_icons::FileIcons::get_icon(Path::new(extension.as_str()), cx))
             .map(Icon::from_path)
             .map(|icon| icon.color(Color::Muted))
     }
@@ -232,30 +224,18 @@ impl PickerDelegate for LanguageSelectorDelegate {
     }
 
     fn dismissed(&mut self, _: &mut Window, cx: &mut Context<Picker<Self>>) {
-        self.language_selector
-            .update(cx, |_, cx| cx.emit(DismissEvent))
-            .ok();
+        self.language_selector.update(cx, |_, cx| cx.emit(DismissEvent)).ok();
     }
 
     fn selected_index(&self) -> usize {
         self.selected_index
     }
 
-    fn set_selected_index(
-        &mut self,
-        ix: usize,
-        _window: &mut Window,
-        _: &mut Context<Picker<Self>>,
-    ) {
+    fn set_selected_index(&mut self, ix: usize, _window: &mut Window, _: &mut Context<Picker<Self>>) {
         self.selected_index = ix;
     }
 
-    fn update_matches(
-        &mut self,
-        query: String,
-        window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) -> gpui::Task<()> {
+    fn update_matches(&mut self, query: String, window: &mut Window, cx: &mut Context<Picker<Self>>) -> gpui::Task<()> {
         let background = cx.background_executor().clone();
         let candidates = self.candidates.clone();
         let query_is_empty = query.is_empty();
@@ -278,7 +258,7 @@ impl PickerDelegate for LanguageSelectorDelegate {
                     false,
                     true,
                     100,
-                    &Default::default(),
+                    &std::sync::atomic::AtomicBool::default(),
                     background,
                 )
                 .await
@@ -296,9 +276,7 @@ impl PickerDelegate for LanguageSelectorDelegate {
                     this.delegate
                         .current_language_candidate_index
                         .and_then(|current_language_candidate_index| {
-                            matches.iter().position(|mat| {
-                                mat.candidate_id == current_language_candidate_index
-                            })
+                            matches.iter().position(|mat| mat.candidate_id == current_language_candidate_index)
                         })
                         .unwrap_or(0)
                 } else {

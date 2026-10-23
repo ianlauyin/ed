@@ -120,7 +120,7 @@ impl HistoryManager {
                     }
                 }
             }) {
-                for id in deleted_ids.iter() {
+                for id in &deleted_ids {
                     db.delete_workspace_by_id(*id).await.log_err();
                 }
             }

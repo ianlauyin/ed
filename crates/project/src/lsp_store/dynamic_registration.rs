@@ -816,7 +816,7 @@ impl LspStore {
         cx: &mut Context<Self>,
     ) -> anyhow::Result<()> {
         let server = self.language_server_for_id(server_id).with_context(|| format!("no server {server_id} found"))?;
-        for unreg in params.unregisterations.iter() {
+        for unreg in &params.unregisterations {
             match unreg.method.as_str() {
                 "workspace/didChangeWatchedFiles" => {
                     let notify = if let Some(local_lsp_store) = self.as_local_mut() {

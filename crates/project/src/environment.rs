@@ -66,9 +66,9 @@ impl ProjectEnvironment {
         });
         Self {
             cli_environment,
-            local_environments: Default::default(),
-            remote_environments: Default::default(),
-            environment_error_messages: Default::default(),
+            local_environments: HashMap::default(),
+            remote_environments: HashMap::default(),
+            environment_error_messages: VecDeque::default(),
             environment_error_messages_tx: tx,
             worktree_store,
             remote_client,

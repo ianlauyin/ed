@@ -255,7 +255,7 @@ struct BatchIterator<'a> {
     polychrome_sprites_iter: Peekable<slice::Iter<'a, PolychromeSprite>>,
 }
 
-impl<'a> Iterator for BatchIterator<'a> {
+impl Iterator for BatchIterator<'_> {
     type Item = PrimitiveBatch;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -671,9 +671,9 @@ impl Path<Pixels> {
             vertices: Vec::new(),
             start,
             current: start,
-            bounds: Bounds { origin: start, size: Default::default() },
-            content_mask: Default::default(),
-            color: Default::default(),
+            bounds: Bounds { origin: start, size: Size::default() },
+            content_mask: ContentMask::default(),
+            color: Background::default(),
             contour_count: 0,
         }
     }
@@ -728,13 +728,13 @@ impl Path<Pixels> {
     ) {
         self.bounds = self
             .bounds
-            .union(&Bounds { origin: xy.0, size: Default::default() })
-            .union(&Bounds { origin: xy.1, size: Default::default() })
-            .union(&Bounds { origin: xy.2, size: Default::default() });
+            .union(&Bounds { origin: xy.0, size: Size::default() })
+            .union(&Bounds { origin: xy.1, size: Size::default() })
+            .union(&Bounds { origin: xy.2, size: Size::default() });
 
-        self.vertices.push(PathVertex { xy_position: xy.0, st_position: st.0, content_mask: Default::default() });
-        self.vertices.push(PathVertex { xy_position: xy.1, st_position: st.1, content_mask: Default::default() });
-        self.vertices.push(PathVertex { xy_position: xy.2, st_position: st.2, content_mask: Default::default() });
+        self.vertices.push(PathVertex { xy_position: xy.0, st_position: st.0, content_mask: ContentMask::default() });
+        self.vertices.push(PathVertex { xy_position: xy.1, st_position: st.1, content_mask: ContentMask::default() });
+        self.vertices.push(PathVertex { xy_position: xy.2, st_position: st.2, content_mask: ContentMask::default() });
     }
 }
 

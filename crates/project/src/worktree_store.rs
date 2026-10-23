@@ -241,9 +241,9 @@ impl WorktreeStore {
 
     pub fn local(retain_worktrees: bool, fs: Arc<dyn Fs>, next_worktree_id: WorktreeIdCounter) -> Self {
         Self {
-            next_entry_id: Default::default(),
+            next_entry_id: Arc::default(),
             next_worktree_id,
-            loading_worktrees: Default::default(),
+            loading_worktrees: HashMap::default(),
             downstream_client: None,
             worktrees: Vec::new(),
             scanning_enabled: true,
@@ -261,9 +261,9 @@ impl WorktreeStore {
         next_worktree_id: WorktreeIdCounter,
     ) -> Self {
         Self {
-            next_entry_id: Default::default(),
+            next_entry_id: Arc::default(),
             next_worktree_id,
-            loading_worktrees: Default::default(),
+            loading_worktrees: HashMap::default(),
             downstream_client: None,
             worktrees: Vec::new(),
             scanning_enabled: true,
@@ -504,7 +504,7 @@ impl WorktreeStore {
                 let new_abs_path = new_worktree.read(cx).absolutize(&new_project_path.path);
                 let fs = fs.clone();
                 let copy = cx.background_spawn(async move {
-                    copy_recursive(fs.as_ref(), &old_abs_path, &new_abs_path, Default::default()).await
+                    copy_recursive(fs.as_ref(), &old_abs_path, &new_abs_path, fs::CopyOptions::default()).await
                 });
 
                 cx.spawn(async move |_, cx| {
@@ -1055,7 +1055,7 @@ impl WorktreeStore {
         self.downstream_client = Some((downstream_client, remote_id));
 
         // When shared, retain all worktrees
-        for worktree_handle in self.worktrees.iter_mut() {
+        for worktree_handle in &mut self.worktrees {
             match worktree_handle {
                 WorktreeHandle::Strong(_) => {}
                 WorktreeHandle::Weak(worktree) => {

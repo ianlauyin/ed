@@ -10,7 +10,6 @@ use std::hash::Hash;
 use std::hash::Hasher;
 use std::marker::PhantomData;
 use std::mem;
-use std::ops::DerefMut;
 use std::ops::Range;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -1534,7 +1533,7 @@ impl Window {
         let visibility = platform_window.visibility();
         let hovered = Rc::new(Cell::new(platform_window.is_hovered()));
         let needs_present = Rc::new(Cell::new(false));
-        let next_frame_callbacks: Rc<RefCell<Vec<FrameCallback>>> = Default::default();
+        let next_frame_callbacks: Rc<RefCell<Vec<FrameCallback>>> = Rc::default();
         let input_rate_tracker = Rc::new(RefCell::new(InputRateTracker::default()));
         let last_frame_time = Rc::new(Cell::new(None));
 
@@ -3026,8 +3025,8 @@ impl Window {
             }
 
             let event = WindowFocusEvent {
-                previous_focus_path: if previous_window_active { previous_focus_path } else { Default::default() },
-                current_focus_path: if current_window_active { current_focus_path } else { Default::default() },
+                previous_focus_path: if previous_window_active { previous_focus_path } else { SmallVec::default() },
+                current_focus_path: if current_window_active { current_focus_path } else { SmallVec::default() },
             };
             self.focus_listeners.clone().retain(&(), |listener| listener(&event, self, cx));
         }
@@ -3053,7 +3052,7 @@ impl Window {
 
     fn record_entities_accessed(&self, cx: &mut App) {
         let mut entities_ref = cx.entities.accessed_entities.get_mut();
-        let mut entities = mem::take(entities_ref.deref_mut());
+        let mut entities = mem::take(entities_ref);
         let handle = self.handle;
         cx.record_entities_accessed(
             handle,
@@ -3062,7 +3061,7 @@ impl Window {
             &entities,
         );
         let mut entities_ref = cx.entities.accessed_entities.get_mut();
-        mem::swap(&mut entities, entities_ref.deref_mut());
+        mem::swap(&mut entities, entities_ref);
     }
 
     fn invalidate_entities(&mut self) {
@@ -4141,7 +4140,7 @@ impl Window {
             font_id,
             glyph_id,
             font_size,
-            subpixel_variant: Default::default(),
+            subpixel_variant: Point::default(),
             scale_factor,
             is_emoji: true,
             subpixel_rendering: false,
@@ -4170,7 +4169,7 @@ impl Window {
                 pad: 0,
                 grayscale: false.into(),
                 bounds,
-                corner_radii: Default::default(),
+                corner_radii: Corners::default(),
                 content_mask,
                 tile,
                 opacity,

@@ -424,8 +424,8 @@ impl ProjectSearch {
             project,
             workspace,
             excerpts,
-            pending_search: Default::default(),
-            match_ranges: Default::default(),
+            pending_search: Option::default(),
+            match_ranges: Vec::default(),
             active_query: None,
             last_search_query_text: None,
             search_id: 0,
@@ -433,9 +433,9 @@ impl ProjectSearch {
             phase: SearchPhase::Idle,
             reuses_excerpts: false,
             results_refreshed: true,
-            search_history_cursor: Default::default(),
-            search_included_history_cursor: Default::default(),
-            search_excluded_history_cursor: Default::default(),
+            search_history_cursor: SearchHistoryCursor::default(),
+            search_included_history_cursor: SearchHistoryCursor::default(),
+            search_excluded_history_cursor: SearchHistoryCursor::default(),
             project_search_turning_into_text_finder: Arc::new(AtomicBool::new(false)),
             _excerpts_subscription: excerpts_subscription,
             _workspace_subscription: workspace_subscription,
@@ -452,7 +452,7 @@ impl ProjectSearch {
                 project: self.project.clone(),
                 workspace: self.workspace.clone(),
                 excerpts,
-                pending_search: Default::default(),
+                pending_search: Option::default(),
                 match_ranges: self.match_ranges.clone(),
                 active_query: self.active_query.clone(),
                 last_search_query_text: self.last_search_query_text.clone(),
@@ -1746,12 +1746,12 @@ impl ProjectSearchView {
             included_files: if self.filters_enabled {
                 self.included_files_editor.read(cx).text(cx)
             } else {
-                Default::default()
+                String::default()
             },
             excluded_files: if self.filters_enabled {
                 self.excluded_files_editor.read(cx).text(cx)
             } else {
-                Default::default()
+                String::default()
             },
             options: self.search_options,
             filters_enabled: self.filters_enabled,
@@ -2057,7 +2057,9 @@ impl ProjectSearchView {
                 if is_new_search {
                     self.results_editor.update(cx, |editor, cx| {
                         let range_to_select = match_ranges.first().map(|range| editor.range_for_match(range));
-                        editor.change_selections(Default::default(), window, cx, |s| s.select_ranges(range_to_select));
+                        editor.change_selections(SelectionEffects::default(), window, cx, |s| {
+                            s.select_ranges(range_to_select)
+                        });
                         editor.scroll(Point::default(), window, cx);
                     });
                     if phase == SearchPhase::Confirmed && self.query_editor.focus_handle(cx).is_focused(window) {
@@ -2727,7 +2729,7 @@ impl Render for ProjectSearchBar {
                 .child(render_action_button(
                     "project-search-replace-button",
                     IconName::ReplaceAll,
-                    Default::default(),
+                    Option::default(),
                     "Replace All Matches",
                     &ReplaceAll,
                     focus_handle,

@@ -219,7 +219,7 @@ impl BufferDiagnosticsEditor {
             focus_handle,
             editor,
             diagnostics,
-            blocks: Default::default(),
+            blocks: Vec::default(),
             multibuffer,
             buffer,
             project_path,
@@ -404,7 +404,7 @@ impl BufferDiagnosticsEditor {
             // determine what range does the diagnostic block span.
             let mut excerpt_ranges: Vec<ExcerptRange<_>> = Vec::new();
 
-            for diagnostic_block in blocks.iter() {
+            for diagnostic_block in &blocks {
                 let excerpt_range = context_range_for_entry(
                     diagnostic_block.initial_range.clone(),
                     multibuffer_context,
@@ -477,7 +477,7 @@ impl BufferDiagnosticsEditor {
                     let range_to_select = anchor_range.start..anchor_range.start;
 
                     buffer_diagnostics_editor.editor.update(cx, |editor, cx| {
-                        editor.change_selections(Default::default(), window, cx, |selection| {
+                        editor.change_selections(editor::SelectionEffects::default(), window, cx, |selection| {
                             selection.select_anchor_ranges([range_to_select])
                         })
                     });
@@ -793,7 +793,7 @@ impl Render for BufferDiagnosticsEditor {
 
                     div.child(Button::new("diagnostics-show-warning-label", label).on_click(cx.listener(
                         |buffer_diagnostics_editor, _, window, cx| {
-                            buffer_diagnostics_editor.toggle_warnings(&Default::default(), window, cx);
+                            buffer_diagnostics_editor.toggle_warnings(&ToggleWarnings, window, cx);
                             cx.notify();
                         },
                     )))
@@ -839,7 +839,7 @@ impl DiagnosticsToolbarEditor for WeakEntity<BufferDiagnosticsEditor> {
 
     fn toggle_warnings(&self, window: &mut Window, cx: &mut App) {
         let _ = self.update(cx, |buffer_diagnostics_editor, cx| {
-            buffer_diagnostics_editor.toggle_warnings(&Default::default(), window, cx);
+            buffer_diagnostics_editor.toggle_warnings(&ToggleWarnings, window, cx);
         });
     }
 

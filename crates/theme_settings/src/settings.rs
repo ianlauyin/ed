@@ -565,7 +565,7 @@ impl settings::Settings for ThemeSettings {
                 features: content.ui_font_features.clone().unwrap().into_gpui(),
                 fallbacks: font_fallbacks_from_settings(content.ui_font_fallbacks.clone()),
                 weight: content.ui_font_weight.unwrap().into_gpui(),
-                style: Default::default(),
+                style: FontStyle::default(),
             },
             buffer_font: Font {
                 family: content.buffer_font_family.as_ref().unwrap().0.clone().into(),

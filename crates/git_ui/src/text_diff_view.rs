@@ -115,7 +115,7 @@ impl TextDiffView {
             };
 
             if let Some(range) = mb_range {
-                source_editor.change_selections(Default::default(), window, cx, |s| {
+                source_editor.change_selections(editor::SelectionEffects::default(), window, cx, |s| {
                     s.select_ranges(vec![range]);
                 });
             }

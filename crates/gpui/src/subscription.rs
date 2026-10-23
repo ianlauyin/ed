@@ -1,14 +1,12 @@
+use std::cell::Cell;
+use std::cell::RefCell;
+use std::fmt::Debug;
+use std::rc::Rc;
+
 use collections::BTreeMap;
 use gpui_util::post_inc;
-use std::{
-    cell::{Cell, RefCell},
-    fmt::Debug,
-    rc::Rc,
-};
 
-pub(crate) struct SubscriberSet<EmitterKey, Callback>(
-    Rc<RefCell<SubscriberSetState<EmitterKey, Callback>>>,
-);
+pub(crate) struct SubscriberSet<EmitterKey, Callback>(Rc<RefCell<SubscriberSetState<EmitterKey, Callback>>>);
 
 impl<EmitterKey, Callback> Clone for SubscriberSet<EmitterKey, Callback> {
     fn clone(&self) -> Self {
@@ -33,10 +31,7 @@ where
     Callback: 'static,
 {
     pub fn new() -> Self {
-        Self(Rc::new(RefCell::new(SubscriberSetState {
-            subscribers: Default::default(),
-            next_subscriber_id: 0,
-        })))
+        Self(Rc::new(RefCell::new(SubscriberSetState { subscribers: BTreeMap::default(), next_subscriber_id: 0 })))
     }
 
     /// Inserts a new [`Subscription`] for the given `emitter_key`. By default, subscriptions
@@ -56,14 +51,7 @@ where
             .entry(emitter_key.clone())
             .or_default()
             .get_or_insert_with(Default::default)
-            .insert(
-                subscriber_id,
-                Subscriber {
-                    active: active.clone(),
-                    dropped: dropped.clone(),
-                    callback,
-                },
-            );
+            .insert(subscriber_id, Subscriber { active: active.clone(), dropped: dropped.clone(), callback });
         let this = self.0.clone();
 
         let subscription = Subscription {
@@ -86,23 +74,14 @@ where
         (subscription, move || active.set(true))
     }
 
-    pub fn remove(
-        &self,
-        emitter: &EmitterKey,
-    ) -> impl IntoIterator<Item = Callback> + use<EmitterKey, Callback> {
+    pub fn remove(&self, emitter: &EmitterKey) -> impl IntoIterator<Item = Callback> + use<EmitterKey, Callback> {
         let subscribers = self.0.borrow_mut().subscribers.remove(emitter);
         subscribers
             .unwrap_or_default()
             .map(|s| s.into_values())
             .into_iter()
             .flatten()
-            .filter_map(|subscriber| {
-                if subscriber.active.get() {
-                    Some(subscriber.callback)
-                } else {
-                    None
-                }
-            })
+            .filter_map(|subscriber| if subscriber.active.get() { Some(subscriber.callback) } else { None })
     }
 
     /// Call the given callback for each subscriber to the given emitter.
@@ -111,13 +90,7 @@ where
     where
         F: FnMut(&mut Callback) -> bool,
     {
-        let Some(mut subscribers) = self
-            .0
-            .borrow_mut()
-            .subscribers
-            .get_mut(emitter)
-            .and_then(|s| s.take())
-        else {
+        let Some(mut subscribers) = self.0.borrow_mut().subscribers.get_mut(emitter).and_then(|s| s.take()) else {
             return;
         };
 
@@ -155,9 +128,7 @@ impl Subscription {
     /// Creates a new subscription with a callback that gets invoked when
     /// this subscription is dropped.
     pub fn new(unsubscribe: impl 'static + FnOnce()) -> Self {
-        Self {
-            unsubscribe: Some(Box::new(unsubscribe)),
-        }
+        Self { unsubscribe: Some(Box::new(unsubscribe)) }
     }
 
     /// Detaches the subscription from this handle. The callback will

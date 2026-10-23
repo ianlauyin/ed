@@ -118,7 +118,7 @@ impl ConflictRegion {
 
 impl ConflictSet {
     pub fn new(buffer_id: BufferId, has_conflict: bool, _: &mut Context<Self>) -> Self {
-        Self { has_conflict, snapshot: ConflictSetSnapshot { buffer_id, conflicts: Default::default() } }
+        Self { has_conflict, snapshot: ConflictSetSnapshot { buffer_id, conflicts: Arc::default() } }
     }
 
     pub fn set_has_conflict(&mut self, has_conflict: bool, cx: &mut Context<Self>) -> bool {
@@ -130,7 +130,7 @@ impl ConflictSet {
                     old_range: 0..self.snapshot.conflicts.len(),
                     new_range: 0..0,
                 });
-                self.snapshot.conflicts = Default::default();
+                self.snapshot.conflicts = Arc::default();
             }
             true
         } else {

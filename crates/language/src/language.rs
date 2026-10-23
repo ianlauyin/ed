@@ -28,7 +28,6 @@ use std::fmt::Debug;
 use std::hash::Hash;
 use std::iter;
 use std::mem;
-use std::ops::DerefMut;
 use std::ops::Range;
 use std::path::Path;
 use std::path::PathBuf;
@@ -210,7 +209,7 @@ where
     F: FnOnce(&mut QueryCursor) -> R,
 {
     let mut cursor = QueryCursorHandle::new();
-    func(cursor.deref_mut())
+    func(&mut cursor)
 }
 
 /// A shared grammar for plain text, exposed for reuse by downstream crates.
@@ -264,7 +263,7 @@ pub static PLAIN_TEXT: LazyLock<Arc<Language>> = LazyLock::new(|| {
                         newline: false,
                     },
                 ],
-                disabled_scopes_by_bracket_ix: Default::default(),
+                disabled_scopes_by_bracket_ix: Vec::default(),
             },
             ..Default::default()
         },
@@ -597,7 +596,7 @@ pub trait LspAdapter: 'static + Send + Sync {
     }
 
     fn disk_based_diagnostic_sources(&self) -> Vec<String> {
-        Default::default()
+        Vec::default()
     }
 
     fn disk_based_diagnostics_progress_token(&self) -> Option<String> {
@@ -1043,7 +1042,7 @@ pub trait HighlightSource {
     fn source_len(&self) -> usize;
     fn source_chunks(&self) -> impl Iterator<Item = &str>;
     fn parse(&self, grammar: &Grammar) -> Tree;
-    fn text_provider<'a>(&'a self) -> impl tree_sitter::TextProvider<&'a [u8]> + 'a;
+    fn text_provider(&self) -> impl tree_sitter::TextProvider<&[u8]> + '_;
 }
 
 impl HighlightSource for str {
@@ -1062,7 +1061,7 @@ impl HighlightSource for str {
         })
     }
 
-    fn text_provider<'a>(&'a self) -> impl tree_sitter::TextProvider<&'a [u8]> + 'a {
+    fn text_provider(&self) -> impl tree_sitter::TextProvider<&[u8]> + '_ {
         self.as_bytes()
     }
 }
@@ -1080,7 +1079,7 @@ impl HighlightSource for Rope {
         parse_text(grammar, self, None)
     }
 
-    fn text_provider<'a>(&'a self) -> impl tree_sitter::TextProvider<&'a [u8]> + 'a {
+    fn text_provider(&self) -> impl tree_sitter::TextProvider<&[u8]> + '_ {
         TextProvider(self)
     }
 }

@@ -275,7 +275,7 @@ impl gpui::Render for ProjectPicker {
             .child(match &self.data {
                 ProjectPickerData::Ssh { connection_string, nickname } => SshConnectionHeader {
                     connection_string: connection_string.clone(),
-                    paths: Default::default(),
+                    paths: Vec::default(),
                     nickname: nickname.clone(),
                 }
                 .render(window, cx),
@@ -1199,7 +1199,7 @@ impl RemoteServerProjects {
 
     fn add_ssh_server(&self, connection_options: remote::SshConnectionOptions, cx: &Context<Self>) {
         self.update_settings_file(cx, move |setting, _| {
-            setting.ssh_connections.get_or_insert(Default::default()).push(SshConnection {
+            setting.ssh_connections.get_or_insert(Vec::default()).push(SshConnection {
                 host: connection_options.host.to_string(),
                 username: connection_options.username,
                 port: connection_options.port,
@@ -1291,7 +1291,7 @@ impl RemoteServerProjects {
                 .child(match &options {
                     ViewServerOptionsState::Ssh { connection, .. } => SshConnectionHeader {
                         connection_string: connection.host.to_string().into(),
-                        paths: Default::default(),
+                        paths: Vec::default(),
                         nickname: connection.nickname.clone().map(|s| s.into()),
                     }
                     .render(window, cx)
@@ -1495,12 +1495,8 @@ impl RemoteServerProjects {
             .id("ssh-edit-nickname")
             .track_focus(&self.focus_handle(cx))
             .child(
-                SshConnectionHeader {
-                    connection_string: connection_string.into(),
-                    paths: Default::default(),
-                    nickname,
-                }
-                .render(window, cx),
+                SshConnectionHeader { connection_string: connection_string.into(), paths: Vec::default(), nickname }
+                    .render(window, cx),
             )
             .child(
                 h_flex()

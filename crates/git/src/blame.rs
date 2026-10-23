@@ -1,17 +1,29 @@
-use crate::Oid;
-use crate::commit::{get_messages, get_tag_names};
-use crate::repository::{GitBinary, RepoPath};
-use anyhow::{Context as _, Result};
-use collections::{HashMap, HashSet};
-use futures::{AsyncWriteExt, TryFutureExt, try_join};
-use serde::{Deserialize, Serialize};
-use smol::io::{AsyncBufReadExt, AsyncReadExt, BufReader};
 use std::ops::Range;
-use text::{LineEnding, Rope};
+
+use anyhow::Context as _;
+use anyhow::Result;
+use collections::HashMap;
+use collections::HashSet;
+use futures::AsyncWriteExt;
+use futures::TryFutureExt;
+use futures::try_join;
+use serde::Deserialize;
+use serde::Serialize;
+use smol::io::AsyncBufReadExt;
+use smol::io::AsyncReadExt;
+use smol::io::BufReader;
+use text::LineEnding;
+use text::Rope;
 use time::OffsetDateTime;
 use time::UtcOffset;
 use time::macros::format_description;
 use util::command::Stdio;
+
+use crate::Oid;
+use crate::commit::get_messages;
+use crate::commit::get_tag_names;
+use crate::repository::GitBinary;
+use crate::repository::RepoPath;
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Blame {
@@ -31,11 +43,7 @@ impl Blame {
         Self::with_commit_details(git, entries).await
     }
 
-    pub(crate) async fn for_path_at_revision(
-        git: &GitBinary,
-        path: &RepoPath,
-        revision: Oid,
-    ) -> Result<Self> {
+    pub(crate) async fn for_path_at_revision(git: &GitBinary, path: &RepoPath, revision: Oid) -> Result<Self> {
         let entries = run_git_blame(git, path, BlameSource::Revision(revision)).await?;
         Self::with_commit_details(git, entries).await
     }
@@ -43,14 +51,13 @@ impl Blame {
     async fn with_commit_details(git: &GitBinary, mut entries: Vec<BlameEntry>) -> Result<Self> {
         let mut unique_shas = HashSet::default();
 
-        for entry in entries.iter_mut() {
+        for entry in &mut entries {
             unique_shas.insert(entry.sha);
         }
 
         let shas = unique_shas.into_iter().collect::<Vec<_>>();
         let (messages, tag_names) = try_join!(
-            get_messages(git, &shas)
-                .map_err(|error| error.context("failed to get commit messages")),
+            get_messages(git, &shas).map_err(|error| error.context("failed to get commit messages")),
             async {
                 match get_tag_names(git, &shas).await {
                     Ok(tag_names) => Ok(tag_names),
@@ -63,11 +70,7 @@ impl Blame {
         )?;
 
         entries.sort_unstable_by_key(|entry| entry.range.start);
-        Ok(Self {
-            entries,
-            messages,
-            tag_names,
-        })
+        Ok(Self { entries, messages, tag_names })
     }
 }
 
@@ -81,11 +84,7 @@ enum BlameSource<'a> {
     Revision(Oid),
 }
 
-async fn run_git_blame(
-    git: &GitBinary,
-    path: &RepoPath,
-    source: BlameSource<'_>,
-) -> Result<Vec<BlameEntry>> {
+async fn run_git_blame(git: &GitBinary, path: &RepoPath, source: BlameSource<'_>) -> Result<Vec<BlameEntry>> {
     let mut child = {
         let mut args = vec!["blame", "--incremental"];
         let revision_string;
@@ -99,11 +98,7 @@ async fn run_git_blame(
         args.push("--");
         git.build_command(&args)
             .arg(path.as_unix_str())
-            .stdin(if matches!(source, BlameSource::Contents(..)) {
-                Stdio::piped()
-            } else {
-                Stdio::null()
-            })
+            .stdin(if matches!(source, BlameSource::Contents(..)) { Stdio::piped() } else { Stdio::null() })
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .kill_on_drop(true)
@@ -112,14 +107,8 @@ async fn run_git_blame(
     };
 
     let stdin = child.stdin.take();
-    let stdout = child
-        .stdout
-        .take()
-        .context("failed to get stdout from git blame command")?;
-    let stderr = child
-        .stderr
-        .take()
-        .context("failed to get stderr from git blame command")?;
+    let stdout = child.stdout.take().context("failed to get stdout from git blame command")?;
+    let stderr = child.stderr.take().context("failed to get stderr from git blame command")?;
 
     let write_stdin = async move {
         if let BlameSource::Contents(contents, line_ending) = source {
@@ -140,10 +129,7 @@ async fn run_git_blame(
 
         loop {
             line_buffer.clear();
-            let bytes_read = reader
-                .read_line(&mut line_buffer)
-                .await
-                .context("reading git blame stdout")?;
+            let bytes_read = reader.read_line(&mut line_buffer).await.context("reading git blame stdout")?;
             if bytes_read == 0 {
                 break;
             }
@@ -162,22 +148,13 @@ async fn run_git_blame(
 
     let read_stderr = async move {
         let mut stderr_output = String::new();
-        BufReader::new(stderr)
-            .read_to_string(&mut stderr_output)
-            .await
-            .context("reading git blame stderr")?;
+        BufReader::new(stderr).read_to_string(&mut stderr_output).await.context("reading git blame stderr")?;
         Result::<String>::Ok(stderr_output)
     };
 
-    let wait_for_status = async {
-        child
-            .status()
-            .await
-            .context("waiting for git blame process")
-    };
+    let wait_for_status = async { child.status().await.context("waiting for git blame process") };
 
-    let ((), entries, stderr, status) =
-        try_join!(write_stdin, read_stdout, read_stderr, wait_for_status)?;
+    let ((), entries, stderr, status) = try_join!(write_stdin, read_stdout, read_stderr, wait_for_status)?;
 
     if !status.success() {
         let trimmed = stderr.trim();
@@ -225,24 +202,14 @@ impl BlameEntry {
     fn new_from_blame_line(line: &str) -> Result<BlameEntry> {
         let mut parts = line.split_whitespace();
 
-        let sha = parts
-            .next()
-            .and_then(|line| line.parse::<Oid>().ok())
-            .context("parsing sha")?;
+        let sha = parts.next().and_then(|line| line.parse::<Oid>().ok()).context("parsing sha")?;
 
-        let original_line_number = parts
-            .next()
-            .and_then(|line| line.parse::<u32>().ok())
-            .context("parsing original line number")?;
-        let final_line_number = parts
-            .next()
-            .and_then(|line| line.parse::<u32>().ok())
-            .context("parsing final line number")?;
+        let original_line_number =
+            parts.next().and_then(|line| line.parse::<u32>().ok()).context("parsing original line number")?;
+        let final_line_number =
+            parts.next().and_then(|line| line.parse::<u32>().ok()).context("parsing final line number")?;
 
-        let line_count = parts
-            .next()
-            .and_then(|line| line.parse::<u32>().ok())
-            .context("parsing line count")?;
+        let line_count = parts.next().and_then(|line| line.parse::<u32>().ok()).context("parsing line count")?;
 
         let start_line = final_line_number.saturating_sub(1);
         let end_line = start_line + line_count;
@@ -342,11 +309,7 @@ struct GitBlameParser {
 
 impl GitBlameParser {
     fn new() -> Self {
-        Self {
-            entries: Vec::new(),
-            index: HashMap::default(),
-            current_entry: None,
-        }
+        Self { entries: Vec::new(), index: HashMap::default(), current_entry: None }
     }
 
     fn push_line(&mut self, line: &str) -> Result<()> {
@@ -356,27 +319,15 @@ impl GitBlameParser {
             None => {
                 let mut new_entry = BlameEntry::new_from_blame_line(line)?;
 
-                if let Some(existing_entry) = self
-                    .index
-                    .get(&new_entry.sha)
-                    .and_then(|slot| self.entries.get(*slot))
-                {
+                if let Some(existing_entry) = self.index.get(&new_entry.sha).and_then(|slot| self.entries.get(*slot)) {
                     new_entry.author.clone_from(&existing_entry.author);
-                    new_entry
-                        .author_mail
-                        .clone_from(&existing_entry.author_mail);
+                    new_entry.author_mail.clone_from(&existing_entry.author_mail);
                     new_entry.author_time = existing_entry.author_time;
                     new_entry.author_tz.clone_from(&existing_entry.author_tz);
-                    new_entry
-                        .committer_name
-                        .clone_from(&existing_entry.committer_name);
-                    new_entry
-                        .committer_email
-                        .clone_from(&existing_entry.committer_email);
+                    new_entry.committer_name.clone_from(&existing_entry.committer_name);
+                    new_entry.committer_email.clone_from(&existing_entry.committer_email);
                     new_entry.committer_time = existing_entry.committer_time;
-                    new_entry
-                        .committer_tz
-                        .clone_from(&existing_entry.committer_tz);
+                    new_entry.committer_tz.clone_from(&existing_entry.committer_tz);
                     new_entry.summary.clone_from(&existing_entry.summary);
                     new_entry.boundary = existing_entry.boundary;
                 }
@@ -409,16 +360,12 @@ impl GitBlameParser {
                     "summary" if is_committed => entry.summary = Some(value.into()),
                     "author" if is_committed => entry.author = Some(value.into()),
                     "author-mail" if is_committed => entry.author_mail = Some(value.into()),
-                    "author-time" if is_committed => {
-                        entry.author_time = Some(value.parse::<i64>()?)
-                    }
+                    "author-time" if is_committed => entry.author_time = Some(value.parse::<i64>()?),
                     "author-tz" if is_committed => entry.author_tz = Some(value.into()),
 
                     "committer" if is_committed => entry.committer_name = Some(value.into()),
                     "committer-mail" if is_committed => entry.committer_email = Some(value.into()),
-                    "committer-time" if is_committed => {
-                        entry.committer_time = Some(value.parse::<i64>()?)
-                    }
+                    "committer-time" if is_committed => entry.committer_time = Some(value.parse::<i64>()?),
                     "committer-tz" if is_committed => entry.committer_tz = Some(value.into()),
                     _ => {}
                 }
@@ -447,10 +394,7 @@ impl GitBlameParser {
 }
 
 fn unquote_git_path(value: &str) -> String {
-    let Some(quoted) = value
-        .strip_prefix('"')
-        .and_then(|value| value.strip_suffix('"'))
-    else {
+    let Some(quoted) = value.strip_prefix('"').and_then(|value| value.strip_suffix('"')) else {
         return value.to_owned();
     };
     let mut bytes = Vec::with_capacity(quoted.len());

@@ -607,7 +607,7 @@ impl ProjectDiffToolbar {
             .update(cx, |workspace, cx| {
                 if let Some(panel) = workspace.panel::<GitPanel>(cx) {
                     panel.update(cx, |panel, cx| {
-                        panel.stage_all(&Default::default(), window, cx);
+                        panel.stage_all(&StageAll, window, cx);
                     });
                 }
             })
@@ -621,7 +621,7 @@ impl ProjectDiffToolbar {
                     return;
                 };
                 panel.update(cx, |panel, cx| {
-                    panel.unstage_all(&Default::default(), window, cx);
+                    panel.unstage_all(&UnstageAll, window, cx);
                 });
             })
             .ok();

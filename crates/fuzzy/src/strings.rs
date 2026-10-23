@@ -1,16 +1,17 @@
-use crate::{
-    CharBag,
-    char_bag::simple_lowercase,
-    matcher::{MatchCandidate, Matcher},
-};
+use std::borrow::Borrow;
+use std::cmp::Ordering;
+use std::cmp::{self};
+use std::iter;
+use std::ops::Range;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{self};
+
 use gpui::BackgroundExecutor;
-use std::{
-    borrow::Borrow,
-    cmp::{self, Ordering},
-    iter,
-    ops::Range,
-    sync::atomic::{self, AtomicBool},
-};
+
+use crate::CharBag;
+use crate::char_bag::simple_lowercase;
+use crate::matcher::MatchCandidate;
+use crate::matcher::Matcher;
 
 #[derive(Clone, Debug)]
 pub struct StringMatchCandidate {
@@ -21,11 +22,7 @@ pub struct StringMatchCandidate {
 
 impl StringMatchCandidate {
     pub fn new(id: usize, string: &str) -> Self {
-        Self {
-            id,
-            string: string.into(),
-            char_bag: string.into(),
-        }
+        Self { id, string: string.into(), char_bag: string.into() }
     }
 }
 
@@ -85,9 +82,7 @@ impl StringMatch {
     /// Gets the byte length of the utf-8 character at a byte offset. If the index is out of range
     /// or not on a utf-8 boundary then None is returned.
     fn char_len_at_index(&self, ix: usize) -> Option<usize> {
-        self.string
-            .get(ix..)
-            .and_then(|slice| slice.chars().next().map(|char| char.len_utf8()))
+        self.string.get(ix..).and_then(|slice| slice.chars().next().map(|char| char.len_utf8()))
     }
 }
 
@@ -127,7 +122,7 @@ where
     T: Borrow<StringMatchCandidate> + Sync,
 {
     if candidates.is_empty() || max_results == 0 {
-        return Default::default();
+        return Vec::default();
     }
 
     if query.is_empty() {
@@ -136,7 +131,7 @@ where
             .map(|candidate| StringMatch {
                 candidate_id: candidate.borrow().id,
                 score: 0.,
-                positions: Default::default(),
+                positions: Vec::default(),
                 string: candidate.borrow().string.clone(),
             })
             .collect();
@@ -151,9 +146,8 @@ where
 
     let num_cpus = executor.num_cpus().min(candidates.len());
     let segment_size = candidates.len().div_ceil(num_cpus);
-    let mut segment_results = (0..num_cpus)
-        .map(|_| Vec::with_capacity(max_results.min(candidates.len())))
-        .collect::<Vec<_>>();
+    let mut segment_results =
+        (0..num_cpus).map(|_| Vec::with_capacity(max_results.min(candidates.len()))).collect::<Vec<_>>();
 
     executor
         .scoped(|scope| {
@@ -162,20 +156,12 @@ where
                 scope.spawn(async move {
                     let segment_start = cmp::min(segment_idx * segment_size, candidates.len());
                     let segment_end = cmp::min(segment_start + segment_size, candidates.len());
-                    let mut matcher = Matcher::new(
-                        query,
-                        lowercase_query,
-                        query_char_bag,
-                        smart_case,
-                        penalize_length,
-                    );
+                    let mut matcher = Matcher::new(query, lowercase_query, query_char_bag, smart_case, penalize_length);
 
                     matcher.match_candidates(
                         &[],
                         &[],
-                        candidates[segment_start..segment_end]
-                            .iter()
-                            .map(|c| c.borrow()),
+                        candidates[segment_start..segment_end].iter().map(|c| c.borrow()),
                         results,
                         cancel_flag,
                         |candidate: &&StringMatchCandidate, score, positions| StringMatch {

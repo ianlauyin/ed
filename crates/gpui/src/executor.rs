@@ -1,17 +1,27 @@
-use crate::{ActivityGuard, App, PlatformDispatcher, PlatformScheduler};
+use std::future::Future;
+use std::marker::PhantomData;
+use std::mem;
+use std::pin::Pin;
+use std::rc::Rc;
+use std::sync::Arc;
+use std::time::Duration;
 
 use futures::channel::mpsc;
 use futures::prelude::*;
-use gpui_util::{TryFutureExt, TryFutureExtBacktrace};
+use gpui_util::TryFutureExt;
+use gpui_util::TryFutureExtBacktrace;
+pub use scheduler::DedicatedExecutor;
+pub use scheduler::FallibleTask;
 use scheduler::Instant;
+pub use scheduler::LocalExecutor as SchedulerLocalExecutor;
+pub use scheduler::Priority;
 use scheduler::Scheduler;
-use std::{future::Future, marker::PhantomData, rc::Rc, sync::Arc, time::Duration};
+pub use scheduler::Task;
 
-use std::{mem, pin::Pin};
-
-pub use scheduler::{
-    DedicatedExecutor, FallibleTask, LocalExecutor as SchedulerLocalExecutor, Priority, Task,
-};
+use crate::ActivityGuard;
+use crate::App;
+use crate::PlatformDispatcher;
+use crate::PlatformScheduler;
 
 /// A pointer to the executor that is currently running,
 /// for spawning background tasks.
@@ -49,17 +59,13 @@ where
     #[track_caller]
     fn detach_and_log_err(self, cx: &App) {
         let location = core::panic::Location::caller();
-        cx.foreground_executor()
-            .spawn(self.log_tracked_err(*location))
-            .detach();
+        cx.foreground_executor().spawn(self.log_tracked_err(*location)).detach();
     }
 
     #[track_caller]
     fn detach_and_log_err_with_backtrace(self, cx: &App) {
         let location = *core::panic::Location::caller();
-        cx.foreground_executor()
-            .spawn(self.log_tracked_err_with_backtrace(location))
-            .detach();
+        cx.foreground_executor().spawn(self.log_tracked_err_with_backtrace(location)).detach();
     }
 }
 
@@ -68,10 +74,7 @@ impl BackgroundExecutor {
     pub fn new(dispatcher: Arc<dyn PlatformDispatcher>) -> Self {
         let scheduler: Arc<dyn Scheduler> = Arc::new(PlatformScheduler::new(dispatcher.clone()));
 
-        Self {
-            inner: scheduler::BackgroundExecutor::new(scheduler),
-            dispatcher,
-        }
+        Self { inner: scheduler::BackgroundExecutor::new(scheduler), dispatcher }
     }
 
     /// Returns the underlying scheduler::BackgroundExecutor.
@@ -190,11 +193,7 @@ impl ForegroundExecutor {
         let platform_scheduler = Arc::new(PlatformScheduler::new(dispatcher.clone()));
         let inner = platform_scheduler.foreground_executor();
 
-        Self {
-            inner,
-            dispatcher,
-            not_send: PhantomData,
-        }
+        Self { inner, dispatcher, not_send: PhantomData }
     }
 
     /// Enqueues the given Task to run on the main thread.
@@ -208,11 +207,7 @@ impl ForegroundExecutor {
 
     /// Enqueues the given Task to run on the main thread with the given priority.
     #[track_caller]
-    pub fn spawn_with_priority<R>(
-        &self,
-        _priority: Priority,
-        future: impl Future<Output = R> + 'static,
-    ) -> Task<R>
+    pub fn spawn_with_priority<R>(&self, _priority: Priority, future: impl Future<Output = R> + 'static) -> Task<R>
     where
         R: 'static,
     {
@@ -230,19 +225,14 @@ impl ForegroundExecutor {
     /// On platforms without dedicated support, schedules the given future to run
     /// with a low priority, ignoring `timeout`.
     #[track_caller]
-    pub fn spawn_when_idle<R>(
-        &self,
-        timeout: Option<Duration>,
-        future: impl Future<Output = R> + 'static,
-    ) -> Task<R>
+    pub fn spawn_when_idle<R>(&self, timeout: Option<Duration>, future: impl Future<Output = R> + 'static) -> Task<R>
     where
         R: 'static,
     {
         let dispatcher = self.dispatcher.clone();
-        self.inner
-            .spawn_with_dispatch(future.boxed_local(), move |runnable| {
-                dispatcher.dispatch_on_main_thread_when_idle(runnable, timeout);
-            })
+        self.inner.spawn_with_dispatch(future.boxed_local(), move |runnable| {
+            dispatcher.dispatch_on_main_thread_when_idle(runnable, timeout);
+        })
     }
 
     /// The time remaining in the current idle slice, when called from a task
@@ -293,14 +283,7 @@ pub struct Scope<'a> {
 impl<'a> Scope<'a> {
     fn new(executor: BackgroundExecutor, priority: Priority) -> Self {
         let (tx, rx) = mpsc::channel(1);
-        Self {
-            executor,
-            priority,
-            tx: Some(tx),
-            rx,
-            futures: Default::default(),
-            lifetime: PhantomData,
-        }
+        Self { executor, priority, tx: Some(tx), rx, futures: Vec::default(), lifetime: PhantomData }
     }
 
     /// How many CPUs are available to the dispatcher.
@@ -341,9 +324,6 @@ impl Drop for Scope<'_> {
             self.rx.next().await;
         };
         let mut future = std::pin::pin!(future);
-        self.executor
-            .inner
-            .scheduler()
-            .block(None, future.as_mut(), None);
+        self.executor.inner.scheduler().block(None, future.as_mut(), None);
     }
 }

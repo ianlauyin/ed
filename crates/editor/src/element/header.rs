@@ -123,7 +123,7 @@ impl EditorElement {
 
         let mut origin = hitbox.origin;
         // Move floating header up to avoid colliding with the next buffer header.
-        for block in blocks.iter() {
+        for block in blocks {
             if !block.is_buffer_header {
                 continue;
             }

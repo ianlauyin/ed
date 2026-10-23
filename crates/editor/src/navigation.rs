@@ -2,7 +2,7 @@ use super::*;
 
 impl Editor {
     pub fn move_left(&mut self, _: &MoveLeft, window: &mut Window, cx: &mut Context<Self>) {
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_with(&mut |map, selection| {
                 let cursor = if selection.is_empty() { movement::left(map, selection.start) } else { selection.start };
                 selection.collapse_to(cursor, SelectionGoal::None);
@@ -11,13 +11,13 @@ impl Editor {
     }
 
     pub fn select_left(&mut self, _: &SelectLeft, window: &mut Window, cx: &mut Context<Self>) {
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, _| (movement::left(map, head), SelectionGoal::None));
         })
     }
 
     pub fn move_right(&mut self, _: &MoveRight, window: &mut Window, cx: &mut Context<Self>) {
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_with(&mut |map, selection| {
                 let cursor = if selection.is_empty() { movement::right(map, selection.end) } else { selection.end };
                 selection.collapse_to(cursor, SelectionGoal::None)
@@ -26,7 +26,7 @@ impl Editor {
     }
 
     pub fn select_right(&mut self, _: &SelectRight, window: &mut Window, cx: &mut Context<Self>) {
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, _| (movement::right(map, head), SelectionGoal::None));
         });
     }
@@ -45,7 +45,7 @@ impl Editor {
         let selection_count = self.selections.count();
         let first_selection = self.selections.first_anchor();
 
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_with(&mut |map, selection| {
                 if !selection.is_empty() {
                     selection.goal = SelectionGoal::None;
@@ -72,7 +72,7 @@ impl Editor {
 
         let text_layout_details = &self.text_layout_details(window, cx);
 
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_with(&mut |map, selection| {
                 if !selection.is_empty() {
                     selection.goal = SelectionGoal::None;
@@ -102,7 +102,7 @@ impl Editor {
 
         let text_layout_details = &self.text_layout_details(window, cx);
 
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_with(&mut |map, selection| {
                 if !selection.is_empty() {
                     selection.goal = SelectionGoal::None;
@@ -122,7 +122,7 @@ impl Editor {
 
     pub fn select_down_by_lines(&mut self, action: &SelectDownByLines, window: &mut Window, cx: &mut Context<Self>) {
         let text_layout_details = &self.text_layout_details(window, cx);
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, goal| {
                 movement::down_by_rows(map, head, action.lines, goal, false, text_layout_details)
             })
@@ -131,7 +131,7 @@ impl Editor {
 
     pub fn select_up_by_lines(&mut self, action: &SelectUpByLines, window: &mut Window, cx: &mut Context<Self>) {
         let text_layout_details = &self.text_layout_details(window, cx);
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, goal| {
                 movement::up_by_rows(map, head, action.lines, goal, false, text_layout_details)
             })
@@ -145,7 +145,7 @@ impl Editor {
 
         let text_layout_details = &self.text_layout_details(window, cx);
 
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, goal| {
                 movement::up_by_rows(map, head, row_count, goal, false, text_layout_details)
             })
@@ -198,7 +198,7 @@ impl Editor {
 
     pub fn select_up(&mut self, _: &SelectUp, window: &mut Window, cx: &mut Context<Self>) {
         let text_layout_details = &self.text_layout_details(window, cx);
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, goal| movement::up(map, head, goal, false, text_layout_details))
         })
     }
@@ -217,7 +217,7 @@ impl Editor {
         let selection_count = self.selections.count();
         let first_selection = self.selections.first_anchor();
 
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_with(&mut |map, selection| {
                 if !selection.is_empty() {
                     selection.goal = SelectionGoal::None;
@@ -239,7 +239,7 @@ impl Editor {
 
         let text_layout_details = &self.text_layout_details(window, cx);
 
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, goal| {
                 movement::down_by_rows(map, head, row_count, goal, false, text_layout_details)
             })
@@ -291,7 +291,7 @@ impl Editor {
 
     pub fn select_down(&mut self, _: &SelectDown, window: &mut Window, cx: &mut Context<Self>) {
         let text_layout_details = &self.text_layout_details(window, cx);
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, goal| movement::down(map, head, goal, false, text_layout_details))
         });
     }
@@ -302,7 +302,7 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_cursors_with(&mut |map, head, _| {
                 (movement::previous_word_start(map, head, false), SelectionGoal::None)
             });
@@ -315,7 +315,7 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_cursors_with(&mut |map, head, _| (movement::previous_subword_start(map, head), SelectionGoal::None));
         })
     }
@@ -326,7 +326,7 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, _| {
                 (movement::previous_word_start(map, head, false), SelectionGoal::None)
             });
@@ -339,25 +339,25 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, _| (movement::previous_subword_start(map, head), SelectionGoal::None));
         })
     }
 
     pub fn move_to_next_word_end(&mut self, _: &MoveToNextWordEnd, window: &mut Window, cx: &mut Context<Self>) {
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_cursors_with(&mut |map, head, _| (movement::next_word_end(map, head, false), SelectionGoal::None));
         })
     }
 
     pub fn move_to_next_subword_end(&mut self, _: &MoveToNextSubwordEnd, window: &mut Window, cx: &mut Context<Self>) {
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_cursors_with(&mut |map, head, _| (movement::next_subword_end(map, head), SelectionGoal::None));
         })
     }
 
     pub fn select_to_next_word_end(&mut self, _: &SelectToNextWordEnd, window: &mut Window, cx: &mut Context<Self>) {
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, _| (movement::next_word_end(map, head, false), SelectionGoal::None));
         })
     }
@@ -368,7 +368,7 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, _| (movement::next_subword_end(map, head), SelectionGoal::None));
         })
     }
@@ -380,7 +380,7 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         let stop_at_indent = action.stop_at_indent && !self.mode.is_single_line();
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_cursors_with(&mut |map, head, _| {
                 (
                     movement::indented_line_beginning(map, head, action.stop_at_soft_wraps, stop_at_indent),
@@ -397,7 +397,7 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         let stop_at_indent = action.stop_at_indent && !self.mode.is_single_line();
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, _| {
                 (
                     movement::indented_line_beginning(map, head, action.stop_at_soft_wraps, stop_at_indent),
@@ -408,7 +408,7 @@ impl Editor {
     }
 
     pub fn move_to_end_of_line(&mut self, action: &MoveToEndOfLine, window: &mut Window, cx: &mut Context<Self>) {
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_cursors_with(&mut |map, head, _| {
                 (movement::line_end(map, head, action.stop_at_soft_wraps), SelectionGoal::None)
             });
@@ -416,7 +416,7 @@ impl Editor {
     }
 
     pub fn select_to_end_of_line(&mut self, action: &SelectToEndOfLine, window: &mut Window, cx: &mut Context<Self>) {
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, _| {
                 (movement::line_end(map, head, action.stop_at_soft_wraps), SelectionGoal::None)
             });
@@ -433,7 +433,7 @@ impl Editor {
             cx.propagate();
             return;
         }
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_with(&mut |map, selection| {
                 selection.collapse_to(movement::start_of_paragraph(map, selection.head(), 1), SelectionGoal::None)
             });
@@ -445,7 +445,7 @@ impl Editor {
             cx.propagate();
             return;
         }
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_with(&mut |map, selection| {
                 selection.collapse_to(movement::end_of_paragraph(map, selection.head(), 1), SelectionGoal::None)
             });
@@ -506,7 +506,7 @@ impl Editor {
             cx.propagate();
             return;
         }
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, _| (movement::start_of_paragraph(map, head, 1), SelectionGoal::None));
         })
     }
@@ -521,7 +521,7 @@ impl Editor {
             cx.propagate();
             return;
         }
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, _| (movement::end_of_paragraph(map, head, 1), SelectionGoal::None));
         })
     }
@@ -531,7 +531,7 @@ impl Editor {
             cx.propagate();
             return;
         }
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_with(&mut |map, selection| {
                 selection.collapse_to(
                     movement::start_of_excerpt(map, selection.head(), workspace::searchable::Direction::Prev),
@@ -552,7 +552,7 @@ impl Editor {
             return;
         }
 
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_with(&mut |map, selection| {
                 selection.collapse_to(
                     movement::start_of_excerpt(map, selection.head(), workspace::searchable::Direction::Next),
@@ -567,7 +567,7 @@ impl Editor {
             cx.propagate();
             return;
         }
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_with(&mut |map, selection| {
                 selection.collapse_to(
                     movement::end_of_excerpt(map, selection.head(), workspace::searchable::Direction::Next),
@@ -587,7 +587,7 @@ impl Editor {
             cx.propagate();
             return;
         }
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_with(&mut |map, selection| {
                 selection.collapse_to(
                     movement::end_of_excerpt(map, selection.head(), workspace::searchable::Direction::Prev),
@@ -607,7 +607,7 @@ impl Editor {
             cx.propagate();
             return;
         }
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, _| {
                 (movement::start_of_excerpt(map, head, workspace::searchable::Direction::Prev), SelectionGoal::None)
             });
@@ -624,7 +624,7 @@ impl Editor {
             cx.propagate();
             return;
         }
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, _| {
                 (movement::start_of_excerpt(map, head, workspace::searchable::Direction::Next), SelectionGoal::None)
             });
@@ -636,7 +636,7 @@ impl Editor {
             cx.propagate();
             return;
         }
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, _| {
                 (movement::end_of_excerpt(map, head, workspace::searchable::Direction::Next), SelectionGoal::None)
             });
@@ -653,7 +653,7 @@ impl Editor {
             cx.propagate();
             return;
         }
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_heads_with(&mut |map, head, _| {
                 (movement::end_of_excerpt(map, head, workspace::searchable::Direction::Prev), SelectionGoal::None)
             });
@@ -665,7 +665,7 @@ impl Editor {
             cx.propagate();
             return;
         }
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.select_ranges(vec![Anchor::Min..Anchor::Min]);
         });
     }
@@ -673,7 +673,7 @@ impl Editor {
     pub fn select_to_beginning(&mut self, _: &SelectToBeginning, window: &mut Window, cx: &mut Context<Self>) {
         let mut selection = self.selections.last::<Point>(&self.display_snapshot(cx));
         selection.set_head(Point::zero(), SelectionGoal::None);
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.select(vec![selection]);
         });
     }
@@ -684,7 +684,7 @@ impl Editor {
             return;
         }
         let cursor = self.buffer.read(cx).read(cx).len();
-        self.change_selections(Default::default(), window, cx, |s| s.select_ranges(vec![cursor..cursor]));
+        self.change_selections(SelectionEffects::default(), window, cx, |s| s.select_ranges(vec![cursor..cursor]));
     }
 
     pub fn set_nav_history(&mut self, nav_history: Option<ItemNavHistory>) {
@@ -1275,7 +1275,7 @@ impl Editor {
 
     pub(super) fn go_to_next_change(&mut self, _: &GoToNextChange, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(selections) = self.change_list.next_change(1, Direction::Next).map(|s| s.to_vec()) {
-            self.change_selections(Default::default(), window, cx, |s| {
+            self.change_selections(SelectionEffects::default(), window, cx, |s| {
                 let map = s.display_snapshot();
                 s.select_display_ranges(selections.iter().map(|a| {
                     let point = a.to_display_point(&map);
@@ -1292,7 +1292,7 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         if let Some(selections) = self.change_list.next_change(1, Direction::Prev).map(|s| s.to_vec()) {
-            self.change_selections(Default::default(), window, cx, |s| {
+            self.change_selections(SelectionEffects::default(), window, cx, |s| {
                 let map = s.display_snapshot();
                 s.select_display_ranges(selections.iter().map(|a| {
                     let point = a.to_display_point(&map);

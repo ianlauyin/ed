@@ -129,7 +129,7 @@ impl RedistributableColumnsState {
             committed_widths: widths.clone(),
             preview_widths: widths,
             resize_behavior: resize_behavior.into_table_row(cols),
-            cached_container_width: Default::default(),
+            cached_container_width: Pixels::default(),
         }
     }
 
@@ -315,12 +315,12 @@ impl RedistributableColumnsState {
             TableRow::from_vec(visible_cols.iter().map(|&idx| resize_behavior[idx]).collect(), visible_cols.len());
 
         let mut col_position = 0.0;
-        for length in rendered_widths[0..=divider_position].iter() {
+        for length in &rendered_widths[0..=divider_position] {
             col_position += length + divider_width;
         }
 
         let mut total_length_ratio = col_position;
-        for length in rendered_widths[divider_position + 1..].iter() {
+        for length in &rendered_widths[divider_position + 1..] {
             total_length_ratio += length;
         }
         let cols = rendered_behavior.cols();

@@ -209,8 +209,8 @@ impl State {
     fn derive(old: &Self) -> Self {
         Self {
             last_worktree_root_id: None,
-            ancestors: Default::default(),
-            visible_entries: Default::default(),
+            ancestors: HashMap::default(),
+            visible_entries: Vec::default(),
             max_width_item_index: None,
             edit_state: old.edit_state.clone(),
             temporarily_unfolded_pending_state: None,
@@ -901,15 +901,15 @@ impl ProjectPanel {
                     rendered_entries_len: 0,
                     folded_directory_drag_target: None,
                     drag_target_entry: None,
-                    marked_entries: Default::default(),
+                    marked_entries: Vec::default(),
                     selection: None,
                     context_menu: None,
                     filename_editor,
                     clipboard: None,
                     _dragged_entry_destination: None,
                     workspace: workspace.weak_handle(),
-                    diagnostics: Default::default(),
-                    diagnostic_counts: Default::default(),
+                    diagnostics: HashMap::default(),
+                    diagnostic_counts: HashMap::default(),
                     diagnostic_summary_update: Task::ready(()),
                     scroll_handle,
                     mouse_down: false,
@@ -921,13 +921,13 @@ impl ProjectPanel {
                         max_width_item_index: None,
                         edit_state: None,
                         temporarily_unfolded_pending_state: None,
-                        last_worktree_root_id: Default::default(),
-                        visible_entries: Default::default(),
-                        ancestors: Default::default(),
-                        expanded_dir_ids: Default::default(),
-                        unfolded_dir_ids: Default::default(),
+                        last_worktree_root_id: Option::default(),
+                        visible_entries: Vec::default(),
+                        ancestors: HashMap::default(),
+                        expanded_dir_ids: HashMap::default(),
+                        unfolded_dir_ids: HashSet::default(),
                     },
-                    update_visible_entries_task: Default::default(),
+                    update_visible_entries_task: UpdateVisibleEntriesTask::default(),
                     undo_manager: UndoManager::new(workspace.weak_handle(), weak_project_panel, cx),
                 };
                 this.update_visible_entries(None, false, false, window, cx);
@@ -1019,7 +1019,7 @@ impl ProjectPanel {
     }
 
     fn update_diagnostics(&mut self, cx: &Context<Self>) {
-        let mut diagnostics: HashMap<(WorktreeId, Arc<RelPath>), DiagnosticSeverity> = Default::default();
+        let mut diagnostics: HashMap<(WorktreeId, Arc<RelPath>), DiagnosticSeverity> = HashMap::default();
         let show_diagnostics_setting = ProjectPanelSettings::get_global(cx).show_diagnostics;
 
         if show_diagnostics_setting != ShowDiagnostics::Off {
@@ -1063,7 +1063,7 @@ impl ProjectPanel {
                 },
             )
         } else {
-            Default::default()
+            HashMap::default()
         };
     }
 
@@ -2317,7 +2317,7 @@ impl ProjectPanel {
                 });
                 self.filename_editor.update(cx, |editor, cx| {
                     editor.set_text(file_name, window, cx);
-                    editor.change_selections(Default::default(), window, cx, |s| {
+                    editor.change_selections(editor::SelectionEffects::default(), window, cx, |s| {
                         s.select_ranges([MultiBufferOffset(selection.start)..MultiBufferOffset(selection.end)])
                     });
                 });
@@ -3248,7 +3248,7 @@ impl ProjectPanel {
         // For directories, we collect all files under them recursively
         let mut files_to_download: Vec<(WorktreeId, Arc<RelPath>, PathBuf)> = Vec::new();
 
-        for selected in entries.iter() {
+        for selected in &entries {
             let Some(worktree) = project.worktree_for_id(selected.worktree_id, cx) else {
                 continue;
             };
@@ -3437,7 +3437,7 @@ impl ProjectPanel {
     }
 
     fn remove_from_project(&mut self, _: &RemoveFromProject, _window: &mut Window, cx: &mut Context<Self>) {
-        for entry in self.effective_entries().iter() {
+        for entry in &self.effective_entries() {
             let worktree_id = entry.worktree_id;
             self.project.update(cx, |project, cx| project.remove_worktree(worktree_id, cx));
         }
@@ -4402,7 +4402,7 @@ impl ProjectPanel {
                 cx.spawn_in(window, async move |project_panel, cx| {
                     let mut last_succeed = None;
                     let mut changes = Vec::new();
-                    for task in copy_tasks.into_iter() {
+                    for task in copy_tasks {
                         if let Some(Some(entry)) = task.await.log_err() {
                             last_succeed = Some(entry.id);
                             changes.push(Change::Created((worktree_id, entry.path).into()));
@@ -4683,8 +4683,8 @@ impl ProjectPanel {
 
                 let entry_range = range.start.saturating_sub(ix)..end_ix - ix;
                 let entries = visible.index.get_or_init(|| visible.entries.iter().map(|e| e.path.clone()).collect());
-                for entry in visible.entries[entry_range].iter() {
-                    let status = if git_status_setting { entry.git_summary } else { Default::default() };
+                for entry in &visible.entries[entry_range] {
+                    let status = if git_status_setting { entry.git_summary } else { GitSummary::default() };
 
                     let mut details = self.details_for_entry(
                         entry,
@@ -4866,7 +4866,7 @@ impl ProjectPanel {
             }
         }
 
-        for tree_id in worktree_ids.into_iter() {
+        for tree_id in worktree_ids {
             if let Some(found) = self.find_entry_in_worktree(tree_id, reverse_search, false, &predicate, cx) {
                 return Some(SelectedEntry { worktree_id: tree_id, entry_id: found.id });
             }
@@ -4933,7 +4933,7 @@ impl ProjectPanel {
             }
         }
 
-        for tree_id in worktree_ids.into_iter() {
+        for tree_id in worktree_ids {
             if let Some(found) = self.find_entry_in_worktree(tree_id, reverse_search, true, &predicate, cx) {
                 return Some(SelectedEntry { worktree_id: tree_id, entry_id: found.id });
             }
@@ -6089,7 +6089,7 @@ impl ProjectPanel {
         let git_summaries_by_id = if git_status_enabled {
             visible.entries.iter().map(|e| (e.id, e.git_summary)).collect::<HashMap<_, _>>()
         } else {
-            Default::default()
+            HashMap::default()
         };
 
         // already checked if non empty above

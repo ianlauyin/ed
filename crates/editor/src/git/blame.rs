@@ -61,7 +61,7 @@ impl sum_tree::Item for GitBlameEntry {
 
 impl sum_tree::ContextLessSummary for GitBlameEntrySummary {
     fn zero() -> Self {
-        Default::default()
+        GitBlameEntrySummary::default()
     }
 
     fn add_summary(&mut self, summary: &Self) {
@@ -560,8 +560,8 @@ impl GitBlame {
                                         snapshot,
                                         buffer_edits,
                                         None,
-                                        Default::default(),
-                                        Default::default(),
+                                        HashMap::default(),
+                                        HashMap::default(),
                                     )),
                                     Err(e) => errors.push(e),
                                 }

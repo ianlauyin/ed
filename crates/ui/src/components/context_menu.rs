@@ -360,7 +360,7 @@ impl ContextMenu {
             (builder.clone())(
                 Self {
                     builder: Some(builder),
-                    items: Default::default(),
+                    items: Vec::default(),
                     focus_handle,
                     action_context: None,
                     selected_index: None,
@@ -406,7 +406,7 @@ impl ContextMenu {
         let new_menu = (builder.clone())(
             Self {
                 builder: Some(builder),
-                items: Default::default(),
+                items: Vec::default(),
                 focus_handle: focus_handle.clone(),
                 action_context: None,
                 selected_index: None,
@@ -1181,7 +1181,7 @@ impl ContextMenu {
 
             let mut menu = ContextMenu {
                 builder: None,
-                items: Default::default(),
+                items: Vec::default(),
                 focus_handle,
                 action_context: None,
                 selected_index: None,
@@ -2069,7 +2069,7 @@ impl Render for ContextMenu {
                             el.on_boxed_action(&**action, cx.listener(ContextMenu::end_slot))
                         })
                         .when(!self.delayed, |mut el| {
-                            for item in self.items.iter() {
+                            for item in &self.items {
                                 if let ContextMenuItem::Entry(ContextMenuEntry {
                                     action: Some(action),
                                     disabled: false,

@@ -451,7 +451,7 @@ impl StagedDiffToolbar {
                     return;
                 };
                 panel.update(cx, |panel, cx| {
-                    panel.unstage_all(&Default::default(), window, cx);
+                    panel.unstage_all(&UnstageAll, window, cx);
                 });
             })
             .ok();

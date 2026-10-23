@@ -280,7 +280,7 @@ impl EditorElement {
                 && (is_singleton || editor.allow_git_diff_scrollbar_markers);
             if !is_singleton && !show_git_diff_markers {
                 editor.scrollbar_marker_state.dirty = true;
-                editor.scrollbar_marker_state.markers = Default::default();
+                editor.scrollbar_marker_state.markers = Arc::default();
                 editor.scrollbar_marker_state.pending_refresh = None;
                 return;
             }
@@ -417,7 +417,7 @@ impl EditorElement {
                                 bottom: ScrollbarLayout::BORDER_WIDTH,
                                 ..Default::default()
                             },
-                            MinimapThumbBorder::None => Default::default(),
+                            MinimapThumbBorder::None => Edges::default(),
                         };
 
                         // The minimap's bottom edge sits against the pane card's rounded

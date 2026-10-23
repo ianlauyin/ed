@@ -621,10 +621,10 @@ impl App {
                 background_executor,
                 foreground_executor,
                 svg_renderer: SvgRenderer::new(asset_source.clone()),
-                loading_assets: Default::default(),
+                loading_assets: HashMap::default(),
                 asset_source,
                 http_client: None,
-                globals_by_type: Default::default(),
+                globals_by_type: TypeIdHashMap::default(),
                 entities,
                 new_entity_observers: SubscriberSet::new(),
                 windows: SlotMap::with_key(),
@@ -634,10 +634,10 @@ impl App {
                 keymap: Rc::new(RefCell::new(Keymap::default())),
                 keyboard_layout,
                 keyboard_mapper,
-                global_action_listeners: Default::default(),
+                global_action_listeners: TypeIdHashMap::default(),
                 pending_effects: VecDeque::new(),
                 pending_notifications: FxHashSet::default(),
-                pending_global_notifications: Default::default(),
+                pending_global_notifications: TypeIdHashSet::default(),
                 observers: SubscriberSet::new(),
                 tracked_entities: FxHashMap::default(),
                 window_invalidators_by_entity: FxHashMap::default(),
@@ -659,7 +659,7 @@ impl App {
                 restart_path: None,
                 restart_arguments: Vec::new(),
                 window_closed_observers: SubscriberSet::new(),
-                layout_id_buffer: Default::default(),
+                layout_id_buffer: Vec::default(),
                 propagate_event: true,
                 prompt_builder: Some(PromptBuilder::Default),
                 quit_mode: QuitMode::default(),
@@ -958,12 +958,12 @@ impl App {
         entities: &FxHashSet<EntityId>,
     ) {
         let mut tracked_entities = std::mem::take(self.tracked_entities.entry(window_handle.id).or_default());
-        for entity in tracked_entities.iter() {
+        for entity in &tracked_entities {
             self.window_invalidators_by_entity.entry(*entity).and_modify(|windows| {
                 windows.remove(&window_handle.id);
             });
         }
-        for entity in entities.iter() {
+        for entity in entities {
             self.window_invalidators_by_entity
                 .entry(*entity)
                 .or_default()
@@ -2736,19 +2736,19 @@ impl<'a, T: 'static> GpuiBorrow<'a, T> {
     }
 }
 
-impl<'a, T: 'static> std::borrow::Borrow<T> for GpuiBorrow<'a, T> {
+impl<T: 'static> std::borrow::Borrow<T> for GpuiBorrow<'_, T> {
     fn borrow(&self) -> &T {
         self.inner.as_ref().unwrap().borrow()
     }
 }
 
-impl<'a, T: 'static> std::borrow::BorrowMut<T> for GpuiBorrow<'a, T> {
+impl<T: 'static> std::borrow::BorrowMut<T> for GpuiBorrow<'_, T> {
     fn borrow_mut(&mut self) -> &mut T {
         self.inner.as_mut().unwrap().borrow_mut()
     }
 }
 
-impl<'a, T: 'static> std::ops::Deref for GpuiBorrow<'a, T> {
+impl<T: 'static> std::ops::Deref for GpuiBorrow<'_, T> {
     type Target = T;
 
     fn deref(&self) -> &Self::Target {
@@ -2756,13 +2756,13 @@ impl<'a, T: 'static> std::ops::Deref for GpuiBorrow<'a, T> {
     }
 }
 
-impl<'a, T: 'static> std::ops::DerefMut for GpuiBorrow<'a, T> {
+impl<T: 'static> std::ops::DerefMut for GpuiBorrow<'_, T> {
     fn deref_mut(&mut self) -> &mut T {
         self.inner.as_mut().unwrap()
     }
 }
 
-impl<'a, T> Drop for GpuiBorrow<'a, T> {
+impl<T> Drop for GpuiBorrow<'_, T> {
     fn drop(&mut self) {
         let lease = self.inner.take().unwrap();
         self.app.notify(lease.id);

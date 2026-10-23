@@ -138,7 +138,7 @@ impl Editor {
         if self.allow_git_diff_scrollbar_markers != allow {
             self.allow_git_diff_scrollbar_markers = allow;
             self.scrollbar_marker_state.dirty = true;
-            self.scrollbar_marker_state.markers = Default::default();
+            self.scrollbar_marker_state.markers = Arc::default();
             self.scrollbar_marker_state.pending_refresh = None;
             cx.notify();
         }

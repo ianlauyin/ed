@@ -153,7 +153,7 @@ impl Render for ProjectDiagnosticsEditor {
                     let label = format!("Show {} warning{}", self.summary.warning_count, plural_suffix);
                     this.child(Button::new("diagnostics-show-warning-label", label).on_click(cx.listener(
                         |this, _, window, cx| {
-                            this.toggle_warnings(&Default::default(), window, cx);
+                            this.toggle_warnings(&ToggleWarnings, window, cx);
                             cx.notify();
                         },
                     )))
@@ -270,14 +270,14 @@ impl ProjectDiagnosticsEditor {
         let mut this = Self {
             project: project_handle.clone(),
             summary: project.diagnostic_summary(false, cx),
-            diagnostics: Default::default(),
-            blocks: Default::default(),
+            diagnostics: HashMap::default(),
+            blocks: HashMap::default(),
             include_warnings,
             workspace,
             multibuffer: excerpts,
             focus_handle,
             editor,
-            paths_to_update: Default::default(),
+            paths_to_update: BTreeSet::default(),
             update_excerpts_task: None,
             diagnostic_summary_update: Task::ready(()),
             _subscription: project_event_subscription,
@@ -595,7 +595,7 @@ impl ProjectDiagnosticsEditor {
                 if was_empty && let Some(anchor_range) = anchor_ranges.first() {
                     let range_to_select = anchor_range.start..anchor_range.start;
                     this.editor.update(cx, |editor, cx| {
-                        editor.change_selections(Default::default(), window, cx, |s| {
+                        editor.change_selections(editor::SelectionEffects::default(), window, cx, |s| {
                             s.select_anchor_ranges([range_to_select]);
                         })
                     });
@@ -827,7 +827,7 @@ impl DiagnosticsToolbarEditor for WeakEntity<ProjectDiagnosticsEditor> {
 
     fn toggle_warnings(&self, window: &mut Window, cx: &mut App) {
         let _ = self.update(cx, |project_diagnostics_editor, cx| {
-            project_diagnostics_editor.toggle_warnings(&Default::default(), window, cx);
+            project_diagnostics_editor.toggle_warnings(&ToggleWarnings, window, cx);
         });
     }
 

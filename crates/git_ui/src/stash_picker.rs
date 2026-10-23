@@ -251,8 +251,8 @@ impl StashListDelegate {
             workspace,
             all_stash_entries: None,
             selected_index: 0,
-            last_query: Default::default(),
-            modifiers: Default::default(),
+            last_query: String::default(),
+            modifiers: Modifiers::default(),
             focus_handle: cx.focus_handle(),
             timezone,
             show_footer: false,
@@ -398,7 +398,7 @@ impl PickerDelegate for StashListDelegate {
                     false,
                     true,
                     10000,
-                    &Default::default(),
+                    &std::sync::atomic::AtomicBool::default(),
                     cx.background_executor().clone(),
                 )
                 .await

@@ -41,8 +41,8 @@ impl MetalAtlas {
         MetalAtlas(Mutex::new(AtlasState::new(MetalAtlasTextures {
             device,
             supports_shared_storage,
-            monochrome_textures: Default::default(),
-            polychrome_textures: Default::default(),
+            monochrome_textures: AtlasTextureList::default(),
+            polychrome_textures: AtlasTextureList::default(),
         })))
     }
 

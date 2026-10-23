@@ -354,14 +354,14 @@ impl ImageStore {
                 });
 
                 LocalImageStore {
-                    local_image_ids_by_path: Default::default(),
-                    local_image_ids_by_entry_id: Default::default(),
+                    local_image_ids_by_path: HashMap::default(),
+                    local_image_ids_by_entry_id: HashMap::default(),
                     image_store: this,
                     _subscription: subscription,
                 }
             })),
-            opened_images: Default::default(),
-            loading_images_by_path: Default::default(),
+            opened_images: HashMap::default(),
+            loading_images_by_path: HashMap::default(),
             worktree_store,
         }
     }
@@ -376,12 +376,12 @@ impl ImageStore {
             state: Box::new(cx.new(|_| RemoteImageStore {
                 upstream_client,
                 project_id,
-                loading_remote_images_by_id: Default::default(),
-                remote_image_listeners: Default::default(),
-                loaded_images: Default::default(),
+                loading_remote_images_by_id: HashMap::default(),
+                remote_image_listeners: HashMap::default(),
+                loaded_images: HashMap::default(),
             })),
-            opened_images: Default::default(),
-            loading_images_by_path: Default::default(),
+            opened_images: HashMap::default(),
+            loading_images_by_path: HashMap::default(),
             worktree_store,
         }
     }

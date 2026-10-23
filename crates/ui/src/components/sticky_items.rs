@@ -132,7 +132,7 @@ impl Element for StickyItemsElement {
         for item in self.rest_elements.iter_mut().rev() {
             item.paint(window, cx);
         }
-        for item in self.rest_decorations.iter_mut() {
+        for item in &mut self.rest_decorations {
             item.paint(window, cx);
         }
     }

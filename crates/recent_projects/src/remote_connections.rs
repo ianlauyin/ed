@@ -388,7 +388,7 @@ async fn path_exists(connection: &Arc<dyn RemoteConnection>, path: &Path) -> boo
     let Ok(command) = connection.build_command(
         Some("test".to_string()),
         &["-e".to_owned(), path.to_string_lossy().to_string()],
-        &Default::default(),
+        &std::collections::HashMap::<_, _, _>::default(),
         None,
         None,
         Interactive::No,

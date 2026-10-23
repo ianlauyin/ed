@@ -759,7 +759,7 @@ impl Default for Style {
             border_color: None,
             border_style: BorderStyle::default(),
             corner_radii: Corners::default(),
-            box_shadow: Default::default(),
+            box_shadow: Vec::default(),
             text: TextStyleRefinement::default(),
             mouse_cursor: None,
             opacity: None,

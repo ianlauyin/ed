@@ -304,8 +304,8 @@ impl Companion {
     pub(crate) fn new(rhs_display_map_id: EntityId) -> Self {
         Self {
             rhs_display_map_id,
-            rhs_custom_block_to_balancing_block: Default::default(),
-            lhs_custom_block_to_balancing_block: Default::default(),
+            rhs_custom_block_to_balancing_block: RefCell::default(),
+            lhs_custom_block_to_balancing_block: RefCell::default(),
         }
     }
 
@@ -456,9 +456,9 @@ impl DisplayMap {
             crease_map,
             fold_placeholder,
             diagnostics_max_severity,
-            text_highlights: Default::default(),
-            inlay_highlights: Default::default(),
-            semantic_token_highlights: Default::default(),
+            text_highlights: Arc::default(),
+            inlay_highlights: TreeMap::default(),
+            semantic_token_highlights: Arc::default(),
             clip_at_line_ends: false,
             masked: false,
             companion: None,

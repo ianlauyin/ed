@@ -197,9 +197,9 @@ impl WrapMap {
                 font_with_size: (font, font_size),
                 wrap_width: None,
                 soft_wrap_indent: SoftWrapIndent::default(),
-                pending_edits: Default::default(),
-                interpolated_edits: Default::default(),
-                edits_since_sync: Default::default(),
+                pending_edits: VecDeque::default(),
+                interpolated_edits: Patch::default(),
+                edits_since_sync: Patch::default(),
                 snapshot: WrapSnapshot::new(tab_snapshot),
                 background_task: None,
             };
@@ -736,7 +736,7 @@ impl WrapSnapshot {
         let input_end = input_end.min(max_point);
         WrapChunks {
             input_chunks: self.tab_snapshot.chunks(input_start..input_end, language_aware, highlights),
-            input_chunk: Default::default(),
+            input_chunk: Chunk::default(),
             output_position: output_start,
             max_output_row: rows.end,
             transforms,
@@ -1216,7 +1216,7 @@ impl WrapPoint {
 
 impl sum_tree::ContextLessSummary for TransformSummary {
     fn zero() -> Self {
-        Default::default()
+        TransformSummary::default()
     }
 
     fn add_summary(&mut self, other: &Self) {
@@ -1227,7 +1227,7 @@ impl sum_tree::ContextLessSummary for TransformSummary {
 
 impl<'a> sum_tree::Dimension<'a, TransformSummary> for TabPoint {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        TabPoint::default()
     }
 
     fn add_summary(&mut self, summary: &'a TransformSummary, _: ()) {
@@ -1243,7 +1243,7 @@ impl sum_tree::SeekTarget<'_, TransformSummary, TransformSummary> for TabPoint {
 
 impl<'a> sum_tree::Dimension<'a, TransformSummary> for WrapPoint {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        WrapPoint::default()
     }
 
     fn add_summary(&mut self, summary: &'a TransformSummary, _: ()) {

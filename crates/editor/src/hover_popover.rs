@@ -980,7 +980,7 @@ pub fn open_markdown_url(workspace: Option<Entity<Workspace>>, link: SharedStrin
                     return Ok(());
                 };
                 editor.update_in(cx, |editor, window, cx| {
-                    editor.change_selections(Default::default(), window, cx, |selections| {
+                    editor.change_selections(crate::SelectionEffects::default(), window, cx, |selections| {
                         selections.select_ranges([text::Point::new(accum - 1, 0)..text::Point::new(accum - 1, 0)]);
                     });
                 })

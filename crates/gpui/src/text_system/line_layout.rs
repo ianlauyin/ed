@@ -88,8 +88,8 @@ impl LineLayout {
         let mut prev_index = 0;
         let mut prev_x = px(0.);
 
-        for run in self.runs.iter() {
-            for glyph in run.glyphs.iter() {
+        for run in &self.runs {
+            for glyph in &run.glyphs {
                 if glyph.position.x >= x {
                     if glyph.position.x - x < x - prev_x {
                         return glyph.index;
@@ -804,8 +804,8 @@ fn apply_force_width_to_layout(layout: &mut LineLayout, force_width: Pixels) {
     let mut last_base_shaped_x = px(f32::NEG_INFINITY);
     let mut last_base_actual_x = px(0.);
 
-    for run in layout.runs.iter_mut() {
-        for glyph in run.glyphs.iter_mut() {
+    for run in &mut layout.runs {
+        for glyph in &mut run.glyphs {
             let shaped_x = glyph.position.x;
 
             if shaped_x > last_base_shaped_x + force_width * 0.5 {

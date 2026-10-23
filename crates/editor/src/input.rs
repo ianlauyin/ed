@@ -653,7 +653,7 @@ impl Editor {
                 })
                 .collect();
 
-            this.change_selections(Default::default(), window, cx, |s| s.select(new_selections));
+            this.change_selections(SelectionEffects::default(), window, cx, |s| s.select(new_selections));
 
             if let Some(task) = this.trigger_on_type_formatting("\n".to_owned(), window, cx) {
                 task.detach_and_log_err(cx);
@@ -689,7 +689,7 @@ impl Editor {
         self.transact(window, cx, |editor, window, cx| {
             editor.edit(edits, cx);
 
-            editor.change_selections(Default::default(), window, cx, |s| {
+            editor.change_selections(SelectionEffects::default(), window, cx, |s| {
                 let mut index = 0;
                 s.move_cursors_with(&mut |map, _, _| {
                     let row = rows[index];
@@ -771,7 +771,7 @@ impl Editor {
                 });
             }
 
-            editor.change_selections(Default::default(), window, cx, |s| {
+            editor.change_selections(SelectionEffects::default(), window, cx, |s| {
                 let mut index = 0;
                 s.maybe_move_cursors_with(&mut |map, _, _| {
                     let row = rows.get(index).copied().flatten();
@@ -848,7 +848,7 @@ impl Editor {
         }
         self.transact(window, cx, |this, window, cx| {
             this.select_autoclose_pair(window, cx);
-            this.change_selections(Default::default(), window, cx, |s| {
+            this.change_selections(SelectionEffects::default(), window, cx, |s| {
                 s.move_with(&mut |map, selection| {
                     if selection.is_empty() {
                         let mut cursor = if action.ignore_newlines {
@@ -877,7 +877,7 @@ impl Editor {
         }
         self.transact(window, cx, |this, window, cx| {
             this.select_autoclose_pair(window, cx);
-            this.change_selections(Default::default(), window, cx, |s| {
+            this.change_selections(SelectionEffects::default(), window, cx, |s| {
                 s.move_with(&mut |map, selection| {
                     if selection.is_empty() {
                         let mut cursor = if action.ignore_newlines {
@@ -905,7 +905,7 @@ impl Editor {
             return;
         }
         self.transact(window, cx, |this, window, cx| {
-            this.change_selections(Default::default(), window, cx, |s| {
+            this.change_selections(SelectionEffects::default(), window, cx, |s| {
                 s.move_with(&mut |map, selection| {
                     if selection.is_empty() {
                         let mut cursor = if action.ignore_newlines {
@@ -933,7 +933,7 @@ impl Editor {
             return;
         }
         self.transact(window, cx, |this, window, cx| {
-            this.change_selections(Default::default(), window, cx, |s| {
+            this.change_selections(SelectionEffects::default(), window, cx, |s| {
                 s.move_with(&mut |map, selection| {
                     if selection.is_empty() {
                         let mut cursor = if action.ignore_newlines {
@@ -961,7 +961,7 @@ impl Editor {
             return;
         }
         self.transact(window, cx, |this, window, cx| {
-            this.change_selections(Default::default(), window, cx, |s| {
+            this.change_selections(SelectionEffects::default(), window, cx, |s| {
                 s.move_with(&mut |_, selection| {
                     selection.reversed = true;
                 });
@@ -981,7 +981,7 @@ impl Editor {
             return;
         }
         self.transact(window, cx, |this, window, cx| {
-            this.change_selections(Default::default(), window, cx, |s| {
+            this.change_selections(SelectionEffects::default(), window, cx, |s| {
                 s.move_with(&mut |_, selection| {
                     selection.reversed = false;
                 });
@@ -997,7 +997,7 @@ impl Editor {
             return;
         }
         self.transact(window, cx, |this, window, cx| {
-            this.change_selections(Default::default(), window, cx, |s| {
+            this.change_selections(SelectionEffects::default(), window, cx, |s| {
                 s.move_with(&mut |_, selection| {
                     selection.reversed = false;
                 });
@@ -1005,7 +1005,7 @@ impl Editor {
 
             this.select_to_end_of_line(&SelectToEndOfLine { stop_at_soft_wraps: false }, window, cx);
             if !action.stop_at_newlines {
-                this.change_selections(Default::default(), window, cx, |s| {
+                this.change_selections(SelectionEffects::default(), window, cx, |s| {
                     s.move_with(&mut |_, sel| {
                         if sel.is_empty() {
                             sel.end = DisplayPoint::new(sel.end.row() + 1_u32, 0);
@@ -1164,7 +1164,7 @@ impl Editor {
                     }
                 }
             }
-            this.change_selections(Default::default(), _window, cx, |s| s.select(selections));
+            this.change_selections(SelectionEffects::default(), _window, cx, |s| s.select(selections));
         });
     }
 
@@ -1304,7 +1304,7 @@ impl Editor {
                             .zip(prefix_trimmed_lengths.iter().copied())
                             .map(|(prefix, trimmed_prefix_len)| {
                                 comment_prefix_range(
-                                    snapshot.deref(),
+                                    &snapshot,
                                     row,
                                     &prefix[..trimmed_prefix_len],
                                     &prefix[trimmed_prefix_len..],
@@ -1353,14 +1353,14 @@ impl Editor {
                     let comment_prefix = full_comment_prefix.trim_end_matches(' ');
                     let comment_prefix_whitespace = &full_comment_prefix[comment_prefix.len()..];
                     let prefix_range = comment_prefix_range(
-                        snapshot.deref(),
+                        &snapshot,
                         start_row,
                         comment_prefix,
                         comment_prefix_whitespace,
                         ignore_indent,
                     );
                     let suffix_range = comment_suffix_range(
-                        snapshot.deref(),
+                        &snapshot,
                         end_row,
                         comment_suffix.trim_start_matches(' '),
                         comment_suffix.starts_with(' '),
@@ -1411,7 +1411,7 @@ impl Editor {
             }
 
             drop(snapshot);
-            this.change_selections(Default::default(), window, cx, |s| s.select(selections));
+            this.change_selections(SelectionEffects::default(), window, cx, |s| s.select(selections));
 
             let selections = this.selections.all::<Point>(&this.display_snapshot(cx));
             let selections_on_single_row = selections
@@ -1426,7 +1426,7 @@ impl Editor {
             if advance_downwards {
                 let snapshot = this.buffer.read(cx).snapshot(cx);
 
-                this.change_selections(Default::default(), window, cx, |s| {
+                this.change_selections(SelectionEffects::default(), window, cx, |s| {
                     s.move_cursors_with(&mut |display_snapshot, display_point, _| {
                         let mut point = display_point.to_point(display_snapshot);
                         point.row += 1;
@@ -1489,7 +1489,7 @@ impl Editor {
             this.buffer.update(cx, |buffer, cx| {
                 buffer.edit(full_edits.iter().map(|(_, p, t)| (p.clone(), t.clone())).collect::<Vec<_>>(), None, cx);
             });
-            this.change_selections(Default::default(), window, cx, |s| {
+            this.change_selections(SelectionEffects::default(), window, cx, |s| {
                 let mut offset = 0;
                 let mut selections = vec![];
                 for (id, parent, text) in full_edits {
@@ -1500,7 +1500,7 @@ impl Editor {
                         start,
                         end: start + text.len(),
                         reversed: false,
-                        goal: Default::default(),
+                        goal: SelectionGoal::default(),
                     });
                 }
                 s.select(selections);
@@ -1610,7 +1610,7 @@ impl Editor {
 
         // Current range has associated linked ranges.
         let mut linked_edits = HashMap::<_, Vec<_>>::default();
-        for range in linked_ranges.iter() {
+        for range in linked_ranges {
             let start_offset = TO::to_offset(&range.start, &buffer_snapshot);
             let end_offset = start_offset + end_difference;
             let start_offset = start_offset + start_difference;
@@ -1695,7 +1695,7 @@ impl Editor {
 
             linked_edits.apply(cx);
 
-            this.change_selections(Default::default(), window, cx, |s| {
+            this.change_selections(SelectionEffects::default(), window, cx, |s| {
                 s.select_anchors(selection_anchors);
             });
 
@@ -2413,7 +2413,7 @@ impl EntityInputHandler for Editor {
                     selections.select_ranges(new_selected_ranges)
                 });
                 if should_backspace {
-                    this.backspace(&Default::default(), window, cx);
+                    this.backspace(&Backspace, window, cx);
                 }
             }
 

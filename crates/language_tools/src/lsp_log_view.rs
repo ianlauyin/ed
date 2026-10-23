@@ -879,7 +879,7 @@ impl Render for LspLogToolbarItemView {
                 move |window, cx| {
                     let log_view = log_view.clone();
                     ContextMenu::build(window, cx, |mut menu, window, _| {
-                        for (server_key, name, worktree_root, active_entry_kind) in available_language_servers.iter() {
+                        for (server_key, name, worktree_root, active_entry_kind) in &available_language_servers {
                             let label = format!("{name} ({worktree_root})");
                             let server_key = server_key.clone();
                             let active_entry_kind = *active_entry_kind;
@@ -1208,9 +1208,9 @@ impl ServerInfo {
                 language_name: None,
                 server_version: server.version(),
                 server_readable_version: server.readable_version(),
-                pending_work: Default::default(),
+                pending_work: std::collections::BTreeMap::default(),
                 has_pending_diagnostic_updates: false,
-                progress_tokens: Default::default(),
+                progress_tokens: HashSet::default(),
                 worktree: None,
                 binary: Some(server.binary().clone()),
                 configuration: Some(server.configuration().clone()),

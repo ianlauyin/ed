@@ -98,7 +98,7 @@ impl From<String> for SshConnectionHost {
 
 impl Default for SshConnectionHost {
     fn default() -> Self {
-        Self::Hostname(Default::default())
+        Self::Hostname(String::default())
     }
 }
 
@@ -262,7 +262,7 @@ impl RemoteConnection for SshRemoteConnection {
             args.push(format!("{}:{}:{}", local_port, bracket_ipv6(&host), remote_port));
         }
         args.push(socket.connection_options.ssh_destination());
-        Ok(CommandTemplate { program: "ssh".into(), args, env: Default::default() })
+        Ok(CommandTemplate { program: "ssh".into(), args, env: HashMap::default() })
     }
 
     fn upload_directory(&self, src_path: PathBuf, dest_path: RemotePathBuf, cx: &App) -> Task<Result<()>> {
@@ -854,7 +854,7 @@ fn build_command_posix(
     let mut exec = posix_working_dir_prefix(working_dir, ssh_shell_kind)?;
     write!(exec, "exec env ")?;
 
-    for (k, v) in input_env.iter() {
+    for (k, v) in input_env {
         let assignment = format!("{k}={v}");
         let assignment = ssh_shell_kind.try_quote(&assignment).context("shell quoting")?;
         write!(exec, "{assignment} ")?;

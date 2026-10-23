@@ -760,7 +760,16 @@ impl PickerDelegate for WorktreePickerDelegate {
         let executor = cx.background_executor().clone();
 
         let task = cx.background_executor().spawn(async move {
-            fuzzy::match_strings(&candidates, &query, true, true, 10000, &Default::default(), executor).await
+            fuzzy::match_strings(
+                &candidates,
+                &query,
+                true,
+                true,
+                10000,
+                &std::sync::atomic::AtomicBool::default(),
+                executor,
+            )
+            .await
         });
 
         let repo_worktrees_clone = repo_worktrees;

@@ -170,7 +170,7 @@ impl Editor {
         let buffer = self.buffer.read(cx).snapshot(cx);
         let mut selection = self.selections.first::<MultiBufferOffset>(&self.display_snapshot(cx));
         selection.set_head(buffer.len(), SelectionGoal::None);
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.select(vec![selection]);
         });
     }
@@ -191,7 +191,7 @@ impl Editor {
             selection.end = cmp::min(max_point, Point::new(rows.end.0, 0));
             selection.reversed = false;
         }
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.select(selections);
         });
     }
@@ -279,7 +279,7 @@ impl Editor {
         let query_matches =
             select_next_state.query.stream_find_iter(buffer.bytes_in_range(MultiBufferOffset(0)..buffer.len()));
 
-        for query_match in query_matches.into_iter() {
+        for query_match in query_matches {
             let query_match = query_match.context("query match for select all action")?; // can only fail due to I/O
             let offset_range = if reversed {
                 MultiBufferOffset(query_match.end())..MultiBufferOffset(query_match.start())
@@ -456,7 +456,7 @@ impl Editor {
         let selections = self.selections.disjoint_anchors_arc();
         match selections.first() {
             Some(first) if selections.len() >= 2 => {
-                self.change_selections(Default::default(), window, cx, |s| {
+                self.change_selections(SelectionEffects::default(), window, cx, |s| {
                     s.select_ranges([first.range()]);
                 });
             }
@@ -474,7 +474,7 @@ impl Editor {
         let selections = self.selections.disjoint_anchors_arc();
         match selections.last() {
             Some(last) if selections.len() >= 2 => {
-                self.change_selections(Default::default(), window, cx, |s| {
+                self.change_selections(SelectionEffects::default(), window, cx, |s| {
                     s.select_ranges([last.range()]);
                 });
             }
@@ -525,7 +525,7 @@ impl Editor {
             .collect::<Vec<_>>();
 
         if selected_larger_symbol {
-            self.change_selections(Default::default(), window, cx, |s| {
+            self.change_selections(SelectionEffects::default(), window, cx, |s| {
                 s.select(new_selections);
             });
         }
@@ -824,7 +824,7 @@ impl Editor {
     }
 
     fn select_delimiters_impl(&mut self, include_brackets: bool, window: &mut Window, cx: &mut Context<Self>) {
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_offsets_with(&mut |snapshot, selection| {
                 let Some(enclosing_bracket_ranges) = snapshot.enclosing_bracket_ranges(selection.start..selection.end)
                 else {
@@ -864,7 +864,7 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.move_offsets_with(&mut |snapshot, selection| {
                 let Some(enclosing_bracket_ranges) = snapshot.enclosing_bracket_ranges(selection.start..selection.end)
                 else {
@@ -1913,7 +1913,7 @@ impl Editor {
         }
 
         let mut last_added_item_per_group = HashMap::default();
-        for group in state.groups.iter_mut() {
+        for group in &mut state.groups {
             if let Some(last_id) = group.stack.last() {
                 last_added_item_per_group.insert(*last_id, group);
             }
@@ -2267,7 +2267,7 @@ impl Editor {
             })
             .collect::<Vec<_>>();
 
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.select(new_selections);
         });
         self.request_autoscroll(Autoscroll::newest(), cx);
@@ -2289,7 +2289,7 @@ impl Editor {
             })
             .collect::<Vec<_>>();
 
-        self.change_selections(Default::default(), window, cx, |s| {
+        self.change_selections(SelectionEffects::default(), window, cx, |s| {
             s.select(new_selections);
         });
     }

@@ -96,7 +96,7 @@ impl sum_tree::KeyedItem for Locator {
 
 impl sum_tree::ContextLessSummary for Locator {
     fn zero() -> Self {
-        Default::default()
+        Locator::default()
     }
 
     fn add_summary(&mut self, summary: &Self) {

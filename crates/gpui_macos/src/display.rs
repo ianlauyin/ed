@@ -128,7 +128,7 @@ impl PlatformDisplay for MacDisplay {
             let bounds = CGDisplayBounds(self.0);
 
             Bounds {
-                origin: Default::default(),
+                origin: gpui::Point::default(),
                 size: size(px(bounds.size.width as f32), px(bounds.size.height as f32)),
             }
         }

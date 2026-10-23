@@ -182,7 +182,7 @@ impl Render for CommitTooltip {
         let workspace = self.workspace.clone();
         let commit_summary = CommitSummary {
             sha: self.commit.sha.clone(),
-            subject: self.commit.message.as_ref().map_or(Default::default(), |message| {
+            subject: self.commit.message.as_ref().map_or(SharedString::default(), |message| {
                 message.message.split('\n').next().unwrap().trim_end().to_string().into()
             }),
             commit_timestamp: self.commit.commit_time.unix_timestamp(),

@@ -45,7 +45,7 @@ impl Editor {
 
         let project = self.project.clone();
         let runnable_task = match deployed_from {
-            Some(CodeActionSource::Indicator(_)) => Task::ready(Ok(Default::default())),
+            Some(CodeActionSource::Indicator(_)) => Task::ready(Ok(Option::default())),
             _ => {
                 let mut task_context_task = Task::ready(Ok(None));
                 let workspace = self.workspace().map(|w| w.downgrade());

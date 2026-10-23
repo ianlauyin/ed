@@ -404,7 +404,7 @@ impl TabSnapshot {
         expanded_bytes + column.saturating_sub(collapsed_bytes)
     }
 
-    fn collapse_tabs<'a>(&self, mut cursor: TabStopCursor<'a>, column: u32, bias: Bias) -> (u32, u32, u32) {
+    fn collapse_tabs(&self, mut cursor: TabStopCursor<'_>, column: u32, bias: Bias) -> (u32, u32, u32) {
         let tab_size = self.tab_size.get();
         let mut collapsed_column = column;
         let mut seek_target = column.min(self.max_expansion_column);

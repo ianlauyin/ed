@@ -92,6 +92,7 @@ pub trait Along {
     AddAssign,
     Sub,
     SubAssign,
+    Clone,
     Copy,
     Debug,
     PartialEq,
@@ -351,12 +352,6 @@ where
     /// ```
     pub fn clamp(&self, min: &Self, max: &Self) -> Self {
         self.max(min).min(max)
-    }
-}
-
-impl<T: Clone + Debug + Default + PartialEq> Clone for Point<T> {
-    fn clone(&self) -> Self {
-        Self { x: self.x.clone(), y: self.y.clone() }
     }
 }
 

@@ -1,20 +1,22 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{format_ident, quote};
-use syn::{
-    DeriveInput, Field, FieldsNamed, PredicateType, TraitBound, Type, TypeParamBound, WhereClause,
-    WherePredicate, parse_macro_input, parse_quote,
-};
+use quote::format_ident;
+use quote::quote;
+use syn::DeriveInput;
+use syn::Field;
+use syn::FieldsNamed;
+use syn::PredicateType;
+use syn::TraitBound;
+use syn::Type;
+use syn::TypeParamBound;
+use syn::WhereClause;
+use syn::WherePredicate;
+use syn::parse_macro_input;
+use syn::parse_quote;
 
 #[proc_macro_derive(Refineable, attributes(refineable))]
 pub fn derive_refineable(input: TokenStream) -> TokenStream {
-    let DeriveInput {
-        ident,
-        data,
-        generics,
-        attrs,
-        ..
-    } = parse_macro_input!(input);
+    let DeriveInput { ident, data, generics, attrs, .. } = parse_macro_input!(input);
 
     let refineable_attr = attrs.iter().find(|attr| attr.path().is_ident("refineable"));
 
@@ -40,10 +42,9 @@ pub fn derive_refineable(input: TokenStream) -> TokenStream {
     let (impl_generics, ty_generics, where_clause) = generics.split_for_impl();
 
     let fields = match data {
-        syn::Data::Struct(syn::DataStruct {
-            fields: syn::Fields::Named(FieldsNamed { named, .. }),
-            ..
-        }) => named.into_iter().collect::<Vec<Field>>(),
+        syn::Data::Struct(syn::DataStruct { fields: syn::Fields::Named(FieldsNamed { named, .. }), .. }) => {
+            named.into_iter().collect::<Vec<Field>>()
+        }
         _ => panic!("This derive macro only supports structs with named fields"),
     };
 
@@ -73,7 +74,7 @@ pub fn derive_refineable(input: TokenStream) -> TokenStream {
             WherePredicate::Type(PredicateType {
                 lifetimes: None,
                 bounded_ty: ty.clone(),
-                colon_token: Default::default(),
+                colon_token: syn::token::Colon::default(),
                 bounds: {
                     let mut punctuated = syn::punctuated::Punctuated::new();
                     punctuated.push_value(TypeParamBound::Trait(TraitBound {
@@ -96,7 +97,7 @@ pub fn derive_refineable(input: TokenStream) -> TokenStream {
             where_clause.clone()
         }
         None => WhereClause {
-            where_token: Default::default(),
+            where_token: syn::token::Where::default(),
             predicates: type_param_bounds.into_iter().collect(),
         },
     };
@@ -504,9 +505,7 @@ pub fn derive_refineable(input: TokenStream) -> TokenStream {
 }
 
 fn is_refineable_field(f: &Field) -> bool {
-    f.attrs
-        .iter()
-        .any(|attr| attr.path().is_ident("refineable"))
+    f.attrs.iter().any(|attr| attr.path().is_ident("refineable"))
 }
 
 fn is_optional_field(f: &Field) -> bool {

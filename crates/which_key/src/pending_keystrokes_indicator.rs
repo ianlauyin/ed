@@ -132,7 +132,7 @@ impl PendingKeystrokesIndicator {
         let pending_keys_changed =
             self.render_state.as_ref().is_none_or(|previous| previous.keystrokes.as_ref() != keystrokes.as_slice());
         if pending_keys_changed {
-            self.popover_scroll_handle.set_offset(Default::default());
+            self.popover_scroll_handle.set_offset(gpui::Point::default());
         }
         // Pausing or resuming the timeout also notifies observers, so close a hover-opened
         // popover early only when the pending keys change. A keyboard-opened popover stays open
@@ -162,7 +162,7 @@ impl PendingKeystrokesIndicator {
 
     fn clear_render_state(&mut self, window: &mut Window, cx: &mut Context<Self>) -> bool {
         self.popover = PopoverState::default();
-        self.popover_scroll_handle.set_offset(Default::default());
+        self.popover_scroll_handle.set_offset(gpui::Point::default());
         window.set_pending_input_timeout_paused(&cx.entity(), false, cx);
         self.render_state.take().is_some()
     }

@@ -901,7 +901,7 @@ impl GraphData {
         self.commits.reserve(commits.len());
         self.lines.reserve(commits.len() / 2);
 
-        for commit in commits.iter() {
+        for commit in commits {
             let commit_row = self.commits.len();
 
             let commit_lane = self.parent_to_lanes.get(&commit.sha).and_then(|lanes| lanes.iter().min().copied());
@@ -974,7 +974,7 @@ impl GraphData {
 
             self.max_lanes = self.max_lanes.max(self.lane_states.len());
 
-            for ref_name in commit.ref_names.iter() {
+            for ref_name in &commit.ref_names {
                 let char_count = ref_name.chars().count();
                 let is_wider =
                     self.widest_ref_label.as_ref().is_none_or(|(_, widest_count)| char_count > *widest_count);
@@ -1909,7 +1909,7 @@ impl GitGraph {
         self.search_state.matches.clear();
         self.search_state.selected_index = None;
         self.search_state.editor.update(cx, |editor, _cx| {
-            editor.set_text_style_refinement(Default::default());
+            editor.set_text_style_refinement(TextStyleRefinement::default());
         });
 
         if query.as_str().is_empty() {
@@ -1973,7 +1973,7 @@ impl GitGraph {
     fn activate_search_editor_if_focused(&self, window: &mut Window, cx: &mut Context<Self>) {
         self.search_state.editor.update(cx, |editor, cx| {
             if editor.is_focused(window) {
-                editor.select_all(&Default::default(), window, cx);
+                editor.select_all(&editor::actions::SelectAll, window, cx);
                 editor.show_cursor(cx);
             }
         });

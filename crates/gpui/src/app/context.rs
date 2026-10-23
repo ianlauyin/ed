@@ -44,7 +44,7 @@ pub struct Context<'a, T> {
     entity_state: WeakEntity<T>,
 }
 
-impl<'a, T> ops::Deref for Context<'a, T> {
+impl<T> ops::Deref for Context<'_, T> {
     type Target = App;
 
     fn deref(&self) -> &Self::Target {
@@ -52,7 +52,7 @@ impl<'a, T> ops::Deref for Context<'a, T> {
     }
 }
 
-impl<'a, T> ops::DerefMut for Context<'a, T> {
+impl<T> ops::DerefMut for Context<'_, T> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         self.app
     }

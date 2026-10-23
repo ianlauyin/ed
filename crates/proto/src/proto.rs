@@ -702,7 +702,7 @@ pub fn split_worktree_update(mut message: UpdateWorktree) -> impl Iterator<Item 
             && message.removed_entries.is_empty()
             && message.updated_repositories.is_empty();
 
-        let removed_repositories = if done { mem::take(&mut message.removed_repositories) } else { Default::default() };
+        let removed_repositories = if done { mem::take(&mut message.removed_repositories) } else { Vec::default() };
 
         Some(UpdateWorktree {
             project_id: message.project_id,

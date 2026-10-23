@@ -547,11 +547,11 @@ impl Worktree {
         };
         Ok(cx.new(move |cx: &mut Context<Worktree>| {
             let mut snapshot = LocalSnapshot {
-                ignores_by_parent_abs_path: Default::default(),
-                global_gitignore: Default::default(),
-                repo_exclude_by_work_dir_abs_path: Default::default(),
-                git_repositories: Default::default(),
-                external_canonical_to_relative: Default::default(),
+                ignores_by_parent_abs_path: HashMap::default(),
+                global_gitignore: Option::default(),
+                repo_exclude_by_work_dir_abs_path: HashMap::default(),
+                git_repositories: TreeMap::default(),
+                external_canonical_to_relative: BTreeMap::default(),
                 snapshot: Snapshot::new(
                     worktree_id,
                     abs_path
@@ -608,7 +608,7 @@ impl Worktree {
                 next_entry_id,
                 snapshot,
                 is_scanning: watch::channel_with(true),
-                snapshot_subscriptions: Default::default(),
+                snapshot_subscriptions: VecDeque::default(),
                 update_observer: None,
                 scan_requests_tx,
                 path_prefixes_to_scan_tx,
@@ -662,7 +662,7 @@ impl Worktree {
                 background_snapshot: background_snapshot.clone(),
                 updates_tx: Some(background_updates_tx),
                 update_observer: None,
-                snapshot_subscriptions: Default::default(),
+                snapshot_subscriptions: VecDeque::default(),
                 visible: worktree.visible,
                 disconnected: false,
                 received_initial_update: false,
@@ -1255,14 +1255,14 @@ impl LocalWorktree {
                     state: async_lock::Mutex::new(BackgroundScannerState {
                         prev_snapshot: snapshot.snapshot.clone(),
                         snapshot,
-                        symlink_paths_by_target: Default::default(),
-                        scanned_dirs: Default::default(),
-                        watched_dir_abs_paths_by_entry_id: Default::default(),
+                        symlink_paths_by_target: HashMap::default(),
+                        scanned_dirs: HashSet::default(),
+                        watched_dir_abs_paths_by_entry_id: HashMap::default(),
                         scanning_enabled,
-                        path_prefixes_to_scan: Default::default(),
-                        paths_to_scan: Default::default(),
+                        path_prefixes_to_scan: HashSet::default(),
+                        paths_to_scan: HashSet::default(),
                         removed_entries: RemovedEntries::default(),
-                        changed_paths: Default::default(),
+                        changed_paths: Vec::default(),
                     }),
                     phase: BackgroundScannerPhase::InitialScan,
                     settings,
@@ -1702,7 +1702,7 @@ impl LocalWorktree {
 
         cx.spawn(async move |this, cx| {
             let trash_id = if entry.is_file() {
-                fs.trash(&abs_path, Default::default()).await?
+                fs.trash(&abs_path, RemoveOptions::default()).await?
             } else {
                 fs.trash(&abs_path, RemoveOptions { recursive: true, ignore_if_not_exists: false }).await?
             };
@@ -1721,7 +1721,7 @@ impl LocalWorktree {
 
         cx.spawn(async move |this, cx| {
             if entry.is_file() {
-                fs.remove_file(&abs_path, Default::default()).await?
+                fs.remove_file(&abs_path, RemoveOptions::default()).await?
             } else {
                 fs.remove_dir(&abs_path, RemoveOptions { recursive: true, ignore_if_not_exists: false }).await?
             };
@@ -1928,8 +1928,8 @@ impl LocalWorktree {
     }
 
     pub fn update_abs_path_and_refresh(&mut self, new_path: Arc<SanitizedPath>, cx: &Context<Worktree>) {
-        self.snapshot.git_repositories = Default::default();
-        self.snapshot.ignores_by_parent_abs_path = Default::default();
+        self.snapshot.git_repositories = TreeMap::default();
+        self.snapshot.ignores_by_parent_abs_path = HashMap::default();
         let root_name = new_path
             .as_path()
             .file_name()
@@ -2167,8 +2167,8 @@ impl Snapshot {
             path_style,
             root_char_bag: root_name.as_unix_str().chars().map(|c| c.to_ascii_lowercase()).collect(),
             root_name,
-            entries_by_path: Default::default(),
-            entries_by_id: Default::default(),
+            entries_by_path: SumTree::default(),
+            entries_by_id: SumTree::default(),
             root_repo_common_dir: None,
             root_repo_is_linked_worktree: false,
             scan_id: 1,
@@ -3408,7 +3408,7 @@ impl<'a, S: Summary> sum_tree::Dimension<'a, PathSummary<S>> for PathProgress<'a
 
 impl<'a> sum_tree::Dimension<'a, PathSummary<GitSummary>> for GitSummary {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        GitSummary::default()
     }
 
     fn add_summary(&mut self, summary: &'a PathSummary<GitSummary>, _: ()) {
@@ -3426,7 +3426,7 @@ impl<'a> sum_tree::SeekTarget<'a, PathSummary<GitSummary>, Dimensions<TraversalP
 
 impl<'a, S: Summary> sum_tree::Dimension<'a, PathSummary<S>> for PathKey {
     fn zero(_: S::Context<'_>) -> Self {
-        Default::default()
+        PathKey::default()
     }
 
     fn add_summary(&mut self, summary: &'a PathSummary<S>, _: S::Context<'_>) {
@@ -3436,7 +3436,7 @@ impl<'a, S: Summary> sum_tree::Dimension<'a, PathSummary<S>> for PathKey {
 
 impl<'a, S: Summary> sum_tree::Dimension<'a, PathSummary<S>> for TraversalProgress<'a> {
     fn zero(_cx: S::Context<'_>) -> Self {
-        Default::default()
+        TraversalProgress::default()
     }
 
     fn add_summary(&mut self, summary: &'a PathSummary<S>, _: S::Context<'_>) {
@@ -3551,7 +3551,7 @@ impl Default for EntrySummary {
 
 impl sum_tree::ContextLessSummary for EntrySummary {
     fn zero() -> Self {
-        Default::default()
+        EntrySummary::default()
     }
 
     fn add_summary(&mut self, rhs: &Self) {
@@ -3595,7 +3595,7 @@ struct PathEntrySummary {
 
 impl sum_tree::ContextLessSummary for PathEntrySummary {
     fn zero() -> Self {
-        Default::default()
+        PathEntrySummary::default()
     }
 
     fn add_summary(&mut self, summary: &Self) {
@@ -3605,7 +3605,7 @@ impl sum_tree::ContextLessSummary for PathEntrySummary {
 
 impl<'a> sum_tree::Dimension<'a, PathEntrySummary> for ProjectEntryId {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        ProjectEntryId::default()
     }
 
     fn add_summary(&mut self, summary: &'a PathEntrySummary, _: ()) {
@@ -3624,7 +3624,7 @@ impl Default for PathKey {
 
 impl<'a> sum_tree::Dimension<'a, EntrySummary> for PathKey {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        PathKey::default()
     }
 
     fn add_summary(&mut self, summary: &'a EntrySummary, _: ()) {
@@ -4937,7 +4937,7 @@ impl BackgroundScanner {
             let abs_path = snapshot.abs_path.clone();
             let mut repo_exclude_keys_to_remove: Vec<Arc<Path>> = Vec::new();
 
-            for (work_dir_abs_path, (_, needs_update)) in snapshot.repo_exclude_by_work_dir_abs_path.iter_mut() {
+            for (work_dir_abs_path, (_, needs_update)) in &mut snapshot.repo_exclude_by_work_dir_abs_path {
                 let repository = snapshot
                     .git_repositories
                     .iter()
@@ -5368,7 +5368,8 @@ fn build_diff(
     new_snapshot: &Snapshot,
     event_roots: &[EventRoot],
 ) -> UpdatedEntriesSet {
-    use BackgroundScannerPhase::*;
+    use BackgroundScannerPhase::EventsReceivedDuringInitialScan;
+    use BackgroundScannerPhase::InitialScan;
     use PathChange::Added;
     use PathChange::AddedOrUpdated;
     use PathChange::Loaded;
@@ -5529,7 +5530,7 @@ impl TraversalProgress<'_> {
 
 impl<'a> sum_tree::Dimension<'a, EntrySummary> for TraversalProgress<'a> {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        TraversalProgress::default()
     }
 
     fn add_summary(&mut self, summary: &'a EntrySummary, _: ()) {

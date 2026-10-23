@@ -341,7 +341,7 @@ fn run() -> Result<()> {
         let _ = temp_dir.keep();
     }
 
-    for path in args.paths_with_position.iter() {
+    for path in &args.paths_with_position {
         if URL_PREFIX.iter().any(|&prefix| path.starts_with(prefix)) {
             urls.push(path.to_string());
         } else if path == "-" && args.paths_with_position.len() == 1 {

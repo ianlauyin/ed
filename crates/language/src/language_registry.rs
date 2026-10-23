@@ -110,17 +110,17 @@ impl LanguageRegistry {
                 next_language_server_id: 0,
                 languages: Vec::new(),
                 available_languages: AvailableLanguages::default(),
-                grammars: Default::default(),
-                language_settings: Default::default(),
-                loading_languages: Default::default(),
-                lsp_adapters: Default::default(),
-                all_lsp_adapters: Default::default(),
+                grammars: HashMap::default(),
+                language_settings: AllLanguageSettingsContent::default(),
+                loading_languages: HashMap::default(),
+                lsp_adapters: HashMap::default(),
+                all_lsp_adapters: HashMap::default(),
                 subscription: watch::channel(),
-                theme: Default::default(),
+                theme: Option::default(),
                 version: 0,
                 reload_count: 0,
             }),
-            lsp_binary_status_tx: Default::default(),
+            lsp_binary_status_tx: ServerStatusSender::default(),
             executor,
         };
         this.add(PLAIN_TEXT.clone());
@@ -332,7 +332,7 @@ impl LanguageRegistry {
         let mut state = self.state.write();
 
         // If the language is already loaded, resolve with it immediately.
-        for loaded_language in state.languages.iter() {
+        for loaded_language in &state.languages {
             if loaded_language.id == language_id {
                 tx.send(Ok(loaded_language.clone())).unwrap();
                 return rx;

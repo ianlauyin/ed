@@ -641,7 +641,7 @@ impl PickerDelegate for LspLocationsDelegate {
                     false,
                     true,
                     candidates.len(),
-                    &Default::default(),
+                    &std::sync::atomic::AtomicBool::default(),
                     cx.background_executor().clone(),
                 )
                 .await;

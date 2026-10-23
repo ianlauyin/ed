@@ -288,12 +288,12 @@ pub enum DiagnosticSourceKind {
 impl Default for Diagnostic {
     fn default() -> Self {
         Self {
-            source: Default::default(),
+            source: Option::default(),
             source_kind: DiagnosticSourceKind::Other,
             code: None,
             code_description: None,
             severity: DiagnosticSeverity::ERROR,
-            message: Default::default(),
+            message: DiagnosticMessage::default(),
             group_id: 0,
             is_primary: false,
             is_disk_based: false,

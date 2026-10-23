@@ -437,14 +437,14 @@ fn compute_indent_guides(
             _ => {}
         }
 
-        for indent in indent_stack.iter_mut() {
+        for indent in &mut indent_stack {
             indent.length = current_row - indent.offset.y + 1;
         }
     }
 
     indent_guides.extend(indent_stack);
 
-    for guide in indent_guides.iter_mut() {
+    for guide in &mut indent_guides {
         if includes_trailing_indent && guide.offset.y + guide.length == offset + indents.len().saturating_sub(1) {
             guide.continues_offscreen =
                 indents.last().map(|last_indent| guide.offset.x < *last_indent).unwrap_or(false);

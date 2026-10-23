@@ -46,7 +46,7 @@ impl DiagnosticRenderer {
         let primary = &diagnostic_group[primary_ix];
         let group_id = primary.diagnostic.group_id;
         let mut results = vec![];
-        for entry in diagnostic_group.iter() {
+        for entry in &diagnostic_group {
             let mut markdown = Self::markdown(entry.diagnostic);
             if entry.diagnostic.is_primary {
                 let diagnostic = &primary.diagnostic;
@@ -283,7 +283,7 @@ impl DiagnosticBlock {
         let range = range.start.to_offset(snapshot)..range.end.to_offset(snapshot);
 
         editor.unfold_ranges(&[range.start..range.end], true, false, cx);
-        editor.change_selections(Default::default(), window, cx, |s| {
+        editor.change_selections(editor::SelectionEffects::default(), window, cx, |s| {
             s.select_ranges([range.start..range.start]);
         });
         window.focus(&editor.focus_handle(cx), cx);

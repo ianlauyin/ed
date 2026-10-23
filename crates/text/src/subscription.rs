@@ -1,9 +1,11 @@
-use crate::{Edit, Patch};
+use std::mem;
+use std::sync::Arc;
+use std::sync::Weak;
+
 use parking_lot::Mutex;
-use std::{
-    mem,
-    sync::{Arc, Weak},
-};
+
+use crate::Edit;
+use crate::Patch;
 
 #[derive(Default)]
 pub struct Topic<T>(Mutex<Vec<Weak<Mutex<Patch<T>>>>>);
@@ -22,7 +24,7 @@ where
     TDelta: Ord + Copy,
 {
     pub fn subscribe(&mut self) -> Subscription<T> {
-        let subscription = Subscription(Default::default());
+        let subscription = Subscription(Arc::default());
         self.0.get_mut().push(Arc::downgrade(&subscription.0));
         subscription
     }
@@ -42,10 +44,8 @@ impl<T: Default> Subscription<T> {
     }
 }
 
-fn publish<T, TDelta>(
-    subscriptions: &mut Vec<Weak<Mutex<Patch<T>>>>,
-    edits: impl Clone + IntoIterator<Item = Edit<T>>,
-) where
+fn publish<T, TDelta>(subscriptions: &mut Vec<Weak<Mutex<Patch<T>>>>, edits: impl Clone + IntoIterator<Item = Edit<T>>)
+where
     T: 'static
         + Copy
         + Ord

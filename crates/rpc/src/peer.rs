@@ -1,31 +1,43 @@
-use super::{
-    Connection,
-    message_stream::{Message, MessageStream},
-    proto::{
-        self, AnyTypedEnvelope, EnvelopedMessage, PeerId, Receipt, RequestMessage, TypedEnvelope,
-    },
-};
-use anyhow::{Context as _, Result, anyhow};
+use std::fmt;
+use std::future;
+use std::future::Future;
+use std::sync::Arc;
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::Ordering::SeqCst;
+use std::sync::atomic::{self};
+use std::time::Duration;
+use std::time::Instant;
+
+use anyhow::Context as _;
+use anyhow::Result;
+use anyhow::anyhow;
 use collections::HashMap;
-use futures::{
-    FutureExt, SinkExt, StreamExt, TryFutureExt,
-    channel::{mpsc, oneshot},
-    stream::BoxStream,
-};
-use parking_lot::{Mutex, RwLock};
-use proto::{ErrorCode, ErrorCodeExt, ErrorExt, RpcError};
-use serde::{Serialize, ser::SerializeStruct};
-use std::{
-    fmt, future,
-    future::Future,
-    sync::atomic::Ordering::SeqCst,
-    sync::{
-        Arc,
-        atomic::{self, AtomicU32},
-    },
-    time::Duration,
-    time::Instant,
-};
+use futures::FutureExt;
+use futures::SinkExt;
+use futures::StreamExt;
+use futures::TryFutureExt;
+use futures::channel::mpsc;
+use futures::channel::oneshot;
+use futures::stream::BoxStream;
+use parking_lot::Mutex;
+use parking_lot::RwLock;
+use proto::ErrorCode;
+use proto::ErrorCodeExt;
+use proto::ErrorExt;
+use proto::RpcError;
+use serde::Serialize;
+use serde::ser::SerializeStruct;
+
+use super::Connection;
+use super::message_stream::Message;
+use super::message_stream::MessageStream;
+use super::proto::AnyTypedEnvelope;
+use super::proto::EnvelopedMessage;
+use super::proto::PeerId;
+use super::proto::Receipt;
+use super::proto::RequestMessage;
+use super::proto::TypedEnvelope;
+use super::proto::{self};
 
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Serialize)]
 pub struct ConnectionId {
@@ -35,19 +47,13 @@ pub struct ConnectionId {
 
 impl From<ConnectionId> for PeerId {
     fn from(id: ConnectionId) -> Self {
-        PeerId {
-            owner_id: id.owner_id,
-            id: id.id,
-        }
+        PeerId { owner_id: id.owner_id, id: id.id }
     }
 }
 
 impl From<PeerId> for ConnectionId {
     fn from(peer_id: PeerId) -> Self {
-        Self {
-            owner_id: peer_id.owner_id,
-            id: peer_id.id,
-        }
+        Self { owner_id: peer_id.owner_id, id: peer_id.id }
     }
 }
 
@@ -70,25 +76,12 @@ pub struct ConnectionState {
     next_message_id: Arc<AtomicU32>,
     #[allow(clippy::type_complexity)]
     #[serde(skip)]
-    response_channels: Arc<
-        Mutex<
-            Option<
-                HashMap<
-                    u32,
-                    oneshot::Sender<(proto::Envelope, std::time::Instant, oneshot::Sender<()>)>,
-                >,
-            >,
-        >,
-    >,
+    response_channels:
+        Arc<Mutex<Option<HashMap<u32, oneshot::Sender<(proto::Envelope, std::time::Instant, oneshot::Sender<()>)>>>>>,
     #[allow(clippy::type_complexity)]
     #[serde(skip)]
-    stream_response_channels: Arc<
-        Mutex<
-            Option<
-                HashMap<u32, mpsc::UnboundedSender<(Result<proto::Envelope>, oneshot::Sender<()>)>>,
-            >,
-        >,
-    >,
+    stream_response_channels:
+        Arc<Mutex<Option<HashMap<u32, mpsc::UnboundedSender<(Result<proto::Envelope>, oneshot::Sender<()>)>>>>>,
 }
 
 const KEEPALIVE_INTERVAL: Duration = Duration::from_secs(1);
@@ -99,8 +92,8 @@ impl Peer {
     pub fn new(epoch: u32) -> Arc<Self> {
         Arc::new(Self {
             epoch: AtomicU32::new(epoch),
-            connections: Default::default(),
-            next_connection_id: Default::default(),
+            connections: RwLock::default(),
+            next_connection_id: std::sync::atomic::AtomicU32::default(),
         })
     }
 
@@ -126,15 +119,13 @@ impl Peer {
         let (mut incoming_tx, incoming_rx) = mpsc::channel(INCOMING_BUFFER_SIZE);
         let (outgoing_tx, mut outgoing_rx) = mpsc::unbounded();
 
-        let connection_id = ConnectionId {
-            owner_id: self.epoch.load(SeqCst),
-            id: self.next_connection_id.fetch_add(1, SeqCst),
-        };
+        let connection_id =
+            ConnectionId { owner_id: self.epoch.load(SeqCst), id: self.next_connection_id.fetch_add(1, SeqCst) };
         let connection_state = ConnectionState {
             outgoing_tx,
-            next_message_id: Default::default(),
-            response_channels: Arc::new(Mutex::new(Some(Default::default()))),
-            stream_response_channels: Arc::new(Mutex::new(Some(Default::default()))),
+            next_message_id: Arc::default(),
+            response_channels: Arc::new(Mutex::new(Some(HashMap::default()))),
+            stream_response_channels: Arc::new(Mutex::new(Some(HashMap::default()))),
         };
         let mut writer = MessageStream::new(connection.tx);
         let mut reader = MessageStream::new(connection.rx);
@@ -148,10 +139,7 @@ impl Peer {
                 response_channels.lock().take();
                 if let Some(channels) = stream_response_channels.lock().take() {
                     for channel in channels.values() {
-                        let _ = channel.unbounded_send((
-                            Err(anyhow!("connection closed")),
-                            oneshot::channel().0,
-                        ));
+                        let _ = channel.unbounded_send((Err(anyhow!("connection closed")), oneshot::channel().0));
                     }
                 }
                 this.connections.write().remove(&connection_id);
@@ -241,8 +229,7 @@ impl Peer {
         receiver_id: ConnectionId,
         request: T,
     ) -> impl Future<Output = Result<T::Response>> + use<T> {
-        self.request_internal(None, receiver_id, request)
-            .map_ok(|envelope| envelope.payload)
+        self.request_internal(None, receiver_id, request).map_ok(|envelope| envelope.payload)
     }
 
     pub fn request_envelope<T: RequestMessage>(
@@ -259,8 +246,7 @@ impl Peer {
         receiver_id: ConnectionId,
         request: T,
     ) -> impl Future<Output = Result<T::Response>> {
-        self.request_internal(Some(sender_id), receiver_id, request)
-            .map_ok(|envelope| envelope.payload)
+        self.request_internal(Some(sender_id), receiver_id, request).map_ok(|envelope| envelope.payload)
     }
 
     fn request_internal<T: RequestMessage>(
@@ -277,8 +263,7 @@ impl Peer {
                 message_id: response.id,
                 sender_id: receiver_id.into(),
                 original_sender_id: response.original_sender_id,
-                payload: T::Response::from_envelope(response)
-                    .context("received response of the wrong type")?,
+                payload: T::Response::from_envelope(response).context("received response of the wrong type")?,
                 received_at,
             })
         }
@@ -328,16 +313,12 @@ impl Peer {
         receiver_id: ConnectionId,
         request: T,
     ) -> impl Future<Output = Result<BoxStream<'static, Result<T::Response>>>> {
-        let stream =
-            self.request_stream_dynamic(receiver_id, request.into_envelope(0, None, None), T::NAME);
+        let stream = self.request_stream_dynamic(receiver_id, request.into_envelope(0, None, None), T::NAME);
 
         async move {
             Ok(stream
                 .await?
-                .map(|response| {
-                    T::Response::from_envelope(response?)
-                        .context("received response of the wrong type")
-                })
+                .map(|response| T::Response::from_envelope(response?).context("received response of the wrong type"))
                 .boxed())
         }
     }
@@ -353,15 +334,8 @@ impl Peer {
             let message_id = connection.next_message_id.fetch_add(1, SeqCst);
             envelope.id = message_id;
             let stream_response_channels = connection.stream_response_channels.clone();
-            stream_response_channels
-                .lock()
-                .as_mut()
-                .context("connection was closed")?
-                .insert(message_id, tx);
-            if let Err(error) = connection
-                .outgoing_tx
-                .unbounded_send(Message::Envelope(envelope))
-            {
+            stream_response_channels.lock().as_mut().context("connection was closed")?.insert(message_id, tx);
+            if let Err(error) = connection.outgoing_tx.unbounded_send(Message::Envelope(envelope)) {
                 if let Some(channels) = stream_response_channels.lock().as_mut() {
                     channels.remove(&message_id);
                 }
@@ -390,8 +364,7 @@ impl Peer {
                     let stream_response_channels = stream_response_channels.clone();
                     future::ready(match response {
                         Ok(response) => {
-                            if let Some(proto::envelope::Payload::Error(error)) = &response.payload
-                            {
+                            if let Some(proto::envelope::Payload::Error(error)) = &response.payload {
                                 // Remove the transmitting end of the response channel to end the stream.
                                 if let Some(channels) = stream_response_channels.upgrade()
                                     && let Some(channels) = channels.lock().as_mut()
@@ -399,9 +372,7 @@ impl Peer {
                                     channels.remove(&message_id);
                                 }
                                 Some(Err(RpcError::from_proto(error, request_type)))
-                            } else if let Some(proto::envelope::Payload::EndStream(_)) =
-                                &response.payload
-                            {
+                            } else if let Some(proto::envelope::Payload::EndStream(_)) = &response.payload {
                                 // Remove the transmitting end of the response channel to end the stream.
                                 if let Some(channels) = stream_response_channels.upgrade()
                                     && let Some(channels) = channels.lock().as_mut()
@@ -422,20 +393,14 @@ impl Peer {
 
     pub fn send<T: EnvelopedMessage>(&self, receiver_id: ConnectionId, message: T) -> Result<()> {
         let connection = self.connection_state(receiver_id)?;
-        let message_id = connection
-            .next_message_id
-            .fetch_add(1, atomic::Ordering::SeqCst);
-        connection.outgoing_tx.unbounded_send(Message::Envelope(
-            message.into_envelope(message_id, None, None),
-        ))?;
+        let message_id = connection.next_message_id.fetch_add(1, atomic::Ordering::SeqCst);
+        connection.outgoing_tx.unbounded_send(Message::Envelope(message.into_envelope(message_id, None, None)))?;
         Ok(())
     }
 
     pub fn send_dynamic(&self, receiver_id: ConnectionId, message: proto::Envelope) -> Result<()> {
         let connection = self.connection_state(receiver_id)?;
-        connection
-            .outgoing_tx
-            .unbounded_send(Message::Envelope(message))?;
+        connection.outgoing_tx.unbounded_send(Message::Envelope(message))?;
         Ok(())
     }
 
@@ -446,72 +411,48 @@ impl Peer {
         message: T,
     ) -> Result<()> {
         let connection = self.connection_state(receiver_id)?;
-        let message_id = connection
-            .next_message_id
-            .fetch_add(1, atomic::Ordering::SeqCst);
-        connection
-            .outgoing_tx
-            .unbounded_send(Message::Envelope(message.into_envelope(
-                message_id,
-                None,
-                Some(sender_id.into()),
-            )))?;
+        let message_id = connection.next_message_id.fetch_add(1, atomic::Ordering::SeqCst);
+        connection.outgoing_tx.unbounded_send(Message::Envelope(message.into_envelope(
+            message_id,
+            None,
+            Some(sender_id.into()),
+        )))?;
         Ok(())
     }
 
-    pub fn respond<T: RequestMessage>(
-        &self,
-        receipt: Receipt<T>,
-        response: T::Response,
-    ) -> Result<()> {
+    pub fn respond<T: RequestMessage>(&self, receipt: Receipt<T>, response: T::Response) -> Result<()> {
         let connection = self.connection_state(receipt.sender_id.into())?;
-        let message_id = connection
-            .next_message_id
-            .fetch_add(1, atomic::Ordering::SeqCst);
-        connection
-            .outgoing_tx
-            .unbounded_send(Message::Envelope(response.into_envelope(
-                message_id,
-                Some(receipt.message_id),
-                None,
-            )))?;
+        let message_id = connection.next_message_id.fetch_add(1, atomic::Ordering::SeqCst);
+        connection.outgoing_tx.unbounded_send(Message::Envelope(response.into_envelope(
+            message_id,
+            Some(receipt.message_id),
+            None,
+        )))?;
         Ok(())
     }
 
     pub fn end_stream<T: RequestMessage>(&self, receipt: Receipt<T>) -> Result<()> {
         let connection = self.connection_state(receipt.sender_id.into())?;
-        let message_id = connection
-            .next_message_id
-            .fetch_add(1, atomic::Ordering::SeqCst);
+        let message_id = connection.next_message_id.fetch_add(1, atomic::Ordering::SeqCst);
 
         let message = proto::EndStream {};
 
-        connection
-            .outgoing_tx
-            .unbounded_send(Message::Envelope(message.into_envelope(
-                message_id,
-                Some(receipt.message_id),
-                None,
-            )))?;
+        connection.outgoing_tx.unbounded_send(Message::Envelope(message.into_envelope(
+            message_id,
+            Some(receipt.message_id),
+            None,
+        )))?;
         Ok(())
     }
 
-    pub fn respond_with_error<T: RequestMessage>(
-        &self,
-        receipt: Receipt<T>,
-        response: proto::Error,
-    ) -> Result<()> {
+    pub fn respond_with_error<T: RequestMessage>(&self, receipt: Receipt<T>, response: proto::Error) -> Result<()> {
         let connection = self.connection_state(receipt.sender_id.into())?;
-        let message_id = connection
-            .next_message_id
-            .fetch_add(1, atomic::Ordering::SeqCst);
-        connection
-            .outgoing_tx
-            .unbounded_send(Message::Envelope(response.into_envelope(
-                message_id,
-                Some(receipt.message_id),
-                None,
-            )))?;
+        let message_id = connection.next_message_id.fetch_add(1, atomic::Ordering::SeqCst);
+        connection.outgoing_tx.unbounded_send(Message::Envelope(response.into_envelope(
+            message_id,
+            Some(receipt.message_id),
+            None,
+        )))?;
         Ok(())
     }
 
@@ -522,19 +463,13 @@ impl Peer {
         message_type_name: &'static str,
     ) -> Result<()> {
         let connection = self.connection_state(sender_id)?;
-        let response = ErrorCode::Internal
-            .message(format!("message {} was not handled", message_type_name))
-            .to_proto();
-        let message_id = connection
-            .next_message_id
-            .fetch_add(1, atomic::Ordering::SeqCst);
-        connection
-            .outgoing_tx
-            .unbounded_send(Message::Envelope(response.into_envelope(
-                message_id,
-                Some(request_message_id),
-                None,
-            )))?;
+        let response = ErrorCode::Internal.message(format!("message {} was not handled", message_type_name)).to_proto();
+        let message_id = connection.next_message_id.fetch_add(1, atomic::Ordering::SeqCst);
+        connection.outgoing_tx.unbounded_send(Message::Envelope(response.into_envelope(
+            message_id,
+            Some(request_message_id),
+            None,
+        )))?;
         Ok(())
     }
 
@@ -547,9 +482,7 @@ impl Peer {
     ) -> BoxStream<'static, Box<dyn AnyTypedEnvelope>> {
         let response_channels = connection_state.response_channels.clone();
         let stream_response_channels = connection_state.stream_response_channels.clone();
-        self.connections
-            .write()
-            .insert(connection_id, connection_state);
+        self.connections.write().insert(connection_id, connection_state);
 
         let incoming_rx = incoming_rx.filter_map(move |(incoming, received_at)| {
             let response_channels = response_channels.clone();
@@ -622,9 +555,8 @@ impl Peer {
 
     fn connection_state(&self, connection_id: ConnectionId) -> Result<ConnectionState> {
         let connections = self.connections.read();
-        let connection = connections
-            .get(&connection_id)
-            .with_context(|| format!("no such connection: {connection_id}"))?;
+        let connection =
+            connections.get(&connection_id).with_context(|| format!("no such connection: {connection_id}"))?;
         Ok(connection.clone())
     }
 }

@@ -629,15 +629,15 @@ impl Pane {
             preview_item_id: None,
             max_tabs,
             use_max_tabs,
-            last_focus_handle_by_item: Default::default(),
+            last_focus_handle_by_item: HashMap::default(),
             nav_history: NavHistory(Arc::new(Mutex::new(NavHistoryState {
                 mode: NavigationMode::Normal,
-                backward_stack: Default::default(),
-                forward_stack: Default::default(),
-                closed_stack: Default::default(),
-                tag_stack: Default::default(),
+                backward_stack: VecDeque::default(),
+                forward_stack: VecDeque::default(),
+                closed_stack: VecDeque::default(),
+                tag_stack: VecDeque::default(),
                 tag_stack_pos: Default::default(),
-                paths_by_item: Default::default(),
+                paths_by_item: HashMap::default(),
                 pane: handle,
                 next_timestamp,
                 preview_item_id: None,
@@ -663,10 +663,10 @@ impl Pane {
             double_click_dispatch_action,
             save_modals_spawned: HashSet::default(),
             close_pane_if_empty: true,
-            split_item_context_menu_handle: Default::default(),
-            new_item_context_menu_handle: Default::default(),
+            split_item_context_menu_handle: PopoverMenuHandle::default(),
+            new_item_context_menu_handle: PopoverMenuHandle::default(),
             pinned_tab_count: 0,
-            diagnostics: Default::default(),
+            diagnostics: HashMap::default(),
             zoom_out_on_close: true,
             focus_follows_mouse: WorkspaceSettings::get_global(cx).focus_follows_mouse,
             diagnostic_summary_update: Task::ready(()),
@@ -1755,7 +1755,7 @@ impl Pane {
         // Close least recently used items to reach target count.
         // The target count is allowed to be exceeded, as we protect pinned
         // items, dirty items, and sometimes, the active item.
-        for entry in self.activation_history.iter() {
+        for entry in &self.activation_history {
             if items_len < target_count {
                 break;
             }
@@ -3023,9 +3023,7 @@ impl Pane {
             .icon_size(IconSize::Small)
             .on_click({
                 let entity = cx.entity();
-                move |_, window, cx| {
-                    entity.update(cx, |pane, cx| pane.navigate_backward(&Default::default(), window, cx))
-                }
+                move |_, window, cx| entity.update(cx, |pane, cx| pane.navigate_backward(&GoBack, window, cx))
             })
             .disabled(!self.can_navigate_backward())
             .tooltip({
@@ -3044,9 +3042,7 @@ impl Pane {
             .icon_size(IconSize::Small)
             .on_click({
                 let entity = cx.entity();
-                move |_, window, cx| {
-                    entity.update(cx, |pane, cx| pane.navigate_forward(&Default::default(), window, cx))
-                }
+                move |_, window, cx| entity.update(cx, |pane, cx| pane.navigate_forward(&GoForward, window, cx))
             })
             .disabled(!self.can_navigate_forward())
             .tooltip({

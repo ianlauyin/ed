@@ -612,7 +612,7 @@ impl sum_tree::KeyedItem for DiffStateSnapshot {
     }
 }
 
-impl<'a> Dimension<'a, DiffStateSummary> for Option<BufferId> {
+impl Dimension<'_, DiffStateSummary> for Option<BufferId> {
     fn zero(_cx: ()) -> Self {
         None
     }
@@ -1265,13 +1265,13 @@ impl MultiBuffer {
     pub fn new_(capability: Capability, snapshot: MultiBufferSnapshot) -> Self {
         Self {
             snapshot: RefCell::new(snapshot),
-            buffers: Default::default(),
+            buffers: BTreeMap::default(),
             diffs: HashMap::default(),
             subscriptions: Topic::default(),
             singleton: false,
             capability,
             title: None,
-            buffer_changed_since_sync: Default::default(),
+            buffer_changed_since_sync: Rc::default(),
             history: History::default(),
         }
     }
@@ -1279,7 +1279,7 @@ impl MultiBuffer {
     pub fn clone(&self, new_cx: &mut Context<Self>) -> Self {
         let mut buffers = BTreeMap::default();
         let buffer_changed_since_sync = Rc::new(Cell::new(false));
-        for (buffer_id, buffer_state) in self.buffers.iter() {
+        for (buffer_id, buffer_state) in &self.buffers {
             buffer_state.buffer.update(new_cx, |buffer, _| {
                 buffer.record_changes(Rc::downgrade(&buffer_changed_since_sync));
             });
@@ -1295,14 +1295,14 @@ impl MultiBuffer {
             );
         }
         let mut diff_bases = HashMap::default();
-        for (buffer_id, diff) in self.diffs.iter() {
+        for (buffer_id, diff) in &self.diffs {
             diff_bases.insert(*buffer_id, DiffState::new(diff.diff.clone(), new_cx));
         }
         Self {
             snapshot: RefCell::new(self.snapshot.borrow().clone()),
             buffers,
             diffs: diff_bases,
-            subscriptions: Default::default(),
+            subscriptions: Topic::default(),
             singleton: self.singleton,
             capability: self.capability,
             history: self.history.clone(),
@@ -1452,7 +1452,7 @@ impl MultiBuffer {
         ) {
             let original_indent_columns = match &mut autoindent_mode {
                 Some(AutoindentMode::Block { original_indent_columns }) => mem::take(original_indent_columns),
-                _ => Default::default(),
+                _ => Vec::default(),
             };
 
             let buffer_edits =
@@ -1509,7 +1509,7 @@ impl MultiBuffer {
                     }
 
                     let deletion_autoindent_mode = if let Some(AutoindentMode::Block { .. }) = autoindent_mode {
-                        Some(AutoindentMode::Block { original_indent_columns: Default::default() })
+                        Some(AutoindentMode::Block { original_indent_columns: Vec::default() })
                     } else {
                         autoindent_mode.clone()
                     };
@@ -1546,7 +1546,7 @@ impl MultiBuffer {
         snapshot: &MultiBufferSnapshot,
         original_indent_columns: &[Option<u32>],
     ) -> HashMap<BufferId, Vec<BufferEdit>> {
-        let mut buffer_edits: HashMap<BufferId, Vec<BufferEdit>> = Default::default();
+        let mut buffer_edits: HashMap<BufferId, Vec<BufferEdit>> = HashMap::default();
         let mut cursor = snapshot.cursor::<MultiBufferOffset, BufferOffset>();
         for (ix, (range, new_text)) in edits.into_iter().enumerate() {
             let original_indent_column = original_indent_columns.get(ix).copied().flatten();
@@ -1704,7 +1704,7 @@ impl MultiBuffer {
         cx: &mut Context<Self>,
     ) {
         let snapshot = self.snapshot(cx);
-        let mut selections_by_buffer: HashMap<BufferId, Vec<Selection<text::Anchor>>> = Default::default();
+        let mut selections_by_buffer: HashMap<BufferId, Vec<Selection<text::Anchor>>> = HashMap::default();
 
         for selection in selections {
             for (buffer_snapshot, buffer_range, _) in snapshot.range_to_buffer_ranges(selection.start..selection.end) {
@@ -1718,7 +1718,7 @@ impl MultiBuffer {
             }
         }
 
-        for (buffer_id, buffer_state) in self.buffers.iter() {
+        for (buffer_id, buffer_state) in &self.buffers {
             if !selections_by_buffer.contains_key(buffer_id) {
                 buffer_state.buffer.update(cx, |buffer, cx| buffer.remove_active_selections(cx));
             }
@@ -1781,9 +1781,9 @@ impl MultiBuffer {
         } = self.snapshot.get_mut();
         let start = ExcerptDimension(MultiBufferOffset::ZERO);
         let prev_len = ExcerptDimension(excerpts.summary().text.len);
-        *excerpts = Default::default();
-        *buffers = Default::default();
-        *diffs = Default::default();
+        *excerpts = SumTree::default();
+        *buffers = TreeMap::default();
+        *diffs = SumTree::default();
         *trailing_excerpt_update_count += 1;
         *is_dirty = false;
         *has_deleted_file = false;
@@ -2573,7 +2573,7 @@ impl MultiBuffer {
         // Ensure there's always at least one buffer content transform.
         if new_diff_transforms.is_empty() {
             new_diff_transforms
-                .push(DiffTransform::BufferContent { summary: Default::default(), inserted_hunk_info: None }, ());
+                .push(DiffTransform::BufferContent { summary: MBTextSummary::default(), inserted_hunk_info: None }, ());
         }
 
         drop(old_diff_transforms);
@@ -2993,7 +2993,7 @@ impl MultiBufferSnapshot {
                     word_diffs
                 }
             } else {
-                Default::default()
+                Vec::default()
             };
 
             let buffer_range = if is_inverted {
@@ -4704,7 +4704,7 @@ impl MultiBufferSnapshot {
         self.excerpts.iter().map(|excerpt| excerpt.range.clone())
     }
 
-    fn cursor<'a, MBD, BD>(&'a self) -> MultiBufferCursor<'a, MBD, BD>
+    fn cursor<MBD, BD>(&self) -> MultiBufferCursor<'_, MBD, BD>
     where
         MBD: MultiBufferDimension + Ord + Sub + ops::AddAssign<<MBD as Sub>::Output>,
         BD: TextDimension + AddAssign<<MBD as Sub>::Output>,
@@ -5306,7 +5306,7 @@ impl MultiBufferSnapshot {
                 _ => {}
             }
 
-            for indent in indent_stack.iter_mut() {
+            for indent in &mut indent_stack {
                 indent.end_row = last_row;
             }
         }
@@ -5421,10 +5421,10 @@ impl MultiBufferSnapshot {
         .map(|(range, diagnostic, _)| DiagnosticEntryRef { diagnostic, range })
     }
 
-    pub fn diagnostics_with_buffer_ids_in_range<'a, MBD>(
-        &'a self,
+    pub fn diagnostics_with_buffer_ids_in_range<MBD>(
+        &self,
         range: Range<MBD>,
-    ) -> impl Iterator<Item = (BufferId, DiagnosticEntryRef<'a, MBD>)> + 'a
+    ) -> impl Iterator<Item = (BufferId, DiagnosticEntryRef<'_, MBD>)> + '_
     where
         MBD: MultiBufferDimension
             + Ord
@@ -5866,7 +5866,7 @@ impl MultiBufferSnapshot {
             .flatten()
     }
 
-    pub fn buffers_with_paths<'a>(&'a self) -> impl 'a + Iterator<Item = (&'a BufferSnapshot, &'a PathKey)> {
+    pub fn buffers_with_paths(&self) -> impl '_ + Iterator<Item = (&BufferSnapshot, &PathKey)> {
         self.buffers.values().map(|buffer| (&buffer.buffer_snapshot, &buffer.path_key))
     }
 
@@ -6564,7 +6564,7 @@ where
     }
 }
 
-impl<'a, MBD> sum_tree::SeekTarget<'a, DiffTransformSummary, DiffTransforms<MBD>> for ExcerptDimension<MBD>
+impl<MBD> sum_tree::SeekTarget<'_, DiffTransformSummary, DiffTransforms<MBD>> for ExcerptDimension<MBD>
 where
     MBD: MultiBufferDimension + Ord,
 {
@@ -6583,7 +6583,7 @@ impl<'a, MBD: MultiBufferDimension> sum_tree::Dimension<'a, DiffTransformSummary
     }
 }
 
-impl<'a, MBD> sum_tree::SeekTarget<'a, DiffTransformSummary, DiffTransforms<MBD>> for OutputDimension<MBD>
+impl<MBD> sum_tree::SeekTarget<'_, DiffTransformSummary, DiffTransforms<MBD>> for OutputDimension<MBD>
 where
     MBD: MultiBufferDimension + Ord,
 {

@@ -504,7 +504,7 @@ impl PickerDelegate for CommandPaletteDelegate {
                     fuzzy_nucleo::Case::Smart,
                     fuzzy_nucleo::LengthPenalty::On,
                     10000,
-                    &Default::default(),
+                    &std::sync::atomic::AtomicBool::default(),
                     executor,
                 )
                 .await;

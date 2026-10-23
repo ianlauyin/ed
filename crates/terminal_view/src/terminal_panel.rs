@@ -1144,7 +1144,7 @@ pub fn new_terminal_pane(
         let mut pane = Pane::new(
             workspace.clone(),
             project.clone(),
-            Default::default(),
+            Arc::default(),
             None,
             workspace::NewTerminal::default().boxed_clone(),
             false,

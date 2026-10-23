@@ -250,7 +250,7 @@ impl ServerListeners {
 
 fn start_server(listeners: ServerListeners, log_rx: Receiver<Vec<u8>>, cx: &App) -> AnyProtoClient {
     // This is the server idle timeout. If no connection comes in this timeout, the server will shut down.
-    const IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_secs(10 * 60);
+    const IDLE_TIMEOUT: std::time::Duration = std::time::Duration::from_mins(10);
 
     let (incoming_tx, incoming_rx) = mpsc::unbounded::<Envelope>();
     let (outgoing_tx, mut outgoing_rx) = mpsc::unbounded::<Envelope>();
@@ -376,7 +376,7 @@ fn start_server(listeners: ServerListeners, log_rx: Receiver<Vec<u8>>, cx: &App)
 }
 
 fn init_paths() -> anyhow::Result<()> {
-    for path in [paths::config_dir(), paths::logs_dir(), paths::temp_dir()].iter() {
+    for path in &[paths::config_dir(), paths::logs_dir(), paths::temp_dir()] {
         std::fs::create_dir_all(path).with_context(|| format!("creating directory {path:?}"))?;
     }
     Ok(())

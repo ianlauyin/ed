@@ -1,38 +1,55 @@
-use editor::{Bias, Editor, SelectionEffects, scroll::Autoscroll, styled_runs_for_code_label};
-use fuzzy::{StringMatch, StringMatchCandidate};
-use gpui::{
-    App, Context, DismissEvent, Entity, HighlightStyle, ParentElement, StyledText, Task, TaskExt,
-    TextStyle, WeakEntity, Window, relative,
-};
+use std::cmp::Reverse;
+use std::sync::Arc;
+
+use editor::Bias;
+use editor::Editor;
+use editor::SelectionEffects;
+use editor::scroll::Autoscroll;
+use editor::styled_runs_for_code_label;
+use fuzzy::StringMatch;
+use fuzzy::StringMatchCandidate;
+use gpui::App;
+use gpui::Context;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::HighlightStyle;
+use gpui::ParentElement;
+use gpui::StyledText;
+use gpui::Task;
+use gpui::TaskExt;
+use gpui::TextStyle;
+use gpui::WeakEntity;
+use gpui::Window;
+use gpui::relative;
 use ordered_float::OrderedFloat;
-use picker::{Picker, PickerDelegate, PreviewUpdate};
-use project::{Project, Symbol, lsp_store::SymbolLocation};
+use picker::Picker;
+use picker::PickerDelegate;
+use picker::PreviewUpdate;
+use project::Project;
+use project::Symbol;
+use project::lsp_store::SymbolLocation;
 use settings::Settings;
-use std::{cmp::Reverse, sync::Arc};
 use theme::ActiveTheme;
 use theme_settings::ThemeSettings;
 use util::ResultExt;
-use workspace::{
-    Workspace,
-    ui::{LabelLike, ListItem, ListItemSpacing, prelude::*},
-};
+use workspace::Workspace;
+use workspace::ui::LabelLike;
+use workspace::ui::ListItem;
+use workspace::ui::ListItemSpacing;
+use workspace::ui::prelude::*;
 
 pub fn init(cx: &mut App) {
-    cx.observe_new(
-        |workspace: &mut Workspace, _window, _: &mut Context<Workspace>| {
-            workspace.register_action(
-                |workspace, _: &workspace::ToggleProjectSymbols, window, cx| {
-                    let project = workspace.project().clone();
-                    let handle = cx.entity().downgrade();
-                    workspace.toggle_modal(window, cx, move |window, cx| {
-                        let delegate = ProjectSymbolsDelegate::new(handle, project.clone());
-                        let preview = picker_preview::editor_preview(project, window, cx);
-                        Picker::uniform_list_with_preview(delegate, preview, window, cx)
-                    })
-                },
-            );
-        },
-    )
+    cx.observe_new(|workspace: &mut Workspace, _window, _: &mut Context<Workspace>| {
+        workspace.register_action(|workspace, _: &workspace::ToggleProjectSymbols, window, cx| {
+            let project = workspace.project().clone();
+            let handle = cx.entity().downgrade();
+            workspace.toggle_modal(window, cx, move |window, cx| {
+                let delegate = ProjectSymbolsDelegate::new(handle, project.clone());
+                let preview = picker_preview::editor_preview(project, window, cx);
+                Picker::uniform_list_with_preview(delegate, preview, window, cx)
+            })
+        });
+    })
     .detach();
 }
 
@@ -55,10 +72,10 @@ impl ProjectSymbolsDelegate {
             workspace,
             project,
             selected_match_index: 0,
-            symbols: Default::default(),
-            visible_match_candidates: Default::default(),
-            external_match_candidates: Default::default(),
-            matches: Default::default(),
+            symbols: Vec::default(),
+            visible_match_candidates: Vec::default(),
+            external_match_candidates: Vec::default(),
+            matches: Vec::default(),
             show_worktree_root_name: false,
         }
     }
@@ -71,7 +88,7 @@ impl ProjectSymbolsDelegate {
             false,
             true,
             MAX_MATCHES,
-            &Default::default(),
+            &std::sync::atomic::AtomicBool::default(),
             cx.background_executor().clone(),
         ));
         let mut external_matches = cx.foreground_executor().block_on(fuzzy::match_strings(
@@ -80,7 +97,7 @@ impl ProjectSymbolsDelegate {
             false,
             true,
             MAX_MATCHES - visible_matches.len().min(MAX_MATCHES),
-            &Default::default(),
+            &std::sync::atomic::AtomicBool::default(),
             cx.background_executor().clone(),
         ));
         let sort_key_for_match = |mat: &StringMatch| {
@@ -117,27 +134,18 @@ impl PickerDelegate for ProjectSymbolsDelegate {
     }
 
     fn confirm(&mut self, secondary: bool, window: &mut Window, cx: &mut Context<Picker<Self>>) {
-        if let Some(symbol) = self
-            .matches
-            .get(self.selected_match_index)
-            .map(|mat| self.symbols[mat.candidate_id].clone())
+        if let Some(symbol) =
+            self.matches.get(self.selected_match_index).map(|mat| self.symbols[mat.candidate_id].clone())
         {
-            let buffer = self.project.update(cx, |project, cx| {
-                project.open_buffer_for_symbol(&symbol, cx)
-            });
+            let buffer = self.project.update(cx, |project, cx| project.open_buffer_for_symbol(&symbol, cx));
             let symbol = symbol.clone();
             let workspace = self.workspace.clone();
             cx.spawn_in(window, async move |_, cx| {
                 let buffer = buffer.await?;
                 workspace.update_in(cx, |workspace, window, cx| {
-                    let position = buffer
-                        .read(cx)
-                        .clip_point_utf16(symbol.range.start, Bias::Left);
-                    let pane = if secondary {
-                        workspace.adjacent_pane(window, cx)
-                    } else {
-                        workspace.active_pane().clone()
-                    };
+                    let position = buffer.read(cx).clip_point_utf16(symbol.range.start, Bias::Left);
+                    let pane =
+                        if secondary { workspace.adjacent_pane(window, cx) } else { workspace.active_pane().clone() };
 
                     let editor = workspace.open_project_item::<Editor>(
                         secondary.then_some(pane),
@@ -156,8 +164,7 @@ impl PickerDelegate for ProjectSymbolsDelegate {
                             return;
                         };
                         let text_anchor = buffer_snapshot.anchor_before(position);
-                        let Some(anchor) = multibuffer_snapshot.anchor_in_buffer(text_anchor)
-                        else {
+                        let Some(anchor) = multibuffer_snapshot.anchor_in_buffer(text_anchor) else {
                             return;
                         };
                         editor.change_selections(
@@ -185,12 +192,7 @@ impl PickerDelegate for ProjectSymbolsDelegate {
         self.selected_match_index
     }
 
-    fn set_selected_index(
-        &mut self,
-        ix: usize,
-        _window: &mut Window,
-        _cx: &mut Context<Picker<Self>>,
-    ) {
+    fn set_selected_index(&mut self, ix: usize, _window: &mut Window, _cx: &mut Context<Picker<Self>>) {
         self.selected_match_index = ix;
     }
 
@@ -200,25 +202,15 @@ impl PickerDelegate for ProjectSymbolsDelegate {
         Some(PreviewUpdate::from_symbol(symbol))
     }
 
-    fn update_matches(
-        &mut self,
-        query: String,
-        window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) -> Task<()> {
+    fn update_matches(&mut self, query: String, window: &mut Window, cx: &mut Context<Picker<Self>>) -> Task<()> {
         // Try to support rust-analyzer's path based symbols feature which
         // allows to search by rust path syntax, in that case we only want to
         // filter names by the last segment
         // Ideally this was a first class LSP feature (rich queries)
-        let query_filter = query
-            .rsplit_once("::")
-            .map_or(&*query, |(_, suffix)| suffix)
-            .to_owned();
+        let query_filter = query.rsplit_once("::").map_or(&*query, |(_, suffix)| suffix).to_owned();
         self.filter(&query_filter, window, cx);
         self.show_worktree_root_name = self.project.read(cx).visible_worktrees(cx).count() > 1;
-        let symbols = self
-            .project
-            .update(cx, |project, cx| project.symbols(&query, cx));
+        let symbols = self.project.update(cx, |project, cx| project.symbols(&query, cx));
         cx.spawn_in(window, async move |this, cx| {
             let symbols = symbols.await.log_err();
             if let Some(symbols) = symbols {
@@ -228,14 +220,10 @@ impl PickerDelegate for ProjectSymbolsDelegate {
                     let (visible_match_candidates, external_match_candidates) = symbols
                         .iter()
                         .enumerate()
-                        .map(|(id, symbol)| {
-                            StringMatchCandidate::new(id, symbol.label.filter_text())
-                        })
+                        .map(|(id, symbol)| StringMatchCandidate::new(id, symbol.label.filter_text()))
                         .partition(|candidate| {
                             if let SymbolLocation::InProject(path) = &symbols[candidate.id].path {
-                                project
-                                    .entry_for_path(path, cx)
-                                    .is_some_and(|e| !e.is_ignored)
+                                project.entry_for_path(path, cx).is_some_and(|e| !e.is_ignored)
                             } else {
                                 false
                             }
@@ -276,10 +264,7 @@ impl PickerDelegate for ProjectSymbolsDelegate {
                 }
                 path.display(path_style).into_owned().into()
             }
-            SymbolLocation::OutsideProject {
-                abs_path,
-                signature: _,
-            } => abs_path.to_string_lossy(),
+            SymbolLocation::OutsideProject { abs_path, signature: _ } => abs_path.to_string_lossy(),
         };
         let label = symbol.label.text.clone();
         let line_number = symbol.range.start.0.row + 1;
@@ -298,40 +283,24 @@ impl PickerDelegate for ProjectSymbolsDelegate {
             ..Default::default()
         };
 
-        let highlight_style = HighlightStyle {
-            background_color: Some(cx.theme().colors().text_accent.alpha(0.3)),
-            ..Default::default()
-        };
-        let custom_highlights = string_match
-            .positions
-            .iter()
-            .map(|pos| (*pos..label.ceil_char_boundary(pos + 1), highlight_style));
+        let highlight_style =
+            HighlightStyle { background_color: Some(cx.theme().colors().text_accent.alpha(0.3)), ..Default::default() };
+        let custom_highlights =
+            string_match.positions.iter().map(|pos| (*pos..label.ceil_char_boundary(pos + 1), highlight_style));
 
         let highlights = gpui::combine_highlights(custom_highlights, syntax_runs);
 
         Some(
-            ListItem::new(ix)
-                .inset(true)
-                .spacing(ListItemSpacing::Sparse)
-                .toggle_state(selected)
-                .child(
-                    v_flex()
-                        .child(
-                            LabelLike::new().child(
-                                StyledText::new(&label)
-                                    .with_default_highlights(&text_style, highlights),
-                            ),
-                        )
-                        .child(
-                            h_flex()
-                                .child(Label::new(path).size(LabelSize::Small).color(Color::Muted))
-                                .child(
-                                    Label::new(format!(":{}", line_number))
-                                        .size(LabelSize::Small)
-                                        .color(Color::Placeholder),
-                                ),
-                        ),
-                ),
+            ListItem::new(ix).inset(true).spacing(ListItemSpacing::Sparse).toggle_state(selected).child(
+                v_flex()
+                    .child(
+                        LabelLike::new()
+                            .child(StyledText::new(&label).with_default_highlights(&text_style, highlights)),
+                    )
+                    .child(h_flex().child(Label::new(path).size(LabelSize::Small).color(Color::Muted)).child(
+                        Label::new(format!(":{}", line_number)).size(LabelSize::Small).color(Color::Placeholder),
+                    )),
+            ),
         )
     }
 }

@@ -588,7 +588,7 @@ pub struct MutableSelectionsCollection<'snap, 'a> {
     preserve_buffer_positions: bool,
 }
 
-impl<'snap, 'a> fmt::Debug for MutableSelectionsCollection<'snap, 'a> {
+impl fmt::Debug for MutableSelectionsCollection<'_, '_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("MutableSelectionsCollection")
             .field("collection", &self.collection)
@@ -597,7 +597,7 @@ impl<'snap, 'a> fmt::Debug for MutableSelectionsCollection<'snap, 'a> {
     }
 }
 
-impl<'snap, 'a> MutableSelectionsCollection<'snap, 'a> {
+impl MutableSelectionsCollection<'_, '_> {
     pub(crate) const fn preserve_buffer_positions(&mut self) {
         self.preserve_buffer_positions = true;
     }

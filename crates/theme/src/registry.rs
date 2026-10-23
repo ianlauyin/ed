@@ -3,11 +3,16 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use collections::HashMap;
-use gpui::{App, AssetSource, Global, SharedString};
+use gpui::App;
+use gpui::AssetSource;
+use gpui::Global;
+use gpui::SharedString;
 use parking_lot::RwLock;
 use thiserror::Error;
 
-use crate::{Appearance, Theme, ThemeFamily};
+use crate::Appearance;
+use crate::Theme;
+use crate::ThemeFamily;
 
 /// The metadata for a theme.
 #[derive(Debug, Clone)]
@@ -88,12 +93,7 @@ impl ThemeRegistry {
 
     /// Creates a new [`ThemeRegistry`] with the given [`AssetSource`].
     pub fn new(assets: Box<dyn AssetSource>) -> Self {
-        let registry = Self {
-            state: RwLock::new(ThemeRegistryState {
-                themes: HashMap::default(),
-            }),
-            assets,
-        };
+        let registry = Self { state: RwLock::new(ThemeRegistryState { themes: HashMap::default() }), assets };
 
         // We're loading the Zed default theme, as we need a theme to be loaded
         // for tests.
@@ -104,7 +104,7 @@ impl ThemeRegistry {
 
     /// Inserts the given theme families into the registry.
     pub fn insert_theme_families(&self, families: impl IntoIterator<Item = ThemeFamily>) {
-        for family in families.into_iter() {
+        for family in families {
             self.insert_themes(family.themes);
         }
     }
@@ -112,17 +112,14 @@ impl ThemeRegistry {
     /// Inserts the given themes into the registry.
     pub fn insert_themes(&self, themes: impl IntoIterator<Item = Theme>) {
         let mut state = self.state.write();
-        for theme in themes.into_iter() {
+        for theme in themes {
             state.themes.insert(theme.name.clone(), Arc::new(theme));
         }
     }
 
     /// Removes the themes with the given names from the registry.
     pub fn remove_user_themes(&self, themes_to_remove: &[SharedString]) {
-        self.state
-            .write()
-            .themes
-            .retain(|name, _| !themes_to_remove.contains(name))
+        self.state.write().themes.retain(|name, _| !themes_to_remove.contains(name))
     }
 
     /// Removes all themes from the registry.
@@ -143,21 +140,13 @@ impl ThemeRegistry {
             .read()
             .themes
             .values()
-            .map(|theme| ThemeMeta {
-                name: theme.name.clone(),
-                appearance: theme.appearance(),
-            })
+            .map(|theme| ThemeMeta { name: theme.name.clone(), appearance: theme.appearance() })
             .collect()
     }
 
     /// Returns the theme with the given name.
     pub fn get(&self, name: &str) -> Result<Arc<Theme>, ThemeNotFoundError> {
-        self.state
-            .read()
-            .themes
-            .get(name)
-            .ok_or_else(|| ThemeNotFoundError(name.to_string().into()))
-            .cloned()
+        self.state.read().themes.get(name).ok_or_else(|| ThemeNotFoundError(name.to_string().into())).cloned()
     }
 }
 

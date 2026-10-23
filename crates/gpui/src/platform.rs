@@ -993,7 +993,7 @@ impl PlatformTextSystem for NoopTextSystem {
     }
 
     fn glyph_raster_bounds(&self, _params: &RenderGlyphParams) -> Result<Bounds<DevicePixels>> {
-        Ok(Default::default())
+        Ok(Bounds::default())
     }
 
     fn rasterize_glyph(
@@ -1883,9 +1883,9 @@ impl Default for WindowOptions {
         Self {
             window_bounds: None,
             titlebar: Some(TitlebarOptions {
-                title: Default::default(),
+                title: Option::default(),
                 appears_transparent: Default::default(),
-                traffic_light_position: Default::default(),
+                traffic_light_position: Option::default(),
             }),
             focus: true,
             show: true,
@@ -2253,14 +2253,14 @@ impl ClipboardItem {
     pub fn text(&self) -> Option<String> {
         let mut answer = String::new();
 
-        for entry in self.entries.iter() {
+        for entry in &self.entries {
             if let ClipboardEntry::String(ClipboardString { text, metadata: _ }) = entry {
                 answer.push_str(text);
             }
         }
 
         if answer.is_empty() {
-            for entry in self.entries.iter() {
+            for entry in &self.entries {
                 if let ClipboardEntry::ExternalPaths(paths) = entry {
                     for path in &paths.0 {
                         use std::fmt::Write as _;

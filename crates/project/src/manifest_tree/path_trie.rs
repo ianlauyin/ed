@@ -43,7 +43,7 @@ impl<Label: Ord + Clone> RootPathTrie<Label> {
     }
 
     fn new_with_key(worktree_relative_path: Arc<RelPath>) -> Self {
-        RootPathTrie { worktree_relative_path, labels: Default::default(), children: Default::default() }
+        RootPathTrie { worktree_relative_path, labels: BTreeMap::default(), children: BTreeMap::default() }
     }
 
     // Internal implementation of inner that allows one to visit descendants of insertion point for a node.

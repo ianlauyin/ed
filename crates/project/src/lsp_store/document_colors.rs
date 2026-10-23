@@ -278,8 +278,8 @@ impl LspStore {
                         text_document: make_text_document_identifier(&path)?,
                         color: color.color,
                         range: color.lsp_range,
-                        work_done_progress_params: Default::default(),
-                        partial_result_params: Default::default(),
+                        work_done_progress_params: lsp::WorkDoneProgressParams::default(),
+                        partial_result_params: lsp::PartialResultParams::default(),
                     },
                     request_timeout,
                 );

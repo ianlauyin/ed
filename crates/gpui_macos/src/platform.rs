@@ -352,7 +352,7 @@ impl MacPlatform {
             menu_command: None,
             validate_menu_command: None,
             will_open_menu: None,
-            menu_actions: Default::default(),
+            menu_actions: Vec::default(),
             open_urls: None,
             finish_launching: None,
             dock_menu: None,

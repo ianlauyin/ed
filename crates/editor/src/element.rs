@@ -1393,7 +1393,7 @@ impl EditorElement {
         let content_offset = if self.editor.read(cx).show_indent_guides.is_none_or(|should_show| should_show) {
             content_offset
         } else {
-            Default::default()
+            gpui::Point::default()
         };
 
         Some(EditorScrollbars::new(
@@ -2126,7 +2126,7 @@ impl EditorElement {
         for (buffer_row, segment) in segments {
             line_numbers
                 .entry(buffer_row)
-                .or_insert_with(|| LineNumberLayout { segments: Default::default() })
+                .or_insert_with(|| LineNumberLayout { segments: SmallVec::default() })
                 .segments
                 .push(segment);
         }
@@ -2231,7 +2231,7 @@ impl EditorElement {
                 per_row_map[ix].push((seg_start..seg_end, color));
             }
         }
-        for row_segments in per_row_map.iter_mut() {
+        for row_segments in &mut per_row_map {
             if row_segments.is_empty() {
                 continue;
             }
@@ -2960,7 +2960,7 @@ impl EditorElement {
                 ),
             };
 
-        let viewport_bounds = Bounds::new(Default::default(), window.viewport_size())
+        let viewport_bounds = Bounds::new(gpui::Point::default(), window.viewport_size())
             .extend(Edges { right: -right_margin - MENU_GAP, ..Default::default() });
 
         let min_height = height_above_menu + min_menu_height + height_below_menu;
@@ -3092,7 +3092,7 @@ impl EditorElement {
 
         let min_height = line_height * min_height_in_lines as f32 + POPOVER_Y_PADDING;
         let max_height = line_height * max_height_in_lines as f32 + POPOVER_Y_PADDING;
-        let viewport_bounds = Bounds::new(Default::default(), window.viewport_size())
+        let viewport_bounds = Bounds::new(gpui::Point::default(), window.viewport_size())
             .extend(Edges { right: -right_margin - MENU_GAP, ..Default::default() });
         self.layout_popovers_above_or_below_line(
             target_position,
@@ -3801,7 +3801,7 @@ impl EditorElement {
                     paint_highlight(range.start, range.end, color, edges);
                 }
 
-                for (guide_x, active) in layout.wrap_guides.iter() {
+                for (guide_x, active) in &layout.wrap_guides {
                     let color = if *active {
                         cx.theme().colors().editor_active_wrap_guide
                     } else {
@@ -4098,11 +4098,11 @@ impl EditorElement {
                 }
             });
 
-            for test_indicator in layout.test_indicators.iter_mut() {
+            for test_indicator in &mut layout.test_indicators {
                 test_indicator.paint(window, cx);
             }
 
-            for gutter_hover_button in layout.gutter_hover_buttons.iter_mut() {
+            for gutter_hover_button in &mut layout.gutter_hover_buttons {
                 gutter_hover_button.paint(window, cx);
             }
         });
@@ -4164,7 +4164,7 @@ impl EditorElement {
         };
 
         window.paint_layer(layout.gutter_hitbox.bounds, |window| {
-            for mut blame_element in blamed_display_rows.into_iter() {
+            for mut blame_element in blamed_display_rows {
                 blame_element.paint(window, cx);
             }
         })
@@ -4381,7 +4381,7 @@ impl EditorElement {
             };
 
             for (player_color, selections) in &layout.selections {
-                for selection in selections.iter() {
+                for selection in selections {
                     self.paint_highlighted_range(
                         selection.range.clone(),
                         true,
@@ -6177,7 +6177,7 @@ impl Element for EditorElement {
                     let is_row_soft_wrapped =
                         |row: usize| row_infos.get(row).is_none_or(|info| info.buffer_row.is_none());
 
-                    let start_anchor = if start_row == Default::default() {
+                    let start_anchor = if start_row == DisplayRow::default() {
                         Anchor::Min
                     } else {
                         snapshot
@@ -6211,7 +6211,7 @@ impl Element for EditorElement {
                             } else {
                                 editor.update(cx, |editor, cx| {
                                     let snapshot = editor.snapshot(window, cx);
-                                    let start_anchor = if start_row == Default::default() {
+                                    let start_anchor = if start_row == DisplayRow::default() {
                                         Anchor::Min
                                     } else {
                                         snapshot.buffer_snapshot().anchor_before(
@@ -6571,7 +6571,7 @@ impl Element for EditorElement {
                             })
                         }
                     } else {
-                        Default::default()
+                        RenderBlocksOutput::default()
                     };
                     let RenderBlocksOutput {
                         non_spacer_blocks: mut blocks,
@@ -7470,7 +7470,7 @@ impl ScrollbarLayout {
             visible_range,
             text_unit_size,
             thumb_bounds,
-            thumb_state: Default::default(),
+            thumb_state: ScrollbarThumbState::default(),
         }
     }
 

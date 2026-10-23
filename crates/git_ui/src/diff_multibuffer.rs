@@ -178,7 +178,7 @@ impl DiffMultibuffer {
             focus_handle,
             editor,
             multibuffer,
-            buffer_subscriptions: Default::default(),
+            buffer_subscriptions: HashMap::default(),
             pending_scroll: None,
             empty_label: empty_label.into(),
             _task: task,
@@ -247,7 +247,7 @@ impl DiffMultibuffer {
     pub(crate) fn move_to_beginning(&self, window: &mut Window, cx: &mut Context<Self>) {
         self.editor.update(cx, |editor, cx| {
             editor.rhs_editor().update(cx, |editor, cx| {
-                editor.change_selections(Default::default(), window, cx, |s| {
+                editor.change_selections(SelectionEffects::default(), window, cx, |s| {
                     s.select_ranges(vec![multi_buffer::Anchor::Min..multi_buffer::Anchor::Min]);
                 });
             });

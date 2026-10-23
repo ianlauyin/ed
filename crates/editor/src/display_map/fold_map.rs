@@ -166,7 +166,7 @@ impl FoldPoint {
 
 impl<'a> sum_tree::Dimension<'a, TransformSummary> for FoldPoint {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        FoldPoint::default()
     }
 
     fn add_summary(&mut self, summary: &'a TransformSummary, _: ()) {
@@ -184,7 +184,7 @@ impl FoldMapWriter<'_> {
         let mut edits = Vec::new();
         let mut folds = Vec::new();
         let snapshot = self.0.snapshot.inlay_snapshot.clone();
-        for (range, fold_text) in ranges.into_iter() {
+        for (range, fold_text) in ranges {
             let buffer = &snapshot.buffer;
             let range = range.start.to_offset(buffer)..range.end.to_offset(buffer);
 
@@ -262,7 +262,7 @@ impl FoldMapWriter<'_> {
         let mut fold_ixs_to_delete = Vec::new();
         let snapshot = self.0.snapshot.inlay_snapshot.clone();
         let buffer = &snapshot.buffer;
-        for range in ranges.into_iter() {
+        for range in ranges {
             let range = range.start.to_offset(buffer)..range.end.to_offset(buffer);
             let mut folds_cursor = intersecting_folds(&snapshot, &self.0.snapshot.folds, range.clone(), inclusive);
             while let Some(fold) = folds_cursor.item() {
@@ -1055,7 +1055,7 @@ impl sum_tree::Item for Transform {
 
 impl sum_tree::ContextLessSummary for TransformSummary {
     fn zero() -> Self {
-        Default::default()
+        TransformSummary::default()
     }
 
     fn add_summary(&mut self, other: &Self) {
@@ -1142,7 +1142,7 @@ impl sum_tree::Summary for FoldSummary {
     type Context<'a> = &'a MultiBufferSnapshot;
 
     fn zero(_cx: &MultiBufferSnapshot) -> Self {
-        Default::default()
+        FoldSummary::default()
     }
 
     fn add_summary(&mut self, other: &Self, buffer: Self::Context<'_>) {
@@ -1170,7 +1170,7 @@ impl sum_tree::Summary for FoldSummary {
 
 impl<'a> sum_tree::Dimension<'a, FoldSummary> for FoldRange {
     fn zero(_cx: &MultiBufferSnapshot) -> Self {
-        Default::default()
+        FoldRange::default()
     }
 
     fn add_summary(&mut self, summary: &'a FoldSummary, _: &MultiBufferSnapshot) {
@@ -1193,7 +1193,7 @@ impl sum_tree::SeekTarget<'_, FoldSummary, FoldRange> for MultiBufferOffset {
 
 impl<'a> sum_tree::Dimension<'a, FoldSummary> for MultiBufferOffset {
     fn zero(_cx: &MultiBufferSnapshot) -> Self {
-        Default::default()
+        MultiBufferOffset::default()
     }
 
     fn add_summary(&mut self, summary: &'a FoldSummary, _: &MultiBufferSnapshot) {
@@ -1527,7 +1527,7 @@ where
 
 impl<'a> sum_tree::Dimension<'a, TransformSummary> for FoldOffset {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        FoldOffset::default()
     }
 
     fn add_summary(&mut self, summary: &'a TransformSummary, _: ()) {
@@ -1537,7 +1537,7 @@ impl<'a> sum_tree::Dimension<'a, TransformSummary> for FoldOffset {
 
 impl<'a> sum_tree::Dimension<'a, TransformSummary> for InlayPoint {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        InlayPoint::default()
     }
 
     fn add_summary(&mut self, summary: &'a TransformSummary, _: ()) {
@@ -1547,7 +1547,7 @@ impl<'a> sum_tree::Dimension<'a, TransformSummary> for InlayPoint {
 
 impl<'a> sum_tree::Dimension<'a, TransformSummary> for InlayOffset {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        InlayOffset::default()
     }
 
     fn add_summary(&mut self, summary: &'a TransformSummary, _: ()) {

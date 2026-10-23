@@ -283,7 +283,7 @@ impl Markdown {
             pending_autoscroll: None,
             active_root_block: None,
             should_reparse: false,
-            images_by_source_offset: Default::default(),
+            images_by_source_offset: HashMap::default(),
             parsed_markdown: Arc::default(),
             pending_parse: None,
             focus_handle,

@@ -143,7 +143,7 @@ impl ThreadSafeConnection {
                 uri: Arc::from(uri),
                 persistent,
                 connection_initialize_query: None,
-                connections: Default::default(),
+                connections: Arc::default(),
             },
             _schema: PhantomData,
         }
@@ -176,7 +176,7 @@ impl ThreadSafeConnection {
 
         let thread_safe_connection = (*self).clone();
         write_channel(Box::new(move || {
-            let connection = thread_safe_connection.deref();
+            let connection = &*thread_safe_connection;
             let result = connection.with_write(|connection| callback(connection));
             sender.send(result).ok();
         }));
@@ -235,7 +235,7 @@ impl ThreadSafeConnection {
         write_queue_constructor: Option<WriteQueueConstructor>,
     ) -> Self {
         let connection =
-            Self { uri: Arc::from(uri), persistent, connection_initialize_query, connections: Default::default() };
+            Self { uri: Arc::from(uri), persistent, connection_initialize_query, connections: Arc::default() };
 
         connection.initialize_queues(write_queue_constructor);
         connection

@@ -88,7 +88,7 @@ impl Drop for SyntaxSnapshot {
                 // Deliberately bogus anchors, doesn't matter in this context
                 range: Anchor::min_min_range_for_buffer(BufferId::new(1).unwrap()),
                 last_layer_range: Anchor::min_min_range_for_buffer(BufferId::new(1).unwrap()),
-                last_layer_language: Default::default(),
+                last_layer_language: Option::default(),
                 contains_unknown_injections: Default::default(),
             }),
         ));
@@ -506,9 +506,9 @@ impl SyntaxSnapshot {
                             start_byte: 0,
                             old_end_byte: node.end_byte(),
                             new_end_byte: 0,
-                            start_position: Default::default(),
+                            start_position: tree_sitter::Point::default(),
                             old_end_position: node.end_position(),
-                            new_end_position: Default::default(),
+                            new_end_position: tree_sitter::Point::default(),
                         }
                     };
 
@@ -773,8 +773,8 @@ impl SyntaxSnapshot {
                             included_ranges.push(tree_sitter::Range {
                                 start_byte: 0,
                                 end_byte: 0,
-                                start_point: Default::default(),
-                                end_point: Default::default(),
+                                start_point: tree_sitter::Point::default(),
+                                end_point: tree_sitter::Point::default(),
                             });
                         }
 
@@ -828,8 +828,8 @@ impl SyntaxSnapshot {
                             included_ranges.push(tree_sitter::Range {
                                 start_byte: 0,
                                 end_byte: 0,
-                                start_point: Default::default(),
-                                end_point: Default::default(),
+                                start_point: tree_sitter::Point::default(),
+                                end_point: tree_sitter::Point::default(),
                             });
                         }
 
@@ -1161,7 +1161,7 @@ impl<'a> SyntaxMapCaptures<'a> {
 
             // TODO - add a Tree-sitter API to remove the need for this.
             let cursor = unsafe {
-                std::mem::transmute::<&mut tree_sitter::QueryCursor, &'static mut QueryCursor>(query_cursor.deref_mut())
+                std::mem::transmute::<&mut tree_sitter::QueryCursor, &'static mut QueryCursor>(&mut *query_cursor)
             };
 
             cursor.set_byte_range(range.clone());
@@ -1280,7 +1280,7 @@ impl<'a> SyntaxMapMatches<'a> {
 
             // TODO - add a Tree-sitter API to remove the need for this.
             let cursor = unsafe {
-                std::mem::transmute::<&mut tree_sitter::QueryCursor, &'static mut QueryCursor>(query_cursor.deref_mut())
+                std::mem::transmute::<&mut tree_sitter::QueryCursor, &'static mut QueryCursor>(&mut *query_cursor)
             };
             cursor.set_max_start_depth(options.max_start_depth);
 

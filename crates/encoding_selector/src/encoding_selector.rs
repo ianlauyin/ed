@@ -247,7 +247,16 @@ impl PickerDelegate for EncodingSelectorDelegate {
                     })
                     .collect()
             } else {
-                match_strings(&candidates, &query, false, true, 100, &Default::default(), background).await
+                match_strings(
+                    &candidates,
+                    &query,
+                    false,
+                    true,
+                    100,
+                    &std::sync::atomic::AtomicBool::default(),
+                    background,
+                )
+                .await
             };
 
             this.update(cx, |this, cx| {

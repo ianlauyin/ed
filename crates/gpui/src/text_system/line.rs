@@ -267,7 +267,7 @@ pub struct ShapedLineCursor<'a> {
     x_offset: Pixels,
 }
 
-impl<'a> ShapedLineCursor<'a> {
+impl ShapedLineCursor<'_> {
     /// Takes the bytes since the previous boundary.
     ///
     /// Panics if the boundary precedes the previous one, exceeds the line's

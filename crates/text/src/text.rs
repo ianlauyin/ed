@@ -212,7 +212,7 @@ impl History {
     pub fn new(base_text: Rope) -> Self {
         Self {
             base_text,
-            operations: Default::default(),
+            operations: TreeMap::default(),
             undo_stack: Vec::new(),
             redo_stack: Vec::new(),
             transaction_depth: 0,
@@ -234,7 +234,7 @@ impl History {
         if self.transaction_depth == 1 {
             let id = clock.tick();
             self.undo_stack.push(HistoryEntry {
-                transaction: Transaction { id, start, edit_ids: Default::default() },
+                transaction: Transaction { id, start, edit_ids: Vec::default() },
                 first_edit_at: now,
                 last_edit_at: now,
                 suppress_grouping: false,
@@ -532,7 +532,7 @@ struct FragmentTextSummary {
 
 impl<'a> sum_tree::Dimension<'a, FragmentSummary> for FragmentTextSummary {
     fn zero(_: &Option<clock::Global>) -> Self {
-        Default::default()
+        FragmentTextSummary::default()
     }
 
     fn add_summary(&mut self, summary: &'a FragmentSummary, _: &Option<clock::Global>) {
@@ -714,8 +714,8 @@ impl Buffer {
                     insertion_offset,
                     len: chunk_len as u32,
                     visible: true,
-                    deletions: Default::default(),
-                    max_undos: Default::default(),
+                    deletions: SmallVec::default(),
+                    max_undos: clock::Global::default(),
                 };
                 insertions.push(InsertionFragment::new(&fragment), ());
                 fragments.push(fragment, &None);
@@ -736,16 +736,16 @@ impl Buffer {
                 fragments,
                 insertions,
                 version,
-                undo_map: Default::default(),
-                insertion_slices: Default::default(),
+                undo_map: UndoMap::default(),
+                insertion_slices: TreeSet::default(),
             },
             history,
             deferred_ops: OperationQueue::new(),
             deferred_replicas: HashSet::default(),
             lamport_clock,
-            subscriptions: Default::default(),
-            edit_id_resolvers: Default::default(),
-            wait_for_version_txs: Default::default(),
+            subscriptions: Topic::default(),
+            edit_id_resolvers: HashMap::default(),
+            wait_for_version_txs: Vec::default(),
         }
     }
 
@@ -768,9 +768,9 @@ impl Buffer {
             deferred_ops: OperationQueue::new(),
             deferred_replicas: HashSet::default(),
             lamport_clock: clock::Lamport::new(ReplicaId::LOCAL_BRANCH),
-            subscriptions: Default::default(),
-            edit_id_resolvers: Default::default(),
-            wait_for_version_txs: Default::default(),
+            subscriptions: Topic::default(),
+            edit_id_resolvers: HashMap::default(),
+            wait_for_version_txs: Vec::default(),
         }
     }
 
@@ -1532,8 +1532,8 @@ fn push_fragments_for_insertion(
             timestamp,
             insertion_offset: *insertion_offset,
             len: chunk_len as u32,
-            deletions: Default::default(),
-            max_undos: Default::default(),
+            deletions: SmallVec::default(),
+            max_undos: clock::Global::default(),
             visible: true,
         };
         insertion_slices.push(InsertionSlice::from_fragment(edit_timestamp, &fragment));
@@ -2709,7 +2709,7 @@ impl sum_tree::Summary for FragmentSummary {
     type Context<'a> = &'a Option<clock::Global>;
 
     fn zero(_cx: Self::Context<'_>) -> Self {
-        Default::default()
+        FragmentSummary::default()
     }
 
     fn add_summary(&mut self, other: &Self, _: Self::Context<'_>) {
@@ -2812,7 +2812,7 @@ impl sum_tree::Dimension<'_, FragmentSummary> for usize {
 
 impl sum_tree::Dimension<'_, FragmentSummary> for FullOffset {
     fn zero(_: &Option<clock::Global>) -> Self {
-        Default::default()
+        FullOffset::default()
     }
 
     fn add_summary(&mut self, summary: &FragmentSummary, _: &Option<clock::Global>) {
@@ -2822,7 +2822,7 @@ impl sum_tree::Dimension<'_, FragmentSummary> for FullOffset {
 
 impl<'a> sum_tree::Dimension<'a, FragmentSummary> for Option<&'a Locator> {
     fn zero(_: &Option<clock::Global>) -> Self {
-        Default::default()
+        Option::default()
     }
 
     fn add_summary(&mut self, summary: &'a FragmentSummary, _: &Option<clock::Global>) {
@@ -2850,13 +2850,13 @@ impl VersionedFullOffset {
 
 impl Default for VersionedFullOffset {
     fn default() -> Self {
-        Self::Offset(Default::default())
+        Self::Offset(FullOffset::default())
     }
 }
 
 impl<'a> sum_tree::Dimension<'a, FragmentSummary> for VersionedFullOffset {
     fn zero(_cx: &Option<clock::Global>) -> Self {
-        Default::default()
+        VersionedFullOffset::default()
     }
 
     fn add_summary(&mut self, summary: &'a FragmentSummary, cx: &Option<clock::Global>) {

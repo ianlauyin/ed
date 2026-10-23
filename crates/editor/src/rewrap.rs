@@ -367,7 +367,9 @@ impl<'a> WordBreakingTokenizer<'a> {
 }
 
 fn is_char_ideographic(ch: char) -> bool {
-    use unicode_script::Script::*;
+    use unicode_script::Script::Han;
+    use unicode_script::Script::Tangut;
+    use unicode_script::Script::Yi;
     use unicode_script::UnicodeScript;
     matches!(ch.script(), Han | Tangut | Yi)
 }

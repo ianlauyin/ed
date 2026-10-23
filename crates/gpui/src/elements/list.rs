@@ -1486,7 +1486,7 @@ impl sum_tree::Item for ListItem {
 
 impl sum_tree::ContextLessSummary for ListItemSummary {
     fn zero() -> Self {
-        Default::default()
+        ListItemSummary::default()
     }
 
     fn add_summary(&mut self, summary: &Self) {
@@ -1501,7 +1501,7 @@ impl sum_tree::ContextLessSummary for ListItemSummary {
 
 impl<'a> sum_tree::Dimension<'a, ListItemSummary> for Count {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        Count::default()
     }
 
     fn add_summary(&mut self, summary: &'a ListItemSummary, _: ()) {
@@ -1511,7 +1511,7 @@ impl<'a> sum_tree::Dimension<'a, ListItemSummary> for Count {
 
 impl<'a> sum_tree::Dimension<'a, ListItemSummary> for Height {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        Height::default()
     }
 
     fn add_summary(&mut self, summary: &'a ListItemSummary, _: ()) {

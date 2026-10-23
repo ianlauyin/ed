@@ -1986,7 +1986,7 @@ impl BlockSnapshot {
 
         BlockChunks {
             input_chunks: self.wrap_snapshot.chunks(input_start..input_end, language_aware, highlights),
-            input_chunk: Default::default(),
+            input_chunk: Chunk::default(),
             transforms: cursor,
             output_row: rows.start,
             line_count_overflow: RowDelta(0),
@@ -2465,7 +2465,7 @@ impl sum_tree::Item for Transform {
 
 impl sum_tree::ContextLessSummary for TransformSummary {
     fn zero() -> Self {
-        Default::default()
+        TransformSummary::default()
     }
 
     fn add_summary(&mut self, summary: &Self) {
@@ -2481,7 +2481,7 @@ impl sum_tree::ContextLessSummary for TransformSummary {
 
 impl<'a> sum_tree::Dimension<'a, TransformSummary> for WrapRow {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        WrapRow::default()
     }
 
     fn add_summary(&mut self, summary: &'a TransformSummary, _: ()) {
@@ -2491,7 +2491,7 @@ impl<'a> sum_tree::Dimension<'a, TransformSummary> for WrapRow {
 
 impl<'a> sum_tree::Dimension<'a, TransformSummary> for BlockRow {
     fn zero(_cx: ()) -> Self {
-        Default::default()
+        BlockRow::default()
     }
 
     fn add_summary(&mut self, summary: &'a TransformSummary, _: ()) {

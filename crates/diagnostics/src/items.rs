@@ -102,7 +102,7 @@ impl Render for DiagnosticIndicator {
                                 });
                             }
                             workspace.update(cx, |workspace, cx| {
-                                ProjectDiagnosticsEditor::deploy(workspace, &Default::default(), window, cx)
+                                ProjectDiagnosticsEditor::deploy(workspace, &Deploy, window, cx)
                             })
                         }
                     })),

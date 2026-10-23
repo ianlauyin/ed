@@ -1,3 +1,5 @@
+use collections::HashMap;
+use collections::IndexMap;
 use settings_content::*;
 
 pub const DEFAULT_WINDOW_TITLE_FORMAT: &str = "${projectName}${separator}${fileName}";
@@ -128,7 +130,7 @@ pub fn settings() -> SettingsContent {
             ..Default::default()
         }),
         hide_mouse: Some(HideMouseMode::OnTypingAndAction),
-        log: Some(Default::default()),
+        log: Some(HashMap::default()),
         line_indicator_format: Some(LineIndicatorFormat::Long),
         outline_panel: Some(OutlinePanelSettingsContent {
             button: Some(true),
@@ -192,7 +194,7 @@ fn terminal_settings() -> Option<TerminalSettingsContent> {
         project: ProjectTerminalSettingsContent {
             shell: Some(Shell::System),
             working_directory: Some(WorkingDirectory::CurrentProjectDirectory),
-            env: Some(Default::default()),
+            env: Some(HashMap::default()),
             detect_venv: Some(true),
             path_hyperlink_regexes: Some(PathHyperlinkRegexes(vec![
                 PathHyperlinkRegex::SingleLine("File \"(?<path>[^\"]+)\", line (?<line>[0-9]+)".into()),
@@ -326,7 +328,7 @@ fn workspace_settings() -> WorkspaceSettingsContent {
         drop_target_size: Some(0.2),
         when_closing_with_no_tabs: Some(CloseWindowWhenNoItems::PlatformDefault),
         use_system_path_prompts: Some(true),
-        command_aliases: Default::default(),
+        command_aliases: HashMap::default(),
         max_tabs: None,
         on_new_window: Some(OnNewWindow::Launchpad),
         resize_all_panels_in_dock: Some(vec![DockPosition::Left]),
@@ -352,7 +354,7 @@ fn theme_settings() -> Box<ThemeSettingsContent> {
         buffer_font_size: Some(FontSize(15.0)),
         buffer_font_weight: Some(FontWeightContent(400.0)),
         buffer_line_height: Some(BufferLineHeight::Comfortable),
-        buffer_font_features: Some(FontFeaturesContent(Default::default())),
+        buffer_font_features: Some(FontFeaturesContent(IndexMap::default())),
         git_commit_buffer_font_size: Some(FontSize(12.0)),
         mermaid_font_family: None,
         theme: Some(ThemeSelection::Static(ThemeName("Nord".into()))),
@@ -455,12 +457,12 @@ fn language_settings() -> AllLanguageSettingsContent {
             use_auto_surround: Some(true),
             always_treat_brackets_as_autoclosed: Some(false),
             use_on_type_format: Some(true),
-            code_actions_on_format: Some(Default::default()),
+            code_actions_on_format: Some(HashMap::default()),
             linked_edits: Some(true),
             auto_indent: Some(AutoIndentMode::SyntaxAware),
             auto_indent_on_paste: Some(true),
             tasks: Some(LanguageTaskSettingsContent {
-                variables: Some(Default::default()),
+                variables: Some(HashMap::default()),
                 enabled: Some(true),
                 prefer_lsp: Some(true),
             }),
