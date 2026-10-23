@@ -112,6 +112,10 @@ remote detection, command execution, and proxy startup are removed.
     (`/a/b/`, `/a//b`, `/a/./b`) share one backend watch and receive the same
     events; on case-insensitive volumes the key is also case-folded and
     Unicode-normalized.
+  - A registration under a recursive watch shares its ancestor's backend watch.
+    Removing that ancestor first installs replacement watches for the surviving
+    descendants (shallowest first); if a replacement fails, the ancestor's watch
+    is kept until the descendants it still serves are removed.
 - File formats and protocol data may describe other operating systems, paths,
   line endings, or remote hosts; these do not imply editor host support.
 

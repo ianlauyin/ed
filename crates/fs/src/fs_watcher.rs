@@ -1,3 +1,4 @@
+use std::collections::BTreeSet;
 use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::path::Path;
@@ -359,7 +360,7 @@ fn path_is_under(path: &SanitizedPath, root: &SanitizedPath, case_insensitive: b
 ///
 /// Folded keys use path-component spelling so separators and `.` components
 /// agree with exact path equality. macOS also normalizes Unicode before folding.
-#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Debug, PartialEq, Eq, Hash, PartialOrd, Ord)]
 enum WatchKey {
     Exact(Arc<Path>),
     Folded(Arc<str>),
@@ -576,6 +577,10 @@ fn coalesce_pending_rescans(pending_paths: &mut Vec<PathEvent>, path_events: &mu
     path_events.retain(|event| event.kind != Some(PathEventKind::Rescan) || deduped_rescans.contains(&event.path));
 }
 
+fn path_depth(path: &SanitizedPath) -> usize {
+    path.as_path().components().count()
+}
+
 fn is_covered_rescan(kind: Option<PathEventKind>, path: &Path, ancestor: &Path) -> bool {
     kind == Some(PathEventKind::Rescan) && path != ancestor && path.starts_with(ancestor)
 }
@@ -586,13 +591,24 @@ pub struct WatcherRegistrationId(u32);
 struct WatcherRegistrationState {
     callback: Arc<dyn Fn(&notify::Event) + Send + Sync>,
     key: WatchKey,
-    path: Arc<SanitizedPath>,
 }
 
 struct PathRegistrationState {
+    path: Arc<SanitizedPath>,
+    /// Empty while a backend watch is retained for covered descendants that
+    /// could not get their own backend watch.
     watcher_ids: Vec<WatcherRegistrationId>,
-    has_os_watcher: bool,
+    coverage: Coverage,
     stale: bool,
+}
+
+enum Coverage {
+    /// Has its own backend watch. On recursive backends, that watch also
+    /// serves the descendant registrations listed here by [`path_depth`] and
+    /// key, so promotion proceeds shallowest first without re-sorting.
+    Watched { covered: BTreeSet<(usize, WatchKey)> },
+    /// Served by the recursive backend watch of this ancestor registration.
+    CoveredBy(WatchKey),
 }
 
 /// The registered watch paths for one backend, keyed by [`WatchKey`] so that
@@ -609,24 +625,25 @@ impl WatchPaths {
         self.0.get_mut(key)
     }
 
-    fn entry(&mut self, key: WatchKey) -> std::collections::hash_map::Entry<'_, WatchKey, PathRegistrationState> {
-        self.0.entry(key)
-    }
-
-    fn remove(&mut self, key: &WatchKey) {
-        self.0.remove(key);
-    }
-
-    /// True if a recursive registration on a strict ancestor already covers
-    /// `path`. Only poll watches and native macOS/Windows watches are recursive.
-    fn covered_by_recursive_ancestor(&self, path: &SanitizedPath, recursive: bool) -> bool {
+    /// The nearest strict ancestor whose recursive backend watch covers `path`.
+    /// Only poll watches and native macOS watches are recursive.
+    fn covering_ancestor(&self, path: &SanitizedPath, recursive: bool) -> Option<WatchKey> {
         if !recursive {
-            return false;
+            return None;
         }
-        path.as_path().ancestors().skip(1).any(|ancestor| {
+        path.as_path().ancestors().skip(1).find_map(|ancestor| {
             let ancestor = SanitizedPath::unchecked_new(ancestor);
-            self.0.contains_key(&WatchKey::exact(ancestor)) || self.0.contains_key(&WatchKey::folded(ancestor))
+            [WatchKey::exact(ancestor), WatchKey::folded(ancestor)].into_iter().find(|key| {
+                self.0.get(key).is_some_and(|registration| matches!(registration.coverage, Coverage::Watched { .. }))
+            })
         })
+    }
+
+    fn covered_by_mut(&mut self, key: &WatchKey) -> Option<&mut BTreeSet<(usize, WatchKey)>> {
+        match &mut self.0.get_mut(key)?.coverage {
+            Coverage::Watched { covered } => Some(covered),
+            Coverage::CoveredBy(_) => None,
+        }
     }
 
     /// Collects the watcher ids of every registration whose directory is an
@@ -666,20 +683,6 @@ impl WatcherState {
                 NATIVE_WATCH_LIMIT_COOLDOWN.as_secs()
             );
         }
-    }
-
-    fn remove_registration(&mut self, id: WatcherRegistrationId) -> Option<Arc<SanitizedPath>> {
-        let registration_state = self.watchers.remove(&id)?;
-        let path_state = self.paths.get_mut(&registration_state.key)?;
-        path_state.watcher_ids.retain(|&existing| existing != id);
-        if !path_state.watcher_ids.is_empty() {
-            return None;
-        }
-
-        let was_actually_watched = path_state.has_os_watcher;
-        self.paths.remove(&registration_state.key);
-
-        was_actually_watched.then_some(registration_state.path)
     }
 }
 
@@ -776,12 +779,12 @@ impl OsWatcher {
         let path = SanitizedPath::from_arc(path);
         let key = WatchKey::for_registration(&path, case_insensitive);
         let mut state = self.state.lock();
-        let path_already_covered = state.paths.covered_by_recursive_ancestor(&path, self.recursive);
-        let path_already_registered = state.paths.contains(&key);
-
-        if path_already_registered {
+        let new_coverage = if state.paths.contains(&key) {
             self.rewatch_if_stale(&mut state, &path, &key)?;
-        } else if !path_already_covered {
+            None
+        } else if let Some(ancestor) = state.paths.covering_ancestor(&path, self.recursive) {
+            Some(Coverage::CoveredBy(ancestor))
+        } else {
             if self.kind == OsWatcherKind::Native && state.is_native_watch_limit_cooldown_active() {
                 return Ok(None);
             }
@@ -794,16 +797,32 @@ impl OsWatcher {
                 }
                 Err(error) => return Err(error),
             }
-        }
+            Some(Coverage::Watched { covered: BTreeSet::new() })
+        };
 
         let id = state.last_registration;
         state.last_registration = WatcherRegistrationId(id.0 + 1);
 
-        let registration_state = WatcherRegistrationState { callback: Arc::new(cb), key: key.clone(), path };
+        let registration_state = WatcherRegistrationState { callback: Arc::new(cb), key: key.clone() };
         state.watchers.insert(id, registration_state);
-        state.paths.entry(key).and_modify(|registration| registration.watcher_ids.push(id)).or_insert_with(|| {
-            PathRegistrationState { watcher_ids: vec![id], has_os_watcher: !path_already_covered, stale: false }
-        });
+        match new_coverage {
+            None => {
+                if let Some(registration) = state.paths.get_mut(&key) {
+                    registration.watcher_ids.push(id);
+                }
+            }
+            Some(coverage) => {
+                if let Coverage::CoveredBy(ancestor) = &coverage
+                    && let Some(covered) = state.paths.covered_by_mut(ancestor)
+                {
+                    covered.insert((path_depth(&path), key.clone()));
+                }
+                state
+                    .paths
+                    .0
+                    .insert(key, PathRegistrationState { path, watcher_ids: vec![id], coverage, stale: false });
+            }
+        }
 
         Ok(Some(id))
     }
@@ -827,10 +846,106 @@ impl OsWatcher {
 
     pub fn remove(&self, id: WatcherRegistrationId) {
         let mut state = self.state.lock();
-        let Some(path) = state.remove_registration(id) else {
+        let Some(registration) = state.watchers.remove(&id) else {
             return;
         };
-        self.unwatch(path.as_path()).log_err();
+        let key = registration.key;
+        let Some(path_state) = state.paths.get_mut(&key) else {
+            return;
+        };
+        path_state.watcher_ids.retain(|&existing| existing != id);
+        if !path_state.watcher_ids.is_empty() {
+            return;
+        }
+        match &path_state.coverage {
+            Coverage::Watched { .. } => self.release_watch(&mut state, key),
+            Coverage::CoveredBy(ancestor) => {
+                let ancestor = ancestor.clone();
+                let covered_entry = (path_depth(&path_state.path), key);
+                state.paths.0.remove(&covered_entry.1);
+                let Some(ancestor_state) = state.paths.get_mut(&ancestor) else {
+                    return;
+                };
+                let retained = ancestor_state.watcher_ids.is_empty();
+                let Coverage::Watched { covered } = &mut ancestor_state.coverage else {
+                    return;
+                };
+                // A retained watch stopped at its shallowest covered registration,
+                // so only that registration leaving can unblock its release.
+                let blocked_release = covered.first() == Some(&covered_entry);
+                covered.remove(&covered_entry);
+                if retained && blocked_release {
+                    self.release_watch(&mut state, ancestor);
+                }
+            }
+        }
+    }
+
+    /// Unwatches the unused backend watch at `key` once every registration it
+    /// covers is served by another watch.
+    ///
+    /// Replacements are installed shallowest first, so one can cover deeper
+    /// registrations. If one cannot be installed, the watch is retained for
+    /// the registrations still covered by it, and is reconsidered when the one
+    /// that could not be promoted is removed.
+    fn release_watch(&self, state: &mut WatcherState, key: WatchKey) {
+        // Exclude this watch from coverage checks while it stays installed.
+        let Some(mut released) = state.paths.0.remove(&key) else {
+            return;
+        };
+        let mut pending = match &mut released.coverage {
+            Coverage::Watched { covered } => std::mem::take(covered),
+            Coverage::CoveredBy(_) => {
+                state.paths.0.insert(key, released);
+                return;
+            }
+        };
+        while let Some((depth, covered_key)) = pending.pop_first() {
+            let Some(covered_path) = state.paths.0.get(&covered_key).map(|registration| registration.path.clone())
+            else {
+                continue;
+            };
+            let coverage = match state.paths.covering_ancestor(&covered_path, self.recursive) {
+                Some(ancestor) => {
+                    if let Some(covered) = state.paths.covered_by_mut(&ancestor) {
+                        covered.insert((depth, covered_key.clone()));
+                    }
+                    Coverage::CoveredBy(ancestor)
+                }
+                None if self.watch_replacement(state, &covered_path) => Coverage::Watched { covered: BTreeSet::new() },
+                None => {
+                    pending.insert((depth, covered_key));
+                    released.coverage = Coverage::Watched { covered: pending };
+                    state.paths.0.insert(key, released);
+                    return;
+                }
+            };
+            if let Some(registration) = state.paths.get_mut(&covered_key) {
+                registration.coverage = coverage;
+                registration.stale = false;
+            }
+        }
+
+        // Forget the watch even if unwatching fails: notify can report failure
+        // after dropping the watch (FSEvents restarts its stream afterwards), so
+        // a later registration of this path must install a fresh watch.
+        self.unwatch(released.path.as_path()).log_err();
+    }
+
+    fn watch_replacement(&self, state: &mut WatcherState, path: &SanitizedPath) -> bool {
+        if self.kind == OsWatcherKind::Native && state.is_native_watch_limit_cooldown_active() {
+            return false;
+        }
+        match self.watch(path.as_path()) {
+            Ok(()) => true,
+            Err(error) => {
+                if self.kind == OsWatcherKind::Native && is_max_files_watch_error(&error) {
+                    state.start_native_watch_limit_cooldown(path.as_path());
+                }
+                log::error!("failed to restore watch for {path:?}; retaining its covering watch: {error:#}");
+                false
+            }
+        }
     }
 
     fn watch(&self, path: &Path) -> anyhow::Result<()> {
