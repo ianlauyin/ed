@@ -465,7 +465,9 @@ impl Parser<'_, '_> {
         Err(self.fail("'LINK', 'START_LINK'"))
     }
 
-    fn vertex_statement(&mut self) -> Result<Vec<String>, Error> {
+    /// A chain of nodes and links. Its nodes are only gathered, with `collect`, for the subgraph
+    /// it is in.
+    fn vertex_statement(&mut self, collect: bool) -> Result<Vec<String>, Error> {
         let (mut stmt, data) = self.node()?;
         if let (Some(data), Some(last)) = (&data, stmt.last()) {
             self.db.add_vertex(last, None, None, None, None, Some(data))?;
@@ -483,9 +485,11 @@ impl Parser<'_, '_> {
             }
             self.db.add_link(&stmt, &next, &info)?;
 
-            let mut joined = next.clone();
-            joined.append(&mut nodes);
-            nodes = joined;
+            if collect {
+                let mut joined = next.clone();
+                joined.append(&mut nodes);
+                nodes = joined;
+            }
             stmt = next;
         }
     }
@@ -629,8 +633,9 @@ impl Parser<'_, '_> {
         Ok(Frame { collect: false, id: Some(id), list: Vec::new(), same, title: Some(title) })
     }
 
-    /// One statement, or `None` for statements that add nothing to a subgraph body.
-    fn statement(&mut self) -> Result<Option<DocItem>, Error> {
+    /// One statement, or `None` for statements that add nothing to a subgraph body. `collect`
+    /// says whether the statement is in a subgraph body.
+    fn statement(&mut self, collect: bool) -> Result<Option<DocItem>, Error> {
         let t = self.kind();
         match t {
             T::Style => {
@@ -705,7 +710,7 @@ impl Parser<'_, '_> {
                 if !is_id(t) {
                     return Err(self.fail(STATEMENT_START));
                 }
-                let nodes = self.vertex_statement()?;
+                let nodes = self.vertex_statement(collect)?;
                 self.separator()?;
                 Ok(Some(DocItem::Ids(nodes)))
             }
@@ -746,7 +751,7 @@ impl Parser<'_, '_> {
                 frame.collect = collect;
                 open.push(frame);
                 collect = true;
-            } else if let Some(item) = self.statement()?
+            } else if let Some(item) = self.statement(collect)?
                 && collect
             {
                 list.push(item);

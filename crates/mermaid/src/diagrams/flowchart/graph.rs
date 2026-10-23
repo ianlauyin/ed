@@ -128,18 +128,13 @@ fn is_collapsed(metadata: Option<&Vec<(String, Value)>>) -> bool {
 pub(crate) fn build(model: &FlowDb, default_curve: Option<&str>) -> FlowGraph {
     let subgraphs = &model.subgraphs;
 
-    // Pele concatenates and trims after each class, so earlier declarations are trimmed again.
+    // Each class's declarations, trimmed once.
     let compiled = |names: &mut dyn Iterator<Item = &str>| -> Vec<String> {
         let mut out: Vec<String> = Vec::new();
         for name in names {
             if let Some(def) = model.classes.iter().find(|def| def.id == name) {
-                out.extend(def.styles.iter().cloned());
-                out.extend(def.text_styles.iter().cloned());
-                for entry in &mut out {
-                    let trimmed = super::db::js_trim(entry);
-                    if trimmed.len() != entry.len() {
-                        *entry = String::from(trimmed);
-                    }
+                for declaration in def.styles.iter().chain(&def.text_styles) {
+                    out.push(super::db::js_trim(declaration).to_owned());
                 }
             }
         }
@@ -265,7 +260,6 @@ pub(crate) fn build(model: &FlowDb, default_curve: Option<&str>) -> FlowGraph {
             pos: vertex.pos.clone(),
             shape: if is_group { String::from("rect") } else { shape_of(vertex) },
         };
-        by_id.insert(&vertex.id, nodes.len());
         nodes.push(node);
     }
 

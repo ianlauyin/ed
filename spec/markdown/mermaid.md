@@ -21,7 +21,18 @@
   background, accents as chart series).
 - Layout measures text as monospace (0.6 em per glyph), so diagrams use
   `mermaid_font_family`, defaulting to the buffer font, with common system
-  monospace fonts as fallbacks.
+  monospace fonts as fallbacks. Because every label is already monospace,
+  `<code>`, `<kbd>`, `<samp>`, and `<tt>` only drop their tags (Pele switches
+  them to a monospace font).
+- Label markup (ported from Pele 1.9): bold/italic (`b strong i em cite dfn
+  var`), underline (`u ins`), and `<sub>`/`<sup>` (baseline shift, smaller
+  text) are styled, and HTML styling carries across line breaks; other HTML
+  tags are dropped, while tag-shaped text that is not HTML (`List<T>`) stays
+  as text. Wrapping breaks at spaces, between Chinese/Japanese characters,
+  at zero-width spaces, and at soft hyphens (shown as `-` only at a break);
+  a label of several lines uses a 1.3 line height.
+- Sankey links are filled with source-to-target gradients by default; since
+  each SVG is rasterized alone, the fixed gradient ids cannot clash.
 - Diagrams render at their natural size times the fence scale
   (```` ```mermaid 150 ````); wider ones scroll horizontally. There is no
   per-diagram zoom (ctrl/cmd+scroll was removed). Diagrams follow the

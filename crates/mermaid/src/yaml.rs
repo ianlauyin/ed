@@ -488,6 +488,10 @@ fn scalar(raw: &str) -> Value {
         "false" | "False" | "FALSE" => return Value::Bool(false),
         _ => {}
     }
+    // Every number starts with a sign, a point, or a digit.
+    if !s.starts_with(|c: char| matches!(c, '-' | '+' | '.') || c.is_ascii_digit()) {
+        return Value::String(s.to_owned());
+    }
 
     if is_int(s) || is_float(s) {
         return Value::Number(crate::util::float::parse(s).unwrap_or(f64::NAN));
