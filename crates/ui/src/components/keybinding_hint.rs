@@ -1,7 +1,14 @@
+use gpui::AnyElement;
+use gpui::App;
+use gpui::BoxShadow;
+use gpui::FontStyle;
+use gpui::Hsla;
+use gpui::IntoElement;
+use gpui::Window;
+use theme::Appearance;
+
 use crate::KeyBinding;
 use crate::prelude::*;
-use gpui::{AnyElement, App, BoxShadow, FontStyle, Hsla, IntoElement, Window};
-use theme::Appearance;
 
 /// Represents a hint for a keybinding, optionally with a prefix and suffix.
 ///
@@ -53,14 +60,8 @@ impl KeybindingHint {
     /// );
     /// # }
     /// ```
-    pub fn new(keybinding: KeyBinding, background_color: Hsla) -> Self {
-        Self {
-            prefix: None,
-            suffix: None,
-            keybinding,
-            size: None,
-            background_color,
-        }
+    pub const fn new(keybinding: KeyBinding, background_color: Hsla) -> Self {
+        Self { prefix: None, suffix: None, keybinding, size: None, background_color }
     }
 
     /// Creates a new `KeybindingHint` with a prefix and keybinding.
@@ -83,18 +84,8 @@ impl KeybindingHint {
     /// );
     /// # }
     /// ```
-    pub fn with_prefix(
-        prefix: impl Into<SharedString>,
-        keybinding: KeyBinding,
-        background_color: Hsla,
-    ) -> Self {
-        Self {
-            prefix: Some(prefix.into()),
-            suffix: None,
-            keybinding,
-            size: None,
-            background_color,
-        }
+    pub fn with_prefix(prefix: impl Into<SharedString>, keybinding: KeyBinding, background_color: Hsla) -> Self {
+        Self { prefix: Some(prefix.into()), suffix: None, keybinding, size: None, background_color }
     }
 
     /// Creates a new `KeybindingHint` with a keybinding and suffix.
@@ -117,18 +108,8 @@ impl KeybindingHint {
     /// );
     /// # }
     /// ```
-    pub fn with_suffix(
-        keybinding: KeyBinding,
-        suffix: impl Into<SharedString>,
-        background_color: Hsla,
-    ) -> Self {
-        Self {
-            prefix: None,
-            suffix: Some(suffix.into()),
-            keybinding,
-            size: None,
-            background_color,
-        }
+    pub fn with_suffix(keybinding: KeyBinding, suffix: impl Into<SharedString>, background_color: Hsla) -> Self {
+        Self { prefix: None, suffix: Some(suffix.into()), keybinding, size: None, background_color }
     }
 
     /// Sets the prefix for the keybinding hint.
@@ -209,19 +190,13 @@ impl RenderOnce for KeybindingHint {
         let colors = cx.theme().colors();
         let is_light = cx.theme().appearance() == Appearance::Light;
 
-        let border_color =
-            self.background_color
-                .blend(colors.text.alpha(if is_light { 0.08 } else { 0.16 }));
+        let border_color = self.background_color.blend(colors.text.alpha(if is_light { 0.08 } else { 0.16 }));
 
-        let bg_color = self
-            .background_color
-            .blend(colors.text_accent.alpha(if is_light { 0.05 } else { 0.1 }));
+        let bg_color = self.background_color.blend(colors.text_accent.alpha(if is_light { 0.05 } else { 0.1 }));
 
         let shadow_color = colors.text.alpha(if is_light { 0.04 } else { 0.08 });
 
-        let size = self
-            .size
-            .unwrap_or(TextSize::Small.rems(cx).to_pixels(window.rem_size()));
+        let size = self.size.unwrap_or(TextSize::Small.rems(cx).to_pixels(window.rem_size()));
 
         let kb_size = size - px(2.0);
 
@@ -271,13 +246,11 @@ impl Component for KeybindingHint {
                     vec![
                         single_example(
                             "With Prefix",
-                            KeybindingHint::with_prefix("Go to Start:", enter.clone(), bg_color)
-                                .into_any_element(),
+                            KeybindingHint::with_prefix("Go to Start:", enter.clone(), bg_color).into_any_element(),
                         ),
                         single_example(
                             "With Suffix",
-                            KeybindingHint::with_suffix(enter.clone(), "Go to End", bg_color)
-                                .into_any_element(),
+                            KeybindingHint::with_suffix(enter.clone(), "Go to End", bg_color).into_any_element(),
                         ),
                         single_example(
                             "With Prefix and Suffix",

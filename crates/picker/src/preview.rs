@@ -2,8 +2,14 @@ use std::ops::Range;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use gpui::{AnyElement, App, Entity, IntoElement, Window};
-use language::{Anchor, Buffer, HighlightedText};
+use gpui::AnyElement;
+use gpui::App;
+use gpui::Entity;
+use gpui::IntoElement;
+use gpui::Window;
+use language::Anchor;
+use language::Buffer;
+use language::HighlightedText;
 use project::Symbol;
 
 /// The editor-agnostic interface a [`Picker`](crate::Picker) uses to drive its
@@ -33,10 +39,7 @@ pub enum Layout {
 
 impl Preview {
     pub fn new(content: Arc<dyn PreviewBackend>) -> Self {
-        Preview {
-            content,
-            layout: Layout::default(),
-        }
+        Preview { content, layout: Layout::default() }
     }
 
     pub fn update(&mut self, update: Update, window: &mut Window, cx: &mut App) {
@@ -100,40 +103,28 @@ pub struct Update {
 
 impl Update {
     /// Preview the buffer at `abs_path` without highlighting anything.
-    pub fn from_path(abs_path: PathBuf) -> Self {
-        Self {
-            source: PreviewSource::Path(abs_path),
-            match_location: None,
-        }
+    pub const fn from_path(abs_path: PathBuf) -> Self {
+        Self { source: PreviewSource::Path(abs_path), match_location: None }
     }
 
     /// Show `message` centered in the preview instead of a buffer.
     ///
     /// The message is a [`HighlightedText`], so parts of it (e.g. a file path)
     /// can be emphasized.
-    pub fn message(message: HighlightedText) -> Self {
-        Self {
-            source: PreviewSource::Message(message),
-            match_location: None,
-        }
+    pub const fn message(message: HighlightedText) -> Self {
+        Self { source: PreviewSource::Message(message), match_location: None }
     }
 
     /// Preview `buffer`, highlighting and scrolling to `highlight`.
-    pub fn from_buffer(buffer: Entity<Buffer>, highlight: MatchLocation) -> Self {
-        Self {
-            source: PreviewSource::Buffer(buffer),
-            match_location: Some(highlight),
-        }
+    pub const fn from_buffer(buffer: Entity<Buffer>, highlight: MatchLocation) -> Self {
+        Self { source: PreviewSource::Buffer(buffer), match_location: Some(highlight) }
     }
 
     /// Preview the buffer for `symbol`, highlighting and scrolling to its range.
     ///
     /// The buffer is opened and the highlight derived by the preview once the
     /// buffer loads.
-    pub fn from_symbol(symbol: Symbol) -> Self {
-        Self {
-            source: PreviewSource::Symbol(symbol),
-            match_location: None,
-        }
+    pub const fn from_symbol(symbol: Symbol) -> Self {
+        Self { source: PreviewSource::Symbol(symbol), match_location: None }
     }
 }

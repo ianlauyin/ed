@@ -1,17 +1,16 @@
 // FluentBuilder
 // pub use gpui_util::{FutureExt, Timeout, arc_cow::ArcCow};
 
-use std::{
-    env,
-    ffi::OsStr,
-    fmt,
-    ops::AddAssign,
-    panic::Location,
-    pin::Pin,
-    sync::OnceLock,
-    task::{Context, Poll},
-    time::Instant,
-};
+use std::env;
+use std::ffi::OsStr;
+use std::fmt;
+use std::ops::AddAssign;
+use std::panic::Location;
+use std::pin::Pin;
+use std::sync::OnceLock;
+use std::task::Context;
+use std::task::Poll;
+use std::time::Instant;
 
 pub mod arc_cow;
 
@@ -34,9 +33,7 @@ pub fn post_inc<T: From<u8> + AddAssign<T> + Copy>(value: &mut T) -> T {
 pub fn measure<R>(label: &str, f: impl FnOnce() -> R) -> R {
     static ZED_MEASUREMENTS: OnceLock<bool> = OnceLock::new();
     let zed_measurements = ZED_MEASUREMENTS.get_or_init(|| {
-        env::var("ZED_MEASUREMENTS")
-            .map(|measurements| measurements == "1" || measurements == "true")
-            .unwrap_or(false)
+        env::var("ZED_MEASUREMENTS").map(|measurements| measurements == "1" || measurements == "true").unwrap_or(false)
     });
 
     if *zed_measurements {
@@ -168,11 +165,7 @@ where
 }
 
 #[inline(never)]
-fn log_error_with_caller(
-    caller: core::panic::Location<'_>,
-    arguments: fmt::Arguments<'_>,
-    level: log::Level,
-) {
+fn log_error_with_caller(caller: core::panic::Location<'_>, arguments: fmt::Arguments<'_>, level: log::Level) {
     let file = caller.file();
 
     // In this codebase all crates reside in a `crates` directory,
@@ -202,11 +195,7 @@ fn log_error_with_caller(
 
 #[track_caller]
 pub fn log_err<E: std::fmt::Display>(error: &E) {
-    log_error_with_caller(
-        *Location::caller(),
-        format_args!("{error:#}"),
-        log::Level::Error,
-    );
+    log_error_with_caller(*Location::caller(), format_args!("{error:#}"), log::Level::Error);
 }
 
 // Forces `{:?}` formatting through a `Display`-bounded logging helper so `anyhow::Error` emits a
@@ -359,11 +348,7 @@ where
             Poll::Ready(output) => Poll::Ready(match output {
                 Ok(output) => Some(output),
                 Err(error) => {
-                    log_error_with_caller(
-                        location,
-                        format_args!("{:#}", DebugAsDisplay(&error)),
-                        level,
-                    );
+                    log_error_with_caller(location, format_args!("{:#}", DebugAsDisplay(&error)), level);
                     None
                 }
             }),
@@ -409,7 +394,7 @@ impl<F: FnOnce()> Drop for Deferred<F> {
 
 /// Run the given function when the returned value is dropped (unless it's cancelled).
 #[must_use]
-pub fn defer<F: FnOnce()>(f: F) -> Deferred<F> {
+pub const fn defer<F: FnOnce()>(f: F) -> Deferred<F> {
     Deferred(Some(f))
 }
 
@@ -439,9 +424,7 @@ impl std::hash::Hasher for TypeIdHasher {
                 .map(|&array| self.value = u64::from_ne_bytes(array))
                 .unwrap_or_else(|| unreachable!("slice was sliced to 8 bytes"));
         } else {
-            debug_panic!(
-                "expected a 64-bit value, did you use this hasher with something other than a TypeId?"
-            );
+            debug_panic!("expected a 64-bit value, did you use this hasher with something other than a TypeId?");
         }
     }
 

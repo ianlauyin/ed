@@ -82,7 +82,7 @@ impl NotificationId {
     }
 
     /// Builds a `NotificationId` out of the given string.
-    pub fn named(id: SharedString) -> Self {
+    pub const fn named(id: SharedString) -> Self {
         Self::Named(id)
     }
 }
@@ -126,21 +126,20 @@ impl Workspace {
                 let dismiss_timeout_ms =
                     ProjectSettings::get_global(cx).global_lsp_settings.notifications.dismiss_timeout_ms;
 
-                if is_prompt_without_actions {
-                    if let Some(dismiss_duration_ms) = dismiss_timeout_ms.filter(|&ms| ms > 0) {
-                        let task = cx.spawn({
-                            let id = id.clone();
-                            async move |this, cx| {
-                                cx.background_executor().timer(Duration::from_millis(dismiss_duration_ms)).await;
-                                let _ = this.update(cx, |workspace, cx| {
-                                    workspace.dismiss_notification(&id, cx);
-                                });
-                            }
-                        });
-                        prompt.update(cx, |prompt, _| {
-                            prompt.dismiss_task = Some(task);
-                        });
-                    }
+                if is_prompt_without_actions && let Some(dismiss_duration_ms) = dismiss_timeout_ms.filter(|&ms| ms > 0)
+                {
+                    let task = cx.spawn({
+                        let id = id.clone();
+                        async move |this, cx| {
+                            cx.background_executor().timer(Duration::from_millis(dismiss_duration_ms)).await;
+                            let _ = this.update(cx, |workspace, cx| {
+                                workspace.dismiss_notification(&id, cx);
+                            });
+                        }
+                    });
+                    prompt.update(cx, |prompt, _| {
+                        prompt.dismiss_task = Some(task);
+                    });
                 }
             }
             notification.into()
@@ -395,7 +394,7 @@ impl Render for LanguageServerPrompt {
 impl EventEmitter<DismissEvent> for LanguageServerPrompt {}
 impl EventEmitter<SuppressEvent> for LanguageServerPrompt {}
 
-fn workspace_error_notification_id() -> NotificationId {
+const fn workspace_error_notification_id() -> NotificationId {
     struct WorkspaceErrorNotification;
     NotificationId::unique::<WorkspaceErrorNotification>()
 }
@@ -488,7 +487,7 @@ pub mod simple_message_notification {
     }
 
     impl AutoHideState {
-        fn new(duration: Duration, cx: &mut Context<MessageNotification>) -> Self {
+        fn new(duration: Duration, cx: &Context<MessageNotification>) -> Self {
             let mut this = Self {
                 remaining_dismiss_duration: duration,
                 timer_started: None,
@@ -500,7 +499,7 @@ pub mod simple_message_notification {
             this
         }
 
-        fn schedule(&mut self, cx: &mut Context<MessageNotification>) {
+        fn schedule(&mut self, cx: &Context<MessageNotification>) {
             if self.task.is_some() || self.hovered {
                 return;
             }
@@ -564,7 +563,7 @@ pub mod simple_message_notification {
             }
         }
 
-        fn needs_animation_frame(&self) -> bool {
+        const fn needs_animation_frame(&self) -> bool {
             self.fade.is_some()
         }
 
@@ -682,7 +681,7 @@ pub mod simple_message_notification {
             }
         }
 
-        pub fn button_style(mut self, style: ButtonStyle) -> Self {
+        pub const fn button_style(mut self, style: ButtonStyle) -> Self {
             self.button_style = Some(style);
             self
         }
@@ -696,18 +695,18 @@ pub mod simple_message_notification {
         }
 
         /// Show `icon` at the start (left) of the primary action button label.
-        pub fn primary_icon(mut self, icon: IconName) -> Self {
+        pub const fn primary_icon(mut self, icon: IconName) -> Self {
             self.primary_icon = Some(ActionIcon::start(icon));
             self
         }
 
         /// Show `icon` at the end (right) of the primary action button label.
-        pub fn primary_end_icon(mut self, icon: IconName) -> Self {
+        pub const fn primary_end_icon(mut self, icon: IconName) -> Self {
             self.primary_icon = Some(ActionIcon::end(icon));
             self
         }
 
-        pub fn primary_icon_color(mut self, color: Color) -> Self {
+        pub const fn primary_icon_color(mut self, color: Color) -> Self {
             self.primary_icon_color = Some(color);
             self
         }
@@ -737,18 +736,18 @@ pub mod simple_message_notification {
         }
 
         /// Show `icon` at the start (left) of the secondary action button label.
-        pub fn secondary_icon(mut self, icon: IconName) -> Self {
+        pub const fn secondary_icon(mut self, icon: IconName) -> Self {
             self.secondary_icon = Some(ActionIcon::start(icon));
             self
         }
 
         /// Show `icon` at the end (right) of the secondary action button label.
-        pub fn secondary_end_icon(mut self, icon: IconName) -> Self {
+        pub const fn secondary_end_icon(mut self, icon: IconName) -> Self {
             self.secondary_icon = Some(ActionIcon::end(icon));
             self
         }
 
-        pub fn secondary_icon_color(mut self, color: Color) -> Self {
+        pub const fn secondary_icon_color(mut self, color: Color) -> Self {
             self.secondary_icon_color = Some(color);
             self
         }
@@ -781,7 +780,7 @@ pub mod simple_message_notification {
             self
         }
 
-        fn render_secondary_menu(&self, cx: &mut Context<Self>) -> AnyElement {
+        fn render_secondary_menu(&self, cx: &Context<Self>) -> AnyElement {
             let notification = cx.weak_entity();
             let entries = self.secondary_menu_entries.clone();
             PopoverMenu::new(("notification-secondary-menu", cx.entity_id()))
@@ -831,14 +830,14 @@ pub mod simple_message_notification {
             cx.emit(DismissEvent);
         }
 
-        pub fn show_close_button(mut self, show: bool) -> Self {
+        pub const fn show_close_button(mut self, show: bool) -> Self {
             self.show_close_button = show;
             self
         }
 
         /// Determines whether the given notification ID should be suppressible
         /// Suppressed notifications will not be shown anymor
-        pub fn show_suppress_button(mut self, show: bool) -> Self {
+        pub const fn show_suppress_button(mut self, show: bool) -> Self {
             self.show_suppress_button = show;
             self
         }
@@ -851,7 +850,7 @@ pub mod simple_message_notification {
             self
         }
 
-        pub fn content_icon(mut self, icon: IconName, color: Color) -> Self {
+        pub const fn content_icon(mut self, icon: IconName, color: Color) -> Self {
             self.content_icon = Some(icon);
             self.content_icon_color = Some(color);
             self
@@ -867,7 +866,7 @@ pub mod simple_message_notification {
             self
         }
 
-        fn auto_dismiss(mut self, severity: ErrorSeverity, cx: &mut Context<Self>) -> Self {
+        fn auto_dismiss(mut self, severity: ErrorSeverity, cx: &Context<Self>) -> Self {
             if let Some(delay) = severity.auto_dismiss_delay() {
                 self.auto_hide = Some(AutoHideState::new(delay, cx));
             }
@@ -1499,7 +1498,7 @@ where
     R: 'static,
 {
     fn detach_and_notify_err(self, workspace: WeakEntity<Workspace>, window: &mut Window, cx: &mut App) {
-        window.spawn(cx, async move |mut cx| self.await.notify_workspace_async_err(workspace, &mut cx)).detach();
+        window.spawn(cx, async move |cx| self.await.notify_workspace_async_err(workspace, cx)).detach();
     }
 }
 

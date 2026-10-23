@@ -23,24 +23,15 @@ impl Default for PlayerColor {
 
 impl PlayerColor {
     pub fn dark() -> Self {
-        Self {
-            cursor: blue().dark().step_9(),
-            selection: blue().dark().step_3(),
-        }
+        Self { cursor: blue().dark().step_9(), selection: blue().dark().step_3() }
     }
 
     pub fn light() -> Self {
-        Self {
-            cursor: blue().light().step_9(),
-            selection: blue().light().step_3(),
-        }
+        Self { cursor: blue().light().step_9(), selection: blue().light().step_3() }
     }
 
     /// The colors used when the editor is read-only.
-    pub fn read_only(&self) -> Self {
-        Self {
-            cursor: self.cursor.grayscale(),
-            selection: self.selection.grayscale(),
-        }
+    pub const fn read_only(&self) -> Self {
+        Self { cursor: self.cursor.grayscale(), selection: self.selection.grayscale() }
     }
 }

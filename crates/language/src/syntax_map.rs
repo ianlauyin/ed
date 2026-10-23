@@ -1,28 +1,55 @@
-use crate::{
-    CaptureId, File, Grammar, InjectionConfig, Language, LanguageId, LanguageRegistry,
-    QUERY_CURSORS, with_parser,
-};
+use std::borrow::Cow;
+use std::cmp::Ordering;
+use std::cmp::Reverse;
+use std::cmp::{self};
+use std::collections::BinaryHeap;
+use std::fmt;
+use std::iter;
+use std::ops::ControlFlow;
+use std::ops::Deref;
+use std::ops::DerefMut;
+use std::ops::Range;
+use std::sync::Arc;
+use std::sync::LazyLock;
+use std::time::Duration;
+use std::time::Instant;
+
 use collections::HashMap;
 use futures::FutureExt;
 use gpui::SharedString;
 use language_core::highlight_map::HighlightCaptureRef;
 use smallvec::SmallVec;
-use std::{
-    borrow::Cow,
-    cmp::{self, Ordering, Reverse},
-    collections::BinaryHeap,
-    fmt, iter,
-    ops::{ControlFlow, Deref, DerefMut, Range},
-    sync::{Arc, LazyLock},
-    time::{Duration, Instant},
-};
 use streaming_iterator::StreamingIterator;
-use sum_tree::{Bias, Dimensions, SeekTarget, SumTree};
-use text::{Anchor, BufferId, BufferSnapshot, OffsetRangeExt, Point, Rope, ToOffset, ToPoint};
-use tree_sitter::{
-    Node, Query, QueryCapture, QueryCaptures, QueryCursor, QueryMatch, QueryMatches,
-    QueryPredicateArg,
-};
+use sum_tree::Bias;
+use sum_tree::Dimensions;
+use sum_tree::SeekTarget;
+use sum_tree::SumTree;
+use text::Anchor;
+use text::BufferId;
+use text::BufferSnapshot;
+use text::OffsetRangeExt;
+use text::Point;
+use text::Rope;
+use text::ToOffset;
+use text::ToPoint;
+use tree_sitter::Node;
+use tree_sitter::Query;
+use tree_sitter::QueryCapture;
+use tree_sitter::QueryCaptures;
+use tree_sitter::QueryCursor;
+use tree_sitter::QueryMatch;
+use tree_sitter::QueryMatches;
+use tree_sitter::QueryPredicateArg;
+
+use crate::CaptureId;
+use crate::File;
+use crate::Grammar;
+use crate::InjectionConfig;
+use crate::Language;
+use crate::LanguageId;
+use crate::LanguageRegistry;
+use crate::QUERY_CURSORS;
+use crate::with_parser;
 
 pub const MAX_BYTES_TO_QUERY: usize = 16 * 1024;
 
@@ -44,15 +71,14 @@ pub struct SyntaxSnapshot {
 // To avoid blocking the main thread, we offload the drop operation to a background thread.
 impl Drop for SyntaxSnapshot {
     fn drop(&mut self) {
-        static DROP_TX: LazyLock<std::sync::mpsc::Sender<SumTree<SyntaxLayerEntry>>> =
-            LazyLock::new(|| {
-                let (tx, rx) = std::sync::mpsc::channel();
-                std::thread::Builder::new()
-                    .name("SyntaxSnapshot::drop".into())
-                    .spawn(move || while let Ok(_) = rx.recv() {})
-                    .expect("failed to spawn drop thread");
-                tx
-            });
+        static DROP_TX: LazyLock<std::sync::mpsc::Sender<SumTree<SyntaxLayerEntry>>> = LazyLock::new(|| {
+            let (tx, rx) = std::sync::mpsc::channel();
+            std::thread::Builder::new()
+                .name("SyntaxSnapshot::drop".into())
+                .spawn(move || while rx.recv().is_ok() {})
+                .expect("failed to spawn drop thread");
+            tx
+        });
         // This does allocate a new Arc, but it's cheap and avoids blocking the main thread without needing to use an `Option` or `MaybeUninit`.
         let _ = DROP_TX.send(std::mem::replace(
             &mut self.layers,
@@ -103,10 +129,7 @@ pub(crate) fn flattened_highlight_regions(
         let capture = captures.next()?;
         Some((
             capture.node.byte_range(),
-            HighlightCaptureRef {
-                grammar_index: capture.grammar_index,
-                capture_id: CaptureId(capture.index),
-            },
+            HighlightCaptureRef { grammar_index: capture.grammar_index, capture_id: CaptureId(capture.index) },
         ))
     });
     flatten_capture_regions(range, capture_refs)
@@ -133,11 +156,7 @@ pub(crate) fn flatten_capture_regions(
             next_capture = captures.next();
         }
         let mut next_boundary = range.end;
-        if let Some(min_end) = stack
-            .iter()
-            .map(|(capture_range, _)| capture_range.end)
-            .min()
-        {
+        if let Some(min_end) = stack.iter().map(|(capture_range, _)| capture_range.end).min() {
             next_boundary = next_boundary.min(min_end);
         }
         if let Some((capture_range, _)) = &next_capture {
@@ -216,7 +235,7 @@ impl SyntaxLayerContent {
         }
     }
 
-    fn tree(&self) -> Option<&tree_sitter::Tree> {
+    const fn tree(&self) -> Option<&tree_sitter::Tree> {
         match self {
             SyntaxLayerContent::Parsed { tree, .. } => Some(tree),
             SyntaxLayerContent::Pending { .. } => None,
@@ -227,9 +246,7 @@ impl SyntaxLayerContent {
     fn language_name(&self) -> SharedString {
         match self {
             SyntaxLayerContent::Parsed { language, .. } => language.name().0,
-            SyntaxLayerContent::Pending { language_name, .. } => {
-                SharedString::from(language_name.clone())
-            }
+            SyntaxLayerContent::Pending { language_name, .. } => SharedString::from(language_name.clone()),
         }
     }
 }
@@ -317,10 +334,7 @@ impl ParseStepLanguage {
 
 enum ParseMode {
     Single,
-    Combined {
-        parent_layer_range: Range<usize>,
-        parent_layer_changed_ranges: Vec<Range<usize>>,
-    },
+    Combined { parent_layer_range: Range<usize>, parent_layer_changed_ranges: Vec<Range<usize>> },
 }
 
 /// Identifies a set of injection matches that should share a single syntax layer.
@@ -332,10 +346,7 @@ enum InjectionGroupKey {
     /// Every match whose `@injection.host` capture resolves to the same node shares one
     /// layer spanning that node. This keeps interpolated strings such as Python
     /// f-strings, which produce one match per string fragment, in a single layer.
-    Host {
-        language: LanguageId,
-        host_range: Range<usize>,
-    },
+    Host { language: LanguageId, host_range: Range<usize> },
 }
 
 #[derive(Debug, PartialEq, Eq)]
@@ -353,10 +364,7 @@ pub(crate) struct QueryCursorHandle(Option<QueryCursor>);
 
 impl SyntaxMap {
     pub fn new(text: &BufferSnapshot) -> Self {
-        Self {
-            snapshot: SyntaxSnapshot::new(text),
-            language_registry: None,
-        }
+        Self { snapshot: SyntaxSnapshot::new(text), language_registry: None }
     }
 
     pub fn set_language_registry(&mut self, registry: Arc<LanguageRegistry>) {
@@ -408,15 +416,14 @@ impl SyntaxSnapshot {
         }
     }
 
-    pub fn update_count(&self) -> usize {
+    pub const fn update_count(&self) -> usize {
         self.update_count
     }
 
     pub fn interpolate(&mut self, text: &BufferSnapshot) {
-        let edits = text
-            .anchored_edits_since::<Dimensions<usize, Point>>(&self.interpolated_version)
-            .collect::<Vec<_>>();
-        self.interpolated_version = text.version().clone();
+        let edits =
+            text.anchored_edits_since::<Dimensions<usize, Point>>(&self.interpolated_version).collect::<Vec<_>>();
+        self.interpolated_version.clone_from(text.version());
 
         if edits.is_empty() {
             return;
@@ -437,10 +444,7 @@ impl SyntaxSnapshot {
 
             // Preserve any layers at this depth that precede the first edit.
             if let Some((_, edit_range)) = edits.get(first_edit_ix_for_depth) {
-                let target = ChangeStartPosition {
-                    depth,
-                    position: edit_range.start,
-                };
+                let target = ChangeStartPosition { depth, position: edit_range.start };
                 if target.cmp(cursor.start(), text).is_gt() {
                     let slice = cursor.slice(&target, Bias::Left);
                     layers.append(slice, text);
@@ -462,8 +466,7 @@ impl SyntaxSnapshot {
             };
 
             let Some(layer) = cursor.item() else { break };
-            let Dimensions(start_byte, start_point, _) =
-                layer.range.start.summary::<Dimensions<usize, Point>>(text);
+            let Dimensions(start_byte, start_point, _) = layer.range.start.summary::<Dimensions<usize, Point>>(text);
 
             // Ignore edits that end before the start of this layer, and don't consider them
             // for any subsequent layers at this same depth.
@@ -490,12 +493,10 @@ impl SyntaxSnapshot {
                     let tree_edit = if edit_range.start.cmp(&layer.range.start, text).is_ge() {
                         tree_sitter::InputEdit {
                             start_byte: edit.new.start.0 - start_byte,
-                            old_end_byte: edit.new.start.0 - start_byte
-                                + (edit.old.end.0 - edit.old.start.0),
+                            old_end_byte: edit.new.start.0 - start_byte + (edit.old.end.0 - edit.old.start.0),
                             new_end_byte: edit.new.end.0 - start_byte,
                             start_position: (edit.new.start.1 - start_point).to_ts_point(),
-                            old_end_position: (edit.new.start.1 - start_point
-                                + (edit.old.end.1 - edit.old.start.1))
+                            old_end_position: (edit.new.start.1 - start_point + (edit.old.end.1 - edit.old.start.1))
                                 .to_ts_point(),
                             new_end_position: (edit.new.end.1 - start_point).to_ts_point(),
                         }
@@ -538,8 +539,7 @@ impl SyntaxSnapshot {
         registry: Option<Arc<LanguageRegistry>>,
         root_language: Arc<Language>,
     ) {
-        self.reparse_(text, file, registry, root_language, None)
-            .ok();
+        self.reparse_(text, file, registry, root_language, None).ok();
     }
 
     pub fn reparse_with_timeout(
@@ -562,31 +562,17 @@ impl SyntaxSnapshot {
         mut budget: Option<Duration>,
     ) -> Result<(), ParseTimeout> {
         let budget = &mut budget;
-        let edit_ranges = text
-            .edits_since::<usize>(&self.parsed_version)
-            .map(|edit| edit.new)
-            .collect::<Vec<_>>();
-        self.reparse_with_ranges(
-            text,
-            file,
-            root_language.clone(),
-            edit_ranges,
-            registry.as_ref(),
-            budget,
-        )?;
+        let edit_ranges = text.edits_since::<usize>(&self.parsed_version).map(|edit| edit.new).collect::<Vec<_>>();
+        self.reparse_with_ranges(text, file, root_language.clone(), edit_ranges, registry.as_ref(), budget)?;
 
         if let Some(registry) = registry
             && registry.version() != self.language_registry_version
         {
             let mut resolved_injection_ranges = Vec::new();
-            let mut cursor = self
-                .layers
-                .filter::<_, ()>(text, |summary| summary.contains_unknown_injections);
+            let mut cursor = self.layers.filter::<_, ()>(text, |summary| summary.contains_unknown_injections);
             cursor.next();
             while let Some(layer) = cursor.item() {
-                let SyntaxLayerContent::Pending { language_name, .. } = &layer.content else {
-                    unreachable!()
-                };
+                let SyntaxLayerContent::Pending { language_name, .. } = &layer.content else { unreachable!() };
                 if registry
                     .language_for_name_or_extension(language_name)
                     .now_or_never()
@@ -644,9 +630,7 @@ impl SyntaxSnapshot {
         let mut injection_groups = HashMap::default();
         queue.push(ParseStep {
             depth: 0,
-            language: ParseStepLanguage::Loaded {
-                language: root_language,
-            },
+            language: ParseStepLanguage::Loaded { language: root_language },
             included_ranges: vec![tree_sitter::Range {
                 start_byte: 0,
                 end_byte: text.len(),
@@ -667,11 +651,7 @@ impl SyntaxSnapshot {
                     step.language.name(),
                     step.language.id(),
                 );
-                SyntaxLayerPosition {
-                    depth: step.depth,
-                    range: step.range.clone(),
-                    language: step.language.id(),
-                }
+                SyntaxLayerPosition { depth: step.depth, range: step.range.clone(), language: step.language.id() }
             } else {
                 SyntaxLayerPosition {
                     depth: max_depth + 1,
@@ -711,13 +691,8 @@ impl SyntaxSnapshot {
                             );
                         }
 
-                        changed_regions.insert(
-                            ChangedRegion {
-                                depth: layer.depth + 1,
-                                range: layer.range.clone(),
-                            },
-                            text,
-                        );
+                        changed_regions
+                            .insert(ChangedRegion { depth: layer.depth + 1, range: layer.range.clone() }, text);
                     } else {
                         layers.push(layer.clone(), text);
                     }
@@ -759,12 +734,8 @@ impl SyntaxSnapshot {
                     for range in &mut included_ranges {
                         range.start_byte -= step_start_byte;
                         range.end_byte -= step_start_byte;
-                        range.start_point = (Point::from_ts_point(range.start_point)
-                            - step_start_point)
-                            .to_ts_point();
-                        range.end_point = (Point::from_ts_point(range.end_point)
-                            - step_start_point)
-                            .to_ts_point();
+                        range.start_point = (Point::from_ts_point(range.start_point) - step_start_point).to_ts_point();
+                        range.end_point = (Point::from_ts_point(range.end_point) - step_start_point).to_ts_point();
                     }
 
                     if let Some((SyntaxLayerContent::Parsed { tree: old_tree, .. }, layer_range)) =
@@ -777,11 +748,7 @@ impl SyntaxSnapshot {
                             LogIncludedRanges(&old_tree.included_ranges())
                         );
 
-                        if let ParseMode::Combined {
-                            mut parent_layer_changed_ranges,
-                            ..
-                        } = step.mode
-                        {
+                        if let ParseMode::Combined { mut parent_layer_changed_ranges, .. } = step.mode {
                             for range in &mut parent_layer_changed_ranges {
                                 range.start = range.start.saturating_sub(step_start_byte);
                                 range.end = range.end.saturating_sub(step_start_byte);
@@ -840,13 +807,11 @@ impl SyntaxSnapshot {
                         changed_ranges = join_ranges(
                             invalidated_ranges
                                 .iter()
-                                .filter(|&range| {
-                                    range.start <= step_end_byte && range.end >= step_start_byte
-                                })
+                                .filter(|&range| range.start <= step_end_byte && range.end >= step_start_byte)
                                 .cloned(),
-                            old_tree.changed_ranges(&tree).map(|r| {
-                                step_start_byte + r.start_byte..step_start_byte + r.end_byte
-                            }),
+                            old_tree
+                                .changed_ranges(&tree)
+                                .map(|r| step_start_byte + r.start_byte..step_start_byte + r.end_byte),
                         );
                     } else {
                         if matches!(step.mode, ParseMode::Combined { .. }) {
@@ -875,14 +840,8 @@ impl SyntaxSnapshot {
                             LogIncludedRanges(&included_ranges),
                         );
 
-                        let result = parse_text(
-                            grammar,
-                            text.as_rope(),
-                            step_start_byte,
-                            &included_ranges,
-                            None,
-                            budget,
-                        );
+                        let result =
+                            parse_text(grammar, text.as_rope(), step_start_byte, &included_ranges, None, budget);
                         match result {
                             Ok(t) => tree = t,
                             Err(e) if e.downcast_ref::<ParseTimeout>().is_some() => {
@@ -896,10 +855,9 @@ impl SyntaxSnapshot {
                         changed_ranges = vec![step_start_byte..step_end_byte];
                     }
 
-                    if let (Some((config, registry)), false) = (
-                        grammar.injection_config.as_ref().zip(registry.as_ref()),
-                        changed_ranges.is_empty(),
-                    ) {
+                    if let (Some((config, registry)), false) =
+                        (grammar.injection_config.as_ref().zip(registry.as_ref()), changed_ranges.is_empty())
+                    {
                         // Handle invalidation and reactivation of injections on comment update
                         let mut expanded_ranges: Vec<_> = changed_ranges
                             .iter()
@@ -923,8 +881,7 @@ impl SyntaxSnapshot {
                             changed_regions.insert(
                                 ChangedRegion {
                                     depth: step.depth + 1,
-                                    range: text.anchor_before(range.start)
-                                        ..text.anchor_after(range.end),
+                                    range: text.anchor_before(range.start)..text.anchor_after(range.end),
                                 },
                                 text,
                             );
@@ -933,10 +890,7 @@ impl SyntaxSnapshot {
                             config,
                             text,
                             step.range.clone(),
-                            tree.root_node_with_offset(
-                                step_start_byte,
-                                step_start_point.to_ts_point(),
-                            ),
+                            tree.root_node_with_offset(step_start_byte, step_start_point.to_ts_point()),
                             registry,
                             step.depth + 1,
                             &expanded_ranges,
@@ -948,31 +902,25 @@ impl SyntaxSnapshot {
                     // Layers built from more than one included range don't cover their
                     // whole span, so record the sub-ranges to let callers tell which
                     // offsets actually belong to this layer.
-                    let included_sub_ranges: Option<Vec<Range<Anchor>>> =
-                        if is_combined || included_ranges.len() > 1 {
-                            Some(
-                                included_ranges
-                                    .into_iter()
-                                    .filter(|r| r.start_byte < r.end_byte)
-                                    .map(|r| {
-                                        text.anchor_before(r.start_byte + step_start_byte)
-                                            ..text.anchor_after(r.end_byte + step_start_byte)
-                                    })
-                                    .collect(),
-                            )
-                        } else {
-                            None
-                        };
-                    SyntaxLayerContent::Parsed {
-                        tree,
-                        language,
-                        included_sub_ranges,
-                    }
+                    let included_sub_ranges: Option<Vec<Range<Anchor>>> = if is_combined || included_ranges.len() > 1 {
+                        Some(
+                            included_ranges
+                                .into_iter()
+                                .filter(|r| r.start_byte < r.end_byte)
+                                .map(|r| {
+                                    text.anchor_before(r.start_byte + step_start_byte)
+                                        ..text.anchor_after(r.end_byte + step_start_byte)
+                                })
+                                .collect(),
+                        )
+                    } else {
+                        None
+                    };
+                    SyntaxLayerContent::Parsed { tree, language, included_sub_ranges }
                 }
                 ParseStepLanguage::Pending { name } => SyntaxLayerContent::Pending {
                     language_name: name,
-                    content_range: match (step.included_ranges.first(), step.included_ranges.last())
-                    {
+                    content_range: match (step.included_ranges.first(), step.included_ranges.last()) {
                         (Some(first), Some(last)) => {
                             text.anchor_before(first.start_byte)..text.anchor_after(last.end_byte)
                         }
@@ -981,20 +929,13 @@ impl SyntaxSnapshot {
                 },
             };
 
-            layers.push(
-                SyntaxLayerEntry {
-                    depth: step.depth,
-                    range: step.range,
-                    content,
-                },
-                text,
-            );
+            layers.push(SyntaxLayerEntry { depth: step.depth, range: step.range, content }, text);
         }
 
         drop(cursor);
         self.layers = layers;
-        self.interpolated_version = text.version.clone();
-        self.parsed_version = text.version.clone();
+        self.interpolated_version.clone_from(&text.version);
+        self.parsed_version.clone_from(&text.version);
         #[cfg(any(test, debug_assertions))]
         self.check_invariants(text, file);
         Ok(())
@@ -1003,14 +944,9 @@ impl SyntaxSnapshot {
     #[cfg(any(test, debug_assertions))]
     fn check_invariants(&self, text: &BufferSnapshot, file: Option<&dyn File>) {
         let out_of_order = |reason: &str| -> ! {
-            let file_path = file.map_or_else(
-                || "<untitled>".to_owned(),
-                |file| format!("{:?}", file.path()),
-            );
-            let mut dump = format!(
-                "layers out of order: {reason}\nbuffer: {:?}\nfile: {file_path}\nlayers:\n",
-                text.remote_id(),
-            );
+            let file_path = file.map_or_else(|| "<untitled>".to_owned(), |file| format!("{:?}", file.path()));
+            let mut dump =
+                format!("layers out of order: {reason}\nbuffer: {:?}\nfile: {file_path}\nlayers:\n", text.remote_id(),);
             for layer in self.layers.iter() {
                 dump.push_str(&format!(
                     "  depth={} range={:?} language={} id={:?}\n",
@@ -1059,12 +995,7 @@ impl SyntaxSnapshot {
         buffer: &'a BufferSnapshot,
         query: fn(&Grammar) -> Option<&Query>,
     ) -> SyntaxMapCaptures<'a> {
-        SyntaxMapCaptures::new(
-            range.clone(),
-            buffer.as_rope(),
-            self.layers_for_range(range, buffer, true),
-            query,
-        )
+        SyntaxMapCaptures::new(range.clone(), buffer.as_rope(), self.layers_for_range(range, buffer, true), query)
     }
 
     pub fn matches<'a>(
@@ -1108,10 +1039,10 @@ impl SyntaxSnapshot {
         iter::from_fn(move || {
             while let Some(layer) = cursor.item() {
                 let mut info = None;
-                if let SyntaxLayerContent::Parsed { language, .. } = &layer.content {
-                    if include_hidden || !language.config.hidden {
-                        info = Some(language);
-                    }
+                if let SyntaxLayerContent::Parsed { language, .. } = &layer.content
+                    && (include_hidden || !language.config.hidden)
+                {
+                    info = Some(language);
                 }
                 cursor.next();
                 if info.is_some() {
@@ -1147,12 +1078,7 @@ impl SyntaxSnapshot {
         iter::from_fn(move || {
             while let Some(layer) = cursor.item() {
                 let mut info = None;
-                if let SyntaxLayerContent::Parsed {
-                    tree,
-                    language,
-                    included_sub_ranges,
-                } = &layer.content
-                {
+                if let SyntaxLayerContent::Parsed { tree, language, included_sub_ranges } = &layer.content {
                     let layer_start_offset = layer.range.start.to_offset(buffer);
                     let layer_start_point = layer.range.start.to_point(buffer).to_ts_point();
                     if include_hidden || !language.config.hidden {
@@ -1192,17 +1118,12 @@ impl SyntaxSnapshot {
             // meaningful when all its layers have the same depth.
             summary.contains_unknown_injections
                 && (summary.max_depth > summary.min_depth
-                    || (summary.range.end.cmp(&start, buffer).is_ge()
-                        && summary.range.start.cmp(&end, buffer).is_le()))
+                    || (summary.range.end.cmp(&start, buffer).is_ge() && summary.range.start.cmp(&end, buffer).is_le()))
         });
         cursor.next();
         let mut injections = Vec::new();
         while let Some(layer) = cursor.item() {
-            if let SyntaxLayerContent::Pending {
-                language_name,
-                content_range,
-            } = &layer.content
-            {
+            if let SyntaxLayerContent::Pending { language_name, content_range } = &layer.content {
                 let content_range = content_range.to_offset(buffer);
                 if content_range.start < range.end && content_range.end > range.start {
                     injections.push((language_name.clone(), content_range));
@@ -1213,7 +1134,7 @@ impl SyntaxSnapshot {
         injections
     }
 
-    pub fn language_registry_version(&self) -> usize {
+    pub const fn language_registry_version(&self) -> usize {
         self.language_registry_version
     }
 }
@@ -1225,11 +1146,7 @@ impl<'a> SyntaxMapCaptures<'a> {
         layers: impl Iterator<Item = SyntaxLayer<'a>>,
         query: fn(&Grammar) -> Option<&Query>,
     ) -> Self {
-        let mut result = Self {
-            layers: Vec::new(),
-            grammars: Vec::new(),
-            active_layer_count: 0,
-        };
+        let mut result = Self { layers: Vec::new(), grammars: Vec::new(), active_layer_count: 0 };
         for layer in layers {
             let grammar = match &layer.language.grammar {
                 Some(grammar) => grammar,
@@ -1244,21 +1161,15 @@ impl<'a> SyntaxMapCaptures<'a> {
 
             // TODO - add a Tree-sitter API to remove the need for this.
             let cursor = unsafe {
-                std::mem::transmute::<&mut tree_sitter::QueryCursor, &'static mut QueryCursor>(
-                    query_cursor.deref_mut(),
-                )
+                std::mem::transmute::<&mut tree_sitter::QueryCursor, &'static mut QueryCursor>(query_cursor.deref_mut())
             };
 
             cursor.set_byte_range(range.clone());
             let captures = cursor.captures(query, layer.node(), TextProvider(text));
-            let grammar_index = result
-                .grammars
-                .iter()
-                .position(|g| g.id() == grammar.id())
-                .unwrap_or_else(|| {
-                    result.grammars.push(grammar);
-                    result.grammars.len() - 1
-                });
+            let grammar_index = result.grammars.iter().position(|g| g.id() == grammar.id()).unwrap_or_else(|| {
+                result.grammars.push(grammar);
+                result.grammars.len() - 1
+            });
             let mut layer = SyntaxMapCapturesLayer {
                 depth: layer.depth,
                 grammar_index,
@@ -1292,11 +1203,7 @@ impl<'a> SyntaxMapCaptures<'a> {
     pub fn peek(&self) -> Option<SyntaxMapCapture<'a>> {
         let layer = self.layers[..self.active_layer_count].first()?;
         let capture = layer.next_capture?;
-        Some(SyntaxMapCapture {
-            grammar_index: layer.grammar_index,
-            index: capture.index,
-            node: capture.node,
-        })
+        Some(SyntaxMapCapture { grammar_index: layer.grammar_index, index: capture.index, node: capture.node })
     }
 
     pub fn advance(&mut self) -> bool {
@@ -1333,11 +1240,8 @@ impl<'a> SyntaxMapCaptures<'a> {
             layer.advance();
         }
         self.layers.sort_unstable_by_key(|layer| layer.sort_key());
-        self.active_layer_count = self
-            .layers
-            .iter()
-            .position(|layer| layer.next_capture.is_none())
-            .unwrap_or(self.layers.len());
+        self.active_layer_count =
+            self.layers.iter().position(|layer| layer.next_capture.is_none()).unwrap_or(self.layers.len());
     }
 }
 
@@ -1348,11 +1252,8 @@ pub struct TreeSitterOptions {
 }
 
 impl TreeSitterOptions {
-    pub fn max_start_depth(max_start_depth: u32) -> Self {
-        Self {
-            max_start_depth: Some(max_start_depth),
-            max_bytes_to_query: None,
-        }
+    pub const fn max_start_depth(max_start_depth: u32) -> Self {
+        Self { max_start_depth: Some(max_start_depth), max_bytes_to_query: None }
     }
 }
 
@@ -1379,30 +1280,23 @@ impl<'a> SyntaxMapMatches<'a> {
 
             // TODO - add a Tree-sitter API to remove the need for this.
             let cursor = unsafe {
-                std::mem::transmute::<&mut tree_sitter::QueryCursor, &'static mut QueryCursor>(
-                    query_cursor.deref_mut(),
-                )
+                std::mem::transmute::<&mut tree_sitter::QueryCursor, &'static mut QueryCursor>(query_cursor.deref_mut())
             };
             cursor.set_max_start_depth(options.max_start_depth);
 
             if let Some(max_bytes_to_query) = options.max_bytes_to_query {
                 let midpoint = (range.start + range.end) / 2;
                 let containing_range_start = midpoint.saturating_sub(max_bytes_to_query / 2);
-                let containing_range_end =
-                    containing_range_start.saturating_add(max_bytes_to_query);
+                let containing_range_end = containing_range_start.saturating_add(max_bytes_to_query);
                 cursor.set_containing_byte_range(containing_range_start..containing_range_end);
             }
 
             cursor.set_byte_range(range.clone());
             let matches = cursor.matches(query, layer.node(), TextProvider(text));
-            let grammar_index = result
-                .grammars
-                .iter()
-                .position(|g| g.id() == grammar.id())
-                .unwrap_or_else(|| {
-                    result.grammars.push(grammar);
-                    result.grammars.len() - 1
-                });
+            let grammar_index = result.grammars.iter().position(|g| g.id() == grammar.id()).unwrap_or_else(|| {
+                result.grammars.push(grammar);
+                result.grammars.len() - 1
+            });
             let mut layer = SyntaxMapMatchesLayer {
                 language: layer.language.clone(),
                 depth: layer.depth,
@@ -1527,11 +1421,7 @@ impl SyntaxMapMatchesLayer<'_> {
         if self.has_next {
             let captures = &self.next_captures;
             if let Some((first, last)) = captures.first().zip(captures.last()) {
-                return (
-                    first.node.start_byte(),
-                    Reverse(last.node.end_byte()),
-                    self.depth,
-                );
+                return (first.node.start_byte(), Reverse(last.node.end_byte()), self.depth);
             }
         }
         (usize::MAX, Reverse(0), usize::MAX)
@@ -1563,10 +1453,8 @@ fn satisfies_custom_predicates(query: &Query, mat: &QueryMatch) -> bool {
 }
 
 fn has_parent(args: &[QueryPredicateArg], mat: &QueryMatch) -> bool {
-    let (
-        Some(QueryPredicateArg::Capture(capture_ix)),
-        Some(QueryPredicateArg::String(parent_kind)),
-    ) = (args.first(), args.get(1))
+    let (Some(QueryPredicateArg::Capture(capture_ix)), Some(QueryPredicateArg::String(parent_kind))) =
+        (args.first(), args.get(1))
     else {
         return false;
     };
@@ -1575,16 +1463,10 @@ fn has_parent(args: &[QueryPredicateArg], mat: &QueryMatch) -> bool {
         return false;
     };
 
-    capture
-        .node
-        .parent()
-        .is_some_and(|p| p.kind() == parent_kind.as_ref())
+    capture.node.parent().is_some_and(|p| p.kind() == parent_kind.as_ref())
 }
 
-fn join_ranges(
-    a: impl Iterator<Item = Range<usize>>,
-    b: impl Iterator<Item = Range<usize>>,
-) -> Vec<Range<usize>> {
+fn join_ranges(a: impl Iterator<Item = Range<usize>>, b: impl Iterator<Item = Range<usize>>) -> Vec<Range<usize>> {
     let mut result = Vec::<Range<usize>>::new();
     let mut a = a.peekable();
     let mut b = b.peekable();
@@ -1661,9 +1543,7 @@ fn parse_text(
                 old_tree,
                 progress_callback
                     .as_mut()
-                    .map(|progress_callback| tree_sitter::ParseOptions {
-                        progress_callback: Some(progress_callback),
-                    }),
+                    .map(|progress_callback| tree_sitter::ParseOptions { progress_callback: Some(progress_callback) }),
             )
             .inspect(|_| {
                 if let Some(parse_budget) = parse_budget {
@@ -1701,10 +1581,7 @@ fn get_injections(
                 .now_or_never()
                 .and_then(|language| language.ok())
         {
-            injection_groups.insert(
-                InjectionGroupKey::Combined(language.id),
-                (language, Vec::new()),
-            );
+            injection_groups.insert(InjectionGroupKey::Combined(language.id), (language, Vec::new()));
         }
     }
 
@@ -1712,16 +1589,13 @@ fn get_injections(
         query_cursor.set_byte_range(query_range.start.saturating_sub(1)..query_range.end + 1);
         let mut matches = query_cursor.matches(&config.query, node, TextProvider(text.as_rope()));
         while let Some(mat) = matches.next() {
-            let content_ranges = mat
-                .nodes_for_capture_index(config.content_capture_ix)
-                .map(|node| node.range())
-                .collect::<Vec<_>>();
+            let content_ranges =
+                mat.nodes_for_capture_index(config.content_capture_ix).map(|node| node.range()).collect::<Vec<_>>();
             if content_ranges.is_empty() {
                 continue;
             }
 
-            let content_range =
-                content_ranges.first().unwrap().start_byte..content_ranges.last().unwrap().end_byte;
+            let content_range = content_ranges.first().unwrap().start_byte..content_ranges.last().unwrap().end_byte;
 
             // Avoid duplicate matches if two changed ranges intersect the same injection.
             if let Some((prev_pattern_ix, prev_range)) = &prev_match
@@ -1740,27 +1614,24 @@ fn get_injections(
                 .map(|host_node| host_node.byte_range());
 
             let mut step_range = content_range.clone();
-            let language_name =
-                if let Some(name) = config.patterns[mat.pattern_index].language.as_ref() {
-                    Some(Cow::Borrowed(name.as_ref()))
-                } else if let Some(language_node) = config
-                    .language_capture_ix
-                    .and_then(|ix| mat.nodes_for_capture_index(ix).next())
-                {
-                    step_range.start = cmp::min(content_range.start, language_node.start_byte());
-                    step_range.end = cmp::max(content_range.end, language_node.end_byte());
-                    let language_name: String =
-                        text.text_for_range(language_node.byte_range()).collect();
+            let language_name = if let Some(name) = config.patterns[mat.pattern_index].language.as_ref() {
+                Some(Cow::Borrowed(name.as_ref()))
+            } else if let Some(language_node) =
+                config.language_capture_ix.and_then(|ix| mat.nodes_for_capture_index(ix).next())
+            {
+                step_range.start = cmp::min(content_range.start, language_node.start_byte());
+                step_range.end = cmp::max(content_range.end, language_node.end_byte());
+                let language_name: String = text.text_for_range(language_node.byte_range()).collect();
 
-                    // Enable paths ending in a language extension to represent a language name: e.g. "foo/bar/baz.rs"
-                    if let Some(last_dot_pos) = language_name.rfind('.') {
-                        Some(Cow::Owned(language_name[last_dot_pos + 1..].to_string()))
-                    } else {
-                        Some(Cow::Owned(language_name))
-                    }
+                // Enable paths ending in a language extension to represent a language name: e.g. "foo/bar/baz.rs"
+                if let Some(last_dot_pos) = language_name.rfind('.') {
+                    Some(Cow::Owned(language_name[last_dot_pos + 1..].to_string()))
                 } else {
-                    None
-                };
+                    Some(Cow::Owned(language_name))
+                }
+            } else {
+                None
+            };
 
             if let Some(language_name) = language_name {
                 // Languages without a grammar stay pending, so that the
@@ -1774,10 +1645,7 @@ fn get_injections(
 
                 if let Some(language) = language {
                     let group_key = if let Some(host_range) = host_range {
-                        Some(InjectionGroupKey::Host {
-                            language: language.id,
-                            host_range,
-                        })
+                        Some(InjectionGroupKey::Host { language: language.id, host_range })
                     } else if combined {
                         Some(InjectionGroupKey::Combined(language.id))
                     } else {
@@ -1802,9 +1670,7 @@ fn get_injections(
                 } else {
                     queue.push(ParseStep {
                         depth,
-                        language: ParseStepLanguage::Pending {
-                            name: language_name.into(),
-                        },
+                        language: ParseStepLanguage::Pending { name: language_name.into() },
                         included_ranges: content_ranges,
                         range,
                         mode: ParseMode::Single,
@@ -1830,19 +1696,12 @@ fn get_injections(
                     parent_layer_changed_ranges: changed_ranges.to_vec(),
                 },
             ),
-            InjectionGroupKey::Host { host_range, .. } => (
-                text.anchor_before(host_range.start)..text.anchor_after(host_range.end),
-                ParseMode::Single,
-            ),
+            InjectionGroupKey::Host { host_range, .. } => {
+                (text.anchor_before(host_range.start)..text.anchor_after(host_range.end), ParseMode::Single)
+            }
         };
 
-        queue.push(ParseStep {
-            depth,
-            language: ParseStepLanguage::Loaded { language },
-            range,
-            included_ranges,
-            mode,
-        })
+        queue.push(ParseStep { depth, language: ParseStepLanguage::Loaded { language }, range, included_ranges, mode })
     }
 }
 
@@ -1886,10 +1745,9 @@ pub(crate) fn splice_included_ranges(
                     (start..end, Some(new_ranges.next().unwrap()))
                 }
             }
-            (None, Some(next_new_range)) => (
-                next_new_range.start_byte..next_new_range.end_byte,
-                Some(new_ranges.next().unwrap()),
-            ),
+            (None, Some(next_new_range)) => {
+                (next_new_range.start_byte..next_new_range.end_byte, Some(new_ranges.next().unwrap()))
+            }
         };
 
         let mut start_ix = ranges_ix
@@ -1920,19 +1778,12 @@ pub(crate) fn splice_included_ranges(
                 break;
             }
         }
-        let changed_start = changed_portion
-            .as_ref()
-            .map_or(usize::MAX, |range| range.start)
-            .min(start_ix);
-        let changed_end =
-            changed_portion
-                .as_ref()
-                .map_or(0, |range| range.end)
-                .max(if insert.is_some() {
-                    start_ix + 1
-                } else {
-                    start_ix
-                });
+        let changed_start = changed_portion.as_ref().map_or(usize::MAX, |range| range.start).min(start_ix);
+        let changed_end = changed_portion.as_ref().map_or(0, |range| range.end).max(if insert.is_some() {
+            start_ix + 1
+        } else {
+            start_ix
+        });
         changed_portion = Some(changed_start..changed_end);
 
         ranges.splice(start_ix..end_ix, insert);
@@ -1992,25 +1843,19 @@ fn insert_newlines_between_ranges(
 impl OwnedSyntaxLayer {
     /// Returns the root syntax node for this layer.
     pub fn node(&self) -> Node<'_> {
-        self.tree
-            .root_node_with_offset(self.offset.0, self.offset.1)
+        self.tree.root_node_with_offset(self.offset.0, self.offset.1)
     }
 }
 
 impl<'a> SyntaxLayer<'a> {
     /// Returns an owned version of this layer.
     pub fn to_owned(&self) -> OwnedSyntaxLayer {
-        OwnedSyntaxLayer {
-            tree: self.tree.clone(),
-            offset: self.offset,
-            language: self.language.clone(),
-        }
+        OwnedSyntaxLayer { tree: self.tree.clone(), offset: self.offset, language: self.language.clone() }
     }
 
     /// Returns the root node for this layer.
     pub fn node(&self) -> Node<'a> {
-        self.tree
-            .root_node_with_offset(self.offset.0, self.offset.1)
+        self.tree.root_node_with_offset(self.offset.0, self.offset.1)
     }
 
     pub(crate) fn override_id(&self, offset: usize, text: &text::BufferSnapshot) -> Option<u32> {
@@ -2020,8 +1865,7 @@ impl<'a> SyntaxLayer<'a> {
         let mut query_cursor = QueryCursorHandle::new();
         query_cursor.set_byte_range(offset.saturating_sub(1)..offset.saturating_add(1));
         query_cursor.set_containing_byte_range(
-            offset.saturating_sub(MAX_BYTES_TO_QUERY / 2)
-                ..offset.saturating_add(MAX_BYTES_TO_QUERY / 2),
+            offset.saturating_sub(MAX_BYTES_TO_QUERY / 2)..offset.saturating_add(MAX_BYTES_TO_QUERY / 2),
         );
 
         let mut smallest_match: Option<(u32, Range<usize>)> = None;
@@ -2091,10 +1935,7 @@ impl Ord for ParseStep {
 
 impl ParseStep {
     fn range(&self) -> Range<usize> {
-        if let ParseMode::Combined {
-            parent_layer_range, ..
-        } = &self.mode
-        {
+        if let ParseMode::Combined { parent_layer_range, .. } = &self.mode {
             parent_layer_range.clone()
         } else {
             let start = self.included_ranges.first().map_or(0, |r| r.start_byte);
@@ -2116,16 +1957,11 @@ impl ChangedRegion {
 
 impl ChangeRegionSet {
     fn start_position(&self, buffer_id: BufferId) -> ChangeStartPosition {
-        self.0.first().map_or(
-            ChangeStartPosition {
-                depth: usize::MAX,
-                position: Anchor::max_for_buffer(buffer_id),
-            },
-            |region| ChangeStartPosition {
-                depth: region.depth,
-                position: region.range.start,
-            },
-        )
+        self.0
+            .first()
+            .map_or(ChangeStartPosition { depth: usize::MAX, position: Anchor::max_for_buffer(buffer_id) }, |region| {
+                ChangeStartPosition { depth: region.depth, position: region.range.start }
+            })
     }
 
     fn intersects(&self, layer: &SyntaxLayerEntry, text: &BufferSnapshot) -> bool {
@@ -2158,11 +1994,7 @@ impl ChangeRegionSet {
         self.0.retain(|region| {
             region.depth > summary.max_depth
                 || (region.depth == summary.max_depth
-                    && region
-                        .range
-                        .end
-                        .cmp(&summary.last_layer_range.start, text)
-                        .is_gt())
+                    && region.range.end.cmp(&summary.last_layer_range.start, text).is_gt())
         });
         self.0.len() < prev_len
     }
@@ -2175,10 +2007,8 @@ impl sum_tree::Summary for SyntaxLayerSummary {
         Self {
             max_depth: 0,
             min_depth: 0,
-            range: Anchor::max_for_buffer(buffer.remote_id())
-                ..Anchor::min_for_buffer(buffer.remote_id()),
-            last_layer_range: Anchor::min_for_buffer(buffer.remote_id())
-                ..Anchor::max_for_buffer(buffer.remote_id()),
+            range: Anchor::max_for_buffer(buffer.remote_id())..Anchor::min_for_buffer(buffer.remote_id()),
+            last_layer_range: Anchor::min_for_buffer(buffer.remote_id())..Anchor::max_for_buffer(buffer.remote_id()),
             last_layer_language: None,
             contains_unknown_injections: false,
         }
@@ -2205,17 +2035,8 @@ impl sum_tree::Summary for SyntaxLayerSummary {
 impl SeekTarget<'_, SyntaxLayerSummary, SyntaxLayerSummary> for SyntaxLayerPosition {
     fn cmp(&self, cursor_location: &SyntaxLayerSummary, buffer: &BufferSnapshot) -> Ordering {
         Ord::cmp(&self.depth, &cursor_location.max_depth)
-            .then_with(|| {
-                self.range
-                    .start
-                    .cmp(&cursor_location.last_layer_range.start, buffer)
-            })
-            .then_with(|| {
-                cursor_location
-                    .last_layer_range
-                    .end
-                    .cmp(&self.range.end, buffer)
-            })
+            .then_with(|| self.range.start.cmp(&cursor_location.last_layer_range.start, buffer))
+            .then_with(|| cursor_location.last_layer_range.end.cmp(&self.range.end, buffer))
             .then_with(|| self.language.cmp(&cursor_location.last_layer_language))
     }
 }
@@ -2346,23 +2167,16 @@ impl fmt::Debug for LogAnchorRange<'_> {
 impl fmt::Debug for LogOffsetRanges<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_list()
-            .entries(self.0.iter().map(|range| {
-                LogPoint(range.start.to_point(self.1))..LogPoint(range.end.to_point(self.1))
-            }))
+            .entries(
+                self.0.iter().map(|range| LogPoint(range.start.to_point(self.1))..LogPoint(range.end.to_point(self.1))),
+            )
             .finish()
     }
 }
 
 impl fmt::Debug for LogChangedRegions<'_> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_list()
-            .entries(
-                self.0
-                    .0
-                    .iter()
-                    .map(|region| LogAnchorRange(&region.range, self.1)),
-            )
-            .finish()
+        f.debug_list().entries(self.0.0.iter().map(|region| LogAnchorRange(&region.range, self.1))).finish()
     }
 }
 

@@ -1,8 +1,7 @@
-use std::{
-    collections::{BTreeMap, btree_map::Entry},
-    ops::ControlFlow,
-    sync::Arc,
-};
+use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
+use std::ops::ControlFlow;
+use std::sync::Arc;
 
 use path::rel_path::RelPathBuf;
 use util::rel_path::RelPath;
@@ -44,29 +43,20 @@ impl<Label: Ord + Clone> RootPathTrie<Label> {
     }
 
     fn new_with_key(worktree_relative_path: Arc<RelPath>) -> Self {
-        RootPathTrie {
-            worktree_relative_path,
-            labels: Default::default(),
-            children: Default::default(),
-        }
+        RootPathTrie { worktree_relative_path, labels: Default::default(), children: Default::default() }
     }
 
     // Internal implementation of inner that allows one to visit descendants of insertion point for a node.
-    fn insert_inner(
-        &mut self,
-        path: &TriePath,
-        value: Label,
-        presence: LabelPresence,
-    ) -> &mut Self {
+    fn insert_inner(&mut self, path: &TriePath, value: Label, presence: LabelPresence) -> &mut Self {
         let mut current = self;
 
         let mut path_so_far = RelPathBuf::new();
         for key in path.0.iter() {
             path_so_far = path_so_far.join(RelPath::from_unix_str(key.as_ref()).unwrap());
             current = match current.children.entry(key.clone()) {
-                Entry::Vacant(vacant_entry) => vacant_entry.insert(RootPathTrie::new_with_key(
-                    Arc::from(path_so_far.as_rel_path()),
-                )),
+                Entry::Vacant(vacant_entry) => {
+                    vacant_entry.insert(RootPathTrie::new_with_key(Arc::from(path_so_far.as_rel_path())))
+                }
                 Entry::Occupied(occupied_entry) => occupied_entry.into_mut(),
             };
         }
@@ -82,16 +72,11 @@ impl<Label: Ord + Clone> RootPathTrie<Label> {
     pub fn walk<'a>(
         &'a self,
         path: &TriePath,
-        callback: &mut dyn for<'b> FnMut(
-            &'b Arc<RelPath>,
-            &'a BTreeMap<Label, LabelPresence>,
-        ) -> ControlFlow<()>,
+        callback: &mut dyn for<'b> FnMut(&'b Arc<RelPath>, &'a BTreeMap<Label, LabelPresence>) -> ControlFlow<()>,
     ) {
         let mut current = self;
         for key in path.0.iter() {
-            if !current.labels.is_empty()
-                && (callback)(&current.worktree_relative_path, &current.labels).is_break()
-            {
+            if !current.labels.is_empty() && (callback)(&current.worktree_relative_path, &current.labels).is_break() {
                 return;
             };
             current = match current.children.get(key) {
@@ -118,18 +103,19 @@ impl<Label: Ord + Clone> RootPathTrie<Label> {
     }
 }
 
+impl<Label: Ord + Clone> Default for RootPathTrie<Label> {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// [TriePath] is a [Path] preprocessed for amortizing the cost of doing multiple lookups in distinct [RootPathTrie]s.
 #[derive(Clone)]
 pub struct TriePath(Arc<[Arc<str>]>);
 
 impl TriePath {
     pub fn new(value: &RelPath) -> Self {
-        TriePath(
-            value
-                .components()
-                .map(|component| component.into())
-                .collect(),
-        )
+        TriePath(value.components().map(|component| component.into()).collect())
     }
 }
 

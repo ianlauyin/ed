@@ -1,4 +1,7 @@
-use crate::{Action, App, Platform, SharedString};
+use crate::Action;
+use crate::App;
+use crate::Platform;
+use crate::SharedString;
 
 /// A menu of the application, either a main menu or a submenu
 pub struct Menu {
@@ -15,11 +18,7 @@ pub struct Menu {
 impl Menu {
     /// Create a new Menu with the given name
     pub fn new(name: impl Into<SharedString>) -> Self {
-        Self {
-            name: name.into(),
-            items: vec![],
-            disabled: false,
-        }
+        Self { name: name.into(), items: vec![], disabled: false }
     }
 
     /// Set items to be in this menu
@@ -29,7 +28,7 @@ impl Menu {
     }
 
     /// Set whether this menu is disabled
-    pub fn disabled(mut self, disabled: bool) -> Self {
+    pub const fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
         self
     }
@@ -58,10 +57,7 @@ pub struct OsMenu {
 impl OsMenu {
     /// Create an OwnedOsMenu from this OsMenu
     pub fn owned(self) -> OwnedOsMenu {
-        OwnedOsMenu {
-            name: self.name.to_string().into(),
-            menu_type: self.menu_type,
-        }
+        OwnedOsMenu { name: self.name.to_string().into(), menu_type: self.menu_type }
     }
 }
 
@@ -105,40 +101,27 @@ pub enum MenuItem {
 
 impl MenuItem {
     /// Creates a new menu item that is a separator
-    pub fn separator() -> Self {
+    pub const fn separator() -> Self {
         Self::Separator
     }
 
     /// Creates a new menu item that is a submenu
-    pub fn submenu(menu: Menu) -> Self {
+    pub const fn submenu(menu: Menu) -> Self {
         Self::Submenu(menu)
     }
 
     /// Creates a new submenu that is populated by the OS
     pub fn os_submenu(name: impl Into<SharedString>, menu_type: SystemMenuType) -> Self {
-        Self::SystemMenu(OsMenu {
-            name: name.into(),
-            menu_type,
-        })
+        Self::SystemMenu(OsMenu { name: name.into(), menu_type })
     }
 
     /// Creates a new menu item that invokes an action
     pub fn action(name: impl Into<SharedString>, action: impl Action) -> Self {
-        Self::Action {
-            name: name.into(),
-            action: Box::new(action),
-            os_action: None,
-            checked: false,
-            disabled: false,
-        }
+        Self::Action { name: name.into(), action: Box::new(action), os_action: None, checked: false, disabled: false }
     }
 
     /// Creates a new menu item that invokes an action and has an OS action
-    pub fn os_action(
-        name: impl Into<SharedString>,
-        action: impl Action,
-        os_action: OsAction,
-    ) -> Self {
+    pub fn os_action(name: impl Into<SharedString>, action: impl Action, os_action: OsAction) -> Self {
         Self::Action {
             name: name.into(),
             action: Box::new(action),
@@ -153,19 +136,9 @@ impl MenuItem {
         match self {
             MenuItem::Separator => OwnedMenuItem::Separator,
             MenuItem::Submenu(submenu) => OwnedMenuItem::Submenu(submenu.owned()),
-            MenuItem::Action {
-                name,
-                action,
-                os_action,
-                checked,
-                disabled,
-            } => OwnedMenuItem::Action {
-                name: name.into(),
-                action,
-                os_action,
-                checked,
-                disabled,
-            },
+            MenuItem::Action { name, action, os_action, checked, disabled } => {
+                OwnedMenuItem::Action { name: name.into(), action, os_action, checked, disabled }
+            }
             MenuItem::SystemMenu(os_menu) => OwnedMenuItem::SystemMenu(os_menu.owned()),
         }
     }
@@ -173,12 +146,9 @@ impl MenuItem {
     /// Set whether this menu item is checked
     ///
     /// Only for [`MenuItem::Action`], otherwise, will be ignored
-    pub fn checked(mut self, checked: bool) -> Self {
-        match &mut self {
-            MenuItem::Action { checked: old, .. } => {
-                *old = checked;
-            }
-            _ => {}
+    pub const fn checked(mut self, checked: bool) -> Self {
+        if let MenuItem::Action { checked: old, .. } = &mut self {
+            *old = checked;
         }
         self
     }
@@ -187,7 +157,7 @@ impl MenuItem {
     ///
     /// Only for [`MenuItem::Action`], otherwise, returns false
     #[inline]
-    pub fn is_checked(&self) -> bool {
+    pub const fn is_checked(&self) -> bool {
         match self {
             MenuItem::Action { checked, .. } => *checked,
             _ => false,
@@ -195,7 +165,7 @@ impl MenuItem {
     }
 
     /// Set whether this menu item is disabled
-    pub fn disabled(mut self, disabled: bool) -> Self {
+    pub const fn disabled(mut self, disabled: bool) -> Self {
         match &mut self {
             MenuItem::Action { disabled: old, .. } => {
                 *old = disabled;
@@ -212,7 +182,7 @@ impl MenuItem {
     ///
     /// Only for [`MenuItem::Action`] and [`MenuItem::Submenu`], otherwise, returns false
     #[inline]
-    pub fn is_disabled(&self) -> bool {
+    pub const fn is_disabled(&self) -> bool {
         match self {
             MenuItem::Action { disabled, .. } => *disabled,
             MenuItem::Submenu(submenu) => submenu.disabled,
@@ -282,13 +252,7 @@ impl Clone for OwnedMenuItem {
         match self {
             OwnedMenuItem::Separator => OwnedMenuItem::Separator,
             OwnedMenuItem::Submenu(submenu) => OwnedMenuItem::Submenu(submenu.clone()),
-            OwnedMenuItem::Action {
-                name,
-                action,
-                os_action,
-                checked,
-                disabled,
-            } => OwnedMenuItem::Action {
+            OwnedMenuItem::Action { name, action, os_action, checked, disabled } => OwnedMenuItem::Action {
                 name: name.clone(),
                 action: action.boxed_clone(),
                 os_action: *os_action,
@@ -341,10 +305,7 @@ pub(crate) fn init_app_menus(platform: &dyn Platform, cx: &App) {
     platform.on_validate_app_menu_command(Box::new({
         let cx = cx.to_async();
         move |action| {
-            cx.app
-                .upgrade()
-                .map(|app| app.borrow_mut().update(|cx| cx.is_action_available(action)))
-                .unwrap_or(false)
+            cx.app.upgrade().map(|app| app.borrow_mut().update(|cx| cx.is_action_available(action))).unwrap_or(false)
         }
     }));
 

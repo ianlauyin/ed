@@ -10,33 +10,75 @@ mod settings;
 
 use std::sync::Arc;
 
-use ::settings::{IntoGpui, Settings, SettingsStore};
+use ::settings::IntoGpui;
+use ::settings::Settings;
+use ::settings::SettingsStore;
 use anyhow::Context as _;
-use gpui::{App, Font, HighlightStyle, Pixels, Refineable, px};
+use gpui::App;
+use gpui::Font;
+use gpui::HighlightStyle;
+use gpui::Pixels;
+use gpui::Refineable;
+use gpui::px;
 use gpui_util::ResultExt;
-use theme::{
-    AccentColors, Appearance, AppearanceContent, DEFAULT_DARK_THEME, GlobalTheme, LoadThemes,
-    PlayerColor, StatusColors, SyntaxTheme, SystemAppearance, SystemColors, Theme, ThemeColors,
-    ThemeFamily, ThemeRegistry, ThemeSettingsProvider, ThemeStyles, default_color_scales,
-    try_parse_color,
-};
-
-pub use crate::schema::{
-    FontStyleContent, FontWeightContent, HighlightStyleContent, StatusColorsContent,
-    ThemeColorsContent, ThemeContent, ThemeFamilyContent, ThemeStyleContent,
-    WindowBackgroundContent, status_colors_refinement, syntax_overrides, theme_colors_refinement,
-};
-use crate::settings::adjust_buffer_font_size;
-pub use crate::settings::{
-    BufferLineHeight, FontFamilyName, GitCommitBufferFontSize, MarkdownPreviewFontSize,
-    ThemeAppearanceMode, ThemeName, ThemeSelection, ThemeSettings,
-    adjust_git_commit_buffer_font_size, adjust_markdown_preview_font_size, adjust_ui_font_size,
-    adjusted_font_size, appearance_to_mode, buffer_line_height_from_settings, clamp_font_size,
-    default_theme, observe_buffer_font_size_adjustment, reset_buffer_font_size,
-    reset_git_commit_buffer_font_size, reset_markdown_preview_font_size, reset_ui_font_size,
-    set_mode, set_theme, setup_ui_font,
-};
+use theme::AccentColors;
+use theme::Appearance;
+use theme::AppearanceContent;
+use theme::DEFAULT_DARK_THEME;
+use theme::GlobalTheme;
+use theme::LoadThemes;
+use theme::PlayerColor;
+use theme::StatusColors;
+use theme::SyntaxTheme;
+use theme::SystemAppearance;
+use theme::SystemColors;
+use theme::Theme;
+use theme::ThemeColors;
+use theme::ThemeFamily;
+use theme::ThemeRegistry;
+use theme::ThemeSettingsProvider;
+use theme::ThemeStyles;
 pub use theme::UiDensity;
+use theme::default_color_scales;
+use theme::try_parse_color;
+
+pub use crate::schema::FontStyleContent;
+pub use crate::schema::FontWeightContent;
+pub use crate::schema::HighlightStyleContent;
+pub use crate::schema::StatusColorsContent;
+pub use crate::schema::ThemeColorsContent;
+pub use crate::schema::ThemeContent;
+pub use crate::schema::ThemeFamilyContent;
+pub use crate::schema::ThemeStyleContent;
+pub use crate::schema::WindowBackgroundContent;
+pub use crate::schema::status_colors_refinement;
+pub use crate::schema::syntax_overrides;
+pub use crate::schema::theme_colors_refinement;
+pub use crate::settings::BufferLineHeight;
+pub use crate::settings::FontFamilyName;
+pub use crate::settings::GitCommitBufferFontSize;
+pub use crate::settings::MarkdownPreviewFontSize;
+pub use crate::settings::ThemeAppearanceMode;
+pub use crate::settings::ThemeName;
+pub use crate::settings::ThemeSelection;
+pub use crate::settings::ThemeSettings;
+use crate::settings::adjust_buffer_font_size;
+pub use crate::settings::adjust_git_commit_buffer_font_size;
+pub use crate::settings::adjust_markdown_preview_font_size;
+pub use crate::settings::adjust_ui_font_size;
+pub use crate::settings::adjusted_font_size;
+pub use crate::settings::appearance_to_mode;
+pub use crate::settings::buffer_line_height_from_settings;
+pub use crate::settings::clamp_font_size;
+pub use crate::settings::default_theme;
+pub use crate::settings::observe_buffer_font_size_adjustment;
+pub use crate::settings::reset_buffer_font_size;
+pub use crate::settings::reset_git_commit_buffer_font_size;
+pub use crate::settings::reset_markdown_preview_font_size;
+pub use crate::settings::reset_ui_font_size;
+pub use crate::settings::set_mode;
+pub use crate::settings::set_theme;
+pub use crate::settings::setup_ui_font;
 
 struct ThemeSettingsProviderImpl;
 
@@ -84,15 +126,10 @@ pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
 
     let mut prev_buffer_font_size_settings = settings.buffer_font_size_settings();
     let mut prev_ui_font_size_settings = settings.ui_font_size_settings();
-    let mut prev_git_commit_buffer_font_size_settings =
-        settings.git_commit_buffer_font_size_settings();
-    let mut prev_markdown_preview_font_size_settings =
-        settings.markdown_preview_font_size_settings();
+    let mut prev_git_commit_buffer_font_size_settings = settings.git_commit_buffer_font_size_settings();
+    let mut prev_markdown_preview_font_size_settings = settings.markdown_preview_font_size_settings();
     let mut prev_theme_name = settings.theme.name(SystemAppearance::global(cx).0);
-    let mut prev_theme_overrides = (
-        settings.experimental_theme_overrides.clone(),
-        settings.theme_overrides.clone(),
-    );
+    let mut prev_theme_overrides = (settings.experimental_theme_overrides.clone(), settings.theme_overrides.clone());
 
     cx.observe_global::<SettingsStore>(move |cx| {
         let settings = ThemeSettings::get_global(cx);
@@ -102,10 +139,7 @@ pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
         let git_commit_buffer_font_size_settings = settings.git_commit_buffer_font_size_settings();
         let markdown_preview_font_size_settings = settings.markdown_preview_font_size_settings();
         let theme_name = settings.theme.name(SystemAppearance::global(cx).0);
-        let theme_overrides = (
-            settings.experimental_theme_overrides.clone(),
-            settings.theme_overrides.clone(),
-        );
+        let theme_overrides = (settings.experimental_theme_overrides.clone(), settings.theme_overrides.clone());
 
         if buffer_font_size_settings != prev_buffer_font_size_settings {
             prev_buffer_font_size_settings = buffer_font_size_settings;
@@ -147,9 +181,7 @@ fn configured_theme(cx: &mut App) -> Arc<Theme> {
         Ok(theme) => theme,
         Err(err) => {
             log::error!("{err}");
-            themes
-                .get(default_theme(*system_appearance))
-                .unwrap_or_else(|_| themes.get(DEFAULT_DARK_THEME).unwrap())
+            themes.get(default_theme(*system_appearance)).unwrap_or_else(|_| themes.get(DEFAULT_DARK_THEME).unwrap())
         }
     };
     theme_settings.apply_theme_overrides(theme)
@@ -194,19 +226,9 @@ pub fn refine_theme_family(theme_family_content: ThemeFamilyContent) -> ThemeFam
     let name = theme_family_content.name.clone();
     let author = theme_family_content.author.clone();
 
-    let themes: Vec<Theme> = theme_family_content
-        .themes
-        .iter()
-        .map(|theme_content| refine_theme(theme_content))
-        .collect();
+    let themes: Vec<Theme> = theme_family_content.themes.iter().map(refine_theme).collect();
 
-    ThemeFamily {
-        id,
-        name: name.into(),
-        author: author.into(),
-        themes,
-        scales: default_color_scales(),
-    }
+    ThemeFamily { id, name: name.into(), author: author.into(), themes, scales: default_color_scales() }
 }
 
 /// Refines a [`ThemeContent`] into a [`Theme`].
@@ -252,14 +274,8 @@ pub fn refine_theme(theme: &ThemeContent) -> Theme {
         (
             syntax_token.clone(),
             HighlightStyle {
-                color: highlight
-                    .color
-                    .as_ref()
-                    .and_then(|color| try_parse_color(color).ok()),
-                background_color: highlight
-                    .background_color
-                    .as_ref()
-                    .and_then(|color| try_parse_color(color).ok()),
+                color: highlight.color.as_ref().and_then(|color| try_parse_color(color).ok()),
+                background_color: highlight.background_color.as_ref().and_then(|color| try_parse_color(color).ok()),
                 font_style: highlight.font_style.map(|s| s.into_gpui()),
                 font_weight: highlight.font_weight.map(|w| w.into_gpui()),
                 ..Default::default()
@@ -268,11 +284,8 @@ pub fn refine_theme(theme: &ThemeContent) -> Theme {
     });
     let syntax_theme = Arc::new(SyntaxTheme::new(syntax_highlights));
 
-    let window_background_appearance = theme
-        .style
-        .window_background_appearance
-        .map(|w| w.into_gpui())
-        .unwrap_or_default();
+    let window_background_appearance =
+        theme.style.window_background_appearance.map(|w| w.into_gpui()).unwrap_or_default();
 
     Theme {
         id: uuid::Uuid::new_v4().to_string(),
@@ -293,46 +306,27 @@ pub fn refine_theme(theme: &ThemeContent) -> Theme {
 /// Merges player color overrides into the given [`PlayerColor`].
 ///
 /// Only the first entry is used: it is the local player's color.
-pub fn merge_player_color(
-    player_color: &mut PlayerColor,
-    user_player_colors: &[::settings::PlayerColorContent],
-) {
+pub fn merge_player_color(player_color: &mut PlayerColor, user_player_colors: &[::settings::PlayerColorContent]) {
     let Some(player) = user_player_colors.first() else {
         return;
     };
-    if let Some(cursor) = player
-        .cursor
-        .as_ref()
-        .and_then(|color| try_parse_color(color).ok())
-    {
+    if let Some(cursor) = player.cursor.as_ref().and_then(|color| try_parse_color(color).ok()) {
         player_color.cursor = cursor;
     }
-    if let Some(selection) = player
-        .selection
-        .as_ref()
-        .and_then(|color| try_parse_color(color).ok())
-    {
+    if let Some(selection) = player.selection.as_ref().and_then(|color| try_parse_color(color).ok()) {
         player_color.selection = selection;
     }
 }
 
 /// Merges accent color overrides into the given [`AccentColors`].
-pub fn merge_accent_colors(
-    accent_colors: &mut AccentColors,
-    user_accent_colors: &[::settings::AccentContent],
-) {
+pub fn merge_accent_colors(accent_colors: &mut AccentColors, user_accent_colors: &[::settings::AccentContent]) {
     if user_accent_colors.is_empty() {
         return;
     }
 
     let colors = user_accent_colors
         .iter()
-        .filter_map(|accent_color| {
-            accent_color
-                .0
-                .as_ref()
-                .and_then(|color| try_parse_color(color).ok())
-        })
+        .filter_map(|accent_color| accent_color.0.as_ref().and_then(|color| try_parse_color(color).ok()))
         .collect::<Vec<_>>();
 
     if !colors.is_empty() {

@@ -1,45 +1,88 @@
+use std::borrow::Cow;
+use std::io;
+use std::ops::RangeInclusive;
 use std::os::fd::AsRawFd;
-use std::{borrow::Cow, io, ops::RangeInclusive, path::PathBuf, sync::Arc};
+use std::path::PathBuf;
+use std::sync::Arc;
 
 mod hyperlinks;
 
-use alacritty_terminal::{
-    event::{Event as AlacTermEvent, EventListener, Notify, WindowSize},
-    event_loop::{EventLoop, Msg, Notifier},
-    grid::{Dimensions, Grid, GridIterator, Row, Scroll as AlacScroll},
-    index::{Boundary, Column, Direction as AlacDirection, Line, Point as AlacPoint},
-    selection::{
-        Selection as AlacSelection, SelectionRange as AlacSelectionRange,
-        SelectionType as AlacSelectionType,
-    },
-    sync::FairMutex,
-    term::{
-        Config, Osc52, RenderableCursor, SEMANTIC_ESCAPE_CHARS, Term, TermMode,
-        cell::{Cell as AlacCell, Flags, Hyperlink as AlacHyperlink},
-        search::{Match, RegexIter, RegexSearch},
-    },
-    tty,
-    vi_mode::{ViModeCursor, ViMotion as AlacViMotion},
-    vte::ansi::{
-        ClearMode, CursorShape as AlacCursorShape, CursorStyle as AlacCursorStyle,
-        NamedPrivateMode, PrivateMode,
-    },
-};
-use anyhow::{Context as _, Result};
+use alacritty_terminal::event::Event as AlacTermEvent;
+use alacritty_terminal::event::EventListener;
+use alacritty_terminal::event::Notify;
+use alacritty_terminal::event::WindowSize;
+use alacritty_terminal::event_loop::EventLoop;
+use alacritty_terminal::event_loop::Msg;
+use alacritty_terminal::event_loop::Notifier;
+use alacritty_terminal::grid::Dimensions;
+use alacritty_terminal::grid::Grid;
+use alacritty_terminal::grid::GridIterator;
+use alacritty_terminal::grid::Row;
+use alacritty_terminal::grid::Scroll as AlacScroll;
+use alacritty_terminal::index::Boundary;
+use alacritty_terminal::index::Column;
+use alacritty_terminal::index::Direction as AlacDirection;
+use alacritty_terminal::index::Line;
+use alacritty_terminal::index::Point as AlacPoint;
+use alacritty_terminal::selection::Selection as AlacSelection;
+use alacritty_terminal::selection::SelectionRange as AlacSelectionRange;
+use alacritty_terminal::selection::SelectionType as AlacSelectionType;
+use alacritty_terminal::sync::FairMutex;
+use alacritty_terminal::term::Config;
+use alacritty_terminal::term::Osc52;
+use alacritty_terminal::term::RenderableCursor;
+use alacritty_terminal::term::SEMANTIC_ESCAPE_CHARS;
+use alacritty_terminal::term::Term;
+use alacritty_terminal::term::TermMode;
+use alacritty_terminal::term::cell::Cell as AlacCell;
+use alacritty_terminal::term::cell::Flags;
+use alacritty_terminal::term::cell::Hyperlink as AlacHyperlink;
+use alacritty_terminal::term::search::Match;
+use alacritty_terminal::term::search::RegexIter;
+use alacritty_terminal::term::search::RegexSearch;
+use alacritty_terminal::tty;
+use alacritty_terminal::vi_mode::ViModeCursor;
+use alacritty_terminal::vi_mode::ViMotion as AlacViMotion;
+use alacritty_terminal::vte::ansi::ClearMode;
+use alacritty_terminal::vte::ansi::CursorShape as AlacCursorShape;
+use alacritty_terminal::vte::ansi::CursorStyle as AlacCursorStyle;
+use alacritty_terminal::vte::ansi::NamedPrivateMode;
+use alacritty_terminal::vte::ansi::PrivateMode;
+use anyhow::Context as _;
+use anyhow::Result;
 use futures::channel::mpsc::UnboundedSender;
+pub(super) use hyperlinks::HyperlinkMatch;
+pub(super) use hyperlinks::RegexSearches;
 use util::paths::PathStyle;
 use vte::ansi::Handler;
 
-use crate::{
-    Cell, Color, Content, Cursor, CursorShape, GridLinesChange, HoveredWord, Hyperlink,
-    HyperlinkData, IndexedCell, Modes, Point, PtyEvent, Range, RenderableCells, Scroll, Search,
-    Selection, SelectionRange, SelectionSide, SelectionType, TerminalBackendEvent, TerminalBounds,
-    ViMotion,
-    pty_info::ProcessIdGetter,
-    terminal_settings::{AlternateScroll, CursorShape as SettingsCursorShape},
-};
-
-pub(super) use hyperlinks::{HyperlinkMatch, RegexSearches};
+use crate::Cell;
+use crate::Color;
+use crate::Content;
+use crate::Cursor;
+use crate::CursorShape;
+use crate::GridLinesChange;
+use crate::HoveredWord;
+use crate::Hyperlink;
+use crate::HyperlinkData;
+use crate::IndexedCell;
+use crate::Modes;
+use crate::Point;
+use crate::PtyEvent;
+use crate::Range;
+use crate::RenderableCells;
+use crate::Scroll;
+use crate::Search;
+use crate::Selection;
+use crate::SelectionRange;
+use crate::SelectionSide;
+use crate::SelectionType;
+use crate::TerminalBackendEvent;
+use crate::TerminalBounds;
+use crate::ViMotion;
+use crate::pty_info::ProcessIdGetter;
+use crate::terminal_settings::AlternateScroll;
+use crate::terminal_settings::CursorShape as SettingsCursorShape;
 
 pub(super) type AlacrittyPty = tty::Pty;
 pub(super) type AlacrittyTerm = Term<ZedListener>;
@@ -76,11 +119,7 @@ impl PtySender {
     }
 
     pub(super) fn resize(&self, bounds: TerminalBounds) {
-        if let Err(error) = self
-            .notifier
-            .0
-            .send(Msg::Resize(window_size_from_terminal_bounds(bounds)))
-        {
+        if let Err(error) = self.notifier.0.send(Msg::Resize(window_size_from_terminal_bounds(bounds))) {
             log::error!("failed to resize alacritty pty: {error}");
         }
     }
@@ -114,10 +153,7 @@ pub(super) fn display_only_term_config(
     }
 }
 
-pub(super) fn pty_term_config(
-    scrolling_history: usize,
-    cursor_shape: SettingsCursorShape,
-) -> AlacrittyTermConfig {
+pub(super) fn pty_term_config(scrolling_history: usize, cursor_shape: SettingsCursorShape) -> AlacrittyTermConfig {
     Config {
         scrolling_history,
         default_cursor_style: alacritty_cursor_style(cursor_shape),
@@ -126,10 +162,7 @@ pub(super) fn pty_term_config(
     }
 }
 
-pub(super) fn set_default_cursor_style(
-    config: &mut AlacrittyTermConfig,
-    cursor_shape: SettingsCursorShape,
-) {
+pub(super) const fn set_default_cursor_style(config: &mut AlacrittyTermConfig, cursor_shape: SettingsCursorShape) {
     config.default_cursor_style = alacritty_cursor_style(cursor_shape);
 }
 
@@ -160,11 +193,7 @@ pub(super) fn pty_options(
     }
 }
 
-pub(super) fn open_pty(
-    options: &tty::Options,
-    bounds: TerminalBounds,
-    window_id: u64,
-) -> io::Result<AlacrittyPty> {
+pub(super) fn open_pty(options: &tty::Options, bounds: TerminalBounds, window_id: u64) -> io::Result<AlacrittyPty> {
     tty::new(options, window_size_from_terminal_bounds(bounds), window_id)
 }
 
@@ -175,14 +204,7 @@ pub(super) fn new_term(
     alternate_scroll: AlternateScroll,
     generation: u64,
 ) -> Arc<AlacrittyTermLock> {
-    let mut term = Term::new(
-        config.clone(),
-        &bounds,
-        ZedListener {
-            sender: events_tx,
-            generation,
-        },
-    );
+    let mut term = Term::new(config.clone(), &bounds, ZedListener { sender: events_tx, generation });
 
     if let AlternateScroll::Off = alternate_scroll {
         term.unset_private_mode(PrivateMode::Named(NamedPrivateMode::AlternateScroll));
@@ -197,23 +219,12 @@ pub(super) fn spawn_event_loop(
     pty: AlacrittyPty,
     drain_on_exit: bool,
 ) -> Result<PtySender> {
-    let event_loop = EventLoop::new(
-        term,
-        ZedListener {
-            sender: events_tx,
-            generation: 0,
-        },
-        pty,
-        drain_on_exit,
-        false,
-    )
-    .context("failed to create event loop")?;
+    let event_loop = EventLoop::new(term, ZedListener { sender: events_tx, generation: 0 }, pty, drain_on_exit, false)
+        .context("failed to create event loop")?;
     let pty_tx = event_loop.channel();
     let _io_thread = event_loop.spawn();
 
-    Ok(PtySender {
-        notifier: Notifier(pty_tx),
-    })
+    Ok(PtySender { notifier: Notifier(pty_tx) })
 }
 
 pub(super) fn resize(term: &mut AlacrittyTerm, bounds: TerminalBounds) {
@@ -232,11 +243,7 @@ pub(super) fn set_selection(term: &mut AlacrittyTerm, selection: Option<&Selecti
     term.selection = selection.map(Selection::to_alacritty);
 }
 
-pub(super) fn update_selection(
-    term: &mut AlacrittyTerm,
-    point: Point,
-    side: SelectionSide,
-) -> bool {
+pub(super) fn update_selection(term: &mut AlacrittyTerm, point: Point, side: SelectionSide) -> bool {
     let Some(mut selection) = term.selection.take() else {
         return false;
     };
@@ -265,14 +272,11 @@ pub(super) fn vi_motion(term: &mut AlacrittyTerm, motion: ViMotion) {
     term.vi_motion(motion.to_alacritty());
 }
 
-fn alacritty_cursor_style(cursor_shape: SettingsCursorShape) -> AlacCursorStyle {
-    AlacCursorStyle {
-        shape: alacritty_cursor_shape(cursor_shape),
-        blinking: false,
-    }
+const fn alacritty_cursor_style(cursor_shape: SettingsCursorShape) -> AlacCursorStyle {
+    AlacCursorStyle { shape: alacritty_cursor_shape(cursor_shape), blinking: false }
 }
 
-fn alacritty_cursor_shape(cursor_shape: SettingsCursorShape) -> AlacCursorShape {
+const fn alacritty_cursor_shape(cursor_shape: SettingsCursorShape) -> AlacCursorShape {
     match cursor_shape {
         SettingsCursorShape::Block => AlacCursorShape::Block,
         SettingsCursorShape::Underline => AlacCursorShape::Underline,
@@ -310,9 +314,7 @@ impl From<AlacTermEvent> for TerminalBackendEvent {
             AlacTermEvent::ColorRequest(index, format) => Self::ColorRequest(index, format),
             AlacTermEvent::PtyWrite(output) => Self::PtyWrite(output),
             AlacTermEvent::TextAreaSizeRequest(format) => {
-                Self::TextAreaSizeRequest(Arc::new(move |bounds| {
-                    format(window_size_from_terminal_bounds(bounds))
-                }))
+                Self::TextAreaSizeRequest(Arc::new(move |bounds| format(window_size_from_terminal_bounds(bounds))))
             }
             AlacTermEvent::CursorBlinkingChange => Self::CursorBlinkingChange,
             AlacTermEvent::Wakeup => Self::Wakeup,
@@ -325,14 +327,12 @@ impl From<AlacTermEvent> for TerminalBackendEvent {
 
 impl EventListener for ZedListener {
     fn send_event(&self, event: AlacTermEvent) {
-        self.sender
-            .unbounded_send(PtyEvent::Event(event.into(), self.generation))
-            .ok();
+        self.sender.unbounded_send(PtyEvent::Event(event.into(), self.generation)).ok();
     }
 }
 
 impl Scroll {
-    fn to_alacritty(self) -> AlacScroll {
+    const fn to_alacritty(self) -> AlacScroll {
         match self {
             Self::Delta(delta) => AlacScroll::Delta(delta),
             Self::PageUp => AlacScroll::PageUp,
@@ -344,7 +344,7 @@ impl Scroll {
 }
 
 impl ViMotion {
-    fn to_alacritty(self) -> AlacViMotion {
+    const fn to_alacritty(self) -> AlacViMotion {
         match self {
             Self::Up => AlacViMotion::Up,
             Self::Down => AlacViMotion::Down,
@@ -368,11 +368,7 @@ impl ViMotion {
 
 impl Search {
     pub fn new(search: &str) -> Option<Self> {
-        Some(Self {
-            search: AlacrittySearch {
-                search: RegexSearch::new(search).ok()?,
-            },
-        })
+        Some(Self { search: AlacrittySearch { search: RegexSearch::new(search).ok()? } })
     }
 
     fn into_alacritty(self) -> RegexSearch {
@@ -381,7 +377,7 @@ impl Search {
 }
 
 impl SelectionSide {
-    fn to_alacritty(self) -> AlacDirection {
+    const fn to_alacritty(self) -> AlacDirection {
         match self {
             Self::Left => AlacDirection::Left,
             Self::Right => AlacDirection::Right,
@@ -390,7 +386,7 @@ impl SelectionSide {
 }
 
 impl SelectionType {
-    fn to_alacritty(self) -> AlacSelectionType {
+    const fn to_alacritty(self) -> AlacSelectionType {
         match self {
             Self::Simple => AlacSelectionType::Simple,
             Self::Semantic => AlacSelectionType::Semantic,
@@ -401,11 +397,8 @@ impl SelectionType {
 
 impl Selection {
     fn to_alacritty(&self) -> AlacSelection {
-        let mut selection = AlacSelection::new(
-            self.ty.to_alacritty(),
-            self.start.point.to_alacritty(),
-            self.start.side.to_alacritty(),
-        );
+        let mut selection =
+            AlacSelection::new(self.ty.to_alacritty(), self.start.point.to_alacritty(), self.start.side.to_alacritty());
         if self.start.point != self.end.point || self.start.side != self.end.side {
             selection.update(self.end.point.to_alacritty(), self.end.side.to_alacritty());
         }
@@ -415,12 +408,7 @@ impl Selection {
 
 impl Hyperlink {
     pub fn new<T: ToString>(id: Option<T>, uri: String) -> Self {
-        Self {
-            data: HyperlinkData::Owned {
-                id: id.map(|id| Arc::from(id.to_string())),
-                uri: Arc::from(uri),
-            },
-        }
+        Self { data: HyperlinkData::Owned { id: id.map(|id| Arc::from(id.to_string())), uri: Arc::from(uri) } }
     }
 
     pub fn id(&self) -> Option<&str> {
@@ -437,14 +425,12 @@ impl Hyperlink {
         }
     }
 
-    fn from_alacritty(hyperlink: AlacHyperlink) -> Self {
-        Self {
-            data: HyperlinkData::Alacritty(hyperlink),
-        }
+    const fn from_alacritty(hyperlink: AlacHyperlink) -> Self {
+        Self { data: HyperlinkData::Alacritty(hyperlink) }
     }
 }
 
-fn terminal_hyperlink_from_alacritty(hyperlink: AlacHyperlink) -> Hyperlink {
+const fn terminal_hyperlink_from_alacritty(hyperlink: AlacHyperlink) -> Hyperlink {
     Hyperlink::from_alacritty(hyperlink)
 }
 
@@ -463,17 +449,17 @@ fn terminal_cell_from_alacritty(cell: &AlacCell) -> Cell {
 
 impl Cell {
     #[inline]
-    pub fn character(&self) -> char {
+    pub const fn character(&self) -> char {
         self.cell.c
     }
 
     #[inline]
-    pub fn foreground(&self) -> Color {
+    pub const fn foreground(&self) -> Color {
         self.cell.fg
     }
 
     #[inline]
-    pub fn background(&self) -> Color {
+    pub const fn background(&self) -> Color {
         self.cell.bg
     }
 
@@ -488,55 +474,53 @@ impl Cell {
     }
 
     #[inline]
-    pub fn is_inverse(&self) -> bool {
+    pub const fn is_inverse(&self) -> bool {
         self.cell.flags.contains(Flags::INVERSE)
     }
 
     #[inline]
-    pub fn is_wide_char_spacer(&self) -> bool {
+    pub const fn is_wide_char_spacer(&self) -> bool {
         self.cell.flags.contains(Flags::WIDE_CHAR_SPACER)
     }
 
     #[inline]
-    pub fn is_dim(&self) -> bool {
+    pub const fn is_dim(&self) -> bool {
         self.cell.flags.intersects(Flags::DIM)
     }
 
     #[inline]
-    pub fn has_underline(&self) -> bool {
+    pub const fn has_underline(&self) -> bool {
         self.cell.flags.intersects(Flags::ALL_UNDERLINES)
     }
 
     #[inline]
-    pub fn has_undercurl(&self) -> bool {
+    pub const fn has_undercurl(&self) -> bool {
         self.cell.flags.contains(Flags::UNDERCURL)
     }
 
     #[inline]
-    pub fn has_strikeout(&self) -> bool {
+    pub const fn has_strikeout(&self) -> bool {
         self.cell.flags.intersects(Flags::STRIKEOUT)
     }
 
     #[inline]
-    pub fn is_bold(&self) -> bool {
+    pub const fn is_bold(&self) -> bool {
         self.cell.flags.intersects(Flags::BOLD)
     }
 
     #[inline]
-    pub fn is_italic(&self) -> bool {
+    pub const fn is_italic(&self) -> bool {
         self.cell.flags.intersects(Flags::ITALIC)
     }
 
     #[inline]
     pub fn has_visible_style_modifier(&self) -> bool {
-        self.cell
-            .flags
-            .intersects(Flags::ALL_UNDERLINES | Flags::INVERSE | Flags::STRIKEOUT)
+        self.cell.flags.intersects(Flags::ALL_UNDERLINES | Flags::INVERSE | Flags::STRIKEOUT)
     }
 }
 
 impl<'a> RenderableCells<'a> {
-    pub(super) fn new(cells: GridIterator<'a, AlacCell>) -> Self {
+    pub(super) const fn new(cells: GridIterator<'a, AlacCell>) -> Self {
         Self { cells }
     }
 }
@@ -558,99 +542,29 @@ impl Iterator for RenderableCells<'_> {
 
 impl Modes {}
 
-fn terminal_modes_from_alacritty(mode: TermMode) -> Modes {
+const fn terminal_modes_from_alacritty(mode: TermMode) -> Modes {
     let mut terminal_modes = Modes::empty();
-    add_terminal_mode(
-        &mut terminal_modes,
-        mode,
-        TermMode::APP_CURSOR,
-        Modes::APP_CURSOR,
-    );
-    add_terminal_mode(
-        &mut terminal_modes,
-        mode,
-        TermMode::APP_KEYPAD,
-        Modes::APP_KEYPAD,
-    );
-    add_terminal_mode(
-        &mut terminal_modes,
-        mode,
-        TermMode::SHOW_CURSOR,
-        Modes::SHOW_CURSOR,
-    );
-    add_terminal_mode(
-        &mut terminal_modes,
-        mode,
-        TermMode::LINE_WRAP,
-        Modes::LINE_WRAP,
-    );
+    add_terminal_mode(&mut terminal_modes, mode, TermMode::APP_CURSOR, Modes::APP_CURSOR);
+    add_terminal_mode(&mut terminal_modes, mode, TermMode::APP_KEYPAD, Modes::APP_KEYPAD);
+    add_terminal_mode(&mut terminal_modes, mode, TermMode::SHOW_CURSOR, Modes::SHOW_CURSOR);
+    add_terminal_mode(&mut terminal_modes, mode, TermMode::LINE_WRAP, Modes::LINE_WRAP);
     add_terminal_mode(&mut terminal_modes, mode, TermMode::ORIGIN, Modes::ORIGIN);
     add_terminal_mode(&mut terminal_modes, mode, TermMode::INSERT, Modes::INSERT);
-    add_terminal_mode(
-        &mut terminal_modes,
-        mode,
-        TermMode::LINE_FEED_NEW_LINE,
-        Modes::LINE_FEED_NEW_LINE,
-    );
-    add_terminal_mode(
-        &mut terminal_modes,
-        mode,
-        TermMode::FOCUS_IN_OUT,
-        Modes::FOCUS_IN_OUT,
-    );
-    add_terminal_mode(
-        &mut terminal_modes,
-        mode,
-        TermMode::ALTERNATE_SCROLL,
-        Modes::ALTERNATE_SCROLL,
-    );
-    add_terminal_mode(
-        &mut terminal_modes,
-        mode,
-        TermMode::BRACKETED_PASTE,
-        Modes::BRACKETED_PASTE,
-    );
-    add_terminal_mode(
-        &mut terminal_modes,
-        mode,
-        TermMode::SGR_MOUSE,
-        Modes::SGR_MOUSE,
-    );
-    add_terminal_mode(
-        &mut terminal_modes,
-        mode,
-        TermMode::UTF8_MOUSE,
-        Modes::UTF8_MOUSE,
-    );
-    add_terminal_mode(
-        &mut terminal_modes,
-        mode,
-        TermMode::ALT_SCREEN,
-        Modes::ALT_SCREEN,
-    );
-    add_terminal_mode(
-        &mut terminal_modes,
-        mode,
-        TermMode::MOUSE_REPORT_CLICK,
-        Modes::MOUSE_REPORT_CLICK,
-    );
-    add_terminal_mode(
-        &mut terminal_modes,
-        mode,
-        TermMode::MOUSE_DRAG,
-        Modes::MOUSE_DRAG,
-    );
-    add_terminal_mode(
-        &mut terminal_modes,
-        mode,
-        TermMode::MOUSE_MOTION,
-        Modes::MOUSE_MOTION,
-    );
+    add_terminal_mode(&mut terminal_modes, mode, TermMode::LINE_FEED_NEW_LINE, Modes::LINE_FEED_NEW_LINE);
+    add_terminal_mode(&mut terminal_modes, mode, TermMode::FOCUS_IN_OUT, Modes::FOCUS_IN_OUT);
+    add_terminal_mode(&mut terminal_modes, mode, TermMode::ALTERNATE_SCROLL, Modes::ALTERNATE_SCROLL);
+    add_terminal_mode(&mut terminal_modes, mode, TermMode::BRACKETED_PASTE, Modes::BRACKETED_PASTE);
+    add_terminal_mode(&mut terminal_modes, mode, TermMode::SGR_MOUSE, Modes::SGR_MOUSE);
+    add_terminal_mode(&mut terminal_modes, mode, TermMode::UTF8_MOUSE, Modes::UTF8_MOUSE);
+    add_terminal_mode(&mut terminal_modes, mode, TermMode::ALT_SCREEN, Modes::ALT_SCREEN);
+    add_terminal_mode(&mut terminal_modes, mode, TermMode::MOUSE_REPORT_CLICK, Modes::MOUSE_REPORT_CLICK);
+    add_terminal_mode(&mut terminal_modes, mode, TermMode::MOUSE_DRAG, Modes::MOUSE_DRAG);
+    add_terminal_mode(&mut terminal_modes, mode, TermMode::MOUSE_MOTION, Modes::MOUSE_MOTION);
     add_terminal_mode(&mut terminal_modes, mode, TermMode::VI, Modes::VI);
     terminal_modes
 }
 
-fn add_terminal_mode(
+const fn add_terminal_mode(
     terminal_modes: &mut Modes,
     alacritty_modes: TermMode,
     alacritty_mode: TermMode,
@@ -662,7 +576,7 @@ fn add_terminal_mode(
 }
 
 impl Cursor {
-    fn from_alacritty(cursor: RenderableCursor) -> Self {
+    const fn from_alacritty(cursor: RenderableCursor) -> Self {
         Self {
             shape: terminal_cursor_shape_from_alacritty(cursor.shape),
             point: terminal_point_from_alacritty(cursor.point),
@@ -670,7 +584,7 @@ impl Cursor {
     }
 }
 
-fn terminal_cursor_shape_from_alacritty(shape: AlacCursorShape) -> CursorShape {
+const fn terminal_cursor_shape_from_alacritty(shape: AlacCursorShape) -> CursorShape {
     match shape {
         AlacCursorShape::Block => CursorShape::Block,
         AlacCursorShape::Underline => CursorShape::Underline,
@@ -686,23 +600,17 @@ impl Point {
     }
 }
 
-fn terminal_point_from_alacritty(point: AlacPoint) -> Point {
-    Point {
-        line: point.line.0,
-        column: point.column.0,
-    }
+const fn terminal_point_from_alacritty(point: AlacPoint) -> Point {
+    Point { line: point.line.0, column: point.column.0 }
 }
 
 impl Range {
-    fn from_alacritty(range: RangeInclusive<AlacPoint>) -> Self {
-        Self {
-            start: terminal_point_from_alacritty(*range.start()),
-            end: terminal_point_from_alacritty(*range.end()),
-        }
+    const fn from_alacritty(range: RangeInclusive<AlacPoint>) -> Self {
+        Self { start: terminal_point_from_alacritty(*range.start()), end: terminal_point_from_alacritty(*range.end()) }
     }
 }
 
-fn terminal_selection_range_from_alacritty(range: AlacSelectionRange) -> SelectionRange {
+const fn terminal_selection_range_from_alacritty(range: AlacSelectionRange) -> SelectionRange {
     SelectionRange {
         start: terminal_point_from_alacritty(range.start),
         end: terminal_point_from_alacritty(range.end),
@@ -739,24 +647,14 @@ pub(super) fn shrink_to_used(term: &mut Term<ZedListener>) {
     term.grid_mut().truncate();
 }
 
-fn adjusted_last_hovered_word(
-    grid: &Grid<AlacCell>,
-    last_content: &Content,
-) -> (Option<HoveredWord>, GridLinesChange) {
-    let grid_size_changed =
-        grid.columns() != last_content.columns || grid.screen_lines() != last_content.screen_lines;
+fn adjusted_last_hovered_word(grid: &Grid<AlacCell>, last_content: &Content) -> (Option<HoveredWord>, GridLinesChange) {
+    let grid_size_changed = grid.columns() != last_content.columns || grid.screen_lines() != last_content.screen_lines;
 
-    let Some(total_lines_delta) = grid
-        .total_lines()
-        .checked_signed_diff(last_content.total_lines)
-    else {
+    let Some(total_lines_delta) = grid.total_lines().checked_signed_diff(last_content.total_lines) else {
         return (None, GridLinesChange::Unchanged);
     };
 
-    let Some(display_offset_delta) = grid
-        .display_offset()
-        .checked_signed_diff(last_content.display_offset)
-    else {
+    let Some(display_offset_delta) = grid.display_offset().checked_signed_diff(last_content.display_offset) else {
         return (None, GridLinesChange::Unchanged);
     };
 
@@ -809,11 +707,7 @@ pub(super) fn make_content(term: &Term<ZedListener>, last_content: &Content) -> 
         cell: terminal_cell_from_alacritty(ic.cell),
     }));
 
-    let selection_text = if content.selection.is_some() {
-        term.selection_to_string()
-    } else {
-        None
-    };
+    let selection_text = if content.selection.is_some() { term.selection_to_string() } else { None };
 
     let grid = term.grid();
     let (last_hovered_word, grid_lines_change) = adjusted_last_hovered_word(grid, last_content);
@@ -834,9 +728,7 @@ pub(super) fn make_content(term: &Term<ZedListener>, last_content: &Content) -> 
         columns: grid.columns(),
         screen_lines: grid.screen_lines(),
         selection_text,
-        selection: content
-            .selection
-            .map(terminal_selection_range_from_alacritty),
+        selection: content.selection.map(terminal_selection_range_from_alacritty),
         cursor: Cursor::from_alacritty(content.cursor),
         cursor_char: term.grid()[content.cursor.point].c,
         terminal_bounds: last_content.terminal_bounds,
@@ -876,8 +768,7 @@ pub(super) fn last_non_empty_lines(term: &Term<ZedListener>, line_count: usize) 
     let topmost_line = grid.topmost_line().0;
 
     while current_line >= topmost_line && lines.len() < line_count {
-        let (logical_line_start, logical_line) =
-            logical_line_for_row(grid, current_line, topmost_line);
+        let (logical_line_start, logical_line) = logical_line_for_row(grid, current_line, topmost_line);
 
         if let Some(line) = process_line(logical_line) {
             lines.push(line);
@@ -955,19 +846,12 @@ fn find_logical_line_start(grid: &Grid<AlacCell>, current: i32, topmost: i32) ->
 }
 
 fn row_to_string(row: &Row<AlacCell>) -> String {
-    row[..Column(row.len())]
-        .iter()
-        .map(|cell| cell.c)
-        .collect::<String>()
+    row[..Column(row.len())].iter().map(|cell| cell.c).collect::<String>()
 }
 
 fn process_line(line: String) -> Option<String> {
     let trimmed = line.trim_end().to_string();
-    if !trimmed.is_empty() {
-        Some(trimmed)
-    } else {
-        None
-    }
+    if !trimmed.is_empty() { Some(trimmed) } else { None }
 }
 
 /// Appends a stringified task summary to the terminal, after its output.
@@ -1009,15 +893,10 @@ pub(super) unsafe fn append_text_to_term(term: &mut Term<ZedListener>, text_line
 
 pub(super) fn search_matches(term: &AlacrittyTerm, searcher: Search) -> Vec<Range> {
     let mut searcher = searcher.into_alacritty();
-    all_search_matches(term, &mut searcher)
-        .map(Range::from_alacritty)
-        .collect()
+    all_search_matches(term, &mut searcher).map(Range::from_alacritty).collect()
 }
 
-fn all_search_matches<'a, T>(
-    term: &'a Term<T>,
-    regex: &'a mut RegexSearch,
-) -> impl Iterator<Item = Match> + 'a {
+fn all_search_matches<'a, T>(term: &'a Term<T>, regex: &'a mut RegexSearch) -> impl Iterator<Item = Match> + 'a {
     let start = AlacPoint::new(term.grid().topmost_line(), Column(0));
     let end = AlacPoint::new(term.grid().bottommost_line(), term.grid().last_column());
     RegexIter::new(start, end, AlacDirection::Right, term, regex)

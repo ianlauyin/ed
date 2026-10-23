@@ -1,15 +1,28 @@
+use std::collections::VecDeque;
+use std::path::Path;
+use std::sync::Arc;
+
 use anyhow::Context as _;
-use futures::{FutureExt, StreamExt as _, channel::mpsc, future::Shared};
+use collections::HashMap;
+use futures::FutureExt;
+use futures::StreamExt as _;
+use futures::channel::mpsc;
+use futures::future::Shared;
+use gpui::App;
+use gpui::AppContext as _;
+use gpui::Context;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::Task;
+use gpui::WeakEntity;
 use language::Buffer;
 use remote::RemoteClient;
-use rpc::proto::{self, REMOTE_SERVER_PROJECT_ID};
-use std::{collections::VecDeque, path::Path, sync::Arc};
-use task::{Shell, shell_to_proto};
+use rpc::proto::REMOTE_SERVER_PROJECT_ID;
+use rpc::proto::{self};
+use task::Shell;
+use task::shell_to_proto;
 use util::ResultExt;
 use worktree::Worktree;
-
-use collections::HashMap;
-use gpui::{App, AppContext as _, Context, Entity, EventEmitter, Task, WeakEntity};
 
 use crate::worktree_store::WorktreeStore;
 
@@ -115,17 +128,12 @@ impl ProjectEnvironment {
 
         let remote_client = self.remote_client.as_ref().and_then(|it| it.upgrade());
         match remote_client {
-            Some(remote_client) => remote_client.clone().read(cx).shell().map(|shell| {
-                self.remote_directory_environment(
-                    &Shell::Program(shell),
-                    abs_path,
-                    remote_client,
-                    cx,
-                )
-            }),
-            None if self.is_remote_project => {
-                Some(self.local_directory_environment(&Shell::System, abs_path, cx))
-            }
+            Some(remote_client) => remote_client
+                .clone()
+                .read(cx)
+                .shell()
+                .map(|shell| self.remote_directory_environment(&Shell::Program(shell), abs_path, remote_client, cx)),
+            None if self.is_remote_project => Some(self.local_directory_environment(&Shell::System, abs_path, cx)),
             None => Some(self.local_directory_environment(&Shell::System, abs_path, cx)),
         }
         .unwrap_or_else(|| Task::ready(None).shared())
@@ -138,22 +146,15 @@ impl ProjectEnvironment {
     ) -> Shared<Task<Option<HashMap<String, String>>>> {
         let remote_client = self.remote_client.as_ref().and_then(|it| it.upgrade());
         match remote_client {
-            Some(remote_client) => remote_client.clone().read(cx).shell().map(|shell| {
-                self.remote_directory_environment(
-                    &Shell::Program(shell),
-                    abs_path,
-                    remote_client,
-                    cx,
-                )
-            }),
-            None if self.is_remote_project => {
-                Some(self.local_directory_environment(&Shell::System, abs_path, cx))
-            }
+            Some(remote_client) => remote_client
+                .clone()
+                .read(cx)
+                .shell()
+                .map(|shell| self.remote_directory_environment(&Shell::Program(shell), abs_path, remote_client, cx)),
+            None if self.is_remote_project => Some(self.local_directory_environment(&Shell::System, abs_path, cx)),
             None => self
                 .worktree_store
-                .read_with(cx, |worktree_store, cx| {
-                    worktree_store.find_worktree(&abs_path, cx)
-                })
+                .read_with(cx, |worktree_store, cx| worktree_store.find_worktree(&abs_path, cx))
                 .ok()
                 .map(|_| self.local_directory_environment(&Shell::System, abs_path, cx)),
         }
@@ -163,20 +164,15 @@ impl ProjectEnvironment {
     /// Returns the project environment using the default worktree path.
     /// This ensures that project-specific environment variables (e.g. from `.envrc`)
     /// are loaded from the project directory rather than the home directory.
-    pub fn default_environment(
-        &mut self,
-        cx: &mut App,
-    ) -> Shared<Task<Option<HashMap<String, String>>>> {
+    pub fn default_environment(&mut self, cx: &mut App) -> Shared<Task<Option<HashMap<String, String>>>> {
         let abs_path = self
             .worktree_store
             .read_with(cx, |worktree_store, cx| {
-                crate::Project::default_visible_worktree_paths(worktree_store, cx)
-                    .into_iter()
-                    .next()
+                crate::Project::default_visible_worktree_paths(worktree_store, cx).into_iter().next()
             })
             .ok()
             .flatten()
-            .map(|path| Arc::<Path>::from(path))
+            .map(Arc::<Path>::from)
             .unwrap_or_else(|| paths::home_dir().as_path().into());
         self.local_directory_environment(&Shell::System, abs_path, cx)
     }
@@ -203,27 +199,18 @@ impl ProjectEnvironment {
                 let tx = self.environment_error_messages_tx.clone();
                 cx.spawn(async move |cx| {
                     let mut shell_env = match cx
-                        .background_spawn(load_directory_shell_environment(
-                            shell,
-                            abs_path.clone(),
-                            tx,
-                        ))
+                        .background_spawn(load_directory_shell_environment(shell, abs_path.clone(), tx))
                         .await
                     {
                         Ok(shell_env) => Some(shell_env),
                         Err(e) => {
-                            log::error!(
-                                "Failed to load shell environment for directory {abs_path:?}: {e:#}"
-                            );
+                            log::error!("Failed to load shell environment for directory {abs_path:?}: {e:#}");
                             None
                         }
                     };
 
                     if let Some(shell_env) = shell_env.as_mut() {
-                        let path = shell_env
-                            .get("PATH")
-                            .map(|path| path.as_str())
-                            .unwrap_or_default();
+                        let path = shell_env.get("PATH").map(|path| path.as_str()).unwrap_or_default();
                         log::debug!(
                             "using project environment variables shell launched in {:?}. PATH={:?}",
                             abs_path,
@@ -250,15 +237,11 @@ impl ProjectEnvironment {
         self.remote_environments
             .entry((shell.clone(), abs_path.clone()))
             .or_insert_with(|| {
-                let response =
-                    remote_client
-                        .read(cx)
-                        .proto_client()
-                        .request(proto::GetDirectoryEnvironment {
-                            project_id: REMOTE_SERVER_PROJECT_ID,
-                            shell: Some(shell_to_proto(shell.clone())),
-                            directory: abs_path.to_string_lossy().to_string(),
-                        });
+                let response = remote_client.read(cx).proto_client().request(proto::GetDirectoryEnvironment {
+                    project_id: REMOTE_SERVER_PROJECT_ID,
+                    shell: Some(shell_to_proto(shell.clone())),
+                    directory: abs_path.to_string_lossy().to_string(),
+                });
                 cx.background_spawn(async move {
                     let environment = response.await.log_err()?;
                     Some(environment.environment.into_iter().collect())
@@ -303,11 +286,8 @@ async fn load_directory_shell_environment(
     tx: mpsc::UnboundedSender<String>,
 ) -> anyhow::Result<HashMap<String, String>> {
     let (shell, args) = shell.program_and_args();
-    util::shell_env::capture(shell.clone(), args, abs_path)
-        .await
-        .with_context(|| {
-            tx.unbounded_send("Failed to load environment variables".into())
-                .ok();
-            format!("capturing shell environment with {shell:?}")
-        })
+    util::shell_env::capture(shell.clone(), args, abs_path).await.with_context(|| {
+        tx.unbounded_send("Failed to load environment variables".into()).ok();
+        format!("capturing shell environment with {shell:?}")
+    })
 }

@@ -329,17 +329,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "async-recursion"
-version = "1.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3b43422f69d8ff38f95f1b2bb76517c91589a924d1559a0e935d7c8ce0274c11"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 2.0.117",
-]
-
-[[package]]
 name = "async-signal"
 version = "0.2.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -792,16 +781,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "clap_complete_nushell"
-version = "4.6.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fbb9e9715d29a754b468591be588f6b926f5b0a1eb6a8b62acabeb66ff84d897"
-dependencies = [
- "clap",
- "clap_complete",
-]
-
-[[package]]
 name = "clap_derive"
 version = "4.5.49"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -826,7 +805,6 @@ dependencies = [
  "anyhow",
  "clap",
  "clap_complete",
- "clap_complete_nushell",
  "collections",
  "console",
  "core-foundation",
@@ -6719,7 +6697,6 @@ name = "terminal_view"
 version = "0.1.0"
 dependencies = [
  "anyhow",
- "async-recursion",
  "breadcrumbs",
  "collections",
  "db",
@@ -8410,7 +8387,6 @@ version = "0.1.0"
 dependencies = [
  "any_vec",
  "anyhow",
- "async-recursion",
  "chrono",
  "collections",
  "component",

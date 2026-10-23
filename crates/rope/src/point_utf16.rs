@@ -1,7 +1,7 @@
-use std::{
-    cmp::Ordering,
-    ops::{Add, AddAssign, Sub},
-};
+use std::cmp::Ordering;
+use std::ops::Add;
+use std::ops::AddAssign;
+use std::ops::Sub;
 
 #[derive(Clone, Copy, Default, Eq, PartialEq, Debug, Hash)]
 pub struct PointUtf16 {
@@ -10,29 +10,22 @@ pub struct PointUtf16 {
 }
 
 impl PointUtf16 {
-    pub const MAX: Self = Self {
-        row: u32::MAX,
-        column: u32::MAX,
-    };
+    pub const MAX: Self = Self { row: u32::MAX, column: u32::MAX };
 
-    pub fn new(row: u32, column: u32) -> Self {
+    pub const fn new(row: u32, column: u32) -> Self {
         PointUtf16 { row, column }
     }
 
-    pub fn zero() -> Self {
+    pub const fn zero() -> Self {
         PointUtf16::new(0, 0)
     }
 
-    pub fn is_zero(&self) -> bool {
+    pub const fn is_zero(&self) -> bool {
         self.row == 0 && self.column == 0
     }
 
     pub fn saturating_sub(self, other: Self) -> Self {
-        if self < other {
-            Self::zero()
-        } else {
-            self - other
-        }
+        if self < other { Self::zero() } else { self - other }
     }
 }
 

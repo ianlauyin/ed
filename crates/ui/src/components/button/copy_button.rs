@@ -1,11 +1,20 @@
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
-use gpui::{
-    AnyElement, App, ClipboardItem, Context, ElementId, Entity, IntoElement, ParentElement,
-    RenderOnce, Styled, Window,
-};
+use gpui::AnyElement;
+use gpui::App;
+use gpui::ClipboardItem;
+use gpui::Context;
+use gpui::ElementId;
+use gpui::Entity;
+use gpui::IntoElement;
+use gpui::ParentElement;
+use gpui::RenderOnce;
+use gpui::Styled;
+use gpui::Window;
 
-use crate::{Tooltip, prelude::*};
+use crate::Tooltip;
+use crate::prelude::*;
 
 const COPIED_STATE_DURATION: Duration = Duration::from_secs(2);
 
@@ -14,14 +23,12 @@ struct CopyButtonState {
 }
 
 impl CopyButtonState {
-    fn new(_window: &mut Window, _cx: &mut Context<Self>) -> Self {
+    const fn new(_window: &mut Window, _cx: &mut Context<Self>) -> Self {
         Self { copied_at: None }
     }
 
     fn is_copied(&self) -> bool {
-        self.copied_at
-            .map(|t| t.elapsed() < COPIED_STATE_DURATION)
-            .unwrap_or(false)
+        self.copied_at.map(|t| t.elapsed() < COPIED_STATE_DURATION).unwrap_or(false)
     }
 
     fn mark_copied(&mut self) {
@@ -53,12 +60,12 @@ impl CopyButton {
         }
     }
 
-    pub fn icon_size(mut self, icon_size: IconSize) -> Self {
+    pub const fn icon_size(mut self, icon_size: IconSize) -> Self {
         self.icon_size = icon_size;
         self
     }
 
-    pub fn disabled(mut self, disabled: bool) -> Self {
+    pub const fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
         self
     }
@@ -73,10 +80,7 @@ impl CopyButton {
         self
     }
 
-    pub fn custom_on_click(
-        mut self,
-        custom_on_click: impl Fn(&mut Window, &mut App) + 'static,
-    ) -> Self {
+    pub fn custom_on_click(mut self, custom_on_click: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         self.custom_on_click = Some(Box::new(custom_on_click));
         self
     }
@@ -89,8 +93,7 @@ impl RenderOnce for CopyButton {
         let custom_on_click = self.custom_on_click;
         let visible_on_hover = self.visible_on_hover;
 
-        let state: Entity<CopyButtonState> =
-            window.use_keyed_state(id.clone(), cx, CopyButtonState::new);
+        let state: Entity<CopyButtonState> = window.use_keyed_state(id.clone(), cx, CopyButtonState::new);
         let is_copied = state.read(cx).is_copied();
 
         let (icon, color, tooltip) = if is_copied {
@@ -126,11 +129,7 @@ impl RenderOnce for CopyButton {
                 .detach();
             });
 
-        if let Some(visible_on_hover) = visible_on_hover {
-            button.visible_on_hover(visible_on_hover)
-        } else {
-            button
-        }
+        if let Some(visible_on_hover) = visible_on_hover { button.visible_on_hover(visible_on_hover) } else { button }
     }
 }
 
@@ -160,15 +159,9 @@ impl Component for CopyButton {
                 h_flex()
                     .gap_1()
                     .child(Label::new(label_text).size(LabelSize::Small))
-                    .child(
-                        CopyButton::new("preview-xsmall", label_text).icon_size(IconSize::XSmall),
-                    )
-                    .child(
-                        CopyButton::new("preview-medium", label_text).icon_size(IconSize::Medium),
-                    )
-                    .child(
-                        CopyButton::new("preview-xlarge", label_text).icon_size(IconSize::XLarge),
-                    )
+                    .child(CopyButton::new("preview-xsmall", label_text).icon_size(IconSize::XSmall))
+                    .child(CopyButton::new("preview-medium", label_text).icon_size(IconSize::Medium))
+                    .child(CopyButton::new("preview-xlarge", label_text).icon_size(IconSize::XLarge))
                     .into_any_element(),
             ),
             single_example(
@@ -176,10 +169,7 @@ impl Component for CopyButton {
                 h_flex()
                     .gap_1()
                     .child(Label::new(label_text).size(LabelSize::Small))
-                    .child(
-                        CopyButton::new("preview-tooltip", label_text)
-                            .tooltip_label("Custom tooltip label"),
-                    )
+                    .child(CopyButton::new("preview-tooltip", label_text).tooltip_label("Custom tooltip label"))
                     .into_any_element(),
             ),
             single_example(
@@ -188,9 +178,7 @@ impl Component for CopyButton {
                     .group("container")
                     .gap_1()
                     .child(Label::new(label_text).size(LabelSize::Small))
-                    .child(
-                        CopyButton::new("preview-hover", label_text).visible_on_hover("container"),
-                    )
+                    .child(CopyButton::new("preview-hover", label_text).visible_on_hover("container"))
                     .into_any_element(),
             ),
         ];

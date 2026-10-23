@@ -1,6 +1,9 @@
-use crate::{Anchor, BufferSnapshot, TextDimension};
 use std::cmp::Ordering;
 use std::ops::Range;
+
+use crate::Anchor;
+use crate::BufferSnapshot;
+use crate::TextDimension;
 
 #[derive(Default, Copy, Clone, Debug, PartialEq)]
 pub enum SelectionGoal {
@@ -26,20 +29,12 @@ pub struct Selection<T> {
 impl<T: Clone> Selection<T> {
     /// A place where the selection had stopped at.
     pub fn head(&self) -> T {
-        if self.reversed {
-            self.start.clone()
-        } else {
-            self.end.clone()
-        }
+        if self.reversed { self.start.clone() } else { self.end.clone() }
     }
 
     /// A place where selection was initiated from.
     pub fn tail(&self) -> T {
-        if self.reversed {
-            self.end.clone()
-        } else {
-            self.start.clone()
-        }
+        if self.reversed { self.end.clone() } else { self.start.clone() }
     }
 
     pub fn map<F, S>(&self, f: F) -> Selection<S>
@@ -115,7 +110,7 @@ impl<T: Copy + Ord> Selection<T> {
         self.goal = new_goal;
     }
 
-    pub fn swap_head_tail(&mut self) {
+    pub const fn swap_head_tail(&mut self) {
         if self.reversed {
             self.reversed = false;
         } else {
@@ -125,7 +120,7 @@ impl<T: Copy + Ord> Selection<T> {
 }
 
 impl<T: Copy> Selection<T> {
-    pub fn range(&self) -> Range<T> {
+    pub const fn range(&self) -> Range<T> {
         self.start..self.end
     }
 }
@@ -143,10 +138,7 @@ impl<T: Copy + Eq> Selection<T> {
 }
 
 impl Selection<Anchor> {
-    pub fn resolve<'a, D: 'a + TextDimension>(
-        &'a self,
-        snapshot: &'a BufferSnapshot,
-    ) -> Selection<D> {
+    pub fn resolve<'a, D: 'a + TextDimension>(&'a self, snapshot: &'a BufferSnapshot) -> Selection<D> {
         Selection {
             id: self.id,
             start: snapshot.summary_for_anchor(&self.start),

@@ -1,16 +1,36 @@
-use dispatch2::{DispatchQueue, DispatchQueueGlobalPriority, DispatchTime, GlobalQueueIdentifier};
-use gpui::{ActivityGuard, PlatformDispatcher, Priority, RunnableMeta, RunnableVariant};
+use std::ffi::c_void;
+use std::ptr::NonNull;
+use std::time::Duration;
 
 use async_task::Runnable;
-use objc2::{rc::Retained, runtime::ProtocolObject};
-use objc2_foundation::{NSActivityOptions, NSObjectProtocol, NSProcessInfo, NSString, NSThread};
-use std::{ffi::c_void, ptr::NonNull, time::Duration};
+use dispatch2::DispatchQueue;
+use dispatch2::DispatchQueueGlobalPriority;
+use dispatch2::DispatchTime;
+use dispatch2::GlobalQueueIdentifier;
+use gpui::ActivityGuard;
+use gpui::PlatformDispatcher;
+use gpui::Priority;
+use gpui::RunnableMeta;
+use gpui::RunnableVariant;
+use objc2::rc::Retained;
+use objc2::runtime::ProtocolObject;
+use objc2_foundation::NSActivityOptions;
+use objc2_foundation::NSObjectProtocol;
+use objc2_foundation::NSProcessInfo;
+use objc2_foundation::NSString;
+use objc2_foundation::NSThread;
 
 pub struct AppleDispatcher;
 
 impl AppleDispatcher {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
+    }
+}
+
+impl Default for AppleDispatcher {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -43,9 +63,7 @@ impl PlatformDispatcher for AppleDispatcher {
 
     fn dispatch_after(&self, duration: Duration, runnable: RunnableVariant) {
         let context = runnable.into_raw().as_ptr() as *mut c_void;
-        let queue = DispatchQueue::global_queue(GlobalQueueIdentifier::Priority(
-            DispatchQueueGlobalPriority::High,
-        ));
+        let queue = DispatchQueue::global_queue(GlobalQueueIdentifier::Priority(DispatchQueueGlobalPriority::High));
         let when = DispatchTime::NOW.time(duration.as_nanos() as i64);
         unsafe {
             DispatchQueue::exec_after_f(when, &queue, context, trampoline);
@@ -53,10 +71,7 @@ impl PlatformDispatcher for AppleDispatcher {
     }
 
     fn prevent_app_nap(&self, reason: &str) -> ActivityGuard {
-        AppleActivity::begin(
-            reason,
-            NSActivityOptions::UserInitiatedAllowingIdleSystemSleep,
-        )
+        AppleActivity::begin(reason, NSActivityOptions::UserInitiatedAllowingIdleSystemSleep)
     }
 }
 
@@ -84,8 +99,7 @@ impl Drop for AppleActivity {
 }
 
 extern "C" fn trampoline(context: *mut c_void) {
-    let runnable =
-        unsafe { Runnable::<RunnableMeta>::from_raw(NonNull::new_unchecked(context as *mut ())) };
+    let runnable = unsafe { Runnable::<RunnableMeta>::from_raw(NonNull::new_unchecked(context as *mut ())) };
 
     runnable.run();
 }

@@ -19,12 +19,15 @@ better fit the LSP specification.
 */
 #![allow(non_upper_case_globals)]
 #![forbid(unsafe_code)]
-use std::{collections::HashMap, fmt::Debug, str::FromStr};
+use std::collections::HashMap;
+use std::fmt::Debug;
+use std::str::FromStr;
 
-use serde::{
-    de::{self, Error as Error_},
-    Deserialize, Deserializer, Serialize,
-};
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::de::Error as Error_;
+use serde::de::{self};
 use serde_json::Value;
 
 mod uri;
@@ -220,8 +223,7 @@ impl std::fmt::Display for NumberOrString {
 
 impl NumberOrString {
     pub fn from_string(s: String) -> Self {
-        s.parse()
-            .map_or(NumberOrString::String(s), NumberOrString::Number)
+        s.parse().map_or(NumberOrString::String(s), NumberOrString::Number)
     }
 }
 
@@ -252,9 +254,7 @@ pub type LSPArray = Vec<serde_json::Value>;
 
 /// Position in a text document expressed as zero-based line and character offset.
 /// A position is between two characters like an 'insert' cursor in a editor.
-#[derive(
-    Debug, Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Default, Deserialize, Serialize, Hash,
-)]
+#[derive(Debug, Eq, PartialEq, Ord, PartialOrd, Copy, Clone, Default, Deserialize, Serialize, Hash)]
 pub struct Position {
     /// Line position in a document (zero-based).
     pub line: u32,
@@ -267,7 +267,7 @@ pub struct Position {
 }
 
 impl Position {
-    pub fn new(line: u32, character: u32) -> Position {
+    pub const fn new(line: u32, character: u32) -> Position {
         Position { line, character }
     }
 }
@@ -283,7 +283,7 @@ pub struct Range {
 }
 
 impl Range {
-    pub fn new(start: Position, end: Position) -> Range {
+    pub const fn new(start: Position, end: Position) -> Range {
         Range { start, end }
     }
 }
@@ -296,7 +296,7 @@ pub struct Location {
 }
 
 impl Location {
-    pub fn new(uri: Uri, range: Range) -> Location {
+    pub const fn new(uri: Uri, range: Range) -> Location {
         Location { uri, range }
     }
 }
@@ -388,7 +388,7 @@ impl DiagnosticMessage {
     }
 
     /// Returns a mutable reference to the raw text of the message, regardless of its markup kind.
-    pub fn as_mut_string(&mut self) -> &mut String {
+    pub const fn as_mut_string(&mut self) -> &mut String {
         match self {
             DiagnosticMessage::String(message) => message,
             DiagnosticMessage::MarkupContent(markup) => &mut markup.value,
@@ -484,9 +484,7 @@ where
     let opt = Option::<String>::deserialize(deserializer)?;
     match opt {
         Some(s) if s.is_empty() || s == "null" => Ok(None),
-        Some(s) => Uri::from_str(&s)
-            .map(Some)
-            .map_err(serde::de::Error::custom),
+        Some(s) => Uri::from_str(&s).map(Some).map_err(serde::de::Error::custom),
         None => Ok(None),
     }
 }
@@ -601,12 +599,8 @@ pub struct Command {
 }
 
 impl Command {
-    pub fn new(title: String, command: String, arguments: Option<Vec<Value>>) -> Command {
-        Command {
-            title,
-            command,
-            arguments,
-        }
+    pub const fn new(title: String, command: String, arguments: Option<Vec<Value>>) -> Command {
+        Command { title, command, arguments }
     }
 }
 
@@ -627,7 +621,7 @@ pub struct TextEdit {
 }
 
 impl TextEdit {
-    pub fn new(range: Range, new_text: String) -> TextEdit {
+    pub const fn new(range: Range, new_text: String) -> TextEdit {
         TextEdit { range, new_text }
     }
 }
@@ -930,11 +924,7 @@ pub struct ConfigurationParams {
 #[serde(rename_all = "camelCase")]
 pub struct ConfigurationItem {
     /// The scope to get the configuration section for.
-    #[serde(
-        default,
-        deserialize_with = "deserialize_optional_uri",
-        skip_serializing_if = "Option::is_none"
-    )]
+    #[serde(default, deserialize_with = "deserialize_optional_uri", skip_serializing_if = "Option::is_none")]
     pub scope_uri: Option<Uri>,
 
     ///The configuration section asked for.
@@ -959,9 +949,7 @@ mod url_map {
 
         impl<V: de::DeserializeOwned> Default for UrlMapVisitor<V> {
             fn default() -> Self {
-                UrlMapVisitor {
-                    _marker: PhantomData,
-                }
+                UrlMapVisitor { _marker: PhantomData }
             }
         }
         impl<'de, V: de::DeserializeOwned> de::Visitor<'de> for UrlMapVisitor<V> {
@@ -992,9 +980,7 @@ mod url_map {
         }
         impl<V: de::DeserializeOwned> Default for OptionUrlMapVisitor<V> {
             fn default() -> Self {
-                OptionUrlMapVisitor {
-                    _marker: PhantomData,
-                }
+                OptionUrlMapVisitor { _marker: PhantomData }
             }
         }
         impl<'de, V: de::DeserializeOwned> de::Visitor<'de> for OptionUrlMapVisitor<V> {
@@ -1025,9 +1011,7 @@ mod url_map {
             where
                 D: serde::Deserializer<'de>,
             {
-                deserializer
-                    .deserialize_map(UrlMapVisitor::<V>::default())
-                    .map(Some)
+                deserializer.deserialize_map(UrlMapVisitor::<V>::default()).map(Some)
             }
         }
 
@@ -1036,10 +1020,7 @@ mod url_map {
         deserializer.deserialize_option(OptionUrlMapVisitor::default())
     }
 
-    pub fn serialize<S, V>(
-        changes: &Option<HashMap<Uri, V>>,
-        serializer: S,
-    ) -> Result<S::Ok, S::Error>
+    pub fn serialize<S, V>(changes: &Option<HashMap<Uri, V>>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: serde::Serializer,
         V: serde::Serialize,
@@ -1061,11 +1042,7 @@ mod url_map {
 
 impl WorkspaceEdit {
     pub fn new(changes: HashMap<Uri, Vec<TextEdit>>) -> WorkspaceEdit {
-        WorkspaceEdit {
-            changes: Some(changes),
-            document_changes: None,
-            ..Default::default()
-        }
+        WorkspaceEdit { changes: Some(changes), document_changes: None, ..Default::default() }
     }
 }
 
@@ -1081,7 +1058,7 @@ pub struct TextDocumentIdentifier {
 }
 
 impl TextDocumentIdentifier {
-    pub fn new(uri: Uri) -> TextDocumentIdentifier {
+    pub const fn new(uri: Uri) -> TextDocumentIdentifier {
         TextDocumentIdentifier { uri }
     }
 }
@@ -1105,13 +1082,8 @@ pub struct TextDocumentItem {
 }
 
 impl TextDocumentItem {
-    pub fn new(uri: Uri, language_id: String, version: i32, text: String) -> TextDocumentItem {
-        TextDocumentItem {
-            uri,
-            language_id,
-            version,
-            text,
-        }
+    pub const fn new(uri: Uri, language_id: String, version: i32, text: String) -> TextDocumentItem {
+        TextDocumentItem { uri, language_id, version, text }
     }
 }
 
@@ -1130,7 +1102,7 @@ pub struct VersionedTextDocumentIdentifier {
 }
 
 impl VersionedTextDocumentIdentifier {
-    pub fn new(uri: Uri, version: i32) -> VersionedTextDocumentIdentifier {
+    pub const fn new(uri: Uri, version: i32) -> VersionedTextDocumentIdentifier {
         VersionedTextDocumentIdentifier { uri, version }
     }
 }
@@ -1155,11 +1127,8 @@ pub struct OptionalVersionedTextDocumentIdentifier {
 }
 
 impl OptionalVersionedTextDocumentIdentifier {
-    pub fn new(uri: Uri, version: i32) -> OptionalVersionedTextDocumentIdentifier {
-        OptionalVersionedTextDocumentIdentifier {
-            uri,
-            version: Some(version),
-        }
+    pub const fn new(uri: Uri, version: i32) -> OptionalVersionedTextDocumentIdentifier {
+        OptionalVersionedTextDocumentIdentifier { uri, version: Some(version) }
     }
 }
 
@@ -1179,14 +1148,8 @@ pub struct TextDocumentPositionParams {
 }
 
 impl TextDocumentPositionParams {
-    pub fn new(
-        text_document: TextDocumentIdentifier,
-        position: Position,
-    ) -> TextDocumentPositionParams {
-        TextDocumentPositionParams {
-            text_document,
-            position,
-        }
+    pub const fn new(text_document: TextDocumentIdentifier, position: Position) -> TextDocumentPositionParams {
+        TextDocumentPositionParams { text_document, position }
     }
 }
 
@@ -1553,11 +1516,7 @@ pub struct PublishDiagnosticsClientCapabilities {
 
     /// Client supports the tag property to provide meta data about a diagnostic.
     /// Clients supporting tags have to handle unknown tags gracefully.
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "TagSupport::deserialize_compat"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "TagSupport::deserialize_compat")]
     pub tag_support: Option<TagSupport<DiagnosticTag>>,
 
     /// Whether the client interprets the version property of the
@@ -1598,16 +1557,12 @@ impl<T> TagSupport<T> {
         S: serde::Deserializer<'de>,
         T: serde::Deserialize<'de>,
     {
-        Ok(
-            match Option::<Value>::deserialize(serializer).map_err(serde::de::Error::custom)? {
-                Some(Value::Bool(false)) => None,
-                Some(Value::Bool(true)) => Some(TagSupport { value_set: vec![] }),
-                Some(other) => {
-                    Some(TagSupport::<T>::deserialize(other).map_err(serde::de::Error::custom)?)
-                }
-                None => None,
-            },
-        )
+        Ok(match Option::<Value>::deserialize(serializer).map_err(serde::de::Error::custom)? {
+            Some(Value::Bool(false)) => None,
+            Some(Value::Bool(true)) => Some(TagSupport { value_set: vec![] }),
+            Some(other) => Some(TagSupport::<T>::deserialize(other).map_err(serde::de::Error::custom)?),
+            None => None,
+        })
     }
 }
 
@@ -2540,7 +2495,7 @@ pub struct FileEvent {
 }
 
 impl FileEvent {
-    pub fn new(uri: Uri, typ: FileChangeType) -> FileEvent {
+    pub const fn new(uri: Uri, typ: FileChangeType) -> FileEvent {
         FileEvent { uri, typ }
     }
 }
@@ -2641,9 +2596,8 @@ impl<'de> serde::Deserialize<'de> for WatchKind {
         D: serde::Deserializer<'de>,
     {
         let i = u8::deserialize(deserializer)?;
-        WatchKind::from_bits(i).ok_or_else(|| {
-            D::Error::invalid_value(de::Unexpected::Unsigned(u64::from(i)), &"Unknown flag")
-        })
+        WatchKind::from_bits(i)
+            .ok_or_else(|| D::Error::invalid_value(de::Unexpected::Unsigned(u64::from(i)), &"Unknown flag"))
     }
 }
 
@@ -2670,16 +2624,8 @@ pub struct PublishDiagnosticsParams {
 }
 
 impl PublishDiagnosticsParams {
-    pub fn new(
-        uri: Uri,
-        diagnostics: Vec<Diagnostic>,
-        version: Option<i32>,
-    ) -> PublishDiagnosticsParams {
-        PublishDiagnosticsParams {
-            uri,
-            diagnostics,
-            version,
-        }
+    pub const fn new(uri: Uri, diagnostics: Vec<Diagnostic>, version: Option<i32>) -> PublishDiagnosticsParams {
+        PublishDiagnosticsParams { uri, diagnostics, version }
     }
 }
 
@@ -2716,15 +2662,12 @@ pub struct LanguageString {
 }
 
 impl MarkedString {
-    pub fn from_markdown(markdown: String) -> MarkedString {
+    pub const fn from_markdown(markdown: String) -> MarkedString {
         MarkedString::String(markdown)
     }
 
-    pub fn from_language_code(language: String, code_block: String) -> MarkedString {
-        MarkedString::LanguageString(LanguageString {
-            language,
-            value: code_block,
-        })
+    pub const fn from_language_code(language: String, code_block: String) -> MarkedString {
+        MarkedString::LanguageString(LanguageString { language, value: code_block })
     }
 }
 
@@ -2889,7 +2832,8 @@ impl SymbolTag {
 
 #[cfg(test)]
 mod tests {
-    use serde::{Deserialize, Serialize};
+    use serde::Deserialize;
+    use serde::Serialize;
 
     use super::*;
 
@@ -2943,10 +2887,7 @@ mod tests {
         );
 
         test_serialization(
-            &DiagnosticMessage::MarkupContent(MarkupContent {
-                kind: MarkupKind::PlainText,
-                value: "message".into(),
-            }),
+            &DiagnosticMessage::MarkupContent(MarkupContent { kind: MarkupKind::PlainText, value: "message".into() }),
             r#"{"kind":"plaintext","value":"message"}"#,
         );
     }
@@ -2964,10 +2905,7 @@ mod tests {
     #[test]
     fn language_string() {
         test_serialization(
-            &LanguageString {
-                language: "LL".into(),
-                value: "VV".into(),
-            },
+            &LanguageString { language: "LL".into(), value: "VV".into() },
             r#"{"language":"LL","value":"VV"}"#,
         );
     }
@@ -2985,22 +2923,11 @@ mod tests {
             r#"{"changes":{}}"#,
         );
 
-        test_serialization(
-            &WorkspaceEdit {
-                changes: None,
-                document_changes: None,
-                ..Default::default()
-            },
-            r#"{}"#,
-        );
+        test_serialization(&WorkspaceEdit { changes: None, document_changes: None, ..Default::default() }, r#"{}"#);
 
         test_serialization(
             &WorkspaceEdit {
-                changes: Some(
-                    vec![(Uri::from_str("file://test").unwrap(), vec![])]
-                        .into_iter()
-                        .collect(),
-                ),
+                changes: Some(vec![(Uri::from_str("file://test").unwrap(), vec![])].into_iter().collect()),
                 document_changes: None,
                 ..Default::default()
             },
@@ -3017,20 +2944,13 @@ mod tests {
     fn test_watch_kind() {
         test_serialization(&WatchKind::Create, "1");
         test_serialization(&(WatchKind::Create | WatchKind::Change), "3");
-        test_serialization(
-            &(WatchKind::Create | WatchKind::Change | WatchKind::Delete),
-            "7",
-        );
+        test_serialization(&(WatchKind::Create | WatchKind::Change | WatchKind::Delete), "7");
     }
 
     #[test]
     fn test_resource_operation_kind() {
         test_serialization(
-            &vec![
-                ResourceOperationKind::Create,
-                ResourceOperationKind::Rename,
-                ResourceOperationKind::Delete,
-            ],
+            &vec![ResourceOperationKind::Create, ResourceOperationKind::Rename, ResourceOperationKind::Delete],
             r#"["create","rename","delete"]"#,
         );
     }
@@ -3039,22 +2959,16 @@ mod tests {
     fn configuration_item_deserialization() {
         // Valid URI parses correctly
         let item: ConfigurationItem =
-            serde_json::from_str(r#"{"scopeUri": "file:///test.yaml", "section": "yaml"}"#)
-                .unwrap();
-        assert_eq!(
-            item.scope_uri.as_ref().map(|u| u.as_str()),
-            Some("file:///test.yaml")
-        );
+            serde_json::from_str(r#"{"scopeUri": "file:///test.yaml", "section": "yaml"}"#).unwrap();
+        assert_eq!(item.scope_uri.as_ref().map(|u| u.as_str()), Some("file:///test.yaml"));
         assert_eq!(item.section, Some("yaml".to_string()));
 
         // Literal "null" string is treated as None (yaml-language-server sends this)
-        let item: ConfigurationItem =
-            serde_json::from_str(r#"{"scopeUri": "null", "section": "yaml"}"#).unwrap();
+        let item: ConfigurationItem = serde_json::from_str(r#"{"scopeUri": "null", "section": "yaml"}"#).unwrap();
         assert_eq!(item.scope_uri, None);
 
         // JSON null is treated as None
-        let item: ConfigurationItem =
-            serde_json::from_str(r#"{"scopeUri": null, "section": "yaml"}"#).unwrap();
+        let item: ConfigurationItem = serde_json::from_str(r#"{"scopeUri": null, "section": "yaml"}"#).unwrap();
         assert_eq!(item.scope_uri, None);
 
         // Missing scopeUri defaults to None
@@ -3062,20 +2976,17 @@ mod tests {
         assert_eq!(item.scope_uri, None);
 
         // Missing section defaults to None
-        let item: ConfigurationItem =
-            serde_json::from_str(r#"{"scopeUri": "file:///test"}"#).unwrap();
+        let item: ConfigurationItem = serde_json::from_str(r#"{"scopeUri": "file:///test"}"#).unwrap();
         assert_eq!(item.section, None);
         assert!(item.scope_uri.is_some());
 
         // Empty string is treated as None
-        let item: ConfigurationItem =
-            serde_json::from_str(r#"{"scopeUri": "", "section": "yaml"}"#).unwrap();
+        let item: ConfigurationItem = serde_json::from_str(r#"{"scopeUri": "", "section": "yaml"}"#).unwrap();
         assert_eq!(item.scope_uri, None);
 
         // Malformed URI still produces an error
-        assert!(serde_json::from_str::<ConfigurationItem>(
-            r#"{"scopeUri": "not a valid uri", "section": "yaml"}"#
-        )
-        .is_err());
+        assert!(
+            serde_json::from_str::<ConfigurationItem>(r#"{"scopeUri": "not a valid uri", "section": "yaml"}"#).is_err()
+        );
     }
 }

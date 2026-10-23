@@ -1,12 +1,21 @@
-use super::{
-    Highlights,
-    fold_map::{self, Chunk, FoldChunks, FoldEdit, FoldOffset, FoldPoint, FoldSnapshot},
-};
+use std::cmp;
+use std::num::NonZeroU32;
+use std::ops::Range;
 
-use language::{LanguageAwareStyling, Point};
-use multi_buffer::{MultiBufferRow, MultiBufferSnapshot};
-use std::{cmp, num::NonZeroU32, ops::Range};
+use language::LanguageAwareStyling;
+use language::Point;
+use multi_buffer::MultiBufferRow;
+use multi_buffer::MultiBufferSnapshot;
 use sum_tree::Bias;
+
+use super::Highlights;
+use super::fold_map::Chunk;
+use super::fold_map::FoldChunks;
+use super::fold_map::FoldEdit;
+use super::fold_map::FoldOffset;
+use super::fold_map::FoldPoint;
+use super::fold_map::FoldSnapshot;
+use super::fold_map::{self};
 
 const MAX_EXPANSION_COLUMN: u32 = 256;
 const MAX_ROW_SCAN_CHUNKS: usize = 8;
@@ -46,10 +55,7 @@ impl TabMap {
             self.0.tab_size = tab_size;
             return (
                 self.0.clone(),
-                vec![TabEdit {
-                    old: TabPoint::zero()..old_max_point,
-                    new: TabPoint::zero()..self.0.max_point(),
-                }],
+                vec![TabEdit { old: TabPoint::zero()..old_max_point, new: TabPoint::zero()..self.0.max_point() }],
             );
         }
 
@@ -94,10 +100,7 @@ impl TabMap {
                 }
                 None => old_chunks.insert(old_snapshot.fold_snapshot.chunks(
                     fold_edit.old.end..old_fold_len,
-                    LanguageAwareStyling {
-                        tree_sitter: false,
-                        diagnostics: false,
-                    },
+                    LanguageAwareStyling { tree_sitter: false, diagnostics: false },
                     Highlights::default(),
                 )),
             };
@@ -218,16 +221,14 @@ impl std::ops::Deref for TabSnapshot {
 
 impl TabSnapshot {
     #[inline]
-    pub fn buffer_snapshot(&self) -> &MultiBufferSnapshot {
+    pub const fn buffer_snapshot(&self) -> &MultiBufferSnapshot {
         &self.fold_snapshot.inlay_snapshot.buffer
     }
 
     pub fn line_len(&self, row: u32) -> u32 {
         let max_point = self.max_point();
         if row < max_point.row() {
-            self.fold_point_to_tab_point(FoldPoint::new(row, self.fold_snapshot.line_len(row)))
-                .0
-                .column
+            self.fold_point_to_tab_point(FoldPoint::new(row, self.fold_snapshot.line_len(row))).0.column
         } else {
             max_point.column()
         }
@@ -240,22 +241,13 @@ impl TabSnapshot {
     pub fn text_summary_for_range(&self, range: Range<TabPoint>) -> TextSummary {
         let input_start = self.tab_point_to_fold_point(range.start, Bias::Left).0;
         let input_end = self.tab_point_to_fold_point(range.end, Bias::Right).0;
-        let input_summary = self
-            .fold_snapshot
-            .text_summary_for_range(input_start..input_end);
+        let input_summary = self.fold_snapshot.text_summary_for_range(input_start..input_end);
 
-        let line_end = if range.start.row() == range.end.row() {
-            range.end
-        } else {
-            self.max_point()
-        };
+        let line_end = if range.start.row() == range.end.row() { range.end } else { self.max_point() };
         let first_line_chars = self
             .chunks(
                 range.start..line_end,
-                LanguageAwareStyling {
-                    tree_sitter: false,
-                    diagnostics: false,
-                },
+                LanguageAwareStyling { tree_sitter: false, diagnostics: false },
                 Highlights::default(),
             )
             .flat_map(|chunk| chunk.text.chars())
@@ -267,10 +259,7 @@ impl TabSnapshot {
         } else {
             self.chunks(
                 TabPoint::new(range.end.row(), 0)..range.end,
-                LanguageAwareStyling {
-                    tree_sitter: false,
-                    diagnostics: false,
-                },
+                LanguageAwareStyling { tree_sitter: false, diagnostics: false },
                 Highlights::default(),
             )
             .flat_map(|chunk| chunk.text.chars())
@@ -292,14 +281,10 @@ impl TabSnapshot {
         language_aware: LanguageAwareStyling,
         highlights: Highlights<'a>,
     ) -> TabChunks<'a> {
-        let (input_start, expanded_char_column, to_next_stop) =
-            self.tab_point_to_fold_point(range.start, Bias::Left);
+        let (input_start, expanded_char_column, to_next_stop) = self.tab_point_to_fold_point(range.start, Bias::Left);
         let input_column = input_start.column();
         let input_start = input_start.to_offset(&self.fold_snapshot);
-        let input_end = self
-            .tab_point_to_fold_point(range.end, Bias::Right)
-            .0
-            .to_offset(&self.fold_snapshot);
+        let input_end = self.tab_point_to_fold_point(range.end, Bias::Right).0.to_offset(&self.fold_snapshot);
         let to_next_stop = if range.start.0 + Point::new(0, to_next_stop) > range.end.0 {
             range.end.column() - range.start.column()
         } else {
@@ -308,11 +293,7 @@ impl TabSnapshot {
 
         TabChunks {
             snapshot: self,
-            fold_chunks: self.fold_snapshot.chunks(
-                input_start..input_end,
-                language_aware,
-                highlights,
-            ),
+            fold_chunks: self.fold_snapshot.chunks(input_start..input_end, language_aware, highlights),
             input_column,
             column: expanded_char_column,
             max_expansion_column: self.max_expansion_column,
@@ -338,10 +319,7 @@ impl TabSnapshot {
     }
 
     pub fn clip_point(&self, point: TabPoint, bias: Bias) -> TabPoint {
-        self.fold_point_to_tab_point(
-            self.fold_snapshot
-                .clip_point(self.tab_point_to_fold_point(point, bias).0, bias),
-        )
+        self.fold_point_to_tab_point(self.fold_snapshot.clip_point(self.tab_point_to_fold_point(point, bias).0, bias))
     }
 
     pub fn fold_point_to_tab_point(&self, input: FoldPoint) -> TabPoint {
@@ -351,7 +329,7 @@ impl TabSnapshot {
         TabPoint::new(input.row(), expanded)
     }
 
-    pub fn tab_point_cursor(&self) -> TabPointCursor<'_> {
+    pub const fn tab_point_cursor(&self) -> TabPointCursor<'_> {
         TabPointCursor {
             snapshot: self,
             tab_stop_cursor: None,
@@ -364,25 +342,17 @@ impl TabSnapshot {
     }
 
     pub fn tab_point_to_fold_point(&self, output: TabPoint, bias: Bias) -> (FoldPoint, u32, u32) {
-        let chunks = self
-            .fold_snapshot
-            .chunks_at(FoldPoint::new(output.row(), 0));
+        let chunks = self.fold_snapshot.chunks_at(FoldPoint::new(output.row(), 0));
 
         let tab_cursor = TabStopCursor::new(chunks);
         let expanded = output.column();
-        let (collapsed, expanded_char_column, to_next_stop) =
-            self.collapse_tabs(tab_cursor, expanded, bias);
+        let (collapsed, expanded_char_column, to_next_stop) = self.collapse_tabs(tab_cursor, expanded, bias);
 
-        (
-            FoldPoint::new(output.row(), collapsed),
-            expanded_char_column,
-            to_next_stop,
-        )
+        (FoldPoint::new(output.row(), collapsed), expanded_char_column, to_next_stop)
     }
 
     pub fn buffer_row_to_tab_row(&self, buffer_row: MultiBufferRow) -> u32 {
-        self.point_to_tab_point(Point::new(buffer_row.0, 0), Bias::Left)
-            .row()
+        self.point_to_tab_point(Point::new(buffer_row.0, 0), Bias::Left).row()
     }
 
     pub fn point_to_tab_point(&self, point: Point, bias: Bias) -> TabPoint {
@@ -394,9 +364,7 @@ impl TabSnapshot {
     pub fn tab_point_to_point(&self, point: TabPoint, bias: Bias) -> Point {
         let fold_point = self.tab_point_to_fold_point(point, bias).0;
         let inlay_point = fold_point.to_inlay_point(&self.fold_snapshot);
-        self.fold_snapshot
-            .inlay_snapshot
-            .to_buffer_point(inlay_point)
+        self.fold_snapshot.inlay_snapshot.to_buffer_point(inlay_point)
     }
 
     /// Expands the tabs between the cursor's position and `column`. `tab_count`
@@ -427,25 +395,16 @@ impl TabSnapshot {
             seek_target = end_column - cursor.byte_offset;
         }
 
-        let left_over_char_bytes = if !cursor.is_char_boundary() {
-            cursor.bytes_until_next_char().unwrap_or(0) as u32
-        } else {
-            0
-        };
+        let left_over_char_bytes =
+            if !cursor.is_char_boundary() { cursor.bytes_until_next_char().unwrap_or(0) as u32 } else { 0 };
 
         let collapsed_bytes = cursor.byte_offset() + left_over_char_bytes;
-        let expanded_bytes =
-            cursor.byte_offset() + *expanded_tab_len - *tab_count + left_over_char_bytes;
+        let expanded_bytes = cursor.byte_offset() + *expanded_tab_len - *tab_count + left_over_char_bytes;
 
         expanded_bytes + column.saturating_sub(collapsed_bytes)
     }
 
-    fn collapse_tabs<'a>(
-        &self,
-        mut cursor: TabStopCursor<'a>,
-        column: u32,
-        bias: Bias,
-    ) -> (u32, u32, u32) {
+    fn collapse_tabs<'a>(&self, mut cursor: TabStopCursor<'a>, column: u32, bias: Bias) -> (u32, u32, u32) {
         let tab_size = self.tab_size.get();
         let mut collapsed_column = column;
         let mut seek_target = column.min(self.max_expansion_column);
@@ -470,29 +429,21 @@ impl TabSnapshot {
                 // We expanded past the search target, so need to account for the offshoot
                 expanded_chars -= expanded_bytes - column;
                 return match bias {
-                    Bias::Left => (
-                        cursor.byte_offset() - 1,
-                        expanded_chars,
-                        expanded_bytes - column,
-                    ),
+                    Bias::Left => (cursor.byte_offset() - 1, expanded_chars, expanded_bytes - column),
                     Bias::Right => (cursor.byte_offset(), expanded_chars, 0),
                 };
             } else {
                 // otherwise we only want to move the cursor collapse column forward
                 collapsed_column = collapsed_column - tab_len + 1;
-                seek_target = (collapsed_column - cursor.byte_offset)
-                    .min(self.max_expansion_column - cursor.byte_offset);
+                seek_target =
+                    (collapsed_column - cursor.byte_offset).min(self.max_expansion_column - cursor.byte_offset);
             }
         }
 
         let collapsed_bytes = cursor.byte_offset();
         let expanded_bytes = cursor.byte_offset() + expanded_tab_len - tab_count;
         let expanded_chars = cursor.char_offset() + expanded_tab_len - tab_count;
-        (
-            collapsed_bytes + column.saturating_sub(expanded_bytes),
-            expanded_chars,
-            0,
-        )
+        (collapsed_bytes + column.saturating_sub(expanded_bytes), expanded_chars, 0)
     }
 }
 
@@ -512,7 +463,7 @@ pub struct TabPointCursor<'a> {
 
 impl TabPointCursor<'_> {
     /// Resets the cursor to the start so it can seek backward again.
-    pub fn reset(&mut self) {
+    pub const fn reset(&mut self) {
         self.needs_seek = true;
     }
 
@@ -527,9 +478,8 @@ impl TabPointCursor<'_> {
                 if !(can_continue && row == self.row && end_column >= cursor.byte_offset) {
                     // Scanning over the rows in between is cheaper than seeking
                     // the fold chunks, as long as the target row is nearby.
-                    let advanced = can_continue
-                        && row > self.row
-                        && cursor.advance_rows(row - self.row, self.max_scan_chunks);
+                    let advanced =
+                        can_continue && row > self.row && cursor.advance_rows(row - self.row, self.max_scan_chunks);
                     if !advanced {
                         let row_start = FoldPoint::new(row, 0).to_offset(&snapshot.fold_snapshot);
                         cursor.seek_to(row_start..snapshot.fold_snapshot.len());
@@ -544,19 +494,13 @@ impl TabPointCursor<'_> {
                 self.tab_count = 0;
                 self.expanded_tab_len = 0;
                 self.needs_seek = false;
-                self.tab_stop_cursor.insert(TabStopCursor::new(
-                    snapshot.fold_snapshot.chunks_at(FoldPoint::new(row, 0)),
-                ))
+                self.tab_stop_cursor
+                    .insert(TabStopCursor::new(snapshot.fold_snapshot.chunks_at(FoldPoint::new(row, 0))))
             }
         };
         self.row = row;
 
-        let expanded = snapshot.expand_tabs(
-            cursor,
-            &mut self.tab_count,
-            &mut self.expanded_tab_len,
-            point.column(),
-        );
+        let expanded = snapshot.expand_tabs(cursor, &mut self.tab_count, &mut self.expanded_tab_len, point.column());
         TabPoint::new(row, expanded)
     }
 }
@@ -565,19 +509,19 @@ impl TabPointCursor<'_> {
 pub struct TabPoint(pub Point);
 
 impl TabPoint {
-    pub fn new(row: u32, column: u32) -> Self {
+    pub const fn new(row: u32, column: u32) -> Self {
         Self(Point::new(row, column))
     }
 
-    pub fn zero() -> Self {
+    pub const fn zero() -> Self {
         Self::new(0, 0)
     }
 
-    pub fn row(self) -> u32 {
+    pub const fn row(self) -> u32 {
         self.0.row
     }
 
-    pub fn column(self) -> u32 {
+    pub const fn column(self) -> u32 {
         self.0.column
     }
 }
@@ -656,16 +600,12 @@ pub struct TabChunks<'a> {
 
 impl TabChunks<'_> {
     pub(crate) fn seek(&mut self, range: Range<TabPoint>) {
-        let (input_start, expanded_char_column, to_next_stop) = self
-            .snapshot
-            .tab_point_to_fold_point(range.start, Bias::Left);
+        let (input_start, expanded_char_column, to_next_stop) =
+            self.snapshot.tab_point_to_fold_point(range.start, Bias::Left);
         let input_column = input_start.column();
         let input_start = input_start.to_offset(&self.snapshot.fold_snapshot);
-        let input_end = self
-            .snapshot
-            .tab_point_to_fold_point(range.end, Bias::Right)
-            .0
-            .to_offset(&self.snapshot.fold_snapshot);
+        let input_end =
+            self.snapshot.tab_point_to_fold_point(range.end, Bias::Right).0.to_offset(&self.snapshot.fold_snapshot);
         let to_next_stop = if range.start.0 + Point::new(0, to_next_stop) > range.end.0 {
             range.end.column() - range.start.column()
         } else {
@@ -710,16 +650,9 @@ impl<'a> Iterator for TabChunks<'a> {
             self.chunk.chars >>= 1;
             self.chunk.newlines >>= 1;
 
-            let tab_size = if self.input_column < self.max_expansion_column {
-                self.tab_size.get()
-            } else {
-                1
-            };
+            let tab_size = if self.input_column < self.max_expansion_column { self.tab_size.get() } else { 1 };
             let mut len = tab_size - self.column % tab_size;
-            let next_output_position = cmp::min(
-                self.output_position + Point::new(0, len),
-                self.max_output_position,
-            );
+            let next_output_position = cmp::min(self.output_position + Point::new(0, len), self.max_output_position);
             len = next_output_position.column - self.output_position.column;
             self.column += len;
             self.input_column += 1;
@@ -747,16 +680,12 @@ impl<'a> Iterator for TabChunks<'a> {
             let newline_count = chunk.newlines.count_ones();
             if newline_count > 0 {
                 let last_newline_bit = 128 - chunk.newlines.leading_zeros();
-                let chars_after_last_newline =
-                    chunk.chars.unbounded_shr(last_newline_bit).count_ones();
+                let chars_after_last_newline = chunk.chars.unbounded_shr(last_newline_bit).count_ones();
                 let bytes_after_last_newline = chunk_len - last_newline_bit;
 
                 self.column = chars_after_last_newline;
                 self.input_column = bytes_after_last_newline;
-                self.output_position = Point::new(
-                    self.output_position.row + newline_count,
-                    bytes_after_last_newline,
-                );
+                self.output_position = Point::new(self.output_position.row + newline_count, bytes_after_last_newline);
             } else {
                 let char_count = chunk.chars.count_ones();
                 self.column += char_count;
@@ -785,16 +714,12 @@ impl<'a> Iterator for TabChunks<'a> {
         let newline_count = prefix_newlines.count_ones();
         if newline_count > 0 {
             let last_newline_bit = 128 - prefix_newlines.leading_zeros();
-            let chars_after_last_newline =
-                prefix_chars.unbounded_shr(last_newline_bit).count_ones();
+            let chars_after_last_newline = prefix_chars.unbounded_shr(last_newline_bit).count_ones();
             let bytes_after_last_newline = prefix_len as u32 - last_newline_bit;
 
             self.column = chars_after_last_newline;
             self.input_column = bytes_after_last_newline;
-            self.output_position = Point::new(
-                self.output_position.row + newline_count,
-                bytes_after_last_newline,
-            );
+            self.output_position = Point::new(self.output_position.row + newline_count, bytes_after_last_newline);
         } else {
             let char_count = prefix_chars.count_ones();
             self.column += char_count;
@@ -804,13 +729,7 @@ impl<'a> Iterator for TabChunks<'a> {
             self.output_position.column += prefix_len as u32;
         }
 
-        Some(Chunk {
-            text: prefix,
-            chars: prefix_chars,
-            tabs: 0,
-            newlines: prefix_newlines,
-            ..self.chunk.clone()
-        })
+        Some(Chunk { text: prefix, chars: prefix_chars, tabs: 0, newlines: prefix_newlines, ..self.chunk.clone() })
     }
 }
 
@@ -835,29 +754,18 @@ struct TabStopChunk<'a> {
 
 impl<'a> TabStopChunk<'a> {
     fn new(chunk: Chunk<'a>) -> Self {
-        Self {
-            chars: chunk.chars,
-            text: chunk.text,
-            tabs: chunk.tabs,
-            newlines: chunk.newlines,
-        }
+        Self { chars: chunk.chars, text: chunk.text, tabs: chunk.tabs, newlines: chunk.newlines }
     }
 
-    fn has_newline_in_byte_range(&self, range: Range<u32>) -> bool {
+    const fn has_newline_in_byte_range(&self, range: Range<u32>) -> bool {
         let mask = u128::MAX.unbounded_shl(range.start) & !u128::MAX.unbounded_shl(range.end);
         self.newlines & mask != 0
     }
 }
 
 impl<'a> TabStopCursor<'a> {
-    fn new(chunks: FoldChunks<'a>) -> Self {
-        Self {
-            chunks,
-            byte_offset: 0,
-            char_offset: 0,
-            current_chunk: None,
-            crossed_newline: false,
-        }
+    const fn new(chunks: FoldChunks<'a>) -> Self {
+        Self { chunks, byte_offset: 0, char_offset: 0, current_chunk: None, crossed_newline: false }
     }
 
     fn seek_to(&mut self, range: Range<FoldOffset>) {
@@ -916,20 +824,14 @@ impl<'a> TabStopCursor<'a> {
         self.current_chunk.as_ref().map(|&(ref chunk, idx)| {
             let higher_chars = chunk.chars.unbounded_shr(idx + 1);
 
-            if higher_chars != 0 {
-                higher_chars.trailing_zeros() as usize + 1
-            } else {
-                chunk.text.len() - idx as usize
-            }
+            if higher_chars != 0 { higher_chars.trailing_zeros() as usize + 1 } else { chunk.text.len() - idx as usize }
         })
     }
 
     fn is_char_boundary(&self) -> bool {
-        self.current_chunk
-            .as_ref()
-            .is_some_and(|&(ref chunk, idx)| {
-                (1u128.unbounded_shl(idx) & chunk.chars) != 0 || idx as usize == chunk.text.len()
-            })
+        self.current_chunk.as_ref().is_some_and(|&(ref chunk, idx)| {
+            (1u128.unbounded_shl(idx) & chunk.chars) != 0 || idx as usize == chunk.text.len()
+        })
     }
 
     /// distance: length to move forward while searching for the next tab stop
@@ -940,11 +842,9 @@ impl<'a> TabStopCursor<'a> {
 
         let mut distance_remaining = distance;
 
-        while let Some((mut chunk, chunk_position)) = self.current_chunk.take().or_else(|| {
-            self.chunks
-                .next()
-                .map(|chunk| (TabStopChunk::new(chunk), 0))
-        }) {
+        while let Some((mut chunk, chunk_position)) =
+            self.current_chunk.take().or_else(|| self.chunks.next().map(|chunk| (TabStopChunk::new(chunk), 0)))
+        {
             let chunk_len = chunk.text.len() as u32;
 
             if chunk.tabs == 0 {
@@ -953,8 +853,7 @@ impl<'a> TabStopCursor<'a> {
                     let end = chunk_position + distance_remaining;
                     self.crossed_newline |= chunk.has_newline_in_byte_range(chunk_position..end);
                     self.byte_offset += distance_remaining;
-                    self.char_offset +=
-                        count_chars_in_byte_range(chunk_position..(end - 1), chunk.chars);
+                    self.char_offset += count_chars_in_byte_range(chunk_position..(end - 1), chunk.chars);
                     if end < 128 {
                         self.current_chunk = Some((chunk, end));
                     }
@@ -963,8 +862,7 @@ impl<'a> TabStopCursor<'a> {
 
                 self.crossed_newline |= chunk.has_newline_in_byte_range(chunk_position..chunk_len);
                 self.byte_offset += chunk_remaining;
-                self.char_offset +=
-                    count_chars_in_byte_range(chunk_position..(chunk_len - 1), chunk.chars);
+                self.char_offset += count_chars_in_byte_range(chunk_position..(chunk_len - 1), chunk.chars);
                 distance_remaining -= chunk_remaining;
                 continue;
             }
@@ -976,21 +874,16 @@ impl<'a> TabStopCursor<'a> {
                 let end = chunk_position + distance_remaining;
                 self.crossed_newline |= chunk.has_newline_in_byte_range(chunk_position..end);
                 self.byte_offset += distance_remaining;
-                self.char_offset +=
-                    count_chars_in_byte_range(chunk_position..(end - 1), chunk.chars);
+                self.char_offset += count_chars_in_byte_range(chunk_position..(end - 1), chunk.chars);
                 self.current_chunk = Some((chunk, end));
                 return None;
             }
 
             self.crossed_newline |= chunk.has_newline_in_byte_range(chunk_position..tab_end);
             self.byte_offset += bytes_to_tab;
-            self.char_offset +=
-                count_chars_in_byte_range(chunk_position..(tab_end - 1), chunk.chars);
+            self.char_offset += count_chars_in_byte_range(chunk_position..(tab_end - 1), chunk.chars);
 
-            let tabstop = TabStop {
-                char_offset: self.char_offset,
-                byte_offset: self.byte_offset,
-            };
+            let tabstop = TabStop { char_offset: self.char_offset, byte_offset: self.byte_offset };
 
             chunk.tabs = (chunk.tabs - 1) & chunk.tabs;
 
@@ -1004,17 +897,17 @@ impl<'a> TabStopCursor<'a> {
         None
     }
 
-    fn byte_offset(&self) -> u32 {
+    const fn byte_offset(&self) -> u32 {
         self.byte_offset
     }
 
-    fn char_offset(&self) -> u32 {
+    const fn char_offset(&self) -> u32 {
         self.char_offset
     }
 }
 
 #[inline(always)]
-fn count_chars_in_byte_range(range: Range<u32>, bitmap: u128) -> u32 {
+const fn count_chars_in_byte_range(range: Range<u32>, bitmap: u128) -> u32 {
     let low_mask = u128::MAX << range.start;
     let high_mask = u128::MAX >> (127 - range.end);
     (bitmap & low_mask & high_mask).count_ones()

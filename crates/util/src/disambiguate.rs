@@ -11,17 +11,13 @@ use std::hash::Hash;
 /// a "fixed point" where increasing `detail` no longer changes the output. If
 /// an item reaches its fixed point, it is assumed it will no longer change and
 /// will no longer be checked for collisions.
-pub fn compute_disambiguation_details<T, D>(
-    items: &[T],
-    get_description: impl Fn(&T, usize) -> D,
-) -> Vec<usize>
+pub fn compute_disambiguation_details<T, D>(items: &[T], get_description: impl Fn(&T, usize) -> D) -> Vec<usize>
 where
     D: Eq + Hash + Clone,
 {
     let mut details = vec![0usize; items.len()];
     let mut descriptions: HashMap<D, Vec<usize>> = HashMap::default();
-    let mut current_descriptions: Vec<D> =
-        items.iter().map(|item| get_description(item, 0)).collect();
+    let mut current_descriptions: Vec<D> = items.iter().map(|item| get_description(item, 0)).collect();
 
     loop {
         let mut any_collisions = false;
@@ -34,10 +30,7 @@ where
                 }
                 current_descriptions[index] = new_description;
             }
-            descriptions
-                .entry(current_descriptions[index].clone())
-                .or_insert_with(Vec::new)
-                .push(index);
+            descriptions.entry(current_descriptions[index].clone()).or_default().push(index);
         }
 
         for (_, indices) in descriptions.drain() {

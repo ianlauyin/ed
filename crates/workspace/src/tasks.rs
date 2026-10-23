@@ -61,8 +61,8 @@ impl Workspace {
         self: &mut Workspace,
         spawn_in_terminal: SpawnInTerminal,
         on_complete: Option<TaskCompletionHandler>,
-        window: &mut Window,
-        cx: &mut Context<Workspace>,
+        window: &Window,
+        cx: &Context<Workspace>,
     ) {
         if self.terminal_provider.is_some() {
             let task = cx.spawn_in(window, async move |workspace, cx| {

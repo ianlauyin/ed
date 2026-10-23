@@ -1,13 +1,18 @@
-use collections::HashMap;
 use std::collections::VecDeque;
-use std::sync::{
-    OnceLock, RwLock,
-    atomic::{AtomicU8, Ordering},
-};
+use std::sync::OnceLock;
+use std::sync::RwLock;
+use std::sync::atomic::AtomicU8;
+use std::sync::atomic::Ordering;
 
-use crate::{SCOPE_DEPTH_MAX, SCOPE_STRING_SEP_STR, ScopeAlloc, ScopeRef, env_config, private};
-
+use collections::HashMap;
 use log;
+
+use crate::SCOPE_DEPTH_MAX;
+use crate::SCOPE_STRING_SEP_STR;
+use crate::ScopeAlloc;
+use crate::ScopeRef;
+use crate::env_config;
+use crate::private;
 
 static ENV_FILTER: OnceLock<env_config::EnvFilter> = OnceLock::new();
 static SCOPE_MAP: RwLock<ScopeMap> = RwLock::new(ScopeMap::empty());
@@ -55,11 +60,7 @@ pub fn is_possibly_enabled_level(level: log::Level) -> bool {
     level as u8 <= LEVEL_ENABLED_MAX_CONFIG.load(Ordering::Acquire)
 }
 
-pub fn is_scope_enabled(
-    scope: &ScopeRef<'_>,
-    module_path: Option<&str>,
-    level: log::Level,
-) -> bool {
+pub fn is_scope_enabled(scope: &ScopeRef<'_>, module_path: Option<&str>, level: log::Level) -> bool {
     // TODO: is_always_allowed_level that checks against LEVEL_ENABLED_MIN_CONFIG
     if !is_possibly_enabled_level(level) {
         // [FAST PATH]
@@ -149,9 +150,7 @@ fn scope_alloc_from_scope_str(scope_str: &str) -> Option<ScopeAlloc> {
         return None;
     }
     if scope_iter.next().is_some() {
-        crate::warn!(
-            "Invalid scope key, too many nested scopes: '{scope_str}'. Max depth is {SCOPE_DEPTH_MAX}",
-        );
+        crate::warn!("Invalid scope key, too many nested scopes: '{scope_str}'. Max depth is {SCOPE_DEPTH_MAX}",);
         return None;
     }
     let scope = scope_buf.map(|s| s.to_string());
@@ -186,9 +185,7 @@ impl ScopeMap {
         default_filters: &[(&str, log::LevelFilter)],
     ) -> Self {
         let mut items = Vec::<(ScopeAlloc, log::LevelFilter)>::with_capacity(
-            items_input_map.len()
-                + env_config.map_or(0, |c| c.directive_names.len())
-                + default_filters.len(),
+            items_input_map.len() + env_config.map_or(0, |c| c.directive_names.len()) + default_filters.len(),
         );
         let mut modules = Vec::with_capacity(4);
 
@@ -205,11 +202,7 @@ impl ScopeMap {
             Some((scope_str.as_str(), level_filter))
         });
 
-        let all_filters = default_filters
-            .iter()
-            .cloned()
-            .chain(env_filters)
-            .chain(new_filters);
+        let all_filters = default_filters.iter().cloned().chain(env_filters).chain(new_filters);
 
         for (scope_str, level_filter) in all_filters {
             if scope_str.contains("::") {
@@ -223,10 +216,7 @@ impl ScopeMap {
             let Some(scope) = scope_alloc_from_scope_str(scope_str) else {
                 continue;
             };
-            if let Some(idx) = items
-                .iter()
-                .position(|(scope_existing, _)| scope_existing == &scope)
-            {
+            if let Some(idx) = items.iter().position(|(scope_existing, _)| scope_existing == &scope) {
                 items[idx].1 = level_filter;
             } else {
                 items.push((scope, level_filter));
@@ -236,11 +226,7 @@ impl ScopeMap {
         items.sort_by(|a, b| a.0.cmp(&b.0));
         modules.sort_by(|(a_name, _), (b_name, _)| a_name.cmp(b_name));
 
-        let mut this = Self {
-            entries: Vec::with_capacity(items.len() * SCOPE_DEPTH_MAX),
-            modules,
-            root_count: 0,
-        };
+        let mut this = Self { entries: Vec::with_capacity(items.len() * SCOPE_DEPTH_MAX), modules, root_count: 0 };
 
         let items_count = items.len();
 
@@ -250,20 +236,12 @@ impl ScopeMap {
             items_range: std::ops::Range<usize>,
         }
         let mut process_queue = VecDeque::new();
-        process_queue.push_back(ProcessQueueEntry {
-            parent_index: usize::MAX,
-            depth: 0,
-            items_range: 0..items_count,
-        });
+        process_queue.push_back(ProcessQueueEntry { parent_index: usize::MAX, depth: 0, items_range: 0..items_count });
 
         let empty_range = 0..0;
 
         while let Some(process_entry) = process_queue.pop_front() {
-            let ProcessQueueEntry {
-                items_range,
-                depth,
-                parent_index,
-            } = process_entry;
+            let ProcessQueueEntry { items_range, depth, parent_index } = process_entry;
             let mut cursor = items_range.start;
             let res_entries_start = this.entries.len();
             while cursor < items_range.end {
@@ -286,12 +264,7 @@ impl ScopeMap {
                 let is_last = depth + 1 == SCOPE_DEPTH_MAX || !is_valid_scope;
                 let mut enabled = None;
                 if is_last {
-                    assert_eq!(
-                        sub_items_start + 1,
-                        sub_items_end,
-                        "Expected one item: got: {:?}",
-                        &items[items_range]
-                    );
+                    assert_eq!(sub_items_start + 1, sub_items_end, "Expected one item: got: {:?}", &items[items_range]);
                     enabled = Some(items[sub_items_start].1);
                 } else {
                     let entry_index = this.entries.len();
@@ -318,7 +291,7 @@ impl ScopeMap {
         this
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.entries.is_empty() && self.modules.is_empty()
     }
 
@@ -338,10 +311,7 @@ impl ScopeMap {
             let mut enabled = None;
             let mut cur_range = &map.entries[0..map.root_count];
             let mut depth = 0;
-            'search: while !cur_range.is_empty()
-                && depth < SCOPE_DEPTH_MAX
-                && scope[depth].as_ref() != ""
-            {
+            'search: while !cur_range.is_empty() && depth < SCOPE_DEPTH_MAX && scope[depth].as_ref() != "" {
                 for entry in cur_range {
                     if entry.scope == scope[depth].as_ref() {
                         enabled = entry.enabled.or(enabled);
@@ -369,8 +339,7 @@ impl ScopeMap {
 
             if !self.modules.is_empty() {
                 let crate_name = private::extract_crate_name_from_module_path(module_path);
-                let is_scope_just_crate_name =
-                    scope[0].as_ref() == crate_name && scope[1].as_ref() == "";
+                let is_scope_just_crate_name = scope[0].as_ref() == crate_name && scope[1].as_ref() == "";
                 if enabled.is_none() || is_scope_just_crate_name {
                     for (module, filter) in &self.modules {
                         if module == module_path {
@@ -392,10 +361,6 @@ impl ScopeMap {
     }
 
     const fn empty() -> ScopeMap {
-        ScopeMap {
-            entries: vec![],
-            modules: vec![],
-            root_count: 0,
-        }
+        ScopeMap { entries: vec![], modules: vec![], root_count: 0 }
     }
 }

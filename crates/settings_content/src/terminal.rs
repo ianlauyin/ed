@@ -1,9 +1,15 @@
-use collections::{HashMap, HashSet};
+use collections::HashMap;
+use collections::HashSet;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use settings_macros::{MergeFrom, with_fallible_options};
+use serde::Deserialize;
+use serde::Serialize;
+use settings_macros::MergeFrom;
+use settings_macros::with_fallible_options;
 
-use crate::{FontFamilyName, FontFeaturesContent, FontSize, FontWeightContent};
+use crate::FontFamilyName;
+use crate::FontFeaturesContent;
+use crate::FontSize;
+use crate::FontWeightContent;
 
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct ProjectTerminalSettingsContent {
@@ -233,16 +239,7 @@ crate::fallible_options::flattened_deserialize!(TerminalSettingsContent {
 
 /// Shell configuration to open the terminal with.
 #[derive(
-    Clone,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::EnumDiscriminants,
+    Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom, strum::EnumDiscriminants,
 )]
 #[strum_discriminants(derive(strum::VariantArray, strum::VariantNames, strum::FromRepr))]
 #[serde(rename_all = "snake_case")]
@@ -263,17 +260,7 @@ pub enum Shell {
     },
 }
 
-#[derive(
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::EnumDiscriminants,
-)]
+#[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom, strum::EnumDiscriminants)]
 #[strum_discriminants(derive(strum::VariantArray, strum::VariantNames, strum::FromRepr))]
 #[serde(rename_all = "snake_case")]
 pub enum WorkingDirectory {
@@ -308,7 +295,7 @@ pub enum TerminalLineHeight {
 }
 
 impl TerminalLineHeight {
-    pub fn value(&self) -> f32 {
+    pub const fn value(&self) -> f32 {
         match self {
             TerminalLineHeight::Comfortable => 1.618,
             TerminalLineHeight::Standard => 1.3,
@@ -430,13 +417,7 @@ impl crate::merge_from::MergeFrom for PathHyperlinkRegexes {
         self.0 = other
             .0
             .iter()
-            .flat_map(|entry| {
-                if entry.is_rest() {
-                    inherited.as_slice()
-                } else {
-                    std::slice::from_ref(entry)
-                }
-            })
+            .flat_map(|entry| if entry.is_rest() { inherited.as_slice() } else { std::slice::from_ref(entry) })
             .filter(|entry| {
                 let regex = match entry {
                     PathHyperlinkRegex::SingleLine(regex) => regex.clone(),

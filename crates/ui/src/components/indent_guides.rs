@@ -1,7 +1,22 @@
-use std::{cmp::Ordering, ops::Range, rc::Rc};
+use std::cmp::Ordering;
+use std::ops::Range;
+use std::rc::Rc;
 
-use gpui::{AnyElement, App, Bounds, Entity, Hsla, Point, fill, point, size};
-use gpui::{DispatchPhase, Hitbox, HitboxBehavior, MouseButton, MouseDownEvent, MouseMoveEvent};
+use gpui::AnyElement;
+use gpui::App;
+use gpui::Bounds;
+use gpui::DispatchPhase;
+use gpui::Entity;
+use gpui::Hitbox;
+use gpui::HitboxBehavior;
+use gpui::Hsla;
+use gpui::MouseButton;
+use gpui::MouseDownEvent;
+use gpui::MouseMoveEvent;
+use gpui::Point;
+use gpui::fill;
+use gpui::point;
+use gpui::size;
 use smallvec::SmallVec;
 
 use crate::prelude::*;
@@ -36,29 +51,14 @@ pub struct IndentGuides {
     colors: IndentGuideColors,
     indent_size: Pixels,
     left_offset: Pixels,
-    compute_indents_fn:
-        Option<Box<dyn Fn(Range<usize>, &mut Window, &mut App) -> SmallVec<[usize; 64]>>>,
-    render_fn: Option<
-        Box<
-            dyn Fn(
-                RenderIndentGuideParams,
-                &mut Window,
-                &mut App,
-            ) -> SmallVec<[RenderedIndentGuide; 12]>,
-        >,
-    >,
+    compute_indents_fn: Option<Box<dyn Fn(Range<usize>, &mut Window, &mut App) -> SmallVec<[usize; 64]>>>,
+    render_fn:
+        Option<Box<dyn Fn(RenderIndentGuideParams, &mut Window, &mut App) -> SmallVec<[RenderedIndentGuide; 12]>>>,
     on_click: Option<Rc<dyn Fn(&IndentGuideLayout, &mut Window, &mut App)>>,
 }
 
 pub fn indent_guides(indent_size: Pixels, colors: IndentGuideColors) -> IndentGuides {
-    IndentGuides {
-        colors,
-        indent_size,
-        left_offset: px(0.),
-        compute_indents_fn: None,
-        render_fn: None,
-        on_click: None,
-    }
+    IndentGuides { colors, indent_size, left_offset: px(0.), compute_indents_fn: None, render_fn: None, on_click: None }
 }
 
 impl IndentGuides {
@@ -66,16 +66,13 @@ impl IndentGuides {
     /// up with the icon column of the list's rows. Ignored when a custom render
     /// function is set via [`Self::with_render_fn`], which is responsible for its
     /// own positioning.
-    pub fn with_left_offset(mut self, left_offset: Pixels) -> Self {
+    pub const fn with_left_offset(mut self, left_offset: Pixels) -> Self {
         self.left_offset = left_offset;
         self
     }
 
     /// Sets the callback that will be called when the user clicks on an indent guide.
-    pub fn on_click(
-        mut self,
-        on_click: impl Fn(&IndentGuideLayout, &mut Window, &mut App) + 'static,
-    ) -> Self {
+    pub fn on_click(mut self, on_click: impl Fn(&IndentGuideLayout, &mut Window, &mut App) + 'static) -> Self {
         self.on_click = Some(Rc::new(on_click));
         self
     }
@@ -84,13 +81,7 @@ impl IndentGuides {
     pub fn with_compute_indents_fn<V: Render>(
         mut self,
         entity: Entity<V>,
-        compute_indents_fn: impl Fn(
-            &mut V,
-            Range<usize>,
-            &mut Window,
-            &mut Context<V>,
-        ) -> SmallVec<[usize; 64]>
-        + 'static,
+        compute_indents_fn: impl Fn(&mut V, Range<usize>, &mut Window, &mut Context<V>) -> SmallVec<[usize; 64]> + 'static,
     ) -> Self {
         let compute_indents_fn = Box::new(move |range, window: &mut Window, cx: &mut App| {
             entity.update(cx, |this, cx| compute_indents_fn(this, range, window, cx))
@@ -103,12 +94,7 @@ impl IndentGuides {
     pub fn with_render_fn<V: Render>(
         mut self,
         entity: Entity<V>,
-        render_fn: impl Fn(
-            &mut V,
-            RenderIndentGuideParams,
-            &mut Window,
-            &mut App,
-        ) -> SmallVec<[RenderedIndentGuide; 12]>
+        render_fn: impl Fn(&mut V, RenderIndentGuideParams, &mut Window, &mut App) -> SmallVec<[RenderedIndentGuide; 12]>
         + 'static,
     ) -> Self {
         let render_fn = move |params, window: &mut Window, cx: &mut App| {
@@ -127,21 +113,14 @@ impl IndentGuides {
         cx: &mut App,
     ) -> AnyElement {
         let mut indent_guides = if let Some(ref custom_render) = self.render_fn {
-            let params = RenderIndentGuideParams {
-                indent_guides,
-                indent_size: self.indent_size,
-                item_height,
-            };
+            let params = RenderIndentGuideParams { indent_guides, indent_size: self.indent_size, item_height };
             custom_render(params, window, cx)
         } else {
             indent_guides
                 .into_iter()
                 .map(|layout| RenderedIndentGuide {
                     bounds: Bounds::new(
-                        point(
-                            layout.offset.x * self.indent_size + self.left_offset,
-                            layout.offset.y * item_height,
-                        ),
+                        point(layout.offset.x * self.indent_size + self.left_offset, layout.offset.y * item_height),
                         size(px(1.), layout.length * item_height),
                     ),
                     layout,
@@ -229,11 +208,7 @@ mod uniform_list {
                 panic!("compute_indents_fn is required for UniformListDecoration");
             };
             let visible_entries = &compute_indents_fn(visible_range.clone(), window, cx);
-            let indent_guides = compute_indent_guides(
-                visible_entries,
-                visible_range.start,
-                includes_trailing_indent,
-            );
+            let indent_guides = compute_indent_guides(visible_entries, visible_range.start, includes_trailing_indent);
             self.render_from_layout(indent_guides, bounds, item_height, window, cx)
         }
     }
@@ -241,9 +216,8 @@ mod uniform_list {
 
 /// Implements the necessary functionality for rendering indent guides inside a sticky items.
 mod sticky_items {
-    use crate::StickyItemsDecoration;
-
     use super::*;
+    use crate::StickyItemsDecoration;
 
     impl StickyItemsDecoration for IndentGuides {
         fn compute(
@@ -309,15 +283,9 @@ impl Element for IndentGuidesElement {
                 .indent_guides
                 .as_ref()
                 .iter()
-                .map(|guide| {
-                    window
-                        .insert_hitbox(guide.hitbox.unwrap_or(guide.bounds), HitboxBehavior::Normal)
-                })
+                .map(|guide| window.insert_hitbox(guide.hitbox.unwrap_or(guide.bounds), HitboxBehavior::Normal))
                 .collect();
-            Self::PrepaintState::Interactive {
-                hitboxes: Rc::new(hitboxes),
-                on_hovered_indent_guide_click,
-            }
+            Self::PrepaintState::Interactive { hitboxes: Rc::new(hitboxes), on_hovered_indent_guide_click }
         } else {
             Self::PrepaintState::Static
         }
@@ -337,22 +305,12 @@ impl Element for IndentGuidesElement {
         match prepaint {
             IndentGuidesElementPrepaintState::Static => {
                 for indent_guide in self.indent_guides.as_ref() {
-                    let fill_color = if indent_guide.is_active {
-                        self.colors.active
-                    } else {
-                        self.colors.default
-                    };
+                    let fill_color = if indent_guide.is_active { self.colors.active } else { self.colors.default };
 
-                    window.paint_quad(fill(
-                        window.pixel_snap_bounds(indent_guide.bounds),
-                        fill_color,
-                    ));
+                    window.paint_quad(fill(window.pixel_snap_bounds(indent_guide.bounds), fill_color));
                 }
             }
-            IndentGuidesElementPrepaintState::Interactive {
-                hitboxes,
-                on_hovered_indent_guide_click,
-            } => {
+            IndentGuidesElementPrepaintState::Interactive { hitboxes, on_hovered_indent_guide_click } => {
                 window.on_mouse_event({
                     let hitboxes = hitboxes.clone();
                     let indent_guides = self.indent_guides.clone();
@@ -392,10 +350,7 @@ impl Element for IndentGuidesElement {
                         self.colors.default
                     };
 
-                    window.paint_quad(fill(
-                        window.pixel_snap_bounds(indent_guide.bounds),
-                        fill_color,
-                    ));
+                    window.paint_quad(fill(window.pixel_snap_bounds(indent_guide.bounds), fill_color));
                 }
 
                 window.on_mouse_event({
@@ -485,13 +440,9 @@ fn compute_indent_guides(
     indent_guides.extend(indent_stack);
 
     for guide in indent_guides.iter_mut() {
-        if includes_trailing_indent
-            && guide.offset.y + guide.length == offset + indents.len().saturating_sub(1)
-        {
-            guide.continues_offscreen = indents
-                .last()
-                .map(|last_indent| guide.offset.x < *last_indent)
-                .unwrap_or(false);
+        if includes_trailing_indent && guide.offset.y + guide.length == offset + indents.len().saturating_sub(1) {
+            guide.continues_offscreen =
+                indents.last().map(|last_indent| guide.offset.x < *last_indent).unwrap_or(false);
         }
     }
 

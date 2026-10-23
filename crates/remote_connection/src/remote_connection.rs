@@ -1,16 +1,35 @@
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use anyhow::Result;
-use futures::{FutureExt as _, channel::oneshot, select};
-use gpui::{
-    App, AsyncApp, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, ParentElement as _,
-    Render, SharedString, Task, WeakEntity,
-};
-use remote::{ConnectionIdentifier, RemoteClient, RemoteConnectionOptions};
-use ui::{
-    ActiveTheme, CommonAnimationExt, Context, InteractiveElement, KeyBinding, ListItem, prelude::*,
-};
-use workspace::{DismissDecision, ModalView, Workspace};
+use futures::FutureExt as _;
+use futures::channel::oneshot;
+use futures::select;
+use gpui::App;
+use gpui::AsyncApp;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::ParentElement as _;
+use gpui::Render;
+use gpui::SharedString;
+use gpui::Task;
+use gpui::WeakEntity;
+use remote::ConnectionIdentifier;
+use remote::RemoteClient;
+use remote::RemoteConnectionOptions;
+use ui::ActiveTheme;
+use ui::CommonAnimationExt;
+use ui::Context;
+use ui::InteractiveElement;
+use ui::KeyBinding;
+use ui::ListItem;
+use ui::prelude::*;
+use workspace::DismissDecision;
+use workspace::ModalView;
+use workspace::Workspace;
 
 pub struct RemoteConnectionPrompt {
     connection_string: SharedString,
@@ -63,31 +82,28 @@ impl RemoteConnectionPrompt {
 
 impl Render for RemoteConnectionPrompt {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        v_flex()
-            .p_2()
-            .size_full()
-            .when_some(self.status_message.clone(), |this, status_message| {
-                this.child(
-                    h_flex()
-                        .min_w_0()
-                        .w_full()
-                        .mt_1()
-                        .gap_1()
-                        .child(
-                            Icon::new(IconName::LoadCircle)
-                                .size(IconSize::Small)
-                                .color(Color::Muted)
-                                .with_rotate_animation(2),
-                        )
-                        .child(
-                            Label::new(format!("{}…", status_message))
-                                .size(LabelSize::Small)
-                                .color(Color::Muted)
-                                .truncate()
-                                .flex_1(),
-                        ),
-                )
-            })
+        v_flex().p_2().size_full().when_some(self.status_message.clone(), |this, status_message| {
+            this.child(
+                h_flex()
+                    .min_w_0()
+                    .w_full()
+                    .mt_1()
+                    .gap_1()
+                    .child(
+                        Icon::new(IconName::LoadCircle)
+                            .size(IconSize::Small)
+                            .color(Color::Muted)
+                            .with_rotate_animation(2),
+                    )
+                    .child(
+                        Label::new(format!("{}…", status_message))
+                            .size(LabelSize::Small)
+                            .color(Color::Muted)
+                            .truncate()
+                            .flex_1(),
+                    ),
+            )
+        })
     }
 }
 
@@ -99,13 +115,10 @@ impl RemoteConnectionModal {
         cx: &mut Context<Self>,
     ) -> Self {
         let (connection_string, nickname) = match connection_options {
-            RemoteConnectionOptions::Ssh(options) => {
-                (options.connection_string(), options.nickname.clone())
-            }
+            RemoteConnectionOptions::Ssh(options) => (options.connection_string(), options.nickname.clone()),
         };
         Self {
-            prompt: cx
-                .new(|cx| RemoteConnectionPrompt::new(connection_string, nickname, window, cx)),
+            prompt: cx.new(|cx| RemoteConnectionPrompt::new(connection_string, nickname, window, cx)),
             finished: false,
             paths,
         }
@@ -117,10 +130,7 @@ impl RemoteConnectionModal {
     }
 
     fn dismiss(&mut self, _: &menu::Cancel, _: &mut Window, cx: &mut Context<Self>) {
-        if let Some(tx) = self
-            .prompt
-            .update(cx, |prompt, _cx| prompt.cancellation.take())
-        {
+        if let Some(tx) = self.prompt.update(cx, |prompt, _cx| prompt.cancellation.take()) {
             log::debug!("cancelling remote connection");
             tx.send(()).ok();
         }
@@ -166,18 +176,10 @@ impl RenderOnce for SshConnectionHeader {
                             .text_ellipsis()
                             .child(Headline::new(main_label).size(HeadlineSize::XSmall)),
                     )
-                    .children(
-                        meta_label.map(|label| {
-                            Label::new(label).color(Color::Muted).size(LabelSize::Small)
-                        }),
-                    )
-                    .child(div().overflow_x_hidden().text_ellipsis().children(
-                        self.paths.into_iter().map(|path| {
-                            Label::new(path.to_string_lossy().into_owned())
-                                .size(LabelSize::Small)
-                                .color(Color::Muted)
-                        }),
-                    )),
+                    .children(meta_label.map(|label| Label::new(label).color(Color::Muted).size(LabelSize::Small)))
+                    .child(div().overflow_x_hidden().text_ellipsis().children(self.paths.into_iter().map(|path| {
+                        Label::new(path.to_string_lossy().into_owned()).size(LabelSize::Small).color(Color::Muted)
+                    }))),
             )
     }
 }
@@ -198,14 +200,7 @@ impl Render for RemoteConnectionModal {
             .key_context("SshConnectionModal")
             .track_focus(&self.focus_handle(cx))
             .on_action(cx.listener(Self::dismiss))
-            .child(
-                SshConnectionHeader {
-                    paths: self.paths.clone(),
-                    connection_string,
-                    nickname,
-                }
-                .render(window, cx),
-            )
+            .child(SshConnectionHeader { paths: self.paths.clone(), connection_string, nickname }.render(window, cx))
             .child(
                 div()
                     .w_full()
@@ -242,11 +237,7 @@ impl Focusable for RemoteConnectionModal {
 impl EventEmitter<DismissEvent> for RemoteConnectionModal {}
 
 impl ModalView for RemoteConnectionModal {
-    fn on_before_dismiss(
-        &mut self,
-        _window: &mut Window,
-        _: &mut Context<Self>,
-    ) -> DismissDecision {
+    fn on_before_dismiss(&mut self, _window: &mut Window, _: &mut Context<Self>) -> DismissDecision {
         DismissDecision::Dismiss(self.finished)
     }
 
@@ -261,7 +252,7 @@ pub struct RemoteClientDelegate {
 }
 
 impl RemoteClientDelegate {
-    pub fn new(ui: WeakEntity<RemoteConnectionPrompt>) -> Self {
+    pub const fn new(ui: WeakEntity<RemoteConnectionPrompt>) -> Self {
         Self { ui }
     }
 }
@@ -273,7 +264,7 @@ impl remote::RemoteClientDelegate for RemoteClientDelegate {
 }
 
 impl RemoteClientDelegate {
-    fn update_status(&self, status: Option<&str>, cx: &mut AsyncApp) {
+    fn update_status(&self, status: Option<&str>, cx: &AsyncApp) {
         cx.update(|cx| {
             self.ui
                 .update(cx, |modal, cx| {
@@ -307,18 +298,10 @@ pub fn connect_with_modal(
             RemoteConnectionModal::new(&connection_options, Vec::new(), window, cx)
         });
         let Some(modal) = workspace.active_modal::<RemoteConnectionModal>(cx) else {
-            return Task::ready(Err(anyhow::anyhow!(
-                "Failed to open remote connection dialog"
-            )));
+            return Task::ready(Err(anyhow::anyhow!("Failed to open remote connection dialog")));
         };
         let prompt = modal.read(cx).prompt.clone();
-        connect(
-            ConnectionIdentifier::setup(),
-            connection_options,
-            prompt,
-            window,
-            cx,
-        )
+        connect(ConnectionIdentifier::setup(), connection_options, prompt, window, cx)
     })
 }
 
@@ -352,16 +335,7 @@ pub fn connect_reusing_pool(
         let connection = remote::connect(connection_options, delegate.clone(), cx).await?;
 
         let (_cancel_guard, cancel_rx) = oneshot::channel::<()>();
-        cx.update(|cx| {
-            RemoteClient::new(
-                ConnectionIdentifier::setup(),
-                connection,
-                cancel_rx,
-                delegate,
-                cx,
-            )
-        })
-        .await
+        cx.update(|cx| RemoteClient::new(ConnectionIdentifier::setup(), connection, cancel_rx, delegate, cx)).await
     })
 }
 
@@ -392,7 +366,6 @@ pub fn connect(
             result = connection.fuse() => result,
         }?;
 
-        cx.update(|cx| remote::RemoteClient::new(unique_identifier, connection, rx, delegate, cx))
-            .await
+        cx.update(|cx| remote::RemoteClient::new(unique_identifier, connection, rx, delegate, cx)).await
     })
 }

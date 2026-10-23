@@ -50,11 +50,11 @@ struct CapabilityRegistrationChange {
 }
 
 impl CapabilityRegistrationChange {
-    fn applicability_may_have_changed(self) -> bool {
+    const fn applicability_may_have_changed(self) -> bool {
         self.active_capability_changed || self.text_document_registration_changed
     }
 
-    fn ordered_capability_may_have_changed(self) -> bool {
+    const fn ordered_capability_may_have_changed(self) -> bool {
         self.active_capability_changed || self.registration_changed
     }
 }
@@ -653,8 +653,8 @@ impl LspStore {
                 }
                 "textDocument/codeLens" => {
                     let document_selector = parse_text_document_registration(reg.register_options.as_ref())?;
-                    if let Some(options) = reg.register_options.map(serde_json::from_value).transpose()? {
-                        if self
+                    if let Some(options) = reg.register_options.map(serde_json::from_value).transpose()?
+                        && self
                             .register_dynamic_text_document_capability(
                                 &server,
                                 &reg.method,
@@ -665,9 +665,8 @@ impl LspStore {
                                 |capabilities| &mut capabilities.code_lens_provider,
                             )?
                             .applicability_may_have_changed()
-                        {
-                            self.refresh_code_lens(Some(server_id), cx);
-                        }
+                    {
+                        self.refresh_code_lens(Some(server_id), cx);
                     }
                 }
                 "textDocument/diagnostic" => {
@@ -764,8 +763,8 @@ impl LspStore {
                 }
                 "textDocument/documentLink" => {
                     let document_selector = parse_text_document_registration(reg.register_options.as_ref())?;
-                    if let Some(caps) = reg.register_options.map(serde_json::from_value).transpose()? {
-                        if self
+                    if let Some(caps) = reg.register_options.map(serde_json::from_value).transpose()?
+                        && self
                             .register_dynamic_text_document_capability(
                                 &server,
                                 &reg.method,
@@ -776,9 +775,8 @@ impl LspStore {
                                 |capabilities| &mut capabilities.document_link_provider,
                             )?
                             .applicability_may_have_changed()
-                        {
-                            self.refresh_document_links(Some(server_id), cx);
-                        }
+                    {
+                        self.refresh_document_links(Some(server_id), cx);
                     }
                 }
                 "textDocument/semanticTokens" => {
@@ -787,8 +785,7 @@ impl LspStore {
                         .register_options
                         .map(serde_json::from_value::<lsp::SemanticTokensRegistrationOptions>)
                         .transpose()?
-                    {
-                        if self
+                        && self
                             .register_dynamic_text_document_capability(
                                 &server,
                                 &reg.method,
@@ -799,11 +796,10 @@ impl LspStore {
                                 |capabilities| &mut capabilities.semantic_tokens_provider,
                             )?
                             .ordered_capability_may_have_changed()
-                        {
-                            // Re-query already-open buffers, which would otherwise keep
-                            // tree-sitter-only highlighting until edited.
-                            self.refresh_semantic_tokens(server_id, cx);
-                        }
+                    {
+                        // Re-query already-open buffers, which would otherwise keep
+                        // tree-sitter-only highlighting until edited.
+                        self.refresh_semantic_tokens(server_id, cx);
                     }
                 }
                 _ => log::warn!("unhandled capability registration: {reg:?}"),
@@ -1073,9 +1069,7 @@ fn take_text_document_sync_options(capabilities: &mut lsp::ServerCapabilities) -
     match capabilities.text_document_sync.take() {
         Some(lsp::TextDocumentSyncCapability::Options(sync_options)) => sync_options,
         Some(lsp::TextDocumentSyncCapability::Kind(sync_kind)) => {
-            let mut sync_options = lsp::TextDocumentSyncOptions::default();
-            sync_options.change = Some(sync_kind);
-            sync_options
+            lsp::TextDocumentSyncOptions { change: Some(sync_kind), ..Default::default() }
         }
         None => lsp::TextDocumentSyncOptions::default(),
     }

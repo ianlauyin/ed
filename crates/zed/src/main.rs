@@ -5,55 +5,76 @@ mod zed;
 // Ensure the binary name stays in sync with APP_NAME so that the paths used
 // at runtime (data dir, config dir, etc.) match what the binary is called.
 const _: () = assert!(
-    paths::APP_NAME
-        .as_bytes()
-        .eq_ignore_ascii_case(env!("CARGO_BIN_NAME").as_bytes()),
+    paths::APP_NAME.as_bytes().eq_ignore_ascii_case(env!("CARGO_BIN_NAME").as_bytes()),
     "paths::APP_NAME must match the binary name. \
      Update APP_NAME in crates/paths/src/paths.rs when renaming the binary.",
 );
 
+use std::cell::RefCell;
+use std::env;
+use std::io::IsTerminal;
+use std::io::{self};
+use std::path::Path;
+use std::path::PathBuf;
+use std::process;
+use std::rc::Rc;
+use std::sync::Arc;
+use std::sync::LazyLock;
+use std::time::Duration;
+
 use anyhow::Result;
+use assets::Assets;
 use clap::Parser;
 use cli::FORCE_CLI_MODE_ENV_VAR_NAME;
 use collections::HashMap;
 use db::kvp::KeyValueStore;
 use editor::Editor;
-use fs::{Fs, RealFs};
-use futures::{FutureExt, StreamExt, channel::oneshot};
-use gpui::{App, AppContext, Application, AsyncApp, QuitMode, Task, TaskExt, UpdateGlobal as _};
-use gpui_platform;
-
+use fs::Fs;
+use fs::RealFs;
+use futures::FutureExt;
+use futures::StreamExt;
+use futures::channel::oneshot;
+use gpui::App;
+use gpui::AppContext;
+use gpui::Application;
+use gpui::AsyncApp;
+use gpui::QuitMode;
+use gpui::Task;
+use gpui::TaskExt;
+use gpui::UpdateGlobal as _;
 use gpui_tokio::Tokio;
 use language::LanguageRegistry;
-use remote::RemoteConnectionOptions;
-
-use assets::Assets;
 use project::trusted_worktrees;
-use recent_projects::{RemoteSettings, open_remote_project};
-use session::{AppSession, Session};
-use settings::{Settings, SettingsStore};
+use recent_projects::RemoteSettings;
+use recent_projects::open_remote_project;
+use remote::RemoteConnectionOptions;
+use session::AppSession;
+use session::Session;
+use settings::Settings;
+use settings::SettingsStore;
 use settings_content::app_metadata::AppVersion;
-use std::{
-    cell::RefCell,
-    env,
-    io::{self, IsTerminal},
-    path::{Path, PathBuf},
-    process,
-    rc::Rc,
-    sync::{Arc, LazyLock},
-    time::Duration,
-};
-use theme::{ActiveTheme, GlobalTheme};
+use theme::ActiveTheme;
+use theme::GlobalTheme;
 use util::ResultExt;
 use uuid::Uuid;
-use workspace::{
-    AppState, MultiWorkspace, SerializedWorkspaceLocation, SessionWorkspace, Toast,
-    WorkspaceSettings, WorkspaceStore, notifications::NotificationId, restore_multiworkspace,
-};
-use zed::{
-    OpenListener, OpenRequest, RawOpenRequest, build_window_options, derive_paths_with_position,
-    handle_cli_connection, initialize_keymap, initialize_workspace, open_paths_with_positions,
-};
+use workspace::AppState;
+use workspace::MultiWorkspace;
+use workspace::SerializedWorkspaceLocation;
+use workspace::SessionWorkspace;
+use workspace::Toast;
+use workspace::WorkspaceSettings;
+use workspace::WorkspaceStore;
+use workspace::notifications::NotificationId;
+use workspace::restore_multiworkspace;
+use zed::OpenListener;
+use zed::OpenRequest;
+use zed::RawOpenRequest;
+use zed::build_window_options;
+use zed::derive_paths_with_position;
+use zed::handle_cli_connection;
+use zed::initialize_keymap;
+use zed::initialize_workspace;
+use zed::open_paths_with_positions;
 
 use crate::zed::OpenRequestKind;
 
@@ -62,8 +83,7 @@ use crate::zed::OpenRequestKind;
 static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 fn build_application() -> Application {
-    Application::with_platform(gpui_platform::current_platform(false))
-        .with_quit_mode(QuitMode::LastWindowClosed)
+    Application::with_platform(gpui_platform::current_platform(false)).with_quit_mode(QuitMode::LastWindowClosed)
 }
 
 fn files_not_created_on_launch(errors: HashMap<io::ErrorKind, Vec<&Path>>) {
@@ -94,36 +114,27 @@ fn files_not_created_on_launch(errors: HashMap<io::ErrorKind, Vec<&Path>>) {
         .collect::<Vec<_>>().join("\n\n");
 
     eprintln!("{message}: {error_details}");
-    build_application()
-        .with_quit_mode(QuitMode::Explicit)
-        .run(move |cx| {
-            if let Ok(window) = cx.open_window(gpui::WindowOptions::default(), |_, cx| {
-                cx.new(|_| gpui::Empty)
-            }) {
-                window
-                    .update(cx, |_, window, cx| {
-                        let response = window.prompt(
-                            gpui::PromptLevel::Critical,
-                            message,
-                            Some(&error_details),
-                            &["Exit"],
-                            cx,
-                        );
+    build_application().with_quit_mode(QuitMode::Explicit).run(move |cx| {
+        if let Ok(window) = cx.open_window(gpui::WindowOptions::default(), |_, cx| cx.new(|_| gpui::Empty)) {
+            window
+                .update(cx, |_, window, cx| {
+                    let response =
+                        window.prompt(gpui::PromptLevel::Critical, message, Some(&error_details), &["Exit"], cx);
 
-                        cx.spawn_in(window, async move |_, cx| {
-                            response.await?;
-                            cx.update(|_, cx| cx.quit())
-                        })
-                        .detach_and_log_err(cx);
+                    cx.spawn_in(window, async move |_, cx| {
+                        response.await?;
+                        cx.update(|_, cx| cx.quit())
                     })
-                    .log_err();
-            } else {
-                fail_to_open_window(anyhow::anyhow!("{message}: {error_details}"), cx)
-            }
-        })
+                    .detach_and_log_err(cx);
+                })
+                .log_err();
+        } else {
+            fail_to_open_window(anyhow::anyhow!("{message}: {error_details}"), cx)
+        }
+    })
 }
 
-fn fail_to_open_window_async(e: anyhow::Error, cx: &mut AsyncApp) {
+fn fail_to_open_window_async(e: anyhow::Error, cx: &AsyncApp) {
     cx.update(|cx| fail_to_open_window(e, cx));
 }
 
@@ -146,10 +157,7 @@ fn main() {
 
     let restart_arguments = if let Some(directory) = args.user_data_dir.as_deref() {
         let directory = paths::set_custom_data_dir(directory);
-        vec![
-            std::ffi::OsString::from("--user-data-dir"),
-            directory.as_os_str().to_owned(),
-        ]
+        vec![std::ffi::OsString::from("--user-data-dir"), directory.as_os_str().to_owned()]
     } else {
         Vec::new()
     };
@@ -186,17 +194,12 @@ fn main() {
 
     log::info!("========== starting zed version {app_version} ==========");
 
-    let app = build_application()
-        .with_assets(Assets)
-        .with_restart_arguments(restart_arguments);
+    let app = build_application().with_assets(Assets).with_restart_arguments(restart_arguments);
 
     let app_db = db::AppDatabase::new();
 
     let session_id = Uuid::new_v4().to_string();
-    let session = app.background_executor().spawn(Session::new(
-        session_id,
-        KeyValueStore::from_app_db(&app_db),
-    ));
+    let session = app.background_executor().spawn(Session::new(session_id, KeyValueStore::from_app_db(&app_db)));
     let (open_listener, mut open_rx) = OpenListener::new();
 
     let failed_single_instance_check = if cfg!(debug_assertions) {
@@ -223,13 +226,7 @@ fn main() {
 
     app.on_open_urls({
         let open_listener = open_listener.clone();
-        move |urls| {
-            open_listener.open(RawOpenRequest {
-                urls,
-                diff_paths: Vec::new(),
-                ..Default::default()
-            })
-        }
+        move |urls| open_listener.open(RawOpenRequest { urls, diff_paths: Vec::new(), ..Default::default() })
     });
     app.on_reopen(move |cx| {
         if let Some(app_state) = AppState::try_global(cx) {
@@ -263,12 +260,8 @@ fn main() {
         zlog_settings::init(cx);
         initialize_keymap(cx);
 
-        let user_agent = format!(
-            "ed/{} ({}; {})",
-            AppVersion::global(cx),
-            std::env::consts::OS,
-            std::env::consts::ARCH
-        );
+        let user_agent =
+            format!("ed/{} ({}; {})", AppVersion::global(cx), std::env::consts::OS, std::env::consts::ARCH);
         let http = gpui::reqwest::Client::builder()
             .user_agent(user_agent)
             .connect_timeout(Duration::from_secs(10))
@@ -286,7 +279,7 @@ fn main() {
 
         languages::init(languages.clone(), fs.clone(), cx);
 
-        let workspace_store = cx.new(|cx| WorkspaceStore::new(cx));
+        let workspace_store = cx.new(WorkspaceStore::new);
 
         zed::init(cx);
 
@@ -355,24 +348,14 @@ fn main() {
             move |cx| {
                 for &mut window in cx.windows().iter_mut() {
                     let background_appearance = cx.theme().window_background_appearance();
-                    window
-                        .update(cx, |_, window, _| {
-                            window.set_background_appearance(background_appearance)
-                        })
-                        .ok();
+                    window.update(cx, |_, window, _| window.set_background_appearance(background_appearance)).ok();
                 }
 
-                cx.set_text_rendering_mode(
-                    match WorkspaceSettings::get_global(cx).text_rendering_mode {
-                        settings::TextRenderingMode::PlatformDefault => {
-                            gpui::TextRenderingMode::PlatformDefault
-                        }
-                        settings::TextRenderingMode::Subpixel => gpui::TextRenderingMode::Subpixel,
-                        settings::TextRenderingMode::Grayscale => {
-                            gpui::TextRenderingMode::Grayscale
-                        }
-                    },
-                );
+                cx.set_text_rendering_mode(match WorkspaceSettings::get_global(cx).text_rendering_mode {
+                    settings::TextRenderingMode::PlatformDefault => gpui::TextRenderingMode::PlatformDefault,
+                    settings::TextRenderingMode::Subpixel => gpui::TextRenderingMode::Subpixel,
+                    settings::TextRenderingMode::Grayscale => gpui::TextRenderingMode::Grayscale,
+                });
             }
         })
         .detach();
@@ -392,46 +375,25 @@ fn main() {
 
         cx.activate(true);
 
-        let urls: Vec<_> = args
-            .paths_or_urls
-            .iter()
-            .map(|arg| parse_url_arg(arg, cx))
-            .collect();
+        let urls: Vec<_> = args.paths_or_urls.iter().map(|arg| parse_url_arg(arg, cx)).collect();
 
         // Check if any diff paths are directories to determine diff_all mode
-        let diff_all_mode = args
-            .diff
-            .chunks(2)
-            .any(|pair| Path::new(&pair[0]).is_dir() || Path::new(&pair[1]).is_dir());
+        let diff_all_mode =
+            args.diff.chunks(2).any(|pair| Path::new(&pair[0]).is_dir() || Path::new(&pair[1]).is_dir());
 
-        let diff_paths: Vec<[String; 2]> = args
-            .diff
-            .chunks(2)
-            .map(|chunk| [chunk[0].clone(), chunk[1].clone()])
-            .collect();
+        let diff_paths: Vec<[String; 2]> =
+            args.diff.chunks(2).map(|chunk| [chunk[0].clone(), chunk[1].clone()]).collect();
 
         if !urls.is_empty() || !diff_paths.is_empty() {
-            open_listener.open(RawOpenRequest {
-                urls,
-                diff_paths,
-                diff_all: diff_all_mode,
-                ..Default::default()
-            })
+            open_listener.open(RawOpenRequest { urls, diff_paths, diff_all: diff_all_mode, ..Default::default() })
         }
 
         let (current_session_id, last_session_id) = {
             let session = app_state.session.read(cx);
-            (
-                session.id().to_owned(),
-                session.last_session_id().map(|id| id.to_owned()),
-            )
+            (session.id().to_owned(), session.last_session_id().map(|id| id.to_owned()))
         };
 
-        let restore_task = match open_rx
-            .try_recv()
-            .ok()
-            .and_then(|request| OpenRequest::parse(request, cx).log_err())
-        {
+        let restore_task = match open_rx.try_recv().ok().and_then(|request| OpenRequest::parse(request, cx).log_err()) {
             Some(request) => {
                 handle_open_request(request, app_state.clone(), cx);
                 Task::ready(())
@@ -462,17 +424,12 @@ fn main() {
             let restore_finished = restore_finished.clone();
             async move |_cx| {
                 restore_finished.await;
-                db.garbage_collect_workspaces(
-                    fs.as_ref(),
-                    &current_session_id,
-                    last_session_id.as_deref(),
-                )
-                .await
+                db.garbage_collect_workspaces(fs.as_ref(), &current_session_id, last_session_id.as_deref()).await
             }
         })
         .detach_and_log_err(cx);
 
-        let app_state = app_state.clone();
+        let app_state = app_state;
 
         cx.spawn(async move |cx| {
             let _first_window_subscription = _first_window_subscription;
@@ -496,12 +453,11 @@ fn main() {
     });
 }
 
-fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut App) {
+fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &App) {
     if let Some(kind) = request.kind {
         match kind {
             OpenRequestKind::CliConnection(connection) => {
-                cx.spawn(async move |cx| handle_cli_connection(connection, app_state, cx).await)
-                    .detach();
+                cx.spawn(async move |cx| handle_cli_connection(connection, app_state, cx).await).detach();
             }
         }
 
@@ -522,14 +478,10 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
 
     let mut task = None;
     if !request.open_paths.is_empty() || !request.diff_paths.is_empty() {
-        let base_open_options = zed::open_options_for_request(
-            request.open_behavior,
-            &workspace::SerializedWorkspaceLocation::Local,
-            cx,
-        );
+        let base_open_options =
+            zed::open_options_for_request(request.open_behavior, &workspace::SerializedWorkspaceLocation::Local, cx);
         task = Some(cx.spawn(async move |cx| {
-            let paths_with_position =
-                derive_paths_with_position(app_state.fs.as_ref(), request.open_paths).await;
+            let paths_with_position = derive_paths_with_position(app_state.fs.as_ref(), request.open_paths).await;
             let (_window, results) = open_paths_with_positions(
                 &paths_with_position,
                 &request.diff_paths,
@@ -558,34 +510,21 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &mut 
     }
 }
 
-pub(crate) async fn restore_or_create_workspace(
-    app_state: Arc<AppState>,
-    cx: &mut AsyncApp,
-) -> Result<()> {
+pub(crate) async fn restore_or_create_workspace(app_state: Arc<AppState>, cx: &mut AsyncApp) -> Result<()> {
     if let Some(multi_workspaces) = restorable_workspaces(cx, &app_state).await {
         let mut error_count = 0;
         for multi_workspace in multi_workspaces {
             let result = match &multi_workspace.active_workspace.location {
                 SerializedWorkspaceLocation::Local => {
-                    restore_multiworkspace(multi_workspace, app_state.clone(), cx)
-                        .await
-                        .map(|_| ())
+                    restore_multiworkspace(multi_workspace, app_state.clone(), cx).await.map(|_| ())
                 }
                 SerializedWorkspaceLocation::Remote(connection_options) => {
                     let mut connection_options = connection_options.clone();
                     let RemoteConnectionOptions::Ssh(options) = &mut connection_options;
-                    cx.update(|cx| {
-                        RemoteSettings::get_global(cx)
-                            .fill_connection_options_from_settings(options)
-                    });
+                    cx.update(|cx| RemoteSettings::get_global(cx).fill_connection_options_from_settings(options));
 
-                    let paths = multi_workspace
-                        .active_workspace
-                        .paths
-                        .paths()
-                        .iter()
-                        .map(PathBuf::from)
-                        .collect::<Vec<_>>();
+                    let paths =
+                        multi_workspace.active_workspace.paths.paths().iter().map(PathBuf::from).collect::<Vec<_>>();
                     let state = multi_workspace.state.clone();
                     async {
                         let window = open_remote_project(
@@ -596,13 +535,7 @@ pub(crate) async fn restore_or_create_workspace(
                             cx,
                         )
                         .await?;
-                        workspace::apply_restored_multiworkspace_state(
-                            window,
-                            &state,
-                            app_state.fs.clone(),
-                            cx,
-                        )
-                        .await;
+                        workspace::apply_restored_multiworkspace_state(window, &state, app_state.fs.clone(), cx).await;
                         Ok::<(), anyhow::Error>(())
                     }
                     .await
@@ -619,10 +552,7 @@ pub(crate) async fn restore_or_create_workspace(
             let message = if error_count == 1 {
                 "Failed to restore 1 workspace. Check logs for details.".to_string()
             } else {
-                format!(
-                    "Failed to restore {} workspaces. Check logs for details.",
-                    error_count
-                )
+                format!("Failed to restore {} workspaces. Check logs for details.", error_count)
             };
 
             // Try to find an active workspace to show the toast
@@ -633,10 +563,7 @@ pub(crate) async fn restore_or_create_workspace(
                     multi_workspace
                         .update(cx, |multi_workspace, _, cx| {
                             multi_workspace.workspace().update(cx, |workspace, cx| {
-                                workspace.show_toast(
-                                    Toast::new(NotificationId::unique::<()>(), message.clone()),
-                                    cx,
-                                )
+                                workspace.show_toast(Toast::new(NotificationId::unique::<()>(), message.clone()), cx)
                             });
                         })
                         .ok();
@@ -650,17 +577,9 @@ pub(crate) async fn restore_or_create_workspace(
             if !toast_shown {
                 log::error!("All workspace restorations failed. Opening fallback empty workspace.");
                 cx.update(|cx| {
-                    workspace::open_new(
-                        Default::default(),
-                        app_state.clone(),
-                        cx,
-                        |workspace, _window, cx| {
-                            workspace.show_toast(
-                                Toast::new(NotificationId::unique::<()>(), message),
-                                cx,
-                            );
-                        },
-                    )
+                    workspace::open_new(Default::default(), app_state.clone(), cx, |workspace, _window, cx| {
+                        workspace.show_toast(Toast::new(NotificationId::unique::<()>(), message), cx);
+                    })
                 })
                 .await?;
             }
@@ -672,31 +591,7 @@ pub(crate) async fn restore_or_create_workspace(
         // check, Zed would exit silently.
         if cx.update(|cx| cx.windows().is_empty()) {
             cx.update(|cx| {
-                workspace::open_new(
-                    Default::default(),
-                    app_state.clone(),
-                    cx,
-                    |workspace, window, cx| {
-                        let restore_on_startup =
-                            WorkspaceSettings::get_global(cx).restore_on_startup;
-                        match restore_on_startup {
-                            workspace::RestoreOnStartupBehavior::Launchpad => {}
-                            _ => {
-                                Editor::new_file(workspace, &Default::default(), window, cx);
-                            }
-                        }
-                    },
-                )
-            })
-            .await?;
-        }
-    } else {
-        cx.update(|cx| {
-            workspace::open_new(
-                Default::default(),
-                app_state,
-                cx,
-                |workspace, window, cx| {
+                workspace::open_new(Default::default(), app_state.clone(), cx, |workspace, window, cx| {
                     let restore_on_startup = WorkspaceSettings::get_global(cx).restore_on_startup;
                     match restore_on_startup {
                         workspace::RestoreOnStartupBehavior::Launchpad => {}
@@ -704,8 +599,21 @@ pub(crate) async fn restore_or_create_workspace(
                             Editor::new_file(workspace, &Default::default(), window, cx);
                         }
                     }
-                },
-            )
+                })
+            })
+            .await?;
+        }
+    } else {
+        cx.update(|cx| {
+            workspace::open_new(Default::default(), app_state, cx, |workspace, window, cx| {
+                let restore_on_startup = WorkspaceSettings::get_global(cx).restore_on_startup;
+                match restore_on_startup {
+                    workspace::RestoreOnStartupBehavior::Launchpad => {}
+                    _ => {
+                        Editor::new_file(workspace, &Default::default(), window, cx);
+                    }
+                }
+            })
         })
         .await?;
     }
@@ -714,7 +622,7 @@ pub(crate) async fn restore_or_create_workspace(
 }
 
 async fn restorable_workspaces(
-    cx: &mut AsyncApp,
+    cx: &AsyncApp,
     app_state: &Arc<AppState>,
 ) -> Option<Vec<workspace::SerializedMultiWorkspace>> {
     let locations = restorable_workspace_locations(cx, app_state).await?;
@@ -722,47 +630,30 @@ async fn restorable_workspaces(
 }
 
 pub(crate) async fn restorable_workspace_locations(
-    cx: &mut AsyncApp,
+    cx: &AsyncApp,
     app_state: &Arc<AppState>,
 ) -> Option<Vec<SessionWorkspace>> {
-    let (mut restore_behavior, db) = cx.update(|cx| {
-        (
-            WorkspaceSettings::get(None, cx).restore_on_startup,
-            workspace::WorkspaceDb::global(cx),
-        )
-    });
+    let (mut restore_behavior, db) =
+        cx.update(|cx| (WorkspaceSettings::get(None, cx).restore_on_startup, workspace::WorkspaceDb::global(cx)));
 
     let session_handle = app_state.session.clone();
     let (last_session_id, last_session_window_stack) = cx.update(|cx| {
         let session = session_handle.read(cx);
 
-        (
-            session.last_session_id().map(|id| id.to_string()),
-            session.last_session_window_stack(),
-        )
+        (session.last_session_id().map(|id| id.to_string()), session.last_session_window_stack())
     });
 
-    if last_session_id.is_none()
-        && matches!(
-            restore_behavior,
-            workspace::RestoreOnStartupBehavior::LastSession
-        )
-    {
+    if last_session_id.is_none() && matches!(restore_behavior, workspace::RestoreOnStartupBehavior::LastSession) {
         restore_behavior = workspace::RestoreOnStartupBehavior::LastWorkspace;
     }
 
     match restore_behavior {
         workspace::RestoreOnStartupBehavior::LastWorkspace => {
-            workspace::last_opened_workspace_location(&db, app_state.fs.as_ref())
-                .await
-                .map(|(workspace_id, location, paths)| {
-                    vec![SessionWorkspace {
-                        workspace_id,
-                        location,
-                        paths,
-                        window_id: None,
-                    }]
-                })
+            workspace::last_opened_workspace_location(&db, app_state.fs.as_ref()).await.map(
+                |(workspace_id, location, paths)| {
+                    vec![SessionWorkspace { workspace_id, location, paths, window_id: None }]
+                },
+            )
         }
         workspace::RestoreOnStartupBehavior::LastSession => {
             if let Some(last_session_id) = last_session_id {
@@ -799,9 +690,7 @@ fn install_panic_hook() {
     std::panic::set_hook(Box::new(move |info| {
         let backtrace = std::backtrace::Backtrace::force_capture();
         let message = info.payload_as_str().unwrap_or("Box<Any>");
-        let location = info
-            .location()
-            .map_or_else(|| "<unknown>".to_owned(), |location| location.to_string());
+        let location = info.location().map_or_else(|| "<unknown>".to_owned(), |location| location.to_string());
         let thread = std::thread::current();
         let thread_name = thread.name().unwrap_or("<unnamed>");
         log::error!("thread '{thread_name}' panicked at {location}:\n{message}\n{backtrace}");
@@ -812,19 +701,15 @@ fn install_panic_hook() {
 }
 
 fn init_paths() -> HashMap<io::ErrorKind, Vec<&'static Path>> {
-    [
-        paths::config_dir(),
-        paths::database_dir(),
-        paths::logs_dir(),
-        paths::temp_dir(),
-    ]
-    .into_iter()
-    .fold(HashMap::default(), |mut errors, path| {
-        if let Err(e) = std::fs::create_dir_all(path) {
-            errors.entry(e.kind()).or_insert_with(Vec::new).push(path);
-        }
-        errors
-    })
+    [paths::config_dir(), paths::database_dir(), paths::logs_dir(), paths::temp_dir()].into_iter().fold(
+        HashMap::default(),
+        |mut errors, path| {
+            if let Err(e) = std::fs::create_dir_all(path) {
+                errors.entry(e.kind()).or_insert_with(Vec::new).push(path);
+            }
+            errors
+        },
+    )
 }
 
 pub(crate) static FORCE_CLI_MODE: LazyLock<bool> = LazyLock::new(|| {
@@ -873,10 +758,7 @@ fn parse_url_arg(arg: &str, _cx: &App) -> String {
     match std::fs::canonicalize(Path::new(&arg)) {
         Ok(path) => format!("file://{}", path.display()),
         Err(_) => {
-            if arg.starts_with("file://")
-                || arg.starts_with("ed-cli://")
-                || arg.starts_with("ssh://")
-            {
+            if arg.starts_with("file://") || arg.starts_with("ed-cli://") || arg.starts_with("ssh://") {
                 arg.into()
             } else {
                 format!("file://{arg}")
@@ -886,7 +768,7 @@ fn parse_url_arg(arg: &str, _cx: &App) -> String {
 }
 
 #[cfg(debug_assertions)]
-fn watch_languages(fs: Arc<dyn fs::Fs>, languages: Arc<LanguageRegistry>, cx: &mut App) {
+fn watch_languages(fs: Arc<dyn fs::Fs>, languages: Arc<LanguageRegistry>, cx: &App) {
     use std::time::Duration;
 
     cx.background_spawn(async move {
@@ -909,9 +791,7 @@ fn watch_languages(fs: Arc<dyn fs::Fs>, languages: Arc<LanguageRegistry>, cx: &m
         }
 
         while let Some(event) = events.next().await {
-            let has_language_file = event
-                .iter()
-                .any(|event| event.path.extension().is_some_and(|ext| ext == "scm"));
+            let has_language_file = event.iter().any(|event| event.path.extension().is_some_and(|ext| ext == "scm"));
             if has_language_file {
                 languages.reload();
             }

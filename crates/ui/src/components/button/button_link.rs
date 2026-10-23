@@ -1,6 +1,9 @@
-use gpui::{IntoElement, Window, prelude::*};
+use gpui::IntoElement;
+use gpui::Window;
+use gpui::prelude::*;
 
-use crate::{ButtonLike, prelude::*};
+use crate::ButtonLike;
+use crate::prelude::*;
 
 /// A button that takes an underline to look like a regular web link.
 /// It also contains an arrow icon to communicate the link takes you out of Zed.
@@ -32,17 +35,17 @@ impl ButtonLink {
         }
     }
 
-    pub fn no_icon(mut self, no_icon: bool) -> Self {
+    pub const fn no_icon(mut self, no_icon: bool) -> Self {
         self.no_icon = no_icon;
         self
     }
 
-    pub fn label_size(mut self, label_size: LabelSize) -> Self {
+    pub const fn label_size(mut self, label_size: LabelSize) -> Self {
         self.label_size = label_size;
         self
     }
 
-    pub fn label_color(mut self, label_color: Color) -> Self {
+    pub const fn label_color(mut self, label_color: Color) -> Self {
         self.label_color = label_color;
         self
     }
@@ -57,18 +60,9 @@ impl RenderOnce for ButtonLink {
             .child(
                 h_flex()
                     .gap_0p5()
-                    .child(
-                        Label::new(self.label)
-                            .size(self.label_size)
-                            .color(self.label_color)
-                            .underline(),
-                    )
+                    .child(Label::new(self.label).size(self.label_size).color(self.label_color).underline())
                     .when(!self.no_icon, |this| {
-                        this.child(
-                            Icon::new(IconName::ArrowUpRight)
-                                .size(IconSize::Small)
-                                .color(Color::Muted),
-                        )
+                        this.child(Icon::new(IconName::ArrowUpRight).size(IconSize::Small).color(Color::Muted))
                     }),
             )
             .on_click(move |_, _, cx| cx.open_url(&self.link))

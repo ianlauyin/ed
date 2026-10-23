@@ -1,36 +1,48 @@
-use crate::{
-    RemoteClientDelegate, RemotePlatform,
-    command::{RemoteCommand, home_relative_path, home_stdio_launcher_command},
-    remote_client::{CommandTemplate, Interactive, RemoteConnection, RemoteConnectionOptions},
-    transport::{HOME_DIR_ARGS, HOME_DIR_PROGRAM, parse_home_dir, parse_platform, parse_shell},
-};
-use anyhow::{Context as _, Result, anyhow};
+use std::fmt::Write as _;
+use std::net::IpAddr;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+
+use anyhow::Context as _;
+use anyhow::Result;
+use anyhow::anyhow;
 use async_trait::async_trait;
 use collections::HashMap;
-use futures::{
-    FutureExt as _,
-    channel::mpsc::{Sender, UnboundedReceiver, UnboundedSender},
-    select_biased,
-};
-use gpui::{App, AppContext as _, AsyncApp, Task};
+use futures::FutureExt as _;
+use futures::channel::mpsc::Sender;
+use futures::channel::mpsc::UnboundedReceiver;
+use futures::channel::mpsc::UnboundedSender;
+use futures::select_biased;
+use gpui::App;
+use gpui::AppContext as _;
+use gpui::AsyncApp;
+use gpui::Task;
 use rpc::proto::Envelope;
 pub use settings_content::SshPortForwardOption;
-use std::{
-    fmt::Write as _,
-    net::IpAddr,
-    path::{Path, PathBuf},
-    sync::{
-        Arc,
-        atomic::{AtomicBool, Ordering},
-    },
-    time::Duration,
-};
 use util::command::Stdio;
-use util::{
-    paths::{PathStyle, RemotePathBuf},
-    rel_path::RelPath,
-    shell::ShellKind,
-};
+use util::paths::PathStyle;
+use util::paths::RemotePathBuf;
+use util::rel_path::RelPath;
+use util::shell::ShellKind;
+
+use crate::RemoteClientDelegate;
+use crate::RemotePlatform;
+use crate::command::RemoteCommand;
+use crate::command::home_relative_path;
+use crate::command::home_stdio_launcher_command;
+use crate::remote_client::CommandTemplate;
+use crate::remote_client::Interactive;
+use crate::remote_client::RemoteConnection;
+use crate::remote_client::RemoteConnectionOptions;
+use crate::transport::HOME_DIR_ARGS;
+use crate::transport::HOME_DIR_PROGRAM;
+use crate::transport::parse_home_dir;
+use crate::transport::parse_platform;
+use crate::transport::parse_shell;
 
 /// How long to wait for SSH to establish a connection.
 const SSH_CONNECTION_TIMEOUT: Duration = Duration::from_secs(17);
@@ -61,32 +73,26 @@ impl SshConnectionHost {
             Self::Hostname(hostname) => hostname.clone(),
         }
     }
+}
 
-    pub fn to_string(&self) -> String {
+impl std::fmt::Display for SshConnectionHost {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::IpAddr(ip) => ip.to_string(),
-            Self::Hostname(hostname) => hostname.clone(),
+            Self::IpAddr(ip) => ip.fmt(f),
+            Self::Hostname(hostname) => f.write_str(hostname),
         }
     }
 }
 
 impl From<&str> for SshConnectionHost {
     fn from(value: &str) -> Self {
-        if let Ok(address) = value.parse() {
-            Self::IpAddr(address)
-        } else {
-            Self::Hostname(value.to_string())
-        }
+        if let Ok(address) = value.parse() { Self::IpAddr(address) } else { Self::Hostname(value.to_string()) }
     }
 }
 
 impl From<String> for SshConnectionHost {
     fn from(value: String) -> Self {
-        if let Ok(address) = value.parse() {
-            Self::IpAddr(address)
-        } else {
-            Self::Hostname(value)
-        }
+        if let Ok(address) = value.parse() { Self::IpAddr(address) } else { Self::Hostname(value) }
     }
 }
 
@@ -97,11 +103,7 @@ impl Default for SshConnectionHost {
 }
 
 fn bracket_ipv6(host: &str) -> String {
-    if host.contains(':') && !host.starts_with('[') {
-        format!("[{}]", host)
-    } else {
-        host.to_string()
-    }
+    if host.contains(':') && !host.starts_with('[') { format!("[{}]", host) } else { host.to_string() }
 }
 
 #[derive(Debug, Default, Clone, PartialEq, Eq, Hash, serde::Serialize, serde::Deserialize)]
@@ -169,9 +171,7 @@ impl RemoteEnvironment {
         let shell = parse_shell(fields.next().context("Missing remote shell")?, "sh");
         let platform = parse_platform(fields.next().context("Missing remote platform")?)?;
         let version = fields.next().context("Missing remote OS version")?;
-        let status = fields
-            .next()
-            .context("Missing remote OS version exit status")?;
+        let status = fields.next().context("Missing remote OS version exit status")?;
         let os_version = if status == "0" {
             super::parse_os_version(platform.os, version)
         } else {
@@ -179,11 +179,7 @@ impl RemoteEnvironment {
             None
         };
 
-        Ok(Self {
-            shell,
-            platform,
-            os_version,
-        })
+        Ok(Self { shell, platform, os_version })
     }
 }
 
@@ -219,12 +215,7 @@ impl RemoteConnection for SshRemoteConnection {
         port_forward: Option<(u16, String, u16)>,
         interactive: Interactive,
     ) -> Result<CommandTemplate> {
-        let Self {
-            socket,
-            ssh_shell_kind,
-            ssh_shell,
-            ..
-        } = self;
+        let Self { socket, ssh_shell_kind, ssh_shell, .. } = self;
         let env = socket.envs.clone();
 
         build_command_posix(
@@ -242,14 +233,8 @@ impl RemoteConnection for SshRemoteConnection {
         )
     }
 
-    fn build_stdio_command(
-        &self,
-        mut command: RemoteCommand,
-    ) -> Result<(CommandTemplate, Vec<u8>)> {
-        let remote_binary_path = self
-            .remote_binary_path
-            .as_ref()
-            .context("Remote binary path not set")?;
+    fn build_stdio_command(&self, mut command: RemoteCommand) -> Result<(CommandTemplate, Vec<u8>)> {
+        let remote_binary_path = self.remote_binary_path.as_ref().context("Remote binary path not set")?;
         command.retain_valid_env();
         let mut exec = posix_working_dir_prefix(command.working_dir.take(), self.ssh_shell_kind)?;
         exec.push_str(&home_stdio_launcher_command(
@@ -268,43 +253,25 @@ impl RemoteConnection for SshRemoteConnection {
         Ok((template, command.encode()?))
     }
 
-    fn build_forward_ports_command(
-        &self,
-        forwards: Vec<(u16, String, u16)>,
-    ) -> Result<CommandTemplate> {
+    fn build_forward_ports_command(&self, forwards: Vec<(u16, String, u16)>) -> Result<CommandTemplate> {
         let Self { socket, .. } = self;
         let mut args = socket.ssh_command_options();
         args.push("-N".into());
         for (local_port, host, remote_port) in forwards {
             args.push("-L".into());
-            args.push(format!(
-                "{}:{}:{}",
-                local_port,
-                bracket_ipv6(&host),
-                remote_port
-            ));
+            args.push(format!("{}:{}:{}", local_port, bracket_ipv6(&host), remote_port));
         }
         args.push(socket.connection_options.ssh_destination());
-        Ok(CommandTemplate {
-            program: "ssh".into(),
-            args,
-            env: Default::default(),
-        })
+        Ok(CommandTemplate { program: "ssh".into(), args, env: Default::default() })
     }
 
-    fn upload_directory(
-        &self,
-        src_path: PathBuf,
-        dest_path: RemotePathBuf,
-        cx: &App,
-    ) -> Task<Result<()>> {
+    fn upload_directory(&self, src_path: PathBuf, dest_path: RemotePathBuf, cx: &App) -> Task<Result<()>> {
         let dest_path_str = dest_path.to_string();
         let src_path_display = src_path.display().to_string();
 
         let mut sftp_command = self.build_sftp_command();
         sftp_command.kill_on_drop(true);
-        let mut scp_command =
-            self.build_scp_command(&src_path, &dest_path_str, Some(&["-C", "-r"]));
+        let mut scp_command = self.build_scp_command(&src_path, &dest_path_str, Some(&["-C", "-r"]));
         scp_command.kill_on_drop(true);
 
         cx.background_spawn(async move {
@@ -367,7 +334,7 @@ impl RemoteConnection for SshRemoteConnection {
 
         let mut proxy_args = vec![];
         for env_var in VARS {
-            if let Some(value) = std::env::var(env_var).ok() {
+            if let Ok(value) = std::env::var(env_var) {
                 proxy_args.push(format!("{env_var}={value}"));
             }
         }
@@ -379,9 +346,7 @@ impl RemoteConnection for SshRemoteConnection {
         if reconnect {
             proxy_args.push("--reconnect".to_owned());
         }
-        let mut ssh_command =
-            self.socket
-                .ssh_command(self.ssh_shell_kind, "env", &proxy_args, false);
+        let mut ssh_command = self.socket.ssh_command(self.ssh_shell_kind, "env", &proxy_args, false);
 
         let ssh_proxy_process = match ssh_command
             // IMPORTANT: we kill this process when we drop the task that uses it.
@@ -390,9 +355,7 @@ impl RemoteConnection for SshRemoteConnection {
         {
             Ok(process) => process,
             Err(error) => {
-                return Task::ready(Err(
-                    anyhow::Error::new(error).context("failed to spawn remote server")
-                ));
+                return Task::ready(Err(anyhow::Error::new(error).context("failed to spawn remote server")));
             }
         };
 
@@ -433,11 +396,7 @@ impl SshRemoteConnection {
             }
             result = socket.environment_posix().fuse() => result.context("Failed to connect to host")?,
         };
-        let RemoteEnvironment {
-            shell: ssh_shell,
-            platform: ssh_platform,
-            os_version: ssh_os_version,
-        } = environment;
+        let RemoteEnvironment { shell: ssh_shell, platform: ssh_platform, os_version: ssh_os_version } = environment;
         log::info!("Remote shell discovered: {}", ssh_shell);
 
         let ssh_shell_kind = ShellKind::new(&ssh_shell, false);
@@ -468,12 +427,7 @@ impl SshRemoteConnection {
     async fn check_server_binary(&self) -> Result<Arc<RelPath>> {
         let path = RelPath::from_unix_str(".local/bin/ed_server").unwrap();
         self.socket
-            .run_command(
-                self.ssh_shell_kind,
-                &path.display(self.path_style()),
-                &["version"],
-                false,
-            )
+            .run_command(self.ssh_shell_kind, &path.display(self.path_style()), &["version"], false)
             .await
             .context(
                 "Could not run SSH remote server at ~/.local/bin/ed_server. \
@@ -492,23 +446,17 @@ impl SshRemoteConnection {
         const SSH_DENY_ARGS_FOR_SCP: &[&str] = &["-X", "-Y"];
 
         let mut command = util::command::new_command("scp");
-        self.socket
-            .ssh_options(&mut command, false, Some(SSH_DENY_ARGS_FOR_SCP))
-            .args(
-                self.socket
-                    .connection_options
-                    .port
-                    .map(|port| vec!["-P".to_string(), port.to_string()])
-                    .unwrap_or_default(),
-            );
+        self.socket.ssh_options(&mut command, false, Some(SSH_DENY_ARGS_FOR_SCP)).args(
+            self.socket
+                .connection_options
+                .port
+                .map(|port| vec!["-P".to_string(), port.to_string()])
+                .unwrap_or_default(),
+        );
         if let Some(args) = additional_args {
             command.args(args);
         }
-        command.arg(src_path).arg(format!(
-            "{}:{}",
-            self.socket.connection_options.scp_destination(),
-            dest_path_str
-        ));
+        command.arg(src_path).arg(format!("{}:{}", self.socket.connection_options.scp_destination(), dest_path_str));
         command
     }
 
@@ -517,15 +465,13 @@ impl SshRemoteConnection {
         const SSH_DENY_ARGS_FOR_SFTP: &[&str] = &["-X", "-Y"];
 
         let mut command = util::command::new_command("sftp");
-        self.socket
-            .ssh_options(&mut command, false, Some(SSH_DENY_ARGS_FOR_SFTP))
-            .args(
-                self.socket
-                    .connection_options
-                    .port
-                    .map(|port| vec!["-P".to_string(), port.to_string()])
-                    .unwrap_or_default(),
-            );
+        self.socket.ssh_options(&mut command, false, Some(SSH_DENY_ARGS_FOR_SFTP)).args(
+            self.socket
+                .connection_options
+                .port
+                .map(|port| vec!["-P".to_string(), port.to_string()])
+                .unwrap_or_default(),
+        );
         command.arg("-b").arg("-");
         command.arg(self.socket.connection_options.scp_destination());
         command.stdin(Stdio::piped());
@@ -539,10 +485,7 @@ impl SshRemoteConnection {
 
 impl SshSocket {
     fn new(options: SshConnectionOptions) -> Self {
-        Self {
-            connection_options: options,
-            envs: HashMap::default(),
-        }
+        Self { connection_options: options, envs: HashMap::default() }
     }
 
     // :WARNING: ssh unquotes arguments when executing on the remote :WARNING:
@@ -560,23 +503,16 @@ impl SshSocket {
     ) -> util::command::Command {
         let mut command = util::command::new_command("ssh");
         let program = shell_kind.prepend_command_prefix(program);
-        let mut to_run = shell_kind
-            .try_quote_prefix_aware(&program)
-            .expect("shell quoting")
-            .into_owned();
+        let mut to_run = shell_kind.try_quote_prefix_aware(&program).expect("shell quoting").into_owned();
         for arg in args {
             // We're trying to work with: sh, bash, zsh, fish, tcsh, ...?
-            debug_assert!(
-                !arg.as_ref().contains('\n'),
-                "multiline arguments do not work in all shells"
-            );
+            debug_assert!(!arg.as_ref().contains('\n'), "multiline arguments do not work in all shells");
             to_run.push(' ');
             to_run.push_str(&shell_kind.try_quote(arg.as_ref()).expect("shell quoting"));
         }
         let separator = shell_kind.sequential_commands_separator();
         let to_run = format!("cd{separator} {to_run}");
-        self.ssh_options(&mut command, true, None)
-            .arg(self.connection_options.ssh_destination());
+        self.ssh_options(&mut command, true, None).arg(self.connection_options.ssh_destination());
         if !allow_pseudo_tty {
             command.arg("-T");
         }
@@ -620,11 +556,7 @@ impl SshSocket {
             args.retain(|x| !deny_args.contains(&x.as_str()));
         }
 
-        command
-            .stdin(Stdio::piped())
-            .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .args(args)
+        command.stdin(Stdio::piped()).stdout(Stdio::piped()).stderr(Stdio::piped()).args(args)
     }
 
     // Returns the SSH command-line options (without the destination) for building commands.
@@ -645,10 +577,7 @@ impl SshSocket {
     }
 
     async fn home_dir(&self, shell: ShellKind) -> Option<String> {
-        match self
-            .run_command(shell, HOME_DIR_PROGRAM, &HOME_DIR_ARGS, false)
-            .await
-        {
+        match self.run_command(shell, HOME_DIR_PROGRAM, &HOME_DIR_ARGS, false).await {
             Ok(output) => {
                 let home_dir = parse_home_dir(&output);
                 if home_dir.is_none() {
@@ -665,9 +594,7 @@ impl SshSocket {
 }
 
 fn parse_port_number(port_str: &str) -> Result<u16> {
-    port_str
-        .parse()
-        .with_context(|| format!("parsing port number: {port_str}"))
+    port_str.parse().with_context(|| format!("parsing port number: {port_str}"))
 }
 
 fn split_port_forward_tokens(spec: &str) -> Result<Vec<String>> {
@@ -705,11 +632,8 @@ fn split_port_forward_tokens(spec: &str) -> Result<Vec<String>> {
 }
 
 fn parse_port_forward_spec(spec: &str) -> Result<SshPortForwardOption> {
-    let tokens = if spec.contains('[') {
-        split_port_forward_tokens(spec)?
-    } else {
-        spec.split(':').map(String::from).collect()
-    };
+    let tokens =
+        if spec.contains('[') { split_port_forward_tokens(spec)? } else { spec.split(':').map(String::from).collect() };
 
     match tokens.len() {
         4 => {
@@ -727,12 +651,7 @@ fn parse_port_forward_spec(spec: &str) -> Result<SshPortForwardOption> {
             let local_port = parse_port_number(&tokens[0])?;
             let remote_port = parse_port_number(&tokens[2])?;
 
-            Ok(SshPortForwardOption {
-                local_host: None,
-                local_port,
-                remote_host: Some(tokens[1].clone()),
-                remote_port,
-            })
+            Ok(SshPortForwardOption { local_host: None, local_port, remote_host: Some(tokens[1].clone()), remote_port })
         }
         _ => anyhow::bail!("Invalid port forward format: {spec}"),
     }
@@ -748,18 +667,11 @@ impl SshConnectionOptions {
         let mut port_forwards: Vec<SshPortForwardOption> = Vec::new();
 
         // disallowed: -E, -e, -F, -f, -G, -g, -M, -N, -n, -O, -q, -S, -s, -T, -t, -V, -v, -W
-        const ALLOWED_OPTS: &[&str] = &[
-            "-4", "-6", "-A", "-a", "-C", "-K", "-k", "-X", "-x", "-Y", "-y",
-        ];
-        const ALLOWED_ARGS: &[&str] = &[
-            "-B", "-b", "-c", "-D", "-F", "-I", "-i", "-J", "-l", "-m", "-o", "-P", "-p", "-R",
-            "-w",
-        ];
+        const ALLOWED_OPTS: &[&str] = &["-4", "-6", "-A", "-a", "-C", "-K", "-k", "-X", "-x", "-Y", "-y"];
+        const ALLOWED_ARGS: &[&str] =
+            &["-B", "-b", "-c", "-D", "-F", "-I", "-i", "-J", "-l", "-m", "-o", "-P", "-p", "-R", "-w"];
 
-        let mut tokens = ShellKind::Posix
-            .split(input)
-            .context("invalid input")?
-            .into_iter();
+        let mut tokens = ShellKind::Posix.split(input).context("invalid input")?.into_iter();
 
         'outer: while let Some(arg) = tokens.next() {
             if ALLOWED_OPTS.contains(&(&arg as &str)) {
@@ -781,11 +693,8 @@ impl SshConnectionOptions {
                 continue;
             }
             if arg == "-L" || arg.starts_with("-L") {
-                let forward_spec = if arg == "-L" {
-                    tokens.next()
-                } else {
-                    Some(arg.strip_prefix("-L").unwrap().to_string())
-                };
+                let forward_spec =
+                    if arg == "-L" { tokens.next() } else { Some(arg.strip_prefix("-L").unwrap().to_string()) };
 
                 if let Some(spec) = forward_spec {
                     port_forwards.push(parse_port_forward_spec(&spec)?);
@@ -926,11 +835,7 @@ impl SshConnectionOptions {
             self.host.to_string()
         };
 
-        if let Some(username) = &self.username {
-            format!("{}@{}", username, host)
-        } else {
-            host
-        }
+        if let Some(username) = &self.username { format!("{}@{}", username, host) } else { host }
     }
 }
 
@@ -952,42 +857,24 @@ fn build_command_posix(
 
     for (k, v) in input_env.iter() {
         let assignment = format!("{k}={v}");
-        let assignment = ssh_shell_kind
-            .try_quote(&assignment)
-            .context("shell quoting")?;
+        let assignment = ssh_shell_kind.try_quote(&assignment).context("shell quoting")?;
         write!(exec, "{assignment} ")?;
     }
 
     if let Some(input_program) = input_program {
-        write!(
-            exec,
-            "{}",
-            ssh_shell_kind
-                .try_quote_prefix_aware(&input_program)
-                .context("shell quoting")?
-        )?;
+        write!(exec, "{}", ssh_shell_kind.try_quote_prefix_aware(&input_program).context("shell quoting")?)?;
         for arg in input_args {
-            let arg = ssh_shell_kind.try_quote(&arg).context("shell quoting")?;
+            let arg = ssh_shell_kind.try_quote(arg).context("shell quoting")?;
             write!(exec, " {arg}")?;
         }
     } else {
         write!(exec, "{ssh_shell} -l")?;
     };
 
-    Ok(ssh_command_template(
-        ssh_options,
-        port_forward,
-        interactive,
-        ssh_destination,
-        exec,
-        ssh_env,
-    ))
+    Ok(ssh_command_template(ssh_options, port_forward, interactive, ssh_destination, exec, ssh_env))
 }
 
-fn posix_working_dir_prefix(
-    working_dir: Option<String>,
-    ssh_shell_kind: ShellKind,
-) -> Result<String> {
+fn posix_working_dir_prefix(working_dir: Option<String>, ssh_shell_kind: ShellKind) -> Result<String> {
     let mut exec = String::new();
     if let Some(working_dir) = working_dir {
         let working_dir = RemotePathBuf::new(working_dir, PathStyle::Unix).to_string();
@@ -1005,21 +892,11 @@ fn posix_working_dir_prefix(
                 ssh_shell_kind.sequential_and_commands_separator()
             )?;
         } else {
-            let quoted_dir = ssh_shell_kind
-                .try_quote(&working_dir)
-                .context("shell quoting")?;
-            write!(
-                exec,
-                "cd {quoted_dir} {} ",
-                ssh_shell_kind.sequential_and_commands_separator()
-            )?;
+            let quoted_dir = ssh_shell_kind.try_quote(&working_dir).context("shell quoting")?;
+            write!(exec, "cd {quoted_dir} {} ", ssh_shell_kind.sequential_and_commands_separator())?;
         }
     } else {
-        write!(
-            exec,
-            "cd {} ",
-            ssh_shell_kind.sequential_and_commands_separator()
-        )?;
+        write!(exec, "cd {} ", ssh_shell_kind.sequential_and_commands_separator())?;
     };
     Ok(exec)
 }
@@ -1037,12 +914,7 @@ fn ssh_command_template(
 
     if let Some((local_port, host, remote_port)) = port_forward {
         args.push("-L".into());
-        args.push(format!(
-            "{}:{}:{}",
-            local_port,
-            bracket_ipv6(&host),
-            remote_port
-        ));
+        args.push(format!("{}:{}:{}", local_port, bracket_ipv6(&host), remote_port));
     }
 
     // LogLevel=ERROR suppresses the "Connection to ... closed." message while
@@ -1058,9 +930,5 @@ fn ssh_command_template(
     args.push(ssh_destination.into());
     args.push(exec);
 
-    CommandTemplate {
-        program: "ssh".into(),
-        args,
-        env: ssh_env,
-    }
+    CommandTemplate { program: "ssh".into(), args, env: ssh_env }
 }

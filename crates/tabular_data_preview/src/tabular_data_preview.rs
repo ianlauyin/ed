@@ -1,14 +1,25 @@
-use editor::{Editor, EditorEvent};
-use gpui::{Action, AppContext, Entity, EventEmitter, FocusHandle, Focusable, Task, actions};
-
+use editor::Editor;
+use editor::EditorEvent;
+use gpui::Action;
+use gpui::AppContext;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::Task;
+use gpui::actions;
 use schemars::JsonSchema;
 use serde::Deserialize;
-use ui::{SharedString, prelude::*};
-use workspace::{Item, Pane, Workspace};
+use ui::SharedString;
+use ui::prelude::*;
+use workspace::Item;
+use workspace::Pane;
+use workspace::Workspace;
 
 use crate::parser::EditorState;
-
-pub use crate::table_view::{CellSelection, PerformanceMetrics, TableView};
+pub use crate::table_view::CellSelection;
+pub use crate::table_view::PerformanceMetrics;
+pub use crate::table_view::TableView;
 
 mod parser;
 mod renderer;
@@ -62,23 +73,17 @@ impl TabularDataPreviewPane {
     pub fn register(workspace: &mut Workspace) {
         workspace.register_action_renderer(|div, _, _, cx| {
             div.on_action(cx.listener(|workspace, _: &OpenPreview, window, cx| {
-                if let Some(editor) =
-                    Self::resolve_active_item_as_tabular_data_editor(workspace, cx)
-                {
+                if let Some(editor) = Self::resolve_active_item_as_tabular_data_editor(workspace, cx) {
                     let pane = workspace.active_pane().clone();
                     Self::open_preview_in_pane(editor, pane, window, cx);
                 }
             }))
-            .on_action(cx.listener(
-                |workspace, _: &OpenPreviewToTheSide, window, cx| {
-                    if let Some(editor) =
-                        Self::resolve_active_item_as_tabular_data_editor(workspace, cx)
-                    {
-                        let pane = workspace.active_pane().clone();
-                        Self::open_preview_to_the_side_of_pane(workspace, editor, pane, window, cx);
-                    }
-                },
-            ))
+            .on_action(cx.listener(|workspace, _: &OpenPreviewToTheSide, window, cx| {
+                if let Some(editor) = Self::resolve_active_item_as_tabular_data_editor(workspace, cx) {
+                    let pane = workspace.active_pane().clone();
+                    Self::open_preview_to_the_side_of_pane(workspace, editor, pane, window, cx);
+                }
+            }))
         });
     }
 
@@ -124,11 +129,7 @@ impl TabularDataPreviewPane {
         cx.notify();
     }
 
-    fn find_existing_preview_item_idx(
-        pane: &Pane,
-        editor: &Entity<Editor>,
-        cx: &App,
-    ) -> Option<usize> {
+    fn find_existing_preview_item_idx(pane: &Pane, editor: &Entity<Editor>, cx: &App) -> Option<usize> {
         pane.items_of_type::<TabularDataPreviewPane>()
             .find(|view| &view.read(cx).active_editor_state.editor == editor)
             .and_then(|view| pane.index_for_item(&view))
@@ -136,26 +137,21 @@ impl TabularDataPreviewPane {
 
     fn new(editor: &Entity<Editor>, window: &Window, cx: &mut Context<Workspace>) -> Entity<Self> {
         cx.new(|cx| {
-            let subscription = cx.subscribe(
-                editor,
-                |this: &mut TabularDataPreviewPane, _editor, event: &EditorEvent, cx| {
+            let subscription =
+                cx.subscribe(editor, |this: &mut TabularDataPreviewPane, _editor, event: &EditorEvent, cx| {
                     match event {
                         EditorEvent::Edited { .. } | EditorEvent::DirtyChanged => {
                             this.parse_from_active_editor(true, cx);
                         }
                         _ => {}
                     };
-                },
-            );
+                });
 
             let table = cx.new(|cx| TableView::new(window, cx));
             let table_subscription = cx.observe(&table, |_, _, cx| cx.notify());
 
             let mut view = TabularDataPreviewPane {
-                active_editor_state: EditorState {
-                    editor: editor.clone(),
-                    _subscription: subscription,
-                },
+                active_editor_state: EditorState { editor: editor.clone(), _subscription: subscription },
                 table,
                 parsing_task: None,
                 is_parsing: false,
@@ -169,7 +165,7 @@ impl TabularDataPreviewPane {
         })
     }
 
-    pub(crate) fn editor_state(&self) -> &EditorState {
+    pub(crate) const fn editor_state(&self) -> &EditorState {
         &self.active_editor_state
     }
 
@@ -177,9 +173,7 @@ impl TabularDataPreviewPane {
         workspace: &Workspace,
         cx: &mut Context<Workspace>,
     ) -> Option<Entity<Editor>> {
-        let editor = workspace
-            .active_item(cx)
-            .and_then(|item| item.act_as::<Editor>(cx))?;
+        let editor = workspace.active_item(cx).and_then(|item| item.act_as::<Editor>(cx))?;
         Self::is_tabular_data_file(&editor, cx).then_some(editor)
     }
 
@@ -230,10 +224,7 @@ impl Item for TabularDataPreviewPane {
             .and_then(|b| {
                 let file = b.read(cx).file()?;
                 let local_file = file.as_local()?;
-                local_file
-                    .abs_path(cx)
-                    .file_name()
-                    .map(|name| format!("Preview {}", name.to_string_lossy()).into())
+                local_file.abs_path(cx).file_name().map(|name| format!("Preview {}", name.to_string_lossy()).into())
             })
             .unwrap_or_else(|| SharedString::from("Tabular Data Preview"))
     }

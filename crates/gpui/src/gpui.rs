@@ -50,9 +50,6 @@ mod util;
 mod view;
 mod window;
 
-#[cfg(doc)]
-pub mod _ownership_and_data_flow;
-
 /// Do not touch, here be dragons for use by gpui_macros and such.
 #[doc(hidden)]
 pub mod private {
@@ -70,6 +67,9 @@ mod seal {
     pub trait Sealed {}
 }
 
+use std::any::Any;
+use std::future::Future;
+
 pub use action::*;
 pub use anyhow::Result;
 pub use app::*;
@@ -84,9 +84,11 @@ pub use executor::*;
 pub use geometry::*;
 pub use gestures::*;
 pub use global::*;
-pub use gpui_macros::{AppContext, IntoElement, Render, VisualContext, register_action};
-pub use spring::*;
-
+pub use gpui_macros::AppContext;
+pub use gpui_macros::IntoElement;
+pub use gpui_macros::Render;
+pub use gpui_macros::VisualContext;
+pub use gpui_macros::register_action;
 pub use gpui_shared_string::*;
 pub use gpui_util::arc_cow::ArcCow;
 pub use http::*;
@@ -96,20 +98,22 @@ use key_dispatch::*;
 pub use keymap::*;
 pub use path_builder::*;
 pub use platform::*;
-
 pub use refineable::*;
 pub use scene::*;
 pub use shared_uri::*;
-use std::{any::Any, future::Future};
+pub use spring::*;
 pub use style::*;
 pub use styled::*;
 pub use subscription::*;
 pub use svg_renderer::*;
 pub(crate) use tab_stop::*;
+pub use taffy::AvailableSpace;
+pub use taffy::LayoutId;
 use taffy::TaffyLayoutEngine;
-pub use taffy::{AvailableSpace, LayoutId};
 pub use text_system::*;
-pub use util::{FutureExt, Timeout, block_on};
+pub use util::FutureExt;
+pub use util::Timeout;
+pub use util::block_on;
 pub use view::*;
 pub use window::*;
 
@@ -119,6 +123,7 @@ pub trait AppContext {
     /// Create a new entity in the app context.
     #[expect(
         clippy::wrong_self_convention,
+        clippy::new_ret_no_self,
         reason = "`App::new` is an ubiquitous function for creating entities"
     )]
     fn new<T: 'static>(&mut self, build_entity: impl FnOnce(&mut Context<T>) -> T) -> Entity<T>;
@@ -137,11 +142,7 @@ pub trait AppContext {
     ) -> Entity<T>;
 
     /// Update a entity in the app context.
-    fn update_entity<T, R>(
-        &mut self,
-        handle: &Entity<T>,
-        update: impl FnOnce(&mut T, &mut Context<T>) -> R,
-    ) -> R
+    fn update_entity<T, R>(&mut self, handle: &Entity<T>, update: impl FnOnce(&mut T, &mut Context<T>) -> R) -> R
     where
         T: 'static;
 
@@ -164,18 +165,10 @@ pub trait AppContext {
     /// rendered window that referenced the entity. Returns `None` if the
     /// entity has no current window or that window is unavailable. See
     /// [`App::with_window`] for the underlying lookup.
-    fn with_window<R>(
-        &mut self,
-        entity_id: EntityId,
-        f: impl FnOnce(&mut Window, &mut App) -> R,
-    ) -> Option<R>;
+    fn with_window<R>(&mut self, entity_id: EntityId, f: impl FnOnce(&mut Window, &mut App) -> R) -> Option<R>;
 
     /// Read a window off of the application context.
-    fn read_window<T, R>(
-        &self,
-        window: &WindowHandle<T>,
-        read: impl FnOnce(Entity<T>, &App) -> R,
-    ) -> Result<R>
+    fn read_window<T, R>(&self, window: &WindowHandle<T>, read: impl FnOnce(Entity<T>, &App) -> R) -> Result<R>
     where
         T: 'static;
 

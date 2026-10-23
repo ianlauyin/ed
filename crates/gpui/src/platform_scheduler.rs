@@ -1,23 +1,29 @@
-use crate::{PlatformDispatcher, RunnableMeta};
-use async_task::Runnable;
-use chrono::{DateTime, Utc};
-use futures::channel::oneshot;
-use scheduler::Instant;
-use scheduler::{
-    Clock, LocalExecutor, Priority, Scheduler, SessionId, Task, Timer, spawn_dedicated_thread,
-};
+use std::any::Any;
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::atomic::AtomicU16;
+use std::sync::atomic::Ordering;
+use std::task::Context;
+use std::task::Poll;
+use std::time::Duration;
 
-use std::task::{Context, Poll};
-use std::{
-    any::Any,
-    future::Future,
-    pin::Pin,
-    sync::{
-        Arc,
-        atomic::{AtomicU16, Ordering},
-    },
-    time::Duration,
-};
+use async_task::Runnable;
+use chrono::DateTime;
+use chrono::Utc;
+use futures::channel::oneshot;
+use scheduler::Clock;
+use scheduler::Instant;
+use scheduler::LocalExecutor;
+use scheduler::Priority;
+use scheduler::Scheduler;
+use scheduler::SessionId;
+use scheduler::Task;
+use scheduler::Timer;
+use scheduler::spawn_dedicated_thread;
+
+use crate::PlatformDispatcher;
+use crate::RunnableMeta;
 
 /// A production implementation of [`Scheduler`] that wraps a [`PlatformDispatcher`].
 ///
@@ -94,15 +100,10 @@ impl Scheduler for PlatformScheduler {
     }
 
     fn schedule_local(&self, _session_id: SessionId, runnable: Runnable<RunnableMeta>) {
-        self.dispatcher
-            .dispatch_on_main_thread(runnable, Priority::default());
+        self.dispatcher.dispatch_on_main_thread(runnable, Priority::default());
     }
 
-    fn schedule_background_with_priority(
-        &self,
-        runnable: Runnable<RunnableMeta>,
-        priority: Priority,
-    ) {
+    fn schedule_background_with_priority(&self, runnable: Runnable<RunnableMeta>, priority: Priority) {
         self.dispatcher.dispatch(runnable, priority);
     }
 
@@ -113,16 +114,14 @@ impl Scheduler for PlatformScheduler {
 
         // Create a runnable that will send the completion signal
         let location = std::panic::Location::caller();
-        let (runnable, _task) = async_task::Builder::new()
-            .metadata(RunnableMeta { location })
-            .spawn(
-                move |_| async move {
-                    let _ = tx.send(());
-                },
-                move |runnable| {
-                    dispatcher.dispatch_after(duration, runnable);
-                },
-            );
+        let (runnable, _task) = async_task::Builder::new().metadata(RunnableMeta { location }).spawn(
+            move |_| async move {
+                let _ = tx.send(());
+            },
+            move |runnable| {
+                dispatcher.dispatch_after(duration, runnable);
+            },
+        );
         runnable.schedule();
 
         Timer::new(rx)
@@ -135,16 +134,13 @@ impl Scheduler for PlatformScheduler {
     fn spawn_dedicated(
         self: Arc<Self>,
         f: Box<
-            dyn FnOnce(
-                    LocalExecutor,
-                )
-                    -> Pin<Box<dyn Future<Output = Box<dyn Any + Send + Sync>> + 'static>>
+            dyn FnOnce(LocalExecutor) -> Pin<Box<dyn Future<Output = Box<dyn Any + Send + Sync>> + 'static>>
                 + Send
                 + 'static,
         >,
     ) -> Task<Box<dyn Any + Send + Sync>> {
         let session_id = self.next_session_id();
-        spawn_dedicated_thread(session_id, self, move |executor| f(executor))
+        spawn_dedicated_thread(session_id, self, f)
     }
 }
 

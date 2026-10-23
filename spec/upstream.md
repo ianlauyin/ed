@@ -10,6 +10,10 @@ from upstream in layout as well as in behaviour.
 
 - Changes may touch more files than the feature strictly needs: reformatting,
   lint fixes, and cleanups in passing are welcome. A noisy diff is acceptable.
+- Clippy's style group is enabled workspace-wide along with selected nursery and
+  pedantic lints. The workspace stays warning-free; where a lint fights a
+  deliberate API shape or macro output, it is allowed at that item with a reason
+  rather than disabled globally.
 - Upstream changes are ported by reading and understanding them, then
   re-applying the intent against the fork's code. There are no merges, rebases,
   cherry-picks, or `git diff | git apply` — textual patches are not expected to

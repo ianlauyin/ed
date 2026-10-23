@@ -1,8 +1,17 @@
 use editor::EditorSettings;
-use gpui::{App, FocusHandle};
+use gpui::App;
+use gpui::FocusHandle;
 use settings::Settings as _;
-use ui::{ButtonCommon, Clickable, Context, Render, Tooltip, Window, prelude::*};
-use workspace::{HideStatusItem, ItemHandle, StatusItemView};
+use ui::ButtonCommon;
+use ui::Clickable;
+use ui::Context;
+use ui::Render;
+use ui::Tooltip;
+use ui::Window;
+use ui::prelude::*;
+use workspace::HideStatusItem;
+use workspace::ItemHandle;
+use workspace::StatusItemView;
 
 pub const SEARCH_ICON: IconName = IconName::MagnifyingGlass;
 
@@ -11,10 +20,14 @@ pub struct SearchButton {
 }
 
 impl SearchButton {
-    pub fn new() -> Self {
-        Self {
-            pane_item_focus_handle: None,
-        }
+    pub const fn new() -> Self {
+        Self { pane_item_focus_handle: None }
+    }
+}
+
+impl Default for SearchButton {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -33,18 +46,9 @@ impl Render for SearchButton {
                 .tab_index(0isize)
                 .tooltip(move |_window, cx| {
                     if let Some(focus_handle) = &focus_handle {
-                        Tooltip::for_action_in(
-                            "Project Search",
-                            &workspace::DeploySearch::default(),
-                            focus_handle,
-                            cx,
-                        )
+                        Tooltip::for_action_in("Project Search", &workspace::DeploySearch::default(), focus_handle, cx)
                     } else {
-                        Tooltip::for_action(
-                            "Project Search",
-                            &workspace::DeploySearch::default(),
-                            cx,
-                        )
+                        Tooltip::for_action("Project Search", &workspace::DeploySearch::default(), cx)
                     }
                 })
                 .on_click(cx.listener(|_this, _, window, cx| {

@@ -1,6 +1,9 @@
-use crate::SharedString;
-use anyhow::{Context as _, Result};
 use std::fmt;
+
+use anyhow::Context as _;
+use anyhow::Result;
+
+use crate::SharedString;
 
 /// A datastructure for resolving whether an action should be dispatched
 /// at this point in the element tree. Contains a set of identifiers
@@ -63,17 +66,11 @@ impl KeyContext {
             return Ok(());
         }
 
-        let key = source
-            .chars()
-            .take_while(|c| is_identifier_char(*c))
-            .collect::<String>();
+        let key = source.chars().take_while(|c| is_identifier_char(*c)).collect::<String>();
         source = skip_whitespace(&source[key.len()..]);
         if let Some(suffix) = source.strip_prefix('=') {
             source = skip_whitespace(suffix);
-            let value = source
-                .chars()
-                .take_while(|c| is_identifier_char(*c))
-                .collect::<String>();
+            let value = source.chars().take_while(|c| is_identifier_char(*c)).collect::<String>();
             source = skip_whitespace(&source[value.len()..]);
             context.set(key, value);
         } else {
@@ -84,7 +81,7 @@ impl KeyContext {
     }
 
     /// Check if this context is empty.
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
@@ -115,10 +112,7 @@ impl KeyContext {
     pub fn set<S1: Into<SharedString>, S2: Into<SharedString>>(&mut self, key: S1, value: S2) {
         let key = key.into();
         if !self.contains(&key) {
-            self.0.push(ContextEntry {
-                key,
-                value: Some(value.into()),
-            })
+            self.0.push(ContextEntry { key, value: Some(value.into()) })
         }
     }
 
@@ -129,11 +123,7 @@ impl KeyContext {
 
     /// Get the associated value for a given identifier or key.
     pub fn get(&self, key: &str) -> Option<&SharedString> {
-        self.0
-            .iter()
-            .find(|entry| entry.key.as_ref() == key)?
-            .value
-            .as_ref()
+        self.0.iter().find(|entry| entry.key.as_ref() == key)?.value.as_ref()
     }
 }
 
@@ -167,22 +157,13 @@ pub enum KeyBindingContextPredicate {
     NotEqual(SharedString, SharedString),
     /// A predicate that will match a given predicate appearing below another predicate.
     /// in the element tree
-    Descendant(
-        Box<KeyBindingContextPredicate>,
-        Box<KeyBindingContextPredicate>,
-    ),
+    Descendant(Box<KeyBindingContextPredicate>, Box<KeyBindingContextPredicate>),
     /// Predicate that will invert another predicate.
     Not(Box<KeyBindingContextPredicate>),
     /// A predicate that will match if both of its children match.
-    And(
-        Box<KeyBindingContextPredicate>,
-        Box<KeyBindingContextPredicate>,
-    ),
+    And(Box<KeyBindingContextPredicate>, Box<KeyBindingContextPredicate>),
     /// A predicate that will match if either of its children match.
-    Or(
-        Box<KeyBindingContextPredicate>,
-        Box<KeyBindingContextPredicate>,
-    ),
+    Or(Box<KeyBindingContextPredicate>, Box<KeyBindingContextPredicate>),
 }
 
 impl fmt::Display for KeyBindingContextPredicate {
@@ -196,12 +177,8 @@ impl fmt::Display for KeyBindingContextPredicate {
                 Self::Identifier(name) => write!(f, "!{name}"),
                 _ => write!(f, "!({pred})"),
             },
-            Self::And(..) => self.fmt_joined(f, " && ", LogicalOperator::And, |node| {
-                matches!(node, Self::Or(..))
-            }),
-            Self::Or(..) => self.fmt_joined(f, " || ", LogicalOperator::Or, |node| {
-                matches!(node, Self::And(..))
-            }),
+            Self::And(..) => self.fmt_joined(f, " && ", LogicalOperator::And, |node| matches!(node, Self::Or(..))),
+            Self::Or(..) => self.fmt_joined(f, " || ", LogicalOperator::Or, |node| matches!(node, Self::And(..))),
         }
     }
 }
@@ -269,14 +246,8 @@ impl KeyBindingContextPredicate {
         };
         match self {
             Self::Identifier(name) => context.contains(name),
-            Self::Equal(left, right) => context
-                .get(left)
-                .map(|value| value == right)
-                .unwrap_or(false),
-            Self::NotEqual(left, right) => context
-                .get(left)
-                .map(|value| value != right)
-                .unwrap_or(true),
+            Self::Equal(left, right) => context.get(left).map(|value| value == right).unwrap_or(false),
+            Self::NotEqual(left, right) => context.get(left).map(|value| value != right).unwrap_or(true),
             Self::Not(pred) => {
                 for i in 0..all_contexts.len() {
                     if pred.eval_inner(&all_contexts[..=i], all_contexts) {
@@ -325,9 +296,7 @@ impl KeyBindingContextPredicate {
 
         match other {
             KeyBindingContextPredicate::Descendant(_, child) => self.is_superset(child),
-            KeyBindingContextPredicate::And(left, right) => {
-                self.is_superset(left) || self.is_superset(right)
-            }
+            KeyBindingContextPredicate::And(left, right) => self.is_superset(left) || self.is_superset(right),
             KeyBindingContextPredicate::Identifier(_) => false,
             KeyBindingContextPredicate::Equal(_, _) => false,
             KeyBindingContextPredicate::NotEqual(_, _) => false,
@@ -337,10 +306,7 @@ impl KeyBindingContextPredicate {
     }
 
     fn parse_expr(mut source: &str, min_precedence: u32) -> anyhow::Result<(Self, &str)> {
-        type Op = fn(
-            KeyBindingContextPredicate,
-            KeyBindingContextPredicate,
-        ) -> Result<KeyBindingContextPredicate>;
+        type Op = fn(KeyBindingContextPredicate, KeyBindingContextPredicate) -> Result<KeyBindingContextPredicate>;
 
         let (mut predicate, rest) = Self::parse_primary(source)?;
         source = rest;
@@ -383,23 +349,16 @@ impl KeyBindingContextPredicate {
                 Ok((KeyBindingContextPredicate::Not(Box::new(predicate)), source))
             }
             _ if is_identifier_char(next) => {
-                let len = source
-                    .find(|c: char| !is_identifier_char(c) && !is_vim_operator_char(c))
-                    .unwrap_or(source.len());
+                let len =
+                    source.find(|c: char| !is_identifier_char(c) && !is_vim_operator_char(c)).unwrap_or(source.len());
                 let (identifier, rest) = source.split_at(len);
                 source = skip_whitespace(rest);
-                Ok((
-                    KeyBindingContextPredicate::Identifier(identifier.to_string().into()),
-                    source,
-                ))
+                Ok((KeyBindingContextPredicate::Identifier(identifier.to_string().into()), source))
             }
             _ if is_vim_operator_char(next) => {
                 let (operator, rest) = source.split_at(1);
                 source = skip_whitespace(rest);
-                Ok((
-                    KeyBindingContextPredicate::Identifier(operator.to_string().into()),
-                    source,
-                ))
+                Ok((KeyBindingContextPredicate::Identifier(operator.to_string().into()), source))
             }
             _ => anyhow::bail!("unexpected character '{next:?}'"),
         }
@@ -453,8 +412,7 @@ impl KeyBindingContextPredicate {
         first: &mut bool,
     ) -> fmt::Result {
         match (operator, self) {
-            (LogicalOperator::And, Self::And(left, right))
-            | (LogicalOperator::Or, Self::Or(left, right)) => {
+            (LogicalOperator::And, Self::And(left, right)) | (LogicalOperator::Or, Self::Or(left, right)) => {
                 left.fmt_joined_inner(f, separator, operator, needs_parens, first)?;
                 right.fmt_joined_inner(f, separator, operator, needs_parens, first)
             }
@@ -464,11 +422,7 @@ impl KeyBindingContextPredicate {
                 }
                 *first = false;
 
-                if needs_parens(node) {
-                    write!(f, "({node})")
-                } else {
-                    write!(f, "{node}")
-                }
+                if needs_parens(node) { write!(f, "({node})") } else { write!(f, "{node}") }
             }
         }
     }
@@ -490,13 +444,11 @@ fn is_identifier_char(c: char) -> bool {
     c.is_alphanumeric() || c == '_' || c == '-'
 }
 
-fn is_vim_operator_char(c: char) -> bool {
+const fn is_vim_operator_char(c: char) -> bool {
     c == '>' || c == '<' || c == '~' || c == '"' || c == '?'
 }
 
 fn skip_whitespace(source: &str) -> &str {
-    let len = source
-        .find(|c: char| !c.is_whitespace())
-        .unwrap_or(source.len());
+    let len = source.find(|c: char| !c.is_whitespace()).unwrap_or(source.len());
     &source[len..]
 }

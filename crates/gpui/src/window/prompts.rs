@@ -2,13 +2,26 @@ use std::ops::Deref;
 
 use futures::channel::oneshot;
 
-use crate::{
-    AnyView, App, AppContext as _, Context, Entity, EventEmitter, FocusHandle, Focusable,
-    InteractiveElement, IntoElement, ParentElement, PromptButton, PromptLevel, Render,
-    StatefulInteractiveElement, Styled, div, opaque_grey, white,
-};
-
 use super::Window;
+use crate::AnyView;
+use crate::App;
+use crate::AppContext as _;
+use crate::Context;
+use crate::Entity;
+use crate::EventEmitter;
+use crate::FocusHandle;
+use crate::Focusable;
+use crate::InteractiveElement;
+use crate::IntoElement;
+use crate::ParentElement;
+use crate::PromptButton;
+use crate::PromptLevel;
+use crate::Render;
+use crate::StatefulInteractiveElement;
+use crate::Styled;
+use crate::div;
+use crate::opaque_grey;
+use crate::white;
 
 /// The event emitted when a prompt's option is selected.
 /// The usize is the index of the selected option, from the actions
@@ -26,7 +39,7 @@ pub struct PromptHandle {
 }
 
 impl PromptHandle {
-    pub(crate) fn new(sender: oneshot::Sender<usize>) -> Self {
+    pub(crate) const fn new(sender: oneshot::Sender<usize>) -> Self {
         Self { sender }
     }
 
@@ -57,9 +70,7 @@ impl PromptHandle {
 
         window.focus(&view.focus_handle(cx), cx);
 
-        RenderablePromptHandle {
-            view: Box::new(view),
-        }
+        RenderablePromptHandle { view: Box::new(view) }
     }
 }
 
@@ -118,14 +129,7 @@ impl Render for FallbackPromptRenderer {
                     .child(div().overflow_hidden().child(self.message.clone())),
             )
             .children(self.detail.clone().map(|detail| {
-                div()
-                    .w_full()
-                    .flex()
-                    .flex_row()
-                    .justify_around()
-                    .text_sm()
-                    .mb_2()
-                    .child(div().child(detail))
+                div().w_full().flex().flex_row().justify_around().text_sm().mb_2().child(div().child(detail))
             }))
             .children(self.actions.iter().enumerate().map(|(ix, action)| {
                 div()
@@ -146,34 +150,17 @@ impl Render for FallbackPromptRenderer {
                     }))
             }));
 
-        div()
-            .size_full()
-            .child(
-                div()
-                    .size_full()
-                    .bg(opaque_grey(0.5, 0.6))
-                    .absolute()
-                    .top_0()
-                    .left_0(),
-            )
-            .child(
-                div()
-                    .size_full()
-                    .absolute()
-                    .top_0()
-                    .left_0()
-                    .flex()
-                    .flex_col()
-                    .justify_around()
-                    .child(
-                        div()
-                            .w_full()
-                            .flex()
-                            .flex_row()
-                            .justify_around()
-                            .child(prompt),
-                    ),
-            )
+        div().size_full().child(div().size_full().bg(opaque_grey(0.5, 0.6)).absolute().top_0().left_0()).child(
+            div()
+                .size_full()
+                .absolute()
+                .top_0()
+                .left_0()
+                .flex()
+                .flex_col()
+                .justify_around()
+                .child(div().w_full().flex().flex_row().justify_around().child(prompt)),
+        )
     }
 }
 

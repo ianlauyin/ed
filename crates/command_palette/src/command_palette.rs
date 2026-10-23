@@ -1,31 +1,52 @@
 mod command_palette_settings;
 mod persistence;
 
-use std::{
-    cmp::{self, Reverse},
-    collections::{HashMap, VecDeque},
-    sync::Arc,
-    time::Duration,
-};
+use std::cmp::Reverse;
+use std::cmp::{self};
+use std::collections::HashMap;
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context as _;
 use command_palette_settings::CommandPaletteSettings;
-
-use fuzzy_nucleo::{StringMatch, StringMatchCandidate};
-use gpui::{
-    Action, App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, MouseButton,
-    ParentElement, Render, Styled, Task, TaskExt, WeakEntity, Window, actions,
-};
+use fuzzy_nucleo::StringMatch;
+use fuzzy_nucleo::StringMatchCandidate;
+use gpui::Action;
+use gpui::App;
+use gpui::Context;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::MouseButton;
+use gpui::ParentElement;
+use gpui::Render;
+use gpui::Styled;
+use gpui::Task;
+use gpui::TaskExt;
+use gpui::WeakEntity;
+use gpui::Window;
+use gpui::actions;
 use persistence::CommandPaletteDB;
 use picker::Direction;
-use picker::{Picker, PickerDelegate};
-use postage::{sink::Sink, stream::Stream};
+use picker::Picker;
+use picker::PickerDelegate;
+use postage::sink::Sink;
+use postage::stream::Stream;
 use settings::Settings;
-use ui::{
-    ButtonLike, HighlightedLabel, KeyBinding, ListItem, ListItemSpacing, Tooltip, prelude::*,
-};
+use ui::ButtonLike;
+use ui::HighlightedLabel;
+use ui::KeyBinding;
+use ui::ListItem;
+use ui::ListItemSpacing;
+use ui::Tooltip;
+use ui::prelude::*;
 use util::ResultExt;
-use workspace::{ModalView, Workspace, WorkspaceSettings};
+use workspace::ModalView;
+use workspace::Workspace;
+use workspace::WorkspaceSettings;
 use zed_actions::command_palette::Toggle;
 
 actions!(command_palette, [RemoveSelected]);
@@ -69,22 +90,11 @@ pub fn normalize_action_query(input: &str) -> String {
 }
 
 impl CommandPalette {
-    fn register(
-        workspace: &mut Workspace,
-        _window: Option<&mut Window>,
-        _: &mut Context<Workspace>,
-    ) {
-        workspace.register_action(|workspace, _: &Toggle, window, cx| {
-            Self::toggle(workspace, "", window, cx)
-        });
+    fn register(workspace: &mut Workspace, _window: Option<&mut Window>, _: &mut Context<Workspace>) {
+        workspace.register_action(|workspace, _: &Toggle, window, cx| Self::toggle(workspace, "", window, cx));
     }
 
-    pub fn toggle(
-        workspace: &mut Workspace,
-        query: &str,
-        window: &mut Window,
-        cx: &mut Context<Workspace>,
-    ) {
+    pub fn toggle(workspace: &mut Workspace, query: &str, window: &mut Window, cx: &mut Context<Workspace>) {
         if workspace.active_modal::<CommandPalette>(cx).is_some() {
             workspace.hide_modal(window, cx);
             return;
@@ -98,17 +108,11 @@ impl CommandPalette {
             return;
         };
 
-        workspace.toggle_modal(window, cx, move |window, cx| {
-            CommandPalette::new(previous_focus_handle, query, window, cx)
-        });
+        workspace
+            .toggle_modal(window, cx, move |window, cx| CommandPalette::new(previous_focus_handle, query, window, cx));
     }
 
-    fn new(
-        previous_focus_handle: FocusHandle,
-        query: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    fn new(previous_focus_handle: FocusHandle, query: &str, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let commands = window
             .available_actions(cx)
             .into_iter()
@@ -119,8 +123,7 @@ impl CommandPalette {
             })
             .collect();
 
-        let delegate =
-            CommandPaletteDelegate::new(cx.entity().downgrade(), commands, previous_focus_handle);
+        let delegate = CommandPaletteDelegate::new(cx.entity().downgrade(), commands, previous_focus_handle);
 
         let picker = cx.new(|cx| {
             // One-shot action; there's nothing to reopen.
@@ -135,8 +138,7 @@ impl CommandPalette {
     }
 
     pub fn set_query(&mut self, query: &str, window: &mut Window, cx: &mut Context<Self>) {
-        self.picker
-            .update(cx, |picker, cx| picker.set_query(query, window, cx))
+        self.picker.update(cx, |picker, cx| picker.set_query(query, window, cx))
     }
 
     fn remove_selected(&mut self, _: &RemoveSelected, window: &mut Window, cx: &mut Context<Self>) {
@@ -149,9 +151,7 @@ impl CommandPalette {
             else {
                 return;
             };
-            delegate
-                .remove_command_history(command_name, window, cx)
-                .detach();
+            delegate.remove_command_history(command_name, window, cx).detach();
         });
     }
 }
@@ -166,10 +166,7 @@ impl Focusable for CommandPalette {
 
 impl Render for CommandPalette {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        v_flex()
-            .key_context("CommandPalette")
-            .on_action(cx.listener(Self::remove_selected))
-            .child(self.picker.clone())
+        v_flex().key_context("CommandPalette").on_action(cx.listener(Self::remove_selected)).child(self.picker.clone())
     }
 }
 
@@ -181,10 +178,7 @@ pub struct CommandPaletteDelegate {
     matches: Vec<StringMatch>,
     selected_ix: usize,
     previous_focus_handle: FocusHandle,
-    updating_matches: Option<(
-        Task<()>,
-        postage::dispatch::Receiver<(Vec<Command>, Vec<StringMatch>)>,
-    )>,
+    updating_matches: Option<(Task<()>, postage::dispatch::Receiver<(Vec<Command>, Vec<StringMatch>)>)>,
     query_history: QueryHistory,
 }
 
@@ -210,11 +204,7 @@ struct QueryHistory {
 impl QueryHistory {
     fn history(&mut self, cx: &App) -> &mut VecDeque<String> {
         self.history.get_or_insert_with(|| {
-            CommandPaletteDB::global(cx)
-                .list_recent_queries()
-                .unwrap_or_default()
-                .into_iter()
-                .collect()
+            CommandPaletteDB::global(cx).list_recent_queries().unwrap_or_default().into_iter().collect()
         })
     }
 
@@ -228,11 +218,11 @@ impl QueryHistory {
     }
 
     fn validate_cursor(&mut self, current_query: &str, cx: &App) -> Option<usize> {
-        if let Some(pos) = self.cursor {
-            if self.history(cx).get(pos).map(|s| s.as_str()) != Some(current_query) {
-                self.cursor = None;
-                self.prefix = None;
-            }
+        if let Some(pos) = self.cursor
+            && self.history(cx).get(pos).map(|s| s.as_str()) != Some(current_query)
+        {
+            self.cursor = None;
+            self.prefix = None;
         }
         self.cursor
     }
@@ -246,11 +236,7 @@ impl QueryHistory {
         let start_index = self.cursor.unwrap_or(self.history(cx).len());
 
         for i in (0..start_index).rev() {
-            if self
-                .history(cx)
-                .get(i)
-                .is_some_and(|e| e.starts_with(&prefix))
-            {
+            if self.history(cx).get(i).is_some_and(|e| e.starts_with(&prefix)) {
                 self.cursor = Some(i);
                 return self.history(cx).get(i).map(|s| s.as_str());
             }
@@ -263,11 +249,7 @@ impl QueryHistory {
         let prefix = self.prefix.clone().unwrap_or_default();
 
         for i in (selected + 1)..self.history(cx).len() {
-            if self
-                .history(cx)
-                .get(i)
-                .is_some_and(|e| e.starts_with(&prefix))
-            {
+            if self.history(cx).get(i).is_some_and(|e| e.starts_with(&prefix)) {
                 self.cursor = Some(i);
                 return self.history(cx).get(i).map(|s| s.as_str());
             }
@@ -280,18 +262,14 @@ impl QueryHistory {
         self.prefix = None;
     }
 
-    fn is_navigating(&self) -> bool {
+    const fn is_navigating(&self) -> bool {
         self.cursor.is_some()
     }
 }
 
 impl Clone for Command {
     fn clone(&self) -> Self {
-        Self {
-            name: self.name.clone(),
-            action: self.action.boxed_clone(),
-            usage: self.usage,
-        }
+        Self { name: self.name.clone(), action: self.action.boxed_clone(), usage: self.usage }
     }
 }
 
@@ -360,10 +338,10 @@ impl CommandPaletteDelegate {
     }
 
     fn remove_command_history(
-        &mut self,
+        &self,
         command_name: SharedString,
-        window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
+        window: &Window,
+        cx: &Context<Picker<Self>>,
     ) -> Task<()> {
         let db = CommandPaletteDB::global(cx);
         cx.spawn_in(window, async move |picker, cx| {
@@ -385,11 +363,7 @@ impl CommandPaletteDelegate {
         })
     }
 
-    fn render_history_button(
-        ix: usize,
-        command_name: SharedString,
-        cx: &mut Context<Picker<Self>>,
-    ) -> impl IntoElement {
+    fn render_history_button(ix: usize, command_name: SharedString, cx: &Context<Picker<Self>>) -> impl IntoElement {
         h_flex()
             .id(("command-history", ix))
             .group("command-history-button")
@@ -403,21 +377,14 @@ impl CommandPaletteDelegate {
             })
             .child(
                 ButtonLike::new(("remove-command-history", ix))
-                    .tooltip(Tooltip::for_action_title(
-                        "Remove from Command History",
-                        &RemoveSelected,
-                    ))
+                    .tooltip(Tooltip::for_action_title("Remove from Command History", &RemoveSelected))
                     .child(
                         h_flex()
                             .relative()
                             .child(
                                 h_flex()
                                     .group_hover("command-history-button", |this| this.invisible())
-                                    .child(
-                                        Icon::new(IconName::HistoryRerun)
-                                            .color(Color::Muted)
-                                            .size(IconSize::Small),
-                                    ),
+                                    .child(Icon::new(IconName::HistoryRerun).color(Color::Muted).size(IconSize::Small)),
                             )
                             .child(
                                 h_flex()
@@ -429,10 +396,7 @@ impl CommandPaletteDelegate {
                     )
                     .on_click(cx.listener(move |picker, _, window, cx| {
                         window.prevent_default();
-                        picker
-                            .delegate
-                            .remove_command_history(command_name.clone(), window, cx)
-                            .detach();
+                        picker.delegate.remove_command_history(command_name.clone(), window, cx).detach();
                     })),
             )
     }
@@ -441,11 +405,7 @@ impl CommandPaletteDelegate {
         if self.matches.is_empty() {
             return None;
         }
-        let action_ix = self
-            .matches
-            .get(self.selected_ix)
-            .map(|m| m.candidate_id)
-            .unwrap_or(self.selected_ix);
+        let action_ix = self.matches.get(self.selected_ix).map(|m| m.candidate_id).unwrap_or(self.selected_ix);
         // this gets called in headless tests where there are no commands loaded
         // so we need to return an Option here
         self.commands.get(action_ix)
@@ -472,16 +432,10 @@ impl PickerDelegate for CommandPaletteDelegate {
     ) -> Option<String> {
         match direction {
             Direction::Up => {
-                let should_use_history =
-                    self.selected_ix == 0 || self.query_history.is_navigating();
-                if should_use_history {
-                    if let Some(query) = self
-                        .query_history
-                        .previous(query, cx)
-                        .map(|s| s.to_string())
-                    {
-                        return Some(query);
-                    }
+                let should_use_history = self.selected_ix == 0 || self.query_history.is_navigating();
+                if should_use_history && let Some(query) = self.query_history.previous(query, cx).map(|s| s.to_string())
+                {
+                    return Some(query);
                 }
             }
             Direction::Down => {
@@ -507,12 +461,7 @@ impl PickerDelegate for CommandPaletteDelegate {
         self.selected_ix
     }
 
-    fn set_selected_index(
-        &mut self,
-        ix: usize,
-        _window: &mut Window,
-        _: &mut Context<Picker<Self>>,
-    ) {
+    fn set_selected_index(&mut self, ix: usize, _window: &mut Window, _: &mut Context<Picker<Self>>) {
         self.selected_ix = ix;
     }
 
@@ -524,7 +473,7 @@ impl PickerDelegate for CommandPaletteDelegate {
     ) -> gpui::Task<()> {
         let settings = WorkspaceSettings::get_global(cx);
         if let Some(alias) = settings.command_aliases.get(&query) {
-            query = alias.as_ref().to_owned();
+            alias.as_ref().clone_into(&mut query);
         }
 
         let (mut tx, mut rx) = postage::dispatch::channel(1);
@@ -559,16 +508,9 @@ impl PickerDelegate for CommandPaletteDelegate {
                 )
                 .await;
 
-                let used_commands = commands
-                    .iter()
-                    .take_while(|command| command.usage.is_some())
-                    .count();
+                let used_commands = commands.iter().take_while(|command| command.usage.is_some()).count();
                 matches.sort_by_key(|string_match| {
-                    if string_match.candidate_id < used_commands {
-                        string_match.candidate_id
-                    } else {
-                        usize::MAX
-                    }
+                    if string_match.candidate_id < used_commands { string_match.candidate_id } else { usize::MAX }
                 });
 
                 tx.send((commands, matches)).await.log_err();
@@ -582,13 +524,7 @@ impl PickerDelegate for CommandPaletteDelegate {
                 return;
             };
 
-            picker
-                .update(cx, |picker, cx| {
-                    picker
-                        .delegate
-                        .matches_updated(query, commands, matches, cx)
-                })
-                .ok();
+            picker.update(cx, |picker, cx| picker.delegate.matches_updated(query, commands, matches, cx)).ok();
         })
     }
 
@@ -603,10 +539,7 @@ impl PickerDelegate for CommandPaletteDelegate {
             return true;
         };
 
-        match cx
-            .foreground_executor()
-            .block_with_timeout(duration, rx.clone().recv())
-        {
+        match cx.foreground_executor().block_with_timeout(duration, rx.clone().recv()) {
             Ok(Some((commands, matches))) => {
                 self.matches_updated(query, commands, matches, cx);
                 true
@@ -619,9 +552,7 @@ impl PickerDelegate for CommandPaletteDelegate {
     }
 
     fn dismissed(&mut self, _window: &mut Window, cx: &mut Context<Picker<Self>>) {
-        self.command_palette
-            .update(cx, |_, cx| cx.emit(DismissEvent))
-            .ok();
+        self.command_palette.update(cx, |_, cx| cx.emit(DismissEvent)).ok();
     }
 
     fn confirm(&mut self, _secondary: bool, window: &mut Window, cx: &mut Context<Picker<Self>>) {
@@ -643,11 +574,8 @@ impl PickerDelegate for CommandPaletteDelegate {
         let command_name = command.name.clone();
         let latest_query = self.latest_query.clone();
         let db = CommandPaletteDB::global(cx);
-        cx.background_spawn(async move {
-            db.write_command_invocation(command_name, latest_query)
-                .await
-        })
-        .detach_and_log_err(cx);
+        cx.background_spawn(async move { db.write_command_invocation(command_name, latest_query).await })
+            .detach_and_log_err(cx);
         let action = command.action;
         window.focus(&self.previous_focus_handle, cx);
         self.dismissed(window, cx);
@@ -665,49 +593,27 @@ impl PickerDelegate for CommandPaletteDelegate {
         let command = self.commands.get(matching_command.candidate_id)?;
 
         Some(
-            ListItem::new(ix)
-                .inset(true)
-                .spacing(ListItemSpacing::Sparse)
-                .toggle_state(selected)
-                .child(
-                    h_flex()
-                        .w_full()
-                        .py_px()
-                        .justify_between()
-                        .gap_2()
-                        .child(
-                            HighlightedLabel::new(
-                                command.name.clone(),
-                                matching_command.positions.clone(),
-                            )
-                            .truncate(),
-                        )
-                        .child(
-                            h_flex()
-                                .flex_shrink_0()
-                                .gap_2()
-                                .child(KeyBinding::for_action_in(
-                                    &*command.action,
-                                    &self.previous_focus_handle,
-                                    cx,
-                                ))
-                                .when(command.usage.is_some(), |this| {
-                                    this.child(Self::render_history_button(
-                                        ix,
-                                        command.name.clone(),
-                                        cx,
-                                    ))
-                                }),
-                        ),
-                ),
+            ListItem::new(ix).inset(true).spacing(ListItemSpacing::Sparse).toggle_state(selected).child(
+                h_flex()
+                    .w_full()
+                    .py_px()
+                    .justify_between()
+                    .gap_2()
+                    .child(HighlightedLabel::new(command.name.clone(), matching_command.positions.clone()).truncate())
+                    .child(
+                        h_flex()
+                            .flex_shrink_0()
+                            .gap_2()
+                            .child(KeyBinding::for_action_in(&*command.action, &self.previous_focus_handle, cx))
+                            .when(command.usage.is_some(), |this| {
+                                this.child(Self::render_history_button(ix, command.name.clone(), cx))
+                            }),
+                    ),
+            ),
         )
     }
 
-    fn render_footer(
-        &self,
-        _window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) -> Option<AnyElement> {
+    fn render_footer(&self, _window: &mut Window, cx: &mut Context<Picker<Self>>) -> Option<AnyElement> {
         self.selected_command()?;
         let focus_handle = &self.previous_focus_handle;
 
@@ -722,12 +628,10 @@ impl PickerDelegate for CommandPaletteDelegate {
                 .child(
                     Button::new("run-action", "Run")
                         .key_binding(
-                            KeyBinding::for_action_in(&menu::Confirm, &focus_handle, cx)
+                            KeyBinding::for_action_in(&menu::Confirm, focus_handle, cx)
                                 .map(|kb| kb.size(rems_from_px(12_f32))),
                         )
-                        .on_click(|_, window, cx| {
-                            window.dispatch_action(menu::Confirm.boxed_clone(), cx)
-                        }),
+                        .on_click(|_, window, cx| window.dispatch_action(menu::Confirm.boxed_clone(), cx)),
                 )
                 .into_any(),
         )
@@ -755,23 +659,14 @@ pub fn humanize_action_name(name: &str) -> String {
         } else if char.is_uppercase() {
             let start = index;
             index += 1;
-            while chars
-                .get(index)
-                .is_some_and(|next_char| next_char.is_uppercase())
-            {
+            while chars.get(index).is_some_and(|next_char| next_char.is_uppercase()) {
                 index += 1;
             }
 
             let uppercase_run = &chars[start..index];
             if uppercase_run.len() > 1 {
-                let split_before_last = chars
-                    .get(index)
-                    .is_some_and(|next_char| next_char.is_lowercase());
-                let acronym_end = if split_before_last {
-                    uppercase_run.len() - 1
-                } else {
-                    uppercase_run.len()
-                };
+                let split_before_last = chars.get(index).is_some_and(|next_char| next_char.is_lowercase());
+                let acronym_end = if split_before_last { uppercase_run.len() - 1 } else { uppercase_run.len() };
 
                 if acronym_end > 0 {
                     if !result.ends_with(' ') {
@@ -803,8 +698,6 @@ pub fn humanize_action_name(name: &str) -> String {
 
 impl std::fmt::Debug for Command {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Command")
-            .field("name", &self.name)
-            .finish_non_exhaustive()
+        f.debug_struct("Command").field("name", &self.name).finish_non_exhaustive()
     }
 }

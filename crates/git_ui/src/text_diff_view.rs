@@ -1,35 +1,56 @@
 //! TextDiffView currently provides a UI for displaying differences between the clipboard and selected text.
 
+use std::any::Any;
+use std::any::TypeId;
+use std::cmp;
+use std::ops::Range;
+use std::pin::pin;
+use std::sync::Arc;
+use std::time::Duration;
+
 use anyhow::Result;
 use buffer_diff::BufferDiff;
-use editor::{
-    Editor, EditorEvent, EditorSettings, HiddenUnstagedDiffHunkRenderer, MultiBuffer,
-    SplittableEditor, ToPoint, actions::DiffClipboardWithSelectionData,
-};
-use futures::{FutureExt, select_biased};
-use gpui::{
-    App, AppContext as _, AsyncApp, Context, Entity, EventEmitter, FocusHandle, Focusable,
-    IntoElement, Render, Task, Window,
-};
-use language::{self, Buffer, Capability, OffsetRangeExt, Point};
-use project::{Project, ProjectPath};
+use editor::Editor;
+use editor::EditorEvent;
+use editor::EditorSettings;
+use editor::HiddenUnstagedDiffHunkRenderer;
+use editor::MultiBuffer;
+use editor::SplittableEditor;
+use editor::ToPoint;
+use editor::actions::DiffClipboardWithSelectionData;
+use futures::FutureExt;
+use futures::select_biased;
+use gpui::App;
+use gpui::AppContext as _;
+use gpui::AsyncApp;
+use gpui::Context;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::IntoElement;
+use gpui::Render;
+use gpui::Task;
+use gpui::Window;
+use language::Buffer;
+use language::Capability;
+use language::OffsetRangeExt;
+use language::Point;
+use language::{self};
+use project::Project;
+use project::ProjectPath;
 use settings::Settings;
-use std::{
-    any::{Any, TypeId},
-    cmp,
-    ops::Range,
-    pin::pin,
-    sync::Arc,
-    time::Duration,
-};
-use ui::{Color, Icon, IconName, SharedString};
+use ui::Color;
+use ui::Icon;
+use ui::IconName;
+use ui::SharedString;
 use util::paths::PathExt;
-
-use workspace::{
-    Item, ItemNavHistory, Workspace,
-    item::{ItemEvent, SaveOptions},
-    searchable::SearchableItemHandle,
-};
+use workspace::Item;
+use workspace::ItemNavHistory;
+use workspace::Workspace;
+use workspace::item::ItemEvent;
+use workspace::item::SaveOptions;
+use workspace::searchable::SearchableItemHandle;
 
 pub struct TextDiffView {
     diff_editor: Entity<SplittableEditor>,
@@ -55,8 +76,8 @@ impl TextDiffView {
             let multibuffer_snapshot = multibuffer.read(cx).snapshot(cx);
             let first_selection = editor.selections.newest_anchor();
 
-            let (source_buffer, buffer_range) = multibuffer_snapshot
-                .anchor_range_to_buffer_anchor_range(first_selection.range())?;
+            let (source_buffer, buffer_range) =
+                multibuffer_snapshot.anchor_range_to_buffer_anchor_range(first_selection.range())?;
             let max_point = source_buffer.max_point();
             let buffer_range = buffer_range.to_point(source_buffer);
             let source_buffer = multibuffer.read(cx).buffer(source_buffer.remote_id())?;
@@ -85,10 +106,8 @@ impl TextDiffView {
             let multibuffer = source_editor.buffer();
             let mb_range = {
                 let mb = multibuffer.read(cx);
-                let start_anchor =
-                    mb.buffer_point_to_anchor(&source_buffer, expanded_selection_range.start, cx);
-                let end_anchor =
-                    mb.buffer_point_to_anchor(&source_buffer, expanded_selection_range.end, cx);
+                let start_anchor = mb.buffer_point_to_anchor(&source_buffer, expanded_selection_range.start, cx);
+                let end_anchor = mb.buffer_point_to_anchor(&source_buffer, expanded_selection_range.end, cx);
                 start_anchor.zip(end_anchor).map(|(s, e)| {
                     let snapshot = mb.snapshot(cx);
                     s.to_point(&snapshot)..e.to_point(&snapshot)
@@ -106,28 +125,20 @@ impl TextDiffView {
         let mut clipboard_text = diff_data.clipboard_text.clone();
 
         if !clipboard_text.ends_with("\n") {
-            clipboard_text.push_str("\n");
+            clipboard_text.push('\n');
         }
 
         let workspace = workspace.weak_handle();
-        let clipboard_buffer = build_clipboard_buffer(
-            clipboard_text,
-            &source_buffer,
-            expanded_selection_range.clone(),
-            cx,
-        );
+        let clipboard_buffer =
+            build_clipboard_buffer(clipboard_text, &source_buffer, expanded_selection_range.clone(), cx);
         let diff_buffer = cx.new(|cx| {
-            let mut diff = BufferDiff::new_with_base_text_buffer(
-                &source_buffer_snapshot.text,
-                clipboard_buffer.clone(),
-                cx,
-            );
+            let mut diff =
+                BufferDiff::new_with_base_text_buffer(&source_buffer_snapshot.text, clipboard_buffer.clone(), cx);
             diff.set_operations(Arc::new(buffer_diff::RestoreDiffOperations));
             diff
         });
 
-        let expanded_selection_range =
-            source_buffer_snapshot.anchor_range_outside(expanded_selection_range);
+        let expanded_selection_range = source_buffer_snapshot.anchor_range_outside(expanded_selection_range);
         let task = window.spawn(cx, async move |cx| {
             update_diff_buffer(&diff_buffer, &source_buffer, &clipboard_buffer, cx).await;
 
@@ -212,25 +223,18 @@ impl TextDiffView {
         let editor = source_editor.read(cx);
         let title = editor.buffer().read(cx).title(cx).to_string();
         let selection_location_text = selection_location_text(editor, cx);
-        let selection_location_title = selection_location_text
-            .as_ref()
-            .map(|text| format!("{} @ {}", title, text))
-            .unwrap_or(title);
+        let selection_location_title =
+            selection_location_text.as_ref().map(|text| format!("{} @ {}", title, text)).unwrap_or(title);
 
         let path = editor
             .buffer()
             .read(cx)
             .as_singleton()
-            .and_then(|b| {
-                b.read(cx)
-                    .file()
-                    .map(|f| f.full_path(cx).compact().to_string_lossy().into_owned())
-            })
+            .and_then(|b| b.read(cx).file().map(|f| f.full_path(cx).compact().to_string_lossy().into_owned()))
             .unwrap_or(MultiBuffer::DEFAULT_TITLE.into());
 
-        let selection_location_path = selection_location_text
-            .map(|text| format!("{} @ {}", path, text))
-            .unwrap_or(path);
+        let selection_location_path =
+            selection_location_text.map(|text| format!("{} @ {}", path, text)).unwrap_or(path);
 
         Self {
             diff_editor,
@@ -240,10 +244,7 @@ impl TextDiffView {
             _recalculate_diff_task: cx.spawn(async move |_, cx| {
                 while buffer_changes_rx.recv().await.is_ok() {
                     loop {
-                        let mut timer = cx
-                            .background_executor()
-                            .timer(RECALCULATE_DIFF_DEBOUNCE)
-                            .fuse();
+                        let mut timer = cx.background_executor().timer(RECALCULATE_DIFF_DEBOUNCE).fuse();
                         let mut recv = pin!(buffer_changes_rx.recv().fuse());
                         select_biased! {
                             _ = timer => break,
@@ -298,12 +299,7 @@ async fn update_diff_buffer(
 
     let update = diff
         .update(cx, |diff, cx| {
-            diff.update_diff(
-                source_buffer_snapshot.text.clone(),
-                &base_buffer_snapshot,
-                Some(base_text.clone()),
-                cx,
-            )
+            diff.update_diff(source_buffer_snapshot.text.clone(), &base_buffer_snapshot, Some(base_text.clone()), cx)
         })
         .await;
 
@@ -338,8 +334,7 @@ impl Item for TextDiffView {
     }
 
     fn deactivated(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.diff_editor
-            .update(cx, |editor, cx| editor.deactivated(window, cx));
+        self.diff_editor.update(cx, |editor, cx| editor.deactivated(window, cx));
     }
 
     fn act_as_type<'a>(
@@ -363,11 +358,7 @@ impl Item for TextDiffView {
         Some(Box::new(self.diff_editor.clone()))
     }
 
-    fn for_each_project_item(
-        &self,
-        cx: &App,
-        f: &mut dyn FnMut(gpui::EntityId, &dyn project::ProjectItem),
-    ) {
+    fn for_each_project_item(&self, cx: &App, f: &mut dyn FnMut(gpui::EntityId, &dyn project::ProjectItem)) {
         self.diff_editor.read(cx).for_each_project_item(cx, f)
     }
 
@@ -375,37 +366,19 @@ impl Item for TextDiffView {
         self.diff_editor.read(cx).active_project_path(cx)
     }
 
-    fn set_nav_history(
-        &mut self,
-        nav_history: ItemNavHistory,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn set_nav_history(&mut self, nav_history: ItemNavHistory, _: &mut Window, cx: &mut Context<Self>) {
         let rhs = self.diff_editor.read(cx).rhs_editor().clone();
         rhs.update(cx, |editor, _| {
             editor.set_nav_history(Some(nav_history));
         });
     }
 
-    fn navigate(
-        &mut self,
-        data: Arc<dyn Any + Send>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        self.diff_editor
-            .update(cx, |editor, cx| editor.navigate(data, window, cx))
+    fn navigate(&mut self, data: Arc<dyn Any + Send>, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        self.diff_editor.update(cx, |editor, cx| editor.navigate(data, window, cx))
     }
 
-    fn added_to_workspace(
-        &mut self,
-        workspace: &mut Workspace,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.diff_editor.update(cx, |editor, cx| {
-            editor.added_to_workspace(workspace, window, cx)
-        });
+    fn added_to_workspace(&mut self, workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Self>) {
+        self.diff_editor.update(cx, |editor, cx| editor.added_to_workspace(workspace, window, cx));
     }
 
     fn can_save(&self, cx: &App) -> bool {
@@ -421,8 +394,7 @@ impl Item for TextDiffView {
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
         // Delegate saving to the editor, which manages the new buffer
-        self.diff_editor
-            .update(cx, |editor, cx| editor.save(options, project, window, cx))
+        self.diff_editor.update(cx, |editor, cx| editor.save(options, project, window, cx))
     }
 }
 
@@ -442,13 +414,7 @@ pub fn selection_location_text(editor: &Editor, cx: &App) -> Option<String> {
     let range_text = if start_row == end_row {
         format!("L{}:{}-{}", start_row + 1, start_column + 1, end_column + 1)
     } else {
-        format!(
-            "L{}:{}-L{}:{}",
-            start_row + 1,
-            start_column + 1,
-            end_row + 1,
-            end_column + 1
-        )
+        format!("L{}:{}-L{}:{}", start_row + 1, start_column + 1, end_row + 1, end_column + 1)
     };
 
     Some(range_text)

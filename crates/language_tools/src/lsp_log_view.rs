@@ -1,30 +1,71 @@
-use collections::{HashMap, HashSet, VecDeque};
-use editor::{Editor, EditorEvent, MultiBufferOffset, actions::MoveToEnd, scroll::Autoscroll};
-use gpui::{
-    Anchor, App, Context, Entity, EventEmitter, FocusHandle, Focusable, IntoElement, ParentElement,
-    Render, Styled, Subscription, Task, WeakEntity, Window, actions, div,
-};
+use std::any::TypeId;
+use std::borrow::Cow;
+use std::sync::Arc;
+
+use collections::HashMap;
+use collections::HashSet;
+use collections::VecDeque;
+use editor::Editor;
+use editor::EditorEvent;
+use editor::MultiBufferOffset;
+use editor::actions::MoveToEnd;
+use editor::scroll::Autoscroll;
+use gpui::Anchor;
+use gpui::App;
+use gpui::Context;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::IntoElement;
+use gpui::ParentElement;
+use gpui::Render;
+use gpui::Styled;
+use gpui::Subscription;
+use gpui::Task;
+use gpui::WeakEntity;
+use gpui::Window;
+use gpui::actions;
+use gpui::div;
 use itertools::Itertools as _;
-use language::{LanguageServerId, language_settings::SoftWrap};
-use lsp::{
-    LanguageServer, LanguageServerName, LanguageServerSelector, MessageType, SetTraceParams,
-    TraceValue, notification::SetTrace,
-};
-use project::{
-    LanguageServerStatus, Project,
-    lsp_store::log_store::{
-        self, Event, LanguageServerKind, LanguageServerLogKey, LogKind, LogStore, Message,
-    },
-    search::SearchQuery,
-};
+use language::LanguageServerId;
+use language::language_settings::SoftWrap;
+use lsp::LanguageServer;
+use lsp::LanguageServerName;
+use lsp::LanguageServerSelector;
+use lsp::MessageType;
+use lsp::SetTraceParams;
+use lsp::TraceValue;
+use lsp::notification::SetTrace;
+use project::LanguageServerStatus;
+use project::Project;
+use project::lsp_store::log_store::Event;
+use project::lsp_store::log_store::LanguageServerKind;
+use project::lsp_store::log_store::LanguageServerLogKey;
+use project::lsp_store::log_store::LogKind;
+use project::lsp_store::log_store::LogStore;
+use project::lsp_store::log_store::Message;
+use project::lsp_store::log_store::{self};
+use project::search::SearchQuery;
 use settings::SeedQuerySetting;
-use std::{any::TypeId, borrow::Cow, sync::Arc};
-use ui::{Checkbox, ContextMenu, PopoverMenu, ToggleState, prelude::*};
-use workspace::{
-    SplitDirection, ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView, Workspace, WorkspaceId,
-    item::{Item, ItemHandle},
-    searchable::{Direction, SearchEvent, SearchToken, SearchableItem, SearchableItemHandle},
-};
+use ui::Checkbox;
+use ui::ContextMenu;
+use ui::PopoverMenu;
+use ui::ToggleState;
+use ui::prelude::*;
+use workspace::SplitDirection;
+use workspace::ToolbarItemEvent;
+use workspace::ToolbarItemLocation;
+use workspace::ToolbarItemView;
+use workspace::Workspace;
+use workspace::WorkspaceId;
+use workspace::item::Item;
+use workspace::item::ItemHandle;
+use workspace::searchable::Direction;
+use workspace::searchable::SearchEvent;
+use workspace::searchable::SearchToken;
+use workspace::searchable::SearchableItem;
+use workspace::searchable::SearchableItemHandle;
 
 use crate::get_or_create_tool;
 
@@ -47,13 +88,10 @@ pub fn open(
                     let project_is_local = project.read(cx).is_local();
                     let weak_lsp_store = project.read(cx).lsp_store().downgrade();
                     let tool_log_store = log_store.clone();
-                    let log_view = get_or_create_tool(
-                        workspace,
-                        SplitDirection::Right,
-                        window,
-                        cx,
-                        move |window, cx| LspLogView::new(project, tool_log_store, window, cx),
-                    );
+                    let log_view =
+                        get_or_create_tool(workspace, SplitDirection::Right, window, cx, move |window, cx| {
+                            LspLogView::new(project, tool_log_store, window, cx)
+                        });
                     log_view.update(cx, |log_view, cx| {
                         let key_priority = |key: &LanguageServerLogKey| match &key.kind {
                             LanguageServerKind::Local { .. } if project_is_local => 0,
@@ -65,10 +103,7 @@ pub fn open(
                                 .read(cx)
                                 .language_servers
                                 .keys()
-                                .filter(|key| {
-                                    key.server_id == id
-                                        && key.is_for_project(&weak_project, &weak_lsp_store)
-                                })
+                                .filter(|key| key.server_id == id && key.is_for_project(&weak_project, &weak_lsp_store))
                                 .min_by_key(|key| key_priority(key))
                                 .cloned(),
                             LanguageServerSelector::Name(name) => log_store
@@ -152,13 +187,9 @@ pub fn init(on_headless_host: bool, cx: &mut App) {
         workspace.register_action(move |workspace, _: &OpenLanguageServerLogs, window, cx| {
             let log_store = log_store.clone();
             let project = workspace.project().clone();
-            get_or_create_tool(
-                workspace,
-                SplitDirection::Right,
-                window,
-                cx,
-                move |window, cx| LspLogView::new(project, log_store, window, cx),
-            );
+            get_or_create_tool(workspace, SplitDirection::Right, window, cx, move |window, cx| {
+                LspLogView::new(project, log_store, window, cx)
+            });
         });
     })
     .detach();
@@ -173,100 +204,76 @@ impl LspLogView {
     ) -> Self {
         let weak_project = project.downgrade();
         let weak_lsp_store = project.read(cx).lsp_store().downgrade();
-        let server_key = log_store
-            .read(cx)
-            .server_keys_for_project(&weak_project, &weak_lsp_store)
-            .next();
-        let model_changes_subscription =
-            cx.observe_in(&log_store, window, move |this, store, window, cx| {
-                this.prune_enabled_streams(cx);
-                let server_key = this
-                    .current_server_key
-                    .as_ref()
-                    .filter(|key| {
-                        store.read(cx).language_servers.contains_key(key)
-                            && key.is_for_project(&weak_project, &weak_lsp_store)
-                    })
-                    .cloned()
-                    .or_else(|| {
-                        store
-                            .read(cx)
-                            .server_keys_for_project(&weak_project, &weak_lsp_store)
-                            .next()
-                    });
-                if let Some(server_key) = server_key {
-                    let stream_is_enabled = this.active_entry_kind == LogKind::ServerInfo
-                        || this
-                            .enabled_streams
-                            .get(&server_key)
-                            .is_some_and(|streams| {
-                                streams.log_kinds.contains(&this.active_entry_kind)
-                            });
-                    if this.current_server_key.as_ref() == Some(&server_key) {
-                        if !stream_is_enabled {
-                            // Rebuilding from the store would duplicate logs whose events are still queued.
-                            this.set_stream_enabled(&server_key, this.active_entry_kind, true, cx);
-                        }
-                    } else {
-                        match this.active_entry_kind {
-                            LogKind::Rpc => this.show_rpc_trace_for_server(server_key, window, cx),
-                            LogKind::Trace => this.show_trace_for_server(server_key, window, cx),
-                            LogKind::Logs => this.show_logs_for_server(server_key, window, cx),
-                            LogKind::ServerInfo => this.show_server_info(server_key, window, cx),
-                        }
+        let server_key = log_store.read(cx).server_keys_for_project(&weak_project, &weak_lsp_store).next();
+        let model_changes_subscription = cx.observe_in(&log_store, window, move |this, store, window, cx| {
+            this.prune_enabled_streams(cx);
+            let server_key = this
+                .current_server_key
+                .as_ref()
+                .filter(|key| {
+                    store.read(cx).language_servers.contains_key(key)
+                        && key.is_for_project(&weak_project, &weak_lsp_store)
+                })
+                .cloned()
+                .or_else(|| store.read(cx).server_keys_for_project(&weak_project, &weak_lsp_store).next());
+            if let Some(server_key) = server_key {
+                let stream_is_enabled = this.active_entry_kind == LogKind::ServerInfo
+                    || this
+                        .enabled_streams
+                        .get(&server_key)
+                        .is_some_and(|streams| streams.log_kinds.contains(&this.active_entry_kind));
+                if this.current_server_key.as_ref() == Some(&server_key) {
+                    if !stream_is_enabled {
+                        // Rebuilding from the store would duplicate logs whose events are still queued.
+                        this.set_stream_enabled(&server_key, this.active_entry_kind, true, cx);
+                    }
+                } else {
+                    match this.active_entry_kind {
+                        LogKind::Rpc => this.show_rpc_trace_for_server(server_key, window, cx),
+                        LogKind::Trace => this.show_trace_for_server(server_key, window, cx),
+                        LogKind::Logs => this.show_logs_for_server(server_key, window, cx),
+                        LogKind::ServerInfo => this.show_server_info(server_key, window, cx),
                     }
                 }
+            }
 
-                cx.notify();
-            });
+            cx.notify();
+        });
 
-        let events_subscriptions = cx.subscribe_in(
-            &log_store,
-            window,
-            move |log_view, _, e, window, cx| match e {
-                Event::NewServerLogEntry { key, kind, text } => {
-                    if log_view.current_server_key.as_ref() == Some(key)
-                        && LogKind::from_server_log_type(kind) == log_view.active_entry_kind
-                    {
-                        log_view.editor.update(cx, |editor, cx| {
-                            editor.set_read_only(false);
-                            let last_offset = editor.buffer().read(cx).len(cx);
-                            let newest_cursor_is_at_end = editor
-                                .selections
-                                .newest::<MultiBufferOffset>(&editor.display_snapshot(cx))
-                                .start
+        let events_subscriptions = cx.subscribe_in(&log_store, window, move |log_view, _, e, window, cx| match e {
+            Event::NewServerLogEntry { key, kind, text } => {
+                if log_view.current_server_key.as_ref() == Some(key)
+                    && LogKind::from_server_log_type(kind) == log_view.active_entry_kind
+                {
+                    log_view.editor.update(cx, |editor, cx| {
+                        editor.set_read_only(false);
+                        let last_offset = editor.buffer().read(cx).len(cx);
+                        let newest_cursor_is_at_end =
+                            editor.selections.newest::<MultiBufferOffset>(&editor.display_snapshot(cx)).start
                                 >= last_offset;
-                            editor.edit(
-                                vec![
-                                    (last_offset..last_offset, text.as_str()),
-                                    (last_offset..last_offset, "\n"),
-                                ],
+                        editor.edit(
+                            vec![(last_offset..last_offset, text.as_str()), (last_offset..last_offset, "\n")],
+                            cx,
+                        );
+                        if text.len() > 1024 {
+                            let b = editor.buffer().read(cx).as_singleton().unwrap().read(cx);
+                            let fold_offset = b.as_rope().ceil_char_boundary(last_offset.0 + 1024);
+                            editor.fold_ranges(
+                                vec![MultiBufferOffset(fold_offset)..MultiBufferOffset(b.as_rope().len())],
+                                false,
+                                window,
                                 cx,
                             );
-                            if text.len() > 1024 {
-                                let b = editor.buffer().read(cx).as_singleton().unwrap().read(cx);
-                                let fold_offset =
-                                    b.as_rope().ceil_char_boundary(last_offset.0 + 1024);
-                                editor.fold_ranges(
-                                    vec![
-                                        MultiBufferOffset(fold_offset)
-                                            ..MultiBufferOffset(b.as_rope().len()),
-                                    ],
-                                    false,
-                                    window,
-                                    cx,
-                                );
-                            }
+                        }
 
-                            if newest_cursor_is_at_end {
-                                editor.request_autoscroll(Autoscroll::bottom(), cx);
-                            }
-                            editor.set_read_only(true);
-                        });
-                    }
+                        if newest_cursor_is_at_end {
+                            editor.request_autoscroll(Autoscroll::bottom(), cx);
+                        }
+                        editor.set_read_only(true);
+                    });
                 }
-            },
-        );
+            }
+        });
         let (editor, editor_subscriptions) = Self::editor_for_logs(String::new(), window, cx);
 
         let focus_handle = cx.focus_handle();
@@ -279,11 +286,7 @@ impl LspLogView {
                 .enabled_streams
                 .iter()
                 .flat_map(|(key, streams)| {
-                    streams
-                        .log_kinds
-                        .iter()
-                        .map(|log_kind| (key.clone(), *log_kind))
-                        .collect::<Vec<_>>()
+                    streams.log_kinds.iter().map(|log_kind| (key.clone(), *log_kind)).collect::<Vec<_>>()
                 })
                 .collect::<Vec<_>>();
             for (key, log_kind) in enabled_streams {
@@ -301,11 +304,7 @@ impl LspLogView {
             current_server_key: None,
             active_entry_kind: LogKind::Logs,
             enabled_streams: HashMap::default(),
-            _log_store_subscriptions: vec![
-                model_changes_subscription,
-                events_subscriptions,
-                focus_subscription,
-            ],
+            _log_store_subscriptions: vec![model_changes_subscription, events_subscriptions, focus_subscription],
         };
         if let Some(server_key) = server_key {
             lsp_log_view.show_logs_for_server(server_key, window, cx);
@@ -319,14 +318,10 @@ impl LspLogView {
         cx: &mut Context<Self>,
     ) -> (Entity<Editor>, Vec<Subscription>) {
         let editor = initialize_new_editor(log_contents, true, window, cx);
-        let editor_subscription = cx.subscribe(
-            &editor,
-            |_, _, event: &EditorEvent, cx: &mut Context<LspLogView>| cx.emit(event.clone()),
-        );
-        let search_subscription = cx.subscribe(
-            &editor,
-            |_, _, event: &SearchEvent, cx: &mut Context<LspLogView>| cx.emit(event.clone()),
-        );
+        let editor_subscription =
+            cx.subscribe(&editor, |_, _, event: &EditorEvent, cx: &mut Context<LspLogView>| cx.emit(event.clone()));
+        let search_subscription =
+            cx.subscribe(&editor, |_, _, event: &SearchEvent, cx: &mut Context<LspLogView>| cx.emit(event.clone()));
         (editor, vec![editor_subscription, search_subscription])
     }
 
@@ -350,17 +345,9 @@ impl LspLogView {
 * Configuration: {CONFIGURATION}",
             NAME = info.status.name,
             ID = info.id,
-            VERSION = info
-                .status
-                .server_version
-                .as_ref()
-                .map(|version| version.as_ref())
-                .unwrap_or("Unknown"),
-            BINARY = info
-                .status
-                .binary
-                .as_ref()
-                .map_or_else(|| "Unknown".to_string(), |binary| format!("{:#?}", binary)),
+            VERSION = info.status.server_version.as_ref().map(|version| version.as_ref()).unwrap_or("Unknown"),
+            BINARY =
+                info.status.binary.as_ref().map_or_else(|| "Unknown".to_string(), |binary| format!("{:#?}", binary)),
             WORKSPACE_FOLDERS = info
                 .status
                 .workspace_folders
@@ -379,18 +366,14 @@ impl LspLogView {
                 .unwrap_or_else(|| "Unknown".to_string()),
         );
         let editor = initialize_new_editor(server_info, false, window, cx);
-        let editor_subscription = cx.subscribe(
-            &editor,
-            |_, _, event: &EditorEvent, cx: &mut Context<LspLogView>| cx.emit(event.clone()),
-        );
-        let search_subscription = cx.subscribe(
-            &editor,
-            |_, _, event: &SearchEvent, cx: &mut Context<LspLogView>| cx.emit(event.clone()),
-        );
+        let editor_subscription =
+            cx.subscribe(&editor, |_, _, event: &EditorEvent, cx: &mut Context<LspLogView>| cx.emit(event.clone()));
+        let search_subscription =
+            cx.subscribe(&editor, |_, _, event: &SearchEvent, cx: &mut Context<LspLogView>| cx.emit(event.clone()));
         (editor, vec![editor_subscription, search_subscription])
     }
 
-    pub(crate) fn menu_items(&self, cx: &mut App) -> Option<Vec<LogMenuItem>> {
+    pub(crate) fn menu_items(&self, cx: &App) -> Option<Vec<LogMenuItem>> {
         let log_store = self.log_store.read(cx);
 
         let unknown_server = LanguageServerName::new_static("unknown server");
@@ -414,8 +397,7 @@ impl LspLogView {
                     server_kind: key.kind.clone(),
                     worktree_root_name,
                     rpc_trace_enabled: self.enabled_streams.get(key).is_some_and(|streams| {
-                        streams.generation == state.generation
-                            && streams.log_kinds.contains(&LogKind::Rpc)
+                        streams.generation == state.generation && streams.log_kinds.contains(&LogKind::Rpc)
                     }),
                     selected_entry: self.active_entry_kind,
                     trace_level: lsp::TraceValue::Off,
@@ -429,27 +411,16 @@ impl LspLogView {
     fn prune_enabled_streams(&mut self, cx: &App) {
         let log_store = self.log_store.read(cx);
         self.enabled_streams.retain(|key, streams| {
-            log_store
-                .language_servers
-                .get(key)
-                .is_some_and(|state| state.generation == streams.generation)
+            log_store.language_servers.get(key).is_some_and(|state| state.generation == streams.generation)
         });
     }
 
-    fn set_stream_enabled(
-        &mut self,
-        key: &LanguageServerLogKey,
-        log_kind: LogKind,
-        enabled: bool,
-        cx: &mut App,
-    ) {
+    fn set_stream_enabled(&mut self, key: &LanguageServerLogKey, log_kind: LogKind, enabled: bool, cx: &mut App) {
         // A view can be released before the observer sees a removed or replaced registration.
         self.prune_enabled_streams(cx);
         if enabled {
-            let already_enabled = self
-                .enabled_streams
-                .get(key)
-                .is_some_and(|streams| streams.log_kinds.contains(&log_kind));
+            let already_enabled =
+                self.enabled_streams.get(key).is_some_and(|streams| streams.log_kinds.contains(&log_kind));
             if already_enabled {
                 return;
             }
@@ -461,10 +432,7 @@ impl LspLogView {
             };
             self.enabled_streams
                 .entry(key.clone())
-                .or_insert_with(|| EnabledLogStreams {
-                    generation,
-                    log_kinds: HashSet::default(),
-                })
+                .or_insert_with(|| EnabledLogStreams { generation, log_kinds: HashSet::default() })
                 .log_kinds
                 .insert(log_kind);
         } else {
@@ -483,27 +451,16 @@ impl LspLogView {
         }
     }
 
-    fn set_visible_log_stream(
-        &mut self,
-        key: &LanguageServerLogKey,
-        log_kind: LogKind,
-        cx: &mut App,
-    ) {
+    fn set_visible_log_stream(&mut self, key: &LanguageServerLogKey, log_kind: LogKind, cx: &mut App) {
         self.set_stream_enabled(key, log_kind, true, cx);
-        let stream_is_enabled = self
-            .enabled_streams
-            .get(key)
-            .is_some_and(|streams| streams.log_kinds.contains(&log_kind));
+        let stream_is_enabled =
+            self.enabled_streams.get(key).is_some_and(|streams| streams.log_kinds.contains(&log_kind));
         if stream_is_enabled {
             self.disable_visible_log_streams(Some((key, log_kind)), cx);
         }
     }
 
-    fn disable_visible_log_streams(
-        &mut self,
-        except: Option<(&LanguageServerLogKey, LogKind)>,
-        cx: &mut App,
-    ) {
+    fn disable_visible_log_streams(&mut self, except: Option<(&LanguageServerLogKey, LogKind)>, cx: &mut App) {
         let visible_log_streams = self
             .enabled_streams
             .iter()
@@ -517,33 +474,17 @@ impl LspLogView {
             })
             .collect::<Vec<_>>();
         for (key, log_kind) in visible_log_streams {
-            let should_preserve = except.is_some_and(|(except_key, except_kind)| {
-                except_key == &key && except_kind == log_kind
-            });
+            let should_preserve =
+                except.is_some_and(|(except_key, except_kind)| except_key == &key && except_kind == log_kind);
             if !should_preserve {
                 self.set_stream_enabled(&key, log_kind, false, cx);
             }
         }
     }
 
-    fn show_logs_for_server(
-        &mut self,
-        key: LanguageServerLogKey,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let typ = self
-            .log_store
-            .read(cx)
-            .language_servers
-            .get(&key)
-            .map(|v| v.log_level)
-            .unwrap_or(MessageType::LOG);
-        let log_contents = self
-            .log_store
-            .read(cx)
-            .server_logs(&key)
-            .map(|v| log_contents(v, typ));
+    fn show_logs_for_server(&mut self, key: LanguageServerLogKey, window: &mut Window, cx: &mut Context<Self>) {
+        let typ = self.log_store.read(cx).language_servers.get(&key).map(|v| v.log_level).unwrap_or(MessageType::LOG);
+        let log_contents = self.log_store.read(cx).server_logs(&key).map(|v| log_contents(v, typ));
         if let Some(log_contents) = log_contents {
             self.current_server_key = Some(key.clone());
             self.active_entry_kind = LogKind::Logs;
@@ -582,23 +523,12 @@ impl LspLogView {
         self.editor.read(cx).focus_handle(cx).focus(window, cx);
     }
 
-    fn show_trace_for_server(
-        &mut self,
-        key: LanguageServerLogKey,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn show_trace_for_server(&mut self, key: LanguageServerLogKey, window: &mut Window, cx: &mut Context<Self>) {
         let trace_level = self
             .log_store
-            .update(cx, |log_store, _| {
-                Some(log_store.get_language_server_state(&key)?.trace_level)
-            })
+            .update(cx, |log_store, _| Some(log_store.get_language_server_state(&key)?.trace_level))
             .unwrap_or(TraceValue::Messages);
-        let log_contents = self
-            .log_store
-            .read(cx)
-            .server_trace(&key)
-            .map(|v| log_contents(v, trace_level));
+        let log_contents = self.log_store.read(cx).server_trace(&key).map(|v| log_contents(v, trace_level));
         if let Some(log_contents) = log_contents {
             self.current_server_key = Some(key.clone());
             self.active_entry_kind = LogKind::Trace;
@@ -611,12 +541,7 @@ impl LspLogView {
         self.editor.read(cx).focus_handle(cx).focus(window, cx);
     }
 
-    fn show_rpc_trace_for_server(
-        &mut self,
-        key: LanguageServerLogKey,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn show_rpc_trace_for_server(&mut self, key: LanguageServerLogKey, window: &mut Window, cx: &mut Context<Self>) {
         self.toggle_rpc_trace_for_server(key.clone(), true, window, cx);
         let rpc_log = self.log_store.update(cx, |log_store, _| {
             log_store
@@ -631,13 +556,9 @@ impl LspLogView {
             self.active_entry_kind = LogKind::Rpc;
             let (editor, editor_subscriptions) = Self::editor_for_logs(rpc_log, window, cx);
             let language = self.project.read(cx).languages().language_for_name("JSON");
-            editor
-                .read(cx)
-                .buffer()
-                .read(cx)
-                .as_singleton()
-                .expect("log buffer should be a singleton")
-                .update(cx, |_, cx| {
+            editor.read(cx).buffer().read(cx).as_singleton().expect("log buffer should be a singleton").update(
+                cx,
+                |_, cx| {
                     cx.spawn({
                         let buffer = cx.entity();
                         async move |_, cx| {
@@ -648,7 +569,8 @@ impl LspLogView {
                         }
                     })
                     .detach();
-                });
+                },
+            );
 
             self.editor = editor;
             self.editor_subscriptions = editor_subscriptions;
@@ -672,25 +594,14 @@ impl LspLogView {
         }
     }
 
-    fn update_trace_level(
-        &self,
-        key: LanguageServerLogKey,
-        level: TraceValue,
-        cx: &mut Context<Self>,
-    ) {
+    fn update_trace_level(&self, key: LanguageServerLogKey, level: TraceValue, cx: &mut Context<Self>) {
         let server = self
             .log_store
             .read(cx)
             .language_servers
             .get(&key)
             .and_then(|state| state.server())
-            .or_else(|| {
-                self.project
-                    .read(cx)
-                    .lsp_store()
-                    .read(cx)
-                    .language_server_for_id(key.server_id)
-            });
+            .or_else(|| self.project.read(cx).lsp_store().read(cx).language_server_for_id(key.server_id));
         if let Some(server) = server {
             self.log_store.update(cx, |this, _| {
                 if let Some(state) = this.get_language_server_state(&key) {
@@ -698,18 +609,11 @@ impl LspLogView {
                 }
             });
 
-            server
-                .notify::<SetTrace>(SetTraceParams { value: level })
-                .ok();
+            server.notify::<SetTrace>(SetTraceParams { value: level }).ok();
         }
     }
 
-    fn show_server_info(
-        &mut self,
-        key: LanguageServerLogKey,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn show_server_info(&mut self, key: LanguageServerLogKey, window: &mut Window, cx: &mut Context<Self>) {
         let server_id = key.server_id;
         let server_info = self
             .log_store
@@ -720,27 +624,18 @@ impl LspLogView {
             .as_deref()
             .map(ServerInfo::new);
         let server_info = server_info.or_else(|| {
-            self.project
-                .read(cx)
-                .lsp_store()
-                .update(cx, |lsp_store, _| {
-                    lsp_store
-                        .language_server_for_id(server_id)
-                        .as_ref()
-                        .map(|language_server| ServerInfo::new(language_server))
-                        .or_else(move || {
-                            let capabilities =
-                                lsp_store.lsp_server_capabilities.get(&server_id)?.clone();
-                            let status =
-                                lsp_store.language_server_statuses.get(&server_id)?.clone();
+            self.project.read(cx).lsp_store().update(cx, |lsp_store, _| {
+                lsp_store
+                    .language_server_for_id(server_id)
+                    .as_ref()
+                    .map(|language_server| ServerInfo::new(language_server))
+                    .or_else(move || {
+                        let capabilities = lsp_store.lsp_server_capabilities.get(&server_id)?.clone();
+                        let status = lsp_store.language_server_statuses.get(&server_id)?.clone();
 
-                            Some(ServerInfo {
-                                id: server_id,
-                                capabilities,
-                                status,
-                            })
-                        })
-                })
+                        Some(ServerInfo { id: server_id, capabilities, status })
+                    })
+            })
         });
         let Some(server_info) = server_info else {
             return;
@@ -757,18 +652,12 @@ impl LspLogView {
 }
 
 fn log_contents<T: Message>(lines: &VecDeque<T>, level: <T as Message>::Level) -> String {
-    lines
-        .iter()
-        .filter(|message| message.should_include(level))
-        .flat_map(|message| [message.as_ref(), "\n"])
-        .collect()
+    lines.iter().filter(|message| message.should_include(level)).flat_map(|message| [message.as_ref(), "\n"]).collect()
 }
 
 impl Render for LspLogView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        self.editor.update(cx, |editor, cx| {
-            editor.render(window, cx).into_any_element()
-        })
+        self.editor.update(cx, |editor, cx| editor.render(window, cx).into_any_element())
     }
 }
 
@@ -789,11 +678,7 @@ impl Item for LspLogView {
         "LSP Logs".into()
     }
 
-    fn as_searchable(
-        &self,
-        handle: &Entity<Self>,
-        _: &App,
-    ) -> Option<Box<dyn SearchableItemHandle>> {
+    fn as_searchable(&self, handle: &Entity<Self>, _: &App) -> Option<Box<dyn SearchableItemHandle>> {
         Some(Box::new(handle.clone()))
     }
 
@@ -855,9 +740,7 @@ impl SearchableItem for LspLogView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.editor.update(cx, |e, cx| {
-            e.update_matches(matches, active_match_index, token, window, cx)
-        })
+        self.editor.update(cx, |e, cx| e.update_matches(matches, active_match_index, token, window, cx))
     }
 
     fn query_suggestion(
@@ -866,9 +749,7 @@ impl SearchableItem for LspLogView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> String {
-        self.editor.update(cx, |e, cx| {
-            e.query_suggestion(seed_query_override, window, cx)
-        })
+        self.editor.update(cx, |e, cx| e.query_suggestion(seed_query_override, window, cx))
     }
 
     fn activate_match(
@@ -879,9 +760,7 @@ impl SearchableItem for LspLogView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.editor.update(cx, |e, cx| {
-            e.activate_match(index, matches, token, window, cx)
-        })
+        self.editor.update(cx, |e, cx| e.activate_match(index, matches, token, window, cx))
     }
 
     fn select_matches(
@@ -891,8 +770,7 @@ impl SearchableItem for LspLogView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.editor
-            .update(cx, |e, cx| e.select_matches(matches, token, window, cx))
+        self.editor.update(cx, |e, cx| e.select_matches(matches, token, window, cx))
     }
 
     fn find_matches(
@@ -901,8 +779,7 @@ impl SearchableItem for LspLogView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> gpui::Task<Vec<Self::Match>> {
-        self.editor
-            .update(cx, |e, cx| e.find_matches(query, window, cx))
+        self.editor.update(cx, |e, cx| e.find_matches(query, window, cx))
     }
 
     fn replace(
@@ -935,9 +812,7 @@ impl SearchableItem for LspLogView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Option<usize> {
-        self.editor.update(cx, |e, cx| {
-            e.active_match_index(direction, matches, token, window, cx)
-        })
+        self.editor.update(cx, |e, cx| e.active_match_index(direction, matches, token, window, cx))
     }
 }
 
@@ -977,23 +852,12 @@ impl Render for LspLogToolbarItemView {
             (menu_rows, current_server_key)
         });
 
-        let current_server = current_server_key.and_then(|current_server_key| {
-            menu_rows
-                .iter()
-                .find(|row| row.key() == current_server_key)
-                .cloned()
-        });
+        let current_server = current_server_key
+            .and_then(|current_server_key| menu_rows.iter().find(|row| row.key() == current_server_key).cloned());
 
         let available_language_servers: Vec<_> = menu_rows
             .into_iter()
-            .map(|row| {
-                (
-                    row.key(),
-                    row.server_name,
-                    row.worktree_root_name,
-                    row.selected_entry,
-                )
-            })
+            .map(|row| (row.key(), row.server_name, row.worktree_root_name, row.selected_entry))
             .collect();
 
         let log_toolbar_view = cx.weak_entity();
@@ -1005,28 +869,17 @@ impl Render for LspLogToolbarItemView {
                     "language_server_menu_header",
                     current_server
                         .as_ref()
-                        .map(|row| {
-                            Cow::Owned(format!(
-                                "{} ({})",
-                                row.server_name.0, row.worktree_root_name,
-                            ))
-                        })
+                        .map(|row| Cow::Owned(format!("{} ({})", row.server_name.0, row.worktree_root_name,)))
                         .unwrap_or_else(|| "No server selected".into()),
                 )
-                .end_icon(
-                    Icon::new(IconName::ChevronDown)
-                        .size(IconSize::Small)
-                        .color(Color::Muted),
-                ),
+                .end_icon(Icon::new(IconName::ChevronDown).size(IconSize::Small).color(Color::Muted)),
             )
             .menu({
                 let log_view = log_view.clone();
                 move |window, cx| {
                     let log_view = log_view.clone();
                     ContextMenu::build(window, cx, |mut menu, window, _| {
-                        for (server_key, name, worktree_root, active_entry_kind) in
-                            available_language_servers.iter()
-                        {
+                        for (server_key, name, worktree_root, active_entry_kind) in available_language_servers.iter() {
                             let label = format!("{name} ({worktree_root})");
                             let server_key = server_key.clone();
                             let active_entry_kind = *active_entry_kind;
@@ -1038,31 +891,12 @@ impl Render for LspLogToolbarItemView {
                                     view.active_entry_kind = active_entry_kind;
                                     match view.active_entry_kind {
                                         LogKind::Rpc => {
-                                            view.toggle_rpc_trace_for_server(
-                                                server_key.clone(),
-                                                true,
-                                                window,
-                                                cx,
-                                            );
-                                            view.show_rpc_trace_for_server(
-                                                server_key.clone(),
-                                                window,
-                                                cx,
-                                            );
+                                            view.toggle_rpc_trace_for_server(server_key.clone(), true, window, cx);
+                                            view.show_rpc_trace_for_server(server_key.clone(), window, cx);
                                         }
-                                        LogKind::Trace => view.show_trace_for_server(
-                                            server_key.clone(),
-                                            window,
-                                            cx,
-                                        ),
-                                        LogKind::Logs => view.show_logs_for_server(
-                                            server_key.clone(),
-                                            window,
-                                            cx,
-                                        ),
-                                        LogKind::ServerInfo => {
-                                            view.show_server_info(server_key.clone(), window, cx)
-                                        }
+                                        LogKind::Trace => view.show_trace_for_server(server_key.clone(), window, cx),
+                                        LogKind::Logs => view.show_logs_for_server(server_key.clone(), window, cx),
+                                        LogKind::ServerInfo => view.show_server_info(server_key.clone(), window, cx),
                                     }
                                     cx.notify();
                                 }),
@@ -1087,11 +921,8 @@ impl Render for LspLogToolbarItemView {
             PopoverMenu::new("LspViewSelector")
                 .anchor(Anchor::TopLeft)
                 .trigger(
-                    Button::new("language_server_menu_header", label).end_icon(
-                        Icon::new(IconName::ChevronDown)
-                            .size(IconSize::Small)
-                            .color(Color::Muted),
-                    ),
+                    Button::new("language_server_menu_header", label)
+                        .end_icon(Icon::new(IconName::ChevronDown).size(IconSize::Small).color(Color::Muted)),
                 )
                 .menu(move |window, cx| {
                     let log_toolbar_view = log_toolbar_view.upgrade()?;
@@ -1138,22 +969,21 @@ impl Render for LspLogToolbarItemView {
                                                         ToggleState::Unselected
                                                     },
                                                 )
-                                                .on_click(window.listener_for(
-                                                    &log_toolbar_view,
-                                                    move |view, selection, window, cx| {
-                                                        let enabled = matches!(
-                                                            selection,
-                                                            ToggleState::Selected
-                                                        );
-                                                        view.toggle_rpc_logging_for_server(
-                                                            server_key.clone(),
-                                                            enabled,
-                                                            window,
-                                                            cx,
-                                                        );
-                                                        cx.stop_propagation();
-                                                    },
-                                                )),
+                                                .on_click(
+                                                    window.listener_for(
+                                                        &log_toolbar_view,
+                                                        move |view, selection, window, cx| {
+                                                            let enabled = matches!(selection, ToggleState::Selected);
+                                                            view.toggle_rpc_logging_for_server(
+                                                                server_key.clone(),
+                                                                enabled,
+                                                                window,
+                                                                cx,
+                                                            );
+                                                            cx.stop_propagation();
+                                                        },
+                                                    ),
+                                                ),
                                             ),
                                         )
                                         .into_any_element()
@@ -1184,190 +1014,128 @@ impl Render for LspLogToolbarItemView {
             .size_full()
             .gap_1()
             .justify_between()
-            .child(
-                h_flex()
-                    .gap_0p5()
-                    .child(lsp_menu)
-                    .children(view_selector)
-                    .child(
-                        log_view.update(cx, |this, _cx| match this.active_entry_kind {
-                            LogKind::Trace => {
-                                let log_view = log_view.clone();
-                                div().child(
-                                    PopoverMenu::new("lsp-trace-level-menu")
-                                        .anchor(Anchor::TopLeft)
-                                        .trigger(
-                                            Button::new(
-                                                "language_server_trace_level_selector",
-                                                "Trace level",
-                                            )
-                                            .end_icon(
-                                                Icon::new(IconName::ChevronDown)
-                                                    .size(IconSize::Small)
-                                                    .color(Color::Muted),
-                                            ),
-                                        )
-                                        .menu({
-                                            let log_view = log_view;
+            .child(h_flex().gap_0p5().child(lsp_menu).children(view_selector).child(log_view.update(
+                cx,
+                |this, _cx| match this.active_entry_kind {
+                    LogKind::Trace => {
+                        let log_view = log_view.clone();
+                        div().child(
+                            PopoverMenu::new("lsp-trace-level-menu")
+                                .anchor(Anchor::TopLeft)
+                                .trigger(Button::new("language_server_trace_level_selector", "Trace level").end_icon(
+                                    Icon::new(IconName::ChevronDown).size(IconSize::Small).color(Color::Muted),
+                                ))
+                                .menu({
+                                    let log_view = log_view;
 
-                                            move |window, cx| {
-                                                let key =
-                                                    log_view.read(cx).current_server_key.clone()?;
+                                    move |window, cx| {
+                                        let key = log_view.read(cx).current_server_key.clone()?;
 
-                                                let trace_level =
-                                                    log_view.update(cx, |this, cx| {
-                                                        this.log_store.update(cx, |this, _| {
-                                                            Some(
-                                                                this.get_language_server_state(
-                                                                    &key,
-                                                                )?
-                                                                .trace_level,
-                                                            )
-                                                        })
-                                                    })?;
+                                        let trace_level = log_view.update(cx, |this, cx| {
+                                            this.log_store.update(cx, |this, _| {
+                                                Some(this.get_language_server_state(&key)?.trace_level)
+                                            })
+                                        })?;
 
-                                                ContextMenu::build(
-                                                    window,
-                                                    cx,
-                                                    |mut menu, window, cx| {
-                                                        let log_view = log_view.clone();
+                                        ContextMenu::build(window, cx, |mut menu, window, cx| {
+                                            let log_view = log_view.clone();
 
-                                                        for (option, label) in [
-                                                            (TraceValue::Off, "Off"),
-                                                            (TraceValue::Messages, "Messages"),
-                                                            (TraceValue::Verbose, "Verbose"),
-                                                        ] {
-                                                            menu = menu.entry(label, None, {
-                                                                let log_view = log_view.clone();
-                                                                move |_, cx| {
-                                                                    log_view.update(cx, |this, cx| {
-                                                                    if let Some(key) = this
-                                                                        .current_server_key
-                                                                        .clone()
-                                                                    {
-                                                                        this.update_trace_level(
-                                                                            key, option, cx,
-                                                                        );
-                                                                    }
-                                                                });
-                                                                }
-                                                            });
-                                                            if option == trace_level {
-                                                                menu.select_last(window, cx);
+                                            for (option, label) in [
+                                                (TraceValue::Off, "Off"),
+                                                (TraceValue::Messages, "Messages"),
+                                                (TraceValue::Verbose, "Verbose"),
+                                            ] {
+                                                menu = menu.entry(label, None, {
+                                                    let log_view = log_view.clone();
+                                                    move |_, cx| {
+                                                        log_view.update(cx, |this, cx| {
+                                                            if let Some(key) = this.current_server_key.clone() {
+                                                                this.update_trace_level(key, option, cx);
                                                             }
-                                                        }
-
-                                                        menu
-                                                    },
-                                                )
-                                                .into()
+                                                        });
+                                                    }
+                                                });
+                                                if option == trace_level {
+                                                    menu.select_last(window, cx);
+                                                }
                                             }
-                                        }),
-                                )
-                            }
-                            LogKind::Logs => {
-                                let log_view = log_view.clone();
-                                div().child(
-                                    PopoverMenu::new("lsp-log-level-menu")
-                                        .anchor(Anchor::TopLeft)
-                                        .trigger(
-                                            Button::new(
-                                                "language_server_log_level_selector",
-                                                "Log level",
-                                            )
-                                            .end_icon(
-                                                Icon::new(IconName::ChevronDown)
-                                                    .size(IconSize::Small)
-                                                    .color(Color::Muted),
-                                            ),
-                                        )
-                                        .menu({
-                                            let log_view = log_view;
 
-                                            move |window, cx| {
-                                                let key =
-                                                    log_view.read(cx).current_server_key.clone()?;
+                                            menu
+                                        })
+                                        .into()
+                                    }
+                                }),
+                        )
+                    }
+                    LogKind::Logs => {
+                        let log_view = log_view.clone();
+                        div().child(
+                            PopoverMenu::new("lsp-log-level-menu")
+                                .anchor(Anchor::TopLeft)
+                                .trigger(Button::new("language_server_log_level_selector", "Log level").end_icon(
+                                    Icon::new(IconName::ChevronDown).size(IconSize::Small).color(Color::Muted),
+                                ))
+                                .menu({
+                                    let log_view = log_view;
 
-                                                let log_level =
-                                                    log_view.update(cx, |this, cx| {
-                                                        this.log_store.update(cx, |this, _| {
-                                                            Some(
-                                                                this.get_language_server_state(
-                                                                    &key,
-                                                                )?
-                                                                .log_level,
-                                                            )
-                                                        })
-                                                    })?;
+                                    move |window, cx| {
+                                        let key = log_view.read(cx).current_server_key.clone()?;
 
-                                                ContextMenu::build(
-                                                    window,
-                                                    cx,
-                                                    |mut menu, window, cx| {
-                                                        let log_view = log_view.clone();
+                                        let log_level = log_view.update(cx, |this, cx| {
+                                            this.log_store.update(cx, |this, _| {
+                                                Some(this.get_language_server_state(&key)?.log_level)
+                                            })
+                                        })?;
 
-                                                        for (option, label) in [
-                                                            (MessageType::LOG, "Log"),
-                                                            (MessageType::INFO, "Info"),
-                                                            (MessageType::WARNING, "Warning"),
-                                                            (MessageType::ERROR, "Error"),
-                                                        ] {
-                                                            menu = menu.entry(label, None, {
-                                                                let log_view = log_view.clone();
-                                                                move |window, cx| {
-                                                                    log_view.update(cx, |this, cx| {
-                                                                    if let Some(key) = this
-                                                                        .current_server_key
-                                                                        .clone()
-                                                                    {
-                                                                        this.update_log_level(
-                                                                            key, option, window, cx,
-                                                                        );
-                                                                    }
-                                                                });
-                                                                }
-                                                            });
-                                                            if option == log_level {
-                                                                menu.select_last(window, cx);
+                                        ContextMenu::build(window, cx, |mut menu, window, cx| {
+                                            let log_view = log_view.clone();
+
+                                            for (option, label) in [
+                                                (MessageType::LOG, "Log"),
+                                                (MessageType::INFO, "Info"),
+                                                (MessageType::WARNING, "Warning"),
+                                                (MessageType::ERROR, "Error"),
+                                            ] {
+                                                menu = menu.entry(label, None, {
+                                                    let log_view = log_view.clone();
+                                                    move |window, cx| {
+                                                        log_view.update(cx, |this, cx| {
+                                                            if let Some(key) = this.current_server_key.clone() {
+                                                                this.update_log_level(key, option, window, cx);
                                                             }
-                                                        }
-
-                                                        menu
-                                                    },
-                                                )
-                                                .into()
+                                                        });
+                                                    }
+                                                });
+                                                if option == log_level {
+                                                    menu.select_last(window, cx);
+                                                }
                                             }
-                                        }),
-                                )
-                            }
-                            _ => div(),
-                        }),
-                    ),
-            )
-            .child(
-                Button::new("clear_log_button", "Clear").on_click(cx.listener(
-                    |this, _, window, cx| {
-                        if let Some(log_view) = this.log_view.as_ref() {
-                            log_view.update(cx, |log_view, cx| {
-                                log_view.editor.update(cx, |editor, cx| {
-                                    editor.set_read_only(false);
-                                    editor.clear(window, cx);
-                                    editor.set_read_only(true);
-                                });
-                            })
-                        }
-                    },
-                )),
-            )
+
+                                            menu
+                                        })
+                                        .into()
+                                    }
+                                }),
+                        )
+                    }
+                    _ => div(),
+                },
+            )))
+            .child(Button::new("clear_log_button", "Clear").on_click(cx.listener(|this, _, window, cx| {
+                if let Some(log_view) = this.log_view.as_ref() {
+                    log_view.update(cx, |log_view, cx| {
+                        log_view.editor.update(cx, |editor, cx| {
+                            editor.set_read_only(false);
+                            editor.clear(window, cx);
+                            editor.set_read_only(true);
+                        });
+                    })
+                }
+            })))
     }
 }
 
-fn initialize_new_editor(
-    content: String,
-    move_to_end: bool,
-    window: &mut Window,
-    cx: &mut App,
-) -> Entity<Editor> {
+fn initialize_new_editor(content: String, move_to_end: bool, window: &mut Window, cx: &mut App) -> Entity<Editor> {
     cx.new(|cx| {
         let mut editor = Editor::multi_line(window, cx);
         editor.hide_minimap_by_default(window, cx);
@@ -1390,15 +1158,12 @@ const SERVER_TRACE: &str = "Server Trace";
 const SERVER_INFO: &str = "Server Info";
 
 impl LspLogToolbarItemView {
-    pub fn new() -> Self {
-        Self {
-            log_view: None,
-            _log_view_subscription: None,
-        }
+    pub const fn new() -> Self {
+        Self { log_view: None, _log_view_subscription: None }
     }
 
     fn toggle_rpc_logging_for_server(
-        &mut self,
+        &self,
         key: LanguageServerLogKey,
         enabled: bool,
         window: &mut Window,
@@ -1418,6 +1183,12 @@ impl LspLogToolbarItemView {
             });
         }
         cx.notify();
+    }
+}
+
+impl Default for LspLogToolbarItemView {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -12,26 +12,29 @@ mod theme;
 mod title_bar;
 mod workspace;
 
-pub use action::{ActionName, ActionWithArguments, CommandAliasTarget};
+pub use action::ActionName;
+pub use action::ActionWithArguments;
+pub use action::CommandAliasTarget;
 use anyhow::Context;
+use collections::HashMap;
+use collections::IndexSet;
 pub use editor::*;
 pub use fallible_options::*;
 pub use language::*;
 pub use merge_from::MergeFrom as MergeFromTrait;
 pub use project::*;
+use schemars::JsonSchema;
+use serde::Deserialize;
+use serde::Serialize;
 use serde::de::DeserializeOwned;
-pub use serde_helper::{
-    serialize_f32_with_two_decimal_places, serialize_optional_f32_with_two_decimal_places,
-};
+pub use serde_helper::serialize_f32_with_two_decimal_places;
+pub use serde_helper::serialize_optional_f32_with_two_decimal_places;
+use settings_macros::MergeFrom;
+use settings_macros::with_fallible_options;
 pub use terminal::*;
 pub use theme::*;
 pub use title_bar::*;
 pub use workspace::*;
-
-use collections::{HashMap, IndexSet};
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use settings_macros::{MergeFrom, with_fallible_options};
 
 /// A non-negative size in pixels.
 ///
@@ -52,9 +55,7 @@ use settings_macros::{MergeFrom, with_fallible_options};
     derive_more::From,
 )]
 #[serde(transparent)]
-pub struct PixelSetting(
-    #[serde(serialize_with = "crate::serialize_f32_with_two_decimal_places")] pub f32,
-);
+pub struct PixelSetting(#[serde(serialize_with = "crate::serialize_f32_with_two_decimal_places")] pub f32);
 
 impl std::fmt::Display for PixelSetting {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -64,6 +65,7 @@ impl std::fmt::Display for PixelSetting {
 }
 
 use std::hash::Hash;
+
 pub use util::serde::default_true;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -224,7 +226,7 @@ pub struct SettingsContent {
 }
 
 impl SettingsContent {
-    pub fn languages_mut(&mut self) -> &mut HashMap<String, LanguageSettingsContent> {
+    pub const fn languages_mut(&mut self) -> &mut HashMap<String, LanguageSettingsContent> {
         &mut self.project.all_languages.languages.0
     }
 }
@@ -657,9 +659,7 @@ pub enum ShowIndentGuides {
 }
 
 #[with_fallible_options]
-#[derive(
-    Copy, Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq, Default,
-)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq, Default)]
 pub struct IndentGuidesSettingsContent {
     /// When to show the scrollbar in the outline panel.
     pub show: Option<ShowIndentGuides>,
@@ -769,9 +769,7 @@ pub struct SshConnection {
 }
 
 #[with_fallible_options]
-#[derive(
-    Clone, Debug, Default, Serialize, PartialEq, Eq, PartialOrd, Ord, Deserialize, JsonSchema,
-)]
+#[derive(Clone, Debug, Default, Serialize, PartialEq, Eq, PartialOrd, Ord, Deserialize, JsonSchema)]
 pub struct RemoteProject {
     pub paths: Vec<String>,
 }
@@ -807,9 +805,9 @@ pub struct TabSwitcherSettingsContent {
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct ExtendingVec<T>(pub Vec<T>);
 
-impl<T> Into<Vec<T>> for ExtendingVec<T> {
-    fn into(self) -> Vec<T> {
-        self.0
+impl<T> From<ExtendingVec<T>> for Vec<T> {
+    fn from(val: ExtendingVec<T>) -> Self {
+        val.0
     }
 }
 impl<T> From<Vec<T>> for ExtendingVec<T> {
@@ -853,13 +851,7 @@ impl merge_from::MergeFrom for SplicingVec {
         self.0 = other
             .0
             .iter()
-            .flat_map(|entry| {
-                if entry == Self::REST {
-                    inherited.clone()
-                } else {
-                    vec![entry.clone()]
-                }
-            })
+            .flat_map(|entry| if entry == Self::REST { inherited.clone() } else { vec![entry.clone()] })
             .collect::<IndexSet<_>>()
             .into_iter()
             .collect();
@@ -888,18 +880,7 @@ impl<T: Clone + std::hash::Hash + Eq> merge_from::MergeFrom for ExtendingSet<T> 
 }
 
 #[derive(
-    Copy,
-    Clone,
-    Default,
-    Debug,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Serialize,
-    Deserialize,
-    MergeFrom,
-    JsonSchema,
+    Copy, Clone, Default, Debug, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, MergeFrom, JsonSchema,
 )]
 #[serde(transparent)]
 pub struct DelayMs(pub u64);

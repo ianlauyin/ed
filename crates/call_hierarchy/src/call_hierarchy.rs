@@ -1,32 +1,66 @@
-use std::{
-    ops::Range,
-    path::PathBuf,
-    sync::{Arc, atomic::AtomicBool},
-};
+use std::ops::Range;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
-use editor::{
-    Editor, RowHighlightOptions, SelectionEffects,
-    scroll::{Autoscroll, ScrollOffset},
-};
-use fuzzy::{StringMatch, StringMatchCandidate};
-use gpui::{
-    Action, AnyView, App, AsyncWindowContext, Context, DismissEvent, Entity, EventEmitter,
-    FocusHandle, Focusable, HighlightStyle, ParentElement, Point, Render, Styled, StyledText,
-    Subscription, Task, TextRun, WeakEntity, Window,
-};
-use language::{
-    Buffer, CodeLabel, File as _, Language, Location, Rope, ToOffset, ToPoint, lsp_to_symbol_kind,
-};
-use picker::{Picker, PickerDelegate};
-use project::{CallHierarchyItem, LspStoreEvent, Project};
+use editor::Editor;
+use editor::RowHighlightOptions;
+use editor::SelectionEffects;
+use editor::scroll::Autoscroll;
+use editor::scroll::ScrollOffset;
+use fuzzy::StringMatch;
+use fuzzy::StringMatchCandidate;
+use gpui::Action;
+use gpui::AnyView;
+use gpui::App;
+use gpui::AsyncWindowContext;
+use gpui::Context;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::HighlightStyle;
+use gpui::ParentElement;
+use gpui::Point;
+use gpui::Render;
+use gpui::Styled;
+use gpui::StyledText;
+use gpui::Subscription;
+use gpui::Task;
+use gpui::TextRun;
+use gpui::WeakEntity;
+use gpui::Window;
+use language::Buffer;
+use language::CodeLabel;
+use language::File as _;
+use language::Language;
+use language::Location;
+use language::Rope;
+use language::ToOffset;
+use language::ToPoint;
+use language::lsp_to_symbol_kind;
+use picker::Picker;
+use picker::PickerDelegate;
+use project::CallHierarchyItem;
+use project::LspStoreEvent;
+use project::Project;
 use settings::Settings;
 use theme_settings::ThemeSettings;
-use ui::{
-    KeyBinding, ListItem, ListItemSpacing, prelude::*, tooltip_container, utils::buffer_text_style,
-};
-use util::{ResultExt, paths::PathExt};
-use workspace::{DismissDecision, ModalView, Workspace};
-pub use zed_actions::{ShowIncomingCalls, ShowOutgoingCalls, ToggleDirection};
+use ui::KeyBinding;
+use ui::ListItem;
+use ui::ListItemSpacing;
+use ui::prelude::*;
+use ui::tooltip_container;
+use ui::utils::buffer_text_style;
+use util::ResultExt;
+use util::paths::PathExt;
+use workspace::DismissDecision;
+use workspace::ModalView;
+use workspace::Workspace;
+pub use zed_actions::ShowIncomingCalls;
+pub use zed_actions::ShowOutgoingCalls;
+pub use zed_actions::ToggleDirection;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum CallHierarchyMode {
@@ -36,7 +70,7 @@ pub enum CallHierarchyMode {
 }
 
 impl CallHierarchyMode {
-    fn opposite(self) -> Self {
+    const fn opposite(self) -> Self {
         match self {
             CallHierarchyMode::Incoming => CallHierarchyMode::Outgoing,
             CallHierarchyMode::Outgoing => CallHierarchyMode::Incoming,
@@ -73,9 +107,7 @@ pub struct CallHierarchySettings {
 impl Settings for CallHierarchySettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let call_hierarchy = content.call_hierarchy.as_ref().unwrap();
-        Self {
-            modal_max_width: call_hierarchy.modal_max_width.unwrap(),
-        }
+        Self { modal_max_width: call_hierarchy.modal_max_width.unwrap() }
     }
 }
 
@@ -118,17 +150,8 @@ pub async fn fetch_calls(
                         site.range.start.to_offset(buffer)
                     });
                     let site_count = sites.len().max(1);
-                    let target = sites
-                        .into_iter()
-                        .next()
-                        .unwrap_or_else(|| item_location(&item));
-                    Call {
-                        item,
-                        target,
-                        site_count,
-                        label: None,
-                        display: CallDisplay::default(),
-                    }
+                    let target = sites.into_iter().next().unwrap_or_else(|| item_location(&item));
+                    Call { item, target, site_count, label: None, display: CallDisplay::default() }
                 })
                 .collect::<Vec<_>>()
         })
@@ -141,11 +164,7 @@ pub async fn fetch_calls(
             call.display = compute_call_display(call, cx);
         }
         calls.sort_by_cached_key(|call| {
-            let offset = call
-                .target
-                .range
-                .start
-                .to_offset(call.target.buffer.read(cx));
+            let offset = call.target.range.start.to_offset(call.target.buffer.read(cx));
             (call.display.path.clone(), offset)
         });
     })
@@ -196,39 +215,27 @@ impl CallHierarchyView {
         cx: &mut Context<Self>,
     ) -> CallHierarchyView {
         let prev_scroll_position = editor.update(cx, |editor, cx| Some(editor.scroll_position(cx)));
-        let project_subscription =
-            cx.subscribe_in(&project, window, |view, _, event, window, cx| match event {
-                project::Event::LanguageServerBufferRegistered { buffer_id, .. } => {
-                    view.retry_empty_hierarchy(
-                        |delegate, cx| {
-                            delegate
-                                .queried_buffer
-                                .as_ref()
-                                .is_some_and(|buffer| buffer.read(cx).remote_id() == *buffer_id)
-                        },
-                        window,
-                        cx,
-                    );
-                }
-                _ => {}
-            });
-        let lsp_store_subscription = cx.subscribe_in(
-            &project.read(cx).lsp_store(),
-            window,
-            |view, _, event, window, cx| match event {
-                LspStoreEvent::LanguageServerUpdate {
+        let project_subscription = cx.subscribe_in(&project, window, |view, _, event, window, cx| {
+            if let project::Event::LanguageServerBufferRegistered { buffer_id, .. } = event {
+                view.retry_empty_hierarchy(
+                    |delegate, cx| {
+                        delegate.queried_buffer.as_ref().is_some_and(|buffer| buffer.read(cx).remote_id() == *buffer_id)
+                    },
+                    window,
+                    cx,
+                );
+            }
+        });
+        let lsp_store_subscription =
+            cx.subscribe_in(&project.read(cx).lsp_store(), window, |view, _, event, window, cx| {
+                if let LspStoreEvent::LanguageServerUpdate {
                     message: proto::update_language_server::Variant::WorkEnd(_),
                     ..
-                } => {
-                    view.retry_empty_hierarchy(
-                        |delegate, _| delegate.queried_buffer.is_some(),
-                        window,
-                        cx,
-                    );
+                } = event
+                {
+                    view.retry_empty_hierarchy(|delegate, _| delegate.queried_buffer.is_some(), window, cx);
                 }
-                _ => {}
-            },
-        );
+            });
         let delegate = CallHierarchyDelegate::new(
             cx.entity().downgrade(),
             editor,
@@ -240,18 +247,12 @@ impl CallHierarchyView {
         );
         let modal_width = CallHierarchySettings::get_global(cx)
             .modal_max_width
-            .to_pixels(
-                BASE_MODAL_WIDTH.to_pixels(window.rem_size()),
-                window.viewport_size().width,
-            );
+            .to_pixels(BASE_MODAL_WIDTH.to_pixels(window.rem_size()), window.viewport_size().width);
         let picker = cx.new(|cx| {
             Picker::uniform_list(delegate, window, cx)
                 .initial_width(Rems::from_pixels(modal_width, window))
                 .show_scrollbar(true)
-                .max_height(Rems::from_pixels(
-                    window.viewport_size().height * 0.75,
-                    window,
-                ))
+                .max_height(Rems::from_pixels(window.viewport_size().height * 0.75, window))
         });
         let picker_focus_handle = picker.focus_handle(cx);
         picker.update(cx, |picker, cx| {
@@ -260,17 +261,13 @@ impl CallHierarchyView {
             picker.delegate.fetch_root(window, cx);
         });
 
-        CallHierarchyView {
-            picker,
-            mode,
-            _subscriptions: [project_subscription, lsp_store_subscription],
-        }
+        CallHierarchyView { picker, mode, _subscriptions: [project_subscription, lsp_store_subscription] }
     }
 
     fn retry_empty_hierarchy(
-        &mut self,
+        &self,
         should_retry: impl FnOnce(&CallHierarchyDelegate, &App) -> bool,
-        window: &mut Window,
+        window: &Window,
         cx: &mut Context<Self>,
     ) {
         self.picker.update(cx, |picker, cx| {
@@ -307,11 +304,7 @@ impl Focusable for CallHierarchyView {
 impl EventEmitter<DismissEvent> for CallHierarchyView {}
 
 impl ModalView for CallHierarchyView {
-    fn on_before_dismiss(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> DismissDecision {
+    fn on_before_dismiss(&mut self, window: &mut Window, cx: &mut Context<Self>) -> DismissDecision {
         self.picker.update(cx, |picker, cx| {
             picker.delegate.restore_editor(window, cx);
         });
@@ -387,13 +380,10 @@ impl CallHierarchyDelegate {
         }
     }
 
-    fn fetch_root(&mut self, window: &mut Window, cx: &mut Context<Picker<Self>>) {
+    fn fetch_root(&mut self, window: &Window, cx: &mut Context<Picker<Self>>) {
         let editor_anchor = self.editor.update(cx, |editor, cx| {
             let selection = editor.selections.newest_anchor().head();
-            editor
-                .buffer()
-                .read(cx)
-                .text_anchor_for_position(selection, cx)
+            editor.buffer().read(cx).text_anchor_for_position(selection, cx)
         });
         let Some((buffer, position)) = editor_anchor else {
             self.state = FetchState::NoSymbol;
@@ -404,22 +394,16 @@ impl CallHierarchyDelegate {
         self.state = FetchState::Loading;
         cx.notify();
 
-        let prepare_task = self.project.update(cx, |project, cx| {
-            project.prepare_call_hierarchy(&buffer, position, cx)
-        });
+        let prepare_task = self.project.update(cx, |project, cx| project.prepare_call_hierarchy(&buffer, position, cx));
 
-        self.fetch_task = Some(cx.spawn_in(window, async move |picker, mut cx| {
+        self.fetch_task = Some(cx.spawn_in(window, async move |picker, cx| {
             let root_item = match prepare_task.await {
                 Ok(items) => items.unwrap_or_default().into_iter().next(),
                 Err(error) => {
                     log::error!("failed to prepare call hierarchy: {error:#}");
                     picker
                         .update_in(cx, |picker, window, cx| {
-                            picker
-                                .delegate
-                                .workspace
-                                .update(cx, |workspace, cx| workspace.show_error(error, cx))
-                                .ok();
+                            picker.delegate.workspace.update(cx, |workspace, cx| workspace.show_error(error, cx)).ok();
                             picker.delegate.dismissed(window, cx);
                         })
                         .ok();
@@ -441,7 +425,7 @@ impl CallHierarchyDelegate {
                     picker.refresh_placeholder(window, cx);
                 })
                 .ok();
-            load_and_apply_calls(picker, root_item, None, &mut cx).await;
+            load_and_apply_calls(picker, root_item, None, cx).await;
         }));
     }
 
@@ -449,7 +433,7 @@ impl CallHierarchyDelegate {
         &mut self,
         root_item: CallHierarchyItem,
         select_item: Option<CallHierarchyItem>,
-        window: &mut Window,
+        window: &Window,
         cx: &mut Context<Picker<Self>>,
     ) {
         self.state = FetchState::Loading;
@@ -458,8 +442,8 @@ impl CallHierarchyDelegate {
         self.selected_index = 0;
         cx.notify();
 
-        self.fetch_task = Some(cx.spawn_in(window, async move |picker, mut cx| {
-            load_and_apply_calls(picker, root_item, select_item, &mut cx).await;
+        self.fetch_task = Some(cx.spawn_in(window, async move |picker, cx| {
+            load_and_apply_calls(picker, root_item, select_item, cx).await;
         }));
     }
 
@@ -468,7 +452,7 @@ impl CallHierarchyDelegate {
         self.calls.get(mat.candidate_id)
     }
 
-    fn expand_selected(&mut self, window: &mut Window, cx: &mut Context<Picker<Self>>) -> bool {
+    fn expand_selected(&mut self, window: &Window, cx: &mut Context<Picker<Self>>) -> bool {
         let Some(new_root) = self.selected_call().map(|call| call.item.clone()) else {
             return false;
         };
@@ -479,7 +463,7 @@ impl CallHierarchyDelegate {
         true
     }
 
-    fn collapse_to_parent(&mut self, window: &mut Window, cx: &mut Context<Picker<Self>>) -> bool {
+    fn collapse_to_parent(&mut self, window: &Window, cx: &mut Context<Picker<Self>>) -> bool {
         let Some(parent) = self.root_stack.pop() else {
             return false;
         };
@@ -511,10 +495,7 @@ impl CallHierarchyDelegate {
             editor.highlight_rows::<CallHierarchyPreview>(
                 start..end,
                 |cx| cx.theme().colors().editor_highlighted_line_background,
-                RowHighlightOptions {
-                    autoscroll: true,
-                    ..RowHighlightOptions::default()
-                },
+                RowHighlightOptions { autoscroll: true, ..RowHighlightOptions::default() },
                 cx,
             );
             editor.request_autoscroll(Autoscroll::center(), cx);
@@ -541,12 +522,8 @@ impl PickerDelegate for CallHierarchyDelegate {
 
     fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
         match (&self.root_item, self.mode) {
-            (Some(root), CallHierarchyMode::Incoming) => {
-                Arc::from(format!("Search calls to `{}`...", root.name))
-            }
-            (Some(root), CallHierarchyMode::Outgoing) => {
-                Arc::from(format!("Search calls from `{}`...", root.name))
-            }
+            (Some(root), CallHierarchyMode::Incoming) => Arc::from(format!("Search calls to `{}`...", root.name)),
+            (Some(root), CallHierarchyMode::Outgoing) => Arc::from(format!("Search calls from `{}`...", root.name)),
             (None, CallHierarchyMode::Incoming) => Arc::from("Search incoming calls..."),
             (None, CallHierarchyMode::Outgoing) => Arc::from("Search outgoing calls..."),
         }
@@ -577,22 +554,12 @@ impl PickerDelegate for CallHierarchyDelegate {
         }))
     }
 
-    fn set_selected_index(
-        &mut self,
-        ix: usize,
-        _window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) {
+    fn set_selected_index(&mut self, ix: usize, _window: &mut Window, cx: &mut Context<Picker<Self>>) {
         self.selected_index = ix;
         self.preview_selected(cx);
     }
 
-    fn update_matches(
-        &mut self,
-        query: String,
-        _window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) -> Task<()> {
+    fn update_matches(&mut self, query: String, _window: &mut Window, cx: &mut Context<Picker<Self>>) -> Task<()> {
         if query.is_empty() {
             self.matches = identity_matches(self.calls.len());
             self.selected_index = 0;
@@ -602,16 +569,9 @@ impl PickerDelegate for CallHierarchyDelegate {
         let candidates = self.candidates.clone();
         let executor = cx.background_executor().clone();
         cx.spawn(async move |picker, cx| {
-            let matches = fuzzy::match_strings(
-                candidates.as_slice(),
-                &query,
-                true,
-                true,
-                100,
-                &AtomicBool::new(false),
-                executor,
-            )
-            .await;
+            let matches =
+                fuzzy::match_strings(candidates.as_slice(), &query, true, true, 100, &AtomicBool::new(false), executor)
+                    .await;
 
             picker
                 .update(cx, |picker, cx| {
@@ -635,30 +595,16 @@ impl PickerDelegate for CallHierarchyDelegate {
         self.workspace
             .update(cx, |workspace, cx| {
                 let position = target.to_point(&buffer.read(cx).snapshot());
-                let pane = if secondary {
-                    workspace.adjacent_pane(window, cx)
-                } else {
-                    workspace.active_pane().clone()
-                };
+                let pane =
+                    if secondary { workspace.adjacent_pane(window, cx) } else { workspace.active_pane().clone() };
 
-                let editor = workspace.open_project_item::<Editor>(
-                    Some(pane),
-                    buffer,
-                    true,
-                    true,
-                    true,
-                    true,
-                    window,
-                    cx,
-                );
+                let editor =
+                    workspace.open_project_item::<Editor>(Some(pane), buffer, true, true, true, true, window, cx);
 
                 editor.update(cx, |editor, cx| {
-                    editor.change_selections(
-                        SelectionEffects::scroll(Autoscroll::center()),
-                        window,
-                        cx,
-                        |s| s.select_ranges([position..position]),
-                    );
+                    editor.change_selections(SelectionEffects::scroll(Autoscroll::center()), window, cx, |s| {
+                        s.select_ranges([position..position])
+                    });
                 });
             })
             .ok();
@@ -671,27 +617,15 @@ impl PickerDelegate for CallHierarchyDelegate {
         self.view.update(cx, |_, cx| cx.emit(DismissEvent)).ok();
     }
 
-    fn select_child(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) -> Option<String> {
+    fn select_child(&mut self, window: &mut Window, cx: &mut Context<Picker<Self>>) -> Option<String> {
         self.expand_selected(window, cx).then(String::new)
     }
 
-    fn select_parent(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) -> Option<String> {
+    fn select_parent(&mut self, window: &mut Window, cx: &mut Context<Picker<Self>>) -> Option<String> {
         self.collapse_to_parent(window, cx).then(String::new)
     }
 
-    fn render_footer(
-        &self,
-        _window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) -> Option<gpui::AnyElement> {
+    fn render_footer(&self, _window: &mut Window, cx: &mut Context<Picker<Self>>) -> Option<gpui::AnyElement> {
         if self.calls.is_empty() && self.root_stack.is_empty() {
             return None;
         }
@@ -778,12 +712,12 @@ impl PickerDelegate for CallHierarchyDelegate {
                                 .child(name_styled)
                                 .children(detail_styled),
                         )
-                        .children(call.display.path.clone().map(|path| {
-                            Label::new(path)
-                                .size(LabelSize::Small)
-                                .color(Color::Muted)
-                                .truncate()
-                        })),
+                        .children(
+                            call.display
+                                .path
+                                .clone()
+                                .map(|path| Label::new(path).size(LabelSize::Small).color(Color::Muted).truncate()),
+                        ),
                 )
                 .when(call.display.needs_tooltip, |this| {
                     this.tooltip(move |_window, cx| {
@@ -809,14 +743,10 @@ struct CallSignatureTooltip {
 impl Render for CallSignatureTooltip {
     fn render(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let mut signature_style = buffer_text_style(cx);
-        signature_style.line_height =
-            relative(ThemeSettings::get_global(cx).buffer_line_height.value());
+        signature_style.line_height = relative(ThemeSettings::get_global(cx).buffer_line_height.value());
         let signature = match &self.label {
             Some((label, label_text)) => StyledText::new(label_text.clone())
-                .with_default_highlights(
-                    &signature_style,
-                    cx.theme().syntax().resolve_runs(&label.runs),
-                )
+                .with_default_highlights(&signature_style, cx.theme().syntax().resolve_runs(&label.runs))
                 .into_any_element(),
             None => div().child(self.full_signature.clone()).into_any_element(),
         };
@@ -827,9 +757,7 @@ impl Render for CallSignatureTooltip {
             el.max_w(max_width)
                 .gap_0p5()
                 .child(div().text_size(buffer_font_size).child(signature))
-                .children(
-                    path.map(|path| Label::new(path).size(LabelSize::Small).color(Color::Muted)),
-                )
+                .children(path.map(|path| Label::new(path).size(LabelSize::Small).color(Color::Muted)))
         })
     }
 }
@@ -843,12 +771,7 @@ enum FetchState {
 
 struct CallHierarchyPreview;
 
-fn toggle_call_hierarchy(
-    editor: Entity<Editor>,
-    mode: CallHierarchyMode,
-    window: &mut Window,
-    cx: &mut App,
-) {
+fn toggle_call_hierarchy(editor: Entity<Editor>, mode: CallHierarchyMode, window: &mut Window, cx: &mut App) {
     let Some(workspace) = editor.read(cx).workspace() else {
         log::error!("call hierarchy: editor has no workspace");
         return;
@@ -865,30 +788,20 @@ fn toggle_call_hierarchy(
 }
 
 fn item_location(item: &CallHierarchyItem) -> Location {
-    Location {
-        buffer: item.buffer.clone(),
-        range: item.selection_range.clone(),
-    }
+    Location { buffer: item.buffer.clone(), range: item.selection_range.clone() }
 }
 
-async fn attach_labels(calls: &mut [Call], project: &Entity<Project>, cx: &mut AsyncWindowContext) {
+async fn attach_labels(calls: &mut [Call], project: &Entity<Project>, cx: &AsyncWindowContext) {
     let mut fallback_groups = Vec::<(Arc<Language>, Vec<usize>)>::new();
     for (index, call) in calls.iter_mut().enumerate() {
-        let Some(language) = call
-            .item
-            .buffer
-            .read_with(cx, |buffer, _| buffer.language().cloned())
-        else {
+        let Some(language) = call.item.buffer.read_with(cx, |buffer, _| buffer.language().cloned()) else {
             continue;
         };
         if let Some(label) = signature_label(&call.item, &language) {
             call.label = Some(Arc::new(label));
             continue;
         }
-        match fallback_groups
-            .iter_mut()
-            .find(|(group_language, _)| group_language.name() == language.name())
-        {
+        match fallback_groups.iter_mut().find(|(group_language, _)| group_language.name() == language.name()) {
             Some((_, indices)) => indices.push(index),
             None => fallback_groups.push((language, vec![index])),
         }
@@ -898,11 +811,7 @@ async fn attach_labels(calls: &mut [Call], project: &Entity<Project>, cx: &mut A
     }
     let language_registry = project.read_with(cx, |project, _| project.languages().clone());
     for (language, indices) in fallback_groups {
-        let Some(lsp_adapter) = language_registry
-            .lsp_adapters(&language.name())
-            .first()
-            .cloned()
-        else {
+        let Some(lsp_adapter) = language_registry.lsp_adapters(&language.name()).first().cloned() else {
             continue;
         };
         let symbols = indices
@@ -913,11 +822,7 @@ async fn attach_labels(calls: &mut [Call], project: &Entity<Project>, cx: &mut A
                 container_name: None,
             })
             .collect::<Vec<_>>();
-        let Some(labels) = lsp_adapter
-            .labels_for_symbols(&symbols, &language)
-            .await
-            .log_err()
-        else {
+        let Some(labels) = lsp_adapter.labels_for_symbols(&symbols, &language).await.log_err() else {
             continue;
         };
         for (index, label) in indices.into_iter().zip(labels) {
@@ -932,9 +837,8 @@ async fn load_and_apply_calls(
     select_item: Option<CallHierarchyItem>,
     cx: &mut AsyncWindowContext,
 ) {
-    let Ok((project, mode)) = picker.read_with(cx, |picker, _| {
-        (picker.delegate.project.clone(), picker.delegate.mode)
-    }) else {
+    let Ok((project, mode)) = picker.read_with(cx, |picker, _| (picker.delegate.project.clone(), picker.delegate.mode))
+    else {
         return;
     };
     let mut calls = fetch_calls(&root_item, &project, mode, cx).await;
@@ -948,24 +852,13 @@ async fn load_and_apply_calls(
             let buffer_font_size = settings.buffer_font_size(cx);
             let path_font_size = TextSize::Small.rems(cx).to_pixels(window.rem_size());
             for call in calls.iter_mut() {
-                let signature = call
-                    .display
-                    .label_text
-                    .clone()
-                    .unwrap_or_else(|| call.display.full_signature.clone());
-                let signature_width = shaped_width(
-                    signature,
-                    settings.buffer_font.clone(),
-                    buffer_font_size,
-                    window,
-                );
+                let signature = call.display.label_text.clone().unwrap_or_else(|| call.display.full_signature.clone());
+                let signature_width = shaped_width(signature, settings.buffer_font.clone(), buffer_font_size, window);
                 let path_width = call
                     .display
                     .path
                     .clone()
-                    .map(|path| {
-                        shaped_width(path, settings.ui_font.clone(), path_font_size, window)
-                    })
+                    .map(|path| shaped_width(path, settings.ui_font.clone(), path_font_size, window))
                     .unwrap_or_default();
                 call.display.needs_tooltip = signature_width.max(path_width) > available_width;
             }
@@ -1014,18 +907,12 @@ fn call_display_path(buffer: &Buffer, cx: &App) -> Option<PathBuf> {
 }
 
 fn signature_label(item: &CallHierarchyItem, language: &Arc<Language>) -> Option<CodeLabel> {
-    let detail = item
-        .detail
-        .as_deref()
-        .map(str::trim)
-        .filter(|detail| !detail.is_empty())?;
+    let detail = item.detail.as_deref().map(str::trim).filter(|detail| !detail.is_empty())?;
     let signature = collapse_whitespace(detail);
     let name_start = find_symbol_name(&signature, &item.name)?;
     let filter_range = name_start..name_start + item.name.len();
     let source = Rope::from_iter([signature.as_str(), " {}"]);
-    let runs = language
-        .highlight_text(&source, 0..signature.len())
-        .collect();
+    let runs = language.highlight_text(&source, 0..signature.len()).collect();
     Some(CodeLabel::new(signature, filter_range, runs))
 }
 
@@ -1046,10 +933,8 @@ fn collapse_whitespace(text: &str) -> String {
         if result.is_empty() {
             result = fragment;
         } else {
-            let opens_block = indent > previous_indent
-                && result.chars().last().is_some_and(|last| !is_word(last));
-            let closes_block = indent < previous_indent
-                && fragment.chars().next().is_some_and(|first| !is_word(first));
+            let opens_block = indent > previous_indent && result.chars().last().is_some_and(|last| !is_word(last));
+            let closes_block = indent < previous_indent && fragment.chars().next().is_some_and(|first| !is_word(first));
             if closes_block && result.ends_with(',') {
                 result.pop();
             }
@@ -1070,29 +955,17 @@ fn find_symbol_name(text: &str, symbol_name: &str) -> Option<usize> {
     if symbol_name.is_empty() {
         return None;
     }
-    text.match_indices(symbol_name)
-        .map(|(start, _)| start)
-        .find(|&start| {
-            let boundary_before = text[..start]
-                .chars()
-                .next_back()
-                .is_none_or(|c| !c.is_alphanumeric() && c != '_');
-            let boundary_after = text[start + symbol_name.len()..]
-                .chars()
-                .next()
-                .is_none_or(|c| !c.is_alphanumeric() && c != '_');
-            boundary_before && boundary_after
-        })
+    text.match_indices(symbol_name).map(|(start, _)| start).find(|&start| {
+        let boundary_before = text[..start].chars().next_back().is_none_or(|c| !c.is_alphanumeric() && c != '_');
+        let boundary_after =
+            text[start + symbol_name.len()..].chars().next().is_none_or(|c| !c.is_alphanumeric() && c != '_');
+        boundary_before && boundary_after
+    })
 }
 
 fn identity_matches(count: usize) -> Vec<StringMatch> {
     (0..count)
-        .map(|index| StringMatch {
-            candidate_id: index,
-            score: 0.0,
-            positions: Vec::new(),
-            string: String::new(),
-        })
+        .map(|index| StringMatch { candidate_id: index, score: 0.0, positions: Vec::new(), string: String::new() })
         .collect()
 }
 
@@ -1114,10 +987,7 @@ fn compute_call_display(call: &Call, cx: &App) -> CallDisplay {
         Some(detail) => format!("{}{detail}", call.item.name),
         None => call.item.name.clone(),
     });
-    let label_text = call
-        .label
-        .as_ref()
-        .map(|label| SharedString::from(label.text.clone()));
+    let label_text = call.label.as_ref().map(|label| SharedString::from(label.text.clone()));
 
     CallDisplay {
         name: SharedString::from(call.item.name.clone()),
@@ -1133,26 +1003,15 @@ fn extract_call_detail(call: &Call) -> Option<String> {
     let detail = if let Some(detail) = call.label.as_deref().and_then(detail_from_label_suffix) {
         Some(detail)
     } else {
-        call.item
-            .detail
-            .as_deref()
-            .map(str::trim)
-            .filter(|detail| !detail.is_empty())
-            .and_then(|detail| {
-                trim_detail_after_symbol_name(detail, &call.item.name)
-                    .or_else(|| Some(detail.to_owned()))
-            })
+        call.item.detail.as_deref().map(str::trim).filter(|detail| !detail.is_empty()).and_then(|detail| {
+            trim_detail_after_symbol_name(detail, &call.item.name).or_else(|| Some(detail.to_owned()))
+        })
     };
     detail.map(|detail| collapse_whitespace(&detail))
 }
 
 fn detail_from_label_suffix(label: &CodeLabel) -> Option<String> {
-    label
-        .text
-        .get(label.filter_range.end..)
-        .map(str::trim)
-        .filter(|suffix| !suffix.is_empty())
-        .map(ToOwned::to_owned)
+    label.text.get(label.filter_range.end..).map(str::trim).filter(|suffix| !suffix.is_empty()).map(ToOwned::to_owned)
 }
 
 fn trim_detail_after_symbol_name(detail: &str, symbol_name: &str) -> Option<String> {
@@ -1161,12 +1020,7 @@ fn trim_detail_after_symbol_name(detail: &str, symbol_name: &str) -> Option<Stri
     (!suffix.is_empty()).then(|| suffix.to_owned())
 }
 
-fn shaped_width(
-    text: SharedString,
-    font: gpui::Font,
-    font_size: Pixels,
-    window: &Window,
-) -> Pixels {
+fn shaped_width(text: SharedString, font: gpui::Font, font_size: Pixels, window: &Window) -> Pixels {
     let run = TextRun {
         len: text.len(),
         font,
@@ -1175,10 +1029,7 @@ fn shaped_width(
         underline: None,
         strikethrough: None,
     };
-    window
-        .text_system()
-        .shape_line(text, font_size, &[run], None)
-        .width
+    window.text_system().shape_line(text, font_size, &[run], None).width
 }
 
 fn render_item(
@@ -1194,10 +1045,7 @@ fn render_item(
         ..HighlightStyle::default()
     };
 
-    let label_carries_detail = call_item
-        .label
-        .as_ref()
-        .is_some_and(|label| detail_from_label_suffix(label).is_some());
+    let label_carries_detail = call_item.label.as_ref().is_some_and(|label| detail_from_label_suffix(label).is_some());
     let detail_styled = if label_carries_detail {
         None
     } else {
@@ -1208,28 +1056,21 @@ fn render_item(
         })
     };
 
-    let name_styled = if let Some((label, label_text)) = call_item
-        .label
-        .as_ref()
-        .zip(call_item.display.label_text.clone())
-    {
-        let syntax_runs = cx.theme().syntax().resolve_runs(&label.runs);
-        let custom_highlights = match_ranges.into_iter().map(|range| {
-            let start = label.filter_range.start + range.start;
-            let end = label.filter_range.start + range.end;
-            (start..end, highlight_style)
-        });
+    let name_styled =
+        if let Some((label, label_text)) = call_item.label.as_ref().zip(call_item.display.label_text.clone()) {
+            let syntax_runs = cx.theme().syntax().resolve_runs(&label.runs);
+            let custom_highlights = match_ranges.into_iter().map(|range| {
+                let start = label.filter_range.start + range.start;
+                let end = label.filter_range.start + range.end;
+                (start..end, highlight_style)
+            });
 
-        StyledText::new(label_text).with_default_highlights(
-            &base_text_style,
-            gpui::combine_highlights(custom_highlights, syntax_runs),
-        )
-    } else {
-        StyledText::new(call_item.display.name.clone()).with_default_highlights(
-            &base_text_style,
-            match_ranges.into_iter().map(|r| (r, highlight_style)),
-        )
-    };
+            StyledText::new(label_text)
+                .with_default_highlights(&base_text_style, gpui::combine_highlights(custom_highlights, syntax_runs))
+        } else {
+            StyledText::new(call_item.display.name.clone())
+                .with_default_highlights(&base_text_style, match_ranges.into_iter().map(|r| (r, highlight_style)))
+        };
 
     (name_styled, detail_styled)
 }

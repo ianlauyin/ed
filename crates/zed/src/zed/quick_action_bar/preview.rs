@@ -1,9 +1,14 @@
-use editor::{Editor, MultiBuffer};
-use gpui::{AnyElement, Entity, Modifiers};
+use editor::Editor;
+use editor::MultiBuffer;
+use gpui::AnyElement;
+use gpui::Entity;
+use gpui::Modifiers;
 use markdown_preview::markdown_preview_view::MarkdownPreviewView;
 use svg_preview::svg_preview_view::SvgPreviewView;
 use tabular_data_preview::TabularDataPreviewPane;
-use ui::{Tooltip, prelude::*, text_for_keystroke};
+use ui::Tooltip;
+use ui::prelude::*;
+use ui::text_for_keystroke;
 
 use super::QuickActionBar;
 
@@ -14,7 +19,7 @@ enum PreviewTarget {
 }
 
 impl QuickActionBar {
-    pub fn render_preview_button(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
+    pub fn render_preview_button(&self, cx: &Context<Self>) -> Option<AnyElement> {
         // Resolve against this toolbar's own pane item rather than the
         // workspace's focused item, so each pane's button reflects and
         // targets the content of the pane it belongs to.
@@ -40,18 +45,12 @@ impl QuickActionBar {
         let (button_id, tooltip_text, open_action_for_tooltip) = match &preview_target {
             PreviewTarget::Markdown(editor) => (
                 "toggle-markdown-preview",
-                if MarkdownPreviewView::is_html_file(editor, cx) {
-                    "Preview HTML"
-                } else {
-                    "Preview Markdown"
-                },
+                if MarkdownPreviewView::is_html_file(editor, cx) { "Preview HTML" } else { "Preview Markdown" },
                 &markdown_preview::OpenPreview as &dyn gpui::Action,
             ),
-            PreviewTarget::Svg(_) => (
-                "toggle-svg-preview",
-                "Preview SVG",
-                &svg_preview::OpenPreview as &dyn gpui::Action,
-            ),
+            PreviewTarget::Svg(_) => {
+                ("toggle-svg-preview", "Preview SVG", &svg_preview::OpenPreview as &dyn gpui::Action)
+            }
             PreviewTarget::TabularData(_) => (
                 "toggle-tabular-preview",
                 "Preview Tabular Data",
@@ -59,11 +58,7 @@ impl QuickActionBar {
             ),
         };
 
-        let alt_click = gpui::Keystroke {
-            key: "click".into(),
-            modifiers: Modifiers::alt(),
-            ..Default::default()
-        };
+        let alt_click = gpui::Keystroke { key: "click".into(), modifiers: Modifiers::alt(), ..Default::default() };
 
         let button = IconButton::new(button_id, IconName::Eye)
             .icon_size(IconSize::Small)
@@ -72,10 +67,7 @@ impl QuickActionBar {
                 Tooltip::with_meta(
                     tooltip_text,
                     Some(open_action_for_tooltip),
-                    format!(
-                        "{} to open in a split",
-                        text_for_keystroke(&alt_click.modifiers, &alt_click.key, cx)
-                    ),
+                    format!("{} to open in a split", text_for_keystroke(&alt_click.modifiers, &alt_click.key, cx)),
                     cx,
                 )
             })
@@ -99,9 +91,7 @@ impl QuickActionBar {
                                         workspace, editor, pane, window, cx,
                                     );
                                 } else {
-                                    MarkdownPreviewView::open_preview_in_pane(
-                                        workspace, editor, pane, window, cx,
-                                    );
+                                    MarkdownPreviewView::open_preview_in_pane(workspace, editor, pane, window, cx);
                                 }
                             }
                             PreviewTarget::Svg(buffer) => {
@@ -111,9 +101,7 @@ impl QuickActionBar {
                                         workspace, buffer, pane, window, cx,
                                     );
                                 } else {
-                                    SvgPreviewView::open_preview_in_pane(
-                                        workspace, buffer, pane, window, cx,
-                                    );
+                                    SvgPreviewView::open_preview_in_pane(workspace, buffer, pane, window, cx);
                                 }
                             }
                             PreviewTarget::TabularData(editor) => {
@@ -123,9 +111,7 @@ impl QuickActionBar {
                                         workspace, editor, pane, window, cx,
                                     );
                                 } else {
-                                    TabularDataPreviewPane::open_preview_in_pane(
-                                        editor, pane, window, cx,
-                                    );
+                                    TabularDataPreviewPane::open_preview_in_pane(editor, pane, window, cx);
                                 }
                             }
                         }

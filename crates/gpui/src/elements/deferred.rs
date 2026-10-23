@@ -1,13 +1,16 @@
-use crate::{
-    AnyElement, App, Bounds, Element, GlobalElementId, IntoElement, LayoutId, Pixels, Window,
-};
+use crate::AnyElement;
+use crate::App;
+use crate::Bounds;
+use crate::Element;
+use crate::GlobalElementId;
+use crate::IntoElement;
+use crate::LayoutId;
+use crate::Pixels;
+use crate::Window;
 
 /// Builds a `Deferred` element, which delays the layout and paint of its child.
 pub fn deferred(child: impl IntoElement) -> Deferred {
-    Deferred {
-        child: Some(child.into_any_element()),
-        priority: 0,
-    }
+    Deferred { child: Some(child.into_any_element()), priority: 0 }
 }
 
 /// An element which delays the painting of its child until after all of
@@ -21,7 +24,7 @@ impl Deferred {
     /// Sets the `priority` value of the `deferred` element, which
     /// determines the drawing order relative to other deferred elements,
     /// with higher values being drawn on top.
-    pub fn with_priority(mut self, priority: usize) -> Self {
+    pub const fn with_priority(mut self, priority: usize) -> Self {
         self.priority = priority;
         self
     }
@@ -39,12 +42,7 @@ impl Element for Deferred {
         None
     }
 
-    fn request_layout(
-        &mut self,
-        _id: Option<&GlobalElementId>,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> (LayoutId, ()) {
+    fn request_layout(&mut self, _id: Option<&GlobalElementId>, window: &mut Window, cx: &mut App) -> (LayoutId, ()) {
         let layout_id = self.child.as_mut().unwrap().request_layout(window, cx);
         (layout_id, ())
     }
@@ -85,7 +83,7 @@ impl IntoElement for Deferred {
 impl Deferred {
     /// Sets a priority for the element. A higher priority conceptually means painting the element
     /// on top of deferred draws with a lower priority (i.e. closer to the viewer).
-    pub fn priority(mut self, priority: usize) -> Self {
+    pub const fn priority(mut self, priority: usize) -> Self {
         self.priority = priority;
         self
     }

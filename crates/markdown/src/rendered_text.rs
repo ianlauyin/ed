@@ -309,9 +309,7 @@ impl RenderedLine {
                 return None;
             }
 
-            let Some(wrapped_line) = self.layout.line_layout_for_index(0) else {
-                return None;
-            };
+            let wrapped_line = self.layout.line_layout_for_index(0)?;
 
             let bounds = self.layout.bounds();
             let line_height = self.layout.line_height();
@@ -337,17 +335,9 @@ impl RenderedLine {
         })
         .unwrap_or(position);
 
-        let line_rendered_index;
-        let out_of_bounds;
-        match self.layout.index_for_position(adjusted_position) {
-            Ok(ix) => {
-                line_rendered_index = ix;
-                out_of_bounds = false;
-            }
-            Err(ix) => {
-                line_rendered_index = ix;
-                out_of_bounds = true;
-            }
+        let (line_rendered_index, out_of_bounds) = match self.layout.index_for_position(adjusted_position) {
+            Ok(ix) => (ix, false),
+            Err(ix) => (ix, true),
         };
         let source_index = self.source_index_for_rendered_index(line_rendered_index);
         if out_of_bounds { Err(source_index) } else { Ok(source_index) }
@@ -565,14 +555,13 @@ impl RenderedText {
             }
 
             // Handle gap between lines
-            if position.y > line_bounds.bottom() {
-                if let Some(next_line) = lines.peek()
-                    && position.y < next_line.layout.bounds().top()
-                    && gap_source_index.is_none()
-                {
-                    // A later table cell may contain the position, so defer the gap fallback.
-                    gap_source_index = Some(line.source_end);
-                }
+            if position.y > line_bounds.bottom()
+                && let Some(next_line) = lines.peek()
+                && position.y < next_line.layout.bounds().top()
+                && gap_source_index.is_none()
+            {
+                // A later table cell may contain the position, so defer the gap fallback.
+                gap_source_index = Some(line.source_end);
             }
         }
 

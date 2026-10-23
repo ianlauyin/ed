@@ -4,7 +4,8 @@ use ::sum_tree::SumTree;
 use collections::FxHashMap;
 use sum_tree::Bias;
 
-use crate::{FocusHandle, FocusId};
+use crate::FocusHandle;
+use crate::FocusId;
 
 /// Represents a collection of focus handles using the tab-index APIs.
 #[derive(Debug)]
@@ -23,7 +24,7 @@ pub enum TabStopOperation {
 }
 
 impl TabStopOperation {
-    fn focus_handle(&self) -> Option<&FocusHandle> {
+    const fn focus_handle(&self) -> Option<&FocusHandle> {
         match self {
             TabStopOperation::Insert(focus_handle) => Some(focus_handle),
             _ => None,
@@ -51,15 +52,13 @@ struct TabStopNode {
 
 impl Ord for TabStopNode {
     fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-        self.path
-            .cmp(&other.path)
-            .then(self.node_insertion_index.cmp(&other.node_insertion_index))
+        self.path.cmp(&other.path).then(self.node_insertion_index.cmp(&other.node_insertion_index))
     }
 }
 
 impl PartialOrd for TabStopNode {
     fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-        Some(self.cmp(&other))
+        Some(self.cmp(other))
     }
 }
 
@@ -76,8 +75,7 @@ impl Default for TabStopMap {
 
 impl TabStopMap {
     pub fn insert(&mut self, focus_handle: &FocusHandle) {
-        self.insertion_history
-            .push(TabStopOperation::Insert(focus_handle.clone()));
+        self.insertion_history.push(TabStopOperation::Insert(focus_handle.clone()));
         let mut path = self.current_path.clone();
         path.0.push(focus_handle.tab_index);
         let order = TabStopNode {
@@ -90,8 +88,7 @@ impl TabStopMap {
     }
 
     pub fn begin_group(&mut self, tab_index: isize) {
-        self.insertion_history
-            .push(TabStopOperation::Group(tab_index));
+        self.insertion_history.push(TabStopOperation::Group(tab_index));
         self.current_path.0.push(tab_index);
     }
 
@@ -114,9 +111,7 @@ impl TabStopMap {
             if first.tab_stop {
                 return self.focus_handle_for_order(first);
             } else {
-                return self
-                    .next_inner(first)
-                    .and_then(|order| self.focus_handle_for_order(order));
+                return self.next_inner(first).and_then(|order| self.focus_handle_for_order(order));
             }
         };
 
@@ -125,11 +120,7 @@ impl TabStopMap {
         };
         let item = self.next_inner(node);
 
-        if let Some(item) = item {
-            self.focus_handle_for_order(&item)
-        } else {
-            self.next(None)
-        }
+        if let Some(item) = item { self.focus_handle_for_order(item) } else { self.next(None) }
     }
 
     fn next_inner(&self, node: &TabStopNode) -> Option<&TabStopNode> {
@@ -151,9 +142,7 @@ impl TabStopMap {
             if last.tab_stop {
                 return self.focus_handle_for_order(last);
             } else {
-                return self
-                    .prev_inner(last)
-                    .and_then(|order| self.focus_handle_for_order(order));
+                return self.prev_inner(last).and_then(|order| self.focus_handle_for_order(order));
             }
         };
 
@@ -162,11 +151,7 @@ impl TabStopMap {
         };
         let item = self.prev_inner(node);
 
-        if let Some(item) = item {
-            self.focus_handle_for_order(&item)
-        } else {
-            self.prev(None)
-        }
+        if let Some(item) = item { self.focus_handle_for_order(item) } else { self.prev(None) }
     }
 
     fn prev_inner(&self, node: &TabStopNode) -> Option<&TabStopNode> {
@@ -192,23 +177,18 @@ impl TabStopMap {
         }
     }
 
-    pub fn paint_index(&self) -> usize {
+    pub const fn paint_index(&self) -> usize {
         self.insertion_history.len()
     }
 
     fn focus_handle_for_order(&self, order: &TabStopNode) -> Option<FocusHandle> {
         let handle = self.insertion_history[order.node_insertion_index].focus_handle();
-        debug_assert!(
-            handle.is_some(),
-            "The order node did not correspond to an element, this is a GPUI bug"
-        );
+        debug_assert!(handle.is_some(), "The order node did not correspond to an element, this is a GPUI bug");
         handle.cloned()
     }
 
     fn tab_node_for_focus_id(&self, focused_id: &FocusId) -> Option<&TabStopNode> {
-        let Some(order) = self.by_id.get(focused_id) else {
-            return None;
-        };
+        let order = self.by_id.get(focused_id)?;
         Some(order)
     }
 }
@@ -216,7 +196,8 @@ impl TabStopMap {
 mod sum_tree_impl {
     use sum_tree::SeekTarget;
 
-    use crate::tab_stop::{TabStopNode, TabStopPath};
+    use crate::tab_stop::TabStopNode;
+    use crate::tab_stop::TabStopPath;
 
     #[derive(Clone, Debug)]
     pub struct TabStopOrderNodeSummary {
@@ -229,11 +210,7 @@ mod sum_tree_impl {
 
     impl sum_tree::ContextLessSummary for TabStopOrderNodeSummary {
         fn zero() -> Self {
-            TabStopOrderNodeSummary {
-                max_index: 0,
-                max_path: TabStopPath::default(),
-                tab_stops: 0,
-            }
+            TabStopOrderNodeSummary { max_index: 0, max_path: TabStopPath::default(), tab_stops: 0 }
         }
 
         fn add_summary(&mut self, summary: &Self) {
@@ -298,12 +275,8 @@ mod sum_tree_impl {
             cursor_location: &TabStopNode,
             _: <TabStopOrderNodeSummary as sum_tree::Summary>::Context<'_>,
         ) -> std::cmp::Ordering {
-            Iterator::cmp(self.path.0.iter(), cursor_location.path.0.iter()).then(
-                <usize as Ord>::cmp(
-                    &self.node_insertion_index,
-                    &cursor_location.node_insertion_index,
-                ),
-            )
+            Iterator::cmp(self.path.0.iter(), cursor_location.path.0.iter())
+                .then(<usize as Ord>::cmp(&self.node_insertion_index, &cursor_location.node_insertion_index))
         }
     }
 }

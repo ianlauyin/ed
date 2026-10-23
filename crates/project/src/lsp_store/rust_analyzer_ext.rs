@@ -222,7 +222,7 @@ pub fn clear_flycheck(
 fn find_rust_analyzer_server(
     project: &Entity<Project>,
     buffer: Option<&Entity<Buffer>>,
-    cx: &mut AsyncApp,
+    cx: &AsyncApp,
 ) -> Option<LanguageServerId> {
     project.read_with(cx, |project, cx| {
         buffer

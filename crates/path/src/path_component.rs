@@ -7,10 +7,11 @@
 //! with runtime checks on [`PathStyle`], and helpers that `std` defines as
 //! private inherent methods on `Prefix` live in the local [`PrefixExt`] trait.
 
-use crate::PathStyle;
 use std::ffi::OsStr;
 use std::path::Path;
 pub use std::path::Prefix;
+
+use crate::PathStyle;
 
 pub(crate) trait PrefixExt {
     fn len(&self) -> usize;
@@ -31,23 +32,9 @@ impl PrefixExt for Prefix<'_> {
         }
         match *self {
             Verbatim(x) => 4 + os_str_len(x),
-            VerbatimUNC(x, y) => {
-                8 + os_str_len(x)
-                    + if os_str_len(y) > 0 {
-                        1 + os_str_len(y)
-                    } else {
-                        0
-                    }
-            }
+            VerbatimUNC(x, y) => 8 + os_str_len(x) + if os_str_len(y) > 0 { 1 + os_str_len(y) } else { 0 },
             VerbatimDisk(_) => 6,
-            UNC(x, y) => {
-                2 + os_str_len(x)
-                    + if os_str_len(y) > 0 {
-                        1 + os_str_len(y)
-                    } else {
-                        0
-                    }
-            }
+            UNC(x, y) => 2 + os_str_len(x) + if os_str_len(y) > 0 { 1 + os_str_len(y) } else { 0 },
             DeviceNS(x) => 4 + os_str_len(x),
             Disk(_) => 2,
         }
@@ -160,24 +147,19 @@ impl<'a> Components<'a> {
             path_style,
             path: path.as_os_str().as_encoded_bytes(),
             prefix,
-            has_physical_root: path_style
-                .has_physical_root(path.as_os_str().as_encoded_bytes(), prefix),
+            has_physical_root: path_style.has_physical_root(path.as_os_str().as_encoded_bytes(), prefix),
             // use a platform-specific initial state to avoid one turn of
             // the state-machine when the platform doesn't have a Prefix.
-            front: if path_style.has_prefixes() {
-                State::Prefix
-            } else {
-                State::StartDir
-            },
+            front: if path_style.has_prefixes() { State::Prefix } else { State::StartDir },
             back: State::Body,
         }
     }
 
-    pub(crate) fn prefix(&self) -> Option<Prefix<'_>> {
+    pub(crate) const fn prefix(&self) -> Option<Prefix<'_>> {
         self.prefix
     }
 
-    fn has_prefixes(&self) -> bool {
+    const fn has_prefixes(&self) -> bool {
         self.path_style.has_prefixes()
     }
 
@@ -194,10 +176,7 @@ impl<'a> Components<'a> {
         if !self.has_prefixes() {
             return false;
         }
-        self.prefix
-            .as_ref()
-            .map(Prefix::is_verbatim)
-            .unwrap_or(false)
+        self.prefix.as_ref().map(Prefix::is_verbatim).unwrap_or(false)
     }
 
     #[inline]
@@ -205,25 +184,13 @@ impl<'a> Components<'a> {
         if !self.has_prefixes() {
             return 0;
         }
-        if self.front == State::Prefix {
-            self.prefix_len()
-        } else {
-            0
-        }
+        if self.front == State::Prefix { self.prefix_len() } else { 0 }
     }
 
     #[inline]
     fn len_before_body(&self) -> usize {
-        let root = if self.front <= State::StartDir && self.has_physical_root {
-            1
-        } else {
-            0
-        };
-        let cur_dir = if self.front <= State::StartDir && self.include_cur_dir() {
-            1
-        } else {
-            0
-        };
+        let root = if self.front <= State::StartDir && self.has_physical_root { 1 } else { 0 };
+        let cur_dir = if self.front <= State::StartDir && self.include_cur_dir() { 1 } else { 0 };
         self.prefix_remaining() + root + cur_dir
     }
 
@@ -234,11 +201,7 @@ impl<'a> Components<'a> {
 
     #[inline]
     fn is_sep_byte(&self, b: u8) -> bool {
-        if self.prefix_verbatim() {
-            self.path_style.is_verbatim_sep(b)
-        } else {
-            self.path_style.is_sep_byte(b)
-        }
+        if self.prefix_verbatim() { self.path_style.is_verbatim_sep(b) } else { self.path_style.is_sep_byte(b) }
     }
 
     pub fn as_path(&self) -> &'a Path {
@@ -258,10 +221,9 @@ impl<'a> Components<'a> {
         }
         if self.has_prefixes()
             && let Some(p) = self.prefix
+            && p.has_implicit_root()
         {
-            if p.has_implicit_root() {
-                return true;
-            }
+            return true;
         }
         false
     }
@@ -286,9 +248,7 @@ impl<'a> Components<'a> {
             // separately via `include_cur_dir`
             b".." => Some(Component::ParentDir),
             b"" => None,
-            _ => Some(Component::Normal(unsafe {
-                OsStr::from_encoded_bytes_unchecked(comp)
-            })),
+            _ => Some(Component::Normal(unsafe { OsStr::from_encoded_bytes_unchecked(comp) })),
         }
     }
 
@@ -299,25 +259,18 @@ impl<'a> Components<'a> {
             Some(i) => (1, &self.path[..i]),
         };
         // SAFETY: `comp` is a valid substring, since it is split on a separator.
-        (comp.len() + extra, unsafe {
-            self.parse_single_component(comp)
-        })
+        (comp.len() + extra, unsafe { self.parse_single_component(comp) })
     }
 
     fn parse_next_component_back(&self) -> (usize, Option<Component<'a>>) {
         debug_assert!(self.back == State::Body);
         let start = self.len_before_body();
-        let (extra, comp) = match self.path[start..]
-            .iter()
-            .rposition(|b| self.is_sep_byte(*b))
-        {
+        let (extra, comp) = match self.path[start..].iter().rposition(|b| self.is_sep_byte(*b)) {
             None => (0, &self.path[start..]),
             Some(i) => (1, &self.path[start + i + 1..]),
         };
         // SAFETY: `comp` is a valid substring, since it is split on a separator.
-        (comp.len() + extra, unsafe {
-            self.parse_single_component(comp)
-        })
+        (comp.len() + extra, unsafe { self.parse_single_component(comp) })
     }
 
     fn trim_left(&mut self) {
@@ -414,11 +367,7 @@ impl<'a> DoubleEndedIterator for Components<'a> {
                     self.back = State::StartDir;
                 }
                 State::StartDir => {
-                    self.back = if self.has_prefixes() {
-                        State::Prefix
-                    } else {
-                        State::Done
-                    };
+                    self.back = if self.has_prefixes() { State::Prefix } else { State::Done };
                     if self.has_physical_root {
                         self.path = &self.path[..self.path.len() - 1];
                         return Some(Component::RootDir);

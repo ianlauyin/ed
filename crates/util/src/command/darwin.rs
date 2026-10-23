@@ -1,18 +1,27 @@
-use mach2::exception_types::{
-    EXC_MASK_ALL, EXCEPTION_DEFAULT, exception_behavior_t, exception_mask_t,
-};
-use mach2::port::{MACH_PORT_NULL, mach_port_t};
-use mach2::thread_status::{THREAD_STATE_NONE, thread_state_flavor_t};
-use smol::Async;
 use std::collections::BTreeMap;
-use std::ffi::{CString, OsStr, OsString};
+use std::ffi::CString;
+use std::ffi::OsStr;
+use std::ffi::OsString;
 use std::io;
 use std::os::fd::AsRawFd;
-use std::os::unix::ffi::{OsStrExt, OsStringExt};
+use std::os::unix::ffi::OsStrExt;
+use std::os::unix::ffi::OsStringExt;
 use std::os::unix::io::FromRawFd;
-use std::path::{Path, PathBuf};
-use std::process::{ExitStatus, Output};
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::ExitStatus;
+use std::process::Output;
 use std::ptr;
+
+use mach2::exception_types::EXC_MASK_ALL;
+use mach2::exception_types::EXCEPTION_DEFAULT;
+use mach2::exception_types::exception_behavior_t;
+use mach2::exception_types::exception_mask_t;
+use mach2::port::MACH_PORT_NULL;
+use mach2::port::mach_port_t;
+use mach2::thread_status::THREAD_STATE_NONE;
+use mach2::thread_status::thread_state_flavor_t;
+use smol::Async;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Stdio {
@@ -26,15 +35,15 @@ pub enum Stdio {
 }
 
 impl Stdio {
-    pub fn piped() -> Self {
+    pub const fn piped() -> Self {
         Self::Piped
     }
 
-    pub fn inherit() -> Self {
+    pub const fn inherit() -> Self {
         Self::Inherit
     }
 
-    pub fn null() -> Self {
+    pub const fn null() -> Self {
         Self::Null
     }
 }
@@ -99,8 +108,7 @@ impl Command {
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
     {
-        self.args
-            .extend(args.into_iter().map(|a| a.as_ref().to_owned()));
+        self.args.extend(args.into_iter().map(|a| a.as_ref().to_owned()));
         self
     }
 
@@ -109,8 +117,7 @@ impl Command {
     }
 
     pub fn env(&mut self, key: impl AsRef<OsStr>, val: impl AsRef<OsStr>) -> &mut Self {
-        self.envs
-            .insert(key.as_ref().to_owned(), Some(val.as_ref().to_owned()));
+        self.envs.insert(key.as_ref().to_owned(), Some(val.as_ref().to_owned()));
         self
     }
 
@@ -121,8 +128,7 @@ impl Command {
         V: AsRef<OsStr>,
     {
         for (key, val) in vars {
-            self.envs
-                .insert(key.as_ref().to_owned(), Some(val.as_ref().to_owned()));
+            self.envs.insert(key.as_ref().to_owned(), Some(val.as_ref().to_owned()));
         }
         self
     }
@@ -148,31 +154,28 @@ impl Command {
         self
     }
 
-    pub fn stdin(&mut self, cfg: Stdio) -> &mut Self {
+    pub const fn stdin(&mut self, cfg: Stdio) -> &mut Self {
         self.stdin_cfg = Some(cfg);
         self
     }
 
-    pub fn stdout(&mut self, cfg: Stdio) -> &mut Self {
+    pub const fn stdout(&mut self, cfg: Stdio) -> &mut Self {
         self.stdout_cfg = Some(cfg);
         self
     }
 
-    pub fn stderr(&mut self, cfg: Stdio) -> &mut Self {
+    pub const fn stderr(&mut self, cfg: Stdio) -> &mut Self {
         self.stderr_cfg = Some(cfg);
         self
     }
 
-    pub fn kill_on_drop(&mut self, kill_on_drop: bool) -> &mut Self {
+    pub const fn kill_on_drop(&mut self, kill_on_drop: bool) -> &mut Self {
         self.kill_on_drop = kill_on_drop;
         self
     }
 
     pub fn spawn(&mut self) -> io::Result<Child> {
-        let current_dir = self
-            .current_dir
-            .as_deref()
-            .unwrap_or_else(|| Path::new("."));
+        let current_dir = self.current_dir.as_deref().unwrap_or_else(|| Path::new("."));
 
         // Optimization: if no environment modifications were requested, pass None
         // to spawn_posix so it uses the `environ` global directly, avoiding a
@@ -248,9 +251,7 @@ impl Child {
         self.inner.try_status()
     }
 
-    pub fn status(
-        &mut self,
-    ) -> impl std::future::Future<Output = io::Result<ExitStatus>> + Send + 'static {
+    pub fn status(&mut self) -> impl std::future::Future<Output = io::Result<ExitStatus>> + Send + 'static {
         self.stdin.take();
         self.inner.status()
     }
@@ -278,15 +279,10 @@ impl Child {
             io::Result::Ok(data)
         };
 
-        let (stdout_data, stderr_data) =
-            futures_lite::future::try_zip(stdout_future, stderr_future).await?;
+        let (stdout_data, stderr_data) = futures_lite::future::try_zip(stdout_future, stderr_future).await?;
         let status = status.await?;
 
-        Ok(Output {
-            status,
-            stdout: stdout_data,
-            stderr: stderr_data,
-        })
+        Ok(Output { status, stdout: stdout_data, stderr: stderr_data })
     }
 }
 
@@ -302,36 +298,27 @@ fn spawn_posix_spawn(
 ) -> io::Result<Child> {
     // posix_spawnp resolves programs against the parent's cwd/PATH, not the child's.
     let resolved_program = if program.as_bytes().contains(&b'/') {
-        std::path::absolute(current_dir.join(program)).map_or_else(
-            |_| program.as_bytes().to_vec(),
-            |p| p.into_os_string().into_vec(),
-        )
+        std::path::absolute(current_dir.join(program))
+            .map_or_else(|_| program.as_bytes().to_vec(), |p| p.into_os_string().into_vec())
     } else {
         envs.and_then(|e| {
             e.iter()
                 .find(|(k, _)| k.as_os_str() == OsStr::new("PATH"))
                 .and_then(|(_, v)| which::which_in(program, Some(v.as_os_str()), current_dir).ok())
         })
-        .map_or_else(
-            || program.as_bytes().to_vec(),
-            |path| path.into_os_string().into_vec(),
-        )
+        .map_or_else(|| program.as_bytes().to_vec(), |path| path.into_os_string().into_vec())
     };
     let program_cstr = CString::new(resolved_program).map_err(|_| invalid_input_error())?;
     let argv0_cstr = CString::new(program.as_bytes()).map_err(|_| invalid_input_error())?;
 
-    let current_dir_cstr =
-        CString::new(current_dir.as_os_str().as_bytes()).map_err(|_| invalid_input_error())?;
+    let current_dir_cstr = CString::new(current_dir.as_os_str().as_bytes()).map_err(|_| invalid_input_error())?;
 
     let mut argv_cstrs = vec![argv0_cstr];
     for arg in args {
         let cstr = CString::new(arg.as_bytes()).map_err(|_| invalid_input_error())?;
         argv_cstrs.push(cstr);
     }
-    let mut argv_ptrs: Vec<*mut libc::c_char> = argv_cstrs
-        .iter()
-        .map(|s| s.as_ptr() as *mut libc::c_char)
-        .collect();
+    let mut argv_ptrs: Vec<*mut libc::c_char> = argv_cstrs.iter().map(|s| s.as_ptr() as *mut libc::c_char).collect();
     argv_ptrs.push(ptr::null_mut());
 
     let envp: Vec<CString> = if let Some(envs) = envs {
@@ -347,10 +334,7 @@ fn spawn_posix_spawn(
     } else {
         Vec::new()
     };
-    let mut envp_ptrs: Vec<*mut libc::c_char> = envp
-        .iter()
-        .map(|s| s.as_ptr() as *mut libc::c_char)
-        .collect();
+    let mut envp_ptrs: Vec<*mut libc::c_char> = envp.iter().map(|s| s.as_ptr() as *mut libc::c_char).collect();
     envp_ptrs.push(ptr::null_mut());
 
     let (stdin_read, stdin_write) = match stdin_cfg {
@@ -393,8 +377,8 @@ fn spawn_posix_spawn(
     let mut file_actions: libc::posix_spawn_file_actions_t = ptr::null_mut();
 
     unsafe {
-        cvt_nz(libc::posix_spawnattr_init(&mut attr))?;
-        cvt_nz(libc::posix_spawn_file_actions_init(&mut file_actions))?;
+        cvt_nz(libc::posix_spawnattr_init(&raw mut attr))?;
+        cvt_nz(libc::posix_spawn_file_actions_init(&raw mut file_actions))?;
 
         // The Rust runtime sets SIGPIPE to SIG_IGN before `main`, and ignored
         // dispositions survive exec, so without this children would never die
@@ -402,95 +386,67 @@ fn spawn_posix_spawn(
         // (rust-lang/rust#101077). Like std, we don't touch the signal mask,
         // so deliberately blocked signals (e.g. via `nohup`) stay blocked.
         let mut default_set: libc::sigset_t = std::mem::zeroed();
-        if libc::sigemptyset(&mut default_set) == -1 {
+        if libc::sigemptyset(&raw mut default_set) == -1 {
             return Err(io::Error::last_os_error());
         }
-        if libc::sigaddset(&mut default_set, libc::SIGPIPE) == -1 {
+        if libc::sigaddset(&raw mut default_set, libc::SIGPIPE) == -1 {
             return Err(io::Error::last_os_error());
         }
-        cvt_nz(libc::posix_spawnattr_setsigdefault(&mut attr, &default_set))?;
+        cvt_nz(libc::posix_spawnattr_setsigdefault(&raw mut attr, &raw const default_set))?;
 
         cvt_nz(libc::posix_spawnattr_setflags(
-            &mut attr,
+            &raw mut attr,
             (libc::POSIX_SPAWN_CLOEXEC_DEFAULT | libc::POSIX_SPAWN_SETSIGDEF) as libc::c_short,
         ))?;
 
         cvt_nz(posix_spawnattr_setexceptionports_np(
-            &mut attr,
+            &raw mut attr,
             EXC_MASK_ALL,
             MACH_PORT_NULL,
             EXCEPTION_DEFAULT as exception_behavior_t,
             THREAD_STATE_NONE,
         ))?;
 
-        cvt_nz(posix_spawn_file_actions_addchdir_np(
-            &mut file_actions,
-            current_dir_cstr.as_ptr(),
-        ))?;
+        cvt_nz(posix_spawn_file_actions_addchdir_np(&raw mut file_actions, current_dir_cstr.as_ptr()))?;
 
         // With POSIX_SPAWN_CLOEXEC_DEFAULT, any fd without a file action is
         // closed in the child, so inheriting a stdio fd requires an explicit
         // addinherit_np action; without one the child's fd 0/1/2 would start
         // out closed and could be silently reused by its first open().
         if let Some(fd) = &stdin_read {
-            cvt_nz(libc::posix_spawn_file_actions_adddup2(
-                &mut file_actions,
-                fd.as_raw_fd(),
-                libc::STDIN_FILENO,
-            ))?;
+            cvt_nz(libc::posix_spawn_file_actions_adddup2(&raw mut file_actions, fd.as_raw_fd(), libc::STDIN_FILENO))?;
         }
         if stdin_read.is_some() || stdin_cfg == Stdio::Inherit {
-            cvt_nz(posix_spawn_file_actions_addinherit_np(
-                &mut file_actions,
-                libc::STDIN_FILENO,
-            ))?;
+            cvt_nz(posix_spawn_file_actions_addinherit_np(&raw mut file_actions, libc::STDIN_FILENO))?;
         }
 
         if let Some(fd) = &stdout_write {
-            cvt_nz(libc::posix_spawn_file_actions_adddup2(
-                &mut file_actions,
-                fd.as_raw_fd(),
-                libc::STDOUT_FILENO,
-            ))?;
+            cvt_nz(libc::posix_spawn_file_actions_adddup2(&raw mut file_actions, fd.as_raw_fd(), libc::STDOUT_FILENO))?;
         }
         if stdout_write.is_some() || stdout_cfg == Stdio::Inherit {
-            cvt_nz(posix_spawn_file_actions_addinherit_np(
-                &mut file_actions,
-                libc::STDOUT_FILENO,
-            ))?;
+            cvt_nz(posix_spawn_file_actions_addinherit_np(&raw mut file_actions, libc::STDOUT_FILENO))?;
         }
 
         if let Some(fd) = &stderr_write {
-            cvt_nz(libc::posix_spawn_file_actions_adddup2(
-                &mut file_actions,
-                fd.as_raw_fd(),
-                libc::STDERR_FILENO,
-            ))?;
+            cvt_nz(libc::posix_spawn_file_actions_adddup2(&raw mut file_actions, fd.as_raw_fd(), libc::STDERR_FILENO))?;
         }
         if stderr_write.is_some() || stderr_cfg == Stdio::Inherit {
-            cvt_nz(posix_spawn_file_actions_addinherit_np(
-                &mut file_actions,
-                libc::STDERR_FILENO,
-            ))?;
+            cvt_nz(posix_spawn_file_actions_addinherit_np(&raw mut file_actions, libc::STDERR_FILENO))?;
         }
 
         let mut pid: libc::pid_t = 0;
 
         let spawn_result = libc::posix_spawnp(
-            &mut pid,
+            &raw mut pid,
             program_cstr.as_ptr(),
-            &file_actions,
-            &attr,
+            &raw const file_actions,
+            &raw const attr,
             argv_ptrs.as_ptr(),
-            if envs.is_some() {
-                envp_ptrs.as_ptr()
-            } else {
-                environ
-            },
+            if envs.is_some() { envp_ptrs.as_ptr() } else { environ },
         );
 
-        libc::posix_spawnattr_destroy(&mut attr);
-        libc::posix_spawn_file_actions_destroy(&mut file_actions);
+        libc::posix_spawnattr_destroy(&raw mut attr);
+        libc::posix_spawn_file_actions_destroy(&raw mut file_actions);
 
         cvt_nz(spawn_result)?;
 
@@ -531,21 +487,13 @@ fn create_pipe() -> io::Result<(std::fs::File, std::fs::File)> {
             }
         }
 
-        Ok((
-            std::fs::File::from_raw_fd(fds[0]),
-            std::fs::File::from_raw_fd(fds[1]),
-        ))
+        Ok((std::fs::File::from_raw_fd(fds[0]), std::fs::File::from_raw_fd(fds[1])))
     }
 }
 
 fn open_dev_null(flags: libc::c_int) -> io::Result<std::fs::File> {
     // Set close-on-exec for this pipe, for the same reason as in `create_pipe`.
-    let fd = unsafe {
-        libc::open(
-            c"/dev/null".as_ptr() as *const libc::c_char,
-            flags | libc::O_CLOEXEC,
-        )
-    };
+    let fd = unsafe { libc::open(c"/dev/null".as_ptr() as *const libc::c_char, flags | libc::O_CLOEXEC) };
     if fd == -1 {
         return Err(io::Error::last_os_error());
     }
@@ -555,16 +503,9 @@ fn open_dev_null(flags: libc::c_int) -> io::Result<std::fs::File> {
 /// Zero means `Ok()`, all other values are treated as raw OS errors. Does not look at `errno`.
 /// Mirrored after Rust's std `cvt_nz` function.
 fn cvt_nz(error: libc::c_int) -> io::Result<()> {
-    if error == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::from_raw_os_error(error))
-    }
+    if error == 0 { Ok(()) } else { Err(io::Error::from_raw_os_error(error)) }
 }
 
 fn invalid_input_error() -> io::Error {
-    io::Error::new(
-        io::ErrorKind::InvalidInput,
-        "invalid argument: path or argument contains null byte",
-    )
+    io::Error::new(io::ErrorKind::InvalidInput, "invalid argument: path or argument contains null byte")
 }

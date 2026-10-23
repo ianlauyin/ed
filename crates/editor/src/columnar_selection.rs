@@ -1,23 +1,30 @@
-use language::{Bias, LanguageAwareStyling, Point};
-use multi_buffer::{MBTextSummary, MultiBufferRow};
 use std::ops::Range;
-use unicode_segmentation::{GraphemeCursor, GraphemeIncomplete};
 
-use crate::{
-    DisplayPoint,
-    display_map::{DisplaySnapshot, FoldPoint, Highlights, TabPoint, ToDisplayPoint as _},
-};
+use language::Bias;
+use language::LanguageAwareStyling;
+use language::Point;
+use multi_buffer::MBTextSummary;
+use multi_buffer::MultiBufferRow;
+use unicode_segmentation::GraphemeCursor;
+use unicode_segmentation::GraphemeIncomplete;
+
+use crate::DisplayPoint;
+use crate::display_map::DisplaySnapshot;
+use crate::display_map::FoldPoint;
+use crate::display_map::Highlights;
+use crate::display_map::TabPoint;
+use crate::display_map::ToDisplayPoint as _;
 
 pub(crate) struct ColumnarSelectionRows<'a> {
     snapshot: &'a DisplaySnapshot,
 }
 
 impl<'a> ColumnarSelectionRows<'a> {
-    pub(crate) fn new(snapshot: &'a DisplaySnapshot) -> Self {
+    pub(crate) const fn new(snapshot: &'a DisplaySnapshot) -> Self {
         Self { snapshot }
     }
 
-    pub(crate) fn columns_for_ranges(&mut self, ranges: &[Range<Point>]) -> Vec<Range<u32>> {
+    pub(crate) fn columns_for_ranges(&self, ranges: &[Range<Point>]) -> Vec<Range<u32>> {
         let tabs = self.snapshot.tab_snapshot();
         let mut endpoints = ranges
             .iter()
@@ -47,10 +54,7 @@ impl<'a> ColumnarSelectionRows<'a> {
         answers
     }
 
-    pub(crate) fn points_for_rows(
-        &mut self,
-        queries: &[(u32, Range<u32>)],
-    ) -> Vec<Option<(Point, Point)>> {
+    pub(crate) fn points_for_rows(&self, queries: &[(u32, Range<u32>)]) -> Vec<Option<(Point, Point)>> {
         let tabs = self.snapshot.tab_snapshot();
         let max_row = tabs.max_point().row();
         let mut endpoints = Vec::new();
@@ -74,9 +78,7 @@ impl<'a> ColumnarSelectionRows<'a> {
             let mut buffer_cursor = None;
             for &(_, goal, end, index) in endpoints {
                 let columns = &queries[index].1;
-                if (end && answers[index].is_none())
-                    || (!end && columns.start != columns.end && goal >= length)
-                {
+                if (end && answers[index].is_none()) || (!end && columns.start != columns.end && goal >= length) {
                     continue;
                 }
                 text.advance_columns(&mut cursor, goal - column);
@@ -84,18 +86,10 @@ impl<'a> ColumnarSelectionRows<'a> {
                 if !end && columns.start != columns.end && cursor.byte() == length {
                     continue;
                 }
-                let point = self.point_for_cursor(
-                    row,
-                    &mut text,
-                    cursor.clone(),
-                    preceding,
-                    &mut buffer_cursor,
-                );
+                let point = self.point_for_cursor(row, &mut text, cursor.clone(), preceding, &mut buffer_cursor);
                 preceding = Some((cursor.byte(), point));
                 answers[index] = if end {
-                    answers[index]
-                        .zip(point)
-                        .map(|((start, _), end)| (start.min(end), start.max(end)))
+                    answers[index].zip(point).map(|((start, _), end)| (start.min(end), start.max(end)))
                 } else {
                     point.map(|point| (point, point))
                 };
@@ -126,10 +120,7 @@ impl<'a> ColumnarSelectionRows<'a> {
             let tab_point = TabPoint::new(row, cursor.byte());
             let tabs = self.snapshot.tab_snapshot();
             let fold_point = tabs.tab_point_to_fold_point(tab_point, Bias::Left).0;
-            if let Some(range) = self
-                .snapshot
-                .fold_snapshot()
-                .placeholder_range_at(fold_point)
+            if let Some(range) = self.snapshot.fold_snapshot().placeholder_range_at(fold_point)
                 && range.start < fold_point
             {
                 let start = tabs.fold_point_to_tab_point(range.start);
@@ -142,16 +133,13 @@ impl<'a> ColumnarSelectionRows<'a> {
             let canonical = tabs.point_to_tab_point(point, Bias::Left);
             if !hidden
                 && canonical == tab_point
-                && self.floor_buffer_point(buffer_cursor, &mut backward_buffer_cursor, point)
-                    == point
+                && self.floor_buffer_point(buffer_cursor, &mut backward_buffer_cursor, point) == point
             {
                 return Some(point);
             }
             let preceding = if hidden && canonical == tab_point {
-                let hidden_start = self.snapshot.display_point_to_fold_point(
-                    DisplayPoint::new(display_point.row(), 0),
-                    Bias::Left,
-                );
+                let hidden_start =
+                    self.snapshot.display_point_to_fold_point(DisplayPoint::new(display_point.row(), 0), Bias::Left);
                 let hidden_start = tabs.fold_point_to_tab_point(hidden_start);
                 if hidden_start.row() != row {
                     return None;
@@ -165,19 +153,10 @@ impl<'a> ColumnarSelectionRows<'a> {
                 canonical
             } else {
                 let previous = if let Some(byte) = point.column.checked_sub(1) {
-                    self.floor_buffer_point(
-                        buffer_cursor,
-                        &mut backward_buffer_cursor,
-                        Point::new(point.row, byte),
-                    )
+                    self.floor_buffer_point(buffer_cursor, &mut backward_buffer_cursor, Point::new(point.row, byte))
                 } else {
                     let row = point.row.checked_sub(1)?;
-                    Point::new(
-                        row,
-                        self.snapshot
-                            .buffer_snapshot()
-                            .line_len(MultiBufferRow(row)),
-                    )
+                    Point::new(row, self.snapshot.buffer_snapshot().line_len(MultiBufferRow(row)))
                 };
                 tabs.point_to_tab_point(previous, Bias::Left)
             };
@@ -201,14 +180,10 @@ impl<'a> ColumnarSelectionRows<'a> {
         if forward.as_ref().is_none_or(|cursor| cursor.row < point.row) {
             *backward = forward.replace(self.buffer_row_cursor(point.row));
         }
-        let cursor = if let Some(cursor) = forward.as_mut().filter(|cursor| cursor.row == point.row)
-        {
+        let cursor = if let Some(cursor) = forward.as_mut().filter(|cursor| cursor.row == point.row) {
             cursor
         } else {
-            if backward
-                .as_ref()
-                .is_none_or(|cursor| cursor.row != point.row)
-            {
+            if backward.as_ref().is_none_or(|cursor| cursor.row != point.row) {
                 let cursor = backward.insert(self.buffer_row_cursor(point.row));
                 cursor.reverse = Some(cursor.text.floor_at(point.column));
             }
@@ -218,10 +193,7 @@ impl<'a> ColumnarSelectionRows<'a> {
             cursor.text.floor_forward(&mut cursor.forward, point.column);
             cursor.reverse = Some(cursor.forward.boundary.clone());
         }
-        let boundary = cursor
-            .reverse
-            .as_mut()
-            .expect("buffer boundary initialized");
+        let boundary = cursor.reverse.as_mut().expect("buffer boundary initialized");
         cursor.text.retreat_to(boundary, point.column);
         Point::new(point.row, boundary.byte())
     }
@@ -229,12 +201,7 @@ impl<'a> ColumnarSelectionRows<'a> {
     fn buffer_row_cursor(&self, row: u32) -> BufferRowCursor<'a> {
         let text = self.buffer_row(row);
         let forward = text.forward_cursor();
-        BufferRowCursor {
-            row,
-            text,
-            forward,
-            reverse: None,
-        }
+        BufferRowCursor { row, text, forward, reverse: None }
     }
 
     fn buffer_row(&self, row: u32) -> RowText<'a> {
@@ -252,9 +219,7 @@ impl<'a> ColumnarSelectionRows<'a> {
     fn row(&self, row: u32) -> RowText<'a> {
         let tabs = self.snapshot.tab_snapshot();
         let folds = self.snapshot.fold_snapshot();
-        let summary = folds.text_summary_for_range(
-            FoldPoint::new(row, 0)..FoldPoint::new(row, folds.line_len(row)),
-        );
+        let summary = folds.text_summary_for_range(FoldPoint::new(row, 0)..FoldPoint::new(row, folds.line_len(row)));
         let length = tabs.line_len(row);
         if summary.len.0 == summary.chars {
             RowText::Ascii(length)
@@ -262,10 +227,7 @@ impl<'a> ColumnarSelectionRows<'a> {
             let chunks = tabs
                 .chunks(
                     TabPoint::new(row, 0)..TabPoint::new(row, length),
-                    LanguageAwareStyling {
-                        tree_sitter: false,
-                        diagnostics: false,
-                    },
+                    LanguageAwareStyling { tree_sitter: false, diagnostics: false },
                     Highlights::default(),
                 )
                 .map(|chunk| (chunk.text, chunk.is_tab));
@@ -323,11 +285,7 @@ impl<'a> RowText<'a> {
     }
 
     fn with_tabs(length: u32, chunks: impl Iterator<Item = (&'a str, bool)> + 'a) -> Self {
-        Self::Unicode(RowChunks {
-            length,
-            chunks: Vec::new(),
-            remaining: Box::new(chunks),
-        })
+        Self::Unicode(RowChunks { length, chunks: Vec::new(), remaining: Box::new(chunks) })
     }
 
     fn cursor(&self, byte: u32) -> BoundaryCursor {
@@ -343,11 +301,7 @@ impl<'a> RowText<'a> {
 
     fn forward_cursor(&self) -> ForwardCursor {
         let boundary = self.cursor(0);
-        ForwardCursor {
-            next: boundary.clone(),
-            boundary,
-            column: 0,
-        }
+        ForwardCursor { next: boundary.clone(), boundary, column: 0 }
     }
 
     fn floor_forward(&mut self, cursor: &mut ForwardCursor, byte: u32) {
@@ -358,9 +312,7 @@ impl<'a> RowText<'a> {
             return;
         }
         while cursor.boundary.byte() < byte {
-            if cursor.next.byte() == cursor.boundary.byte()
-                && self.next_boundary(&mut cursor.next).is_none()
-            {
+            if cursor.next.byte() == cursor.boundary.byte() && self.next_boundary(&mut cursor.next).is_none() {
                 break;
             }
             if cursor.next.byte() > byte {
@@ -373,9 +325,7 @@ impl<'a> RowText<'a> {
 
     fn advance_columns(&mut self, cursor: &mut BoundaryCursor, count: u32) {
         if let Self::Ascii(length) = self {
-            cursor
-                .graphemes
-                .set_cursor(cursor.byte().saturating_add(count).min(*length) as usize);
+            cursor.graphemes.set_cursor(cursor.byte().saturating_add(count).min(*length) as usize);
         } else {
             for _ in 0..count {
                 if self.next_boundary(cursor).is_none() {
@@ -399,9 +349,7 @@ impl<'a> RowText<'a> {
             }
             cursor.graphemes.set_cursor(chunk.start + offset);
             if chunks.resolve(&mut cursor, BoundaryQuery::Check).is_none() {
-                chunks
-                    .resolve(&mut cursor, BoundaryQuery::Previous)
-                    .expect("non-boundary has a preceding boundary");
+                chunks.resolve(&mut cursor, BoundaryQuery::Previous).expect("non-boundary has a preceding boundary");
             }
         }
         cursor
@@ -409,9 +357,7 @@ impl<'a> RowText<'a> {
 
     fn retreat_to(&mut self, cursor: &mut BoundaryCursor, byte: u32) {
         if let Self::Ascii(_) = self {
-            cursor
-                .graphemes
-                .set_cursor(cursor.byte().min(byte) as usize);
+            cursor.graphemes.set_cursor(cursor.byte().min(byte) as usize);
         } else {
             while cursor.byte() > byte {
                 if self.previous_boundary(cursor).is_none() {
@@ -450,30 +396,21 @@ impl<'a> RowChunks<'a> {
     fn chunk(&mut self, index: usize) -> TextChunk<'a> {
         const TAB_CHARACTERS: [u8; 128] = [b'\t'; 128];
         while self.chunks.len() <= index {
-            let (text, is_tab) = self
-                .remaining
-                .find(|(text, _)| !text.is_empty())
-                .expect("row chunks must cover the row");
+            let (text, is_tab) =
+                self.remaining.find(|(text, _)| !text.is_empty()).expect("row chunks must cover the row");
             let text = if is_tab {
                 std::str::from_utf8(&TAB_CHARACTERS[..text.len()]).expect("tab controls are UTF-8")
             } else {
                 text
             };
-            let start = self
-                .chunks
-                .last()
-                .map_or(0, |chunk| chunk.start + chunk.text.len());
+            let start = self.chunks.last().map_or(0, |chunk| chunk.start + chunk.text.len());
             self.chunks.push(TextChunk { start, text });
         }
         self.chunks[index]
     }
 
     fn locate(&mut self, byte: usize) -> usize {
-        while self
-            .chunks
-            .last()
-            .is_none_or(|chunk| chunk.start + chunk.text.len() <= byte)
-        {
+        while self.chunks.last().is_none_or(|chunk| chunk.start + chunk.text.len() <= byte) {
             self.chunk(self.chunks.len());
         }
         self.chunks.partition_point(|chunk| chunk.start <= byte) - 1
@@ -492,13 +429,10 @@ impl<'a> RowChunks<'a> {
             }
             let chunk = loop {
                 let chunk = self.chunk(cursor.chunk_index);
-                if offset < chunk.start
-                    || (query == BoundaryQuery::Previous && offset == chunk.start)
-                {
+                if offset < chunk.start || (query == BoundaryQuery::Previous && offset == chunk.start) {
                     cursor.chunk_index -= 1;
                 } else if offset > chunk.start + chunk.text.len()
-                    || (query != BoundaryQuery::Previous
-                        && offset == chunk.start + chunk.text.len())
+                    || (query != BoundaryQuery::Previous && offset == chunk.start + chunk.text.len())
                 {
                     cursor.chunk_index += 1;
                 } else {
@@ -506,22 +440,20 @@ impl<'a> RowChunks<'a> {
                 }
             };
             let mut bridge = [0; 8];
-            let (text, start) =
-                if query != BoundaryQuery::Previous && offset == chunk.start && offset > 0 {
-                    let previous = self.chunk(cursor.chunk_index - 1);
-                    let previous = previous.text.chars().next_back().expect("nonempty chunk");
-                    let following = chunk.text.chars().next().expect("nonempty chunk");
-                    let previous_length = previous.encode_utf8(&mut bridge).len();
-                    let following_length =
-                        following.encode_utf8(&mut bridge[previous_length..]).len();
-                    (
-                        std::str::from_utf8(&bridge[..previous_length + following_length])
-                            .expect("encoded scalars are UTF-8"),
-                        offset - previous_length,
-                    )
-                } else {
-                    (chunk.text, chunk.start)
-                };
+            let (text, start) = if query != BoundaryQuery::Previous && offset == chunk.start && offset > 0 {
+                let previous = self.chunk(cursor.chunk_index - 1);
+                let previous = previous.text.chars().next_back().expect("nonempty chunk");
+                let following = chunk.text.chars().next().expect("nonempty chunk");
+                let previous_length = previous.encode_utf8(&mut bridge).len();
+                let following_length = following.encode_utf8(&mut bridge[previous_length..]).len();
+                (
+                    std::str::from_utf8(&bridge[..previous_length + following_length])
+                        .expect("encoded scalars are UTF-8"),
+                    offset - previous_length,
+                )
+            } else {
+                (chunk.text, chunk.start)
+            };
             loop {
                 let result = match query {
                     BoundaryQuery::Next => cursor.graphemes.next_boundary(text, start),
@@ -537,9 +469,7 @@ impl<'a> RowChunks<'a> {
                         let index = self.locate(end - 1);
                         let context = self.chunk(index);
                         let context_text = &context.text[..end - context.start];
-                        cursor
-                            .graphemes
-                            .provide_context(context_text, context.start);
+                        cursor.graphemes.provide_context(context_text, context.start);
                     }
                     Err(GraphemeIncomplete::NextChunk | GraphemeIncomplete::PrevChunk) => break,
                     Err(error) => unreachable!("row grapheme cursor: {error:?}"),

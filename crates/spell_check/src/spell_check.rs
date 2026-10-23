@@ -4,7 +4,8 @@
 //! (https://github.com/blopker/codebook): identifiers are split into their
 //! camelCase / snake_case parts and each part is checked on its own.
 
-use std::{ops::Range, sync::LazyLock};
+use std::ops::Range;
+use std::sync::LazyLock;
 
 use collections::HashSet;
 use regex::Regex;
@@ -17,19 +18,12 @@ const MIN_WORD_LEN: usize = 3;
 const MAX_SUGGESTIONS: usize = 5;
 
 static DICTIONARY: LazyLock<spellbook::Dictionary> = LazyLock::new(|| {
-    spellbook::Dictionary::new(
-        include_str!("../dictionaries/en_US.aff"),
-        include_str!("../dictionaries/en_US.dic"),
-    )
-    .expect("bundled en_US dictionary must parse")
+    spellbook::Dictionary::new(include_str!("../dictionaries/en_US.aff"), include_str!("../dictionaries/en_US.dic"))
+        .expect("bundled en_US dictionary must parse")
 });
 
-static CODE_WORDS: LazyLock<HashSet<&'static str>> = LazyLock::new(|| {
-    include_str!("../dictionaries/code_words.txt")
-        .lines()
-        .filter(|line| !line.is_empty())
-        .collect()
-});
+static CODE_WORDS: LazyLock<HashSet<&'static str>> =
+    LazyLock::new(|| include_str!("../dictionaries/code_words.txt").lines().filter(|line| !line.is_empty()).collect());
 
 static SKIP_PATTERNS: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
@@ -105,10 +99,7 @@ pub fn project_word_insertion(text: &str, word: &str) -> Option<(usize, String)>
 
 /// Returns the byte ranges of the misspelled words in `text`.
 pub fn misspelled_words(text: &str, project_words: &HashSet<String>) -> Vec<Range<usize>> {
-    let skip = SKIP_PATTERNS
-        .find_iter(text)
-        .map(|m| m.range())
-        .collect::<Vec<_>>();
+    let skip = SKIP_PATTERNS.find_iter(text).map(|m| m.range()).collect::<Vec<_>>();
     let mut skip = skip.iter().peekable();
     let mut parts = Vec::new();
     let mut result = Vec::new();
@@ -140,12 +131,7 @@ pub fn is_correct(word: &str, project_words: &HashSet<String>) -> bool {
     if CODE_WORDS.contains(lowercase.as_str()) || project_words.contains(&lowercase) {
         return true;
     }
-    DICTIONARY.check(word)
-        || DICTIONARY
-            .checker()
-            .check_lower_as_title(true)
-            .check_lower_as_upper(true)
-            .check(word)
+    DICTIONARY.check(word) || DICTIONARY.checker().check_lower_as_title(true).check_lower_as_upper(true).check(word)
 }
 
 /// Dictionary suggestions for `word`, in the word's case.
@@ -190,23 +176,19 @@ fn tokens(text: &str) -> impl Iterator<Item = Range<usize>> + '_ {
     })
 }
 
-fn is_apostrophe(c: char) -> bool {
+const fn is_apostrophe(c: char) -> bool {
     c == '\'' || c == '\u{2019}'
 }
 
 /// Git hashes and other hex runs: 7+ hex digits, at least one a decimal
 /// digit so words spelled with a-f ("defaced") are still checked.
 fn is_hash(token: &str) -> bool {
-    token.len() >= 7
-        && token.chars().all(|c| c.is_ascii_hexdigit())
-        && token.chars().any(|c| c.is_ascii_digit())
+    token.len() >= 7 && token.chars().all(|c| c.is_ascii_hexdigit()) && token.chars().any(|c| c.is_ascii_digit())
 }
 
 /// The dictionary is English, so only Latin scripts are checked.
 fn is_supported_script(token: &str) -> bool {
-    token
-        .chars()
-        .all(|c| c.is_ascii() || matches!(c, '\u{00C0}'..='\u{024F}' | '\u{2019}'))
+    token.chars().all(|c| c.is_ascii() || matches!(c, '\u{00C0}'..='\u{024F}' | '\u{2019}'))
 }
 
 #[derive(Clone, Copy, PartialEq)]
@@ -238,9 +220,7 @@ fn split_identifier(token: &str, parts: &mut Vec<Range<usize>>) {
             (_, CharKind::Underscore) => true,
             (Some(CharKind::Lower), CharKind::Upper) => true,
             // The last capital of a run starts the next word: HTTPResponse.
-            (Some(CharKind::Upper), CharKind::Upper) => {
-                chars.peek().is_some_and(|(_, next)| next.is_lowercase())
-            }
+            (Some(CharKind::Upper), CharKind::Upper) => chars.peek().is_some_and(|(_, next)| next.is_lowercase()),
             (Some(prev), kind) => (prev == CharKind::Digit) != (kind == CharKind::Digit),
             (None, _) => false,
         };

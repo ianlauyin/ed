@@ -1,28 +1,47 @@
 gpui::actions!(activity_indicator, [DismissMessage]);
+use std::cmp::Reverse;
+use std::collections::HashSet;
+use std::fmt::Write;
+use std::sync::Arc;
+use std::time::Duration;
+use std::time::Instant;
+
 use editor::Editor;
 use futures::StreamExt;
-use gpui::{
-    App, Context, Entity, EventEmitter, InteractiveElement as _, ParentElement as _, Render,
-    SharedString, Styled, Task, Window, actions,
-};
-use language::{
-    BinaryStatus, LanguageServerId, LanguageServerName, LanguageServerStatusUpdate, ServerHealth,
-};
-use project::{
-    LanguageServerProgress, LspStoreEvent, ProgressToken, Project, ProjectEnvironmentEvent,
-    git_store::{GitStoreEvent, Repository},
-};
+use gpui::App;
+use gpui::Context;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::InteractiveElement as _;
+use gpui::ParentElement as _;
+use gpui::Render;
+use gpui::SharedString;
+use gpui::Styled;
+use gpui::Task;
+use gpui::Window;
+use gpui::actions;
+use language::BinaryStatus;
+use language::LanguageServerId;
+use language::LanguageServerName;
+use language::LanguageServerStatusUpdate;
+use language::ServerHealth;
+use project::LanguageServerProgress;
+use project::LspStoreEvent;
+use project::ProgressToken;
+use project::Project;
+use project::ProjectEnvironmentEvent;
+use project::git_store::GitStoreEvent;
+use project::git_store::Repository;
 use smallvec::SmallVec;
-use std::{
-    cmp::Reverse,
-    collections::HashSet,
-    fmt::Write,
-    sync::Arc,
-    time::{Duration, Instant},
-};
-use ui::{ContextMenu, PopoverMenu, PopoverMenuHandle, Tooltip, prelude::*};
+use ui::ContextMenu;
+use ui::PopoverMenu;
+use ui::PopoverMenuHandle;
+use ui::Tooltip;
+use ui::prelude::*;
 use util::truncate_and_trailoff;
-use workspace::{StatusItemView, Workspace, item::ItemHandle};
+use workspace::StatusItemView;
+use workspace::Workspace;
+use workspace::item::ItemHandle;
 
 const GIT_OPERATION_DELAY: Duration = Duration::from_millis(0);
 pub const DEFERRED_SCAN_MESSAGE_TIMEOUT: Duration = Duration::from_secs(10);
@@ -36,10 +55,7 @@ actions!(
 );
 
 pub enum Event {
-    ShowStatus {
-        server_name: LanguageServerName,
-        status: SharedString,
-    },
+    ShowStatus { server_name: LanguageServerName, status: SharedString },
 }
 
 pub struct ActivityIndicator {
@@ -81,8 +97,7 @@ enum ActivityIcon {
 struct Content {
     icon: ActivityIcon,
     message: String,
-    on_click:
-        Option<Arc<dyn Fn(&mut ActivityIndicator, &mut Window, &mut Context<ActivityIndicator>)>>,
+    on_click: Option<Arc<dyn Fn(&mut ActivityIndicator, &mut Window, &mut Context<ActivityIndicator>)>>,
     tooltip_message: Option<String>,
 }
 
@@ -105,8 +120,7 @@ impl ActivityIndicator {
                                 this.fs_jobs.push(info);
                             }
                             fs::JobEvent::Updated { id, message } => {
-                                if let Some(job) = this.fs_jobs.iter_mut().find(|job| job.id == id)
-                                {
+                                if let Some(job) = this.fs_jobs.iter_mut().find(|job| job.id == id) {
                                     job.message = message;
                                 }
                             }
@@ -121,105 +135,78 @@ impl ActivityIndicator {
             })
             .detach();
 
-            cx.subscribe(
-                &project.read(cx).lsp_store(),
-                |activity_indicator, _, event, cx| {
-                    if let LspStoreEvent::LanguageServerUpdate { name, message, .. } = event {
-                        if let proto::update_language_server::Variant::StatusUpdate(status_update) =
-                            message
-                        {
-                            let Some(name) = name.clone() else {
-                                return;
-                            };
-                            let status = match &status_update.status {
-                                Some(proto::status_update::Status::Binary(binary_status)) => {
-                                    if let Some(binary_status) =
-                                        proto::ServerBinaryStatus::try_from(*binary_status).ok()
-                                    {
-                                        let binary_status = match binary_status {
-                                            proto::ServerBinaryStatus::None => BinaryStatus::None,
-                                            proto::ServerBinaryStatus::Starting => {
-                                                BinaryStatus::Starting
-                                            }
-                                            proto::ServerBinaryStatus::Stopping => {
-                                                BinaryStatus::Stopping
-                                            }
-                                            proto::ServerBinaryStatus::Stopped => {
-                                                BinaryStatus::Stopped
-                                            }
-                                            proto::ServerBinaryStatus::Failed => {
-                                                let Some(error) = status_update.message.clone()
-                                                else {
-                                                    return;
-                                                };
-                                                BinaryStatus::Failed { error }
-                                            }
-                                        };
-                                        LanguageServerStatusUpdate::Binary(binary_status)
-                                    } else {
-                                        return;
-                                    }
+            cx.subscribe(&project.read(cx).lsp_store(), |activity_indicator, _, event, cx| {
+                if let LspStoreEvent::LanguageServerUpdate { name, message, .. } = event {
+                    if let proto::update_language_server::Variant::StatusUpdate(status_update) = message {
+                        let Some(name) = name.clone() else {
+                            return;
+                        };
+                        let status = match &status_update.status {
+                            Some(proto::status_update::Status::Binary(binary_status)) => {
+                                if let Ok(binary_status) = proto::ServerBinaryStatus::try_from(*binary_status) {
+                                    let binary_status = match binary_status {
+                                        proto::ServerBinaryStatus::None => BinaryStatus::None,
+                                        proto::ServerBinaryStatus::Starting => BinaryStatus::Starting,
+                                        proto::ServerBinaryStatus::Stopping => BinaryStatus::Stopping,
+                                        proto::ServerBinaryStatus::Stopped => BinaryStatus::Stopped,
+                                        proto::ServerBinaryStatus::Failed => {
+                                            let Some(error) = status_update.message.clone() else {
+                                                return;
+                                            };
+                                            BinaryStatus::Failed { error }
+                                        }
+                                    };
+                                    LanguageServerStatusUpdate::Binary(binary_status)
+                                } else {
+                                    return;
                                 }
-                                Some(proto::status_update::Status::Health(health_status)) => {
-                                    if let Some(health) =
-                                        proto::ServerHealth::try_from(*health_status).ok()
-                                    {
-                                        let health = match health {
-                                            proto::ServerHealth::Ok => ServerHealth::Ok,
-                                            proto::ServerHealth::Warning => ServerHealth::Warning,
-                                            proto::ServerHealth::Error => ServerHealth::Error,
-                                        };
-                                        LanguageServerStatusUpdate::Health(
-                                            health,
-                                            status_update.message.clone().map(SharedString::from),
-                                        )
-                                    } else {
-                                        return;
-                                    }
+                            }
+                            Some(proto::status_update::Status::Health(health_status)) => {
+                                if let Ok(health) = proto::ServerHealth::try_from(*health_status) {
+                                    let health = match health {
+                                        proto::ServerHealth::Ok => ServerHealth::Ok,
+                                        proto::ServerHealth::Warning => ServerHealth::Warning,
+                                        proto::ServerHealth::Error => ServerHealth::Error,
+                                    };
+                                    LanguageServerStatusUpdate::Health(
+                                        health,
+                                        status_update.message.clone().map(SharedString::from),
+                                    )
+                                } else {
+                                    return;
                                 }
-                                None => return,
-                            };
+                            }
+                            None => return,
+                        };
 
-                            activity_indicator.statuses.retain(|s| s.name != name);
-                            activity_indicator
-                                .statuses
-                                .push(ServerStatus { name, status });
-                        }
-                        cx.notify()
+                        activity_indicator.statuses.retain(|s| s.name != name);
+                        activity_indicator.statuses.push(ServerStatus { name, status });
                     }
-                },
-            )
+                    cx.notify()
+                }
+            })
             .detach();
 
-            cx.subscribe(
-                &project.read(cx).environment().clone(),
-                |_, _, event, cx| match event {
-                    ProjectEnvironmentEvent::ErrorsUpdated => cx.notify(),
-                },
-            )
+            cx.subscribe(&project.read(cx).environment().clone(), |_, _, event, cx| match event {
+                ProjectEnvironmentEvent::ErrorsUpdated => cx.notify(),
+            })
             .detach();
 
-            cx.subscribe(
-                &project.read(cx).git_store().clone(),
-                |_, _, event: &GitStoreEvent, cx| {
-                    if let project::git_store::GitStoreEvent::JobsUpdated = event {
-                        cx.notify()
-                    }
-                },
-            )
+            cx.subscribe(&project.read(cx).git_store().clone(), |_, _, event: &GitStoreEvent, cx| {
+                if let project::git_store::GitStoreEvent::JobsUpdated = event {
+                    cx.notify()
+                }
+            })
             .detach();
 
-            cx.subscribe(
-                &project,
-                |this, _, event: &project::Event, cx| match event {
-                    project::Event::WorktreeAdded(_)
-                    | project::Event::WorktreeRemoved(_)
-                    | project::Event::WorktreeUpdatedEntries(..) => {
-                        this.update_deferred_scan_status(cx);
-                    }
-                    _ => {}
-                },
-            )
+            cx.subscribe(&project, |this, _, event: &project::Event, cx| match event {
+                project::Event::WorktreeAdded(_)
+                | project::Event::WorktreeRemoved(_)
+                | project::Event::WorktreeUpdatedEntries(..) => {
+                    this.update_deferred_scan_status(cx);
+                }
+                _ => {}
+            })
             .detach();
 
             let mut this = Self {
@@ -234,22 +221,14 @@ impl ActivityIndicator {
         });
 
         cx.subscribe_in(&this, window, move |_, _, event, window, cx| match event {
-            Event::ShowStatus {
-                server_name,
-                status,
-            } => {
-                let create_buffer =
-                    project.update(cx, |project, cx| project.create_buffer(None, false, cx));
+            Event::ShowStatus { server_name, status } => {
+                let create_buffer = project.update(cx, |project, cx| project.create_buffer(None, false, cx));
                 let status = status.clone();
                 let server_name = server_name.clone();
                 cx.spawn_in(window, async move |workspace, cx| {
                     let buffer = create_buffer.await?;
                     buffer.update(cx, |buffer, cx| {
-                        buffer.edit(
-                            [(0..0, format!("Language server {server_name}:\n\n{status}"))],
-                            None,
-                            cx,
-                        );
+                        buffer.edit([(0..0, format!("Language server {server_name}:\n\n{status}"))], None, cx);
                         buffer.set_capability(language::Capability::ReadOnly, cx);
                     });
                     workspace.update_in(cx, |workspace, window, cx| {
@@ -278,30 +257,23 @@ impl ActivityIndicator {
     fn show_error_message(&mut self, _: &ShowErrorMessage, _: &mut Window, cx: &mut Context<Self>) {
         let mut status_message_shown = false;
         self.statuses.retain(|status| match &status.status {
-            LanguageServerStatusUpdate::Binary(BinaryStatus::Failed { error })
-                if !status_message_shown =>
-            {
-                cx.emit(Event::ShowStatus {
-                    server_name: status.name.clone(),
-                    status: SharedString::from(error),
-                });
+            LanguageServerStatusUpdate::Binary(BinaryStatus::Failed { error }) if !status_message_shown => {
+                cx.emit(Event::ShowStatus { server_name: status.name.clone(), status: SharedString::from(error) });
                 status_message_shown = true;
                 false
             }
-            LanguageServerStatusUpdate::Health(
-                ServerHealth::Error | ServerHealth::Warning,
-                status_string,
-            ) if !status_message_shown => match status_string {
-                Some(error) => {
-                    cx.emit(Event::ShowStatus {
-                        server_name: status.name.clone(),
-                        status: error.clone(),
-                    });
-                    status_message_shown = true;
-                    false
+            LanguageServerStatusUpdate::Health(ServerHealth::Error | ServerHealth::Warning, status_string)
+                if !status_message_shown =>
+            {
+                match status_string {
+                    Some(error) => {
+                        cx.emit(Event::ShowStatus { server_name: status.name.clone(), status: error.clone() });
+                        status_message_shown = true;
+                        false
+                    }
+                    None => false,
                 }
-                None => false,
-            },
+            }
             _ => true,
         });
     }
@@ -317,27 +289,20 @@ impl ActivityIndicator {
         });
     }
 
-    fn pending_language_server_work<'a>(
-        &self,
-        cx: &'a App,
-    ) -> impl Iterator<Item = PendingWork<'a>> {
-        self.project
-            .read(cx)
-            .language_server_statuses(cx)
-            .rev()
-            .flat_map(|(server_id, status)| {
-                let mut pending_work = status
-                    .pending_work
-                    .iter()
-                    .map(|(progress_token, progress)| PendingWork {
-                        language_server_id: server_id,
-                        progress_token,
-                        progress,
-                    })
-                    .collect::<SmallVec<[_; 4]>>();
-                pending_work.sort_by_key(|work| Reverse(work.progress.last_update_at));
-                pending_work
-            })
+    fn pending_language_server_work<'a>(&self, cx: &'a App) -> impl Iterator<Item = PendingWork<'a>> {
+        self.project.read(cx).language_server_statuses(cx).rev().flat_map(|(server_id, status)| {
+            let mut pending_work = status
+                .pending_work
+                .iter()
+                .map(|(progress_token, progress)| PendingWork {
+                    language_server_id: server_id,
+                    progress_token,
+                    progress,
+                })
+                .collect::<SmallVec<[_; 4]>>();
+            pending_work.sort_by_key(|work| Reverse(work.progress.last_update_at));
+            pending_work
+        })
     }
 
     fn pending_environment_error<'a>(&'a self, cx: &'a App) -> Option<&'a String> {
@@ -348,18 +313,14 @@ impl ActivityIndicator {
         let has_deferred_scan_dirs = self.project.read(cx).visible_worktrees(cx).any(|worktree| {
             let worktree = worktree.read(cx);
             worktree.deferred_scan_dir_count() > 0
-                && worktree.as_local().is_none_or(|local_worktree| {
-                    local_worktree.settings().file_scan_depth.is_some()
-                })
+                && worktree.as_local().is_none_or(|local_worktree| local_worktree.settings().file_scan_depth.is_some())
         });
         match &self.deferred_scan_message {
             DeferredScanMessage::Undetected if has_deferred_scan_dirs => {
                 self.deferred_scan_message = DeferredScanMessage::Pending;
                 cx.notify();
             }
-            DeferredScanMessage::Pending | DeferredScanMessage::Shown { .. }
-                if !has_deferred_scan_dirs =>
-            {
+            DeferredScanMessage::Pending | DeferredScanMessage::Shown { .. } if !has_deferred_scan_dirs => {
                 self.deferred_scan_message = DeferredScanMessage::Undetected;
                 cx.notify();
             }
@@ -370,14 +331,14 @@ impl ActivityIndicator {
         }
     }
 
-    fn content_to_render(&mut self, cx: &mut Context<Self>) -> Option<Content> {
+    fn content_to_render(&mut self, cx: &Context<Self>) -> Option<Content> {
         if let Some(content) = self.primary_content(cx) {
             return Some(content);
         }
         self.deferred_scan_content(cx)
     }
 
-    fn primary_content(&mut self, cx: &mut Context<Self>) -> Option<Content> {
+    fn primary_content(&mut self, cx: &Context<Self>) -> Option<Content> {
         // Show if loading the project environment failed
         if let Some(message) = self.pending_environment_error(cx) {
             return Some(Content {
@@ -395,12 +356,7 @@ impl ActivityIndicator {
         // Show any language server has pending activity.
         {
             let mut pending_work = self.pending_language_server_work(cx);
-            if let Some(PendingWork {
-                progress_token,
-                progress,
-                ..
-            }) = pending_work.next()
-            {
+            if let Some(PendingWork { progress_token, progress, .. }) = pending_work.next() {
                 let mut message = progress.title.clone().unwrap_or(progress_token.to_string());
 
                 if let Some(percentage) = progress.percentage {
@@ -426,12 +382,8 @@ impl ActivityIndicator {
             }
         }
 
-        let current_job = self
-            .project
-            .read(cx)
-            .active_repository(cx)
-            .map(|r| r.read(cx))
-            .and_then(Repository::current_job);
+        let current_job =
+            self.project.read(cx).active_repository(cx).map(|r| r.read(cx)).and_then(Repository::current_job);
         // Show any long-running git command
         if let Some(job_info) = current_job
             && Instant::now() - job_info.start >= GIT_OPERATION_DELAY
@@ -462,9 +414,7 @@ impl ActivityIndicator {
         let mut servers_to_clear_statuses = HashSet::<LanguageServerName>::default();
         for status in &self.statuses {
             match &status.status {
-                LanguageServerStatusUpdate::Binary(
-                    BinaryStatus::Starting | BinaryStatus::Stopping,
-                ) => {}
+                LanguageServerStatusUpdate::Binary(BinaryStatus::Starting | BinaryStatus::Stopping) => {}
                 LanguageServerStatusUpdate::Binary(BinaryStatus::Stopped) => {
                     servers_to_clear_statuses.insert(status.name.clone());
                 }
@@ -482,8 +432,7 @@ impl ActivityIndicator {
                 },
             }
         }
-        self.statuses
-            .retain(|status| !servers_to_clear_statuses.contains(&status.name));
+        self.statuses.retain(|status| !servers_to_clear_statuses.contains(&status.name));
 
         health_messages.sort_by_key(|(_, health, _)| match health {
             ServerHealth::Error => 2,
@@ -496,20 +445,15 @@ impl ActivityIndicator {
                 icon: ActivityIcon::Icon(IconName::Warning),
                 message: format!(
                     "Failed to run {}. Click to show error.",
-                    failed
-                        .iter()
-                        .map(|name| name.as_ref())
-                        .fold(String::new(), |mut acc, s| {
-                            if !acc.is_empty() {
-                                acc.push_str(", ");
-                            }
-                            acc.push_str(s);
-                            acc
-                        }),
+                    failed.iter().map(|name| name.as_ref()).fold(String::new(), |mut acc, s| {
+                        if !acc.is_empty() {
+                            acc.push_str(", ");
+                        }
+                        acc.push_str(s);
+                        acc
+                    }),
                 ),
-                on_click: Some(Arc::new(|this, window, cx| {
-                    this.show_error_message(&ShowErrorMessage, window, cx)
-                })),
+                on_click: Some(Arc::new(|this, window, cx| this.show_error_message(&ShowErrorMessage, window, cx))),
                 tooltip_message: None,
             });
         }
@@ -545,18 +489,12 @@ impl ActivityIndicator {
                 .collect::<Vec<_>>()
                 .join(" ");
             let mut altered_message = single_line_message != message;
-            let truncated_message = truncate_and_trailoff(
-                &single_line_message,
-                MAX_MESSAGE_LEN.saturating_sub(health_str.len()),
-            );
+            let truncated_message =
+                truncate_and_trailoff(&single_line_message, MAX_MESSAGE_LEN.saturating_sub(health_str.len()));
             altered_message |= truncated_message != single_line_message;
             let final_message = format!("{health_str}{truncated_message}");
 
-            let tooltip_message = if altered_message {
-                Some(format!("{health_str}{message}"))
-            } else {
-                None
-            };
+            let tooltip_message = if altered_message { Some(format!("{health_str}{message}")) } else { None };
 
             return Some(Content {
                 icon: ActivityIcon::Icon(IconName::Warning),
@@ -566,9 +504,7 @@ impl ActivityIndicator {
                     if altered_message {
                         activity_indicator.show_error_message(&ShowErrorMessage, window, cx)
                     } else {
-                        activity_indicator
-                            .statuses
-                            .retain(|status| status.name != server_name);
+                        activity_indicator.statuses.retain(|status| status.name != server_name);
                         cx.notify();
                     }
                 })),
@@ -578,19 +514,14 @@ impl ActivityIndicator {
         None
     }
 
-    fn deferred_scan_content(&mut self, cx: &mut Context<Self>) -> Option<Content> {
-        if !matches!(
-            self.deferred_scan_message,
-            DeferredScanMessage::Pending | DeferredScanMessage::Shown { .. }
-        ) {
+    fn deferred_scan_content(&mut self, cx: &Context<Self>) -> Option<Content> {
+        if !matches!(self.deferred_scan_message, DeferredScanMessage::Pending | DeferredScanMessage::Shown { .. }) {
             return None;
         }
         if matches!(self.deferred_scan_message, DeferredScanMessage::Pending) {
             self.deferred_scan_message = DeferredScanMessage::Shown {
                 _dismiss_timer: cx.spawn(async move |this, cx| {
-                    cx.background_executor()
-                        .timer(DEFERRED_SCAN_MESSAGE_TIMEOUT)
-                        .await;
+                    cx.background_executor().timer(DEFERRED_SCAN_MESSAGE_TIMEOUT).await;
                     this.update(cx, |this, cx| {
                         this.deferred_scan_message = DeferredScanMessage::Dismissed;
                         cx.notify();
@@ -644,11 +575,9 @@ impl Render for ActivityIndicator {
                     .tab_index(0isize)
                     .map(|this| match content.icon {
                         ActivityIcon::LoadingSpinner => this.loading(true),
-                        ActivityIcon::Icon(icon_name) => this.start_icon(
-                            Icon::new(icon_name)
-                                .size(IconSize::Small)
-                                .color(Color::Muted),
-                        ),
+                        ActivityIcon::Icon(icon_name) => {
+                            this.start_icon(Icon::new(icon_name).size(IconSize::Small).color(Color::Muted))
+                        }
                     })
                     .map(|button| {
                         if truncate_content {
@@ -673,11 +602,7 @@ impl Render for ActivityIndicator {
                         let menu = ContextMenu::build(window, cx, |mut menu, _, cx| {
                             for work in strong_this.read(cx).pending_language_server_work(cx) {
                                 let activity_indicator = activity_indicator.clone();
-                                let mut title = work
-                                    .progress
-                                    .title
-                                    .clone()
-                                    .unwrap_or(work.progress_token.to_string());
+                                let mut title = work.progress.title.clone().unwrap_or(work.progress_token.to_string());
 
                                 if work.progress.is_cancellable {
                                     has_cancellable_work = true;
@@ -701,16 +626,13 @@ impl Render for ActivityIndicator {
                                             let token = token.clone();
                                             activity_indicator
                                                 .update(cx, |activity_indicator, cx| {
-                                                    activity_indicator.project.update(
-                                                        cx,
-                                                        |project, cx| {
-                                                            project.cancel_language_server_work(
-                                                                language_server_id,
-                                                                Some(token),
-                                                                cx,
-                                                            );
-                                                        },
-                                                    );
+                                                    activity_indicator.project.update(cx, |project, cx| {
+                                                        project.cancel_language_server_work(
+                                                            language_server_id,
+                                                            Some(token),
+                                                            cx,
+                                                        );
+                                                    });
                                                     activity_indicator.context_menu_handle.hide(cx);
                                                     cx.notify();
                                                 })
@@ -736,13 +658,7 @@ impl Render for ActivityIndicator {
 }
 
 impl StatusItemView for ActivityIndicator {
-    fn set_active_pane_item(
-        &mut self,
-        _: Option<&dyn ItemHandle>,
-        _window: &mut Window,
-        _: &mut Context<Self>,
-    ) {
-    }
+    fn set_active_pane_item(&mut self, _: Option<&dyn ItemHandle>, _window: &mut Window, _: &mut Context<Self>) {}
 
     fn hide_setting(&self, _: &App) -> Option<workspace::HideStatusItem> {
         // Activity indicator auto-hides when there's no work to display.

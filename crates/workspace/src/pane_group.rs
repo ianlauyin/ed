@@ -50,15 +50,15 @@ pub struct PaneRenderResult {
 }
 
 impl PaneGroup {
-    pub fn with_root(root: Member) -> Self {
+    pub const fn with_root(root: Member) -> Self {
         Self { root, is_center: false }
     }
 
-    pub fn new(pane: Entity<Pane>) -> Self {
+    pub const fn new(pane: Entity<Pane>) -> Self {
         Self { root: Member::Pane(pane), is_center: false }
     }
 
-    pub fn set_is_center(&mut self, is_center: bool) {
+    pub const fn set_is_center(&mut self, is_center: bool) {
         self.is_center = is_center;
     }
 
@@ -203,7 +203,7 @@ impl PaneGroup {
         match &mut self.root {
             Member::Pane(_) => {}
             Member::Axis(axis) => {
-                let _ = axis.reset_pane_sizes();
+                axis.reset_pane_sizes();
             }
         };
         self.mark_positions(cx);
@@ -331,7 +331,7 @@ pub struct ActivePaneDecorator<'a> {
 }
 
 impl<'a> ActivePaneDecorator<'a> {
-    pub fn new(active_pane: &'a Entity<Pane>, workspace: &'a WeakEntity<Workspace>) -> Self {
+    pub const fn new(active_pane: &'a Entity<Pane>, workspace: &'a WeakEntity<Workspace>) -> Self {
         Self { active_pane, workspace }
     }
 }
@@ -752,12 +752,12 @@ impl PaneAxis {
         window: &mut Window,
         cx: &mut App,
     ) -> PaneRenderResult {
-        if let Some(maximized) = maximized {
-            if let Some(maximized_pane) = maximized.upgrade() {
-                for member in &self.members {
-                    if member.contains_pane(&maximized_pane) {
-                        return member.render(basis, zoomed, Some(maximized), render_cx, window, cx);
-                    }
+        if let Some(maximized) = maximized
+            && let Some(maximized_pane) = maximized.upgrade()
+        {
+            for member in &self.members {
+                if member.contains_pane(&maximized_pane) {
+                    return member.render(basis, zoomed, Some(maximized), render_cx, window, cx);
                 }
             }
         }
@@ -828,7 +828,7 @@ impl std::fmt::Display for SplitDirection {
 }
 
 impl SplitDirection {
-    pub fn all() -> [Self; 4] {
+    pub const fn all() -> [Self; 4] {
         [Self::Up, Self::Down, Self::Left, Self::Right]
     }
 
@@ -870,21 +870,21 @@ impl SplitDirection {
         }
     }
 
-    pub fn axis(&self) -> Axis {
+    pub const fn axis(&self) -> Axis {
         match self {
             Self::Up | Self::Down => Axis::Vertical,
             Self::Left | Self::Right => Axis::Horizontal,
         }
     }
 
-    pub fn increasing(&self) -> bool {
+    pub const fn increasing(&self) -> bool {
         match self {
             Self::Left | Self::Up => false,
             Self::Down | Self::Right => true,
         }
     }
 
-    pub fn opposite(&self) -> SplitDirection {
+    pub const fn opposite(&self) -> SplitDirection {
         match self {
             Self::Down => Self::Up,
             Self::Up => Self::Down,
@@ -1000,7 +1000,7 @@ mod element {
     }
 
     impl PaneAxisElement {
-        pub fn with_active_pane(mut self, active_pane_ix: Option<usize>) -> Self {
+        pub const fn with_active_pane(mut self, active_pane_ix: Option<usize>) -> Self {
             self.active_pane_ix = active_pane_ix;
             self
         }

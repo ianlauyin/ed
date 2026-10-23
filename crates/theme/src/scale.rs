@@ -1,7 +1,10 @@
 #![allow(missing_docs)]
-use gpui::{App, Hsla, SharedString};
+use gpui::App;
+use gpui::Hsla;
+use gpui::SharedString;
 
-use crate::{ActiveTheme, Appearance};
+use crate::ActiveTheme;
+use crate::Appearance;
 
 /// A collection of colors that are used to style the UI.
 ///
@@ -253,32 +256,26 @@ impl ColorScaleSet {
         dark: ColorScale,
         dark_alpha: ColorScale,
     ) -> Self {
-        Self {
-            name: name.into(),
-            light,
-            light_alpha,
-            dark,
-            dark_alpha,
-        }
+        Self { name: name.into(), light, light_alpha, dark, dark_alpha }
     }
 
-    pub fn name(&self) -> &SharedString {
+    pub const fn name(&self) -> &SharedString {
         &self.name
     }
 
-    pub fn light(&self) -> &ColorScale {
+    pub const fn light(&self) -> &ColorScale {
         &self.light
     }
 
-    pub fn light_alpha(&self) -> &ColorScale {
+    pub const fn light_alpha(&self) -> &ColorScale {
         &self.light_alpha
     }
 
-    pub fn dark(&self) -> &ColorScale {
+    pub const fn dark(&self) -> &ColorScale {
         &self.dark
     }
 
-    pub fn dark_alpha(&self) -> &ColorScale {
+    pub const fn dark_alpha(&self) -> &ColorScale {
         &self.dark_alpha
     }
 

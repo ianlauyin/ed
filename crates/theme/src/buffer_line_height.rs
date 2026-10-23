@@ -12,7 +12,7 @@ pub enum BufferLineHeight {
 
 impl BufferLineHeight {
     /// Returns the value of the line height.
-    pub fn value(&self) -> f32 {
+    pub const fn value(&self) -> f32 {
         match self {
             BufferLineHeight::Comfortable => 1.618,
             BufferLineHeight::Standard => 1.3,

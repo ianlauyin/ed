@@ -30,13 +30,8 @@ pub struct CornerSolver {
 }
 
 impl CornerSolver {
-    pub fn new(root_radius: Pixels, root_border: Pixels, root_padding: Pixels) -> Self {
-        Self {
-            root_radius,
-            root_border,
-            root_padding,
-            children: Vec::new(),
-        }
+    pub const fn new(root_radius: Pixels, root_border: Pixels, root_padding: Pixels) -> Self {
+        Self { root_radius, root_border, root_padding, children: Vec::new() }
     }
 
     pub fn add_child(mut self, border: Pixels, padding: Pixels) -> Self {

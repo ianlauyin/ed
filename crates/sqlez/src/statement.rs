@@ -1,11 +1,18 @@
-use std::ffi::{CStr, CString, c_int};
+use std::ffi::CStr;
+use std::ffi::CString;
+use std::ffi::c_int;
 use std::marker::PhantomData;
-use std::{ptr, slice, str};
+use std::ptr;
+use std::slice;
+use std::str;
 
-use anyhow::{Context as _, Result, bail};
+use anyhow::Context as _;
+use anyhow::Result;
+use anyhow::bail;
 use libsqlite3_sys::*;
 
-use crate::bindable::{Bind, Column};
+use crate::bindable::Bind;
+use crate::bindable::Column;
 use crate::connection::Connection;
 
 pub struct Statement<'a> {
@@ -38,19 +45,12 @@ pub enum SqlType {
 
 impl<'a> Statement<'a> {
     pub fn prepare<T: AsRef<str>>(connection: &'a Connection, query: T) -> Result<Self> {
-        let mut statement = Self {
-            raw_statements: Default::default(),
-            current_statement: 0,
-            connection,
-            phantom: PhantomData,
-        };
+        let mut statement =
+            Self { raw_statements: Default::default(), current_statement: 0, connection, phantom: PhantomData };
         let sql = CString::new(query.as_ref()).context("Error creating cstr")?;
         let mut remaining_sql = sql.as_c_str();
         while {
-            let remaining_sql_str = remaining_sql
-                .to_str()
-                .context("Parsing remaining sql")?
-                .trim();
+            let remaining_sql_str = remaining_sql.to_str().context("Parsing remaining sql")?.trim();
             remaining_sql_str != ";" && !remaining_sql_str.is_empty()
         } {
             let mut raw_statement = ptr::null_mut::<sqlite3_stmt>();
@@ -60,14 +60,12 @@ impl<'a> Statement<'a> {
                     connection.sqlite3,
                     remaining_sql.as_ptr(),
                     -1,
-                    &mut raw_statement,
-                    &mut remaining_sql_ptr,
+                    &raw mut raw_statement,
+                    &raw mut remaining_sql_ptr,
                 )
             };
 
-            connection
-                .last_error()
-                .with_context(|| format!("Prepare call failed for query:\n{}", query.as_ref()))?;
+            connection.last_error().with_context(|| format!("Prepare call failed for query:\n{}", query.as_ref()))?;
 
             remaining_sql = unsafe { CStr::from_ptr(remaining_sql_ptr) };
             statement.raw_statements.push(raw_statement);
@@ -75,10 +73,7 @@ impl<'a> Statement<'a> {
             if !connection.can_write() && unsafe { sqlite3_stmt_readonly(raw_statement) == 0 } {
                 let sql = unsafe { CStr::from_ptr(sqlite3_sql(raw_statement)) };
 
-                bail!(
-                    "Write statement prepared with connection that is not write capable. SQL:\n{} ",
-                    sql.to_str()?
-                )
+                bail!("Write statement prepared with connection that is not write capable. SQL:\n{} ", sql.to_str()?)
             }
         }
 
@@ -114,20 +109,14 @@ impl<'a> Statement<'a> {
             for raw_statement in self.raw_statements.iter() {
                 if index <= sqlite3_bind_parameter_count(*raw_statement) {
                     bind(raw_statement);
-                    self.connection
-                        .last_error()
-                        .with_context(|| format!("Failed to bind value at index {index}"))?;
+                    self.connection.last_error().with_context(|| format!("Failed to bind value at index {index}"))?;
                     any_succeed = true;
                 } else {
                     continue;
                 }
             }
         }
-        if any_succeed {
-            Ok(())
-        } else {
-            anyhow::bail!("Failed to bind parameters")
-        }
+        if any_succeed { Ok(()) } else { anyhow::bail!("Failed to bind parameters") }
     }
 
     pub fn bind_blob(&self, index: i32, blob: &[u8]) -> Result<()> {
@@ -144,16 +133,12 @@ impl<'a> Statement<'a> {
         let index = index as c_int;
         let pointer = unsafe { sqlite3_column_blob(self.current_statement(), index) };
 
-        self.connection
-            .last_error()
-            .with_context(|| format!("Failed to read blob at index {index}"))?;
+        self.connection.last_error().with_context(|| format!("Failed to read blob at index {index}"))?;
         if pointer.is_null() {
             return Ok(&[]);
         }
         let len = unsafe { sqlite3_column_bytes(self.current_statement(), index) as usize };
-        self.connection
-            .last_error()
-            .with_context(|| format!("Failed to read length of blob at index {index}"))?;
+        self.connection.last_error().with_context(|| format!("Failed to read length of blob at index {index}"))?;
 
         unsafe { Ok(slice::from_raw_parts(pointer as *const u8, len)) }
     }
@@ -169,9 +154,7 @@ impl<'a> Statement<'a> {
     pub fn column_double(&self, index: i32) -> Result<f64> {
         let index = index as c_int;
         let result = unsafe { sqlite3_column_double(self.current_statement(), index) };
-        self.connection
-            .last_error()
-            .with_context(|| format!("Failed to read double at index {index}"))?;
+        self.connection.last_error().with_context(|| format!("Failed to read double at index {index}"))?;
         Ok(result)
     }
 
@@ -185,9 +168,7 @@ impl<'a> Statement<'a> {
     pub fn column_int(&self, index: i32) -> Result<i32> {
         let index = index as c_int;
         let result = unsafe { sqlite3_column_int(self.current_statement(), index) };
-        self.connection
-            .last_error()
-            .with_context(|| format!("Failed to read int at index {index}"))?;
+        self.connection.last_error().with_context(|| format!("Failed to read int at index {index}"))?;
         Ok(result)
     }
 
@@ -201,9 +182,7 @@ impl<'a> Statement<'a> {
     pub fn column_int64(&self, index: i32) -> Result<i64> {
         let index = index as c_int;
         let result = unsafe { sqlite3_column_int64(self.current_statement(), index) };
-        self.connection
-            .last_error()
-            .with_context(|| format!("Failed to read i64 at index {index}"))?;
+        self.connection.last_error().with_context(|| format!("Failed to read i64 at index {index}"))?;
         Ok(result)
     }
 
@@ -228,16 +207,12 @@ impl<'a> Statement<'a> {
         let index = index as c_int;
         let pointer = unsafe { sqlite3_column_text(self.current_statement(), index) };
 
-        self.connection
-            .last_error()
-            .with_context(|| format!("Failed to read text from column {index}"))?;
+        self.connection.last_error().with_context(|| format!("Failed to read text from column {index}"))?;
         if pointer.is_null() {
             return Ok("");
         }
         let len = unsafe { sqlite3_column_bytes(self.current_statement(), index) as usize };
-        self.connection
-            .last_error()
-            .with_context(|| format!("Failed to read text length at {index}"))?;
+        self.connection.last_error().with_context(|| format!("Failed to read text length at {index}"))?;
 
         let slice = unsafe { slice::from_raw_parts(pointer, len) };
         Ok(str::from_utf8(slice)?)
@@ -300,10 +275,7 @@ impl<'a> Statement<'a> {
     }
 
     pub fn map<R>(&mut self, callback: impl FnMut(&mut Statement) -> Result<R>) -> Result<Vec<R>> {
-        fn logic<R>(
-            this: &mut Statement,
-            mut callback: impl FnMut(&mut Statement) -> Result<R>,
-        ) -> Result<Vec<R>> {
+        fn logic<R>(this: &mut Statement, mut callback: impl FnMut(&mut Statement) -> Result<R>) -> Result<Vec<R>> {
             let mut mapped_rows = Vec::new();
             while this.step()? == StepResult::Row {
                 mapped_rows.push(callback(this)?);
@@ -321,14 +293,8 @@ impl<'a> Statement<'a> {
     }
 
     pub fn single<R>(&mut self, callback: impl FnOnce(&mut Statement) -> Result<R>) -> Result<R> {
-        fn logic<R>(
-            this: &mut Statement,
-            callback: impl FnOnce(&mut Statement) -> Result<R>,
-        ) -> Result<R> {
-            anyhow::ensure!(
-                this.step()? == StepResult::Row,
-                "single called with query that returns no rows."
-            );
+        fn logic<R>(this: &mut Statement, callback: impl FnOnce(&mut Statement) -> Result<R>) -> Result<R> {
+            anyhow::ensure!(this.step()? == StepResult::Row, "single called with query that returns no rows.");
             let result = callback(this)?;
 
             anyhow::ensure!(
@@ -347,21 +313,13 @@ impl<'a> Statement<'a> {
         self.single(|this| this.column::<R>())
     }
 
-    pub fn maybe<R>(
-        &mut self,
-        callback: impl FnOnce(&mut Statement) -> Result<R>,
-    ) -> Result<Option<R>> {
-        fn logic<R>(
-            this: &mut Statement,
-            callback: impl FnOnce(&mut Statement) -> Result<R>,
-        ) -> Result<Option<R>> {
+    pub fn maybe<R>(&mut self, callback: impl FnOnce(&mut Statement) -> Result<R>) -> Result<Option<R>> {
+        fn logic<R>(this: &mut Statement, callback: impl FnOnce(&mut Statement) -> Result<R>) -> Result<Option<R>> {
             if this.step().context("Failed on step call")? != StepResult::Row {
                 return Ok(None);
             }
 
-            let result = callback(this)
-                .map(|r| Some(r))
-                .context("Failed to parse row result")?;
+            let result = callback(this).map(|r| Some(r)).context("Failed to parse row result")?;
 
             anyhow::ensure!(
                 this.step().context("Second step call")? == StepResult::Done,

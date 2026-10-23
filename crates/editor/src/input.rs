@@ -3,11 +3,11 @@ use super::*;
 const ORDERED_LIST_MAX_MARKER_LEN: usize = 16;
 
 impl Editor {
-    pub fn set_input_enabled(&mut self, input_enabled: bool) {
+    pub const fn set_input_enabled(&mut self, input_enabled: bool) {
         self.input_enabled = input_enabled;
     }
 
-    pub fn set_expects_character_input(&mut self, expects_character_input: bool) {
+    pub const fn set_expects_character_input(&mut self, expects_character_input: bool) {
         self.expects_character_input = expects_character_input;
     }
 
@@ -19,7 +19,7 @@ impl Editor {
         }
     }
 
-    pub fn set_use_autoclose(&mut self, autoclose: bool) {
+    pub const fn set_use_autoclose(&mut self, autoclose: bool) {
         self.use_autoclose = autoclose;
     }
 
@@ -35,30 +35,17 @@ impl Editor {
             return;
         }
 
-        cx.emit(EditorEvent::InputHandled {
-            utf16_range_to_replace: relative_utf16_range.clone(),
-            text: text.into(),
-        });
+        cx.emit(EditorEvent::InputHandled { utf16_range_to_replace: relative_utf16_range.clone(), text: text.into() });
 
         if let Some(relative_utf16_range) = relative_utf16_range {
-            let selections = self
-                .selections
-                .all::<MultiBufferOffsetUtf16>(&self.display_snapshot(cx));
+            let selections = self.selections.all::<MultiBufferOffsetUtf16>(&self.display_snapshot(cx));
             self.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
                 let new_ranges = selections.into_iter().map(|range| {
                     let start = MultiBufferOffsetUtf16(OffsetUtf16(
-                        range
-                            .head()
-                            .0
-                            .0
-                            .saturating_add_signed(relative_utf16_range.start),
+                        range.head().0.0.saturating_add_signed(relative_utf16_range.start),
                     ));
                     let end = MultiBufferOffsetUtf16(OffsetUtf16(
-                        range
-                            .head()
-                            .0
-                            .0
-                            .saturating_add_signed(relative_utf16_range.end),
+                        range.head().0.0.saturating_add_signed(relative_utf16_range.end),
                     ));
                     start..end
                 });
@@ -91,9 +78,7 @@ impl Editor {
         let mut has_adjacent_edits = false;
         let mut in_adjacent_group = false;
 
-        let mut regions = self
-            .selections_with_autoclose_regions(selections, &snapshot)
-            .peekable();
+        let mut regions = self.selections_with_autoclose_regions(selections, &snapshot).peekable();
 
         while let Some((selection, autoclose_region)) = regions.next() {
             if snapshot
@@ -131,10 +116,7 @@ impl Editor {
                             let preceding_text_matches_prefix = prefix_len == 0
                                 || (selection.start.column >= (prefix_len as u32)
                                     && snapshot.contains_str_at(
-                                        Point::new(
-                                            selection.start.row,
-                                            selection.start.column - (prefix_len as u32),
-                                        ),
+                                        Point::new(selection.start.row, selection.start.column - (prefix_len as u32)),
                                         &pair.start[..prefix_len],
                                     ));
                             if preceding_text_matches_prefix {
@@ -143,8 +125,7 @@ impl Editor {
                                 break;
                             }
                         }
-                        if pair.end.as_str() == text.as_ref() && bracket_pair_matching_end.is_none()
-                        {
+                        if pair.end.as_str() == text.as_ref() && bracket_pair_matching_end.is_none() {
                             // take first bracket pair matching end, but don't break in case a later bracket
                             // pair matches start
                             bracket_pair_matching_end = Some(pair.clone());
@@ -161,8 +142,7 @@ impl Editor {
                 if let Some(bracket_pair) = bracket_pair {
                     let snapshot_settings = snapshot.language_settings_at(selection.start, cx);
                     let autoclose = self.use_autoclose && snapshot_settings.use_autoclose;
-                    let auto_surround =
-                        self.use_auto_surround && snapshot_settings.use_auto_surround;
+                    let auto_surround = self.use_auto_surround && snapshot_settings.use_auto_surround;
                     if selection.is_empty() {
                         if is_bracket_pair_start {
                             // If the inserted text is a suffix of an opening bracket and the
@@ -174,72 +154,59 @@ impl Editor {
                                 .is_none_or(|c| scope.should_autoclose_before(c));
 
                             let preceding_text_allows_autoclose = selection.start.column == 0
-                                || snapshot
-                                    .reversed_chars_at(selection.start)
-                                    .next()
-                                    .is_none_or(|c| {
-                                        bracket_pair.start != bracket_pair.end
-                                            || !snapshot
-                                                .char_classifier_at(selection.start)
-                                                .is_word(c)
-                                    });
+                                || snapshot.reversed_chars_at(selection.start).next().is_none_or(|c| {
+                                    bracket_pair.start != bracket_pair.end
+                                        || !snapshot.char_classifier_at(selection.start).is_word(c)
+                                });
 
-                            let is_closing_quote = if bracket_pair.end == bracket_pair.start
-                                && bracket_pair.start.len() == 1
-                            {
-                                if let Some(target) = bracket_pair.start.chars().next() {
-                                    let mut byte_offset = 0u32;
-                                    let current_line_count = snapshot
-                                        .reversed_chars_at(selection.start)
-                                        .take_while(|&c| c != '\n')
-                                        .filter(|c| {
-                                            byte_offset += c.len_utf8() as u32;
-                                            if *c != target {
-                                                return false;
-                                            }
+                            let is_closing_quote =
+                                if bracket_pair.end == bracket_pair.start && bracket_pair.start.len() == 1 {
+                                    if let Some(target) = bracket_pair.start.chars().next() {
+                                        let mut byte_offset = 0u32;
+                                        let current_line_count = snapshot
+                                            .reversed_chars_at(selection.start)
+                                            .take_while(|&c| c != '\n')
+                                            .filter(|c| {
+                                                byte_offset += c.len_utf8() as u32;
+                                                if *c != target {
+                                                    return false;
+                                                }
 
-                                            let point = Point::new(
-                                                selection.start.row,
-                                                selection.start.column.saturating_sub(byte_offset),
-                                            );
+                                                let point = Point::new(
+                                                    selection.start.row,
+                                                    selection.start.column.saturating_sub(byte_offset),
+                                                );
 
-                                            let is_enabled = snapshot
-                                                .language_scope_at(point)
-                                                .and_then(|scope| {
-                                                    scope
-                                                        .brackets()
-                                                        .find(|(pair, _)| {
-                                                            pair.start == bracket_pair.start
-                                                        })
-                                                        .map(|(_, enabled)| enabled)
-                                                })
-                                                .unwrap_or(true);
+                                                let is_enabled = snapshot
+                                                    .language_scope_at(point)
+                                                    .and_then(|scope| {
+                                                        scope
+                                                            .brackets()
+                                                            .find(|(pair, _)| pair.start == bracket_pair.start)
+                                                            .map(|(_, enabled)| enabled)
+                                                    })
+                                                    .unwrap_or(true);
 
-                                            let is_delimiter = snapshot
-                                                .language_scope_at(Point::new(
-                                                    point.row,
-                                                    point.column + 1,
-                                                ))
-                                                .and_then(|scope| {
-                                                    scope
-                                                        .brackets()
-                                                        .find(|(pair, _)| {
-                                                            pair.start == bracket_pair.start
-                                                        })
-                                                        .map(|(_, enabled)| !enabled)
-                                                })
-                                                .unwrap_or(false);
+                                                let is_delimiter = snapshot
+                                                    .language_scope_at(Point::new(point.row, point.column + 1))
+                                                    .and_then(|scope| {
+                                                        scope
+                                                            .brackets()
+                                                            .find(|(pair, _)| pair.start == bracket_pair.start)
+                                                            .map(|(_, enabled)| !enabled)
+                                                    })
+                                                    .unwrap_or(false);
 
-                                            is_enabled && !is_delimiter
-                                        })
-                                        .count();
-                                    current_line_count % 2 == 1
+                                                is_enabled && !is_delimiter
+                                            })
+                                            .count();
+                                        current_line_count % 2 == 1
+                                    } else {
+                                        false
+                                    }
                                 } else {
                                     false
-                                }
-                            } else {
-                                false
-                            };
+                                };
 
                             if autoclose
                                 && bracket_pair.close
@@ -249,16 +216,8 @@ impl Editor {
                             {
                                 let anchor = snapshot.anchor_before(selection.end);
                                 new_selections.push((selection.map(|_| anchor), text.len()));
-                                new_autoclose_regions.push((
-                                    anchor,
-                                    text.len(),
-                                    selection.id,
-                                    bracket_pair.clone(),
-                                ));
-                                edits.push((
-                                    selection.range(),
-                                    format!("{}{}", text, bracket_pair.end).into(),
-                                ));
+                                new_autoclose_regions.push((anchor, text.len(), selection.id, bracket_pair.clone()));
+                                edits.push((selection.range(), format!("{}{}", text, bracket_pair.end).into()));
                                 bracket_inserted = true;
                                 continue;
                             }
@@ -273,15 +232,13 @@ impl Editor {
                                 && snapshot.contains_str_at(region.range.end, text.as_ref());
                             if should_skip {
                                 let anchor = snapshot.anchor_after(selection.end);
-                                new_selections
-                                    .push((selection.map(|_| anchor), region.pair.end.len()));
+                                new_selections.push((selection.map(|_| anchor), region.pair.end.len()));
                                 continue;
                             }
                         }
 
-                        let always_treat_brackets_as_autoclosed = snapshot
-                            .language_settings_at(selection.start, cx)
-                            .always_treat_brackets_as_autoclosed;
+                        let always_treat_brackets_as_autoclosed =
+                            snapshot.language_settings_at(selection.start, cx).always_treat_brackets_as_autoclosed;
                         if always_treat_brackets_as_autoclosed
                             && is_bracket_pair_end
                             && snapshot.contains_str_at(selection.end, text.as_ref())
@@ -302,10 +259,7 @@ impl Editor {
                         && bracket_pair.start.chars().count() == 1
                     {
                         edits.push((selection.start..selection.start, text.clone()));
-                        edits.push((
-                            selection.end..selection.end,
-                            bracket_pair.end.as_str().into(),
-                        ));
+                        edits.push((selection.end..selection.end, bracket_pair.end.as_str().into()));
                         bracket_inserted = true;
                         new_selections.push((
                             Selection {
@@ -356,9 +310,7 @@ impl Editor {
                 continue;
             }
 
-            let next_is_adjacent = regions
-                .peek()
-                .is_some_and(|(next, _)| selection.end == next.start);
+            let next_is_adjacent = regions.peek().is_some_and(|(next, _)| selection.end == next.start);
 
             // If not handling any auto-close operation, then just replace the selected
             // text with the given input and move the selection to the end of the
@@ -373,23 +325,17 @@ impl Editor {
 
             if !self.linked_edit_ranges.is_empty() {
                 let start_anchor = snapshot.anchor_before(selection.start);
-                let classifier = snapshot
-                    .char_classifier_at(start_anchor)
-                    .scope_context(Some(CharScopeContext::LinkedEdit));
+                let classifier =
+                    snapshot.char_classifier_at(start_anchor).scope_context(Some(CharScopeContext::LinkedEdit));
 
-                if let Some((_, anchor_range)) =
-                    snapshot.anchor_range_to_buffer_anchor_range(start_anchor..anchor)
-                {
-                    let is_word_char = text
-                        .chars()
-                        .next()
-                        .is_none_or(|char| classifier.is_word(char));
+                if let Some((_, anchor_range)) = snapshot.anchor_range_to_buffer_anchor_range(start_anchor..anchor) {
+                    let is_word_char = text.chars().next().is_none_or(|char| classifier.is_word(char));
 
                     let is_dot = text.as_ref() == ".";
                     let should_apply_linked_edit = is_word_char || is_dot;
 
                     if should_apply_linked_edit {
-                        linked_edits.push(&self, anchor_range, text.clone(), cx);
+                        linked_edits.push(self, anchor_range, text.clone(), cx);
                     } else {
                         clear_linked_edit_ranges = true;
                     }
@@ -414,13 +360,10 @@ impl Editor {
             if clear_linked_edit_ranges {
                 this.linked_edit_ranges.clear();
             }
-            let initial_buffer_versions =
-                jsx_tag_auto_close::construct_initial_buffer_versions_map(this, &edits, cx);
+            let initial_buffer_versions = jsx_tag_auto_close::construct_initial_buffer_versions_map(this, &edits, cx);
 
             let autoindent_mode = if has_multiple_selections {
-                this.autoindent_mode
-                    .clone()
-                    .map(|_| AutoindentMode::PreserveSingleLine)
+                this.autoindent_mode.clone().map(|_| AutoindentMode::PreserveSingleLine)
             } else {
                 this.autoindent_mode.clone()
             };
@@ -435,19 +378,17 @@ impl Editor {
             let new_anchor_selections = new_selections.iter().map(|e| &e.0);
             let new_selection_deltas = new_selections.iter().map(|e| e.1);
             let map = this.display_map.update(cx, |map, cx| map.snapshot(cx));
-            let new_selections = resolve_selections_wrapping_blocks::<MultiBufferOffset, _>(
-                new_anchor_selections,
-                &map,
-            )
-            .zip(new_selection_deltas)
-            .map(|(selection, delta)| Selection {
-                id: selection.id,
-                start: selection.start + delta,
-                end: selection.end + delta,
-                reversed: selection.reversed,
-                goal: SelectionGoal::None,
-            })
-            .collect::<Vec<_>>();
+            let new_selections =
+                resolve_selections_wrapping_blocks::<MultiBufferOffset, _>(new_anchor_selections, &map)
+                    .zip(new_selection_deltas)
+                    .map(|(selection, delta)| Selection {
+                        id: selection.id,
+                        start: selection.start + delta,
+                        end: selection.end + delta,
+                        reversed: selection.reversed,
+                        goal: SelectionGoal::None,
+                    })
+                    .collect::<Vec<_>>();
 
             let mut i = 0;
             for (position, delta, selection_id, pair) in new_autoclose_regions {
@@ -455,42 +396,25 @@ impl Editor {
                 let start = map.buffer_snapshot().anchor_before(position);
                 let end = map.buffer_snapshot().anchor_after(position);
                 while let Some(existing_state) = this.autoclose_regions.get(i) {
-                    match existing_state
-                        .range
-                        .start
-                        .cmp(&start, map.buffer_snapshot())
-                    {
+                    match existing_state.range.start.cmp(&start, map.buffer_snapshot()) {
                         Ordering::Less => i += 1,
                         Ordering::Greater => break,
-                        Ordering::Equal => {
-                            match end.cmp(&existing_state.range.end, map.buffer_snapshot()) {
-                                Ordering::Less => i += 1,
-                                Ordering::Equal => break,
-                                Ordering::Greater => break,
-                            }
-                        }
+                        Ordering::Equal => match end.cmp(&existing_state.range.end, map.buffer_snapshot()) {
+                            Ordering::Less => i += 1,
+                            Ordering::Equal => break,
+                            Ordering::Greater => break,
+                        },
                     }
                 }
-                this.autoclose_regions.insert(
-                    i,
-                    AutocloseRegion {
-                        selection_id,
-                        range: start..end,
-                        pair,
-                    },
-                );
+                this.autoclose_regions.insert(i, AutocloseRegion { selection_id, range: start..end, pair });
             }
 
-            this.change_selections(
-                SelectionEffects::scroll(Autoscroll::fit()).completions(false),
-                window,
-                cx,
-                |s| s.select(new_selections),
-            );
+            this.change_selections(SelectionEffects::scroll(Autoscroll::fit()).completions(false), window, cx, |s| {
+                s.select(new_selections)
+            });
 
             if !bracket_inserted
-                && let Some(on_type_format_task) =
-                    this.trigger_on_type_formatting(text.to_string(), window, cx)
+                && let Some(on_type_format_task) = this.trigger_on_type_formatting(text.to_string(), window, cx)
             {
                 on_type_format_task.detach_and_log_err(cx);
             }
@@ -502,10 +426,7 @@ impl Editor {
                 // is not mutated between there and here (only selections move), so a
                 // fresh `buffer().snapshot(cx)` would be redundant.
                 if latest.is_empty()
-                    && map
-                        .buffer_snapshot()
-                        .line_len(MultiBufferRow(latest.start.row))
-                        == latest.start.column
+                    && map.buffer_snapshot().line_len(MultiBufferRow(latest.start.row)) == latest.start.column
                 {
                     this.rewrap(
                         RewrapOptions {
@@ -531,35 +452,25 @@ impl Editor {
 
         self.transact(window, cx, |this, window, cx| {
             let (edits_with_flags, selection_info): (Vec<_>, Vec<_>) = {
-                let selections = this
-                    .selections
-                    .all::<MultiBufferOffset>(&this.display_snapshot(cx));
+                let selections = this.selections.all::<MultiBufferOffset>(&this.display_snapshot(cx));
                 let multi_buffer = this.buffer.read(cx);
                 let buffer = multi_buffer.snapshot(cx);
                 selections
                     .iter()
                     .map(|selection| {
                         let start_point = selection.start.to_point(&buffer);
-                        let mut existing_indent =
-                            buffer.indent_size_for_line(MultiBufferRow(start_point.row));
+                        let mut existing_indent = buffer.indent_size_for_line(MultiBufferRow(start_point.row));
                         let full_indent_len = existing_indent.len;
                         existing_indent.len = cmp::min(existing_indent.len, start_point.column);
                         let mut start = selection.start;
                         let end = selection.end;
                         let selection_is_empty = start == end;
                         let language_scope = buffer.language_scope_at(start);
-                        existing_indent =
-                            logical_indent_for_newline(&start_point, &buffer, existing_indent);
+                        existing_indent = logical_indent_for_newline(&start_point, &buffer, existing_indent);
                         let (delimiter, newline_config) = if let Some(language) = &language_scope {
-                            let needs_extra_newline = NewlineConfig::insert_extra_newline_brackets(
-                                &buffer,
-                                start..end,
-                                language,
-                            )
-                                || NewlineConfig::insert_extra_newline_tree_sitter(
-                                    &buffer,
-                                    start..end,
-                                );
+                            let needs_extra_newline =
+                                NewlineConfig::insert_extra_newline_brackets(&buffer, start..end, language)
+                                    || NewlineConfig::insert_extra_newline_tree_sitter(&buffer, start..end);
 
                             let mut newline_config = NewlineConfig::Newline {
                                 additional_indent: IndentSize::spaces(0),
@@ -581,17 +492,10 @@ impl Editor {
                                     return None;
                                 }
 
-                                return comment_delimiter_for_newline(
-                                    &start_point,
-                                    &buffer,
-                                    language,
-                                );
+                                return comment_delimiter_for_newline(&start_point, &buffer, language);
                             }) {
                                 delimiter = Some(comment_delimiter);
-                                if let NewlineConfig::Newline {
-                                    extra_line_additional_indent,
-                                    ..
-                                } = &mut newline_config
+                                if let NewlineConfig::Newline { extra_line_additional_indent, .. } = &mut newline_config
                                 {
                                     *extra_line_additional_indent = None;
                                 }
@@ -645,17 +549,14 @@ impl Editor {
 
                         let (edit_start, new_text, prevent_auto_indent) = match &newline_config {
                             NewlineConfig::ClearCurrentLine => {
-                                let row_start =
-                                    buffer.point_to_offset(Point::new(start_point.row, 0));
+                                let row_start = buffer.point_to_offset(Point::new(start_point.row, 0));
                                 (row_start, String::new(), false)
                             }
                             NewlineConfig::UnindentCurrentLine { continuation } => {
-                                let row_start =
-                                    buffer.point_to_offset(Point::new(start_point.row, 0));
+                                let row_start = buffer.point_to_offset(Point::new(start_point.row, 0));
                                 let tab_size = buffer.language_settings_at(start, cx).tab_size;
-                                existing_indent.len = existing_indent
-                                    .len
-                                    .saturating_sub(existing_indent.outdent_len(tab_size));
+                                existing_indent.len =
+                                    existing_indent.len.saturating_sub(existing_indent.outdent_len(tab_size));
                                 let mut new_text = String::new();
                                 new_text.extend(existing_indent.chars());
                                 new_text.push_str(continuation);
@@ -666,19 +567,12 @@ impl Editor {
                                 extra_line_additional_indent,
                                 prevent_auto_indent,
                             } => {
-                                let auto_indent_mode =
-                                    buffer.language_settings_at(start, cx).auto_indent;
-                                let preserve_indent =
-                                    auto_indent_mode != language::AutoIndentMode::None;
-                                let apply_syntax_indent =
-                                    auto_indent_mode == language::AutoIndentMode::SyntaxAware;
-                                let capacity_for_delimiter =
-                                    delimiter.as_deref().map(str::len).unwrap_or_default();
-                                let existing_indent_len = if preserve_indent {
-                                    existing_indent.len as usize
-                                } else {
-                                    0
-                                };
+                                let auto_indent_mode = buffer.language_settings_at(start, cx).auto_indent;
+                                let preserve_indent = auto_indent_mode != language::AutoIndentMode::None;
+                                let apply_syntax_indent = auto_indent_mode == language::AutoIndentMode::SyntaxAware;
+                                let capacity_for_delimiter = delimiter.as_deref().map(str::len).unwrap_or_default();
+                                let existing_indent_len =
+                                    if preserve_indent { existing_indent.len as usize } else { 0 };
                                 let extra_line_len = extra_line_additional_indent
                                     .map(|i| 1 + existing_indent_len + i.len as usize)
                                     .unwrap_or(0);
@@ -716,11 +610,7 @@ impl Editor {
                                     start = buffer.point_to_offset(Point::new(start_point.row, 0));
                                 }
 
-                                (
-                                    start,
-                                    new_text,
-                                    *prevent_auto_indent || !apply_syntax_indent,
-                                )
+                                (start, new_text, *prevent_auto_indent || !apply_syntax_indent)
                             }
                         };
 
@@ -782,11 +672,8 @@ impl Editor {
         let mut edits = Vec::new();
         let mut rows = Vec::new();
 
-        for (rows_inserted, selection) in self
-            .selections
-            .all_adjusted(&self.display_snapshot(cx))
-            .into_iter()
-            .enumerate()
+        for (rows_inserted, selection) in
+            self.selections.all_adjusted(&self.display_snapshot(cx)).into_iter().enumerate()
         {
             let cursor = selection.head();
             let row = cursor.row;
@@ -854,9 +741,7 @@ impl Editor {
             let row = cursor.row;
 
             let point = Point::new(row, 0);
-            let Some((buffer_handle, buffer_point)) =
-                self.buffer.read(cx).point_to_buffer_point(point, cx)
-            else {
+            let Some((buffer_handle, buffer_point)) = self.buffer.read(cx).point_to_buffer_point(point, cx) else {
                 rows.push(None);
                 continue;
             };
@@ -872,7 +757,7 @@ impl Editor {
         }
 
         self.transact(window, cx, |editor, window, cx| {
-            for (_, (buffer_handle, points)) in &buffer_edits {
+            for (buffer_handle, points) in buffer_edits.values() {
                 buffer_handle.update(cx, |buffer, cx| {
                     let edits: Vec<_> = points
                         .iter()
@@ -925,9 +810,7 @@ impl Editor {
     }
 
     pub fn insert(&mut self, text: &str, window: &mut Window, cx: &mut Context<Self>) {
-        let autoindent = text.is_empty().not().then(|| AutoindentMode::Block {
-            original_indent_columns: Vec::new(),
-        });
+        let autoindent = text.is_empty().not().then(|| AutoindentMode::Block { original_indent_columns: Vec::new() });
         self.replace_selections(text, autoindent, window, cx, false);
     }
 
@@ -938,8 +821,7 @@ impl Editor {
         let mut linked_edits = LinkedEdits::new();
         if !self.linked_edit_ranges.is_empty() {
             for selection in self.selections.disjoint_anchors() {
-                let Some((_, range)) =
-                    multibuffer_snapshot.anchor_range_to_buffer_anchor_range(selection.range())
+                let Some((_, range)) = multibuffer_snapshot.anchor_range_to_buffer_anchor_range(selection.range())
                 else {
                     continue;
                 };
@@ -951,11 +833,7 @@ impl Editor {
 
     /// Deletes the content covered by the current selections and applies
     /// linked edits.
-    pub fn delete_selections_with_linked_edits(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn delete_selections_with_linked_edits(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.replace_selections("", None, window, cx, true);
     }
 
@@ -978,12 +856,8 @@ impl Editor {
                         } else {
                             movement::previous_word_start_or_newline(map, selection.head())
                         };
-                        cursor = movement::adjust_greedy_deletion(
-                            map,
-                            selection.head(),
-                            cursor,
-                            action.ignore_brackets,
-                        );
+                        cursor =
+                            movement::adjust_greedy_deletion(map, selection.head(), cursor, action.ignore_brackets);
                         selection.set_head(cursor, SelectionGoal::None);
                     }
                 });
@@ -1011,12 +885,8 @@ impl Editor {
                         } else {
                             movement::previous_subword_start_or_newline(map, selection.head())
                         };
-                        cursor = movement::adjust_greedy_deletion(
-                            map,
-                            selection.head(),
-                            cursor,
-                            action.ignore_brackets,
-                        );
+                        cursor =
+                            movement::adjust_greedy_deletion(map, selection.head(), cursor, action.ignore_brackets);
                         selection.set_head(cursor, SelectionGoal::None);
                     }
                 });
@@ -1043,12 +913,8 @@ impl Editor {
                         } else {
                             movement::next_word_end_or_newline(map, selection.head())
                         };
-                        cursor = movement::adjust_greedy_deletion(
-                            map,
-                            selection.head(),
-                            cursor,
-                            action.ignore_brackets,
-                        );
+                        cursor =
+                            movement::adjust_greedy_deletion(map, selection.head(), cursor, action.ignore_brackets);
                         selection.set_head(cursor, SelectionGoal::None);
                     }
                 });
@@ -1075,12 +941,8 @@ impl Editor {
                         } else {
                             movement::next_subword_end_or_newline(map, selection.head())
                         };
-                        cursor = movement::adjust_greedy_deletion(
-                            map,
-                            selection.head(),
-                            cursor,
-                            action.ignore_brackets,
-                        );
+                        cursor =
+                            movement::adjust_greedy_deletion(map, selection.head(), cursor, action.ignore_brackets);
                         selection.set_head(cursor, SelectionGoal::None);
                     }
                 });
@@ -1106,10 +968,7 @@ impl Editor {
             });
 
             this.select_to_beginning_of_line(
-                &SelectToBeginningOfLine {
-                    stop_at_soft_wraps: false,
-                    stop_at_indent: action.stop_at_indent,
-                },
+                &SelectToBeginningOfLine { stop_at_soft_wraps: false, stop_at_indent: action.stop_at_indent },
                 window,
                 cx,
             );
@@ -1117,12 +976,7 @@ impl Editor {
         });
     }
 
-    pub fn delete_to_end_of_line(
-        &mut self,
-        _: &DeleteToEndOfLine,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn delete_to_end_of_line(&mut self, _: &DeleteToEndOfLine, window: &mut Window, cx: &mut Context<Self>) {
         if self.read_only(cx) {
             return;
         }
@@ -1133,23 +987,12 @@ impl Editor {
                 });
             });
 
-            this.select_to_end_of_line(
-                &SelectToEndOfLine {
-                    stop_at_soft_wraps: false,
-                },
-                window,
-                cx,
-            );
+            this.select_to_end_of_line(&SelectToEndOfLine { stop_at_soft_wraps: false }, window, cx);
             this.delete(&Delete, window, cx);
         });
     }
 
-    pub fn cut_to_end_of_line(
-        &mut self,
-        action: &CutToEndOfLine,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn cut_to_end_of_line(&mut self, action: &CutToEndOfLine, window: &mut Window, cx: &mut Context<Self>) {
         if self.read_only(cx) {
             return;
         }
@@ -1160,13 +1003,7 @@ impl Editor {
                 });
             });
 
-            this.select_to_end_of_line(
-                &SelectToEndOfLine {
-                    stop_at_soft_wraps: false,
-                },
-                window,
-                cx,
-            );
+            this.select_to_end_of_line(&SelectToEndOfLine { stop_at_soft_wraps: false }, window, cx);
             if !action.stop_at_newlines {
                 this.change_selections(Default::default(), window, cx, |s| {
                     s.move_with(&mut |_, sel| {
@@ -1187,23 +1024,15 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.try_insert_snippet_at_selections(action, window, cx)
-            .log_err();
+        self.try_insert_snippet_at_selections(action, window, cx).log_err();
     }
 
-    pub fn toggle_block_comments(
-        &mut self,
-        _: &ToggleBlockComments,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn toggle_block_comments(&mut self, _: &ToggleBlockComments, window: &mut Window, cx: &mut Context<Self>) {
         if self.read_only(cx) {
             return;
         }
         self.transact(window, cx, |this, _window, cx| {
-            let mut selections = this
-                .selections
-                .all::<MultiBufferPoint>(&this.display_snapshot(cx));
+            let mut selections = this.selections.all::<MultiBufferPoint>(&this.display_snapshot(cx));
             let mut edits = Vec::new();
             let snapshot = this.buffer.read(cx).read(cx);
             let empty_str: Arc<str> = Arc::default();
@@ -1213,17 +1042,11 @@ impl Editor {
                 let start_point = selection.start;
                 let end_point = selection.end;
 
-                let Some(language) =
-                    snapshot.language_scope_at(Point::new(start_point.row, start_point.column))
-                else {
+                let Some(language) = snapshot.language_scope_at(Point::new(start_point.row, start_point.column)) else {
                     continue;
                 };
 
-                let Some(BlockCommentConfig {
-                    start: comment_start,
-                    end: comment_end,
-                    ..
-                }) = language.block_comment()
+                let Some(BlockCommentConfig { start: comment_start, end: comment_end, .. }) = language.block_comment()
                 else {
                     continue;
                 };
@@ -1233,15 +1056,9 @@ impl Editor {
 
                 // Collect full lines spanning the selection as the search region
                 let region_start = Point::new(start_point.row, 0);
-                let region_end = Point::new(
-                    end_point.row,
-                    snapshot.line_len(MultiBufferRow(end_point.row)),
-                );
-                let region_bytes: Vec<u8> = snapshot
-                    .bytes_in_range(region_start..region_end)
-                    .flatten()
-                    .copied()
-                    .collect();
+                let region_end = Point::new(end_point.row, snapshot.line_len(MultiBufferRow(end_point.row)));
+                let region_bytes: Vec<u8> =
+                    snapshot.bytes_in_range(region_start..region_end).flatten().copied().collect();
 
                 let region_start_offset = snapshot.point_to_offset(region_start);
                 let start_byte = snapshot.point_to_offset(start_point) - region_start_offset;
@@ -1267,59 +1084,35 @@ impl Editor {
                         let suffix_end = suffix_pos + suffix_needle.len();
 
                         // Case 1: /* ... */ surrounds the selection
-                        let markers_surround = prefix_pos <= start_byte
-                            && suffix_end >= end_byte
-                            && start_byte < suffix_end;
+                        let markers_surround =
+                            prefix_pos <= start_byte && suffix_end >= end_byte && start_byte < suffix_end;
 
                         // Case 2: selection contains /* ... */ (only whitespace padding)
                         let selection_contains = start_byte <= prefix_pos
                             && suffix_end <= end_byte
-                            && region_bytes[start_byte..prefix_pos]
-                                .iter()
-                                .all(|&b| b.is_ascii_whitespace())
-                            && region_bytes[suffix_end..end_byte]
-                                .iter()
-                                .all(|&b| b.is_ascii_whitespace());
+                            && region_bytes[start_byte..prefix_pos].iter().all(|&b| b.is_ascii_whitespace())
+                            && region_bytes[suffix_end..end_byte].iter().all(|&b| b.is_ascii_whitespace());
 
                         if markers_surround || selection_contains {
                             is_commented = true;
-                            let prefix_pt =
-                                snapshot.offset_to_point(region_start_offset + prefix_pos);
-                            let suffix_pt =
-                                snapshot.offset_to_point(region_start_offset + suffix_pos);
-                            prefix_range = prefix_pt
-                                ..Point::new(
-                                    prefix_pt.row,
-                                    prefix_pt.column + prefix_needle.len() as u32,
-                                );
-                            suffix_range = suffix_pt
-                                ..Point::new(
-                                    suffix_pt.row,
-                                    suffix_pt.column + suffix_needle.len() as u32,
-                                );
+                            let prefix_pt = snapshot.offset_to_point(region_start_offset + prefix_pos);
+                            let suffix_pt = snapshot.offset_to_point(region_start_offset + suffix_pos);
+                            prefix_range =
+                                prefix_pt..Point::new(prefix_pt.row, prefix_pt.column + prefix_needle.len() as u32);
+                            suffix_range =
+                                suffix_pt..Point::new(suffix_pt.row, suffix_pt.column + suffix_needle.len() as u32);
                         }
                     }
                 }
 
                 if is_commented {
                     // Also remove the space after /* and before */
-                    if snapshot
-                        .bytes_in_range(prefix_range.end..snapshot.max_point())
-                        .flatten()
-                        .next()
-                        == Some(&b' ')
-                    {
+                    if snapshot.bytes_in_range(prefix_range.end..snapshot.max_point()).flatten().next() == Some(&b' ') {
                         prefix_range.end.column += 1;
                     }
                     if suffix_range.start.column > 0 {
-                        let before =
-                            Point::new(suffix_range.start.row, suffix_range.start.column - 1);
-                        if snapshot
-                            .bytes_in_range(before..suffix_range.start)
-                            .flatten()
-                            .next()
-                            == Some(&b' ')
-                        {
+                        let before = Point::new(suffix_range.start.row, suffix_range.start.column - 1);
+                        if snapshot.bytes_in_range(before..suffix_range.start).flatten().next() == Some(&b' ') {
                             suffix_range.start.column -= 1;
                         }
                     }
@@ -1355,22 +1148,16 @@ impl Editor {
                 buffer.edit(edits, None, cx);
             });
 
-            let mut selections = this
-                .selections
-                .all::<MultiBufferPoint>(&this.display_snapshot(cx));
+            let mut selections = this.selections.all::<MultiBufferPoint>(&this.display_snapshot(cx));
             for selection in &mut selections {
-                if let Some((_, prefix_len, suffix_len, was_empty, suffix_row)) = markers_inserted
-                    .iter()
-                    .find(|(id, _, _, _, _)| *id == selection.id)
+                if let Some((_, prefix_len, suffix_len, was_empty, suffix_row)) =
+                    markers_inserted.iter().find(|(id, _, _, _, _)| *id == selection.id)
                 {
                     if *was_empty {
-                        selection.start.column = selection
-                            .start
-                            .column
-                            .saturating_sub((*prefix_len + *suffix_len) as u32);
-                    } else {
                         selection.start.column =
-                            selection.start.column.saturating_sub(*prefix_len as u32);
+                            selection.start.column.saturating_sub((*prefix_len + *suffix_len) as u32);
+                    } else {
+                        selection.start.column = selection.start.column.saturating_sub(*prefix_len as u32);
                         if selection.end.row == *suffix_row {
                             selection.end.column += *suffix_len as u32;
                         }
@@ -1381,20 +1168,13 @@ impl Editor {
         });
     }
 
-    pub fn toggle_comments(
-        &mut self,
-        action: &ToggleComments,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn toggle_comments(&mut self, action: &ToggleComments, window: &mut Window, cx: &mut Context<Self>) {
         if self.read_only(cx) {
             return;
         }
         let text_layout_details = &self.text_layout_details(window, cx);
         self.transact(window, cx, |this, window, cx| {
-            let mut selections = this
-                .selections
-                .all::<MultiBufferPoint>(&this.display_snapshot(cx));
+            let mut selections = this.selections.all::<MultiBufferPoint>(&this.display_snapshot(cx));
             let mut edits = Vec::new();
             let mut selection_edit_ranges = Vec::new();
             let mut last_toggled_row = None;
@@ -1411,35 +1191,20 @@ impl Editor {
                 comment_prefix_whitespace: &str,
                 ignore_indent: bool,
             ) -> Range<Point> {
-                let indent_size = if ignore_indent {
-                    0
-                } else {
-                    snapshot.indent_size_for_line(row).len
-                };
+                let indent_size = if ignore_indent { 0 } else { snapshot.indent_size_for_line(row).len };
 
                 let start = Point::new(row.0, indent_size);
 
-                let mut line_bytes = snapshot
-                    .bytes_in_range(start..snapshot.max_point())
-                    .flatten()
-                    .copied();
+                let mut line_bytes = snapshot.bytes_in_range(start..snapshot.max_point()).flatten().copied();
 
                 // If this line currently begins with the line comment prefix, then record
                 // the range containing the prefix.
-                if line_bytes
-                    .by_ref()
-                    .take(comment_prefix.len())
-                    .eq(comment_prefix.bytes())
-                {
+                if line_bytes.by_ref().take(comment_prefix.len()).eq(comment_prefix.bytes()) {
                     // Include any whitespace that matches the comment prefix.
-                    let matching_whitespace_len = line_bytes
-                        .zip(comment_prefix_whitespace.bytes())
-                        .take_while(|(a, b)| a == b)
-                        .count() as u32;
-                    let end = Point::new(
-                        start.row,
-                        start.column + comment_prefix.len() as u32 + matching_whitespace_len,
-                    );
+                    let matching_whitespace_len =
+                        line_bytes.zip(comment_prefix_whitespace.bytes()).take_while(|(a, b)| a == b).count() as u32;
+                    let end =
+                        Point::new(start.row, start.column + comment_prefix.len() as u32 + matching_whitespace_len);
                     start..end
                 } else {
                     start..start
@@ -1481,16 +1246,13 @@ impl Editor {
 
             // TODO: Handle selections that cross excerpts
             for selection in &mut selections {
-                let start_column = snapshot
-                    .indent_size_for_line(MultiBufferRow(selection.start.row))
-                    .len;
-                let language = if let Some(language) =
-                    snapshot.language_scope_at(Point::new(selection.start.row, start_column))
-                {
-                    language
-                } else {
-                    continue;
-                };
+                let start_column = snapshot.indent_size_for_line(MultiBufferRow(selection.start.row)).len;
+                let language =
+                    if let Some(language) = snapshot.language_scope_at(Point::new(selection.start.row, start_column)) {
+                        language
+                    } else {
+                        continue;
+                    };
 
                 selection_edit_ranges.clear();
 
@@ -1500,12 +1262,11 @@ impl Editor {
                 if last_toggled_row == Some(start_row) {
                     start_row = start_row.next_row();
                 }
-                let end_row =
-                    if selection.end.row > selection.start.row && selection.end.column == 0 {
-                        MultiBufferRow(selection.end.row - 1)
-                    } else {
-                        MultiBufferRow(selection.end.row)
-                    };
+                let end_row = if selection.end.row > selection.start.row && selection.end.column == 0 {
+                    MultiBufferRow(selection.end.row - 1)
+                } else {
+                    MultiBufferRow(selection.end.row)
+                };
                 last_toggled_row = Some(end_row);
 
                 if start_row > end_row {
@@ -1517,16 +1278,12 @@ impl Editor {
 
                 // If ignore_indent is set, trim spaces from the right side of all full_comment_prefixes
                 if ignore_indent {
-                    full_comment_prefixes = full_comment_prefixes
-                        .into_iter()
-                        .map(|s| Arc::from(s.trim_end()))
-                        .collect();
+                    full_comment_prefixes =
+                        full_comment_prefixes.into_iter().map(|s| Arc::from(s.trim_end())).collect();
                 }
 
                 if !full_comment_prefixes.is_empty() {
-                    let first_prefix = full_comment_prefixes
-                        .first()
-                        .expect("prefixes is non-empty");
+                    let first_prefix = full_comment_prefixes.first().expect("prefixes is non-empty");
                     let prefix_trimmed_lengths = full_comment_prefixes
                         .iter()
                         .map(|p| p.trim_end_matches(' ').len())
@@ -1581,28 +1338,17 @@ impl Editor {
                     let should_uncomment = uncommented_lines == 0 && commented_lines > 0;
 
                     if should_uncomment {
-                        edits.extend(
-                            selection_edit_ranges
-                                .iter()
-                                .cloned()
-                                .map(|range| (range, empty_str.clone())),
-                        );
+                        edits.extend(selection_edit_ranges.iter().cloned().map(|range| (range, empty_str.clone())));
                     } else {
-                        let min_column = selection_edit_ranges
-                            .iter()
-                            .map(|range| range.start.column)
-                            .min()
-                            .unwrap_or(0);
+                        let min_column =
+                            selection_edit_ranges.iter().map(|range| range.start.column).min().unwrap_or(0);
                         edits.extend(selection_edit_ranges.iter().map(|range| {
                             let position = Point::new(range.start.row, min_column);
                             (position..position, first_prefix.clone())
                         }));
                     }
-                } else if let Some(BlockCommentConfig {
-                    start: full_comment_prefix,
-                    end: comment_suffix,
-                    ..
-                }) = language.block_comment()
+                } else if let Some(BlockCommentConfig { start: full_comment_prefix, end: comment_suffix, .. }) =
+                    language.block_comment()
                 {
                     let comment_prefix = full_comment_prefix.trim_end_matches(' ');
                     let comment_prefix_whitespace = &full_comment_prefix[comment_prefix.len()..];
@@ -1621,10 +1367,7 @@ impl Editor {
                     );
 
                     if prefix_range.is_empty() || suffix_range.is_empty() {
-                        edits.push((
-                            prefix_range.start..prefix_range.start,
-                            full_comment_prefix.clone(),
-                        ));
+                        edits.push((prefix_range.start..prefix_range.start, full_comment_prefix.clone()));
                         edits.push((suffix_range.end..suffix_range.end, comment_suffix.clone()));
                         suffixes_inserted.push((end_row, comment_suffix.len()));
                     } else {
@@ -1671,12 +1414,10 @@ impl Editor {
             this.change_selections(Default::default(), window, cx, |s| s.select(selections));
 
             let selections = this.selections.all::<Point>(&this.display_snapshot(cx));
-            let selections_on_single_row = selections.array_windows::<2>().all(|[a, b]| {
-                a.start.row == b.start.row && a.end.row == b.end.row && a.start.row == a.end.row
-            });
-            let selections_selecting = selections
-                .iter()
-                .any(|selection| selection.start != selection.end);
+            let selections_on_single_row = selections
+                .array_windows::<2>()
+                .all(|[a, b]| a.start.row == b.start.row && a.end.row == b.end.row && a.start.row == a.end.row);
+            let selections_selecting = selections.iter().any(|selection| selection.start != selection.end);
             let advance_downwards = action.advance_downwards
                 && selections_on_single_row
                 && !selections_selecting
@@ -1692,9 +1433,7 @@ impl Editor {
                         point = snapshot.clip_point(point, Bias::Left);
                         let display_point = point.to_display_point(display_snapshot);
                         let goal = SelectionGoal::HorizontalPosition(
-                            display_snapshot
-                                .x_for_display_point(display_point, text_layout_details)
-                                .into(),
+                            display_snapshot.x_for_display_point(display_point, text_layout_details).into(),
                         );
                         (display_point, goal)
                     })
@@ -1703,12 +1442,7 @@ impl Editor {
         });
     }
 
-    pub fn unwrap_syntax_node(
-        &mut self,
-        _: &UnwrapSyntaxNode,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn unwrap_syntax_node(&mut self, _: &UnwrapSyntaxNode, window: &mut Window, cx: &mut Context<Self>) {
         if self.read_only(cx) {
             return;
         }
@@ -1725,8 +1459,7 @@ impl Editor {
             .into_iter()
             .filter_map(|selection| {
                 let child = if selection.is_empty()
-                    && let Some((_, ancestor_range)) =
-                        buffer.syntax_ancestor(selection.start..selection.end)
+                    && let Some((_, ancestor_range)) = buffer.syntax_ancestor(selection.start..selection.end)
                 {
                     ancestor_range
                 } else {
@@ -1754,14 +1487,7 @@ impl Editor {
 
         self.transact(window, cx, |this, window, cx| {
             this.buffer.update(cx, |buffer, cx| {
-                buffer.edit(
-                    full_edits
-                        .iter()
-                        .map(|(_, p, t)| (p.clone(), t.clone()))
-                        .collect::<Vec<_>>(),
-                    None,
-                    cx,
-                );
+                buffer.edit(full_edits.iter().map(|(_, p, t)| (p.clone(), t.clone())).collect::<Vec<_>>(), None, cx);
             });
             this.change_selections(Default::default(), window, cx, |s| {
                 let mut offset = 0;
@@ -1794,34 +1520,24 @@ impl Editor {
             pending = "".to_string();
         }
 
-        let existing_pending = self
-            .text_highlights(HighlightKey::PendingInput, cx)
-            .map(|(_, ranges)| ranges.to_vec());
+        let existing_pending = self.text_highlights(HighlightKey::PendingInput, cx).map(|(_, ranges)| ranges.to_vec());
         if existing_pending.is_none() && pending.is_empty() {
             return;
         }
         let mut inserted_ranges = Vec::new();
         let transaction = self.transact(window, cx, |this, window, cx| {
-            let selections = this
-                .selections
-                .all::<MultiBufferOffset>(&this.display_snapshot(cx));
+            let selections = this.selections.all::<MultiBufferOffset>(&this.display_snapshot(cx));
             let buffer = this.buffer.read(cx).snapshot(cx);
             let selection_ranges = selections
                 .iter()
-                .map(|selection| {
-                    buffer.anchor_before(selection.start)..buffer.anchor_before(selection.end)
-                })
+                .map(|selection| buffer.anchor_before(selection.start)..buffer.anchor_before(selection.end))
                 .collect::<Vec<_>>();
             inserted_ranges = selections
                 .iter()
-                .map(|selection| {
-                    buffer.anchor_before(selection.end)..buffer.anchor_after(selection.end)
-                })
+                .map(|selection| buffer.anchor_before(selection.end)..buffer.anchor_after(selection.end))
                 .collect();
 
-            let edits = selections
-                .iter()
-                .map(|selection| (selection.end..selection.end, pending.clone()));
+            let edits = selections.iter().map(|selection| (selection.end..selection.end, pending.clone()));
             this.edit(edits, cx);
             this.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
                 s.select_anchor_ranges(selection_ranges);
@@ -1847,11 +1563,7 @@ impl Editor {
                 HighlightKey::PendingInput,
                 pending_ranges,
                 HighlightStyle {
-                    underline: Some(UnderlineStyle {
-                        thickness: px(1.),
-                        color: None,
-                        wavy: false,
-                    }),
+                    underline: Some(UnderlineStyle { thickness: px(1.), color: None, wavy: false }),
                     ..Default::default()
                 },
                 cx,
@@ -1865,10 +1577,7 @@ impl Editor {
             });
         }
 
-        if self
-            .text_highlights(HighlightKey::PendingInput, cx)
-            .is_none()
-        {
+        if self.text_highlights(HighlightKey::PendingInput, cx).is_none() {
             self.ime_transaction.take();
         }
     }
@@ -1889,11 +1598,8 @@ impl Editor {
         let multibuffer_snapshot = self.buffer.read(cx).snapshot(cx);
         let buffer = self.buffer.read(cx).buffer(query_range.end.buffer_id)?;
         let buffer_snapshot = buffer.read(cx).snapshot();
-        let (base_range, linked_ranges) = self.linked_edit_ranges.get(
-            buffer_snapshot.remote_id(),
-            query_range.clone(),
-            &buffer_snapshot,
-        )?;
+        let (base_range, linked_ranges) =
+            self.linked_edit_ranges.get(buffer_snapshot.remote_id(), query_range.clone(), &buffer_snapshot)?;
         // find offset from the start of current range to current cursor position
         let start_byte_offset = TO::to_offset(&base_range.start, &buffer_snapshot);
 
@@ -1912,13 +1618,10 @@ impl Editor {
                 continue;
             }
             if self.selections.disjoint_anchor_ranges().any(|s| {
-                let Some((selection_start, _)) =
-                    multibuffer_snapshot.anchor_to_buffer_anchor(s.start)
-                else {
+                let Some((selection_start, _)) = multibuffer_snapshot.anchor_to_buffer_anchor(s.start) else {
                     return false;
                 };
-                let Some((selection_end, _)) = multibuffer_snapshot.anchor_to_buffer_anchor(s.end)
-                else {
+                let Some((selection_end, _)) = multibuffer_snapshot.anchor_to_buffer_anchor(s.end) else {
                     return false;
                 };
                 if selection_start.buffer_id != query_range.start.buffer_id
@@ -1933,26 +1636,18 @@ impl Editor {
             }
             let start = buffer_snapshot.anchor_after(start_offset);
             let end = buffer_snapshot.anchor_after(end_offset);
-            linked_edits
-                .entry(buffer.clone())
-                .or_default()
-                .push(start..end);
+            linked_edits.entry(buffer.clone()).or_default().push(start..end);
         }
         Some(linked_edits)
     }
 
-    pub(super) fn marked_text_ranges(
-        &self,
-        cx: &App,
-    ) -> Option<Vec<Range<MultiBufferOffsetUtf16>>> {
+    pub(super) fn marked_text_ranges(&self, cx: &App) -> Option<Vec<Range<MultiBufferOffsetUtf16>>> {
         let snapshot = self.buffer.read(cx).read(cx);
         let (_, ranges) = self.text_highlights(HighlightKey::InputComposition, cx)?;
         Some(
             ranges
                 .iter()
-                .map(move |range| {
-                    range.start.to_offset_utf16(&snapshot)..range.end.to_offset_utf16(&snapshot)
-                })
+                .map(move |range| range.start.to_offset_utf16(&snapshot)..range.end.to_offset_utf16(&snapshot))
                 .collect(),
         )
     }
@@ -1994,13 +1689,7 @@ impl Editor {
                         })
                         .collect::<Vec<_>>()
                 };
-                buffer.edit(
-                    old_selections
-                        .iter()
-                        .map(|s| (s.start..s.end, text.clone())),
-                    autoindent_mode,
-                    cx,
-                );
+                buffer.edit(old_selections.iter().map(|s| (s.start..s.end, text.clone())), autoindent_mode, cx);
                 anchors
             });
 
@@ -2021,9 +1710,7 @@ impl Editor {
     /// If any empty selections is touching the start of its innermost containing autoclose
     /// region, expand it to select the brackets.
     pub(super) fn select_autoclose_pair(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let selections = self
-            .selections
-            .all::<MultiBufferOffset>(&self.display_snapshot(cx));
+        let selections = self.selections.all::<MultiBufferOffset>(&self.display_snapshot(cx));
         let buffer = self.buffer.read(cx).read(cx);
         let new_selections = self
             .selections_with_autoclose_regions(selections, &buffer)
@@ -2048,9 +1735,8 @@ impl Editor {
                     }
                 }
 
-                let always_treat_brackets_as_autoclosed = buffer
-                    .language_settings_at(selection.start, cx)
-                    .always_treat_brackets_as_autoclosed;
+                let always_treat_brackets_as_autoclosed =
+                    buffer.language_settings_at(selection.start, cx).always_treat_brackets_as_autoclosed;
 
                 if !always_treat_brackets_as_autoclosed {
                     return selection;
@@ -2064,10 +1750,8 @@ impl Editor {
 
                         if buffer.contains_str_at(selection.start, &pair.end) {
                             let pair_start_len = pair.start.len();
-                            if buffer.contains_str_at(
-                                selection.start.saturating_sub_usize(pair_start_len),
-                                &pair.start,
-                            ) {
+                            if buffer.contains_str_at(selection.start.saturating_sub_usize(pair_start_len), &pair.start)
+                            {
                                 selection.start -= pair_start_len;
                                 selection.end += pair.end.len();
 
@@ -2117,14 +1801,11 @@ impl Editor {
         });
     }
 
-    fn set_use_auto_surround(&mut self, auto_surround: bool) {
+    const fn set_use_auto_surround(&mut self, auto_surround: bool) {
         self.use_auto_surround = auto_surround;
     }
 
-    fn find_possible_emoji_shortcode_at_position(
-        snapshot: &MultiBufferSnapshot,
-        position: Point,
-    ) -> Option<String> {
+    fn find_possible_emoji_shortcode_at_position(snapshot: &MultiBufferSnapshot, position: Point) -> Option<String> {
         let mut chars = Vec::new();
         let mut found_colon = false;
         for char in snapshot.reversed_chars_at(position).take(100) {
@@ -2137,11 +1818,7 @@ impl Editor {
                 // If the previous character is not a whitespace, we are in the middle of a word
                 // and we only want to complete the shortcode if the word is made up of other emojis
                 let mut containing_word = String::new();
-                for ch in snapshot
-                    .reversed_chars_at(position)
-                    .skip(chars.len() + 1)
-                    .take(100)
-                {
+                for ch in snapshot.reversed_chars_at(position).skip(chars.len() + 1).take(100) {
                     if ch.is_whitespace() {
                         break;
                     }
@@ -2234,59 +1911,30 @@ impl Editor {
     }
 }
 
-pub(super) fn is_list_prefix_row(
-    row: MultiBufferRow,
-    buffer: &MultiBufferSnapshot,
-    language: &LanguageScope,
-) -> bool {
+pub(super) fn is_list_prefix_row(row: MultiBufferRow, buffer: &MultiBufferSnapshot, language: &LanguageScope) -> bool {
     let Some((snapshot, range)) = buffer.buffer_line_for_row(row) else {
         return false;
     };
 
-    let num_of_whitespaces = snapshot
-        .chars_for_range(range.clone())
-        .take_while(|c| c.is_whitespace())
-        .count();
+    let num_of_whitespaces = snapshot.chars_for_range(range.clone()).take_while(|c| c.is_whitespace()).count();
 
     let task_list_prefixes: Vec<_> = language
         .task_list()
         .into_iter()
-        .flat_map(|config| {
-            config
-                .prefixes
-                .iter()
-                .map(|p| p.as_ref())
-                .collect::<Vec<_>>()
-        })
+        .flat_map(|config| config.prefixes.iter().map(|p| p.as_ref()).collect::<Vec<_>>())
         .collect();
-    let unordered_list_markers: Vec<_> = language
-        .unordered_list()
-        .iter()
-        .map(|marker| marker.as_ref())
-        .collect();
-    let all_prefixes: Vec<_> = task_list_prefixes
-        .into_iter()
-        .chain(unordered_list_markers)
-        .collect();
+    let unordered_list_markers: Vec<_> = language.unordered_list().iter().map(|marker| marker.as_ref()).collect();
+    let all_prefixes: Vec<_> = task_list_prefixes.into_iter().chain(unordered_list_markers).collect();
     if let Some(max_prefix_len) = all_prefixes.iter().map(|p| p.len()).max() {
-        let candidate: String = snapshot
-            .chars_for_range(range.clone())
-            .skip(num_of_whitespaces)
-            .take(max_prefix_len)
-            .collect();
-        if all_prefixes
-            .iter()
-            .any(|prefix| candidate.starts_with(*prefix))
-        {
+        let candidate: String =
+            snapshot.chars_for_range(range.clone()).skip(num_of_whitespaces).take(max_prefix_len).collect();
+        if all_prefixes.iter().any(|prefix| candidate.starts_with(*prefix)) {
             return true;
         }
     }
 
-    let ordered_list_candidate: String = snapshot
-        .chars_for_range(range)
-        .skip(num_of_whitespaces)
-        .take(ORDERED_LIST_MAX_MARKER_LEN)
-        .collect();
+    let ordered_list_candidate: String =
+        snapshot.chars_for_range(range).skip(num_of_whitespaces).take(ORDERED_LIST_MAX_MARKER_LEN).collect();
     for ordered_config in language.ordered_list() {
         let regex = match Regex::new(&ordered_config.pattern) {
             Ok(r) => r,
@@ -2315,14 +1963,8 @@ enum NewlineConfig {
 }
 
 impl NewlineConfig {
-    fn has_extra_line(&self) -> bool {
-        matches!(
-            self,
-            Self::Newline {
-                extra_line_additional_indent: Some(_),
-                ..
-            }
-        )
+    const fn has_extra_line(&self) -> bool {
+        matches!(self, Self::Newline { extra_line_additional_indent: Some(_), .. })
     }
 
     fn insert_extra_newline_brackets(
@@ -2349,21 +1991,12 @@ impl NewlineConfig {
             enabled
                 && pair.newline
                 && buffer.contains_str_at(range.end, pair_end)
-                && buffer.contains_str_at(
-                    range.start.saturating_sub_usize(pair_start.len()),
-                    pair_start,
-                )
+                && buffer.contains_str_at(range.start.saturating_sub_usize(pair_start.len()), pair_start)
         })
     }
 
-    fn insert_extra_newline_tree_sitter(
-        buffer: &MultiBufferSnapshot,
-        range: Range<MultiBufferOffset>,
-    ) -> bool {
-        let (buffer, range) = match buffer
-            .range_to_buffer_ranges(range.start..range.end)
-            .as_slice()
-        {
+    fn insert_extra_newline_tree_sitter(buffer: &MultiBufferSnapshot, range: Range<MultiBufferOffset>) -> bool {
+        let (buffer, range) = match buffer.range_to_buffer_ranges(range.start..range.end).as_slice() {
             [(buffer_snapshot, range, _)] => (*buffer_snapshot, range.clone()),
             _ => return false,
         };
@@ -2372,9 +2005,7 @@ impl NewlineConfig {
 
             for pair in buffer
                 .all_bracket_ranges(range.start.0..range.end.0)
-                .filter(move |pair| {
-                    pair.open_range.start <= range.start.0 && pair.close_range.end >= range.end.0
-                })
+                .filter(move |pair| pair.open_range.start <= range.start.0 && pair.close_range.end >= range.end.0)
             {
                 let len = pair.close_range.end - pair.open_range.start;
 
@@ -2410,10 +2041,7 @@ fn comment_delimiter_for_newline(
     let max_len_of_delimiter = delimiters.iter().map(|delimiter| delimiter.len()).max()?;
     let (snapshot, range) = buffer.buffer_line_for_row(MultiBufferRow(start_point.row))?;
 
-    let num_of_whitespaces = snapshot
-        .chars_for_range(range.clone())
-        .take_while(|c| c.is_whitespace())
-        .count();
+    let num_of_whitespaces = snapshot.chars_for_range(range.clone()).take_while(|c| c.is_whitespace()).count();
     let comment_candidate = snapshot
         .chars_for_range(range.clone())
         .skip(num_of_whitespaces)
@@ -2424,8 +2052,7 @@ fn comment_delimiter_for_newline(
         .filter_map(|delimiter| {
             let prefix = delimiter.trim_end();
             if comment_candidate.starts_with(prefix) {
-                let is_repl = if let Some(stripped_comment) = comment_candidate.strip_prefix(prefix)
-                {
+                let is_repl = if let Some(stripped_comment) = comment_candidate.strip_prefix(prefix) {
                     stripped_comment.starts_with(" %%")
                 } else {
                     false
@@ -2437,10 +2064,7 @@ fn comment_delimiter_for_newline(
         })
         .max_by_key(|(_, len, _)| *len)?;
 
-    if let Some(BlockCommentConfig {
-        start: block_start, ..
-    }) = language.block_comment()
-    {
+    if let Some(BlockCommentConfig { start: block_start, .. }) = language.block_comment() {
         let block_start_trimmed = block_start.trim_end();
         if block_start_trimmed.starts_with(delimiter.trim_end()) {
             let line_content = snapshot
@@ -2455,23 +2079,16 @@ fn comment_delimiter_for_newline(
         }
     }
 
-    let cursor_is_placed_after_comment_marker =
-        num_of_whitespaces + trimmed_len <= start_point.column as usize;
+    let cursor_is_placed_after_comment_marker = num_of_whitespaces + trimmed_len <= start_point.column as usize;
     if cursor_is_placed_after_comment_marker {
         if !is_repl {
             return Some(delimiter.clone());
         }
 
-        let line_content_after_cursor: String = snapshot
-            .chars_for_range(range)
-            .skip(start_point.column as usize)
-            .collect();
+        let line_content_after_cursor: String =
+            snapshot.chars_for_range(range).skip(start_point.column as usize).collect();
 
-        if line_content_after_cursor.trim().is_empty() {
-            return None;
-        } else {
-            return Some(delimiter.clone());
-        }
+        if line_content_after_cursor.trim().is_empty() { None } else { Some(delimiter.clone()) }
     } else {
         None
     }
@@ -2483,35 +2100,24 @@ fn documentation_delimiter_for_newline(
     language: &LanguageScope,
     newline_config: &mut NewlineConfig,
 ) -> Option<Arc<str>> {
-    let BlockCommentConfig {
-        start: start_tag,
-        end: end_tag,
-        prefix: delimiter,
-        tab_size: len,
-    } = language.documentation_comment()?;
-    let is_within_block_comment = buffer
-        .language_scope_at(*start_point)
-        .is_some_and(|scope| scope.override_name() == Some("comment"));
+    let BlockCommentConfig { start: start_tag, end: end_tag, prefix: delimiter, tab_size: len } =
+        language.documentation_comment()?;
+    let is_within_block_comment =
+        buffer.language_scope_at(*start_point).is_some_and(|scope| scope.override_name() == Some("comment"));
     if !is_within_block_comment {
         return None;
     }
 
     let (snapshot, range) = buffer.buffer_line_for_row(MultiBufferRow(start_point.row))?;
 
-    let num_of_whitespaces = snapshot
-        .chars_for_range(range.clone())
-        .take_while(|c| c.is_whitespace())
-        .count();
+    let num_of_whitespaces = snapshot.chars_for_range(range.clone()).take_while(|c| c.is_whitespace()).count();
 
     // It is safe to use a column from MultiBufferPoint in context of a single buffer ranges, because we're only ever looking at a single line at a time.
     let column = start_point.column;
     let cursor_is_after_start_tag = {
         let start_tag_len = start_tag.len();
-        let start_tag_line = snapshot
-            .chars_for_range(range.clone())
-            .skip(num_of_whitespaces)
-            .take(start_tag_len)
-            .collect::<String>();
+        let start_tag_line =
+            snapshot.chars_for_range(range.clone()).skip(num_of_whitespaces).take(start_tag_len).collect::<String>();
         if start_tag_line.starts_with(start_tag.as_ref()) {
             num_of_whitespaces + start_tag_len <= column as usize
         } else {
@@ -2566,22 +2172,13 @@ fn documentation_delimiter_for_newline(
         }
     };
 
-    if (cursor_is_after_start_tag || cursor_is_after_delimiter)
-        && cursor_is_before_end_tag_if_exists
-    {
-        let additional_indent = if cursor_is_after_start_tag {
-            IndentSize::spaces(*len)
-        } else {
-            IndentSize::spaces(0)
-        };
+    if (cursor_is_after_start_tag || cursor_is_after_delimiter) && cursor_is_before_end_tag_if_exists {
+        let additional_indent =
+            if cursor_is_after_start_tag { IndentSize::spaces(*len) } else { IndentSize::spaces(0) };
 
         *newline_config = NewlineConfig::Newline {
             additional_indent,
-            extra_line_additional_indent: if needs_extra_line {
-                Some(extra_line_additional_indent)
-            } else {
-                None
-            },
+            extra_line_additional_indent: if needs_extra_line { Some(extra_line_additional_indent) } else { None },
             prevent_auto_indent: true,
         };
         Some(delimiter.clone())
@@ -2598,8 +2195,7 @@ fn logical_indent_for_newline(
     buffer: &MultiBufferSnapshot,
     existing_indent: IndentSize,
 ) -> IndentSize {
-    let Some((snapshot, line_range)) = buffer.buffer_line_for_row(MultiBufferRow(start_point.row))
-    else {
+    let Some((snapshot, line_range)) = buffer.buffer_line_for_row(MultiBufferRow(start_point.row)) else {
         return existing_indent;
     };
     // Columns agree between the multi-buffer and the underlying buffer for a line
@@ -2607,9 +2203,7 @@ fn logical_indent_for_newline(
     // first line the column comes out too small and the lookup below declines,
     // leaving the indent alone.
     let position = Point::new(line_range.start.row, start_point.column);
-    snapshot
-        .block_comment_closing_indent(position)
-        .unwrap_or(existing_indent)
+    snapshot.block_comment_closing_indent(position).unwrap_or(existing_indent)
 }
 
 fn list_delimiter_for_newline(
@@ -2620,38 +2214,21 @@ fn list_delimiter_for_newline(
 ) -> Option<Arc<str>> {
     let (snapshot, range) = buffer.buffer_line_for_row(MultiBufferRow(start_point.row))?;
 
-    let num_of_whitespaces = snapshot
-        .chars_for_range(range.clone())
-        .take_while(|c| c.is_whitespace())
-        .count();
+    let num_of_whitespaces = snapshot.chars_for_range(range.clone()).take_while(|c| c.is_whitespace()).count();
 
     let task_list_entries: Vec<_> = language
         .task_list()
         .into_iter()
-        .flat_map(|config| {
-            config
-                .prefixes
-                .iter()
-                .map(|prefix| (prefix.as_ref(), config.continuation.as_ref()))
-        })
+        .flat_map(|config| config.prefixes.iter().map(|prefix| (prefix.as_ref(), config.continuation.as_ref())))
         .collect();
-    let unordered_list_entries: Vec<_> = language
-        .unordered_list()
-        .iter()
-        .map(|marker| (marker.as_ref(), marker.as_ref()))
-        .collect();
+    let unordered_list_entries: Vec<_> =
+        language.unordered_list().iter().map(|marker| (marker.as_ref(), marker.as_ref())).collect();
 
-    let all_entries: Vec<_> = task_list_entries
-        .into_iter()
-        .chain(unordered_list_entries)
-        .collect();
+    let all_entries: Vec<_> = task_list_entries.into_iter().chain(unordered_list_entries).collect();
 
     if let Some(max_prefix_len) = all_entries.iter().map(|(p, _)| p.len()).max() {
-        let candidate: String = snapshot
-            .chars_for_range(range.clone())
-            .skip(num_of_whitespaces)
-            .take(max_prefix_len)
-            .collect();
+        let candidate: String =
+            snapshot.chars_for_range(range.clone()).skip(num_of_whitespaces).take(max_prefix_len).collect();
 
         if let Some((prefix, continuation)) = all_entries
             .iter()
@@ -2660,10 +2237,8 @@ fn list_delimiter_for_newline(
         {
             let end_of_prefix = num_of_whitespaces + prefix.len();
             let cursor_is_after_prefix = end_of_prefix <= start_point.column as usize;
-            let has_content_after_marker = snapshot
-                .chars_for_range(range)
-                .skip(end_of_prefix)
-                .any(|c| !c.is_whitespace());
+            let has_content_after_marker =
+                snapshot.chars_for_range(range).skip(end_of_prefix).any(|c| !c.is_whitespace());
 
             if has_content_after_marker && cursor_is_after_prefix {
                 return Some((*continuation).into());
@@ -2673,9 +2248,7 @@ fn list_delimiter_for_newline(
                 if num_of_whitespaces == 0 {
                     *newline_config = NewlineConfig::ClearCurrentLine;
                 } else {
-                    *newline_config = NewlineConfig::UnindentCurrentLine {
-                        continuation: (*continuation).into(),
-                    };
+                    *newline_config = NewlineConfig::UnindentCurrentLine { continuation: (*continuation).into() };
                 }
             }
 
@@ -2683,11 +2256,8 @@ fn list_delimiter_for_newline(
         }
     }
 
-    let candidate: String = snapshot
-        .chars_for_range(range.clone())
-        .skip(num_of_whitespaces)
-        .take(ORDERED_LIST_MAX_MARKER_LEN)
-        .collect();
+    let candidate: String =
+        snapshot.chars_for_range(range.clone()).skip(num_of_whitespaces).take(ORDERED_LIST_MAX_MARKER_LEN).collect();
 
     for ordered_config in language.ordered_list() {
         let regex = match Regex::new(&ordered_config.pattern) {
@@ -2701,16 +2271,12 @@ fn list_delimiter_for_newline(
             let end_of_prefix = num_of_whitespaces + marker_len;
             let cursor_is_after_prefix = end_of_prefix <= start_point.column as usize;
 
-            let has_content_after_marker = snapshot
-                .chars_for_range(range)
-                .skip(end_of_prefix)
-                .any(|c| !c.is_whitespace());
+            let has_content_after_marker =
+                snapshot.chars_for_range(range).skip(end_of_prefix).any(|c| !c.is_whitespace());
 
             if has_content_after_marker && cursor_is_after_prefix {
                 let number: u32 = captures.get(1)?.as_str().parse().ok()?;
-                let continuation = ordered_config
-                    .format
-                    .replace("{1}", &(number + 1).to_string());
+                let continuation = ordered_config.format.replace("{1}", &(number + 1).to_string());
                 return Some(continuation.into());
             }
 
@@ -2719,9 +2285,7 @@ fn list_delimiter_for_newline(
                 if num_of_whitespaces == 0 {
                     *newline_config = NewlineConfig::ClearCurrentLine;
                 } else {
-                    *newline_config = NewlineConfig::UnindentCurrentLine {
-                        continuation: continuation.into(),
-                    };
+                    *newline_config = NewlineConfig::UnindentCurrentLine { continuation: continuation.into() };
                 }
             }
 
@@ -2741,14 +2305,8 @@ impl EntityInputHandler for Editor {
         cx: &mut Context<Self>,
     ) -> Option<String> {
         let snapshot = self.buffer.read(cx).read(cx);
-        let start = snapshot.clip_offset_utf16(
-            MultiBufferOffsetUtf16(OffsetUtf16(range_utf16.start)),
-            Bias::Left,
-        );
-        let end = snapshot.clip_offset_utf16(
-            MultiBufferOffsetUtf16(OffsetUtf16(range_utf16.end)),
-            Bias::Right,
-        );
+        let start = snapshot.clip_offset_utf16(MultiBufferOffsetUtf16(OffsetUtf16(range_utf16.start)), Bias::Left);
+        let end = snapshot.clip_offset_utf16(MultiBufferOffsetUtf16(OffsetUtf16(range_utf16.end)), Bias::Right);
         if (start.0.0..end.0.0) != range_utf16 {
             adjusted_range.replace(start.0.0..end.0.0);
         }
@@ -2767,23 +2325,15 @@ impl EntityInputHandler for Editor {
             return None;
         }
 
-        let selection = self
-            .selections
-            .newest::<MultiBufferOffsetUtf16>(&self.display_snapshot(cx));
+        let selection = self.selections.newest::<MultiBufferOffsetUtf16>(&self.display_snapshot(cx));
         let range = selection.range();
 
-        Some(UTF16Selection {
-            range: range.start.0.0..range.end.0.0,
-            reversed: selection.reversed,
-        })
+        Some(UTF16Selection { range: range.start.0.0..range.end.0.0, reversed: selection.reversed })
     }
 
     fn marked_text_range(&self, _: &mut Window, cx: &mut Context<Self>) -> Option<Range<usize>> {
         let snapshot = self.buffer.read(cx).read(cx);
-        let range = self
-            .text_highlights(HighlightKey::InputComposition, cx)?
-            .1
-            .first()?;
+        let range = self.text_highlights(HighlightKey::InputComposition, cx)?.1.first()?;
         Some(range.start.to_offset_utf16(&snapshot).0.0..range.end.to_offset_utf16(&snapshot).0.0)
     }
 
@@ -2851,10 +2401,7 @@ impl EntityInputHandler for Editor {
                     })
             });
 
-            cx.emit(EditorEvent::InputHandled {
-                utf16_range_to_replace: range_to_replace,
-                text: text.into(),
-            });
+            cx.emit(EditorEvent::InputHandled { utf16_range_to_replace: range_to_replace, text: text.into() });
 
             if let Some(new_selected_ranges) = new_selected_ranges {
                 // Only backspace if at least one range covers actual text. When all
@@ -2901,10 +2448,8 @@ impl EntityInputHandler for Editor {
                     for marked_range in &mut marked_ranges {
                         marked_range.end = marked_range.start + relative_range_utf16.end;
                         marked_range.start += relative_range_utf16.start;
-                        marked_range.start =
-                            snapshot.clip_offset_utf16(marked_range.start, Bias::Left);
-                        marked_range.end =
-                            snapshot.clip_offset_utf16(marked_range.end, Bias::Right);
+                        marked_range.start = snapshot.clip_offset_utf16(marked_range.start, Bias::Left);
+                        marked_range.end = snapshot.clip_offset_utf16(marked_range.end, Bias::Right);
                     }
                 }
                 Some(marked_ranges)
@@ -2934,15 +2479,10 @@ impl EntityInputHandler for Editor {
                     })
             });
 
-            cx.emit(EditorEvent::InputHandled {
-                utf16_range_to_replace: range_to_replace,
-                text: text.into(),
-            });
+            cx.emit(EditorEvent::InputHandled { utf16_range_to_replace: range_to_replace, text: text.into() });
 
             if let Some(ranges) = ranges_to_replace {
-                this.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
-                    s.select_ranges(ranges)
-                });
+                this.change_selections(SelectionEffects::no_scroll(), window, cx, |s| s.select_ranges(ranges));
             }
 
             let marked_ranges = {
@@ -2950,9 +2490,7 @@ impl EntityInputHandler for Editor {
                 this.selections
                     .disjoint_anchors_arc()
                     .iter()
-                    .map(|selection| {
-                        selection.start.bias_left(&snapshot)..selection.end.bias_right(&snapshot)
-                    })
+                    .map(|selection| selection.start.bias_left(&snapshot)..selection.end.bias_right(&snapshot))
                     .collect::<Vec<_>>()
             };
 
@@ -2963,11 +2501,7 @@ impl EntityInputHandler for Editor {
                     HighlightKey::InputComposition,
                     marked_ranges.clone(),
                     HighlightStyle {
-                        underline: Some(UnderlineStyle {
-                            thickness: px(1.),
-                            color: None,
-                            wavy: false,
-                        }),
+                        underline: Some(UnderlineStyle { thickness: px(1.), color: None, wavy: false }),
                         ..Default::default()
                     },
                     cx,
@@ -2989,12 +2523,9 @@ impl EntityInputHandler for Editor {
                     .into_iter()
                     .map(|marked_range| {
                         let insertion_start = marked_range.start.to_offset_utf16(&snapshot).0;
-                        let new_start = MultiBufferOffsetUtf16(OffsetUtf16(
-                            insertion_start.0 + new_selected_range.start,
-                        ));
-                        let new_end = MultiBufferOffsetUtf16(OffsetUtf16(
-                            insertion_start.0 + new_selected_range.end,
-                        ));
+                        let new_start =
+                            MultiBufferOffsetUtf16(OffsetUtf16(insertion_start.0 + new_selected_range.start));
+                        let new_end = MultiBufferOffsetUtf16(OffsetUtf16(insertion_start.0 + new_selected_range.end));
                         snapshot.clip_offset_utf16(new_start, Bias::Left)
                             ..snapshot.clip_offset_utf16(new_end, Bias::Right)
                     })
@@ -3014,10 +2545,7 @@ impl EntityInputHandler for Editor {
             });
         }
 
-        if self
-            .text_highlights(HighlightKey::InputComposition, cx)
-            .is_none()
-        {
+        if self.text_highlights(HighlightKey::InputComposition, cx).is_none() {
             self.ime_transaction.take();
         }
     }
@@ -3030,30 +2558,21 @@ impl EntityInputHandler for Editor {
         cx: &mut Context<Self>,
     ) -> Option<gpui::Bounds<Pixels>> {
         let text_layout_details = self.text_layout_details(window, cx);
-        let CharacterDimensions {
-            em_width,
-            em_advance,
-            line_height,
-        } = self.character_dimensions(window, cx);
+        let CharacterDimensions { em_width, em_advance, line_height } = self.character_dimensions(window, cx);
 
         let snapshot = self.snapshot(window, cx);
         let scroll_position = snapshot.scroll_position();
         let scroll_left = scroll_position.x * ScrollOffset::from(em_advance);
 
-        let start =
-            MultiBufferOffsetUtf16(OffsetUtf16(range_utf16.start)).to_display_point(&snapshot);
+        let start = MultiBufferOffsetUtf16(OffsetUtf16(range_utf16.start)).to_display_point(&snapshot);
         let x = Pixels::from(
             ScrollOffset::from(
-                snapshot.x_for_display_point(start, &text_layout_details)
-                    + self.gutter_dimensions.full_width(),
+                snapshot.x_for_display_point(start, &text_layout_details) + self.gutter_dimensions.full_width(),
             ) - scroll_left,
         );
         let y = line_height * (start.row().as_f64() - scroll_position.y) as f32;
 
-        Some(Bounds {
-            origin: element_bounds.origin + point(x, y),
-            size: size(em_width, line_height),
-        })
+        Some(Bounds { origin: element_bounds.origin + point(x, y), size: size(em_width, line_height) })
     }
 
     fn character_index_for_point(
@@ -3067,10 +2586,8 @@ impl EntityInputHandler for Editor {
             return None;
         }
         let display_point = position_map.point_for_position(point).previous_valid;
-        let anchor = position_map
-            .snapshot
-            .display_point_to_anchor(display_point, Bias::Left);
-        let utf16_offset = anchor.to_offset_utf16(&position_map.snapshot.buffer_snapshot());
+        let anchor = position_map.snapshot.display_point_to_anchor(display_point, Bias::Left);
+        let utf16_offset = anchor.to_offset_utf16(position_map.snapshot.buffer_snapshot());
         Some(utf16_offset.0.0)
     }
 

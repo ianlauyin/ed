@@ -1,7 +1,10 @@
 use std::borrow::Cow;
 
 use anyhow::Context as _;
-use language_core::{LanguageConfig, LanguageQueries, QueryFile, QueryFileContents};
+use language_core::LanguageConfig;
+use language_core::LanguageQueries;
+use language_core::QueryFile;
+use language_core::QueryFileContents;
 
 // Dev builds read the checkout's query files at runtime instead of embedding
 // them; see the `assets` crate for the rationale.
@@ -30,10 +33,7 @@ pub fn native_grammars() -> Vec<(&'static str, tree_sitter::Language)> {
         ("python", tree_sitter_python::LANGUAGE.into()),
         ("rust", tree_sitter_rust::LANGUAGE.into()),
         ("tsx", tree_sitter_typescript::LANGUAGE_TSX.into()),
-        (
-            "typescript",
-            tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into(),
-        ),
+        ("typescript", tree_sitter_typescript::LANGUAGE_TYPESCRIPT.into()),
         ("yaml", tree_sitter_yaml::LANGUAGE.into()),
     ]
 }
@@ -48,11 +48,9 @@ pub fn load_config(name: &str) -> LanguageConfig {
     )
     .unwrap();
 
-    let config = LanguageConfig::from_toml(&config_toml)
+    LanguageConfig::from_toml(&config_toml)
         .with_context(|| format!("failed to load config.toml for language {name:?}"))
-        .unwrap();
-
-    config
+        .unwrap()
 }
 
 /// Load and parse the `config.toml` for a given language name, stripping fields

@@ -1,9 +1,17 @@
 use std::sync::Arc;
 
-use crate::{Disclosure, DockSide, IconButtonShape, prelude::*};
-use component::{Component, ComponentScope, example_group_with_title, single_example};
-use gpui::{AnyElement, ClickEvent};
+use component::Component;
+use component::ComponentScope;
+use component::example_group_with_title;
+use component::single_example;
+use gpui::AnyElement;
+use gpui::ClickEvent;
 use theme::UiDensity;
+
+use crate::Disclosure;
+use crate::DockSide;
+use crate::IconButtonShape;
+use crate::prelude::*;
 
 #[derive(IntoElement, RegisterComponent)]
 pub struct ListHeader {
@@ -56,15 +64,12 @@ impl ListHeader {
     }
 
     /// Sets the shape of the disclosure button.
-    pub fn disclosure_shape(mut self, shape: IconButtonShape) -> Self {
+    pub const fn disclosure_shape(mut self, shape: IconButtonShape) -> Self {
         self.disclosure_shape = Some(shape);
         self
     }
 
-    pub fn on_toggle(
-        mut self,
-        on_toggle: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
+    pub fn on_toggle(mut self, on_toggle: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
         self.on_toggle = Some(Arc::new(on_toggle));
         self
     }
@@ -84,12 +89,12 @@ impl ListHeader {
         self
     }
 
-    pub fn inset(mut self, inset: bool) -> Self {
+    pub const fn inset(mut self, inset: bool) -> Self {
         self.inset = inset;
         self
     }
 
-    pub fn focused(mut self, focused: bool) -> Self {
+    pub const fn focused(mut self, focused: bool) -> Self {
         self.focused = Some(focused);
         self
     }
@@ -111,76 +116,57 @@ impl RenderOnce for ListHeader {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let ui_density = theme::theme_settings(cx).ui_density(cx);
 
-        h_flex()
-            .id(self.label.clone())
-            .w_full()
-            .relative()
-            .group("list_header")
-            .child(
-                div()
-                    .map(|this| match self.height {
-                        Some(height) => this.h(height),
-                        None => match ui_density {
-                            UiDensity::Comfortable => this.h_5(),
-                            _ => this.h_7(),
-                        },
-                    })
-                    .when(self.inset, |this| this.px_2())
-                    .when(self.selected, |this| {
-                        this.bg(cx.theme().colors().ghost_element_selected)
-                    })
-                    .when_some(self.focused, |this, focused| {
-                        this.border_1()
-                            .when_some(self.dock, |this, dock| match dock {
-                                DockSide::Left => this.border_l_2(),
-                                DockSide::Right => this.border_r_2(),
-                            })
-                            .when(focused, |this| {
-                                this.border_color(cx.theme().colors().border_focused)
-                            })
-                    })
-                    .flex()
-                    .flex_1()
-                    .items_center()
-                    .justify_between()
-                    .w_full()
-                    .gap(DynamicSpacing::Base04.rems(cx))
-                    .child(
-                        h_flex()
-                            .gap(DynamicSpacing::Base04.rems(cx))
-                            .children(self.toggle.map(|is_open| {
-                                Disclosure::new("toggle", is_open)
-                                    .when_some(self.disclosure_shape, |this, shape| {
-                                        this.shape(shape)
-                                    })
-                                    .on_toggle_expanded(self.on_toggle.clone())
-                            }))
-                            .child(
-                                div()
-                                    .id("label_container")
-                                    .flex()
-                                    .gap(DynamicSpacing::Base04.rems(cx))
-                                    .items_center()
-                                    .children(self.start_slot)
-                                    .child(Label::new(self.label.clone()).color(Color::Muted))
-                                    .when_some(self.on_toggle, |this, on_toggle| {
-                                        this.on_click(move |event, window, cx| {
-                                            on_toggle(event, window, cx)
-                                        })
-                                    }),
-                            ),
-                    )
-                    .child(h_flex().children(self.end_slot))
-                    .when_some(self.end_hover_slot, |this, end_hover_slot| {
-                        this.child(
+        h_flex().id(self.label.clone()).w_full().relative().group("list_header").child(
+            div()
+                .map(|this| match self.height {
+                    Some(height) => this.h(height),
+                    None => match ui_density {
+                        UiDensity::Comfortable => this.h_5(),
+                        _ => this.h_7(),
+                    },
+                })
+                .when(self.inset, |this| this.px_2())
+                .when(self.selected, |this| this.bg(cx.theme().colors().ghost_element_selected))
+                .when_some(self.focused, |this, focused| {
+                    this.border_1()
+                        .when_some(self.dock, |this, dock| match dock {
+                            DockSide::Left => this.border_l_2(),
+                            DockSide::Right => this.border_r_2(),
+                        })
+                        .when(focused, |this| this.border_color(cx.theme().colors().border_focused))
+                })
+                .flex()
+                .flex_1()
+                .items_center()
+                .justify_between()
+                .w_full()
+                .gap(DynamicSpacing::Base04.rems(cx))
+                .child(
+                    h_flex()
+                        .gap(DynamicSpacing::Base04.rems(cx))
+                        .children(self.toggle.map(|is_open| {
+                            Disclosure::new("toggle", is_open)
+                                .when_some(self.disclosure_shape, |this, shape| this.shape(shape))
+                                .on_toggle_expanded(self.on_toggle.clone())
+                        }))
+                        .child(
                             div()
-                                .absolute()
-                                .right_0()
-                                .visible_on_hover("list_header")
-                                .child(end_hover_slot),
-                        )
-                    }),
-            )
+                                .id("label_container")
+                                .flex()
+                                .gap(DynamicSpacing::Base04.rems(cx))
+                                .items_center()
+                                .children(self.start_slot)
+                                .child(Label::new(self.label.clone()).color(Color::Muted))
+                                .when_some(self.on_toggle, |this, on_toggle| {
+                                    this.on_click(move |event, window, cx| on_toggle(event, window, cx))
+                                }),
+                        ),
+                )
+                .child(h_flex().children(self.end_slot))
+                .when_some(self.end_hover_slot, |this, end_hover_slot| {
+                    this.child(div().absolute().right_0().visible_on_hover("list_header").child(end_hover_slot))
+                }),
+        )
     }
 }
 
@@ -201,21 +187,14 @@ impl Component for ListHeader {
                 example_group_with_title(
                     "Basic Headers",
                     vec![
-                        single_example(
-                            "Simple",
-                            ListHeader::new("Section Header").into_any_element(),
-                        ),
+                        single_example("Simple", ListHeader::new("Section Header").into_any_element()),
                         single_example(
                             "With Icon",
-                            ListHeader::new("Files")
-                                .start_slot(Icon::new(IconName::File))
-                                .into_any_element(),
+                            ListHeader::new("Files").start_slot(Icon::new(IconName::File)).into_any_element(),
                         ),
                         single_example(
                             "With End Slot",
-                            ListHeader::new("Recent")
-                                .end_slot(Label::new("5").color(Color::Muted))
-                                .into_any_element(),
+                            ListHeader::new("Recent").end_slot(Label::new("5").color(Color::Muted)).into_any_element(),
                         ),
                     ],
                 ),
@@ -224,15 +203,11 @@ impl Component for ListHeader {
                     vec![
                         single_example(
                             "Expanded",
-                            ListHeader::new("Expanded Section")
-                                .toggle(Some(true))
-                                .into_any_element(),
+                            ListHeader::new("Expanded Section").toggle(Some(true)).into_any_element(),
                         ),
                         single_example(
                             "Collapsed",
-                            ListHeader::new("Collapsed Section")
-                                .toggle(Some(false))
-                                .into_any_element(),
+                            ListHeader::new("Collapsed Section").toggle(Some(false)).into_any_element(),
                         ),
                     ],
                 ),
@@ -241,16 +216,9 @@ impl Component for ListHeader {
                     vec![
                         single_example(
                             "Selected",
-                            ListHeader::new("Selected Header")
-                                .toggle_state(true)
-                                .into_any_element(),
+                            ListHeader::new("Selected Header").toggle_state(true).into_any_element(),
                         ),
-                        single_example(
-                            "Inset",
-                            ListHeader::new("Inset Header")
-                                .inset(true)
-                                .into_any_element(),
-                        ),
+                        single_example("Inset", ListHeader::new("Inset Header").inset(true).into_any_element()),
                     ],
                 ),
             ])

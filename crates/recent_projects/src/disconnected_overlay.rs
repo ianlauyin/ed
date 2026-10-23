@@ -1,11 +1,24 @@
-use gpui::{ClickEvent, DismissEvent, EventEmitter, FocusHandle, Focusable, Render, WeakEntity};
+use gpui::ClickEvent;
+use gpui::DismissEvent;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::Render;
+use gpui::WeakEntity;
 use project::project_settings::ProjectSettings;
 use remote::RemoteConnectionOptions;
 use settings::Settings;
-use ui::{ElevationIndex, Modal, ModalFooter, ModalHeader, Section, prelude::*};
-use workspace::{
-    ModalView, MultiWorkspace, OpenOptions, Workspace, notifications::DetachAndPromptErr,
-};
+use ui::ElevationIndex;
+use ui::Modal;
+use ui::ModalFooter;
+use ui::ModalHeader;
+use ui::Section;
+use ui::prelude::*;
+use workspace::ModalView;
+use workspace::MultiWorkspace;
+use workspace::OpenOptions;
+use workspace::Workspace;
+use workspace::notifications::DetachAndPromptErr;
 
 use crate::open_remote_project;
 
@@ -24,11 +37,7 @@ impl Focusable for DisconnectedOverlay {
     }
 }
 impl ModalView for DisconnectedOverlay {
-    fn on_before_dismiss(
-        &mut self,
-        _window: &mut Window,
-        _: &mut Context<Self>,
-    ) -> workspace::DismissDecision {
+    fn on_before_dismiss(&mut self, _window: &mut Window, _: &mut Context<Self>) -> workspace::DismissDecision {
         workspace::DismissDecision::Dismiss(self.finished)
     }
     fn fade_out_background(&self) -> bool {
@@ -37,47 +46,30 @@ impl ModalView for DisconnectedOverlay {
 }
 
 impl DisconnectedOverlay {
-    pub fn register(
-        workspace: &mut Workspace,
-        window: Option<&mut Window>,
-        cx: &mut Context<Workspace>,
-    ) {
+    pub fn register(workspace: &mut Workspace, window: Option<&mut Window>, cx: &mut Context<Workspace>) {
         let Some(window) = window else {
             return;
         };
-        cx.subscribe_in(
-            workspace.project(),
-            window,
-            |workspace, project, event, window, cx| {
-                if !matches!(
-                    event,
-                    project::Event::DisconnectedFromHost
-                        | project::Event::DisconnectedFromRemote { .. }
-                ) {
-                    return;
-                }
-                let handle = cx.entity().downgrade();
+        cx.subscribe_in(workspace.project(), window, |workspace, project, event, window, cx| {
+            if !matches!(event, project::Event::DisconnectedFromHost | project::Event::DisconnectedFromRemote { .. }) {
+                return;
+            }
+            let handle = cx.entity().downgrade();
 
-                let Some(connection_options) = project.read(cx).remote_connection_options(cx)
-                else {
-                    return;
-                };
-                let server_not_running = matches!(
-                    event,
-                    project::Event::DisconnectedFromRemote {
-                        server_not_running: true
-                    }
-                );
+            let Some(connection_options) = project.read(cx).remote_connection_options(cx) else {
+                return;
+            };
+            let server_not_running =
+                matches!(event, project::Event::DisconnectedFromRemote { server_not_running: true });
 
-                workspace.toggle_modal(window, cx, |_, cx| DisconnectedOverlay {
-                    finished: false,
-                    workspace: handle,
-                    connection_options,
-                    server_not_running,
-                    focus_handle: cx.focus_handle(),
-                });
-            },
-        )
+            workspace.toggle_modal(window, cx, |_, cx| DisconnectedOverlay {
+                finished: false,
+                workspace: handle,
+                connection_options,
+                server_not_running,
+                focus_handle: cx.focus_handle(),
+            });
+        })
         .detach();
     }
 
@@ -91,8 +83,8 @@ impl DisconnectedOverlay {
     fn reconnect_to_remote_project(
         &self,
         connection_options: RemoteConnectionOptions,
-        window: &mut Window,
-        cx: &mut Context<Self>,
+        window: &Window,
+        cx: &Context<Self>,
     ) {
         let Some(workspace) = self.workspace.upgrade() else {
             return;
@@ -103,22 +95,14 @@ impl DisconnectedOverlay {
         };
 
         let app_state = workspace.read(cx).app_state().clone();
-        let paths = workspace
-            .read(cx)
-            .root_paths(cx)
-            .iter()
-            .map(|path| path.to_path_buf())
-            .collect();
+        let paths = workspace.read(cx).root_paths(cx).iter().map(|path| path.to_path_buf()).collect();
 
         cx.spawn_in(window, async move |_, cx| {
             open_remote_project(
                 connection_options,
                 paths,
                 app_state,
-                OpenOptions {
-                    requesting_window: Some(window_handle),
-                    ..Default::default()
-                },
+                OpenOptions { requesting_window: Some(window_handle), ..Default::default() },
                 cx,
             )
             .await?;
@@ -135,19 +119,12 @@ impl DisconnectedOverlay {
 
 impl Render for DisconnectedOverlay {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        let autosave = if ProjectSettings::get_global(cx)
-            .session
-            .restore_unsaved_buffers
-        {
+        let autosave = if ProjectSettings::get_global(cx).session.restore_unsaved_buffers {
             "\nUnsaved changes are stored locally."
         } else {
             ""
         };
-        let reason = if self.server_not_running {
-            "process exiting unexpectedly"
-        } else {
-            "not responding"
-        };
+        let reason = if self.server_not_running { "process exiting unexpectedly" } else { "not responding" };
         let message = format!(
             "Your connection to {} has been lost due to the server {reason}.{autosave}",
             self.connection_options.display_name(),

@@ -1,20 +1,54 @@
-use std::{
-    hash::{Hash, Hasher},
-    iter, mem,
-    ops::Range,
-};
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::iter;
+use std::mem;
+use std::ops::Range;
 
-use crate::{
-    AbsoluteLength, App, Background, BackgroundTag, BorderStyle, Bounds, ContentMask, Corners,
-    CornersRefinement, CursorStyle, DefiniteLength, DevicePixels, Edges, EdgesRefinement, Font,
-    FontFallbacks, FontFeatures, FontStyle, FontWeight, GridLocation, Hsla, Length, Pixels, Point,
-    PointRefinement, Rgba, SharedString, Size, SizeRefinement, Styled, TextRun, Window, black, phi,
-    point, px, quad, rems, size,
-};
 use collections::HashSet;
 use refineable::Refineable;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
+
+use crate::AbsoluteLength;
+use crate::App;
+use crate::Background;
+use crate::BackgroundTag;
+use crate::BorderStyle;
+use crate::Bounds;
+use crate::ContentMask;
+use crate::Corners;
+use crate::CornersRefinement;
+use crate::CursorStyle;
+use crate::DefiniteLength;
+use crate::DevicePixels;
+use crate::Edges;
+use crate::EdgesRefinement;
+use crate::Font;
+use crate::FontFallbacks;
+use crate::FontFeatures;
+use crate::FontStyle;
+use crate::FontWeight;
+use crate::GridLocation;
+use crate::Hsla;
+use crate::Length;
+use crate::Pixels;
+use crate::Point;
+use crate::PointRefinement;
+use crate::Rgba;
+use crate::SharedString;
+use crate::Size;
+use crate::SizeRefinement;
+use crate::Styled;
+use crate::TextRun;
+use crate::Window;
+use crate::black;
+use crate::phi;
+use crate::point;
+use crate::px;
+use crate::quad;
+use crate::rems;
+use crate::size;
 
 /// Use this struct for interfacing with the 'debug_below' styling from your own elements.
 /// If a parent element has this style set on it, then this struct will be set as a global in
@@ -41,11 +75,7 @@ pub enum ObjectFit {
 
 impl ObjectFit {
     /// Get the bounds of the image within the given bounds.
-    pub fn get_bounds(
-        &self,
-        bounds: Bounds<Pixels>,
-        image_size: Size<DevicePixels>,
-    ) -> Bounds<Pixels> {
+    pub fn get_bounds(&self, bounds: Bounds<Pixels>, image_size: Size<DevicePixels>) -> Bounds<Pixels> {
         let image_size = image_size.map(|dimension| Pixels::from(u32::from(dimension)));
         let image_ratio = image_size.width / image_size.height;
         let bounds_ratio = bounds.size.width / bounds.size.height;
@@ -54,15 +84,9 @@ impl ObjectFit {
             ObjectFit::Fill => bounds,
             ObjectFit::Contain => {
                 let new_size = if bounds_ratio > image_ratio {
-                    size(
-                        image_size.width * (bounds.size.height / image_size.height),
-                        bounds.size.height,
-                    )
+                    size(image_size.width * (bounds.size.height / image_size.height), bounds.size.height)
                 } else {
-                    size(
-                        bounds.size.width,
-                        image_size.height * (bounds.size.width / image_size.width),
-                    )
+                    size(bounds.size.width, image_size.height * (bounds.size.width / image_size.width))
                 };
 
                 Bounds {
@@ -78,15 +102,9 @@ impl ObjectFit {
                 if image_size.width > bounds.size.width || image_size.height > bounds.size.height {
                     // If the image is larger, use the same logic as Contain to scale it down.
                     let new_size = if bounds_ratio > image_ratio {
-                        size(
-                            image_size.width * (bounds.size.height / image_size.height),
-                            bounds.size.height,
-                        )
+                        size(image_size.width * (bounds.size.height / image_size.height), bounds.size.height)
                     } else {
-                        size(
-                            bounds.size.width,
-                            image_size.height * (bounds.size.width / image_size.width),
-                        )
+                        size(bounds.size.width, image_size.height * (bounds.size.width / image_size.width))
                     };
 
                     Bounds {
@@ -111,15 +129,9 @@ impl ObjectFit {
             }
             ObjectFit::Cover => {
                 let new_size = if bounds_ratio > image_ratio {
-                    size(
-                        bounds.size.width,
-                        image_size.height * (bounds.size.width / image_size.width),
-                    )
+                    size(bounds.size.width, image_size.height * (bounds.size.width / image_size.width))
                 } else {
-                    size(
-                        image_size.width * (bounds.size.height / image_size.height),
-                        bounds.size.height,
-                    )
+                    size(image_size.width * (bounds.size.height / image_size.height), bounds.size.height)
                 };
 
                 Bounds {
@@ -130,18 +142,13 @@ impl ObjectFit {
                     size: new_size,
                 }
             }
-            ObjectFit::None => Bounds {
-                origin: bounds.origin,
-                size: image_size,
-            },
+            ObjectFit::None => Bounds { origin: bounds.origin, size: image_size },
         }
     }
 }
 
 /// The minimum size of a column or row in a grid layout
-#[derive(
-    Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, JsonSchema, Serialize, Deserialize,
-)]
+#[derive(Copy, Clone, PartialEq, Eq, PartialOrd, Ord, Debug, Default, JsonSchema, Serialize, Deserialize)]
 pub enum GridTemplateMinSize {
     /// The column or row size may be 0
     #[default]
@@ -154,18 +161,7 @@ pub enum GridTemplateMinSize {
 
 /// A simplified representation of the grid-template-* value
 #[derive(
-    Copy,
-    Clone,
-    Refineable,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Debug,
-    Default,
-    JsonSchema,
-    Serialize,
-    Deserialize,
+    Copy, Clone, Refineable, PartialEq, Eq, PartialOrd, Ord, Debug, Default, JsonSchema, Serialize, Deserialize,
 )]
 pub struct GridTemplate {
     /// How this template directive should be repeated
@@ -363,30 +359,24 @@ impl BoxShadow {
     /// Creates a new [`BoxShadow`] with the given offset and color, matching the order
     /// of the CSS `box-shadow` property. Use the builder methods to set blur radius,
     /// spread radius, and inset.
-    pub fn new(offset_x: Pixels, offset_y: Pixels, color: Hsla) -> Self {
-        Self {
-            color,
-            offset: point(offset_x, offset_y),
-            blur_radius: px(0.),
-            spread_radius: px(0.),
-            inset: false,
-        }
+    pub const fn new(offset_x: Pixels, offset_y: Pixels, color: Hsla) -> Self {
+        Self { color, offset: point(offset_x, offset_y), blur_radius: px(0.), spread_radius: px(0.), inset: false }
     }
 
     /// Sets the shadow blur radius.
-    pub fn blur_radius(mut self, blur_radius: Pixels) -> Self {
+    pub const fn blur_radius(mut self, blur_radius: Pixels) -> Self {
         self.blur_radius = blur_radius;
         self
     }
 
     /// Sets the shadow spread radius.
-    pub fn spread_radius(mut self, spread_radius: Pixels) -> Self {
+    pub const fn spread_radius(mut self, spread_radius: Pixels) -> Self {
         self.spread_radius = spread_radius;
         self
     }
 
     /// Marks the shadow as inset (drawn inside the element's bounds).
-    pub fn inset(mut self) -> Self {
+    pub const fn inset(mut self) -> Self {
         self.inset = true;
         self
     }
@@ -610,71 +600,48 @@ impl Hash for HighlightStyle {
         self.background_color.hash(state);
         self.underline.hash(state);
         self.strikethrough.hash(state);
-        state.write_u32(u32::from_be_bytes(
-            self.fade_out.map(|f| f.to_be_bytes()).unwrap_or_default(),
-        ));
+        state.write_u32(u32::from_be_bytes(self.fade_out.map(|f| f.to_be_bytes()).unwrap_or_default()));
     }
 }
 
 impl Style {
     /// Returns true if the style is visible and the background is opaque.
     pub fn has_opaque_background(&self) -> bool {
-        self.background
-            .as_ref()
-            .is_some_and(|fill| fill.color().is_some_and(|color| !color.is_transparent()))
+        self.background.as_ref().is_some_and(|fill| fill.color().is_some_and(|color| !color.is_transparent()))
     }
 
     /// Get the text style in this element style.
     pub fn text_style(&self) -> Option<&TextStyleRefinement> {
-        if self.text.is_some() {
-            Some(&self.text)
-        } else {
-            None
-        }
+        if self.text.is_some() { Some(&self.text) } else { None }
     }
 
     /// Get the content mask for this element style, based on the given bounds.
     /// If the element does not hide its overflow, this will return `None`.
-    pub fn overflow_mask(
-        &self,
-        bounds: Bounds<Pixels>,
-        rem_size: Pixels,
-    ) -> Option<ContentMask<Pixels>> {
+    pub fn overflow_mask(&self, bounds: Bounds<Pixels>, rem_size: Pixels) -> Option<ContentMask<Pixels>> {
         match self.overflow {
-            Point {
-                x: Overflow::Visible,
-                y: Overflow::Visible,
-            } => None,
+            Point { x: Overflow::Visible, y: Overflow::Visible } => None,
             _ => {
                 let mut min = bounds.origin;
                 let mut max = bounds.bottom_right();
 
-                if self
-                    .border_color
-                    .is_some_and(|color| !color.is_transparent())
-                {
+                if self.border_color.is_some_and(|color| !color.is_transparent()) {
                     min.x += self.border_widths.left.to_pixels(rem_size);
                     max.x -= self.border_widths.right.to_pixels(rem_size);
                     min.y += self.border_widths.top.to_pixels(rem_size);
                     max.y -= self.border_widths.bottom.to_pixels(rem_size);
                 }
 
-                let bounds = match (
-                    self.overflow.x == Overflow::Visible,
-                    self.overflow.y == Overflow::Visible,
-                ) {
+                let bounds = match (self.overflow.x == Overflow::Visible, self.overflow.y == Overflow::Visible) {
                     // x and y both visible
                     (true, true) => return None,
                     // x visible, y hidden
-                    (true, false) => Bounds::from_corners(
-                        point(min.x, bounds.origin.y),
-                        point(max.x, bounds.bottom_right().y),
-                    ),
+                    (true, false) => {
+                        Bounds::from_corners(point(min.x, bounds.origin.y), point(max.x, bounds.bottom_right().y))
+                    }
                     // x hidden, y visible
-                    (false, true) => Bounds::from_corners(
-                        point(bounds.origin.x, min.y),
-                        point(bounds.bottom_right().x, max.y),
-                    ),
+                    (false, true) => {
+                        Bounds::from_corners(point(bounds.origin.x, min.y), point(bounds.bottom_right().x, max.y))
+                    }
                     // both hidden
                     (false, false) => Bounds::from_corners(min, max),
                 };
@@ -703,10 +670,7 @@ impl Style {
         }
 
         let rem_size = window.rem_size();
-        let corner_radii = self
-            .corner_radii
-            .to_pixels(rem_size)
-            .clamp_radii_for_quad_size(bounds.size);
+        let corner_radii = self.corner_radii.to_pixels(rem_size).clamp_radii_for_quad_size(bounds.size);
 
         window.paint_drop_shadows(bounds, corner_radii, &self.box_shadow);
 
@@ -714,15 +678,9 @@ impl Style {
         if background_color.is_some_and(|color| !color.is_transparent()) {
             let mut border_color = match background_color {
                 Some(color) => match color.tag {
-                    BackgroundTag::Solid
-                    | BackgroundTag::PatternSlash
-                    | BackgroundTag::Checkerboard => color.solid,
+                    BackgroundTag::Solid | BackgroundTag::PatternSlash | BackgroundTag::Checkerboard => color.solid,
 
-                    BackgroundTag::LinearGradient => color
-                        .colors
-                        .first()
-                        .map(|stop| stop.color)
-                        .unwrap_or_default(),
+                    BackgroundTag::LinearGradient => color.colors.first().map(|stop| stop.color).unwrap_or_default(),
                 },
                 None => Hsla::default(),
             };
@@ -762,8 +720,7 @@ impl Style {
     }
 
     fn is_border_visible(&self) -> bool {
-        self.border_color
-            .is_some_and(|color| !color.is_transparent())
+        self.border_color.is_some_and(|color| !color.is_transparent())
             && self.border_widths.any(|length| !length.is_zero())
     }
 }
@@ -773,10 +730,7 @@ impl Default for Style {
         Style {
             display: Display::Block,
             visibility: Visibility::Visible,
-            overflow: Point {
-                x: Overflow::Visible,
-                y: Overflow::Visible,
-            },
+            overflow: Point { x: Overflow::Visible, y: Overflow::Visible },
             allow_concurrent_scroll: false,
             restrict_scroll_to_axis: false,
             scrollbar_width: AbsoluteLength::default(),
@@ -822,9 +776,7 @@ impl Default for Style {
 }
 
 /// The properties that can be applied to an underline.
-#[derive(
-    Refineable, Copy, Clone, Default, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema,
-)]
+#[derive(Refineable, Copy, Clone, Default, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct UnderlineStyle {
     /// The thickness of the underline.
     pub thickness: Pixels,
@@ -837,9 +789,7 @@ pub struct UnderlineStyle {
 }
 
 /// The properties that can be applied to a strikethrough.
-#[derive(
-    Refineable, Copy, Clone, Default, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema,
-)]
+#[derive(Refineable, Copy, Clone, Default, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, JsonSchema)]
 pub struct StrikethroughStyle {
     /// The thickness of the strikethrough.
     pub thickness: Pixels,
@@ -859,7 +809,7 @@ impl Fill {
     /// Unwrap this fill into a solid color, if it is one.
     ///
     /// If the fill is not a solid color, this method returns `None`.
-    pub fn color(&self) -> Option<Background> {
+    pub const fn color(&self) -> Option<Background> {
         match self {
             Fill::Color(color) => Some(*color),
         }
@@ -913,10 +863,7 @@ impl From<&TextStyle> for HighlightStyle {
 impl HighlightStyle {
     /// Create a highlight style with just a color
     pub fn color(color: Hsla) -> Self {
-        Self {
-            color: Some(color),
-            ..Default::default()
-        }
+        Self { color: Some(color), ..Default::default() }
     }
     /// Blend this highlight style with another.
     /// Non-continuous properties, like font_weight and font_style, are overwritten.
@@ -925,13 +872,7 @@ impl HighlightStyle {
         Self {
             color: other
                 .color
-                .map(|other_color| {
-                    if let Some(color) = self.color {
-                        color.blend(other_color)
-                    } else {
-                        other_color
-                    }
-                })
+                .map(|other_color| if let Some(color) = self.color { color.blend(other_color) } else { other_color })
                 .or(self.color),
             font_weight: other.font_weight.or(self.font_weight),
             font_style: other.font_style.or(self.font_style),
@@ -941,9 +882,7 @@ impl HighlightStyle {
             fade_out: other
                 .fade_out
                 .map(|source_fade| {
-                    self.fade_out
-                        .map(|dest_fade| (dest_fade * (1. + source_fade)).clamp(0., 1.))
-                        .unwrap_or(source_fade)
+                    self.fade_out.map(|dest_fade| (dest_fade * (1. + source_fade)).clamp(0., 1.)).unwrap_or(source_fade)
                 })
                 .or(self.fade_out),
         }
@@ -952,37 +891,25 @@ impl HighlightStyle {
 
 impl From<Hsla> for HighlightStyle {
     fn from(color: Hsla) -> Self {
-        Self {
-            color: Some(color),
-            ..Default::default()
-        }
+        Self { color: Some(color), ..Default::default() }
     }
 }
 
 impl From<FontWeight> for HighlightStyle {
     fn from(font_weight: FontWeight) -> Self {
-        Self {
-            font_weight: Some(font_weight),
-            ..Default::default()
-        }
+        Self { font_weight: Some(font_weight), ..Default::default() }
     }
 }
 
 impl From<FontStyle> for HighlightStyle {
     fn from(font_style: FontStyle) -> Self {
-        Self {
-            font_style: Some(font_style),
-            ..Default::default()
-        }
+        Self { font_style: Some(font_style), ..Default::default() }
     }
 }
 
 impl From<Rgba> for HighlightStyle {
     fn from(color: Rgba) -> Self {
-        Self {
-            color: Some(color.into()),
-            ..Default::default()
-        }
+        Self { color: Some(color.into()), ..Default::default() }
     }
 }
 
@@ -1012,9 +939,7 @@ pub fn combine_highlights(
             if ix > prev_index && !active_styles.is_empty() {
                 let current_style = active_styles
                     .iter()
-                    .fold(HighlightStyle::default(), |acc, highlight_id| {
-                        acc.highlight(highlights[*highlight_id])
-                    });
+                    .fold(HighlightStyle::default(), |acc, highlight_id| acc.highlight(highlights[*highlight_id]));
                 return Some((prev_index..ix, current_style));
             }
 

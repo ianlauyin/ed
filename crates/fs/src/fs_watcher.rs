@@ -1,18 +1,28 @@
-use futures::{Stream, StreamExt as _};
-use gpui::{BackgroundExecutor, Task};
-use notify::{Event, EventKind};
-use parking_lot::Mutex;
-use std::{
-    collections::{HashMap, VecDeque},
-    ops::DerefMut,
-    path::{Path, PathBuf},
-    pin::Pin,
-    sync::{Arc, LazyLock},
-    time::{Duration, Instant},
-};
-use util::{ResultExt, paths::SanitizedPath};
+use std::collections::HashMap;
+use std::collections::VecDeque;
+use std::ops::DerefMut;
+use std::path::Path;
+use std::path::PathBuf;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::LazyLock;
+use std::time::Duration;
+use std::time::Instant;
 
-use crate::{Fs, PathEvent, PathEventKind, Watcher};
+use futures::Stream;
+use futures::StreamExt as _;
+use gpui::BackgroundExecutor;
+use gpui::Task;
+use notify::Event;
+use notify::EventKind;
+use parking_lot::Mutex;
+use util::ResultExt;
+use util::paths::SanitizedPath;
+
+use crate::Fs;
+use crate::PathEvent;
+use crate::PathEventKind;
+use crate::Watcher;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum OsWatcherKind {
@@ -35,28 +45,19 @@ pub(crate) async fn watch(
     executor: BackgroundExecutor,
     path: &Path,
     latency: Duration,
-) -> (
-    Pin<Box<dyn Send + Stream<Item = Vec<PathEvent>>>>,
-    Arc<dyn Watcher>,
-) {
+) -> (Pin<Box<dyn Send + Stream<Item = Vec<PathEvent>>>>, Arc<dyn Watcher>) {
     let (tx, rx) = async_channel::unbounded();
     let pending_paths: Arc<Mutex<Vec<PathEvent>>> = Default::default();
 
-    let watcher: Arc<dyn Watcher> = Arc::new(FsWatcher::new(
-        native_watcher,
-        poll_watcher,
-        fs.clone(),
-        executor.clone(),
-        tx,
-        pending_paths.clone(),
-    ));
+    let watcher: Arc<dyn Watcher> =
+        Arc::new(FsWatcher::new(native_watcher, poll_watcher, fs.clone(), executor.clone(), tx, pending_paths.clone()));
 
     if let Err(e) = watcher.add(path) {
         log::warn!("Failed to watch {}:\n{e}", path.display());
     }
 
     // Check if path is a symlink and follow the target parent
-    if let Some(mut target) = fs.read_link(path).await.ok() {
+    if let Ok(mut target) = fs.read_link(path).await {
         log::trace!("watch symlink {path:?} -> {target:?}");
         // Check if symlink target is relative path, if so make it absolute
         if target.is_relative()
@@ -213,19 +214,12 @@ impl Watcher for FsWatcher {
         log::trace!("watcher add: {path:?}");
 
         let path: Arc<Path> = path.into();
-        if path_covered_by_recursive_registration(
-            &self.registrations.lock(),
-            SanitizedPath::new(&path),
-        ) {
+        if path_covered_by_recursive_registration(&self.registrations.lock(), SanitizedPath::new(&path)) {
             log::trace!("path to watch is covered by an existing registration: {path:?}");
             return Ok(());
         }
 
-        if self
-            .pending_registrations
-            .lock()
-            .contains_key(path.as_ref())
-        {
+        if self.pending_registrations.lock().contains_key(path.as_ref()) {
             log::trace!("path to watch is already pending: {path:?}");
             return Ok(());
         }
@@ -267,11 +261,7 @@ fn path_covered_by_recursive_registration(
         let ancestor = SanitizedPath::unchecked_new(ancestor);
         [WatchKey::exact(ancestor), WatchKey::folded(ancestor)]
             .iter()
-            .any(|key| {
-                registrations
-                    .get(key)
-                    .is_some_and(|registration| registration.os_watcher.is_recursive())
-            })
+            .any(|key| registrations.get(key).is_some_and(|registration| registration.os_watcher.is_recursive()))
     })
 }
 
@@ -285,10 +275,7 @@ fn path_covered_by_recursive_registration(
 /// - `poll` — always use polling
 /// - `auto` (default) — auto-detect based on filesystem type
 pub fn requires_poll_watcher(path: &Path) -> bool {
-    match std::env::var("ZED_FILE_WATCHER_MODE")
-        .as_deref()
-        .unwrap_or("auto")
-    {
+    match std::env::var("ZED_FILE_WATCHER_MODE").as_deref().unwrap_or("auto") {
         "native" => return false,
         "poll" => return true,
         _ => {}
@@ -315,11 +302,7 @@ fn register_existing_path(
     pending_path_events: Arc<Mutex<Vec<PathEvent>>>,
 ) -> anyhow::Result<Option<FsWatcherRegistration>> {
     let os_watcher = if fs.requires_poll_watcher(path.as_ref()) {
-        log::info!(
-            "Using poll watcher ({}ms interval) for {}",
-            poll_interval().as_millis(),
-            path.display()
-        );
+        log::info!("Using poll watcher ({}ms interval) for {}", poll_interval().as_millis(), path.display());
 
         poll_watcher
     } else {
@@ -327,25 +310,14 @@ fn register_existing_path(
     };
     let root_path = SanitizedPath::new_arc(path.as_ref());
     let path_for_callback = path.clone();
-    let Some(registration_id) =
-        os_watcher.add(path, case_insensitive, move |event: &notify::Event| {
-            log::trace!("watcher received event: {event:?}");
-            push_notify_event(
-                &tx,
-                &pending_path_events,
-                &root_path,
-                case_insensitive,
-                path_for_callback.as_ref(),
-                event,
-            );
-        })?
+    let Some(registration_id) = os_watcher.add(path, case_insensitive, move |event: &notify::Event| {
+        log::trace!("watcher received event: {event:?}");
+        push_notify_event(&tx, &pending_path_events, &root_path, case_insensitive, path_for_callback.as_ref(), event);
+    })?
     else {
         return Ok(None);
     };
-    Ok(Some(FsWatcherRegistration {
-        id: registration_id,
-        os_watcher: os_watcher.clone(),
-    }))
+    Ok(Some(FsWatcherRegistration { id: registration_id, os_watcher: os_watcher.clone() }))
 }
 
 /// Whether the volume backing `path` does case-insensitive name lookups, used to
@@ -421,11 +393,7 @@ impl WatchKey {
     }
 
     fn for_registration(path: &SanitizedPath, case_insensitive: bool) -> Self {
-        if case_insensitive {
-            Self::folded(path)
-        } else {
-            Self::exact(path)
-        }
+        if case_insensitive { Self::folded(path) } else { Self::exact(path) }
     }
 }
 
@@ -489,11 +457,7 @@ async fn poll_path_until_created(
                 )
             }
         };
-        let registration = if fs.is_fake() {
-            register()
-        } else {
-            smol::unblock(register).await
-        };
+        let registration = if fs.is_fake() { register() } else { smol::unblock(register).await };
 
         match registration {
             Ok(Some(registration)) => {
@@ -509,14 +473,8 @@ async fn poll_path_until_created(
                     &tx,
                     &pending_path_events,
                     vec![
-                        PathEvent {
-                            path: path.to_path_buf(),
-                            kind: Some(PathEventKind::Created),
-                        },
-                        PathEvent {
-                            path: path.to_path_buf(),
-                            kind: Some(PathEventKind::Rescan),
-                        },
+                        PathEvent { path: path.to_path_buf(), kind: Some(PathEventKind::Created) },
+                        PathEvent { path: path.to_path_buf(), kind: Some(PathEventKind::Rescan) },
                     ],
                 );
                 return;
@@ -544,9 +502,7 @@ fn enqueue_path_events(
         tx.try_send(()).ok();
     }
     coalesce_pending_rescans(&mut pending_paths, &mut path_events);
-    util::extend_sorted(&mut *pending_paths, path_events, usize::MAX, |a, b| {
-        a.path.cmp(&b.path)
-    });
+    util::extend_sorted(&mut *pending_paths, path_events, usize::MAX, |a, b| a.path.cmp(&b.path));
 }
 
 fn push_notify_event(
@@ -568,10 +524,8 @@ fn push_notify_event(
         .iter()
         .filter_map(|event_path| {
             let event_path = SanitizedPath::new(event_path);
-            path_is_under(event_path, root_path, case_insensitive).then(|| PathEvent {
-                path: event_path.as_path().to_path_buf(),
-                kind,
-            })
+            path_is_under(event_path, root_path, case_insensitive)
+                .then(|| PathEvent { path: event_path.as_path().to_path_buf(), kind })
         })
         .collect::<Vec<_>>();
 
@@ -580,10 +534,7 @@ fn push_notify_event(
         // `MustScanSubDirs`); only a pathless one (inotify queue overflow) means
         // the whole watched root is suspect.
         if path_events.is_empty() {
-            path_events.push(PathEvent {
-                path: watched_root.to_path_buf(),
-                kind: Some(PathEventKind::Rescan),
-            });
+            path_events.push(PathEvent { path: watched_root.to_path_buf(), kind: Some(PathEventKind::Rescan) });
         } else {
             for path_event in &mut path_events {
                 path_event.kind = Some(PathEventKind::Rescan);
@@ -595,49 +546,35 @@ fn push_notify_event(
 }
 
 fn coalesce_pending_rescans(pending_paths: &mut Vec<PathEvent>, path_events: &mut Vec<PathEvent>) {
-    if !path_events
-        .iter()
-        .any(|event| event.kind == Some(PathEventKind::Rescan))
-    {
+    if !path_events.iter().any(|event| event.kind == Some(PathEventKind::Rescan)) {
         return;
     }
 
-    let mut new_rescan_paths: Vec<std::path::PathBuf> = path_events
-        .iter()
-        .filter(|e| e.kind == Some(PathEventKind::Rescan))
-        .map(|e| e.path.clone())
-        .collect();
+    let mut new_rescan_paths: Vec<std::path::PathBuf> =
+        path_events.iter().filter(|e| e.kind == Some(PathEventKind::Rescan)).map(|e| e.path.clone()).collect();
     new_rescan_paths.sort_unstable();
 
     let mut deduped_rescans: Vec<std::path::PathBuf> = Vec::with_capacity(new_rescan_paths.len());
     for path in new_rescan_paths {
-        if deduped_rescans
-            .iter()
-            .any(|ancestor| path != *ancestor && path.starts_with(ancestor))
-        {
+        if deduped_rescans.iter().any(|ancestor| path != *ancestor && path.starts_with(ancestor)) {
             continue;
         }
         deduped_rescans.push(path);
     }
 
     deduped_rescans.retain(|new_path| {
-        !pending_paths
-            .iter()
-            .any(|pending| is_covered_rescan(pending.kind, new_path, &pending.path))
+        !pending_paths.iter().any(|pending| is_covered_rescan(pending.kind, new_path, &pending.path))
     });
 
     if !deduped_rescans.is_empty() {
         pending_paths.retain(|pending| {
             !deduped_rescans.iter().any(|rescan_path| {
-                pending.path == *rescan_path
-                    || is_covered_rescan(pending.kind, &pending.path, rescan_path)
+                pending.path == *rescan_path || is_covered_rescan(pending.kind, &pending.path, rescan_path)
             })
         });
     }
 
-    path_events.retain(|event| {
-        event.kind != Some(PathEventKind::Rescan) || deduped_rescans.contains(&event.path)
-    });
+    path_events.retain(|event| event.kind != Some(PathEventKind::Rescan) || deduped_rescans.contains(&event.path));
 }
 
 fn is_covered_rescan(kind: Option<PathEventKind>, path: &Path, ancestor: &Path) -> bool {
@@ -673,10 +610,7 @@ impl WatchPaths {
         self.0.get_mut(key)
     }
 
-    fn entry(
-        &mut self,
-        key: WatchKey,
-    ) -> std::collections::hash_map::Entry<'_, WatchKey, PathRegistrationState> {
+    fn entry(&mut self, key: WatchKey) -> std::collections::hash_map::Entry<'_, WatchKey, PathRegistrationState> {
         self.0.entry(key)
     }
 
@@ -692,8 +626,7 @@ impl WatchPaths {
         }
         path.as_path().ancestors().skip(1).any(|ancestor| {
             let ancestor = SanitizedPath::unchecked_new(ancestor);
-            self.0.contains_key(&WatchKey::exact(ancestor))
-                || self.0.contains_key(&WatchKey::folded(ancestor))
+            self.0.contains_key(&WatchKey::exact(ancestor)) || self.0.contains_key(&WatchKey::folded(ancestor))
         })
     }
 
@@ -722,8 +655,7 @@ struct WatcherState {
 
 impl WatcherState {
     fn is_native_watch_limit_cooldown_active(&self) -> bool {
-        self.cooldown_until
-            .is_some_and(|cooldown_until| cooldown_until > Instant::now())
+        self.cooldown_until.is_some_and(|cooldown_until| cooldown_until > Instant::now())
     }
 
     fn start_native_watch_limit_cooldown(&mut self, path: &Path) {
@@ -825,20 +757,17 @@ impl OsWatcher {
 
     /// The callback a substitute backend uses to report events, standing
     /// in for the `EventHandler` notify would have been constructed with.
-    pub(crate) fn event_sink(
-        &self,
-    ) -> impl Fn(notify::Result<notify::Event>) + Send + Sync + 'static {
+    pub(crate) fn event_sink(&self) -> impl Fn(notify::Result<notify::Event>) + Send + Sync + 'static {
         let event_tx = self.event_tx.clone();
         move |event| {
             enqueue(&event_tx, event);
         }
     }
 
-    pub(crate) fn is_recursive(&self) -> bool {
+    pub(crate) const fn is_recursive(&self) -> bool {
         self.recursive
     }
 
-    #[must_use]
     fn add(
         &self,
         path: Arc<std::path::Path>,
@@ -848,9 +777,7 @@ impl OsWatcher {
         let path = SanitizedPath::from_arc(path);
         let key = WatchKey::for_registration(&path, case_insensitive);
         let mut state = self.state.lock();
-        let path_already_covered = state
-            .paths
-            .covered_by_recursive_ancestor(&path, self.recursive);
+        let path_already_covered = state.paths.covered_by_recursive_ancestor(&path, self.recursive);
         let path_already_registered = state.paths.contains(&key);
 
         if path_already_registered {
@@ -862,9 +789,7 @@ impl OsWatcher {
 
             match self.watch(path.as_path()) {
                 Ok(()) => {}
-                Err(error)
-                    if self.kind == OsWatcherKind::Native && is_max_files_watch_error(&error) =>
-                {
+                Err(error) if self.kind == OsWatcherKind::Native && is_max_files_watch_error(&error) => {
                     state.start_native_watch_limit_cooldown(path.as_path());
                     return Ok(None);
                 }
@@ -875,31 +800,16 @@ impl OsWatcher {
         let id = state.last_registration;
         state.last_registration = WatcherRegistrationId(id.0 + 1);
 
-        let registration_state = WatcherRegistrationState {
-            callback: Arc::new(cb),
-            key: key.clone(),
-            path,
-        };
+        let registration_state = WatcherRegistrationState { callback: Arc::new(cb), key: key.clone(), path };
         state.watchers.insert(id, registration_state);
-        state
-            .paths
-            .entry(key)
-            .and_modify(|registration| registration.watcher_ids.push(id))
-            .or_insert_with(|| PathRegistrationState {
-                watcher_ids: vec![id],
-                has_os_watcher: !path_already_covered,
-                stale: false,
-            });
+        state.paths.entry(key).and_modify(|registration| registration.watcher_ids.push(id)).or_insert_with(|| {
+            PathRegistrationState { watcher_ids: vec![id], has_os_watcher: !path_already_covered, stale: false }
+        });
 
         Ok(Some(id))
     }
 
-    fn rewatch_if_stale(
-        &self,
-        state: &mut WatcherState,
-        path: &SanitizedPath,
-        key: &WatchKey,
-    ) -> anyhow::Result<()> {
+    fn rewatch_if_stale(&self, state: &mut WatcherState, path: &SanitizedPath, key: &WatchKey) -> anyhow::Result<()> {
         let Some(path_state) = state.paths.get_mut(key) else {
             return Ok(());
         };
@@ -926,35 +836,21 @@ impl OsWatcher {
 
     fn watch(&self, path: &Path) -> anyhow::Result<()> {
         self.ensure_backend()?;
-        self.backend
-            .lock()
-            .as_mut()
-            .expect("watcher backend initialized")
-            .watch(
-                path,
-                if self.recursive {
-                    notify::RecursiveMode::Recursive
-                } else {
-                    notify::RecursiveMode::NonRecursive
-                },
-            )?;
+        self.backend.lock().as_mut().expect("watcher backend initialized").watch(
+            path,
+            if self.recursive { notify::RecursiveMode::Recursive } else { notify::RecursiveMode::NonRecursive },
+        )?;
         Ok(())
     }
 
     fn unwatch(&self, path: &Path) -> anyhow::Result<()> {
-        let watcher = self
-            .backend
-            .lock()
-            .as_mut()
-            .map(|watcher| watcher.unwatch(path));
+        let watcher = self.backend.lock().as_mut().map(|watcher| watcher.unwatch(path));
 
         match watcher {
             // inotify auto-removes a watch when its directory is deleted, so a
             // later unwatch races that and fails with a benign error. Either way
             // the path is no longer watched, which is all we wanted.
-            Some(Err(error)) if !matches!(error.kind, notify::ErrorKind::WatchNotFound) => {
-                Err(error.into())
-            }
+            Some(Err(error)) if !matches!(error.kind, notify::ErrorKind::WatchNotFound) => Err(error.into()),
             _ => Ok(()),
         }
     }
@@ -973,12 +869,8 @@ impl OsWatcher {
                     // file read in a watched directory would queue events, increasing the
                     // risk of queue overflows (and thus full rescans) under read-heavy
                     // workloads like grep or language server indexing.
-                    let config =
-                        notify::Config::default().with_event_kinds(notify::EventKindMask::CORE);
-                    Box::new(<notify::RecommendedWatcher as notify::Watcher>::new(
-                        self.event_sink(),
-                        config,
-                    )?)
+                    let config = notify::Config::default().with_event_kinds(notify::EventKindMask::CORE);
+                    Box::new(<notify::RecommendedWatcher as notify::Watcher>::new(self.event_sink(), config)?)
                 }
                 OsWatcherKind::Poll => {
                     let config = notify::Config::default().with_poll_interval(*POLL_INTERVAL);
@@ -990,11 +882,7 @@ impl OsWatcher {
     }
 }
 
-fn dispatch(
-    kind: OsWatcherKind,
-    state: &Mutex<WatcherState>,
-    event: notify::Result<notify::Event>,
-) {
+fn dispatch(kind: OsWatcherKind, state: &Mutex<WatcherState>, event: notify::Result<notify::Event>) {
     let event = match event {
         Ok(event) => event,
         Err(error) => {
@@ -1014,10 +902,7 @@ fn dispatch(
                 path_state.stale = true;
             }
         } else if !kind.is_recursive()
-            && matches!(
-                event.kind,
-                EventKind::Remove(_) | EventKind::Modify(notify::event::ModifyKind::Name(_))
-            )
+            && matches!(event.kind, EventKind::Remove(_) | EventKind::Modify(notify::event::ModifyKind::Name(_)))
         {
             for path in &event.paths {
                 let path = SanitizedPath::new(path);
@@ -1032,9 +917,7 @@ fn dispatch(
                     // Descendant watches follow the directory without their own rename events.
                     for (key, path_state) in &mut state.paths.0 {
                         let descendant = match (key, &event_key) {
-                            (WatchKey::Exact(key), WatchKey::Exact(event_key)) => {
-                                key.starts_with(event_key)
-                            }
+                            (WatchKey::Exact(key), WatchKey::Exact(event_key)) => key.starts_with(event_key),
                             (WatchKey::Folded(key), WatchKey::Folded(event_key)) => {
                                 Path::new(key.as_ref()).starts_with(Path::new(event_key.as_ref()))
                             }
@@ -1048,11 +931,7 @@ fn dispatch(
             }
         }
         if event.need_rescan() {
-            state
-                .watchers
-                .values()
-                .map(|registration| registration.callback.clone())
-                .collect::<Vec<_>>()
+            state.watchers.values().map(|registration| registration.callback.clone()).collect::<Vec<_>>()
         } else {
             let mut ids = Vec::new();
             for path in &event.paths {
@@ -1092,10 +971,7 @@ impl RescanHistory {
                 self.paths,
             )
         });
-        let first_path = event
-            .paths
-            .len()
-            .saturating_sub(RESCAN_PATH_HISTORY_CAPACITY);
+        let first_path = event.paths.len().saturating_sub(RESCAN_PATH_HISTORY_CAPACITY);
         for path in event.paths.iter().skip(first_path) {
             if self.paths.len() == RESCAN_PATH_HISTORY_CAPACITY {
                 self.paths.pop_front();
@@ -1120,10 +996,7 @@ fn dispatch_batch(
     let mut rescan_dispatched = false;
 
     for event in std::iter::once(first).chain(std::iter::from_fn(|| event_rx.try_recv().ok())) {
-        if event
-            .as_ref()
-            .is_ok_and(|event| event.need_rescan() && event.paths.is_empty())
-        {
+        if event.as_ref().is_ok_and(|event| event.need_rescan() && event.paths.is_empty()) {
             if rescan_dispatched {
                 continue;
             }
@@ -1140,17 +1013,8 @@ fn dispatch_batch(
     }
 }
 
-fn enqueue(
-    event_tx: &async_channel::Sender<notify::Result<notify::Event>>,
-    event: notify::Result<notify::Event>,
-) {
-    if matches!(
-        event,
-        Ok(Event {
-            kind: EventKind::Access(_),
-            ..
-        })
-    ) {
+fn enqueue(event_tx: &async_channel::Sender<notify::Result<notify::Event>>, event: notify::Result<notify::Event>) {
+    if matches!(event, Ok(Event { kind: EventKind::Access(_), .. })) {
         return;
     }
 
@@ -1160,9 +1024,7 @@ fn enqueue(
 }
 
 fn is_max_files_watch_error(error: &anyhow::Error) -> bool {
-    error
-        .downcast_ref::<notify::Error>()
-        .is_some_and(|error| matches!(&error.kind, notify::ErrorKind::MaxFilesWatch))
+    error.downcast_ref::<notify::Error>().is_some_and(|error| matches!(&error.kind, notify::ErrorKind::MaxFilesWatch))
 }
 
 static POLL_INTERVAL: LazyLock<Duration> = LazyLock::new(|| {
@@ -1253,14 +1115,9 @@ fn is_virtiofs(path: &Path) -> bool {
             continue;
         };
 
-        let mount_point = mount_point
-            .replace("\\040", " ")
-            .replace("\\011", "\t")
-            .replace("\\012", "\n")
-            .replace("\\134", "\\");
-        if path.starts_with(&mount_point)
-            && best_mount.is_none_or(|(length, _)| mount_point.len() > length)
-        {
+        let mount_point =
+            mount_point.replace("\\040", " ").replace("\\011", "\t").replace("\\012", "\n").replace("\\134", "\\");
+        if path.starts_with(&mount_point) && best_mount.is_none_or(|(length, _)| mount_point.len() > length) {
             best_mount = Some((mount_point.len(), *fs_type));
         }
     }

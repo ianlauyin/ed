@@ -1,9 +1,19 @@
-use crate::{
-    BufferId, BufferSnapshot, Point, PointUtf16, TextDimension, ToOffset, ToPoint, ToPointUtf16,
-    locator::Locator,
-};
-use std::{cmp::Ordering, fmt::Debug, ops::Range};
-use sum_tree::{Bias, Dimensions};
+use std::cmp::Ordering;
+use std::fmt::Debug;
+use std::ops::Range;
+
+use sum_tree::Bias;
+use sum_tree::Dimensions;
+
+use crate::BufferId;
+use crate::BufferSnapshot;
+use crate::Point;
+use crate::PointUtf16;
+use crate::TextDimension;
+use crate::ToOffset;
+use crate::ToPoint;
+use crate::ToPointUtf16;
+use crate::locator::Locator;
 
 /// A timestamped position in a buffer.
 #[doc(alias = "TextAnchor")]
@@ -46,17 +56,11 @@ impl Debug for Anchor {
 }
 
 impl Anchor {
-    pub fn new(timestamp: clock::Lamport, offset: u32, bias: Bias, buffer_id: BufferId) -> Self {
-        Self {
-            timestamp_replica_id: timestamp.replica_id,
-            timestamp_value: timestamp.value,
-            offset,
-            bias,
-            buffer_id,
-        }
+    pub const fn new(timestamp: clock::Lamport, offset: u32, bias: Bias, buffer_id: BufferId) -> Self {
+        Self { timestamp_replica_id: timestamp.replica_id, timestamp_value: timestamp.value, offset, bias, buffer_id }
     }
 
-    pub fn min_for_buffer(buffer_id: BufferId) -> Self {
+    pub const fn min_for_buffer(buffer_id: BufferId) -> Self {
         Self {
             timestamp_replica_id: clock::Lamport::MIN.replica_id,
             timestamp_value: clock::Lamport::MIN.value,
@@ -66,7 +70,7 @@ impl Anchor {
         }
     }
 
-    pub fn max_for_buffer(buffer_id: BufferId) -> Self {
+    pub const fn max_for_buffer(buffer_id: BufferId) -> Self {
         Self {
             timestamp_replica_id: clock::Lamport::MAX.replica_id,
             timestamp_value: clock::Lamport::MAX.value,
@@ -76,15 +80,15 @@ impl Anchor {
         }
     }
 
-    pub fn min_min_range_for_buffer(buffer_id: BufferId) -> std::ops::Range<Self> {
+    pub const fn min_min_range_for_buffer(buffer_id: BufferId) -> std::ops::Range<Self> {
         let min = Self::min_for_buffer(buffer_id);
         min..min
     }
-    pub fn max_max_range_for_buffer(buffer_id: BufferId) -> std::ops::Range<Self> {
+    pub const fn max_max_range_for_buffer(buffer_id: BufferId) -> std::ops::Range<Self> {
         let max = Self::max_for_buffer(buffer_id);
         max..max
     }
-    pub fn min_max_range_for_buffer(buffer_id: BufferId) -> std::ops::Range<Self> {
+    pub const fn min_max_range_for_buffer(buffer_id: BufferId) -> std::ops::Range<Self> {
         Self::min_for_buffer(buffer_id)..Self::max_for_buffer(buffer_id)
     }
 
@@ -92,30 +96,18 @@ impl Anchor {
         let fragment_id_comparison = if self.timestamp() == other.timestamp() {
             Ordering::Equal
         } else {
-            buffer
-                .fragment_id_for_anchor(self)
-                .cmp(buffer.fragment_id_for_anchor(other))
+            buffer.fragment_id_for_anchor(self).cmp(buffer.fragment_id_for_anchor(other))
         };
 
-        fragment_id_comparison
-            .then_with(|| self.offset.cmp(&other.offset))
-            .then_with(|| self.bias.cmp(&other.bias))
+        fragment_id_comparison.then_with(|| self.offset.cmp(&other.offset)).then_with(|| self.bias.cmp(&other.bias))
     }
 
     pub fn min<'a>(&'a self, other: &'a Self, buffer: &BufferSnapshot) -> &'a Self {
-        if self.cmp(other, buffer).is_le() {
-            self
-        } else {
-            other
-        }
+        if self.cmp(other, buffer).is_le() { self } else { other }
     }
 
     pub fn max<'a>(&'a self, other: &'a Self, buffer: &BufferSnapshot) -> &'a Self {
-        if self.cmp(other, buffer).is_ge() {
-            self
-        } else {
-            other
-        }
+        if self.cmp(other, buffer).is_ge() { self } else { other }
     }
 
     pub fn bias(&self, bias: Bias, buffer: &BufferSnapshot) -> Anchor {
@@ -156,35 +148,23 @@ impl Anchor {
             let Some(fragment_id) = buffer.try_fragment_id_for_anchor(self) else {
                 return false;
             };
-            let (.., item) = buffer
-                .fragments
-                .find::<Dimensions<Option<&Locator>, usize>, _>(
-                    &None,
-                    &Some(fragment_id),
-                    Bias::Left,
-                );
+            let (.., item) =
+                buffer.fragments.find::<Dimensions<Option<&Locator>, usize>, _>(&None, &Some(fragment_id), Bias::Left);
             item.is_some_and(|fragment| fragment.visible)
         }
     }
 
     pub fn is_min(&self) -> bool {
-        self.timestamp() == clock::Lamport::MIN
-            && self.offset == u32::MIN
-            && self.bias == Bias::Left
+        self.timestamp() == clock::Lamport::MIN && self.offset == u32::MIN && self.bias == Bias::Left
     }
 
     pub fn is_max(&self) -> bool {
-        self.timestamp() == clock::Lamport::MAX
-            && self.offset == u32::MAX
-            && self.bias == Bias::Right
+        self.timestamp() == clock::Lamport::MAX && self.offset == u32::MAX && self.bias == Bias::Right
     }
 
     #[inline]
-    pub fn timestamp(&self) -> clock::Lamport {
-        clock::Lamport {
-            replica_id: self.timestamp_replica_id,
-            value: self.timestamp_value,
-        }
+    pub const fn timestamp(&self) -> clock::Lamport {
+        clock::Lamport { replica_id: self.timestamp_replica_id, value: self.timestamp_value }
     }
 
     pub fn opaque_id(&self) -> [u8; 20] {
@@ -215,13 +195,11 @@ where
     }
 
     fn to_point(&self, snapshot: &BufferSnapshot) -> Range<Point> {
-        self.start.to_offset(snapshot).to_point(snapshot)
-            ..self.end.to_offset(snapshot).to_point(snapshot)
+        self.start.to_offset(snapshot).to_point(snapshot)..self.end.to_offset(snapshot).to_point(snapshot)
     }
 
     fn to_point_utf16(&self, snapshot: &BufferSnapshot) -> Range<PointUtf16> {
-        self.start.to_offset(snapshot).to_point_utf16(snapshot)
-            ..self.end.to_offset(snapshot).to_point_utf16(snapshot)
+        self.start.to_offset(snapshot).to_point_utf16(snapshot)..self.end.to_offset(snapshot).to_point_utf16(snapshot)
     }
 }
 

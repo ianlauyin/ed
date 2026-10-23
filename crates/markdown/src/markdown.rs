@@ -233,11 +233,11 @@ struct MarkdownEscaper {
 impl MarkdownEscaper {
     const TAB_SIZE: usize = 4;
 
-    fn new() -> Self {
+    const fn new() -> Self {
         Self { in_leading_whitespace: true }
     }
 
-    fn next(&mut self, c: char) -> EscapeAction {
+    const fn next(&mut self, c: char) -> EscapeAction {
         let action = if self.in_leading_whitespace && c == '\t' {
             EscapeAction::Nbsp(Self::TAB_SIZE)
         } else if self.in_leading_whitespace && c == ' ' {
@@ -302,7 +302,7 @@ impl Markdown {
     }
 
     fn code_block_scroll_handle(&mut self, id: usize) -> ScrollHandle {
-        self.code_block_scroll_handles.entry(id).or_insert_with(ScrollHandle::new).clone()
+        self.code_block_scroll_handles.entry(id).or_default().clone()
     }
 
     fn autoscroll_code_block(&self, source_index: usize, cursor_position: Point<Pixels>) {
@@ -327,7 +327,7 @@ impl Markdown {
         scroll_handle.set_offset(point(offset.x + horizontal_delta, offset.y));
     }
 
-    pub fn is_parsing(&self) -> bool {
+    pub const fn is_parsing(&self) -> bool {
         self.pending_parse.is_some()
     }
 
@@ -349,7 +349,7 @@ impl Markdown {
         }
     }
 
-    pub fn source(&self) -> &SharedString {
+    pub const fn source(&self) -> &SharedString {
         &self.source
     }
 
@@ -395,7 +395,7 @@ impl Markdown {
 
     /// Sets whether the source is an HTML document; takes effect on the next
     /// [`Self::reset`] or [`Self::replace`].
-    pub fn set_html_document(&mut self, html_document: bool) {
+    pub const fn set_html_document(&mut self, html_document: bool) {
         self.options.html_document = html_document;
     }
 
@@ -445,7 +445,7 @@ impl Markdown {
         output.into()
     }
 
-    pub fn has_selection(&self) -> bool {
+    pub const fn has_selection(&self) -> bool {
         self.selection.end > self.selection.start
     }
 
@@ -490,7 +490,7 @@ impl Markdown {
         &self.search_highlights
     }
 
-    pub fn active_search_highlight(&self) -> Option<usize> {
+    pub const fn active_search_highlight(&self) -> Option<usize> {
         self.active_search_highlight
     }
 
@@ -503,7 +503,7 @@ impl Markdown {
         }
     }
 
-    fn copy(&self, rendered_text: Option<&RenderedText>, _: &mut Window, cx: &mut Context<Self>) {
+    fn copy(&self, rendered_text: Option<&RenderedText>, _: &mut Window, cx: &Context<Self>) {
         if self.selection.end <= self.selection.start {
             return;
         }
@@ -511,7 +511,7 @@ impl Markdown {
         cx.write_to_clipboard(ClipboardItem::new_string(text));
     }
 
-    fn copy_as_markdown(&mut self, _: &mut Window, cx: &mut Context<Self>) {
+    fn copy_as_markdown(&mut self, _: &mut Window, cx: &Context<Self>) {
         if let Some(text) = self.context_menu_selected_markdown.take() {
             cx.write_to_clipboard(ClipboardItem::new_string(text.to_string()));
             return;
@@ -539,20 +539,20 @@ impl Markdown {
     /// Returns the URL of the link that was most recently right-clicked, if any.
     /// This is set during a right-click mouse-down event and can be read by parent
     /// views to include a "Copy Link" item in their context menus.
-    pub fn context_menu_link(&self) -> Option<&SharedString> {
+    pub const fn context_menu_link(&self) -> Option<&SharedString> {
         self.context_menu_link.as_ref()
     }
 
     /// Returns the rendered (plain) text that was selected when the most recent
     /// context menu invocation happened.
-    pub fn context_menu_selected_text(&self) -> Option<&SharedString> {
+    pub const fn context_menu_selected_text(&self) -> Option<&SharedString> {
         self.context_menu_selected_text.as_ref()
     }
 
     /// Returns the markdown that was selected when the most recent context
     /// menu invocation happened, rebalanced via
     /// [`ParsedMarkdown::rebalanced_markdown_for_selection`].
-    pub fn context_menu_selected_markdown(&self) -> Option<&SharedString> {
+    pub const fn context_menu_selected_markdown(&self) -> Option<&SharedString> {
         self.context_menu_selected_markdown.as_ref()
     }
 
@@ -769,7 +769,7 @@ impl Selection {
         }
     }
 
-    fn tail(&self) -> usize {
+    const fn tail(&self) -> usize {
         if self.reversed { self.end } else { self.start }
     }
 }
@@ -850,15 +850,15 @@ struct MarkdownEventIndex(usize);
 type CodeBlockHighlights = HashMap<MarkdownEventIndex, ResolvedHighlights>;
 
 impl ParsedMarkdown {
-    pub fn source(&self) -> &SharedString {
+    pub const fn source(&self) -> &SharedString {
         &self.source
     }
 
-    pub fn events(&self) -> &Arc<[(Range<usize>, MarkdownEvent)]> {
+    pub const fn events(&self) -> &Arc<[(Range<usize>, MarkdownEvent)]> {
         &self.events
     }
 
-    pub fn root_block_starts(&self) -> &Arc<[usize]> {
+    pub const fn root_block_starts(&self) -> &Arc<[usize]> {
         &self.root_block_starts
     }
 

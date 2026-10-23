@@ -1,4 +1,6 @@
-use gpui::{App, Styled, hsla};
+use gpui::App;
+use gpui::Styled;
+use gpui::hsla;
 
 use crate::ElevationIndex;
 use crate::prelude::*;
@@ -11,10 +13,8 @@ fn elevated<E: Styled>(this: E, cx: &App, index: ElevationIndex) -> E {
         .shadow(index.shadow(cx))
 }
 
-fn elevated_borderless<E: Styled>(this: E, cx: &mut App, index: ElevationIndex) -> E {
-    this.bg(cx.theme().colors().elevated_surface_background)
-        .rounded_lg()
-        .shadow(index.shadow(cx))
+fn elevated_borderless<E: Styled>(this: E, cx: &App, index: ElevationIndex) -> E {
+    this.bg(cx.theme().colors().elevated_surface_background).rounded_lg().shadow(index.shadow(cx))
 }
 
 /// Extends [`gpui::Styled`] with Zed-specific styling methods.

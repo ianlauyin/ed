@@ -1,4 +1,5 @@
-use ui::{HighlightedLabel, prelude::*};
+use ui::HighlightedLabel;
+use ui::prelude::*;
 
 #[derive(Clone)]
 pub struct HighlightedMatchWithPaths {
@@ -29,21 +30,12 @@ impl HighlightedMatch {
             }
             first = false;
 
-            highlight_positions.extend(
-                component
-                    .highlight_positions
-                    .iter()
-                    .map(|position| position + byte_offset),
-            );
+            highlight_positions.extend(component.highlight_positions.iter().map(|position| position + byte_offset));
             text.push_str(&component.text);
             byte_offset += component.text.len();
         }
 
-        Self {
-            text,
-            highlight_positions,
-            color: Color::Default,
-        }
+        Self { text, highlight_positions, color: Color::Default }
     }
 
     pub fn color(self, color: Color) -> Self {
@@ -52,10 +44,7 @@ impl HighlightedMatch {
 }
 impl RenderOnce for HighlightedMatch {
     fn render(self, _window: &mut Window, _: &mut App) -> impl IntoElement {
-        HighlightedLabel::new(self.text, self.highlight_positions)
-            .single_line()
-            .color(self.color)
-            .truncate()
+        HighlightedLabel::new(self.text, self.highlight_positions).single_line().color(self.color).truncate()
     }
 }
 
@@ -69,7 +58,7 @@ impl HighlightedMatchWithPaths {
         }))
     }
 
-    pub fn is_active(mut self, active: bool) -> Self {
+    pub const fn is_active(mut self, active: bool) -> Self {
         self.active = active;
         self
     }
@@ -87,15 +76,9 @@ impl RenderOnce for HighlightedMatchWithPaths {
                         this.child(Label::new(format!("({})", prefix)).color(Color::Muted))
                     })
                     .when(self.active, |this| {
-                        this.child(
-                            Icon::new(IconName::Check)
-                                .size(IconSize::Small)
-                                .color(Color::Accent),
-                        )
+                        this.child(Icon::new(IconName::Check).size(IconSize::Small).color(Color::Accent))
                     }),
             )
-            .when(!self.paths.is_empty(), |this| {
-                self.render_paths_children(this)
-            })
+            .when(!self.paths.is_empty(), |this| self.render_paths_children(this))
     }
 }

@@ -1,5 +1,9 @@
+use gpui::AnyElement;
+use gpui::IntoElement;
+use gpui::ParentElement;
+use gpui::Styled;
+
 use crate::prelude::*;
-use gpui::{AnyElement, IntoElement, ParentElement, Styled};
 
 /// Banners provide informative and brief messages without interrupting the user.
 /// This component offers four severity levels that can be used depending on the message.
@@ -26,19 +30,20 @@ pub struct Banner {
     wrap_content: bool,
 }
 
+impl Default for Banner {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Banner {
     /// Creates a new `Banner` component with default styling.
-    pub fn new() -> Self {
-        Self {
-            severity: Severity::Info,
-            children: Vec::new(),
-            action_slot: None,
-            wrap_content: false,
-        }
+    pub const fn new() -> Self {
+        Self { severity: Severity::Info, children: Vec::new(), action_slot: None, wrap_content: false }
     }
 
     /// Sets the severity of the banner.
-    pub fn severity(mut self, severity: Severity) -> Self {
+    pub const fn severity(mut self, severity: Severity) -> Self {
         self.severity = severity;
         self
     }
@@ -50,7 +55,7 @@ impl Banner {
     }
 
     /// Sets whether the banner content should wrap.
-    pub fn wrap_content(mut self, wrap: bool) -> Self {
+    pub const fn wrap_content(mut self, wrap: bool) -> Self {
         self.wrap_content = wrap;
         self
     }
@@ -116,11 +121,7 @@ impl RenderOnce for Banner {
             .child(div().min_w_0().flex_1().children(self.children));
 
         if let Some(action_slot) = self.action_slot {
-            banner = banner
-                .pl_2()
-                .pr_1()
-                .child(icon_and_child)
-                .child(action_slot);
+            banner = banner.pl_2().pr_1().child(icon_and_child).child(action_slot);
         } else {
             banner = banner.px_2().child(icon_and_child);
         }
@@ -143,9 +144,7 @@ impl Component for Banner {
         let severity_examples = vec![
             single_example(
                 "Default",
-                Banner::new()
-                    .child(Label::new("This is a default banner with no customization"))
-                    .into_any_element(),
+                Banner::new().child(Label::new("This is a default banner with no customization")).into_any_element(),
             ),
             single_example(
                 "Info",
@@ -184,8 +183,6 @@ impl Component for Banner {
             ),
         ];
 
-        example_group(severity_examples)
-            .vertical()
-            .into_any_element()
+        example_group(severity_examples).vertical().into_any_element()
     }
 }

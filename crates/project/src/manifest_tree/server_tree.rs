@@ -6,32 +6,37 @@
 //! LSP Tree is transparent to RPC peers; when clients ask host to spawn a new language server, the host will perform LSP Tree lookup for provided path; it may decide
 //! to reuse existing language server.
 
-use std::{
-    collections::{BTreeMap, BTreeSet, btree_map::Entry},
-    sync::{Arc, Weak},
-};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::collections::btree_map::Entry;
+use std::sync::Arc;
+use std::sync::OnceLock;
+use std::sync::Weak;
 
 use collections::IndexMap;
-use gpui::{App, Entity};
-use language::{
-    CachedLspAdapter, LanguageName, LanguageRegistry, ManifestDelegate, ManifestName,
-    language_settings::AllLanguageSettings,
-};
+use gpui::App;
+use gpui::Entity;
+use language::CachedLspAdapter;
+use language::LanguageName;
+use language::LanguageRegistry;
+use language::ManifestDelegate;
+use language::ManifestName;
+use language::language_settings::AllLanguageSettings;
 use lsp::LanguageServerName;
-use settings::{Settings, SettingsLocation, WorktreeId};
-use std::sync::OnceLock;
+use settings::Settings;
+use settings::SettingsLocation;
+use settings::WorktreeId;
 use util::rel_path::RelPath;
 
-use crate::{LanguageServerId, ProjectPath, project_settings::LspSettings};
-
 use super::ManifestTree;
+use crate::LanguageServerId;
+use crate::ProjectPath;
+use crate::project_settings::LspSettings;
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ServersForWorktree {
-    pub(crate) roots: BTreeMap<
-        Arc<RelPath>,
-        BTreeMap<LanguageServerName, (Arc<InnerTreeNode>, BTreeSet<LanguageName>)>,
-    >,
+    pub(crate) roots:
+        BTreeMap<Arc<RelPath>, BTreeMap<LanguageServerName, (Arc<InnerTreeNode>, BTreeSet<LanguageName>)>>,
 }
 
 pub struct LanguageServerTree {
@@ -78,9 +83,7 @@ impl LanguageServerTreeNode {
 
     /// Returns a language server name as the language server adapter would return.
     pub fn name(&self) -> Option<LanguageServerName> {
-        self.0
-            .upgrade()
-            .map(|node| node.disposition.server_name.clone())
+        self.0.upgrade().map(|node| node.disposition.server_name.clone())
     }
 }
 
@@ -100,11 +103,7 @@ impl InnerTreeNode {
     fn new(server_name: LanguageServerName, path: ProjectPath, settings: LspSettings) -> Self {
         InnerTreeNode {
             id: Default::default(),
-            disposition: Arc::new(LaunchDisposition {
-                server_name,
-                path,
-                settings: settings.into(),
-            }),
+            disposition: Arc::new(LaunchDisposition { server_name, path, settings: settings.into() }),
         }
     }
 
@@ -114,15 +113,8 @@ impl InnerTreeNode {
 }
 
 impl LanguageServerTree {
-    pub(crate) fn new(
-        manifest_tree: Entity<ManifestTree>,
-        languages: Arc<LanguageRegistry>,
-    ) -> Self {
-        Self {
-            manifest_tree,
-            instances: Default::default(),
-            languages,
-        }
+    pub(crate) fn new(manifest_tree: Entity<ManifestTree>, languages: Arc<LanguageRegistry>) -> Self {
+        Self { manifest_tree, instances: Default::default(), languages }
     }
 
     /// Get all initialized language server IDs for a given path.
@@ -169,13 +161,7 @@ impl LanguageServerTree {
                 .entry(root_path.path.clone())
                 .or_default()
                 .entry(adapter.name());
-            let new_node = || {
-                Arc::new(InnerTreeNode::new(
-                    adapter.name(),
-                    root_path.clone(),
-                    settings,
-                ))
-            };
+            let new_node = || Arc::new(InnerTreeNode::new(adapter.name(), root_path.clone(), settings));
             let (node, languages) = match inner_node {
                 Entry::Occupied(mut entry) => {
                     if entry.get().0.id.get().is_none() {
@@ -197,12 +183,8 @@ impl LanguageServerTree {
     ) -> impl Iterator<Item = LanguageServerId> + 'a {
         adapters.into_iter().filter_map(move |(_, (_, adapter))| {
             let root_path = root_path.clone();
-            let inner_node = self
-                .instances
-                .get(&root_path.worktree_id)?
-                .roots
-                .get(&root_path.path)?
-                .get(&adapter.name())?;
+            let inner_node =
+                self.instances.get(&root_path.worktree_id)?.roots.get(&root_path.path)?.get(&adapter.name())?;
             inner_node.0.id.get().copied()
         })
     }
@@ -216,9 +198,7 @@ impl LanguageServerTree {
     ) -> ProjectPath {
         // Find out what the root location of our subproject is.
         // That's where we'll look for language settings (that include a set of language servers).
-        self.manifest_tree.update(cx, |this, cx| {
-            this.root_for_path_or_worktree_root(path, manifest_name, delegate, cx)
-        })
+        self.manifest_tree.update(cx, |this, cx| this.root_for_path_or_worktree_root(path, manifest_name, delegate, cx))
     }
 
     fn adapters_for_language(
@@ -227,12 +207,9 @@ impl LanguageServerTree {
         language_name: &LanguageName,
         cx: &App,
     ) -> IndexMap<LanguageServerName, (LspSettings, Arc<CachedLspAdapter>)> {
-        let settings_location = SettingsLocation {
-            worktree_id: manifest_location.worktree_id,
-            path: &manifest_location.path,
-        };
-        let settings =
-            AllLanguageSettings::get(Some(settings_location), cx).language(Some(language_name));
+        let settings_location =
+            SettingsLocation { worktree_id: manifest_location.worktree_id, path: &manifest_location.path };
+        let settings = AllLanguageSettings::get(Some(settings_location), cx).language(Some(language_name));
         if !settings.enable_language_server {
             return Default::default();
         }
@@ -240,13 +217,10 @@ impl LanguageServerTree {
             .lsp_adapters(language_name)
             .into_iter()
             .map(|adapter| {
-                let adapter_settings = crate::lsp_store::language_server_settings_for(
-                    settings_location,
-                    &adapter.name,
-                    cx,
-                )
-                .cloned()
-                .unwrap_or_default();
+                let adapter_settings =
+                    crate::lsp_store::language_server_settings_for(settings_location, &adapter.name, cx)
+                        .cloned()
+                        .unwrap_or_default();
                 (adapter.name(), (adapter_settings, adapter))
             })
             .collect()
@@ -261,7 +235,7 @@ impl LanguageServerTree {
     /// E.g. if the user disables one of their language servers for Python, we don't want to shut down any language servers unaffected by this settings change.
     ///
     /// Thus, [`ServerTreeRebase`] mimics the interface of a [`ServerTree`], except that it tries to find a matching language server in the old tree before handing out an uninitialized node.
-    pub(crate) fn rebase(&mut self) -> ServerTreeRebase {
+    pub(crate) fn rebase(&self) -> ServerTreeRebase {
         ServerTreeRebase::new(self)
     }
 
@@ -317,23 +291,13 @@ impl ServerTreeRebase {
             .flat_map(|nodes| {
                 nodes.roots.values().flat_map(|servers| {
                     servers.values().filter_map(|server| {
-                        server
-                            .0
-                            .id
-                            .get()
-                            .copied()
-                            .map(|id| (id, server.0.disposition.server_name.clone()))
+                        server.0.id.get().copied().map(|id| (id, server.0.disposition.server_name.clone()))
                     })
                 })
             })
             .collect();
-        let new_tree =
-            LanguageServerTree::new(old_tree.manifest_tree.clone(), old_tree.languages.clone());
-        Self {
-            old_contents,
-            all_server_ids,
-            new_tree,
-        }
+        let new_tree = LanguageServerTree::new(old_tree.manifest_tree.clone(), old_tree.languages.clone());
+        Self { old_contents, all_server_ids, new_tree }
     }
 
     pub(crate) fn walk<'a>(
@@ -344,56 +308,45 @@ impl ServerTreeRebase {
         delegate: Arc<dyn ManifestDelegate>,
         cx: &'a mut App,
     ) -> impl Iterator<Item = LanguageServerTreeNode> + 'a {
-        let manifest =
-            self.new_tree
-                .manifest_location_for_path(&path, manifest_name, &delegate, cx);
-        let adapters = self
-            .new_tree
-            .adapters_for_language(&manifest, &language_name, cx);
+        let manifest = self.new_tree.manifest_location_for_path(&path, manifest_name, &delegate, cx);
+        let adapters = self.new_tree.adapters_for_language(&manifest, &language_name, cx);
 
-        self.new_tree
-            .init_with_adapters(manifest, language_name, adapters)
-            .filter_map(|node| {
-                // Inspect result of the query and initialize it ourselves before
-                // handing it off to the caller.
-                let live_node = node.0.upgrade()?;
+        self.new_tree.init_with_adapters(manifest, language_name, adapters).filter_map(|node| {
+            // Inspect result of the query and initialize it ourselves before
+            // handing it off to the caller.
+            let live_node = node.0.upgrade()?;
 
-                if live_node.id.get().is_some() {
-                    return Some(node);
-                }
+            if live_node.id.get().is_some() {
+                return Some(node);
+            }
 
-                let disposition = &live_node.disposition;
-                let Some((existing_node, _)) = self
-                    .old_contents
-                    .get(&disposition.path.worktree_id)
-                    .and_then(|worktree_nodes| worktree_nodes.roots.get(&disposition.path.path))
-                    .and_then(|roots| roots.get(&disposition.server_name))
-                    .filter(|(old_node, _)| {
-                        // Only compare settings that require server restart.
-                        // Dynamic settings (settings.settings) can be updated via DidChangeConfiguration
-                        // without restarting the server.
-                        disposition.settings.binary == old_node.disposition.settings.binary
-                            && disposition.settings.initialization_options
-                                == old_node.disposition.settings.initialization_options
-                    })
-                else {
-                    return Some(node);
-                };
-                if let Some(existing_id) = existing_node.id.get() {
-                    live_node.id.set(*existing_id).ok();
-                }
+            let disposition = &live_node.disposition;
+            let Some((existing_node, _)) = self
+                .old_contents
+                .get(&disposition.path.worktree_id)
+                .and_then(|worktree_nodes| worktree_nodes.roots.get(&disposition.path.path))
+                .and_then(|roots| roots.get(&disposition.server_name))
+                .filter(|(old_node, _)| {
+                    // Only compare settings that require server restart.
+                    // Dynamic settings (settings.settings) can be updated via DidChangeConfiguration
+                    // without restarting the server.
+                    disposition.settings.binary == old_node.disposition.settings.binary
+                        && disposition.settings.initialization_options
+                            == old_node.disposition.settings.initialization_options
+                })
+            else {
+                return Some(node);
+            };
+            if let Some(existing_id) = existing_node.id.get() {
+                live_node.id.set(*existing_id).ok();
+            }
 
-                Some(node)
-            })
+            Some(node)
+        })
     }
 
     /// Returns IDs of servers that are no longer referenced (and can be shut down).
-    pub(crate) fn finish(
-        self,
-    ) -> (
-        LanguageServerTree,
-        BTreeMap<LanguageServerId, LanguageServerName>,
-    ) {
+    pub(crate) fn finish(self) -> (LanguageServerTree, BTreeMap<LanguageServerId, LanguageServerName>) {
         let preserved_server_ids = self
             .new_tree
             .instances
@@ -402,16 +355,10 @@ impl ServerTreeRebase {
             .flat_map(|nodes| nodes.values())
             .filter_map(|(node, _)| node.id())
             .collect::<BTreeSet<_>>();
-        (
-            self.new_tree,
-            self.all_server_ids
-                .into_iter()
-                .filter(|(id, _)| !preserved_server_ids.contains(id))
-                .collect(),
-        )
+        (self.new_tree, self.all_server_ids.into_iter().filter(|(id, _)| !preserved_server_ids.contains(id)).collect())
     }
 
-    pub(crate) fn server_tree(&mut self) -> &mut LanguageServerTree {
+    pub(crate) const fn server_tree(&mut self) -> &mut LanguageServerTree {
         &mut self.new_tree
     }
 }

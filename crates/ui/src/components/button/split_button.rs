@@ -1,13 +1,20 @@
-use gpui::{
-    AnyElement, App, BoxShadow, ParentElement, RenderOnce, Styled, Window, div, hsla, prelude::*,
-    px,
-};
-
+use gpui::AnyElement;
+use gpui::App;
+use gpui::BoxShadow;
+use gpui::ParentElement;
+use gpui::RenderOnce;
+use gpui::Styled;
+use gpui::Window;
+use gpui::div;
+use gpui::hsla;
+use gpui::prelude::*;
+use gpui::px;
 use theme::ActiveTheme;
 
-use crate::{Divider, ElevationIndex, prelude::*};
-
 use super::ButtonLike;
+use crate::Divider;
+use crate::ElevationIndex;
+use crate::prelude::*;
 
 #[derive(Clone, Copy, PartialEq)]
 pub enum SplitButtonStyle {
@@ -55,14 +62,10 @@ pub struct SplitButton {
 
 impl SplitButton {
     pub fn new(left: impl Into<SplitButtonKind>, right: AnyElement) -> Self {
-        Self {
-            left: left.into(),
-            right,
-            style: SplitButtonStyle::Filled,
-        }
+        Self { left: left.into(), right, style: SplitButtonStyle::Filled }
     }
 
-    pub fn style(mut self, style: SplitButtonStyle) -> Self {
+    pub const fn style(mut self, style: SplitButtonStyle) -> Self {
         self.style = style;
         self
     }
@@ -70,45 +73,30 @@ impl SplitButton {
 
 impl RenderOnce for SplitButton {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let is_filled_or_outlined = matches!(
-            self.style,
-            SplitButtonStyle::Filled | SplitButtonStyle::Outlined
-        );
+        let is_filled_or_outlined = matches!(self.style, SplitButtonStyle::Filled | SplitButtonStyle::Outlined);
 
-        let outline = BoxShadow::new(px(0.), px(0.), cx.theme().colors().border.opacity(0.8))
-            .spread_radius(px(1.))
-            .inset();
+        let outline =
+            BoxShadow::new(px(0.), px(0.), cx.theme().colors().border.opacity(0.8)).spread_radius(px(1.)).inset();
 
         h_flex()
             .when(is_filled_or_outlined, |this| this.relative().rounded_sm())
-            .when(self.style == SplitButtonStyle::Transparent, |this| {
-                this.gap_px()
-            })
+            .when(self.style == SplitButtonStyle::Transparent, |this| this.gap_px())
             .child(div().flex_grow_1().child(match self.left {
                 SplitButtonKind::Button(button) => button.into_any_element(),
                 SplitButtonKind::ButtonLike(button) => button.into_any_element(),
                 SplitButtonKind::IconButton(icon) => icon.into_any_element(),
             }))
-            .child(Divider::vertical().when(is_filled_or_outlined, |s| {
-                s.h_full().color(crate::DividerColor::Border)
-            }))
+            .child(Divider::vertical().when(is_filled_or_outlined, |s| s.h_full().color(crate::DividerColor::Border)))
             .child(self.right)
             .when(is_filled_or_outlined, |this| {
-                this.child(
-                    div()
-                        .absolute()
-                        .inset_0()
-                        .rounded_sm()
-                        .shadow(vec![outline]),
-                )
+                this.child(div().absolute().inset_0().rounded_sm().shadow(vec![outline]))
             })
             .when(self.style == SplitButtonStyle::Filled, |this| {
-                this.bg(ElevationIndex::Surface.on_elevation_bg(cx))
-                    .shadow(vec![BoxShadow::new(
-                        px(0.),
-                        px(1.),
-                        hsla(0.0, 0.0, 0.0, 0.16),
-                    )])
+                this.bg(ElevationIndex::Surface.on_elevation_bg(cx)).shadow(vec![BoxShadow::new(
+                    px(0.),
+                    px(1.),
+                    hsla(0.0, 0.0, 0.0, 0.16),
+                )])
             })
     }
 }

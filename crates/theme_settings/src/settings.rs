@@ -1,25 +1,47 @@
 #![allow(missing_docs)]
 
-use crate::schema::{status_colors_refinement, syntax_overrides, theme_colors_refinement};
-use crate::{merge_accent_colors, merge_player_color};
+use std::sync::Arc;
+
 use collections::HashMap;
-use gpui::{
-    App, Context, Font, FontFallbacks, FontStyle, FontWeight, Global, Pixels, SharedString,
-    Subscription, Window, px,
-};
+use gpui::App;
+use gpui::Context;
+use gpui::Font;
+use gpui::FontFallbacks;
+use gpui::FontStyle;
+use gpui::FontWeight;
+use gpui::Global;
+use gpui::Pixels;
+use gpui::SharedString;
+use gpui::Subscription;
+use gpui::Window;
+use gpui::px;
 use refineable::Refineable;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-pub use settings::{FontFamilyName, ThemeAppearanceMode, ThemeName};
-use settings::{IntoGpui, RegisterSetting, Settings, SettingsContent};
-use std::sync::Arc;
-use theme::{Appearance, SyntaxTheme, Theme, UiDensity};
+use serde::Deserialize;
+use serde::Serialize;
+pub use settings::FontFamilyName;
+use settings::IntoGpui;
+use settings::RegisterSetting;
+use settings::Settings;
+use settings::SettingsContent;
+pub use settings::ThemeAppearanceMode;
+pub use settings::ThemeName;
+use theme::Appearance;
+use theme::SyntaxTheme;
+use theme::Theme;
+use theme::UiDensity;
+
+use crate::merge_accent_colors;
+use crate::merge_player_color;
+use crate::schema::status_colors_refinement;
+use crate::schema::syntax_overrides;
+use crate::schema::theme_colors_refinement;
 
 const MIN_FONT_SIZE: Pixels = px(6.0);
 const MAX_FONT_SIZE: Pixels = px(100.0);
 const MIN_LINE_HEIGHT: f32 = 1.0;
 
-pub(crate) fn ui_density_from_settings(val: settings::UiDensity) -> UiDensity {
+pub(crate) const fn ui_density_from_settings(val: settings::UiDensity) -> UiDensity {
     match val {
         settings::UiDensity::Compact => UiDensity::Compact,
         settings::UiDensity::Default => UiDensity::Default,
@@ -27,7 +49,7 @@ pub(crate) fn ui_density_from_settings(val: settings::UiDensity) -> UiDensity {
     }
 }
 
-pub fn appearance_to_mode(appearance: Appearance) -> ThemeAppearanceMode {
+pub const fn appearance_to_mode(appearance: Appearance) -> ThemeAppearanceMode {
     match appearance {
         Appearance::Light => ThemeAppearanceMode::Light,
         Appearance::Dark => ThemeAppearanceMode::Dark,
@@ -92,7 +114,7 @@ pub struct ThemeSettings {
 }
 
 /// Returns the name of the default theme for the given [`Appearance`].
-pub fn default_theme(appearance: Appearance) -> &'static str {
+pub const fn default_theme(appearance: Appearance) -> &'static str {
     match appearance {
         Appearance::Light => settings::DEFAULT_LIGHT_THEME,
         Appearance::Dark => settings::DEFAULT_DARK_THEME,
@@ -142,9 +164,7 @@ impl From<settings::ThemeSelection> for ThemeSelection {
     fn from(selection: settings::ThemeSelection) -> Self {
         match selection {
             settings::ThemeSelection::Static(theme) => ThemeSelection::Static(theme),
-            settings::ThemeSelection::Dynamic { mode, light, dark } => {
-                ThemeSelection::Dynamic { mode, light, dark }
-            }
+            settings::ThemeSelection::Dynamic { mode, light, dark } => ThemeSelection::Dynamic { mode, light, dark },
         }
     }
 }
@@ -166,7 +186,7 @@ impl ThemeSelection {
     }
 
     /// Returns the [ThemeMode] for the [ThemeSelection].
-    pub fn mode(&self) -> Option<ThemeAppearanceMode> {
+    pub const fn mode(&self) -> Option<ThemeAppearanceMode> {
         match self {
             ThemeSelection::Static(_) => None,
             ThemeSelection::Dynamic { mode, .. } => Some(*mode),
@@ -206,8 +226,7 @@ pub fn set_theme(
                 Appearance::Dark => *dark = theme_name,
             }
 
-            let should_update_mode =
-                !(mode == &ThemeAppearanceMode::System && theme_appearance == system_appearance);
+            let should_update_mode = !(mode == &ThemeAppearanceMode::System && theme_appearance == system_appearance);
 
             if should_update_mode {
                 *mode = appearance_to_mode(theme_appearance);
@@ -229,10 +248,7 @@ pub fn set_mode(content: &mut SettingsContent, mode: ThemeAppearanceMode) {
                     dark: ThemeName(settings::DEFAULT_DARK_THEME.into()),
                 };
             }
-            settings::ThemeSelection::Dynamic {
-                mode: mode_to_update,
-                ..
-            } => *mode_to_update = mode,
+            settings::ThemeSelection::Dynamic { mode: mode_to_update, .. } => *mode_to_update = mode,
         }
     } else {
         theme.theme = Some(settings::ThemeSelection::Dynamic {
@@ -245,7 +261,7 @@ pub fn set_mode(content: &mut SettingsContent, mode: ThemeAppearanceMode) {
 
 pub use theme::BufferLineHeight;
 
-pub fn buffer_line_height_from_settings(value: settings::BufferLineHeight) -> BufferLineHeight {
+pub const fn buffer_line_height_from_settings(value: settings::BufferLineHeight) -> BufferLineHeight {
     match value {
         settings::BufferLineHeight::Comfortable => BufferLineHeight::Comfortable,
         settings::BufferLineHeight::Standard => BufferLineHeight::Standard,
@@ -256,19 +272,13 @@ pub fn buffer_line_height_from_settings(value: settings::BufferLineHeight) -> Bu
 impl ThemeSettings {
     /// Returns the buffer font size.
     pub fn buffer_font_size(&self, cx: &App) -> Pixels {
-        let font_size = cx
-            .try_global::<BufferFontSize>()
-            .map(|size| size.0)
-            .unwrap_or(self.buffer_font_size);
+        let font_size = cx.try_global::<BufferFontSize>().map(|size| size.0).unwrap_or(self.buffer_font_size);
         clamp_font_size(font_size)
     }
 
     /// Returns the UI font size.
     pub fn ui_font_size(&self, cx: &App) -> Pixels {
-        let font_size = cx
-            .try_global::<UiFontSize>()
-            .map(|size| size.0)
-            .unwrap_or(self.ui_font_size);
+        let font_size = cx.try_global::<UiFontSize>().map(|size| size.0).unwrap_or(self.ui_font_size);
         clamp_font_size(font_size)
     }
 
@@ -283,30 +293,24 @@ impl ThemeSettings {
     /// Returns the font family to use in the markdown preview,
     /// falling back to the UI font family when unset.
     pub fn markdown_preview_font_family(&self) -> &SharedString {
-        self.markdown_preview_font_family
-            .as_ref()
-            .unwrap_or(&self.ui_font.family)
+        self.markdown_preview_font_family.as_ref().unwrap_or(&self.ui_font.family)
     }
 
     /// Returns the font family to use for code in the markdown preview,
     /// falling back to the buffer font family when unset.
     pub fn markdown_preview_code_font_family(&self) -> &SharedString {
-        self.markdown_preview_code_font_family
-            .as_ref()
-            .unwrap_or(&self.buffer_font.family)
+        self.markdown_preview_code_font_family.as_ref().unwrap_or(&self.buffer_font.family)
     }
 
     /// Returns the font family to use for Mermaid diagrams, falling back to
     /// the buffer font family when unset: diagrams are laid out for a
     /// monospace font.
     pub fn mermaid_font_family(&self) -> &SharedString {
-        self.mermaid_font_family
-            .as_ref()
-            .unwrap_or(&self.buffer_font.family)
+        self.mermaid_font_family.as_ref().unwrap_or(&self.buffer_font.family)
     }
 
     /// Returns the font weight to use for headings in the markdown preview.
-    pub fn markdown_preview_heading_font_weight(&self) -> FontWeight {
+    pub const fn markdown_preview_heading_font_weight(&self) -> FontWeight {
         self.markdown_preview_heading_font_weight
     }
 
@@ -326,7 +330,7 @@ impl ThemeSettings {
     ///
     /// The real buffer font size is stored in-memory, to support temporary font size changes.
     /// Use [`Self::buffer_font_size`] to get the real font size.
-    pub fn buffer_font_size_settings(&self) -> Pixels {
+    pub const fn buffer_font_size_settings(&self) -> Pixels {
         self.buffer_font_size
     }
 
@@ -334,11 +338,11 @@ impl ThemeSettings {
     ///
     /// The real UI font size is stored in-memory, to support temporary font size changes.
     /// Use [`Self::ui_font_size`] to get the real font size.
-    pub fn ui_font_size_settings(&self) -> Pixels {
+    pub const fn ui_font_size_settings(&self) -> Pixels {
         self.ui_font_size
     }
 
-    pub fn git_commit_buffer_font_size_settings(&self) -> Option<Pixels> {
+    pub const fn git_commit_buffer_font_size_settings(&self) -> Option<Pixels> {
         self.git_commit_buffer_font_size
     }
 
@@ -346,12 +350,12 @@ impl ThemeSettings {
     ///
     /// The real markdown preview font size is stored in-memory, to support temporary
     /// font size changes. Use [`Self::markdown_preview_font_size`] to get the real font size.
-    pub fn markdown_preview_font_size_settings(&self) -> Option<Pixels> {
+    pub const fn markdown_preview_font_size_settings(&self) -> Option<Pixels> {
         self.markdown_preview_font_size
     }
 
     /// Returns the buffer's line height.
-    pub fn line_height(&self) -> f32 {
+    pub const fn line_height(&self) -> f32 {
         f32::max(self.buffer_line_height.value(), MIN_LINE_HEIGHT)
     }
 
@@ -378,8 +382,7 @@ impl ThemeSettings {
 
     fn modify_theme(base_theme: &mut Theme, theme_overrides: &settings::ThemeStyleContent) {
         if let Some(window_background_appearance) = theme_overrides.window_background_appearance {
-            base_theme.styles.window_background_appearance =
-                window_background_appearance.into_gpui();
+            base_theme.styles.window_background_appearance = window_background_appearance.into_gpui();
         }
         let status_color_refinement = status_colors_refinement(&theme_overrides.status);
 
@@ -392,10 +395,8 @@ impl ThemeSettings {
         base_theme.styles.status.refine(&status_color_refinement);
         merge_player_color(&mut base_theme.styles.player, &theme_overrides.players);
         merge_accent_colors(&mut base_theme.styles.accents, &theme_overrides.accents);
-        base_theme.styles.syntax = SyntaxTheme::merge(
-            base_theme.styles.syntax.clone(),
-            syntax_overrides(theme_overrides),
-        );
+        base_theme.styles.syntax =
+            SyntaxTheme::merge(base_theme.styles.syntax.clone(), syntax_overrides(theme_overrides));
     }
 }
 
@@ -454,14 +455,13 @@ pub fn observe_buffer_font_size_adjustment<V: 'static>(
 
 /// Gets the font size, adjusted by the difference between the current buffer font size and the one set in the settings.
 pub fn adjusted_font_size(size: Pixels, cx: &App) -> Pixels {
-    let adjusted_font_size =
-        if let Some(BufferFontSize(adjusted_size)) = cx.try_global::<BufferFontSize>() {
-            let buffer_font_size = ThemeSettings::get_global(cx).buffer_font_size;
-            let delta = *adjusted_size - buffer_font_size;
-            size + delta
-        } else {
-            size
-        };
+    let adjusted_font_size = if let Some(BufferFontSize(adjusted_size)) = cx.try_global::<BufferFontSize>() {
+        let buffer_font_size = ThemeSettings::get_global(cx).buffer_font_size;
+        let delta = *adjusted_size - buffer_font_size;
+        size + delta
+    } else {
+        size
+    };
     clamp_font_size(adjusted_font_size)
 }
 
@@ -469,9 +469,7 @@ pub fn adjusted_font_size(size: Pixels, cx: &App) -> Pixels {
 /// This will be effective until the app is restarted.
 pub fn adjust_buffer_font_size(cx: &mut App, f: impl FnOnce(Pixels) -> Pixels) {
     let buffer_font_size = ThemeSettings::get_global(cx).buffer_font_size;
-    let adjusted_size = cx
-        .try_global::<BufferFontSize>()
-        .map_or(buffer_font_size, |adjusted_size| adjusted_size.0);
+    let adjusted_size = cx.try_global::<BufferFontSize>().map_or(buffer_font_size, |adjusted_size| adjusted_size.0);
     cx.set_global(BufferFontSize(clamp_font_size(f(adjusted_size))));
     cx.refresh_windows();
 }
@@ -499,9 +497,7 @@ pub fn setup_ui_font(window: &mut Window, cx: &mut App) -> gpui::Font {
 /// Sets the adjusted UI font size.
 pub fn adjust_ui_font_size(cx: &mut App, f: impl FnOnce(Pixels) -> Pixels) {
     let ui_font_size = ThemeSettings::get_global(cx).ui_font_size(cx);
-    let adjusted_size = cx
-        .try_global::<UiFontSize>()
-        .map_or(ui_font_size, |adjusted_size| adjusted_size.0);
+    let adjusted_size = cx.try_global::<UiFontSize>().map_or(ui_font_size, |adjusted_size| adjusted_size.0);
     cx.set_global(UiFontSize(clamp_font_size(f(adjusted_size))));
     cx.refresh_windows();
 }
@@ -516,9 +512,8 @@ pub fn reset_ui_font_size(cx: &mut App) {
 
 pub fn adjust_git_commit_buffer_font_size(cx: &mut App, f: impl FnOnce(Pixels) -> Pixels) {
     let git_commit_buffer_font_size = ThemeSettings::get_global(cx).git_commit_buffer_font_size(cx);
-    let adjusted_size = cx
-        .try_global::<GitCommitBufferFontSize>()
-        .map_or(git_commit_buffer_font_size, |adjusted_size| adjusted_size.0);
+    let adjusted_size =
+        cx.try_global::<GitCommitBufferFontSize>().map_or(git_commit_buffer_font_size, |adjusted_size| adjusted_size.0);
     cx.set_global(GitCommitBufferFontSize(clamp_font_size(f(adjusted_size))));
     cx.refresh_windows();
 }
@@ -533,9 +528,8 @@ pub fn reset_git_commit_buffer_font_size(cx: &mut App) {
 /// Sets the adjusted font size of the markdown preview.
 pub fn adjust_markdown_preview_font_size(cx: &mut App, f: impl FnOnce(Pixels) -> Pixels) {
     let markdown_preview_font_size = ThemeSettings::get_global(cx).markdown_preview_font_size(cx);
-    let adjusted_size = cx
-        .try_global::<MarkdownPreviewFontSize>()
-        .map_or(markdown_preview_font_size, |adjusted_size| adjusted_size.0);
+    let adjusted_size =
+        cx.try_global::<MarkdownPreviewFontSize>().map_or(markdown_preview_font_size, |adjusted_size| adjusted_size.0);
     cx.set_global(MarkdownPreviewFontSize(clamp_font_size(f(adjusted_size))));
     cx.refresh_windows();
 }
@@ -553,16 +547,9 @@ pub fn clamp_font_size(size: Pixels) -> Pixels {
     size.clamp(MIN_FONT_SIZE, MAX_FONT_SIZE)
 }
 
-fn font_fallbacks_from_settings(
-    fallbacks: Option<Vec<settings::FontFamilyName>>,
-) -> Option<FontFallbacks> {
+fn font_fallbacks_from_settings(fallbacks: Option<Vec<settings::FontFamilyName>>) -> Option<FontFallbacks> {
     fallbacks.map(|fallbacks| {
-        FontFallbacks::from_fonts(
-            fallbacks
-                .into_iter()
-                .map(|font_family| font_family.0.to_string())
-                .collect(),
-        )
+        FontFallbacks::from_fonts(fallbacks.into_iter().map(|font_family| font_family.0.to_string()).collect())
     })
 }
 
@@ -581,22 +568,14 @@ impl settings::Settings for ThemeSettings {
                 style: Default::default(),
             },
             buffer_font: Font {
-                family: content
-                    .buffer_font_family
-                    .as_ref()
-                    .unwrap()
-                    .0
-                    .clone()
-                    .into(),
+                family: content.buffer_font_family.as_ref().unwrap().0.clone().into(),
                 features: content.buffer_font_features.clone().unwrap().into_gpui(),
                 fallbacks: font_fallbacks_from_settings(content.buffer_font_fallbacks.clone()),
                 weight: content.buffer_font_weight.unwrap().into_gpui(),
                 style: FontStyle::default(),
             },
             buffer_font_size: clamp_font_size(content.buffer_font_size.unwrap().into_gpui()),
-            buffer_line_height: buffer_line_height_from_settings(
-                content.buffer_line_height.unwrap(),
-            ),
+            buffer_line_height: buffer_line_height_from_settings(content.buffer_line_height.unwrap()),
             git_commit_buffer_font_size: content.git_commit_buffer_font_size.map(|s| s.into_gpui()),
             markdown_preview_font_family: markdown_preview
                 .and_then(|preview| preview.font_family.as_ref())
@@ -610,10 +589,7 @@ impl settings::Settings for ThemeSettings {
             markdown_preview_theme: markdown_preview
                 .and_then(|preview| preview.theme.clone())
                 .map(ThemeSelection::from),
-            mermaid_font_family: content
-                .mermaid_font_family
-                .as_ref()
-                .map(|font| font.0.clone().into()),
+            mermaid_font_family: content.mermaid_font_family.as_ref().map(|font| font.0.clone().into()),
             markdown_preview_heading_font_weight: markdown_preview
                 .and_then(|preview| preview.heading_font_weight)
                 .map(|weight| weight.into_gpui())

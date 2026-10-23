@@ -1,17 +1,33 @@
-use crate::{
-    ns::{NSRect, NSUInteger, array_iter, array_object_at, id, nil},
-    ns_string,
-};
+use std::time::Duration;
+
 use anyhow::Result;
 use core_foundation::base::CFRelease;
-use core_foundation::uuid::{CFUUIDGetUUIDBytes, CFUUIDRef};
-use core_graphics::display::{
-    CGDirectDisplayID, CGDisplay, CGDisplayBounds, CGGetActiveDisplayList,
-};
-use gpui::{Bounds, DisplayId, Pixels, PlatformDisplay, point, px, refresh_interval_from_hz, size};
-use objc2::{class, msg_send, sel};
-use std::time::Duration;
+use core_foundation::uuid::CFUUIDGetUUIDBytes;
+use core_foundation::uuid::CFUUIDRef;
+use core_graphics::display::CGDirectDisplayID;
+use core_graphics::display::CGDisplay;
+use core_graphics::display::CGDisplayBounds;
+use core_graphics::display::CGGetActiveDisplayList;
+use gpui::Bounds;
+use gpui::DisplayId;
+use gpui::Pixels;
+use gpui::PlatformDisplay;
+use gpui::point;
+use gpui::px;
+use gpui::refresh_interval_from_hz;
+use gpui::size;
+use objc2::class;
+use objc2::msg_send;
+use objc2::sel;
 use uuid::Uuid;
+
+use crate::ns::NSRect;
+use crate::ns::NSUInteger;
+use crate::ns::array_iter;
+use crate::ns::array_object_at;
+use crate::ns::id;
+use crate::ns::nil;
+use crate::ns_string;
 
 #[derive(Debug)]
 pub(crate) struct MacDisplay(pub(crate) CGDirectDisplayID);
@@ -56,11 +72,7 @@ impl MacDisplay {
         // SAFETY: `displays` has room for the capacity passed in, and
         // `display_count` reports how many entries were written.
         let result = unsafe {
-            CGGetActiveDisplayList(
-                displays.capacity() as u32,
-                displays.as_mut_ptr(),
-                &mut display_count,
-            )
+            CGGetActiveDisplayList(displays.capacity() as u32, displays.as_mut_ptr(), &raw mut display_count)
         };
         if result == 0 {
             // SAFETY: `CGGetActiveDisplayList` initialized `display_count`
@@ -85,10 +97,7 @@ impl PlatformDisplay for MacDisplay {
 
     fn uuid(&self) -> Result<Uuid> {
         let cfuuid = unsafe { CGDisplayCreateUUIDFromDisplayID(self.0 as CGDirectDisplayID) };
-        anyhow::ensure!(
-            !cfuuid.is_null(),
-            "AppKit returned a null from CGDisplayCreateUUIDFromDisplayID"
-        );
+        anyhow::ensure!(!cfuuid.is_null(), "AppKit returned a null from CGDisplayCreateUUIDFromDisplayID");
 
         let bytes = unsafe { CFUUIDGetUUIDBytes(cfuuid) };
         unsafe { CFRelease(cfuuid as _) };
@@ -138,18 +147,11 @@ impl PlatformDisplay for MacDisplay {
 
             // Convert from bottom-left origin (AppKit) to top-left origin
             let origin_y =
-                screen_frame.size.height - visible_frame.origin.y - visible_frame.size.height
-                    + screen_frame.origin.y;
+                screen_frame.size.height - visible_frame.origin.y - visible_frame.size.height + screen_frame.origin.y;
 
             Bounds {
-                origin: point(
-                    px(visible_frame.origin.x as f32 - screen_frame.origin.x as f32),
-                    px(origin_y as f32),
-                ),
-                size: size(
-                    px(visible_frame.size.width as f32),
-                    px(visible_frame.size.height as f32),
-                ),
+                origin: point(px(visible_frame.origin.x as f32 - screen_frame.origin.x as f32), px(origin_y as f32)),
+                size: size(px(visible_frame.size.width as f32), px(visible_frame.size.height as f32)),
             }
         }
     }
@@ -159,11 +161,8 @@ impl PlatformDisplay for MacDisplay {
         // display mode's rate is 0 on built-in panels.
         let screen_hertz = unsafe {
             let screen = self.get_nsscreen();
-            let supports_maximum: bool = if screen == nil {
-                false
-            } else {
-                msg_send![screen, respondsToSelector: sel!(maximumFramesPerSecond)]
-            };
+            let supports_maximum: bool =
+                if screen == nil { false } else { msg_send![screen, respondsToSelector: sel!(maximumFramesPerSecond)] };
             if supports_maximum {
                 let frames_per_second: isize = msg_send![screen, maximumFramesPerSecond];
                 frames_per_second as f64
@@ -172,9 +171,7 @@ impl PlatformDisplay for MacDisplay {
             }
         };
         refresh_interval_from_hz(screen_hertz).or_else(|| {
-            CGDisplay::new(self.0)
-                .display_mode()
-                .and_then(|mode| refresh_interval_from_hz(mode.refresh_rate()))
+            CGDisplay::new(self.0).display_mode().and_then(|mode| refresh_interval_from_hz(mode.refresh_rate()))
         })
     }
 }
@@ -187,8 +184,7 @@ impl MacDisplay {
 
         for screen in unsafe { array_iter(screens) } {
             let device_description: id = unsafe { msg_send![screen, deviceDescription] };
-            let screen_number: id =
-                unsafe { msg_send![device_description, objectForKey: screen_number_key] };
+            let screen_number: id = unsafe { msg_send![device_description, objectForKey: screen_number_key] };
             let screen_id: NSUInteger = msg_send![screen_number, unsignedIntegerValue];
             if screen_id as CGDirectDisplayID == self.0 {
                 return screen;

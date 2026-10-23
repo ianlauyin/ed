@@ -1,9 +1,22 @@
 use std::borrow::Borrow;
 use std::rc::Rc;
 
+use gpui::Action;
+use gpui::AnyElement;
+use gpui::AnyView;
+use gpui::AppContext;
+use gpui::FocusHandle;
+use gpui::IntoElement;
+use gpui::Render;
+
+use crate::Color;
+use crate::KeyBinding;
+use crate::Label;
+use crate::LabelSize;
+use crate::StyledExt;
+use crate::h_flex;
 use crate::prelude::*;
-use crate::{Color, KeyBinding, Label, LabelSize, StyledExt, h_flex, v_flex};
-use gpui::{Action, AnyElement, AnyView, AppContext, FocusHandle, IntoElement, Render};
+use crate::v_flex;
 
 #[derive(RegisterComponent)]
 pub struct Tooltip {
@@ -35,24 +48,12 @@ impl RenderOnce for Title {
 
 impl Tooltip {
     pub fn simple(title: impl Into<SharedString>, cx: &mut App) -> AnyView {
-        cx.new(|_| Self {
-            title: Title::Str(title.into()),
-            meta: None,
-            key_binding: None,
-        })
-        .into()
+        cx.new(|_| Self { title: Title::Str(title.into()), meta: None, key_binding: None }).into()
     }
 
     pub fn text(title: impl Into<SharedString>) -> impl Fn(&mut Window, &mut App) -> AnyView {
         let title = title.into();
-        move |_, cx| {
-            cx.new(|_| Self {
-                title: title.clone().into(),
-                meta: None,
-                key_binding: None,
-            })
-            .into()
-        }
+        move |_, cx| cx.new(|_| Self { title: title.clone().into(), meta: None, key_binding: None }).into()
     }
 
     pub fn for_action_title<T: Into<SharedString>>(
@@ -83,21 +84,13 @@ impl Tooltip {
             cx.new(|cx| Self {
                 title: Title::Str(title.clone()),
                 meta: None,
-                key_binding: Some(KeyBinding::for_action_in(
-                    action.as_ref(),
-                    &focus_handle,
-                    cx,
-                )),
+                key_binding: Some(KeyBinding::for_action_in(action.as_ref(), &focus_handle, cx)),
             })
             .into()
         }
     }
 
-    pub fn for_action(
-        title: impl Into<SharedString>,
-        action: &dyn Action,
-        cx: &mut App,
-    ) -> AnyView {
+    pub fn for_action(title: impl Into<SharedString>, action: &dyn Action, cx: &mut App) -> AnyView {
         cx.new(|cx| Self {
             title: Title::Str(title.into()),
             meta: None,
@@ -150,19 +143,11 @@ impl Tooltip {
     }
 
     pub fn new(title: impl Into<SharedString>) -> Self {
-        Self {
-            title: title.into().into(),
-            meta: None,
-            key_binding: None,
-        }
+        Self { title: title.into().into(), meta: None, key_binding: None }
     }
 
     pub fn new_element(title: impl Fn(&mut Window, &mut App) -> AnyElement + 'static) -> Self {
-        Self {
-            title: Title::Callback(Rc::new(title)),
-            meta: None,
-            key_binding: None,
-        }
+        Self { title: Title::Callback(Rc::new(title)), meta: None, key_binding: None }
     }
 
     pub fn element(
@@ -171,12 +156,7 @@ impl Tooltip {
         let title = Title::Callback(Rc::new(title));
         move |_, cx| {
             let title = title.clone();
-            cx.new(|_| Self {
-                title,
-                meta: None,
-                key_binding: None,
-            })
-            .into()
+            cx.new(|_| Self { title, meta: None, key_binding: None }).into()
         }
     }
 
@@ -198,16 +178,10 @@ impl Render for Tooltip {
                 h_flex()
                     .gap_4()
                     .child(div().max_w_72().child(self.title.clone()))
-                    .when_some(self.key_binding.clone(), |this, key_binding| {
-                        this.justify_between().child(key_binding)
-                    }),
+                    .when_some(self.key_binding.clone(), |this, key_binding| this.justify_between().child(key_binding)),
             )
             .when_some(self.meta.clone(), |this, meta| {
-                this.child(
-                    div()
-                        .max_w_72()
-                        .child(Label::new(meta).size(LabelSize::Small).color(Color::Muted)),
-                )
+                this.child(div().max_w_72().child(Label::new(meta).size(LabelSize::Small).color(Color::Muted)))
             })
         })
     }
@@ -238,7 +212,7 @@ pub struct LinkPreview {
 }
 
 impl LinkPreview {
-    pub fn new(url: &str, cx: &mut App) -> AnyView {
+    pub fn build(url: &str, cx: &mut App) -> AnyView {
         let mut wrapped_url = String::new();
         for (i, ch) in url.chars().enumerate() {
             if i == 500 {
@@ -250,21 +224,14 @@ impl LinkPreview {
             }
             wrapped_url.push(ch);
         }
-        cx.new(|_| LinkPreview {
-            link: wrapped_url.into(),
-        })
-        .into()
+        cx.new(|_| LinkPreview { link: wrapped_url.into() }).into()
     }
 }
 
 impl Render for LinkPreview {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         tooltip_container(cx, |el, _| {
-            el.child(
-                Label::new(self.link.clone())
-                    .size(LabelSize::XSmall)
-                    .color(Color::Muted),
-            )
+            el.child(Label::new(self.link.clone()).size(LabelSize::XSmall).color(Color::Muted))
         })
     }
 }
@@ -282,9 +249,7 @@ impl Component for Tooltip {
     fn preview(_window: &mut Window, _cx: &mut App) -> AnyElement {
         example_group(vec![single_example(
             "Text only",
-            Button::new("delete-example", "Delete")
-                .tooltip(Tooltip::text("This is a tooltip!"))
-                .into_any_element(),
+            Button::new("delete-example", "Delete").tooltip(Tooltip::text("This is a tooltip!")).into_any_element(),
         )])
         .into_any_element()
     }

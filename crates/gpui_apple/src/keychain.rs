@@ -1,10 +1,25 @@
-use objc2_core_foundation::{CFData, CFDictionary, CFRetained, CFString, CFType, kCFBooleanTrue};
-use objc2_security::{
-    SecItemAdd, SecItemCopyMatching, SecItemDelete, SecItemUpdate, errSecItemNotFound,
-    errSecSuccess, errSecUserCanceled, kSecAttrAccount, kSecAttrServer, kSecClass,
-    kSecClassInternetPassword, kSecReturnAttributes, kSecReturnData, kSecValueData,
-};
 use std::ptr;
+
+use objc2_core_foundation::CFData;
+use objc2_core_foundation::CFDictionary;
+use objc2_core_foundation::CFRetained;
+use objc2_core_foundation::CFString;
+use objc2_core_foundation::CFType;
+use objc2_core_foundation::kCFBooleanTrue;
+use objc2_security::SecItemAdd;
+use objc2_security::SecItemCopyMatching;
+use objc2_security::SecItemDelete;
+use objc2_security::SecItemUpdate;
+use objc2_security::errSecItemNotFound;
+use objc2_security::errSecSuccess;
+use objc2_security::errSecUserCanceled;
+use objc2_security::kSecAttrAccount;
+use objc2_security::kSecAttrServer;
+use objc2_security::kSecClass;
+use objc2_security::kSecClassInternetPassword;
+use objc2_security::kSecReturnAttributes;
+use objc2_security::kSecReturnData;
+use objc2_security::kSecValueData;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum KeychainOperation {
@@ -17,40 +32,20 @@ pub enum KeychainOperation {
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum KeychainError {
     #[error("keychain {operation:?} failed with OSStatus {status}")]
-    Security {
-        operation: KeychainOperation,
-        status: i32,
-    },
+    Security { operation: KeychainOperation, status: i32 },
     #[error("invalid keychain response: {0}")]
     InvalidResponse(&'static str),
 }
 
-pub fn write_credentials(
-    server: &str,
-    account: &str,
-    password: &[u8],
-) -> Result<(), KeychainError> {
+pub fn write_credentials(server: &str, account: &str, password: &[u8]) -> Result<(), KeychainError> {
     let server = CFString::from_str(server);
     let account = CFString::from_str(account);
     let password = CFData::from_bytes(password);
     // SAFETY: Reading immutable constants exported by the Security framework.
-    let (class_key, server_key, account_key, data_key, internet_password) = unsafe {
-        (
-            kSecClass,
-            kSecAttrServer,
-            kSecAttrAccount,
-            kSecValueData,
-            kSecClassInternetPassword,
-        )
-    };
-    let query = CFDictionary::<CFString, CFType>::from_slices(
-        &[class_key, server_key],
-        &[internet_password, &server],
-    );
-    let attributes = CFDictionary::<CFString, CFType>::from_slices(
-        &[account_key, data_key],
-        &[&account, &password],
-    );
+    let (class_key, server_key, account_key, data_key, internet_password) =
+        unsafe { (kSecClass, kSecAttrServer, kSecAttrAccount, kSecValueData, kSecClassInternetPassword) };
+    let query = CFDictionary::<CFString, CFType>::from_slices(&[class_key, server_key], &[internet_password, &server]);
+    let attributes = CFDictionary::<CFString, CFType>::from_slices(&[account_key, data_key], &[&account, &password]);
     let mut operation = KeychainOperation::Update;
     // SAFETY: Both dictionaries map Security attribute keys to CF values.
     let mut status = unsafe { SecItemUpdate(query.as_opaque(), attributes.as_opaque()) };
@@ -70,44 +65,23 @@ pub fn write_credentials(
 pub fn read_credentials(server: &str) -> Result<Option<(String, Vec<u8>)>, KeychainError> {
     let server = CFString::from_str(server);
     // SAFETY: Reading immutable constants exported by Core Foundation and Security.
-    let (
-        true_value,
-        class_key,
-        server_key,
-        return_attributes_key,
-        return_data_key,
-        internet_password,
-    ) = unsafe {
-        (
-            kCFBooleanTrue,
-            kSecClass,
-            kSecAttrServer,
-            kSecReturnAttributes,
-            kSecReturnData,
-            kSecClassInternetPassword,
-        )
+    let (true_value, class_key, server_key, return_attributes_key, return_data_key, internet_password) = unsafe {
+        (kCFBooleanTrue, kSecClass, kSecAttrServer, kSecReturnAttributes, kSecReturnData, kSecClassInternetPassword)
     };
-    let true_value = true_value.ok_or(KeychainError::InvalidResponse(
-        "Core Foundation true value unavailable",
-    ))?;
+    let true_value = true_value.ok_or(KeychainError::InvalidResponse("Core Foundation true value unavailable"))?;
     let query = CFDictionary::<CFString, CFType>::from_slices(
-        &[
-            class_key,
-            server_key,
-            return_attributes_key,
-            return_data_key,
-        ],
+        &[class_key, server_key, return_attributes_key, return_data_key],
         &[internet_password, &server, true_value, true_value],
     );
     let mut result = ptr::null();
     // SAFETY: The query maps Security attribute keys to CF values, and `result`
     // is a valid out-pointer.
-    let status = unsafe { SecItemCopyMatching(query.as_opaque(), &mut result) };
+    let status = unsafe { SecItemCopyMatching(query.as_opaque(), &raw mut result) };
     if !read_status(status)? {
         return Ok(None);
     }
-    let result = ptr::NonNull::new(result.cast_mut())
-        .ok_or(KeychainError::InvalidResponse("keychain returned no item"))?;
+    let result =
+        ptr::NonNull::new(result.cast_mut()).ok_or(KeychainError::InvalidResponse("keychain returned no item"))?;
     // SAFETY: SecItemCopyMatching follows the Create rule, so we own this reference.
     let result = unsafe { CFRetained::from_raw(result) }
         .downcast::<CFDictionary>()
@@ -118,16 +92,12 @@ pub fn read_credentials(server: &str) -> Result<Option<(String, Vec<u8>)>, Keych
     let (account_key, data_key) = unsafe { (kSecAttrAccount, kSecValueData) };
     let account = result
         .get(account_key)
-        .ok_or(KeychainError::InvalidResponse(
-            "account was missing from keychain item",
-        ))?
+        .ok_or(KeychainError::InvalidResponse("account was missing from keychain item"))?
         .downcast::<CFString>()
         .map_err(|_| KeychainError::InvalidResponse("account was not a string"))?;
     let password = result
         .get(data_key)
-        .ok_or(KeychainError::InvalidResponse(
-            "password was missing from keychain item",
-        ))?
+        .ok_or(KeychainError::InvalidResponse("password was missing from keychain item"))?
         .downcast::<CFData>()
         .map_err(|_| KeychainError::InvalidResponse("password was not data"))?;
     Ok(Some((account.to_string(), password.to_vec())))
@@ -136,12 +106,8 @@ pub fn read_credentials(server: &str) -> Result<Option<(String, Vec<u8>)>, Keych
 pub fn delete_credentials(server: &str) -> Result<(), KeychainError> {
     let server = CFString::from_str(server);
     // SAFETY: Reading immutable constants exported by the Security framework.
-    let (class_key, server_key, internet_password) =
-        unsafe { (kSecClass, kSecAttrServer, kSecClassInternetPassword) };
-    let query = CFDictionary::<CFString, CFType>::from_slices(
-        &[class_key, server_key],
-        &[internet_password, &server],
-    );
+    let (class_key, server_key, internet_password) = unsafe { (kSecClass, kSecAttrServer, kSecClassInternetPassword) };
+    let query = CFDictionary::<CFString, CFType>::from_slices(&[class_key, server_key], &[internet_password, &server]);
     // SAFETY: The query maps Security attribute keys to CF values.
     let status = unsafe { SecItemDelete(query.as_opaque()) };
     check_status(KeychainOperation::Delete, status)
@@ -156,10 +122,6 @@ fn read_status(status: i32) -> Result<bool, KeychainError> {
     }
 }
 
-fn check_status(operation: KeychainOperation, status: i32) -> Result<(), KeychainError> {
-    if status == errSecSuccess {
-        Ok(())
-    } else {
-        Err(KeychainError::Security { operation, status })
-    }
+const fn check_status(operation: KeychainOperation, status: i32) -> Result<(), KeychainError> {
+    if status == errSecSuccess { Ok(()) } else { Err(KeychainError::Security { operation, status }) }
 }

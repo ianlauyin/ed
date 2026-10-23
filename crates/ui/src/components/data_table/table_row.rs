@@ -4,12 +4,15 @@
 //! It is especially useful for CSV or tabular data where rectangular invariants must be maintained, but the number of columns is only known at runtime.
 //! By using `TableRow`, we gain stronger guarantees and safer APIs compared to a bare `Vec<T>`, without requiring const generics.
 
-use std::{
-    any::type_name,
-    ops::{
-        Index, IndexMut, Range, RangeFrom, RangeFull, RangeInclusive, RangeTo, RangeToInclusive,
-    },
-};
+use std::any::type_name;
+use std::ops::Index;
+use std::ops::IndexMut;
+use std::ops::Range;
+use std::ops::RangeFrom;
+use std::ops::RangeFull;
+use std::ops::RangeInclusive;
+use std::ops::RangeTo;
+use std::ops::RangeToInclusive;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct TableRow<T>(Vec<T>);
@@ -42,11 +45,7 @@ impl<T> TableRow<T> {
     /// Returns `Ok(TableRow)` if the length matches, or an `Err` with a descriptive message otherwise.
     pub fn try_from_vec(data: Vec<T>, expected_len: usize) -> Result<Self, String> {
         if data.len() != expected_len {
-            Err(format!(
-                "Row length {} does not match expected {}",
-                data.len(),
-                expected_len
-            ))
+            Err(format!("Row length {} does not match expected {}", data.len(), expected_len))
         } else {
             Ok(Self(data))
         }
@@ -58,12 +57,7 @@ impl<T> TableRow<T> {
     /// Panics if `col` is out of bounds (i.e., `col >= self.cols()`).
     pub fn expect_get(&self, col: impl Into<usize>) -> &T {
         let col = col.into();
-        self.0.get(col).unwrap_or_else(|| {
-            panic!(
-                "Expected table row of `{}` to have {col:?}",
-                type_name::<T>()
-            )
-        })
+        self.0.get(col).unwrap_or_else(|| panic!("Expected table row of `{}` to have {col:?}", type_name::<T>()))
     }
 
     pub fn get(&self, col: impl Into<usize>) -> Option<&T> {
@@ -126,7 +120,7 @@ impl<T> TableRow<T> {
     }
 
     /// Number of columns (alias to `len()` with more semantic meaning)
-    pub fn cols(&self) -> usize {
+    pub const fn cols(&self) -> usize {
         self.0.len()
     }
 }

@@ -5,9 +5,10 @@
 //! The code is a near-verbatim copy of upstream; the only notable changes are
 //! `PathStyle`-related: the separator helpers delegate to [`PathStyle::Windows`].
 
-use crate::PathStyle;
 use std::ffi::OsStr;
 use std::path::Prefix;
+
+use crate::PathStyle;
 
 struct PrefixParser<'a, const LEN: usize> {
     path: &'a OsStr,
@@ -26,18 +27,11 @@ impl<'a, const LEN: usize> PrefixParser<'a, LEN> {
     }
 
     fn new(path: &'a OsStr) -> Self {
-        Self {
-            path,
-            prefix: Self::get_prefix(path),
-        }
+        Self { path, prefix: Self::get_prefix(path) }
     }
 
     fn as_slice(&self) -> PrefixParserSlice<'a, '_> {
-        PrefixParserSlice {
-            path: self.path,
-            prefix: &self.prefix[..LEN.min(self.path.len())],
-            index: 0,
-        }
+        PrefixParserSlice { path: self.path, prefix: &self.prefix[..LEN.min(self.path.len())], index: 0 }
     }
 }
 
@@ -51,10 +45,7 @@ impl<'a> PrefixParserSlice<'a, '_> {
     fn strip_prefix(&self, prefix: &str) -> Option<Self> {
         self.prefix[self.index..]
             .starts_with(prefix.as_bytes())
-            .then_some(Self {
-                index: self.index + prefix.len(),
-                ..*self
-            })
+            .then_some(Self { index: self.index + prefix.len(), ..*self })
     }
 
     fn prefix_bytes(&self) -> &'a [u8] {
@@ -71,7 +62,12 @@ impl<'a> PrefixParserSlice<'a, '_> {
 }
 
 pub fn parse_prefix(path: &OsStr) -> Option<Prefix<'_>> {
-    use Prefix::{DeviceNS, Disk, UNC, Verbatim, VerbatimDisk, VerbatimUNC};
+    use Prefix::DeviceNS;
+    use Prefix::Disk;
+    use Prefix::UNC;
+    use Prefix::Verbatim;
+    use Prefix::VerbatimDisk;
+    use Prefix::VerbatimUNC;
 
     let parser = PrefixParser::<8>::new(path);
     let parser = parser.as_slice();
@@ -140,7 +136,7 @@ pub fn parse_prefix(path: &OsStr) -> Option<Prefix<'_>> {
 fn parse_drive(path: &OsStr) -> Option<u8> {
     // In most DOS systems, it is not possible to have more than 26 drive letters.
     // See <https://en.wikipedia.org/wiki/Drive_letter_assignment#Common_assignments>.
-    fn is_valid_drive_letter(drive: &u8) -> bool {
+    const fn is_valid_drive_letter(drive: &u8) -> bool {
         drive.is_ascii_alphabetic()
     }
 
@@ -153,16 +149,7 @@ fn parse_drive(path: &OsStr) -> Option<u8> {
 // Parses a drive prefix exactly, e.g. "C:"
 fn parse_drive_exact(path: &OsStr) -> Option<u8> {
     // only parse two bytes: the drive letter and the drive separator
-    if path
-        .as_encoded_bytes()
-        .get(2)
-        .map(|&x| is_verbatim_sep(x))
-        .unwrap_or(true)
-    {
-        parse_drive(path)
-    } else {
-        None
-    }
+    if path.as_encoded_bytes().get(2).map(|&x| is_verbatim_sep(x)).unwrap_or(true) { parse_drive(path) } else { None }
 }
 
 // Parse the next path component.
@@ -170,11 +157,7 @@ fn parse_drive_exact(path: &OsStr) -> Option<u8> {
 // Returns the next component and the rest of the path excluding the component and separator.
 // Does not recognize `/` as a separator character on Windows if `verbatim` is true.
 pub(crate) fn parse_next_component(path: &OsStr, verbatim: bool) -> (&OsStr, &OsStr) {
-    let separator = if verbatim {
-        is_verbatim_sep
-    } else {
-        is_sep_byte
-    };
+    let separator = if verbatim { is_verbatim_sep } else { is_sep_byte };
 
     match path.as_encoded_bytes().iter().position(|&x| separator(x)) {
         Some(separator_start) => {
@@ -190,23 +173,18 @@ pub(crate) fn parse_next_component(path: &OsStr, verbatim: bool) -> (&OsStr, &Os
             // is encoded in a single byte, therefore `bytes[separator_start]` and
             // `bytes[separator_end]` must be code point boundaries and thus
             // `bytes[..separator_start]` and `bytes[separator_end..]` are valid wtf8 slices.
-            unsafe {
-                (
-                    OsStr::from_encoded_bytes_unchecked(component),
-                    OsStr::from_encoded_bytes_unchecked(path),
-                )
-            }
+            unsafe { (OsStr::from_encoded_bytes_unchecked(component), OsStr::from_encoded_bytes_unchecked(path)) }
         }
         None => (path, OsStr::new("")),
     }
 }
 
 #[inline]
-fn is_verbatim_sep(b: u8) -> bool {
+const fn is_verbatim_sep(b: u8) -> bool {
     PathStyle::Windows.is_verbatim_sep(b)
 }
 
 #[inline]
-fn is_sep_byte(b: u8) -> bool {
+const fn is_sep_byte(b: u8) -> bool {
     PathStyle::Windows.is_sep_byte(b)
 }

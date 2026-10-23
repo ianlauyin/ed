@@ -1,39 +1,61 @@
 use anyhow::anyhow;
-use editor::{Editor, actions::DiffClipboardWithSelectionData};
-
-use workspace::{Toast, notifications::NotificationId};
+use editor::Editor;
+use editor::actions::DiffClipboardWithSelectionData;
+use workspace::Toast;
+use workspace::notifications::NotificationId;
 
 mod blame_ui;
 pub mod clone;
 
-use git::{
-    Oid,
-    repository::{Branch, CommitDetails, Upstream, UpstreamTracking, UpstreamTrackingStatus},
-    status::{FileStatus, StatusCode, UnmergedStatus, UnmergedStatusCode},
-};
-use gpui::{
-    App, ClipboardItem, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
-    SharedString, Subscription, Task, TaskExt, WeakEntity, Window,
-};
-use menu::{Cancel, Confirm};
+use git::Oid;
+use git::repository::Branch;
+use git::repository::CommitDetails;
+use git::repository::Upstream;
+use git::repository::UpstreamTracking;
+use git::repository::UpstreamTrackingStatus;
+use git::status::FileStatus;
+use git::status::StatusCode;
+use git::status::UnmergedStatus;
+use git::status::UnmergedStatusCode;
+use gpui::App;
+use gpui::ClipboardItem;
+use gpui::Context;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::SharedString;
+use gpui::Subscription;
+use gpui::Task;
+use gpui::TaskExt;
+use gpui::WeakEntity;
+use gpui::Window;
+use menu::Cancel;
+use menu::Confirm;
 use notifications::status_toast::StatusToast;
 use project::git_store::Repository;
 use project_diff::ProjectDiff;
 use time::OffsetDateTime;
-use ui::{ButtonLike, ContextMenu, ElevationIndex, PopoverMenuHandle, TintColor, prelude::*};
+use ui::ButtonLike;
+use ui::ContextMenu;
+use ui::ElevationIndex;
+use ui::PopoverMenuHandle;
+use ui::TintColor;
+use ui::prelude::*;
 use util::ResultExt as _;
-use workspace::{
-    ModalView, OpenMode, Workspace,
-    notifications::{DetachAndPromptErr, NotifyTaskExt},
-};
-use zed_actions;
+use workspace::ModalView;
+use workspace::OpenMode;
+use workspace::Workspace;
+use workspace::notifications::DetachAndPromptErr;
+use workspace::notifications::NotifyTaskExt;
 
-use crate::{
-    commit_view::CommitView,
-    git_panel::{GitPanel, GitStatusEntry, RemoteOperationKind},
-    solo_diff_view::SoloDiffView,
-    text_diff_view::TextDiffView,
-};
+use crate::commit_view::CommitView;
+use crate::git_panel::GitPanel;
+use crate::git_panel::GitStatusEntry;
+use crate::git_panel::RemoteOperationKind;
+use crate::solo_diff_view::SoloDiffView;
+use crate::text_diff_view::TextDiffView;
 
 pub mod branch_diff;
 pub mod branch_picker;
@@ -81,18 +103,12 @@ pub fn init(cx: &mut App) {
     git_ui_core::set_file_history_opener(
         |workspace, project_path, window, cx| {
             let Some((repo_id, log_source)) =
-                git_graph::resolve_file_history_target_from_project_path(
-                    workspace,
-                    project_path,
-                    cx,
-                )
+                git_graph::resolve_file_history_target_from_project_path(workspace, project_path, cx)
             else {
                 return;
             };
             let git_store = workspace.project().read(cx).git_store().clone();
-            git_graph::open_or_reuse_graph(
-                workspace, repo_id, git_store, log_source, None, window, cx,
-            );
+            git_graph::open_or_reuse_graph(workspace, repo_id, git_store, log_source, None, window, cx);
         },
         cx,
     );
@@ -111,20 +127,12 @@ pub fn init(cx: &mut App) {
         repository_selector::register(workspace);
         git_picker::register(workspace);
 
-        workspace.register_action(
-            |workspace, action: &zed_actions::CreateWorktree, window, cx| {
-                git_ui_core::worktree_service::handle_create_worktree(
-                    workspace, action, window, None, cx,
-                );
-            },
-        );
-        workspace.register_action(
-            |workspace, action: &zed_actions::SwitchWorktree, window, cx| {
-                git_ui_core::worktree_service::handle_switch_worktree(
-                    workspace, action, window, None, cx,
-                );
-            },
-        );
+        workspace.register_action(|workspace, action: &zed_actions::CreateWorktree, window, cx| {
+            git_ui_core::worktree_service::handle_create_worktree(workspace, action, window, None, cx);
+        });
+        workspace.register_action(|workspace, action: &zed_actions::SwitchWorktree, window, cx| {
+            git_ui_core::worktree_service::handle_switch_worktree(workspace, action, window, None, cx);
+        });
 
         workspace.register_action(|workspace, _: &zed_actions::git::Worktree, window, cx| {
             let focused_dock = workspace.focused_dock_position(window, cx);
@@ -141,37 +149,32 @@ pub fn init(cx: &mut App) {
             });
         });
 
-        workspace.register_action(
-            |workspace, action: &zed_actions::OpenWorktreeInNewWindow, window, cx| {
-                let path = action.path.clone();
-                let is_remote = !workspace.project().read(cx).is_local();
+        workspace.register_action(|workspace, action: &zed_actions::OpenWorktreeInNewWindow, window, cx| {
+            let path = action.path.clone();
+            let is_remote = !workspace.project().read(cx).is_local();
 
-                if is_remote {
-                    let connection_options =
-                        workspace.project().read(cx).remote_connection_options(cx);
-                    let app_state = workspace.app_state().clone();
-                    let workspace_handle = workspace.weak_handle();
-                    cx.spawn_in(window, async move |_, cx| {
-                        if let Some(connection_options) = connection_options {
-                            git_ui_core::worktree_picker::open_remote_worktree(
-                                connection_options,
-                                vec![path],
-                                app_state,
-                                workspace_handle,
-                                cx,
-                            )
-                            .await?;
-                        }
-                        anyhow::Ok(())
-                    })
-                    .detach_and_log_err(cx);
-                } else {
-                    workspace
-                        .open_workspace_for_paths(OpenMode::NewWindow, vec![path], window, cx)
-                        .detach_and_log_err(cx);
-                }
-            },
-        );
+            if is_remote {
+                let connection_options = workspace.project().read(cx).remote_connection_options(cx);
+                let app_state = workspace.app_state().clone();
+                let workspace_handle = workspace.weak_handle();
+                cx.spawn_in(window, async move |_, cx| {
+                    if let Some(connection_options) = connection_options {
+                        git_ui_core::worktree_picker::open_remote_worktree(
+                            connection_options,
+                            vec![path],
+                            app_state,
+                            workspace_handle,
+                            cx,
+                        )
+                        .await?;
+                    }
+                    anyhow::Ok(())
+                })
+                .detach_and_log_err(cx);
+            } else {
+                workspace.open_workspace_for_paths(OpenMode::NewWindow, vec![path], window, cx).detach_and_log_err(cx);
+            }
+        });
 
         let project = workspace.project().read(cx);
         if project.is_read_only(cx) {
@@ -312,29 +315,18 @@ pub fn init(cx: &mut App) {
                 return;
             };
 
-            workspace.toggle_modal(window, cx, |window, cx| {
-                GitCloneModal::show(panel, window, cx)
-            });
+            workspace.toggle_modal(window, cx, |window, cx| GitCloneModal::show(panel, window, cx));
         });
         workspace.register_action(|workspace, _: &git::OpenModifiedFiles, window, cx| {
             open_modified_files(workspace, window, cx);
         });
         workspace.register_action_renderer(|div, workspace, _window, cx| {
-            div.when_some(
-                file_diff_entry(workspace, cx),
-                |div, (entry, repository)| {
-                    let workspace = workspace.weak_handle();
-                    div.on_action(move |_: &git::OpenFileDiff, window, cx| {
-                        open_file_diff(
-                            entry.clone(),
-                            repository.clone(),
-                            workspace.clone(),
-                            window,
-                            cx,
-                        );
-                    })
-                },
-            )
+            div.when_some(file_diff_entry(workspace, cx), |div, (entry, repository)| {
+                let workspace = workspace.weak_handle();
+                div.on_action(move |_: &git::OpenFileDiff, window, cx| {
+                    open_file_diff(entry.clone(), repository.clone(), workspace.clone(), window, cx);
+                })
+            })
         });
         workspace.register_action(|workspace, _: &git::RenameBranch, window, cx| {
             rename_current_branch(workspace, window, cx);
@@ -346,13 +338,11 @@ pub fn init(cx: &mut App) {
             copy_branch_name(workspace, cx);
         });
         workspace.register_action(show_ref_picker);
-        workspace.register_action(
-            |workspace, action: &DiffClipboardWithSelectionData, window, cx| {
-                if let Some(task) = TextDiffView::open(action, workspace, window, cx) {
-                    task.detach();
-                };
-            },
-        );
+        workspace.register_action(|workspace, action: &DiffClipboardWithSelectionData, window, cx| {
+            if let Some(task) = TextDiffView::open(action, workspace, window, cx) {
+                task.detach();
+            };
+        });
     })
     .detach();
 }
@@ -361,7 +351,7 @@ fn open_file_diff(
     entry: GitStatusEntry,
     repository: Entity<Repository>,
     workspace: WeakEntity<Workspace>,
-    window: &mut Window,
+    window: &Window,
     cx: &mut App,
 ) {
     window.defer(cx, move |window, cx| {
@@ -370,39 +360,25 @@ fn open_file_diff(
     });
 }
 
-fn file_diff_entry(
-    workspace: &Workspace,
-    cx: &App,
-) -> Option<(GitStatusEntry, Entity<Repository>)> {
+fn file_diff_entry(workspace: &Workspace, cx: &App) -> Option<(GitStatusEntry, Entity<Repository>)> {
     let project_path = workspace.active_item(cx)?.project_path(cx)?;
 
-    workspace
-        .project()
-        .read(cx)
-        .repositories(cx)
-        .values()
-        .find_map(|repository| {
-            let repo_path = repository
-                .read(cx)
-                .project_path_to_repo_path(&project_path, cx)?;
-            let status_entry = repository.read(cx).status_for_path(&repo_path)?;
-            Some((
-                GitStatusEntry {
-                    repo_path,
-                    status: status_entry.status,
-                    staging: status_entry.status.staging(),
-                    diff_stat: status_entry.diff_stat,
-                },
-                repository.clone(),
-            ))
-        })
+    workspace.project().read(cx).repositories(cx).values().find_map(|repository| {
+        let repo_path = repository.read(cx).project_path_to_repo_path(&project_path, cx)?;
+        let status_entry = repository.read(cx).status_for_path(&repo_path)?;
+        Some((
+            GitStatusEntry {
+                repo_path,
+                status: status_entry.status,
+                staging: status_entry.status.staging(),
+                diff_stat: status_entry.diff_stat,
+            },
+            repository.clone(),
+        ))
+    })
 }
 
-fn open_modified_files(
-    workspace: &mut Workspace,
-    window: &mut Window,
-    cx: &mut Context<Workspace>,
-) {
+fn open_modified_files(workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace>) {
     let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
         return;
     };
@@ -413,11 +389,7 @@ fn open_modified_files(
         let repo = repo.read(cx);
         repo.cached_status()
             .filter_map(|entry| {
-                if entry.status.is_modified() {
-                    repo.repo_path_to_project_path(&entry.repo_path, cx)
-                } else {
-                    None
-                }
+                if entry.status.is_modified() { repo.repo_path_to_project_path(&entry.repo_path, cx) } else { None }
             })
             .collect()
     });
@@ -437,22 +409,13 @@ struct RenameBranchModal {
 }
 
 impl RenameBranchModal {
-    fn new(
-        current_branch: String,
-        repo: Entity<Repository>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    fn new(current_branch: String, repo: Entity<Repository>, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let editor = cx.new(|cx| {
             let mut editor = Editor::single_line(window, cx);
             editor.set_text(current_branch.clone(), window, cx);
             editor
         });
-        Self {
-            current_branch: current_branch.into(),
-            editor,
-            repo,
-        }
+        Self { current_branch: current_branch.into(), editor, repo }
     }
 
     fn cancel(&mut self, _: &Cancel, _window: &mut Window, cx: &mut Context<Self>) {
@@ -469,12 +432,7 @@ impl RenameBranchModal {
         let repo = self.repo.clone();
         let current_branch = self.current_branch.to_string();
         cx.spawn(async move |_, cx| {
-            match repo
-                .update(cx, |repo, _| {
-                    repo.rename_branch(current_branch, new_name.clone())
-                })
-                .await
-            {
+            match repo.update(cx, |repo, _| repo.rename_branch(current_branch, new_name.clone())).await {
                 Ok(Ok(_)) => Ok(()),
                 Ok(Err(error)) => Err(error),
                 Err(_) => Err(anyhow!("Operation was canceled")),
@@ -510,8 +468,7 @@ impl Render for RenameBranchModal {
                     .gap_1p5()
                     .child(Icon::new(IconName::GitBranch).size(IconSize::XSmall))
                     .child(
-                        Headline::new(format!("Rename Branch ({})", self.current_branch))
-                            .size(HeadlineSize::XSmall),
+                        Headline::new(format!("Rename Branch ({})", self.current_branch)).size(HeadlineSize::XSmall),
                     ),
             )
             .child(div().px_3().pb_3().w_full().child(self.editor.clone()))
@@ -540,13 +497,7 @@ impl CreateTagModal {
             editor.set_placeholder_text("Tag name", window, cx);
             editor
         });
-        Self {
-            commit,
-            at_head,
-            editor,
-            repo,
-            workspace,
-        }
+        Self { commit, at_head, editor, repo, workspace }
     }
 
     fn tag_target_commit_label(&self) -> String {
@@ -572,13 +523,9 @@ impl CreateTagModal {
         let repo = self.repo.clone();
         let commit = self.commit.to_string();
         let workspace = self.workspace.clone();
-        let success_message = format!(
-            "Created tag \"{tag_name}\" at {}",
-            self.tag_target_commit_label()
-        );
+        let success_message = format!("Created tag \"{tag_name}\" at {}", self.tag_target_commit_label());
         cx.spawn(async move |_, cx| {
-            repo.update(cx, |repo, _| repo.create_tag(tag_name, commit))
-                .await??;
+            repo.update(cx, |repo, _| repo.create_tag(tag_name, commit)).await??;
 
             workspace
                 .update(cx, |workspace, cx| {
@@ -588,9 +535,7 @@ impl CreateTagModal {
                 .log_err();
             Ok(())
         })
-        .detach_and_prompt_err("Failed to create tag", window, cx, |error, _, _| {
-            Some(error.to_string())
-        });
+        .detach_and_prompt_err("Failed to create tag", window, cx, |error, _, _| Some(error.to_string()));
         cx.emit(DismissEvent);
     }
 }
@@ -626,11 +571,7 @@ impl Render for CreateTagModal {
     }
 }
 
-fn rename_current_branch(
-    workspace: &mut Workspace,
-    window: &mut Window,
-    cx: &mut Context<Workspace>,
-) {
+fn rename_current_branch(workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace>) {
     let Some(panel) = workspace.panel::<git_panel::GitPanel>(cx) else {
         return;
     };
@@ -649,20 +590,14 @@ fn rename_current_branch(
         return;
     };
 
-    workspace.toggle_modal(window, cx, |window, cx| {
-        RenameBranchModal::new(current_branch_name, repo, window, cx)
-    });
+    workspace.toggle_modal(window, cx, |window, cx| RenameBranchModal::new(current_branch_name, repo, window, cx));
 }
 
 fn create_tag_at_head(workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace>) {
     let Some(repo) = workspace.project().read(cx).active_repository(cx) else {
         return;
     };
-    let Some(commit) = repo
-        .read(cx)
-        .head_commit
-        .as_ref()
-        .and_then(|commit| Oid::try_from(commit.sha.as_ref()).ok())
+    let Some(commit) = repo.read(cx).head_commit.as_ref().and_then(|commit| Oid::try_from(commit.sha.as_ref()).ok())
     else {
         return;
     };
@@ -683,7 +618,7 @@ pub(crate) fn create_tag_at_commit(
     });
 }
 
-fn copy_branch_name(workspace: &mut Workspace, cx: &mut Context<Workspace>) {
+fn copy_branch_name(workspace: &Workspace, cx: &mut Context<Workspace>) {
     let Some(panel) = workspace.panel::<GitPanel>(cx) else {
         return;
     };
@@ -719,27 +654,17 @@ impl RefPickerModal {
             editor
         });
 
-        let _editor_subscription = cx.subscribe_in(
-            &editor,
-            window,
-            |this, _editor, event: &editor::EditorEvent, window, cx| {
+        let _editor_subscription =
+            cx.subscribe_in(&editor, window, |this, _editor, event: &editor::EditorEvent, window, cx| {
                 if let editor::EditorEvent::BufferEdited = event {
                     this.lookup_commit_details(window, cx);
                 }
-            },
-        );
+            });
 
-        Self {
-            editor,
-            repo,
-            workspace,
-            commit_details: None,
-            lookup_task: None,
-            _editor_subscription,
-        }
+        Self { editor, repo, workspace, commit_details: None, lookup_task: None, _editor_subscription }
     }
 
-    fn lookup_commit_details(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn lookup_commit_details(&mut self, window: &Window, cx: &mut Context<Self>) {
         let git_ref = self.editor.read(cx).text(cx);
         let git_ref = git_ref.trim().to_string();
 
@@ -751,14 +676,9 @@ impl RefPickerModal {
 
         let repo = self.repo.clone();
         self.lookup_task = Some(cx.spawn_in(window, async move |this, cx| {
-            cx.background_executor()
-                .timer(std::time::Duration::from_millis(300))
-                .await;
+            cx.background_executor().timer(std::time::Duration::from_millis(300)).await;
 
-            let show_result = repo
-                .update(cx, |repo, _| repo.show(git_ref.clone()))
-                .await
-                .ok();
+            let show_result = repo.update(cx, |repo, _| repo.show(git_ref.clone())).await.ok();
 
             if let Some(show_future) = show_result {
                 if let Ok(details) = show_future {
@@ -854,8 +774,7 @@ impl Render for RefPickerModal {
         let commit_preview = self.commit_details.as_ref().map(|details| {
             let commit_time = OffsetDateTime::from_unix_timestamp(details.commit_timestamp)
                 .unwrap_or_else(|_| OffsetDateTime::now_utc());
-            let local_offset =
-                time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
+            let local_offset = time::UtcOffset::current_local_offset().unwrap_or(time::UtcOffset::UTC);
             let formatted_time = time_format::format_localized_timestamp(
                 commit_time,
                 OffsetDateTime::now_utc(),
@@ -872,18 +791,11 @@ impl Render for RefPickerModal {
                 .justify_between()
                 .overflow_x_hidden()
                 .child(
-                    div().max_w_96().child(
-                        Label::new(author_and_subject)
-                            .size(LabelSize::Small)
-                            .truncate()
-                            .color(Color::Muted),
-                    ),
+                    div()
+                        .max_w_96()
+                        .child(Label::new(author_and_subject).size(LabelSize::Small).truncate().color(Color::Muted)),
                 )
-                .child(
-                    Label::new(formatted_time)
-                        .size(LabelSize::Small)
-                        .color(Color::Muted),
-                )
+                .child(Label::new(formatted_time).size(LabelSize::Small).color(Color::Muted))
         });
 
         v_flex()
@@ -903,27 +815,18 @@ impl Render for RefPickerModal {
                     .child(Headline::new("View Commit").size(HeadlineSize::XSmall)),
             )
             .child(div().px_3().w_full().child(self.editor.clone()))
-            .when_some(commit_preview, |el, preview| {
-                el.child(div().px_3().pb_3().w_full().child(preview))
-            })
+            .when_some(commit_preview, |el, preview| el.child(div().px_3().pb_3().w_full().child(preview)))
             .when(!has_commit_details, |el| el.child(div().pb_3()))
     }
 }
 
-fn show_ref_picker(
-    workspace: &mut Workspace,
-    _: &git::ViewCommit,
-    window: &mut Window,
-    cx: &mut Context<Workspace>,
-) {
+fn show_ref_picker(workspace: &mut Workspace, _: &git::ViewCommit, window: &mut Window, cx: &mut Context<Workspace>) {
     let Some(repo) = workspace.project().read(cx).active_repository(cx) else {
         return;
     };
 
     let workspace_entity = cx.entity();
-    workspace.toggle_modal(window, cx, |window, cx| {
-        RefPickerModal::new(repo, workspace_entity, window, cx)
-    });
+    workspace.toggle_modal(window, cx, |window, cx| RefPickerModal::new(repo, workspace_entity, window, cx));
 }
 
 fn render_remote_button(
@@ -937,58 +840,53 @@ fn render_remote_button(
     let id = id.into();
     let upstream = branch.upstream.as_ref();
     match upstream {
-        Some(Upstream {
-            tracking: UpstreamTracking::Tracked(UpstreamTrackingStatus { ahead, behind }),
-            ..
-        }) => match (*ahead, *behind) {
-            (0, 0) if show_fetch_button => Some(remote_button::render_fetch_button(
-                keybinding_target,
-                id,
-                in_progress_operation,
-                menu_handle,
-            )),
-            (0, 0) => None,
-            (ahead, 0) => Some(remote_button::render_push_button(
-                keybinding_target,
-                id,
-                ahead,
-                in_progress_operation,
-                menu_handle,
-            )),
-            (ahead, behind) => Some(remote_button::render_pull_button(
-                keybinding_target,
-                id,
-                ahead,
-                behind,
-                in_progress_operation,
-                menu_handle,
-            )),
-        },
-        Some(Upstream {
-            tracking: UpstreamTracking::Gone,
-            ..
-        }) => Some(remote_button::render_republish_button(
-            keybinding_target,
-            id,
-            in_progress_operation,
-            menu_handle,
-        )),
-        None => Some(remote_button::render_publish_button(
-            keybinding_target,
-            id,
-            in_progress_operation,
-            menu_handle,
-        )),
+        Some(Upstream { tracking: UpstreamTracking::Tracked(UpstreamTrackingStatus { ahead, behind }), .. }) => {
+            match (*ahead, *behind) {
+                (0, 0) if show_fetch_button => {
+                    Some(remote_button::render_fetch_button(keybinding_target, id, in_progress_operation, menu_handle))
+                }
+                (0, 0) => None,
+                (ahead, 0) => Some(remote_button::render_push_button(
+                    keybinding_target,
+                    id,
+                    ahead,
+                    in_progress_operation,
+                    menu_handle,
+                )),
+                (ahead, behind) => Some(remote_button::render_pull_button(
+                    keybinding_target,
+                    id,
+                    ahead,
+                    behind,
+                    in_progress_operation,
+                    menu_handle,
+                )),
+            }
+        }
+        Some(Upstream { tracking: UpstreamTracking::Gone, .. }) => {
+            Some(remote_button::render_republish_button(keybinding_target, id, in_progress_operation, menu_handle))
+        }
+        None => Some(remote_button::render_publish_button(keybinding_target, id, in_progress_operation, menu_handle)),
     }
 }
 
 mod remote_button {
+    use gpui::Action;
+    use gpui::Anchor;
+    use gpui::AnyView;
+    use gpui::ClickEvent;
+    use gpui::FocusHandle;
+    use ui::ButtonLike;
+    use ui::CommonAnimationExt;
+    use ui::ContextMenu;
+    use ui::ElevationIndex;
+    use ui::PopoverMenu;
+    use ui::PopoverMenuHandle;
+    use ui::SplitButton;
+    use ui::Tooltip;
+    use ui::prelude::*;
+
     use crate::git_panel::RemoteOperationKind;
-    use gpui::{Action, Anchor, AnyView, ClickEvent, FocusHandle};
-    use ui::{
-        ButtonLike, CommonAnimationExt, ContextMenu, ElevationIndex, PopoverMenu,
-        PopoverMenuHandle, SplitButton, Tooltip, prelude::*,
-    };
 
     pub fn render_fetch_button(
         keybinding_target: Option<FocusHandle>,
@@ -1009,13 +907,7 @@ mod remote_button {
                 window.dispatch_action(Box::new(git::Fetch), cx);
             },
             move |_window, cx| {
-                git_action_tooltip(
-                    "Fetch updates from remote",
-                    &git::Fetch,
-                    "git fetch",
-                    keybinding_target.clone(),
-                    cx,
-                )
+                git_action_tooltip("Fetch updates from remote", &git::Fetch, "git fetch", keybinding_target.clone(), cx)
             },
         )
     }
@@ -1071,15 +963,7 @@ mod remote_button {
             move |_, window, cx| {
                 window.dispatch_action(Box::new(git::Pull), cx);
             },
-            move |_window, cx| {
-                git_action_tooltip(
-                    "Pull",
-                    &git::Pull,
-                    "git pull",
-                    keybinding_target.clone(),
-                    cx,
-                )
-            },
+            move |_window, cx| git_action_tooltip("Pull", &git::Pull, "git pull", keybinding_target.clone(), cx),
         )
     }
 
@@ -1143,7 +1027,7 @@ mod remote_button {
         )
     }
 
-    fn in_progress_tooltip(operation: RemoteOperationKind) -> &'static str {
+    const fn in_progress_tooltip(operation: RemoteOperationKind) -> &'static str {
         match operation {
             RemoteOperationKind::Fetch => "Fetch in Progress…",
             RemoteOperationKind::Pull => "Pull in Progress…",
@@ -1176,17 +1060,12 @@ mod remote_button {
         let menu_open = menu_handle.is_deployed();
 
         PopoverMenu::new(id.into())
-            .trigger(crate::render_split_button_chevron_trigger(
-                "split-button-right",
-                menu_open,
-            ))
+            .trigger(crate::render_split_button_chevron_trigger("split-button-right", menu_open))
             .with_handle(menu_handle)
             .menu(move |window, cx| {
                 Some(ContextMenu::build(window, cx, |context_menu, _, _| {
                     context_menu
-                        .when_some(keybinding_target.clone(), |el, keybinding_target| {
-                            el.context(keybinding_target)
-                        })
+                        .when_some(keybinding_target.clone(), |el, keybinding_target| el.context(keybinding_target))
                         .action("Fetch", git::Fetch.boxed_clone())
                         .action("Fetch From", git::FetchFrom.boxed_clone())
                         .action("Pull", git::Pull.boxed_clone())
@@ -1198,10 +1077,7 @@ mod remote_button {
                 }))
             })
             .anchor(Anchor::TopRight)
-            .offset(gpui::Point {
-                x: px(0.),
-                y: px(2.),
-            })
+            .offset(gpui::Point { x: px(0.), y: px(2.) })
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -1218,16 +1094,9 @@ mod remote_button {
         tooltip: impl Fn(&mut Window, &mut App) -> AnyView + 'static,
     ) -> SplitButton {
         fn count(count: usize) -> impl IntoElement {
-            h_flex()
-                .ml_neg_px()
-                .h(rems(0.875))
-                .overflow_hidden()
-                .px_0p5()
-                .child(
-                    Label::new(count.to_string())
-                        .size(LabelSize::XSmall)
-                        .line_height_style(LineHeightStyle::UiLabel),
-                )
+            h_flex().ml_neg_px().h(rems(0.875)).overflow_hidden().px_0p5().child(
+                Label::new(count.to_string()).size(LabelSize::XSmall).line_height_style(LineHeightStyle::UiLabel),
+            )
         }
 
         let should_render_counts = left_icon.is_none() && (ahead_count > 0 || behind_count > 0);
@@ -1242,12 +1111,10 @@ mod remote_button {
                     h_flex()
                         .ml_neg_0p5()
                         .when(behind_count > 0, |this| {
-                            this.child(Icon::new(IconName::ArrowDown).size(IconSize::XSmall))
-                                .child(count(behind_count))
+                            this.child(Icon::new(IconName::ArrowDown).size(IconSize::XSmall)).child(count(behind_count))
                         })
                         .when(ahead_count > 0, |this| {
-                            this.child(Icon::new(IconName::ArrowUp).size(IconSize::XSmall))
-                                .child(count(ahead_count))
+                            this.child(Icon::new(IconName::ArrowUp).size(IconSize::XSmall)).child(count(ahead_count))
                         }),
                 )
             })
@@ -1280,27 +1147,16 @@ mod remote_button {
                 }
             });
 
-        let right = render_git_action_menu(
-            format!("split-button-right-{}", id),
-            keybinding_target,
-            menu_handle,
-        )
-        .into_any_element();
+        let right = render_git_action_menu(format!("split-button-right-{}", id), keybinding_target, menu_handle)
+            .into_any_element();
 
         SplitButton::new(left, right)
     }
 }
 
-pub(crate) fn render_split_button_chevron_trigger(
-    id: impl Into<ElementId>,
-    menu_open: bool,
-) -> ButtonLike {
+pub(crate) fn render_split_button_chevron_trigger(id: impl Into<ElementId>, menu_open: bool) -> ButtonLike {
     let chevron_button_size = rems_from_px(20_f32);
-    let chevron_icon = if menu_open {
-        IconName::ChevronUp
-    } else {
-        IconName::ChevronDown
-    };
+    let chevron_icon = if menu_open { IconName::ChevronUp } else { IconName::ChevronDown };
 
     ButtonLike::new_rounded_right(id)
         .layer(ElevationIndex::ModalSurface)
@@ -1317,7 +1173,7 @@ pub struct GitStatusIcon {
 }
 
 impl GitStatusIcon {
-    pub fn new(status: FileStatus) -> Self {
+    pub const fn new(status: FileStatus) -> Self {
         Self { status }
     }
 }
@@ -1327,25 +1183,13 @@ impl RenderOnce for GitStatusIcon {
         let status = self.status;
 
         let (icon_name, color) = if status.is_conflicted() {
-            (
-                IconName::Warning,
-                cx.theme().colors().version_control_conflict,
-            )
+            (IconName::Warning, cx.theme().colors().version_control_conflict)
         } else if status.is_deleted() {
-            (
-                IconName::SquareMinus,
-                cx.theme().colors().version_control_deleted,
-            )
+            (IconName::SquareMinus, cx.theme().colors().version_control_deleted)
         } else if status.is_modified() {
-            (
-                IconName::SquareDot,
-                cx.theme().colors().version_control_modified,
-            )
+            (IconName::SquareDot, cx.theme().colors().version_control_modified)
         } else {
-            (
-                IconName::SquarePlus,
-                cx.theme().colors().version_control_added,
-            )
+            (IconName::SquarePlus, cx.theme().colors().version_control_added)
         };
 
         Icon::new(icon_name).color(Color::Custom(color))
@@ -1364,21 +1208,15 @@ impl Component for GitStatusIcon {
     }
 
     fn preview(_window: &mut Window, _cx: &mut App) -> AnyElement {
-        fn tracked_file_status(code: StatusCode) -> FileStatus {
-            FileStatus::Tracked(git::status::TrackedStatus {
-                index_status: code,
-                worktree_status: code,
-            })
+        const fn tracked_file_status(code: StatusCode) -> FileStatus {
+            FileStatus::Tracked(git::status::TrackedStatus { index_status: code, worktree_status: code })
         }
 
         let modified = tracked_file_status(StatusCode::Modified);
         let added = tracked_file_status(StatusCode::Added);
         let deleted = tracked_file_status(StatusCode::Deleted);
-        let conflict = UnmergedStatus {
-            first_head: UnmergedStatusCode::Updated,
-            second_head: UnmergedStatusCode::Updated,
-        }
-        .into();
+        let conflict =
+            UnmergedStatus { first_head: UnmergedStatusCode::Updated, second_head: UnmergedStatusCode::Updated }.into();
 
         v_flex()
             .gap_6()
@@ -1386,10 +1224,7 @@ impl Component for GitStatusIcon {
                 single_example("Modified", GitStatusIcon::new(modified).into_any_element()),
                 single_example("Added", GitStatusIcon::new(added).into_any_element()),
                 single_example("Deleted", GitStatusIcon::new(deleted).into_any_element()),
-                single_example(
-                    "Conflicted",
-                    GitStatusIcon::new(conflict).into_any_element(),
-                ),
+                single_example("Conflicted", GitStatusIcon::new(conflict).into_any_element()),
             ])])
             .into_any_element()
     }
@@ -1412,11 +1247,7 @@ impl GitCloneModal {
 
         window.focus(&focus_handle, cx);
 
-        Self {
-            panel,
-            repo_input,
-            focus_handle,
-        }
+        Self { panel, repo_input, focus_handle }
     }
 }
 

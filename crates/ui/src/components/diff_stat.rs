@@ -13,16 +13,10 @@ pub struct DiffStat {
 
 impl DiffStat {
     pub fn new(id: impl Into<ElementId>, added: usize, removed: usize) -> Self {
-        Self {
-            id: id.into(),
-            added,
-            removed,
-            label_size: LabelSize::Small,
-            tooltip: None,
-        }
+        Self { id: id.into(), added, removed, label_size: LabelSize::Small, tooltip: None }
     }
 
-    pub fn label_size(mut self, label_size: LabelSize) -> Self {
+    pub const fn label_size(mut self, label_size: LabelSize) -> Self {
         self.label_size = label_size;
         self
     }
@@ -42,19 +36,13 @@ impl RenderOnce for DiffStat {
         h_flex()
             .id(self.id)
             .gap_1()
-            .child(
-                Label::new(format!("+\u{2009}{added}"))
-                    .color(Color::VersionControlAdded)
-                    .size(self.label_size),
-            )
+            .child(Label::new(format!("+\u{2009}{added}")).color(Color::VersionControlAdded).size(self.label_size))
             .child(
                 Label::new(format!("\u{2012}\u{2009}{removed}"))
                     .color(Color::VersionControlDeleted)
                     .size(self.label_size),
             )
-            .when_some(tooltip, |this, tooltip| {
-                this.tooltip(Tooltip::text(tooltip))
-            })
+            .when_some(tooltip, |this, tooltip| this.tooltip(Tooltip::text(tooltip)))
     }
 }
 
@@ -79,15 +67,9 @@ impl Component for DiffStat {
                 .bg(cx.theme().colors().panel_background)
         };
 
-        let diff_stat_example = vec![single_example(
-            "Default",
-            container()
-                .child(DiffStat::new("id", 1_234, 5_678))
-                .into_any_element(),
-        )];
+        let diff_stat_example =
+            vec![single_example("Default", container().child(DiffStat::new("id", 1_234, 5_678)).into_any_element())];
 
-        example_group(diff_stat_example)
-            .vertical()
-            .into_any_element()
+        example_group(diff_stat_example).vertical().into_any_element()
     }
 }

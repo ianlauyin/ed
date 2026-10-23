@@ -2,13 +2,19 @@ use std::num::NonZeroUsize;
 
 use collections::HashMap;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use settings_macros::{MergeFrom, with_fallible_options};
+use serde::Deserialize;
+use serde::Serialize;
+use settings_macros::MergeFrom;
+use settings_macros::with_fallible_options;
 
-use crate::{
-    CenteredPaddingSettings, CommandAliasTarget, DelayMs, DockPosition, DockSide, InactiveOpacity,
-    ShowIndentGuides, serialize_optional_f32_with_two_decimal_places,
-};
+use crate::CenteredPaddingSettings;
+use crate::CommandAliasTarget;
+use crate::DelayMs;
+use crate::DockPosition;
+use crate::DockSide;
+use crate::InactiveOpacity;
+use crate::ShowIndentGuides;
+use crate::serialize_optional_f32_with_two_decimal_places;
 
 #[with_fallible_options]
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
@@ -412,7 +418,7 @@ pub enum CloseWindowWhenNoItems {
 }
 
 impl CloseWindowWhenNoItems {
-    pub fn should_close(&self) -> bool {
+    pub const fn should_close(&self) -> bool {
         match self {
             CloseWindowWhenNoItems::PlatformDefault => true,
             CloseWindowWhenNoItems::CloseWindow => true,
@@ -570,7 +576,7 @@ pub enum EncodingDisplayOptions {
     NonUtf8,
 }
 impl EncodingDisplayOptions {
-    pub fn should_show(&self, is_utf8: bool, has_bom: bool) -> bool {
+    pub const fn should_show(&self, is_utf8: bool, has_bom: bool) -> bool {
         match self {
             Self::Disabled => false,
             Self::Enabled => true,
@@ -583,16 +589,7 @@ impl EncodingDisplayOptions {
 }
 
 #[derive(
-    Copy,
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    Eq,
-    JsonSchema,
-    MergeFrom,
-    strum::EnumDiscriminants,
+    Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom, strum::EnumDiscriminants,
 )]
 #[strum_discriminants(derive(strum::VariantArray, strum::VariantNames, strum::FromRepr))]
 #[serde(rename_all = "snake_case")]
@@ -608,12 +605,10 @@ pub enum AutosaveSetting {
 }
 
 impl AutosaveSetting {
-    pub fn should_save_on_close(&self) -> bool {
+    pub const fn should_save_on_close(&self) -> bool {
         matches!(
             &self,
-            AutosaveSetting::OnFocusChange
-                | AutosaveSetting::OnWindowChange
-                | AutosaveSetting::AfterDelay { .. }
+            AutosaveSetting::OnFocusChange | AutosaveSetting::OnWindowChange | AutosaveSetting::AfterDelay { .. }
         )
     }
 }
@@ -839,16 +834,7 @@ pub struct ProjectPanelSettingsContent {
 
 /// Controls the width of the git diff hunk indicators in the gutter.
 #[derive(
-    Clone,
-    Copy,
-    Debug,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    strum::EnumDiscriminants,
+    Clone, Copy, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, strum::EnumDiscriminants,
 )]
 #[strum_discriminants(derive(strum::VariantArray, strum::VariantNames, strum::FromRepr))]
 #[serde(rename_all = "snake_case")]
@@ -911,11 +897,11 @@ pub enum FolderIndicator {
 }
 
 impl FolderIndicator {
-    pub fn shows_chevron(self) -> bool {
+    pub const fn shows_chevron(self) -> bool {
         matches!(self, Self::Chevron | Self::Both)
     }
 
-    pub fn shows_icon(self) -> bool {
+    pub const fn shows_icon(self) -> bool {
         matches!(self, Self::Icon | Self::Both)
     }
 }
@@ -998,9 +984,7 @@ impl From<ProjectPanelSortOrder> for util::paths::SortOrder {
 }
 
 #[with_fallible_options]
-#[derive(
-    Copy, Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq, Default,
-)]
+#[derive(Copy, Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq, Default)]
 pub struct ProjectPanelIndentGuidesSettings {
     pub show: Option<ShowIndentGuides>,
 }

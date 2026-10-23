@@ -15,7 +15,7 @@ pub enum ErrorSeverity {
 }
 
 impl ErrorSeverity {
-    pub fn auto_dismiss_delay(&self) -> Option<Duration> {
+    pub const fn auto_dismiss_delay(&self) -> Option<Duration> {
         match self {
             ErrorSeverity::Critical => None,
             ErrorSeverity::Error => Some(Duration::from_secs(30)),
@@ -45,12 +45,12 @@ pub struct ActionIcon {
 
 impl ActionIcon {
     /// Show `name` at the start (left) of the action button label.
-    pub fn start(name: IconName) -> Self {
+    pub const fn start(name: IconName) -> Self {
         Self { name, position: IconPosition::Start }
     }
 
     /// Show `name` at the end (right) of the action button label.
-    pub fn end(name: IconName) -> Self {
+    pub const fn end(name: IconName) -> Self {
         Self { name, position: IconPosition::End }
     }
 }
@@ -76,7 +76,7 @@ impl ErrorAction {
     }
 
     /// Show `icon` at the start (left) of the action button label.
-    pub fn with_icon(mut self, icon: IconName) -> Self {
+    pub const fn with_icon(mut self, icon: IconName) -> Self {
         self.icon = Some(ActionIcon::start(icon));
         self
     }
@@ -85,7 +85,7 @@ impl ErrorAction {
     ///
     /// Useful for actions that navigate the user elsewhere — for example the trailing
     /// `⇗` produced by [`Self::link`].
-    pub fn with_end_icon(mut self, icon: IconName) -> Self {
+    pub const fn with_end_icon(mut self, icon: IconName) -> Self {
         self.icon = Some(ActionIcon::end(icon));
         self
     }

@@ -13,19 +13,12 @@ enum SelectNextOrigin {
 }
 
 impl Editor {
-    pub fn sync_selections(
-        &mut self,
-        other: Entity<Editor>,
-        cx: &mut Context<Self>,
-    ) -> gpui::Subscription {
+    pub fn sync_selections(&mut self, other: Entity<Editor>, cx: &mut Context<Self>) -> gpui::Subscription {
         self.sync_selections_from(other.read(cx).selections.disjoint_anchors().to_vec(), cx);
 
         let other_subscription = cx.subscribe(&other, |editor, other, event, cx| {
             if let EditorEvent::SelectionsChanged { local: true } = event {
-                editor.sync_selections_from(
-                    other.read(cx).selections.disjoint_anchors().to_vec(),
-                    cx,
-                );
+                editor.sync_selections_from(other.read(cx).selections.disjoint_anchors().to_vec(), cx);
             }
         });
 
@@ -93,21 +86,14 @@ impl Editor {
     }
 
     pub fn has_non_empty_selection(&self, snapshot: &DisplaySnapshot) -> bool {
-        self.selections
-            .all_adjusted(snapshot)
-            .iter()
-            .any(|selection| !selection.is_empty())
+        self.selections.all_adjusted(snapshot).iter().any(|selection| !selection.is_empty())
     }
 
     pub fn is_range_selected(&mut self, range: &Range<Anchor>, cx: &mut Context<Self>) -> bool {
-        if self
-            .selections
-            .pending_anchor()
-            .is_some_and(|pending_selection| {
-                let snapshot = self.buffer().read(cx).snapshot(cx);
-                pending_selection.range().includes(range, &snapshot)
-            })
-        {
+        if self.selections.pending_anchor().is_some_and(|pending_selection| {
+            let snapshot = self.buffer().read(cx).snapshot(cx);
+            pending_selection.range().includes(range, &snapshot)
+        }) {
             return true;
         }
 
@@ -130,8 +116,7 @@ impl Editor {
         };
 
         pending_nonempty_selection
-            || (self.columnar_selection_state.is_some()
-                && self.selections.disjoint_anchors().len() > 1)
+            || (self.columnar_selection_state.is_some() && self.selections.disjoint_anchors().len() > 1)
     }
 
     pub fn has_pending_selection(&self) -> bool {
@@ -154,13 +139,7 @@ impl Editor {
                 s.clear_pending();
             }
         });
-        self.selections_did_change(
-            false,
-            &old_cursor_position,
-            SelectionEffects::default(),
-            window,
-            cx,
-        );
+        self.selections_did_change(false, &old_cursor_position, SelectionEffects::default(), window, cx);
     }
 
     pub fn set_mark(&mut self, _: &actions::SetMark, window: &mut Window, cx: &mut Context<Self>) {
@@ -175,12 +154,7 @@ impl Editor {
         cx.notify();
     }
 
-    pub fn swap_selection_ends(
-        &mut self,
-        _: &actions::SwapSelectionEnds,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn swap_selection_ends(&mut self, _: &actions::SwapSelectionEnds, window: &mut Window, cx: &mut Context<Self>) {
         self.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
             s.move_with(&mut |_, sel| {
                 if sel.start != sel.end {
@@ -194,9 +168,7 @@ impl Editor {
 
     pub fn select_to_end(&mut self, _: &SelectToEnd, window: &mut Window, cx: &mut Context<Self>) {
         let buffer = self.buffer.read(cx).snapshot(cx);
-        let mut selection = self
-            .selections
-            .first::<MultiBufferOffset>(&self.display_snapshot(cx));
+        let mut selection = self.selections.first::<MultiBufferOffset>(&self.display_snapshot(cx));
         selection.set_head(buffer.len(), SelectionGoal::None);
         self.change_selections(Default::default(), window, cx, |s| {
             s.select(vec![selection]);
@@ -248,11 +220,7 @@ impl Editor {
 
                     if action.keep_selections {
                         // Keep the selection range for each line
-                        let selection_start = if row == selection.start.row {
-                            selection.start
-                        } else {
-                            line_start
-                        };
+                        let selection_start = if row == selection.start.row { selection.start } else { line_start };
                         new_selection_ranges.push(selection_start..line_end);
                     } else {
                         // Collapse to cursor at end of line
@@ -283,21 +251,11 @@ impl Editor {
         });
     }
 
-    pub fn add_selection_above(
-        &mut self,
-        action: &AddSelectionAbove,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn add_selection_above(&mut self, action: &AddSelectionAbove, window: &mut Window, cx: &mut Context<Self>) {
         self.add_selection(true, action.skip_soft_wrap, window, cx);
     }
 
-    pub fn add_selection_below(
-        &mut self,
-        action: &AddSelectionBelow,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn add_selection_below(&mut self, action: &AddSelectionBelow, window: &mut Window, cx: &mut Context<Self>) {
         self.add_selection(false, action.skip_soft_wrap, window, cx);
     }
 
@@ -310,8 +268,7 @@ impl Editor {
         let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
 
         self.select_next_match_internal(&display_map, false, None, window, cx)?;
-        let Some(select_next_state) = self.select_next_state.as_mut().filter(|state| !state.done)
-        else {
+        let Some(select_next_state) = self.select_next_state.as_mut().filter(|state| !state.done) else {
             return Ok(());
         };
 
@@ -319,9 +276,8 @@ impl Editor {
         let initial_selection = self.selections.oldest::<MultiBufferOffset>(&display_map);
         let reversed = initial_selection.reversed;
         let buffer = display_map.buffer_snapshot();
-        let query_matches = select_next_state
-            .query
-            .stream_find_iter(buffer.bytes_in_range(MultiBufferOffset(0)..buffer.len()));
+        let query_matches =
+            select_next_state.query.stream_find_iter(buffer.bytes_in_range(MultiBufferOffset(0)..buffer.len()));
 
         for query_match in query_matches.into_iter() {
             let query_match = query_match.context("query match for select all action")?; // can only fail due to I/O
@@ -332,11 +288,9 @@ impl Editor {
             };
 
             let is_partial_word_match = select_next_state.wordwise
-                && (buffer.is_inside_word(offset_range.start, None)
-                    || buffer.is_inside_word(offset_range.end, None));
+                && (buffer.is_inside_word(offset_range.start, None) || buffer.is_inside_word(offset_range.end, None));
 
-            let is_initial_selection = MultiBufferOffset(query_match.start())
-                == initial_selection.start
+            let is_initial_selection = MultiBufferOffset(query_match.start()) == initial_selection.start
                 && MultiBufferOffset(query_match.end()) == initial_selection.end;
 
             if !is_partial_word_match && !is_initial_selection {
@@ -366,20 +320,9 @@ impl Editor {
         Ok(())
     }
 
-    pub fn select_next(
-        &mut self,
-        action: &SelectNext,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Result<()> {
+    pub fn select_next(&mut self, action: &SelectNext, window: &mut Window, cx: &mut Context<Self>) -> Result<()> {
         let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
-        self.select_next_match_internal(
-            &display_map,
-            action.replace_newest,
-            Some(Autoscroll::newest()),
-            window,
-            cx,
-        )
+        self.select_next_match_internal(&display_map, action.replace_newest, Some(Autoscroll::newest()), window, cx)
     }
 
     pub fn select_previous(
@@ -406,21 +349,14 @@ impl Editor {
                 // When we're iterating matches backwards, the oldest match will actually be the furthest one in the buffer.
                 let bytes_before_last_selection =
                     buffer.reversed_bytes_in_range(MultiBufferOffset(0)..last_selection.start);
-                let bytes_after_first_selection =
-                    buffer.reversed_bytes_in_range(first_selection.end..buffer.len());
+                let bytes_after_first_selection = buffer.reversed_bytes_in_range(first_selection.end..buffer.len());
                 let query_matches = query
                     .stream_find_iter(bytes_before_last_selection)
                     .map(|result| (last_selection.start, result))
-                    .chain(
-                        query
-                            .stream_find_iter(bytes_after_first_selection)
-                            .map(|result| (buffer.len(), result)),
-                    );
+                    .chain(query.stream_find_iter(bytes_after_first_selection).map(|result| (buffer.len(), result)));
                 for (end_offset, query_match) in query_matches {
-                    let query_match =
-                        query_match.context("query match for select previous action")?;
-                    let offset_range =
-                        end_offset - query_match.end()..end_offset - query_match.start();
+                    let query_match = query_match.context("query match for select previous action")?;
+                    let offset_range = end_offset - query_match.end()..end_offset - query_match.start();
 
                     if !select_prev_state.wordwise
                         || (!buffer.is_inside_word(offset_range.start, None)
@@ -459,15 +395,12 @@ impl Editor {
 
                 if same_text_selected {
                     if selected_text.is_none() {
-                        selected_text =
-                            Some(buffer.text_for_range(selection.range()).collect::<String>());
+                        selected_text = Some(buffer.text_for_range(selection.range()).collect::<String>());
                     }
 
                     if let Some(next_selection) = selections_iter.peek() {
                         if next_selection.len() == selection.len() {
-                            let next_selected_text = buffer
-                                .text_for_range(next_selection.range())
-                                .collect::<String>();
+                            let next_selected_text = buffer.text_for_range(next_selection.range()).collect::<String>();
                             if Some(next_selected_text) != selected_text {
                                 same_text_selected = false;
                                 selected_text = None;
@@ -497,19 +430,11 @@ impl Editor {
                     );
                 }
                 if selections.len() == 1 {
-                    let selection = selections
-                        .last()
-                        .expect("ensured that there's only one selection");
-                    let query = buffer
-                        .text_for_range(selection.start..selection.end)
-                        .collect::<String>();
+                    let selection = selections.last().expect("ensured that there's only one selection");
+                    let query = buffer.text_for_range(selection.start..selection.end).collect::<String>();
                     let is_empty = query.is_empty();
-                    let select_state = self.build_select_state(
-                        query.chars().rev().collect(),
-                        SelectNextOrigin::Caret,
-                        is_empty,
-                        cx,
-                    )?;
+                    let select_state =
+                        self.build_select_state(query.chars().rev().collect(), SelectNextOrigin::Caret, is_empty, cx)?;
                     self.select_prev_state = Some(select_state);
                 } else {
                     self.select_prev_state = None;
@@ -527,12 +452,7 @@ impl Editor {
         Ok(())
     }
 
-    pub fn find_next_match(
-        &mut self,
-        _: &FindNextMatch,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Result<()> {
+    pub fn find_next_match(&mut self, _: &FindNextMatch, window: &mut Window, cx: &mut Context<Self>) -> Result<()> {
         let selections = self.selections.disjoint_anchors_arc();
         match selections.first() {
             Some(first) if selections.len() >= 2 => {
@@ -540,13 +460,7 @@ impl Editor {
                     s.select_ranges([first.range()]);
                 });
             }
-            _ => self.select_next(
-                &SelectNext {
-                    replace_newest: true,
-                },
-                window,
-                cx,
-            )?,
+            _ => self.select_next(&SelectNext { replace_newest: true }, window, cx)?,
         }
         Ok(())
     }
@@ -564,28 +478,14 @@ impl Editor {
                     s.select_ranges([last.range()]);
                 });
             }
-            _ => self.select_previous(
-                &SelectPrevious {
-                    replace_newest: true,
-                },
-                window,
-                cx,
-            )?,
+            _ => self.select_previous(&SelectPrevious { replace_newest: true }, window, cx)?,
         }
         Ok(())
     }
 
-    pub fn select_enclosing_symbol(
-        &mut self,
-        _: &SelectEnclosingSymbol,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn select_enclosing_symbol(&mut self, _: &SelectEnclosingSymbol, window: &mut Window, cx: &mut Context<Self>) {
         let buffer = self.buffer.read(cx).snapshot(cx);
-        let old_selections = self
-            .selections
-            .all::<MultiBufferOffset>(&self.display_snapshot(cx))
-            .into_boxed_slice();
+        let old_selections = self.selections.all::<MultiBufferOffset>(&self.display_snapshot(cx)).into_boxed_slice();
 
         fn update_selection(
             selection: &Selection<MultiBufferOffset>,
@@ -640,10 +540,7 @@ impl Editor {
         let Some(visible_row_count) = self.visible_row_count() else {
             return;
         };
-        let old_selections: Box<[_]> = self
-            .selections
-            .all::<MultiBufferOffset>(&self.display_snapshot(cx))
-            .into();
+        let old_selections: Box<[_]> = self.selections.all::<MultiBufferOffset>(&self.display_snapshot(cx)).into();
         if old_selections.is_empty() {
             return;
         }
@@ -685,9 +582,7 @@ impl Editor {
                     if !node.is_named() {
                         continue;
                     }
-                    if !display_map.intersects_fold(new_range.start)
-                        && !display_map.intersects_fold(new_range.end)
-                    {
+                    if !display_map.intersects_fold(new_range.start) && !display_map.intersects_fold(new_range.end) {
                         break;
                     }
                 }
@@ -708,10 +603,8 @@ impl Editor {
         }
 
         // scroll based on transformation done to the last selection created by the user
-        let (last_old, last_new) = old_selections
-            .last()
-            .zip(new_selections.last().cloned())
-            .expect("old_selections isn't empty");
+        let (last_old, last_new) =
+            old_selections.last().zip(new_selections.last().cloned()).expect("old_selections isn't empty");
 
         let is_selection_reversed = if new_selections.len() == 1 {
             let should_be_reversed = last_old.start != last_new.start;
@@ -744,15 +637,9 @@ impl Editor {
             SelectSyntaxNodeScrollBehavior::CursorBottom
         };
 
-        let old_selections: Box<[Selection<Anchor>]> = old_selections
-            .iter()
-            .map(|s| s.map(|offset| buffer.anchor_before(offset)))
-            .collect();
-        self.select_syntax_node_history.push((
-            old_selections,
-            scroll_behavior,
-            is_selection_reversed,
-        ));
+        let old_selections: Box<[Selection<Anchor>]> =
+            old_selections.iter().map(|s| s.map(|offset| buffer.anchor_before(offset))).collect();
+        self.select_syntax_node_history.push((old_selections, scroll_behavior, is_selection_reversed));
     }
 
     pub fn select_smaller_syntax_node(
@@ -761,18 +648,14 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some((mut selections, scroll_behavior, is_selection_reversed)) =
-            self.select_syntax_node_history.pop()
-        {
+        if let Some((mut selections, scroll_behavior, is_selection_reversed)) = self.select_syntax_node_history.pop() {
             if let Some(selection) = selections.last_mut() {
                 selection.reversed = is_selection_reversed;
             }
 
             let snapshot = self.buffer.read(cx).snapshot(cx);
-            let selections: Vec<Selection<MultiBufferOffset>> = selections
-                .iter()
-                .map(|s| s.map(|anchor| anchor.to_offset(&snapshot)))
-                .collect();
+            let selections: Vec<Selection<MultiBufferOffset>> =
+                selections.iter().map(|s| s.map(|anchor| anchor.to_offset(&snapshot))).collect();
 
             self.select_syntax_node_history.disable_clearing = true;
             self.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
@@ -794,12 +677,7 @@ impl Editor {
         }
     }
 
-    pub fn select_next_syntax_node(
-        &mut self,
-        _: &SelectNextSyntaxNode,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn select_next_syntax_node(&mut self, _: &SelectNextSyntaxNode, window: &mut Window, cx: &mut Context<Self>) {
         let old_selections = self.selections.all_anchors(&self.display_snapshot(cx));
         if old_selections.is_empty() {
             return;
@@ -811,25 +689,18 @@ impl Editor {
         let new_selections = old_selections
             .iter()
             .map(|selection| {
-                let old_range =
-                    selection.start.to_offset(&buffer)..selection.end.to_offset(&buffer);
-                if let Some(results) = buffer.map_excerpt_ranges(
-                    old_range,
-                    |buf, _excerpt_range, input_buffer_range| {
+                let old_range = selection.start.to_offset(&buffer)..selection.end.to_offset(&buffer);
+                if let Some(results) =
+                    buffer.map_excerpt_ranges(old_range, |buf, _excerpt_range, input_buffer_range| {
                         let Some(node) = buf.syntax_next_sibling(input_buffer_range) else {
                             return Vec::new();
                         };
-                        vec![(
-                            BufferOffset(node.byte_range().start)
-                                ..BufferOffset(node.byte_range().end),
-                            (),
-                        )]
-                    },
-                ) && let [(new_range, _)] = results.as_slice()
+                        vec![(BufferOffset(node.byte_range().start)..BufferOffset(node.byte_range().end), ())]
+                    })
+                    && let [(new_range, _)] = results.as_slice()
                 {
                     selected_sibling = true;
-                    let new_range =
-                        buffer.anchor_after(new_range.start)..buffer.anchor_before(new_range.end);
+                    let new_range = buffer.anchor_after(new_range.start)..buffer.anchor_before(new_range.end);
                     Selection {
                         id: selection.id,
                         start: new_range.start,
@@ -844,14 +715,9 @@ impl Editor {
             .collect::<Vec<_>>();
 
         if selected_sibling {
-            self.change_selections(
-                SelectionEffects::scroll(Autoscroll::fit()),
-                window,
-                cx,
-                |s| {
-                    s.select(new_selections);
-                },
-            );
+            self.change_selections(SelectionEffects::scroll(Autoscroll::fit()), window, cx, |s| {
+                s.select(new_selections);
+            });
         }
     }
 
@@ -869,21 +735,16 @@ impl Editor {
         let new_selections = old_selections
             .iter()
             .map(|selection| {
-                let old_range = selection.start.to_offset(&multibuffer_snapshot)
-                    ..selection.end.to_offset(&multibuffer_snapshot);
-                if let Some(results) = multibuffer_snapshot.map_excerpt_ranges(
-                    old_range,
-                    |buf, _excerpt_range, input_buffer_range| {
+                let old_range =
+                    selection.start.to_offset(&multibuffer_snapshot)..selection.end.to_offset(&multibuffer_snapshot);
+                if let Some(results) =
+                    multibuffer_snapshot.map_excerpt_ranges(old_range, |buf, _excerpt_range, input_buffer_range| {
                         let Some(node) = buf.syntax_prev_sibling(input_buffer_range) else {
                             return Vec::new();
                         };
-                        vec![(
-                            BufferOffset(node.byte_range().start)
-                                ..BufferOffset(node.byte_range().end),
-                            (),
-                        )]
-                    },
-                ) && let [(new_range, _)] = results.as_slice()
+                        vec![(BufferOffset(node.byte_range().start)..BufferOffset(node.byte_range().end), ())]
+                    })
+                    && let [(new_range, _)] = results.as_slice()
                 {
                     selected_sibling = true;
                     let new_range = multibuffer_snapshot.anchor_after(new_range.start)
@@ -902,14 +763,9 @@ impl Editor {
             .collect::<Vec<_>>();
 
         if selected_sibling {
-            self.change_selections(
-                SelectionEffects::scroll(Autoscroll::fit()),
-                window,
-                cx,
-                |s| {
-                    s.select(new_selections);
-                },
-            );
+            self.change_selections(SelectionEffects::scroll(Autoscroll::fit()), window, cx, |s| {
+                s.select(new_selections);
+            });
         }
     }
 
@@ -967,16 +823,10 @@ impl Editor {
         self.select_delimiters_impl(true, window, cx);
     }
 
-    fn select_delimiters_impl(
-        &mut self,
-        include_brackets: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn select_delimiters_impl(&mut self, include_brackets: bool, window: &mut Window, cx: &mut Context<Self>) {
         self.change_selections(Default::default(), window, cx, |s| {
             s.move_offsets_with(&mut |snapshot, selection| {
-                let Some(enclosing_bracket_ranges) =
-                    snapshot.enclosing_bracket_ranges(selection.start..selection.end)
+                let Some(enclosing_bracket_ranges) = snapshot.enclosing_bracket_ranges(selection.start..selection.end)
                 else {
                     return;
                 };
@@ -985,11 +835,7 @@ impl Editor {
                 let mut best_length = usize::MAX;
 
                 for (open, close) in enclosing_bracket_ranges {
-                    let range = if include_brackets {
-                        open.start..close.end
-                    } else {
-                        open.end..close.start
-                    };
+                    let range = if include_brackets { open.start..close.end } else { open.end..close.start };
 
                     // Skip any bracket pair that is already covered by the
                     // selection so repeated uses of delimiters selection only
@@ -1020,8 +866,7 @@ impl Editor {
     ) {
         self.change_selections(Default::default(), window, cx, |s| {
             s.move_offsets_with(&mut |snapshot, selection| {
-                let Some(enclosing_bracket_ranges) =
-                    snapshot.enclosing_bracket_ranges(selection.start..selection.end)
+                let Some(enclosing_bracket_ranges) = snapshot.enclosing_bracket_ranges(selection.start..selection.end)
                 else {
                     return;
                 };
@@ -1034,8 +879,8 @@ impl Editor {
                     let close = close.to_inclusive();
                     let length = *close.end() - open.start;
                     let inside = selection.start >= open.end && selection.end <= *close.start();
-                    let in_bracket_range = open.to_inclusive().contains(&selection.head())
-                        || close.contains(&selection.head());
+                    let in_bracket_range =
+                        open.to_inclusive().contains(&selection.head()) || close.contains(&selection.head());
 
                     // If best is next to a bracket and current isn't, skip
                     if !in_bracket_range && best_in_bracket_range {
@@ -1050,15 +895,13 @@ impl Editor {
                     best_length = length;
                     best_inside = inside;
                     best_in_bracket_range = in_bracket_range;
-                    best_destination = Some(
-                        if close.contains(&selection.start) && close.contains(&selection.end) {
-                            if inside { open.end } else { open.start }
-                        } else if inside {
-                            *close.start()
-                        } else {
-                            *close.end()
-                        },
-                    );
+                    best_destination = Some(if close.contains(&selection.start) && close.contains(&selection.end) {
+                        if inside { open.end } else { open.start }
+                    } else if inside {
+                        *close.start()
+                    } else {
+                        *close.end()
+                    });
                 }
 
                 if let Some(destination) = best_destination {
@@ -1068,22 +911,14 @@ impl Editor {
         });
     }
 
-    pub fn undo_selection(
-        &mut self,
-        _: &UndoSelection,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn undo_selection(&mut self, _: &UndoSelection, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(entry) = self.selection_history.undo_stack.pop_back() {
             self.selection_history.mode = SelectionHistoryMode::Undoing;
             self.with_selection_effects_deferred(window, cx, |this, window, cx| {
                 this.end_selection(window, cx);
-                this.change_selections(
-                    SelectionEffects::scroll(Autoscroll::newest()),
-                    window,
-                    cx,
-                    |s| s.select_anchors_unexpanded(entry.selections.to_vec()),
-                );
+                this.change_selections(SelectionEffects::scroll(Autoscroll::newest()), window, cx, |s| {
+                    s.select_anchors_unexpanded(entry.selections.to_vec())
+                });
             });
             self.selection_history.mode = SelectionHistoryMode::Normal;
 
@@ -1093,22 +928,14 @@ impl Editor {
         }
     }
 
-    pub fn redo_selection(
-        &mut self,
-        _: &RedoSelection,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn redo_selection(&mut self, _: &RedoSelection, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(entry) = self.selection_history.redo_stack.pop_back() {
             self.selection_history.mode = SelectionHistoryMode::Redoing;
             self.with_selection_effects_deferred(window, cx, |this, window, cx| {
                 this.end_selection(window, cx);
-                this.change_selections(
-                    SelectionEffects::scroll(Autoscroll::newest()),
-                    window,
-                    cx,
-                    |s| s.select_anchors_unexpanded(entry.selections.to_vec()),
-                );
+                this.change_selections(SelectionEffects::scroll(Autoscroll::newest()), window, cx, |s| {
+                    s.select_anchors_unexpanded(entry.selections.to_vec())
+                });
             });
             self.selection_history.mode = SelectionHistoryMode::Normal;
 
@@ -1118,35 +945,20 @@ impl Editor {
         }
     }
 
-    pub(super) fn select(
-        &mut self,
-        phase: SelectPhase,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn select(&mut self, phase: SelectPhase, window: &mut Window, cx: &mut Context<Self>) {
         self.hide_context_menu(window, cx);
 
         match phase {
-            SelectPhase::Begin {
-                position,
-                add,
-                click_count,
-            } => self.begin_selection(position, add, click_count, window, cx),
-            SelectPhase::BeginColumnar {
-                position,
-                goal_column,
-                reset,
-                mode,
-            } => self.begin_columnar_selection(position, goal_column, reset, mode, window, cx),
-            SelectPhase::Extend {
-                position,
-                click_count,
-            } => self.extend_selection(position, click_count, window, cx),
-            SelectPhase::Update {
-                position,
-                goal_column,
-                scroll_delta,
-            } => self.update_selection(position, goal_column, scroll_delta, window, cx),
+            SelectPhase::Begin { position, add, click_count } => {
+                self.begin_selection(position, add, click_count, window, cx)
+            }
+            SelectPhase::BeginColumnar { position, goal_column, reset, mode } => {
+                self.begin_columnar_selection(position, goal_column, reset, mode, window, cx)
+            }
+            SelectPhase::Extend { position, click_count } => self.extend_selection(position, click_count, window, cx),
+            SelectPhase::Update { position, goal_column, scroll_delta } => {
+                self.update_selection(position, goal_column, scroll_delta, window, cx)
+            }
             SelectPhase::End => self.end_selection(window, cx),
         }
     }
@@ -1159,10 +971,7 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
-        let tail = self
-            .selections
-            .newest::<MultiBufferOffset>(&display_map)
-            .tail();
+        let tail = self.selections.newest::<MultiBufferOffset>(&display_map).tail();
         let click_count = click_count.max(match self.selections.select_mode() {
             SelectMode::Character => 1,
             SelectMode::Word(_) => 2,
@@ -1178,24 +987,15 @@ impl Editor {
             SelectMode::Word(range) | SelectMode::Line(range) => range.clone(),
         };
 
-        let Some((mut pending_selection, mut pending_mode)) = self.pending_selection_and_mode()
-        else {
+        let Some((mut pending_selection, mut pending_mode)) = self.pending_selection_and_mode() else {
             log::error!("extend_selection dispatched with no pending selection");
             return;
         };
 
-        if pending_selection
-            .start
-            .cmp(&current_selection.start, display_map.buffer_snapshot())
-            == Ordering::Greater
-        {
+        if pending_selection.start.cmp(&current_selection.start, display_map.buffer_snapshot()) == Ordering::Greater {
             pending_selection.start = current_selection.start;
         }
-        if pending_selection
-            .end
-            .cmp(&current_selection.end, display_map.buffer_snapshot())
-            == Ordering::Less
-        {
+        if pending_selection.end.cmp(&current_selection.end, display_map.buffer_snapshot()) == Ordering::Less {
             pending_selection.end = current_selection.end;
             pending_selection.reversed = true;
         }
@@ -1246,9 +1046,7 @@ impl Editor {
                 auto_scroll = true;
             }
             2 => {
-                let position = display_map
-                    .clip_point(position, Bias::Left)
-                    .to_offset(&display_map, Bias::Left);
+                let position = display_map.clip_point(position, Bias::Left).to_offset(&display_map, Bias::Left);
                 let (range, _) = buffer.surrounding_word(position, None);
                 start = buffer.anchor_before(range.start);
                 end = buffer.anchor_before(range.end);
@@ -1256,14 +1054,10 @@ impl Editor {
                 auto_scroll = true;
             }
             3 => {
-                let position = display_map
-                    .clip_point(position, Bias::Left)
-                    .to_point(&display_map);
+                let position = display_map.clip_point(position, Bias::Left).to_point(&display_map);
                 let line_start = display_map.prev_line_boundary(position).0;
-                let next_line_start = buffer.clip_point(
-                    display_map.next_line_boundary(position).0 + Point::new(1, 0),
-                    Bias::Left,
-                );
+                let next_line_start =
+                    buffer.clip_point(display_map.next_line_boundary(position).0 + Point::new(1, 0), Bias::Left);
                 start = buffer.anchor_before(line_start);
                 end = buffer.anchor_before(next_line_start);
                 mode = SelectMode::Line(start..end);
@@ -1279,30 +1073,24 @@ impl Editor {
         auto_scroll &= EditorSettings::get_global(cx).autoscroll_on_clicks;
 
         let point_to_delete: Option<usize> = {
-            let selected_points: Vec<Selection<Point>> =
-                self.selections.disjoint_in_range(start..end, &display_map);
+            let selected_points: Vec<Selection<Point>> = self.selections.disjoint_in_range(start..end, &display_map);
 
             if !add || click_count > 1 {
                 None
             } else if !selected_points.is_empty() {
                 Some(selected_points[0].id)
             } else {
-                let clicked_point_already_selected =
-                    self.selections.disjoint_anchors().iter().find(|selection| {
-                        selection.start.to_point(buffer) == start.to_point(buffer)
-                            || selection.end.to_point(buffer) == end.to_point(buffer)
-                    });
+                let clicked_point_already_selected = self.selections.disjoint_anchors().iter().find(|selection| {
+                    selection.start.to_point(buffer) == start.to_point(buffer)
+                        || selection.end.to_point(buffer) == end.to_point(buffer)
+                });
 
                 clicked_point_already_selected.map(|selection| selection.id)
             }
         };
 
         let selections_count = self.selections.count();
-        let effects = if auto_scroll {
-            SelectionEffects::default()
-        } else {
-            SelectionEffects::no_scroll()
-        };
+        let effects = if auto_scroll { SelectionEffects::default() } else { SelectionEffects::no_scroll() };
 
         self.change_selections(effects, window, cx, |s| {
             if let Some(point_to_delete) = point_to_delete {
@@ -1343,20 +1131,12 @@ impl Editor {
                     tail = pending.tail().to_point(buffer);
                 }
                 SelectMode::Word(original_range) => {
-                    let offset = display_map
-                        .clip_point(position, Bias::Left)
-                        .to_offset(&display_map, Bias::Left);
+                    let offset = display_map.clip_point(position, Bias::Left).to_offset(&display_map, Bias::Left);
                     let original_range = original_range.to_offset(buffer);
 
-                    let head_offset = if buffer.is_inside_word(offset, None)
-                        || original_range.contains(&offset)
-                    {
+                    let head_offset = if buffer.is_inside_word(offset, None) || original_range.contains(&offset) {
                         let (word_range, _) = buffer.surrounding_word(offset, None);
-                        if word_range.start < original_range.start {
-                            word_range.start
-                        } else {
-                            word_range.end
-                        }
+                        if word_range.start < original_range.start { word_range.start } else { word_range.end }
                     } else {
                         offset
                     };
@@ -1371,14 +1151,10 @@ impl Editor {
                 SelectMode::Line(original_range) => {
                     let original_range = original_range.to_point(display_map.buffer_snapshot());
 
-                    let position = display_map
-                        .clip_point(position, Bias::Left)
-                        .to_point(&display_map);
+                    let position = display_map.clip_point(position, Bias::Left).to_point(&display_map);
                     let line_start = display_map.prev_line_boundary(position).0;
-                    let next_line_start = buffer.clip_point(
-                        display_map.next_line_boundary(position).0 + Point::new(1, 0),
-                        Bias::Left,
-                    );
+                    let next_line_start =
+                        buffer.clip_point(display_map.next_line_boundary(position).0 + Point::new(1, 0), Bias::Left);
 
                     if line_start < original_range.start {
                         head = line_start
@@ -1422,18 +1198,13 @@ impl Editor {
     pub(super) fn end_selection(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.columnar_selection_state.take();
         if let Some(pending_mode) = self.selections.pending_mode() {
-            let selections = self
-                .selections
-                .all::<MultiBufferOffset>(&self.display_snapshot(cx));
+            let selections = self.selections.all::<MultiBufferOffset>(&self.display_snapshot(cx));
             // `select` below resets the selections' granularity to `Character`, since it's the
             // funnel every wholesale selection replacement goes through. When extending, the
             // granularity established by the selection gesture that started the extension must
             // survive that reset instead of being overwritten by `pending_mode`.
-            let select_mode = if self.selections.is_extending() {
-                self.selections.select_mode().clone()
-            } else {
-                pending_mode
-            };
+            let select_mode =
+                if self.selections.is_extending() { self.selections.select_mode().clone() } else { pending_mode };
             self.change_selections(SelectionEffects::no_scroll(), window, cx, |s| {
                 s.select(selections);
                 s.clear_pending();
@@ -1460,22 +1231,12 @@ impl Editor {
         let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
 
         if reset {
-            let pointer_position = display_map
-                .buffer_snapshot()
-                .anchor_before(position.to_point(&display_map));
+            let pointer_position = display_map.buffer_snapshot().anchor_before(position.to_point(&display_map));
 
-            self.change_selections(
-                SelectionEffects::scroll(Autoscroll::newest()),
-                window,
-                cx,
-                |s| {
-                    s.clear_disjoint();
-                    s.set_pending_anchor_range(
-                        pointer_position..pointer_position,
-                        SelectMode::Character,
-                    );
-                },
-            );
+            self.change_selections(SelectionEffects::scroll(Autoscroll::newest()), window, cx, |s| {
+                s.clear_disjoint();
+                s.set_pending_anchor_range(pointer_position..pointer_position, SelectMode::Character);
+            });
         };
 
         let tail = self.selections.newest::<Point>(&display_map).tail();
@@ -1493,9 +1254,9 @@ impl Editor {
                     None
                 },
             }),
-            ColumnarMode::FromSelection => Some(ColumnarSelectionState::FromSelection {
-                selection_tail: selection_anchor,
-            }),
+            ColumnarMode::FromSelection => {
+                Some(ColumnarSelectionState::FromSelection { selection_tail: selection_anchor })
+            }
         };
 
         if !reset {
@@ -1517,9 +1278,7 @@ impl Editor {
 
         let selection_anchors = self.selections.disjoint_anchors_arc();
 
-        let display_map = self
-            .display_map
-            .update(cx, |display_map, cx| display_map.snapshot(cx));
+        let display_map = self.display_map.update(cx, |display_map, cx| display_map.snapshot(cx));
         let buffer = display_map.buffer_snapshot();
         self.select_next_state = None;
         self.select_prev_state = None;
@@ -1564,8 +1323,7 @@ impl Editor {
             {
                 let start_offset = selection_start.to_offset(buffer);
                 let position_matches = start_offset == completion_position.to_offset(buffer);
-                let continue_showing = if let Some((snap, ..)) =
-                    buffer.point_to_buffer_offset(completion_position)
+                let continue_showing = if let Some((snap, ..)) = buffer.point_to_buffer_offset(completion_position)
                     && !snap.capability.editable()
                 {
                     false
@@ -1603,11 +1361,12 @@ impl Editor {
 
         self.blink_manager.update(cx, BlinkManager::pause_blinking);
 
-        if local && !self.suppress_selection_callback {
-            if let Some(callback) = self.on_local_selections_changed.as_ref() {
-                let cursor_position = self.selections.newest::<Point>(&display_map).head();
-                callback(cursor_position, window, cx);
-            }
+        if local
+            && !self.suppress_selection_callback
+            && let Some(callback) = self.on_local_selections_changed.as_ref()
+        {
+            let cursor_position = self.selections.newest::<Point>(&display_map).head();
+            callback(cursor_position, window, cx);
         }
 
         cx.emit(EditorEvent::SelectionsChanged { local });
@@ -1626,8 +1385,7 @@ impl Editor {
                 data.selections = inmemory_selections;
             });
 
-            if WorkspaceSettings::get(None, cx).restore_on_startup
-                != RestoreOnStartupBehavior::EmptyTab
+            if WorkspaceSettings::get(None, cx).restore_on_startup != RestoreOnStartupBehavior::EmptyTab
                 && let Some(workspace_id) = self.workspace_serialization_id(cx)
             {
                 let snapshot = self.buffer().read(cx).snapshot(cx);
@@ -1639,12 +1397,7 @@ impl Editor {
                     background_executor.timer(SERIALIZATION_THROTTLE_TIME).await;
                     let db_selections = selections
                         .iter()
-                        .map(|selection| {
-                            (
-                                selection.start.to_offset(&snapshot).0,
-                                selection.end.to_offset(&snapshot).0,
-                            )
-                        })
+                        .map(|selection| (selection.start.to_offset(&snapshot).0, selection.end.to_offset(&snapshot).0))
                         .collect();
 
                     db.save_editor_selections(editor_id, workspace_id, db_selections)
@@ -1709,11 +1462,7 @@ impl Editor {
             let ranges = self
                 .selections
                 .disjoint_anchor_ranges()
-                .chain(
-                    self.selections
-                        .pending_anchor()
-                        .map(|selection| selection.range()),
-                )
+                .chain(self.selections.pending_anchor().map(|selection| selection.range()))
                 .collect::<Vec<_>>();
             self.unfold_ranges(&ranges, false, false, cx);
         }
@@ -1722,10 +1471,10 @@ impl Editor {
             self.selection_history.push(state.history_entry);
         }
 
-        if state.changed || state.effects.unfold {
-            if let Some(autoscroll) = state.effects.scroll {
-                self.request_autoscroll(autoscroll, cx);
-            }
+        if (state.changed || state.effects.unfold)
+            && let Some(autoscroll) = state.effects.scroll
+        {
+            self.request_autoscroll(autoscroll, cx);
         }
 
         if state.changed {
@@ -1748,13 +1497,10 @@ impl Editor {
         };
 
         let tail = match columnar_state {
-            ColumnarSelectionState::FromMouse {
-                selection_tail,
-                display_point,
-            } => display_point.unwrap_or_else(|| selection_tail.to_display_point(display_map)),
-            ColumnarSelectionState::FromSelection { selection_tail } => {
-                selection_tail.to_display_point(display_map)
+            ColumnarSelectionState::FromMouse { selection_tail, display_point } => {
+                display_point.unwrap_or_else(|| selection_tail.to_display_point(display_map))
             }
+            ColumnarSelectionState::FromSelection { selection_tail } => selection_tail.to_display_point(display_map),
         };
 
         let start_row = cmp::min(tail.row(), head.row());
@@ -1769,24 +1515,14 @@ impl Editor {
         // `PositionMap::point_for_position`). `x_for_display_point` clamps at
         // the line's width, so convert that overshoot back to pixels with the
         // same unit to keep the rectangle tracking the mouse past short lines.
-        let font_id = text_layout_details
-            .text_system
-            .resolve_font(&text_layout_details.editor_style.text.font());
-        let font_size = text_layout_details
-            .editor_style
-            .text
-            .font_size
-            .to_pixels(text_layout_details.rem_size);
-        let em_layout_width = text_layout_details
-            .text_system
-            .em_layout_width(font_id, font_size);
+        let font_id = text_layout_details.text_system.resolve_font(&text_layout_details.editor_style.text.font());
+        let font_size = text_layout_details.editor_style.text.font_size.to_pixels(text_layout_details.rem_size);
+        let em_layout_width = text_layout_details.text_system.em_layout_width(font_id, font_size);
         let x_for_unclipped_point = |point: DisplayPoint| {
             let line_len = display_map.line_len(point.row());
             if point.column() > line_len {
-                let eol_x = display_map.x_for_display_point(
-                    DisplayPoint::new(point.row(), line_len),
-                    &text_layout_details,
-                );
+                let eol_x =
+                    display_map.x_for_display_point(DisplayPoint::new(point.row(), line_len), &text_layout_details);
                 eol_x + em_layout_width * (point.column() - line_len) as f32
             } else {
                 display_map.x_for_display_point(point, &text_layout_details)
@@ -1814,26 +1550,17 @@ impl Editor {
                 last_buffer_row = Some(buffer_row);
 
                 let layout = display_map.layout_row(row, &text_layout_details);
-                if matches!(columnar_state, ColumnarSelectionState::FromSelection { .. })
-                    && start_x > layout.width
-                {
+                if matches!(columnar_state, ColumnarSelectionState::FromSelection { .. }) && start_x > layout.width {
                     return None;
                 }
 
                 let start_column = layout.closest_index_for_x(start_x) as u32;
                 let end_column = layout.closest_index_for_x(end_x) as u32;
 
-                let start = display_map
-                    .clip_point(DisplayPoint::new(row, start_column), Bias::Left)
-                    .to_point(display_map);
-                let end = display_map
-                    .clip_point(DisplayPoint::new(row, end_column), Bias::Right)
-                    .to_point(display_map);
-                if reversed {
-                    Some(end..start)
-                } else {
-                    Some(start..end)
-                }
+                let start =
+                    display_map.clip_point(DisplayPoint::new(row, start_column), Bias::Left).to_point(display_map);
+                let end = display_map.clip_point(DisplayPoint::new(row, end_column), Bias::Right).to_point(display_map);
+                if reversed { Some(end..start) } else { Some(start..end) }
             })
             .collect::<Vec<_>>();
         if selection_ranges.is_empty() {
@@ -1846,11 +1573,7 @@ impl Editor {
                     .iter()
                     .filter(|selection_range| selection_range.start != selection_range.end)
                     .peekable();
-                if non_empty_ranges.peek().is_some() {
-                    non_empty_ranges.cloned().collect()
-                } else {
-                    selection_ranges
-                }
+                if non_empty_ranges.peek().is_some() { non_empty_ranges.cloned().collect() } else { selection_ranges }
             }
             _ => selection_ranges,
         };
@@ -1862,16 +1585,10 @@ impl Editor {
     }
 
     fn pending_selection_and_mode(&self) -> Option<(Selection<Anchor>, SelectMode)> {
-        Some((
-            *self.selections.pending_anchor()?,
-            self.selections.pending_mode()?,
-        ))
+        Some((*self.selections.pending_anchor()?, self.selections.pending_mode()?))
     }
 
-    pub(super) fn invalidate_add_selection_goals_after_change(
-        &mut self,
-        previous: Option<&[Selection<Anchor>]>,
-    ) {
+    pub(super) fn invalidate_add_selection_goals_after_change(&mut self, previous: Option<&[Selection<Anchor>]>) {
         if self.add_selections_state.is_none() {
             return;
         }
@@ -1920,10 +1637,7 @@ impl Editor {
         let skip_soft_wrap = state.skip_soft_wrap;
         state.groups.retain_mut(|group| {
             if group.stack.first().is_none_or(|id| !unchanged.contains(id))
-                || group
-                    .stack
-                    .iter()
-                    .any(|id| !unchanged.contains(id) && !removed.contains(id))
+                || group.stack.iter().any(|id| !unchanged.contains(id) && !removed.contains(id))
             {
                 group.goal_source = None;
             }
@@ -1937,10 +1651,7 @@ impl Editor {
         previous: &[Selection<Point>],
         current: &[Selection<Point>],
     ) {
-        let current_by_id = current
-            .iter()
-            .map(|selection| (selection.id, selection))
-            .collect::<HashMap<_, _>>();
+        let current_by_id = current.iter().map(|selection| (selection.id, selection)).collect::<HashMap<_, _>>();
         let mut unchanged = HashSet::default();
         let mut removed = HashSet::default();
         for selection in previous {
@@ -1950,11 +1661,8 @@ impl Editor {
                 }
             } else {
                 let index = current.partition_point(|current| current.end < selection.start);
-                let overlaps = current
-                    .iter()
-                    .skip(index)
-                    .take_while(|current| current.start <= selection.end)
-                    .any(|current| {
+                let overlaps =
+                    current.iter().skip(index).take_while(|current| current.start <= selection.end).any(|current| {
                         if current.is_empty() || selection.is_empty() {
                             current.start <= selection.end && selection.start <= current.end
                         } else {
@@ -1975,9 +1683,7 @@ impl Editor {
     ) -> Vec<Selection<Point>> {
         selections
             .iter()
-            .filter(|selection| {
-                snapshot.can_resolve(&selection.start) && snapshot.can_resolve(&selection.end)
-            })
+            .filter(|selection| snapshot.can_resolve(&selection.start) && snapshot.can_resolve(&selection.end))
             .map(|selection| selection.map(|anchor| anchor.to_point(snapshot.buffer_snapshot())))
             .collect()
     }
@@ -1987,18 +1693,14 @@ impl Editor {
         snapshot: &DisplaySnapshot,
         change: impl FnOnce(&mut MutableSelectionsCollection<'_, '_>) -> R,
     ) -> (bool, R) {
-        let previous = self
-            .add_selections_state
-            .as_ref()
-            .map(|_| self.selections.disjoint_anchors_arc());
+        let previous = self.add_selections_state.as_ref().map(|_| self.selections.disjoint_anchors_arc());
         let (changed, result) = self.selections.change_with(snapshot, change);
         if changed
             && let Some(previous) = previous
             && let Some(state) = &mut self.add_selections_state
         {
             let previous = Self::resolve_add_selection_anchors(&previous, snapshot);
-            let current =
-                Self::resolve_add_selection_anchors(self.selections.disjoint_anchors(), snapshot);
+            let current = Self::resolve_add_selection_anchors(self.selections.disjoint_anchors(), snapshot);
             Self::reconcile_add_selection_groups(state, &previous, &current);
             if state.groups.is_empty() {
                 self.add_selections_state = None;
@@ -2025,11 +1727,8 @@ impl Editor {
         change: impl FnOnce(&mut MutableSelectionsCollection<'_, '_>) -> R,
     ) -> R {
         let snapshot = self.display_snapshot(cx);
-        let unfold = effects.unfold
-            || self
-                .deferred_selection_effects_state
-                .as_ref()
-                .is_some_and(|state| state.effects.unfold);
+        let unfold =
+            effects.unfold || self.deferred_selection_effects_state.as_ref().is_some_and(|state| state.effects.unfold);
         let change = |selections: &mut MutableSelectionsCollection<'_, '_>| {
             if unfold {
                 // Folded display coordinates would otherwise move anchor-based jump destinations.
@@ -2055,128 +1754,80 @@ impl Editor {
         result
     }
 
-    fn add_selection(
-        &mut self,
-        above: bool,
-        skip_soft_wrap: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn add_selection(&mut self, above: bool, skip_soft_wrap: bool, window: &mut Window, cx: &mut Context<Self>) {
         let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
         let text_layout_details = self.text_layout_details(window, cx);
         let buffer = display_map.buffer_snapshot();
         let all_selections = self.selections.all_unexpanded::<Point>(&display_map);
         let goal_source_for_selection = |selection: &Selection<Point>| {
-            let end_bias = if selection.is_empty() {
-                Bias::Right
-            } else {
-                Bias::Left
-            };
+            let end_bias = if selection.is_empty() { Bias::Right } else { Bias::Left };
             buffer.anchor_after(selection.start)..buffer.anchor_at(selection.end, end_bias)
         };
 
-        let history_entry = self
-            .deferred_selection_effects_state
-            .is_none()
-            .then(|| self.selection_history_entry());
-        if self
-            .add_selections_state
-            .as_ref()
-            .is_some_and(|state| state.skip_soft_wrap != skip_soft_wrap)
-        {
+        let history_entry = self.deferred_selection_effects_state.is_none().then(|| self.selection_history_entry());
+        if self.add_selections_state.as_ref().is_some_and(|state| state.skip_soft_wrap != skip_soft_wrap) {
             self.add_selections_state = None;
         }
         let mut state = self
             .add_selections_state
             .take()
-            .unwrap_or_else(|| AddSelectionsState {
-                groups: Vec::new(),
-                skip_soft_wrap,
-            });
+            .unwrap_or_else(|| AddSelectionsState { groups: Vec::new(), skip_soft_wrap });
         if !state.groups.is_empty() {
-            let previous = Self::resolve_add_selection_anchors(
-                self.selections.disjoint_anchors(),
-                &display_map,
-            );
+            let previous = Self::resolve_add_selection_anchors(self.selections.disjoint_anchors(), &display_map);
             Self::reconcile_add_selection_groups(&mut state, &previous, &all_selections);
         }
-        let columnar_selection_ids = state
-            .groups
-            .iter()
-            .flat_map(|group| group.stack.iter())
-            .copied()
-            .collect::<HashSet<_>>();
-        let mut columnar_rows = ColumnarSelectionRows::new(&display_map);
-        let (mut columnar_selections, new_selections_to_columnarize) =
-            all_selections
-                .into_iter()
-                .partition::<Vec<_>, _>(|selection| columnar_selection_ids.contains(&selection.id));
+        let columnar_selection_ids =
+            state.groups.iter().flat_map(|group| group.stack.iter()).copied().collect::<HashSet<_>>();
+        let columnar_rows = ColumnarSelectionRows::new(&display_map);
+        let (mut columnar_selections, new_selections_to_columnarize) = all_selections
+            .into_iter()
+            .partition::<Vec<_>, _>(|selection| columnar_selection_ids.contains(&selection.id));
 
         let mut goal_columns_by_selection_id = HashMap::default();
         let mut projected_selections = Vec::new();
         let mut projection_counts = vec![None; new_selections_to_columnarize.len()];
         if skip_soft_wrap {
-            let selections_by_id = columnar_selections
-                .iter()
-                .map(|selection| (selection.id, selection))
-                .collect::<HashMap<_, _>>();
+            let selections_by_id =
+                columnar_selections.iter().map(|selection| (selection.id, selection)).collect::<HashMap<_, _>>();
             let mut sources = Vec::new();
             for group in &mut state.groups {
-                let Some(oldest_selection) =
-                    group.stack.first().and_then(|id| selections_by_id.get(id))
-                else {
+                let Some(oldest_selection) = group.stack.first().and_then(|id| selections_by_id.get(id)) else {
                     continue;
                 };
-                if group.goal_source.as_ref().is_some_and(|source| {
-                    !buffer.can_resolve(&source.start) || !buffer.can_resolve(&source.end)
-                }) {
+                if group
+                    .goal_source
+                    .as_ref()
+                    .is_some_and(|source| !buffer.can_resolve(&source.start) || !buffer.can_resolve(&source.end))
+                {
                     group.goal_source = None;
                 }
-                let source = group
-                    .goal_source
-                    .get_or_insert_with(|| goal_source_for_selection(oldest_selection));
+                let source = group.goal_source.get_or_insert_with(|| goal_source_for_selection(oldest_selection));
                 if let Some(last_id) = group.stack.last() {
                     sources.push((*last_id, source.to_point(buffer)));
                 }
             }
-            sources.extend(
-                new_selections_to_columnarize
-                    .iter()
-                    .map(|selection| (selection.id, selection.range())),
-            );
-            let ranges = sources
-                .iter()
-                .map(|(_, range)| range.clone())
-                .collect::<Vec<_>>();
-            goal_columns_by_selection_id.extend(
-                sources
-                    .iter()
-                    .map(|(id, _)| *id)
-                    .zip(columnar_rows.columns_for_ranges(&ranges)),
-            );
+            sources.extend(new_selections_to_columnarize.iter().map(|selection| (selection.id, selection.range())));
+            let ranges = sources.iter().map(|(_, range)| range.clone()).collect::<Vec<_>>();
+            goal_columns_by_selection_id
+                .extend(sources.iter().map(|(id, _)| *id).zip(columnar_rows.columns_for_ranges(&ranges)));
             let tabs = display_map.tab_snapshot();
             let mut queries = Vec::new();
-            for (selection, projection_count) in new_selections_to_columnarize
-                .iter()
-                .zip(&mut projection_counts)
-            {
+            for (selection, projection_count) in new_selections_to_columnarize.iter().zip(&mut projection_counts) {
                 let start = tabs.point_to_tab_point(selection.start, Bias::Left);
                 let end = tabs.point_to_tab_point(selection.end, Bias::Left);
                 if start.row() != end.row()
-                    || display_map
-                        .is_block_line(selection.start.to_display_point(&display_map).row())
+                    || display_map.is_block_line(selection.start.to_display_point(&display_map).row())
                 {
                     let columns = &goal_columns_by_selection_id[&selection.id];
                     let query_start = queries.len();
                     let mut row = start.row();
                     loop {
-                        let last_row =
-                            if let Some(hidden) = display_map.fully_replaced_tab_rows(row) {
-                                *hidden.end()
-                            } else {
-                                queries.push((row, columns.clone(), selection.reversed));
-                                row
-                            };
+                        let last_row = if let Some(hidden) = display_map.fully_replaced_tab_rows(row) {
+                            *hidden.end()
+                        } else {
+                            queries.push((row, columns.clone(), selection.reversed));
+                            row
+                        };
                         if last_row >= end.row() {
                             break;
                         }
@@ -2185,15 +1836,11 @@ impl Editor {
                     *projection_count = Some(queries.len() - query_start);
                 }
             }
-            projected_selections = self
-                .selections
-                .build_columnar_selections_from_tab_expanded_columns(&mut columnar_rows, &queries);
+            projected_selections =
+                self.selections.build_columnar_selections_from_tab_expanded_columns(&columnar_rows, &queries);
         }
         let mut projected_selections = projected_selections.into_iter();
-        for (selection, projection_count) in new_selections_to_columnarize
-            .into_iter()
-            .zip(projection_counts)
-        {
+        for (selection, projection_count) in new_selections_to_columnarize.into_iter().zip(projection_counts) {
             if skip_soft_wrap {
                 let goal_source = Some(goal_source_for_selection(&selection));
                 let mut stack = Vec::new();
@@ -2215,11 +1862,7 @@ impl Editor {
                     {
                         goal_columns_by_selection_id.insert(*last_id, columns);
                     }
-                    state.groups.push(AddSelectionsGroup {
-                        above,
-                        stack,
-                        goal_source,
-                    });
+                    state.groups.push(AddSelectionsGroup { above, stack, goal_source });
                 } else {
                     columnar_selections.push(selection);
                 }
@@ -2230,14 +1873,10 @@ impl Editor {
             let end_x = display_map.x_for_display_point(range.end, &text_layout_details);
             let positions = start_x.min(end_x)..start_x.max(end_x);
             let mut stack = Vec::new();
-            if range.start.row() == range.end.row() && !display_map.is_block_line(range.start.row())
-            {
+            if range.start.row() == range.end.row() && !display_map.is_block_line(range.start.row()) {
                 stack.push(selection.id);
                 columnar_selections.push(Selection {
-                    goal: SelectionGoal::HorizontalRange {
-                        start: positions.start.into(),
-                        end: positions.end.into(),
-                    },
+                    goal: SelectionGoal::HorizontalRange { start: positions.start.into(), end: positions.end.into() },
                     ..selection
                 });
             } else {
@@ -2258,22 +1897,14 @@ impl Editor {
                 if above {
                     stack.reverse();
                 }
-                state.groups.push(AddSelectionsGroup {
-                    above,
-                    stack,
-                    goal_source: None,
-                });
+                state.groups.push(AddSelectionsGroup { above, stack, goal_source: None });
             } else {
                 columnar_selections.push(selection);
             }
         }
 
         let mut final_selections = Vec::new();
-        let end_row = if above {
-            DisplayRow(0)
-        } else {
-            display_map.max_point().row()
-        };
+        let end_row = if above { DisplayRow(0) } else { display_map.max_point().row() };
 
         if skip_soft_wrap {
             for selection in &mut columnar_selections {
@@ -2297,18 +1928,13 @@ impl Editor {
                     if group.stack.len() == 1 {
                         group.above = above;
                     }
-                    (group.above == above).then(|| {
-                        (
-                            *selection,
-                            goal_columns_by_selection_id[&selection.id].clone(),
-                        )
-                    })
+                    (group.above == above).then(|| (*selection, goal_columns_by_selection_id[&selection.id].clone()))
                 })
                 .collect::<Vec<_>>();
             next_logical_selections.extend(queries.iter().map(|(selection, _)| selection.id).zip(
                 self.selections.find_next_columnar_selections_by_buffer_row(
                     &display_map,
-                    &mut columnar_rows,
+                    &columnar_rows,
                     &queries,
                     above,
                 ),
@@ -2325,21 +1951,14 @@ impl Editor {
                         next_logical_selections.remove(&selection.id).flatten()
                     } else {
                         let range = selection.display_range(&display_map).sorted();
-                        let row = if above {
-                            range.start.row()
+                        let row = if above { range.start.row() } else { range.end.row() };
+                        let positions = if let SelectionGoal::HorizontalRange { start, end } = selection.goal {
+                            Pixels::from(start)..Pixels::from(end)
                         } else {
-                            range.end.row()
+                            let start_x = display_map.x_for_display_point(range.start, &text_layout_details);
+                            let end_x = display_map.x_for_display_point(range.end, &text_layout_details);
+                            start_x.min(end_x)..start_x.max(end_x)
                         };
-                        let positions =
-                            if let SelectionGoal::HorizontalRange { start, end } = selection.goal {
-                                Pixels::from(start)..Pixels::from(end)
-                            } else {
-                                let start_x = display_map
-                                    .x_for_display_point(range.start, &text_layout_details);
-                                let end_x = display_map
-                                    .x_for_display_point(range.end, &text_layout_details);
-                                start_x.min(end_x)..start_x.max(end_x)
-                            };
                         self.selections.find_next_columnar_selection_by_display_row(
                             &display_map,
                             row,
@@ -2372,13 +1991,9 @@ impl Editor {
         }
 
         let unmerged_selections = final_selections.clone();
-        self.change_selections_with_history(
-            SelectionEffects::default(),
-            history_entry,
-            window,
-            cx,
-            |selections| selections.select(final_selections),
-        );
+        self.change_selections_with_history(SelectionEffects::default(), history_entry, window, cx, |selections| {
+            selections.select(final_selections)
+        });
 
         let current = self.selections.all_unexpanded::<Point>(&display_map);
         Self::reconcile_add_selection_groups(&mut state, &unmerged_selections, &current);
@@ -2397,12 +2012,7 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Editor>,
     ) {
-        self.unfold_ranges(
-            std::slice::from_ref(&range),
-            false,
-            auto_scroll.is_some(),
-            cx,
-        );
+        self.unfold_ranges(std::slice::from_ref(&range), false, auto_scroll.is_some(), cx);
         let effects = if let Some(scroll) = auto_scroll {
             SelectionEffects::scroll(scroll)
         } else {
@@ -2429,7 +2039,7 @@ impl Editor {
         cx: &mut Context<Self>,
     ) -> Result<()> {
         let buffer = display_map.buffer_snapshot();
-        let mut selections = self.selections.all::<MultiBufferOffset>(&display_map);
+        let mut selections = self.selections.all::<MultiBufferOffset>(display_map);
         if let Some(mut select_next_state) = self.select_next_state.take() {
             let query = &select_next_state.query;
             if !select_next_state.done {
@@ -2443,10 +2053,8 @@ impl Editor {
                     .context("missing selection for select next action")?;
                 let mut next_selected_range = None;
 
-                let bytes_after_last_selection =
-                    buffer.bytes_in_range(last_selection.end..buffer.len());
-                let bytes_before_first_selection =
-                    buffer.bytes_in_range(MultiBufferOffset(0)..first_selection.start);
+                let bytes_after_last_selection = buffer.bytes_in_range(last_selection.end..buffer.len());
+                let bytes_before_first_selection = buffer.bytes_in_range(MultiBufferOffset(0)..first_selection.start);
                 let query_matches = query
                     .stream_find_iter(bytes_after_last_selection)
                     .map(|result| (last_selection.end, result))
@@ -2458,18 +2066,14 @@ impl Editor {
 
                 for (start_offset, query_match) in query_matches {
                     let query_match = query_match.context("query match for select next action")?;
-                    let offset_range =
-                        start_offset + query_match.start()..start_offset + query_match.end();
+                    let offset_range = start_offset + query_match.start()..start_offset + query_match.end();
 
                     if !select_next_state.wordwise
                         || (!buffer.is_inside_word(offset_range.start, None)
                             && !buffer.is_inside_word(offset_range.end, None))
                     {
-                        let idx = selections
-                            .partition_point(|selection| selection.end <= offset_range.start);
-                        let overlaps = selections
-                            .get(idx)
-                            .map_or(false, |selection| selection.start < offset_range.end);
+                        let idx = selections.partition_point(|selection| selection.end <= offset_range.start);
+                        let overlaps = selections.get(idx).is_some_and(|selection| selection.start < offset_range.end);
 
                         if !overlaps {
                             next_selected_range = Some(offset_range);
@@ -2506,15 +2110,12 @@ impl Editor {
 
                 if same_text_selected {
                     if selected_text.is_none() {
-                        selected_text =
-                            Some(buffer.text_for_range(selection.range()).collect::<String>());
+                        selected_text = Some(buffer.text_for_range(selection.range()).collect::<String>());
                     }
 
                     if let Some(next_selection) = selections_iter.peek() {
                         if next_selection.len() == selection.len() {
-                            let next_selected_text = buffer
-                                .text_for_range(next_selection.range())
-                                .collect::<String>();
+                            let next_selected_text = buffer.text_for_range(next_selection.range()).collect::<String>();
                             if Some(next_selected_text) != selected_text {
                                 same_text_selected = false;
                                 selected_text = None;
@@ -2545,33 +2146,18 @@ impl Editor {
                 }
 
                 if selections.len() == 1 {
-                    let selection = selections
-                        .last()
-                        .expect("ensured that there's only one selection");
-                    let query = buffer
-                        .text_for_range(selection.start..selection.end)
-                        .collect::<String>();
+                    let selection = selections.last().expect("ensured that there's only one selection");
+                    let query = buffer.text_for_range(selection.start..selection.end).collect::<String>();
                     let is_empty = query.is_empty();
-                    let select_state =
-                        self.build_select_state(query, SelectNextOrigin::Caret, is_empty, cx)?;
+                    let select_state = self.build_select_state(query, SelectNextOrigin::Caret, is_empty, cx)?;
                     self.select_next_state = Some(select_state);
                 } else {
                     self.select_next_state = None;
                 }
             } else if let Some(selected_text) = selected_text {
-                self.select_next_state = Some(self.build_select_state(
-                    selected_text,
-                    SelectNextOrigin::Selection,
-                    false,
-                    cx,
-                )?);
-                self.select_next_match_internal(
-                    display_map,
-                    replace_newest,
-                    autoscroll,
-                    window,
-                    cx,
-                )?;
+                self.select_next_state =
+                    Some(self.build_select_state(selected_text, SelectNextOrigin::Selection, false, cx)?);
+                self.select_next_match_internal(display_map, replace_newest, autoscroll, window, cx)?;
             }
         }
         Ok(())
@@ -2636,9 +2222,7 @@ impl Editor {
             let (_, final_range) = if node.kind() == "string_content" {
                 let mut current_node = node;
                 let mut current_range = range;
-                while let Some((parent, parent_range)) =
-                    buffer.syntax_ancestor(current_range.clone())
-                {
+                while let Some((parent, parent_range)) = buffer.syntax_ancestor(current_range.clone()) {
                     if parent.kind() == "string_content" {
                         current_node = parent;
                         current_range = parent_range;
@@ -2652,11 +2236,7 @@ impl Editor {
                 (node, range)
             };
 
-            new_pos = if move_to_end {
-                final_range.end
-            } else {
-                final_range.start
-            };
+            new_pos = if move_to_end { final_range.end } else { final_range.start };
 
             break;
         }
@@ -2664,16 +2244,8 @@ impl Editor {
         new_pos
     }
 
-    fn move_cursors_to_syntax_nodes(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        move_to_end: bool,
-    ) {
-        let old_selections: Box<[_]> = self
-            .selections
-            .all::<MultiBufferOffset>(&self.display_snapshot(cx))
-            .into();
+    fn move_cursors_to_syntax_nodes(&mut self, window: &mut Window, cx: &mut Context<Self>, move_to_end: bool) {
+        let old_selections: Box<[_]> = self.selections.all::<MultiBufferOffset>(&self.display_snapshot(cx)).into();
         if old_selections.is_empty() {
             return;
         }
@@ -2689,20 +2261,9 @@ impl Editor {
                 }
 
                 let selection_pos = selection.head();
-                let new_pos = self.find_syntax_node_boundary(
-                    selection_pos,
-                    move_to_end,
-                    &display_map,
-                    &buffer,
-                );
+                let new_pos = self.find_syntax_node_boundary(selection_pos, move_to_end, &display_map, &buffer);
 
-                Selection {
-                    id: selection.id,
-                    start: new_pos,
-                    end: new_pos,
-                    goal: SelectionGoal::None,
-                    reversed: false,
-                }
+                Selection { id: selection.id, start: new_pos, end: new_pos, goal: SelectionGoal::None, reversed: false }
             })
             .collect::<Vec<_>>();
 
@@ -2712,12 +2273,7 @@ impl Editor {
         self.request_autoscroll(Autoscroll::newest(), cx);
     }
 
-    fn select_to_syntax_nodes(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-        move_to_end: bool,
-    ) {
+    fn select_to_syntax_nodes(&mut self, window: &mut Window, cx: &mut Context<Self>, move_to_end: bool) {
         let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
         let buffer = self.buffer.read(cx).snapshot(cx);
         let old_selections = self.selections.all::<MultiBufferOffset>(&display_map);
@@ -2725,12 +2281,7 @@ impl Editor {
         let new_selections = old_selections
             .iter()
             .map(|selection| {
-                let new_pos = self.find_syntax_node_boundary(
-                    selection.head(),
-                    move_to_end,
-                    &display_map,
-                    &buffer,
-                );
+                let new_pos = self.find_syntax_node_boundary(selection.head(), move_to_end, &display_map, &buffer);
 
                 let mut new_selection = *selection;
                 new_selection.set_head(new_pos, SelectionGoal::None);

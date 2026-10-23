@@ -1,15 +1,17 @@
-use std::{
-    borrow::{Borrow, Cow},
-    fmt, io,
-    ops::Deref,
-    path::{Path, PathBuf},
-    rc::Rc,
-    sync::Arc,
-};
+use std::borrow::Borrow;
+use std::borrow::Cow;
+use std::fmt;
+use std::io;
+use std::ops::Deref;
+use std::path::Path;
+use std::path::PathBuf;
+use std::rc::Rc;
+use std::sync::Arc;
 
 use anyhow::Context;
 
-use crate::{PathStyle, rel_path::RelPath};
+use crate::PathStyle;
+use crate::rel_path::RelPath;
 
 // An absolute path on the user's local filesystem.
 // Requires paths to be valid utf-8
@@ -28,7 +30,7 @@ impl AbsPath {
         Ok(Self::new_unchecked(path))
     }
 
-    fn new_unchecked(path: &Path) -> &Self {
+    const fn new_unchecked(path: &Path) -> &Self {
         // SAFETY: `AbsPath` is a `repr(transparent)` wrapper around `Path`.
         unsafe { &*(path as *const Path as *const Self) }
     }
@@ -73,18 +75,16 @@ impl AbsPath {
         self.0.display()
     }
 
-    pub fn as_std_path(&self) -> &Path {
+    pub const fn as_std_path(&self) -> &Path {
         &self.0
     }
 
     pub fn as_str(&self) -> &str {
-        self.0
-            .to_str()
-            .expect("valid UTF-8 enforced in constructor")
+        self.0.to_str().expect("valid UTF-8 enforced in constructor")
     }
 
     pub fn ancestors(&self) -> impl Iterator<Item = &AbsPath> {
-        self.0.ancestors().map(|p| AbsPath::new_unchecked(p))
+        self.0.ancestors().map(AbsPath::new_unchecked)
     }
 
     pub fn strip_prefix<'a>(&'a self, prefix: &AbsPath) -> Option<Cow<'a, RelPath>> {
@@ -136,9 +136,7 @@ pub struct AbsPathBuf(PathBuf);
 impl AbsPathBuf {
     pub fn new(path: impl Into<PathBuf>) -> anyhow::Result<Self> {
         let path = path.into();
-        if let Err(e) = AbsPath::new(&path) {
-            return Err(e);
-        }
+        AbsPath::new(&path)?;
         Ok(Self(path))
     }
 

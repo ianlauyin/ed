@@ -1,13 +1,23 @@
 use futures::future::join_all;
-use gpui::{App, Entity, SharedString, Task, TaskExt};
+use gpui::App;
+use gpui::Entity;
+use gpui::SharedString;
+use gpui::Task;
+use gpui::TaskExt;
 use itertools::Itertools;
-use language::{Buffer, ClientCommand};
-use project::{CodeAction, LspAction};
-use text::{OffsetRangeExt as _, ToOffset as _, ToPoint as _};
+use language::Buffer;
+use language::ClientCommand;
+use project::CodeAction;
+use project::LspAction;
+use text::OffsetRangeExt as _;
+use text::ToOffset as _;
+use text::ToPoint as _;
+use ui::Context;
+use ui::Window;
 
-use ui::{Context, Window};
-
-use crate::{Editor, SelectionEffects, hover_links::HoverLink};
+use crate::Editor;
+use crate::SelectionEffects;
+use crate::hover_links::HoverLink;
 
 static EMPTY_LENS_FALLBACK_TITLE: SharedString = SharedString::new_static("0 references");
 
@@ -38,17 +48,15 @@ pub(super) fn try_handle_client_command(
         .read(cx)
         .language_server_adapter_for_id(action.server_id)
         .and_then(|adapter| adapter.adapter.client_command(&command.command, arguments))
-        .or_else(|| match command.command.as_str() {
-            "editor.action.showReferences"
-            | "editor.action.goToLocations"
-            | "editor.action.peekLocations" => Some(ClientCommand::ShowLocations),
+        .or(match command.command.as_str() {
+            "editor.action.showReferences" | "editor.action.goToLocations" | "editor.action.peekLocations" => {
+                Some(ClientCommand::ShowLocations)
+            }
             _ => None,
         });
 
     match client_command {
-        Some(ClientCommand::ShowLocations) => {
-            try_show_references(arguments, action, editor, window, cx)
-        }
+        Some(ClientCommand::ShowLocations) => try_show_references(arguments, action, editor, window, cx),
         None => false,
     }
 }
@@ -72,13 +80,8 @@ fn try_show_references(
 
     let server_id = action.server_id;
     let nav_entry = editor.navigation_entry(editor.selections.newest_anchor().head(), cx);
-    let links = locations
-        .into_iter()
-        .map(|location| HoverLink::LspLocation(location, server_id))
-        .collect();
-    editor
-        .navigate_to_hover_links(None, links, nav_entry, false, window, cx)
-        .detach_and_log_err(cx);
+    let links = locations.into_iter().map(|location| HoverLink::LspLocation(location, server_id)).collect();
+    editor.navigate_to_hover_links(None, links, nav_entry, false, window, cx).detach_and_log_err(cx);
 
     true
 }
@@ -97,8 +100,7 @@ impl Editor {
             return None;
         }
         let lsp_store = self.project.as_ref()?.read(cx).lsp_store();
-        let fetch_task =
-            lsp_store.update(cx, |lsp_store, cx| lsp_store.code_lens_actions(buffer, cx));
+        let fetch_task = lsp_store.update(cx, |lsp_store, cx| lsp_store.code_lens_actions(buffer, cx));
         let buffer = buffer.clone();
         Some(cx.spawn(async move |cx| {
             let actions = match fetch_task.await {
@@ -127,8 +129,8 @@ impl Editor {
                     .map(|(id, action)| {
                         let needs_resolve = !action.resolved
                             && matches!(&action.lsp_action, LspAction::CodeLens(lens) if lens.command.is_none());
-                        let resolve = needs_resolve
-                            .then(|| lsp_store.resolve_code_lens(&buffer, action.server_id, id, cx));
+                        let resolve =
+                            needs_resolve.then(|| lsp_store.resolve_code_lens(&buffer, action.server_id, id, cx));
                         async move {
                             match resolve {
                                 Some(task) => task.await.map(|(_, resolved)| resolved),
@@ -147,26 +149,19 @@ impl Editor {
                         return None;
                     };
                     match lens.command.as_ref().filter(|command| !command.title.is_empty()) {
-                        Some(command) => Some(HoverCodeLens {
-                            title: SharedString::from(&command.title),
-                            action: Some(action),
-                        }),
-                        None => action.resolved.then(|| HoverCodeLens {
-                            title: EMPTY_LENS_FALLBACK_TITLE.clone(),
-                            action: None,
-                        }),
+                        Some(command) => {
+                            Some(HoverCodeLens { title: SharedString::from(&command.title), action: Some(action) })
+                        }
+                        None => action
+                            .resolved
+                            .then(|| HoverCodeLens { title: EMPTY_LENS_FALLBACK_TITLE.clone(), action: None }),
                     }
                 })
                 .collect()
         }))
     }
 
-    pub(crate) fn run_code_lens_action(
-        &mut self,
-        action: CodeAction,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn run_code_lens_action(&mut self, action: CodeAction, window: &mut Window, cx: &mut Context<Self>) {
         let snapshot = self.buffer().read(cx).snapshot(cx);
         if let Some(position) = snapshot.anchor_in_excerpt(action.range.start) {
             self.change_selections(SelectionEffects::default(), window, cx, |s| {
@@ -182,9 +177,7 @@ impl Editor {
         let project = workspace.read(cx).project().clone();
         if let Some(buffer) = self.buffer().read(cx).buffer(action.range.start.buffer_id) {
             project
-                .update(cx, |project, cx| {
-                    project.apply_code_action(buffer, action, true, cx)
-                })
+                .update(cx, |project, cx| project.apply_code_action(buffer, action, true, cx))
                 .detach_and_log_err(cx);
         }
     }

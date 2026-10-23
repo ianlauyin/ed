@@ -1,38 +1,38 @@
-use std::sync::{Arc, LazyLock};
+use std::sync::Arc;
+use std::sync::LazyLock;
 
 use anyhow::Result;
 use collections::HashMap;
-use gpui::{App, AsyncApp, Entity, SharedString, Task};
-use language::{LanguageRegistry, language_settings::AllLanguageSettings};
+use gpui::App;
+use gpui::AsyncApp;
+use gpui::Entity;
+use gpui::SharedString;
+use gpui::Task;
+use language::LanguageRegistry;
+use language::language_settings::AllLanguageSettings;
 use parking_lot::RwLock;
 use project::LspStore;
-use settings::{Settings as _, SettingsLocation};
-use util::schemars::{AllowTrailingCommas, DefaultDenyUnknownFields};
+use settings::Settings as _;
+use settings::SettingsLocation;
+use util::schemars::AllowTrailingCommas;
+use util::schemars::DefaultDenyUnknownFields;
 
 const SCHEMA_URI_PREFIX: &str = "zed://schemas/";
 
 const TSCONFIG_SCHEMA: &str = include_str!("schemas/tsconfig.json");
 const PACKAGE_JSON_SCHEMA: &str = include_str!("schemas/package.json");
 
-static JSONC_SCHEMA: LazyLock<String> = LazyLock::new(|| {
-    serde_json::to_string(&generate_jsonc_schema()).expect("JSONC schema should serialize")
-});
+static JSONC_SCHEMA: LazyLock<String> =
+    LazyLock::new(|| serde_json::to_string(&generate_jsonc_schema()).expect("JSONC schema should serialize"));
 
 static ACTION_SCHEMA_CACHE: LazyLock<RwLock<HashMap<String, String>>> =
     LazyLock::new(|| RwLock::new(HashMap::default()));
 
 pub fn init(cx: &mut App) {
-    project::lsp_store::json_language_server_ext::register_schema_handler(
-        handle_schema_request,
-        cx,
-    );
+    project::lsp_store::json_language_server_ext::register_schema_handler(handle_schema_request, cx);
 }
 
-pub fn handle_schema_request(
-    _lsp_store: Entity<LspStore>,
-    uri: String,
-    _cx: &mut AsyncApp,
-) -> Task<Result<String>> {
+pub fn handle_schema_request(_lsp_store: Entity<LspStore>, uri: String, _cx: &mut AsyncApp) -> Task<Result<String>> {
     let path = match uri.strip_prefix(SCHEMA_URI_PREFIX) {
         Some(path) => path,
         None => return Task::ready(Err(anyhow::anyhow!("Invalid schema URI: {}", uri))),
@@ -54,10 +54,7 @@ fn resolve_static_schema(path: &str) -> Option<String> {
         "package_json" => Some(PACKAGE_JSON_SCHEMA.to_string()),
         "jsonc" => Some(JSONC_SCHEMA.clone()),
         "action" => {
-            let normalized_action_name = match rest {
-                Some(name) => name,
-                None => return None,
-            };
+            let normalized_action_name = rest?;
             let action_name = denormalize_action_name(normalized_action_name);
 
             if let Some(cached) = ACTION_SCHEMA_CACHE.read().get(&action_name).cloned() {
@@ -66,14 +63,10 @@ fn resolve_static_schema(path: &str) -> Option<String> {
 
             let mut generator = settings::action_schema_generator();
             let schema = settings::get_action_schema_by_name(&action_name, &mut generator);
-            let json = serde_json::to_string(
-                &root_schema_from_action_schema(schema, &mut generator).to_value(),
-            )
-            .expect("Action schema should serialize");
+            let json = serde_json::to_string(&root_schema_from_action_schema(schema, &generator).to_value())
+                .expect("Action schema should serialize");
 
-            ACTION_SCHEMA_CACHE
-                .write()
-                .insert(action_name, json.clone());
+            ACTION_SCHEMA_CACHE.write().insert(action_name, json.clone());
             Some(json)
         }
 
@@ -117,17 +110,14 @@ pub fn all_schema_file_associations(
         },
     ]);
 
-    file_associations
-        .as_array_mut()
-        .unwrap()
-        .extend(cx.all_action_names().into_iter().map(|&name| {
-            let normalized_name = normalize_action_name(name);
-            let file_name = normalized_action_name_to_file_name(normalized_name.clone());
-            serde_json::json!({
-                "fileMatch": [file_name],
-                "url": format!("{SCHEMA_URI_PREFIX}action/{normalized_name}")
-            })
-        }));
+    file_associations.as_array_mut().unwrap().extend(cx.all_action_names().iter().map(|&name| {
+        let normalized_name = normalize_action_name(name);
+        let file_name = normalized_action_name_to_file_name(normalized_name.clone());
+        serde_json::json!({
+            "fileMatch": [file_name],
+            "url": format!("{SCHEMA_URI_PREFIX}action/{normalized_name}")
+        })
+    }));
 
     file_associations
 }
@@ -171,7 +161,7 @@ pub fn normalized_action_name_to_file_name(mut normalized_action_name: String) -
 
 fn root_schema_from_action_schema(
     action_schema: Option<schemars::Schema>,
-    generator: &mut schemars::SchemaGenerator,
+    generator: &schemars::SchemaGenerator,
 ) -> schemars::Schema {
     let Some(mut action_schema) = action_schema else {
         return schemars::json_schema!(false);
@@ -188,8 +178,6 @@ fn root_schema_from_action_schema(
         "allowTrailingCommas": true,
         "$defs": defs,
     });
-    schema
-        .ensure_object()
-        .extend(std::mem::take(action_schema.ensure_object()));
+    schema.ensure_object().extend(std::mem::take(action_schema.ensure_object()));
     schema
 }

@@ -15,7 +15,6 @@ doctest = false
 rpc.workspace = true
 any_vec.workspace = true
 anyhow.workspace = true
-async-recursion.workspace = true
 chrono.workspace = true
 collections.workspace = true
 component.workspace = true

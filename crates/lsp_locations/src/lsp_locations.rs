@@ -3,31 +3,63 @@ use std::ops::Range;
 use std::sync::Arc;
 
 use collections::HashMap;
-use editor::actions::{
-    FindAllReferences, GoToDeclaration, GoToDefinition, GoToImplementation, GoToTypeDefinition,
-};
-use editor::hover_links::{HoverLink, OpenDefinitionLocations};
-use editor::{Editor, EditorSettings, GotoDefinitionKind, OpenResultsIn};
+use editor::Editor;
+use editor::EditorSettings;
+use editor::GotoDefinitionKind;
+use editor::OpenResultsIn;
+use editor::actions::FindAllReferences;
+use editor::actions::GoToDeclaration;
+use editor::actions::GoToDefinition;
+use editor::actions::GoToImplementation;
+use editor::actions::GoToTypeDefinition;
+use editor::hover_links::HoverLink;
+use editor::hover_links::OpenDefinitionLocations;
 use file_icons::FileIcons;
 use fuzzy::StringMatchCandidate;
-use gpui::{
-    AnyElement, App, AppContext, AsyncWindowContext, Context, DismissEvent, DispatchPhase, Entity,
-    EventEmitter, FocusHandle, Focusable, HighlightStyle, StyledText, Subscription, Task,
-    TextStyle, WeakEntity, prelude::*,
-};
-use language::{Buffer, HighlightId, LanguageAwareStyling};
-use picker::{Picker, PickerDelegate};
-use project::{Location, LocationLink, Project, ProjectPath};
-use settings::{GoToDefinitionFallback, Settings as _};
-use text::{Anchor, Point};
+use gpui::AnyElement;
+use gpui::App;
+use gpui::AppContext;
+use gpui::AsyncWindowContext;
+use gpui::Context;
+use gpui::DismissEvent;
+use gpui::DispatchPhase;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::HighlightStyle;
+use gpui::StyledText;
+use gpui::Subscription;
+use gpui::Task;
+use gpui::TextStyle;
+use gpui::WeakEntity;
+use gpui::prelude::*;
+use language::Buffer;
+use language::HighlightId;
+use language::LanguageAwareStyling;
+use picker::Picker;
+use picker::PickerDelegate;
+use project::Location;
+use project::LocationLink;
+use project::Project;
+use project::ProjectPath;
+use settings::GoToDefinitionFallback;
+use settings::Settings as _;
+use text::Anchor;
+use text::Point;
 use theme_settings::ThemeSettings;
-use ui::{Divider, FluentBuilder};
-use ui::{ListItem, ListItemSpacing, prelude::*};
+use ui::Divider;
+use ui::FluentBuilder;
+use ui::ListItem;
+use ui::ListItemSpacing;
+use ui::prelude::*;
 use util::ResultExt as _;
+use workspace::ModalView;
+use workspace::Toast;
+use workspace::Workspace;
 use workspace::item::ItemSettings;
 use workspace::notifications::NotificationId;
 use workspace::pane::NavigationEntry;
-use workspace::{ModalView, Toast, Workspace};
 
 pub fn init(cx: &mut App) {
     cx.observe_new(register).detach();
@@ -44,18 +76,11 @@ fn register(editor: &mut Editor, _window: Option<&mut Window>, cx: &mut Context<
     editor
         .register_action_renderer(|editor, window, _| {
             if editor.lsp_data_enabled() {
-                window.on_action(
-                    TypeId::of::<OpenDefinitionLocations>(),
-                    |action, phase, window, cx| {
-                        if phase == DispatchPhase::Bubble {
-                            handle_definition_locations(
-                                action.downcast_ref().expect("definition action"),
-                                window,
-                                cx,
-                            );
-                        }
-                    },
-                );
+                window.on_action(TypeId::of::<OpenDefinitionLocations>(), |action, phase, window, cx| {
+                    if phase == DispatchPhase::Bubble {
+                        handle_definition_locations(action.downcast_ref().expect("definition action"), window, cx);
+                    }
+                });
             }
         })
         .detach();
@@ -64,13 +89,7 @@ fn register(editor: &mut Editor, _window: Option<&mut Window>, cx: &mut Context<
         .register_action({
             let handle = handle.clone();
             move |action: &GoToDefinition, window, cx| {
-                handle_nav_action(
-                    action.open_results_in,
-                    LspPickerKind::Definition,
-                    &handle,
-                    window,
-                    cx,
-                );
+                handle_nav_action(action.open_results_in, LspPickerKind::Definition, &handle, window, cx);
             }
         })
         .detach();
@@ -78,13 +97,7 @@ fn register(editor: &mut Editor, _window: Option<&mut Window>, cx: &mut Context<
         .register_action({
             let handle = handle.clone();
             move |action: &GoToDeclaration, window, cx| {
-                handle_nav_action(
-                    action.open_results_in,
-                    LspPickerKind::Declaration,
-                    &handle,
-                    window,
-                    cx,
-                );
+                handle_nav_action(action.open_results_in, LspPickerKind::Declaration, &handle, window, cx);
             }
         })
         .detach();
@@ -92,13 +105,7 @@ fn register(editor: &mut Editor, _window: Option<&mut Window>, cx: &mut Context<
         .register_action({
             let handle = handle.clone();
             move |action: &GoToImplementation, window, cx| {
-                handle_nav_action(
-                    action.open_results_in,
-                    LspPickerKind::Implementation,
-                    &handle,
-                    window,
-                    cx,
-                );
+                handle_nav_action(action.open_results_in, LspPickerKind::Implementation, &handle, window, cx);
             }
         })
         .detach();
@@ -106,25 +113,13 @@ fn register(editor: &mut Editor, _window: Option<&mut Window>, cx: &mut Context<
         .register_action({
             let handle = handle.clone();
             move |action: &GoToTypeDefinition, window, cx| {
-                handle_nav_action(
-                    action.open_results_in,
-                    LspPickerKind::TypeDefinition,
-                    &handle,
-                    window,
-                    cx,
-                );
+                handle_nav_action(action.open_results_in, LspPickerKind::TypeDefinition, &handle, window, cx);
             }
         })
         .detach();
     editor
         .register_action(move |action: &FindAllReferences, window, cx| {
-            handle_nav_action(
-                action.open_results_in,
-                LspPickerKind::References,
-                &handle,
-                window,
-                cx,
-            );
+            handle_nav_action(action.open_results_in, LspPickerKind::References, &handle, window, cx);
         })
         .detach();
 }
@@ -136,11 +131,10 @@ fn handle_nav_action(
     open_results_in: Option<OpenResultsIn>,
     kind: LspPickerKind,
     editor: &WeakEntity<Editor>,
-    window: &mut Window,
+    window: &Window,
     cx: &mut App,
 ) {
-    let open_results_in =
-        open_results_in.unwrap_or_else(|| EditorSettings::get_global(cx).lsp_results_location);
+    let open_results_in = open_results_in.unwrap_or_else(|| EditorSettings::get_global(cx).lsp_results_location);
     if open_results_in != OpenResultsIn::Picker {
         cx.propagate();
         return;
@@ -148,22 +142,13 @@ fn handle_nav_action(
     LspLocationsPicker::open_for_editor(kind, editor.clone(), window, cx);
 }
 
-fn handle_definition_locations(
-    action: &OpenDefinitionLocations,
-    window: &mut Window,
-    cx: &mut App,
-) {
+fn handle_definition_locations(action: &OpenDefinitionLocations, window: &mut Window, cx: &mut App) {
     let action = &action.0;
     let Some(editor) = action.editor.upgrade() else {
         return;
     };
     if !editor.read(cx).lsp_data_enabled()
-        || !editor
-            .read(cx)
-            .buffer()
-            .read(cx)
-            .snapshot(cx)
-            .can_resolve(&action.position)
+        || !editor.read(cx).buffer().read(cx).snapshot(cx).can_resolve(&action.position)
     {
         return;
     }
@@ -172,10 +157,7 @@ fn handle_definition_locations(
         return;
     };
     if EditorSettings::get_global(cx).lsp_results_location != OpenResultsIn::Picker
-        || action
-            .locations
-            .iter()
-            .any(|location| location.buffer.read(cx).file().is_none())
+        || action.locations.iter().any(|location| location.buffer.read(cx).file().is_none())
     {
         cx.propagate();
         return;
@@ -194,15 +176,7 @@ fn handle_definition_locations(
     workspace.update(cx, |workspace, cx| {
         let project = workspace.project().clone();
         workspace.toggle_modal(window, cx, |window, cx| {
-            LspLocationsPicker::new(
-                kind,
-                matches,
-                project,
-                action.editor.clone(),
-                action.origin.clone(),
-                window,
-                cx,
-            )
+            LspLocationsPicker::new(kind, matches, project, action.editor.clone(), action.origin.clone(), window, cx)
         });
     });
 }
@@ -218,17 +192,12 @@ async fn run_picker_query(
     project: &Entity<Project>,
     cx: &mut AsyncWindowContext,
 ) -> Option<Vec<Location>> {
-    let query = editor
-        .update(cx, |editor, cx| kind.run_query(editor, project, cx))
-        .ok()
-        .flatten()?;
+    let query = editor.update(cx, |editor, cx| kind.run_query(editor, project, cx)).ok().flatten()?;
     match query.await {
         Ok(locations) => Some(locations),
         Err(error) => {
             log::error!("LSP {kind:?} query failed: {error:#}");
-            workspace
-                .update(cx, |workspace, cx| workspace.show_error(error, cx))
-                .log_err();
+            workspace.update(cx, |workspace, cx| workspace.show_error(error, cx)).log_err();
             None
         }
     }
@@ -243,27 +212,15 @@ async fn run_picker_matches(
     cx: &mut AsyncWindowContext,
 ) -> Option<Vec<LocationMatch>> {
     let locations = run_picker_query(kind, editor, workspace, project, cx).await?;
-    editor
-        .update(cx, |_, cx| build_location_matches(&locations, cx))
-        .ok()
+    editor.update(cx, |_, cx| build_location_matches(&locations, cx)).ok()
 }
 
-fn show_no_results_toast(
-    workspace: &WeakEntity<Workspace>,
-    kind: LspPickerKind,
-    cx: &mut AsyncWindowContext,
-) {
+fn show_no_results_toast(workspace: &WeakEntity<Workspace>, kind: LspPickerKind, cx: &mut AsyncWindowContext) {
     workspace
         .update(cx, |workspace, cx| {
             struct NoLspResults;
-            workspace.show_toast(
-                Toast::new(
-                    NotificationId::unique::<NoLspResults>(),
-                    kind.empty_message(),
-                )
-                .autohide(),
-                cx,
-            );
+            workspace
+                .show_toast(Toast::new(NotificationId::unique::<NoLspResults>(), kind.empty_message()).autohide(), cx);
         })
         .log_err();
 }
@@ -278,7 +235,7 @@ pub enum LspPickerKind {
 }
 
 impl LspPickerKind {
-    fn placeholder(self) -> &'static str {
+    const fn placeholder(self) -> &'static str {
         match self {
             LspPickerKind::References => "Filter references…",
             LspPickerKind::Definition => "Filter definitions…",
@@ -290,7 +247,7 @@ impl LspPickerKind {
 
     /// Message shown when the query produces no results, so the command does not
     /// appear to silently do nothing.
-    fn empty_message(self) -> &'static str {
+    const fn empty_message(self) -> &'static str {
         match self {
             LspPickerKind::References => "No references found",
             LspPickerKind::Definition => "No definitions found",
@@ -310,18 +267,12 @@ impl LspPickerKind {
     ) -> Option<Task<anyhow::Result<Vec<Location>>>> {
         match self {
             LspPickerKind::References => editor.find_all_references_locations(project, cx),
-            LspPickerKind::Definition => {
-                editor.definition_locations_of_kind(GotoDefinitionKind::Symbol, cx)
-            }
-            LspPickerKind::Declaration => {
-                editor.definition_locations_of_kind(GotoDefinitionKind::Declaration, cx)
-            }
+            LspPickerKind::Definition => editor.definition_locations_of_kind(GotoDefinitionKind::Symbol, cx),
+            LspPickerKind::Declaration => editor.definition_locations_of_kind(GotoDefinitionKind::Declaration, cx),
             LspPickerKind::Implementation => {
                 editor.definition_locations_of_kind(GotoDefinitionKind::Implementation, cx)
             }
-            LspPickerKind::TypeDefinition => {
-                editor.definition_locations_of_kind(GotoDefinitionKind::Type, cx)
-            }
+            LspPickerKind::TypeDefinition => editor.definition_locations_of_kind(GotoDefinitionKind::Type, cx),
         }
     }
 }
@@ -332,12 +283,7 @@ pub struct LspLocationsPicker {
 }
 
 impl LspLocationsPicker {
-    fn open_for_editor(
-        kind: LspPickerKind,
-        editor: WeakEntity<Editor>,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
+    fn open_for_editor(kind: LspPickerKind, editor: WeakEntity<Editor>, window: &Window, cx: &mut App) {
         let Some(editor) = editor.upgrade() else {
             return;
         };
@@ -356,9 +302,9 @@ impl LspLocationsPicker {
     fn open(
         kind: LspPickerKind,
         editor: Entity<Editor>,
-        workspace: &mut Workspace,
-        window: &mut Window,
-        cx: &mut Context<Workspace>,
+        workspace: &Workspace,
+        window: &Window,
+        cx: &Context<Workspace>,
     ) {
         let project = workspace.project().clone();
         let fallback = EditorSettings::get_global(cx).go_to_definition_fallback;
@@ -373,9 +319,7 @@ impl LspLocationsPicker {
             // range and exclude fileless results, so a single distinct result
             // jumps directly and a fileless-only result reports "no results"
             // instead of opening a blank picker.
-            let Some(mut matches) =
-                run_picker_matches(kind, &editor, &workspace, &project, cx).await
-            else {
+            let Some(mut matches) = run_picker_matches(kind, &editor, &workspace, &project, cx).await else {
                 return;
             };
 
@@ -384,9 +328,7 @@ impl LspLocationsPicker {
                 && fallback == GoToDefinitionFallback::FindAllReferences
             {
                 kind = LspPickerKind::References;
-                let Some(references) =
-                    run_picker_matches(kind, &editor, &workspace, &project, cx).await
-                else {
+                let Some(references) = run_picker_matches(kind, &editor, &workspace, &project, cx).await else {
                     return;
                 };
                 matches = references;
@@ -399,13 +341,10 @@ impl LspLocationsPicker {
 
             if matches.len() == 1 {
                 if let Some(location_match) = matches.into_iter().next() {
-                    let location = Location {
-                        buffer: location_match.buffer,
-                        range: location_match.anchor_range,
-                    };
-                    if let Ok(task) = editor.update_in(cx, |editor, window, cx| {
-                        editor.open_location(location, false, window, cx)
-                    }) {
+                    let location = Location { buffer: location_match.buffer, range: location_match.anchor_range };
+                    if let Ok(task) =
+                        editor.update_in(cx, |editor, window, cx| editor.open_location(location, false, window, cx))
+                    {
                         task.await.log_err();
                     }
                 }
@@ -438,10 +377,7 @@ impl LspLocationsPicker {
         let subscription = cx.subscribe(&picker, |_, _, _: &DismissEvent, cx| {
             cx.emit(DismissEvent);
         });
-        Self {
-            picker,
-            _subscription: subscription,
-        }
+        Self { picker, _subscription: subscription }
     }
 }
 
@@ -509,11 +445,7 @@ impl LspLocationsDelegate {
             .map(|(index, location_match)| {
                 StringMatchCandidate::new(
                     index,
-                    &format!(
-                        "{} {}",
-                        location_match.display_text,
-                        location_match.path.path.as_unix_str()
-                    ),
+                    &format!("{} {}", location_match.display_text, location_match.path.path.as_unix_str()),
                 )
             })
             .collect();
@@ -559,9 +491,7 @@ impl LspLocationsDelegate {
     }
 
     fn first_selectable_index(&self) -> Option<usize> {
-        self.entries
-            .iter()
-            .position(|entry| matches!(entry, Entry::Match(_)))
+        self.entries.iter().position(|entry| matches!(entry, Entry::Match(_)))
     }
 
     fn selected_location_match(&self) -> Option<&LocationMatch> {
@@ -575,10 +505,7 @@ impl LspLocationsDelegate {
         let Some(location_match) = self.selected_location_match() else {
             return;
         };
-        let location = Location {
-            buffer: location_match.buffer.clone(),
-            range: location_match.anchor_range.clone(),
-        };
+        let location = Location { buffer: location_match.buffer.clone(), range: location_match.anchor_range.clone() };
         let Some(editor) = self.editor.upgrade() else {
             return;
         };
@@ -587,10 +514,7 @@ impl LspLocationsDelegate {
                 if let Some(origin) = self.origin.take() {
                     editor.navigate_to_hover_links(
                         None,
-                        vec![HoverLink::Text(LocationLink {
-                            origin: None,
-                            target: location,
-                        })],
+                        vec![HoverLink::Text(LocationLink { origin: None, target: location })],
                         Some(origin),
                         split,
                         window,
@@ -611,17 +535,13 @@ fn build_location_matches(locations: &[Location], cx: &App) -> Vec<LocationMatch
     let mut matches = Vec::with_capacity(locations.len());
 
     for location in locations {
-        let snapshot = snapshots
-            .entry(location.buffer.entity_id())
-            .or_insert_with(|| location.buffer.read(cx).snapshot());
+        let snapshot =
+            snapshots.entry(location.buffer.entity_id()).or_insert_with(|| location.buffer.read(cx).snapshot());
 
         let Some(file) = snapshot.file() else {
             continue;
         };
-        let path = ProjectPath {
-            worktree_id: file.worktree_id(cx),
-            path: file.path().clone(),
-        };
+        let path = ProjectPath { worktree_id: file.worktree_id(cx), path: file.path().clone() };
 
         let start_offset: usize = snapshot.summary_for_anchor(&location.range.start);
         let end_offset: usize = snapshot.summary_for_anchor(&location.range.end);
@@ -640,13 +560,9 @@ fn build_location_matches(locations: &[Location], cx: &App) -> Vec<LocationMatch
         // never re-snapshots the buffer or re-runs highlighting.
         let mut syntax_highlights = Vec::new();
         let mut offset = 0;
-        for chunk in snapshot.chunks(
-            visible_start..visible_end,
-            LanguageAwareStyling {
-                tree_sitter: true,
-                diagnostics: false,
-            },
-        ) {
+        for chunk in
+            snapshot.chunks(visible_start..visible_end, LanguageAwareStyling { tree_sitter: true, diagnostics: false })
+        {
             let chunk_len = chunk.text.len();
             if let Some(id) = chunk.syntax_highlight_id {
                 syntax_highlights.push((offset..offset + chunk_len, id));
@@ -708,21 +624,11 @@ impl PickerDelegate for LspLocationsDelegate {
         false
     }
 
-    fn set_selected_index(
-        &mut self,
-        ix: usize,
-        _window: &mut Window,
-        _cx: &mut Context<Picker<Self>>,
-    ) {
+    fn set_selected_index(&mut self, ix: usize, _window: &mut Window, _cx: &mut Context<Picker<Self>>) {
         self.selected_index = ix;
     }
 
-    fn update_matches(
-        &mut self,
-        query: String,
-        _window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) -> Task<()> {
+    fn update_matches(&mut self, query: String, _window: &mut Window, cx: &mut Context<Picker<Self>>) -> Task<()> {
         let query = query.trim().to_owned();
         let candidates = self.candidates.clone();
         cx.spawn(async move |picker, cx| {
@@ -739,10 +645,8 @@ impl PickerDelegate for LspLocationsDelegate {
                     cx.background_executor().clone(),
                 )
                 .await;
-                let mut indices = string_matches
-                    .into_iter()
-                    .map(|string_match| string_match.candidate_id)
-                    .collect::<Vec<_>>();
+                let mut indices =
+                    string_matches.into_iter().map(|string_match| string_match.candidate_id).collect::<Vec<_>>();
                 // Restore the file-grouped, positional order (fuzzy returns by score).
                 indices.sort_unstable();
                 indices
@@ -784,19 +688,12 @@ impl PickerDelegate for LspLocationsDelegate {
         cx: &mut Context<Picker<Self>>,
     ) -> Option<Self::ListItem> {
         match self.entries.get(ix)? {
-            Entry::Separator => Some(
-                div()
-                    .py(DynamicSpacing::Base04.rems(cx))
-                    .child(Divider::horizontal())
-                    .into_any_element(),
-            ),
+            Entry::Separator => {
+                Some(div().py(DynamicSpacing::Base04.rems(cx)).child(Divider::horizontal()).into_any_element())
+            }
             Entry::Header(path) => {
                 let path_style = self.project.read(cx).path_style(cx);
-                let file_name = path
-                    .path
-                    .file_name()
-                    .map(|name| name.to_string())
-                    .unwrap_or_default();
+                let file_name = path.path.file_name().map(|name| name.to_string()).unwrap_or_default();
                 let directory = path
                     .path
                     .parent()
@@ -807,11 +704,7 @@ impl PickerDelegate for LspLocationsDelegate {
                     .file_icons
                     .then(|| FileIcons::get_icon(path.path.as_std_path(), cx))
                     .flatten()
-                    .map(|icon| {
-                        Icon::from_path(icon)
-                            .color(Color::Muted)
-                            .size(IconSize::Small)
-                    });
+                    .map(|icon| Icon::from_path(icon).color(Color::Muted).size(IconSize::Small));
                 Some(
                     h_flex()
                         .w_full()
@@ -820,19 +713,14 @@ impl PickerDelegate for LspLocationsDelegate {
                         .py_1()
                         .gap_1p5()
                         .children(file_icon)
-                        .child(
-                            h_flex()
-                                .gap_1()
-                                .child(Label::new(file_name).size(LabelSize::Small))
-                                .when(!directory.is_empty(), |this| {
-                                    this.child(
-                                        Label::new(directory)
-                                            .size(LabelSize::Small)
-                                            .color(Color::Muted)
-                                            .truncate_start(),
-                                    )
-                                }),
-                        )
+                        .child(h_flex().gap_1().child(Label::new(file_name).size(LabelSize::Small)).when(
+                            !directory.is_empty(),
+                            |this| {
+                                this.child(
+                                    Label::new(directory).size(LabelSize::Small).color(Color::Muted).truncate_start(),
+                                )
+                            },
+                        ))
                         .into_any_element(),
                 )
             }
@@ -851,23 +739,15 @@ impl PickerDelegate for LspLocationsDelegate {
                                 .text_sm()
                                 .child(
                                     h_flex()
-                                        .w(rems(
-                                            (self.max_line_number.max(1).ilog10() + 1) as f32 * 0.5,
-                                        ))
+                                        .w(rems((self.max_line_number.max(1).ilog10() + 1) as f32 * 0.5))
                                         .justify_end()
                                         .child(
                                             Label::new(location_match.line_number.to_string())
-                                                .color(Color::Custom(
-                                                    cx.theme().colors().text_muted.opacity(0.5),
-                                                )),
+                                                .color(Color::Custom(cx.theme().colors().text_muted.opacity(0.5))),
                                         ),
                                 )
                                 .child(
-                                    div()
-                                        .flex_1()
-                                        .min_w_0()
-                                        .truncate()
-                                        .child(render_matched_line(location_match, cx)),
+                                    div().flex_1().min_w_0().truncate().child(render_matched_line(location_match, cx)),
                                 ),
                         )
                         .into_any_element(),
@@ -908,6 +788,5 @@ fn render_matched_line(location_match: &LocationMatch, cx: &App) -> StyledText {
     let match_highlight = (location_match.match_range.clone(), match_style);
 
     let highlights = gpui::combine_highlights(syntax_highlights, [match_highlight]);
-    StyledText::new(location_match.display_text.clone())
-        .with_default_highlights(&text_style, highlights)
+    StyledText::new(location_match.display_text.clone()).with_default_highlights(&text_style, highlights)
 }

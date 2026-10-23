@@ -83,7 +83,7 @@ pub enum InvalidationStrategy {
 }
 
 impl InvalidationStrategy {
-    pub fn should_invalidate(&self) -> bool {
+    pub const fn should_invalidate(&self) -> bool {
         matches!(self, InvalidationStrategy::RefreshRequested { .. } | InvalidationStrategy::BufferEdited)
     }
 }
@@ -120,7 +120,7 @@ impl std::fmt::Debug for BufferInlayHints {
 const MAX_ROWS_IN_A_CHUNK: u32 = 50;
 
 impl BufferInlayHints {
-    pub fn new(buffer: &Entity<Buffer>, cx: &mut App) -> Self {
+    pub fn new(buffer: &Entity<Buffer>, cx: &App) -> Self {
         let chunks = RowChunks::new(buffer.read(cx).as_text_snapshot(), MAX_ROWS_IN_A_CHUNK);
 
         Self {
@@ -139,7 +139,7 @@ impl BufferInlayHints {
         self.chunks.applicable_chunks(ranges)
     }
 
-    pub fn cached_hints(&mut self, chunk: &RowChunk) -> Option<&CacheInlayHints> {
+    pub fn cached_hints(&self, chunk: &RowChunk) -> Option<&CacheInlayHints> {
         self.hints_by_chunks[chunk.id].as_ref()
     }
 

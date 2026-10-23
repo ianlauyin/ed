@@ -91,16 +91,12 @@ impl ParseState {
                     }
                 }
             }
-            MarkdownEvent::Rule => {
-                if self.depth == 0 && !range.is_empty() {
-                    self.root_block_starts.push(range.start);
-                    let root_block_index = self.root_block_starts.len() - 1;
-                    self.events.push((range.clone(), MarkdownEvent::RootStart));
-                    self.events.push((range.clone(), event));
-                    self.events.push((range, MarkdownEvent::RootEnd(root_block_index)));
-                } else {
-                    self.events.push((range, event));
-                }
+            MarkdownEvent::Rule if self.depth == 0 && !range.is_empty() => {
+                self.root_block_starts.push(range.start);
+                let root_block_index = self.root_block_starts.len() - 1;
+                self.events.push((range.clone(), MarkdownEvent::RootStart));
+                self.events.push((range.clone(), event));
+                self.events.push((range, MarkdownEvent::RootEnd(root_block_index)));
             }
             _ => {
                 self.events.push((range, event));
@@ -898,7 +894,7 @@ fn extract_code_block_content_range(text: &str) -> Range<usize> {
         range.start += newline_ix + 1;
     }
 
-    let text_without_line_ending = text.trim_end_matches(|character| matches!(character, '\r' | '\n'));
+    let text_without_line_ending = text.trim_end_matches(['\r', '\n']);
     let closing_line_start = text_without_line_ending.rfind('\n').map_or(0, |newline_ix| newline_ix + 1);
     if closing_line_start >= range.start {
         let closing_line = &text_without_line_ending[closing_line_start..];

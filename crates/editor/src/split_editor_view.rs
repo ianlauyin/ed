@@ -1,28 +1,58 @@
 use std::cmp;
 
-use collections::{HashMap, HashSet};
-use gpui::{
-    AbsoluteLength, AnyElement, App, AvailableSpace, Bounds, Context, DragMoveEvent, Element,
-    Entity, GlobalElementId, Hsla, IntoElement, LayoutId, Length, ParentElement, Pixels,
-    StatefulInteractiveElement, Styled, TextStyleRefinement, Window, div, linear_color_stop,
-    linear_gradient, point, px, size,
-};
-use multi_buffer::{Anchor, ExcerptBoundaryInfo};
+use collections::HashMap;
+use collections::HashSet;
+use gpui::AbsoluteLength;
+use gpui::AnyElement;
+use gpui::App;
+use gpui::AvailableSpace;
+use gpui::Bounds;
+use gpui::ContentMask;
+use gpui::Context;
+use gpui::DragMoveEvent;
+use gpui::Element;
+use gpui::Entity;
+use gpui::GlobalElementId;
+use gpui::Hsla;
+use gpui::IntoElement;
+use gpui::LayoutId;
+use gpui::Length;
+use gpui::ParentElement;
+use gpui::Pixels;
+use gpui::StatefulInteractiveElement;
+use gpui::Styled;
+use gpui::TextStyleRefinement;
+use gpui::Window;
+use gpui::div;
+use gpui::linear_color_stop;
+use gpui::linear_gradient;
+use gpui::point;
+use gpui::px;
+use gpui::size;
+use multi_buffer::Anchor;
+use multi_buffer::ExcerptBoundaryInfo;
 use smallvec::smallvec;
 use text::BufferId;
 use theme::ActiveTheme;
-use ui::{h_flex, prelude::*, v_flex};
+use ui::h_flex;
+use ui::prelude::*;
+use ui::v_flex;
 
-use gpui::ContentMask;
-
-use crate::{
-    DisplayRow, Editor, EditorSnapshot, EditorStyle, FILE_HEADER_HEIGHT,
-    MULTI_BUFFER_EXCERPT_HEADER_HEIGHT, RowExt, StickyHeaderExcerpt,
-    display_map::Block,
-    element::{EditorElement, SplitSide, header_jump_data, render_buffer_header},
-    scroll::ScrollOffset,
-    split::SplittableEditor,
-};
+use crate::DisplayRow;
+use crate::Editor;
+use crate::EditorSnapshot;
+use crate::EditorStyle;
+use crate::FILE_HEADER_HEIGHT;
+use crate::MULTI_BUFFER_EXCERPT_HEADER_HEIGHT;
+use crate::RowExt;
+use crate::StickyHeaderExcerpt;
+use crate::display_map::Block;
+use crate::element::EditorElement;
+use crate::element::SplitSide;
+use crate::element::header_jump_data;
+use crate::element::render_buffer_header;
+use crate::scroll::ScrollOffset;
+use crate::split::SplittableEditor;
 
 const RESIZE_HANDLE_WIDTH: f32 = 8.0;
 
@@ -36,16 +66,12 @@ pub struct SplitEditorState {
 }
 
 impl SplitEditorState {
-    pub fn new(_cx: &mut App) -> Self {
-        Self {
-            left_ratio: 0.5,
-            visible_left_ratio: 0.5,
-            cached_width: px(0.),
-        }
+    pub const fn new(_cx: &mut App) -> Self {
+        Self { left_ratio: 0.5, visible_left_ratio: 0.5, cached_width: px(0.) }
     }
 
     #[allow(clippy::misnamed_getters)]
-    pub fn left_ratio(&self) -> f32 {
+    pub const fn left_ratio(&self) -> f32 {
         self.visible_left_ratio
     }
 
@@ -74,11 +100,11 @@ impl SplitEditorState {
         self.visible_left_ratio = new_ratio.clamp(min_ratio, max_ratio);
     }
 
-    fn commit_ratio(&mut self) {
+    const fn commit_ratio(&mut self) {
         self.left_ratio = self.visible_left_ratio;
     }
 
-    fn on_double_click(&mut self) {
+    const fn on_double_click(&mut self) {
         self.left_ratio = 0.5;
         self.visible_left_ratio = 0.5;
     }
@@ -92,16 +118,12 @@ pub struct SplitEditorView {
 }
 
 impl SplitEditorView {
-    pub fn new(
+    pub const fn new(
         splittable_editor: Entity<SplittableEditor>,
         style: EditorStyle,
         split_state: Entity<SplitEditorState>,
     ) -> Self {
-        Self {
-            splittable_editor,
-            style,
-            split_state,
-        }
+        Self { splittable_editor, style, split_state }
     }
 }
 
@@ -170,11 +192,7 @@ impl RenderOnce for SplitEditorView {
         let state_for_drag = self.split_state.downgrade();
         let state_for_drop = self.split_state.downgrade();
 
-        let buffer_headers = SplitBufferHeadersElement::new(
-            lhs_editor.clone(),
-            rhs_editor.clone(),
-            self.style.clone(),
-        );
+        let buffer_headers = SplitBufferHeadersElement::new(lhs_editor.clone(), rhs_editor.clone(), self.style.clone());
 
         let lhs_editor_for_order = lhs_editor;
         let rhs_editor_for_order = rhs_editor;
@@ -242,12 +260,8 @@ struct SplitBufferHeadersElement {
 }
 
 impl SplitBufferHeadersElement {
-    fn new(lhs_editor: Entity<Editor>, rhs_editor: Entity<Editor>, style: EditorStyle) -> Self {
-        Self {
-            lhs_editor,
-            rhs_editor,
-            style,
-        }
+    const fn new(lhs_editor: Entity<Editor>, rhs_editor: Entity<Editor>, style: EditorStyle) -> Self {
+        Self { lhs_editor, rhs_editor, style }
     }
 }
 
@@ -287,8 +301,7 @@ impl Element for SplitBufferHeadersElement {
         window: &mut Window,
         _cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        let mut style = gpui::Style::default();
-        style.position = gpui::Position::Absolute;
+        let mut style = gpui::Style { position: gpui::Position::Absolute, ..Default::default() };
         style.inset.top = DefiniteLength::Fraction(0.0).into();
         style.inset.left = DefiniteLength::Fraction(0.0).into();
         style.size.width = Length::Definite(DefiniteLength::Fraction(1.0));
@@ -321,9 +334,7 @@ impl Element for SplitBufferHeadersElement {
         };
 
         window.with_rem_size(rem_size, |window| {
-            window.with_text_style(Some(text_style), |window| {
-                Self::prepaint_inner(self, bounds, window, cx)
-            })
+            window.with_text_style(Some(text_style), |window| Self::prepaint_inner(self, bounds, window, cx))
         })
     }
 
@@ -345,20 +356,15 @@ impl Element for SplitBufferHeadersElement {
 
         window.with_rem_size(rem_size, |window| {
             window.with_text_style(Some(text_style), |window| {
-                window.with_content_mask(
-                    Some(ContentMask {
-                        bounds: prepaint.content_bounds,
-                    }),
-                    |window| {
-                        for header_layout in &mut prepaint.non_sticky_headers {
-                            header_layout.element.paint(window, cx);
-                        }
+                window.with_content_mask(Some(ContentMask { bounds: prepaint.content_bounds }), |window| {
+                    for header_layout in &mut prepaint.non_sticky_headers {
+                        header_layout.element.paint(window, cx);
+                    }
 
-                        if let Some(mut sticky_header) = prepaint.sticky_header.take() {
-                            sticky_header.paint(window, cx);
-                        }
-                    },
-                );
+                    if let Some(mut sticky_header) = prepaint.sticky_header.take() {
+                        sticky_header.paint(window, cx);
+                    }
+                });
             });
         });
     }
@@ -381,62 +387,52 @@ impl SplitBufferHeadersElement {
     }
 
     fn prepaint_inner(
-        &mut self,
+        &self,
         bounds: Bounds<Pixels>,
         window: &mut Window,
         cx: &mut App,
     ) -> SplitBufferHeadersPrepaintState {
         let line_height = window.line_height();
 
-        let snapshot = self
-            .rhs_editor
-            .update(cx, |editor, cx| editor.snapshot(window, cx));
+        let snapshot = self.rhs_editor.update(cx, |editor, cx| editor.snapshot(window, cx));
         let scroll_position = snapshot.scroll_position();
 
         // Compute right margin to avoid overlapping the scrollbar
         let content_bounds = self.content_bounds(bounds, cx);
-        let available_width = (content_bounds.size.width
-            - self.rhs_editor.read(cx).last_right_margin())
-        .max(Pixels::ZERO);
+        let available_width =
+            (content_bounds.size.width - self.rhs_editor.read(cx).last_right_margin()).max(Pixels::ZERO);
 
         let visible_height_in_lines = content_bounds.size.height / line_height;
         let max_row = snapshot.max_point().row();
         let start_row = cmp::min(DisplayRow(scroll_position.y.floor() as u32), max_row);
-        let end_row = cmp::min(
-            (scroll_position.y + visible_height_in_lines as f64).ceil() as u32,
-            max_row.next_row().0,
-        );
+        let end_row =
+            cmp::min((scroll_position.y + visible_height_in_lines as f64).ceil() as u32, max_row.next_row().0);
         let end_row = DisplayRow(end_row);
 
-        let (selected_buffer_ids, latest_selection_anchors) =
-            self.compute_selection_info(&snapshot, cx);
+        let (selected_buffer_ids, latest_selection_anchors) = self.compute_selection_info(&snapshot, cx);
 
         let sticky_header = if snapshot.buffer_snapshot().show_headers() {
-            snapshot
-                .sticky_header_excerpt(scroll_position.y)
-                .map(|sticky_excerpt| {
-                    self.build_sticky_header(
-                        sticky_excerpt,
-                        &snapshot,
-                        scroll_position,
-                        content_bounds,
-                        available_width,
-                        line_height,
-                        &selected_buffer_ids,
-                        &latest_selection_anchors,
-                        start_row,
-                        end_row,
-                        window,
-                        cx,
-                    )
-                })
+            snapshot.sticky_header_excerpt(scroll_position.y).map(|sticky_excerpt| {
+                self.build_sticky_header(
+                    sticky_excerpt,
+                    &snapshot,
+                    scroll_position,
+                    content_bounds,
+                    available_width,
+                    line_height,
+                    &selected_buffer_ids,
+                    &latest_selection_anchors,
+                    start_row,
+                    end_row,
+                    window,
+                    cx,
+                )
+            })
         } else {
             None
         };
 
-        let sticky_header_excerpt_id = snapshot
-            .sticky_header_excerpt(scroll_position.y)
-            .map(|e| e.excerpt);
+        let sticky_header_excerpt_id = snapshot.sticky_header_excerpt(scroll_position.y).map(|e| e.excerpt);
 
         let non_sticky_headers = self.build_non_sticky_headers(
             &snapshot,
@@ -453,28 +449,23 @@ impl SplitBufferHeadersElement {
             cx,
         );
 
-        SplitBufferHeadersPrepaintState {
-            content_bounds,
-            sticky_header,
-            non_sticky_headers,
-        }
+        SplitBufferHeadersPrepaintState { content_bounds, sticky_header, non_sticky_headers }
     }
 
     fn content_bounds(&self, bounds: Bounds<Pixels>, cx: &App) -> Bounds<Pixels> {
         // Left hand side and right hand side horizontal scrollbars are
         // independent, so we clip the bottom if either is visible.
-        let horizontal_scrollbar_height =
-            (self.lhs_editor.read(cx).last_horizontal_scrollbar_visible()
-                || self.rhs_editor.read(cx).last_horizontal_scrollbar_visible())
-            .then_some(self.style.scrollbar_width)
-            .unwrap_or(Pixels::ZERO);
+        let horizontal_scrollbar_height = if self.lhs_editor.read(cx).last_horizontal_scrollbar_visible()
+            || self.rhs_editor.read(cx).last_horizontal_scrollbar_visible()
+        {
+            self.style.scrollbar_width
+        } else {
+            Pixels::ZERO
+        };
 
         Bounds::new(
             bounds.origin,
-            size(
-                bounds.size.width,
-                (bounds.size.height - horizontal_scrollbar_height).max(Pixels::ZERO),
-            ),
+            size(bounds.size.width, (bounds.size.height - horizontal_scrollbar_height).max(Pixels::ZERO)),
         )
     }
 
@@ -484,17 +475,12 @@ impl SplitBufferHeadersElement {
         cx: &App,
     ) -> (HashSet<BufferId>, HashMap<BufferId, Anchor>) {
         let editor = self.rhs_editor.read(cx);
-        let all_selections = editor
-            .selections
-            .all::<crate::Point>(&snapshot.display_snapshot);
+        let all_selections = editor.selections.all::<crate::Point>(&snapshot.display_snapshot);
         let all_anchor_selections = editor.selections.all_anchors(&snapshot.display_snapshot);
 
         let mut selected_buffer_ids = HashSet::default();
         for selection in &all_selections {
-            for buffer_id in snapshot
-                .buffer_snapshot()
-                .buffer_ids_for_range(selection.range())
-            {
+            for buffer_id in snapshot.buffer_snapshot().buffer_ids_for_range(selection.range()) {
                 selected_buffer_ids.insert(buffer_id);
             }
         }
@@ -502,8 +488,7 @@ impl SplitBufferHeadersElement {
         let mut anchors_by_buffer: HashMap<BufferId, (usize, Anchor)> = HashMap::default();
         for selection in all_anchor_selections.iter() {
             let head = selection.head();
-            if let Some((text_anchor, _)) = snapshot.buffer_snapshot().anchor_to_buffer_anchor(head)
-            {
+            if let Some((text_anchor, _)) = snapshot.buffer_snapshot().anchor_to_buffer_anchor(head) {
                 anchors_by_buffer
                     .entry(text_anchor.buffer_id)
                     .and_modify(|(latest_id, latest_anchor)| {
@@ -515,10 +500,8 @@ impl SplitBufferHeadersElement {
                     .or_insert((selection.id, head));
             }
         }
-        let latest_selection_anchors = anchors_by_buffer
-            .into_iter()
-            .map(|(buffer_id, (_, anchor))| (buffer_id, anchor))
-            .collect();
+        let latest_selection_anchors =
+            anchors_by_buffer.into_iter().map(|(buffer_id, (_, anchor))| (buffer_id, anchor)).collect();
 
         (selected_buffer_ids, latest_selection_anchors)
     }
@@ -566,17 +549,8 @@ impl SplitBufferHeadersElement {
                     .top_0(),
             )
             .child(
-                render_buffer_header(
-                    &self.rhs_editor,
-                    excerpt,
-                    false,
-                    selected,
-                    true,
-                    jump_data,
-                    window,
-                    cx,
-                )
-                .into_any_element(),
+                render_buffer_header(&self.rhs_editor, excerpt, false, selected, true, jump_data, window, cx)
+                    .into_any_element(),
             )
             .into_any_element();
 
@@ -600,10 +574,7 @@ impl SplitBufferHeadersElement {
             break;
         }
 
-        let available_size = size(
-            AvailableSpace::Definite(available_width),
-            AvailableSpace::MinContent,
-        );
+        let available_size = size(AvailableSpace::Definite(available_width), AvailableSpace::MinContent);
 
         Self::prepaint_header(&mut header, origin, available_size, bounds, window, cx);
 
@@ -641,33 +612,16 @@ impl SplitBufferHeadersElement {
             };
 
             let selected = selected_buffer_ids.contains(&excerpt.buffer_id());
-            let jump_data = header_jump_data(
-                snapshot,
-                block_row,
-                block.height(),
-                excerpt,
-                latest_selection_anchors,
-            );
+            let jump_data = header_jump_data(snapshot, block_row, block.height(), excerpt, latest_selection_anchors);
 
-            let mut header = render_buffer_header(
-                &self.rhs_editor,
-                excerpt,
-                is_folded,
-                selected,
-                false,
-                jump_data,
-                window,
-                cx,
-            )
-            .into_any_element();
+            let mut header =
+                render_buffer_header(&self.rhs_editor, excerpt, is_folded, selected, false, jump_data, window, cx)
+                    .into_any_element();
 
             let y_offset = (block_row.0 as f64 - scroll_position.y) * f64::from(line_height);
             let origin = point(bounds.origin.x, bounds.origin.y + Pixels::from(y_offset));
 
-            let available_size = size(
-                AvailableSpace::Definite(available_width),
-                AvailableSpace::MinContent,
-            );
+            let available_size = size(AvailableSpace::Definite(available_width), AvailableSpace::MinContent);
 
             Self::prepaint_header(&mut header, origin, available_size, bounds, window, cx);
 

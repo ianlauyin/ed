@@ -1,28 +1,42 @@
-use anyhow::Result;
-use async_recursion::async_recursion;
-use collections::HashSet;
-use futures::future::join_all;
-use gpui::{AppContext as _, AsyncWindowContext, Axis, Entity, Task, WeakEntity};
-use project::Project;
-use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
-use ui::{App, Context, Window};
+
+use anyhow::Result;
+use collections::HashSet;
+use db::query;
+use db::sqlez::domain::Domain;
+use db::sqlez::statement::Statement;
+use db::sqlez::thread_safe_connection::ThreadSafeConnection;
+use db::sqlez_macros::sql;
+use futures::future::join_all;
+use gpui::AppContext as _;
+use gpui::AsyncWindowContext;
+use gpui::Axis;
+use gpui::Entity;
+use gpui::Task;
+use gpui::WeakEntity;
+use project::Project;
+use serde::Deserialize;
+use serde::Serialize;
+use ui::App;
+use ui::Context;
+use ui::Window;
 use util::ResultExt as _;
+use workspace::ItemHandle;
+use workspace::ItemId;
+use workspace::Member;
+use workspace::Pane;
+use workspace::PaneAxis;
+use workspace::PaneGroup;
+use workspace::SerializableItem as _;
+use workspace::SplitDirection;
+use workspace::Workspace;
+use workspace::WorkspaceDb;
+use workspace::WorkspaceId;
 
-use db::{
-    query,
-    sqlez::{domain::Domain, statement::Statement, thread_safe_connection::ThreadSafeConnection},
-    sqlez_macros::sql,
-};
-use workspace::{
-    ItemHandle, ItemId, Member, Pane, PaneAxis, PaneGroup, SerializableItem as _, SplitDirection,
-    Workspace, WorkspaceDb, WorkspaceId,
-};
-
-use crate::{
-    TerminalView, default_working_directory,
-    terminal_panel::{TerminalPanel, new_terminal_pane},
-};
+use crate::TerminalView;
+use crate::default_working_directory;
+use crate::terminal_panel::TerminalPanel;
+use crate::terminal_panel::new_terminal_pane;
 
 pub(crate) fn serialize_pane_group(
     pane_group: &PaneGroup,
@@ -32,18 +46,9 @@ pub(crate) fn serialize_pane_group(
     build_serialized_pane_group(&pane_group.root, active_pane, cx)
 }
 
-fn build_serialized_pane_group(
-    pane_group: &Member,
-    active_pane: &Entity<Pane>,
-    cx: &mut App,
-) -> SerializedPaneGroup {
+fn build_serialized_pane_group(pane_group: &Member, active_pane: &Entity<Pane>, cx: &mut App) -> SerializedPaneGroup {
     match pane_group {
-        Member::Axis(PaneAxis {
-            axis,
-            members,
-            flexes,
-            bounding_boxes: _,
-        }) => SerializedPaneGroup::Group {
+        Member::Axis(PaneAxis { axis, members, flexes, bounding_boxes: _ }) => SerializedPaneGroup::Group {
             axis: SerializedAxis(*axis),
             children: members
                 .iter()
@@ -57,7 +62,7 @@ fn build_serialized_pane_group(
     }
 }
 
-fn serialize_pane(pane: &Entity<Pane>, active: bool, cx: &mut App) -> SerializedPane {
+fn serialize_pane(pane: &Entity<Pane>, active: bool, cx: &App) -> SerializedPane {
     let mut items_to_serialize = HashSet::default();
     let pane = pane.read(cx);
     let children = pane
@@ -79,12 +84,7 @@ fn serialize_pane(pane: &Entity<Pane>, active: bool, cx: &mut App) -> Serialized
         .filter(|active_id| items_to_serialize.contains(active_id));
 
     let pinned_count = pane.pinned_count();
-    SerializedPane {
-        active,
-        children,
-        active_item,
-        pinned_count,
-    }
+    SerializedPane { active, children, active_item, pinned_count }
 }
 
 pub(crate) fn deserialize_terminal_panel(
@@ -93,20 +93,13 @@ pub(crate) fn deserialize_terminal_panel(
     database_id: WorkspaceId,
     serialized_panel: SerializedTerminalPanel,
     terminal_panel: WeakEntity<TerminalPanel>,
-    window: &mut Window,
-    cx: &mut App,
+    window: &Window,
+    cx: &App,
 ) -> Task<anyhow::Result<usize>> {
     window.spawn(cx, async move |cx| {
         let restored_items = match &serialized_panel.items {
             SerializedItems::NoSplits(item_ids) => {
-                let items = deserialize_terminal_views(
-                    database_id,
-                    project,
-                    workspace,
-                    item_ids.as_slice(),
-                    cx,
-                )
-                .await;
+                let items = deserialize_terminal_views(database_id, project, workspace, item_ids.as_slice(), cx).await;
                 let restored_items = items.len();
                 let active_item = serialized_panel.active_item_id;
                 terminal_panel.update_in(cx, |terminal_panel, window, cx| {
@@ -135,13 +128,10 @@ pub(crate) fn deserialize_terminal_panel(
                             .filter(|pane| pane.read(cx).items_len() > 0)
                             .cloned()
                             .collect::<Vec<_>>();
-                        let focused_interim_pane = interim_panes
-                            .iter()
-                            .find(|pane| pane.read(cx).has_focus(window, cx))
-                            .cloned();
+                        let focused_interim_pane =
+                            interim_panes.iter().find(|pane| pane.read(cx).has_focus(window, cx)).cloned();
                         terminal_panel.center = PaneGroup::with_root(center_group);
-                        terminal_panel.active_pane =
-                            active_pane.unwrap_or_else(|| terminal_panel.center.first_pane());
+                        terminal_panel.active_pane = active_pane.unwrap_or_else(|| terminal_panel.center.first_pane());
                         let restored_items = terminal_panel
                             .center
                             .panes()
@@ -150,12 +140,7 @@ pub(crate) fn deserialize_terminal_panel(
                             .sum::<usize>();
                         let restored_pane = terminal_panel.active_pane.clone();
                         for interim_pane in &interim_panes {
-                            terminal_panel.center.split(
-                                &restored_pane,
-                                interim_pane,
-                                SplitDirection::Right,
-                                cx,
-                            );
+                            terminal_panel.center.split(&restored_pane, interim_pane, SplitDirection::Right, cx);
                         }
                         if let Some(focused_interim_pane) = focused_interim_pane {
                             terminal_panel.active_pane = focused_interim_pane;
@@ -196,7 +181,6 @@ fn populate_pane_items(
     }
 }
 
-#[async_recursion(?Send)]
 async fn deserialize_pane_group(
     workspace: WeakEntity<Workspace>,
     project: Entity<Project>,
@@ -206,22 +190,18 @@ async fn deserialize_pane_group(
     cx: &mut AsyncWindowContext,
 ) -> Option<(Member, Option<Entity<Pane>>)> {
     match serialized {
-        SerializedPaneGroup::Group {
-            axis,
-            flexes,
-            children,
-        } => {
+        SerializedPaneGroup::Group { axis, flexes, children } => {
             let mut current_active_pane = None;
             let mut members = Vec::new();
             for child in children {
-                if let Some((new_member, active_pane)) = deserialize_pane_group(
+                if let Some((new_member, active_pane)) = Box::pin(deserialize_pane_group(
                     workspace.clone(),
                     project.clone(),
                     panel.clone(),
                     workspace_id,
                     child,
                     cx,
-                )
+                ))
                 .await
                 {
                     members.push(new_member);
@@ -237,10 +217,7 @@ async fn deserialize_pane_group(
                 return Some((members.remove(0), current_active_pane));
             }
 
-            Some((
-                Member::Axis(PaneAxis::load(axis.0, members, flexes.clone())),
-                current_active_pane,
-            ))
+            Some((Member::Axis(PaneAxis::load(axis.0, members, flexes.clone())), current_active_pane))
         }
         SerializedPaneGroup::Pane(serialized_pane) => {
             let active = serialized_pane.active;
@@ -282,9 +259,7 @@ async fn deserialize_pane_group(
                             .ok()
                             .flatten();
                         let terminal = project
-                            .update(cx, |project, cx| {
-                                project.create_terminal_shell(working_directory, cx)
-                            })
+                            .update(cx, |project, cx| project.create_terminal_shell(working_directory, cx))
                             .await
                             .log_err();
                         let Some(terminal) = terminal else {
@@ -322,24 +297,11 @@ fn deserialize_terminal_views(
 ) -> impl Future<Output = Vec<Entity<TerminalView>>> + use<> {
     let deserialized_items = join_all(item_ids.iter().filter_map(|item_id| {
         cx.update(|window, cx| {
-            TerminalView::deserialize(
-                project.clone(),
-                workspace.clone(),
-                workspace_id,
-                *item_id,
-                window,
-                cx,
-            )
+            TerminalView::deserialize(project.clone(), workspace.clone(), workspace_id, *item_id, window, cx)
         })
         .ok()
     }));
-    async move {
-        deserialized_items
-            .await
-            .into_iter()
-            .filter_map(|item| item.log_err())
-            .collect()
-    }
+    async move { deserialized_items.await.into_iter().filter_map(|item| item.log_err()).collect() }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -360,11 +322,7 @@ pub(crate) enum SerializedItems {
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) enum SerializedPaneGroup {
     Pane(SerializedPane),
-    Group {
-        axis: SerializedAxis,
-        flexes: Option<Vec<f32>>,
-        children: Vec<SerializedPaneGroup>,
-    },
+    Group { axis: SerializedAxis, flexes: Option<Vec<f32>>, children: Vec<SerializedPaneGroup> },
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -400,9 +358,7 @@ impl<'de> Deserialize<'de> for SerializedAxis {
         match s.as_str() {
             "horizontal" => Ok(SerializedAxis(Axis::Horizontal)),
             "vertical" => Ok(SerializedAxis(Axis::Vertical)),
-            invalid => Err(serde::de::Error::custom(format!(
-                "Invalid axis value: '{invalid}'"
-            ))),
+            invalid => Err(serde::de::Error::custom(format!("Invalid axis value: '{invalid}'"))),
         }
     }
 }
@@ -447,27 +403,20 @@ impl TerminalDb {
         workspace_id: WorkspaceId,
         working_directory: PathBuf,
     ) -> Result<()> {
-        log::debug!(
-            "Saving working directory {working_directory:?} for item {item_id} in workspace {workspace_id:?}"
-        );
-        let query =
-            "INSERT INTO terminals(item_id, workspace_id, working_directory, working_directory_path)
+        log::debug!("Saving working directory {working_directory:?} for item {item_id} in workspace {workspace_id:?}");
+        let query = "INSERT INTO terminals(item_id, workspace_id, working_directory, working_directory_path)
             VALUES (?1, ?2, ?3, ?4)
             ON CONFLICT DO UPDATE SET
                 item_id = ?1,
                 workspace_id = ?2,
                 working_directory = ?3,
-                working_directory_path = ?4"
-        ;
+                working_directory_path = ?4";
         self.write(move |conn| {
             let mut statement = Statement::prepare(conn, query)?;
             let mut next_index = statement.bind(&item_id, 1)?;
             next_index = statement.bind(&workspace_id, next_index)?;
             next_index = statement.bind(&working_directory, next_index)?;
-            statement.bind(
-                &working_directory.to_string_lossy().into_owned(),
-                next_index,
-            )?;
+            statement.bind(&working_directory.to_string_lossy().into_owned(), next_index)?;
             statement.exec()
         })
         .await
@@ -487,12 +436,7 @@ impl TerminalDb {
         workspace_id: WorkspaceId,
         custom_title: Option<String>,
     ) -> Result<()> {
-        log::debug!(
-            "Saving custom title {:?} for item {} in workspace {:?}",
-            custom_title,
-            item_id,
-            workspace_id
-        );
+        log::debug!("Saving custom title {:?} for item {} in workspace {:?}", custom_title, item_id, workspace_id);
         self.write(move |conn| {
             let query = "INSERT INTO terminals (item_id, workspace_id, custom_title)
                 VALUES (?1, ?2, ?3)

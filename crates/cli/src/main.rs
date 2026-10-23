@@ -1,45 +1,45 @@
-#![allow(
-    clippy::disallowed_methods,
-    reason = "We are not in an async environment, so std::process::Command is fine"
-)]
+#![allow(clippy::disallowed_methods, reason = "We are not in an async environment, so std::process::Command is fine")]
 
 mod completions;
 
-use crate::completions::Shell;
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::env;
+use std::ffi::OsStr;
+use std::fs;
+use std::io;
+use std::io::IsTerminal;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::ExitStatus;
+use std::sync::Arc;
+use std::thread::JoinHandle;
+use std::thread::{self};
 
-use anyhow::{Context as _, Result};
-use clap::{CommandFactory, Parser};
-use cli::{CliRequest, CliResponse, IpcHandshake};
+use anyhow::Context as _;
+use anyhow::Result;
+use clap::CommandFactory;
+use clap::Parser;
+use cli::CliRequest;
+use cli::CliResponse;
+use cli::IpcHandshake;
 use ipc_channel::ipc::IpcOneShotServer;
 use parking_lot::Mutex;
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    env,
-    ffi::OsStr,
-    fs, io,
-    path::{Path, PathBuf},
-    process::ExitStatus,
-    sync::Arc,
-    thread::{self, JoinHandle},
-};
-use tempfile::{NamedTempFile, TempDir};
+use tempfile::NamedTempFile;
+use tempfile::TempDir;
 use util::paths::PathWithPosition;
 use walkdir::WalkDir;
 
-use std::io::IsTerminal;
+use crate::completions::Shell;
 
-const URL_PREFIX: [&'static str; 4] = ["http://", "https://", "file://", "ssh://"];
+const URL_PREFIX: [&str; 4] = ["http://", "https://", "file://", "ssh://"];
 
 struct Detect;
 
 trait InstalledApp {
     fn zed_version_string(&self) -> String;
     fn launch(&self, ipc_url: String, user_data_dir: Option<&str>) -> anyhow::Result<()>;
-    fn run_foreground(
-        &self,
-        ipc_url: String,
-        user_data_dir: Option<&str>,
-    ) -> io::Result<ExitStatus>;
+    fn run_foreground(&self, ipc_url: String, user_data_dir: Option<&str>) -> io::Result<ExitStatus>;
 }
 
 #[derive(Parser, Debug)]
@@ -166,9 +166,7 @@ fn diff_path_exists(diff_path: &str) -> bool {
     Path::new(diff_path).exists() || PathWithPosition::parse_str(diff_path).path.exists()
 }
 
-fn expand_directory_diff_pairs(
-    diff_pairs: Vec<[String; 2]>,
-) -> anyhow::Result<(Vec<[String; 2]>, Vec<TempDir>)> {
+fn expand_directory_diff_pairs(diff_pairs: Vec<[String; 2]>) -> anyhow::Result<(Vec<[String; 2]>, Vec<TempDir>)> {
     let mut expanded = Vec::new();
     let mut temp_dirs = Vec::new();
 
@@ -190,10 +188,7 @@ fn expand_directory_diff_pairs(
     Ok((expanded, temp_dirs))
 }
 
-fn expand_directory_pair(
-    left: &Path,
-    right: &Path,
-) -> anyhow::Result<(Vec<[String; 2]>, Option<TempDir>)> {
+fn expand_directory_pair(left: &Path, right: &Path) -> anyhow::Result<(Vec<[String; 2]>, Option<TempDir>)> {
     let left_files = collect_files(left)?;
     let right_files = collect_files(right)?;
 
@@ -201,33 +196,24 @@ fn expand_directory_pair(
     rel_paths.extend(left_files.keys().cloned());
     rel_paths.extend(right_files.keys().cloned());
 
-    let mut temp_dir = TempDir::new()?;
+    let temp_dir = TempDir::new()?;
     let mut temp_dir_used = false;
     let mut pairs = Vec::new();
 
     for rel in rel_paths {
         match (left_files.get(&rel), right_files.get(&rel)) {
             (Some(left_path), Some(right_path)) => {
-                pairs.push([
-                    left_path.to_string_lossy().into_owned(),
-                    right_path.to_string_lossy().into_owned(),
-                ]);
+                pairs.push([left_path.to_string_lossy().into_owned(), right_path.to_string_lossy().into_owned()]);
             }
             (Some(left_path), None) => {
-                let stub = create_empty_stub(&mut temp_dir, &rel)?;
+                let stub = create_empty_stub(&temp_dir, &rel)?;
                 temp_dir_used = true;
-                pairs.push([
-                    left_path.to_string_lossy().into_owned(),
-                    stub.to_string_lossy().into_owned(),
-                ]);
+                pairs.push([left_path.to_string_lossy().into_owned(), stub.to_string_lossy().into_owned()]);
             }
             (None, Some(right_path)) => {
-                let stub = create_empty_stub(&mut temp_dir, &rel)?;
+                let stub = create_empty_stub(&temp_dir, &rel)?;
                 temp_dir_used = true;
-                pairs.push([
-                    stub.to_string_lossy().into_owned(),
-                    right_path.to_string_lossy().into_owned(),
-                ]);
+                pairs.push([stub.to_string_lossy().into_owned(), right_path.to_string_lossy().into_owned()]);
             }
             (None, None) => {}
         }
@@ -243,11 +229,7 @@ fn collect_files(root: &Path) -> anyhow::Result<BTreeMap<PathBuf, PathBuf>> {
     for entry in WalkDir::new(root) {
         let entry = entry?;
         if entry.file_type().is_file() {
-            let rel = entry
-                .path()
-                .strip_prefix(root)
-                .context("stripping directory prefix")?
-                .to_path_buf();
+            let rel = entry.path().strip_prefix(root).context("stripping directory prefix")?.to_path_buf();
             files.insert(rel, entry.into_path());
         }
     }
@@ -255,7 +237,7 @@ fn collect_files(root: &Path) -> anyhow::Result<BTreeMap<PathBuf, PathBuf>> {
     Ok(files)
 }
 
-fn create_empty_stub(temp_dir: &mut TempDir, rel: &Path) -> anyhow::Result<PathBuf> {
+fn create_empty_stub(temp_dir: &TempDir, rel: &Path) -> anyhow::Result<PathBuf> {
     let stub_path = temp_dir.path().join(rel);
     if let Some(parent) = stub_path.parent() {
         fs::create_dir_all(parent)?;
@@ -305,8 +287,7 @@ fn run() -> Result<()> {
         return Ok(());
     }
 
-    let (server, server_name) =
-        IpcOneShotServer::<IpcHandshake>::new().context("Handshake before Zed spawn")?;
+    let (server, server_name) = IpcOneShotServer::<IpcHandshake>::new().context("Handshake before Zed spawn")?;
     let url = format!("ed-cli://{server_name}");
 
     let open_behavior = if args.new {
@@ -339,19 +320,13 @@ fn run() -> Result<()> {
     let mut anonymous_fd_tmp_files = vec![];
 
     // Check if any diff paths are directories to determine diff_all mode
-    let diff_all_mode = args
-        .diff
-        .chunks(2)
-        .any(|pair| Path::new(&pair[0]).is_dir() || Path::new(&pair[1]).is_dir());
+    let diff_all_mode = args.diff.chunks(2).any(|pair| Path::new(&pair[0]).is_dir() || Path::new(&pair[1]).is_dir());
 
     for path in args.diff.chunks(2) {
         let left = parse_path_with_position(&path[0])?;
         let right = parse_path_with_position(&path[1])?;
         for diff_path in [&left, &right] {
-            anyhow::ensure!(
-                diff_path_exists(diff_path),
-                "--diff path does not exist: {diff_path}"
-            );
+            anyhow::ensure!(diff_path_exists(diff_path), "--diff path does not exist: {diff_path}");
         }
         diff_paths.push([left, right]);
     }
@@ -429,8 +404,7 @@ fn run() -> Result<()> {
                             return Ok(());
                         }
                         CliResponse::PromptOpenBehavior => {
-                            let behavior = prompt_open_behavior()
-                                .unwrap_or(cli::CliBehaviorSetting::ExistingWindow);
+                            let behavior = prompt_open_behavior().unwrap_or(cli::CliBehaviorSetting::ExistingWindow);
                             tx.send(CliRequest::SetOpenBehavior { behavior })?;
                         }
                     }
@@ -441,19 +415,18 @@ fn run() -> Result<()> {
         })
         .unwrap();
 
-    let stdin_pipe_handle: Option<JoinHandle<anyhow::Result<()>>> =
-        stdin_tmp_file.map(|mut tmp_file| {
-            thread::Builder::new()
-                .name("CliStdin".to_string())
-                .spawn(move || {
-                    let mut stdin = std::io::stdin().lock();
-                    if !io::IsTerminal::is_terminal(&stdin) {
-                        io::copy(&mut stdin, &mut tmp_file)?;
-                    }
-                    Ok(())
-                })
-                .unwrap()
-        });
+    let stdin_pipe_handle: Option<JoinHandle<anyhow::Result<()>>> = stdin_tmp_file.map(|mut tmp_file| {
+        thread::Builder::new()
+            .name("CliStdin".to_string())
+            .spawn(move || {
+                let mut stdin = std::io::stdin().lock();
+                if !io::IsTerminal::is_terminal(&stdin) {
+                    io::copy(&mut stdin, &mut tmp_file)?;
+                }
+                Ok(())
+            })
+            .unwrap()
+    });
 
     let anonymous_fd_pipe_handles: Vec<_> = anonymous_fd_tmp_files
         .into_iter()
@@ -486,10 +459,9 @@ fn run() -> Result<()> {
 
 fn anonymous_fd(path: &str) -> Option<fs::File> {
     {
-        use std::os::{
-            fd::{self, FromRawFd},
-            unix::fs::FileTypeExt,
-        };
+        use std::os::fd::FromRawFd;
+        use std::os::fd::{self};
+        use std::os::unix::fs::FileTypeExt;
 
         let fd_str = path.strip_prefix("/dev/fd/")?;
 
@@ -514,10 +486,7 @@ fn prompt_open_behavior() -> Option<cli::CliBehaviorSetting> {
 
     let blue = console::Style::new().blue();
     let items = [
-        format!(
-            "Add to existing Zed window ({})",
-            blue.apply_to("zed --existing")
-        ),
+        format!("Add to existing Zed window ({})", blue.apply_to("zed --existing")),
         format!("Open a new window ({})", blue.apply_to("zed --classic")),
     ];
 
@@ -527,43 +496,37 @@ fn prompt_open_behavior() -> Option<cli::CliBehaviorSetting> {
         console::style("You can change this later in Zed settings"),
     );
 
-    let selection = dialoguer::Select::new()
-        .with_prompt(&prompt)
-        .items(&items)
-        .default(0)
-        .interact()
-        .ok()?;
+    let selection = dialoguer::Select::new().with_prompt(&prompt).items(&items).default(0).interact().ok()?;
 
-    Some(if selection == 0 {
-        cli::CliBehaviorSetting::ExistingWindow
-    } else {
-        cli::CliBehaviorSetting::NewWindow
-    })
+    Some(if selection == 0 { cli::CliBehaviorSetting::ExistingWindow } else { cli::CliBehaviorSetting::NewWindow })
 }
 
 mod mac_os {
-    use anyhow::{Context as _, Result};
-    use core_foundation::{
-        array::{CFArray, CFIndex},
-        base::TCFType as _,
-        string::kCFStringEncodingUTF8,
-        url::{CFURL, CFURLCreateWithBytes},
-    };
-    use core_services::{
-        LSLaunchURLSpec, LSOpenFromURLSpec, kLSLaunchDefaults, kLSLaunchDontSwitch,
-    };
-    use serde::Deserialize;
-    use std::{
-        ffi::OsStr,
-        fs, io,
-        path::{Path, PathBuf},
-        process::ExitStatus,
-        ptr,
-    };
+    use std::ffi::OsStr;
+    use std::fs;
+    use std::io;
+    use std::path::Path;
+    use std::path::PathBuf;
+    use std::process::ExitStatus;
+    use std::ptr;
 
+    use anyhow::Context as _;
+    use anyhow::Result;
     use cli::FORCE_CLI_MODE_ENV_VAR_NAME;
+    use core_foundation::array::CFArray;
+    use core_foundation::array::CFIndex;
+    use core_foundation::base::TCFType as _;
+    use core_foundation::string::kCFStringEncodingUTF8;
+    use core_foundation::url::CFURL;
+    use core_foundation::url::CFURLCreateWithBytes;
+    use core_services::LSLaunchURLSpec;
+    use core_services::LSOpenFromURLSpec;
+    use core_services::kLSLaunchDefaults;
+    use core_services::kLSLaunchDontSwitch;
+    use serde::Deserialize;
 
-    use crate::{Detect, InstalledApp};
+    use crate::Detect;
+    use crate::InstalledApp;
 
     #[derive(Debug, Deserialize)]
     struct InfoPlist {
@@ -572,23 +535,15 @@ mod mac_os {
     }
 
     enum Bundle {
-        App {
-            app_bundle: PathBuf,
-            plist: InfoPlist,
-        },
-        LocalPath {
-            executable: PathBuf,
-        },
+        App { app_bundle: PathBuf, plist: InfoPlist },
+        LocalPath { executable: PathBuf },
     }
 
     fn locate_bundle() -> Result<PathBuf> {
         let cli_path = std::env::current_exe()?.canonicalize()?;
         let mut app_path = cli_path.clone();
         while app_path.extension() != Some(OsStr::new("app")) {
-            anyhow::ensure!(
-                app_path.pop(),
-                "cannot find app bundle containing {cli_path:?}"
-            );
+            anyhow::ensure!(app_path.pop(), "cannot find app bundle containing {cli_path:?}");
         }
         Ok(app_path)
     }
@@ -606,18 +561,11 @@ mod mac_os {
             match bundle_path.extension().and_then(|ext| ext.to_str()) {
                 Some("app") => {
                     let plist_path = bundle_path.join("Contents/Info.plist");
-                    let plist =
-                        plist::from_file::<_, InfoPlist>(&plist_path).with_context(|| {
-                            format!("Reading *.app bundle plist file at {plist_path:?}")
-                        })?;
-                    Ok(Bundle::App {
-                        app_bundle: bundle_path,
-                        plist,
-                    })
+                    let plist = plist::from_file::<_, InfoPlist>(&plist_path)
+                        .with_context(|| format!("Reading *.app bundle plist file at {plist_path:?}"))?;
+                    Ok(Bundle::App { app_bundle: bundle_path, plist })
                 }
-                _ => Ok(Bundle::LocalPath {
-                    executable: bundle_path,
-                }),
+                _ => Ok(Bundle::LocalPath { executable: bundle_path }),
             }
         }
     }
@@ -643,8 +591,7 @@ mod mac_os {
                             ptr::null(),
                         ));
                         // equivalent to: open ed-cli:... -a /Applications/ed.app
-                        let urls_to_open =
-                            CFArray::from_copyable(&[url_to_open.as_concrete_TypeRef()]);
+                        let urls_to_open = CFArray::from_copyable(&[url_to_open.as_concrete_TypeRef()]);
                         LSOpenFromURLSpec(
                             &LSLaunchURLSpec {
                                 appURL: app_url.as_concrete_TypeRef(),
@@ -657,49 +604,32 @@ mod mac_os {
                         )
                     };
 
-                    anyhow::ensure!(
-                        status == 0,
-                        "cannot start app bundle {}",
-                        self.zed_version_string()
-                    );
+                    anyhow::ensure!(status == 0, "cannot start app bundle {}", self.zed_version_string());
                 }
 
                 Self::LocalPath { executable, .. } => {
-                    let executable_parent = executable
-                        .parent()
-                        .with_context(|| format!("Executable {executable:?} path has no parent"))?;
-                    let subprocess_stdout_file = fs::File::create(
-                        executable_parent.join("ed_dev.log"),
-                    )
-                    .with_context(|| format!("Log file creation in {executable_parent:?}"))?;
-                    let subprocess_stdin_file =
-                        subprocess_stdout_file.try_clone().with_context(|| {
-                            format!("Cloning descriptor for file {subprocess_stdout_file:?}")
-                        })?;
+                    let executable_parent =
+                        executable.parent().with_context(|| format!("Executable {executable:?} path has no parent"))?;
+                    let subprocess_stdout_file = fs::File::create(executable_parent.join("ed_dev.log"))
+                        .with_context(|| format!("Log file creation in {executable_parent:?}"))?;
+                    let subprocess_stdin_file = subprocess_stdout_file
+                        .try_clone()
+                        .with_context(|| format!("Cloning descriptor for file {subprocess_stdout_file:?}"))?;
                     let mut command = std::process::Command::new(executable);
                     command.env(FORCE_CLI_MODE_ENV_VAR_NAME, "");
                     if let Some(dir) = user_data_dir {
                         command.arg("--user-data-dir").arg(dir);
                     }
-                    command
-                        .stderr(subprocess_stdout_file)
-                        .stdout(subprocess_stdin_file)
-                        .arg(url);
+                    command.stderr(subprocess_stdout_file).stdout(subprocess_stdin_file).arg(url);
 
-                    command
-                        .spawn()
-                        .with_context(|| format!("Spawning {command:?}"))?;
+                    command.spawn().with_context(|| format!("Spawning {command:?}"))?;
                 }
             }
 
             Ok(())
         }
 
-        fn run_foreground(
-            &self,
-            ipc_url: String,
-            user_data_dir: Option<&str>,
-        ) -> io::Result<ExitStatus> {
+        fn run_foreground(&self, ipc_url: String, user_data_dir: Option<&str>) -> io::Result<ExitStatus> {
             let path = match self {
                 Bundle::App { app_bundle, .. } => app_bundle.join("Contents/MacOS/ed"),
                 Bundle::LocalPath { executable, .. } => executable.clone(),

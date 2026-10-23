@@ -2,7 +2,7 @@
 pub struct RowDelta(pub u32);
 
 impl RowDelta {
-    pub fn saturating_sub(self, other: RowDelta) -> RowDelta {
+    pub const fn saturating_sub(self, other: RowDelta) -> RowDelta {
         RowDelta(self.0.saturating_sub(other.0))
     }
 }
@@ -38,7 +38,7 @@ impl ::std::ops::SubAssign for RowDelta {
 macro_rules! impl_for_row_types {
     ($row:ident => $row_delta:ident) => {
         impl $row {
-            pub fn saturating_sub(self, other: $row_delta) -> $row {
+            pub const fn saturating_sub(self, other: $row_delta) -> $row {
                 $row(self.0.saturating_sub(other.0))
             }
 

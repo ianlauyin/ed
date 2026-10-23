@@ -1,12 +1,22 @@
-use gpui::{
-    Anchor, AnyView, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Pixels, Point,
-    Subscription,
-};
-use ui::{
-    FluentBuilder as _, IntoElement, PopoverMenu, PopoverMenuHandle, PopoverTrigger, prelude::*,
-};
+use gpui::Anchor;
+use gpui::AnyView;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::Pixels;
+use gpui::Point;
+use gpui::Subscription;
+use ui::FluentBuilder as _;
+use ui::IntoElement;
+use ui::PopoverMenu;
+use ui::PopoverMenuHandle;
+use ui::PopoverTrigger;
+use ui::prelude::*;
 
-use crate::{Picker, PickerDelegate};
+use crate::Picker;
+use crate::PickerDelegate;
 
 pub struct PickerPopoverMenu<T, TT, P>
 where
@@ -29,13 +39,7 @@ where
     TT: Fn(&mut Window, &mut App) -> AnyView + 'static,
     P: PickerDelegate,
 {
-    pub fn new(
-        picker: Entity<Picker<P>>,
-        trigger: T,
-        tooltip: TT,
-        anchor: Anchor,
-        cx: &mut App,
-    ) -> Self {
+    pub fn new(picker: Entity<Picker<P>>, trigger: T, tooltip: TT, anchor: Anchor, cx: &mut App) -> Self {
         picker.update(cx, |picker, _| picker.set_popover());
         Self {
             _subscriptions: vec![cx.subscribe(&picker, |picker, &DismissEvent, cx| {
@@ -45,10 +49,7 @@ where
             trigger,
             tooltip,
             handle: None,
-            offset: Some(Point {
-                x: px(0.0),
-                y: px(-2.0),
-            }),
+            offset: Some(Point { x: px(0.0), y: px(-2.0) }),
             anchor,
         }
     }
@@ -58,7 +59,7 @@ where
         self
     }
 
-    pub fn offset(mut self, offset: Point<Pixels>) -> Self {
+    pub const fn offset(mut self, offset: Point<Pixels>) -> Self {
         self.offset = Some(offset);
         self
     }

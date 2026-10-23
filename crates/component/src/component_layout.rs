@@ -1,7 +1,15 @@
-use gpui::{
-    AnyElement, App, IntoElement, Pixels, RenderOnce, SharedString, Window, div, pattern_slash,
-    prelude::*, px, rems,
-};
+use gpui::AnyElement;
+use gpui::App;
+use gpui::IntoElement;
+use gpui::Pixels;
+use gpui::RenderOnce;
+use gpui::SharedString;
+use gpui::Window;
+use gpui::div;
+use gpui::pattern_slash;
+use gpui::prelude::*;
+use gpui::px;
+use gpui::rems;
 use theme::ActiveTheme;
 
 /// A single example of a component.
@@ -17,13 +25,7 @@ impl RenderOnce for ComponentExample {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         div()
             .pt_2()
-            .map(|this| {
-                if let Some(width) = self.width {
-                    this.w(width)
-                } else {
-                    this.w_full()
-                }
-            })
+            .map(|this| if let Some(width) = self.width { this.w(width) } else { this.w_full() })
             .flex()
             .flex_col()
             .gap_3()
@@ -39,10 +41,7 @@ impl RenderOnce for ComponentExample {
                     )
                     .when_some(self.description, |this, description| {
                         this.child(
-                            div()
-                                .text_size(rems(0.875))
-                                .text_color(cx.theme().colors().text_muted)
-                                .child(description),
+                            div().text_size(rems(0.875)).text_color(cx.theme().colors().text_muted).child(description),
                         )
                     }),
             )
@@ -57,11 +56,7 @@ impl RenderOnce for ComponentExample {
                     .rounded_xl()
                     .border_1()
                     .border_color(cx.theme().colors().border.opacity(0.5))
-                    .bg(pattern_slash(
-                        cx.theme().colors().surface_background.opacity(0.25),
-                        12.0,
-                        12.0,
-                    ))
+                    .bg(pattern_slash(cx.theme().colors().surface_background.opacity(0.25), 12.0, 12.0))
                     .child(self.element),
             )
             .into_any_element()
@@ -70,12 +65,7 @@ impl RenderOnce for ComponentExample {
 
 impl ComponentExample {
     pub fn new(variant_name: impl Into<SharedString>, element: AnyElement) -> Self {
-        Self {
-            variant_name: variant_name.into(),
-            element,
-            description: None,
-            width: None,
-        }
+        Self { variant_name: variant_name.into(), element, description: None, width: None }
     }
 
     pub fn description(mut self, description: impl Into<SharedString>) -> Self {
@@ -83,7 +73,7 @@ impl ComponentExample {
         self
     }
 
-    pub fn width(mut self, width: Pixels) -> Self {
+    pub const fn width(mut self, width: Pixels) -> Self {
         self.width = Some(width);
         self
     }
@@ -105,13 +95,7 @@ impl RenderOnce for ComponentExampleGroup {
             .flex_col()
             .text_sm()
             .text_color(cx.theme().colors().text_muted)
-            .map(|this| {
-                if let Some(width) = self.width {
-                    this.w(width)
-                } else {
-                    this.w_full()
-                }
-            })
+            .map(|this| if let Some(width) = self.width { this.w(width) } else { this.w_full() })
             .when_some(self.title, |this, title| {
                 this.gap_4().child(
                     div()
@@ -120,80 +104,55 @@ impl RenderOnce for ComponentExampleGroup {
                         .gap_3()
                         .mt_4()
                         .mb_1()
-                        .child(
-                            div()
-                                .flex_none()
-                                .text_size(px(10.))
-                                .child(title.to_uppercase()),
-                        )
-                        .child(
-                            div()
-                                .h_px()
-                                .w_full()
-                                .flex_1()
-                                .bg(cx.theme().colors().border),
-                        ),
+                        .child(div().flex_none().text_size(px(10.)).child(title.to_uppercase()))
+                        .child(div().h_px().w_full().flex_1().bg(cx.theme().colors().border)),
                 )
             })
-            .child(
-                div()
-                    .flex()
-                    .flex_col()
-                    .items_start()
-                    .w_full()
-                    .gap_6()
-                    .children(self.examples)
-                    .into_any_element(),
-            )
+            .child(div().flex().flex_col().items_start().w_full().gap_6().children(self.examples).into_any_element())
             .into_any_element()
     }
 }
 
 impl ComponentExampleGroup {
-    pub fn new(examples: Vec<ComponentExample>) -> Self {
-        Self {
-            title: None,
-            examples,
-            width: None,
-            grow: false,
-            vertical: false,
-        }
+    pub const fn new(examples: Vec<ComponentExample>) -> Self {
+        Self { title: None, examples, width: None, grow: false, vertical: false }
     }
     pub fn with_title(title: impl Into<SharedString>, examples: Vec<ComponentExample>) -> Self {
-        Self {
-            title: Some(title.into()),
-            examples,
-            width: None,
-            grow: false,
-            vertical: false,
-        }
+        Self { title: Some(title.into()), examples, width: None, grow: false, vertical: false }
     }
-    pub fn width(mut self, width: Pixels) -> Self {
+    pub const fn width(mut self, width: Pixels) -> Self {
         self.width = Some(width);
         self
     }
-    pub fn grow(mut self) -> Self {
+    pub const fn grow(mut self) -> Self {
         self.grow = true;
         self
     }
-    pub fn vertical(mut self) -> Self {
+    pub const fn vertical(mut self) -> Self {
         self.vertical = true;
         self
     }
 }
 
-pub fn single_example(
-    variant_name: impl Into<SharedString>,
-    example: AnyElement,
-) -> ComponentExample {
+pub fn single_example(variant_name: impl Into<SharedString>, example: AnyElement) -> ComponentExample {
     ComponentExample::new(variant_name, example)
 }
 
 pub fn empty_example(variant_name: impl Into<SharedString>) -> ComponentExample {
-    ComponentExample::new(variant_name, div().w_full().text_center().items_center().text_xs().opacity(0.4).child("This space is intentionally left blank. It indicates a case that should render nothing.").into_any_element())
+    ComponentExample::new(
+        variant_name,
+        div()
+            .w_full()
+            .text_center()
+            .items_center()
+            .text_xs()
+            .opacity(0.4)
+            .child("This space is intentionally left blank. It indicates a case that should render nothing.")
+            .into_any_element(),
+    )
 }
 
-pub fn example_group(examples: Vec<ComponentExample>) -> ComponentExampleGroup {
+pub const fn example_group(examples: Vec<ComponentExample>) -> ComponentExampleGroup {
     ComponentExampleGroup::new(examples)
 }
 

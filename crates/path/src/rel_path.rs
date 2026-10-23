@@ -1,16 +1,18 @@
-use anyhow::{Context as _, Result, anyhow};
-use std::{
-    borrow::{Borrow, Cow},
-    fmt,
-    ops::Deref,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::borrow::Borrow;
+use std::borrow::Cow;
+use std::fmt;
+use std::ops::Deref;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
 
-use crate::{
-    PathStyle,
-    abs_path::{AbsPath, AbsPathBuf},
-};
+use anyhow::Context as _;
+use anyhow::Result;
+use anyhow::anyhow;
+
+use crate::PathStyle;
+use crate::abs_path::AbsPath;
+use crate::abs_path::AbsPathBuf;
 
 /// A file system path that is guaranteed to be relative and normalized.
 ///
@@ -37,7 +39,7 @@ pub struct RelPathBuf(String);
 
 impl RelPath {
     /// Creates an empty [`RelPath`].
-    pub fn empty() -> &'static Self {
+    pub const fn empty() -> &'static Self {
         Self::from_str("")
     }
 
@@ -86,10 +88,7 @@ impl RelPath {
             Cow::Owned(string) => Cow::Owned(RelPathBuf(string)),
         };
 
-        if result
-            .components()
-            .any(|component| component == "" || component == "." || component == "..")
-        {
+        if result.components().any(|component| component.is_empty() || component == "." || component == "..") {
             let mut normalized = RelPathBuf::new();
             for component in result.components() {
                 match component {
@@ -127,26 +126,21 @@ impl RelPath {
         }
     }
 
-    fn from_str(s: &str) -> &Self {
+    const fn from_str(s: &str) -> &Self {
         // Safety: `RelPath` is a transparent wrapper around `str`.
         unsafe { &*(s as *const str as *const Self) }
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
-    pub fn components(&self) -> RelPathComponents<'_> {
+    pub const fn components(&self) -> RelPathComponents<'_> {
         RelPathComponents(&self.0)
     }
 
-    pub fn ancestors(&self) -> RelPathAncestors<'_> {
-        RelPathAncestors {
-            full: &self.0,
-            front: self.0.len(),
-            back: 0,
-            done: false,
-        }
+    pub const fn ancestors(&self) -> RelPathAncestors<'_> {
+        RelPathAncestors { full: &self.0, front: self.0.len(), back: 0, done: false }
     }
 
     pub fn file_name(&self) -> Option<&str> {
@@ -187,12 +181,10 @@ impl RelPath {
         if other.is_empty() {
             return true;
         }
-        if let Some(suffix) = self.0.strip_suffix(&other.0) {
-            if suffix.ends_with('/') {
-                return true;
-            } else if suffix.is_empty() {
-                return true;
-            }
+        if let Some(suffix) = self.0.strip_suffix(&other.0)
+            && (suffix.ends_with('/') || suffix.is_empty())
+        {
+            return true;
         }
         false
     }
@@ -212,11 +204,7 @@ impl RelPath {
     }
 
     pub fn len(&self) -> usize {
-        if self.0.is_empty() {
-            0
-        } else {
-            self.0.matches('/').count() + 1
-        }
+        if self.0.is_empty() { 0 } else { self.0.matches('/').count() + 1 }
     }
 
     pub fn last_n_components(&self, count: usize) -> Option<&Self> {
@@ -265,7 +253,7 @@ impl RelPath {
     /// Get the internal unix-style representation of the path.
     ///
     /// This should not be shown to the user.
-    pub fn as_unix_str(&self) -> &str {
+    pub const fn as_unix_str(&self) -> &str {
         &self.0
     }
 
@@ -327,7 +315,7 @@ impl fmt::Debug for RelPathBuf {
 }
 
 impl RelPathBuf {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self(String::new())
     }
 
@@ -355,10 +343,7 @@ impl RelPathBuf {
 
     pub fn push_component(&mut self, component: &str) -> Result<()> {
         anyhow::ensure!(
-            !component.is_empty()
-                && !component.contains('/')
-                && component != "."
-                && component != "..",
+            !component.is_empty() && !component.contains('/') && component != "." && component != "..",
             "invalid relative path component: {component:?}"
         );
 
@@ -369,7 +354,7 @@ impl RelPathBuf {
         Ok(())
     }
 
-    pub fn as_rel_path(&self) -> &RelPath {
+    pub const fn as_rel_path(&self) -> &RelPath {
         RelPath::from_str(self.0.as_str())
     }
 
@@ -383,6 +368,12 @@ impl RelPathBuf {
         } else {
             false
         }
+    }
+}
+
+impl Default for RelPathBuf {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -509,7 +500,7 @@ pub struct RelPathAncestors<'a> {
 const SEPARATOR: char = '/';
 
 impl<'a> RelPathComponents<'a> {
-    pub fn rest(&self) -> &'a RelPath {
+    pub const fn rest(&self) -> &'a RelPath {
         RelPath::from_str(self.0)
     }
 }
@@ -591,8 +582,7 @@ impl<'de> serde::Deserialize<'de> for RelPathBuf {
         D: serde::Deserializer<'de>,
     {
         let path = String::deserialize(deserializer)?;
-        let rel_path =
-            RelPath::new(Path::new(&path), PathStyle::local()).map_err(serde::de::Error::custom)?;
+        let rel_path = RelPath::new(Path::new(&path), PathStyle::local()).map_err(serde::de::Error::custom)?;
         Ok(rel_path.into_owned())
     }
 }

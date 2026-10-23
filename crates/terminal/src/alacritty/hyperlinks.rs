@@ -1,28 +1,31 @@
-use alacritty_terminal::{
-    Term,
-    event::EventListener,
-    grid::Dimensions,
-    index::{Boundary, Column, Direction as AlacDirection, Point as AlacPoint},
-    term::{
-        cell::Flags,
-        search::{Match, RegexIter, RegexSearch},
-    },
-};
-use log::{info, warn};
+use std::ops::Index;
+use std::ops::Range as StdRange;
+use std::time::Duration;
+use std::time::Instant;
+
+use alacritty_terminal::Term;
+use alacritty_terminal::event::EventListener;
+use alacritty_terminal::grid::Dimensions;
+use alacritty_terminal::index::Boundary;
+use alacritty_terminal::index::Column;
+use alacritty_terminal::index::Direction as AlacDirection;
+use alacritty_terminal::index::Point as AlacPoint;
+use alacritty_terminal::term::cell::Flags;
+use alacritty_terminal::term::search::Match;
+use alacritty_terminal::term::search::RegexIter;
+use alacritty_terminal::term::search::RegexSearch;
+use log::info;
+use log::warn;
 use regex::Regex;
-use std::{
-    ops::{Index, Range as StdRange},
-    time::{Duration, Instant},
-};
 use url::Url;
-use util::paths::{PathStyle, UrlExt};
+use util::paths::PathStyle;
+use util::paths::UrlExt;
 
 use crate::Range;
 
 const URL_REGEX: &str = r#"(ipfs:|ipns:|magnet:|mailto:|gemini://|gopher://|https://|http://|news:|file://|git://|ssh:|ftp://)[^\u{0000}-\u{001F}\u{007F}-\u{009F}<>"\s{-}\^⟨⟩`']+"#;
 const WIDE_CHAR_SPACERS: Flags =
-    Flags::from_bits(Flags::LEADING_WIDE_CHAR_SPACER.bits() | Flags::WIDE_CHAR_SPACER.bits())
-        .unwrap();
+    Flags::from_bits(Flags::LEADING_WIDE_CHAR_SPACER.bits() | Flags::WIDE_CHAR_SPACER.bits()).unwrap();
 
 pub(crate) struct RegexSearches {
     url_regex: Option<RegexSearch>,
@@ -39,11 +42,7 @@ pub(crate) struct HyperlinkMatch {
 
 impl From<(String, bool, Match)> for HyperlinkMatch {
     fn from((text, is_url, range): (String, bool, Match)) -> Self {
-        Self {
-            text,
-            is_url,
-            range: Range::from_alacritty(range),
-        }
+        Self { text, is_url, range: Range::from_alacritty(range) }
     }
 }
 
@@ -65,9 +64,7 @@ impl RegexSearches {
         }
     }
 
-    fn path_hyperlink_regexes(
-        path_hyperlink_regexes: impl IntoIterator<Item: AsRef<str>>,
-    ) -> Vec<Regex> {
+    fn path_hyperlink_regexes(path_hyperlink_regexes: impl IntoIterator<Item: AsRef<str>>) -> Vec<Regex> {
         path_hyperlink_regexes
             .into_iter()
             .filter_map(|regex| {
@@ -136,7 +133,7 @@ pub(crate) fn find_from_grid_point<T: EventListener>(
             Some((url, true, url_match))
         } else {
             path_match(
-                &term,
+                term,
                 line_start,
                 line_end,
                 point,
@@ -150,17 +147,9 @@ pub(crate) fn find_from_grid_point<T: EventListener>(
     found_word.map(|found_word| normalize_found_word(found_word, path_style))
 }
 
-fn normalize_found_word(
-    found_word: (String, bool, Match),
-    path_style: PathStyle,
-) -> HyperlinkMatch {
+fn normalize_found_word(found_word: (String, bool, Match), path_style: PathStyle) -> HyperlinkMatch {
     let (maybe_url_or_path, is_url, word_match) = found_word;
-    normalize_hyperlink_match(
-        maybe_url_or_path,
-        is_url,
-        Range::from_alacritty(word_match),
-        path_style,
-    )
+    normalize_hyperlink_match(maybe_url_or_path, is_url, Range::from_alacritty(word_match), path_style)
 }
 
 fn normalize_hyperlink_match(
@@ -178,43 +167,21 @@ fn normalize_hyperlink_match(
         if maybe_url_or_path.starts_with("file://") {
             if let Ok(url) = Url::parse(&maybe_url_or_path) {
                 if let Ok(path) = url.to_file_path_ext(path_style) {
-                    return HyperlinkMatch {
-                        text: path.to_string_lossy().into_owned(),
-                        is_url: false,
-                        range,
-                    };
+                    return HyperlinkMatch { text: path.to_string_lossy().into_owned(), is_url: false, range };
                 } else if let Some(path) = try_osc8_url_to_path(url)
                     && path_style.is_posix()
                 {
-                    return HyperlinkMatch {
-                        text: path,
-                        is_url: false,
-                        range,
-                    };
+                    return HyperlinkMatch { text: path, is_url: false, range };
                 }
             }
             // Fallback: strip file:// prefix if URL parsing fails
-            let path = maybe_url_or_path
-                .strip_prefix("file://")
-                .unwrap_or(&maybe_url_or_path);
-            HyperlinkMatch {
-                text: path.to_string(),
-                is_url: false,
-                range,
-            }
+            let path = maybe_url_or_path.strip_prefix("file://").unwrap_or(&maybe_url_or_path);
+            HyperlinkMatch { text: path.to_string(), is_url: false, range }
         } else {
-            HyperlinkMatch {
-                text: maybe_url_or_path,
-                is_url: true,
-                range,
-            }
+            HyperlinkMatch { text: maybe_url_or_path, is_url: true, range }
         }
     } else {
-        HyperlinkMatch {
-            text: maybe_url_or_path,
-            is_url: false,
-            range,
-        }
+        HyperlinkMatch { text: maybe_url_or_path, is_url: false, range }
     }
 }
 
@@ -226,31 +193,21 @@ fn try_osc8_url_to_path(url: url::Url) -> Option<String> {
         return None;
     }
 
-    let bytes = url
-        .path_segments()?
-        .skip(1)
-        .flat_map(|segment| percent_decode(segment.as_bytes()))
-        .collect::<Vec<u8>>();
+    let bytes =
+        url.path_segments()?.skip(1).flat_map(|segment| percent_decode(segment.as_bytes())).collect::<Vec<u8>>();
     bytes.try_into().ok()
 }
 
-fn sanitize_url_punctuation<T: EventListener>(
-    url: String,
-    url_match: Match,
-    term: &Term<T>,
-) -> (String, Match) {
+fn sanitize_url_punctuation<T: EventListener>(url: String, url_match: Match, term: &Term<T>) -> (String, Match) {
     let mut sanitized_url = url;
     let mut chars_trimmed = 0;
 
     // Count parentheses in the URL
-    let (open_parens, mut close_parens) =
-        sanitized_url
-            .chars()
-            .fold((0, 0), |(opens, closes), c| match c {
-                '(' => (opens + 1, closes),
-                ')' => (opens, closes + 1),
-                _ => (opens, closes),
-            });
+    let (open_parens, mut close_parens) = sanitized_url.chars().fold((0, 0), |(opens, closes), c| match c {
+        '(' => (opens + 1, closes),
+        ')' => (opens, closes + 1),
+        _ => (opens, closes),
+    });
 
     // Remove trailing characters that shouldn't be at the end of URLs
     while let Some(last_char) = sanitized_url.chars().last() {
@@ -337,9 +294,7 @@ fn path_match<T>(
     // api compresses tab characters into a single space, whereas we require a cell accurate
     // string representation of the line. The below algorithm does this, but seems a bit odd.
     // Maybe there is a clean api for doing this, but I couldn't find it.
-    let mut line = String::with_capacity(
-        (line_end.line.0 - line_start.line.0 + 1) as usize * term.grid().columns(),
-    );
+    let mut line = String::with_capacity((line_end.line.0 - line_start.line.0 + 1) as usize * term.grid().columns());
     let first_cell = &term.grid()[line_start];
     let mut prev_len = 0;
     line.push(first_cell.c);
@@ -372,74 +327,56 @@ fn path_match<T>(
     if line.len() <= hovered_point_byte_offset {
         return None;
     }
-    let found_from_range = |path_range: StdRange<usize>,
-                            link_range: StdRange<usize>,
-                            position: Option<(u32, Option<u32>)>| {
-        let advance_point_by_str = |mut point: AlacPoint, s: &str| {
-            for _ in s.chars() {
-                point = term
-                    .expand_wide(point, AlacDirection::Right)
-                    .add(term, Boundary::Grid, 1);
-            }
+    let found_from_range =
+        |path_range: StdRange<usize>, link_range: StdRange<usize>, position: Option<(u32, Option<u32>)>| {
+            let advance_point_by_str = |mut point: AlacPoint, s: &str| {
+                for _ in s.chars() {
+                    point = term.expand_wide(point, AlacDirection::Right).add(term, Boundary::Grid, 1);
+                }
 
-            // There does not appear to be an alacritty api that is
-            // "move to start of current wide char", so we have to do it ourselves.
-            let flags = term.grid().index(point).flags;
-            if flags.contains(Flags::LEADING_WIDE_CHAR_SPACER) {
-                AlacPoint::new(point.line + 1, Column(0))
-            } else if flags.contains(Flags::WIDE_CHAR_SPACER) {
-                AlacPoint::new(point.line, point.column - 1)
-            } else {
-                point
-            }
+                // There does not appear to be an alacritty api that is
+                // "move to start of current wide char", so we have to do it ourselves.
+                let flags = term.grid().index(point).flags;
+                if flags.contains(Flags::LEADING_WIDE_CHAR_SPACER) {
+                    AlacPoint::new(point.line + 1, Column(0))
+                } else if flags.contains(Flags::WIDE_CHAR_SPACER) {
+                    AlacPoint::new(point.line, point.column - 1)
+                } else {
+                    point
+                }
+            };
+
+            let link_start = advance_point_by_str(line_start, &line[..link_range.start]);
+            let link_end = advance_point_by_str(link_start, &line[link_range]);
+            let link_match = link_start..=term.expand_wide(link_end, AlacDirection::Left).sub(term, Boundary::Grid, 1);
+
+            (
+                {
+                    let mut path = line[path_range].to_string();
+                    position.inspect(|(line, column)| {
+                        path += &format!(":{line}");
+                        column.inspect(|column| path += &format!(":{column}"));
+                    });
+                    path
+                },
+                link_match,
+            )
         };
-
-        let link_start = advance_point_by_str(line_start, &line[..link_range.start]);
-        let link_end = advance_point_by_str(link_start, &line[link_range]);
-        let link_match = link_start
-            ..=term
-                .expand_wide(link_end, AlacDirection::Left)
-                .sub(term, Boundary::Grid, 1);
-
-        (
-            {
-                let mut path = line[path_range].to_string();
-                position.inspect(|(line, column)| {
-                    path += &format!(":{line}");
-                    column.inspect(|column| path += &format!(":{column}"));
-                });
-                path
-            },
-            link_match,
-        )
-    };
 
     for regex in path_hyperlink_regexes {
         let mut path_found = false;
 
-        for (line_start_offset, captures) in regex
-            .captures_iter(&line)
-            .map(|captures| (0usize, captures))
-        {
+        for (line_start_offset, captures) in regex.captures_iter(line).map(|captures| (0usize, captures)) {
             path_found = true;
             let match_range = captures.get(0).unwrap().range();
             let (mut path_range, line_column) = if let Some(path) = captures.name("path") {
-                let parse = |name: &str| {
-                    captures
-                        .name(name)
-                        .and_then(|capture| capture.as_str().parse().ok())
-                };
+                let parse = |name: &str| captures.name(name).and_then(|capture| capture.as_str().parse().ok());
 
-                (
-                    path.range(),
-                    parse("line").map(|line| (line, parse("column"))),
-                )
+                (path.range(), parse("line").map(|line| (line, parse("column"))))
             } else {
                 (match_range.clone(), None)
             };
-            let mut link_range = captures
-                .name("link")
-                .map_or_else(|| match_range.clone(), |link| link.range());
+            let mut link_range = captures.name("link").map_or_else(|| match_range.clone(), |link| link.range());
 
             path_range.start += line_start_offset;
             path_range.end += line_start_offset;

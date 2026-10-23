@@ -1,6 +1,10 @@
-use documented::Documented;
-use gpui::{Hsla, PathBuilder, canvas, point};
 use std::f32::consts::PI;
+
+use documented::Documented;
+use gpui::Hsla;
+use gpui::PathBuilder;
+use gpui::canvas;
+use gpui::point;
 
 use crate::prelude::*;
 
@@ -30,25 +34,25 @@ impl CircularProgress {
     }
 
     /// Sets the current progress value.
-    pub fn value(mut self, value: f32) -> Self {
+    pub const fn value(mut self, value: f32) -> Self {
         self.value = value;
         self
     }
 
     /// Sets the maximum value for the progress indicator.
-    pub fn max_value(mut self, max_value: f32) -> Self {
+    pub const fn max_value(mut self, max_value: f32) -> Self {
         self.max_value = max_value;
         self
     }
 
     /// Sets the size (diameter) of the circular progress indicator.
-    pub fn size(mut self, size: Pixels) -> Self {
+    pub const fn size(mut self, size: Pixels) -> Self {
         self.size = size;
         self
     }
 
     /// Sets the stroke width of the circular progress indicator.
-    pub fn stroke_width(mut self, stroke_width: Pixels) -> Self {
+    pub const fn stroke_width(mut self, stroke_width: Pixels) -> Self {
         self.stroke_width = stroke_width;
         self
     }
@@ -58,19 +62,19 @@ impl CircularProgress {
     /// By default the radius is derived from the size and stroke width so
     /// the ring fills the box. Set it explicitly to draw a smaller ring
     /// inside the box, e.g. to match the padding of an icon glyph.
-    pub fn radius(mut self, radius: Pixels) -> Self {
+    pub const fn radius(mut self, radius: Pixels) -> Self {
         self.radius = Some(radius);
         self
     }
 
     /// Sets the background circle color.
-    pub fn bg_color(mut self, color: Hsla) -> Self {
+    pub const fn bg_color(mut self, color: Hsla) -> Self {
         self.bg_color = color;
         self
     }
 
     /// Sets the progress arc color.
-    pub fn progress_color(mut self, color: Hsla) -> Self {
+    pub const fn progress_color(mut self, color: Hsla) -> Self {
         self.progress_color = color;
         self
     }
@@ -101,20 +105,8 @@ impl RenderOnce for CircularProgress {
                 bg_builder.move_to(point(center_x + radius, center_y));
 
                 // Draw full circle using two 180-degree arcs
-                bg_builder.arc_to(
-                    point(radius, radius),
-                    px(0.),
-                    false,
-                    true,
-                    point(center_x - radius, center_y),
-                );
-                bg_builder.arc_to(
-                    point(radius, radius),
-                    px(0.),
-                    false,
-                    true,
-                    point(center_x + radius, center_y),
-                );
+                bg_builder.arc_to(point(radius, radius), px(0.), false, true, point(center_x - radius, center_y));
+                bg_builder.arc_to(point(radius, radius), px(0.), false, true, point(center_x + radius, center_y));
                 bg_builder.close();
 
                 if let Ok(path) = bg_builder.build() {

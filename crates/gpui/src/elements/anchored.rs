@@ -1,9 +1,25 @@
 use smallvec::SmallVec;
 
-use crate::{
-    Anchor, AnyElement, App, Axis, Bounds, Display, Edges, Element, GlobalElementId, IntoElement,
-    LayoutId, ParentElement, Pixels, Point, Position, Size, Style, Window, point, px,
-};
+use crate::Anchor;
+use crate::AnyElement;
+use crate::App;
+use crate::Axis;
+use crate::Bounds;
+use crate::Display;
+use crate::Edges;
+use crate::Element;
+use crate::GlobalElementId;
+use crate::IntoElement;
+use crate::LayoutId;
+use crate::ParentElement;
+use crate::Pixels;
+use crate::Point;
+use crate::Position;
+use crate::Size;
+use crate::Style;
+use crate::Window;
+use crate::point;
+use crate::px;
 
 /// The state that the anchored element element uses to track its children.
 pub struct AnchoredState {
@@ -36,21 +52,21 @@ pub fn anchored() -> Anchored {
 
 impl Anchored {
     /// Sets which corner of the anchored element should be anchored to the current position.
-    pub fn anchor(mut self, anchor: Anchor) -> Self {
+    pub const fn anchor(mut self, anchor: Anchor) -> Self {
         self.anchor = anchor;
         self
     }
 
     /// Sets the position in window coordinates
     /// (otherwise the location the anchored element is rendered is used)
-    pub fn position(mut self, anchor: Point<Pixels>) -> Self {
+    pub const fn position(mut self, anchor: Point<Pixels>) -> Self {
         self.anchor_position = Some(anchor);
         self
     }
 
     /// Offset the final position by this amount.
     /// Useful when you want to anchor to an element but offset from it, such as in PopoverMenu.
-    pub fn offset(mut self, offset: Point<Pixels>) -> Self {
+    pub const fn offset(mut self, offset: Point<Pixels>) -> Self {
         self.offset = Some(offset);
         self
     }
@@ -58,13 +74,13 @@ impl Anchored {
     /// Sets the position mode for this anchored element. Local will have this
     /// interpret its [`Anchored::position`] as relative to the parent element.
     /// While Window will have it interpret the position as relative to the window.
-    pub fn position_mode(mut self, mode: AnchoredPositionMode) -> Self {
+    pub const fn position_mode(mut self, mode: AnchoredPositionMode) -> Self {
         self.position_mode = mode;
         self
     }
 
     /// Snap to window edge instead of switching anchor corner when an overflow would occur.
-    pub fn snap_to_window(mut self) -> Self {
+    pub const fn snap_to_window(mut self) -> Self {
         self.fit_mode = AnchoredFitMode::SnapToWindow;
         self
     }
@@ -100,17 +116,10 @@ impl Element for Anchored {
         window: &mut Window,
         cx: &mut App,
     ) -> (crate::LayoutId, Self::RequestLayoutState) {
-        let child_layout_ids = self
-            .children
-            .iter_mut()
-            .map(|child| child.request_layout(window, cx))
-            .collect::<SmallVec<_>>();
+        let child_layout_ids =
+            self.children.iter_mut().map(|child| child.request_layout(window, cx)).collect::<SmallVec<_>>();
 
-        let anchored_style = Style {
-            position: Position::Absolute,
-            display: Display::Flex,
-            ..Style::default()
-        };
+        let anchored_style = Style { position: Position::Absolute, display: Display::Flex, ..Style::default() };
 
         let layout_id = window.request_layout(anchored_style, child_layout_ids.iter().copied(), cx);
 
@@ -144,10 +153,7 @@ impl Element for Anchored {
             self.offset,
         );
 
-        let limits = Bounds {
-            origin: Point::default(),
-            size: window.viewport_size(),
-        };
+        let limits = Bounds { origin: Point::default(), size: window.viewport_size() };
 
         if self.fit_mode == AnchoredFitMode::SwitchAnchor {
             let mut anchor = self.anchor;
@@ -165,11 +171,8 @@ impl Element for Anchored {
             }
 
             if desired.top() < limits.top() || desired.bottom() > limits.bottom() {
-                let switched = Bounds::from_anchor_and_size(
-                    anchor.other_side_along(Axis::Vertical),
-                    origin,
-                    children_bounds.size,
-                );
+                let switched =
+                    Bounds::from_anchor_and_size(anchor.other_side_along(Axis::Vertical), origin, children_bounds.size);
                 if !(switched.top() < limits.top() || switched.bottom() > limits.bottom()) {
                     desired = switched;
                 }
@@ -273,11 +276,7 @@ impl AnchoredPositionMode {
             }
             AnchoredPositionMode::Local => {
                 let anchor_position = anchor_position.unwrap_or_default();
-                let bounds = Bounds::from_anchor_and_size(
-                    anchor,
-                    bounds.origin + anchor_position + offset,
-                    size,
-                );
+                let bounds = Bounds::from_anchor_and_size(anchor, bounds.origin + anchor_position + offset, size);
                 (anchor_position, bounds)
             }
         }

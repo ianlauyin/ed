@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use gpui::{AnyView, ClickEvent, SharedString};
+use gpui::AnyView;
+use gpui::ClickEvent;
+use gpui::SharedString;
 
 use crate::IconButtonShape;
 use crate::prelude::*;
@@ -48,23 +50,23 @@ impl Disclosure {
         self
     }
 
-    pub fn opened_icon(mut self, icon: IconName) -> Self {
+    pub const fn opened_icon(mut self, icon: IconName) -> Self {
         self.opened_icon = icon;
         self
     }
 
-    pub fn closed_icon(mut self, icon: IconName) -> Self {
+    pub const fn closed_icon(mut self, icon: IconName) -> Self {
         self.closed_icon = icon;
         self
     }
 
-    pub fn disabled(mut self, disabled: bool) -> Self {
+    pub const fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
         self
     }
 
     /// Sets the shape of the underlying [`IconButton`].
-    pub fn shape(mut self, shape: IconButtonShape) -> Self {
+    pub const fn shape(mut self, shape: IconButtonShape) -> Self {
         self.shape = Some(shape);
         self
     }
@@ -103,9 +105,7 @@ impl RenderOnce for Disclosure {
         .disabled(self.disabled)
         .when_some(self.shape, |this, shape| this.shape(shape))
         .toggle_state(self.selected)
-        .when_some(self.visible_on_hover.clone(), |this, group_name| {
-            this.visible_on_hover(group_name)
-        })
+        .when_some(self.visible_on_hover.clone(), |this, group_name| this.visible_on_hover(group_name))
         .when_some(self.tooltip, |this, tooltip| this.tooltip(tooltip))
         .when_some(self.on_toggle_expanded, move |this, on_toggle| {
             this.on_click(move |event, window, cx| on_toggle(event, window, cx))
@@ -130,10 +130,7 @@ impl Component for Disclosure {
                 example_group_with_title(
                     "Disclosure States",
                     vec![
-                        single_example(
-                            "Closed",
-                            Disclosure::new("closed", false).into_any_element(),
-                        ),
+                        single_example("Closed", Disclosure::new("closed", false).into_any_element()),
                         single_example("Open", Disclosure::new("open", true).into_any_element()),
                     ],
                 ),

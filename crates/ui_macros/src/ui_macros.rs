@@ -18,7 +18,7 @@ pub fn derive_dynamic_spacing(input: TokenStream) -> TokenStream {
 ///
 /// # Example
 ///
-/// ```
+/// ```ignore
 /// use ui::{AnyElement, App, Component, div, IntoElement, Window};
 /// use ui_macros::RegisterComponent;
 ///
@@ -30,7 +30,7 @@ pub fn derive_dynamic_spacing(input: TokenStream) -> TokenStream {
 ///         "My component description"
 ///     }
 ///
-///      fn preview(_window: &mut Window, cx: &mut App) -> AnyElement {
+///     fn preview(_window: &mut Window, cx: &mut App) -> AnyElement {
 ///         div().into_any_element()
 ///     }
 /// }

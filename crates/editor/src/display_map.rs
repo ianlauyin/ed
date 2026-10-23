@@ -78,68 +78,122 @@ mod invisibles;
 mod tab_map;
 mod wrap_map;
 
-pub use crate::display_map::{fold_map::FoldMap, inlay_map::InlayMap, tab_map::TabMap};
-pub use block_map::{
-    Block, BlockChunks as DisplayChunks, BlockContext, BlockId, BlockMap, BlockPlacement,
-    BlockPoint, BlockProperties, BlockRows, BlockStyle, CompanionView, CompanionViewMut,
-    CustomBlockId, EditorMargins, RenderBlock, StickyHeaderExcerpt,
-};
+use std::any::TypeId;
+use std::borrow::Cow;
+use std::cell::RefCell;
+use std::collections::hash_map::Entry;
+use std::fmt::Debug;
+use std::iter;
+use std::num::NonZeroU32;
+use std::ops::Add;
+use std::ops::Range;
+use std::ops::RangeInclusive;
+use std::ops::Sub;
+use std::ops::{self};
+use std::slice;
+use std::sync::Arc;
+
+pub use block_map::Block;
+pub use block_map::BlockChunks as DisplayChunks;
+pub use block_map::BlockContext;
+pub use block_map::BlockId;
+pub use block_map::BlockMap;
+pub use block_map::BlockPlacement;
+pub use block_map::BlockPoint;
+use block_map::BlockPointCursor;
+pub use block_map::BlockProperties;
+use block_map::BlockRow;
+pub use block_map::BlockRows;
+use block_map::BlockSnapshot;
+pub use block_map::BlockStyle;
+pub use block_map::CompanionView;
+pub use block_map::CompanionViewMut;
+pub use block_map::CustomBlockId;
+pub use block_map::EditorMargins;
+pub use block_map::RenderBlock;
+pub use block_map::StickyHeaderExcerpt;
+use collections::HashMap;
+use collections::HashSet;
+use collections::IndexSet;
 pub use crease_map::*;
-pub use fold_map::{
-    ChunkRenderer, ChunkRendererContext, ChunkRendererId, Fold, FoldId, FoldPlaceholder, FoldPoint,
-};
-pub use inlay_map::{InlayOffset, InlayPoint};
+pub use fold_map::ChunkRenderer;
+pub use fold_map::ChunkRendererContext;
+pub use fold_map::ChunkRendererId;
+pub use fold_map::Fold;
+pub use fold_map::FoldId;
+pub use fold_map::FoldPlaceholder;
+pub use fold_map::FoldPoint;
+use fold_map::FoldPointCursor;
+use fold_map::FoldSnapshot;
+use gpui::App;
+use gpui::Context;
+use gpui::Entity;
+use gpui::EntityId;
+use gpui::Font;
+use gpui::HighlightStyle;
+use gpui::Hsla;
+use gpui::LineLayout;
+use gpui::Pixels;
+use gpui::UnderlineStyle;
+use gpui::WeakEntity;
+use inlay_map::BufferOffsetToInlayPointCursor;
+pub use inlay_map::InlayOffset;
+pub use inlay_map::InlayPoint;
+use inlay_map::InlaySnapshot;
+pub use invisibles::is_invisible;
 use invisibles::is_standalone_grapheme;
-pub use invisibles::{is_invisible, replacement};
-pub use wrap_map::{WrapPoint, WrapRow, WrapSnapshot};
-
-use collections::{HashMap, HashSet, IndexSet};
-use gpui::{
-    App, Context, Entity, EntityId, Font, HighlightStyle, Hsla, LineLayout, Pixels, UnderlineStyle,
-    WeakEntity,
-};
-use language::{
-    LanguageAwareStyling, Point, Subscription as BufferSubscription,
-    language_settings::{AllLanguageSettings, LanguageSettings, SoftWrapIndent},
-};
-
-use multi_buffer::{
-    Anchor, AnchorRangeExt, MultiBuffer, MultiBufferOffset, MultiBufferOffsetUtf16,
-    MultiBufferPoint, MultiBufferRow, MultiBufferSnapshot, RowInfo, ToOffset, ToPoint,
-};
+pub use invisibles::replacement;
+use language::LanguageAwareStyling;
+use language::Point;
+use language::Subscription as BufferSubscription;
+use language::language_settings::AllLanguageSettings;
+use language::language_settings::LanguageSettings;
+use language::language_settings::SoftWrapIndent;
+use multi_buffer::Anchor;
+use multi_buffer::AnchorRangeExt;
+use multi_buffer::MultiBuffer;
+use multi_buffer::MultiBufferOffset;
+use multi_buffer::MultiBufferOffsetUtf16;
+use multi_buffer::MultiBufferPoint;
+use multi_buffer::MultiBufferRow;
+use multi_buffer::MultiBufferSnapshot;
+use multi_buffer::RowInfo;
+use multi_buffer::ToOffset;
+use multi_buffer::ToPoint;
+use project::InlayId;
+use project::lsp_store::LspFoldingRange;
+use project::lsp_store::TokenType;
 use project::project_settings::DiagnosticSeverity;
-use project::{InlayId, lsp_store::LspFoldingRange, lsp_store::TokenType};
 use serde::Deserialize;
 use settings::Settings;
 use smallvec::SmallVec;
-use sum_tree::{Bias, TreeMap};
-use text::{BufferId, LineIndent, Patch};
-use theme::StatusColors;
-use ui::{SharedString, px};
-use unicode_segmentation::UnicodeSegmentation;
-
-use std::cell::RefCell;
-use std::collections::hash_map::Entry;
-use std::{
-    any::TypeId,
-    borrow::Cow,
-    fmt::Debug,
-    iter,
-    num::NonZeroU32,
-    ops::{self, Add, Range, RangeInclusive, Sub},
-    slice,
-    sync::Arc,
-};
-
-use crate::{
-    EditorStyle, RowExt, hover_links::InlayHighlight, inlays::Inlay, movement::TextLayoutDetails,
-};
-use block_map::{BlockPointCursor, BlockRow, BlockSnapshot};
-use fold_map::{FoldPointCursor, FoldSnapshot};
-use inlay_map::{BufferOffsetToInlayPointCursor, InlaySnapshot};
+use sum_tree::Bias;
+use sum_tree::TreeMap;
 pub(crate) use tab_map::TabPoint;
-use tab_map::{TabPointCursor, TabSnapshot};
-use wrap_map::{WrapMap, WrapPatch, WrapPointCursor};
+use tab_map::TabPointCursor;
+use tab_map::TabSnapshot;
+use text::BufferId;
+use text::LineIndent;
+use text::Patch;
+use theme::StatusColors;
+use ui::SharedString;
+use ui::px;
+use unicode_segmentation::UnicodeSegmentation;
+use wrap_map::WrapMap;
+use wrap_map::WrapPatch;
+pub use wrap_map::WrapPoint;
+use wrap_map::WrapPointCursor;
+pub use wrap_map::WrapRow;
+pub use wrap_map::WrapSnapshot;
+
+use crate::EditorStyle;
+use crate::RowExt;
+pub use crate::display_map::fold_map::FoldMap;
+pub use crate::display_map::inlay_map::InlayMap;
+pub use crate::display_map::tab_map::TabMap;
+use crate::hover_links::InlayHighlight;
+use crate::inlays::Inlay;
+use crate::movement::TextLayoutDetails;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum FoldStatus {
@@ -194,8 +248,7 @@ pub trait ToDisplayPoint {
 }
 
 type TextHighlights = Arc<HashMap<HighlightKey, Arc<(HighlightStyle, Vec<Range<Anchor>>)>>>;
-type SemanticTokensHighlights =
-    Arc<HashMap<BufferId, (Arc<[SemanticTokenHighlight]>, Arc<HighlightStyleInterner>)>>;
+type SemanticTokensHighlights = Arc<HashMap<BufferId, (Arc<[SemanticTokenHighlight]>, Arc<HighlightStyleInterner>)>>;
 type InlayHighlights = TreeMap<HighlightKey, TreeMap<InlayId, (HighlightStyle, InlayHighlight)>>;
 
 #[derive(Debug)]
@@ -428,19 +481,12 @@ impl DisplayMap {
             assert_eq!(self.entity_id, companion.read(cx).rhs_display_map_id);
             let (snapshot, _edits) = self.sync_through_wrap(cx);
             let edits = Patch::new(vec![text::Edit {
-                old: WrapRow(0)
-                    ..self.block_map.wrap_snapshot.borrow().max_point().row() + WrapRow(1),
+                old: WrapRow(0)..self.block_map.wrap_snapshot.borrow().max_point().row() + WrapRow(1),
                 new: WrapRow(0)..snapshot.max_point().row() + WrapRow(1),
             }]);
             self.block_map.deferred_edits.set(edits);
             self.block_map.retain_blocks_raw(&mut |block| {
-                if companion
-                    .read(cx)
-                    .lhs_custom_block_to_balancing_block
-                    .borrow()
-                    .values()
-                    .any(|id| *id == block.id)
-                {
+                if companion.read(cx).lhs_custom_block_to_balancing_block.borrow().values().any(|id| *id == block.id) {
                     return false;
                 }
                 true
@@ -457,19 +503,13 @@ impl DisplayMap {
             let (snapshot, edits) = self.inlay_map.sync(snapshot, edits.into_inner());
             let (mut writer, snapshot, edits) = self.fold_map.write(snapshot, edits);
             let (snapshot, edits) = self.tab_map.sync(snapshot, edits, tab_size);
-            let (_snapshot, _edits) = self
-                .wrap_map
-                .update(cx, |wrap_map, cx| wrap_map.sync(snapshot, edits, cx));
+            let (_snapshot, _edits) = self.wrap_map.update(cx, |wrap_map, cx| wrap_map.sync(snapshot, edits, cx));
 
             let (snapshot, edits) = writer.unfold_intersecting([Anchor::Min..Anchor::Max], true);
             let (snapshot, edits) = self.tab_map.sync(snapshot, edits, tab_size);
-            let (snapshot, _edits) = self
-                .wrap_map
-                .update(cx, |wrap_map, cx| wrap_map.sync(snapshot, edits, cx));
+            let (snapshot, _edits) = self.wrap_map.update(cx, |wrap_map, cx| wrap_map.sync(snapshot, edits, cx));
 
-            self.block_map.retain_blocks_raw(&mut |block| {
-                !matches!(block.placement, BlockPlacement::Replace(_))
-            });
+            self.block_map.retain_blocks_raw(&mut |block| !matches!(block.placement, BlockPlacement::Replace(_)));
             snapshot
         };
 
@@ -492,19 +532,14 @@ impl DisplayMap {
             let rhs_snapshot = self.buffer.read(cx).snapshot(cx);
             let mut buffers_to_unfold = Vec::new();
             for my_buffer in self.folded_buffers() {
-                let their_buffer = rhs_snapshot
-                    .diff_for_buffer_id(*my_buffer)
-                    .map(|diff| diff.base_text().remote_id());
+                let their_buffer = rhs_snapshot.diff_for_buffer_id(*my_buffer).map(|diff| diff.base_text().remote_id());
 
                 let Some(their_buffer) = their_buffer else {
                     buffers_to_unfold.push(*my_buffer);
                     continue;
                 };
 
-                companion_display_map
-                    .block_map
-                    .folded_buffers
-                    .insert(their_buffer);
+                companion_display_map.block_map.folded_buffers.insert(their_buffer);
             }
             for buffer_id in buffers_to_unfold {
                 self.block_map.folded_buffers.remove(&buffer_id);
@@ -520,31 +555,17 @@ impl DisplayMap {
                 ) else {
                     continue;
                 };
-                let their_id = companion_display_map
-                    .block_map
-                    .insert_block_raw(their_block, companion_wrap_snapshot.buffer());
+                let their_id =
+                    companion_display_map.block_map.insert_block_raw(their_block, companion_wrap_snapshot.buffer());
                 companion.update(cx, |companion, _cx| {
-                    companion
-                        .custom_block_to_balancing_block(self.entity_id)
-                        .borrow_mut()
-                        .insert(block.id, their_id);
+                    companion.custom_block_to_balancing_block(self.entity_id).borrow_mut().insert(block.id, their_id);
                 });
             }
             let companion_edits = Patch::new(vec![text::Edit {
-                old: WrapRow(0)
-                    ..companion_display_map
-                        .block_map
-                        .wrap_snapshot
-                        .borrow()
-                        .max_point()
-                        .row()
-                        + WrapRow(1),
+                old: WrapRow(0)..companion_display_map.block_map.wrap_snapshot.borrow().max_point().row() + WrapRow(1),
                 new: WrapRow(0)..companion_wrap_snapshot.max_point().row() + WrapRow(1),
             }]);
-            companion_display_map
-                .block_map
-                .deferred_edits
-                .set(companion_edits);
+            companion_display_map.block_map.deferred_edits.set(companion_edits);
             companion_display_map.companion = Some((this, companion.clone()));
         });
 
@@ -563,8 +584,7 @@ impl DisplayMap {
         let (snapshot, edits) = self.inlay_map.sync(buffer_snapshot, edits);
         let (snapshot, edits) = self.fold_map.read(snapshot, edits);
         let (snapshot, edits) = self.tab_map.sync(snapshot, edits, tab_size);
-        self.wrap_map
-            .update(cx, |map, cx| map.sync(snapshot, edits, cx))
+        self.wrap_map.update(cx, |map, cx| map.sync(snapshot, edits, cx))
     }
 
     fn with_synced_companion_mut<R>(
@@ -580,49 +600,38 @@ impl DisplayMap {
             return callback(None, cx);
         };
         companion_display_map.update(cx, |companion_display_map, cx| {
-            let (companion_wrap_snapshot, companion_wrap_edits) =
-                companion_display_map.sync_through_wrap(cx);
-            companion_display_map
-                .buffer
-                .update(cx, |companion_multibuffer, cx| {
-                    companion.update(cx, |companion, cx| {
-                        let companion_view = CompanionViewMut::new(
-                            display_map_id,
-                            companion_display_map.entity_id,
-                            &companion_wrap_snapshot,
-                            &companion_wrap_edits,
-                            companion_multibuffer,
-                            companion,
-                            &mut companion_display_map.block_map,
-                        );
-                        callback(Some(companion_view), cx)
-                    })
+            let (companion_wrap_snapshot, companion_wrap_edits) = companion_display_map.sync_through_wrap(cx);
+            companion_display_map.buffer.update(cx, |companion_multibuffer, cx| {
+                companion.update(cx, |companion, cx| {
+                    let companion_view = CompanionViewMut::new(
+                        display_map_id,
+                        companion_display_map.entity_id,
+                        &companion_wrap_snapshot,
+                        &companion_wrap_edits,
+                        companion_multibuffer,
+                        companion,
+                        &mut companion_display_map.block_map,
+                    );
+                    callback(Some(companion_view), cx)
                 })
+            })
         })
     }
 
     pub fn snapshot(&mut self, cx: &mut Context<Self>) -> DisplaySnapshot {
         let (self_wrap_snapshot, self_wrap_edits) = self.sync_through_wrap(cx);
-        let companion_wrap_data = self.companion.as_ref().and_then(|(companion_dm, _)| {
-            companion_dm
-                .update(cx, |dm, cx| dm.sync_through_wrap(cx))
-                .ok()
-        });
+        let companion_wrap_data = self
+            .companion
+            .as_ref()
+            .and_then(|(companion_dm, _)| companion_dm.update(cx, |dm, cx| dm.sync_through_wrap(cx)).ok());
         let companion_ref = self.companion.as_ref().map(|(_, c)| c.read(cx));
-        let companion_view = companion_wrap_data.as_ref().zip(companion_ref).map(
-            |((snapshot, edits), companion)| {
-                CompanionView::new(self.entity_id, snapshot, edits, companion)
-            },
-        );
+        let companion_view = companion_wrap_data
+            .as_ref()
+            .zip(companion_ref)
+            .map(|((snapshot, edits), companion)| CompanionView::new(self.entity_id, snapshot, edits, companion));
 
-        let block_snapshot = self
-            .block_map
-            .read(
-                self_wrap_snapshot.clone(),
-                self_wrap_edits.clone(),
-                companion_view,
-            )
-            .snapshot;
+        let block_snapshot =
+            self.block_map.read(self_wrap_snapshot.clone(), self_wrap_edits.clone(), companion_view).snapshot;
 
         if let Some((companion_dm, _)) = &self.companion {
             let _ = companion_dm.update(cx, |dm, _cx| {
@@ -631,24 +640,17 @@ impl DisplayMap {
                     dm.block_map.read(
                         companion_snapshot,
                         companion_edits,
-                        their_companion_ref.map(|c| {
-                            CompanionView::new(
-                                dm.entity_id,
-                                &self_wrap_snapshot,
-                                &self_wrap_edits,
-                                c,
-                            )
-                        }),
+                        their_companion_ref
+                            .map(|c| CompanionView::new(dm.entity_id, &self_wrap_snapshot, &self_wrap_edits, c)),
                     );
                 }
             });
         }
 
-        let companion_display_snapshot = self.companion.as_ref().and_then(|(companion_dm, _)| {
-            companion_dm
-                .update(cx, |dm, cx| Arc::new(dm.snapshot_simple(cx)))
-                .ok()
-        });
+        let companion_display_snapshot = self
+            .companion
+            .as_ref()
+            .and_then(|(companion_dm, _)| companion_dm.update(cx, |dm, cx| Arc::new(dm.snapshot_simple(cx))).ok());
 
         DisplaySnapshot {
             display_map_id: self.entity_id,
@@ -669,10 +671,7 @@ impl DisplayMap {
     fn snapshot_simple(&mut self, cx: &mut Context<Self>) -> DisplaySnapshot {
         let (wrap_snapshot, wrap_edits) = self.sync_through_wrap(cx);
 
-        let block_snapshot = self
-            .block_map
-            .read(wrap_snapshot, wrap_edits, None)
-            .snapshot;
+        let block_snapshot = self.block_map.read(wrap_snapshot, wrap_edits, None).snapshot;
 
         DisplaySnapshot {
             display_map_id: self.entity_id,
@@ -698,12 +697,7 @@ impl DisplayMap {
         self.fold(
             other
                 .folds_in_range(MultiBufferOffset(0)..other.buffer_snapshot().len())
-                .map(|fold| {
-                    Crease::simple(
-                        fold.range.to_offset(other.buffer_snapshot()),
-                        fold.placeholder.clone(),
-                    )
-                })
+                .map(|fold| Crease::simple(fold.range.to_offset(other.buffer_snapshot()), fold.placeholder.clone()))
                 .collect(),
             cx,
         );
@@ -725,16 +719,11 @@ impl DisplayMap {
         let (snapshot, edits) = self.inlay_map.sync(buffer_snapshot.clone(), edits);
         let (mut fold_map, snapshot, edits) = self.fold_map.write(snapshot, edits);
         let (snapshot, edits) = self.tab_map.sync(snapshot, edits, tab_size);
-        let (snapshot, edits) = self
-            .wrap_map
-            .update(cx, |map, cx| map.sync(snapshot, edits, cx));
+        let (snapshot, edits) = self.wrap_map.update(cx, |map, cx| map.sync(snapshot, edits, cx));
         self.block_map.read(snapshot, edits, None);
 
         let inline = creases.iter().filter_map(|crease| {
-            if let Crease::Inline {
-                range, placeholder, ..
-            } = crease
-            {
+            if let Crease::Inline { range, placeholder, .. } = crease {
                 Some((range.clone(), placeholder.clone()))
             } else {
                 None
@@ -743,29 +732,13 @@ impl DisplayMap {
         let (snapshot, edits) = fold_map.fold(inline);
 
         let (snapshot, edits) = self.tab_map.sync(snapshot, edits, tab_size);
-        let (snapshot, edits) = self
-            .wrap_map
-            .update(cx, |map, cx| map.sync(snapshot, edits, cx));
+        let (snapshot, edits) = self.wrap_map.update(cx, |map, cx| map.sync(snapshot, edits, cx));
 
         let blocks = creases
             .into_iter()
             .filter_map(|crease| {
-                if let Crease::Block {
-                    range,
-                    block_height,
-                    render_block,
-                    block_style,
-                    block_priority,
-                    ..
-                } = crease
-                {
-                    Some((
-                        range,
-                        render_block,
-                        block_height,
-                        block_style,
-                        block_priority,
-                    ))
+                if let Crease::Block { range, block_height, render_block, block_style, block_priority, .. } = crease {
+                    Some((range, render_block, block_height, block_style, block_priority))
                 } else {
                     None
                 }
@@ -799,19 +772,15 @@ impl DisplayMap {
         let (snapshot, edits) = self.inlay_map.sync(snapshot, edits);
         let (mut fold_map, snapshot, edits) = self.fold_map.write(snapshot, edits);
         let (snapshot, edits) = self.tab_map.sync(snapshot, edits, tab_size);
-        let (snapshot, edits) = self
-            .wrap_map
-            .update(cx, |map, cx| map.sync(snapshot, edits, cx));
+        let (snapshot, edits) = self.wrap_map.update(cx, |map, cx| map.sync(snapshot, edits, cx));
         self.block_map.read(snapshot, edits, None);
 
         let (snapshot, edits) = fold_map.remove_folds(ranges, type_id);
         let (snapshot, edits) = self.tab_map.sync(snapshot, edits, tab_size);
-        let (self_new_wrap_snapshot, self_new_wrap_edits) = self
-            .wrap_map
-            .update(cx, |map, cx| map.sync(snapshot, edits, cx));
+        let (self_new_wrap_snapshot, self_new_wrap_edits) =
+            self.wrap_map.update(cx, |map, cx| map.sync(snapshot, edits, cx));
 
-        self.block_map
-            .write(self_new_wrap_snapshot, self_new_wrap_edits, None);
+        self.block_map.write(self_new_wrap_snapshot, self_new_wrap_edits, None);
     }
 
     /// Removes any folds whose ranges intersect any of the given ranges.
@@ -832,17 +801,13 @@ impl DisplayMap {
         let (snapshot, edits) = self.inlay_map.sync(snapshot, edits);
         let (mut fold_map, snapshot, edits) = self.fold_map.write(snapshot, edits);
         let (snapshot, edits) = self.tab_map.sync(snapshot, edits, tab_size);
-        let (snapshot, edits) = self
-            .wrap_map
-            .update(cx, |map, cx| map.sync(snapshot, edits, cx));
+        let (snapshot, edits) = self.wrap_map.update(cx, |map, cx| map.sync(snapshot, edits, cx));
         self.block_map.read(snapshot, edits, None);
 
-        let (snapshot, edits) =
-            fold_map.unfold_intersecting(offset_ranges.iter().cloned(), inclusive);
+        let (snapshot, edits) = fold_map.unfold_intersecting(offset_ranges.iter().cloned(), inclusive);
         let (snapshot, edits) = self.tab_map.sync(snapshot, edits, tab_size);
-        let (self_new_wrap_snapshot, self_new_wrap_edits) = self
-            .wrap_map
-            .update(cx, |map, cx| map.sync(snapshot, edits, cx));
+        let (self_new_wrap_snapshot, self_new_wrap_edits) =
+            self.wrap_map.update(cx, |map, cx| map.sync(snapshot, edits, cx));
 
         self.block_map
             .write(self_new_wrap_snapshot.clone(), self_new_wrap_edits, None)
@@ -853,66 +818,42 @@ impl DisplayMap {
 
     pub fn disable_header_for_buffer(&mut self, buffer_id: BufferId, cx: &mut Context<Self>) {
         let (self_wrap_snapshot, self_wrap_edits) = self.sync_through_wrap(cx);
-        self.block_map
-            .write(self_wrap_snapshot, self_wrap_edits, None)
-            .disable_header_for_buffer(buffer_id);
+        self.block_map.write(self_wrap_snapshot, self_wrap_edits, None).disable_header_for_buffer(buffer_id);
     }
 
-    pub fn fold_buffers(
-        &mut self,
-        buffer_ids: impl IntoIterator<Item = language::BufferId>,
-        cx: &mut App,
-    ) {
+    pub fn fold_buffers(&mut self, buffer_ids: impl IntoIterator<Item = language::BufferId>, cx: &mut App) {
         let buffer_ids: Vec<_> = buffer_ids.into_iter().collect();
 
         let (self_wrap_snapshot, self_wrap_edits) = self.sync_through_wrap(cx);
 
-        Self::with_synced_companion_mut(
-            self.entity_id,
-            &self.companion,
-            cx,
-            |companion_view, cx| {
-                self.block_map
-                    .write(
-                        self_wrap_snapshot.clone(),
-                        self_wrap_edits.clone(),
-                        companion_view,
-                    )
-                    .fold_buffers(buffer_ids.iter().copied(), self.buffer.read(cx), cx);
-            },
-        )
+        Self::with_synced_companion_mut(self.entity_id, &self.companion, cx, |companion_view, cx| {
+            self.block_map.write(self_wrap_snapshot.clone(), self_wrap_edits.clone(), companion_view).fold_buffers(
+                buffer_ids.iter().copied(),
+                self.buffer.read(cx),
+                cx,
+            );
+        })
     }
 
-    pub fn unfold_buffers(
-        &mut self,
-        buffer_ids: impl IntoIterator<Item = language::BufferId>,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn unfold_buffers(&mut self, buffer_ids: impl IntoIterator<Item = language::BufferId>, cx: &mut Context<Self>) {
         let buffer_ids: Vec<_> = buffer_ids.into_iter().collect();
 
         let (self_wrap_snapshot, self_wrap_edits) = self.sync_through_wrap(cx);
 
-        Self::with_synced_companion_mut(
-            self.entity_id,
-            &self.companion,
-            cx,
-            |companion_view, cx| {
-                self.block_map
-                    .write(
-                        self_wrap_snapshot.clone(),
-                        self_wrap_edits.clone(),
-                        companion_view,
-                    )
-                    .unfold_buffers(buffer_ids.iter().copied(), self.buffer.read(cx), cx);
-            },
-        )
+        Self::with_synced_companion_mut(self.entity_id, &self.companion, cx, |companion_view, cx| {
+            self.block_map.write(self_wrap_snapshot.clone(), self_wrap_edits.clone(), companion_view).unfold_buffers(
+                buffer_ids.iter().copied(),
+                self.buffer.read(cx),
+                cx,
+            );
+        })
     }
 
     pub(crate) fn is_buffer_folded(&self, buffer_id: language::BufferId) -> bool {
         self.block_map.folded_buffers.contains(&buffer_id)
     }
 
-    pub(crate) fn folded_buffers(&self) -> &HashSet<BufferId> {
+    pub(crate) const fn folded_buffers(&self) -> &HashSet<BufferId> {
         &self.block_map.folded_buffers
     }
 
@@ -941,14 +882,11 @@ impl DisplayMap {
         &mut self,
         buffer_id: BufferId,
         ranges: Vec<LspFoldingRange>,
-        cx: &mut Context<Self>,
+        cx: &Context<Self>,
     ) {
         let snapshot = self.buffer.read(cx).snapshot(cx);
 
-        let old_ids = self
-            .lsp_folding_crease_ids
-            .remove(&buffer_id)
-            .unwrap_or_default();
+        let old_ids = self.lsp_folding_crease_ids.remove(&buffer_id).unwrap_or_default();
         if !old_ids.is_empty() {
             self.crease_map.remove(old_ids, &snapshot);
         }
@@ -959,17 +897,15 @@ impl DisplayMap {
 
         let base_placeholder = self.fold_placeholder.clone();
         let creases = ranges.into_iter().filter_map(|folding_range| {
-            let mb_range =
-                snapshot.buffer_anchor_range_to_anchor_range(folding_range.range.clone())?;
+            let mb_range = snapshot.buffer_anchor_range_to_anchor_range(folding_range.range.clone())?;
             let placeholder = if let Some(collapsed_text) = folding_range.collapsed_text {
                 FoldPlaceholder {
                     render: Arc::new({
                         let collapsed_text = collapsed_text.clone();
                         move |fold_id, _fold_range, cx: &mut gpui::App| {
-                            use gpui::{Element as _, ParentElement as _};
-                            FoldPlaceholder::fold_element(fold_id, cx)
-                                .child(collapsed_text.clone())
-                                .into_any()
+                            use gpui::Element as _;
+                            use gpui::ParentElement as _;
+                            FoldPlaceholder::fold_element(fold_id, cx).child(collapsed_text.clone()).into_any()
                         }
                     }),
                     constrain_width: false,
@@ -990,7 +926,7 @@ impl DisplayMap {
     }
 
     /// Removes all LSP folding-range creases for a single buffer.
-    pub(super) fn clear_lsp_folding_ranges(&mut self, buffer_id: BufferId, cx: &mut Context<Self>) {
+    pub(super) fn clear_lsp_folding_ranges(&mut self, buffer_id: BufferId, cx: &Context<Self>) {
         if let Some(old_ids) = self.lsp_folding_crease_ids.remove(&buffer_id) {
             let snapshot = self.buffer.read(cx).snapshot(cx);
             self.crease_map.remove(old_ids, &snapshot);
@@ -1008,39 +944,17 @@ impl DisplayMap {
         cx: &mut Context<Self>,
     ) -> Vec<CustomBlockId> {
         let (self_wrap_snapshot, self_wrap_edits) = self.sync_through_wrap(cx);
-        Self::with_synced_companion_mut(
-            self.entity_id,
-            &self.companion,
-            cx,
-            |companion_view, _cx| {
-                self.block_map
-                    .write(
-                        self_wrap_snapshot.clone(),
-                        self_wrap_edits.clone(),
-                        companion_view,
-                    )
-                    .insert(blocks)
-            },
-        )
+        Self::with_synced_companion_mut(self.entity_id, &self.companion, cx, |companion_view, _cx| {
+            self.block_map.write(self_wrap_snapshot.clone(), self_wrap_edits.clone(), companion_view).insert(blocks)
+        })
     }
 
     pub fn resize_blocks(&mut self, heights: HashMap<CustomBlockId, u32>, cx: &mut Context<Self>) {
         let (self_wrap_snapshot, self_wrap_edits) = self.sync_through_wrap(cx);
 
-        Self::with_synced_companion_mut(
-            self.entity_id,
-            &self.companion,
-            cx,
-            |companion_view, _cx| {
-                self.block_map
-                    .write(
-                        self_wrap_snapshot.clone(),
-                        self_wrap_edits.clone(),
-                        companion_view,
-                    )
-                    .resize(heights);
-            },
-        )
+        Self::with_synced_companion_mut(self.entity_id, &self.companion, cx, |companion_view, _cx| {
+            self.block_map.write(self_wrap_snapshot.clone(), self_wrap_edits.clone(), companion_view).resize(heights);
+        })
     }
 
     pub fn replace_blocks(&mut self, renderers: HashMap<CustomBlockId, RenderBlock>) {
@@ -1050,47 +964,26 @@ impl DisplayMap {
     pub fn remove_blocks(&mut self, ids: HashSet<CustomBlockId>, cx: &mut Context<Self>) {
         let (self_wrap_snapshot, self_wrap_edits) = self.sync_through_wrap(cx);
 
-        Self::with_synced_companion_mut(
-            self.entity_id,
-            &self.companion,
-            cx,
-            |companion_view, _cx| {
-                self.block_map
-                    .write(
-                        self_wrap_snapshot.clone(),
-                        self_wrap_edits.clone(),
-                        companion_view,
-                    )
-                    .remove(ids);
-            },
-        )
+        Self::with_synced_companion_mut(self.entity_id, &self.companion, cx, |companion_view, _cx| {
+            self.block_map.write(self_wrap_snapshot.clone(), self_wrap_edits.clone(), companion_view).remove(ids);
+        })
     }
 
-    pub fn row_for_block(
-        &mut self,
-        block_id: CustomBlockId,
-        cx: &mut Context<Self>,
-    ) -> Option<DisplayRow> {
+    pub fn row_for_block(&mut self, block_id: CustomBlockId, cx: &mut Context<Self>) -> Option<DisplayRow> {
         let (self_wrap_snapshot, self_wrap_edits) = self.sync_through_wrap(cx);
 
-        let companion_wrap_data = self.companion.as_ref().and_then(|(companion_dm, _)| {
-            companion_dm
-                .update(cx, |dm, cx| dm.sync_through_wrap(cx))
-                .ok()
-        });
+        let companion_wrap_data = self
+            .companion
+            .as_ref()
+            .and_then(|(companion_dm, _)| companion_dm.update(cx, |dm, cx| dm.sync_through_wrap(cx)).ok());
 
         let companion_ref = self.companion.as_ref().map(|(_, c)| c.read(cx));
-        let companion_view = companion_wrap_data.as_ref().zip(companion_ref).map(
-            |((snapshot, edits), companion)| {
-                CompanionView::new(self.entity_id, snapshot, edits, companion)
-            },
-        );
+        let companion_view = companion_wrap_data
+            .as_ref()
+            .zip(companion_ref)
+            .map(|((snapshot, edits), companion)| CompanionView::new(self.entity_id, snapshot, edits, companion));
 
-        let block_map = self.block_map.read(
-            self_wrap_snapshot.clone(),
-            self_wrap_edits.clone(),
-            companion_view,
-        );
+        let block_map = self.block_map.read(self_wrap_snapshot.clone(), self_wrap_edits.clone(), companion_view);
         let block_row = block_map.row_for_block(block_id)?;
 
         if let Some((companion_dm, _)) = &self.companion {
@@ -1100,14 +993,8 @@ impl DisplayMap {
                     dm.block_map.read(
                         companion_snapshot,
                         companion_edits,
-                        their_companion_ref.map(|c| {
-                            CompanionView::new(
-                                dm.entity_id,
-                                &self_wrap_snapshot,
-                                &self_wrap_edits,
-                                c,
-                            )
-                        }),
+                        their_companion_ref
+                            .map(|c| CompanionView::new(dm.entity_id, &self_wrap_snapshot, &self_wrap_edits, c)),
                     );
                 }
             });
@@ -1160,14 +1047,12 @@ impl DisplayMap {
         style: HighlightStyle,
     ) {
         for highlight in highlights {
-            let update = self.inlay_highlights.update(&key, |highlights| {
-                highlights.insert(highlight.inlay, (style, highlight.clone()))
-            });
+            let update = self
+                .inlay_highlights
+                .update(&key, |highlights| highlights.insert(highlight.inlay, (style, highlight.clone())));
             if update.is_none() {
-                self.inlay_highlights.insert(
-                    key,
-                    TreeMap::from_ordered_entries([(highlight.inlay, (style, highlight))]),
-                );
+                self.inlay_highlights
+                    .insert(key, TreeMap::from_ordered_entries([(highlight.inlay, (style, highlight))]));
             }
         }
     }
@@ -1185,19 +1070,12 @@ impl DisplayMap {
 
     pub fn all_semantic_token_highlights(
         &self,
-    ) -> impl Iterator<
-        Item = (
-            &BufferId,
-            &(Arc<[SemanticTokenHighlight]>, Arc<HighlightStyleInterner>),
-        ),
-    > {
+    ) -> impl Iterator<Item = (&BufferId, &(Arc<[SemanticTokenHighlight]>, Arc<HighlightStyleInterner>))> {
         self.semantic_token_highlights.iter()
     }
 
     pub fn clear_highlights(&mut self, key: HighlightKey) -> bool {
-        let mut cleared = Arc::make_mut(&mut self.text_highlights)
-            .remove(&key)
-            .is_some();
+        let mut cleared = Arc::make_mut(&mut self.text_highlights).remove(&key).is_some();
         cleared |= self.inlay_highlights.remove(&key).is_some();
         cleared
     }
@@ -1218,18 +1096,15 @@ impl DisplayMap {
     }
 
     pub fn set_font(&self, font: Font, font_size: Pixels, cx: &mut Context<Self>) -> bool {
-        self.wrap_map
-            .update(cx, |map, cx| map.set_font_with_size(font, font_size, cx))
+        self.wrap_map.update(cx, |map, cx| map.set_font_with_size(font, font_size, cx))
     }
 
     pub fn set_wrap_width(&self, width: Option<Pixels>, cx: &mut Context<Self>) -> bool {
-        self.wrap_map
-            .update(cx, |map, cx| map.set_wrap_width(width, cx))
+        self.wrap_map.update(cx, |map, cx| map.set_wrap_width(width, cx))
     }
 
     pub fn set_soft_wrap_indent(&self, indent: SoftWrapIndent, cx: &mut Context<Self>) -> bool {
-        self.wrap_map
-            .update(cx, |map, cx| map.set_soft_wrap_indent(indent, cx))
+        self.wrap_map.update(cx, |map, cx| map.set_soft_wrap_indent(indent, cx))
     }
 
     pub fn update_fold_widths(
@@ -1244,20 +1119,16 @@ impl DisplayMap {
         let (snapshot, edits) = self.inlay_map.sync(snapshot, edits);
         let (mut fold_map, snapshot, edits) = self.fold_map.write(snapshot, edits);
         let (snapshot, edits) = self.tab_map.sync(snapshot, edits, tab_size);
-        let (snapshot, edits) = self
-            .wrap_map
-            .update(cx, |map, cx| map.sync(snapshot, edits, cx));
+        let (snapshot, edits) = self.wrap_map.update(cx, |map, cx| map.sync(snapshot, edits, cx));
         self.block_map.read(snapshot, edits, None);
 
         let (snapshot, edits) = fold_map.update_fold_widths(widths);
         let widths_changed = !edits.is_empty();
         let (snapshot, edits) = self.tab_map.sync(snapshot, edits, tab_size);
-        let (self_new_wrap_snapshot, self_new_wrap_edits) = self
-            .wrap_map
-            .update(cx, |map, cx| map.sync(snapshot, edits, cx));
+        let (self_new_wrap_snapshot, self_new_wrap_edits) =
+            self.wrap_map.update(cx, |map, cx| map.sync(snapshot, edits, cx));
 
-        self.block_map
-            .read(self_new_wrap_snapshot, self_new_wrap_edits, None);
+        self.block_map.read(self_new_wrap_snapshot, self_new_wrap_edits, None);
 
         widths_changed
     }
@@ -1266,12 +1137,7 @@ impl DisplayMap {
         self.inlay_map.current_inlays()
     }
 
-    pub(crate) fn splice_inlays(
-        &mut self,
-        to_remove: &[InlayId],
-        to_insert: Vec<Inlay>,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn splice_inlays(&mut self, to_remove: &[InlayId], to_insert: Vec<Inlay>, cx: &mut Context<Self>) {
         if to_remove.is_empty() && to_insert.is_empty() {
             return;
         }
@@ -1279,48 +1145,40 @@ impl DisplayMap {
         let edits = self.buffer_subscription.consume().into_inner();
         let tab_size = Self::tab_size(&self.buffer, cx);
 
-        let companion_wrap_data = self.companion.as_ref().and_then(|(companion_dm, _)| {
-            companion_dm
-                .update(cx, |dm, cx| dm.sync_through_wrap(cx))
-                .ok()
-        });
+        let companion_wrap_data = self
+            .companion
+            .as_ref()
+            .and_then(|(companion_dm, _)| companion_dm.update(cx, |dm, cx| dm.sync_through_wrap(cx)).ok());
 
         let (snapshot, edits) = self.inlay_map.sync(buffer_snapshot, edits);
         let (snapshot, edits) = self.fold_map.read(snapshot, edits);
         let (snapshot, edits) = self.tab_map.sync(snapshot, edits, tab_size);
-        let (snapshot, edits) = self
-            .wrap_map
-            .update(cx, |map, cx| map.sync(snapshot, edits, cx));
+        let (snapshot, edits) = self.wrap_map.update(cx, |map, cx| map.sync(snapshot, edits, cx));
 
         {
             let companion_ref = self.companion.as_ref().map(|(_, c)| c.read(cx));
-            let companion_view = companion_wrap_data.as_ref().zip(companion_ref).map(
-                |((snapshot, edits), companion)| {
-                    CompanionView::new(self.entity_id, snapshot, edits, companion)
-                },
-            );
+            let companion_view = companion_wrap_data
+                .as_ref()
+                .zip(companion_ref)
+                .map(|((snapshot, edits), companion)| CompanionView::new(self.entity_id, snapshot, edits, companion));
             self.block_map.read(snapshot, edits, companion_view);
         }
 
         let (snapshot, edits) = self.inlay_map.splice(to_remove, to_insert);
         let (snapshot, edits) = self.fold_map.read(snapshot, edits);
         let (snapshot, edits) = self.tab_map.sync(snapshot, edits, tab_size);
-        let (self_new_wrap_snapshot, self_new_wrap_edits) = self
-            .wrap_map
-            .update(cx, |map, cx| map.sync(snapshot, edits, cx));
+        let (self_new_wrap_snapshot, self_new_wrap_edits) =
+            self.wrap_map.update(cx, |map, cx| map.sync(snapshot, edits, cx));
 
-        let (self_wrap_snapshot, self_wrap_edits) =
-            (self_new_wrap_snapshot.clone(), self_new_wrap_edits.clone());
+        let (self_wrap_snapshot, self_wrap_edits) = (self_new_wrap_snapshot.clone(), self_new_wrap_edits.clone());
 
         {
             let companion_ref = self.companion.as_ref().map(|(_, c)| c.read(cx));
-            let companion_view = companion_wrap_data.as_ref().zip(companion_ref).map(
-                |((snapshot, edits), companion)| {
-                    CompanionView::new(self.entity_id, snapshot, edits, companion)
-                },
-            );
-            self.block_map
-                .read(self_new_wrap_snapshot, self_new_wrap_edits, companion_view);
+            let companion_view = companion_wrap_data
+                .as_ref()
+                .zip(companion_ref)
+                .map(|((snapshot, edits), companion)| CompanionView::new(self.entity_id, snapshot, edits, companion));
+            self.block_map.read(self_new_wrap_snapshot, self_new_wrap_edits, companion_view);
         }
 
         if let Some((companion_dm, _)) = &self.companion {
@@ -1330,14 +1188,8 @@ impl DisplayMap {
                     dm.block_map.read(
                         companion_snapshot,
                         companion_edits,
-                        their_companion_ref.map(|c| {
-                            CompanionView::new(
-                                dm.entity_id,
-                                &self_wrap_snapshot,
-                                &self_wrap_edits,
-                                c,
-                            )
-                        }),
+                        their_companion_ref
+                            .map(|c| CompanionView::new(dm.entity_id, &self_wrap_snapshot, &self_wrap_edits, c)),
                     );
                 }
             });
@@ -1390,10 +1242,7 @@ pub struct HighlightedChunk<'a> {
 }
 
 impl<'a> HighlightedChunk<'a> {
-    fn highlight_invisibles(
-        self,
-        editor_style: &'a EditorStyle,
-    ) -> impl Iterator<Item = Self> + 'a {
+    fn highlight_invisibles(self, editor_style: &'a EditorStyle) -> impl Iterator<Item = Self> + 'a {
         let mut text = self.text;
         let style = self.style;
         let diagnostic_underline_severity = self.diagnostic_underline_severity;
@@ -1435,11 +1284,8 @@ impl<'a> HighlightedChunk<'a> {
                     }),
                     ..Default::default()
                 };
-                let invisible_style = if let Some(style) = style {
-                    style.highlight(invisible_highlight)
-                } else {
-                    invisible_highlight
-                };
+                let invisible_style =
+                    if let Some(style) = style { style.highlight(invisible_highlight) } else { invisible_highlight };
                 return Some(HighlightedChunk {
                     text: invisible_text,
                     style: Some(invisible_style),
@@ -1447,9 +1293,7 @@ impl<'a> HighlightedChunk<'a> {
                     is_tab: false,
                     is_inlay,
                     replacement: match replacement(ch) {
-                        Some(replacement) => {
-                            Some(ChunkReplacement::Str(SharedString::from(replacement)))
-                        }
+                        Some(replacement) => Some(ChunkReplacement::Str(SharedString::from(replacement))),
                         None => renderer.clone(),
                     },
                 });
@@ -1498,10 +1342,7 @@ impl DisplaySnapshot {
         {
             return None;
         }
-        let wrap_row = self
-            .block_snapshot
-            .to_wrap_point(BlockPoint::new(BlockRow(point.row().0), 0), Bias::Left)
-            .row();
+        let wrap_row = self.block_snapshot.to_wrap_point(BlockPoint::new(BlockRow(point.row().0), 0), Bias::Left).row();
         let wrap_indent = wrap_row
             .0
             .checked_sub(1)
@@ -1510,16 +1351,10 @@ impl DisplaySnapshot {
             return None;
         }
         let fold_point = self.display_point_to_fold_point(point, Bias::Left);
-        if self
-            .fold_snapshot()
-            .placeholder_range_at(fold_point)
-            .is_some()
-        {
+        if self.fold_snapshot().placeholder_range_at(fold_point).is_some() {
             return None;
         }
-        let inlay_offset = self
-            .inlay_snapshot()
-            .to_offset(fold_point.to_inlay_point(self.fold_snapshot()));
+        let inlay_offset = self.inlay_snapshot().to_offset(fold_point.to_inlay_point(self.fold_snapshot()));
         if self.fold_snapshot().is_inlay_offset_folded(inlay_offset) {
             return None;
         }
@@ -1530,8 +1365,7 @@ impl DisplaySnapshot {
         if !position.is_valid(self.buffer_snapshot()) {
             return false;
         }
-        let Some(rendered_range) = self.inlay_snapshot().inlay_offset_range(inlay_id, position)
-        else {
+        let Some(rendered_range) = self.inlay_snapshot().inlay_offset_range(inlay_id, position) else {
             return false;
         };
         let start = self.inlay_offset_to_display_point(rendered_range.start, Bias::Right);
@@ -1541,24 +1375,18 @@ impl DisplaySnapshot {
             if self.is_block_line(row) {
                 return false;
             }
-            let point = if row == start.row() {
-                start
-            } else {
-                DisplayPoint::new(row, 0)
-            };
+            let point = if row == start.row() { start } else { DisplayPoint::new(row, 0) };
             let offset = self.display_point_to_inlay_offset(point, Bias::Left);
             rendered_range.contains(&offset) && !self.fold_snapshot().is_inlay_offset_folded(offset)
         })
     }
 
-    pub(crate) fn diagnostics_visible(&self) -> bool {
+    pub(crate) const fn diagnostics_visible(&self) -> bool {
         self.diagnostics_max_severity.into_lsp().is_some()
     }
 
     fn diagnostic_severity_is_visible(&self, severity: lsp::DiagnosticSeverity) -> bool {
-        self.diagnostics_max_severity
-            .into_lsp()
-            .is_some_and(|max_severity| severity <= max_severity)
+        self.diagnostics_max_severity.into_lsp().is_some_and(|max_severity| severity <= max_severity)
     }
 
     pub(crate) fn diagnostic_underline_style(
@@ -1579,14 +1407,14 @@ impl DisplaySnapshot {
             })
     }
 
-    pub fn wrap_snapshot(&self) -> &WrapSnapshot {
+    pub const fn wrap_snapshot(&self) -> &WrapSnapshot {
         &self.block_snapshot.wrap_snapshot
     }
-    pub fn tab_snapshot(&self) -> &TabSnapshot {
+    pub const fn tab_snapshot(&self) -> &TabSnapshot {
         &self.block_snapshot.wrap_snapshot.tab_snapshot
     }
 
-    pub fn fold_snapshot(&self) -> &FoldSnapshot {
+    pub const fn fold_snapshot(&self) -> &FoldSnapshot {
         &self.block_snapshot.wrap_snapshot.tab_snapshot.fold_snapshot
     }
 
@@ -1595,23 +1423,12 @@ impl DisplaySnapshot {
         self.fold_snapshot().has_folds() || self.block_snapshot.has_replacement_blocks()
     }
 
-    pub fn inlay_snapshot(&self) -> &InlaySnapshot {
-        &self
-            .block_snapshot
-            .wrap_snapshot
-            .tab_snapshot
-            .fold_snapshot
-            .inlay_snapshot
+    pub const fn inlay_snapshot(&self) -> &InlaySnapshot {
+        &self.block_snapshot.wrap_snapshot.tab_snapshot.fold_snapshot.inlay_snapshot
     }
 
-    pub fn buffer_snapshot(&self) -> &MultiBufferSnapshot {
-        &self
-            .block_snapshot
-            .wrap_snapshot
-            .tab_snapshot
-            .fold_snapshot
-            .inlay_snapshot
-            .buffer
+    pub const fn buffer_snapshot(&self) -> &MultiBufferSnapshot {
+        &self.block_snapshot.wrap_snapshot.tab_snapshot.fold_snapshot.inlay_snapshot.buffer
     }
 
     pub fn is_empty(&self) -> bool {
@@ -1623,11 +1440,10 @@ impl DisplaySnapshot {
     /// meaning LSP semantic tokens should replace tree-sitter highlighting.
     pub fn use_tree_sitter_for_syntax(&self, position: DisplayRow, cx: &App) -> bool {
         let position = DisplayPoint::new(position, 0);
-        let Some((buffer_snapshot, ..)) = self.point_to_buffer_point(position.to_point(self))
-        else {
+        let Some((buffer_snapshot, ..)) = self.point_to_buffer_point(position.to_point(self)) else {
             return false;
         };
-        let settings = LanguageSettings::for_buffer_snapshot(&buffer_snapshot, None, cx);
+        let settings = LanguageSettings::for_buffer_snapshot(buffer_snapshot, None, cx);
         settings.semantic_tokens.use_tree_sitter()
     }
 
@@ -1657,10 +1473,7 @@ impl DisplaySnapshot {
         }
     }
 
-    pub fn next_line_boundary(
-        &self,
-        mut point: MultiBufferPoint,
-    ) -> (MultiBufferPoint, DisplayPoint) {
+    pub fn next_line_boundary(&self, mut point: MultiBufferPoint) -> (MultiBufferPoint, DisplayPoint) {
         let original_point = point;
         loop {
             let mut inlay_point = self.inlay_snapshot().to_inlay_point(point);
@@ -1683,11 +1496,7 @@ impl DisplaySnapshot {
     pub fn expand_to_line(&self, range: Range<Point>) -> Range<Point> {
         let new_start = MultiBufferPoint::new(range.start.row, 0);
         let new_end = if range.end.column > 0 {
-            MultiBufferPoint::new(
-                range.end.row,
-                self.buffer_snapshot()
-                    .line_len(MultiBufferRow(range.end.row)),
-            )
+            MultiBufferPoint::new(range.end.row, self.buffer_snapshot().line_len(MultiBufferRow(range.end.row)))
         } else {
             range.end
         };
@@ -1726,12 +1535,8 @@ impl DisplaySnapshot {
         }
 
         let buffer = self.buffer_snapshot();
-        let first_character_end =
-            buffer.clip_offset((range.start + 1usize).min(range.end), Bias::Right);
-        let last_character_start = buffer.clip_offset(
-            range.end.saturating_sub_usize(1).max(range.start),
-            Bias::Left,
-        );
+        let first_character_end = buffer.clip_offset((range.start + 1usize).min(range.end), Bias::Right);
+        let last_character_start = buffer.clip_offset(range.end.saturating_sub_usize(1).max(range.start), Bias::Left);
 
         let mut converter = self.display_point_converter();
         let first_ranges = converter.map(range.start..first_character_end);
@@ -1761,33 +1566,26 @@ impl DisplaySnapshot {
     }
 
     pub fn display_point_to_point(&self, point: DisplayPoint, bias: Bias) -> Point {
-        self.inlay_snapshot()
-            .to_buffer_point(self.display_point_to_inlay_point(point, bias))
+        self.inlay_snapshot().to_buffer_point(self.display_point_to_inlay_point(point, bias))
     }
 
     pub fn display_point_to_inlay_offset(&self, point: DisplayPoint, bias: Bias) -> InlayOffset {
-        self.inlay_snapshot()
-            .to_offset(self.display_point_to_inlay_point(point, bias))
+        self.inlay_snapshot().to_offset(self.display_point_to_inlay_point(point, bias))
     }
 
     pub fn anchor_to_inlay_offset(&self, anchor: Anchor) -> InlayOffset {
-        self.inlay_snapshot()
-            .to_inlay_offset(anchor.to_offset(self.buffer_snapshot()))
+        self.inlay_snapshot().to_inlay_offset(anchor.to_offset(self.buffer_snapshot()))
     }
 
     pub fn display_point_to_anchor(&self, point: DisplayPoint, bias: Bias) -> Anchor {
-        self.buffer_snapshot()
-            .anchor_at(point.to_offset(self, bias), bias)
+        self.buffer_snapshot().anchor_at(point.to_offset(self, bias), bias)
     }
 
     fn display_point_to_inlay_point(&self, point: DisplayPoint, bias: Bias) -> InlayPoint {
         let block_point = point.0;
         let wrap_point = self.block_snapshot.to_wrap_point(block_point, bias);
         let tab_point = self.wrap_snapshot().to_tab_point(wrap_point);
-        let fold_point = self
-            .tab_snapshot()
-            .tab_point_to_fold_point(tab_point, bias)
-            .0;
+        let fold_point = self.tab_snapshot().tab_point_to_fold_point(tab_point, bias).0;
         fold_point.to_inlay_point(self.fold_snapshot())
     }
 
@@ -1795,9 +1593,7 @@ impl DisplaySnapshot {
         let block_point = point.0;
         let wrap_point = self.block_snapshot.to_wrap_point(block_point, bias);
         let tab_point = self.wrap_snapshot().to_tab_point(wrap_point);
-        self.tab_snapshot()
-            .tab_point_to_fold_point(tab_point, bias)
-            .0
+        self.tab_snapshot().tab_point_to_fold_point(tab_point, bias).0
     }
 
     pub fn fold_point_to_display_point(&self, fold_point: FoldPoint) -> DisplayPoint {
@@ -1816,10 +1612,7 @@ impl DisplaySnapshot {
         self.block_snapshot
             .chunks(
                 BlockRow(display_row.0)..BlockRow(self.max_point().row().next_row().0),
-                LanguageAwareStyling {
-                    tree_sitter: false,
-                    diagnostics: false,
-                },
+                LanguageAwareStyling { tree_sitter: false, diagnostics: false },
                 self.masked,
                 Highlights::default(),
             )
@@ -1832,10 +1625,7 @@ impl DisplaySnapshot {
             self.block_snapshot
                 .chunks(
                     BlockRow(row)..BlockRow(row + 1),
-                    LanguageAwareStyling {
-                        tree_sitter: false,
-                        diagnostics: false,
-                    },
+                    LanguageAwareStyling { tree_sitter: false, diagnostics: false },
                     self.masked,
                     Highlights::default(),
                 )
@@ -1871,93 +1661,74 @@ impl DisplaySnapshot {
         language_aware: LanguageAwareStyling,
         editor_style: &'a EditorStyle,
     ) -> impl Iterator<Item = HighlightedChunk<'a>> {
-        self.chunks(
-            display_rows,
-            language_aware,
-            HighlightStyles {
-                inlay_hint: Some(editor_style.inlay_hints_style),
-            },
-        )
-        .flat_map({
-            // track the current underline style so that we can apply it to
-            // inlay hints within the diagnostic's span
-            let mut current_diagnostic_underline: Option<UnderlineStyle> = None;
-            let mut current_diagnostic_severity: Option<lsp::DiagnosticSeverity> = None;
+        self.chunks(display_rows, language_aware, HighlightStyles { inlay_hint: Some(editor_style.inlay_hints_style) })
+            .flat_map({
+                // track the current underline style so that we can apply it to
+                // inlay hints within the diagnostic's span
+                let mut current_diagnostic_underline: Option<UnderlineStyle> = None;
+                let mut current_diagnostic_severity: Option<lsp::DiagnosticSeverity> = None;
 
-            move |chunk| {
-                let syntax_highlight_style = chunk
-                    .syntax_highlight_id
-                    .and_then(|id| editor_style.syntax.get(id).cloned());
+                move |chunk| {
+                    let syntax_highlight_style =
+                        chunk.syntax_highlight_id.and_then(|id| editor_style.syntax.get(id).cloned());
 
-                let chunk_highlight = chunk.highlight_style.map(|chunk_highlight| {
-                    HighlightStyle {
-                        // For color inlays, blend the color with the editor background
-                        // if the color has transparency (alpha < 1.0)
-                        color: chunk_highlight.color.map(|color| {
-                            if chunk.is_inlay && !color.is_opaque() {
-                                editor_style.background.blend(color)
-                            } else {
-                                color
-                            }
-                        }),
-                        underline: chunk_highlight
-                            .underline
-                            .filter(|_| editor_style.show_underlines),
-                        ..chunk_highlight
-                    }
-                });
-
-                let (diagnostic_highlight, diagnostic_severity) = if chunk.is_inlay {
-                    (
-                        current_diagnostic_underline.map(|underline| HighlightStyle {
-                            underline: Some(underline),
-                            ..Default::default()
-                        }),
-                        current_diagnostic_severity,
-                    )
-                } else {
-                    let severity = chunk
-                        .diagnostic_severity
-                        .filter(|severity| self.diagnostic_severity_is_visible(*severity));
-                    let highlight = severity.map(|severity| HighlightStyle {
-                        fade_out: chunk
-                            .is_unnecessary
-                            .then_some(editor_style.unnecessary_code_fade),
-                        underline: self.diagnostic_underline_style(
-                            severity,
-                            chunk.underline,
-                            chunk.is_unnecessary,
-                            editor_style,
-                        ),
-                        ..Default::default()
+                    let chunk_highlight = chunk.highlight_style.map(|chunk_highlight| {
+                        HighlightStyle {
+                            // For color inlays, blend the color with the editor background
+                            // if the color has transparency (alpha < 1.0)
+                            color: chunk_highlight.color.map(|color| {
+                                if chunk.is_inlay && !color.is_opaque() {
+                                    editor_style.background.blend(color)
+                                } else {
+                                    color
+                                }
+                            }),
+                            underline: chunk_highlight.underline.filter(|_| editor_style.show_underlines),
+                            ..chunk_highlight
+                        }
                     });
 
-                    current_diagnostic_underline = highlight.as_ref().and_then(|h| h.underline);
-                    current_diagnostic_severity =
-                        current_diagnostic_underline.and_then(|_| severity);
-                    (highlight, current_diagnostic_severity)
-                };
+                    let (diagnostic_highlight, diagnostic_severity) = if chunk.is_inlay {
+                        (
+                            current_diagnostic_underline
+                                .map(|underline| HighlightStyle { underline: Some(underline), ..Default::default() }),
+                            current_diagnostic_severity,
+                        )
+                    } else {
+                        let severity =
+                            chunk.diagnostic_severity.filter(|severity| self.diagnostic_severity_is_visible(*severity));
+                        let highlight = severity.map(|severity| HighlightStyle {
+                            fade_out: chunk.is_unnecessary.then_some(editor_style.unnecessary_code_fade),
+                            underline: self.diagnostic_underline_style(
+                                severity,
+                                chunk.underline,
+                                chunk.is_unnecessary,
+                                editor_style,
+                            ),
+                            ..Default::default()
+                        });
 
-                let style = [
-                    syntax_highlight_style,
-                    chunk_highlight,
-                    diagnostic_highlight,
-                ]
-                .into_iter()
-                .flatten()
-                .reduce(|acc, highlight| acc.highlight(highlight));
+                        current_diagnostic_underline = highlight.as_ref().and_then(|h| h.underline);
+                        current_diagnostic_severity = current_diagnostic_underline.and(severity);
+                        (highlight, current_diagnostic_severity)
+                    };
 
-                HighlightedChunk {
-                    text: chunk.text,
-                    style,
-                    diagnostic_underline_severity: diagnostic_severity,
-                    is_tab: chunk.is_tab,
-                    is_inlay: chunk.is_inlay,
-                    replacement: chunk.renderer.map(ChunkReplacement::Renderer),
+                    let style = [syntax_highlight_style, chunk_highlight, diagnostic_highlight]
+                        .into_iter()
+                        .flatten()
+                        .reduce(|acc, highlight| acc.highlight(highlight));
+
+                    HighlightedChunk {
+                        text: chunk.text,
+                        style,
+                        diagnostic_underline_severity: diagnostic_severity,
+                        is_tab: chunk.is_tab,
+                        is_inlay: chunk.is_inlay,
+                        replacement: chunk.renderer.map(ChunkReplacement::Renderer),
+                    }
+                    .highlight_invisibles(editor_style)
                 }
-                .highlight_invisibles(editor_style)
-            }
-        })
+            })
     }
 
     /// Returns combined highlight styles (tree-sitter syntax + semantic tokens)
@@ -1972,10 +1743,7 @@ impl DisplaySnapshot {
 
         let chunks = custom_highlights::CustomHighlightsChunks::new(
             multibuffer_range,
-            LanguageAwareStyling {
-                tree_sitter: true,
-                diagnostics: true,
-            },
+            LanguageAwareStyling { tree_sitter: true, diagnostics: true },
             None,
             Some(&self.semantic_token_highlights),
             multibuffer,
@@ -1989,9 +1757,7 @@ impl DisplaySnapshot {
                 continue;
             }
 
-            let syntax_style = chunk
-                .syntax_highlight_id
-                .and_then(|id| syntax_theme.get(id).cloned());
+            let syntax_style = chunk.syntax_highlight_id.and_then(|id| syntax_theme.get(id).cloned());
 
             let overlay_style = chunk.highlight_style;
 
@@ -2027,10 +1793,7 @@ impl DisplaySnapshot {
         let range = display_row..display_row.next_row();
         for chunk in self.highlighted_chunks(
             range,
-            LanguageAwareStyling {
-                tree_sitter: false,
-                diagnostics: false,
-            },
+            LanguageAwareStyling { tree_sitter: false, diagnostics: false },
             editor_style,
         ) {
             line.push_str(chunk.text);
@@ -2058,21 +1821,12 @@ impl DisplaySnapshot {
         text_system.layout_line(&line, font_size, &runs, None)
     }
 
-    pub fn x_for_display_point(
-        &self,
-        display_point: DisplayPoint,
-        text_layout_details: &TextLayoutDetails,
-    ) -> Pixels {
+    pub fn x_for_display_point(&self, display_point: DisplayPoint, text_layout_details: &TextLayoutDetails) -> Pixels {
         let line = self.layout_row(display_point.row(), text_layout_details);
         line.x_for_index(display_point.column() as usize)
     }
 
-    pub fn display_column_for_x(
-        &self,
-        display_row: DisplayRow,
-        x: Pixels,
-        details: &TextLayoutDetails,
-    ) -> u32 {
+    pub fn display_column_for_x(&self, display_row: DisplayRow, x: Pixels, details: &TextLayoutDetails) -> u32 {
         let layout_line = self.layout_row(display_row, details);
         layout_line.closest_index_for_x(x) as u32
     }
@@ -2125,12 +1879,10 @@ impl DisplaySnapshot {
         &self,
         mut offset: MultiBufferOffset,
     ) -> impl Iterator<Item = (char, MultiBufferOffset)> + '_ {
-        self.buffer_snapshot()
-            .reversed_chars_at(offset)
-            .map(move |ch| {
-                offset -= ch.len_utf8();
-                (ch, offset)
-            })
+        self.buffer_snapshot().reversed_chars_at(offset).map(move |ch| {
+            offset -= ch.len_utf8();
+            (ch, offset)
+        })
     }
 
     pub fn clip_point(&self, point: DisplayPoint, bias: Bias) -> DisplayPoint {
@@ -2148,16 +1900,9 @@ impl DisplaySnapshot {
     pub fn inlay_bias_at(&self, point: DisplayPoint) -> Option<Bias> {
         let wrap_point = self.block_snapshot.to_wrap_point(point.0, Bias::Left);
         let tab_point = self.block_snapshot.to_tab_point(wrap_point);
-        let (fold_point, _, _) = self
-            .block_snapshot
-            .tab_snapshot
-            .tab_point_to_fold_point(tab_point, Bias::Left);
-        let inlay_point =
-            fold_point.to_inlay_point(&self.block_snapshot.tab_snapshot.fold_snapshot);
-        self.block_snapshot
-            .tab_snapshot
-            .fold_snapshot
-            .inlay_bias_at_point(inlay_point)
+        let (fold_point, _, _) = self.block_snapshot.tab_snapshot.tab_point_to_fold_point(tab_point, Bias::Left);
+        let inlay_point = fold_point.to_inlay_point(&self.block_snapshot.tab_snapshot.fold_snapshot);
+        self.block_snapshot.tab_snapshot.fold_snapshot.inlay_bias_at_point(inlay_point)
     }
 
     pub fn clip_at_line_end(&self, display_point: DisplayPoint) -> DisplayPoint {
@@ -2178,10 +1923,7 @@ impl DisplaySnapshot {
         self.fold_snapshot().folds_in_range(range)
     }
 
-    pub fn blocks_in_range(
-        &self,
-        rows: Range<DisplayRow>,
-    ) -> impl Iterator<Item = (DisplayRow, &Block)> {
+    pub fn blocks_in_range(&self, rows: Range<DisplayRow>) -> impl Iterator<Item = (DisplayRow, &Block)> {
         self.block_snapshot
             .blocks_in_range(BlockRow(rows.start.0)..BlockRow(rows.end.0))
             .map(|(row, block)| (DisplayRow(row.0), block))
@@ -2200,8 +1942,7 @@ impl DisplaySnapshot {
     }
 
     pub fn is_line_folded(&self, buffer_row: MultiBufferRow) -> bool {
-        self.block_snapshot.is_line_replaced(buffer_row)
-            || self.fold_snapshot().is_line_folded(buffer_row)
+        self.block_snapshot.is_line_replaced(buffer_row) || self.fold_snapshot().is_line_folded(buffer_row)
     }
 
     pub fn is_block_line(&self, display_row: DisplayRow) -> bool {
@@ -2209,15 +1950,11 @@ impl DisplaySnapshot {
     }
 
     pub fn is_folded_buffer_header(&self, display_row: DisplayRow) -> bool {
-        self.block_snapshot
-            .is_folded_buffer_header(BlockRow(display_row.0))
+        self.block_snapshot.is_folded_buffer_header(BlockRow(display_row.0))
     }
 
     pub fn soft_wrap_indent(&self, display_row: DisplayRow) -> Option<u32> {
-        let wrap_row = self
-            .block_snapshot
-            .to_wrap_point(BlockPoint::new(BlockRow(display_row.0), 0), Bias::Left)
-            .row();
+        let wrap_row = self.block_snapshot.to_wrap_point(BlockPoint::new(BlockRow(display_row.0), 0), Bias::Left).row();
         self.wrap_snapshot().soft_wrap_indent(wrap_row)
     }
 
@@ -2284,20 +2021,12 @@ impl DisplaySnapshot {
     /// Returns the indent length of `row` if it starts with a closing bracket.
     fn closing_bracket_indent_len(&self, row: u32) -> Option<u32> {
         let snapshot = self.buffer_snapshot();
-        let indent_len = self
-            .line_indent_for_buffer_row(MultiBufferRow(row))
-            .raw_len();
+        let indent_len = self.line_indent_for_buffer_row(MultiBufferRow(row)).raw_len();
         let content_start = Point::new(row, indent_len);
-        let line_text: String = snapshot
-            .chars_at(content_start)
-            .take_while(|ch| *ch != '\n')
-            .collect();
+        let line_text: String = snapshot.chars_at(content_start).take_while(|ch| *ch != '\n').collect();
 
         let scope = snapshot.language_scope_at(Point::new(row, 0))?;
-        if scope
-            .brackets()
-            .any(|(pair, _)| line_text.starts_with(&pair.end))
-        {
+        if scope.brackets().any(|(pair, _)| line_text.starts_with(&pair.end)) {
             return Some(indent_len);
         }
 
@@ -2305,41 +2034,28 @@ impl DisplaySnapshot {
     }
 
     pub fn crease_for_buffer_row(&self, buffer_row: MultiBufferRow) -> Option<Crease<Point>> {
-        let start =
-            MultiBufferPoint::new(buffer_row.0, self.buffer_snapshot().line_len(buffer_row));
-        if let Some(crease) = self
-            .crease_snapshot
-            .query_row(buffer_row, self.buffer_snapshot())
-        {
+        let start = MultiBufferPoint::new(buffer_row.0, self.buffer_snapshot().line_len(buffer_row));
+        if let Some(crease) = self.crease_snapshot.query_row(buffer_row, self.buffer_snapshot()) {
             match crease {
-                Crease::Inline {
-                    range,
-                    placeholder,
-                    render_toggle,
-                    render_trailer,
-                    metadata,
-                } => Some(Crease::Inline {
-                    range: range.to_point(self.buffer_snapshot()),
-                    placeholder: placeholder.clone(),
-                    render_toggle: render_toggle.clone(),
-                    render_trailer: render_trailer.clone(),
-                    metadata: metadata.clone(),
-                }),
-                Crease::Block {
-                    range,
-                    block_height,
-                    block_style,
-                    render_block,
-                    block_priority,
-                    render_toggle,
-                } => Some(Crease::Block {
-                    range: range.to_point(self.buffer_snapshot()),
-                    block_height: *block_height,
-                    block_style: *block_style,
-                    render_block: render_block.clone(),
-                    block_priority: *block_priority,
-                    render_toggle: render_toggle.clone(),
-                }),
+                Crease::Inline { range, placeholder, render_toggle, render_trailer, metadata } => {
+                    Some(Crease::Inline {
+                        range: range.to_point(self.buffer_snapshot()),
+                        placeholder: placeholder.clone(),
+                        render_toggle: render_toggle.clone(),
+                        render_trailer: render_trailer.clone(),
+                        metadata: metadata.clone(),
+                    })
+                }
+                Crease::Block { range, block_height, block_style, render_block, block_priority, render_toggle } => {
+                    Some(Crease::Block {
+                        range: range.to_point(self.buffer_snapshot()),
+                        block_height: *block_height,
+                        block_style: *block_style,
+                        render_block: render_block.clone(),
+                        block_priority: *block_priority,
+                        render_toggle: render_toggle.clone(),
+                    })
+                }
             }
         } else if !self.use_lsp_folding_ranges
             && self.starts_indent(MultiBufferRow(start.row))
@@ -2357,19 +2073,14 @@ impl DisplaySnapshot {
             let foldable_node_end = {
                 let row_start = Point::new(buffer_row.0, 0);
                 let row_end = Point::new(buffer_row.0, snapshot.line_len(buffer_row));
-                snapshot
-                    .syntax_ancestor(row_start..row_end)
-                    .map(|(_, range)| range.end)
+                snapshot.syntax_ancestor(row_start..row_end).map(|(_, range)| range.end)
             };
 
             for row in (buffer_row.0 + 1)..=max_point.row {
                 let line_indent = self.line_indent_for_buffer_row(MultiBufferRow(row));
-                if !line_indent.is_line_blank()
-                    && line_indent.raw_len() <= start_line_indent.raw_len()
-                {
-                    let in_string_or_comment_scope = snapshot
-                        .language_scope_at(Point::new(row, 0))
-                        .is_some_and(|scope| {
+                if !line_indent.is_line_blank() && line_indent.raw_len() <= start_line_indent.raw_len() {
+                    let in_string_or_comment_scope =
+                        snapshot.language_scope_at(Point::new(row, 0)).is_some_and(|scope| {
                             matches!(
                                 scope.override_name(),
                                 Some("string") | Some("comment") | Some("comment.inclusive")
@@ -2419,11 +2130,11 @@ impl DisplaySnapshot {
         }
     }
 
-    pub fn buffer_header_height(&self) -> u32 {
+    pub const fn buffer_header_height(&self) -> u32 {
         self.block_snapshot.buffer_header_height
     }
 
-    pub fn excerpt_header_height(&self) -> u32 {
+    pub const fn excerpt_header_height(&self) -> u32 {
         self.block_snapshot.excerpt_header_height
     }
 
@@ -2439,34 +2150,24 @@ impl DisplaySnapshot {
         let new_row = (target.max(0) as u32).min(self.fold_snapshot().max_point().row());
 
         self.clip_point(
-            self.fold_point_to_display_point(
-                self.fold_snapshot()
-                    .clip_point(FoldPoint::new(new_row, 0), Bias::Right),
-            ),
+            self.fold_point_to_display_point(self.fold_snapshot().clip_point(FoldPoint::new(new_row, 0), Bias::Right)),
             Bias::Right,
         )
     }
 
     pub(crate) fn fully_replaced_tab_rows(&self, row: u32) -> Option<RangeInclusive<u32>> {
-        if !self.block_snapshot.has_replacement_blocks()
-            || row > self.tab_snapshot().max_point().row()
-        {
+        if !self.block_snapshot.has_replacement_blocks() || row > self.tab_snapshot().max_point().row() {
             return None;
         }
         let wraps = self.wrap_snapshot();
         let wrap_point = wraps.tab_point_to_wrap_point(TabPoint::new(row, 0));
-        let input_range = self
-            .block_snapshot
-            .replacement_block_input_range(wrap_point.row())?;
+        let input_range = self.block_snapshot.replacement_block_input_range(wrap_point.row())?;
         let start = wraps.to_tab_point(WrapPoint::new(input_range.start, 0));
         let start_row = start.row().checked_add(u32::from(start.column() > 0))?;
         let end_row = if input_range.end > wraps.max_point().row() {
             self.tab_snapshot().max_point().row()
         } else {
-            wraps
-                .to_tab_point(WrapPoint::new(input_range.end, 0))
-                .row()
-                .checked_sub(1)?
+            wraps.to_tab_point(WrapPoint::new(input_range.end, 0)).row().checked_sub(1)?
         };
         let rows = start_row..=end_row;
         rows.contains(&row).then_some(rows)
@@ -2479,7 +2180,7 @@ impl DisplaySnapshot {
     }
 }
 
-fn diagnostic_style(severity: lsp::DiagnosticSeverity, colors: &StatusColors) -> Hsla {
+const fn diagnostic_style(severity: lsp::DiagnosticSeverity, colors: &StatusColors) -> Hsla {
     match severity {
         lsp::DiagnosticSeverity::ERROR => colors.error,
         lsp::DiagnosticSeverity::WARNING => colors.warning,
@@ -2503,11 +2204,7 @@ pub struct DisplayPoint(BlockPoint);
 
 impl Debug for DisplayPoint {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_fmt(format_args!(
-            "DisplayPoint({}, {})",
-            self.row().0,
-            self.column()
-        ))
+        f.write_fmt(format_args!("DisplayPoint({}, {})", self.row().0, self.column()))
     }
 }
 
@@ -2532,7 +2229,7 @@ impl Sub for DisplayPoint {
 pub struct DisplayRow(pub u32);
 
 impl DisplayRow {
-    pub(crate) fn as_display_point(&self) -> DisplayPoint {
+    pub(crate) const fn as_display_point(&self) -> DisplayPoint {
         DisplayPoint::new(*self, 0)
     }
 }
@@ -2570,11 +2267,11 @@ impl Sub<u32> for DisplayRow {
 }
 
 impl DisplayPoint {
-    pub fn new(row: DisplayRow, column: u32) -> Self {
+    pub const fn new(row: DisplayRow, column: u32) -> Self {
         Self(BlockPoint(Point::new(row.0, column)))
     }
 
-    pub fn zero() -> Self {
+    pub const fn zero() -> Self {
         Self::new(DisplayRow(0), 0)
     }
 
@@ -2605,13 +2302,9 @@ impl DisplayPoint {
     pub fn to_offset(self, map: &DisplaySnapshot, bias: Bias) -> MultiBufferOffset {
         let wrap_point = map.block_snapshot.to_wrap_point(self.0, bias);
         let tab_point = map.wrap_snapshot().to_tab_point(wrap_point);
-        let fold_point = map
-            .tab_snapshot()
-            .tab_point_to_fold_point(tab_point, bias)
-            .0;
+        let fold_point = map.tab_snapshot().tab_point_to_fold_point(tab_point, bias).0;
         let inlay_point = fold_point.to_inlay_point(map.fold_snapshot());
-        map.inlay_snapshot()
-            .to_buffer_offset(map.inlay_snapshot().to_offset(inlay_point))
+        map.inlay_snapshot().to_buffer_offset(map.inlay_snapshot().to_offset(inlay_point))
     }
 }
 

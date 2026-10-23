@@ -14,28 +14,35 @@ mod pasteboard;
 use gpui_apple::metal_renderer as renderer;
 
 pub mod metal_renderer {
-    pub use gpui_apple::metal_renderer::{PathRasterizationVertex, PathSprite};
+    pub use gpui_apple::metal_renderer::PathRasterizationVertex;
+    pub use gpui_apple::metal_renderer::PathSprite;
 }
 
 mod platform;
 mod window;
 mod window_appearance;
 
-use ns::{NSNotFound, NSUInteger, id};
-use objc2::{Encode, Encoding, RefEncode, class, msg_send};
-use std::{
-    ffi::{CStr, c_char, c_void},
-    ops::Range,
-};
+use std::ffi::CStr;
+use std::ffi::c_char;
+use std::ffi::c_void;
+use std::ops::Range;
 
 pub(crate) use display::*;
 pub(crate) use display_link::*;
-pub(crate) use gpui_apple::{AppleActivity, AppleDispatcher};
+pub(crate) use gpui_apple::AppleActivity;
+pub(crate) use gpui_apple::AppleDispatcher;
 pub(crate) use keyboard::*;
+use ns::NSNotFound;
+use ns::NSUInteger;
+use ns::id;
+use objc2::Encode;
+use objc2::Encoding;
+use objc2::RefEncode;
+use objc2::class;
+use objc2::msg_send;
+pub use platform::MacPlatform;
 pub(crate) use platform::*;
 pub(crate) use window::*;
-
-pub use platform::MacPlatform;
 
 trait NSStringExt {
     unsafe fn to_str(&self) -> &str;
@@ -48,11 +55,7 @@ impl NSStringExt for id {
         }
         unsafe {
             let cstr: *const c_char = msg_send![*self, UTF8String];
-            if cstr.is_null() {
-                ""
-            } else {
-                CStr::from_ptr(cstr).to_str().unwrap()
-            }
+            if cstr.is_null() { "" } else { CStr::from_ptr(cstr).to_str().unwrap() }
         }
     }
 }
@@ -65,18 +68,15 @@ struct NSRange {
 }
 
 impl NSRange {
-    fn invalid() -> Self {
-        Self {
-            location: NSNotFound as NSUInteger,
-            length: 0,
-        }
+    const fn invalid() -> Self {
+        Self { location: NSNotFound as NSUInteger, length: 0 }
     }
 
-    fn is_valid(&self) -> bool {
+    const fn is_valid(&self) -> bool {
         self.location != NSNotFound as NSUInteger
     }
 
-    fn to_range(self) -> Option<Range<usize>> {
+    const fn to_range(self) -> Option<Range<usize>> {
         if self.is_valid() {
             let start = self.location;
             let end = start + self.length;
@@ -89,10 +89,7 @@ impl NSRange {
 
 impl From<Range<usize>> for NSRange {
     fn from(range: Range<usize>) -> Self {
-        NSRange {
-            location: range.start as NSUInteger,
-            length: range.len() as NSUInteger,
-        }
+        NSRange { location: range.start as NSUInteger, length: range.len() as NSUInteger }
     }
 }
 

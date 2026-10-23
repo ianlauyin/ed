@@ -1,9 +1,17 @@
-use collections::{HashMap, IndexMap};
+use std::borrow::Cow;
+use std::fmt::Display;
+use std::ops::Deref;
+use std::sync::Arc;
+
+use collections::HashMap;
+use collections::IndexMap;
 use schemars::JsonSchema;
-use serde::{Deserialize, Deserializer, Serialize};
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
 use serde_json::Value;
-use settings_macros::{MergeFrom, with_fallible_options};
-use std::{borrow::Cow, fmt::Display, ops::Deref, sync::Arc};
+use settings_macros::MergeFrom;
+use settings_macros::with_fallible_options;
 
 use crate::serialize_f32_with_two_decimal_places;
 
@@ -36,8 +44,10 @@ impl<'de> Deserialize<'de> for FontFeaturesContent {
     where
         D: Deserializer<'de>,
     {
-        use serde::de::{MapAccess, Visitor};
         use std::fmt;
+
+        use serde::de::MapAccess;
+        use serde::de::Visitor;
 
         struct FontFeaturesVisitor;
 
@@ -54,9 +64,7 @@ impl<'de> Deserialize<'de> for FontFeaturesContent {
             {
                 let mut feature_map = IndexMap::default();
 
-                while let Some((key, value)) =
-                    access.next_entry::<String, Option<FeatureValue>>()?
-                {
+                while let Some((key, value)) = access.next_entry::<String, Option<FeatureValue>>()? {
                     if !is_valid_feature_tag(&key) {
                         log::error!("Incorrect font feature tag: {}", key);
                         continue;
@@ -70,11 +78,7 @@ impl<'de> Deserialize<'de> for FontFeaturesContent {
                                 if value.is_u64() {
                                     feature_map.insert(key, value.as_u64().unwrap() as u32);
                                 } else {
-                                    log::error!(
-                                        "Incorrect font feature value {} for feature tag {}",
-                                        value,
-                                        key
-                                    );
+                                    log::error!("Incorrect font feature value {} for feature tag {}", value, key);
                                     continue;
                                 }
                             }
@@ -237,16 +241,7 @@ pub struct ThemeSettingsContent {
 
 /// A font size value in pixels, wrapping around `f32` for custom settings UI rendering.
 #[derive(
-    Clone,
-    Copy,
-    Debug,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    PartialOrd,
-    derive_more::FromStr,
+    Clone, Copy, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, PartialOrd, derive_more::FromStr,
 )]
 #[serde(transparent)]
 pub struct FontSize(#[serde(serialize_with = "serialize_f32_with_two_decimal_places")] pub f32);
@@ -264,16 +259,7 @@ impl From<f32> for FontSize {
 }
 
 #[derive(
-    Clone,
-    Copy,
-    Debug,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    PartialOrd,
-    derive_more::FromStr,
+    Clone, Copy, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, PartialOrd, derive_more::FromStr,
 )]
 #[serde(transparent)]
 pub struct CodeFade(#[serde(serialize_with = "serialize_f32_with_two_decimal_places")] pub f32);
@@ -294,26 +280,16 @@ fn default_font_features() -> Option<FontFeaturesContent> {
     Some(FontFeaturesContent::default())
 }
 
-fn default_font_fallbacks() -> Option<Vec<FontFamilyName>> {
+const fn default_font_fallbacks() -> Option<Vec<FontFamilyName>> {
     Some(Vec::new())
 }
 
-fn default_buffer_font_weight() -> Option<FontWeightContent> {
+const fn default_buffer_font_weight() -> Option<FontWeightContent> {
     Some(FontWeightContent::NORMAL)
 }
 
 /// Represents the selection of a theme, which can be either static or dynamic.
-#[derive(
-    Clone,
-    Debug,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    PartialEq,
-    Eq,
-    strum::EnumDiscriminants,
-)]
+#[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq, strum::EnumDiscriminants)]
 #[strum_discriminants(derive(strum::VariantArray, strum::VariantNames, strum::FromRepr))]
 #[serde(untagged)]
 pub enum ThemeSelection {
@@ -331,8 +307,8 @@ pub enum ThemeSelection {
     },
 }
 
-pub const DEFAULT_LIGHT_THEME: &'static str = "One Light";
-pub const DEFAULT_DARK_THEME: &'static str = "One Dark";
+pub const DEFAULT_LIGHT_THEME: &str = "One Light";
+pub const DEFAULT_DARK_THEME: &str = "One Dark";
 
 impl Default for ThemeSelection {
     fn default() -> Self {
@@ -379,19 +355,7 @@ pub enum ThemeAppearanceMode {
 /// Specifies the density of the UI.
 /// Note: This setting is still experimental. See [this tracking issue](https://github.com/zed-industries/zed/issues/18078)
 #[derive(
-    Debug,
-    Default,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Clone,
-    Copy,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
+    Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Serialize, Deserialize, JsonSchema, MergeFrom,
 )]
 #[serde(rename_all = "snake_case")]
 pub enum UiDensity {
@@ -410,7 +374,7 @@ pub enum UiDensity {
 impl UiDensity {
     /// The spacing ratio of a given density.
     /// TODO: Standardize usage throughout the app or remove
-    pub fn spacing_ratio(self) -> f32 {
+    pub const fn spacing_ratio(self) -> f32 {
         match self {
             UiDensity::Compact => 0.75,
             UiDensity::Default => 1.0,
@@ -445,16 +409,7 @@ impl From<FontFamilyName> for String {
 
 /// The buffer's line height.
 #[derive(
-    Clone,
-    Copy,
-    Debug,
-    Serialize,
-    Deserialize,
-    PartialEq,
-    JsonSchema,
-    MergeFrom,
-    Default,
-    strum::EnumDiscriminants,
+    Clone, Copy, Debug, Serialize, Deserialize, PartialEq, JsonSchema, MergeFrom, Default, strum::EnumDiscriminants,
 )]
 #[strum_discriminants(derive(strum::VariantArray, strum::VariantNames, strum::FromRepr))]
 #[serde(rename_all = "snake_case")]
@@ -474,9 +429,7 @@ where
 {
     let value = f32::deserialize(deserializer)?;
     if value < 1.0 {
-        return Err(serde::de::Error::custom(
-            "buffer_line_height.custom must be at least 1.0",
-        ));
+        return Err(serde::de::Error::custom("buffer_line_height.custom must be at least 1.0"));
     }
 
     Ok(value)
@@ -1118,27 +1071,18 @@ pub struct ThemeColorsContent {
 pub struct HighlightStyleContent {
     pub color: Option<ThemeColor>,
 
-    #[serde(
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "treat_error_as_none"
-    )]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "treat_error_as_none")]
     pub background_color: Option<ThemeColor>,
 
-    #[serde(
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "treat_error_as_none"
-    )]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "treat_error_as_none")]
     pub font_style: Option<FontStyleContent>,
 
-    #[serde(
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "treat_error_as_none"
-    )]
+    #[serde(skip_serializing_if = "Option::is_none", deserialize_with = "treat_error_as_none")]
     pub font_weight: Option<FontWeightContent>,
 }
 
 impl HighlightStyleContent {
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.color.is_none()
             && self.background_color.is_none()
             && self.font_style.is_none()
@@ -1320,17 +1264,7 @@ pub enum FontStyleContent {
     Oblique,
 }
 
-#[derive(
-    Clone,
-    Copy,
-    Debug,
-    PartialEq,
-    PartialOrd,
-    Serialize,
-    Deserialize,
-    MergeFrom,
-    derive_more::FromStr,
-)]
+#[derive(Clone, Copy, Debug, PartialEq, PartialOrd, Serialize, Deserialize, MergeFrom, derive_more::FromStr)]
 #[serde(transparent)]
 pub struct FontWeightContent(pub f32);
 

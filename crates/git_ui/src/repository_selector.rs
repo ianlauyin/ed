@@ -1,11 +1,30 @@
-use crate::git_status_icon;
-use git::status::{FileStatus, StatusCode, TrackedStatus, UnmergedStatus, UnmergedStatusCode};
-use gpui::{App, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Task, WeakEntity};
-use picker::{Picker, PickerDelegate, PickerEditorPosition};
-use project::{Project, git_store::Repository};
 use std::sync::Arc;
-use ui::{ListItem, ListItemSpacing, prelude::*};
-use workspace::{ModalView, Workspace};
+
+use git::status::FileStatus;
+use git::status::StatusCode;
+use git::status::TrackedStatus;
+use git::status::UnmergedStatus;
+use git::status::UnmergedStatusCode;
+use gpui::App;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::Task;
+use gpui::WeakEntity;
+use picker::Picker;
+use picker::PickerDelegate;
+use picker::PickerEditorPosition;
+use project::Project;
+use project::git_store::Repository;
+use ui::ListItem;
+use ui::ListItemSpacing;
+use ui::prelude::*;
+use workspace::ModalView;
+use workspace::Workspace;
+
+use crate::git_status_icon;
 
 pub fn register(workspace: &mut Workspace) {
     workspace.register_action(open);
@@ -18,9 +37,7 @@ pub fn open(
     cx: &mut Context<Workspace>,
 ) {
     let project = workspace.project().clone();
-    workspace.toggle_modal(window, cx, |window, cx| {
-        RepositorySelector::new(project, rems(34.), window, cx)
-    })
+    workspace.toggle_modal(window, cx, |window, cx| RepositorySelector::new(project, rems(34.), window, cx))
 }
 
 pub struct RepositorySelector {
@@ -28,21 +45,13 @@ pub struct RepositorySelector {
 }
 
 impl RepositorySelector {
-    pub fn new(
-        project_handle: Entity<Project>,
-        width: Rems,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    pub fn new(project_handle: Entity<Project>, width: Rems, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let git_store = project_handle.read(cx).git_store().clone();
         let repository_entries = git_store.update(cx, |git_store, _cx| {
             let mut repos: Vec<_> = git_store.repositories().values().cloned().collect();
 
             repos.sort_by(|a, b| {
-                a.read(_cx)
-                    .display_name()
-                    .to_lowercase()
-                    .cmp(&b.read(_cx).display_name().to_lowercase())
+                a.read(_cx).display_name().to_lowercase().cmp(&b.read(_cx).display_name().to_lowercase())
             });
 
             repos
@@ -62,11 +71,7 @@ impl RepositorySelector {
             selected_index,
         };
 
-        let picker = cx.new(|cx| {
-            Picker::uniform_list(delegate, window, cx)
-                .initial_width(width)
-                .show_scrollbar(true)
-        });
+        let picker = cx.new(|cx| Picker::uniform_list(delegate, window, cx).initial_width(width).show_scrollbar(true));
 
         RepositorySelector { picker }
     }
@@ -113,9 +118,7 @@ impl Focusable for RepositorySelector {
 
 impl Render for RepositorySelector {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
-        div()
-            .key_context("GitRepositorySelector")
-            .child(self.picker.clone())
+        div().key_context("GitRepositorySelector").child(self.picker.clone())
     }
 }
 
@@ -131,16 +134,12 @@ pub struct RepositorySelectorDelegate {
 
 impl RepositorySelectorDelegate {
     pub fn update_repository_entries(&mut self, all_repositories: Vec<Entity<Repository>>) {
-        self.repository_entries = all_repositories.clone();
+        self.repository_entries.clone_from(&all_repositories);
         self.filtered_repositories = all_repositories;
         self.selected_index = self
             .active_repository
             .as_ref()
-            .and_then(|active| {
-                self.filtered_repositories
-                    .iter()
-                    .position(|repo| repo == active)
-            })
+            .and_then(|active| self.filtered_repositories.iter().position(|repo| repo == active))
             .unwrap_or(0);
     }
 }
@@ -160,12 +159,7 @@ impl PickerDelegate for RepositorySelectorDelegate {
         self.selected_index
     }
 
-    fn set_selected_index(
-        &mut self,
-        ix: usize,
-        _window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) {
+    fn set_selected_index(&mut self, ix: usize, _window: &mut Window, cx: &mut Context<Picker<Self>>) {
         self.selected_index = ix.min(self.filtered_repositories.len().saturating_sub(1));
         cx.notify();
     }
@@ -178,18 +172,11 @@ impl PickerDelegate for RepositorySelectorDelegate {
         PickerEditorPosition::End
     }
 
-    fn update_matches(
-        &mut self,
-        query: String,
-        window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) -> Task<()> {
+    fn update_matches(&mut self, query: String, window: &mut Window, cx: &mut Context<Picker<Self>>) -> Task<()> {
         let all_repositories = self.repository_entries.clone();
 
-        let repo_names: Vec<(Entity<Repository>, String)> = all_repositories
-            .iter()
-            .map(|repo| (repo.clone(), repo.read(cx).display_name().to_lowercase()))
-            .collect();
+        let repo_names: Vec<(Entity<Repository>, String)> =
+            all_repositories.iter().map(|repo| (repo.clone(), repo.read(cx).display_name().to_lowercase())).collect();
 
         cx.spawn_in(window, async move |this, cx| {
             let filtered_repositories = cx
@@ -210,10 +197,7 @@ impl PickerDelegate for RepositorySelectorDelegate {
             this.update_in(cx, |this, window, cx| {
                 let mut sorted_repositories = filtered_repositories;
                 sorted_repositories.sort_by(|a, b| {
-                    a.read(cx)
-                        .display_name()
-                        .to_lowercase()
-                        .cmp(&b.read(cx).display_name().to_lowercase())
+                    a.read(cx).display_name().to_lowercase().cmp(&b.read(cx).display_name().to_lowercase())
                 });
                 let selected_index = this
                     .delegate
@@ -233,16 +217,12 @@ impl PickerDelegate for RepositorySelectorDelegate {
         let Some(selected_repo) = self.filtered_repositories.get(self.selected_index) else {
             return;
         };
-        selected_repo.update(cx, |selected_repo, cx| {
-            selected_repo.set_as_active_repository(cx)
-        });
+        selected_repo.update(cx, |selected_repo, cx| selected_repo.set_as_active_repository(cx));
         self.dismissed(window, cx);
     }
 
     fn dismissed(&mut self, _window: &mut Window, cx: &mut Context<Picker<Self>>) {
-        self.repository_selector
-            .update(cx, |_this, cx| cx.emit(DismissEvent))
-            .ok();
+        self.repository_selector.update(cx, |_this, cx| cx.emit(DismissEvent)).ok();
     }
 
     fn render_match(
@@ -256,27 +236,13 @@ impl PickerDelegate for RepositorySelectorDelegate {
         let repo = repo_info.read(cx);
         let display_name = repo.display_name();
         let summary = repo.status_summary();
-        let is_active = self
-            .active_repository
-            .as_ref()
-            .is_some_and(|active| active == repo_info);
+        let is_active = self.active_repository.as_ref().is_some_and(|active| active == repo_info);
 
-        let mut item = ListItem::new(ix)
-            .inset(true)
-            .spacing(ListItemSpacing::Sparse)
-            .toggle_state(selected)
-            .child(
-                h_flex()
-                    .gap_1()
-                    .child(Label::new(display_name))
-                    .when(is_active, |this| {
-                        this.child(
-                            Icon::new(IconName::Check)
-                                .size(IconSize::Small)
-                                .color(Color::Accent),
-                        )
-                    }),
-            );
+        let mut item = ListItem::new(ix).inset(true).spacing(ListItemSpacing::Sparse).toggle_state(selected).child(
+            h_flex().gap_1().child(Label::new(display_name)).when(is_active, |this| {
+                this.child(Icon::new(IconName::Check).size(IconSize::Small).color(Color::Accent))
+            }),
+        );
 
         if summary.count > 0 {
             let status = if summary.conflict > 0 {

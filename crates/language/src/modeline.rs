@@ -1,5 +1,7 @@
+use std::num::NonZeroU32;
+use std::sync::LazyLock;
+
 use regex::Regex;
-use std::{num::NonZeroU32, sync::LazyLock};
 
 /// The settings extracted from an emacs/vim modelines.
 ///
@@ -75,8 +77,7 @@ fn parse_modelines(modelines: &[&str], settings: &mut ModelineSettings) {
     parse_vim_modelines(modelines, settings);
 }
 
-static EMACS_MODELINE_RE: LazyLock<Regex> =
-    LazyLock::new(|| Regex::new(r"-\*-\s*(.+?)\s*-\*-").expect("valid regex"));
+static EMACS_MODELINE_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"-\*-\s*(.+?)\s*-\*-").expect("valid regex"));
 
 /// Parse Emacs-style modelines
 /// Format: -*- mode: rust; tab-width: 4; indent-tabs-mode: nil; -*-
@@ -119,11 +120,7 @@ fn parse_emacs_local_variables(lines: &[&str], settings: &mut ModelineSettings) 
     let mut continuation = String::new();
 
     for line in &lines[start_idx + 1..] {
-        let Some(content) = line
-            .strip_prefix(prefix)
-            .and_then(|l| l.strip_suffix(suffix))
-            .map(str::trim)
-        else {
+        let Some(content) = line.strip_prefix(prefix).and_then(|l| l.strip_suffix(suffix)).map(str::trim) else {
             return;
         };
 
@@ -189,9 +186,7 @@ fn parse_emacs_key_value(part: &str, settings: &mut ModelineSettings, bare: bool
             "show-trailing-whitespace" => {
                 settings.show_trailing_whitespace = Some(value != "nil");
             }
-            key => settings
-                .emacs_extra_variables
-                .push((key.to_string(), value.to_string())),
+            key => settings.emacs_extra_variables.push((key.to_string(), value.to_string())),
         }
     } else if bare {
         // Handle bare mode specification (e.g., -*- rust -*-)
@@ -227,11 +222,11 @@ static VIM_MODELINE_PATTERNS: LazyLock<Vec<Regex>> = LazyLock::new(|| {
 /// 2. Second form: vim: set ft=rust ts=4 sw=4 et:
 fn parse_vim_modeline(line: &str, settings: &mut ModelineSettings) {
     for re in VIM_MODELINE_PATTERNS.iter() {
-        if let Some(captures) = re.captures(line) {
-            if let Some(options) = captures.get(1) {
-                parse_vim_settings(options.as_str().trim(), settings);
-                break;
-            }
+        if let Some(captures) = re.captures(line)
+            && let Some(options) = captures.get(1)
+        {
+            parse_vim_settings(options.as_str().trim(), settings);
+            break;
         }
     }
 }
@@ -287,9 +282,7 @@ fn parse_vim_settings(content: &str, settings: &mut ModelineSettings) {
                         }
                     }
                     _ => {
-                        settings
-                            .vim_extra_variables
-                            .push((key.to_string(), Some(value.to_string())));
+                        settings.vim_extra_variables.push((key.to_string(), Some(value.to_string())));
                     }
                 }
             } else {

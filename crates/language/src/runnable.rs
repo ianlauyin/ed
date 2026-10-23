@@ -1,4 +1,7 @@
-use std::{cmp::Reverse, iter, ops::Range, sync::Arc};
+use std::cmp::Reverse;
+use std::iter;
+use std::ops::Range;
+use std::sync::Arc;
 
 use collections::HashMap;
 use smallvec::SmallVec;
@@ -6,7 +9,12 @@ use text::BufferId;
 use tree_sitter::QueryCapture;
 use util::RangeExt;
 
-use crate::{BufferSnapshot, Language, Runnable, RunnableCapture, RunnableConfig, RunnableTag};
+use crate::BufferSnapshot;
+use crate::Language;
+use crate::Runnable;
+use crate::RunnableCapture;
+use crate::RunnableConfig;
+use crate::RunnableTag;
 
 pub struct RunnableRange {
     pub buffer_id: BufferId,
@@ -34,11 +42,11 @@ impl RunnableMatchCapture {
         self.range.clone()
     }
 
-    pub fn is_run(&self) -> bool {
+    pub const fn is_run(&self) -> bool {
         matches!(self.capture, ResolverCapture::Run)
     }
 
-    pub fn name(&self) -> Option<&str> {
+    pub const fn name(&self) -> Option<&str> {
         match &self.capture {
             ResolverCapture::Named(name) => Some(name.as_str()),
             ResolverCapture::Run => None,
@@ -64,15 +72,11 @@ pub(crate) fn runnable_ranges(
     buffer: &BufferSnapshot,
     offset_range: Range<usize>,
 ) -> impl Iterator<Item = RunnableRange> + '_ {
-    let mut syntax_matches = buffer.matches(offset_range.clone(), |grammar| {
-        grammar.runnable_config.as_ref().map(|config| &config.query)
-    });
+    let mut syntax_matches =
+        buffer.matches(offset_range.clone(), |grammar| grammar.runnable_config.as_ref().map(|config| &config.query));
 
-    let runnable_configs = syntax_matches
-        .grammars()
-        .iter()
-        .map(|grammar| grammar.runnable_config.as_ref())
-        .collect::<Vec<_>>();
+    let runnable_configs =
+        syntax_matches.grammars().iter().map(|grammar| grammar.runnable_config.as_ref()).collect::<Vec<_>>();
 
     iter::from_fn(move || -> Option<SmallVec<[RunnableRange; 1]>> {
         let mat = syntax_matches.peek()?;
@@ -96,15 +100,9 @@ pub(crate) fn runnable_ranges(
                         offset_range.clone(),
                     )
                 } else {
-                    runnable_range_from_captures(
-                        buffer,
-                        mat.captures,
-                        runnable_config,
-                        mat.pattern_index,
-                        mat.language,
-                    )
-                    .into_iter()
-                    .collect()
+                    runnable_range_from_captures(buffer, mat.captures, runnable_config, mat.pattern_index, mat.language)
+                        .into_iter()
+                        .collect()
                 }
             }
             None => SmallVec::new(),
@@ -128,21 +126,13 @@ struct GroupedRunnableMatches {
     shared_captures: RunnableMatchCaptures,
 }
 
-fn runnable_tags_from_pattern(
-    query: &tree_sitter::Query,
-    pattern_index: usize,
-) -> SmallVec<[RunnableTag; 1]> {
+fn runnable_tags_from_pattern(query: &tree_sitter::Query, pattern_index: usize) -> SmallVec<[RunnableTag; 1]> {
     query
         .property_settings(pattern_index)
         .iter()
         .filter_map(|property| {
             (*property.key == *"tag")
-                .then(|| {
-                    property
-                        .value
-                        .as_ref()
-                        .map(|value| RunnableTag(value.to_string().into()))
-                })
+                .then(|| property.value.as_ref().map(|value| RunnableTag(value.to_string().into())))
                 .flatten()
         })
         .collect()
@@ -150,11 +140,7 @@ fn runnable_tags_from_pattern(
 
 /// `overlaps` rejects empty ranges, so handle a zero-width `offset_range` (cursor) separately.
 fn range_overlaps_or_contains(range: &Range<usize>, offset_range: &Range<usize>) -> bool {
-    if offset_range.is_empty() {
-        range.contains(&offset_range.start)
-    } else {
-        range.overlaps(offset_range)
-    }
+    if offset_range.is_empty() { range.contains(&offset_range.start) } else { range.overlaps(offset_range) }
 }
 
 fn group_runnable_matches(
@@ -187,20 +173,14 @@ fn group_runnable_matches(
                     groups.push(group);
                 }
                 current_in_offset = range_overlaps_or_contains(&range, &offset_range);
-                current_group = Some(RunnableMatchGroup {
-                    range,
-                    captures: SmallVec::new(),
-                });
+                current_group = Some(RunnableMatchGroup { range, captures: SmallVec::new() });
                 continue;
             }
             RunnableCapture::Run => ResolverCapture::Run,
             RunnableCapture::Named(name) => ResolverCapture::Named(name.to_string()),
         };
 
-        let match_capture = RunnableMatchCapture {
-            range: range.clone(),
-            capture: resolver_capture,
-        };
+        let match_capture = RunnableMatchCapture { range: range.clone(), capture: resolver_capture };
 
         match current_group.as_mut() {
             Some(group) if group.range.contains_inclusive(&range) => {
@@ -224,10 +204,7 @@ fn group_runnable_matches(
         groups.push(group);
     }
 
-    GroupedRunnableMatches {
-        groups,
-        shared_captures,
-    }
+    GroupedRunnableMatches { groups, shared_captures }
 }
 
 fn runnable_ranges_from_grouped_matches(
@@ -238,27 +215,17 @@ fn runnable_ranges_from_grouped_matches(
     language: Arc<Language>,
     offset_range: Range<usize>,
 ) -> SmallVec<[RunnableRange; 1]> {
-    let GroupedRunnableMatches {
-        groups,
-        shared_captures,
-    } = group_runnable_matches(captures, runnable_config, offset_range);
+    let GroupedRunnableMatches { groups, shared_captures } =
+        group_runnable_matches(captures, runnable_config, offset_range);
 
     let shared_extras: SmallVec<[(String, String); 4]> = shared_captures
         .iter()
         .filter_map(|capture| {
-            capture.name().map(|name| {
-                (
-                    name.to_string(),
-                    buffer.text_for_range(capture.range()).collect::<String>(),
-                )
-            })
+            capture.name().map(|name| (name.to_string(), buffer.text_for_range(capture.range()).collect::<String>()))
         })
         .collect();
 
-    let Some(resolver) = language
-        .context_provider()
-        .and_then(|provider| provider.runnable_resolver())
-    else {
+    let Some(resolver) = language.context_provider().and_then(|provider| provider.runnable_resolver()) else {
         return SmallVec::new();
     };
     let mut runnable_ranges = SmallVec::with_capacity(groups.len());
@@ -266,10 +233,8 @@ fn runnable_ranges_from_grouped_matches(
     let tags = runnable_tags_from_pattern(&runnable_config.query, pattern_index);
     let buffer_id = buffer.remote_id();
     for group in groups {
-        let Some(ResolvedRunnable {
-            run_range,
-            extra_captures: local_extras,
-        }) = resolver.resolve(&group.captures, &shared_captures, buffer)
+        let Some(ResolvedRunnable { run_range, extra_captures: local_extras }) =
+            resolver.resolve(&group.captures, &shared_captures, buffer)
         else {
             continue;
         };
@@ -279,11 +244,7 @@ fn runnable_ranges_from_grouped_matches(
         runnable_ranges.push(RunnableRange {
             run_range,
             full_range: group.range,
-            runnable: Runnable {
-                tags: tags.clone(),
-                language: language.clone(),
-                buffer: buffer_id,
-            },
+            runnable: Runnable { tags: tags.clone(), language: language.clone(), buffer: buffer_id },
             extra_captures,
             buffer_id,
         });
@@ -301,46 +262,32 @@ fn runnable_range_from_captures(
 ) -> Option<RunnableRange> {
     let mut run_range = None;
     let first_capture = captures.first()?;
-    let full_range =
-        captures
-            .iter()
-            .skip(1)
-            .fold(first_capture.node.byte_range(), |mut acc, next| {
-                let byte_range = next.node.byte_range();
-                if acc.start > byte_range.start {
-                    acc.start = byte_range.start;
-                }
-                if acc.end < byte_range.end {
-                    acc.end = byte_range.end;
-                }
-                acc
-            });
+    let full_range = captures.iter().skip(1).fold(first_capture.node.byte_range(), |mut acc, next| {
+        let byte_range = next.node.byte_range();
+        if acc.start > byte_range.start {
+            acc.start = byte_range.start;
+        }
+        if acc.end < byte_range.end {
+            acc.end = byte_range.end;
+        }
+        acc
+    });
 
-    let extra_captures: SmallVec<[_; 1]> =
-        SmallVec::from_iter(captures.iter().filter_map(|capture| {
-            runnable_config
-                .extra_captures
-                .get(capture.index as usize)
-                .cloned()
-                .and_then(|tag_name| match tag_name {
-                    RunnableCapture::Named(name) => Some((capture.node.byte_range(), name)),
-                    RunnableCapture::Run => {
-                        let _ = run_range.insert(capture.node.byte_range());
-                        None
-                    }
-                    RunnableCapture::RunItem => None,
-                })
-        }));
+    let extra_captures: SmallVec<[_; 1]> = SmallVec::from_iter(captures.iter().filter_map(|capture| {
+        runnable_config.extra_captures.get(capture.index as usize).cloned().and_then(|tag_name| match tag_name {
+            RunnableCapture::Named(name) => Some((capture.node.byte_range(), name)),
+            RunnableCapture::Run => {
+                let _ = run_range.insert(capture.node.byte_range());
+                None
+            }
+            RunnableCapture::RunItem => None,
+        })
+    }));
     let run_range = run_range?;
     let tags = runnable_tags_from_pattern(&runnable_config.query, pattern_index);
     let extra_captures = extra_captures
         .into_iter()
-        .map(|(range, name)| {
-            (
-                name.to_string(),
-                buffer.text_for_range(range).collect::<String>(),
-            )
-        })
+        .map(|(range, name)| (name.to_string(), buffer.text_for_range(range).collect::<String>()))
         .collect();
 
     // A runnable has one range, even when its query pattern contributes multiple tags.
@@ -348,11 +295,7 @@ fn runnable_range_from_captures(
     Some(RunnableRange {
         run_range,
         full_range,
-        runnable: Runnable {
-            tags,
-            language,
-            buffer: buffer_id,
-        },
+        runnable: Runnable { tags, language, buffer: buffer_id },
         extra_captures,
         buffer_id,
     })

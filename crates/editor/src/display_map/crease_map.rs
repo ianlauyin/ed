@@ -1,13 +1,30 @@
-use collections::{HashMap, HashSet};
-use gpui::{AnyElement, IntoElement};
-use multi_buffer::{Anchor, AnchorRangeExt, MultiBufferRow, MultiBufferSnapshot, ToPoint};
-use serde::{Deserialize, Serialize};
-use std::{cmp::Ordering, fmt::Debug, ops::Range, sync::Arc};
-use sum_tree::{Bias, SeekTarget, SumTree};
-use text::Point;
-use ui::{App, SharedString, Window};
+use std::cmp::Ordering;
+use std::fmt::Debug;
+use std::ops::Range;
+use std::sync::Arc;
 
-use crate::{BlockStyle, FoldPlaceholder, RenderBlock};
+use collections::HashMap;
+use collections::HashSet;
+use gpui::AnyElement;
+use gpui::IntoElement;
+use multi_buffer::Anchor;
+use multi_buffer::AnchorRangeExt;
+use multi_buffer::MultiBufferRow;
+use multi_buffer::MultiBufferSnapshot;
+use multi_buffer::ToPoint;
+use serde::Deserialize;
+use serde::Serialize;
+use sum_tree::Bias;
+use sum_tree::SeekTarget;
+use sum_tree::SumTree;
+use text::Point;
+use ui::App;
+use ui::SharedString;
+use ui::Window;
+
+use crate::BlockStyle;
+use crate::FoldPlaceholder;
+use crate::RenderBlock;
 
 #[derive(Copy, Clone, Default, Debug, Eq, PartialEq, PartialOrd, Ord, Hash)]
 pub struct CreaseId(usize);
@@ -35,9 +52,7 @@ pub struct CreaseSnapshot {
 
 impl CreaseSnapshot {
     pub fn new(snapshot: &MultiBufferSnapshot) -> Self {
-        CreaseSnapshot {
-            creases: SumTree::new(snapshot),
-        }
+        CreaseSnapshot { creases: SumTree::new(snapshot) }
     }
 
     pub fn creases(&self) -> impl Iterator<Item = (CreaseId, &Crease<Anchor>)> {
@@ -95,10 +110,7 @@ impl CreaseSnapshot {
         })
     }
 
-    pub fn crease_items_with_offsets(
-        &self,
-        snapshot: &MultiBufferSnapshot,
-    ) -> Vec<(CreaseId, Range<Point>)> {
+    pub fn crease_items_with_offsets(&self, snapshot: &MultiBufferSnapshot) -> Vec<(CreaseId, Range<Point>)> {
         let mut cursor = self.creases.cursor::<ItemSummary>(snapshot);
         let mut results = Vec::new();
 
@@ -126,8 +138,7 @@ type RenderToggleFn = Arc<
             &mut App,
         ) -> AnyElement,
 >;
-type RenderTrailerFn =
-    Arc<dyn Send + Sync + Fn(MultiBufferRow, bool, &mut Window, &mut App) -> AnyElement>;
+type RenderTrailerFn = Arc<dyn Send + Sync + Fn(MultiBufferRow, bool, &mut Window, &mut App) -> AnyElement>;
 
 #[derive(Clone)]
 pub enum Crease<T> {
@@ -157,13 +168,7 @@ pub struct CreaseMetadata {
 
 impl<T> Crease<T> {
     pub fn simple(range: Range<T>, placeholder: FoldPlaceholder) -> Self {
-        Crease::Inline {
-            range,
-            placeholder,
-            render_toggle: None,
-            render_trailer: None,
-            metadata: None,
-        }
+        Crease::Inline { range, placeholder, render_toggle: None, render_trailer: None, metadata: None }
     }
 
     pub fn block(range: Range<T>, height: u32, style: BlockStyle, render: RenderBlock) -> Self {
@@ -196,11 +201,8 @@ impl<T> Crease<T> {
             ) -> ToggleElement
             + 'static,
         ToggleElement: IntoElement,
-        RenderTrailer: 'static
-            + Send
-            + Sync
-            + Fn(MultiBufferRow, bool, &mut Window, &mut App) -> TrailerElement
-            + 'static,
+        RenderTrailer:
+            'static + Send + Sync + Fn(MultiBufferRow, bool, &mut Window, &mut App) -> TrailerElement + 'static,
         TrailerElement: IntoElement,
     {
         Crease::Inline {
@@ -218,31 +220,21 @@ impl<T> Crease<T> {
 
     pub fn with_metadata(self, metadata: CreaseMetadata) -> Self {
         match self {
-            Crease::Inline {
-                range,
-                placeholder,
-                render_toggle,
-                render_trailer,
-                ..
-            } => Crease::Inline {
-                range,
-                placeholder,
-                render_toggle,
-                render_trailer,
-                metadata: Some(metadata),
-            },
+            Crease::Inline { range, placeholder, render_toggle, render_trailer, .. } => {
+                Crease::Inline { range, placeholder, render_toggle, render_trailer, metadata: Some(metadata) }
+            }
             Crease::Block { .. } => self,
         }
     }
 
-    pub fn range(&self) -> &Range<T> {
+    pub const fn range(&self) -> &Range<T> {
         match self {
             Crease::Inline { range, .. } => range,
             Crease::Block { range, .. } => range,
         }
     }
 
-    pub fn metadata(&self) -> Option<&CreaseMetadata> {
+    pub const fn metadata(&self) -> Option<&CreaseMetadata> {
         match self {
             Self::Inline { metadata, .. } => metadata.as_ref(),
             Self::Block { .. } => None,
@@ -256,18 +248,12 @@ where
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Crease::Inline {
-                range, metadata, ..
-            } => f
+            Crease::Inline { range, metadata, .. } => f
                 .debug_struct("Crease::Inline")
                 .field("range", range)
                 .field("metadata", metadata)
                 .finish_non_exhaustive(),
-            Crease::Block {
-                range,
-                block_height,
-                ..
-            } => f
+            Crease::Block { range, block_height, .. } => f
                 .debug_struct("Crease::Block")
                 .field("range", range)
                 .field("height", block_height)
@@ -349,9 +335,7 @@ pub struct ItemSummary {
 
 impl Default for ItemSummary {
     fn default() -> Self {
-        Self {
-            range: Anchor::Min..Anchor::Min,
-        }
+        Self { range: Anchor::Min..Anchor::Min }
     }
 }
 
@@ -371,9 +355,7 @@ impl sum_tree::Item for CreaseItem {
     type Summary = ItemSummary;
 
     fn summary(&self, _cx: &MultiBufferSnapshot) -> Self::Summary {
-        ItemSummary {
-            range: self.crease.range().clone(),
-        }
+        ItemSummary { range: self.crease.range().clone() }
     }
 }
 

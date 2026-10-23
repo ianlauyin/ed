@@ -233,7 +233,6 @@ async-channel = { version = "2.5", default-features = false }
 async-fs = "2.1"
 async-lock = { version = "3.4", default-features = false }
 async-process = "2.5.0"
-async-recursion = "1.0.0"
 async-task = "4.7"
 async-trait = "0.1"
 async-tungstenite = "0.33"
@@ -246,7 +245,6 @@ chardetng = "0.1"
 chrono = { version = "0.4", default-features = false, features = ["std", "serde"] }
 clap = { version = "4.4", features = ["derive", "wrap_help"] }
 clap_complete = "4.4"
-clap_complete_nushell = "4.4"
 console = "0.16"
 convert_case = "0.11.0"
 core-foundation = "0.10"
@@ -521,6 +519,14 @@ zed = { codegen-units = 16 }
 unused_crate_dependencies = "warn"
 
 [workspace.lints.clippy]
+# nursery
+missing_const_for_fn = "warn"
+needless_pass_by_ref_mut = "warn"
+# pedantic
+assigning_clones = "warn"
+borrow_as_ptr = "warn"
+
+# old lint rules
 dbg_macro = "deny"
 todo = "deny"
 
@@ -528,19 +534,6 @@ declare_interior_mutable_const = "deny"
 
 redundant_clone = "deny"
 disallowed_methods = "deny"
-
-# We currently do not restrict any style rules
-# as it slows down shipping code to Zed.
-#
-# Running ./script/clippy can take several minutes, and so it's
-# common to skip that step and let CI do it. Any unexpected failures
-# (which also take minutes to discover) thus require switching back
-# to an old branch, manual fixing, and re-pushing.
-#
-# In the future we could improve this by either making sure
-# Zed can surface clippy errors in diagnostics (in addition to the
-# rust-analyzer errors), or by having CI fix style nits automatically.
-style = { level = "allow", priority = -1 }
 
 # Individual rules that have violations in the codebase:
 type_complexity = "allow"

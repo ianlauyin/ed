@@ -37,7 +37,7 @@ actions!(
     ]
 );
 
-pub fn init(cx: &mut App) {
+pub fn init(cx: &App) {
     cx.observe_new(|workspace: &mut Workspace, _, _| {
         workspace.register_action(|workspace, _: &OpenThemePreview, window, cx| {
             let theme_preview = cx.new(|cx| ThemePreview::new(window, cx));
@@ -54,7 +54,7 @@ enum ThemePreviewPage {
 }
 
 impl ThemePreviewPage {
-    pub fn name(&self) -> &'static str {
+    pub const fn name(&self) -> &'static str {
         match self {
             Self::Overview => "Overview",
             Self::Typography => "Typography",
@@ -68,16 +68,11 @@ struct ThemePreview {
 }
 
 impl ThemePreview {
-    pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(window: &Window, cx: &Context<Self>) -> Self {
         Self { current_page: ThemePreviewPage::Overview, focus_handle: cx.focus_handle() }
     }
 
-    pub fn view(
-        &self,
-        page: ThemePreviewPage,
-        window: &mut Window,
-        cx: &mut Context<ThemePreview>,
-    ) -> impl IntoElement {
+    pub fn view(&self, page: ThemePreviewPage, window: &Window, cx: &mut Context<ThemePreview>) -> impl IntoElement {
         match page {
             ThemePreviewPage::Overview => self.render_overview_page(window, cx).into_any_element(),
             ThemePreviewPage::Typography => self.render_typography_page(window, cx).into_any_element(),
@@ -124,11 +119,11 @@ impl Item for ThemePreview {
 const AVATAR_URL: &str = "https://avatars.githubusercontent.com/u/1714999?v=4";
 
 impl ThemePreview {
-    fn preview_bg(window: &mut Window, cx: &mut App) -> Hsla {
+    fn preview_bg(window: &Window, cx: &App) -> Hsla {
         cx.theme().colors().editor_background
     }
 
-    fn render_text(&self, layer: ElevationIndex, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_text(&self, layer: ElevationIndex, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
         let bg = layer.bg(cx);
 
         let label_with_contrast = |label: &str, fg: Hsla| {
@@ -289,7 +284,7 @@ impl ThemePreview {
             )
     }
 
-    fn render_colors(&self, layer: ElevationIndex, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_colors(&self, layer: ElevationIndex, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
         let bg = layer.bg(cx);
         let all_colors = all_theme_colors(cx);
 
@@ -317,12 +312,7 @@ impl ThemePreview {
         )
     }
 
-    fn render_theme_layer(
-        &self,
-        layer: ElevationIndex,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    fn render_theme_layer(&self, layer: ElevationIndex, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .p_4()
             .bg(layer.bg(cx))
@@ -333,7 +323,7 @@ impl ThemePreview {
             .child(self.render_colors(layer, window, cx))
     }
 
-    fn render_overview_page(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_overview_page(&self, window: &Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .id("theme-preview-overview")
             .overflow_scroll()
@@ -349,7 +339,7 @@ impl ThemePreview {
             .child(self.render_theme_layer(ElevationIndex::ElevatedSurface, window, cx))
     }
 
-    fn render_typography_page(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_typography_page(&self, window: &Window, cx: &Context<Self>) -> impl IntoElement {
         v_flex()
             .id("theme-preview-typography")
             .overflow_scroll()
@@ -371,7 +361,7 @@ impl ThemePreview {
             )
     }
 
-    fn render_page_nav(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_page_nav(&self, window: &Window, cx: &Context<Self>) -> impl IntoElement {
         h_flex().id("theme-preview-nav").items_center().gap_4().py_2().bg(Self::preview_bg(window, cx)).children(
             ThemePreviewPage::iter().map(|p| {
                 Button::new(ElementId::Name(p.name().into()), p.name())

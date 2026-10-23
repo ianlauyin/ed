@@ -1,33 +1,47 @@
-use std::{ops::Range, sync::atomic::Ordering};
+use std::ops::Range;
+use std::sync::atomic::Ordering;
 
-use db::{
-    query,
-    sqlez::{domain::Domain, thread_safe_connection::ThreadSafeConnection},
-    sqlez_macros::sql,
-};
+use db::query;
+use db::sqlez::domain::Domain;
+use db::sqlez::thread_safe_connection::ThreadSafeConnection;
+use db::sqlez_macros::sql;
 use editor::Editor;
-use gpui::{
-    App, AppContext, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
-    Modifiers, Subscription, Task, WeakEntity, actions,
-};
+use gpui::App;
+use gpui::AppContext;
+use gpui::Context;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::Modifiers;
+use gpui::Subscription;
+use gpui::Task;
+use gpui::WeakEntity;
+use gpui::actions;
 use language::Buffer;
 use picker::Picker;
-
 use project::ProjectPath;
 use settings::SeedQuerySetting;
 use text::Anchor;
 use ui::Window;
-use workspace::{DismissDecision, ItemHandle, ModalView, Workspace, WorkspaceDb, WorkspaceId};
+use workspace::DismissDecision;
+use workspace::ItemHandle;
+use workspace::ModalView;
+use workspace::Workspace;
+use workspace::WorkspaceDb;
+use workspace::WorkspaceId;
 
 mod delegate;
 mod render;
-use delegate::{Delegate, matches_to_multibuffer};
+use delegate::Delegate;
+use delegate::matches_to_multibuffer;
 use util::ResultExt as _;
 
-use crate::{
-    ProjectSearchView, SearchOptions, project_search::QuerySeed,
-    text_finder::delegate::PopulateProjectSearch,
-};
+use crate::ProjectSearchView;
+use crate::SearchOptions;
+use crate::project_search::QuerySeed;
+use crate::text_finder::delegate::PopulateProjectSearch;
 
 actions!(text_finder, [ToProjectSearch, Fold, Unfold, ToggleFoldAll]);
 
@@ -88,28 +102,17 @@ pub(crate) struct SearchSeed {
     options: Option<SearchOptions>,
 }
 
-fn store_last_search(
-    workspace_id: Option<WorkspaceId>,
-    query: String,
-    options: SearchOptions,
-    cx: &App,
-) {
+fn store_last_search(workspace_id: Option<WorkspaceId>, query: String, options: SearchOptions, cx: &App) {
     let Some(workspace_id) = workspace_id else {
         return;
     };
     let db = TextFinderDb::global(cx);
     let search_options = options.bits() as i64;
-    db::write_and_log(cx, move || async move {
-        db.set_last_search(workspace_id, query, search_options)
-            .await
-    });
+    db::write_and_log(cx, move || async move { db.set_last_search(workspace_id, query, search_options).await });
 }
 
 fn load_last_search(workspace_id: Option<WorkspaceId>, cx: &App) -> Option<SearchSeed> {
-    let (query, search_options) = TextFinderDb::global(cx)
-        .last_search(workspace_id?)
-        .log_err()
-        .flatten()?;
+    let (query, search_options) = TextFinderDb::global(cx).last_search(workspace_id?).log_err().flatten()?;
     if query.is_empty() {
         return None;
     }
@@ -124,11 +127,7 @@ pub fn init(cx: &mut App) {
 }
 
 impl TextFinder {
-    fn register(
-        workspace: &mut Workspace,
-        _window: Option<&mut Window>,
-        _: &mut Context<Workspace>,
-    ) {
+    fn register(workspace: &mut Workspace, _window: Option<&mut Window>, _: &mut Context<Workspace>) {
         pub use zed_actions::text_finder::Toggle;
         workspace.register_action(|workspace, _: &Toggle, window, cx| {
             let Some(text_picker) = workspace.active_modal::<Self>(cx) else {
@@ -153,16 +152,14 @@ impl TextFinder {
     ) -> Task<()> {
         let project_search_item_id = project_search_view.entity_id();
         cx.spawn_in(window, async move |_, cx| {
-            let workspace =
-                project_search_view.read_with(cx, |view, _| WeakEntity::clone(&view.workspace));
+            let workspace = project_search_view.read_with(cx, |view, _| WeakEntity::clone(&view.workspace));
             let delegate = Delegate::new_from_project_search(project_search_view, cx).await;
             workspace
                 .update_in(cx, |workspace, window, cx| {
                     remove_project_search_tab(project_search_item_id, workspace, window, cx);
                     let workspace_id = workspace.database_id();
-                    workspace.toggle_modal(window, cx, |window, cx| {
-                        Self::new(delegate, None, workspace_id, window, cx)
-                    });
+                    workspace
+                        .toggle_modal(window, cx, |window, cx| Self::new(delegate, None, workspace_id, window, cx));
                 })
                 .ok();
         })
@@ -171,12 +168,7 @@ impl TextFinder {
     /// Transition this text finder into a project search tab, carrying over the
     /// current results (and any in-progress search stream) instead of re-running
     /// the search. Inverse of [`Self::open_from_project_search`].
-    fn to_project_search(
-        &mut self,
-        _: &ToProjectSearch,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn switch_to_project_search(&mut self, _: &ToProjectSearch, window: &mut Window, cx: &mut Context<Self>) {
         let picker = Entity::clone(&self.picker);
         let workspace = self.weak_workspace(cx);
 
@@ -187,8 +179,7 @@ impl TextFinder {
 
         cx.spawn_in(window, async move |this, cx| {
             let search_stream = connected_task.unwrap_or(gpui::Task::ready(None)).await;
-            let matches =
-                picker.update(cx, |picker, _| std::mem::take(&mut picker.delegate.matches));
+            let matches = picker.update(cx, |picker, _| std::mem::take(&mut picker.delegate.matches));
 
             project_search_view
                 .update_in(cx, |view, window, cx| {
@@ -217,47 +208,26 @@ impl TextFinder {
 
             if let Some(stream) = search_stream {
                 project_search_view.update(cx, |view, cx| {
-                    view.entity
-                        .update(cx, |search, cx| search.hook_up_ongoing_search(stream, cx));
+                    view.entity.update(cx, |search, cx| search.hook_up_ongoing_search(stream, cx));
                 });
             }
         })
         .detach();
     }
 
-    fn split_left(
-        &mut self,
-        _: &workspace::pane::SplitLeft,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn split_left(&mut self, _: &workspace::pane::SplitLeft, window: &mut Window, cx: &mut Context<Self>) {
         self.open_in_split(workspace::SplitDirection::Left, window, cx);
     }
 
-    fn split_right(
-        &mut self,
-        _: &workspace::pane::SplitRight,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn split_right(&mut self, _: &workspace::pane::SplitRight, window: &mut Window, cx: &mut Context<Self>) {
         self.open_in_split(workspace::SplitDirection::Right, window, cx);
     }
 
-    fn split_up(
-        &mut self,
-        _: &workspace::pane::SplitUp,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn split_up(&mut self, _: &workspace::pane::SplitUp, window: &mut Window, cx: &mut Context<Self>) {
         self.open_in_split(workspace::SplitDirection::Up, window, cx);
     }
 
-    fn split_down(
-        &mut self,
-        _: &workspace::pane::SplitDown,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn split_down(&mut self, _: &workspace::pane::SplitDown, window: &mut Window, cx: &mut Context<Self>) {
         self.open_in_split(workspace::SplitDirection::Down, window, cx);
     }
 
@@ -279,54 +249,30 @@ impl TextFinder {
         });
     }
 
-    fn open_in_split(
-        &mut self,
-        direction: workspace::SplitDirection,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn open_in_split(&self, direction: workspace::SplitDirection, window: &mut Window, cx: &mut Context<Self>) {
         self.picker.update(cx, |picker, cx| {
             picker.delegate.open_in_split(direction, window, cx);
         });
     }
 
     fn weak_workspace(&self, cx: &App) -> WeakEntity<Workspace> {
-        let workspace = WeakEntity::clone(
-            &self
-                .picker
-                .read(cx)
-                .delegate
-                .project_search_view
-                .read(cx)
-                .workspace,
-        );
-        workspace
+        WeakEntity::clone(&self.picker.read(cx).delegate.project_search_view.read(cx).workspace)
     }
 
     fn take_search_task(
         &self,
         cx: &mut App,
     ) -> Option<Task<Option<project::SearchResults<project::search::SearchResult>>>> {
-        self.picker
-            .read(cx)
-            .delegate
-            .text_finder_turning_into_project_search
-            .store(true, Ordering::Relaxed);
-        self.picker
-            .update(cx, |p, _| p.delegate.in_progress_search.take_connected())
+        self.picker.read(cx).delegate.text_finder_turning_into_project_search.store(true, Ordering::Relaxed);
+        self.picker.update(cx, |p, _| p.delegate.in_progress_search.take_connected())
     }
 
     /// Guess the query the user probably wants for pre-populating the search input.
-    fn seed_query(
-        workspace: &mut Workspace,
-        window: &mut Window,
-        cx: &mut Context<Workspace>,
-    ) -> Option<SearchSeed> {
+    fn seed_query(workspace: &Workspace, window: &mut Window, cx: &mut Context<Workspace>) -> Option<SearchSeed> {
         let last_search = load_last_search(workspace.database_id(), cx);
         let options = last_search.as_ref().and_then(|seed| seed.options);
 
-        let query = Self::active_item_query(workspace, window, cx)
-            .or_else(|| last_search.map(|seed| seed.query))?;
+        let query = Self::active_item_query(workspace, window, cx).or_else(|| last_search.map(|seed| seed.query))?;
 
         Some(SearchSeed { query, options })
     }
@@ -339,18 +285,12 @@ impl TextFinder {
     /// last is the one next to the focus. When the focused item has nothing to offer (say, a
     /// focused terminal without a selection), the center item is tried so an editor selection
     /// still seeds.
-    fn active_item_query(
-        workspace: &mut Workspace,
-        window: &mut Window,
-        cx: &mut Context<Workspace>,
-    ) -> Option<QuerySeed> {
+    fn active_item_query(workspace: &Workspace, window: &mut Window, cx: &mut Context<Workspace>) -> Option<QuerySeed> {
         let focused_item = workspace.focused_pane(window, cx).read(cx).active_item();
-        let active_item = workspace
-            .active_item(cx)
-            .filter(|active| match &focused_item {
-                Some(focused) => focused.item_id() != active.item_id(),
-                None => true,
-            });
+        let active_item = workspace.active_item(cx).filter(|active| match &focused_item {
+            Some(focused) => focused.item_id() != active.item_id(),
+            None => true,
+        });
 
         focused_item
             .into_iter()
@@ -365,7 +305,7 @@ impl TextFinder {
     /// cursor on reopen would clobber the search you were in the middle of, whereas a deliberate
     /// selection (e.g. a double-click) is a clear signal to search for that text.
     fn item_query(
-        workspace: &mut Workspace,
+        workspace: &Workspace,
         item: &dyn ItemHandle,
         window: &mut Window,
         cx: &mut Context<Workspace>,
@@ -382,8 +322,7 @@ impl TextFinder {
         }
 
         if let Some(searchable_item) = item.to_searchable_item_handle(cx) {
-            let query =
-                searchable_item.query_suggestion(Some(SeedQuerySetting::Selection), window, cx);
+            let query = searchable_item.query_suggestion(Some(SeedQuerySetting::Selection), window, cx);
             if !query.is_empty() {
                 return Some(QuerySeed::Text(query));
             }
@@ -392,15 +331,11 @@ impl TextFinder {
         None
     }
 
-    pub(crate) fn open(
-        seed_query: Option<SearchSeed>,
-        window: &mut Window,
-        cx: &mut Context<Workspace>,
-    ) -> Task<()> {
+    pub(crate) fn open(seed_query: Option<SearchSeed>, window: &Window, cx: &Context<Workspace>) -> Task<()> {
         cx.spawn_in(window, async move |workspace, cx| {
-            let Ok(delegate_task) = workspace.update_in(cx, |workspace, window, cx| {
-                Delegate::new(workspace, window, cx)
-            }) else {
+            let Ok(delegate_task) =
+                workspace.update_in(cx, |workspace, window, cx| Delegate::new(workspace, window, cx))
+            else {
                 return;
             };
 
@@ -427,15 +362,8 @@ impl TextFinder {
         let preview = picker_preview::editor_preview(project, window, cx);
         let query_editor = cx.new(|cx| Editor::single_line(window, cx));
         let erased_query_editor = query_editor.update(cx, |editor, cx| editor.erased(cx));
-        let picker = cx.new(|cx| {
-            Picker::list_with_preview_and_query_editor(
-                delegate,
-                preview,
-                erased_query_editor,
-                window,
-                cx,
-            )
-        });
+        let picker =
+            cx.new(|cx| Picker::list_with_preview_and_query_editor(delegate, preview, erased_query_editor, window, cx));
         let picker_weak = picker.downgrade();
         let picker_focus_handle = picker.focus_handle(cx);
         picker.update(cx, |picker, cx| {
@@ -465,14 +393,14 @@ impl TextFinder {
         }
     }
 
-    fn project_search_view(&self, cx: &mut App) -> Entity<ProjectSearchView> {
+    fn project_search_view(&self, cx: &App) -> Entity<ProjectSearchView> {
         Entity::clone(&self.picker.read(cx).delegate.project_search_view)
     }
 }
 
 fn remove_project_search_tab(
     project_search_item_id: gpui::EntityId,
-    workspace: &mut Workspace,
+    workspace: &Workspace,
     window: &mut Window,
     cx: &mut Context<'_, Workspace>,
 ) {
@@ -484,11 +412,7 @@ fn remove_project_search_tab(
 }
 
 impl ModalView for TextFinder {
-    fn on_before_dismiss(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> DismissDecision {
+    fn on_before_dismiss(&mut self, _window: &mut Window, cx: &mut Context<Self>) -> DismissDecision {
         let picker = self.picker.read(cx);
         let query = picker.query(cx);
         let options = picker.delegate.search_options;

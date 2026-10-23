@@ -1,11 +1,24 @@
-use gpui::{App, Context, Entity, IntoElement, ParentElement, Render, Subscription, div};
-use project::image_store::{ImageFormat, ImageMetadata};
+use gpui::App;
+use gpui::Context;
+use gpui::Entity;
+use gpui::IntoElement;
+use gpui::ParentElement;
+use gpui::Render;
+use gpui::Subscription;
+use gpui::div;
+use project::image_store::ImageFormat;
+use project::image_store::ImageMetadata;
 use settings::Settings;
 use ui::prelude::*;
 use util::size::format_file_size;
-use workspace::{HideStatusItem, ItemHandle, StatusItemView, Workspace};
+use workspace::HideStatusItem;
+use workspace::ItemHandle;
+use workspace::StatusItemView;
+use workspace::Workspace;
 
-use crate::{ImageFileSizeUnit, ImageView, ImageViewerSettings};
+use crate::ImageFileSizeUnit;
+use crate::ImageView;
+use crate::ImageViewerSettings;
 
 pub struct ImageInfo {
     metadata: Option<ImageMetadata>,
@@ -14,12 +27,8 @@ pub struct ImageInfo {
 }
 
 impl ImageInfo {
-    pub fn new(_workspace: &Workspace) -> Self {
-        Self {
-            metadata: None,
-            _observe_active_image: None,
-            observe_image_item: None,
-        }
+    pub const fn new(_workspace: &Workspace) -> Self {
+        Self { metadata: None, _observe_active_image: None, observe_image_item: None }
     }
 
     fn update_metadata(&mut self, image_view: &Entity<ImageView>, cx: &mut Context<Self>) {
@@ -55,11 +64,7 @@ impl Render for ImageInfo {
         components.push(format_image_size(metadata.file_size, settings.unit));
 
         if let Some(colors) = metadata.colors {
-            components.push(format!(
-                "{} channels, {} bits per pixel",
-                colors.channels,
-                colors.bits_per_pixel()
-            ));
+            components.push(format!("{} channels, {} bits per pixel", colors.channels, colors.bits_per_pixel()));
         }
 
         components.push(

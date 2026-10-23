@@ -1,12 +1,23 @@
-use crate::component_prelude::*;
-use gpui::{AnyElement, AnyView, DefiniteLength};
+use gpui::AnyElement;
+use gpui::AnyView;
+use gpui::DefiniteLength;
 use ui_macros::RegisterComponent;
 
+use crate::ButtonCommon;
+use crate::ButtonLike;
+use crate::ButtonSize;
+use crate::ButtonStyle;
+use crate::Color;
+use crate::DynamicSpacing;
+use crate::ElevationIndex;
+use crate::Icon;
+use crate::KeyBinding;
+use crate::KeybindingPosition;
+use crate::Label;
+use crate::TintColor;
+use crate::component_prelude::*;
+use crate::prelude::*;
 use crate::traits::animation_ext::CommonAnimationExt;
-use crate::{ButtonCommon, ButtonLike, ButtonSize, ButtonStyle, Icon, Label};
-use crate::{
-    Color, DynamicSpacing, ElevationIndex, KeyBinding, KeybindingPosition, TintColor, prelude::*,
-};
 
 /// An element that creates a button with a label and optional icons.
 ///
@@ -167,13 +178,13 @@ impl Button {
     ///
     /// This method allows you to specify where the keybinding should be displayed
     /// in relation to the button's label.
-    pub fn key_binding_position(mut self, position: KeybindingPosition) -> Self {
+    pub const fn key_binding_position(mut self, position: KeybindingPosition) -> Self {
         self.key_binding_position = position;
         self
     }
 
     /// Sets the alpha property of the color of label.
-    pub fn alpha(mut self, alpha: f32) -> Self {
+    pub const fn alpha(mut self, alpha: f32) -> Self {
         self.alpha = Some(alpha);
         self
     }
@@ -182,7 +193,7 @@ impl Button {
     ///
     /// Buttons with static labels should _never_ be truncated, ensure
     /// this is only used when the label is dynamic and may overflow.
-    pub fn truncate(mut self, truncate: bool) -> Self {
+    pub const fn truncate(mut self, truncate: bool) -> Self {
         self.truncate = truncate;
         self
     }
@@ -191,7 +202,7 @@ impl Button {
     ///
     /// When `loading` is `true`, any `start_icon` is ignored. and a rotating
     /// loading spinner is shown instead.
-    pub fn loading(mut self, loading: bool) -> Self {
+    pub const fn loading(mut self, loading: bool) -> Self {
         self.loading = loading;
         self
     }
@@ -268,10 +279,7 @@ impl Disableable for Button {
 
 impl Clickable for Button {
     #[inline(always)]
-    fn on_click(
-        mut self,
-        handler: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
+    fn on_click(mut self, handler: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static) -> Self {
         self.base = self.base.on_click(handler);
         self
     }
@@ -375,10 +383,7 @@ impl RenderOnce for Button {
         let is_disabled = self.base.disabled;
         let is_selected = self.base.selected;
 
-        let label = self
-            .selected_label
-            .filter(|_| is_selected)
-            .unwrap_or(self.label);
+        let label = self.selected_label.filter(|_| is_selected).unwrap_or(self.label);
 
         let label_color = if is_disabled {
             Color::Disabled
@@ -405,21 +410,14 @@ impl RenderOnce for Button {
                     },
                     |this| {
                         this.when_some(self.start_icon, |this, icon| {
-                            this.child(if is_disabled {
-                                icon.color(Color::Disabled)
-                            } else {
-                                icon
-                            })
+                            this.child(if is_disabled { icon.color(Color::Disabled) } else { icon })
                         })
                     },
                 )
                 .child(
                     h_flex()
                         .when(self.truncate, |this| this.min_w_0().overflow_hidden())
-                        .when(
-                            self.key_binding_position == KeybindingPosition::Start,
-                            |this| this.flex_row_reverse(),
-                        )
+                        .when(self.key_binding_position == KeybindingPosition::Start, |this| this.flex_row_reverse())
                         .gap(DynamicSpacing::Base06.rems(cx))
                         .justify_between()
                         .child(
@@ -432,11 +430,7 @@ impl RenderOnce for Button {
                         .children(self.key_binding),
                 )
                 .when_some(self.end_icon, |this, icon| {
-                    this.child(if is_disabled {
-                        icon.color(Color::Disabled)
-                    } else {
-                        icon
-                    })
+                    this.child(if is_disabled { icon.color(Color::Disabled) } else { icon })
                 }),
         )
     }
@@ -462,21 +456,14 @@ impl Component for Button {
                 example_group_with_title(
                     "Button Styles",
                     vec![
-                        single_example(
-                            "Default",
-                            Button::new("default", "Default").into_any_element(),
-                        ),
+                        single_example("Default", Button::new("default", "Default").into_any_element()),
                         single_example(
                             "Filled",
-                            Button::new("filled", "Filled")
-                                .style(ButtonStyle::Filled)
-                                .into_any_element(),
+                            Button::new("filled", "Filled").style(ButtonStyle::Filled).into_any_element(),
                         ),
                         single_example(
                             "Subtle",
-                            Button::new("outline", "Subtle")
-                                .style(ButtonStyle::Subtle)
-                                .into_any_element(),
+                            Button::new("outline", "Subtle").style(ButtonStyle::Subtle).into_any_element(),
                         ),
                         single_example(
                             "Tinted",
@@ -524,21 +511,14 @@ impl Component for Button {
                 example_group_with_title(
                     "Special States",
                     vec![
-                        single_example(
-                            "Default",
-                            Button::new("default_state", "Default").into_any_element(),
-                        ),
+                        single_example("Default", Button::new("default_state", "Default").into_any_element()),
                         single_example(
                             "Disabled",
-                            Button::new("disabled", "Disabled")
-                                .disabled(true)
-                                .into_any_element(),
+                            Button::new("disabled", "Disabled").disabled(true).into_any_element(),
                         ),
                         single_example(
                             "Selected",
-                            Button::new("selected", "Selected")
-                                .toggle_state(true)
-                                .into_any_element(),
+                            Button::new("selected", "Selected").toggle_state(true).into_any_element(),
                         ),
                     ],
                 ),
@@ -553,9 +533,7 @@ impl Component for Button {
                         ),
                         single_example(
                             "End Icon",
-                            Button::new("icon_end", "End Icon")
-                                .end_icon(Icon::new(IconName::Check))
-                                .into_any_element(),
+                            Button::new("icon_end", "End Icon").end_icon(Icon::new(IconName::Check)).into_any_element(),
                         ),
                         single_example(
                             "Both Icons",

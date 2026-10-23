@@ -1,25 +1,39 @@
-use crate::{App, AppContext, GpuiBorrow, VisualContext, Window, seal::Sealed};
-use anyhow::{Context as _, Result};
+use std::any::Any;
+use std::any::TypeId;
+use std::any::type_name;
+use std::cell::RefCell;
+use std::cmp::Ordering;
+use std::fmt::Display;
+use std::fmt::{self};
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::marker::PhantomData;
+use std::num::NonZeroU64;
+use std::sync::Arc;
+use std::sync::Weak;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering::SeqCst;
+use std::thread::panicking;
+
+use anyhow::Context as _;
+use anyhow::Result;
 use collections::FxHashSet;
-use derive_more::{Deref, DerefMut};
-use parking_lot::{RwLock, RwLockUpgradableReadGuard};
-use slotmap::{KeyData, SecondaryMap, SlotMap};
-use std::{
-    any::{Any, TypeId, type_name},
-    cell::RefCell,
-    cmp::Ordering,
-    fmt::{self, Display},
-    hash::{Hash, Hasher},
-    marker::PhantomData,
-    num::NonZeroU64,
-    sync::{
-        Arc, Weak,
-        atomic::{AtomicU64, AtomicUsize, Ordering::SeqCst},
-    },
-    thread::panicking,
-};
+use derive_more::Deref;
+use derive_more::DerefMut;
+use parking_lot::RwLock;
+use parking_lot::RwLockUpgradableReadGuard;
+use slotmap::KeyData;
+use slotmap::SecondaryMap;
+use slotmap::SlotMap;
 
 use super::Context;
+use crate::App;
+use crate::AppContext;
+use crate::GpuiBorrow;
+use crate::VisualContext;
+use crate::Window;
+use crate::seal::Sealed;
 use crate::util::atomic_incr_if_not_zero;
 
 slotmap::new_key_type! {
@@ -101,11 +115,7 @@ impl EntityMap {
     /// Move an entity to the stack.
     #[track_caller]
     pub fn lease<T>(&mut self, pointer: &Entity<T>) -> Lease<T> {
-        Lease {
-            inner: self.lease_erased(pointer, type_name::<T>()),
-            id: pointer.entity_id,
-            entity_type: PhantomData,
-        }
+        Lease { inner: self.lease_erased(pointer, type_name::<T>()), id: pointer.entity_id, entity_type: PhantomData }
     }
 
     /// Returns an entity after moving it to the stack.
@@ -124,10 +134,8 @@ impl EntityMap {
     #[track_caller]
     pub(super) fn lease_erased(&mut self, pointer: &AnyEntity, entity_type: &str) -> LeaseInner {
         self.assert_valid_context(pointer);
-        let entity = Some(
-            self.lease_inner(pointer.entity_id)
-                .unwrap_or_else(|| double_lease_panic("update", entity_type)),
-        );
+        let entity =
+            Some(self.lease_inner(pointer.entity_id).unwrap_or_else(|| double_lease_panic("update", entity_type)));
         LeaseInner { entity }
     }
 
@@ -143,9 +151,7 @@ impl EntityMap {
     }
 
     pub fn extend_accessed(&mut self, entities: &FxHashSet<EntityId>) {
-        self.accessed_entities
-            .get_mut()
-            .extend(entities.iter().copied());
+        self.accessed_entities.get_mut().extend(entities.iter().copied());
     }
 
     pub fn clear_accessed(&mut self) {
@@ -160,11 +166,7 @@ impl EntityMap {
         dropped_entity_ids
             .filter_map(|entity_id| {
                 let count = ref_counts.counts.remove(entity_id).unwrap();
-                debug_assert_eq!(
-                    count.load(SeqCst),
-                    0,
-                    "dropped an entity that was referenced"
-                );
+                debug_assert_eq!(count.load(SeqCst), 0, "dropped an entity that was referenced");
                 accessed_entities.remove(&entity_id);
                 // If the EntityId was allocated with `Context::reserve`,
                 // the entity may not have been inserted.
@@ -236,23 +238,19 @@ pub struct AnyEntity {
 }
 
 impl AnyEntity {
-    fn new(id: EntityId, entity_type: TypeId, entity_map: Weak<RwLock<EntityRefCounts>>) -> Self {
-        Self {
-            entity_id: id,
-            entity_type,
-            entity_map,
-        }
+    const fn new(id: EntityId, entity_type: TypeId, entity_map: Weak<RwLock<EntityRefCounts>>) -> Self {
+        Self { entity_id: id, entity_type, entity_map }
     }
 
     /// Returns the id associated with this entity.
     #[inline]
-    pub fn entity_id(&self) -> EntityId {
+    pub const fn entity_id(&self) -> EntityId {
         self.entity_id
     }
 
     /// Returns the [TypeId] associated with this entity.
     #[inline]
-    pub fn entity_type(&self) -> TypeId {
+    pub const fn entity_type(&self) -> TypeId {
         self.entity_type
     }
 
@@ -269,10 +267,7 @@ impl AnyEntity {
     /// If this entity handle is not of the specified type, returns itself as an error variant.
     pub fn downcast<T: 'static>(self) -> Result<Entity<T>, AnyEntity> {
         if TypeId::of::<T>() == self.entity_type {
-            Ok(Entity {
-                any_entity: self,
-                entity_type: PhantomData,
-            })
+            Ok(Entity { any_entity: self, entity_type: PhantomData })
         } else {
             Err(self)
         }
@@ -283,19 +278,12 @@ impl Clone for AnyEntity {
     fn clone(&self) -> Self {
         if let Some(entity_map) = self.entity_map.upgrade() {
             let entity_map = entity_map.read();
-            let count = entity_map
-                .counts
-                .get(self.entity_id)
-                .expect("detected over-release of a entity");
+            let count = entity_map.counts.get(self.entity_id).expect("detected over-release of a entity");
             let prev_count = count.fetch_add(1, SeqCst);
             assert_ne!(prev_count, 0, "Detected over-release of a entity.");
         }
 
-        Self {
-            entity_id: self.entity_id,
-            entity_type: self.entity_type,
-            entity_map: self.entity_map.clone(),
-        }
+        Self { entity_id: self.entity_id, entity_type: self.entity_type, entity_map: self.entity_map.clone() }
     }
 }
 
@@ -303,10 +291,7 @@ impl Drop for AnyEntity {
     fn drop(&mut self) {
         if let Some(entity_map) = self.entity_map.upgrade() {
             let entity_map = entity_map.upgradable_read();
-            let count = entity_map
-                .counts
-                .get(self.entity_id)
-                .expect("detected over-release of a handle.");
+            let count = entity_map.counts.get(self.entity_id).expect("detected over-release of a handle.");
             let prev_count = count.fetch_sub(1, SeqCst);
             assert_ne!(prev_count, 0, "Detected over-release of a entity.");
             if prev_count == 1 {
@@ -357,9 +342,7 @@ impl PartialOrd for AnyEntity {
 
 impl std::fmt::Debug for AnyEntity {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("AnyEntity")
-            .field("entity_id", &self.entity_id.as_u64())
-            .finish()
+        f.debug_struct("AnyEntity").field("entity_id", &self.entity_id.as_u64()).finish()
     }
 }
 
@@ -381,25 +364,19 @@ impl<T: 'static> Entity<T> {
     where
         T: 'static,
     {
-        Self {
-            any_entity: AnyEntity::new(id, TypeId::of::<T>(), entity_map),
-            entity_type: PhantomData,
-        }
+        Self { any_entity: AnyEntity::new(id, TypeId::of::<T>(), entity_map), entity_type: PhantomData }
     }
 
     /// Get the entity ID associated with this entity
     #[inline]
-    pub fn entity_id(&self) -> EntityId {
+    pub const fn entity_id(&self) -> EntityId {
         self.any_entity.entity_id
     }
 
     /// Downgrade this entity pointer to a non-retaining weak pointer
     #[inline]
     pub fn downgrade(&self) -> WeakEntity<T> {
-        WeakEntity {
-            any_entity: self.any_entity.downgrade(),
-            entity_type: self.entity_type,
-        }
+        WeakEntity { any_entity: self.any_entity.downgrade(), entity_type: self.entity_type }
     }
 
     /// Convert this into a dynamically typed entity.
@@ -422,11 +399,7 @@ impl<T: 'static> Entity<T> {
 
     /// Updates the entity referenced by this handle with the given function.
     #[inline]
-    pub fn update<R, C: AppContext>(
-        &self,
-        cx: &mut C,
-        update: impl FnOnce(&mut T, &mut Context<T>) -> R,
-    ) -> R {
+    pub fn update<R, C: AppContext>(&self, cx: &mut C, update: impl FnOnce(&mut T, &mut Context<T>) -> R) -> R {
         cx.update_entity(self, update)
     }
 
@@ -460,10 +433,7 @@ impl<T: 'static> Entity<T> {
 impl<T> Clone for Entity<T> {
     #[inline]
     fn clone(&self) -> Self {
-        Self {
-            any_entity: self.any_entity.clone(),
-            entity_type: self.entity_type,
-        }
+        Self { any_entity: self.any_entity.clone(), entity_type: self.entity_type }
     }
 }
 
@@ -524,7 +494,7 @@ pub struct AnyWeakEntity {
 impl AnyWeakEntity {
     /// Get the entity ID associated with this weak reference.
     #[inline]
-    pub fn entity_id(&self) -> EntityId {
+    pub const fn entity_id(&self) -> EntityId {
         self.entity_id
     }
 
@@ -648,31 +618,21 @@ impl<T> std::fmt::Debug for WeakEntity<T> {
 
 impl<T> Clone for WeakEntity<T> {
     fn clone(&self) -> Self {
-        Self {
-            any_entity: self.any_entity.clone(),
-            entity_type: self.entity_type,
-        }
+        Self { any_entity: self.any_entity.clone(), entity_type: self.entity_type }
     }
 }
 
 impl<T: 'static> WeakEntity<T> {
     /// Upgrade this weak entity reference into a strong entity reference
     pub fn upgrade(&self) -> Option<Entity<T>> {
-        Some(Entity {
-            any_entity: self.any_entity.upgrade()?,
-            entity_type: self.entity_type,
-        })
+        Some(Entity { any_entity: self.any_entity.upgrade()?, entity_type: self.entity_type })
     }
 
     /// Updates the entity referenced by this handle with the given function if
     /// the referenced entity still exists. Returns an error if the entity has
     /// been released.
     #[inline(always)]
-    pub fn update<C, R>(
-        &self,
-        cx: &mut C,
-        update: impl FnOnce(&mut T, &mut Context<T>) -> R,
-    ) -> Result<R>
+    pub fn update<C, R>(&self, cx: &mut C, update: impl FnOnce(&mut T, &mut Context<T>) -> R) -> Result<R>
     where
         C: AppContext,
     {
@@ -693,10 +653,8 @@ impl<T: 'static> WeakEntity<T> {
         C: AppContext,
     {
         let entity = self.upgrade().context("entity released")?;
-        cx.with_window(entity.entity_id(), |window, app| {
-            entity.update(app, |entity, cx| update(entity, window, cx))
-        })
-        .context("entity has no current window")
+        cx.with_window(entity.entity_id(), |window, app| entity.update(app, |entity, cx| update(entity, window, cx)))
+            .context("entity has no current window")
     }
 
     /// Reads the entity referenced by this handle with the given function if
@@ -714,10 +672,7 @@ impl<T: 'static> WeakEntity<T> {
     /// Create a new weak entity that can never be upgraded.
     #[inline]
     pub fn new_invalid() -> Self {
-        Self {
-            any_entity: AnyWeakEntity::new_invalid(),
-            entity_type: PhantomData,
-        }
+        Self { any_entity: AnyWeakEntity::new_invalid(), entity_type: PhantomData }
     }
 }
 

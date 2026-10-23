@@ -1,4 +1,9 @@
-use gpui::{Hsla, Pixels, SharedString, linear_color_stop, linear_gradient, px};
+use gpui::Hsla;
+use gpui::Pixels;
+use gpui::SharedString;
+use gpui::linear_color_stop;
+use gpui::linear_gradient;
+use gpui::px;
 
 use crate::prelude::*;
 
@@ -16,7 +21,7 @@ pub struct GradientFade {
 }
 
 impl GradientFade {
-    pub fn new(base_bg: Hsla, hover_bg: Hsla, active_bg: Hsla) -> Self {
+    pub const fn new(base_bg: Hsla, hover_bg: Hsla, active_bg: Hsla) -> Self {
         Self {
             base_bg,
             hover_bg,
@@ -29,22 +34,22 @@ impl GradientFade {
         }
     }
 
-    pub fn width(mut self, width: Pixels) -> Self {
+    pub const fn width(mut self, width: Pixels) -> Self {
         self.width = width;
         self
     }
 
-    pub fn width_hovered(mut self, width: Pixels) -> Self {
+    pub const fn width_hovered(mut self, width: Pixels) -> Self {
         self.width_hovered = Some(width);
         self
     }
 
-    pub fn right(mut self, right: Pixels) -> Self {
+    pub const fn right(mut self, right: Pixels) -> Self {
         self.right = right;
         self
     }
 
-    pub fn gradient_stop(mut self, stop: f32) -> Self {
+    pub const fn gradient_stop(mut self, stop: f32) -> Self {
         self.gradient_stop = stop;
         self
     }
@@ -72,11 +77,7 @@ impl RenderOnce for GradientFade {
             .right(self.right)
             .w(self.width)
             .h_full()
-            .bg(linear_gradient(
-                90.,
-                linear_color_stop(base_bg, stop),
-                linear_color_stop(base_bg.opacity(0.0), 0.),
-            ))
+            .bg(linear_gradient(90., linear_color_stop(base_bg, stop), linear_color_stop(base_bg.opacity(0.0), 0.)))
             .when_some(self.group_name.clone(), |element, group_name| {
                 element.group_hover(group_name, move |s| {
                     s.bg(linear_gradient(

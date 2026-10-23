@@ -1,6 +1,8 @@
 use std::cmp::Ordering;
 
-use gpui::{AnyElement, IntoElement, Stateful};
+use gpui::AnyElement;
+use gpui::IntoElement;
+use gpui::Stateful;
 use smallvec::SmallVec;
 
 use crate::prelude::*;
@@ -65,17 +67,17 @@ impl Tab {
         }
     }
 
-    pub fn position(mut self, position: TabPosition) -> Self {
+    pub const fn position(mut self, position: TabPosition) -> Self {
         self.position = position;
         self
     }
 
-    pub fn style(mut self, style: TabStyle) -> Self {
+    pub const fn style(mut self, style: TabStyle) -> Self {
         self.style = style;
         self
     }
 
-    pub fn close_side(mut self, close_side: TabCloseSide) -> Self {
+    pub const fn close_side(mut self, close_side: TabCloseSide) -> Self {
         self.close_side = close_side;
         self
     }
@@ -143,15 +145,9 @@ impl RenderOnce for Tab {
         };
 
         let (start_slot, end_slot) = {
-            let start_slot = h_flex()
-                .size(START_TAB_SLOT_SIZE)
-                .justify_center()
-                .children(self.start_slot);
+            let start_slot = h_flex().size(START_TAB_SLOT_SIZE).justify_center().children(self.start_slot);
 
-            let end_slot = h_flex()
-                .size(END_TAB_SLOT_SIZE)
-                .justify_center()
-                .children(self.end_slot);
+            let end_slot = h_flex().size(END_TAB_SLOT_SIZE).justify_center().children(self.end_slot);
 
             match self.close_side {
                 TabCloseSide::End => (start_slot, end_slot),
@@ -161,10 +157,7 @@ impl RenderOnce for Tab {
 
         if self.style == TabStyle::Pill {
             let (text_color, bg) = if self.selected {
-                (
-                    cx.theme().colors().text,
-                    Some(cx.theme().colors().ghost_element_selected),
-                )
+                (cx.theme().colors().text, Some(cx.theme().colors().ghost_element_selected))
             } else {
                 (cx.theme().colors().text_muted, None)
             };
@@ -194,26 +187,20 @@ impl RenderOnce for Tab {
         }
 
         // Tabs fill the tab bar height with rounded tops; the active one joins the card below.
-        self.div
-            .h(Tab::container_height(cx))
-            .flex()
-            .items_center()
-            .pr(px(2.))
-            .cursor_pointer()
-            .child(
-                h_flex()
-                    .group("")
-                    .relative()
-                    .h_full()
-                    .rounded_t(px(8.))
-                    .bg(tab_bg)
-                    .px(DynamicSpacing::Base12.px(cx))
-                    .gap(DynamicSpacing::Base04.rems(cx))
-                    .text_color(text_color)
-                    .child(start_slot)
-                    .children(self.children)
-                    .child(end_slot),
-            )
+        self.div.h(Tab::container_height(cx)).flex().items_center().pr(px(2.)).cursor_pointer().child(
+            h_flex()
+                .group("")
+                .relative()
+                .h_full()
+                .rounded_t(px(8.))
+                .bg(tab_bg)
+                .px(DynamicSpacing::Base12.px(cx))
+                .gap(DynamicSpacing::Base04.rems(cx))
+                .text_color(text_color)
+                .child(start_slot)
+                .children(self.children)
+                .child(end_slot),
+        )
     }
 }
 
@@ -233,23 +220,14 @@ impl Component for Tab {
             .children(vec![example_group_with_title(
                 "Variations",
                 vec![
-                    single_example(
-                        "Default",
-                        Tab::new("default").child("Default Tab").into_any_element(),
-                    ),
+                    single_example("Default", Tab::new("default").child("Default Tab").into_any_element()),
                     single_example(
                         "Selected",
-                        Tab::new("selected")
-                            .toggle_state(true)
-                            .child("Selected Tab")
-                            .into_any_element(),
+                        Tab::new("selected").toggle_state(true).child("Selected Tab").into_any_element(),
                     ),
                     single_example(
                         "First",
-                        Tab::new("first")
-                            .position(TabPosition::First)
-                            .child("First Tab")
-                            .into_any_element(),
+                        Tab::new("first").position(TabPosition::First).child("First Tab").into_any_element(),
                     ),
                     single_example(
                         "Middle",
@@ -260,10 +238,7 @@ impl Component for Tab {
                     ),
                     single_example(
                         "Last",
-                        Tab::new("last")
-                            .position(TabPosition::Last)
-                            .child("Last Tab")
-                            .into_any_element(),
+                        Tab::new("last").position(TabPosition::Last).child("Last Tab").into_any_element(),
                     ),
                 ],
             )])

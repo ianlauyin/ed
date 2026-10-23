@@ -1,7 +1,6 @@
 use std::future::Future;
 
 use gpui_util::defer;
-
 pub use reqwest;
 
 /// The HTTP client GPUI uses to fetch remote resources, such as images.
@@ -16,12 +15,12 @@ pub struct HttpClient {
 
 impl HttpClient {
     /// Creates a client that runs its requests on the given Tokio runtime.
-    pub fn new(client: reqwest::Client, runtime: tokio::runtime::Handle) -> Self {
+    pub const fn new(client: reqwest::Client, runtime: tokio::runtime::Handle) -> Self {
         Self { client, runtime }
     }
 
     /// The underlying `reqwest` client.
-    pub fn client(&self) -> &reqwest::Client {
+    pub const fn client(&self) -> &reqwest::Client {
         &self.client
     }
 

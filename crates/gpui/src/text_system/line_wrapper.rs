@@ -1,6 +1,15 @@
-use crate::{FontId, Pixels, SharedString, TextRun, TextSystem, px};
+use std::borrow::Cow;
+use std::iter;
+use std::sync::Arc;
+
 use collections::HashMap;
-use std::{borrow::Cow, iter, sync::Arc};
+
+use crate::FontId;
+use crate::Pixels;
+use crate::SharedString;
+use crate::TextRun;
+use crate::TextSystem;
+use crate::px;
 
 /// Determines whether to truncate text from the start or end.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -63,10 +72,7 @@ impl LineWrapper {
         let mut last_wrap_ix = 0;
         let mut prev_c = '\0';
         let mut index = 0;
-        let mut candidates = fragments
-            .iter()
-            .flat_map(move |fragment| fragment.wrap_boundary_candidates())
-            .peekable();
+        let mut candidates = fragments.iter().flat_map(move |fragment| fragment.wrap_boundary_candidates()).peekable();
         iter::from_fn(move || {
             for candidate in candidates.by_ref() {
                 let ix = index;
@@ -99,10 +105,7 @@ impl LineWrapper {
 
                         self.width_for_char(c)
                     }
-                    WrapBoundaryCandidate::Element {
-                        width: element_width,
-                        ..
-                    } => {
+                    WrapBoundaryCandidate::Element { width: element_width, .. } => {
                         if prev_c == ' ' && first_non_whitespace_ix.is_some() {
                             last_candidate_ix = ix;
                             last_candidate_width = width;
@@ -118,27 +121,20 @@ impl LineWrapper {
 
                 width += item_width;
                 if width > wrap_width && ix > last_wrap_ix {
-                    let wrap_at_candidate =
-                        last_candidate_ix > 0 && width - last_candidate_width <= wrap_width;
+                    let wrap_at_candidate = last_candidate_ix > 0 && width - last_candidate_width <= wrap_width;
 
-                    let carried_width = if wrap_at_candidate {
-                        width - last_candidate_width
-                    } else {
-                        item_width
-                    };
+                    let carried_width = if wrap_at_candidate { width - last_candidate_width } else { item_width };
 
                     // Compute base indentation from the first non-whitespace character on the line
                     // and retain it for all subsequent wrap rows. If the line begins with leading
                     // whitespace that wraps before any non-whitespace character (or is all whitespace),
                     // base_indent remains None so continuation rows within the leading whitespace
                     // do not receive ExtraColumns indentation and degrade into cascading short rows.
-                    if base_indent.is_none() {
-                        if let Some(first_non_whitespace_ix) = first_non_whitespace_ix {
-                            base_indent =
-                                Some(Self::MAX_INDENT.min(
-                                    first_non_whitespace_ix.saturating_sub(last_wrap_ix) as u32,
-                                ));
-                        }
+                    if base_indent.is_none()
+                        && let Some(first_non_whitespace_ix) = first_non_whitespace_ix
+                    {
+                        base_indent =
+                            Some(Self::MAX_INDENT.min(first_non_whitespace_ix.saturating_sub(last_wrap_ix) as u32));
                     }
 
                     let next_indent = match indent_adjustment {
@@ -147,13 +143,11 @@ impl LineWrapper {
                         IndentAdjustment::ExtraColumns(extra) => {
                             if let Some(base_indent) = base_indent {
                                 let candidate = base_indent.saturating_add(extra);
-                                let candidate_indent_width =
-                                    self.width_for_char(' ') * candidate as f32;
+                                let candidate_indent_width = self.width_for_char(' ') * candidate as f32;
                                 // Reserve headroom for any carried suffix from an earlier word boundary
                                 // (and at least 2 columns for a full-width character) so the continuation
                                 // line does not immediately exceed wrap width.
-                                let min_headroom =
-                                    carried_width.max(self.width_for_char(' ') * 2.0);
+                                let min_headroom = carried_width.max(self.width_for_char(' ') * 2.0);
                                 if candidate_indent_width + min_headroom > wrap_width {
                                     0
                                 } else {
@@ -197,10 +191,7 @@ impl LineWrapper {
         truncate_from: TruncateFrom,
     ) -> Option<usize> {
         let mut width = px(0.);
-        let suffix_width = truncation_affix
-            .chars()
-            .map(|c| self.width_for_char(c))
-            .fold(px(0.0), |a, x| a + x);
+        let suffix_width = truncation_affix.chars().map(|c| self.width_for_char(c)).fold(px(0.0), |a, x| a + x);
         let mut truncate_ix = 0;
 
         match truncate_from {
@@ -244,15 +235,9 @@ impl LineWrapper {
         truncate_width: Pixels,
         truncation_affix: &str,
     ) -> Option<(usize, usize)> {
-        let suffix_width = truncation_affix
-            .chars()
-            .map(|c| self.width_for_char(c))
-            .fold(px(0.0), |a, x| a + x);
+        let suffix_width = truncation_affix.chars().map(|c| self.width_for_char(c)).fold(px(0.0), |a, x| a + x);
 
-        let total_width: Pixels = line
-            .chars()
-            .map(|c| self.width_for_char(c))
-            .fold(px(0.0), |a, x| a + x);
+        let total_width: Pixels = line.chars().map(|c| self.width_for_char(c)).fold(px(0.0), |a, x| a + x);
 
         if total_width <= truncate_width {
             return None;
@@ -314,21 +299,14 @@ impl LineWrapper {
                     &line[back_start_ix..]
                 ));
                 let mut runs = runs.to_vec();
-                update_runs_after_middle_truncation(
-                    truncation_affix,
-                    &mut runs,
-                    front_end_ix,
-                    back_start_ix,
-                );
+                update_runs_after_middle_truncation(truncation_affix, &mut runs, front_end_ix, back_start_ix);
                 return (result, Cow::Owned(runs));
             } else {
                 return (line, Cow::Borrowed(runs));
             }
         }
 
-        if let Some(truncate_ix) =
-            self.should_truncate_line(&line, truncate_width, truncation_affix, truncate_from)
-        {
+        if let Some(truncate_ix) = self.should_truncate_line(&line, truncate_width, truncation_affix, truncate_from) {
             let result = match truncate_from {
                 TruncateFrom::Start => SharedString::from(format!(
                     "{truncation_affix}{}",
@@ -336,8 +314,7 @@ impl LineWrapper {
                 )),
                 TruncateFrom::End => SharedString::from(format!(
                     "{}{truncation_affix}",
-                    line[..truncate_ix]
-                        .trim_end_matches(|c: char| c.is_whitespace() || c.is_ascii_punctuation())
+                    line[..truncate_ix].trim_end_matches(|c: char| c.is_whitespace() || c.is_ascii_punctuation())
                 )),
                 TruncateFrom::Middle => unreachable!("Middle truncation is handled above"),
             };
@@ -368,22 +345,13 @@ impl LineWrapper {
         truncate_from: TruncateFrom,
     ) -> (SharedString, Cow<'a, [TextRun]>) {
         if max_lines <= 1 || truncate_from == TruncateFrom::Start {
-            return self.truncate_line(
-                text,
-                wrap_width * max_lines,
-                truncation_affix,
-                runs,
-                truncate_from,
-            );
+            return self.truncate_line(text, wrap_width * max_lines, truncation_affix, runs, truncate_from);
         }
         if truncate_from == TruncateFrom::Middle {
             return self.truncate_line(text, wrap_width, truncation_affix, runs, truncate_from);
         }
 
-        let affix_width: Pixels = truncation_affix
-            .chars()
-            .map(|c| self.width_for_char(c))
-            .sum();
+        let affix_width: Pixels = truncation_affix.chars().map(|c| self.width_for_char(c)).sum();
 
         let mut width = px(0.);
         let mut line = 0usize;
@@ -400,16 +368,11 @@ impl LineWrapper {
                 if line >= max_lines - 1 && !text[ix + 1..].trim().is_empty() {
                     // Newline on the last allowed line with real content
                     // below. Truncate here.
-                    let truncated = text[..truncate_ix]
-                        .trim_end_matches(|c: char| c.is_whitespace() || c.is_ascii_punctuation());
+                    let truncated =
+                        text[..truncate_ix].trim_end_matches(|c: char| c.is_whitespace() || c.is_ascii_punctuation());
                     let result = SharedString::from(format!("{truncated}{truncation_affix}"));
                     let mut runs = runs.to_vec();
-                    update_runs_after_truncation(
-                        &result,
-                        truncation_affix,
-                        &mut runs,
-                        TruncateFrom::End,
-                    );
+                    update_runs_after_truncation(&result, truncation_affix, &mut runs, TruncateFrom::End);
                     return (result, Cow::Owned(runs));
                 }
 
@@ -475,16 +438,11 @@ impl LineWrapper {
                 }
 
                 if width > wrap_width {
-                    let truncated = text[..truncate_ix]
-                        .trim_end_matches(|c: char| c.is_whitespace() || c.is_ascii_punctuation());
+                    let truncated =
+                        text[..truncate_ix].trim_end_matches(|c: char| c.is_whitespace() || c.is_ascii_punctuation());
                     let result = SharedString::from(format!("{truncated}{truncation_affix}"));
                     let mut runs = runs.to_vec();
-                    update_runs_after_truncation(
-                        &result,
-                        truncation_affix,
-                        &mut runs,
-                        TruncateFrom::End,
-                    );
+                    update_runs_after_truncation(&result, truncation_affix, &mut runs, TruncateFrom::End);
                     return (result, Cow::Owned(runs));
                 }
             }
@@ -498,7 +456,7 @@ impl LineWrapper {
 
     /// Any character in this list should be treated as a word character,
     /// meaning it can be part of a word that should not be wrapped.
-    pub(crate) fn is_word_char(c: char) -> bool {
+    pub(crate) const fn is_word_char(c: char) -> bool {
         // ASCII alphanumeric characters, for English, numbers: `Hello123`, etc.
         c.is_ascii_alphanumeric() ||
         // Latin script in Unicode for French, German, Spanish, etc.
@@ -546,30 +504,21 @@ impl LineWrapper {
             if let Some(cached_width) = self.cached_ascii_char_widths[c as usize] {
                 cached_width
             } else {
-                let width = self
-                    .text_system
-                    .layout_width(self.font_id, self.font_size, c);
+                let width = self.text_system.layout_width(self.font_id, self.font_size, c);
                 self.cached_ascii_char_widths[c as usize] = Some(width);
                 width
             }
         } else if let Some(cached_width) = self.cached_other_char_widths.get(&c) {
             *cached_width
         } else {
-            let width = self
-                .text_system
-                .layout_width(self.font_id, self.font_size, c);
+            let width = self.text_system.layout_width(self.font_id, self.font_size, c);
             self.cached_other_char_widths.insert(c, width);
             width
         }
     }
 }
 
-fn update_runs_after_truncation(
-    result: &str,
-    ellipsis: &str,
-    runs: &mut Vec<TextRun>,
-    truncate_from: TruncateFrom,
-) {
+fn update_runs_after_truncation(result: &str, ellipsis: &str, runs: &mut Vec<TextRun>, truncate_from: TruncateFrom) {
     let mut truncate_at = result.len() - ellipsis.len();
     match truncate_from {
         TruncateFrom::Start => {
@@ -679,12 +628,12 @@ pub enum LineFragment<'a> {
 
 impl<'a> LineFragment<'a> {
     /// Creates a new text fragment from the given text.
-    pub fn text(text: &'a str) -> Self {
+    pub const fn text(text: &'a str) -> Self {
         LineFragment::Text { text }
     }
 
     /// Creates a new non-text element with the given width and UTF-8 encoded length.
-    pub fn element(width: Pixels, len_utf8: usize) -> Self {
+    pub const fn element(width: Pixels, len_utf8: usize) -> Self {
         LineFragment::Element { width, len_utf8 }
     }
 
@@ -695,10 +644,7 @@ impl<'a> LineFragment<'a> {
         };
         text.chars().map(move |character| {
             if let LineFragment::Element { width, len_utf8 } = self {
-                WrapBoundaryCandidate::Element {
-                    width: *width,
-                    len_utf8: *len_utf8,
-                }
+                WrapBoundaryCandidate::Element { width: *width, len_utf8: *len_utf8 }
             } else {
                 WrapBoundaryCandidate::Char { character }
             }
@@ -712,7 +658,7 @@ enum WrapBoundaryCandidate {
 }
 
 impl WrapBoundaryCandidate {
-    pub fn len_utf8(&self) -> usize {
+    pub const fn len_utf8(&self) -> usize {
         match self {
             WrapBoundaryCandidate::Char { character } => character.len_utf8(),
             WrapBoundaryCandidate::Element { len_utf8: len, .. } => *len,
@@ -730,7 +676,7 @@ pub struct Boundary {
 }
 
 impl Boundary {
-    fn new(ix: usize, next_indent: u32) -> Self {
+    const fn new(ix: usize, next_indent: u32) -> Self {
         Self { ix, next_indent }
     }
 }

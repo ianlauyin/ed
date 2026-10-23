@@ -1,40 +1,69 @@
-use crate::{
-    conflict_view,
-    git_panel::{GitPanel, GitStatusEntry},
-    git_panel_settings::GitPanelSettings,
-};
+use std::collections::BTreeMap;
+use std::sync::Arc;
+
 use anyhow::Result;
 use buffer_diff::BufferDiff;
-use collections::{HashMap, HashSet};
-use editor::{
-    EditorEvent, EditorSettings, SelectionEffects, SplittableEditor, actions::GoToHunk,
-    multibuffer_context_lines, scroll::Autoscroll,
-};
-use futures::{FutureExt as _, StreamExt as _, stream};
+use collections::HashMap;
+use collections::HashSet;
+use editor::EditorEvent;
+use editor::EditorSettings;
+use editor::SelectionEffects;
+use editor::SplittableEditor;
+use editor::actions::GoToHunk;
+use editor::multibuffer_context_lines;
+use editor::scroll::Autoscroll;
+use futures::FutureExt as _;
+use futures::StreamExt as _;
+use futures::stream;
 use futures_lite::future::yield_now;
-use git::{repository::RepoPath, status::FileStatus};
-use gpui::{
-    App, AppContext as _, AsyncWindowContext, Entity, EventEmitter, FocusHandle, Focusable, Render,
-    SharedString, Subscription, Task, WeakEntity,
-};
-use language::{Anchor, Buffer, BufferId, Capability, OffsetRangeExt};
-use multi_buffer::{MultiBuffer, PathKey};
-use project::{
-    ConflictSet, Project, ProjectPath,
-    git_store::{
-        Repository,
-        diff_buffer_list::{self, BranchDiffEvent, DiffBase},
-    },
-};
-use settings::{GitPanelGroupBy, GitPanelSortBy, Settings, SettingsStore};
-use std::{collections::BTreeMap, sync::Arc};
+use git::repository::RepoPath;
+use git::status::FileStatus;
+use gpui::App;
+use gpui::AppContext as _;
+use gpui::AsyncWindowContext;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::Render;
+use gpui::SharedString;
+use gpui::Subscription;
+use gpui::Task;
+use gpui::WeakEntity;
+use language::Anchor;
+use language::Buffer;
+use language::BufferId;
+use language::Capability;
+use language::OffsetRangeExt;
+use multi_buffer::MultiBuffer;
+use multi_buffer::PathKey;
+use project::ConflictSet;
+use project::Project;
+use project::ProjectPath;
+use project::git_store::Repository;
+use project::git_store::diff_buffer_list::BranchDiffEvent;
+use project::git_store::diff_buffer_list::DiffBase;
+use project::git_store::diff_buffer_list::{self};
+use settings::GitPanelGroupBy;
+use settings::GitPanelSortBy;
+use settings::Settings;
+use settings::SettingsStore;
 use theme::ActiveTheme;
-use ui::{CommonAnimationExt as _, KeyBinding, prelude::*};
-use util::{ResultExt as _, rel_path::RelPath};
-use workspace::{
-    CloseActiveItem, ItemNavHistory, Workspace,
-    item::{Item, SaveOptions},
-};
+use ui::CommonAnimationExt as _;
+use ui::KeyBinding;
+use ui::prelude::*;
+use util::ResultExt as _;
+use util::rel_path::RelPath;
+use workspace::CloseActiveItem;
+use workspace::ItemNavHistory;
+use workspace::Workspace;
+use workspace::item::Item;
+use workspace::item::SaveOptions;
+
+use crate::conflict_view;
+use crate::git_panel::GitPanel;
+use crate::git_panel::GitStatusEntry;
+use crate::git_panel_settings::GitPanelSettings;
 
 /// Loading every changed file at once makes the first one land no sooner than the
 /// last, leaving a large diff on a spinner. Throughput flattens past this point.
@@ -92,10 +121,8 @@ impl DiffMultibuffer {
         });
         let editor_subscription = cx.subscribe_in(&editor, window, Self::handle_editor_event);
 
-        let branch_diff_subscription = cx.subscribe_in(
-            &branch_diff,
-            window,
-            move |this, _git_store, event, window, cx| match event {
+        let branch_diff_subscription =
+            cx.subscribe_in(&branch_diff, window, move |this, _git_store, event, window, cx| match event {
                 BranchDiffEvent::FileListChanged => {
                     this._task = window.spawn(cx, {
                         let this = cx.weak_entity();
@@ -109,14 +136,12 @@ impl DiffMultibuffer {
                         async |cx| Self::refresh(this, cx).await
                     })
                 }
-            },
-        );
+            });
 
         let mut was_sort_by = GitPanelSettings::get_global(cx).sort_by;
         let mut was_group_by = GitPanelSettings::get_global(cx).group_by;
         let mut was_tree_view = GitPanelSettings::get_global(cx).tree_view;
-        let mut was_collapse_untracked_diff =
-            GitPanelSettings::get_global(cx).collapse_untracked_diff;
+        let mut was_collapse_untracked_diff = GitPanelSettings::get_global(cx).collapse_untracked_diff;
         cx.observe_global_in::<SettingsStore>(window, move |this, window, cx| {
             let settings = GitPanelSettings::get_global(cx);
             let sort_by = settings.sort_by;
@@ -165,7 +190,7 @@ impl DiffMultibuffer {
         self.branch_diff.read(cx).diff_base()
     }
 
-    pub(crate) fn branch_diff(&self) -> &Entity<diff_buffer_list::DiffBufferList> {
+    pub(crate) const fn branch_diff(&self) -> &Entity<diff_buffer_list::DiffBufferList> {
         &self.branch_diff
     }
 
@@ -173,7 +198,7 @@ impl DiffMultibuffer {
         self.branch_diff.read(cx).repo().cloned()
     }
 
-    pub(crate) fn set_repo(&mut self, repo: Option<Entity<Repository>>, cx: &mut Context<Self>) {
+    pub(crate) fn set_repo(&self, repo: Option<Entity<Repository>>, cx: &mut Context<Self>) {
         self.branch_diff.update(cx, |branch_diff, cx| {
             branch_diff.set_repo(repo, cx);
         });
@@ -187,16 +212,11 @@ impl DiffMultibuffer {
         self.multibuffer.read(cx).has_conflict(cx)
     }
 
-    pub(crate) fn multibuffer(&self) -> &Entity<MultiBuffer> {
+    pub(crate) const fn multibuffer(&self) -> &Entity<MultiBuffer> {
         &self.multibuffer
     }
 
-    pub(crate) fn move_to_entry(
-        &mut self,
-        entry: GitStatusEntry,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn move_to_entry(&mut self, entry: GitStatusEntry, window: &mut Window, cx: &mut Context<Self>) {
         let Some(git_repo) = self.branch_diff.read(cx).repo() else {
             return;
         };
@@ -215,22 +235,16 @@ impl DiffMultibuffer {
         let Some(git_repo) = self.branch_diff.read(cx).repo() else {
             return;
         };
-        let Some(repo_path) = git_repo
-            .read(cx)
-            .project_path_to_repo_path(project_path, cx)
-        else {
+        let Some(repo_path) = git_repo.read(cx).project_path_to_repo_path(project_path, cx) else {
             return;
         };
-        let status = git_repo
-            .read(cx)
-            .status_for_path(&repo_path)
-            .map(|entry| entry.status)
-            .unwrap_or(FileStatus::Untracked);
-        let path_key = project_diff_path_key(&git_repo.read(cx), &repo_path, status, cx);
+        let status =
+            git_repo.read(cx).status_for_path(&repo_path).map(|entry| entry.status).unwrap_or(FileStatus::Untracked);
+        let path_key = project_diff_path_key(git_repo.read(cx), &repo_path, status, cx);
         self.move_to_path(path_key, window, cx)
     }
 
-    pub(crate) fn move_to_beginning(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn move_to_beginning(&self, window: &mut Window, cx: &mut Context<Self>) {
         self.editor.update(cx, |editor, cx| {
             editor.rhs_editor().update(cx, |editor, cx| {
                 editor.change_selections(Default::default(), window, cx, |s| {
@@ -240,23 +254,13 @@ impl DiffMultibuffer {
         });
     }
 
-    pub(crate) fn move_to_path(
-        &mut self,
-        path_key: PathKey,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn move_to_path(&mut self, path_key: PathKey, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(position) = self.multibuffer.read(cx).location_for_path(&path_key, cx) {
             self.editor.update(cx, |editor, cx| {
                 editor.rhs_editor().update(cx, |editor, cx| {
-                    editor.change_selections(
-                        SelectionEffects::scroll(Autoscroll::focused()),
-                        window,
-                        cx,
-                        |s| {
-                            s.select_ranges([position..position]);
-                        },
-                    )
+                    editor.change_selections(SelectionEffects::scroll(Autoscroll::focused()), window, cx, |s| {
+                        s.select_ranges([position..position]);
+                    })
                 })
             });
         } else {
@@ -277,21 +281,15 @@ impl DiffMultibuffer {
     }
 
     /// Returns a reference to the splittable editor.
-    pub(crate) fn editor(&self) -> &Entity<SplittableEditor> {
+    pub(crate) const fn editor(&self) -> &Entity<SplittableEditor> {
         &self.editor
     }
 
-    pub(crate) fn selected_ranges(
-        &self,
-        cx: &App,
-    ) -> (bool, Vec<std::ops::Range<multi_buffer::Anchor>>) {
+    pub(crate) fn selected_ranges(&self, cx: &App) -> (bool, Vec<std::ops::Range<multi_buffer::Anchor>>) {
         let editor = self.editor.read(cx).rhs_editor().read(cx);
         let snapshot = self.multibuffer.read(cx).snapshot(cx);
         let mut selection = true;
-        let mut ranges = editor
-            .selections
-            .disjoint_anchor_ranges()
-            .collect::<Vec<_>>();
+        let mut ranges = editor.selections.disjoint_anchor_ranges().collect::<Vec<_>>();
         if !ranges.iter().any(|range| range.start != range.end) {
             selection = false;
             let anchor = editor.selections.newest_anchor().head();
@@ -315,17 +313,11 @@ impl DiffMultibuffer {
     /// there is no selection. Unlike [`Self::selected_ranges`], this never
     /// widens to the whole excerpt, so actions affect one hunk at a time.
     fn hunk_action_ranges(&self, cx: &App) -> Vec<std::ops::Range<multi_buffer::Anchor>> {
-        self.editor
-            .read(cx)
-            .rhs_editor()
-            .read(cx)
-            .selections
-            .disjoint_anchor_ranges()
-            .collect()
+        self.editor.read(cx).rhs_editor().read(cx).selections.disjoint_anchor_ranges().collect()
     }
 
     pub(crate) fn stage_or_unstage_selected_hunks(
-        &mut self,
+        &self,
         stage: bool,
         move_to_next: bool,
         window: &mut Window,
@@ -341,18 +333,11 @@ impl DiffMultibuffer {
             editor.stage_or_unstage_diff_hunks(stage, ranges, window, cx);
         });
         if move_to_next {
-            editor
-                .focus_handle(cx)
-                .dispatch_action(&GoToHunk, window, cx);
+            editor.focus_handle(cx).dispatch_action(&GoToHunk, window, cx);
         }
     }
 
-    pub(crate) fn restore_selected_hunks(
-        &mut self,
-        move_to_next: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn restore_selected_hunks(&self, move_to_next: bool, window: &mut Window, cx: &mut Context<Self>) {
         let editor = self.editor.read(cx).rhs_editor().clone();
         let ranges = self.hunk_action_ranges(cx);
         editor.update(cx, |editor, cx| {
@@ -363,9 +348,7 @@ impl DiffMultibuffer {
             }
         });
         if move_to_next {
-            editor
-                .focus_handle(cx)
-                .dispatch_action(&GoToHunk, window, cx);
+            editor.focus_handle(cx).dispatch_action(&GoToHunk, window, cx);
         }
     }
 
@@ -391,23 +374,19 @@ impl DiffMultibuffer {
                 self.workspace
                     .update(cx, |workspace, cx| {
                         if let Some(git_panel) = workspace.panel::<GitPanel>(cx) {
-                            git_panel.update(cx, |git_panel, cx| {
-                                git_panel.select_entry_by_path(project_path, window, cx)
-                            })
+                            git_panel
+                                .update(cx, |git_panel, cx| git_panel.select_entry_by_path(project_path, window, cx))
                         }
                     })
                     .ok();
             }
             EditorEvent::Saved => {
-                self._task =
-                    cx.spawn_in(window, async move |this, cx| Self::refresh(this, cx).await);
+                self._task = cx.spawn_in(window, async move |this, cx| Self::refresh(this, cx).await);
             }
 
             _ => {}
         }
-        if editor.focus_handle(cx).contains_focused(window, cx)
-            && self.multibuffer.read(cx).is_empty()
-        {
+        if editor.focus_handle(cx).contains_focused(window, cx) && self.multibuffer.read(cx).is_empty() {
             self.focus_handle.focus(window, cx)
         }
     }
@@ -487,18 +466,12 @@ impl DiffMultibuffer {
 
         let excerpt_ranges = {
             let diff_hunk_ranges = diff_snapshot
-                .hunks_intersecting_range(
-                    Anchor::min_max_range_for_buffer(snapshot.remote_id()),
-                    &snapshot,
-                )
+                .hunks_intersecting_range(Anchor::min_max_range_for_buffer(snapshot.remote_id()), &snapshot)
                 .map(|diff_hunk| diff_hunk.buffer_range.to_point(&snapshot));
             let conflict_ranges = conflict_set.as_ref().and_then(|conflict_set| {
                 let conflicts = conflict_set.read(cx).snapshot();
-                let conflicts = conflicts
-                    .conflicts
-                    .iter()
-                    .map(|conflict| conflict.range.to_point(&snapshot))
-                    .collect::<Vec<_>>();
+                let conflicts =
+                    conflicts.conflicts.iter().map(|conflict| conflict.range.to_point(&snapshot)).collect::<Vec<_>>();
                 (!conflicts.is_empty()).then_some(conflicts)
             });
 
@@ -529,34 +502,20 @@ impl DiffMultibuffer {
         self.editor.update(cx, |editor, cx| {
             editor.rhs_editor().update(cx, |editor, cx| {
                 if was_empty {
-                    editor.change_selections(
-                        SelectionEffects::no_scroll(),
-                        window,
-                        cx,
-                        |selections| {
-                            selections.select_ranges([
-                                multi_buffer::Anchor::Min..multi_buffer::Anchor::Min
-                            ])
-                        },
-                    );
+                    editor.change_selections(SelectionEffects::no_scroll(), window, cx, |selections| {
+                        selections.select_ranges([multi_buffer::Anchor::Min..multi_buffer::Anchor::Min])
+                    });
                 }
                 if is_excerpt_newly_added
                     && (file_status.is_deleted()
-                        || (file_status.is_untracked()
-                            && GitPanelSettings::get_global(cx).collapse_untracked_diff))
+                        || (file_status.is_untracked() && GitPanelSettings::get_global(cx).collapse_untracked_diff))
                 {
                     needs_fold = true;
                 }
             })
         });
 
-        if self.multibuffer.read(cx).is_empty()
-            && self
-                .editor
-                .read(cx)
-                .focus_handle(cx)
-                .contains_focused(window, cx)
-        {
+        if self.multibuffer.read(cx).is_empty() && self.editor.read(cx).focus_handle(cx).contains_focused(window, cx) {
             self.focus_handle.focus(window, cx);
         } else if self.focus_handle.is_focused(window) && !self.multibuffer.read(cx).is_empty() {
             self.editor.update(cx, |editor, cx| {
@@ -618,12 +577,7 @@ impl DiffMultibuffer {
                 let repo = repo.read(cx);
                 for diff_buffer in buffers_to_load {
                     live_repo_paths.insert(diff_buffer.repo_path.clone());
-                    let path_key = project_diff_path_key(
-                        &repo,
-                        &diff_buffer.repo_path,
-                        diff_buffer.file_status,
-                        cx,
-                    );
+                    let path_key = project_diff_path_key(repo, &diff_buffer.repo_path, diff_buffer.file_status, cx);
                     previous_paths.remove(&path_key);
                     entries.insert(path_key, diff_buffer);
                 }
@@ -632,9 +586,7 @@ impl DiffMultibuffer {
             let repo_path_by_display_id = this
                 .buffer_subscriptions
                 .iter()
-                .map(|(repo_path, sub)| {
-                    (sub.display_buffer.read(cx).remote_id(), repo_path.clone())
-                })
+                .map(|(repo_path, sub)| (sub.display_buffer.read(cx).remote_id(), repo_path.clone()))
                 .collect::<HashMap<_, _>>();
 
             this.editor.update(cx, |editor, cx| {
@@ -650,8 +602,7 @@ impl DiffMultibuffer {
                 }
             });
 
-            this.buffer_subscriptions
-                .retain(|repo_path, _| live_repo_paths.contains(repo_path));
+            this.buffer_subscriptions.retain(|repo_path, _| live_repo_paths.contains(repo_path));
 
             entries
         })?;
@@ -660,11 +611,7 @@ impl DiffMultibuffer {
 
         // Ordered, so excerpts don't shift under the reader as later files arrive.
         let mut loads = stream::iter(entries.into_iter().map(|(path_key, entry)| {
-            let diff_buffer_list::DiffBuffer {
-                repo_path,
-                file_status,
-                load,
-            } = entry;
+            let diff_buffer_list::DiffBuffer { repo_path, file_status, load } = entry;
             load.map(move |loaded| (path_key, repo_path, file_status, loaded))
         }))
         .buffered(MAX_CONCURRENT_BUFFER_LOADS);
@@ -697,9 +644,7 @@ impl DiffMultibuffer {
         this.update(cx, |this, cx| {
             if !buffers_to_fold.is_empty() {
                 this.editor.update(cx, |editor, cx| {
-                    editor
-                        .rhs_editor()
-                        .update(cx, |editor, cx| editor.fold_buffers(buffers_to_fold, cx));
+                    editor.rhs_editor().update(cx, |editor, cx| editor.fold_buffers(buffers_to_fold, cx));
                 });
             }
             this.pending_scroll.take();
@@ -723,24 +668,14 @@ impl DiffMultibuffer {
         let (text_anchor, _) = snapshot.anchor_to_buffer_anchor(position)?;
         let buffer = multibuffer.buffer(text_anchor.buffer_id)?;
         let file = buffer.read(cx).file()?;
-        Some(ProjectPath {
-            worktree_id: file.worktree_id(cx),
-            path: file.path().clone(),
-        })
+        Some(ProjectPath { worktree_id: file.worktree_id(cx), path: file.path().clone() })
     }
 
-    pub(crate) fn added_to_workspace(
-        &mut self,
-        workspace: &mut Workspace,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.editor.update(cx, |editor, cx| {
-            editor.added_to_workspace(workspace, window, cx)
-        });
+    pub(crate) fn added_to_workspace(&self, workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor.update(cx, |editor, cx| editor.added_to_workspace(workspace, window, cx));
     }
 
-    pub(crate) fn deactivated(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn deactivated(&self, window: &mut Window, cx: &mut Context<Self>) {
         self.editor.update(cx, |editor, cx| {
             editor.rhs_editor().update(cx, |primary_editor, cx| {
                 primary_editor.deactivated(window, cx);
@@ -749,19 +684,17 @@ impl DiffMultibuffer {
     }
 
     pub(crate) fn navigate(
-        &mut self,
+        &self,
         data: Arc<dyn std::any::Any + Send>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
         self.editor.update(cx, |editor, cx| {
-            editor.rhs_editor().update(cx, |primary_editor, cx| {
-                primary_editor.navigate(data, window, cx)
-            })
+            editor.rhs_editor().update(cx, |primary_editor, cx| primary_editor.navigate(data, window, cx))
         })
     }
 
-    pub(crate) fn set_nav_history(&mut self, nav_history: ItemNavHistory, cx: &mut Context<Self>) {
+    pub(crate) fn set_nav_history(&self, nav_history: ItemNavHistory, cx: &mut Context<Self>) {
         self.editor.update(cx, |editor, cx| {
             editor.rhs_editor().update(cx, |primary_editor, _| {
                 primary_editor.set_nav_history(Some(nav_history));
@@ -769,42 +702,30 @@ impl DiffMultibuffer {
         });
     }
 
-    pub(crate) fn for_each_project_item(
-        &self,
-        cx: &App,
-        f: &mut dyn FnMut(gpui::EntityId, &dyn project::ProjectItem),
-    ) {
-        self.editor
-            .read(cx)
-            .rhs_editor()
-            .read(cx)
-            .for_each_project_item(cx, f)
+    pub(crate) fn for_each_project_item(&self, cx: &App, f: &mut dyn FnMut(gpui::EntityId, &dyn project::ProjectItem)) {
+        self.editor.read(cx).rhs_editor().read(cx).for_each_project_item(cx, f)
     }
 
     pub(crate) fn save(
-        &mut self,
+        &self,
         options: SaveOptions,
         project: Entity<Project>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
         self.editor.update(cx, |editor, cx| {
-            editor.rhs_editor().update(cx, |primary_editor, cx| {
-                primary_editor.save(options, project, window, cx)
-            })
+            editor.rhs_editor().update(cx, |primary_editor, cx| primary_editor.save(options, project, window, cx))
         })
     }
 
     pub(crate) fn reload(
-        &mut self,
+        &self,
         project: Entity<Project>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
         self.editor.update(cx, |editor, cx| {
-            editor.rhs_editor().update(cx, |primary_editor, cx| {
-                primary_editor.reload(project, window, cx)
-            })
+            editor.rhs_editor().update(cx, |primary_editor, cx| primary_editor.reload(project, window, cx))
         })
     }
 }
@@ -813,11 +734,7 @@ impl EventEmitter<EditorEvent> for DiffMultibuffer {}
 
 impl Focusable for DiffMultibuffer {
     fn focus_handle(&self, cx: &App) -> FocusHandle {
-        if self.multibuffer.read(cx).is_empty() {
-            self.focus_handle.clone()
-        } else {
-            self.editor.focus_handle(cx)
-        }
+        if self.multibuffer.read(cx).is_empty() { self.focus_handle.clone() } else { self.editor.focus_handle(cx) }
     }
 }
 
@@ -846,10 +763,8 @@ impl Render for DiffMultibuffer {
                 )
             })
             .when(is_empty && !is_loading, |el| {
-                let remote_button = if let Some(panel) = self
-                    .workspace
-                    .upgrade()
-                    .and_then(|workspace| workspace.read(cx).panel::<GitPanel>(cx))
+                let remote_button = if let Some(panel) =
+                    self.workspace.upgrade().and_then(|workspace| workspace.read(cx).panel::<GitPanel>(cx))
                 {
                     panel.update(cx, |panel, cx| panel.render_remote_button(cx))
                 } else {
@@ -862,11 +777,7 @@ impl Render for DiffMultibuffer {
                         .child(h_flex().justify_around().child(Label::new(empty_label)))
                         .map(|el| match remote_button {
                             Some(button) => el.child(h_flex().justify_around().child(button)),
-                            None => el.child(
-                                h_flex()
-                                    .justify_around()
-                                    .child(Label::new("Remote up to date")),
-                            ),
+                            None => el.child(h_flex().justify_around().child(Label::new("Remote up to date"))),
                         })
                         .child(
                             h_flex().justify_around().mt_1().child(
@@ -878,10 +789,7 @@ impl Render for DiffMultibuffer {
                                     ))
                                     .on_click(move |_, window, cx| {
                                         window.focus(&keybinding_focus_handle, cx);
-                                        window.dispatch_action(
-                                            Box::new(CloseActiveItem::default()),
-                                            cx,
-                                        );
+                                        window.dispatch_action(Box::new(CloseActiveItem::default()), cx);
                                     }),
                             ),
                         ),
@@ -908,12 +816,7 @@ const NEW_SORT_PREFIX: u64 = 3;
 /// ordering reproduces the git panel's order. The path here is only ever used
 /// for sorting and multibuffer identity; the path shown in the UI comes from the
 /// buffer's own `File`.
-pub(crate) fn project_diff_path_key(
-    repo: &Repository,
-    repo_path: &RepoPath,
-    status: FileStatus,
-    cx: &App,
-) -> PathKey {
+pub(crate) fn project_diff_path_key(repo: &Repository, repo_path: &RepoPath, status: FileStatus, cx: &App) -> PathKey {
     let settings = GitPanelSettings::get_global(cx);
     let sort_prefix = if settings.group_by != GitPanelGroupBy::Status {
         TRACKED_SORT_PREFIX
@@ -928,11 +831,7 @@ pub(crate) fn project_diff_path_key(
     PathKey::with_sort_prefix(sort_prefix, path)
 }
 
-fn project_diff_sort_path(
-    repo_path: &RelPath,
-    tree_view: bool,
-    sort_by: GitPanelSortBy,
-) -> Arc<RelPath> {
+fn project_diff_sort_path(repo_path: &RelPath, tree_view: bool, sort_by: GitPanelSortBy) -> Arc<RelPath> {
     if tree_view {
         tree_sort_path(repo_path)
     } else {
@@ -950,9 +849,7 @@ fn name_sort_path(repo_path: &RelPath) -> Arc<RelPath> {
         return repo_path.into_arc();
     };
     let synthetic = format!("{}/{}", file_name, repo_path.as_unix_str());
-    RelPath::from_unix_str(&synthetic)
-        .map(|path| path.into_arc())
-        .unwrap_or_else(|_| repo_path.into_arc())
+    RelPath::from_unix_str(&synthetic).map(|path| path.into_arc()).unwrap_or_else(|_| repo_path.into_arc())
 }
 
 /// Builds a synthetic path whose natural component-wise ordering reproduces a
@@ -975,7 +872,5 @@ fn tree_sort_path(repo_path: &RelPath) -> Arc<RelPath> {
         }
         synthetic.push_str(component);
     }
-    RelPath::from_unix_str(&synthetic)
-        .map(|path| path.into_arc())
-        .unwrap_or_else(|_| repo_path.into_arc())
+    RelPath::from_unix_str(&synthetic).map(|path| path.into_arc()).unwrap_or_else(|_| repo_path.into_arc())
 }

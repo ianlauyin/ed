@@ -123,7 +123,7 @@ use crate::mermaid_diagrams::MermaidDiagrams;
 const PREVIEW_LANGUAGES: [&str; 2] = ["Markdown", "HTML"];
 const REPARSE_DEBOUNCE: Duration = Duration::from_millis(200);
 
-fn reset_persisted_font_size(settings: &mut settings::SettingsContent) {
+const fn reset_persisted_font_size(settings: &mut settings::SettingsContent) {
     if let Some(markdown_preview) = settings.markdown_preview.as_mut() {
         markdown_preview.font_size = None;
     }
@@ -163,14 +163,14 @@ pub enum MarkdownPreviewMode {
 }
 
 impl MarkdownPreviewMode {
-    fn to_db(self) -> i64 {
+    const fn to_db(self) -> i64 {
         match self {
             Self::Default => 0,
             Self::Follow => 1,
         }
     }
 
-    fn from_db(value: i64) -> Self {
+    const fn from_db(value: i64) -> Self {
         match value {
             1 => Self::Follow,
             _ => Self::Default,
@@ -378,7 +378,7 @@ impl MarkdownPreviewView {
     }
 
     fn create_following_markdown_view(
-        workspace: &mut Workspace,
+        workspace: &Workspace,
         editor: Entity<Editor>,
         window: &mut Window,
         cx: &mut Context<Workspace>,
@@ -474,12 +474,7 @@ impl MarkdownPreviewView {
         })
     }
 
-    fn workspace_updated(
-        &mut self,
-        active_item: Option<Box<dyn ItemHandle>>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn workspace_updated(&mut self, active_item: Option<Box<dyn ItemHandle>>, window: &Window, cx: &mut Context<Self>) {
         if let Some(item) = active_item
             && item.item_id() != cx.entity_id()
             && let Some(editor) = item.act_as::<Editor>(cx)
@@ -514,8 +509,8 @@ impl MarkdownPreviewView {
     ) {
         let open_buffer = workspace.project().update(cx, |project, cx| project.open_buffer(project_path, cx));
 
-        cx.spawn_in(window, async move |workspace, mut cx| {
-            let Some(buffer) = open_buffer.await.notify_workspace_async_err(workspace.clone(), &mut cx) else {
+        cx.spawn_in(window, async move |workspace, cx| {
+            let Some(buffer) = open_buffer.await.notify_workspace_async_err(workspace.clone(), cx) else {
                 return;
             };
             workspace
@@ -567,7 +562,7 @@ impl MarkdownPreviewView {
         languages.language_for_file(file, None, cx) == Some(markdown.id())
     }
 
-    fn set_editor(&mut self, editor: Entity<Editor>, window: &mut Window, cx: &mut Context<Self>) {
+    fn set_editor(&mut self, editor: Entity<Editor>, window: &Window, cx: &mut Context<Self>) {
         if let Some(active) = &self.active_editor
             && active.editor == editor
         {
@@ -578,7 +573,7 @@ impl MarkdownPreviewView {
         let subscription = cx.subscribe_in(&editor, window, |this, editor, event: &EditorEvent, window, cx| {
             match event {
                 EditorEvent::Edited { .. }
-                | EditorEvent::BufferEdited { .. }
+                | EditorEvent::BufferEdited
                 | EditorEvent::DirtyChanged
                 | EditorEvent::BuffersEdited { .. } => {
                     this.update_markdown_from_active_editor(true, false, window, cx);
@@ -651,8 +646,8 @@ impl MarkdownPreviewView {
         &mut self,
         wait_for_debounce: bool,
         should_reveal: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
+        window: &Window,
+        cx: &Context<Self>,
     ) {
         if let Some(state) = &self.active_editor {
             // if there is already a task to update the ui and the current task is also debounced (not high priority), do nothing
@@ -665,12 +660,12 @@ impl MarkdownPreviewView {
     }
 
     fn schedule_markdown_update(
-        &mut self,
+        &self,
         wait_for_debounce: bool,
         should_reveal_selection: bool,
         editor: Entity<Editor>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
+        window: &Window,
+        cx: &Context<Self>,
     ) -> Task<Result<()>> {
         cx.spawn_in(window, async move |view, cx| {
             if wait_for_debounce {
@@ -731,7 +726,7 @@ impl MarkdownPreviewView {
         });
     }
 
-    fn sync_active_root_block(&mut self, cx: &mut Context<Self>) {
+    fn sync_active_root_block(&self, cx: &mut Context<Self>) {
         self.markdown.update(cx, |markdown, cx| {
             markdown.set_active_root_for_source_index(self.active_source_index, cx);
         });
@@ -814,7 +809,7 @@ impl MarkdownPreviewView {
         self.adjust_font_size(action.persist, px(-1.0), cx);
     }
 
-    fn adjust_font_size(&mut self, persist: bool, delta: Pixels, cx: &mut Context<Self>) {
+    fn adjust_font_size(&self, persist: bool, delta: Pixels, cx: &mut Context<Self>) {
         if persist {
             let Ok(fs) = self.workspace.read_with(cx, |workspace, _| workspace.app_state().fs.clone()) else {
                 return;
@@ -948,8 +943,8 @@ impl MarkdownPreviewView {
     fn render_markdown_element(
         &self,
         preview_theme: &Option<Arc<Theme>>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
+        window: &Window,
+        cx: &Context<Self>,
     ) -> MarkdownElement {
         let active_editor = self.active_editor.as_ref().map(|state| state.editor.clone());
         let source_project_path =
@@ -1061,7 +1056,7 @@ impl MarkdownPreviewView {
         });
     }
 
-    fn refresh_preview(view_handle: WeakEntity<Self>, window: &mut Window, cx: &mut App) {
+    fn refresh_preview(view_handle: WeakEntity<Self>, window: &Window, cx: &mut App) {
         if let Some(view) = view_handle.upgrade() {
             let preview_is_focused = view.read(cx).focus_handle.contains_focused(window, cx);
             if !preview_is_focused {
@@ -1096,16 +1091,10 @@ fn handle_url_click(
 
                     let source_index = markdown.update(cx, |markdown, cx| markdown.scroll_to_heading(&slug, cx));
 
-                    if let Some(source_index) = source_index {
-                        if let Some(editor) = active_editor {
-                            MarkdownPreviewView::change_selection_to_source_index(
-                                &editor,
-                                source_index,
-                                true,
-                                window,
-                                cx,
-                            );
-                        }
+                    if let Some(source_index) = source_index
+                        && let Some(editor) = active_editor
+                    {
+                        MarkdownPreviewView::change_selection_to_source_index(&editor, source_index, true, window, cx);
                     }
                 }
             });
@@ -1707,7 +1696,7 @@ impl Render for MarkdownPreviewView {
                         .left_0()
                         .max_w_full()
                         .overflow_hidden()
-                        .child(LinkPreview::new(hovered_url.as_ref(), cx)),
+                        .child(LinkPreview::build(hovered_url.as_ref(), cx)),
                 )
             })
     }

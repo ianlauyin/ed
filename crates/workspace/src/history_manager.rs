@@ -41,7 +41,7 @@ struct GlobalHistoryManager(Entity<HistoryManager>);
 impl Global for GlobalHistoryManager {}
 
 impl HistoryManager {
-    fn new() -> Self {
+    const fn new() -> Self {
         Self { history: Vec::new() }
     }
 
@@ -99,7 +99,7 @@ impl HistoryManager {
         self.update_jump_list(cx);
     }
 
-    fn update_jump_list(&mut self, cx: &mut Context<'_, HistoryManager>) {
+    fn update_jump_list(&self, cx: &Context<'_, HistoryManager>) {
         let menus = vec![MenuItem::action("New Window", NewWindow)];
         let entries = self.history.iter().rev().map(|entry| entry.path.clone()).collect::<Vec<_>>();
         let user_removed = cx.update_jump_list(menus, entries);

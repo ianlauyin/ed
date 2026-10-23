@@ -1,10 +1,11 @@
-use crate::{Bounds, Half};
-use std::{
-    cmp,
-    fmt::Debug,
-    ops::{Add, Sub},
-    ptr::NonNull,
-};
+use std::cmp;
+use std::fmt::Debug;
+use std::ops::Add;
+use std::ops::Sub;
+use std::ptr::NonNull;
+
+use crate::Bounds;
+use crate::Half;
 
 /// Maximum children per internal node (R-tree style branching factor).
 /// Higher values = shorter tree = fewer cache misses, but more work per node.
@@ -71,11 +72,8 @@ struct NodeChildren {
 }
 
 impl NodeChildren {
-    fn new() -> Self {
-        Self {
-            indices: [0; MAX_CHILDREN],
-            len: 0,
-        }
+    const fn new() -> Self {
+        Self { indices: [0; MAX_CHILDREN], len: 0 }
     }
 
     fn push(&mut self, index: usize) {
@@ -84,7 +82,7 @@ impl NodeChildren {
         self.len += 1;
     }
 
-    fn len(&self) -> usize {
+    const fn len(&self) -> usize {
         self.len as usize
     }
 
@@ -95,14 +93,7 @@ impl NodeChildren {
 
 impl<U> BoundsTree<U>
 where
-    U: Clone
-        + Debug
-        + PartialEq
-        + PartialOrd
-        + Add<U, Output = U>
-        + Sub<Output = U>
-        + Half
-        + Default,
+    U: Clone + Debug + PartialEq + PartialOrd + Add<U, Output = U> + Sub<Output = U> + Half + Default,
 {
     /// Clears all nodes from the tree.
     pub fn clear(&mut self) {
@@ -196,11 +187,7 @@ where
     /// Returns the index of the new leaf.
     fn insert_leaf(&mut self, bounds: Bounds<U>, order: u32) -> usize {
         let new_leaf_idx = self.nodes.len();
-        self.nodes.push(Node {
-            bounds: bounds.clone(),
-            max_order: order,
-            kind: NodeKind::Leaf { order },
-        });
+        self.nodes.push(Node { bounds: bounds.clone(), max_order: order, kind: NodeKind::Leaf { order } });
 
         let Some(root_idx) = self.root else {
             // Tree is empty, new leaf becomes root
@@ -248,9 +235,7 @@ where
             // Find the best child to descend into
             let mut best_child_idx = children.as_slice()[0];
             let mut best_child_pos = 0;
-            let mut best_cost = bounds
-                .union(&self.nodes[best_child_idx].bounds)
-                .half_perimeter();
+            let mut best_cost = bounds.union(&self.nodes[best_child_idx].bounds).half_perimeter();
 
             for (pos, &child_idx) in children.as_slice().iter().enumerate().skip(1) {
                 let cost = bounds.union(&self.nodes[child_idx].bounds).half_perimeter();
@@ -300,9 +285,7 @@ where
                     self.nodes.push(Node {
                         bounds: sibling_bounds.union(&bounds),
                         max_order: new_internal_max,
-                        kind: NodeKind::Internal {
-                            children: new_children,
-                        },
+                        kind: NodeKind::Internal { children: new_children },
                     });
 
                     // Replace the leaf with the new internal in parent
@@ -336,15 +319,13 @@ where
                 node.max_order = order;
 
                 // Swap updated child to end (skip first iteration since the invariant is already handled by previous cases)
-                if let Some(child_idx) = updated_child_idx {
-                    if let NodeKind::Internal { children } = &mut node.kind {
-                        if let Some(pos) = children.as_slice().iter().position(|&c| c == child_idx)
-                        {
-                            let last = children.len() - 1;
-                            if pos != last {
-                                children.indices.swap(pos, last);
-                            }
-                        }
+                if let Some(child_idx) = updated_child_idx
+                    && let NodeKind::Internal { children } = &mut node.kind
+                    && let Some(pos) = children.as_slice().iter().position(|&c| c == child_idx)
+                {
+                    let last = children.len() - 1;
+                    if pos != last {
+                        children.indices.swap(pos, last);
                     }
                 }
             }
@@ -361,12 +342,6 @@ where
     U: Clone + Debug + Default + PartialEq,
 {
     fn default() -> Self {
-        BoundsTree {
-            nodes: Vec::new(),
-            root: None,
-            max_leaf: None,
-            insert_path: Vec::new(),
-            search_stack: Vec::new(),
-        }
+        BoundsTree { nodes: Vec::new(), root: None, max_leaf: None, insert_path: Vec::new(), search_stack: Vec::new() }
     }
 }

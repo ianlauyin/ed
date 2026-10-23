@@ -1,11 +1,21 @@
-use gpui::{AnyView, DefiniteLength, Hsla};
+use gpui::AnyView;
+use gpui::DefiniteLength;
+use gpui::Hsla;
 
-use super::button_like::{ButtonCommon, ButtonLike, ButtonSize, ButtonStyle};
-use crate::{
-    ElevationIndex, Icon, IconWithIndicator, Indicator, SelectableButton, TintColor, Tooltip,
-    prelude::*,
-};
-use crate::{IconName, IconSize};
+use super::button_like::ButtonCommon;
+use super::button_like::ButtonLike;
+use super::button_like::ButtonSize;
+use super::button_like::ButtonStyle;
+use crate::ElevationIndex;
+use crate::Icon;
+use crate::IconName;
+use crate::IconSize;
+use crate::IconWithIndicator;
+use crate::Indicator;
+use crate::SelectableButton;
+use crate::TintColor;
+use crate::Tooltip;
+use crate::prelude::*;
 
 /// The shape of an [`IconButton`].
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
@@ -48,38 +58,38 @@ impl IconButton {
         }
     }
 
-    pub fn shape(mut self, shape: IconButtonShape) -> Self {
+    pub const fn shape(mut self, shape: IconButtonShape) -> Self {
         self.shape = shape;
         self
     }
 
-    pub fn icon_size(mut self, icon_size: IconSize) -> Self {
+    pub const fn icon_size(mut self, icon_size: IconSize) -> Self {
         self.icon_size = icon_size;
         self
     }
 
-    pub fn active_background(mut self, background: Hsla) -> Self {
+    pub const fn active_background(mut self, background: Hsla) -> Self {
         self.base.active_background = Some(background);
         self
     }
 
-    pub fn hover_background(mut self, background: Hsla) -> Self {
+    pub const fn hover_background(mut self, background: Hsla) -> Self {
         self.base.hover_background = Some(background);
         self
     }
 
-    pub fn icon_color(mut self, icon_color: Color) -> Self {
+    pub const fn icon_color(mut self, icon_color: Color) -> Self {
         self.icon_color = icon_color;
         self
     }
 
-    pub fn alpha(mut self, alpha: f32) -> Self {
+    pub const fn alpha(mut self, alpha: f32) -> Self {
         self.alpha = Some(alpha);
         self
     }
 
     /// Sets the icon color used while the button is hovered.
-    pub fn hover_color(mut self, color: Color) -> Self {
+    pub const fn hover_color(mut self, color: Color) -> Self {
         self.hover_color = Some(color);
         self
     }
@@ -89,10 +99,7 @@ impl IconButton {
         self
     }
 
-    pub fn on_right_click(
-        mut self,
-        handler: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
+    pub fn on_right_click(mut self, handler: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static) -> Self {
         self.base = self.base.on_right_click(handler);
         self
     }
@@ -108,7 +115,7 @@ impl IconButton {
         self
     }
 
-    pub fn indicator_border_color(mut self, color: Option<Hsla>) -> Self {
+    pub const fn indicator_border_color(mut self, color: Option<Hsla>) -> Self {
         self.indicator_border_color = color;
 
         self
@@ -117,10 +124,7 @@ impl IconButton {
     /// Use the given callback to construct a new tooltip view when the mouse hovers over this
     /// button. The tooltip itself is also hoverable and won't disappear when the user moves the
     /// mouse into the tooltip, allowing it to contain interactive elements like links or buttons.
-    pub fn hoverable_tooltip(
-        mut self,
-        tooltip: impl Fn(&mut Window, &mut App) -> AnyView + 'static,
-    ) -> Self {
+    pub fn hoverable_tooltip(mut self, tooltip: impl Fn(&mut Window, &mut App) -> AnyView + 'static) -> Self {
         self.base = self.base.hoverable_tooltip(tooltip);
         self
     }
@@ -150,10 +154,7 @@ impl SelectableButton for IconButton {
 
 impl Clickable for IconButton {
     #[inline(always)]
-    fn on_click(
-        mut self,
-        handler: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
+    fn on_click(mut self, handler: impl Fn(&gpui::ClickEvent, &mut Window, &mut App) + 'static) -> Self {
         self.base = self.base.on_click(handler);
         self
     }
@@ -226,10 +227,7 @@ impl RenderOnce for IconButton {
         let is_disabled = self.base.disabled;
         let is_selected = self.base.selected;
 
-        let icon = self
-            .selected_icon
-            .filter(|_| is_selected)
-            .unwrap_or(self.icon);
+        let icon = self.selected_icon.filter(|_| is_selected).unwrap_or(self.icon);
 
         let icon_color = if is_disabled {
             Color::Disabled
@@ -247,10 +245,7 @@ impl RenderOnce for IconButton {
             .filter(|_| !is_disabled && !is_selected)
             .map(|color| Color::Custom(color.color(cx).opacity(self.alpha.unwrap_or(1.0))));
 
-        let icon_element = Icon::new(icon)
-            .size(self.icon_size)
-            .color(icon_color)
-            .group_hover_color(hover_color);
+        let icon_element = Icon::new(icon).size(self.icon_size).color(icon_color).group_hover_color(hover_color);
 
         self.base
             .map(|this| match self.shape {

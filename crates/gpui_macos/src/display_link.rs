@@ -50,17 +50,21 @@
 //! is a std implementation detail, not a guarantee; if it changes, the cost
 //! is added latency under contention, not incorrectness.)
 
+use std::collections::BTreeMap;
+use std::collections::btree_map;
+use std::ffi::c_void;
+use std::sync::Mutex;
+use std::sync::MutexGuard;
+use std::sync::PoisonError;
+
 use anyhow::Result;
 use core_graphics::display::CGDirectDisplayID;
-use dispatch2::{
-    _dispatch_source_type_data_add, DispatchObject, DispatchQueue, DispatchRetained, DispatchSource,
-};
+use dispatch2::_dispatch_source_type_data_add;
+use dispatch2::DispatchObject;
+use dispatch2::DispatchQueue;
+use dispatch2::DispatchRetained;
+use dispatch2::DispatchSource;
 use gpui_util::ResultExt;
-use std::{
-    collections::{BTreeMap, btree_map},
-    ffi::c_void,
-    sync::{Mutex, MutexGuard, PoisonError},
-};
 
 static REGISTRY: Mutex<Registry> = Mutex::new(Registry::new());
 
@@ -71,10 +75,7 @@ struct Registry {
 
 impl Registry {
     const fn new() -> Self {
-        Registry {
-            displays: BTreeMap::new(),
-            next_subscriber_id: 0,
-        }
+        Registry { displays: BTreeMap::new(), next_subscriber_id: 0 }
     }
 }
 
@@ -110,7 +111,8 @@ fn lock_registry() -> MutexGuard<'static, Registry> {
 fn debug_assert_main_thread() {
     #[cfg(debug_assertions)]
     {
-        use objc2::{class, msg_send};
+        use objc2::class;
+        use objc2::msg_send;
         let is_main_thread: bool = unsafe { msg_send![class!(NSThread), isMainThread] };
         debug_assert!(
             is_main_thread,
@@ -138,21 +140,14 @@ unsafe extern "C" fn display_link_output_callback(
     0
 }
 
-fn subscribe(
-    display_id: CGDirectDisplayID,
-    frame_requests: DispatchRetained<DispatchSource>,
-) -> Result<SubscriberId> {
+fn subscribe(display_id: CGDirectDisplayID, frame_requests: DispatchRetained<DispatchSource>) -> Result<SubscriberId> {
     debug_assert_main_thread();
 
     let needs_link = !lock_registry().displays.contains_key(&display_id);
     let new_link = if needs_link {
         // Created outside the registry lock; see the lock ordering note above.
         Some(unsafe {
-            sys::DisplayLink::new(
-                display_id,
-                display_link_output_callback,
-                display_id as usize as *mut c_void,
-            )?
+            sys::DisplayLink::new(display_id, display_link_output_callback, display_id as usize as *mut c_void)?
         })
     } else {
         None
@@ -168,21 +163,16 @@ fn subscribe(
             // is safe: a never-started link has no io thread, so releasing it
             // doesn't race.
             (btree_map::Entry::Occupied(entry), _) => entry.into_mut(),
-            (btree_map::Entry::Vacant(vacant), Some(link)) => vacant.insert(DisplayEntry {
-                link,
-                running: false,
-                subscribers: Vec::new(),
-            }),
+            (btree_map::Entry::Vacant(vacant), Some(link)) => {
+                vacant.insert(DisplayEntry { link, running: false, subscribers: Vec::new() })
+            }
             (btree_map::Entry::Vacant(_), None) => {
                 // Entries are never removed, so an entry observed above cannot
                 // have disappeared while subscriptions stay on the main thread.
                 anyhow::bail!("display link registry entry vanished for display {display_id}");
             }
         };
-        entry.subscribers.push(DisplayLinkSubscriber {
-            id: subscriber_id,
-            frame_requests,
-        });
+        entry.subscribers.push(DisplayLinkSubscriber { id: subscriber_id, frame_requests });
         let link_to_start = if entry.running {
             None
         } else {
@@ -194,17 +184,15 @@ fn subscribe(
         (subscriber_id, link_to_start)
     };
 
-    if let Some(mut link) = link_to_start {
-        if let Err(error) = unsafe { link.start() } {
-            let mut registry = lock_registry();
-            if let Some(entry) = registry.displays.get_mut(&display_id) {
-                entry.running = false;
-                entry
-                    .subscribers
-                    .retain(|subscriber| subscriber.id != subscriber_id);
-            }
-            return Err(error);
+    if let Some(mut link) = link_to_start
+        && let Err(error) = unsafe { link.start() }
+    {
+        let mut registry = lock_registry();
+        if let Some(entry) = registry.displays.get_mut(&display_id) {
+            entry.running = false;
+            entry.subscribers.retain(|subscriber| subscriber.id != subscriber_id);
         }
+        return Err(error);
     }
 
     Ok(subscriber_id)
@@ -218,9 +206,7 @@ fn unsubscribe(display_id: CGDirectDisplayID, subscriber_id: SubscriberId) {
         let Some(entry) = registry.displays.get_mut(&display_id) else {
             return;
         };
-        entry
-            .subscribers
-            .retain(|subscriber| subscriber.id != subscriber_id);
+        entry.subscribers.retain(|subscriber| subscriber.id != subscriber_id);
         if entry.subscribers.is_empty() && entry.running {
             entry.running = false;
             Some(entry.link.clone())
@@ -260,10 +246,7 @@ impl WindowFrameSource {
             frame_requests.resume();
             frame_requests
         };
-        Self {
-            frame_requests,
-            registration: None,
-        }
+        Self { frame_requests, registration: None }
     }
 
     pub fn start(&mut self, display_id: CGDirectDisplayID) -> Result<()> {
@@ -298,13 +281,15 @@ mod sys {
     //! Apple docs: [CVDisplayLink](https://developer.apple.com/documentation/corevideo/cvdisplaylinkoutputcallback?language=objc)
     #![allow(dead_code, non_upper_case_globals)]
 
+    use std::ffi::c_void;
+    use std::fmt::Debug;
+    use std::fmt::Formatter;
+    use std::fmt::{self};
+
     use anyhow::Result;
     use core_graphics::display::CGDirectDisplayID;
-    use foreign_types::{ForeignType, foreign_type};
-    use std::{
-        ffi::c_void,
-        fmt::{self, Debug, Formatter},
-    };
+    use foreign_types::ForeignType;
+    use foreign_types::foreign_type;
 
     #[derive(Debug)]
     pub enum CVDisplayLink {}
@@ -319,10 +304,7 @@ mod sys {
 
     impl Debug for DisplayLink {
         fn fmt(&self, formatter: &mut Formatter) -> fmt::Result {
-            formatter
-                .debug_tuple("DisplayLink")
-                .field(&self.as_ptr())
-                .finish()
+            formatter.debug_tuple("DisplayLink").field(&self.as_ptr()).finish()
         }
     }
 
@@ -349,10 +331,8 @@ mod sys {
     pub const kCVTimeStampRateScalarValid: CVTimeStampFlags = 1 << 4;
     pub const kCVTimeStampTopField: CVTimeStampFlags = 1 << 16;
     pub const kCVTimeStampBottomField: CVTimeStampFlags = 1 << 17;
-    pub const kCVTimeStampVideoHostTimeValid: CVTimeStampFlags =
-        kCVTimeStampVideoTimeValid | kCVTimeStampHostTimeValid;
-    pub const kCVTimeStampIsInterlaced: CVTimeStampFlags =
-        kCVTimeStampTopField | kCVTimeStampBottomField;
+    pub const kCVTimeStampVideoHostTimeValid: CVTimeStampFlags = kCVTimeStampVideoTimeValid | kCVTimeStampHostTimeValid;
+    pub const kCVTimeStampIsInterlaced: CVTimeStampFlags = kCVTimeStampTopField | kCVTimeStampBottomField;
 
     #[repr(C)]
     #[derive(Clone, Copy, Default)]
@@ -402,13 +382,8 @@ mod sys {
     #[link(name = "CoreVideo", kind = "framework")]
     #[allow(improper_ctypes, unknown_lints, clippy::duplicated_attributes)]
     unsafe extern "C" {
-        pub fn CVDisplayLinkCreateWithActiveCGDisplays(
-            display_link_out: *mut *mut CVDisplayLink,
-        ) -> i32;
-        pub fn CVDisplayLinkSetCurrentCGDisplay(
-            display_link: &mut DisplayLinkRef,
-            display_id: u32,
-        ) -> i32;
+        pub fn CVDisplayLinkCreateWithActiveCGDisplays(display_link_out: *mut *mut CVDisplayLink) -> i32;
+        pub fn CVDisplayLinkSetCurrentCGDisplay(display_link: &mut DisplayLinkRef, display_id: u32) -> i32;
         pub fn CVDisplayLinkSetOutputCallback(
             display_link: &mut DisplayLinkRef,
             callback: CVDisplayLinkOutputCallback,
@@ -430,7 +405,7 @@ mod sys {
             unsafe {
                 let mut display_link: *mut CVDisplayLink = 0 as _;
 
-                let code = CVDisplayLinkCreateWithActiveCGDisplays(&mut display_link);
+                let code = CVDisplayLinkCreateWithActiveCGDisplays(&raw mut display_link);
                 anyhow::ensure!(code == 0, "could not create display link, code: {}", code);
 
                 let mut display_link = DisplayLink::from_ptr(display_link);
@@ -439,11 +414,7 @@ mod sys {
                 anyhow::ensure!(code == 0, "could not set output callback, code: {}", code);
 
                 let code = CVDisplayLinkSetCurrentCGDisplay(&mut display_link, display_id);
-                anyhow::ensure!(
-                    code == 0,
-                    "could not assign display to display link, code: {}",
-                    code
-                );
+                anyhow::ensure!(code == 0, "could not assign display to display link, code: {}", code);
 
                 Ok(display_link)
             }

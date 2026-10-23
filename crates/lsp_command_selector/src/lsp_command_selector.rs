@@ -1,20 +1,40 @@
-use std::{
-    collections::BTreeSet,
-    sync::{Arc, atomic::AtomicBool},
-};
+use std::collections::BTreeSet;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
 
 use editor::Editor;
-use fuzzy::{StringMatch, StringMatchCandidate, match_strings};
-use gpui::{
-    AnyElement, App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
-    ParentElement, Render, SharedString, Task, WeakEntity, Window, actions,
-};
+use fuzzy::StringMatch;
+use fuzzy::StringMatchCandidate;
+use fuzzy::match_strings;
+use gpui::AnyElement;
+use gpui::App;
+use gpui::Context;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::ParentElement;
+use gpui::Render;
+use gpui::SharedString;
+use gpui::Task;
+use gpui::WeakEntity;
+use gpui::Window;
+use gpui::actions;
 use language::Buffer;
-use lsp::{LanguageServerId, LanguageServerName};
-use picker::{Picker, PickerDelegate};
-use project::{File, LspStore, Project};
-use ui::{HighlightedLabel, ListItem, ListItemSpacing, prelude::*};
-use workspace::{ModalView, Workspace};
+use lsp::LanguageServerId;
+use lsp::LanguageServerName;
+use picker::Picker;
+use picker::PickerDelegate;
+use project::File;
+use project::LspStore;
+use project::Project;
+use ui::HighlightedLabel;
+use ui::ListItem;
+use ui::ListItemSpacing;
+use ui::prelude::*;
+use workspace::ModalView;
+use workspace::Workspace;
 
 actions!(lsp_command_selector, [Toggle, ToggleArgumentsFocus]);
 
@@ -29,11 +49,8 @@ pub struct LspCommandSelector {
 impl LspCommandSelector {
     fn register(workspace: &mut Workspace, _: Option<&mut Window>, _: &mut Context<Workspace>) {
         workspace.register_action_renderer(|div, workspace, _, cx| {
-            let commands_available = active_buffer(workspace, cx).is_some_and(|buffer| {
-                available_commands(&buffer, workspace.project(), cx)
-                    .next()
-                    .is_some()
-            });
+            let commands_available = active_buffer(workspace, cx)
+                .is_some_and(|buffer| available_commands(&buffer, workspace.project(), cx).next().is_some());
             if !commands_available {
                 return div;
             }
@@ -50,9 +67,7 @@ impl LspCommandSelector {
         let project = workspace.project();
         let commands = available_commands(&buffer, project, cx).collect::<BTreeSet<_>>();
         let lsp_store = project.read(cx).lsp_store();
-        workspace.toggle_modal(window, cx, move |window, cx| {
-            LspCommandSelector::new(lsp_store, commands, window, cx)
-        });
+        workspace.toggle_modal(window, cx, move |window, cx| LspCommandSelector::new(lsp_store, commands, window, cx));
     }
 
     fn new(
@@ -70,28 +85,13 @@ impl LspCommandSelector {
             );
             editor
         });
-        let delegate = LspCommandSelectorDelegate::new(
-            cx.entity().downgrade(),
-            lsp_store,
-            arguments_editor,
-            commands,
-        );
+        let delegate = LspCommandSelectorDelegate::new(cx.entity().downgrade(), lsp_store, arguments_editor, commands);
         let picker = cx.new(|cx| Picker::uniform_list(delegate, window, cx));
         Self { picker }
     }
 
-    fn toggle_arguments_focus(
-        &mut self,
-        _: &ToggleArgumentsFocus,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let arguments_focus_handle = self
-            .picker
-            .read(cx)
-            .delegate
-            .arguments_editor
-            .focus_handle(cx);
+    fn toggle_arguments_focus(&mut self, _: &ToggleArgumentsFocus, window: &mut Window, cx: &mut Context<Self>) {
+        let arguments_focus_handle = self.picker.read(cx).delegate.arguments_editor.focus_handle(cx);
         if arguments_focus_handle.contains_focused(window, cx) {
             let picker_focus_handle = self.picker.focus_handle(cx);
             window.focus(&picker_focus_handle, cx);
@@ -168,7 +168,7 @@ impl LspCommandSelectorDelegate {
         }
     }
 
-    fn is_executing(&self) -> bool {
+    const fn is_executing(&self) -> bool {
         matches!(self.execution, Execution::Running { .. })
     }
 
@@ -205,9 +205,7 @@ impl PickerDelegate for LspCommandSelectorDelegate {
     }
 
     fn has_another_open_menu(&self, window: &Window, cx: &App) -> bool {
-        self.arguments_editor
-            .focus_handle(cx)
-            .contains_focused(window, cx)
+        self.arguments_editor.focus_handle(cx).contains_focused(window, cx)
     }
 
     fn confirm(&mut self, _: bool, window: &mut Window, cx: &mut Context<Picker<Self>>) {
@@ -222,15 +220,9 @@ impl PickerDelegate for LspCommandSelectorDelegate {
         };
         let arguments = self.parse_arguments(cx);
         let task = self.lsp_store.update(cx, |lsp_store, cx| {
-            lsp_store.execute_lsp_command(
-                command.server_id,
-                command.command.to_string(),
-                arguments,
-                cx,
-            )
+            lsp_store.execute_lsp_command(command.server_id, command.command.to_string(), arguments, cx)
         });
-        self.arguments_editor
-            .update(cx, |editor, _| editor.set_read_only(true));
+        self.arguments_editor.update(cx, |editor, _| editor.set_read_only(true));
         let task = cx.spawn_in(window, async move |picker, cx| {
             let execution = match task.await {
                 Ok(result) => {
@@ -240,10 +232,7 @@ impl PickerDelegate for LspCommandSelectorDelegate {
                     Execution::Idle
                 }
                 Err(error) => {
-                    let error = format!(
-                        "Failed to execute LSP command {}: {error:#}",
-                        command.command
-                    );
+                    let error = format!("Failed to execute LSP command {}: {error:#}", command.command);
                     log::error!("{error}");
                     Execution::Failed(SharedString::from(error))
                 }
@@ -252,10 +241,7 @@ impl PickerDelegate for LspCommandSelectorDelegate {
                 .update_in(cx, |picker, window, cx| {
                     let succeeded = matches!(execution, Execution::Idle);
                     picker.delegate.execution = execution;
-                    picker
-                        .delegate
-                        .arguments_editor
-                        .update(cx, |editor, _| editor.set_read_only(false));
+                    picker.delegate.arguments_editor.update(cx, |editor, _| editor.set_read_only(false));
                     cx.notify();
                     if succeeded {
                         picker.delegate.dismissed(window, cx);
@@ -275,21 +261,11 @@ impl PickerDelegate for LspCommandSelectorDelegate {
         self.selected_index
     }
 
-    fn set_selected_index(
-        &mut self,
-        ix: usize,
-        _window: &mut Window,
-        _: &mut Context<Picker<Self>>,
-    ) {
+    fn set_selected_index(&mut self, ix: usize, _window: &mut Window, _: &mut Context<Picker<Self>>) {
         self.selected_index = ix;
     }
 
-    fn update_matches(
-        &mut self,
-        query: String,
-        window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) -> Task<()> {
+    fn update_matches(&mut self, query: String, window: &mut Window, cx: &mut Context<Picker<Self>>) -> Task<()> {
         let background = cx.background_executor().clone();
         let candidates = self.candidates.clone();
         cx.spawn_in(window, async move |picker, cx| {
@@ -305,16 +281,7 @@ impl PickerDelegate for LspCommandSelectorDelegate {
                     })
                     .collect()
             } else {
-                match_strings(
-                    &candidates,
-                    &query,
-                    false,
-                    true,
-                    100,
-                    &AtomicBool::new(false),
-                    background,
-                )
-                .await
+                match_strings(&candidates, &query, false, true, 100, &AtomicBool::new(false), background).await
             };
 
             picker
@@ -342,23 +309,12 @@ impl PickerDelegate for LspCommandSelectorDelegate {
                 .spacing(ListItemSpacing::Sparse)
                 .toggle_state(selected)
                 .disabled(self.is_executing())
-                .child(HighlightedLabel::new(
-                    mat.string.clone(),
-                    mat.positions.clone(),
-                ))
-                .end_slot(
-                    Label::new(command.server_name.0.clone())
-                        .size(LabelSize::Small)
-                        .color(Color::Muted),
-                ),
+                .child(HighlightedLabel::new(mat.string.clone(), mat.positions.clone()))
+                .end_slot(Label::new(command.server_name.0.clone()).size(LabelSize::Small).color(Color::Muted)),
         )
     }
 
-    fn render_footer(
-        &self,
-        _window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) -> Option<AnyElement> {
+    fn render_footer(&self, _window: &mut Window, cx: &mut Context<Picker<Self>>) -> Option<AnyElement> {
         Some(
             v_flex()
                 .p_2()
@@ -369,11 +325,7 @@ impl PickerDelegate for LspCommandSelectorDelegate {
                     h_flex()
                         .gap_2()
                         .justify_between()
-                        .child(
-                            Label::new("Arguments")
-                                .size(LabelSize::Small)
-                                .color(Color::Muted),
-                        )
+                        .child(Label::new("Arguments").size(LabelSize::Small).color(Color::Muted))
                         .child(
                             h_flex()
                                 .gap_1()
@@ -382,26 +334,18 @@ impl PickerDelegate for LspCommandSelectorDelegate {
                                     &self.arguments_editor.focus_handle(cx),
                                     cx,
                                 ))
-                                .child(
-                                    Label::new("to switch focus")
-                                        .size(LabelSize::Small)
-                                        .color(Color::Muted),
-                                ),
+                                .child(Label::new("to switch focus").size(LabelSize::Small).color(Color::Muted)),
                         ),
                 )
                 .child(self.arguments_editor.clone())
                 .map(|footer| match &self.execution {
                     Execution::Idle => footer,
-                    Execution::Running { .. } => footer.child(
-                        Label::new("Executing command…")
-                            .size(LabelSize::Small)
-                            .color(Color::Muted),
-                    ),
-                    Execution::Failed(error) => footer.child(
-                        Label::new(error.clone())
-                            .size(LabelSize::Small)
-                            .color(Color::Error),
-                    ),
+                    Execution::Running { .. } => {
+                        footer.child(Label::new("Executing command…").size(LabelSize::Small).color(Color::Muted))
+                    }
+                    Execution::Failed(error) => {
+                        footer.child(Label::new(error.clone()).size(LabelSize::Small).color(Color::Error))
+                    }
                 })
                 .into_any_element(),
         )
@@ -411,11 +355,7 @@ impl PickerDelegate for LspCommandSelectorDelegate {
 fn active_buffer(workspace: &Workspace, cx: &App) -> Option<Entity<Buffer>> {
     let editor = workspace.active_item(cx)?.act_as::<Editor>(cx)?;
     let editor = editor.read(cx);
-    editor
-        .buffer()
-        .read(cx)
-        .as_singleton()
-        .or_else(|| editor.active_buffer(cx))
+    editor.buffer().read(cx).as_singleton().or_else(|| editor.active_buffer(cx))
 }
 
 fn available_commands<'a>(
@@ -426,10 +366,8 @@ fn available_commands<'a>(
     let project = project.read(cx);
     let lsp_store = project.lsp_store().read(cx);
     let buffer = buffer.read(cx);
-    let adapters = buffer
-        .language()
-        .map(|language| project.languages().lsp_adapters(&language.name()))
-        .unwrap_or_default();
+    let adapters =
+        buffer.language().map(|language| project.languages().lsp_adapters(&language.name())).unwrap_or_default();
     let worktree_owning_servers = File::from_dyn(buffer.file())
         .and_then(|file| project.worktree_for_id(file.worktree_id(cx), cx))
         .map(|worktree| worktree.read(cx))
@@ -442,18 +380,12 @@ fn available_commands<'a>(
             adapters.iter().any(|adapter| adapter.name() == status.name)
                 && match (opened_in_servers, worktree_owning_servers, status.worktree) {
                     (Some(server_ids), _, _) => server_ids.contains(server_id),
-                    (None, Some(buffer_worktree), Some(server_worktree)) => {
-                        buffer_worktree == server_worktree
-                    }
+                    (None, Some(buffer_worktree), Some(server_worktree)) => buffer_worktree == server_worktree,
                     (None, _, _) => true,
                 }
         })
         .filter_map(move |(server_id, status)| {
-            let provider = lsp_store
-                .lsp_server_capabilities
-                .get(&server_id)?
-                .execute_command_provider
-                .as_ref()?;
+            let provider = lsp_store.lsp_server_capabilities.get(&server_id)?.execute_command_provider.as_ref()?;
             Some((server_id, status.name.clone(), &provider.commands))
         })
         .flat_map(|(server_id, server_name, commands)| {

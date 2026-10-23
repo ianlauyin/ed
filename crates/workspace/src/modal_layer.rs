@@ -151,7 +151,7 @@ impl ModalLayer {
         let mut previous_focus_handle = window.focused(cx);
         if let Some(active_modal) = &self.active_modal {
             let should_close = active_modal.modal.view().downcast::<V>().is_ok();
-            previous_focus_handle = active_modal.previous_focus_handle.clone();
+            previous_focus_handle.clone_from(&active_modal.previous_focus_handle);
             let did_close = self.hide_modal(window, cx);
             if should_close || !did_close {
                 return;
@@ -271,7 +271,7 @@ impl ModalLayer {
         active_modal.modal.view().downcast::<V>().ok()
     }
 
-    pub fn has_active_modal(&self) -> bool {
+    pub const fn has_active_modal(&self) -> bool {
         self.active_modal.is_some()
     }
 }

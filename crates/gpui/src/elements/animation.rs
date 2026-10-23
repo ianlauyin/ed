@@ -1,13 +1,24 @@
-use scheduler::Instant;
-use std::{cell::Cell, rc::Rc, time::Duration};
-
-use crate::{
-    AnyElement, App, Element, ElementId, GlobalElementId, IntoElement, ParentElement,
-    SpringAnimation, SpringConfig, SpringPlayback, SpringState, SpringTarget, Window,
-};
+use std::cell::Cell;
+use std::rc::Rc;
+use std::time::Duration;
 
 pub use easing::*;
+use scheduler::Instant;
 use smallvec::SmallVec;
+
+use crate::AnyElement;
+use crate::App;
+use crate::Element;
+use crate::ElementId;
+use crate::GlobalElementId;
+use crate::IntoElement;
+use crate::ParentElement;
+use crate::SpringAnimation;
+use crate::SpringConfig;
+use crate::SpringPlayback;
+use crate::SpringState;
+use crate::SpringTarget;
+use crate::Window;
 
 /// An animation that can be applied to an element.
 #[derive(Clone)]
@@ -30,23 +41,17 @@ impl Animation {
     /// Create a new animation with the given duration.
     /// By default the animation will only run once and will use a linear easing function.
     pub fn new(duration: Duration) -> Self {
-        Self {
-            duration,
-            oneshot: true,
-            synced: false,
-            easing: Rc::new(linear),
-            max_fps: None,
-        }
+        Self { duration, oneshot: true, synced: false, easing: Rc::new(linear), max_fps: None }
     }
 
     /// Set the animation to loop when it finishes.
-    pub fn repeat(mut self) -> Self {
+    pub const fn repeat(mut self) -> Self {
         self.oneshot = false;
         self
     }
 
     /// Set the animation to loop when it finishes, phase-locked to a clock shared by the whole [`App`].
-    pub fn repeat_synced(mut self) -> Self {
+    pub const fn repeat_synced(mut self) -> Self {
         self.oneshot = false;
         self.synced = true;
         self
@@ -65,7 +70,7 @@ impl Animation {
     /// every frame, the animation schedules its next render `1 / max_fps`
     /// seconds after the current one. Values that are not finite and positive
     /// are ignored.
-    pub fn with_max_fps(mut self, max_fps: f32) -> Self {
+    pub const fn with_max_fps(mut self, max_fps: f32) -> Self {
         self.max_fps = Some(max_fps);
         self
     }
@@ -131,13 +136,7 @@ pub trait AnimationExt {
         T: SpringTarget,
         T::Output: 'static,
     {
-        let SpringAnimation {
-            config,
-            target,
-            epsilon,
-            initial,
-            playback,
-        } = animation;
+        let SpringAnimation { config, target, epsilon, initial, playback } = animation;
         let scalar_target = target.target();
         SpringAnimationElement {
             id: id.into(),
@@ -147,9 +146,7 @@ pub trait AnimationExt {
             epsilon,
             initial,
             playback,
-            animator: Some(Box::new(move |this, value| {
-                animator(this, target.resolve(value))
-            })),
+            animator: Some(Box::new(move |this, value| animator(this, target.resolve(value)))),
         }
     }
 }
@@ -268,11 +265,8 @@ impl<E: IntoElement + 'static> Element for SpringAnimationElement<E> {
         window.with_element_state(global_id.unwrap(), |state, window| {
             let now = Instant::now();
             let initial = self.initial.unwrap_or(self.target);
-            let mut state = state.unwrap_or_else(|| SpringElementState {
-                spring: SpringState {
-                    position: initial,
-                    velocity: 0.0,
-                },
+            let mut state = state.unwrap_or(SpringElementState {
+                spring: SpringState { position: initial, velocity: 0.0 },
                 target: self.target,
                 config: self.config,
                 initial,
@@ -297,21 +291,12 @@ impl<E: IntoElement + 'static> Element for SpringAnimationElement<E> {
             let done = match self.playback {
                 SpringPlayback::Running => {
                     if cx.reduce_motion() {
-                        state.spring = SpringState {
-                            position: state.target,
-                            velocity: 0.0,
-                        };
+                        state.spring = SpringState { position: state.target, velocity: 0.0 };
                         true
                     } else {
-                        let done =
-                            state
-                                .config
-                                .is_settled(state.spring, state.target, self.epsilon);
+                        let done = state.config.is_settled(state.spring, state.target, self.epsilon);
                         if done {
-                            state.spring = SpringState {
-                                position: state.target,
-                                velocity: 0.0,
-                            };
+                            state.spring = SpringState { position: state.target, velocity: 0.0 };
                         }
                         done
                     }
@@ -322,17 +307,11 @@ impl<E: IntoElement + 'static> Element for SpringAnimationElement<E> {
                     true
                 }
                 SpringPlayback::Completed => {
-                    state.spring = SpringState {
-                        position: state.target,
-                        velocity: 0.0,
-                    };
+                    state.spring = SpringState { position: state.target, velocity: 0.0 };
                     true
                 }
                 SpringPlayback::Cancelled => {
-                    state.spring = SpringState {
-                        position: state.initial,
-                        velocity: 0.0,
-                    };
+                    state.spring = SpringState { position: state.initial, velocity: 0.0 };
                     true
                 }
             };
@@ -401,11 +380,7 @@ impl<E: IntoElement + 'static> Element for AnimationElement<E> {
             });
             let (animation_ix, delta, done) = if cx.reduce_motion() {
                 let animation_ix = self.animations.len() - 1;
-                let delta = if self.animations[animation_ix].oneshot {
-                    1.0
-                } else {
-                    0.0
-                };
+                let delta = if self.animations[animation_ix].oneshot { 1.0 } else { 0.0 };
                 (animation_ix, delta, true)
             } else {
                 let animation_ix = state.animation_ix;
@@ -496,7 +471,7 @@ mod easing {
     use std::f32::consts::PI;
 
     /// The linear easing function, or delta itself
-    pub fn linear(delta: f32) -> f32 {
+    pub const fn linear(delta: f32) -> f32 {
         delta
     }
 
@@ -523,11 +498,7 @@ mod easing {
     /// Apply the given easing function, first in the forward direction and then in the reverse direction
     pub fn bounce(easing: impl Fn(f32) -> f32) -> impl Fn(f32) -> f32 {
         move |delta| {
-            if delta < 0.5 {
-                easing(delta * 2.0)
-            } else {
-                easing((1.0 - delta) * 2.0)
-            }
+            if delta < 0.5 { easing(delta * 2.0) } else { easing((1.0 - delta) * 2.0) }
         }
     }
 

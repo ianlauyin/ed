@@ -1,11 +1,17 @@
 //! Classifies file contents as text or binary and decodes text of any
 //! supported encoding into UTF-8, both whole and as a stream.
 
-use std::io::{self, Read};
+use std::io::Read;
+use std::io::{self};
 
 use anyhow::Result;
 use chardetng::EncodingDetector;
-use encoding_rs::{CoderResult, Decoder, Encoding, UTF_8, UTF_16BE, UTF_16LE};
+use encoding_rs::CoderResult;
+use encoding_rs::Decoder;
+use encoding_rs::Encoding;
+use encoding_rs::UTF_8;
+use encoding_rs::UTF_16BE;
+use encoding_rs::UTF_16LE;
 use futures_lite::future::yield_now;
 
 /// Number of leading bytes that [`analyze_byte_content`] inspects.
@@ -55,32 +61,17 @@ pub fn decode_text(bytes: Vec<u8>) -> Result<DecodedText> {
     let (bom_encoding, byte_content) = decode_byte_header(&bytes);
     if let Some(encoding) = bom_encoding {
         let (text, _) = encoding.decode_with_bom_removal(&bytes);
-        return Ok(DecodedText {
-            text: text.into_owned(),
-            encoding,
-            has_bom: true,
-        });
+        return Ok(DecodedText { text: text.into_owned(), encoding, has_bom: true });
     }
 
     if let Some(encoding) = byte_content.encoding() {
         let (text, _, _) = encoding.decode(&bytes);
-        return Ok(DecodedText {
-            text: text.into_owned(),
-            encoding,
-            has_bom: false,
-        });
+        return Ok(DecodedText { text: text.into_owned(), encoding, has_bom: false });
     }
-    anyhow::ensure!(
-        byte_content != ByteContent::Binary,
-        "Binary files cannot be decoded into text"
-    );
+    anyhow::ensure!(byte_content != ByteContent::Binary, "Binary files cannot be decoded into text");
 
     match String::from_utf8(bytes) {
-        Ok(text) if !text.contains('\x1b') => Ok(DecodedText {
-            text,
-            encoding: UTF_8,
-            has_bom: false,
-        }),
+        Ok(text) if !text.contains('\x1b') => Ok(DecodedText { text, encoding: UTF_8, has_bom: false }),
         Ok(text) => Ok(decode_with_detected_encoding(text.into_bytes())),
         Err(error) => Ok(decode_with_detected_encoding(error.into_bytes())),
     }
@@ -175,12 +166,7 @@ impl<'a> DecodingReader<'a> {
         self.output_position = 0;
         let read = self.inner.read(&mut self.input)?;
         self.finished = read == 0;
-        decode_block(
-            &mut self.decoder,
-            &self.input[..read],
-            self.finished,
-            &mut self.output,
-        )
+        decode_block(&mut self.decoder, &self.input[..read], self.finished, &mut self.output)
     }
 }
 
@@ -261,11 +247,7 @@ pub fn analyze_byte_content(bytes: &[u8]) -> ByteContent {
             continue;
         }
 
-        let is_text_like = match byte {
-            b'\t' | b'\n' | b'\r' | 0x0C => true,
-            0x20..=0x7E | 0x80..=0xBF | 0xC2..=0xF4 => true,
-            _ => false,
-        };
+        let is_text_like = matches!(byte, b'\t' | b'\n' | b'\r' | 0x0C | 0x20..=0x7E | 0x80..=0xBF | 0xC2..=0xF4);
 
         if !is_text_like {
             non_text_like_count += 1;
@@ -309,12 +291,7 @@ pub fn analyze_byte_content(bytes: &[u8]) -> ByteContent {
     }
 }
 
-fn decode_block(
-    decoder: &mut Decoder,
-    block: &[u8],
-    last: bool,
-    output: &mut Vec<u8>,
-) -> io::Result<()> {
+fn decode_block(decoder: &mut Decoder, block: &[u8], last: bool, output: &mut Vec<u8>) -> io::Result<()> {
     let capacity = decoder
         .max_utf8_buffer_length(block.len())
         .ok_or_else(|| io::Error::new(io::ErrorKind::OutOfMemory, "decoded block is too large"))?;
@@ -333,11 +310,7 @@ fn decode_with_detected_encoding(bytes: Vec<u8>) -> DecodedText {
     detector.feed(&bytes, true);
     let encoding = detector.guess(None, true);
     let (text, _, _) = encoding.decode(&bytes);
-    DecodedText {
-        text: text.into_owned(),
-        encoding,
-        has_bom: false,
-    }
+    DecodedText { text: text.into_owned(), encoding, has_bom: false }
 }
 
 const KNOWN_BINARY_HEADERS: &[&[u8]] = &[
@@ -400,9 +373,7 @@ const ADDITIONAL_BINARY_HEADERS: &[&[u8]] = &[
 
 fn has_binary_header(bytes: &[u8], headers: &[&[u8]]) -> bool {
     let index = headers.partition_point(|header| *header <= bytes);
-    headers[..index]
-        .last()
-        .is_some_and(|header| bytes.starts_with(header))
+    headers[..index].last().is_some_and(|header| bytes.starts_with(header))
 }
 
 fn is_gguf_header(bytes: &[u8]) -> bool {
@@ -439,8 +410,8 @@ fn is_plausible_utf16_text(bytes: &[u8], little_endian: bool) -> bool {
             0x0000..=0x001F | 0x007F..=0x009F | 0xFFFE | 0xFFFF => suspicious_count += 1,
             0xD800..=0xDBFF => {
                 let next_offset = i + 2;
-                let has_low_surrogate = read_u16(bytes, next_offset, little_endian)
-                    .is_some_and(|next| (0xDC00..=0xDFFF).contains(&next));
+                let has_low_surrogate =
+                    read_u16(bytes, next_offset, little_endian).is_some_and(|next| (0xDC00..=0xDFFF).contains(&next));
                 if has_low_surrogate {
                     total += 1;
                     word_like_count += 2;

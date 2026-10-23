@@ -1,7 +1,12 @@
 use std::sync::Arc;
 
-use gpui::{Hsla, IntoElement, Point, svg};
-use strum::{EnumIter, EnumString, IntoStaticStr};
+use gpui::Hsla;
+use gpui::IntoElement;
+use gpui::Point;
+use gpui::svg;
+use strum::EnumIter;
+use strum::EnumString;
+use strum::IntoStaticStr;
 
 use crate::prelude::*;
 
@@ -36,7 +41,7 @@ pub enum IconDecorationKind {
 }
 
 impl IconDecorationKind {
-    fn fg(&self) -> KnockoutIconName {
+    const fn fg(&self) -> KnockoutIconName {
         match self {
             Self::X => KnockoutIconName::XFg,
             Self::Dot => KnockoutIconName::DotFg,
@@ -44,7 +49,7 @@ impl IconDecorationKind {
         }
     }
 
-    fn bg(&self) -> KnockoutIconName {
+    const fn bg(&self) -> KnockoutIconName {
         match self {
             Self::X => KnockoutIconName::XBg,
             Self::Dot => KnockoutIconName::DotBg,
@@ -86,13 +91,13 @@ impl IconDecoration {
     }
 
     /// Sets the kind of decoration.
-    pub fn kind(mut self, kind: IconDecorationKind) -> Self {
+    pub const fn kind(mut self, kind: IconDecorationKind) -> Self {
         self.kind = kind;
         self
     }
 
     /// Sets the color of the decoration.
-    pub fn color(mut self, color: Hsla) -> Self {
+    pub const fn color(mut self, color: Hsla) -> Self {
         self.color = color;
         self
     }
@@ -101,25 +106,25 @@ impl IconDecoration {
     ///
     /// Match this to the background of the element the icon will be rendered
     /// on.
-    pub fn knockout_color(mut self, color: Hsla) -> Self {
+    pub const fn knockout_color(mut self, color: Hsla) -> Self {
         self.knockout_color = color;
         self
     }
 
     /// Sets the color of the decoration that is used on hover.
-    pub fn knockout_hover_color(mut self, color: Hsla) -> Self {
+    pub const fn knockout_hover_color(mut self, color: Hsla) -> Self {
         self.knockout_hover_color = color;
         self
     }
 
     /// Sets the position of the decoration.
-    pub fn position(mut self, position: Point<Pixels>) -> Self {
+    pub const fn position(mut self, position: Point<Pixels>) -> Self {
         self.position = position;
         self
     }
 
     /// Sets the size of the decoration.
-    pub fn size(mut self, size: Pixels) -> Self {
+    pub const fn size(mut self, size: Pixels) -> Self {
         self.size = size;
         self
     }
@@ -135,13 +140,8 @@ impl RenderOnce for IconDecoration {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         let size = self.size;
 
-        let foreground = svg()
-            .absolute()
-            .bottom_0()
-            .right_0()
-            .size(size)
-            .path(self.kind.fg().path())
-            .text_color(self.color);
+        let foreground =
+            svg().absolute().bottom_0().right_0().size(size).path(self.kind.fg().path()).text_color(self.color);
 
         let background = svg()
             .absolute()
@@ -151,9 +151,7 @@ impl RenderOnce for IconDecoration {
             .path(self.kind.bg().path())
             .text_color(self.knockout_color)
             .map(|this| match self.group_name {
-                Some(group_name) => this.group_hover(group_name, |style| {
-                    style.text_color(self.knockout_hover_color)
-                }),
+                Some(group_name) => this.group_hover(group_name, |style| style.text_color(self.knockout_hover_color)),
                 None => this.hover(|style| style.text_color(self.knockout_hover_color)),
             });
 

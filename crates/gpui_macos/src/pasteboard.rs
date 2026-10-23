@@ -1,18 +1,29 @@
 use core::slice;
-use std::ffi::{CStr, c_char, c_void};
+use std::ffi::CStr;
+use std::ffi::c_char;
+use std::ffi::c_void;
 use std::path::PathBuf;
 
-use objc2::{class, msg_send, rc::Retained, runtime::AnyObject};
+use gpui::ClipboardEntry;
+use gpui::ClipboardItem;
+use gpui::ClipboardString;
+use gpui::ExternalPaths;
+use gpui::Image;
+use gpui::ImageFormat;
+use gpui::hash;
+use objc2::class;
+use objc2::msg_send;
+use objc2::rc::Retained;
+use objc2::runtime::AnyObject;
 use smallvec::SmallVec;
 use strum::IntoEnumIterator as _;
 
-use crate::{
-    ns::{NSInteger, NSUInteger, array_iter, id, nil},
-    ns_string,
-};
-use gpui::{
-    ClipboardEntry, ClipboardItem, ClipboardString, ExternalPaths, Image, ImageFormat, hash,
-};
+use crate::ns::NSInteger;
+use crate::ns::NSUInteger;
+use crate::ns::array_iter;
+use crate::ns::id;
+use crate::ns::nil;
+use crate::ns_string;
 
 pub struct Pasteboard {
     inner: Retained<AnyObject>,
@@ -70,9 +81,7 @@ impl Pasteboard {
 
             // Next, check for a plain string.
             if let Some(string_entry) = self.read_string_from_pasteboard() {
-                return Some(ClipboardItem {
-                    entries: vec![string_entry],
-                });
+                return Some(ClipboardItem { entries: vec![string_entry] });
             }
 
             // Finally, try the various supported image types.
@@ -91,16 +100,13 @@ impl Pasteboard {
 
         unsafe {
             let types: id = msg_send![&*self.inner, types];
-            let contains: bool =
-                !types.is_null() && msg_send![types, containsObject: ut_type.inner()];
+            let contains: bool = !types.is_null() && msg_send![types, containsObject: ut_type.inner()];
             if contains {
                 self.data_for_type(ut_type.inner_mut()).map(|bytes| {
                     let bytes = bytes.to_vec();
                     let id = hash(&bytes);
 
-                    ClipboardItem {
-                        entries: vec![ClipboardEntry::Image(Image { format, bytes, id })],
-                    }
+                    ClipboardItem { entries: vec![ClipboardEntry::Image(Image { format, bytes, id })] }
                 })
             } else {
                 None
@@ -113,8 +119,8 @@ impl Pasteboard {
             let pasteboard_types: id = msg_send![&*self.inner, types];
             let string_type: id = ns_string("public.utf8-plain-text");
 
-            let contains: bool = !pasteboard_types.is_null()
-                && msg_send![pasteboard_types, containsObject: string_type];
+            let contains: bool =
+                !pasteboard_types.is_null() && msg_send![pasteboard_types, containsObject: string_type];
             if !contains {
                 return None;
             }
@@ -122,19 +128,13 @@ impl Pasteboard {
             let text_bytes = self.data_for_type(string_type)?;
 
             let text = String::from_utf8_lossy(&text_bytes).to_string();
-            let metadata = self
-                .data_for_type(Retained::as_ptr(&self.text_hash_type).cast_mut())
-                .and_then(|hash_bytes| {
+            let metadata =
+                self.data_for_type(Retained::as_ptr(&self.text_hash_type).cast_mut()).and_then(|hash_bytes| {
                     let hash_bytes = hash_bytes.as_slice().try_into().ok()?;
                     let hash = u64::from_be_bytes(hash_bytes);
-                    let metadata =
-                        self.data_for_type(Retained::as_ptr(&self.metadata_type).cast_mut())?;
+                    let metadata = self.data_for_type(Retained::as_ptr(&self.metadata_type).cast_mut())?;
 
-                    if hash == ClipboardString::text_hash(&text) {
-                        String::from_utf8(metadata).ok()
-                    } else {
-                        None
-                    }
+                    if hash == ClipboardString::text_hash(&text) { String::from_utf8(metadata).ok() } else { None }
                 });
 
             Some(ClipboardEntry::String(ClipboardString { text, metadata }))
@@ -173,10 +173,7 @@ impl Pasteboard {
                 [ClipboardEntry::ExternalPaths(paths)] => {
                     self.write_file_urls(paths, None);
                 }
-                [
-                    ClipboardEntry::ExternalPaths(paths),
-                    ClipboardEntry::String(string),
-                ] => {
+                [ClipboardEntry::ExternalPaths(paths), ClipboardEntry::String(string)] => {
                     self.write_file_urls(paths, Some(string));
                 }
                 _ => {
@@ -187,20 +184,14 @@ impl Pasteboard {
                     //
                     // Note how `any_images` is always `false`. We should fix that, but that's orthogonal to the refactor.
 
-                    let mut combined = ClipboardString {
-                        text: String::new(),
-                        metadata: None,
-                    };
+                    let mut combined = ClipboardString { text: String::new(), metadata: None };
 
                     for entry in item.entries {
-                        match entry {
-                            ClipboardEntry::String(text) => {
-                                combined.text.push_str(&text.text());
-                                if combined.metadata.is_none() {
-                                    combined.metadata = text.metadata;
-                                }
+                        if let ClipboardEntry::String(text) = entry {
+                            combined.text.push_str(text.text());
+                            if combined.metadata.is_none() {
+                                combined.metadata = text.metadata;
                             }
-                            _ => {}
                         }
                     }
 
@@ -215,18 +206,15 @@ impl Pasteboard {
             let _: NSInteger = msg_send![&*self.inner, clearContents];
 
             let text_bytes = ns_data(string.text.as_ptr(), string.text.len());
-            let _: bool =
-                msg_send![&*self.inner, setData: text_bytes, forType: NSPasteboardTypeString];
+            let _: bool = msg_send![&*self.inner, setData: text_bytes, forType: NSPasteboardTypeString];
 
             if let Some(metadata) = string.metadata.as_ref() {
                 let hash_bytes = ClipboardString::text_hash(&string.text).to_be_bytes();
                 let hash_bytes = ns_data(hash_bytes.as_ptr(), hash_bytes.len());
-                let _: bool =
-                    msg_send![&*self.inner, setData: hash_bytes, forType: &*self.text_hash_type];
+                let _: bool = msg_send![&*self.inner, setData: hash_bytes, forType: &*self.text_hash_type];
 
                 let metadata_bytes = ns_data(metadata.as_ptr(), metadata.len());
-                let _: bool =
-                    msg_send![&*self.inner, setData: metadata_bytes, forType: &*self.metadata_type];
+                let _: bool = msg_send![&*self.inner, setData: metadata_bytes, forType: &*self.metadata_type];
             }
         }
     }
@@ -250,8 +238,7 @@ impl Pasteboard {
 
             if let Some(string) = string {
                 let text_bytes = ns_data(string.text.as_ptr(), string.text.len());
-                let _: bool =
-                    msg_send![&*self.inner, setData: text_bytes, forType: NSPasteboardTypeString];
+                let _: bool = msg_send![&*self.inner, setData: text_bytes, forType: NSPasteboardTypeString];
             }
         }
     }
@@ -348,11 +335,11 @@ impl UTType {
         Self(unsafe { ns_string("public.pbm") })
     }
 
-    fn inner(&self) -> *const AnyObject {
+    const fn inner(&self) -> *const AnyObject {
         self.0
     }
 
-    pub fn inner_mut(&self) -> *mut AnyObject {
+    pub const fn inner_mut(&self) -> *mut AnyObject {
         self.0 as *mut _
     }
 }
@@ -363,27 +350,19 @@ mod tests {
 
     #[test]
     fn writes_file_urls_readable_as_external_paths() {
-        let pasteboard =
-            unsafe { Pasteboard::new(msg_send![class!(NSPasteboard), pasteboardWithUniqueName]) };
+        let pasteboard = unsafe { Pasteboard::new(msg_send![class!(NSPasteboard), pasteboardWithUniqueName]) };
         let dir = std::env::temp_dir().canonicalize().unwrap();
-        let paths: SmallVec<[PathBuf; 2]> =
-            smallvec::smallvec![dir.join("a.txt"), dir.join("b.txt")];
+        let paths: SmallVec<[PathBuf; 2]> = smallvec::smallvec![dir.join("a.txt"), dir.join("b.txt")];
         let text = "a\nb".to_string();
         pasteboard.write(ClipboardItem {
             entries: vec![
                 ClipboardEntry::ExternalPaths(ExternalPaths(paths.clone())),
-                ClipboardEntry::String(ClipboardString {
-                    text: text.clone(),
-                    metadata: None,
-                }),
+                ClipboardEntry::String(ClipboardString { text: text.clone(), metadata: None }),
             ],
         });
 
         let item = pasteboard.read().unwrap();
-        assert_eq!(
-            item.entries[0],
-            ClipboardEntry::ExternalPaths(ExternalPaths(paths))
-        );
+        assert_eq!(item.entries[0], ClipboardEntry::ExternalPaths(ExternalPaths(paths)));
         assert_eq!(item.text(), Some(text));
     }
 }

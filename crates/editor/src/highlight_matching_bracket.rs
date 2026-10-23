@@ -1,16 +1,18 @@
-use crate::{Editor, HighlightKey, RangeToAnchorExt, display_map::DisplaySnapshot};
-use gpui::{AppContext, Context, HighlightStyle};
+use gpui::AppContext;
+use gpui::Context;
+use gpui::HighlightStyle;
 use language::CursorShape;
 use multi_buffer::MultiBufferOffset;
 use theme::ActiveTheme;
 
+use crate::Editor;
+use crate::HighlightKey;
+use crate::RangeToAnchorExt;
+use crate::display_map::DisplaySnapshot;
+
 impl Editor {
-    pub fn refresh_matching_bracket_highlights(
-        &mut self,
-        snapshot: &DisplaySnapshot,
-        cx: &mut Context<Editor>,
-    ) {
-        let newest_selection = self.selections.newest::<MultiBufferOffset>(&snapshot);
+    pub fn refresh_matching_bracket_highlights(&mut self, snapshot: &DisplaySnapshot, cx: &mut Context<Editor>) {
+        let newest_selection = self.selections.newest::<MultiBufferOffset>(snapshot);
         // Don't highlight brackets if the selection isn't empty
         if !newest_selection.is_empty() {
             self.clear_highlights(HighlightKey::MatchingBracket, cx);
@@ -27,10 +29,9 @@ impl Editor {
         let mut tail = head;
         if (self.cursor_shape == CursorShape::Block || self.cursor_shape == CursorShape::Hollow)
             && head < buffer_snapshot.len()
+            && let Some(tail_ch) = buffer_snapshot.chars_at(tail).next()
         {
-            if let Some(tail_ch) = buffer_snapshot.chars_at(tail).next() {
-                tail += tail_ch.len_utf8();
-            }
+            tail += tail_ch.len_utf8();
         }
         let task = cx.background_spawn({
             let buffer_snapshot = buffer_snapshot.clone();
@@ -51,10 +52,7 @@ impl Editor {
                     .ok()
                     .flatten();
                 let new_ranges = bracket_ranges.map(|(opening_range, closing_range)| {
-                    vec![
-                        opening_range.to_anchors(&buffer_snapshot),
-                        closing_range.to_anchors(&buffer_snapshot),
-                    ]
+                    vec![opening_range.to_anchors(&buffer_snapshot), closing_range.to_anchors(&buffer_snapshot)]
                 });
 
                 if current_ranges != new_ranges {
@@ -66,9 +64,7 @@ impl Editor {
                                 new_ranges,
                                 HighlightStyle {
                                     background_color: Some(
-                                        cx.theme()
-                                            .colors()
-                                            .editor_document_highlight_bracket_background,
+                                        cx.theme().colors().editor_document_highlight_bracket_background,
                                     ),
                                     ..Default::default()
                                 },

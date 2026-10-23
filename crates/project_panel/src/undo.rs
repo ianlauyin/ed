@@ -33,20 +33,20 @@
 //!
 //! User Operation  Create(src/main.rs)
 //! History
-//! 	0 Created(src/main.rs)
+//!     0 Created(src/main.rs)
 //!     1 +++cursor+++
 //!
 //! User Operation  Rename(README.md, readme.md)
 //! History
-//! 	0 Created(src/main.rs)
-//! 	1 Renamed(README.md, readme.md)
+//!     0 Created(src/main.rs)
+//!     1 Renamed(README.md, readme.md)
 //!     2 +++cursor+++
 //!
 //! User Operation  Create(CONTRIBUTING.md)
 //! History
-//! 	0 Created(src/main.rs)
+//!     0 Created(src/main.rs)
 //!     1 Renamed(README.md, readme.md)
-//! 	2 Created(CONTRIBUTING.md) ──┐
+//!     2 Created(CONTRIBUTING.md) ──┐
 //!     3 +++cursor+++               │(before the cursor)
 //!                                  │
 //!   ┌──────────────────────────────┴─────────────────────────────────────────────┐
@@ -61,19 +61,19 @@
 //! Execute         Created(CONTRIBUTING.md) ────────> Trash(CONTRIBUTING.md)
 //! Record          Trashed(WorktreeId(1), TrashId(1))
 //! History
-//! 	0 Created(src/main.rs)
-//! 	1 Renamed(README.md, readme.md) ─────┐
+//!     0 Created(src/main.rs)
+//!     1 Renamed(README.md, readme.md) ─────┐
 //!     2 +++cursor+++                       │(before the cursor)
-//! 	2 Trashed(WorktreeId(1), TrashId(1)) │
+//!     2 Trashed(WorktreeId(1), TrashId(1)) │
 //!                                          │
 //! User Operation  Undo                     v
 //! Execute         Renamed(README.md, readme.md) ───> Rename(readme.md, README.md)
 //! Record          Renamed(readme.md, README.md)
 //! History
-//! 	0 Created(src/main.rs)
+//!     0 Created(src/main.rs)
 //!     1 +++cursor+++
-//! 	1 Renamed(readme.md, README.md) ─────┐ (at the cursor)
-//! 	2 Trashed(WorktreeId(1), TrashId(1)) │
+//!     1 Renamed(readme.md, README.md) ─────┐ (at the cursor)
+//!     2 Trashed(WorktreeId(1), TrashId(1)) │
 //!                                          │
 //!   ┌──────────────────────────────────────┴─────────────────────────────────────┐
 //!     Redoing will take the result at the cursor position, convert that into the
@@ -87,18 +87,18 @@
 //! Execute         Renamed(readme.md, README.md) ───> Rename(README.md, readme.md)
 //! Record          Renamed(README.md, readme.md)
 //! History
-//! 	0 Created(src/main.rs)
-//! 	1 Renamed(README.md, readme.md)
+//!     0 Created(src/main.rs)
+//!     1 Renamed(README.md, readme.md)
 //!     2 +++cursor+++
-//! 	2 Trashed(WorktreeId(1), TrashId(1)) ─┐ (at the cursor)
+//!     2 Trashed(WorktreeId(1), TrashId(1)) ─┐ (at the cursor)
 //!                                 │
 //! User Operation  Redo            v
 //! Execute         Trashed(WorktreeId(1), TrashId(1)) ─> Restore(WorktreeId(1), TrashId(1))
 //! Record          Restored(ProjectPath)
 //! History
-//! 	0 Created(src/main.rs)
-//! 	1 Renamed(README.md, readme.md)
-//! 	2 Restored(ProjectPath)
+//!     0 Created(src/main.rs)
+//!     1 Renamed(README.md, readme.md)
+//!     2 Restored(ProjectPath)
 //!     2 +++cursor+++
 
 //!
@@ -292,7 +292,7 @@ pub(crate) enum Change {
 }
 
 impl Change {
-    fn to_inverse(self) -> Operation {
+    fn into_inverse(self) -> Operation {
         match self {
             Change::Created(project_path) => Operation::Trash(project_path),
             Change::Trashed(worktree_id, trash_id) => Operation::Restore(worktree_id, trash_id),
@@ -309,7 +309,7 @@ impl Change {
             //
             // If we first tried to revert the directory creation, it would fail
             // because there's still files inside the directory.
-            Change::Batched(changes) => Operation::Batch(changes.into_iter().rev().map(Change::to_inverse).collect()),
+            Change::Batched(changes) => Operation::Batch(changes.into_iter().rev().map(Change::into_inverse).collect()),
         }
     }
 }
@@ -399,7 +399,7 @@ enum UndoMessage {
 }
 
 impl UndoMessage {
-    fn error_title(&self) -> &'static str {
+    const fn error_title(&self) -> &'static str {
         match self {
             UndoMessage::Changed(_) => "this is a bug in the manage_undo_and_redo task please report",
             UndoMessage::Undo => "Undo Failed",
@@ -475,7 +475,7 @@ impl Inner {
         }
     }
 
-    pub fn can_undo(&self) -> bool {
+    pub const fn can_undo(&self) -> bool {
         self.cursor > 0
     }
 
@@ -524,7 +524,7 @@ impl Inner {
         // we remove the change from the `history` even before attempting to
         // execute its inversion.
         let change = self.history.remove(before_cursor).expect("we can undo");
-        let operation = change.clone().to_inverse();
+        let operation = change.clone().into_inverse();
 
         match operation.execute(self, cx).await? {
             Some(undo_change) => self.history.insert(before_cursor, undo_change),
@@ -547,7 +547,7 @@ impl Inner {
         // we remove the change from the `history` even before attempting to
         // execute its inversion.
         let change = self.history.remove(self.cursor).expect("we can redo");
-        let operation = change.clone().to_inverse();
+        let operation = change.clone().into_inverse();
         match operation.execute(self, cx).await? {
             Some(redo_change) => {
                 self.history.insert(self.cursor, redo_change);

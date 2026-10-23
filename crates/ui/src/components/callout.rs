@@ -38,9 +38,15 @@ pub struct Callout {
     scrollable_description: bool,
 }
 
+impl Default for Callout {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Callout {
     /// Creates a new `Callout` component with default styling.
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             severity: Severity::Info,
             icon: None,
@@ -56,13 +62,13 @@ impl Callout {
     }
 
     /// Sets the severity of the callout.
-    pub fn severity(mut self, severity: Severity) -> Self {
+    pub const fn severity(mut self, severity: Severity) -> Self {
         self.severity = severity;
         self
     }
 
     /// Sets the icon to display in the callout.
-    pub fn icon(mut self, icon: IconName) -> Self {
+    pub const fn icon(mut self, icon: IconName) -> Self {
         self.icon = Some(icon);
         self
     }
@@ -81,7 +87,7 @@ impl Callout {
     }
 
     /// Disable internal scrolling when a surrounding container scrolls the entire callout.
-    pub fn scrollable_description(mut self, scrollable: bool) -> Self {
+    pub const fn scrollable_description(mut self, scrollable: bool) -> Self {
         self.scrollable_description = scrollable;
         self
     }
@@ -107,13 +113,13 @@ impl Callout {
     }
 
     /// Sets a custom line height for the callout content.
-    pub fn line_height(mut self, line_height: Pixels) -> Self {
+    pub const fn line_height(mut self, line_height: Pixels) -> Self {
         self.line_height = Some(line_height);
         self
     }
 
     /// Sets the border position in the callout.
-    pub fn border_position(mut self, border_position: CalloutBorderPosition) -> Self {
+    pub const fn border_position(mut self, border_position: CalloutBorderPosition) -> Self {
         self.border_position = border_position;
         self
     }
@@ -126,26 +132,12 @@ impl RenderOnce for Callout {
         let has_actions = self.actions_slot.is_some() || self.dismiss_action.is_some();
 
         let (icon, icon_color, bg_color) = match self.severity {
-            Severity::Info => (
-                IconName::Info,
-                Color::Muted,
-                cx.theme().status().info_background.opacity(0.1),
-            ),
-            Severity::Success => (
-                IconName::Check,
-                Color::Success,
-                cx.theme().status().success.opacity(0.1),
-            ),
-            Severity::Warning => (
-                IconName::Warning,
-                Color::Warning,
-                cx.theme().status().warning_background.opacity(0.2),
-            ),
-            Severity::Error => (
-                IconName::XCircle,
-                Color::Error,
-                cx.theme().status().error.opacity(0.08),
-            ),
+            Severity::Info => (IconName::Info, Color::Muted, cx.theme().status().info_background.opacity(0.1)),
+            Severity::Success => (IconName::Check, Color::Success, cx.theme().status().success.opacity(0.1)),
+            Severity::Warning => {
+                (IconName::Warning, Color::Warning, cx.theme().status().warning_background.opacity(0.2))
+            }
+            Severity::Error => (IconName::XCircle, Color::Error, cx.theme().status().error.opacity(0.08)),
         };
 
         h_flex()
@@ -182,23 +174,14 @@ impl RenderOnce for Callout {
                             .justify_between()
                             .flex_wrap()
                             .when_some(self.title, |this, title| {
-                                this.child(
-                                    div()
-                                        .min_w_0()
-                                        .flex_1()
-                                        .child(Label::new(title).size(LabelSize::Small)),
-                                )
+                                this.child(div().min_w_0().flex_1().child(Label::new(title).size(LabelSize::Small)))
                             })
                             .when(has_actions, |this| {
                                 this.child(
                                     h_flex()
                                         .gap_0p5()
-                                        .when_some(self.actions_slot, |this, action| {
-                                            this.child(action)
-                                        })
-                                        .when_some(self.dismiss_action, |this, action| {
-                                            this.child(action)
-                                        }),
+                                        .when_some(self.actions_slot, |this, action| this.child(action))
+                                        .when_some(self.dismiss_action, |this, action| this.child(action)),
                                 )
                             }),
                     )
@@ -206,18 +189,14 @@ impl RenderOnce for Callout {
                         let base_desc_container = div()
                             .id("callout-description-slot")
                             .w_full()
-                            .when(self.scrollable_description, |this| {
-                                this.max_h_32().flex_1().overflow_y_scroll()
-                            })
+                            .when(self.scrollable_description, |this| this.max_h_32().flex_1().overflow_y_scroll())
                             .text_ui_sm(cx);
 
                         if let Some(description_slot) = self.description_slot {
                             this.child(base_desc_container.child(description_slot))
                         } else if let Some(description) = self.description {
                             this.child(
-                                base_desc_container
-                                    .text_color(cx.theme().colors().text_muted)
-                                    .child(description),
+                                base_desc_container.text_color(cx.theme().colors().text_muted).child(description),
                             )
                         } else {
                             this
@@ -263,9 +242,7 @@ impl Component for Callout {
                 Callout::new()
                     .icon(IconName::Warning)
                     .title("Your settings contain deprecated values")
-                    .description(
-                        "We'll backup your current settings and update them to the new format.",
-                    )
+                    .description("We'll backup your current settings and update them to the new format.")
                     .actions_slot(single_action())
                     .into_any_element(),
             )

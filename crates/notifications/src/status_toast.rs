@@ -1,8 +1,15 @@
 use std::rc::Rc;
 
-use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, IntoElement};
-use ui::{Tooltip, prelude::*};
-use workspace::{ToastAction, ToastView};
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::IntoElement;
+use ui::Tooltip;
+use ui::prelude::*;
+use workspace::ToastAction;
+use workspace::ToastView;
 use zed_actions::toast;
 
 #[derive(RegisterComponent)]
@@ -45,16 +52,12 @@ impl StatusToast {
         self
     }
 
-    pub fn auto_dismiss(mut self, auto_dismiss: bool) -> Self {
+    pub const fn auto_dismiss(mut self, auto_dismiss: bool) -> Self {
         self.auto_dismiss = auto_dismiss;
         self
     }
 
-    pub fn action(
-        mut self,
-        label: impl Into<SharedString>,
-        f: impl Fn(&mut Window, &mut App) + 'static,
-    ) -> Self {
+    pub fn action(mut self, label: impl Into<SharedString>, f: impl Fn(&mut Window, &mut App) + 'static) -> Self {
         let this_handle = self.this_handle.clone();
         self.action = Some(ToastAction::new(
             label.into(),
@@ -68,7 +71,7 @@ impl StatusToast {
         self
     }
 
-    pub fn dismiss_button(mut self, show: bool) -> Self {
+    pub const fn dismiss_button(mut self, show: bool) -> Self {
         self.show_dismiss = show;
         self
     }
@@ -84,13 +87,7 @@ impl Render for StatusToast {
             .gap_2()
             .py_1p5()
             .pl_2p5()
-            .map(|this| {
-                if has_action_or_dismiss {
-                    this.pr_1p5()
-                } else {
-                    this.pr_2p5()
-                }
-            })
+            .map(|this| if has_action_or_dismiss { this.pr_1p5() } else { this.pr_2p5() })
             .flex_none()
             .bg(cx.theme().colors().surface_background)
             .shadow_lg()
@@ -99,10 +96,7 @@ impl Render for StatusToast {
             .when_some(self.action.as_ref(), |this, action| {
                 this.child(
                     Button::new(action.id.clone(), action.label.clone())
-                        .tooltip(Tooltip::for_action_title(
-                            action.label.clone(),
-                            &toast::RunAction,
-                        ))
+                        .tooltip(Tooltip::for_action_title(action.label.clone(), &toast::RunAction))
                         .color(Color::Muted)
                         .when_some(action.on_click.clone(), |el, handler| {
                             el.on_click(move |_click_event, window, cx| handler(window, cx))
@@ -159,66 +153,34 @@ impl Component for StatusToast {
     fn preview(_window: &mut Window, cx: &mut App) -> AnyElement {
         let text_example = StatusToast::new("Operation completed", cx, |this, _| this);
 
-        let action_example = StatusToast::new("Update ready to install", cx, |this, _cx| {
-            this.action("Restart", |_, _| {})
+        let action_example =
+            StatusToast::new("Update ready to install", cx, |this, _cx| this.action("Restart", |_, _| {}));
+
+        let dismiss_button_example = StatusToast::new("Dismiss Button", cx, |this, _| this.dismiss_button(true));
+
+        let icon_example = StatusToast::new("Nathan Sobo accepted your contact request", cx, |this, _| {
+            this.icon(Icon::new(IconName::Check).size(IconSize::Small).color(Color::Muted))
         });
-
-        let dismiss_button_example =
-            StatusToast::new("Dismiss Button", cx, |this, _| this.dismiss_button(true));
-
-        let icon_example = StatusToast::new(
-            "Nathan Sobo accepted your contact request",
-            cx,
-            |this, _| {
-                this.icon(
-                    Icon::new(IconName::Check)
-                        .size(IconSize::Small)
-                        .color(Color::Muted),
-                )
-            },
-        );
 
         let success_example = StatusToast::new("Pushed 4 changes to `zed/main`", cx, |this, _| {
-            this.icon(
-                Icon::new(IconName::Check)
-                    .size(IconSize::Small)
-                    .color(Color::Success),
-            )
+            this.icon(Icon::new(IconName::Check).size(IconSize::Small).color(Color::Success))
         });
 
-        let error_example = StatusToast::new(
-            "git push: Couldn't find remote origin `iamnbutler/zed`",
-            cx,
-            |this, _cx| {
-                this.icon(
-                    Icon::new(IconName::XCircle)
-                        .size(IconSize::Small)
-                        .color(Color::Error),
-                )
-                .action("More Info", |_, _| {})
-            },
-        );
+        let error_example =
+            StatusToast::new("git push: Couldn't find remote origin `iamnbutler/zed`", cx, |this, _cx| {
+                this.icon(Icon::new(IconName::XCircle).size(IconSize::Small).color(Color::Error))
+                    .action("More Info", |_, _| {})
+            });
 
         let warning_example = StatusToast::new("You have outdated settings", cx, |this, _cx| {
-            this.icon(
-                Icon::new(IconName::Warning)
-                    .size(IconSize::Small)
-                    .color(Color::Warning),
-            )
-            .action("More Info", |_, _| {})
+            this.icon(Icon::new(IconName::Warning).size(IconSize::Small).color(Color::Warning))
+                .action("More Info", |_, _| {})
         });
 
-        let pr_example =
-            StatusToast::new("`zed/new-notification-system` created!", cx, |this, _cx| {
-                this.icon(
-                    Icon::new(IconName::GitBranch)
-                        .size(IconSize::Small)
-                        .color(Color::Muted),
-                )
-                .action("Open Pull Request", |_, cx| {
-                    cx.open_url("https://github.com/")
-                })
-            });
+        let pr_example = StatusToast::new("`zed/new-notification-system` created!", cx, |this, _cx| {
+            this.icon(Icon::new(IconName::GitBranch).size(IconSize::Small).color(Color::Muted))
+                .action("Open Pull Request", |_, cx| cx.open_url("https://github.com/"))
+        });
 
         v_flex()
             .gap_6()
@@ -230,10 +192,7 @@ impl Component for StatusToast {
                         single_example("Text", div().child(text_example).into_any_element()),
                         single_example("Action", div().child(action_example).into_any_element()),
                         single_example("Icon", div().child(icon_example).into_any_element()),
-                        single_example(
-                            "Dismiss Button",
-                            div().child(dismiss_button_example).into_any_element(),
-                        ),
+                        single_example("Dismiss Button", div().child(dismiss_button_example).into_any_element()),
                     ],
                 ),
                 example_group_with_title(

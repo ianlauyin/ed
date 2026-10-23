@@ -117,7 +117,7 @@ impl<'a> GitTraversal<'a> {
         found
     }
 
-    pub fn start_offset(&self) -> usize {
+    pub const fn start_offset(&self) -> usize {
         self.traversal.start_offset()
     }
 
@@ -210,7 +210,7 @@ pub struct GitEntry {
 }
 
 impl GitEntry {
-    pub fn to_ref(&self) -> GitEntryRef<'_> {
+    pub const fn to_ref(&self) -> GitEntryRef<'_> {
         GitEntryRef { entry: &self.entry, git_summary: self.git_summary }
     }
 }

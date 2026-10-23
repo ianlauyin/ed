@@ -22,18 +22,25 @@ mod ui_density;
 
 use std::sync::Arc;
 
+use gpui::App;
+use gpui::AssetSource;
 use gpui::BorrowAppContext;
 use gpui::Global;
-use gpui::{
-    App, AssetSource, Hsla, Pixels, SharedString, Styled, Tiling, WindowAppearance,
-    WindowBackgroundAppearance, px,
-};
+use gpui::Hsla;
+use gpui::Pixels;
+use gpui::SharedString;
+use gpui::Styled;
+use gpui::Tiling;
+use gpui::WindowAppearance;
+use gpui::WindowBackgroundAppearance;
+use gpui::px;
 use serde::Deserialize;
 
 pub use crate::buffer_line_height::*;
 pub use crate::color_space::*;
 pub use crate::default_colors::*;
-pub use crate::fallback_themes::{apply_status_color_defaults, apply_theme_color_defaults};
+pub use crate::fallback_themes::apply_status_color_defaults;
+pub use crate::fallback_themes::apply_theme_color_defaults;
 pub use crate::font_family_cache::*;
 pub use crate::registry::*;
 pub use crate::scale::*;
@@ -85,7 +92,7 @@ pub enum Appearance {
 
 impl Appearance {
     /// Returns whether the appearance is light.
-    pub fn is_light(&self) -> bool {
+    pub const fn is_light(&self) -> bool {
         match self {
             Self::Light => true,
             Self::Dark => false,
@@ -128,14 +135,9 @@ pub fn init(themes_to_load: LoadThemes, cx: &mut App) {
     FontFamilyCache::init_global(cx);
 
     let themes = ThemeRegistry::default_global(cx);
-    let theme = themes.get(DEFAULT_DARK_THEME).unwrap_or_else(|_| {
-        themes
-            .list()
-            .into_iter()
-            .next()
-            .map(|m| themes.get(&m.name).unwrap())
-            .unwrap()
-    });
+    let theme = themes
+        .get(DEFAULT_DARK_THEME)
+        .unwrap_or_else(|_| themes.list().into_iter().next().map(|m| themes.get(&m.name).unwrap()).unwrap());
     cx.set_global(GlobalTheme { theme });
 }
 
@@ -243,49 +245,49 @@ pub struct Theme {
 impl Theme {
     /// Returns the [`SystemColors`] for the theme.
     #[inline(always)]
-    pub fn system(&self) -> &SystemColors {
+    pub const fn system(&self) -> &SystemColors {
         &self.styles.system
     }
 
     /// Returns the [`AccentColors`] for the theme.
     #[inline(always)]
-    pub fn accents(&self) -> &AccentColors {
+    pub const fn accents(&self) -> &AccentColors {
         &self.styles.accents
     }
 
     /// Returns the local [`PlayerColor`] (cursor and selection) for the theme.
     #[inline(always)]
-    pub fn player(&self) -> PlayerColor {
+    pub const fn player(&self) -> PlayerColor {
         self.styles.player
     }
 
     /// Returns the [`ThemeColors`] for the theme.
     #[inline(always)]
-    pub fn colors(&self) -> &ThemeColors {
+    pub const fn colors(&self) -> &ThemeColors {
         &self.styles.colors
     }
 
     /// Returns the [`SyntaxTheme`] for the theme.
     #[inline(always)]
-    pub fn syntax(&self) -> &Arc<SyntaxTheme> {
+    pub const fn syntax(&self) -> &Arc<SyntaxTheme> {
         &self.styles.syntax
     }
 
     /// Returns the [`StatusColors`] for the theme.
     #[inline(always)]
-    pub fn status(&self) -> &StatusColors {
+    pub const fn status(&self) -> &StatusColors {
         &self.styles.status
     }
 
     /// Returns the [`Appearance`] for the theme.
     #[inline(always)]
-    pub fn appearance(&self) -> Appearance {
+    pub const fn appearance(&self) -> Appearance {
         self.appearance
     }
 
     /// Returns the [`WindowBackgroundAppearance`] for the theme.
     #[inline(always)]
-    pub fn window_background_appearance(&self) -> WindowBackgroundAppearance {
+    pub const fn window_background_appearance(&self) -> WindowBackgroundAppearance {
         self.styles.window_background_appearance
     }
 
@@ -314,7 +316,7 @@ impl Global for GlobalTheme {}
 
 impl GlobalTheme {
     /// Creates a new [`GlobalTheme`] with the given theme.
-    pub fn new(theme: Arc<Theme>) -> Self {
+    pub const fn new(theme: Arc<Theme>) -> Self {
         Self { theme }
     }
 

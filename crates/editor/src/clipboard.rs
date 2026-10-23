@@ -1,5 +1,6 @@
-use super::*;
 use util::rel_path::RelPath;
+
+use super::*;
 
 #[derive(Serialize, Deserialize, Clone, Debug)]
 pub struct ClipboardSelection {
@@ -24,42 +25,29 @@ impl ClipboardSelection {
         project: Option<&Entity<Project>>,
         cx: &App,
     ) -> Self {
-        let first_line_indent = buffer
-            .indent_size_for_line(MultiBufferRow(range.start.row))
-            .len;
+        let first_line_indent = buffer.indent_size_for_line(MultiBufferRow(range.start.row)).len;
 
         let file_path = util::maybe!({
             let project = project?.read(cx);
             let file = buffer.file_at(range.start)?;
-            let project_path = ProjectPath {
-                worktree_id: file.worktree_id(cx),
-                path: file.path().clone(),
-            };
+            let project_path = ProjectPath { worktree_id: file.worktree_id(cx), path: file.path().clone() };
             project.absolute_path(&project_path, cx)
         });
 
         let line_range = if file_path.is_some() {
-            buffer
-                .range_to_buffer_range(range)
-                .map(|(_, buffer_range)| buffer_range.start.row..=buffer_range.end.row)
+            buffer.range_to_buffer_range(range).map(|(_, buffer_range)| buffer_range.start.row..=buffer_range.end.row)
         } else {
             None
         };
 
-        Self {
-            len,
-            is_entire_line,
-            first_line_indent,
-            file_path,
-            line_range,
-        }
+        Self { len, is_entire_line, first_line_indent, file_path, line_range }
     }
 }
 
 impl Editor {
     pub fn do_paste(
         &mut self,
-        text: &String,
+        text: &str,
         clipboard_selections: Option<Vec<ClipboardSelection>>,
         handle_entire_lines: bool,
         window: &mut Window,
@@ -71,21 +59,16 @@ impl Editor {
 
         self.finalize_last_transaction(cx);
 
-        let clipboard_text = Cow::Borrowed(text.as_str());
+        let clipboard_text = Cow::Borrowed(text);
 
         self.transact(window, cx, |this, window, cx| {
             let display_map = this.display_snapshot(cx);
             let old_selections = this.selections.all::<MultiBufferOffset>(&display_map);
-            let cursor_offset = this
-                .selections
-                .last::<MultiBufferOffset>(&display_map)
-                .head();
+            let cursor_offset = this.selections.last::<MultiBufferOffset>(&display_map).head();
 
             if let Some(mut clipboard_selections) = clipboard_selections {
-                let all_selections_were_entire_line =
-                    clipboard_selections.iter().all(|s| s.is_entire_line);
-                let first_selection_indent_column =
-                    clipboard_selections.first().map(|s| s.first_line_indent);
+                let all_selections_were_entire_line = clipboard_selections.iter().all(|s| s.is_entire_line);
+                let first_selection_indent_column = clipboard_selections.first().map(|s| s.first_line_indent);
                 if clipboard_selections.len() != old_selections.len() {
                     clipboard_selections.drain(..);
                 }
@@ -93,9 +76,7 @@ impl Editor {
 
                 this.buffer.update(cx, |buffer, cx| {
                     let snapshot = buffer.read(cx);
-                    auto_indent_on_paste = snapshot
-                        .language_settings_at(cursor_offset, cx)
-                        .auto_indent_on_paste;
+                    auto_indent_on_paste = snapshot.language_settings_at(cursor_offset, cx).auto_indent_on_paste;
 
                     let mut start_offset = 0;
                     let mut edits = Vec::new();
@@ -108,11 +89,7 @@ impl Editor {
                             let end_offset = start_offset + clipboard_selection.len;
                             to_insert = &clipboard_text[start_offset..end_offset];
                             entire_line = clipboard_selection.is_entire_line;
-                            start_offset = if entire_line {
-                                end_offset
-                            } else {
-                                end_offset + 1
-                            };
+                            start_offset = if entire_line { end_offset } else { end_offset + 1 };
                             original_indent_column = Some(clipboard_selection.first_line_indent);
                         } else {
                             to_insert = &*clipboard_text;
@@ -120,31 +97,25 @@ impl Editor {
                             original_indent_column = first_selection_indent_column
                         }
 
-                        let (range, to_insert) =
-                            if selection.is_empty() && handle_entire_lines && entire_line {
-                                // If the corresponding selection was empty when this slice of the
-                                // clipboard text was written, then the entire line containing the
-                                // selection was copied. If this selection is also currently empty,
-                                // then paste the line before the current line of the buffer.
-                                let column = selection.start.to_point(&snapshot).column as usize;
-                                let line_start = selection.start - column;
-                                (line_start..line_start, Cow::Borrowed(to_insert))
+                        let (range, to_insert) = if selection.is_empty() && handle_entire_lines && entire_line {
+                            // If the corresponding selection was empty when this slice of the
+                            // clipboard text was written, then the entire line containing the
+                            // selection was copied. If this selection is also currently empty,
+                            // then paste the line before the current line of the buffer.
+                            let column = selection.start.to_point(&snapshot).column as usize;
+                            let line_start = selection.start - column;
+                            (line_start..line_start, Cow::Borrowed(to_insert))
+                        } else {
+                            let language = snapshot.language_at(selection.head());
+                            let range = selection.range();
+                            if let Some(language) = language
+                                && language.name() == "Markdown"
+                            {
+                                edit_for_markdown_paste(&snapshot, range, to_insert, is_standalone_url(to_insert))
                             } else {
-                                let language = snapshot.language_at(selection.head());
-                                let range = selection.range();
-                                if let Some(language) = language
-                                    && language.name() == "Markdown"
-                                {
-                                    edit_for_markdown_paste(
-                                        &snapshot,
-                                        range,
-                                        to_insert,
-                                        is_standalone_url(to_insert),
-                                    )
-                                } else {
-                                    (range, Cow::Borrowed(to_insert))
-                                }
-                            };
+                                (range, Cow::Borrowed(to_insert))
+                            }
+                        };
 
                         edits.push((range, to_insert));
                         original_indent_columns.push(original_indent_column);
@@ -154,9 +125,7 @@ impl Editor {
                     buffer.edit(
                         edits,
                         if auto_indent_on_paste {
-                            Some(AutoindentMode::Block {
-                                original_indent_columns,
-                            })
+                            Some(AutoindentMode::Block { original_indent_columns })
                         } else {
                             None
                         },
@@ -164,17 +133,13 @@ impl Editor {
                     );
                 });
 
-                let selections = this
-                    .selections
-                    .all::<MultiBufferOffset>(&this.display_snapshot(cx));
+                let selections = this.selections.all::<MultiBufferOffset>(&this.display_snapshot(cx));
                 this.change_selections(Default::default(), window, cx, |s| s.select(selections));
             } else {
                 let clipboard_is_url = is_standalone_url(&clipboard_text);
 
                 let auto_indent_mode = if !clipboard_text.is_empty() {
-                    Some(AutoindentMode::Block {
-                        original_indent_columns: Vec::new(),
-                    })
+                    Some(AutoindentMode::Block { original_indent_columns: Vec::new() })
                 } else {
                     None
                 };
@@ -197,28 +162,18 @@ impl Editor {
                     // lines matches the number of selections, distribute one
                     // line per cursor instead of pasting the whole text at each.
                     let lines: Vec<&str> = clipboard_text.split('\n').collect();
-                    let distribute_lines =
-                        old_selections.len() > 1 && lines.len() == old_selections.len();
+                    let distribute_lines = old_selections.len() > 1 && lines.len() == old_selections.len();
 
                     for (ix, selection) in old_selections.iter().enumerate() {
                         let language = snapshot.language_at(selection.head());
                         let range = selection.range();
 
-                        let text_for_cursor: &str = if distribute_lines {
-                            lines[ix]
-                        } else {
-                            &clipboard_text
-                        };
+                        let text_for_cursor: &str = if distribute_lines { lines[ix] } else { &clipboard_text };
 
                         let (edit_range, edit_text) = if let Some(language) = language
                             && language.name() == "Markdown"
                         {
-                            edit_for_markdown_paste(
-                                &snapshot,
-                                range,
-                                text_for_cursor,
-                                clipboard_is_url,
-                            )
+                            edit_for_markdown_paste(&snapshot, range, text_for_cursor, clipboard_is_url)
                         } else {
                             (range, Cow::Borrowed(text_for_cursor))
                         };
@@ -249,12 +204,7 @@ impl Editor {
         }
     }
 
-    pub fn paste_item(
-        &mut self,
-        item: &ClipboardItem,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn paste_item(&mut self, item: &ClipboardItem, window: &mut Window, cx: &mut Context<Self>) {
         if self.read_only(cx) {
             return;
         }
@@ -281,18 +231,12 @@ impl Editor {
                     let file = buffer.read(cx).file()?;
                     let worktree_id = file.worktree_id(cx);
                     let dir_rel_path = file.path().parent()?.into_arc();
-                    let worktree = self
-                        .project
-                        .as_ref()?
-                        .read(cx)
-                        .worktree_for_id(worktree_id, cx)?;
+                    let worktree = self.project.as_ref()?.read(cx).worktree_for_id(worktree_id, cx)?;
 
                     let extension = image.format.extension();
                     let snapshot = worktree.read(cx).snapshot();
                     let (filename, file_path) =
-                        unused_image_path(&dir_rel_path, extension, |path| {
-                            snapshot.entry_for_path(path).is_some()
-                        })?;
+                        unused_image_path(&dir_rel_path, extension, |path| snapshot.entry_for_path(path).is_some())?;
 
                     let create_task = worktree.update(cx, |worktree, cx| {
                         worktree.create_entry(file_path, false, Some(image.bytes.clone()), cx)
@@ -300,9 +244,7 @@ impl Editor {
 
                     cx.spawn_in(window, async move |editor, cx| {
                         create_task.await?;
-                        editor.update_in(cx, |editor, window, cx| {
-                            editor.insert_image_snippet(&filename, window, cx)
-                        })
+                        editor.update_in(cx, |editor, window, cx| editor.insert_image_snippet(&filename, window, cx))
                     })
                     .detach_and_log_err(cx);
 
@@ -331,12 +273,7 @@ impl Editor {
         }
     }
 
-    fn insert_image_snippet(
-        &mut self,
-        filename: &str,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn insert_image_snippet(&mut self, filename: &str, window: &mut Window, cx: &mut Context<Self>) {
         let Some(snippet) = Snippet::parse(&format!("![$1]({filename})$0")).log_err() else {
             return;
         };
@@ -347,8 +284,7 @@ impl Editor {
             .into_iter()
             .map(|selection| selection.start..selection.end)
             .collect();
-        self.insert_snippet(&insertion_ranges, snippet, window, cx)
-            .log_err();
+        self.insert_snippet(&insertion_ranges, snippet, window, cx).log_err();
     }
 
     pub(super) fn cut_common(
@@ -366,8 +302,7 @@ impl Editor {
             let mut is_first = true;
             let mut prev_selection_was_entire_line = false;
             for selection in &mut selections {
-                let is_entire_line =
-                    (selection.is_empty() && cut_no_selection_line) || self.selections.line_mode();
+                let is_entire_line = (selection.is_empty() && cut_no_selection_line) || self.selections.line_mode();
                 if is_entire_line {
                     selection.start = Point::new(selection.start.row, 0);
                     if !selection.is_empty() && selection.end.column == 0 {
@@ -417,12 +352,7 @@ impl Editor {
         cx.write_to_clipboard(item);
     }
 
-    pub(super) fn kill_ring_cut(
-        &mut self,
-        _: &KillRingCut,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn kill_ring_cut(&mut self, _: &KillRingCut, window: &mut Window, cx: &mut Context<Self>) {
         if self.read_only(cx) {
             return;
         }
@@ -433,11 +363,7 @@ impl Editor {
         let selection_start_point = first_selection.start.to_point(&snapshot);
         let selection_start_row = selection_start_point.row;
         let selection_start_column = selection_start_point.column;
-        let Some((_, text_anchor)) = self
-            .buffer
-            .read(cx)
-            .text_anchor_for_position(first_selection.start, cx)
-        else {
+        let Some((_, text_anchor)) = self.buffer.read(cx).text_anchor_for_position(first_selection.start, cx) else {
             return;
         };
         let buffer_id = text_anchor.buffer_id;
@@ -471,10 +397,7 @@ impl Editor {
             && previous_ring.row == selection_start_row
             && previous_ring.column == selection_start_column
         {
-            let mut entries = previous_ring
-                .metadata
-                .as_ref()
-                .map_or_else(Vec::new, Clone::clone);
+            let mut entries = previous_ring.metadata.as_ref().map_or_else(Vec::new, Clone::clone);
             if let Some(metadata) = entry_metadata.as_ref() {
                 entries.extend_from_slice(metadata);
             }
@@ -505,12 +428,7 @@ impl Editor {
         cx.set_global(item)
     }
 
-    pub(super) fn kill_ring_yank(
-        &mut self,
-        _: &KillRingYank,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn kill_ring_yank(&mut self, _: &KillRingYank, window: &mut Window, cx: &mut Context<Self>) {
         if !cx.has_global::<KillRing>() {
             return;
         }
@@ -523,12 +441,7 @@ impl Editor {
         self.do_paste(&text, metadata, false, window, cx);
     }
 
-    pub(super) fn copy_and_trim(
-        &mut self,
-        _: &CopyAndTrim,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn copy_and_trim(&mut self, _: &CopyAndTrim, _: &mut Window, cx: &mut Context<Self>) {
         self.do_copy(true, cx);
     }
 
@@ -542,9 +455,7 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let selections = self
-            .selections
-            .all::<MultiBufferOffset>(&self.display_snapshot(cx));
+        let selections = self.selections.all::<MultiBufferOffset>(&self.display_snapshot(cx));
 
         if selections.is_empty() {
             log::warn!("There should always be at least one selection in Zed. This is a bug.");
@@ -563,13 +474,7 @@ impl Editor {
             return;
         };
 
-        window.dispatch_action(
-            Box::new(DiffClipboardWithSelectionData {
-                clipboard_text,
-                editor: cx.entity(),
-            }),
-            cx,
-        );
+        window.dispatch_action(Box::new(DiffClipboardWithSelectionData { clipboard_text, editor: cx.entity() }), cx);
     }
 
     fn do_copy(&self, strip_leading_indents: bool, cx: &mut Context<Self>) {
@@ -606,10 +511,8 @@ impl Editor {
                 if first_indent.len == 0 || start.column > first_indent.len {
                     trimmed_selections.push(start..end);
                 } else {
-                    trimmed_selections.push(
-                        Point::new(row.0, first_indent.len)
-                            ..Point::new(row.0, buffer.line_len(row)),
-                    );
+                    trimmed_selections
+                        .push(Point::new(row.0, first_indent.len)..Point::new(row.0, buffer.line_len(row)));
                     for row in start.row + 1..=end.row {
                         let mut line_len = buffer.line_len(MultiBufferRow(row));
                         if row == end.row {
@@ -621,8 +524,7 @@ impl Editor {
                         }
                         let row_indent_size = buffer.indent_size_for_line(MultiBufferRow(row));
                         if row_indent_size.len >= first_indent.len {
-                            trimmed_selections
-                                .push(Point::new(row, first_indent.len)..Point::new(row, line_len));
+                            trimmed_selections.push(Point::new(row, first_indent.len)..Point::new(row, line_len));
                         } else {
                             trimmed_selections.clear();
                             trimmed_selections.push(start..end);
@@ -667,10 +569,7 @@ impl Editor {
             ));
         }
 
-        cx.write_to_clipboard(ClipboardItem::new_string_with_json_metadata(
-            text,
-            clipboard_selections,
-        ));
+        cx.write_to_clipboard(ClipboardItem::new_string_with_json_metadata(text, clipboard_selections));
     }
 }
 
@@ -750,8 +649,5 @@ fn unused_image_path(
 fn is_standalone_url(text: &str) -> bool {
     let mut finder = linkify::LinkFinder::new();
     finder.kinds(&[linkify::LinkKind::Url]);
-    finder
-        .links(text)
-        .next()
-        .is_some_and(|link| link.start() == 0 && link.end() == text.len())
+    finder.links(text).next().is_some_and(|link| link.start() == 0 && link.end() == text.len())
 }

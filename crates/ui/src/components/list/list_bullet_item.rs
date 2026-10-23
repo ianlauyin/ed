@@ -1,6 +1,14 @@
-use crate::{ButtonLink, ListItem, prelude::*};
-use component::{Component, ComponentScope, example_group, single_example};
-use gpui::{IntoElement, ParentElement, SharedString};
+use component::Component;
+use component::ComponentScope;
+use component::example_group;
+use component::single_example;
+use gpui::IntoElement;
+use gpui::ParentElement;
+use gpui::SharedString;
+
+use crate::ButtonLink;
+use crate::ListItem;
+use crate::prelude::*;
 
 #[derive(IntoElement, RegisterComponent)]
 pub struct ListBulletItem {
@@ -11,14 +19,10 @@ pub struct ListBulletItem {
 
 impl ListBulletItem {
     pub fn new(label: impl Into<SharedString>) -> Self {
-        Self {
-            label: label.into(),
-            label_color: None,
-            children: Vec::new(),
-        }
+        Self { label: label.into(), label_color: None, children: Vec::new() }
     }
 
-    pub fn label_color(mut self, color: Color) -> Self {
+    pub const fn label_color(mut self, color: Color) -> Self {
         self.label_color = Some(color);
         self
     }
@@ -43,21 +47,20 @@ impl RenderOnce for ListBulletItem {
                     .gap_1()
                     .items_start()
                     .child(
-                        h_flex().h(line_height).justify_center().child(
-                            Icon::new(IconName::Dash)
-                                .size(IconSize::XSmall)
-                                .color(Color::Hidden),
-                        ),
+                        h_flex()
+                            .h(line_height)
+                            .justify_center()
+                            .child(Icon::new(IconName::Dash).size(IconSize::XSmall).color(Color::Hidden)),
                     )
                     .map(|this| {
                         if !self.children.is_empty() {
                             this.child(h_flex().gap_0p5().flex_wrap().children(self.children))
                         } else {
                             this.child(
-                                div().w_full().min_w_0().child(
-                                    Label::new(self.label)
-                                        .color(self.label_color.unwrap_or(Color::Default)),
-                                ),
+                                div()
+                                    .w_full()
+                                    .min_w_0()
+                                    .child(Label::new(self.label).color(self.label_color.unwrap_or(Color::Default))),
                             )
                         }
                     }),
@@ -77,10 +80,7 @@ impl Component for ListBulletItem {
 
     fn preview(_window: &mut Window, _cx: &mut App) -> AnyElement {
         let basic_examples = vec![
-            single_example(
-                "Simple",
-                ListBulletItem::new("First bullet item").into_any_element(),
-            ),
+            single_example("Simple", ListBulletItem::new("First bullet item").into_any_element()),
             single_example(
                 "Multiple Lines",
                 v_flex()
@@ -91,10 +91,7 @@ impl Component for ListBulletItem {
             ),
             single_example(
                 "Long Text",
-                ListBulletItem::new(
-                    "A longer bullet item that demonstrates text wrapping behavior",
-                )
-                .into_any_element(),
+                ListBulletItem::new("A longer bullet item that demonstrates text wrapping behavior").into_any_element(),
             ),
             single_example(
                 "With Link",
@@ -105,9 +102,6 @@ impl Component for ListBulletItem {
             ),
         ];
 
-        v_flex()
-            .gap_6()
-            .child(example_group(basic_examples).vertical())
-            .into_any_element()
+        v_flex().gap_6().child(example_group(basic_examples).vertical()).into_any_element()
     }
 }

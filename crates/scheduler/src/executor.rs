@@ -1,18 +1,26 @@
-use crate::{Instant, Priority, RunnableMeta, Scheduler, SessionId, Timer};
+use std::any::Any;
+use std::future::Future;
+use std::marker::PhantomData;
+use std::mem::ManuallyDrop;
+use std::panic::Location;
+use std::pin::Pin;
+use std::rc::Rc;
+use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
+use std::task::Waker;
+use std::thread::ThreadId;
+use std::thread::{self};
+use std::time::Duration;
+
 use async_task::Runnable;
-use std::{
-    any::Any,
-    future::Future,
-    marker::PhantomData,
-    mem::ManuallyDrop,
-    panic::Location,
-    pin::Pin,
-    rc::Rc,
-    sync::Arc,
-    task::{Context, Poll, Waker},
-    thread::{self, ThreadId},
-    time::Duration,
-};
+
+use crate::Instant;
+use crate::Priority;
+use crate::RunnableMeta;
+use crate::Scheduler;
+use crate::SessionId;
+use crate::Timer;
 
 /// A `!Send` executor pinned to a single session. Tasks spawned on it run in
 /// order on whichever thread drains the dispatch destination supplied at
@@ -43,15 +51,10 @@ impl LocalExecutor {
         scheduler: Arc<dyn Scheduler>,
         dispatch: impl Fn(Runnable<RunnableMeta>) + Send + Sync + 'static,
     ) -> Self {
-        Self {
-            session_id,
-            scheduler,
-            dispatch: Arc::new(dispatch),
-            not_send: PhantomData,
-        }
+        Self { session_id, scheduler, dispatch: Arc::new(dispatch), not_send: PhantomData }
     }
 
-    pub fn session_id(&self) -> SessionId {
+    pub const fn session_id(&self) -> SessionId {
         self.session_id
     }
 
@@ -67,8 +70,7 @@ impl LocalExecutor {
     {
         let schedule = self.schedule();
         let location = Location::caller();
-        let (runnable, task) =
-            spawn_local_with_source_location(future, schedule, RunnableMeta { location });
+        let (runnable, task) = spawn_local_with_source_location(future, schedule, RunnableMeta { location });
         runnable.schedule();
         Task(TaskState::Spawned(task))
     }
@@ -88,8 +90,7 @@ impl LocalExecutor {
         F::Output: 'static,
     {
         let location = Location::caller();
-        let (runnable, task) =
-            spawn_local_with_source_location(future, dispatch, RunnableMeta { location });
+        let (runnable, task) = spawn_local_with_source_location(future, dispatch, RunnableMeta { location });
         runnable.schedule();
         Task(TaskState::Spawned(task))
     }
@@ -103,8 +104,7 @@ impl LocalExecutor {
         };
         let mut future = std::pin::pin!(future);
 
-        self.scheduler
-            .block(Some(self.session_id), future.as_mut(), None);
+        self.scheduler.block(Some(self.session_id), future.as_mut(), None);
 
         output.take().expect("block_on future did not complete")
     }
@@ -128,8 +128,7 @@ impl LocalExecutor {
             };
             let mut wrapper = std::pin::pin!(wrapper);
 
-            self.scheduler
-                .block(Some(self.session_id), wrapper.as_mut(), Some(timeout));
+            self.scheduler.block(Some(self.session_id), wrapper.as_mut(), Some(timeout));
         }
 
         match output.take() {
@@ -161,10 +160,7 @@ impl LocalExecutor {
         Fut: Future + 'static,
         Fut::Output: Send + Sync + 'static,
     {
-        self.scheduler
-            .clone()
-            .spawn_dedicated(box_dedicated(f))
-            .downcast::<Fut::Output>()
+        self.scheduler.clone().spawn_dedicated(box_dedicated(f)).downcast::<Fut::Output>()
     }
 
     fn schedule(&self) -> impl Fn(Runnable<RunnableMeta>) + Send + Sync + 'static {
@@ -180,18 +176,14 @@ impl LocalExecutor {
 fn box_dedicated<F, Fut>(
     f: F,
 ) -> Box<
-    dyn FnOnce(LocalExecutor) -> Pin<Box<dyn Future<Output = Box<dyn Any + Send + Sync>> + 'static>>
-        + Send
-        + 'static,
+    dyn FnOnce(LocalExecutor) -> Pin<Box<dyn Future<Output = Box<dyn Any + Send + Sync>> + 'static>> + Send + 'static,
 >
 where
     F: FnOnce(LocalExecutor) -> Fut + Send + 'static,
     Fut: Future + 'static,
     Fut::Output: Send + Sync + 'static,
 {
-    Box::new(move |executor| {
-        Box::pin(async move { Box::new(f(executor).await) as Box<dyn Any + Send + Sync> })
-    })
+    Box::new(move |executor| Box::pin(async move { Box::new(f(executor).await) as Box<dyn Any + Send + Sync> }))
 }
 
 #[derive(Clone)]
@@ -221,9 +213,8 @@ impl BackgroundExecutor {
     {
         let schedule = self.schedule_with_priority(priority);
         let location = Location::caller();
-        let (runnable, task) = async_task::Builder::new()
-            .metadata(RunnableMeta { location })
-            .spawn(move |_| future, schedule);
+        let (runnable, task) =
+            async_task::Builder::new().metadata(RunnableMeta { location }).spawn(move |_| future, schedule);
         runnable.schedule();
         Task(TaskState::Spawned(task))
     }
@@ -255,16 +246,10 @@ impl BackgroundExecutor {
         Fut: Future + 'static,
         Fut::Output: Send + Sync + 'static,
     {
-        self.scheduler
-            .clone()
-            .spawn_dedicated(box_dedicated(f))
-            .downcast::<Fut::Output>()
+        self.scheduler.clone().spawn_dedicated(box_dedicated(f)).downcast::<Fut::Output>()
     }
 
-    fn schedule_with_priority(
-        &self,
-        priority: Priority,
-    ) -> impl Fn(Runnable<RunnableMeta>) + Send + Sync + 'static {
+    fn schedule_with_priority(&self, priority: Priority) -> impl Fn(Runnable<RunnableMeta>) + Send + Sync + 'static {
         let scheduler = Arc::downgrade(&self.scheduler);
         move |runnable| {
             if let Some(scheduler) = scheduler.upgrade() {
@@ -300,10 +285,7 @@ impl DedicatedExecutor {
                 runnable.run();
             }
         });
-        Self {
-            sender,
-            _session: session,
-        }
+        Self { sender, _session: session }
     }
 
     /// Spawns a future onto the dedicated session's thread.
@@ -318,14 +300,12 @@ impl DedicatedExecutor {
         F::Output: Send + 'static,
     {
         let sender = self.sender.clone();
-        let (runnable, task) = async_task::Builder::new()
-            .metadata(RunnableMeta::new_with_callers_location())
-            .spawn(
-                move |_| future,
-                move |runnable| {
-                    let _ = sender.send(runnable);
-                },
-            );
+        let (runnable, task) = async_task::Builder::new().metadata(RunnableMeta::new_with_callers_location()).spawn(
+            move |_| future,
+            move |runnable| {
+                let _ = sender.send(runnable);
+            },
+        );
         runnable.schedule();
         Task(TaskState::Spawned(task))
     }
@@ -350,10 +330,7 @@ enum TaskState<T> {
     /// A typed view of a [`Task<Box<dyn Any + Send + Sync>>`] obtained via
     /// [`Task::downcast`]. The inner task drives the actual work; the
     /// downcast layer just unwraps the `Box<dyn Any + Send + Sync>` on poll.
-    Downcast {
-        inner: Box<Task<Box<dyn Any + Send + Sync>>>,
-        marker: PhantomData<fn() -> T>,
-    },
+    Downcast { inner: Box<Task<Box<dyn Any + Send + Sync>>>, marker: PhantomData<fn() -> T> },
 
     /// A task whose real handle is delivered later by another thread (see
     /// [`Task::rendezvous`]). Once delivered, polling replaces this state
@@ -458,9 +435,7 @@ impl<T> RendezvousSender<T> {
                 drop(delivered);
             }
             RendezvousState::Detached => {
-                let RendezvousState::Delivered(task) =
-                    std::mem::replace(&mut *state, RendezvousState::Detached)
-                else {
+                let RendezvousState::Delivered(task) = std::mem::replace(&mut *state, RendezvousState::Detached) else {
                     unreachable!("the delivered task was just stored");
                 };
                 drop(state);
@@ -475,7 +450,7 @@ impl<T> RendezvousSender<T> {
 
 impl<T> Task<T> {
     /// Creates a new task that will resolve with the value
-    pub fn ready(val: T) -> Self {
+    pub const fn ready(val: T) -> Self {
         Task(TaskState::Ready(Some(val)))
     }
 
@@ -485,16 +460,11 @@ impl<T> Task<T> {
     /// Dropping or detaching the task before delivery is honored on delivery.
     pub(crate) fn rendezvous() -> (Self, RendezvousSender<T>) {
         let shared = Arc::new(parking_lot::Mutex::new(RendezvousState::Pending(None)));
-        (
-            Task(TaskState::Rendezvous(RendezvousReceiver {
-                shared: shared.clone(),
-            })),
-            RendezvousSender { shared },
-        )
+        (Task(TaskState::Rendezvous(RendezvousReceiver { shared: shared.clone() })), RendezvousSender { shared })
     }
 
     /// Creates a Task from an async_task::Task
-    pub fn from_async_task(task: async_task::Task<T, RunnableMeta>) -> Self {
+    pub const fn from_async_task(task: async_task::Task<T, RunnableMeta>) -> Self {
         Task(TaskState::Spawned(task))
     }
 
@@ -522,10 +492,9 @@ impl<T> Task<T> {
         FallibleTask(match self.0 {
             TaskState::Ready(val) => FallibleTaskState::Ready(val),
             TaskState::Spawned(task) => FallibleTaskState::Spawned(task.fallible()),
-            TaskState::Downcast { inner, .. } => FallibleTaskState::Downcast {
-                inner: Box::new(inner.fallible()),
-                marker: PhantomData,
-            },
+            TaskState::Downcast { inner, .. } => {
+                FallibleTaskState::Downcast { inner: Box::new(inner.fallible()), marker: PhantomData }
+            }
             TaskState::Rendezvous(receiver) => FallibleTaskState::Rendezvous(receiver),
         })
     }
@@ -541,10 +510,7 @@ impl Task<Box<dyn Any + Send + Sync>> {
     /// error in whatever produced the inner task, since the downcast type is
     /// chosen by the caller of `downcast`.
     pub fn downcast<T: Send + Sync + 'static>(self) -> Task<T> {
-        Task(TaskState::Downcast {
-            inner: Box::new(self),
-            marker: PhantomData,
-        })
+        Task(TaskState::Downcast { inner: Box::new(self), marker: PhantomData })
     }
 }
 
@@ -553,9 +519,7 @@ impl<T> std::fmt::Debug for Task<T> {
         match &self.0 {
             TaskState::Ready(_) => f.debug_tuple("Task::Ready").finish(),
             TaskState::Spawned(task) => f.debug_tuple("Task::Spawned").field(task).finish(),
-            TaskState::Downcast { inner, .. } => {
-                f.debug_tuple("Task::Downcast").field(inner).finish()
-            }
+            TaskState::Downcast { inner, .. } => f.debug_tuple("Task::Downcast").field(inner).finish(),
             TaskState::Rendezvous(_) => f.debug_tuple("Task::Rendezvous").finish(),
         }
     }
@@ -573,10 +537,7 @@ enum FallibleTaskState<T> {
     Spawned(async_task::FallibleTask<T, RunnableMeta>),
 
     /// Mirror of [`TaskState::Downcast`] for fallible tasks.
-    Downcast {
-        inner: Box<FallibleTask<Box<dyn Any + Send + Sync>>>,
-        marker: PhantomData<fn() -> T>,
-    },
+    Downcast { inner: Box<FallibleTask<Box<dyn Any + Send + Sync>>>, marker: PhantomData<fn() -> T> },
 
     /// Mirror of [`TaskState::Rendezvous`] for fallible tasks.
     Rendezvous(RendezvousReceiver<T>),
@@ -584,7 +545,7 @@ enum FallibleTaskState<T> {
 
 impl<T> FallibleTask<T> {
     /// Creates a new fallible task that will resolve with the value.
-    pub fn ready(val: T) -> Self {
+    pub const fn ready(val: T) -> Self {
         FallibleTask(FallibleTaskState::Ready(Some(val)))
     }
 
@@ -611,9 +572,7 @@ impl<T: 'static> Future for FallibleTask<T> {
                 FallibleTaskState::Downcast { inner, .. } => {
                     return match Pin::new(inner.as_mut()).poll(cx) {
                         Poll::Ready(Some(boxed_any)) => Poll::Ready(Some(
-                            *boxed_any
-                                .downcast::<T>()
-                                .expect("FallibleTask::poll: downcast type mismatch"),
+                            *boxed_any.downcast::<T>().expect("FallibleTask::poll: downcast type mismatch"),
                         )),
                         Poll::Ready(None) => Poll::Ready(None),
                         Poll::Pending => Poll::Pending,
@@ -635,13 +594,8 @@ impl<T> std::fmt::Debug for FallibleTask<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match &self.0 {
             FallibleTaskState::Ready(_) => f.debug_tuple("FallibleTask::Ready").finish(),
-            FallibleTaskState::Spawned(task) => {
-                f.debug_tuple("FallibleTask::Spawned").field(task).finish()
-            }
-            FallibleTaskState::Downcast { inner, .. } => f
-                .debug_tuple("FallibleTask::Downcast")
-                .field(inner)
-                .finish(),
+            FallibleTaskState::Spawned(task) => f.debug_tuple("FallibleTask::Spawned").field(task).finish(),
+            FallibleTaskState::Downcast { inner, .. } => f.debug_tuple("FallibleTask::Downcast").field(inner).finish(),
             FallibleTaskState::Rendezvous(_) => f.debug_tuple("FallibleTask::Rendezvous").finish(),
         }
     }
@@ -658,11 +612,9 @@ impl<T: 'static> Future for Task<T> {
                 TaskState::Spawned(task) => return Pin::new(task).poll(cx),
                 TaskState::Downcast { inner, .. } => {
                     return match Pin::new(inner.as_mut()).poll(cx) {
-                        Poll::Ready(boxed_any) => Poll::Ready(
-                            *boxed_any
-                                .downcast::<T>()
-                                .expect("Task::poll: downcast type mismatch"),
-                        ),
+                        Poll::Ready(boxed_any) => {
+                            Poll::Ready(*boxed_any.downcast::<T>().expect("Task::poll: downcast type mismatch"))
+                        }
                         Poll::Pending => Poll::Pending,
                     };
                 }
@@ -684,10 +636,7 @@ fn spawn_local_with_source_location<Fut, S>(
     future: Fut,
     schedule: S,
     metadata: RunnableMeta,
-) -> (
-    async_task::Runnable<RunnableMeta>,
-    async_task::Task<Fut::Output, RunnableMeta>,
-)
+) -> (async_task::Runnable<RunnableMeta>, async_task::Task<Fut::Output, RunnableMeta>)
 where
     Fut: Future + 'static,
     Fut::Output: 'static,
@@ -698,8 +647,7 @@ where
         std::thread_local! {
             static ID: ThreadId = thread::current().id();
         }
-        ID.try_with(|id| *id)
-            .unwrap_or_else(|_| thread::current().id())
+        ID.try_with(|id| *id).unwrap_or_else(|_| thread::current().id())
     }
 
     struct Checked<F> {
@@ -746,11 +694,7 @@ where
 
     let location = metadata.location;
 
-    let future = move |_| Checked {
-        id: thread_id(),
-        inner: ManuallyDrop::new(future),
-        location,
-    };
+    let future = move |_| Checked { id: thread_id(), inner: ManuallyDrop::new(future), location };
 
     let builder = async_task::Builder::new().metadata(metadata);
     // SAFETY: `Checked` enforces the invariants required by `spawn_unchecked`:

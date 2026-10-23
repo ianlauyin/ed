@@ -17,16 +17,17 @@ pub mod settings_content {
 }
 
 pub mod fallible_options {
-    pub use ::settings_content::{FallibleOption, parse_json};
+    pub use ::settings_content::FallibleOption;
+    pub use ::settings_content::parse_json;
 }
 
 #[doc(hidden)]
 pub mod private {
-    pub use crate::settings_store::{RegisteredSetting, SettingValue};
     pub use inventory;
-}
 
-use gpui::App;
+    pub use crate::settings_store::RegisteredSetting;
+    pub use crate::settings_store::SettingValue;
+}
 
 use std::fmt;
 
@@ -36,10 +37,15 @@ pub use action_sequence::ActionSequence;
 pub use built_in_keymap::keymap as built_in_keymap;
 pub use content_into_gpui::IntoGpui;
 pub use editable_setting_control::*;
+use gpui::App;
 pub use granted_write_path::GrantedWritePath;
-pub use keymap::{KeyBindingSpec, built_in_key_bindings};
+pub use keymap::KeyBindingSpec;
+pub use keymap::built_in_key_bindings;
 pub use settings_file::*;
-pub use settings_store::{DefaultSemanticTokenRules, Settings, SettingsLocation, SettingsStore};
+pub use settings_store::DefaultSemanticTokenRules;
+pub use settings_store::Settings;
+pub use settings_store::SettingsLocation;
+pub use settings_store::SettingsStore;
 
 #[derive(Copy, Clone, PartialEq, Eq, Debug, Hash, PartialOrd, Ord, serde::Serialize)]
 pub struct WorktreeId(usize);
@@ -51,19 +57,19 @@ impl From<WorktreeId> for usize {
 }
 
 impl WorktreeId {
-    pub fn from_usize(handle_id: usize) -> Self {
+    pub const fn from_usize(handle_id: usize) -> Self {
         Self(handle_id)
     }
 
-    pub fn from_proto(id: u64) -> Self {
+    pub const fn from_proto(id: u64) -> Self {
         Self(id as usize)
     }
 
-    pub fn to_proto(self) -> u64 {
+    pub const fn to_proto(self) -> u64 {
         self.0 as u64
     }
 
-    pub fn to_usize(self) -> usize {
+    pub const fn to_usize(self) -> usize {
         self.0
     }
 }

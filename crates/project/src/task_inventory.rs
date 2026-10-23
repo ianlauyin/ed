@@ -4,15 +4,26 @@ use std::sync::Arc;
 
 use anyhow::Result;
 use collections::HashMap;
-use gpui::{App, AppContext as _, Entity, SharedString, Task};
-use language::{
-    Buffer, ContextLocation, ContextProvider, Language, language_settings::LanguageSettings,
-};
+use gpui::App;
+use gpui::AppContext as _;
+use gpui::Entity;
+use gpui::SharedString;
+use gpui::Task;
+use language::Buffer;
+use language::ContextLocation;
+use language::ContextProvider;
+use language::Language;
+use language::language_settings::LanguageSettings;
 use lsp::LanguageServerId;
-use task::{TaskTemplate, TaskTemplates, TaskVariables, VariableName};
-use text::{Point, ToPoint};
+use task::TaskTemplate;
+use task::TaskTemplates;
+use task::TaskVariables;
+use task::VariableName;
+use text::Point;
+use text::ToPoint;
 
-use crate::{git_store::GitStore, worktree_store::WorktreeStore};
+use crate::git_store::GitStore;
+use crate::worktree_store::WorktreeStore;
 
 /// Kind of a source the tasks are fetched from, used to build unique task ids.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord)]
@@ -20,20 +31,14 @@ pub enum TaskSourceKind {
     /// Language-specific tasks, matched against tree-sitter runnable tags.
     Language { name: SharedString },
     /// Language-specific tasks coming from LSP servers.
-    Lsp {
-        language_name: SharedString,
-        server: LanguageServerId,
-    },
+    Lsp { language_name: SharedString, server: LanguageServerId },
 }
 
 impl TaskSourceKind {
     pub fn to_id_base(&self) -> String {
         match self {
             Self::Language { name } => format!("language_{name}"),
-            Self::Lsp {
-                server,
-                language_name,
-            } => format!("lsp_{language_name}_{server}"),
+            Self::Lsp { server, language_name } => format!("lsp_{language_name}_{server}"),
         }
     }
 }
@@ -44,27 +49,15 @@ pub fn language_task_templates(
     language: Arc<Language>,
     cx: &App,
 ) -> Task<Vec<(TaskSourceKind, TaskTemplate)>> {
-    let enabled = LanguageSettings::resolve(
-        buffer.as_ref().map(|b| b.read(cx)),
-        Some(&language.name()),
-        cx,
-    )
-    .tasks
-    .enabled;
+    let enabled =
+        LanguageSettings::resolve(buffer.as_ref().map(|b| b.read(cx)), Some(&language.name()), cx).tasks.enabled;
     let Some(provider) = language.context_provider().filter(|_| enabled) else {
         return Task::ready(Vec::new());
     };
-    let kind = TaskSourceKind::Language {
-        name: language.name().into(),
-    };
+    let kind = TaskSourceKind::Language { name: language.name().into() };
     let tasks = provider.associated_tasks(buffer, cx);
     cx.background_spawn(async move {
-        tasks
-            .await
-            .into_iter()
-            .flat_map(|templates| templates.0)
-            .map(|template| (kind.clone(), template))
-            .collect()
+        tasks.await.into_iter().flat_map(|templates| templates.0).map(|template| (kind.clone(), template)).collect()
     })
 }
 
@@ -76,11 +69,8 @@ pub struct BasicContextProvider {
 }
 
 impl BasicContextProvider {
-    pub fn new(worktree_store: Entity<WorktreeStore>, git_store: Entity<GitStore>) -> Self {
-        Self {
-            worktree_store,
-            git_store,
-        }
+    pub const fn new(worktree_store: Entity<WorktreeStore>, git_store: Entity<GitStore>) -> Self {
+        Self { worktree_store, git_store }
     }
 }
 
@@ -97,11 +87,7 @@ impl ContextProvider for BasicContextProvider {
         let buffer_snapshot = buffer.snapshot();
         let symbols = buffer_snapshot.symbols_containing(location.range.start, None);
         let symbol = symbols.last().map(|symbol| {
-            let range = symbol
-                .name_ranges
-                .last()
-                .cloned()
-                .unwrap_or(0..symbol.text.len());
+            let range = symbol.name_ranges.last().cloned().unwrap_or(0..symbol.text.len());
             symbol.text[range].to_string()
         });
 
@@ -109,9 +95,7 @@ impl ContextProvider for BasicContextProvider {
         let Point { row, column } = location.range.start.to_point(&buffer_snapshot);
         let row = row + 1;
         let column = column + 1;
-        let selected_text = buffer
-            .chars_for_range(location.range.clone())
-            .collect::<String>();
+        let selected_text = buffer.chars_for_range(location.range.clone()).collect::<String>();
 
         let mut task_variables = TaskVariables::from_iter([
             (VariableName::Row, row.to_string()),
@@ -127,25 +111,15 @@ impl ContextProvider for BasicContextProvider {
         let worktree = buffer
             .file()
             .map(|file| file.worktree_id(cx))
-            .and_then(|worktree_id| {
-                self.worktree_store
-                    .read(cx)
-                    .worktree_for_id(worktree_id, cx)
-            });
+            .and_then(|worktree_id| self.worktree_store.read(cx).worktree_for_id(worktree_id, cx));
 
         if let Some(worktree) = worktree {
             let worktree = worktree.read(cx);
             let path_style = worktree.path_style();
-            task_variables.insert(
-                VariableName::WorktreeRoot,
-                worktree.abs_path().to_string_lossy().into_owned(),
-            );
+            task_variables.insert(VariableName::WorktreeRoot, worktree.abs_path().to_string_lossy().into_owned());
             if let Some(current_file) = current_file.as_ref() {
                 let relative_path = current_file.path();
-                task_variables.insert(
-                    VariableName::RelativeFile,
-                    relative_path.display(path_style).to_string(),
-                );
+                task_variables.insert(VariableName::RelativeFile, relative_path.display(path_style).to_string());
                 if let Some(relative_dir) = relative_path.parent() {
                     task_variables.insert(
                         VariableName::RelativeDir,
@@ -159,17 +133,10 @@ impl ContextProvider for BasicContextProvider {
             }
         }
 
-        if let Some(worktree_id) = location.buffer.read(cx).file().map(|f| f.worktree_id(cx)) {
-            if let Some(path) = self
-                .git_store
-                .read(cx)
-                .original_repo_path_for_worktree(worktree_id, cx)
-            {
-                task_variables.insert(
-                    VariableName::MainGitWorktree,
-                    path.to_string_lossy().into_owned(),
-                );
-            }
+        if let Some(worktree_id) = location.buffer.read(cx).file().map(|f| f.worktree_id(cx))
+            && let Some(path) = self.git_store.read(cx).original_repo_path_for_worktree(worktree_id, cx)
+        {
+            task_variables.insert(VariableName::MainGitWorktree, path.to_string_lossy().into_owned());
         }
 
         if let Some(current_file) = current_file {
@@ -203,10 +170,8 @@ pub struct ContextProviderWithTasks {
 }
 
 impl ContextProviderWithTasks {
-    pub fn new(definitions: TaskTemplates) -> Self {
-        Self {
-            templates: definitions,
-        }
+    pub const fn new(definitions: TaskTemplates) -> Self {
+        Self { templates: definitions }
     }
 }
 

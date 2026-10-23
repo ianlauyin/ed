@@ -1,16 +1,25 @@
-use crate::{Diagnostic, RelatedInformation, RelatedLocation, range_to_lsp};
+use std::cmp::Ordering;
+use std::cmp::Reverse;
+use std::iter;
+use std::ops::Range;
+use std::sync::Arc;
+
 use anyhow::Result;
 use collections::HashMap;
 use lsp::LanguageServerId;
 use serde::Serialize;
-use std::{
-    cmp::{Ordering, Reverse},
-    iter,
-    ops::Range,
-    sync::Arc,
-};
-use sum_tree::{self, Bias, SumTree};
-use text::{Anchor, FromAnchor, PointUtf16, ToOffset};
+use sum_tree::Bias;
+use sum_tree::SumTree;
+use sum_tree::{self};
+use text::Anchor;
+use text::FromAnchor;
+use text::PointUtf16;
+use text::ToOffset;
+
+use crate::Diagnostic;
+use crate::RelatedInformation;
+use crate::RelatedLocation;
+use crate::range_to_lsp;
 
 /// A set of diagnostics associated with a given buffer, provided
 /// by a single language server.
@@ -40,30 +49,21 @@ pub struct DiagnosticEntry<T> {
 }
 
 impl<T> DiagnosticEntry<T> {
-    pub fn new(range: Range<T>, diagnostic: Diagnostic) -> Self {
-        Self {
-            range,
-            diagnostic,
-            related_information: None,
-        }
+    pub const fn new(range: Range<T>, diagnostic: Diagnostic) -> Self {
+        Self { range, diagnostic, related_information: None }
     }
 }
 
 impl<T: Clone> DiagnosticEntry<T> {
     /// Converts the entry to a different buffer coordinate type, taking the related
     /// information with it so that its locations stay in the same space as the range.
-    pub fn map_coordinates<O>(
-        self,
-        mut map: impl FnMut(&Range<T>) -> Range<O>,
-    ) -> DiagnosticEntry<O> {
+    pub fn map_coordinates<O>(self, mut map: impl FnMut(&Range<T>) -> Range<O>) -> DiagnosticEntry<O> {
         DiagnosticEntry {
             range: map(&self.range),
-            related_information: self.related_information.as_ref().map(|information| {
-                information
-                    .iter()
-                    .map(|information| information.map_location(&mut map))
-                    .collect()
-            }),
+            related_information: self
+                .related_information
+                .as_ref()
+                .map(|information| information.iter().map(|information| information.map_location(&mut map)).collect()),
             diagnostic: self.diagnostic,
         }
     }
@@ -103,14 +103,10 @@ impl<T: Clone> DiagnosticEntryRef<'_, T> {
 
 impl<'a> DiagnosticEntryRef<'a, Anchor> {
     /// Converts the [DiagnosticEntry] to a different buffer coordinate type.
-    pub fn resolve<O: FromAnchor>(
-        &self,
-        buffer: &text::BufferSnapshot,
-    ) -> DiagnosticEntryRef<'a, O> {
+    pub fn resolve<O: FromAnchor>(&self, buffer: &text::BufferSnapshot) -> DiagnosticEntryRef<'a, O> {
         DiagnosticEntryRef {
-            range: O::from_anchor(&self.range.start, buffer)
-                ..O::from_anchor(&self.range.end, buffer),
-            diagnostic: &self.diagnostic,
+            range: O::from_anchor(&self.range.start, buffer)..O::from_anchor(&self.range.end, buffer),
+            diagnostic: self.diagnostic,
         }
     }
 }
@@ -129,11 +125,7 @@ impl<'a> DiagnosticGroup<'a, Anchor> {
     /// Converts the entries in this [`DiagnosticGroup`] to a different buffer coordinate type.
     pub fn resolve<O: FromAnchor>(&self, buffer: &text::BufferSnapshot) -> DiagnosticGroup<'a, O> {
         DiagnosticGroup {
-            entries: self
-                .entries
-                .iter()
-                .map(|entry| entry.resolve(buffer))
-                .collect(),
+            entries: self.entries.iter().map(|entry| entry.resolve(buffer)).collect(),
             primary_ix: self.primary_ix,
         }
     }
@@ -161,10 +153,9 @@ impl DiagnosticEntry<PointUtf16> {
             for information in information.iter() {
                 locations.push(lsp::DiagnosticRelatedInformation {
                     location: match &information.location {
-                        RelatedLocation::InBuffer(range) => lsp::Location {
-                            uri: uri.clone(),
-                            range: range_to_lsp(range.clone())?,
-                        },
+                        RelatedLocation::InBuffer(range) => {
+                            lsp::Location { uri: uri.clone(), range: range_to_lsp(range.clone())? }
+                        }
                         RelatedLocation::InAnotherFile(location) => location.clone(),
                     },
                     message: information.message.clone(),
@@ -193,9 +184,7 @@ impl DiagnosticSet {
     where
         I: IntoIterator<Item = DiagnosticEntry<Anchor>>,
     {
-        Self {
-            diagnostics: SumTree::from_iter(iter, buffer),
-        }
+        Self { diagnostics: SumTree::from_iter(iter, buffer) }
     }
 
     /// Constructs a [DiagnosticSet] from a sequence of entries in an arbitrary order.
@@ -208,9 +197,7 @@ impl DiagnosticSet {
         Self {
             diagnostics: SumTree::from_iter(
                 entries.into_iter().map(|entry| {
-                    entry.map_coordinates(|range| {
-                        buffer.anchor_before(range.start)..buffer.anchor_before(range.end)
-                    })
+                    entry.map_coordinates(|range| buffer.anchor_before(range.start)..buffer.anchor_before(range.end))
                 }),
                 buffer,
             ),
@@ -244,8 +231,7 @@ impl DiagnosticSet {
         T: 'a + ToOffset,
         O: FromAnchor,
     {
-        self.entries_in_range(range, buffer, inclusive, reversed)
-            .map(|entry| entry.resolve(buffer))
+        self.entries_in_range(range, buffer, inclusive, reversed).map(|entry| entry.resolve(buffer))
     }
 
     /// Returns an iterator over the stored entries that intersect the given range of
@@ -304,10 +290,7 @@ impl DiagnosticSet {
             groups
                 .entry(entry.diagnostic.group_id)
                 .or_insert(Vec::new())
-                .push(DiagnosticEntryRef {
-                    range: entry.range.clone(),
-                    diagnostic: &entry.diagnostic,
-                });
+                .push(DiagnosticEntryRef { range: entry.range.clone(), diagnostic: &entry.diagnostic });
         }
 
         let start_ix = output.len();
@@ -316,15 +299,7 @@ impl DiagnosticSet {
             entries
                 .iter()
                 .position(|entry| entry.diagnostic.is_primary)
-                .map(|primary_ix| {
-                    (
-                        language_server_id,
-                        DiagnosticGroup {
-                            entries,
-                            primary_ix,
-                        },
-                    )
-                })
+                .map(|primary_ix| (language_server_id, DiagnosticGroup { entries, primary_ix }))
         }));
         output[start_ix..].sort_unstable_by(|(id_a, group_a), (id_b, group_b)| {
             group_a.entries[group_a.primary_ix]
@@ -342,9 +317,7 @@ impl DiagnosticSet {
         group_id: usize,
         buffer: &'a text::BufferSnapshot,
     ) -> impl 'a + Iterator<Item = DiagnosticEntryRef<'a, O>> {
-        self.iter()
-            .filter(move |entry| entry.diagnostic.group_id == group_id)
-            .map(|entry| entry.resolve(buffer))
+        self.iter().filter(move |entry| entry.diagnostic.group_id == group_id).map(|entry| entry.resolve(buffer))
     }
 }
 
@@ -364,13 +337,9 @@ impl sum_tree::Item for DiagnosticEntry<Anchor> {
 
 impl DiagnosticEntry<Anchor> {
     /// Converts the [DiagnosticEntry] to a different buffer coordinate type.
-    pub fn resolve<'a, O: FromAnchor>(
-        &'a self,
-        buffer: &text::BufferSnapshot,
-    ) -> DiagnosticEntryRef<'a, O> {
+    pub fn resolve<'a, O: FromAnchor>(&'a self, buffer: &text::BufferSnapshot) -> DiagnosticEntryRef<'a, O> {
         DiagnosticEntryRef {
-            range: O::from_anchor(&self.range.start, buffer)
-                ..O::from_anchor(&self.range.end, buffer),
+            range: O::from_anchor(&self.range.start, buffer)..O::from_anchor(&self.range.end, buffer),
             diagnostic: &self.diagnostic,
         }
     }

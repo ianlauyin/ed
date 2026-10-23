@@ -1,21 +1,34 @@
 pub mod cursor_position;
 
 use cursor_position::UserCaretPosition;
-use editor::{
-    Anchor, Editor, RowHighlightOptions, SelectionEffects, ToPoint,
-    actions::Tab,
-    scroll::{Autoscroll, ScrollOffset},
-};
-use gpui::{
-    App, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Render, SharedString, Styled,
-    Subscription, div, prelude::*,
-};
+use editor::Anchor;
+use editor::Editor;
+use editor::RowHighlightOptions;
+use editor::SelectionEffects;
+use editor::ToPoint;
+use editor::actions::Tab;
+use editor::scroll::Autoscroll;
+use editor::scroll::ScrollOffset;
+use gpui::App;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::Render;
+use gpui::SharedString;
+use gpui::Styled;
+use gpui::Subscription;
+use gpui::div;
+use gpui::prelude::*;
 use language::Buffer;
-use text::{Bias, Point};
+use text::Bias;
+use text::Point;
 use theme::ActiveTheme;
 use ui::prelude::*;
 use util::paths::FILE_ROW_COLUMN_DELIMITER;
-use workspace::{DismissDecision, ModalView};
+use workspace::DismissDecision;
+use workspace::ModalView;
 
 pub fn init(cx: &mut App) {
     cx.observe_new(GoToLine::register).detach();
@@ -32,11 +45,7 @@ pub struct GoToLine {
 }
 
 impl ModalView for GoToLine {
-    fn on_before_dismiss(
-        &mut self,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) -> DismissDecision {
+    fn on_before_dismiss(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> DismissDecision {
         self.prev_scroll_position.take();
         DismissDecision::Dismiss(true)
     }
@@ -67,9 +76,8 @@ impl GoToLine {
                     return;
                 };
                 workspace.update(cx, |workspace, cx| {
-                    workspace.toggle_modal(window, cx, move |window, cx| {
-                        GoToLine::new(editor_handle, buffer, window, cx)
-                    });
+                    workspace
+                        .toggle_modal(window, cx, move |window, cx| GoToLine::new(editor_handle, buffer, window, cx));
                 })
             })
             .detach();
@@ -83,9 +91,7 @@ impl GoToLine {
     ) -> Self {
         let (user_caret, last_line, scroll_position) = active_editor.update(cx, |editor, cx| {
             let user_caret = UserCaretPosition::at_selection_end(
-                &editor
-                    .selections
-                    .last::<Point>(&editor.display_snapshot(cx)),
+                &editor.selections.last::<Point>(&editor.display_snapshot(cx)),
                 &editor.buffer().read(cx).snapshot(cx),
             );
 
@@ -124,21 +130,12 @@ impl GoToLine {
                     }
                 })
                 .detach();
-            editor.set_placeholder_text(
-                &format!("{line}{FILE_ROW_COLUMN_DELIMITER}{column}"),
-                window,
-                cx,
-            );
+            editor.set_placeholder_text(&format!("{line}{FILE_ROW_COLUMN_DELIMITER}{column}"), window, cx);
             editor
         });
         let line_editor_change = cx.subscribe_in(&line_editor, window, Self::on_line_editor_event);
 
-        let current_text = format!(
-            "Current Line: {} of {} (column {})",
-            line,
-            last_line + 1,
-            column
-        );
+        let current_text = format!("Current Line: {} of {} (column {})", line, last_line + 1, column);
 
         Self {
             line_editor,
@@ -179,7 +176,7 @@ impl GoToLine {
         }
     }
 
-    fn highlight_current_line(&mut self, cx: &mut Context<Self>) {
+    fn highlight_current_line(&self, cx: &mut Context<Self>) {
         self.active_editor.update(cx, |editor, cx| {
             editor.clear_row_highlights::<GoToLineRowHighlights>();
             let snapshot = editor.buffer().read(cx).snapshot(cx);
@@ -198,10 +195,7 @@ impl GoToLine {
             editor.highlight_rows::<GoToLineRowHighlights>(
                 start..end,
                 |cx| cx.theme().colors().editor_highlighted_line_background,
-                RowHighlightOptions {
-                    autoscroll: true,
-                    ..Default::default()
-                },
+                RowHighlightOptions { autoscroll: true, ..Default::default() },
                 cx,
             );
             editor.request_autoscroll(Autoscroll::center(), cx);
@@ -229,10 +223,7 @@ impl GoToLine {
             buffer_snapshot.point_from_external_input(row, character)
         };
 
-        editor
-            .buffer()
-            .read(cx)
-            .buffer_point_to_anchor(&self.active_buffer, target_point, cx)
+        editor.buffer().read(cx).buffer_point_to_anchor(&self.active_buffer, target_point, cx)
     }
 
     fn relative_line_from_query(&self, cx: &App) -> Option<i32> {
@@ -255,11 +246,7 @@ impl GoToLine {
         let direction = last_direction_char?;
 
         let number_part = &trimmed[number_start_index..];
-        let line_part = number_part
-            .split(FILE_ROW_COLUMN_DELIMITER)
-            .next()
-            .unwrap_or(number_part)
-            .trim();
+        let line_part = number_part.split(FILE_ROW_COLUMN_DELIMITER).next().unwrap_or(number_part).trim();
 
         let value = line_part.parse::<u32>().ok()?;
 
@@ -272,10 +259,7 @@ impl GoToLine {
 
     fn line_and_char_from_query(&self, cx: &App) -> Option<(u32, Option<u32>)> {
         let input = self.line_editor.read(cx).text(cx);
-        let mut components = input
-            .splitn(2, FILE_ROW_COLUMN_DELIMITER)
-            .map(str::trim)
-            .fuse();
+        let mut components = input.splitn(2, FILE_ROW_COLUMN_DELIMITER).map(str::trim).fuse();
         let row = components.next().and_then(|row| row.parse::<u32>().ok())?;
         let column = components.next().and_then(|col| col.parse::<u32>().ok());
         Some((row, column))
@@ -290,12 +274,9 @@ impl GoToLine {
             let Some(start) = self.anchor_from_query(editor, cx) else {
                 return;
             };
-            editor.change_selections(
-                SelectionEffects::scroll(Autoscroll::center()).unfold(),
-                window,
-                cx,
-                |s| s.select_anchor_ranges([start..start]),
-            );
+            editor.change_selections(SelectionEffects::scroll(Autoscroll::center()).unfold(), window, cx, |s| {
+                s.select_anchor_ranges([start..start])
+            });
             editor.focus_handle(cx).focus(window, cx);
             cx.notify()
         });
@@ -316,9 +297,7 @@ impl Render for GoToLine {
             format!("Go to line {target_line} ({offset:+} from current)").into()
         } else {
             match self.line_and_char_from_query(cx) {
-                Some((line, Some(character))) => {
-                    format!("Go to line {line}, character {character}").into()
-                }
+                Some((line, Some(character))) => format!("Go to line {line}, character {character}").into(),
                 Some((line, None)) => format!("Go to line {line}").into(),
                 None => self.current_text.clone(),
             }
@@ -338,12 +317,6 @@ impl Render for GoToLine {
                     .py_1()
                     .child(self.line_editor.clone()),
             )
-            .child(
-                h_flex()
-                    .px_2()
-                    .py_1()
-                    .gap_1()
-                    .child(Label::new(help_text).color(Color::Muted)),
-            )
+            .child(h_flex().px_2().py_1().gap_1().child(Label::new(help_text).color(Color::Muted)))
     }
 }

@@ -2,23 +2,45 @@
 //! can be used to describe common units, concepts, and the relationships
 //! between them.
 
-use anyhow::{Context as _, anyhow};
 use core::fmt::Debug;
-use derive_more::{Add, AddAssign, Div, DivAssign, Mul, Neg, Sub, SubAssign};
-use refineable::Refineable;
-use schemars::{JsonSchema, json_schema};
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use std::borrow::Cow;
-use std::ops::{AddAssign, Range};
-use std::{
-    cmp::{self, PartialOrd},
-    fmt::{self, Display},
-    hash::Hash,
-    ops::{Add, Div, Mul, MulAssign, Neg, Sub},
-};
-use taffy::prelude::{TaffyGridLine, TaffyGridSpan};
+use std::cmp::PartialOrd;
+use std::cmp::{self};
+use std::fmt::Display;
+use std::fmt::{self};
+use std::hash::Hash;
+use std::ops::Add;
+use std::ops::AddAssign;
+use std::ops::Div;
+use std::ops::Mul;
+use std::ops::MulAssign;
+use std::ops::Neg;
+use std::ops::Range;
+use std::ops::Sub;
 
-use crate::{App, DisplayId};
+use anyhow::Context as _;
+use anyhow::anyhow;
+use derive_more::Add;
+use derive_more::AddAssign;
+use derive_more::Div;
+use derive_more::DivAssign;
+use derive_more::Mul;
+use derive_more::Neg;
+use derive_more::Sub;
+use derive_more::SubAssign;
+use refineable::Refineable;
+use schemars::JsonSchema;
+use schemars::json_schema;
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
+use serde::de;
+use taffy::prelude::TaffyGridLine;
+use taffy::prelude::TaffyGridSpan;
+
+use crate::App;
+use crate::DisplayId;
 
 /// Axis in a 2D cartesian space.
 #[derive(Copy, Clone, PartialEq, Eq, Serialize, Deserialize, Debug)]
@@ -31,7 +53,7 @@ pub enum Axis {
 
 impl Axis {
     /// Swap this axis to the opposite axis.
-    pub fn invert(self) -> Self {
+    pub const fn invert(self) -> Self {
         match self {
             Axis::Vertical => Axis::Horizontal,
             Axis::Horizontal => Axis::Vertical,
@@ -152,10 +174,7 @@ impl<T: Clone + Debug + Default + PartialEq> Point<T> {
     /// ```
     #[must_use]
     pub fn map<U: Clone + Debug + Default + PartialEq>(&self, f: impl Fn(T) -> U) -> Point<U> {
-        Point {
-            x: f(self.x.clone()),
-            y: f(self.y.clone()),
-        }
+        Point { x: f(self.x.clone()), y: f(self.y.clone()) }
     }
 }
 
@@ -171,14 +190,8 @@ impl<T: Clone + Debug + Default + PartialEq> Along for Point<T> {
 
     fn apply_along(&self, axis: Axis, f: impl FnOnce(T) -> T) -> Point<T> {
         match axis {
-            Axis::Horizontal => Point {
-                x: f(self.x.clone()),
-                y: self.y.clone(),
-            },
-            Axis::Vertical => Point {
-                x: self.x.clone(),
-                y: f(self.y.clone()),
-            },
+            Axis::Horizontal => Point { x: f(self.x.clone()), y: self.y.clone() },
+            Axis::Vertical => Point { x: self.x.clone(), y: f(self.y.clone()) },
         }
     }
 }
@@ -200,10 +213,7 @@ impl Point<Pixels> {
     /// assert_eq!(scaled_p, Point { x: ScaledPixels::from(15.0), y: ScaledPixels::from(30.0) });
     /// ```
     pub fn scale(&self, factor: f32) -> Point<ScaledPixels> {
-        Point {
-            x: self.x.scale(factor),
-            y: self.y.scale(factor),
-        }
+        Point { x: self.x.scale(factor), y: self.y.scale(factor) }
     }
 
     /// Calculates the Euclidean distance from the origin (0, 0) to this point.
@@ -226,10 +236,7 @@ where
 {
     /// Get the position of this point, relative to the given origin
     pub fn relative_to(&self, origin: &Point<T>) -> Point<T> {
-        point(
-            self.x.clone() - origin.x.clone(),
-            self.y.clone() - origin.y.clone(),
-        )
+        point(self.x.clone() - origin.x.clone(), self.y.clone() - origin.y.clone())
     }
 }
 
@@ -241,10 +248,7 @@ where
     type Output = Point<T>;
 
     fn mul(self, rhs: Rhs) -> Self::Output {
-        Point {
-            x: self.x * rhs.clone(),
-            y: self.y * rhs,
-        }
+        Point { x: self.x * rhs.clone(), y: self.y * rhs }
     }
 }
 
@@ -267,10 +271,7 @@ where
     type Output = Self;
 
     fn div(self, rhs: S) -> Self::Output {
-        Self {
-            x: self.x / rhs.clone(),
-            y: self.y / rhs,
-        }
+        Self { x: self.x / rhs.clone(), y: self.y / rhs }
     }
 }
 
@@ -295,16 +296,8 @@ where
     /// ```
     pub fn max(&self, other: &Self) -> Self {
         Point {
-            x: if self.x > other.x {
-                self.x.clone()
-            } else {
-                other.x.clone()
-            },
-            y: if self.y > other.y {
-                self.y.clone()
-            } else {
-                other.y.clone()
-            },
+            x: if self.x > other.x { self.x.clone() } else { other.x.clone() },
+            y: if self.y > other.y { self.y.clone() } else { other.y.clone() },
         }
     }
 
@@ -325,16 +318,8 @@ where
     /// ```
     pub fn min(&self, other: &Self) -> Self {
         Point {
-            x: if self.x <= other.x {
-                self.x.clone()
-            } else {
-                other.x.clone()
-            },
-            y: if self.y <= other.y {
-                self.y.clone()
-            } else {
-                other.y.clone()
-            },
+            x: if self.x <= other.x { self.x.clone() } else { other.x.clone() },
+            y: if self.y <= other.y { self.y.clone() } else { other.y.clone() },
         }
     }
 
@@ -371,10 +356,7 @@ where
 
 impl<T: Clone + Debug + Default + PartialEq> Clone for Point<T> {
     fn clone(&self) -> Self {
-        Self {
-            x: self.x.clone(),
-            y: self.y.clone(),
-        }
+        Self { x: self.x.clone(), y: self.y.clone() }
     }
 }
 
@@ -388,9 +370,7 @@ impl<T: Clone + Debug + Default + PartialEq + Display> Display for Point<T> {
 ///
 /// This struct is generic over the type `T`, which can be any type that implements `Clone`, `Default`, and `Debug`.
 /// It is commonly used to specify dimensions for elements in a UI, such as a window or element.
-#[derive(
-    Add, Clone, Copy, Default, Deserialize, Div, Hash, Neg, PartialEq, Refineable, Serialize, Sub,
-)]
+#[derive(Add, Clone, Copy, Default, Deserialize, Div, Hash, Neg, PartialEq, Refineable, Serialize, Sub)]
 #[refineable(Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[repr(C)]
 pub struct Size<T: Clone + Debug + Default + PartialEq> {
@@ -402,7 +382,7 @@ pub struct Size<T: Clone + Debug + Default + PartialEq> {
 
 impl<T: Clone + Debug + Default + PartialEq> Size<T> {
     /// Create a new Size, a synonym for [`size`]
-    pub fn new(width: T, height: T) -> Self {
+    pub const fn new(width: T, height: T) -> Self {
         size(width, height)
     }
 }
@@ -455,10 +435,7 @@ where
     where
         U: Clone + Debug + Default + PartialEq,
     {
-        Size {
-            width: f(self.width.clone()),
-            height: f(self.height.clone()),
-        }
+        Size { width: f(self.width.clone()), height: f(self.height.clone()) }
     }
 }
 
@@ -468,10 +445,7 @@ where
 {
     /// Compute the center point of the size.g
     pub fn center(&self) -> Point<T> {
-        Point {
-            x: self.width.half(),
-            y: self.height.half(),
-        }
+        Point { x: self.width.half(), y: self.height.half() }
     }
 }
 
@@ -495,10 +469,7 @@ impl Size<Pixels> {
     /// assert_eq!(scaled_size, Size { width: ScaledPixels::from(200.0), height: ScaledPixels::from(100.0) });
     /// ```
     pub fn scale(&self, factor: f32) -> Size<ScaledPixels> {
-        Size {
-            width: self.width.scale(factor),
-            height: self.height.scale(factor),
-        }
+        Size { width: self.width.scale(factor), height: self.height.scale(factor) }
     }
 }
 
@@ -518,14 +489,8 @@ where
     /// Returns the value of this size along the given axis.
     fn apply_along(&self, axis: Axis, f: impl FnOnce(T) -> T) -> Self {
         match axis {
-            Axis::Horizontal => Size {
-                width: f(self.width.clone()),
-                height: self.height.clone(),
-            },
-            Axis::Vertical => Size {
-                width: self.width.clone(),
-                height: f(self.height.clone()),
-            },
+            Axis::Horizontal => Size { width: f(self.width.clone()), height: self.height.clone() },
+            Axis::Vertical => Size { width: self.width.clone(), height: f(self.height.clone()) },
         }
     }
 }
@@ -551,16 +516,8 @@ where
     /// ```
     pub fn max(&self, other: &Self) -> Self {
         Size {
-            width: if self.width >= other.width {
-                self.width.clone()
-            } else {
-                other.width.clone()
-            },
-            height: if self.height >= other.height {
-                self.height.clone()
-            } else {
-                other.height.clone()
-            },
+            width: if self.width >= other.width { self.width.clone() } else { other.width.clone() },
+            height: if self.height >= other.height { self.height.clone() } else { other.height.clone() },
         }
     }
 
@@ -581,16 +538,8 @@ where
     /// ```
     pub fn min(&self, other: &Self) -> Self {
         Size {
-            width: if self.width >= other.width {
-                other.width.clone()
-            } else {
-                self.width.clone()
-            },
-            height: if self.height >= other.height {
-                other.height.clone()
-            } else {
-                self.height.clone()
-            },
+            width: if self.width >= other.width { other.width.clone() } else { self.width.clone() },
+            height: if self.height >= other.height { other.height.clone() } else { self.height.clone() },
         }
     }
 }
@@ -603,10 +552,7 @@ where
     type Output = Size<Rhs>;
 
     fn mul(self, rhs: Rhs) -> Self::Output {
-        Size {
-            width: self.width * rhs.clone(),
-            height: self.height * rhs,
-        }
+        Size { width: self.width * rhs.clone(), height: self.height * rhs }
     }
 }
 
@@ -640,28 +586,19 @@ impl<T: Clone + Debug + Default + PartialEq + Display> Display for Size<T> {
 
 impl<T: Clone + Debug + Default + PartialEq> From<Point<T>> for Size<T> {
     fn from(point: Point<T>) -> Self {
-        Self {
-            width: point.x,
-            height: point.y,
-        }
+        Self { width: point.x, height: point.y }
     }
 }
 
 impl From<Size<Pixels>> for Size<DefiniteLength> {
     fn from(size: Size<Pixels>) -> Self {
-        Size {
-            width: size.width.into(),
-            height: size.height.into(),
-        }
+        Size { width: size.width.into(), height: size.height.into() }
     }
 }
 
 impl From<Size<Pixels>> for Size<AbsoluteLength> {
     fn from(size: Size<Pixels>) -> Self {
-        Size {
-            width: size.width.into(),
-            height: size.height.into(),
-        }
+        Size { width: size.width.into(), height: size.height.into() }
     }
 }
 
@@ -675,10 +612,7 @@ impl Size<Length> {
     ///
     /// A `Size<Length>` that will fill the available space when used in a layout.
     pub fn full() -> Self {
-        Self {
-            width: relative(1.).into(),
-            height: relative(1.).into(),
-        }
+        Self { width: relative(1.).into(), height: relative(1.).into() }
     }
 }
 
@@ -692,11 +626,8 @@ impl Size<Length> {
     /// # Returns
     ///
     /// A `Size<Length>` with width and height set to `Length::Auto`.
-    pub fn auto() -> Self {
-        Self {
-            width: Length::Auto,
-            height: Length::Auto,
-        }
+    pub const fn auto() -> Self {
+        Self { width: Length::Auto, height: Length::Auto }
     }
 }
 
@@ -728,43 +659,30 @@ pub struct Bounds<T: Clone + Debug + Default + PartialEq> {
 }
 
 /// Create a bounds with the given origin and size
-pub fn bounds<T: Clone + Debug + Default + PartialEq>(
-    origin: Point<T>,
-    size: Size<T>,
-) -> Bounds<T> {
+pub const fn bounds<T: Clone + Debug + Default + PartialEq>(origin: Point<T>, size: Size<T>) -> Bounds<T> {
     Bounds { origin, size }
 }
 
 impl Bounds<Pixels> {
     /// Generate a centered bounds for the given display or primary display if none is provided
     pub fn centered(display_id: Option<DisplayId>, size: Size<Pixels>, cx: &App) -> Self {
-        let display = display_id
-            .and_then(|id| cx.find_display(id))
-            .or_else(|| cx.primary_display());
+        let display = display_id.and_then(|id| cx.find_display(id)).or_else(|| cx.primary_display());
 
         display
             .map(|display| {
                 let visible_bounds = display.visible_bounds();
                 Bounds::centered_at(visible_bounds.center(), size.min(&visible_bounds.size))
             })
-            .unwrap_or_else(|| Bounds {
-                origin: point(px(0.), px(0.)),
-                size,
-            })
+            .unwrap_or_else(|| Bounds { origin: point(px(0.), px(0.)), size })
     }
 
     /// Generate maximized bounds for the given display or primary display if none is provided
     pub fn maximized(display_id: Option<DisplayId>, cx: &App) -> Self {
-        let display = display_id
-            .and_then(|id| cx.find_display(id))
-            .or_else(|| cx.primary_display());
+        let display = display_id.and_then(|id| cx.find_display(id)).or_else(|| cx.primary_display());
 
         display
             .map(|display| display.bounds())
-            .unwrap_or_else(|| Bounds {
-                origin: point(px(0.), px(0.)),
-                size: size(px(1024.), px(768.)),
-            })
+            .unwrap_or_else(|| Bounds { origin: point(px(0.), px(0.)), size: size(px(1024.), px(768.)) })
     }
 }
 
@@ -782,7 +700,7 @@ where
     /// # Returns
     ///
     /// Returns a `Bounds<T>` that has the given origin and size.
-    pub fn new(origin: Point<T>, size: Size<T>) -> Self {
+    pub const fn new(origin: Point<T>, size: Size<T>) -> Self {
         Bounds { origin, size }
     }
 }
@@ -819,14 +737,8 @@ where
     /// assert_eq!(bounds.size.height, 10);
     /// ```
     pub fn from_corners(top_left: Point<T>, bottom_right: Point<T>) -> Self {
-        let origin = Point {
-            x: top_left.x.clone(),
-            y: top_left.y.clone(),
-        };
-        let size = Size {
-            width: bottom_right.x - top_left.x,
-            height: bottom_right.y - top_left.y,
-        };
+        let origin = Point { x: top_left.x.clone(), y: top_left.y.clone() };
+        let size = Size { width: bottom_right.x - top_left.x, height: bottom_right.y - top_left.y };
         Bounds { origin, size }
     }
 }
@@ -840,34 +752,13 @@ where
     pub fn from_anchor_and_size(corner: Anchor, origin: Point<T>, size: Size<T>) -> Bounds<T> {
         let origin = match corner {
             Anchor::TopLeft => origin,
-            Anchor::TopRight => Point {
-                x: origin.x - size.width.clone(),
-                y: origin.y,
-            },
-            Anchor::BottomLeft => Point {
-                x: origin.x,
-                y: origin.y - size.height.clone(),
-            },
-            Anchor::BottomRight => Point {
-                x: origin.x - size.width.clone(),
-                y: origin.y - size.height.clone(),
-            },
-            Anchor::TopCenter => Point {
-                x: origin.x - size.width.half(),
-                y: origin.y,
-            },
-            Anchor::BottomCenter => Point {
-                x: origin.x - size.width.half(),
-                y: origin.y - size.height.clone(),
-            },
-            Anchor::LeftCenter => Point {
-                x: origin.x,
-                y: origin.y - size.height.half(),
-            },
-            Anchor::RightCenter => Point {
-                x: origin.x - size.width.clone(),
-                y: origin.y - size.height.half(),
-            },
+            Anchor::TopRight => Point { x: origin.x - size.width.clone(), y: origin.y },
+            Anchor::BottomLeft => Point { x: origin.x, y: origin.y - size.height.clone() },
+            Anchor::BottomRight => Point { x: origin.x - size.width.clone(), y: origin.y - size.height.clone() },
+            Anchor::TopCenter => Point { x: origin.x - size.width.half(), y: origin.y },
+            Anchor::BottomCenter => Point { x: origin.x - size.width.half(), y: origin.y - size.height.clone() },
+            Anchor::LeftCenter => Point { x: origin.x, y: origin.y - size.height.half() },
+            Anchor::RightCenter => Point { x: origin.x - size.width.clone(), y: origin.y - size.height.half() },
         };
 
         Bounds { origin, size }
@@ -880,10 +771,7 @@ where
 {
     /// Creates a new bounds centered at the given point.
     pub fn centered_at(center: Point<T>, size: Size<T>) -> Self {
-        let origin = Point {
-            x: center.x - size.width.half(),
-            y: center.y - size.height.half(),
-        };
+        let origin = Point { x: center.x - size.width.half(), y: center.y - size.height.half() };
         Self::new(origin, size)
     }
 }
@@ -894,34 +782,22 @@ where
 {
     /// Returns the top center point of the bounds.
     pub fn top_center(&self) -> Point<T> {
-        Point {
-            x: self.origin.x.clone() + self.size.width.half(),
-            y: self.origin.y.clone(),
-        }
+        Point { x: self.origin.x.clone() + self.size.width.half(), y: self.origin.y.clone() }
     }
 
     /// Returns the bottom center point of the bounds.
     pub fn bottom_center(&self) -> Point<T> {
-        Point {
-            x: self.origin.x.clone() + self.size.width.half(),
-            y: self.origin.y.clone() + self.size.height.clone(),
-        }
+        Point { x: self.origin.x.clone() + self.size.width.half(), y: self.origin.y.clone() + self.size.height.clone() }
     }
 
     /// Returns the left center point of the bounds.
     pub fn left_center(&self) -> Point<T> {
-        Point {
-            x: self.origin.x.clone(),
-            y: self.origin.y.clone() + self.size.height.half(),
-        }
+        Point { x: self.origin.x.clone(), y: self.origin.y.clone() + self.size.height.half() }
     }
 
     /// Returns the right center point of the bounds.
     pub fn right_center(&self) -> Point<T> {
-        Point {
-            x: self.origin.x.clone() + self.size.width.clone(),
-            y: self.origin.y.clone() + self.size.height.half(),
-        }
+        Point { x: self.origin.x.clone() + self.size.width.clone(), y: self.origin.y.clone() + self.size.height.half() }
     }
 }
 
@@ -1078,23 +954,14 @@ where
         Bounds {
             origin: self.origin.clone() - point(amount.left.clone(), amount.top.clone()),
             size: self.size.clone()
-                + size(
-                    amount.left.clone() + amount.right.clone(),
-                    amount.top.clone() + amount.bottom,
-                ),
+                + size(amount.left.clone() + amount.right.clone(), amount.top.clone() + amount.bottom),
         }
     }
 }
 
 impl<T> Bounds<T>
 where
-    T: Add<T, Output = T>
-        + Sub<T, Output = T>
-        + Neg<Output = T>
-        + Clone
-        + Debug
-        + Default
-        + PartialEq,
+    T: Add<T, Output = T> + Sub<T, Output = T> + Neg<Output = T> + Clone + Debug + Default + PartialEq,
 {
     /// Inset the bounds by a specified amount. Equivalent to `dilate` with the amount negated.
     ///
@@ -1104,9 +971,7 @@ where
     }
 }
 
-impl<T: PartialOrd + Add<T, Output = T> + Sub<Output = T> + Clone + Debug + Default + PartialEq>
-    Bounds<T>
-{
+impl<T: PartialOrd + Add<T, Output = T> + Sub<Output = T> + Clone + Debug + Default + PartialEq> Bounds<T> {
     /// Calculates the intersection of two `Bounds` objects.
     ///
     /// This method computes the overlapping region of two `Bounds`. If the bounds do not intersect,
@@ -1142,10 +1007,7 @@ impl<T: PartialOrd + Add<T, Output = T> + Sub<Output = T> + Clone + Debug + Defa
     /// ```
     pub fn intersect(&self, other: &Self) -> Self {
         let upper_left = self.origin.max(&other.origin);
-        let bottom_right = self
-            .bottom_right()
-            .min(&other.bottom_right())
-            .max(&upper_left);
+        let bottom_right = self.bottom_right().min(&other.bottom_right()).max(&upper_left);
         Self::from_corners(upper_left, bottom_right)
     }
 
@@ -1213,10 +1075,7 @@ where
     type Output = Bounds<Rhs>;
 
     fn mul(self, rhs: Rhs) -> Self::Output {
-        Bounds {
-            origin: self.origin * rhs.clone(),
-            size: self.size * rhs,
-        }
+        Bounds { origin: self.origin * rhs.clone(), size: self.size * rhs }
     }
 }
 
@@ -1240,10 +1099,7 @@ where
     type Output = Self;
 
     fn div(self, rhs: S) -> Self {
-        Self {
-            origin: self.origin / rhs.clone(),
-            size: self.size / rhs,
-        }
+        Self { origin: self.origin / rhs.clone(), size: self.size / rhs }
     }
 }
 
@@ -1254,10 +1110,7 @@ where
     type Output = Self;
 
     fn add(self, rhs: Point<T>) -> Self {
-        Self {
-            origin: self.origin + rhs,
-            size: self.size,
-        }
+        Self { origin: self.origin + rhs, size: self.size }
     }
 }
 
@@ -1268,19 +1121,13 @@ where
     type Output = Self;
 
     fn sub(self, rhs: Point<T>) -> Self {
-        Self {
-            origin: self.origin - rhs,
-            size: self.size,
-        }
+        Self { origin: self.origin - rhs, size: self.size }
     }
 }
 
 impl<T: Clone + Debug + Default + PartialEq> From<Size<T>> for Point<T> {
     fn from(size: Size<T>) -> Self {
-        Self {
-            x: size.width,
-            y: size.height,
-        }
+        Self { x: size.width, y: size.height }
     }
 }
 
@@ -1342,10 +1189,7 @@ where
     /// assert_eq!(top_right, Point { x: 10, y: 0 });
     /// ```
     pub fn top_right(&self) -> Point<T> {
-        Point {
-            x: self.origin.x.clone() + self.size.width.clone(),
-            y: self.origin.y.clone(),
-        }
+        Point { x: self.origin.x.clone() + self.size.width.clone(), y: self.origin.y.clone() }
     }
 
     /// Returns the bottom right corner point of the bounds.
@@ -1390,10 +1234,7 @@ where
     /// assert_eq!(bottom_left, Point { x: 0, y: 20 });
     /// ```
     pub fn bottom_left(&self) -> Point<T> {
-        Point {
-            x: self.origin.x.clone(),
-            y: self.origin.y.clone() + self.size.height.clone(),
-        }
+        Point { x: self.origin.x.clone(), y: self.origin.y.clone() + self.size.height.clone() }
     }
 }
 
@@ -1543,10 +1384,7 @@ where
     where
         U: Clone + Debug + Default + PartialEq,
     {
-        Bounds {
-            origin: self.origin.map(&f),
-            size: self.size.map(f),
-        }
+        Bounds { origin: self.origin.map(&f), size: self.size.map(f) }
     }
 
     /// Applies a function to the origin  of the bounds, producing a new `Bounds` with the new origin
@@ -1567,10 +1405,7 @@ where
     /// });
     /// ```
     pub fn map_origin(self, f: impl Fn(T) -> T) -> Bounds<T> {
-        Bounds {
-            origin: self.origin.map(f),
-            size: self.size,
-        }
+        Bounds { origin: self.origin.map(f), size: self.size }
     }
 
     /// Applies a function to the origin  of the bounds, producing a new `Bounds` with the new origin
@@ -1591,10 +1426,7 @@ where
     /// });
     /// ```
     pub fn map_size(self, f: impl Fn(T) -> T) -> Bounds<T> {
-        Bounds {
-            origin: self.origin,
-            size: self.size.map(f),
-        }
+        Bounds { origin: self.origin, size: self.size.map(f) }
     }
 }
 
@@ -1604,8 +1436,7 @@ where
 {
     /// Convert a point to the coordinate space defined by this Bounds
     pub fn localize(&self, point: &Point<T>) -> Option<Point<T>> {
-        self.contains(point)
-            .then(|| point.relative_to(&self.origin))
+        self.contains(point).then(|| point.relative_to(&self.origin))
     }
 }
 
@@ -1628,23 +1459,14 @@ impl<T: PartialOrd + Clone + Debug + Default + PartialEq> Bounds<T> {
 
 impl<T: Clone + Debug + Default + PartialEq + Display + Add<T, Output = T>> Display for Bounds<T> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "{} - {} (size {})",
-            self.origin,
-            self.bottom_right(),
-            self.size
-        )
+        write!(f, "{} - {} (size {})", self.origin, self.bottom_right(), self.size)
     }
 }
 
 impl Size<DevicePixels> {
     /// Converts the size from physical to logical pixels.
     pub fn to_pixels(self, scale_factor: f32) -> Size<Pixels> {
-        size(
-            px(self.width.0 as f32 / scale_factor),
-            px(self.height.0 as f32 / scale_factor),
-        )
+        size(px(self.width.0 as f32 / scale_factor), px(self.height.0 as f32 / scale_factor))
     }
 }
 
@@ -1696,10 +1518,7 @@ impl Bounds<Pixels> {
     /// });
     /// ```
     pub fn scale(&self, factor: f32) -> Bounds<ScaledPixels> {
-        Bounds {
-            origin: self.origin.scale(factor),
-            size: self.size.scale(factor),
-        }
+        Bounds { origin: self.origin.scale(factor), size: self.size.scale(factor) }
     }
 
     /// Convert the bounds from logical pixels to physical pixels
@@ -1718,10 +1537,7 @@ impl Bounds<DevicePixels> {
     /// Convert the bounds from physical pixels to logical pixels
     pub fn to_pixels(self, scale_factor: f32) -> Bounds<Pixels> {
         Bounds {
-            origin: point(
-                px(self.origin.x.0 as f32 / scale_factor),
-                px(self.origin.y.0 as f32 / scale_factor),
-            ),
+            origin: point(px(self.origin.x.0 as f32 / scale_factor), px(self.origin.y.0 as f32 / scale_factor)),
             size: self.size.to_pixels(scale_factor),
         }
     }
@@ -1818,12 +1634,7 @@ impl<T: Clone + Debug + Default + PartialEq> Edges<T> {
     /// assert_eq!(uniform_edges.left, 10.0);
     /// ```
     pub fn all(value: T) -> Self {
-        Self {
-            top: value.clone(),
-            right: value.clone(),
-            bottom: value.clone(),
-            left: value,
-        }
+        Self { top: value.clone(), right: value.clone(), bottom: value.clone(), left: value }
     }
 
     /// Applies a function to each field of the `Edges`, producing a new `Edges<U>`.
@@ -1852,12 +1663,7 @@ impl<T: Clone + Debug + Default + PartialEq> Edges<T> {
     where
         U: Clone + Debug + Default + PartialEq,
     {
-        Edges {
-            top: f(&self.top),
-            right: f(&self.right),
-            bottom: f(&self.bottom),
-            left: f(&self.left),
-        }
+        Edges { top: f(&self.top), right: f(&self.right), bottom: f(&self.bottom), left: f(&self.left) }
     }
 
     /// Checks if any of the edges satisfy a given predicate.
@@ -1888,10 +1694,7 @@ impl<T: Clone + Debug + Default + PartialEq> Edges<T> {
     /// assert!(!edges.any(|value| *value > 10));
     /// ```
     pub fn any<F: Fn(&T) -> bool>(&self, predicate: F) -> bool {
-        predicate(&self.top)
-            || predicate(&self.right)
-            || predicate(&self.bottom)
-            || predicate(&self.left)
+        predicate(&self.top) || predicate(&self.right) || predicate(&self.bottom) || predicate(&self.left)
     }
 }
 
@@ -1914,13 +1717,8 @@ impl Edges<Length> {
     /// assert_eq!(auto_edges.bottom, Length::Auto);
     /// assert_eq!(auto_edges.left, Length::Auto);
     /// ```
-    pub fn auto() -> Self {
-        Self {
-            top: Length::Auto,
-            right: Length::Auto,
-            bottom: Length::Auto,
-            left: Length::Auto,
-        }
+    pub const fn auto() -> Self {
+        Self { top: Length::Auto, right: Length::Auto, bottom: Length::Auto, left: Length::Auto }
     }
 
     /// Sets the edges of the `Edges` struct to zero, which means no size or thickness.
@@ -1943,12 +1741,7 @@ impl Edges<Length> {
     /// assert_eq!(no_edges.left, Length::Definite(DefiniteLength::from(Pixels::ZERO)));
     /// ```
     pub fn zero() -> Self {
-        Self {
-            top: px(0.).into(),
-            right: px(0.).into(),
-            bottom: px(0.).into(),
-            left: px(0.).into(),
-        }
+        Self { top: px(0.).into(), right: px(0.).into(), bottom: px(0.).into(), left: px(0.).into() }
     }
 }
 
@@ -1973,12 +1766,7 @@ impl Edges<DefiniteLength> {
     /// assert_eq!(no_edges.left, DefiniteLength::from(px(0.)));
     /// ```
     pub fn zero() -> Self {
-        Self {
-            top: px(0.).into(),
-            right: px(0.).into(),
-            bottom: px(0.).into(),
-            left: px(0.).into(),
-        }
+        Self { top: px(0.).into(), right: px(0.).into(), bottom: px(0.).into(), left: px(0.).into() }
     }
 
     /// Converts the `DefiniteLength` to `Pixels` based on the parent size and the REM size.
@@ -2048,12 +1836,7 @@ impl Edges<AbsoluteLength> {
     /// assert_eq!(no_edges.left, AbsoluteLength::Pixels(Pixels::ZERO));
     /// ```
     pub fn zero() -> Self {
-        Self {
-            top: px(0.).into(),
-            right: px(0.).into(),
-            bottom: px(0.).into(),
-            left: px(0.).into(),
-        }
+        Self { top: px(0.).into(), right: px(0.).into(), bottom: px(0.).into(), left: px(0.).into() }
     }
 
     /// Converts the `AbsoluteLength` to `Pixels` based on the `rem_size`.
@@ -2154,12 +1937,7 @@ impl From<f32> for Edges<Pixels> {
 
 impl From<Pixels> for Edges<Pixels> {
     fn from(val: Pixels) -> Self {
-        Edges {
-            top: val,
-            right: val,
-            bottom: val,
-            left: val,
-        }
+        Edges { top: val, right: val, bottom: val, left: val }
     }
 }
 
@@ -2194,7 +1972,7 @@ impl Anchor {
     /// assert_eq!(Anchor::TopLeft.opposite(), Anchor::BottomRight);
     /// ```
     #[must_use]
-    pub fn opposite(self) -> Self {
+    pub const fn opposite(self) -> Self {
         match self {
             Anchor::TopLeft => Anchor::BottomRight,
             Anchor::TopRight => Anchor::BottomLeft,
@@ -2217,7 +1995,7 @@ impl Anchor {
     /// assert_eq!(result, Anchor::TopRight);
     /// ```
     #[must_use]
-    pub fn other_side_along(self, axis: Axis) -> Self {
+    pub const fn other_side_along(self, axis: Axis) -> Self {
         match axis {
             Axis::Vertical => match self {
                 Anchor::TopLeft => Anchor::BottomLeft,
@@ -2244,20 +2022,14 @@ impl Anchor {
 
     /// Returns whether the anchor is center-positioned.
     #[inline]
-    pub fn is_center(&self) -> bool {
-        matches!(
-            self,
-            Self::TopCenter | Self::BottomCenter | Self::LeftCenter | Self::RightCenter
-        )
+    pub const fn is_center(&self) -> bool {
+        matches!(self, Self::TopCenter | Self::BottomCenter | Self::LeftCenter | Self::RightCenter)
     }
 
     /// Returns whether the anchor is bottom-positioned.
     #[inline]
-    pub fn is_bottom(&self) -> bool {
-        matches!(
-            self,
-            Self::BottomCenter | Self::BottomLeft | Self::BottomRight
-        )
+    pub const fn is_bottom(&self) -> bool {
+        matches!(self, Self::BottomCenter | Self::BottomLeft | Self::BottomRight)
     }
 }
 
@@ -2307,12 +2079,7 @@ where
     /// assert_eq!(uniform_corners.bottom_left, 5.0);
     /// ```
     pub fn all(value: T) -> Self {
-        Self {
-            top_left: value.clone(),
-            top_right: value.clone(),
-            bottom_right: value.clone(),
-            bottom_left: value,
-        }
+        Self { top_left: value.clone(), top_right: value.clone(), bottom_right: value.clone(), bottom_left: value }
     }
 
     /// Returns the requested corner value, supporting all eight corner positions.
@@ -2458,10 +2225,7 @@ impl Corners<Pixels> {
     /// The maximum `Pixels` value among all four corners.
     #[must_use]
     pub fn max(&self) -> Pixels {
-        self.top_left
-            .max(self.top_right)
-            .max(self.bottom_right)
-            .max(self.bottom_left)
+        self.top_left.max(self.top_right).max(self.bottom_right).max(self.bottom_left)
     }
 }
 
@@ -2567,77 +2331,38 @@ impl<T> Copy for Corners<T> where T: Copy + Clone + Debug + Default + PartialEq 
 
 impl From<f32> for Corners<Pixels> {
     fn from(val: f32) -> Self {
-        Corners {
-            top_left: val.into(),
-            top_right: val.into(),
-            bottom_right: val.into(),
-            bottom_left: val.into(),
-        }
+        Corners { top_left: val.into(), top_right: val.into(), bottom_right: val.into(), bottom_left: val.into() }
     }
 }
 
 impl From<Pixels> for Corners<Pixels> {
     fn from(val: Pixels) -> Self {
-        Corners {
-            top_left: val,
-            top_right: val,
-            bottom_right: val,
-            bottom_left: val,
-        }
+        Corners { top_left: val, top_right: val, bottom_right: val, bottom_left: val }
     }
 }
 
 /// Represents an angle in Radians
 #[derive(
-    Clone,
-    Copy,
-    Default,
-    Add,
-    AddAssign,
-    Sub,
-    SubAssign,
-    Neg,
-    Div,
-    DivAssign,
-    PartialEq,
-    Serialize,
-    Deserialize,
-    Debug,
+    Clone, Copy, Default, Add, AddAssign, Sub, SubAssign, Neg, Div, DivAssign, PartialEq, Serialize, Deserialize, Debug,
 )]
 #[repr(transparent)]
 pub struct Radians(pub f32);
 
 /// Create a `Radian` from a raw value
-pub fn radians(value: f32) -> Radians {
+pub const fn radians(value: f32) -> Radians {
     Radians(value)
 }
 
 /// A type representing a percentage value.
 #[derive(
-    Clone,
-    Copy,
-    Default,
-    Add,
-    AddAssign,
-    Sub,
-    SubAssign,
-    Neg,
-    Div,
-    DivAssign,
-    PartialEq,
-    Serialize,
-    Deserialize,
-    Debug,
+    Clone, Copy, Default, Add, AddAssign, Sub, SubAssign, Neg, Div, DivAssign, PartialEq, Serialize, Deserialize, Debug,
 )]
 #[repr(transparent)]
 pub struct Percentage(pub f32);
 
 /// Generate a `Radian` from a percentage of a full circle.
 pub fn percentage(value: f32) -> Percentage {
-    debug_assert!(
-        (0.0..=1.0).contains(&value),
-        "Percentage must be between 0 and 1"
-    );
+    debug_assert!((0.0..=1.0).contains(&value), "Percentage must be between 0 and 1");
     Percentage(value)
 }
 
@@ -2782,11 +2507,7 @@ impl TryFrom<&'_ str> for Pixels {
     type Error = anyhow::Error;
 
     fn try_from(value: &'_ str) -> Result<Self, Self::Error> {
-        value
-            .strip_suffix("px")
-            .context("expected 'px' suffix")
-            .and_then(|number| Ok(number.parse()?))
-            .map(Self)
+        value.strip_suffix("px").context("expected 'px' suffix").and_then(|number| Ok(number.parse()?)).map(Self)
     }
 }
 
@@ -2799,7 +2520,7 @@ impl Pixels {
     pub const MIN: Pixels = Pixels(f32::MIN);
 
     /// Returns the raw `f32` value of this `Pixels`.
-    pub fn as_f32(self) -> f32 {
+    pub const fn as_f32(self) -> f32 {
         self.0
     }
 
@@ -2808,7 +2529,7 @@ impl Pixels {
     /// # Returns
     ///
     /// Returns a new `Pixels` instance with the floored value.
-    pub fn floor(&self) -> Self {
+    pub const fn floor(&self) -> Self {
         Self(self.0.floor())
     }
 
@@ -2817,7 +2538,7 @@ impl Pixels {
     /// # Returns
     ///
     /// Returns a new `Pixels` instance with the rounded value.
-    pub fn round(&self) -> Self {
+    pub const fn round(&self) -> Self {
         Self(self.0.round())
     }
 
@@ -2826,7 +2547,7 @@ impl Pixels {
     /// # Returns
     ///
     /// Returns a new `Pixels` instance with the ceiling value.
-    pub fn ceil(&self) -> Self {
+    pub const fn ceil(&self) -> Self {
         Self(self.0.ceil())
     }
 
@@ -2861,7 +2582,7 @@ impl Pixels {
     /// # Returns
     ///
     /// A new `Pixels` instance with the absolute value of the original `Pixels`.
-    pub fn abs(&self) -> Self {
+    pub const fn abs(&self) -> Self {
         Self(self.0.abs())
     }
 
@@ -2872,7 +2593,7 @@ impl Pixels {
     /// Returns:
     /// * `1.0` if the value is positive
     /// * `-1.0` if the value is negative
-    pub fn signum(&self) -> f32 {
+    pub const fn signum(&self) -> f32 {
         self.0.signum()
     }
 
@@ -2881,7 +2602,7 @@ impl Pixels {
     /// # Returns
     ///
     /// A f64 value of the `Pixels`.
-    pub fn to_f64(self) -> f64 {
+    pub const fn to_f64(self) -> f64 {
         self.0 as f64
     }
 }
@@ -3016,7 +2737,7 @@ impl DevicePixels {
     /// let total_bytes = pixels.to_bytes(bytes_per_pixel);
     /// assert_eq!(total_bytes, 40); // 10 pixels * 4 bytes/pixel = 40 bytes
     /// ```
-    pub fn to_bytes(self, bytes_per_pixel: u8) -> u32 {
+    pub const fn to_bytes(self, bytes_per_pixel: u8) -> u32 {
         self.0 as u32 * bytes_per_pixel as u32
     }
 }
@@ -3088,7 +2809,7 @@ pub struct ScaledPixels(pub f32);
 
 impl ScaledPixels {
     /// Returns the raw `f32` value of this `ScaledPixels`.
-    pub fn as_f32(self) -> f32 {
+    pub const fn as_f32(self) -> f32 {
         self.0
     }
 
@@ -3097,7 +2818,7 @@ impl ScaledPixels {
     /// # Returns
     ///
     /// Returns a new `ScaledPixels` instance with the floored value.
-    pub fn floor(&self) -> Self {
+    pub const fn floor(&self) -> Self {
         Self(self.0.floor())
     }
 
@@ -3106,7 +2827,7 @@ impl ScaledPixels {
     /// # Returns
     ///
     /// Returns a new `ScaledPixels` instance with the rounded value.
-    pub fn round(&self) -> Self {
+    pub const fn round(&self) -> Self {
         Self(self.0.round())
     }
 
@@ -3115,7 +2836,7 @@ impl ScaledPixels {
     /// # Returns
     ///
     /// Returns a new `ScaledPixels` instance with the ceiled value.
-    pub fn ceil(&self) -> Self {
+    pub const fn ceil(&self) -> Self {
         Self(self.0.ceil())
     }
 }
@@ -3292,11 +3013,7 @@ impl TryFrom<&'_ str> for Rems {
     type Error = anyhow::Error;
 
     fn try_from(value: &'_ str) -> Result<Self, Self::Error> {
-        value
-            .strip_suffix("rem")
-            .context("expected 'rem' suffix")
-            .and_then(|number| Ok(number.parse()?))
-            .map(Self)
+        value.strip_suffix("rem").context("expected 'rem' suffix").and_then(|number| Ok(number.parse()?)).map(Self)
     }
 }
 
@@ -3414,9 +3131,7 @@ impl TryFrom<&'_ str> for AbsoluteLength {
         } else if let Ok(rems) = value.try_into() {
             Ok(Self::Rems(rems))
         } else {
-            Err(anyhow!(
-                "invalid AbsoluteLength '{value}', expected {EXPECTED_ABSOLUTE_LENGTH}"
-            ))
+            Err(anyhow!("invalid AbsoluteLength '{value}', expected {EXPECTED_ABSOLUTE_LENGTH}"))
         }
     }
 }
@@ -3538,16 +3253,14 @@ impl TryFrom<&'_ str> for DefiniteLength {
 
     fn try_from(value: &'_ str) -> Result<Self, Self::Error> {
         if let Some(percentage) = value.strip_suffix('%') {
-            let fraction: f32 = percentage.parse::<f32>().with_context(|| {
-                format!("invalid DefiniteLength '{value}', expected {EXPECTED_DEFINITE_LENGTH}")
-            })?;
+            let fraction: f32 = percentage
+                .parse::<f32>()
+                .with_context(|| format!("invalid DefiniteLength '{value}', expected {EXPECTED_DEFINITE_LENGTH}"))?;
             Ok(DefiniteLength::Fraction(fraction / 100.0))
         } else if let Ok(absolute_length) = value.try_into() {
             Ok(DefiniteLength::Absolute(absolute_length))
         } else {
-            Err(anyhow!(
-                "invalid DefiniteLength '{value}', expected {EXPECTED_DEFINITE_LENGTH}"
-            ))
+            Err(anyhow!("invalid DefiniteLength '{value}', expected {EXPECTED_DEFINITE_LENGTH}"))
         }
     }
 }
@@ -3653,9 +3366,7 @@ impl TryFrom<&'_ str> for Length {
         } else if let Ok(definite_length) = value.try_into() {
             Ok(Length::Definite(definite_length))
         } else {
-            Err(anyhow!(
-                "invalid Length '{value}', expected {EXPECTED_LENGTH}"
-            ))
+            Err(anyhow!("invalid Length '{value}', expected {EXPECTED_LENGTH}"))
         }
     }
 }
@@ -3973,9 +3684,6 @@ where
     T: IsZero + Clone + Debug + Default + PartialEq,
 {
     fn is_zero(&self) -> bool {
-        self.top_left.is_zero()
-            && self.top_right.is_zero()
-            && self.bottom_right.is_zero()
-            && self.bottom_left.is_zero()
+        self.top_left.is_zero() && self.top_right.is_zero() && self.bottom_right.is_zero() && self.bottom_left.is_zero()
     }
 }

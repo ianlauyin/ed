@@ -1,8 +1,15 @@
-use gpui::SharedString;
-use lsp::{DiagnosticSeverity, MarkupContent, MarkupKind, NumberOrString};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
-use serde_json::Value;
 use std::ops::Range;
+
+use gpui::SharedString;
+use lsp::DiagnosticSeverity;
+use lsp::MarkupContent;
+use lsp::MarkupKind;
+use lsp::NumberOrString;
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
+use serde_json::Value;
 
 /// A diagnostic's display text together with the information needed to render it and
 /// round-trip server-provided markup.
@@ -28,23 +35,13 @@ enum DiagnosticMessageRendering {
 
 impl DiagnosticMessage {
     pub fn plain(text: impl Into<SharedString>) -> Self {
-        Self {
-            text: text.into(),
-            rendering: DiagnosticMessageRendering::Plain,
-        }
+        Self { text: text.into(), rendering: DiagnosticMessageRendering::Plain }
     }
 
-    pub fn plain_with_adapter_markdown(
-        text: impl Into<SharedString>,
-        markdown: Option<SharedString>,
-    ) -> Self {
+    pub fn plain_with_adapter_markdown(text: impl Into<SharedString>, markdown: Option<SharedString>) -> Self {
         let text = text.into();
         let rendering = markdown.map_or(DiagnosticMessageRendering::Plain, |markdown| {
-            DiagnosticMessageRendering::AdapterMarkdown(if markdown == text {
-                text.clone()
-            } else {
-                markdown
-            })
+            DiagnosticMessageRendering::AdapterMarkdown(if markdown == text { text.clone() } else { markdown })
         });
         Self { text, rendering }
     }
@@ -54,25 +51,16 @@ impl DiagnosticMessage {
         let (text, untrimmed) = if trimmed == markup.value {
             (SharedString::from(markup.value.as_str()), None)
         } else {
-            (
-                SharedString::from(trimmed),
-                Some(SharedString::from(markup.value.as_str())),
-            )
+            (SharedString::from(trimmed), Some(SharedString::from(markup.value.as_str())))
         };
-        Self {
-            text,
-            rendering: DiagnosticMessageRendering::LspMarkup {
-                kind: markup.kind.clone(),
-                untrimmed,
-            },
-        }
+        Self { text, rendering: DiagnosticMessageRendering::LspMarkup { kind: markup.kind.clone(), untrimmed } }
     }
 
     pub fn as_str(&self) -> &str {
         &self.text
     }
 
-    pub fn as_shared_string(&self) -> &SharedString {
+    pub const fn as_shared_string(&self) -> &SharedString {
         &self.text
     }
 
@@ -80,14 +68,10 @@ impl DiagnosticMessage {
         match &self.rendering {
             DiagnosticMessageRendering::Plain => None,
             DiagnosticMessageRendering::AdapterMarkdown(markdown) => Some(markdown),
-            DiagnosticMessageRendering::LspMarkup {
-                kind: MarkupKind::Markdown,
-                untrimmed,
-            } => Some(untrimmed.as_ref().unwrap_or(&self.text)),
-            DiagnosticMessageRendering::LspMarkup {
-                kind: MarkupKind::PlainText,
-                ..
-            } => None,
+            DiagnosticMessageRendering::LspMarkup { kind: MarkupKind::Markdown, untrimmed } => {
+                Some(untrimmed.as_ref().unwrap_or(&self.text))
+            }
+            DiagnosticMessageRendering::LspMarkup { kind: MarkupKind::PlainText, .. } => None,
         }
     }
 
@@ -96,9 +80,7 @@ impl DiagnosticMessage {
             DiagnosticMessageRendering::LspMarkup { kind, untrimmed } => {
                 Some((kind, untrimmed.as_ref().unwrap_or(&self.text)))
             }
-            DiagnosticMessageRendering::Plain | DiagnosticMessageRendering::AdapterMarkdown(_) => {
-                None
-            }
+            DiagnosticMessageRendering::Plain | DiagnosticMessageRendering::AdapterMarkdown(_) => None,
         }
     }
 
@@ -112,10 +94,7 @@ impl DiagnosticMessage {
 
     pub fn to_lsp_message(&self) -> lsp::DiagnosticMessage {
         if let Some((kind, value)) = self.lsp_markup() {
-            lsp::DiagnosticMessage::MarkupContent(MarkupContent {
-                kind: kind.clone(),
-                value: value.to_string(),
-            })
+            lsp::DiagnosticMessage::MarkupContent(MarkupContent { kind: kind.clone(), value: value.to_string() })
         } else {
             lsp::DiagnosticMessage::String(self.text.to_string())
         }
@@ -178,21 +157,12 @@ impl Serialize for DiagnosticMessage {
     {
         let lsp_markup = match &self.rendering {
             DiagnosticMessageRendering::LspMarkup { kind, untrimmed } => {
-                Some(SerializedMarkupContent {
-                    kind,
-                    value: untrimmed.as_ref().unwrap_or(&self.text),
-                })
+                Some(SerializedMarkupContent { kind, value: untrimmed.as_ref().unwrap_or(&self.text) })
             }
-            DiagnosticMessageRendering::Plain | DiagnosticMessageRendering::AdapterMarkdown(_) => {
-                None
-            }
+            DiagnosticMessageRendering::Plain | DiagnosticMessageRendering::AdapterMarkdown(_) => None,
         };
-        SerializedDiagnosticMessage {
-            message: self.as_str(),
-            markdown: self.markdown(),
-            lsp_markup,
-        }
-        .serialize(serializer)
+        SerializedDiagnosticMessage { message: self.as_str(), markdown: self.markdown(), lsp_markup }
+            .serialize(serializer)
     }
 }
 
@@ -221,16 +191,10 @@ impl<'de> Deserialize<'de> for DiagnosticMessage {
             let untrimmed = (markup.value != serialized.message).then_some(markup.value);
             Ok(Self {
                 text: serialized.message,
-                rendering: DiagnosticMessageRendering::LspMarkup {
-                    kind: markup.kind,
-                    untrimmed,
-                },
+                rendering: DiagnosticMessageRendering::LspMarkup { kind: markup.kind, untrimmed },
             })
         } else {
-            Ok(Self::plain_with_adapter_markdown(
-                serialized.message,
-                serialized.markdown,
-            ))
+            Ok(Self::plain_with_adapter_markdown(serialized.message, serialized.markdown))
         }
     }
 }
@@ -303,16 +267,11 @@ pub enum RelatedLocation<T> {
 
 impl<T: Clone> RelatedInformation<T> {
     /// Converts the coordinates of this related information to a different type.
-    pub(crate) fn map_location<O>(
-        &self,
-        map: impl FnOnce(&Range<T>) -> Range<O>,
-    ) -> RelatedInformation<O> {
+    pub(crate) fn map_location<O>(&self, map: impl FnOnce(&Range<T>) -> Range<O>) -> RelatedInformation<O> {
         RelatedInformation {
             location: match &self.location {
                 RelatedLocation::InBuffer(range) => RelatedLocation::InBuffer(map(range)),
-                RelatedLocation::InAnotherFile(location) => {
-                    RelatedLocation::InAnotherFile(location.clone())
-                }
+                RelatedLocation::InAnotherFile(location) => RelatedLocation::InAnotherFile(location.clone()),
             },
             message: self.message.clone(),
         }

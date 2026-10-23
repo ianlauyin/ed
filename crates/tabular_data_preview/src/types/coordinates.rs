@@ -13,12 +13,12 @@ pub struct DisplayRow(pub usize);
 
 impl DisplayRow {
     /// Create a new display row
-    pub fn new(row: usize) -> Self {
+    pub const fn new(row: usize) -> Self {
         Self(row)
     }
 
     /// Get the inner row value
-    pub fn get(self) -> usize {
+    pub const fn get(self) -> usize {
         self.0
     }
 }
@@ -37,7 +37,7 @@ pub struct DataRow(pub usize);
 
 impl DataRow {
     /// Create a new data row
-    pub fn new(row: usize) -> Self {
+    pub const fn new(row: usize) -> Self {
         Self(row)
     }
 }
@@ -73,12 +73,12 @@ pub struct AnyColumn(pub usize);
 
 impl AnyColumn {
     /// Create a new column ID
-    pub fn new(col: usize) -> Self {
+    pub const fn new(col: usize) -> Self {
         Self(col)
     }
 
     /// Get the inner column value
-    pub fn get(self) -> usize {
+    pub const fn get(self) -> usize {
         self.0
     }
 }
@@ -114,10 +114,7 @@ pub struct DataCellId {
 
 impl DataCellId {
     pub fn new(row: impl Into<DataRow>, col: impl Into<AnyColumn>) -> Self {
-        Self {
-            row: row.into(),
-            col: col.into(),
-        }
+        Self { row: row.into(), col: col.into() }
     }
 }
 
@@ -131,14 +128,11 @@ pub struct DisplayCellId {
 impl DisplayCellId {
     /// Create a new display cell ID
     pub fn new(row: impl Into<DisplayRow>, col: impl Into<AnyColumn>) -> Self {
-        Self {
-            row: row.into(),
-            col: col.into(),
-        }
+        Self { row: row.into(), col: col.into() }
     }
 
     /// Returns (row, column)
-    pub fn to_raw(&self) -> (usize, usize) {
+    pub const fn to_raw(&self) -> (usize, usize) {
         (self.row.0, self.col.0)
     }
 }

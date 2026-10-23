@@ -32,13 +32,11 @@
 // https://github.com/bits/UTF-8-Unicode-Test-Documents/blob/master/UTF-8_sequence_separated/utf8_sequence_0-0x10ffff_assigned_including-unprintable-asis.txt
 use unicode_segmentation::GraphemeCursor;
 
-pub fn is_invisible(c: char) -> bool {
+pub const fn is_invisible(c: char) -> bool {
     if c <= '\u{1f}' {
         c != '\t' && c != '\n' && c != '\r'
     } else if c >= '\u{7f}' {
-        c <= '\u{9f}'
-            || (c.is_whitespace() && c != IDEOGRAPHIC_SPACE)
-            || is_format_or_other_invisible_character(c)
+        c <= '\u{9f}' || (c.is_whitespace() && c != IDEOGRAPHIC_SPACE) || is_format_or_other_invisible_character(c)
     } else {
         false
     }
@@ -60,7 +58,7 @@ pub fn replacement(c: char) -> Option<char> {
 }
 
 #[inline(always)]
-fn is_format_or_other_invisible_character(c: char) -> bool {
+const fn is_format_or_other_invisible_character(c: char) -> bool {
     match c {
         // Generated using: ucd-generate general-category --include Format --chars ucd-16.0.0
         '\u{ad}'
@@ -100,16 +98,13 @@ fn is_format_or_other_invisible_character(c: char) -> bool {
 }
 
 #[inline(always)]
-fn should_preserve_invisible_character(c: char) -> bool {
-    match c {
-        '\u{034f}'
+const fn should_preserve_invisible_character(c: char) -> bool {
+    matches!(c, '\u{034f}'
         | '\u{200d}'
         | '\u{17b4}'..='\u{17b5}'
         | '\u{180b}'..='\u{180d}'
         | '\u{e0061}'..='\u{e007a}'
-        | '\u{e007f}' => true,
-        _ => false,
-    }
+        | '\u{e007f}')
 }
 
 pub fn is_standalone_grapheme(text: &str, start: usize, end: usize) -> bool {
@@ -129,7 +124,7 @@ const FIXED_WIDTH_SPACE: char = '\u{2007}';
 const IDEOGRAPHIC_SPACE: char = '\u{3000}';
 
 const C0_SYMBOLS: &[char] = &[
-    '␀', '␁', '␂', '␃', '␄', '␅', '␆', '␇', '␈', '␉', '␊', '␋', '␌', '␍', '␎', '␏', '␐', '␑', '␒',
-    '␓', '␔', '␕', '␖', '␗', '␘', '␙', '␚', '␛', '␜', '␝', '␞', '␟',
+    '␀', '␁', '␂', '␃', '␄', '␅', '␆', '␇', '␈', '␉', '␊', '␋', '␌', '␍', '␎', '␏', '␐', '␑', '␒', '␓', '␔', '␕', '␖',
+    '␗', '␘', '␙', '␚', '␛', '␜', '␝', '␞', '␟',
 ];
 const DEL: char = '␡';

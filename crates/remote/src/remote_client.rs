@@ -1,45 +1,68 @@
-use crate::{
-    SshConnectionOptions, command::RemoteCommand, protocol::MessageId, proxy::ProxyLaunchError,
-    transport::ssh::SshRemoteConnection,
-};
-use anyhow::{Context as _, Result, anyhow};
+use std::collections::VecDeque;
+use std::fmt;
+use std::ops::ControlFlow;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::Weak;
+use std::sync::atomic::AtomicU32;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering::SeqCst;
+use std::time::Duration;
+use std::time::Instant;
+
+use anyhow::Context as _;
+use anyhow::Result;
+use anyhow::anyhow;
 use async_trait::async_trait;
 use collections::HashMap;
-use futures::{
-    Future, FutureExt as _, StreamExt as _,
-    channel::{
-        mpsc::{self, Sender, UnboundedReceiver, UnboundedSender},
-        oneshot,
-    },
-    future::{BoxFuture, Shared, WeakShared},
-    select, select_biased,
-    stream::BoxStream,
-};
-use gpui::{
-    App, AppContext as _, AsyncApp, BackgroundExecutor, BorrowAppContext, Context, Entity,
-    EventEmitter, FutureExt, Global, Task, TaskExt, WeakEntity,
-};
+use futures::Future;
+use futures::FutureExt as _;
+use futures::StreamExt as _;
+use futures::channel::mpsc::Sender;
+use futures::channel::mpsc::UnboundedReceiver;
+use futures::channel::mpsc::UnboundedSender;
+use futures::channel::mpsc::{self};
+use futures::channel::oneshot;
+use futures::future::BoxFuture;
+use futures::future::Shared;
+use futures::future::WeakShared;
+use futures::select;
+use futures::select_biased;
+use futures::stream::BoxStream;
+use gpui::App;
+use gpui::AppContext as _;
+use gpui::AsyncApp;
+use gpui::BackgroundExecutor;
+use gpui::BorrowAppContext;
+use gpui::Context;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FutureExt;
+use gpui::Global;
+use gpui::Task;
+use gpui::TaskExt;
+use gpui::WeakEntity;
 use parking_lot::Mutex;
+use rpc::AnyProtoClient;
+use rpc::ErrorExt;
+use rpc::ProtoClient;
+use rpc::ProtoMessageHandlerSet;
+use rpc::RpcError;
+use rpc::proto::Envelope;
+use rpc::proto::EnvelopedMessage;
+use rpc::proto::PeerId;
+use rpc::proto::RequestMessage;
+use rpc::proto::build_typed_envelope;
+use rpc::proto::{self};
+use util::ResultExt;
+use util::paths::PathStyle;
+use util::paths::RemotePathBuf;
 
-use rpc::{
-    AnyProtoClient, ErrorExt, ProtoClient, ProtoMessageHandlerSet, RpcError,
-    proto::{self, Envelope, EnvelopedMessage, PeerId, RequestMessage, build_typed_envelope},
-};
-use std::{
-    collections::VecDeque,
-    fmt,
-    ops::ControlFlow,
-    path::PathBuf,
-    sync::{
-        Arc, Weak,
-        atomic::{AtomicU32, AtomicU64, Ordering::SeqCst},
-    },
-    time::{Duration, Instant},
-};
-use util::{
-    ResultExt,
-    paths::{PathStyle, RemotePathBuf},
-};
+use crate::SshConnectionOptions;
+use crate::command::RemoteCommand;
+use crate::protocol::MessageId;
+use crate::proxy::ProxyLaunchError;
+use crate::transport::ssh::SshRemoteConnection;
 
 #[derive(Copy, Clone, Debug, PartialEq, Eq)]
 pub enum RemoteOs {
@@ -48,7 +71,7 @@ pub enum RemoteOs {
 }
 
 impl RemoteOs {
-    pub fn as_str(&self) -> &'static str {
+    pub const fn as_str(&self) -> &'static str {
         match self {
             RemoteOs::Linux => "linux",
             RemoteOs::MacOs => "macos",
@@ -56,7 +79,7 @@ impl RemoteOs {
     }
 
     /// ignoring the compositor (as we run headless on remotes).
-    pub fn display_name(&self) -> &'static str {
+    pub const fn display_name(&self) -> &'static str {
         match self {
             RemoteOs::Linux => "Linux",
             RemoteOs::MacOs => "macOS",
@@ -77,7 +100,7 @@ pub enum RemoteArch {
 }
 
 impl RemoteArch {
-    pub fn as_str(&self) -> &'static str {
+    pub const fn as_str(&self) -> &'static str {
         match self {
             RemoteArch::X86_64 => "x86_64",
             RemoteArch::Aarch64 => "aarch64",
@@ -120,10 +143,8 @@ pub trait RemoteClientDelegate: Send + Sync {
 const MAX_MISSED_HEARTBEATS: usize = 5;
 const HEARTBEAT_INTERVAL: Duration = Duration::from_secs(5);
 const HEARTBEAT_TIMEOUT: Duration = Duration::from_secs(5);
-const INITIAL_CONNECTION_TIMEOUT: Duration =
-    Duration::from_secs(if cfg!(debug_assertions) { 5 } else { 60 });
-const RECONNECT_HANDSHAKE_TIMEOUT: Duration =
-    Duration::from_secs(if cfg!(debug_assertions) { 5 } else { 15 });
+const INITIAL_CONNECTION_TIMEOUT: Duration = Duration::from_secs(if cfg!(debug_assertions) { 5 } else { 60 });
+const RECONNECT_HANDSHAKE_TIMEOUT: Duration = Duration::from_secs(if cfg!(debug_assertions) { 5 } else { 15 });
 const RESYNC_TIMEOUT: Duration = Duration::from_secs(if cfg!(debug_assertions) { 5 } else { 15 });
 
 pub const MAX_RECONNECT_ATTEMPTS: usize = 3;
@@ -175,73 +196,48 @@ impl fmt::Display for State {
 impl State {
     fn remote_connection(&self) -> Option<Arc<dyn RemoteConnection>> {
         match self {
-            Self::Connected {
-                remote_connection, ..
-            } => Some(remote_connection.clone()),
-            Self::HeartbeatMissed {
-                remote_connection, ..
-            } => Some(remote_connection.clone()),
-            Self::ReconnectFailed {
-                remote_connection, ..
-            } => Some(remote_connection.clone()),
+            Self::Connected { remote_connection, .. } => Some(remote_connection.clone()),
+            Self::HeartbeatMissed { remote_connection, .. } => Some(remote_connection.clone()),
+            Self::ReconnectFailed { remote_connection, .. } => Some(remote_connection.clone()),
             _ => None,
         }
     }
 
-    fn can_reconnect(&self) -> bool {
+    const fn can_reconnect(&self) -> bool {
         match self {
-            Self::Connected { .. }
-            | Self::HeartbeatMissed { .. }
-            | Self::ReconnectFailed { .. } => true,
-            State::Connecting
-            | State::Reconnecting
-            | State::ReconnectExhausted
-            | State::ServerNotRunning => false,
+            Self::Connected { .. } | Self::HeartbeatMissed { .. } | Self::ReconnectFailed { .. } => true,
+            State::Connecting | State::Reconnecting | State::ReconnectExhausted | State::ServerNotRunning => false,
         }
     }
 
-    fn is_reconnect_failed(&self) -> bool {
+    const fn is_reconnect_failed(&self) -> bool {
         matches!(self, Self::ReconnectFailed { .. })
     }
 
-    fn is_reconnect_exhausted(&self) -> bool {
+    const fn is_reconnect_exhausted(&self) -> bool {
         matches!(self, Self::ReconnectExhausted { .. })
     }
 
-    fn is_server_not_running(&self) -> bool {
+    const fn is_server_not_running(&self) -> bool {
         matches!(self, Self::ServerNotRunning)
     }
 
-    fn is_reconnecting(&self) -> bool {
+    const fn is_reconnecting(&self) -> bool {
         matches!(self, Self::Reconnecting { .. })
     }
 
     fn heartbeat_recovered(self) -> Self {
         match self {
-            Self::HeartbeatMissed {
-                remote_connection,
-                delegate,
-                multiplex_task,
-                heartbeat_task,
-                ..
-            } => Self::Connected {
-                remote_connection,
-                delegate,
-                multiplex_task,
-                heartbeat_task,
-            },
+            Self::HeartbeatMissed { remote_connection, delegate, multiplex_task, heartbeat_task, .. } => {
+                Self::Connected { remote_connection, delegate, multiplex_task, heartbeat_task }
+            }
             _ => self,
         }
     }
 
     fn heartbeat_missed(self) -> Self {
         match self {
-            Self::Connected {
-                remote_connection,
-                delegate,
-                multiplex_task,
-                heartbeat_task,
-            } => Self::HeartbeatMissed {
+            Self::Connected { remote_connection, delegate, multiplex_task, heartbeat_task } => Self::HeartbeatMissed {
                 missed_heartbeats: 1,
                 remote_connection,
                 delegate,
@@ -320,17 +316,19 @@ impl ConnectionIdentifier {
     pub fn setup() -> Self {
         Self::Setup(NEXT_ID.fetch_add(1, SeqCst))
     }
+}
 
-    // This string gets used in a socket name, and so must be relatively short.
-    // The total length of:
-    //   /home/{username}/.local/share/zed/server_state/{name}/stdout.sock
-    // Must be less than about 100 characters
-    //   https://unix.stackexchange.com/questions/367008/why-is-socket-path-length-limited-to-a-hundred-chars
-    // So our strings should be at most 20 characters or so.
-    fn to_string(&self) -> String {
+// This string gets used in a socket name, and so must be relatively short.
+// The total length of:
+//   /home/{username}/.local/share/zed/server_state/{name}/stdout.sock
+// Must be less than about 100 characters
+//   https://unix.stackexchange.com/questions/367008/why-is-socket-path-length-limited-to-a-hundred-chars
+// So our strings should be at most 20 characters or so.
+impl std::fmt::Display for ConnectionIdentifier {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Setup(setup_id) => format!("setup-{setup_id}"),
-            Self::Workspace(workspace_id) => format!("workspace-{workspace_id}"),
+            Self::Setup(setup_id) => write!(f, "setup-{setup_id}"),
+            Self::Workspace(workspace_id) => write!(f, "workspace-{workspace_id}"),
         }
     }
 }
@@ -378,8 +376,7 @@ impl RemoteClient {
                 let (incoming_tx, incoming_rx) = mpsc::unbounded::<Envelope>();
                 let (connection_activity_tx, connection_activity_rx) = mpsc::channel::<()>(1);
 
-                let client =
-                    cx.update(|cx| ChannelClient::new(incoming_rx, outgoing_tx, cx, "client"));
+                let client = cx.update(|cx| ChannelClient::new(incoming_rx, outgoing_tx, cx, "client"));
 
                 let path_style = remote_connection.path_style();
                 let platform = remote_connection.remote_platform();
@@ -416,9 +413,7 @@ impl RemoteClient {
                         let mut error = "remote client exited before becoming ready".to_owned();
                         if let Some(status) = io_task.now_or_never() {
                             match status {
-                                Ok(exit_code) => {
-                                    error.push_str(&format!(", exit_code={exit_code:?}"))
-                                }
+                                Ok(exit_code) => error.push_str(&format!(", exit_code={exit_code:?}")),
                                 Err(e) => error.push_str(&format!(", error={e:?}")),
                             }
                         }
@@ -431,9 +426,7 @@ impl RemoteClient {
                         if let Some(status) = io_task.now_or_never() {
                             error.push_str("Client exited with ");
                             match status {
-                                Ok(exit_code) => {
-                                    error.push_str(&format!("exit_code {exit_code:?}"))
-                                }
+                                Ok(exit_code) => error.push_str(&format!("exit_code {exit_code:?}")),
                                 Err(e) => error.push_str(&format!("error {e:?}")),
                             }
                         } else {
@@ -453,12 +446,7 @@ impl RemoteClient {
                 let heartbeat_task = Self::heartbeat(this.downgrade(), connection_activity_rx, cx);
 
                 this.update(cx, |this, _| {
-                    this.state = Some(State::Connected {
-                        remote_connection,
-                        delegate,
-                        multiplex_task,
-                        heartbeat_task,
-                    });
+                    this.state = Some(State::Connected { remote_connection, delegate, multiplex_task, heartbeat_task });
                 });
 
                 // Use the same `remote_*` property schema as the forwarded
@@ -492,13 +480,7 @@ impl RemoteClient {
         let state = self.state.take()?;
         log::info!("shutting down remote processes");
 
-        let State::Connected {
-            multiplex_task,
-            heartbeat_task,
-            remote_connection,
-            delegate,
-        } = state
-        else {
+        let State::Connected { multiplex_task, heartbeat_task, remote_connection, delegate } = state else {
             return None;
         };
 
@@ -524,72 +506,40 @@ impl RemoteClient {
     }
 
     fn reconnect(&mut self, cx: &mut Context<Self>) -> Result<()> {
-        let can_reconnect = self
-            .state
-            .as_ref()
-            .map(|state| state.can_reconnect())
-            .unwrap_or(false);
+        let can_reconnect = self.state.as_ref().map(|state| state.can_reconnect()).unwrap_or(false);
         if !can_reconnect {
-            let state = if let Some(state) = self.state.as_ref() {
-                state.to_string()
-            } else {
-                "no state set".to_string()
-            };
-            log::info!(
-                "aborting reconnect, because not in state that allows reconnecting: {state}"
-            );
-            anyhow::bail!(
-                "aborting reconnect, because not in state that allows reconnecting: {state}"
-            );
+            let state =
+                if let Some(state) = self.state.as_ref() { state.to_string() } else { "no state set".to_string() };
+            log::info!("aborting reconnect, because not in state that allows reconnecting: {state}");
+            anyhow::bail!("aborting reconnect, because not in state that allows reconnecting: {state}");
         }
 
         let state = self.state.take().unwrap();
         let (attempts, remote_connection, delegate) = match state {
-            State::Connected {
-                remote_connection,
-                delegate,
-                multiplex_task,
-                heartbeat_task,
-            }
-            | State::HeartbeatMissed {
-                remote_connection,
-                delegate,
-                multiplex_task,
-                heartbeat_task,
-                ..
-            } => {
+            State::Connected { remote_connection, delegate, multiplex_task, heartbeat_task }
+            | State::HeartbeatMissed { remote_connection, delegate, multiplex_task, heartbeat_task, .. } => {
                 drop(multiplex_task);
                 drop(heartbeat_task);
                 (0, remote_connection, delegate)
             }
-            State::ReconnectFailed {
-                attempts,
-                remote_connection,
-                delegate,
-                ..
-            } => (attempts, remote_connection, delegate),
-            State::Connecting
-            | State::Reconnecting
-            | State::ReconnectExhausted
-            | State::ServerNotRunning => unreachable!(),
+            State::ReconnectFailed { attempts, remote_connection, delegate, .. } => {
+                (attempts, remote_connection, delegate)
+            }
+            State::Connecting | State::Reconnecting | State::ReconnectExhausted | State::ServerNotRunning => {
+                unreachable!()
+            }
         };
 
         let attempts = attempts + 1;
         if attempts > MAX_RECONNECT_ATTEMPTS {
-            log::error!(
-                "Failed to reconnect to after {} attempts, giving up",
-                MAX_RECONNECT_ATTEMPTS
-            );
+            log::error!("Failed to reconnect to after {} attempts, giving up", MAX_RECONNECT_ATTEMPTS);
             self.set_state(State::ReconnectExhausted, cx);
             return Ok(());
         }
 
         self.set_state(State::Reconnecting, cx);
 
-        log::info!(
-            "Trying to reconnect to remote server... Attempt {}",
-            attempts
-        );
+        log::info!("Trying to reconnect to remote server... Attempt {}", attempts);
 
         let unique_identifier = self.unique_identifier.clone();
         let client = self.client.clone();
@@ -606,11 +556,7 @@ impl RemoteClient {
                 };
             }
 
-            if let Err(error) = remote_connection
-                .kill()
-                .await
-                .context("Failed to kill remote_connection process")
-            {
+            if let Err(error) = remote_connection.kill().await.context("Failed to kill remote_connection process") {
                 failed!(error, attempts, remote_connection, delegate);
             };
 
@@ -676,8 +622,8 @@ impl RemoteClient {
         cx.spawn(async move |this, cx| {
             let new_state = reconnect_task.await;
             this.update(cx, |this, cx| {
-                let reconnected = this.state_is(State::is_reconnecting)
-                    && matches!(&new_state, State::Connected { .. });
+                let reconnected =
+                    this.state_is(State::is_reconnecting) && matches!(&new_state, State::Connected { .. });
                 this.try_set_state(cx, |old_state| {
                     if old_state.is_reconnecting() {
                         match &new_state {
@@ -688,9 +634,7 @@ impl RemoteClient {
                             State::Connected { .. } => {
                                 log::info!("Successfully reconnected");
                             }
-                            State::ReconnectFailed {
-                                error, attempts, ..
-                            } => {
+                            State::ReconnectFailed { error, attempts, .. } => {
                                 log::error!(
                                     "Reconnect attempt {} failed: {:?}. Starting new attempt...",
                                     attempts,
@@ -729,7 +673,7 @@ impl RemoteClient {
     fn heartbeat(
         this: WeakEntity<Self>,
         mut connection_activity_rx: mpsc::Receiver<()>,
-        cx: &mut AsyncApp,
+        cx: &AsyncApp,
     ) -> Task<Result<()>> {
         let Ok(client) = this.read_with(cx, |this, _| this.client.clone()) else {
             return Task::ready(Err(anyhow!("remote_connectionRemoteClient lost")));
@@ -796,40 +740,23 @@ impl RemoteClient {
         })
     }
 
-    fn handle_heartbeat_result(
-        &mut self,
-        missed_heartbeats: usize,
-        cx: &mut Context<Self>,
-    ) -> ControlFlow<()> {
+    fn handle_heartbeat_result(&mut self, missed_heartbeats: usize, cx: &mut Context<Self>) -> ControlFlow<()> {
         let state = self.state.take().unwrap();
-        let next_state = if missed_heartbeats > 0 {
-            state.heartbeat_missed()
-        } else {
-            state.heartbeat_recovered()
-        };
+        let next_state = if missed_heartbeats > 0 { state.heartbeat_missed() } else { state.heartbeat_recovered() };
 
         self.set_state(next_state, cx);
 
         if missed_heartbeats >= MAX_MISSED_HEARTBEATS {
-            log::error!(
-                "Missed last {} heartbeats. Reconnecting...",
-                missed_heartbeats
-            );
+            log::error!("Missed last {} heartbeats. Reconnecting...", missed_heartbeats);
 
-            self.reconnect(cx)
-                .context("failed to start reconnect process after missing heartbeats")
-                .log_err();
+            self.reconnect(cx).context("failed to start reconnect process after missing heartbeats").log_err();
             ControlFlow::Break(())
         } else {
             ControlFlow::Continue(())
         }
     }
 
-    fn monitor(
-        this: WeakEntity<Self>,
-        io_task: Task<Result<i32>>,
-        cx: &AsyncApp,
-    ) -> Task<Result<()>> {
+    fn monitor(this: WeakEntity<Self>, io_task: Task<Result<i32>>, cx: &AsyncApp) -> Task<Result<()>> {
         cx.spawn(async move |cx| {
             let result = io_task.await;
 
@@ -852,10 +779,7 @@ impl RemoteClient {
                     }
                 }
                 Err(error) => {
-                    log::warn!(
-                        "remote io task died with error: {:?}. reconnecting...",
-                        error
-                    );
+                    log::warn!("remote io task died with error: {:?}. reconnecting...", error);
                     this.update(cx, |this, cx| {
                         this.reconnect(cx).ok();
                     })?;
@@ -886,9 +810,7 @@ impl RemoteClient {
         self.state.replace(state);
 
         if is_reconnect_exhausted || is_server_not_running {
-            cx.emit(RemoteClientEvent::Disconnected {
-                server_not_running: is_server_not_running,
-            });
+            cx.emit(RemoteClientEvent::Disconnected { server_not_running: is_server_not_running });
         }
         cx.notify();
     }
@@ -902,8 +824,7 @@ impl RemoteClient {
     }
 
     pub fn shares_network_interface(&self) -> bool {
-        self.remote_connection()
-            .map_or(false, |connection| connection.shares_network_interface())
+        self.remote_connection().is_some_and(|connection| connection.shares_network_interface())
     }
 
     pub fn build_command(
@@ -921,32 +842,21 @@ impl RemoteClient {
         connection.build_command(program, args, env, working_dir, port_forward, interactive)
     }
 
-    pub fn build_stdio_command(
-        &self,
-        command: RemoteCommand,
-    ) -> Result<(CommandTemplate, Vec<u8>)> {
+    pub fn build_stdio_command(&self, command: RemoteCommand) -> Result<(CommandTemplate, Vec<u8>)> {
         let Some(connection) = self.remote_connection() else {
             return Err(anyhow!("no remote connection"));
         };
         connection.build_stdio_command(command)
     }
 
-    pub fn build_forward_ports_command(
-        &self,
-        forwards: Vec<(u16, String, u16)>,
-    ) -> Result<CommandTemplate> {
+    pub fn build_forward_ports_command(&self, forwards: Vec<(u16, String, u16)>) -> Result<CommandTemplate> {
         let Some(connection) = self.remote_connection() else {
             return Err(anyhow!("no remote connection"));
         };
         connection.build_forward_ports_command(forwards)
     }
 
-    pub fn upload_directory(
-        &self,
-        src_path: PathBuf,
-        dest_path: RemotePathBuf,
-        cx: &App,
-    ) -> Task<Result<()>> {
+    pub fn upload_directory(&self, src_path: PathBuf, dest_path: RemotePathBuf, cx: &App) -> Task<Result<()>> {
         let Some(connection) = self.remote_connection() else {
             return Task::ready(Err(anyhow!("no remote connection")));
         };
@@ -962,10 +872,7 @@ impl RemoteClient {
     }
 
     pub fn connection(&self) -> Option<Arc<dyn RemoteConnection>> {
-        if let State::Connected {
-            remote_connection, ..
-        } = self.state.as_ref()?
-        {
+        if let State::Connected { remote_connection, .. } = self.state.as_ref()? {
             Some(remote_connection.clone())
         } else {
             None
@@ -973,23 +880,20 @@ impl RemoteClient {
     }
 
     pub fn connection_state(&self) -> ConnectionState {
-        self.state
-            .as_ref()
-            .map(ConnectionState::from)
-            .unwrap_or(ConnectionState::Disconnected)
+        self.state.as_ref().map(ConnectionState::from).unwrap_or(ConnectionState::Disconnected)
     }
 
     pub fn is_disconnected(&self) -> bool {
         self.connection_state() == ConnectionState::Disconnected
     }
 
-    pub fn path_style(&self) -> PathStyle {
+    pub const fn path_style(&self) -> PathStyle {
         self.path_style
     }
 
     /// The platform (OS and architecture) of the remote host, detected during
     /// connection setup.
-    pub fn remote_platform(&self) -> RemotePlatform {
+    pub const fn remote_platform(&self) -> RemotePlatform {
         self.platform
     }
 
@@ -1000,7 +904,7 @@ impl RemoteClient {
     }
 
     /// A stable identifier for the kind of remote connection (`"ssh"`).
-    pub fn connection_type(&self) -> &'static str {
+    pub const fn connection_type(&self) -> &'static str {
         self.connection_options.connection_type()
     }
 
@@ -1027,12 +931,8 @@ impl RemoteClient {
     pub fn force_heartbeat_timeout(&mut self, attempts: usize, cx: &mut Context<Self>) {
         log::info!("force_heartbeat_timeout: triggering heartbeat failure state");
 
-        if let Some(State::Connected {
-            remote_connection,
-            delegate,
-            multiplex_task,
-            heartbeat_task,
-        }) = self.state.take()
+        if let Some(State::Connected { remote_connection, delegate, multiplex_task, heartbeat_task }) =
+            self.state.take()
         {
             self.set_state(
                 if attempts == 0 {
@@ -1054,18 +954,14 @@ impl RemoteClient {
                 cx,
             );
 
-            self.reconnect(cx)
-                .context("failed to start reconnect after forced timeout")
-                .log_err();
+            self.reconnect(cx).context("failed to start reconnect after forced timeout").log_err();
         } else {
             log::warn!("force_heartbeat_timeout: not in Connected state, ignoring");
         }
     }
 
     pub fn remote_connection(&self) -> Option<Arc<dyn RemoteConnection>> {
-        self.state
-            .as_ref()
-            .and_then(|state| state.remote_connection())
+        self.state.as_ref().and_then(|state| state.remote_connection())
     }
 }
 
@@ -1086,17 +982,15 @@ impl ConnectionPool {
         &mut self,
         opts: RemoteConnectionOptions,
         delegate: Arc<dyn RemoteClientDelegate>,
-        cx: &mut App,
+        cx: &App,
     ) -> Shared<Task<Result<Arc<dyn RemoteConnection>, Arc<anyhow::Error>>>> {
         let connection = self.connections.get(&opts);
         match connection {
             Some(ConnectionPoolEntry::Connecting(task)) => {
                 if let Some(task) = task.upgrade() {
                     log::debug!("Connecting task is still alive");
-                    cx.spawn(async move |cx| {
-                        delegate.set_status(Some("Waiting for existing connection attempt"), cx)
-                    })
-                    .detach();
+                    cx.spawn(async move |cx| delegate.set_status(Some("Waiting for existing connection attempt"), cx))
+                        .detach();
                     return task;
                 }
                 log::debug!("Connecting task is dead, removing it and restarting a connection");
@@ -1123,24 +1017,17 @@ impl ConnectionPool {
                 let delegate = delegate.clone();
                 async move |cx| {
                     let connection = match opts.clone() {
-                        RemoteConnectionOptions::Ssh(opts) => {
-                            SshRemoteConnection::new(opts, delegate, cx)
-                                .await
-                                .map(|connection| Arc::new(connection) as Arc<dyn RemoteConnection>)
-                        }
+                        RemoteConnectionOptions::Ssh(opts) => SshRemoteConnection::new(opts, delegate, cx)
+                            .await
+                            .map(|connection| Arc::new(connection) as Arc<dyn RemoteConnection>),
                     };
 
                     cx.update_global(|pool: &mut Self, _| {
-                        debug_assert!(matches!(
-                            pool.connections.get(&opts),
-                            Some(ConnectionPoolEntry::Connecting(_))
-                        ));
+                        debug_assert!(matches!(pool.connections.get(&opts), Some(ConnectionPoolEntry::Connecting(_))));
                         match connection {
                             Ok(connection) => {
-                                pool.connections.insert(
-                                    opts.clone(),
-                                    ConnectionPoolEntry::Connected(Arc::downgrade(&connection)),
-                                );
+                                pool.connections
+                                    .insert(opts.clone(), ConnectionPoolEntry::Connected(Arc::downgrade(&connection)));
                                 Ok(connection)
                             }
                             Err(error) => {
@@ -1153,8 +1040,7 @@ impl ConnectionPool {
             })
             .shared();
         if let Some(task) = task.downgrade() {
-            self.connections
-                .insert(opts.clone(), ConnectionPoolEntry::Connecting(task));
+            self.connections.insert(opts.clone(), ConnectionPoolEntry::Connecting(task));
         }
         task
     }
@@ -1168,15 +1054,12 @@ pub enum RemoteConnectionOptions {
 impl RemoteConnectionOptions {
     pub fn display_name(&self) -> String {
         match self {
-            RemoteConnectionOptions::Ssh(opts) => opts
-                .nickname
-                .clone()
-                .unwrap_or_else(|| opts.host.to_string()),
+            RemoteConnectionOptions::Ssh(opts) => opts.nickname.clone().unwrap_or_else(|| opts.host.to_string()),
         }
     }
 
     /// A stable identifier for the kind of remote connection, suitable for
-    pub fn connection_type(&self) -> &'static str {
+    pub const fn connection_type(&self) -> &'static str {
         match self {
             RemoteConnectionOptions::Ssh(_) => "ssh",
         }
@@ -1195,6 +1078,8 @@ impl From<SshConnectionOptions> for RemoteConnectionOptions {
     }
 }
 
+// async_trait marks its boxed futures `#[must_use]`
+#[allow(clippy::double_must_use)]
 #[async_trait(?Send)]
 pub trait RemoteConnection: Send + Sync {
     fn start_proxy(
@@ -1207,12 +1092,7 @@ pub trait RemoteConnection: Send + Sync {
         delegate: Arc<dyn RemoteClientDelegate>,
         cx: &mut AsyncApp,
     ) -> Task<Result<i32>>;
-    fn upload_directory(
-        &self,
-        src_path: PathBuf,
-        dest_path: RemotePathBuf,
-        cx: &App,
-    ) -> Task<Result<()>>;
+    fn upload_directory(&self, src_path: PathBuf, dest_path: RemotePathBuf, cx: &App) -> Task<Result<()>>;
     async fn kill(&self) -> Result<()>;
     fn has_been_killed(&self) -> bool;
     fn shares_network_interface(&self) -> bool {
@@ -1228,14 +1108,9 @@ pub trait RemoteConnection: Send + Sync {
         interactive: Interactive,
     ) -> Result<CommandTemplate>;
     fn build_stdio_command(&self, _command: RemoteCommand) -> Result<(CommandTemplate, Vec<u8>)> {
-        Err(anyhow!(
-            "stdio commands are not supported by this remote connection"
-        ))
+        Err(anyhow!("stdio commands are not supported by this remote connection"))
     }
-    fn build_forward_ports_command(
-        &self,
-        forwards: Vec<(u16, String, u16)>,
-    ) -> Result<CommandTemplate>;
+    fn build_forward_ports_command(&self, forwards: Vec<(u16, String, u16)>) -> Result<CommandTemplate>;
     fn connection_options(&self) -> RemoteConnectionOptions;
     fn path_style(&self) -> PathStyle;
     /// The remote platform (OS and architecture), detected during connection setup.
@@ -1248,8 +1123,7 @@ pub trait RemoteConnection: Send + Sync {
 }
 
 type ResponseChannels = Mutex<HashMap<MessageId, oneshot::Sender<(Envelope, oneshot::Sender<()>)>>>;
-type StreamResponseChannels =
-    Arc<Mutex<HashMap<MessageId, UnboundedSender<(Result<Envelope>, oneshot::Sender<()>)>>>>;
+type StreamResponseChannels = Arc<Mutex<HashMap<MessageId, UnboundedSender<(Result<Envelope>, oneshot::Sender<()>)>>>>;
 
 struct Signal<T: 'static> {
     tx: Mutex<Option<oneshot::Sender<T>>>,
@@ -1260,15 +1134,9 @@ impl<T: Send + Clone + 'static> Signal<T> {
     pub fn new(cx: &App) -> Self {
         let (tx, rx) = oneshot::channel();
 
-        let task = cx
-            .background_executor()
-            .spawn(async move { rx.await.ok() })
-            .shared();
+        let task = cx.background_executor().spawn(async move { rx.await.ok() }).shared();
 
-        Self {
-            tx: Mutex::new(Some(tx)),
-            rx: task,
-        }
+        Self { tx: Mutex::new(Some(tx)), rx: task }
     }
 
     fn set(&self, value: T) {
@@ -1313,11 +1181,7 @@ impl ChannelClient {
             buffer: Mutex::new(VecDeque::new()),
             name,
             executor: cx.background_executor().clone(),
-            task: Mutex::new(Self::start_handling_messages(
-                this.clone(),
-                incoming_rx,
-                &cx.to_async(),
-            )),
+            task: Mutex::new(Self::start_handling_messages(this.clone(), incoming_rx, &cx.to_async())),
             remote_started: Signal::new(cx),
         })
     }
@@ -1353,7 +1217,7 @@ impl ChannelClient {
         this: Weak<Self>,
         mut incoming_rx: mpsc::UnboundedReceiver<Envelope>,
         handshake_id: u32,
-        cx: &mut AsyncApp,
+        cx: &AsyncApp,
     ) -> Result<()> {
         while let Some(incoming) = incoming_rx.next().await {
             let Some(this) = this.upgrade() else {
@@ -1370,7 +1234,7 @@ impl ChannelClient {
         anyhow::Ok(())
     }
 
-    async fn handle_message(this: Arc<Self>, incoming: Envelope, cx: &mut AsyncApp) {
+    async fn handle_message(this: Arc<Self>, incoming: Envelope, cx: &AsyncApp) {
         let peer_id = PeerId { owner_id: 0, id: 0 };
         if let Some(ack_id) = incoming.ack_id {
             let mut buffer = this.buffer.lock();
@@ -1379,17 +1243,11 @@ impl ChannelClient {
             }
         }
         if let Some(proto::envelope::Payload::FlushBufferedMessages(_)) = &incoming.payload {
-            log::debug!(
-                "{}:remote message received. name:FlushBufferedMessages",
-                this.name
-            );
+            log::debug!("{}:remote message received. name:FlushBufferedMessages", this.name);
             {
                 let buffer = this.buffer.lock();
                 for envelope in buffer.iter() {
-                    this.outgoing_tx
-                        .lock()
-                        .unbounded_send(envelope.clone())
-                        .ok();
+                    this.outgoing_tx.lock().unbounded_send(envelope.clone()).ok();
                 }
             }
             let mut envelope = proto::Ack {}.into_envelope(0, Some(incoming.id), None);
@@ -1425,16 +1283,12 @@ impl ChannelClient {
             } else {
                 let terminal_stream_response = matches!(
                     &incoming.payload,
-                    Some(proto::envelope::Payload::Error(_))
-                        | Some(proto::envelope::Payload::EndStream(_))
+                    Some(proto::envelope::Payload::Error(_)) | Some(proto::envelope::Payload::EndStream(_))
                 );
                 let sender = if terminal_stream_response {
                     this.stream_response_channels.lock().remove(&request_id)
                 } else {
-                    this.stream_response_channels
-                        .lock()
-                        .get(&request_id)
-                        .cloned()
+                    this.stream_response_channels.lock().get(&request_id).cloned()
                 };
                 if let Some(sender) = sender {
                     let (tx, rx) = oneshot::channel();
@@ -1459,26 +1313,20 @@ impl ChannelClient {
                     .spawn(async move {
                         match future.await {
                             Ok(_) => {
-                                log::debug!(
-                                    "{}:remote message handled. name:{type_name}",
-                                    this.name
-                                );
+                                log::debug!("{}:remote message handled. name:{type_name}", this.name);
                             }
                             Err(error) => {
                                 log::error!(
                                     "{}:error handling message. type:{}, error:{:#}",
                                     this.name,
                                     type_name,
-                                    format!("{error:#}").lines().fold(
-                                        String::new(),
-                                        |mut message, line| {
-                                            if !message.is_empty() {
-                                                message.push(' ');
-                                            }
-                                            message.push_str(line);
-                                            message
+                                    format!("{error:#}").lines().fold(String::new(), |mut message, line| {
+                                        if !message.is_empty() {
+                                            message.push(' ');
                                         }
-                                    )
+                                        message.push_str(line);
+                                        message
+                                    })
                                 );
                             }
                         }
@@ -1486,14 +1334,10 @@ impl ChannelClient {
                     .detach()
             } else {
                 log::error!("{}:unhandled remote message name:{type_name}", this.name);
-                if let Err(e) = AnyProtoClient::from(this.clone()).send_response(
-                    message_id,
-                    anyhow::anyhow!("no handler registered for {type_name}").to_proto(),
-                ) {
-                    log::error!(
-                        "{}:error sending error response for {type_name}:{e:#}",
-                        this.name
-                    );
+                if let Err(e) = AnyProtoClient::from(this.clone())
+                    .send_response(message_id, anyhow::anyhow!("no handler registered for {type_name}").to_proto())
+                {
+                    log::error!("{}:error sending error response for {type_name}:{e:#}", this.name);
                 }
             }
         }
@@ -1537,10 +1381,7 @@ impl ChannelClient {
         connection_ready_rx
     }
 
-    fn request<T: RequestMessage>(
-        &self,
-        payload: T,
-    ) -> impl 'static + Future<Output = Result<T::Response>> {
+    fn request<T: RequestMessage>(&self, payload: T) -> impl 'static + Future<Output = Result<T::Response>> {
         self.request_internal(payload, true)
     }
 
@@ -1550,8 +1391,7 @@ impl ChannelClient {
         use_buffer: bool,
     ) -> impl 'static + Future<Output = Result<T::Response>> {
         log::debug!("remote request start. name:{}", T::NAME);
-        let response =
-            self.request_dynamic(payload.into_envelope(0, None, None), T::NAME, use_buffer);
+        let response = self.request_dynamic(payload.into_envelope(0, None, None), T::NAME, use_buffer);
         async move {
             let response = response.await?;
             log::debug!("remote request finish. name:{}", T::NAME);
@@ -1565,16 +1405,10 @@ impl ChannelClient {
         let response = self.request_internal(proto::FlushBufferedMessages {}, false);
 
         async move {
-            response
-                .with_timeout(timeout, &self.executor)
-                .await
-                .context("Timed out resyncing remote client")??;
+            response.with_timeout(timeout, &self.executor).await.context("Timed out resyncing remote client")??;
 
             for envelope in self.buffer.lock().iter() {
-                self.outgoing_tx
-                    .lock()
-                    .unbounded_send(envelope.clone())
-                    .ok();
+                self.outgoing_tx.lock().unbounded_send(envelope.clone()).ok();
             }
 
             Ok(())
@@ -1612,11 +1446,7 @@ impl ChannelClient {
         response_channels_lock.insert(MessageId(envelope.id), tx);
         drop(response_channels_lock);
 
-        let result = if use_buffer {
-            self.send_buffered(envelope)
-        } else {
-            self.send_unbuffered(envelope)
-        };
+        let result = if use_buffer { self.send_buffered(envelope) } else { self.send_unbuffered(envelope) };
         async move {
             if let Err(error) = &result {
                 log::error!("failed to send message: {error}");
@@ -1662,12 +1492,9 @@ impl ChannelClient {
                     let _keep_cleanup_guard_alive = &cleanup_stream_response_channel;
                     futures::future::ready(match response {
                         Ok(response) => {
-                            if let Some(proto::envelope::Payload::Error(error)) = &response.payload
-                            {
+                            if let Some(proto::envelope::Payload::Error(error)) = &response.payload {
                                 Some(Err(RpcError::from_proto(error, type_name)))
-                            } else if let Some(proto::envelope::Payload::EndStream(_)) =
-                                &response.payload
-                            {
+                            } else if let Some(proto::envelope::Payload::EndStream(_)) = &response.payload {
                                 None
                             } else {
                                 Some(Ok(response))

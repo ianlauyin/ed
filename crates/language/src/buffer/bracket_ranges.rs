@@ -5,16 +5,24 @@
 //! Tree-sitter error recovery can produce bogus or incomplete query matches, which are
 //! repaired chunk-locally before caching, see [`ChunkBrackets`].
 
-use std::{iter, ops::Range};
+use std::iter;
+use std::ops::Range;
 
-use collections::{HashMap, HashSet};
-use text::{Bias, OffsetRangeExt, ToOffset};
+use collections::HashMap;
+use collections::HashSet;
+use text::Bias;
+use text::OffsetRangeExt;
+use text::ToOffset;
 use util::RangeExt;
 
-use crate::{
-    BracketsConfig, BufferRow, BufferSnapshot, Grammar, GrammarId, TreeSitterOptions,
-    syntax_map::{MAX_BYTES_TO_QUERY, SyntaxLayer},
-};
+use crate::BracketsConfig;
+use crate::BufferRow;
+use crate::BufferSnapshot;
+use crate::Grammar;
+use crate::GrammarId;
+use crate::TreeSitterOptions;
+use crate::syntax_map::MAX_BYTES_TO_QUERY;
+use crate::syntax_map::SyntaxLayer;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct BracketMatch {
@@ -26,7 +34,7 @@ pub struct BracketMatch {
 }
 
 impl BracketMatch {
-    pub fn bracket_ranges(self) -> (Range<usize>, Range<usize>) {
+    pub const fn bracket_ranges(self) -> (Range<usize>, Range<usize>) {
         (self.open_range, self.close_range)
     }
 }
@@ -41,7 +49,7 @@ struct BracketMatchCandidate {
 }
 
 impl BracketMatchCandidate {
-    fn open_delimiter(&self) -> BracketDelimiter {
+    const fn open_delimiter(&self) -> BracketDelimiter {
         BracketDelimiter {
             start: self.bracket_match.open_range.start,
             end: self.bracket_match.open_range.end,
@@ -49,7 +57,7 @@ impl BracketMatchCandidate {
         }
     }
 
-    fn close_delimiter(&self) -> BracketDelimiter {
+    const fn close_delimiter(&self) -> BracketDelimiter {
         BracketDelimiter {
             start: self.bracket_match.close_range.start,
             end: self.bracket_match.close_range.end,
@@ -88,39 +96,22 @@ impl BufferSnapshot {
         known_chunks: Option<&HashSet<Range<BufferRow>>>,
     ) -> HashMap<Range<BufferRow>, Vec<BracketMatch>> {
         let mut all_bracket_matches = HashMap::default();
-        if self
-            .language
-            .as_ref()
-            .is_none_or(|language| language.grammar().is_none())
-        {
+        if self.language.as_ref().is_none_or(|language| language.grammar().is_none()) {
             return all_bracket_matches;
         }
 
-        for chunk in self
-            .tree_sitter_data
-            .chunks
-            .applicable_chunks(&[range.to_point(self)])
-        {
+        for chunk in self.tree_sitter_data.chunks.applicable_chunks(&[range.to_point(self)]) {
             if known_chunks.is_some_and(|chunks| chunks.contains(&chunk.row_range())) {
                 continue;
             }
-            if let Some(cached_brackets) = self
-                .tree_sitter_data
-                .brackets_by_chunks
-                .lock()
-                .get(&chunk.id)
-            {
+            if let Some(cached_brackets) = self.tree_sitter_data.brackets_by_chunks.lock().get(&chunk.id) {
                 all_bracket_matches.insert(chunk.row_range(), cached_brackets.clone());
                 continue;
             }
 
             let chunk_range = chunk.anchor_range().to_offset(self);
             let chunk_brackets = self.chunk_bracket_matches(chunk_range);
-            self.tree_sitter_data
-                .brackets_by_chunks
-                .lock()
-                .entry(chunk.id)
-                .or_insert_with(|| chunk_brackets.clone());
+            self.tree_sitter_data.brackets_by_chunks.lock().entry(chunk.id).or_insert_with(|| chunk_brackets.clone());
             all_bracket_matches.insert(chunk.row_range(), chunk_brackets);
         }
 
@@ -137,39 +128,25 @@ impl BufferSnapshot {
     }
 
     pub fn all_bracket_ranges(&self, range: Range<usize>) -> impl Iterator<Item = BracketMatch> {
-        self.fetch_bracket_ranges(range.clone(), None)
-            .into_values()
-            .flatten()
-            .filter(move |bracket_match| {
-                let bracket_range = bracket_match.open_range.start..bracket_match.close_range.end;
-                bracket_range.overlaps(&range)
-            })
+        self.fetch_bracket_ranges(range.clone(), None).into_values().flatten().filter(move |bracket_match| {
+            let bracket_range = bracket_match.open_range.start..bracket_match.close_range.end;
+            bracket_range.overlaps(&range)
+        })
     }
 
     /// Returns bracket range pairs overlapping or adjacent to `range`
-    pub fn bracket_ranges<T: ToOffset>(
-        &self,
-        range: Range<T>,
-    ) -> impl Iterator<Item = BracketMatch> + '_ {
+    pub fn bracket_ranges<T: ToOffset>(&self, range: Range<T>) -> impl Iterator<Item = BracketMatch> + '_ {
         // Find bracket pairs that *inclusively* contain the given range.
         let range = range.start.to_previous_offset(self)..range.end.to_next_offset(self);
-        self.all_bracket_ranges(range)
-            .filter(|pair| !pair.newline_only)
+        self.all_bracket_ranges(range).filter(|pair| !pair.newline_only)
     }
 
     /// Returns enclosing bracket ranges containing the given range
-    pub fn enclosing_bracket_ranges<T: ToOffset>(
-        &self,
-        range: Range<T>,
-    ) -> impl Iterator<Item = BracketMatch> + '_ {
+    pub fn enclosing_bracket_ranges<T: ToOffset>(&self, range: Range<T>) -> impl Iterator<Item = BracketMatch> + '_ {
         let range = range.start.to_offset(self)..range.end.to_offset(self);
 
         let result: Vec<_> = self.bracket_ranges(range.clone()).collect();
-        let max_depth = result
-            .iter()
-            .map(|mat| mat.syntax_layer_depth)
-            .max()
-            .unwrap_or(0);
+        let max_depth = result.iter().map(|mat| mat.syntax_layer_depth).max().unwrap_or(0);
         result.into_iter().filter(move |pair| {
             pair.open_range.start <= range.start
                 && pair.close_range.end >= range.end
@@ -261,10 +238,7 @@ impl<'a> ChunkBrackets<'a> {
     fn collect_queried_candidates(&mut self, snapshot: &'a BufferSnapshot) {
         let bounded_query = (
             self.chunk_range.clone(),
-            TreeSitterOptions {
-                max_bytes_to_query: Some(MAX_BYTES_TO_QUERY),
-                max_start_depth: None,
-            },
+            TreeSitterOptions { max_bytes_to_query: Some(MAX_BYTES_TO_QUERY), max_start_depth: None },
         );
         // The bounded query drops any pair spanning more than `MAX_BYTES_TO_QUERY`
         // (tree-sitter's containing byte range requires full containment), which
@@ -284,27 +258,18 @@ impl<'a> ChunkBrackets<'a> {
         // for the same open means the pattern's matches cannot be trusted.
         let mut close_by_open = HashMap::default();
         for (query_range, options) in iter::once(bounded_query).chain(boundary_queries) {
-            let mut matches = snapshot.syntax.matches_with_options(
-                query_range,
-                &snapshot.text,
-                options,
-                |grammar| grammar.brackets_config.as_ref().map(|c| &c.query),
-            );
-            let grammar_indices = matches
-                .grammars()
-                .iter()
-                .map(|grammar| self.grammar_index(grammar))
-                .collect::<Vec<_>>();
+            let mut matches = snapshot.syntax.matches_with_options(query_range, &snapshot.text, options, |grammar| {
+                grammar.brackets_config.as_ref().map(|c| &c.query)
+            });
+            let grammar_indices =
+                matches.grammars().iter().map(|grammar| self.grammar_index(grammar)).collect::<Vec<_>>();
 
             while let Some(mat) = matches.peek() {
                 let mut open = None;
                 let mut close = None;
                 let syntax_layer_depth = mat.depth;
                 let grammar_index = grammar_indices[mat.grammar_index];
-                let pattern_key = BracketPatternKey {
-                    grammar_index,
-                    pattern_index: mat.pattern_index,
-                };
+                let pattern_key = BracketPatternKey { grammar_index, pattern_index: mat.pattern_index };
                 let config = self.configs[grammar_index];
                 let pattern = &config.patterns[mat.pattern_index];
                 for capture in mat.captures {
@@ -317,8 +282,7 @@ impl<'a> ChunkBrackets<'a> {
 
                 matches.advance();
 
-                let Some(((open_range, open_kind), (close_range, close_kind))) = open.zip(close)
-                else {
+                let Some(((open_range, open_kind), (close_range, close_kind))) = open.zip(close) else {
                     continue;
                 };
 
@@ -352,10 +316,7 @@ impl<'a> ChunkBrackets<'a> {
                     continue;
                 }
 
-                if close_by_open
-                    .insert(candidate.open_delimiter(), candidate.close_delimiter())
-                    .is_some()
-                {
+                if close_by_open.insert(candidate.open_delimiter(), candidate.close_delimiter()).is_some() {
                     self.bogus_patterns.insert(pattern_key);
                 }
 
@@ -365,14 +326,11 @@ impl<'a> ChunkBrackets<'a> {
     }
 
     fn grammar_index(&mut self, grammar: &'a Grammar) -> usize {
-        self.grammar_ids
-            .iter()
-            .position(|&id| id == grammar.id())
-            .unwrap_or_else(|| {
-                self.grammar_ids.push(grammar.id());
-                self.configs.push(grammar.brackets_config.as_ref().unwrap());
-                self.grammar_ids.len() - 1
-            })
+        self.grammar_ids.iter().position(|&id| id == grammar.id()).unwrap_or_else(|| {
+            self.grammar_ids.push(grammar.id());
+            self.configs.push(grammar.brackets_config.as_ref().unwrap());
+            self.grammar_ids.len() - 1
+        })
     }
 
     /// Bracket queries can omit delimiters swallowed by tree-sitter error recovery.
@@ -405,10 +363,7 @@ impl<'a> ChunkBrackets<'a> {
             .collect()
     }
 
-    fn collect_error_layer_delimiters(
-        &mut self,
-        unambiguous_kinds: &[(BracketPatternKey, u16, u16)],
-    ) {
+    fn collect_error_layer_delimiters(&mut self, unambiguous_kinds: &[(BracketPatternKey, u16, u16)]) {
         if unambiguous_kinds.is_empty() {
             return;
         }
@@ -416,8 +371,7 @@ impl<'a> ChunkBrackets<'a> {
             let Some(grammar) = layer.language.grammar() else {
                 continue;
             };
-            let Some(grammar_index) = self.grammar_ids.iter().position(|&id| id == grammar.id())
-            else {
+            let Some(grammar_index) = self.grammar_ids.iter().position(|&id| id == grammar.id()) else {
                 continue;
             };
             let relevant_patterns = unambiguous_kinds
@@ -433,9 +387,7 @@ impl<'a> ChunkBrackets<'a> {
             let mut nodes = vec![(root_node, false)];
             while let Some((node, inside_error)) = nodes.pop() {
                 let node_range = node.byte_range();
-                if node_range.end <= self.chunk_range.start
-                    || node_range.start >= self.chunk_range.end
-                {
+                if node_range.end <= self.chunk_range.start || node_range.start >= self.chunk_range.end {
                     continue;
                 }
                 let inside_error = inside_error || node.is_error();
@@ -444,10 +396,7 @@ impl<'a> ChunkBrackets<'a> {
                 }
 
                 if node.child_count() == 0 {
-                    if !inside_error
-                        || node_range.is_empty()
-                        || !self.chunk_range.contains(&node_range.start)
-                    {
+                    if !inside_error || node_range.is_empty() || !self.chunk_range.contains(&node_range.start) {
                         continue;
                     }
 
@@ -459,24 +408,13 @@ impl<'a> ChunkBrackets<'a> {
                         } else {
                             continue;
                         };
-                        let delimiter = BracketDelimiter {
-                            start: node_range.start,
-                            end: node_range.end,
-                            pattern: *pattern,
-                        };
-                        delimiters_by_pattern
-                            .entry(*pattern)
-                            .or_default()
-                            .insert(delimiter);
-                        self.syntax_layer_depths_by_delimiter
-                            .entry(delimiter)
-                            .or_insert(layer.depth);
+                        let delimiter =
+                            BracketDelimiter { start: node_range.start, end: node_range.end, pattern: *pattern };
+                        delimiters_by_pattern.entry(*pattern).or_default().insert(delimiter);
+                        self.syntax_layer_depths_by_delimiter.entry(delimiter).or_insert(layer.depth);
                     }
                 } else {
-                    nodes.extend(
-                        node.children(&mut cursor)
-                            .map(|child| (child, inside_error)),
-                    );
+                    nodes.extend(node.children(&mut cursor).map(|child| (child, inside_error)));
                 }
             }
         }
@@ -533,12 +471,8 @@ impl<'a> ChunkBrackets<'a> {
 
         for candidate in bogus_candidates(&self.candidates, &self.bogus_patterns) {
             let syntax_layer_depth = candidate.bracket_match.syntax_layer_depth;
-            self.syntax_layer_depths_by_delimiter
-                .entry(candidate.open_delimiter())
-                .or_insert(syntax_layer_depth);
-            self.syntax_layer_depths_by_delimiter
-                .entry(candidate.close_delimiter())
-                .or_insert(syntax_layer_depth);
+            self.syntax_layer_depths_by_delimiter.entry(candidate.open_delimiter()).or_insert(syntax_layer_depth);
+            self.syntax_layer_depths_by_delimiter.entry(candidate.close_delimiter()).or_insert(syntax_layer_depth);
         }
 
         let pair_counts = self.bogus_pair_counts();
@@ -555,14 +489,8 @@ impl<'a> ChunkBrackets<'a> {
     fn bogus_pair_counts(&self) -> DelimiterPairCounts {
         let mut counts = DelimiterPairCounts::default();
         for candidate in bogus_candidates(&self.candidates, &self.bogus_patterns) {
-            *counts
-                .opens
-                .entry(candidate.open_delimiter())
-                .or_insert(0_usize) += 1;
-            *counts
-                .closes
-                .entry(candidate.close_delimiter())
-                .or_insert(0_usize) += 1;
+            *counts.opens.entry(candidate.open_delimiter()).or_insert(0_usize) += 1;
+            *counts.closes.entry(candidate.close_delimiter()).or_insert(0_usize) += 1;
         }
         counts
     }
@@ -579,9 +507,7 @@ impl<'a> ChunkBrackets<'a> {
         mut delimiters: Vec<BracketDelimiter>,
         syntax_delimiters_by_pattern: &HashMap<BracketPatternKey, HashSet<BracketDelimiter>>,
     ) -> Vec<BracketDelimiter> {
-        delimiters.retain(|delimiter| {
-            self.chunk_range.contains(&delimiter.start) && self.is_concrete(delimiter)
-        });
+        delimiters.retain(|delimiter| self.chunk_range.contains(&delimiter.start) && self.is_concrete(delimiter));
         for pattern in &self.incomplete_patterns {
             if let Some(syntax_delimiters) = syntax_delimiters_by_pattern.get(pattern) {
                 delimiters.extend(syntax_delimiters.iter().copied());
@@ -602,12 +528,7 @@ impl<'a> ChunkBrackets<'a> {
     ) -> HashSet<BracketDelimiterPair> {
         // Map each close to its expected open length (for inferring opens)
         let close_to_open_len = bogus_candidates(&self.candidates, &self.bogus_patterns)
-            .map(|candidate| {
-                (
-                    candidate.close_delimiter(),
-                    candidate.bracket_match.open_range.len(),
-                )
-            })
+            .map(|candidate| (candidate.close_delimiter(), candidate.bracket_match.open_range.len()))
             .collect::<HashMap<_, _>>();
         let sorted_opens = self.repairable_delimiters(
             bogus_candidates(&self.candidates, &self.bogus_patterns)
@@ -621,19 +542,13 @@ impl<'a> ChunkBrackets<'a> {
                 .collect(),
             &self.syntax_closes_by_pattern,
         );
-        let closes_with_cross_chunk_opens =
-            bogus_candidates(&self.candidates, &self.bogus_patterns)
-                .filter(|candidate| {
-                    !self
-                        .chunk_range
-                        .contains(&candidate.bracket_match.open_range.start)
-                        && pair_counts.uniquely_paired(
-                            &candidate.open_delimiter(),
-                            &candidate.close_delimiter(),
-                        )
-                })
-                .map(|candidate| candidate.close_delimiter())
-                .collect::<HashSet<_>>();
+        let closes_with_cross_chunk_opens = bogus_candidates(&self.candidates, &self.bogus_patterns)
+            .filter(|candidate| {
+                !self.chunk_range.contains(&candidate.bracket_match.open_range.start)
+                    && pair_counts.uniquely_paired(&candidate.open_delimiter(), &candidate.close_delimiter())
+            })
+            .map(|candidate| candidate.close_delimiter())
+            .collect::<HashSet<_>>();
 
         let mut valid_pairs = HashSet::default();
         let mut open_stacks = HashMap::default();
@@ -642,18 +557,12 @@ impl<'a> ChunkBrackets<'a> {
             // Push all opens before this close onto stack
             while open_idx < sorted_opens.len() && sorted_opens[open_idx].start < close.start {
                 let open = sorted_opens[open_idx];
-                open_stacks
-                    .entry(open.pattern)
-                    .or_insert_with(Vec::new)
-                    .push(open);
+                open_stacks.entry(open.pattern).or_insert_with(Vec::new).push(open);
                 open_idx += 1;
             }
 
             // Try to match with most recent open
-            if let Some(open) = open_stacks
-                .get_mut(&close.pattern)
-                .and_then(|open_stack| open_stack.pop())
-            {
+            if let Some(open) = open_stacks.get_mut(&close.pattern).and_then(|open_stack| open_stack.pop()) {
                 valid_pairs.insert((open, *close));
             } else if !closes_with_cross_chunk_opens.contains(close)
                 && let Some(&open_len) = close_to_open_len.get(close)
@@ -661,23 +570,13 @@ impl<'a> ChunkBrackets<'a> {
                 // No open on stack and the grammar offers no open beyond the
                 // chunk either - infer one based on expected open_len
                 if close.start >= open_len {
-                    let inferred = BracketDelimiter {
-                        start: close.start - open_len,
-                        end: close.start,
-                        pattern: close.pattern,
-                    };
+                    let inferred =
+                        BracketDelimiter { start: close.start - open_len, end: close.start, pattern: close.pattern };
                     valid_pairs.insert((inferred, *close));
                     existing_pairs.insert((inferred, *close));
-                    let syntax_layer_depth = self
-                        .syntax_layer_depths_by_delimiter
-                        .get(close)
-                        .copied()
-                        .unwrap_or(0);
-                    self.syntax_layer_depths_by_delimiter
-                        .entry(inferred)
-                        .or_insert(syntax_layer_depth);
-                    let pattern = &self.configs[close.pattern.grammar_index].patterns
-                        [close.pattern.pattern_index];
+                    let syntax_layer_depth = self.syntax_layer_depths_by_delimiter.get(close).copied().unwrap_or(0);
+                    self.syntax_layer_depths_by_delimiter.entry(inferred).or_insert(syntax_layer_depth);
+                    let pattern = &self.configs[close.pattern.grammar_index].patterns[close.pattern.pattern_index];
                     self.candidates.push(BracketMatchCandidate {
                         bracket_match: BracketMatch {
                             open_range: inferred.start..inferred.end,
@@ -705,22 +604,16 @@ impl<'a> ChunkBrackets<'a> {
         pair_counts: &DelimiterPairCounts,
         valid_pairs: &mut HashSet<BracketDelimiterPair>,
     ) {
-        let matched_opens = valid_pairs
-            .iter()
-            .map(|(open, _)| *open)
-            .collect::<HashSet<_>>();
-        let matched_closes = valid_pairs
-            .iter()
-            .map(|(_, close)| *close)
-            .collect::<HashSet<_>>();
+        let matched_opens = valid_pairs.iter().map(|(open, _)| *open).collect::<HashSet<_>>();
+        let matched_closes = valid_pairs.iter().map(|(_, close)| *close).collect::<HashSet<_>>();
         for candidate in bogus_candidates(&self.candidates, &self.bogus_patterns) {
             let open = candidate.open_delimiter();
             let close = candidate.close_delimiter();
             let open_inside = self.chunk_range.contains(&open.start);
             let close_inside = self.chunk_range.contains(&close.start);
             let crosses_chunk = !open_inside || !close_inside;
-            let unmatched = (!open_inside || !matched_opens.contains(&open))
-                && (!close_inside || !matched_closes.contains(&close));
+            let unmatched =
+                (!open_inside || !matched_opens.contains(&open)) && (!close_inside || !matched_closes.contains(&close));
             if crosses_chunk
                 && unmatched
                 && pair_counts.uniquely_paired(&open, &close)
@@ -739,15 +632,11 @@ impl<'a> ChunkBrackets<'a> {
         valid_pairs: HashSet<BracketDelimiterPair>,
         existing_pairs: HashSet<BracketDelimiterPair>,
     ) {
-        let mut repaired_pairs = valid_pairs
-            .iter()
-            .filter(|pair| !existing_pairs.contains(*pair))
-            .copied()
-            .collect::<Vec<_>>();
+        let mut repaired_pairs =
+            valid_pairs.iter().filter(|pair| !existing_pairs.contains(*pair)).copied().collect::<Vec<_>>();
         repaired_pairs.sort_unstable();
         for (open, close) in repaired_pairs {
-            let pattern =
-                &self.configs[open.pattern.grammar_index].patterns[open.pattern.pattern_index];
+            let pattern = &self.configs[open.pattern.grammar_index].patterns[open.pattern.pattern_index];
             self.candidates.push(BracketMatchCandidate {
                 bracket_match: BracketMatch {
                     open_range: open.start..open.end,
@@ -803,15 +692,10 @@ impl<'a> ChunkBrackets<'a> {
                 // For now, avoid highlighting any pair that has more than single char in each bracket.
                 // We need to  colorize `<Element/>` bracket pairs, so cannot make this check stricter.
                 let should_color = !candidate.rainbow_exclude
-                    && (bracket_match.open_range.len() == 1
-                        || bracket_match.close_range.len() == 1);
+                    && (bracket_match.open_range.len() == 1 || bracket_match.close_range.len() == 1);
                 if should_color {
                     opens.push(bracket_match.open_range.clone());
-                    color_pairs.push((
-                        bracket_match.open_range.clone(),
-                        bracket_match.close_range.clone(),
-                        index,
-                    ));
+                    color_pairs.push((bracket_match.open_range.clone(), bracket_match.close_range.clone(), index));
                 }
                 bracket_match
             })
@@ -836,9 +720,7 @@ impl<'a> ChunkBrackets<'a> {
             }
         }
 
-        all_brackets.sort_by_key(|bracket_match| {
-            (bracket_match.open_range.start, bracket_match.open_range.end)
-        });
+        all_brackets.sort_by_key(|bracket_match| (bracket_match.open_range.start, bracket_match.open_range.end));
 
         all_brackets
     }
@@ -848,9 +730,7 @@ fn bogus_candidates<'a>(
     candidates: &'a [BracketMatchCandidate],
     bogus_patterns: &'a HashSet<BracketPatternKey>,
 ) -> impl Iterator<Item = &'a BracketMatchCandidate> {
-    candidates
-        .iter()
-        .filter(|candidate| bogus_patterns.contains(&candidate.pattern))
+    candidates.iter().filter(|candidate| bogus_patterns.contains(&candidate.pattern))
 }
 
 #[derive(Default)]

@@ -20,7 +20,6 @@ default = ["cli"]
 cli = [
     "dep:clap",
     "dep:clap_complete",
-    "dep:clap_complete_nushell",
     "dep:console",
     "dep:core-foundation",
     "dep:core-services",
@@ -38,7 +37,6 @@ cli = [
 anyhow.workspace = true
 clap = { workspace = true, optional = true }
 clap_complete = { workspace = true, optional = true }
-clap_complete_nushell = { workspace = true, optional = true }
 collections.workspace = true
 console = { workspace = true, optional = true }
 dialoguer = { workspace = true, optional = true }

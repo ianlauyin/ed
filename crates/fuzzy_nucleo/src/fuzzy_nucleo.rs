@@ -3,12 +3,19 @@ mod paths;
 mod strings;
 
 use fuzzy::CharBag;
-use nucleo::pattern::{AtomKind, CaseMatching, Normalization, Pattern};
-
-pub use paths::{
-    PathMatch, PathMatchCandidate, PathMatchCandidateSet, match_fixed_path_set, match_path_sets,
-};
-pub use strings::{StringMatch, StringMatchCandidate, match_strings, match_strings_async};
+use nucleo::pattern::AtomKind;
+use nucleo::pattern::CaseMatching;
+use nucleo::pattern::Normalization;
+use nucleo::pattern::Pattern;
+pub use paths::PathMatch;
+pub use paths::PathMatchCandidate;
+pub use paths::PathMatchCandidateSet;
+pub use paths::match_fixed_path_set;
+pub use paths::match_path_sets;
+pub use strings::StringMatch;
+pub use strings::StringMatchCandidate;
+pub use strings::match_strings;
+pub use strings::match_strings_async;
 
 pub(crate) struct Cancelled;
 
@@ -20,14 +27,10 @@ pub enum Case {
 
 impl Case {
     pub fn smart_if_uppercase_in(query: &str) -> Self {
-        if query.chars().any(|c| c.is_uppercase()) {
-            Self::Smart
-        } else {
-            Self::Ignore
-        }
+        if query.chars().any(|c| c.is_uppercase()) { Self::Smart } else { Self::Ignore }
     }
 
-    pub fn is_smart(self) -> bool {
+    pub const fn is_smart(self) -> bool {
         matches!(self, Self::Smart)
     }
 }
@@ -39,11 +42,11 @@ pub enum LengthPenalty {
 }
 
 impl LengthPenalty {
-    pub fn from_bool(on: bool) -> Self {
+    pub const fn from_bool(on: bool) -> Self {
         if on { Self::On } else { Self::Off }
     }
 
-    pub fn is_on(self) -> bool {
+    pub const fn is_on(self) -> bool {
         matches!(self, Self::On)
     }
 }
@@ -70,20 +73,10 @@ impl Query {
             return None;
         }
         let normalized = query.split_whitespace().collect::<Vec<_>>().join(" ");
-        let pattern = Pattern::new(
-            &normalized,
-            CaseMatching::Ignore,
-            Normalization::Smart,
-            AtomKind::Fuzzy,
-        );
+        let pattern = Pattern::new(&normalized, CaseMatching::Ignore, Normalization::Smart, AtomKind::Fuzzy);
         let wants_case_penalty = case.is_smart() && query.chars().any(|c| c.is_uppercase());
-        let query_chars =
-            wants_case_penalty.then(|| query.chars().filter(|c| !c.is_whitespace()).collect());
-        Some(Query {
-            pattern,
-            query_chars,
-            char_bag: CharBag::from(query),
-        })
+        let query_chars = wants_case_penalty.then(|| query.chars().filter(|c| !c.is_whitespace()).collect());
+        Some(Query { pattern, query_chars, char_bag: CharBag::from(query) })
     }
 }
 
@@ -118,11 +111,7 @@ const SMART_CASE_PENALTY_PER_MISMATCH: f64 = 0.9;
 
 #[inline]
 pub(crate) fn case_penalty(mismatches: u32) -> f64 {
-    if mismatches == 0 {
-        1.0
-    } else {
-        SMART_CASE_PENALTY_PER_MISMATCH.powi(mismatches as i32)
-    }
+    if mismatches == 0 { 1.0 } else { SMART_CASE_PENALTY_PER_MISMATCH.powi(mismatches as i32) }
 }
 
 /// Reconstruct byte-offset match positions from a list of matched char offsets

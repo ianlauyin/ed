@@ -8,7 +8,7 @@ pub fn simple_lowercase(c: char) -> char {
 pub struct CharBag(u64);
 
 impl CharBag {
-    pub fn is_superset(self, other: CharBag) -> bool {
+    pub const fn is_superset(self, other: CharBag) -> bool {
         self.0 & other.0 == other.0
     }
 

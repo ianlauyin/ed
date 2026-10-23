@@ -1,19 +1,27 @@
 mod decorated_icon;
 mod icon_decoration;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 
 pub use decorated_icon::*;
-use gpui::{
-    AnimationElement, AnyElement, Hsla, ImgResourceLoader, IntoElement, Rems, Resource,
-    Transformation, img, svg,
-};
+use gpui::AnimationElement;
+use gpui::AnyElement;
+use gpui::Hsla;
+use gpui::ImgResourceLoader;
+use gpui::IntoElement;
+use gpui::Rems;
+use gpui::Resource;
+use gpui::Transformation;
+use gpui::img;
+use gpui::svg;
 pub use icon_decoration::*;
 pub use icons::*;
 
+use crate::Indicator;
+use crate::prelude::*;
 use crate::traits::transformable::Transformable;
-use crate::{Indicator, prelude::*};
 
 #[derive(IntoElement)]
 pub enum AnyIcon {
@@ -185,7 +193,7 @@ impl Icon {
         }
     }
 
-    pub fn color(mut self, color: Color) -> Self {
+    pub const fn color(mut self, color: Color) -> Self {
         self.color = color;
         self
     }
@@ -207,7 +215,7 @@ impl Icon {
     /// Sets a custom size for the icon, in [`Rems`].
     ///
     /// Not to be exposed outside of the `ui` crate.
-    pub(crate) fn custom_size(mut self, size: Rems) -> Self {
+    pub(crate) const fn custom_size(mut self, size: Rems) -> Self {
         self.size = size;
         self
     }
@@ -227,11 +235,7 @@ impl RenderOnce for Icon {
             IconSource::Embedded(path) => svg().path(path),
             IconSource::ExternalSvg(path) => svg().external_path(path),
             IconSource::External(path) => {
-                return img(path)
-                    .size(self.size)
-                    .flex_none()
-                    .text_color(color)
-                    .into_any_element();
+                return img(path).size(self.size).flex_none().text_color(color).into_any_element();
             }
         };
         let group_hover_color = self.group_hover_color.map(|color| color.color(cx));
@@ -255,12 +259,8 @@ pub struct IconWithIndicator {
 }
 
 impl IconWithIndicator {
-    pub fn new(icon: Icon, indicator: Option<Indicator>) -> Self {
-        Self {
-            icon,
-            indicator,
-            indicator_border_color: None,
-        }
+    pub const fn new(icon: Icon, indicator: Option<Indicator>) -> Self {
+        Self { icon, indicator, indicator_border_color: None }
     }
 
     pub fn indicator(mut self, indicator: Option<Indicator>) -> Self {
@@ -268,14 +268,14 @@ impl IconWithIndicator {
         self
     }
 
-    pub fn indicator_color(mut self, color: Color) -> Self {
+    pub const fn indicator_color(mut self, color: Color) -> Self {
         if let Some(indicator) = self.indicator.as_mut() {
             indicator.color = color;
         }
         self
     }
 
-    pub fn indicator_border_color(mut self, color: Option<Hsla>) -> Self {
+    pub const fn indicator_border_color(mut self, color: Option<Hsla>) -> Self {
         self.indicator_border_color = color;
         self
     }
@@ -283,26 +283,22 @@ impl IconWithIndicator {
 
 impl RenderOnce for IconWithIndicator {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let indicator_border_color = self
-            .indicator_border_color
-            .unwrap_or_else(|| cx.theme().colors().elevated_surface_background);
+        let indicator_border_color =
+            self.indicator_border_color.unwrap_or_else(|| cx.theme().colors().elevated_surface_background);
 
-        div()
-            .relative()
-            .child(self.icon)
-            .when_some(self.indicator, |this, indicator| {
-                this.child(
-                    div()
-                        .absolute()
-                        .size_2p5()
-                        .border_2()
-                        .border_color(indicator_border_color)
-                        .rounded_full()
-                        .bottom_neg_0p5()
-                        .right_neg_0p5()
-                        .child(indicator),
-                )
-            })
+        div().relative().child(self.icon).when_some(self.indicator, |this, indicator| {
+            this.child(
+                div()
+                    .absolute()
+                    .size_2p5()
+                    .border_2()
+                    .border_color(indicator_border_color)
+                    .rounded_full()
+                    .bottom_neg_0p5()
+                    .right_neg_0p5()
+                    .child(indicator),
+            )
+        })
     }
 }
 
@@ -339,23 +335,21 @@ impl Component for Icon {
                         .image_cache(gpui::retain_all("all icons"))
                         .flex_wrap()
                         .gap_2()
-                        .children(<IconName as strum::IntoEnumIterator>::iter().map(
-                            |icon_name: IconName| {
-                                let name: SharedString = format!("{icon_name:?}").into();
-                                v_flex()
-                                    .min_w_0()
-                                    .w_24()
-                                    .p_1p5()
-                                    .gap_2()
-                                    .border_1()
-                                    .border_color(cx.theme().colors().border_variant)
-                                    .bg(cx.theme().colors().element_disabled)
-                                    .rounded_sm()
-                                    .items_center()
-                                    .child(Icon::new(icon_name))
-                                    .child(Label::new(name).size(LabelSize::XSmall).truncate())
-                            },
-                        ))
+                        .children(<IconName as strum::IntoEnumIterator>::iter().map(|icon_name: IconName| {
+                            let name: SharedString = format!("{icon_name:?}").into();
+                            v_flex()
+                                .min_w_0()
+                                .w_24()
+                                .p_1p5()
+                                .gap_2()
+                                .border_1()
+                                .border_color(cx.theme().colors().border_variant)
+                                .bg(cx.theme().colors().element_disabled)
+                                .rounded_sm()
+                                .items_center()
+                                .child(Icon::new(icon_name))
+                                .child(Label::new(name).size(LabelSize::XSmall).truncate())
+                        }))
                         .into_any_element(),
                 )]),
             ])

@@ -34,15 +34,18 @@
 mod error;
 pub mod snapshot;
 
+use std::collections::BTreeMap;
+use std::mem;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
+use std::task::Waker;
+
 pub use error::*;
-use parking_lot::{RwLock, RwLockReadGuard, RwLockUpgradableReadGuard};
-use std::{
-    collections::BTreeMap,
-    mem,
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll, Waker},
-};
+use parking_lot::RwLock;
+use parking_lot::RwLockReadGuard;
+use parking_lot::RwLockUpgradableReadGuard;
 
 pub fn channel<T>(value: T) -> (Sender<T>, Receiver<T>) {
     let state = Arc::new(RwLock::new(State {
@@ -53,19 +56,14 @@ pub fn channel<T>(value: T) -> (Sender<T>, Receiver<T>) {
         closed: false,
     }));
 
-    (
-        Sender {
-            state: state.clone(),
-        },
-        Receiver { state, version: 0 },
-    )
+    (Sender { state: state.clone() }, Receiver { state, version: 0 })
 }
 
 #[derive(Default, Debug, Copy, Clone, PartialEq, Eq, PartialOrd, Ord)]
 struct WakerId(usize);
 
 impl WakerId {
-    fn post_inc(&mut self) -> Self {
+    const fn post_inc(&mut self) -> Self {
         let id = *self;
         self.0 = id.0.wrapping_add(1);
         *self
@@ -87,10 +85,7 @@ pub struct Sender<T> {
 impl<T> Sender<T> {
     pub fn receiver(&self) -> Receiver<T> {
         let version = self.state.read().version;
-        Receiver {
-            state: self.state.clone(),
-            version,
-        }
+        Receiver { state: self.state.clone(), version }
     }
 
     pub fn send(&mut self, value: T) -> Result<(), NoReceiverError> {
@@ -191,10 +186,7 @@ impl<T> Receiver<T> {
     }
 
     pub fn changed(&mut self) -> impl Future<Output = Result<(), NoSenderError>> {
-        Changed {
-            receiver: self,
-            pending_waker_id: None,
-        }
+        Changed { receiver: self, pending_waker_id: None }
     }
 
     /// Creates a new [`Receiver`] holding an initial value that will never change.

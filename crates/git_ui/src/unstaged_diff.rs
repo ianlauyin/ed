@@ -1,37 +1,61 @@
-use crate::{
-    diff_multibuffer::DiffMultibuffer,
-    git_panel::{GitPanel, GitPanelAddon, GitStatusEntry},
-};
-use anyhow::{Context as _, Result};
+use std::any::Any;
+use std::any::TypeId;
+use std::ops::Range;
+use std::sync::Arc;
+
+use anyhow::Context as _;
+use anyhow::Result;
 use buffer_diff::DiffHunkStatus;
-use editor::{
-    DiffHunkRenderer, Editor, EditorEvent, SplittableEditor,
-    actions::{GoToHunk, GoToPreviousHunk},
-};
-use git::{StageAll, StageAndNext};
-use gpui::{
-    Action, AnyElement, App, Context, Entity, EventEmitter, FocusHandle, Focusable, Render,
-    SharedString, Subscription, Task, WeakEntity,
-};
+use editor::DiffHunkRenderer;
+use editor::Editor;
+use editor::EditorEvent;
+use editor::SplittableEditor;
+use editor::actions::GoToHunk;
+use editor::actions::GoToPreviousHunk;
+use git::StageAll;
+use git::StageAndNext;
+use gpui::Action;
+use gpui::AnyElement;
+use gpui::App;
+use gpui::Context;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::Render;
+use gpui::SharedString;
+use gpui::Subscription;
+use gpui::Task;
+use gpui::WeakEntity;
 use language::Capability;
-use project::{
-    Project, ProjectPath,
-    git_store::diff_buffer_list::{DiffBase, DiffBufferList},
-    project_settings::ProjectSettings,
-};
+use project::Project;
+use project::ProjectPath;
+use project::git_store::diff_buffer_list::DiffBase;
+use project::git_store::diff_buffer_list::DiffBufferList;
+use project::project_settings::ProjectSettings;
 use settings::Settings;
-use std::{
-    any::{Any, TypeId},
-    ops::Range,
-    sync::Arc,
-};
-use ui::{DiffStat, Divider, Icon, Tooltip, Window, prelude::*};
-use workspace::{
-    ItemNavHistory, SerializableItem, ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView,
-    Workspace,
-    item::{Item, ItemEvent, ItemHandle, SaveOptions},
-    searchable::SearchableItemHandle,
-};
+use ui::DiffStat;
+use ui::Divider;
+use ui::Icon;
+use ui::Tooltip;
+use ui::Window;
+use ui::prelude::*;
+use workspace::ItemNavHistory;
+use workspace::SerializableItem;
+use workspace::ToolbarItemEvent;
+use workspace::ToolbarItemLocation;
+use workspace::ToolbarItemView;
+use workspace::Workspace;
+use workspace::item::Item;
+use workspace::item::ItemEvent;
+use workspace::item::ItemHandle;
+use workspace::item::SaveOptions;
+use workspace::searchable::SearchableItemHandle;
+
+use crate::diff_multibuffer::DiffMultibuffer;
+use crate::git_panel::GitPanel;
+use crate::git_panel::GitPanelAddon;
+use crate::git_panel::GitStatusEntry;
 
 pub(crate) struct UnstagedDiffHunkRenderer;
 
@@ -47,10 +71,7 @@ impl DiffHunkRenderer for UnstagedDiffHunkRenderer {
         _window: &mut Window,
         cx: &mut App,
     ) -> AnyElement {
-        if !ProjectSettings::get_global(cx)
-            .git
-            .show_stage_restore_buttons
-        {
+        if !ProjectSettings::get_global(cx).git.show_stage_restore_buttons {
             return gpui::Empty.into_any_element();
         }
         let hunk_range_for_restore = hunk_range.clone();
@@ -76,12 +97,7 @@ impl DiffHunkRenderer for UnstagedDiffHunkRenderer {
                         let editor = editor.clone();
                         move |_event, window, cx| {
                             editor.update(cx, |editor, cx| {
-                                editor.stage_or_unstage_diff_hunks(
-                                    true,
-                                    vec![hunk_range.clone()],
-                                    window,
-                                    cx,
-                                );
+                                editor.stage_or_unstage_diff_hunks(true, vec![hunk_range.clone()], window, cx);
                             });
                         }
                     }),
@@ -95,12 +111,8 @@ impl DiffHunkRenderer for UnstagedDiffHunkRenderer {
                         move |_event, window, cx| {
                             editor.update(cx, |editor, cx| {
                                 let snapshot = editor.buffer().read(cx).snapshot(cx);
-                                let hunks: Vec<_> = editor
-                                    .diff_hunks_in_ranges(
-                                        std::slice::from_ref(&hunk_range),
-                                        &snapshot,
-                                    )
-                                    .collect();
+                                let hunks: Vec<_> =
+                                    editor.diff_hunks_in_ranges(std::slice::from_ref(&hunk_range), &snapshot).collect();
                                 if !hunks.is_empty() {
                                     editor.apply_restore(hunks, window, cx);
                                 }
@@ -125,7 +137,7 @@ pub struct UnstagedDiff {
 }
 
 impl UnstagedDiff {
-    pub(crate) fn register(workspace: &mut Workspace, cx: &mut Context<Workspace>) {
+    pub(crate) fn register(workspace: &Workspace, cx: &mut Context<Workspace>) {
         let _ = workspace;
         workspace::register_serializable_item::<Self>(cx);
     }
@@ -143,15 +155,8 @@ impl UnstagedDiff {
             existing
         } else {
             let workspace_handle = cx.entity();
-            let unstaged_diff =
-                cx.new(|cx| Self::new(workspace.project().clone(), workspace_handle, window, cx));
-            workspace.add_item_to_active_pane(
-                Box::new(unstaged_diff.clone()),
-                None,
-                true,
-                window,
-                cx,
-            );
+            let unstaged_diff = cx.new(|cx| Self::new(workspace.project().clone(), workspace_handle, window, cx));
+            workspace.add_item_to_active_pane(Box::new(unstaged_diff.clone()), None, true, window, cx);
             unstaged_diff
         };
 
@@ -161,7 +166,7 @@ impl UnstagedDiff {
                 .diff
                 .read(cx)
                 .repo(cx)
-                .map_or(true, |current| current.entity_id() != intended.entity_id());
+                .is_none_or(|current| current.entity_id() != intended.entity_id());
             if needs_switch {
                 unstaged_diff.update(cx, |unstaged_diff, cx| {
                     unstaged_diff.diff.update(cx, |diff, cx| {
@@ -178,14 +183,8 @@ impl UnstagedDiff {
         }
     }
 
-    pub(crate) fn move_to_entry(
-        &mut self,
-        entry: GitStatusEntry,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.diff
-            .update(cx, |diff, cx| diff.move_to_entry(entry, window, cx));
+    pub(crate) fn move_to_entry(&self, entry: GitStatusEntry, window: &mut Window, cx: &mut Context<Self>) {
+        self.diff.update(cx, |diff, cx| diff.move_to_entry(entry, window, cx));
     }
 
     pub(crate) fn new(
@@ -206,9 +205,7 @@ impl UnstagedDiff {
                     editor.set_diff_hunk_renderer(Some(Arc::new(UnstagedDiffHunkRenderer)), cx);
                     editor.rhs_editor().update(cx, |rhs_editor, _cx| {
                         rhs_editor.set_read_only(false);
-                        rhs_editor.register_addon(GitPanelAddon {
-                            workspace: workspace_handle,
-                        });
+                        rhs_editor.register_addon(GitPanelAddon { workspace: workspace_handle });
                     });
                 },
                 project.clone(),
@@ -226,16 +223,9 @@ impl UnstagedDiff {
         workspace: Entity<Workspace>,
         cx: &mut Context<Self>,
     ) -> Self {
-        let diff_event_subscription = cx.subscribe(&diff, |_, _, event: &EditorEvent, cx| {
-            cx.emit(event.clone())
-        });
+        let diff_event_subscription = cx.subscribe(&diff, |_, _, event: &EditorEvent, cx| cx.emit(event.clone()));
 
-        Self {
-            diff,
-            project,
-            workspace: workspace.downgrade(),
-            _diff_event_subscription: diff_event_subscription,
-        }
+        Self { diff, project, workspace: workspace.downgrade(), _diff_event_subscription: diff_event_subscription }
     }
 
     fn button_states(&self, cx: &App) -> ButtonStates {
@@ -245,13 +235,8 @@ impl UnstagedDiff {
         let snapshot = diff.multibuffer().read(cx).snapshot(cx);
         let prev_next = snapshot.diff_hunks().next().is_some();
         let (selection, ranges) = diff.selected_ranges(cx);
-        let stage = editor
-            .diff_hunks_in_ranges(&ranges, &snapshot)
-            .next()
-            .is_some();
-        let restore = editor
-            .diff_hunks_in_ranges(&ranges, &snapshot)
-            .any(|h| !h.is_created_file());
+        let stage = editor.diff_hunks_in_ranges(&ranges, &snapshot).next().is_some();
+        let restore = editor.diff_hunks_in_ranges(&ranges, &snapshot).any(|h| !h.is_created_file());
         let mut stage_all = false;
         self.workspace
             .read_with(cx, |workspace, cx| {
@@ -262,36 +247,15 @@ impl UnstagedDiff {
             .ok();
         let restore_all = snapshot.diff_hunks().any(|h| !h.is_created_file());
 
-        ButtonStates {
-            stage,
-            restore,
-            restore_all,
-            prev_next,
-            selection,
-            stage_all,
-        }
+        ButtonStates { stage, restore, restore_all, prev_next, selection, stage_all }
     }
 
-    fn stage_selected_unstaged_hunks(
-        &mut self,
-        move_to_next: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.diff.update(cx, |diff, cx| {
-            diff.stage_or_unstage_selected_hunks(true, move_to_next, window, cx)
-        });
+    fn stage_selected_unstaged_hunks(&self, move_to_next: bool, window: &mut Window, cx: &mut Context<Self>) {
+        self.diff.update(cx, |diff, cx| diff.stage_or_unstage_selected_hunks(true, move_to_next, window, cx));
     }
 
-    fn restore_selected_unstaged_hunks(
-        &mut self,
-        move_to_next: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.diff.update(cx, |diff, cx| {
-            diff.restore_selected_hunks(move_to_next, window, cx)
-        });
+    fn restore_selected_unstaged_hunks(&self, move_to_next: bool, window: &mut Window, cx: &mut Context<Self>) {
+        self.diff.update(cx, |diff, cx| diff.restore_selected_hunks(move_to_next, window, cx));
     }
 }
 
@@ -324,18 +288,11 @@ impl Item for UnstagedDiff {
     }
 
     fn deactivated(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.diff
-            .update(cx, |diff, cx| diff.deactivated(window, cx));
+        self.diff.update(cx, |diff, cx| diff.deactivated(window, cx));
     }
 
-    fn navigate(
-        &mut self,
-        data: Arc<dyn Any + Send>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        self.diff
-            .update(cx, |diff, cx| diff.navigate(data, window, cx))
+    fn navigate(&mut self, data: Arc<dyn Any + Send>, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        self.diff.update(cx, |diff, cx| diff.navigate(data, window, cx))
     }
 
     fn tab_tooltip_text(&self, _: &App) -> Option<SharedString> {
@@ -350,11 +307,7 @@ impl Item for UnstagedDiff {
         Some(Box::new(self.diff.read(cx).editor().clone()))
     }
 
-    fn for_each_project_item(
-        &self,
-        cx: &App,
-        f: &mut dyn FnMut(gpui::EntityId, &dyn project::ProjectItem),
-    ) {
+    fn for_each_project_item(&self, cx: &App, f: &mut dyn FnMut(gpui::EntityId, &dyn project::ProjectItem)) {
         self.diff.read(cx).for_each_project_item(cx, f);
     }
 
@@ -362,14 +315,8 @@ impl Item for UnstagedDiff {
         self.diff.read(cx).active_project_path(cx)
     }
 
-    fn set_nav_history(
-        &mut self,
-        nav_history: ItemNavHistory,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.diff
-            .update(cx, |diff, cx| diff.set_nav_history(nav_history, cx));
+    fn set_nav_history(&mut self, nav_history: ItemNavHistory, _: &mut Window, cx: &mut Context<Self>) {
+        self.diff.update(cx, |diff, cx| diff.set_nav_history(nav_history, cx));
     }
 
     fn can_split(&self) -> bool {
@@ -411,8 +358,7 @@ impl Item for UnstagedDiff {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
-        self.diff
-            .update(cx, |diff, cx| diff.save(options, project, window, cx))
+        self.diff.update(cx, |diff, cx| diff.save(options, project, window, cx))
     }
 
     fn save_as(
@@ -425,14 +371,8 @@ impl Item for UnstagedDiff {
         unreachable!()
     }
 
-    fn reload(
-        &mut self,
-        project: Entity<Project>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<()>> {
-        self.diff
-            .update(cx, |diff, cx| diff.reload(project, window, cx))
+    fn reload(&mut self, project: Entity<Project>, window: &mut Window, cx: &mut Context<Self>) -> Task<Result<()>> {
+        self.diff.update(cx, |diff, cx| diff.reload(project, window, cx))
     }
 
     fn act_as_type<'a>(
@@ -446,15 +386,7 @@ impl Item for UnstagedDiff {
         } else if type_id == TypeId::of::<DiffMultibuffer>() {
             Some(self.diff.clone().into())
         } else if type_id == TypeId::of::<Editor>() {
-            Some(
-                self.diff
-                    .read(cx)
-                    .editor()
-                    .read(cx)
-                    .rhs_editor()
-                    .clone()
-                    .into(),
-            )
+            Some(self.diff.read(cx).editor().read(cx).rhs_editor().clone().into())
         } else if type_id == TypeId::of::<SplittableEditor>() {
             Some(self.diff.read(cx).editor().clone().into())
         } else if type_id == TypeId::of::<DiffBufferList>() {
@@ -464,15 +396,8 @@ impl Item for UnstagedDiff {
         }
     }
 
-    fn added_to_workspace(
-        &mut self,
-        workspace: &mut Workspace,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.diff.update(cx, |diff, cx| {
-            diff.added_to_workspace(workspace, window, cx)
-        });
+    fn added_to_workspace(&mut self, workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Self>) {
+        self.diff.update(cx, |diff, cx| diff.added_to_workspace(workspace, window, cx));
     }
 }
 
@@ -481,12 +406,7 @@ impl SerializableItem for UnstagedDiff {
         "UnstagedDiff"
     }
 
-    fn cleanup(
-        _: workspace::WorkspaceId,
-        _: Vec<workspace::ItemId>,
-        _: &mut Window,
-        _: &mut App,
-    ) -> Task<Result<()>> {
+    fn cleanup(_: workspace::WorkspaceId, _: Vec<workspace::ItemId>, _: &mut Window, _: &mut App) -> Task<Result<()>> {
         Task::ready(Ok(()))
     }
 
@@ -532,10 +452,7 @@ pub struct UnstagedDiffToolbar {
 
 impl UnstagedDiffToolbar {
     pub fn new(workspace: &Workspace, _: &mut Context<Self>) -> Self {
-        Self {
-            unstaged_diff: None,
-            workspace: workspace.weak_handle(),
-        }
+        Self { unstaged_diff: None, workspace: workspace.weak_handle() }
     }
 
     fn unstaged_diff(&self, _: &App) -> Option<Entity<UnstagedDiff>> {
@@ -552,12 +469,7 @@ impl UnstagedDiffToolbar {
         })
     }
 
-    fn stage_selected_unstaged_hunks(
-        &mut self,
-        move_to_next: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn stage_selected_unstaged_hunks(&self, move_to_next: bool, window: &mut Window, cx: &mut Context<Self>) {
         let Some(unstaged_diff) = self.unstaged_diff(cx) else {
             return;
         };
@@ -566,12 +478,7 @@ impl UnstagedDiffToolbar {
         });
     }
 
-    fn restore_selected_unstaged_hunks(
-        &mut self,
-        move_to_next: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn restore_selected_unstaged_hunks(&self, move_to_next: bool, window: &mut Window, cx: &mut Context<Self>) {
         let Some(unstaged_diff) = self.unstaged_diff(cx) else {
             return;
         };
@@ -580,7 +487,7 @@ impl UnstagedDiffToolbar {
         });
     }
 
-    fn stage_all(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn stage_all(&self, window: &mut Window, cx: &mut Context<Self>) {
         self.workspace
             .update(cx, |workspace, cx| {
                 let Some(panel) = workspace.panel::<GitPanel>(cx) else {
@@ -593,17 +500,14 @@ impl UnstagedDiffToolbar {
             .ok();
     }
 
-    fn restore_all(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn restore_all(&self, window: &mut Window, cx: &mut Context<Self>) {
         let Some(unstaged_diff) = self.unstaged_diff(cx) else {
             return;
         };
         let diff = unstaged_diff.read(cx).diff.read(cx);
         let editor = diff.editor().read(cx).rhs_editor().clone();
         let snapshot = diff.multibuffer().read(cx).snapshot(cx);
-        let hunks: Vec<_> = snapshot
-            .diff_hunks()
-            .filter(|h| !h.is_created_file())
-            .collect();
+        let hunks: Vec<_> = snapshot.diff_hunks().filter(|h| !h.is_created_file()).collect();
         if !hunks.is_empty() {
             editor.update(cx, |editor, cx| {
                 editor.apply_restore(hunks, window, cx);
@@ -621,23 +525,12 @@ impl ToolbarItemView for UnstagedDiffToolbar {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) -> ToolbarItemLocation {
-        self.unstaged_diff = active_pane_item
-            .and_then(|item| item.act_as::<UnstagedDiff>(cx))
-            .map(|entity| entity.downgrade());
-        if self.unstaged_diff.is_some() {
-            ToolbarItemLocation::PrimaryRight
-        } else {
-            ToolbarItemLocation::Hidden
-        }
+        self.unstaged_diff =
+            active_pane_item.and_then(|item| item.act_as::<UnstagedDiff>(cx)).map(|entity| entity.downgrade());
+        if self.unstaged_diff.is_some() { ToolbarItemLocation::PrimaryRight } else { ToolbarItemLocation::Hidden }
     }
 
-    fn pane_focus_update(
-        &mut self,
-        _pane_focused: bool,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) {
-    }
+    fn pane_focus_update(&mut self, _pane_focused: bool, _window: &mut Window, _cx: &mut Context<Self>) {}
 }
 
 impl Render for UnstagedDiffToolbar {
@@ -659,12 +552,8 @@ impl Render for UnstagedDiffToolbar {
             .flex_wrap()
             .justify_between()
             .when(!is_multibuffer_empty, |this| {
-                this.child(DiffStat::new(
-                    "unstaged-diff-stat",
-                    additions as usize,
-                    deletions as usize,
-                ))
-                .child(Divider::vertical().ml_1())
+                this.child(DiffStat::new("unstaged-diff-stat", additions as usize, deletions as usize))
+                    .child(Divider::vertical().ml_1())
             })
             // n.b. the only reason these arrows are here is because we don't
             // support "undo" for staging so we need a way to go back.
@@ -679,22 +568,16 @@ impl Render for UnstagedDiffToolbar {
                                 &GoToPreviousHunk,
                                 &focus_handle,
                             ))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.dispatch_action(&GoToPreviousHunk, window, cx)
-                            })),
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.dispatch_action(&GoToPreviousHunk, window, cx)),
+                            ),
                     )
                     .child(
                         IconButton::new("down", IconName::ArrowDown)
                             .icon_size(IconSize::Small)
                             .disabled(!button_states.prev_next)
-                            .tooltip(Tooltip::for_action_title_in(
-                                "Go to Next Hunk",
-                                &GoToHunk,
-                                &focus_handle,
-                            ))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.dispatch_action(&GoToHunk, window, cx)
-                            })),
+                            .tooltip(Tooltip::for_action_title_in("Go to Next Hunk", &GoToHunk, &focus_handle))
+                            .on_click(cx.listener(|this, _, window, cx| this.dispatch_action(&GoToHunk, window, cx))),
                     ),
             )
             .child(Divider::vertical())
@@ -738,11 +621,7 @@ impl Render for UnstagedDiffToolbar {
                 Button::new("stage-all", "Stage All")
                     .width(rems_from_px(80_f32))
                     .disabled(!button_states.stage_all)
-                    .tooltip(Tooltip::for_action_title_in(
-                        "Stage All Changes",
-                        &StageAll,
-                        &focus_handle,
-                    ))
+                    .tooltip(Tooltip::for_action_title_in("Stage All Changes", &StageAll, &focus_handle))
                     .on_click(cx.listener(|this, _, window, cx| this.stage_all(window, cx))),
             )
             .child(Divider::vertical())

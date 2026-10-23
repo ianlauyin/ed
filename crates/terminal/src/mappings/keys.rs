@@ -16,13 +16,8 @@ enum TerminalModifiers {
 }
 
 impl TerminalModifiers {
-    fn new(ks: &Keystroke) -> Self {
-        match (
-            ks.modifiers.alt,
-            ks.modifiers.control,
-            ks.modifiers.shift,
-            ks.modifiers.platform,
-        ) {
+    const fn new(ks: &Keystroke) -> Self {
+        match (ks.modifiers.alt, ks.modifiers.control, ks.modifiers.shift, ks.modifiers.platform) {
             (false, false, false, false) => TerminalModifiers::None,
             (true, false, false, false) => TerminalModifiers::Alt,
             (false, true, false, false) => TerminalModifiers::Ctrl,
@@ -32,7 +27,7 @@ impl TerminalModifiers {
         }
     }
 
-    fn any(&self) -> bool {
+    const fn any(&self) -> bool {
         match &self {
             TerminalModifiers::None => false,
             TerminalModifiers::Alt => true,
@@ -44,11 +39,7 @@ impl TerminalModifiers {
     }
 }
 
-pub(crate) fn to_esc_str(
-    keystroke: &Keystroke,
-    mode: Modes,
-    option_as_meta: bool,
-) -> Option<Cow<'static, str>> {
+pub(crate) fn to_esc_str(keystroke: &Keystroke, mode: Modes, option_as_meta: bool) -> Option<Cow<'static, str>> {
     let modifiers = TerminalModifiers::new(keystroke);
 
     // Manual Bindings including modifiers
@@ -105,65 +96,65 @@ pub(crate) fn to_esc_str(
         ("f20", TerminalModifiers::None) => Some("\x1b[34~"),
         // NumpadEnter, Action::Esc("\n".into());
         //Mappings for caret notation keys
-        ("a", TerminalModifiers::Ctrl) => Some("\x01"), //1
+        ("a", TerminalModifiers::Ctrl) => Some("\x01"),      //1
         ("A", TerminalModifiers::CtrlShift) => Some("\x01"), //1
-        ("b", TerminalModifiers::Ctrl) => Some("\x02"), //2
+        ("b", TerminalModifiers::Ctrl) => Some("\x02"),      //2
         ("B", TerminalModifiers::CtrlShift) => Some("\x02"), //2
-        ("c", TerminalModifiers::Ctrl) => Some("\x03"), //3
+        ("c", TerminalModifiers::Ctrl) => Some("\x03"),      //3
         ("C", TerminalModifiers::CtrlShift) => Some("\x03"), //3
-        ("d", TerminalModifiers::Ctrl) => Some("\x04"), //4
+        ("d", TerminalModifiers::Ctrl) => Some("\x04"),      //4
         ("D", TerminalModifiers::CtrlShift) => Some("\x04"), //4
-        ("e", TerminalModifiers::Ctrl) => Some("\x05"), //5
+        ("e", TerminalModifiers::Ctrl) => Some("\x05"),      //5
         ("E", TerminalModifiers::CtrlShift) => Some("\x05"), //5
-        ("f", TerminalModifiers::Ctrl) => Some("\x06"), //6
+        ("f", TerminalModifiers::Ctrl) => Some("\x06"),      //6
         ("F", TerminalModifiers::CtrlShift) => Some("\x06"), //6
-        ("g", TerminalModifiers::Ctrl) => Some("\x07"), //7
+        ("g", TerminalModifiers::Ctrl) => Some("\x07"),      //7
         ("G", TerminalModifiers::CtrlShift) => Some("\x07"), //7
-        ("h", TerminalModifiers::Ctrl) => Some("\x08"), //8
+        ("h", TerminalModifiers::Ctrl) => Some("\x08"),      //8
         ("H", TerminalModifiers::CtrlShift) => Some("\x08"), //8
-        ("i", TerminalModifiers::Ctrl) => Some("\x09"), //9
+        ("i", TerminalModifiers::Ctrl) => Some("\x09"),      //9
         ("I", TerminalModifiers::CtrlShift) => Some("\x09"), //9
-        ("j", TerminalModifiers::Ctrl) => Some("\x0a"), //10
+        ("j", TerminalModifiers::Ctrl) => Some("\x0a"),      //10
         ("J", TerminalModifiers::CtrlShift) => Some("\x0a"), //10
-        ("k", TerminalModifiers::Ctrl) => Some("\x0b"), //11
+        ("k", TerminalModifiers::Ctrl) => Some("\x0b"),      //11
         ("K", TerminalModifiers::CtrlShift) => Some("\x0b"), //11
-        ("l", TerminalModifiers::Ctrl) => Some("\x0c"), //12
+        ("l", TerminalModifiers::Ctrl) => Some("\x0c"),      //12
         ("L", TerminalModifiers::CtrlShift) => Some("\x0c"), //12
-        ("m", TerminalModifiers::Ctrl) => Some("\x0d"), //13
+        ("m", TerminalModifiers::Ctrl) => Some("\x0d"),      //13
         ("M", TerminalModifiers::CtrlShift) => Some("\x0d"), //13
-        ("n", TerminalModifiers::Ctrl) => Some("\x0e"), //14
+        ("n", TerminalModifiers::Ctrl) => Some("\x0e"),      //14
         ("N", TerminalModifiers::CtrlShift) => Some("\x0e"), //14
-        ("o", TerminalModifiers::Ctrl) => Some("\x0f"), //15
+        ("o", TerminalModifiers::Ctrl) => Some("\x0f"),      //15
         ("O", TerminalModifiers::CtrlShift) => Some("\x0f"), //15
-        ("p", TerminalModifiers::Ctrl) => Some("\x10"), //16
+        ("p", TerminalModifiers::Ctrl) => Some("\x10"),      //16
         ("P", TerminalModifiers::CtrlShift) => Some("\x10"), //16
-        ("q", TerminalModifiers::Ctrl) => Some("\x11"), //17
+        ("q", TerminalModifiers::Ctrl) => Some("\x11"),      //17
         ("Q", TerminalModifiers::CtrlShift) => Some("\x11"), //17
-        ("r", TerminalModifiers::Ctrl) => Some("\x12"), //18
+        ("r", TerminalModifiers::Ctrl) => Some("\x12"),      //18
         ("R", TerminalModifiers::CtrlShift) => Some("\x12"), //18
-        ("s", TerminalModifiers::Ctrl) => Some("\x13"), //19
+        ("s", TerminalModifiers::Ctrl) => Some("\x13"),      //19
         ("S", TerminalModifiers::CtrlShift) => Some("\x13"), //19
-        ("t", TerminalModifiers::Ctrl) => Some("\x14"), //20
+        ("t", TerminalModifiers::Ctrl) => Some("\x14"),      //20
         ("T", TerminalModifiers::CtrlShift) => Some("\x14"), //20
-        ("u", TerminalModifiers::Ctrl) => Some("\x15"), //21
+        ("u", TerminalModifiers::Ctrl) => Some("\x15"),      //21
         ("U", TerminalModifiers::CtrlShift) => Some("\x15"), //21
-        ("v", TerminalModifiers::Ctrl) => Some("\x16"), //22
+        ("v", TerminalModifiers::Ctrl) => Some("\x16"),      //22
         ("V", TerminalModifiers::CtrlShift) => Some("\x16"), //22
-        ("w", TerminalModifiers::Ctrl) => Some("\x17"), //23
+        ("w", TerminalModifiers::Ctrl) => Some("\x17"),      //23
         ("W", TerminalModifiers::CtrlShift) => Some("\x17"), //23
-        ("x", TerminalModifiers::Ctrl) => Some("\x18"), //24
+        ("x", TerminalModifiers::Ctrl) => Some("\x18"),      //24
         ("X", TerminalModifiers::CtrlShift) => Some("\x18"), //24
-        ("y", TerminalModifiers::Ctrl) => Some("\x19"), //25
+        ("y", TerminalModifiers::Ctrl) => Some("\x19"),      //25
         ("Y", TerminalModifiers::CtrlShift) => Some("\x19"), //25
-        ("z", TerminalModifiers::Ctrl) => Some("\x1a"), //26
+        ("z", TerminalModifiers::Ctrl) => Some("\x1a"),      //26
         ("Z", TerminalModifiers::CtrlShift) => Some("\x1a"), //26
-        ("@", TerminalModifiers::Ctrl) => Some("\x00"), //0
-        ("[", TerminalModifiers::Ctrl) => Some("\x1b"), //27
-        ("\\", TerminalModifiers::Ctrl) => Some("\x1c"), //28
-        ("]", TerminalModifiers::Ctrl) => Some("\x1d"), //29
-        ("^", TerminalModifiers::Ctrl) => Some("\x1e"), //30
-        ("_", TerminalModifiers::Ctrl) => Some("\x1f"), //31
-        ("?", TerminalModifiers::Ctrl) => Some("\x7f"), //127
+        ("@", TerminalModifiers::Ctrl) => Some("\x00"),      //0
+        ("[", TerminalModifiers::Ctrl) => Some("\x1b"),      //27
+        ("\\", TerminalModifiers::Ctrl) => Some("\x1c"),     //28
+        ("]", TerminalModifiers::Ctrl) => Some("\x1d"),      //29
+        ("^", TerminalModifiers::Ctrl) => Some("\x1e"),      //30
+        ("_", TerminalModifiers::Ctrl) => Some("\x1f"),      //31
+        ("?", TerminalModifiers::Ctrl) => Some("\x7f"),      //127
         _ => None,
     };
     if let Some(esc_str) = manual_esc_str {
@@ -223,10 +214,7 @@ pub(crate) fn to_esc_str(
         } else if keystroke.modifiers.shift {
             return Some(Cow::Owned(format!("\x1b{}", key.to_ascii_uppercase())));
         } else if keystroke.modifiers.control && key.is_ascii_lowercase() {
-            return Some(Cow::Owned(format!(
-                "\x1b{}",
-                (key as u8 - b'a' + 1) as char
-            )));
+            return Some(Cow::Owned(format!("\x1b{}", (key as u8 - b'a' + 1) as char)));
         }
     }
 
@@ -244,7 +232,7 @@ pub(crate) fn to_esc_str(
 ///    8     | Shift + Alt + Control
 /// ---------+---------------------------
 /// from: https://invisible-island.net/xterm/ctlseqs/ctlseqs.html#h2-PC-Style-Function-Keys
-fn modifier_code(keystroke: &Keystroke) -> u32 {
+const fn modifier_code(keystroke: &Keystroke) -> u32 {
     let mut modifier_code = 0;
     if keystroke.modifiers.shift {
         modifier_code |= 1;

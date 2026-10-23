@@ -1,16 +1,24 @@
-use crate::{
-    ExcerptSummary, MultiBufferDimension, MultiBufferOffset, MultiBufferOffsetUtf16, PathKey,
-    PathKeyIndex, find_diff_state,
-};
+use std::cmp::Ordering;
+use std::ops::Add;
+use std::ops::AddAssign;
+use std::ops::Range;
+use std::ops::Sub;
 
-use super::{MultiBufferSnapshot, ToOffset, ToPoint};
-use language::{BufferSnapshot, Point};
-use std::{
-    cmp::Ordering,
-    ops::{Add, AddAssign, Range, Sub},
-};
+use language::BufferSnapshot;
+use language::Point;
 use sum_tree::Bias;
 use text::BufferId;
+
+use super::MultiBufferSnapshot;
+use super::ToOffset;
+use super::ToPoint;
+use crate::ExcerptSummary;
+use crate::MultiBufferDimension;
+use crate::MultiBufferOffset;
+use crate::MultiBufferOffsetUtf16;
+use crate::PathKey;
+use crate::PathKeyIndex;
+use crate::find_diff_state;
 
 /// A multibuffer anchor derived from an anchor into a specific excerpted buffer.
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Hash)]
@@ -36,17 +44,9 @@ pub enum Anchor {
 
 pub(crate) enum AnchorSeekTarget<'a> {
     // buffer no longer exists at its original path key in the multibuffer
-    Missing {
-        path_key: &'a PathKey,
-        buffer_id: BufferId,
-    },
+    Missing { path_key: &'a PathKey, buffer_id: BufferId },
     // we have excerpts for the buffer at the expected path key
-    Excerpt {
-        path_key: &'a PathKey,
-        path_key_index: PathKeyIndex,
-        anchor: text::Anchor,
-        snapshot: &'a BufferSnapshot,
-    },
+    Excerpt { path_key: &'a PathKey, path_key_index: PathKeyIndex, anchor: text::Anchor, snapshot: &'a BufferSnapshot },
     // no excerpts and it's a min or max anchor
     Empty,
 }
@@ -54,24 +54,12 @@ pub(crate) enum AnchorSeekTarget<'a> {
 impl std::fmt::Debug for AnchorSeekTarget<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Excerpt {
-                path_key,
-                path_key_index: _,
-                anchor,
-                snapshot: _,
-            } => f
-                .debug_struct("Excerpt")
-                .field("path_key", path_key)
-                .field("anchor", anchor)
-                .finish(),
-            Self::Missing {
-                path_key,
-                buffer_id,
-            } => f
-                .debug_struct("Missing")
-                .field("path_key", path_key)
-                .field("buffer_id", buffer_id)
-                .finish(),
+            Self::Excerpt { path_key, path_key_index: _, anchor, snapshot: _ } => {
+                f.debug_struct("Excerpt").field("path_key", path_key).field("anchor", anchor).finish()
+            }
+            Self::Missing { path_key, buffer_id } => {
+                f.debug_struct("Missing").field("path_key", path_key).field("buffer_id", buffer_id).finish()
+            }
             Self::Empty => f.debug_struct("Empty").finish(),
         }
     }
@@ -94,15 +82,15 @@ impl From<ExcerptAnchor> for Anchor {
 }
 
 impl ExcerptAnchor {
-    pub(crate) fn buffer_id(&self) -> BufferId {
+    pub(crate) const fn buffer_id(&self) -> BufferId {
         self.text_anchor.buffer_id
     }
 
-    pub(crate) fn text_anchor(&self) -> text::Anchor {
+    pub(crate) const fn text_anchor(&self) -> text::Anchor {
         self.text_anchor
     }
 
-    pub(crate) fn with_diff_base_anchor(mut self, diff_base_anchor: text::Anchor) -> Self {
+    pub(crate) const fn with_diff_base_anchor(mut self, diff_base_anchor: text::Anchor) -> Self {
         self.diff_base_anchor = Some(diff_base_anchor);
         self
     }
@@ -138,16 +126,14 @@ impl ExcerptAnchor {
             return Ordering::Equal;
         };
         // two anchors into the same buffer at the same path that still exists at that path in the multibuffer
-        let text_cmp = self
-            .text_anchor()
-            .cmp(&other.text_anchor(), &buffer.buffer_snapshot);
+        let text_cmp = self.text_anchor().cmp(&other.text_anchor(), &buffer.buffer_snapshot);
         if text_cmp != Ordering::Equal {
             return text_cmp;
         }
 
         if (self.diff_base_anchor.is_some() || other.diff_base_anchor.is_some())
-            && let Some(base_text) = find_diff_state(&snapshot.diffs, self.text_anchor.buffer_id)
-                .map(|diff| diff.base_text())
+            && let Some(base_text) =
+                find_diff_state(&snapshot.diffs, self.text_anchor.buffer_id).map(|diff| diff.base_text())
         {
             return match (self.diff_base_anchor, other.diff_base_anchor) {
                 (Some(self_anchor), Some(other_anchor)) => {
@@ -179,7 +165,7 @@ impl ExcerptAnchor {
         let Some(buffer) = snapshot.buffer_for_id(self.text_anchor.buffer_id) else {
             return *self;
         };
-        let text_anchor = self.text_anchor().bias_left(&buffer);
+        let text_anchor = self.text_anchor().bias_left(buffer);
         let ret = Self::in_buffer(self.path, text_anchor);
         if let Some(diff_base_anchor) = self.diff_base_anchor {
             if let Some(diff) = find_diff_state(&snapshot.diffs, self.text_anchor.buffer_id)
@@ -201,7 +187,7 @@ impl ExcerptAnchor {
         let Some(buffer) = snapshot.buffer_for_id(self.text_anchor.buffer_id) else {
             return *self;
         };
-        let text_anchor = self.text_anchor().bias_right(&buffer);
+        let text_anchor = self.text_anchor().bias_right(buffer);
         let ret = Self::in_buffer(self.path, text_anchor);
         if let Some(diff_base_anchor) = self.diff_base_anchor {
             if let Some(diff) = find_diff_state(&snapshot.diffs, self.text_anchor.buffer_id)
@@ -217,12 +203,8 @@ impl ExcerptAnchor {
     }
 
     #[track_caller]
-    pub(crate) fn in_buffer(path: PathKeyIndex, text_anchor: text::Anchor) -> Self {
-        ExcerptAnchor {
-            path,
-            diff_base_anchor: None,
-            text_anchor,
-        }
+    pub(crate) const fn in_buffer(path: PathKeyIndex, text_anchor: text::Anchor) -> Self {
+        ExcerptAnchor { path, diff_base_anchor: None, text_anchor }
     }
 
     fn is_valid(&self, snapshot: &MultiBufferSnapshot) -> bool {
@@ -246,45 +228,21 @@ impl ExcerptAnchor {
         }
         let is_valid = self.text_anchor == excerpt.range.context.start
             || self.text_anchor == excerpt.range.context.end
-            || self.text_anchor.is_valid(&buffer_snapshot);
+            || self.text_anchor.is_valid(buffer_snapshot);
         is_valid
-            && excerpt
-                .range
-                .context
-                .start
-                .cmp(&self.text_anchor(), buffer_snapshot)
-                .is_le()
-            && excerpt
-                .range
-                .context
-                .end
-                .cmp(&self.text_anchor(), buffer_snapshot)
-                .is_ge()
+            && excerpt.range.context.start.cmp(&self.text_anchor(), buffer_snapshot).is_le()
+            && excerpt.range.context.end.cmp(&self.text_anchor(), buffer_snapshot).is_ge()
     }
 
-    pub(crate) fn seek_target<'a>(
-        &self,
-        snapshot: &'a MultiBufferSnapshot,
-    ) -> AnchorSeekTarget<'a> {
-        self.try_seek_target(snapshot)
-            .expect("anchor is from different multi-buffer")
+    pub(crate) fn seek_target<'a>(&self, snapshot: &'a MultiBufferSnapshot) -> AnchorSeekTarget<'a> {
+        self.try_seek_target(snapshot).expect("anchor is from different multi-buffer")
     }
 
-    pub(crate) fn try_seek_target<'a>(
-        &self,
-        snapshot: &'a MultiBufferSnapshot,
-    ) -> Option<AnchorSeekTarget<'a>> {
+    pub(crate) fn try_seek_target<'a>(&self, snapshot: &'a MultiBufferSnapshot) -> Option<AnchorSeekTarget<'a>> {
         let path_key = snapshot.try_path_for_anchor(*self)?;
 
-        let Some(state) = snapshot
-            .buffers
-            .get(&self.buffer_id())
-            .filter(|state| &state.path_key == path_key)
-        else {
-            return Some(AnchorSeekTarget::Missing {
-                path_key,
-                buffer_id: self.buffer_id(),
-            });
+        let Some(state) = snapshot.buffers.get(&self.buffer_id()).filter(|state| &state.path_key == path_key) else {
+            return Some(AnchorSeekTarget::Missing { path_key, buffer_id: self.buffer_id() });
         };
 
         Some(AnchorSeekTarget::Excerpt {
@@ -317,37 +275,37 @@ impl ToPoint for ExcerptAnchor {
 }
 
 impl Anchor {
-    pub fn is_min(&self) -> bool {
+    pub const fn is_min(&self) -> bool {
         matches!(self, Self::Min)
     }
 
-    pub fn is_max(&self) -> bool {
+    pub const fn is_max(&self) -> bool {
         matches!(self, Self::Max)
     }
 
-    pub(crate) fn in_buffer(path: PathKeyIndex, text_anchor: text::Anchor) -> Self {
+    pub(crate) const fn in_buffer(path: PathKeyIndex, text_anchor: text::Anchor) -> Self {
         Self::Excerpt(ExcerptAnchor::in_buffer(path, text_anchor))
     }
 
-    pub(crate) fn range_in_buffer(path: PathKeyIndex, range: Range<text::Anchor>) -> Range<Self> {
+    pub(crate) const fn range_in_buffer(path: PathKeyIndex, range: Range<text::Anchor>) -> Range<Self> {
         Self::in_buffer(path, range.start)..Self::in_buffer(path, range.end)
     }
 
     pub fn cmp(&self, other: &Anchor, snapshot: &MultiBufferSnapshot) -> Ordering {
         match (self, other) {
-            (Anchor::Min, Anchor::Min) => return Ordering::Equal,
-            (Anchor::Max, Anchor::Max) => return Ordering::Equal,
-            (Anchor::Min, _) => return Ordering::Less,
-            (Anchor::Max, _) => return Ordering::Greater,
-            (_, Anchor::Max) => return Ordering::Less,
-            (_, Anchor::Min) => return Ordering::Greater,
+            (Anchor::Min, Anchor::Min) => Ordering::Equal,
+            (Anchor::Max, Anchor::Max) => Ordering::Equal,
+            (Anchor::Min, _) => Ordering::Less,
+            (Anchor::Max, _) => Ordering::Greater,
+            (_, Anchor::Max) => Ordering::Less,
+            (_, Anchor::Min) => Ordering::Greater,
             (Anchor::Excerpt(self_excerpt_anchor), Anchor::Excerpt(other_excerpt_anchor)) => {
                 self_excerpt_anchor.cmp(other_excerpt_anchor, snapshot)
             }
         }
     }
 
-    pub fn bias(&self) -> Bias {
+    pub const fn bias(&self) -> Bias {
         match self {
             Anchor::Min => Bias::Left,
             Anchor::Max => Bias::Right,
@@ -391,7 +349,7 @@ impl Anchor {
         }
     }
 
-    fn to_excerpt_anchor(&self, snapshot: &MultiBufferSnapshot) -> Option<ExcerptAnchor> {
+    fn to_excerpt_anchor(self, snapshot: &MultiBufferSnapshot) -> Option<ExcerptAnchor> {
         match self {
             Anchor::Min => {
                 let excerpt = snapshot.excerpts.first()?;
@@ -402,7 +360,7 @@ impl Anchor {
                     diff_base_anchor: None,
                 })
             }
-            Anchor::Excerpt(excerpt_anchor) => Some(*excerpt_anchor),
+            Anchor::Excerpt(excerpt_anchor) => Some(excerpt_anchor),
             Anchor::Max => {
                 let excerpt = snapshot.excerpts.last()?;
 
@@ -415,10 +373,7 @@ impl Anchor {
         }
     }
 
-    pub(crate) fn seek_target<'a>(
-        &self,
-        snapshot: &'a MultiBufferSnapshot,
-    ) -> AnchorSeekTarget<'a> {
+    pub(crate) fn seek_target<'a>(&self, snapshot: &'a MultiBufferSnapshot) -> AnchorSeekTarget<'a> {
         let Some(excerpt_anchor) = self.to_excerpt_anchor(snapshot) else {
             return AnchorSeekTarget::Empty;
         };
@@ -426,7 +381,7 @@ impl Anchor {
         excerpt_anchor.seek_target(snapshot)
     }
 
-    pub(crate) fn excerpt_anchor(&self) -> Option<ExcerptAnchor> {
+    pub(crate) const fn excerpt_anchor(&self) -> Option<ExcerptAnchor> {
         match self {
             Anchor::Min | Anchor::Max => None,
             Anchor::Excerpt(excerpt_anchor) => Some(*excerpt_anchor),
@@ -434,14 +389,14 @@ impl Anchor {
     }
 
     /// The buffer this anchor is attached to, unless it's `Min` or `Max`.
-    pub fn buffer_id(&self) -> Option<BufferId> {
+    pub const fn buffer_id(&self) -> Option<BufferId> {
         match self {
             Anchor::Min | Anchor::Max => None,
             Anchor::Excerpt(excerpt_anchor) => Some(excerpt_anchor.buffer_id()),
         }
     }
 
-    pub(crate) fn text_anchor(&self) -> Option<text::Anchor> {
+    pub(crate) const fn text_anchor(&self) -> Option<text::Anchor> {
         match self {
             Anchor::Min | Anchor::Max => None,
             Anchor::Excerpt(excerpt_anchor) => Some(excerpt_anchor.text_anchor()),
@@ -453,17 +408,14 @@ impl Anchor {
     }
 
     /// Note: anchor_to_buffer_anchor is probably what you want
-    pub fn raw_text_anchor(&self) -> Option<text::Anchor> {
+    pub const fn raw_text_anchor(&self) -> Option<text::Anchor> {
         match self {
             Anchor::Min | Anchor::Max => None,
             Anchor::Excerpt(excerpt_anchor) => Some(excerpt_anchor.text_anchor),
         }
     }
 
-    pub(crate) fn try_seek_target<'a>(
-        &self,
-        snapshot: &'a MultiBufferSnapshot,
-    ) -> Option<AnchorSeekTarget<'a>> {
+    pub(crate) fn try_seek_target<'a>(&self, snapshot: &'a MultiBufferSnapshot) -> Option<AnchorSeekTarget<'a>> {
         let Some(excerpt_anchor) = self.to_excerpt_anchor(snapshot) else {
             return Some(AnchorSeekTarget::Empty);
         };
@@ -488,7 +440,7 @@ impl Anchor {
         self.excerpt_anchor()?.diff_base_anchor
     }
 
-    pub fn with_diff_base_anchor(mut self, diff_base_anchor: text::Anchor) -> Self {
+    pub const fn with_diff_base_anchor(mut self, diff_base_anchor: text::Anchor) -> Self {
         match &mut self {
             Anchor::Min | Anchor::Max => {}
             Anchor::Excerpt(excerpt_anchor) => {

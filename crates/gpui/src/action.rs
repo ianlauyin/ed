@@ -1,12 +1,17 @@
-use anyhow::{Context as _, Result};
-use collections::{HashMap, TypeIdHashMap};
+use std::any::Any;
+use std::any::TypeId;
+use std::fmt::Display;
+
+use anyhow::Context as _;
+use anyhow::Result;
+use collections::HashMap;
+use collections::TypeIdHashMap;
 pub use gpui_macros::Action;
-pub use no_action::{NoAction, Unbind, is_no_action, is_unbind};
+pub use no_action::NoAction;
+pub use no_action::Unbind;
+pub use no_action::is_no_action;
+pub use no_action::is_unbind;
 use serde_json::json;
-use std::{
-    any::{Any, TypeId},
-    fmt::Display,
-};
 
 /// Defines and registers unit structs that can be used as actions. For more complex data types, derive `Action`.
 ///
@@ -174,9 +179,7 @@ pub trait Action: Any + Send {
 
 impl std::fmt::Debug for dyn Action {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("dyn Action")
-            .field("name", &self.name())
-            .finish()
+        f.debug_struct("dyn Action").field("name", &self.name()).finish()
     }
 }
 
@@ -298,13 +301,7 @@ impl ActionRegistry {
                 (might be registered in `#[action(deprecated_aliases = [...])]`."
             );
         }
-        self.by_name.insert(
-            name,
-            ActionData {
-                build: action.build,
-                json_schema: action.json_schema,
-            },
-        );
+        self.by_name.insert(name, ActionData { build: action.build, json_schema: action.json_schema });
         for &alias in action.deprecated_aliases {
             if self.by_name.contains_key(alias) {
                 panic!(
@@ -312,13 +309,7 @@ impl ActionRegistry {
                     `{alias}` is specified in `#[action(deprecated_aliases = [...])]` for action `{name}`."
                 );
             }
-            self.by_name.insert(
-                alias,
-                ActionData {
-                    build: action.build,
-                    json_schema: action.json_schema,
-                },
-            );
+            self.by_name.insert(alias, ActionData { build: action.build, json_schema: action.json_schema });
             self.deprecated_aliases.insert(alias, name);
             self.all_names.push(alias);
         }
@@ -334,10 +325,8 @@ impl ActionRegistry {
 
     /// Construct an action based on its name and optional JSON parameters sourced from the keymap.
     pub fn build_action_type(&self, type_id: &TypeId) -> Result<Box<dyn Action>> {
-        let name = self
-            .names_by_type_id
-            .get(type_id)
-            .with_context(|| format!("no action type registered for {type_id:?}"))?;
+        let name =
+            self.names_by_type_id.get(type_id).with_context(|| format!("no action type registered for {type_id:?}"))?;
 
         Ok(self.build_action(name, None)?)
     }
@@ -348,22 +337,13 @@ impl ActionRegistry {
         name: &str,
         params: Option<serde_json::Value>,
     ) -> std::result::Result<Box<dyn Action>, ActionBuildError> {
-        let build_action = self
-            .by_name
-            .get(name)
-            .ok_or_else(|| ActionBuildError::NotFound {
-                name: name.to_owned(),
-            })?
-            .build;
-        (build_action)(params.unwrap_or_else(|| json!({}))).map_err(|e| {
-            ActionBuildError::BuildError {
-                name: name.to_owned(),
-                error: e,
-            }
-        })
+        let build_action =
+            self.by_name.get(name).ok_or_else(|| ActionBuildError::NotFound { name: name.to_owned() })?.build;
+        (build_action)(params.unwrap_or_else(|| json!({})))
+            .map_err(|e| ActionBuildError::BuildError { name: name.to_owned(), error: e })
     }
 
-    pub fn all_action_names(&self) -> &[&'static str] {
+    pub const fn all_action_names(&self) -> &[&'static str] {
         self.all_names.as_slice()
     }
 
@@ -375,10 +355,7 @@ impl ActionRegistry {
         self.all_names
             .iter()
             .map(|name| {
-                let action_data = self
-                    .by_name
-                    .get(name)
-                    .expect("All actions in all_names should be registered");
+                let action_data = self.by_name.get(name).expect("All actions in all_names should be registered");
                 (*name, (action_data.json_schema)(generator))
             })
             .collect::<Vec<_>>()
@@ -389,20 +366,18 @@ impl ActionRegistry {
         name: &str,
         generator: &mut schemars::SchemaGenerator,
     ) -> Option<Option<schemars::Schema>> {
-        self.by_name
-            .get(name)
-            .map(|action_data| (action_data.json_schema)(generator))
+        self.by_name.get(name).map(|action_data| (action_data.json_schema)(generator))
     }
 
-    pub fn deprecated_aliases(&self) -> &HashMap<&'static str, &'static str> {
+    pub const fn deprecated_aliases(&self) -> &HashMap<&'static str, &'static str> {
         &self.deprecated_aliases
     }
 
-    pub fn deprecation_messages(&self) -> &HashMap<&'static str, &'static str> {
+    pub const fn deprecation_messages(&self) -> &HashMap<&'static str, &'static str> {
         &self.deprecation_messages
     }
 
-    pub fn documentation(&self) -> &HashMap<&'static str, &'static str> {
+    pub const fn documentation(&self) -> &HashMap<&'static str, &'static str> {
         &self.documentation
     }
 }
@@ -412,15 +387,14 @@ impl ActionRegistry {
 /// format suited for static analysis such as in validating keymaps, or
 /// generating documentation.
 pub fn generate_list_of_all_registered_actions() -> impl Iterator<Item = MacroActionData> {
-    inventory::iter::<MacroActionBuilder>
-        .into_iter()
-        .map(|builder| builder.0())
+    inventory::iter::<MacroActionBuilder>.into_iter().map(|builder| builder.0())
 }
 
 mod no_action {
-    use crate as gpui;
     use schemars::JsonSchema;
     use serde::Deserialize;
+
+    use crate as gpui;
 
     actions!(
         ed,

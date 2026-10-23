@@ -228,7 +228,7 @@ pub struct LanguageServerLogKey {
 }
 
 impl LanguageServerLogKey {
-    pub fn new(kind: LanguageServerKind, server_id: LanguageServerId) -> Self {
+    pub const fn new(kind: LanguageServerKind, server_id: LanguageServerId) -> Self {
         Self { kind, server_id }
     }
 
@@ -238,7 +238,7 @@ impl LanguageServerLogKey {
 }
 
 impl LanguageServerKind {
-    pub fn project(&self) -> Option<&WeakEntity<Project>> {
+    pub const fn project(&self) -> Option<&WeakEntity<Project>> {
         match self {
             Self::Local { project } | Self::Remote { project } => Some(project),
             Self::LocalSsh { .. } => None,
@@ -292,7 +292,7 @@ enum MessageKind {
 }
 
 impl MessageKind {
-    fn opposite(self) -> Self {
+    const fn opposite(self) -> Self {
         match self {
             Self::Send => Self::Receive,
             Self::Receive => Self::Send,
@@ -369,7 +369,7 @@ pub enum LogKind {
 }
 
 impl LogKind {
-    pub fn from_server_log_type(log_type: &LanguageServerLogType) -> Self {
+    pub const fn from_server_log_type(log_type: &LanguageServerLogType) -> Self {
         match log_type {
             LanguageServerLogType::Log(_) => Self::Logs,
             LanguageServerLogType::Trace { .. } => Self::Trace,
@@ -377,7 +377,7 @@ impl LogKind {
         }
     }
 
-    fn to_proto(self) -> Option<proto::toggle_lsp_logs::LogType> {
+    const fn to_proto(self) -> Option<proto::toggle_lsp_logs::LogType> {
         match self {
             Self::Rpc => Some(proto::toggle_lsp_logs::LogType::Rpc),
             Self::Trace => Some(proto::toggle_lsp_logs::LogType::Trace),
@@ -785,17 +785,17 @@ impl LogStore {
                         LanguageServerKind::LocalSsh { lsp_store } => lsp_store.upgrade(),
                     }
                     .and_then(|lsp_store| lsp_store.read(cx).downstream_client());
-                    if let Some((client, project_id)) = downstream_client {
-                        if state.has_downstream_log_stream(LogKind::from_server_log_type(kind)) {
-                            client
-                                .send(proto::LanguageServerLog {
-                                    project_id,
-                                    language_server_id: key.server_id.to_proto(),
-                                    message: text.clone(),
-                                    log_type: Some(kind.to_proto()),
-                                })
-                                .ok();
-                        }
+                    if let Some((client, project_id)) = downstream_client
+                        && state.has_downstream_log_stream(LogKind::from_server_log_type(kind))
+                    {
+                        client
+                            .send(proto::LanguageServerLog {
+                                project_id,
+                                language_server_id: key.server_id.to_proto(),
+                                message: text.clone(),
+                                log_type: Some(kind.to_proto()),
+                            })
+                            .ok();
                     }
                 }
             }
@@ -893,7 +893,7 @@ impl LogStore {
         key: &LanguageServerLogKey,
         log_kind: LogKind,
         update: impl FnOnce(&mut LanguageServerState),
-        cx: &mut Context<Self>,
+        cx: &Context<Self>,
     ) -> Option<()> {
         let (was_enabled, is_enabled) = {
             let state = self.get_language_server_state(key)?;
@@ -912,7 +912,7 @@ impl LogStore {
         Some(())
     }
 
-    fn send_toggle_log_message(key: &LanguageServerLogKey, enabled: bool, log_kind: LogKind, cx: &mut App) {
+    fn send_toggle_log_message(key: &LanguageServerLogKey, enabled: bool, log_kind: LogKind, cx: &App) {
         let LanguageServerKind::Remote { project } = &key.kind else {
             return;
         };

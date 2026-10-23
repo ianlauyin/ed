@@ -1,34 +1,60 @@
 //! FileDiffView provides a UI for displaying differences between two buffers.
 
+use std::any::Any;
+use std::any::TypeId;
+use std::path::PathBuf;
+use std::pin::pin;
+use std::sync::Arc;
+use std::time::Duration;
+
 use anyhow::Result;
 use buffer_diff::BufferDiff;
-use editor::{
-    DiffStyleControls, Editor, EditorEvent, EditorSettings, HiddenUnstagedDiffHunkRenderer,
-    MultiBuffer, SplittableEditor,
-};
-use futures::{FutureExt, select_biased};
-use gpui::{
-    App, AppContext as _, AsyncApp, Context, Empty, Entity, EventEmitter, FocusHandle, Focusable,
-    Font, IntoElement, Render, Task, WeakEntity, Window,
-};
-use language::{Buffer, HighlightedText, Point};
-use project::{Project, ProjectPath};
+use editor::DiffStyleControls;
+use editor::Editor;
+use editor::EditorEvent;
+use editor::EditorSettings;
+use editor::HiddenUnstagedDiffHunkRenderer;
+use editor::MultiBuffer;
+use editor::SplittableEditor;
+use futures::FutureExt;
+use futures::select_biased;
+use gpui::App;
+use gpui::AppContext as _;
+use gpui::AsyncApp;
+use gpui::Context;
+use gpui::Empty;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::Font;
+use gpui::IntoElement;
+use gpui::Render;
+use gpui::Task;
+use gpui::WeakEntity;
+use gpui::Window;
+use language::Buffer;
+use language::HighlightedText;
+use language::Point;
+use project::Project;
+use project::ProjectPath;
 use settings::Settings;
-use std::{
-    any::{Any, TypeId},
-    path::PathBuf,
-    pin::pin,
-    sync::Arc,
-    time::Duration,
-};
-use ui::{Color, Icon, IconName, SharedString, prelude::*};
+use ui::Color;
+use ui::Icon;
+use ui::IconName;
+use ui::SharedString;
+use ui::prelude::*;
 use util::paths::PathExt as _;
-use workspace::{
-    Item, ItemHandle, ItemNavHistory, ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView,
-    Workspace,
-    item::{ItemEvent, SaveOptions},
-    searchable::SearchableItemHandle,
-};
+use workspace::Item;
+use workspace::ItemHandle;
+use workspace::ItemNavHistory;
+use workspace::ToolbarItemEvent;
+use workspace::ToolbarItemLocation;
+use workspace::ToolbarItemView;
+use workspace::Workspace;
+use workspace::item::ItemEvent;
+use workspace::item::SaveOptions;
+use workspace::searchable::SearchableItemHandle;
 
 pub struct FileDiffView {
     editor: Entity<SplittableEditor>,
@@ -51,12 +77,8 @@ impl FileDiffView {
     ) -> Task<Result<Entity<Self>>> {
         window.spawn(cx, async move |cx| {
             let project = workspace.update(cx, |workspace, _| workspace.project().clone())?;
-            let old_buffer = project
-                .update(cx, |project, cx| project.open_local_buffer(&old_path, cx))
-                .await?;
-            let new_buffer = project
-                .update(cx, |project, cx| project.open_local_buffer(&new_path, cx))
-                .await?;
+            let old_buffer = project.update(cx, |project, cx| project.open_local_buffer(&old_path, cx)).await?;
+            let new_buffer = project.update(cx, |project, cx| project.open_local_buffer(&new_path, cx)).await?;
 
             let buffer_diff = build_buffer_diff(&old_buffer, &new_buffer, cx).await?;
 
@@ -82,10 +104,7 @@ impl FileDiffView {
                 if let Some(target_position) = target_position {
                     let (new_buffer, rhs_editor) = {
                         let diff_view = diff_view.read(cx);
-                        (
-                            diff_view.new_buffer.clone(),
-                            diff_view.editor.read(cx).rhs_editor().clone(),
-                        )
+                        (diff_view.new_buffer.clone(), diff_view.editor.read(cx).rhs_editor().clone())
                     };
                     let point = new_buffer
                         .read(cx)
@@ -184,10 +203,7 @@ impl FileDiffView {
             _recalculate_diff_task: cx.spawn(async move |this, cx| {
                 while buffer_changes_rx.recv().await.is_ok() {
                     loop {
-                        let mut timer = cx
-                            .background_executor()
-                            .timer(RECALCULATE_DIFF_DEBOUNCE)
-                            .fuse();
+                        let mut timer = cx.background_executor().timer(RECALCULATE_DIFF_DEBOUNCE).fuse();
                         let mut recv = pin!(buffer_changes_rx.recv().fuse());
                         select_biased! {
                             _ = timer => break,
@@ -197,17 +213,10 @@ impl FileDiffView {
 
                     log::trace!("start recalculating");
                     let (old_snapshot, new_snapshot) = this.update(cx, |this, cx| {
-                        (
-                            this.old_buffer.read(cx).snapshot(),
-                            this.new_buffer.read(cx).snapshot(),
-                        )
+                        (this.old_buffer.read(cx).snapshot(), this.new_buffer.read(cx).snapshot())
                     })?;
                     diff.update(cx, |diff, cx| {
-                        diff.set_base_text(
-                            Some(old_snapshot.text().as_str().into()),
-                            new_snapshot.text.clone(),
-                            cx,
-                        )
+                        diff.set_base_text(Some(old_snapshot.text().as_str().into()), new_snapshot.text.clone(), cx)
                     })
                     .await;
                     log::trace!("finish recalculating");
@@ -228,22 +237,14 @@ pub async fn build_buffer_diff(
     let language_registry = new_buffer.read_with(cx, |buffer, _| buffer.language_registry());
 
     let diff = cx.new(|cx| {
-        let mut diff = BufferDiff::new(
-            &new_buffer_snapshot.text,
-            new_buffer_snapshot.language().cloned(),
-            language_registry,
-            cx,
-        );
+        let mut diff =
+            BufferDiff::new(&new_buffer_snapshot.text, new_buffer_snapshot.language().cloned(), language_registry, cx);
         diff.set_operations(Arc::new(buffer_diff::RestoreDiffOperations));
         diff
     });
 
     diff.update(cx, |diff, cx| {
-        diff.set_base_text(
-            Some(old_buffer_snapshot.text().into()),
-            new_buffer_snapshot.text.clone(),
-            cx,
-        )
+        diff.set_base_text(Some(old_buffer_snapshot.text().into()), new_buffer_snapshot.text.clone(), cx)
     })
     .await;
 
@@ -270,14 +271,7 @@ impl Item for FileDiffView {
             buffer
                 .read(cx)
                 .file()
-                .and_then(|file| {
-                    Some(
-                        file.full_path(cx)
-                            .file_name()?
-                            .to_string_lossy()
-                            .to_string(),
-                    )
-                })
+                .and_then(|file| Some(file.full_path(cx).file_name()?.to_string_lossy().to_string()))
                 .unwrap_or_else(|| MultiBuffer::DEFAULT_TITLE.into())
         };
         let old_filename = title_text(&self.old_buffer);
@@ -325,11 +319,7 @@ impl Item for FileDiffView {
         Some(Box::new(self.editor.clone()))
     }
 
-    fn for_each_project_item(
-        &self,
-        cx: &App,
-        f: &mut dyn FnMut(gpui::EntityId, &dyn project::ProjectItem),
-    ) {
+    fn for_each_project_item(&self, cx: &App, f: &mut dyn FnMut(gpui::EntityId, &dyn project::ProjectItem)) {
         self.editor.for_each_project_item(cx, f)
     }
 
@@ -337,12 +327,7 @@ impl Item for FileDiffView {
         self.editor.read(cx).active_project_path(cx)
     }
 
-    fn set_nav_history(
-        &mut self,
-        nav_history: ItemNavHistory,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn set_nav_history(&mut self, nav_history: ItemNavHistory, _: &mut Window, cx: &mut Context<Self>) {
         self.editor.update(cx, |editor, cx| {
             editor.rhs_editor().update(cx, |editor, _| {
                 editor.set_nav_history(Some(nav_history));
@@ -350,17 +335,9 @@ impl Item for FileDiffView {
         });
     }
 
-    fn navigate(
-        &mut self,
-        data: Arc<dyn Any + Send>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        self.editor.update(cx, |editor, cx| {
-            editor
-                .rhs_editor()
-                .update(cx, |editor, cx| editor.navigate(data, window, cx))
-        })
+    fn navigate(&mut self, data: Arc<dyn Any + Send>, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        self.editor
+            .update(cx, |editor, cx| editor.rhs_editor().update(cx, |editor, cx| editor.navigate(data, window, cx)))
     }
 
     fn breadcrumb_location(&self, _: &App) -> ToolbarItemLocation {
@@ -371,16 +348,9 @@ impl Item for FileDiffView {
         self.editor.breadcrumbs(cx)
     }
 
-    fn added_to_workspace(
-        &mut self,
-        workspace: &mut Workspace,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn added_to_workspace(&mut self, workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Self>) {
         self.editor.update(cx, |editor, cx| {
-            editor.rhs_editor().update(cx, |editor, cx| {
-                editor.added_to_workspace(workspace, window, cx)
-            })
+            editor.rhs_editor().update(cx, |editor, cx| editor.added_to_workspace(workspace, window, cx))
         });
     }
 
@@ -410,7 +380,7 @@ pub struct FileDiffStyleToolbar {
 }
 
 impl FileDiffStyleToolbar {
-    pub fn new(_: &mut Context<Self>) -> Self {
+    pub const fn new(_: &mut Context<Self>) -> Self {
         Self { file_diff: None }
     }
 
@@ -428,15 +398,10 @@ impl ToolbarItemView for FileDiffStyleToolbar {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) -> ToolbarItemLocation {
-        self.file_diff = active_pane_item
-            .and_then(|item| item.act_as::<FileDiffView>(cx))
-            .map(|entity| entity.downgrade());
+        self.file_diff =
+            active_pane_item.and_then(|item| item.act_as::<FileDiffView>(cx)).map(|entity| entity.downgrade());
 
-        if self.file_diff.is_some() {
-            ToolbarItemLocation::PrimaryLeft
-        } else {
-            ToolbarItemLocation::Hidden
-        }
+        if self.file_diff.is_some() { ToolbarItemLocation::PrimaryLeft } else { ToolbarItemLocation::Hidden }
     }
 }
 
@@ -448,10 +413,6 @@ impl Render for FileDiffStyleToolbar {
 
         let editor = file_diff.read(cx).editor.clone();
 
-        h_flex()
-            .pl_0p5()
-            .gap_1()
-            .child(DiffStyleControls::new(editor))
-            .into_any_element()
+        h_flex().pl_0p5().gap_1().child(DiffStyleControls::new(editor)).into_any_element()
     }
 }

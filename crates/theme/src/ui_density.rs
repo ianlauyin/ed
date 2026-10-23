@@ -1,22 +1,10 @@
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Specifies the density of the UI.
 /// Note: This setting is still experimental. See [this tracking issue](https://github.com/zed-industries/zed/issues/18078)
-#[derive(
-    Debug,
-    Default,
-    PartialEq,
-    Eq,
-    PartialOrd,
-    Ord,
-    Hash,
-    Clone,
-    Copy,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-)]
+#[derive(Debug, Default, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "snake_case")]
 pub enum UiDensity {
     /// A denser UI with tighter spacing and smaller elements.
@@ -34,7 +22,7 @@ pub enum UiDensity {
 impl UiDensity {
     /// The spacing ratio of a given density.
     /// TODO: Standardize usage throughout the app or remove
-    pub fn spacing_ratio(self) -> f32 {
+    pub const fn spacing_ratio(self) -> f32 {
         match self {
             UiDensity::Compact => 0.75,
             UiDensity::Default => 1.0,

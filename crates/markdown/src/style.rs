@@ -14,7 +14,7 @@ pub struct BlockQuoteKindColors {
 }
 
 impl BlockQuoteKindColors {
-    pub(crate) fn for_kind(&self, kind: Option<BlockQuoteKind>, default: Hsla) -> Hsla {
+    pub(crate) const fn for_kind(&self, kind: Option<BlockQuoteKind>, default: Hsla) -> Hsla {
         match kind {
             Some(BlockQuoteKind::Note) => self.note,
             Some(BlockQuoteKind::Tip) => self.tip,

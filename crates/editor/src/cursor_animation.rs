@@ -5,9 +5,15 @@
 // Licensed under the MIT License:
 // https://github.com/LengineerC/vscode-neovide-cursor/blob/main/LICENSE
 
+use std::time::Duration;
+use std::time::Instant;
+
 use collections::HashMap;
-use gpui::{Bounds, Pixels, Point, point, px};
-use std::time::{Duration, Instant};
+use gpui::Bounds;
+use gpui::Pixels;
+use gpui::Point;
+use gpui::point;
+use gpui::px;
 
 const MAX_FRAME_DURATION: Duration = Duration::from_millis(33);
 const SPRING_RESET_EPSILON: f32 = 0.001;
@@ -41,7 +47,7 @@ pub(crate) struct CursorViewport {
 }
 
 impl CursorViewport {
-    pub(crate) fn new(
+    pub(crate) const fn new(
         content_origin: Point<Pixels>,
         text_bounds: Bounds<Pixels>,
         scroll_position: Point<f64>,
@@ -49,14 +55,7 @@ impl CursorViewport {
         line_height: Pixels,
         em_advance: Pixels,
     ) -> Self {
-        Self {
-            content_origin,
-            text_bounds,
-            scroll_position,
-            scroll_pixel_position,
-            line_height,
-            em_advance,
-        }
+        Self { content_origin, text_bounds, scroll_position, scroll_pixel_position, line_height, em_advance }
     }
 
     fn is_finite(self) -> bool {
@@ -99,13 +98,10 @@ impl AnimationPoint {
             return Self::default();
         }
 
-        Self {
-            x: self.x / length,
-            y: self.y / length,
-        }
+        Self { x: self.x / length, y: self.y / length }
     }
 
-    fn is_finite(self) -> bool {
+    const fn is_finite(self) -> bool {
         self.x.is_finite() && self.y.is_finite()
     }
 }
@@ -114,10 +110,7 @@ impl std::ops::Add for AnimationPoint {
     type Output = Self;
 
     fn add(self, other: Self) -> Self {
-        Self {
-            x: self.x + other.x,
-            y: self.y + other.y,
-        }
+        Self { x: self.x + other.x, y: self.y + other.y }
     }
 }
 
@@ -125,10 +118,7 @@ impl std::ops::Sub for AnimationPoint {
     type Output = Self;
 
     fn sub(self, other: Self) -> Self {
-        Self {
-            x: self.x - other.x,
-            y: self.y - other.y,
-        }
+        Self { x: self.x - other.x, y: self.y - other.y }
     }
 }
 
@@ -142,20 +132,14 @@ struct CursorGeometry {
 impl CursorGeometry {
     fn from_bounds(bounds: Bounds<Pixels>) -> Self {
         Self {
-            origin: AnimationPoint {
-                x: bounds.origin.x.into(),
-                y: bounds.origin.y.into(),
-            },
+            origin: AnimationPoint { x: bounds.origin.x.into(), y: bounds.origin.y.into() },
             width: bounds.size.width.into(),
             height: bounds.size.height.into(),
         }
     }
 
     fn center(self) -> AnimationPoint {
-        AnimationPoint {
-            x: self.origin.x + self.width / 2.0,
-            y: self.origin.y + self.height / 2.0,
-        }
+        AnimationPoint { x: self.origin.x + self.width / 2.0, y: self.origin.y + self.height / 2.0 }
     }
 
     fn is_finite(self) -> bool {
@@ -203,14 +187,10 @@ impl DampedSpringAnimation {
         let decay = (-angular_frequency * elapsed_seconds).exp();
         self.position = (initial_position + combined_velocity * elapsed_seconds) * decay;
         self.velocity = decay
-            * (-initial_position * angular_frequency
-                - combined_velocity * elapsed_seconds * angular_frequency
+            * (-initial_position * angular_frequency - combined_velocity * elapsed_seconds * angular_frequency
                 + combined_velocity);
 
-        if !self.position.is_finite()
-            || !self.velocity.is_finite()
-            || self.position.abs() < SPRING_RESET_EPSILON
-        {
+        if !self.position.is_finite() || !self.velocity.is_finite() || self.position.abs() < SPRING_RESET_EPSILON {
             self.reset();
             return false;
         }
@@ -218,7 +198,7 @@ impl DampedSpringAnimation {
         self.position.abs() >= SPRING_ACTIVE_EPSILON
     }
 
-    fn reset(&mut self) {
+    const fn reset(&mut self) {
         self.position = 0.0;
         self.velocity = 0.0;
     }
@@ -270,20 +250,13 @@ impl Corner {
 
     fn retarget(&mut self, geometry: CursorGeometry, rank: usize) {
         let destination = self.destination(geometry);
-        let horizontal_jump =
-            (destination.x - self.target_position.x) / geometry.width.max(f32::EPSILON);
-        let vertical_jump =
-            (destination.y - self.target_position.y) / geometry.height.max(f32::EPSILON);
-        let normalized_jump = AnimationPoint {
-            x: horizontal_jump,
-            y: vertical_jump,
-        }
-        .normalized();
+        let horizontal_jump = (destination.x - self.target_position.x) / geometry.width.max(f32::EPSILON);
+        let vertical_jump = (destination.y - self.target_position.y) / geometry.height.max(f32::EPSILON);
+        let normalized_jump = AnimationPoint { x: horizontal_jump, y: vertical_jump }.normalized();
         let corner_direction = self.relative_position.normalized();
-        let leading_alignment =
-            normalized_jump.x * corner_direction.x + normalized_jump.y * corner_direction.y;
-        let is_short_jump = horizontal_jump.abs() <= SHORT_MOVE_THRESHOLD
-            && vertical_jump.abs() <= SPRING_RESET_EPSILON;
+        let leading_alignment = normalized_jump.x * corner_direction.x + normalized_jump.y * corner_direction.y;
+        let is_short_jump =
+            horizontal_jump.abs() <= SHORT_MOVE_THRESHOLD && vertical_jump.abs() <= SPRING_RESET_EPSILON;
 
         let base_animation_length = if is_short_jump {
             ANIMATION_LENGTH_SECONDS.min(SHORT_ANIMATION_LENGTH_SECONDS)
@@ -295,8 +268,8 @@ impl Corner {
         } else {
             base_animation_length * RANK_TRAIL_FACTORS[rank.min(3)]
         };
-        self.animation_length = base_animation_length
-            + (reference_animation_length - base_animation_length) * TRAIL_SIZE;
+        self.animation_length =
+            base_animation_length + (reference_animation_length - base_animation_length) * TRAIL_SIZE;
 
         if self.animation_length > ANIMATION_RESET_THRESHOLD_SECONDS {
             self.horizontal_animation.reset();
@@ -309,18 +282,12 @@ impl Corner {
     }
 
     fn update(&mut self, elapsed_seconds: f32, max_trail_distance: f32) -> bool {
-        self.horizontal_animation
-            .update(elapsed_seconds, self.animation_length);
-        self.vertical_animation
-            .update(elapsed_seconds, self.animation_length);
-        self.horizontal_animation.position = self
-            .horizontal_animation
-            .position
-            .clamp(-max_trail_distance, max_trail_distance);
-        self.vertical_animation.position = self
-            .vertical_animation
-            .position
-            .clamp(-max_trail_distance, max_trail_distance);
+        self.horizontal_animation.update(elapsed_seconds, self.animation_length);
+        self.vertical_animation.update(elapsed_seconds, self.animation_length);
+        self.horizontal_animation.position =
+            self.horizontal_animation.position.clamp(-max_trail_distance, max_trail_distance);
+        self.vertical_animation.position =
+            self.vertical_animation.position.clamp(-max_trail_distance, max_trail_distance);
         self.current_position = AnimationPoint {
             x: self.target_position.x - self.horizontal_animation.position,
             y: self.target_position.y - self.vertical_animation.position,
@@ -386,12 +353,7 @@ impl CursorAnimationStates {
         viewport: CursorViewport,
         now: Instant,
     ) -> Option<[Point<Pixels>; 4]> {
-        self.states.entry(selection_id).or_default().update(
-            logical_position,
-            target_bounds,
-            viewport,
-            now,
-        )
+        self.states.entry(selection_id).or_default().update(logical_position, target_bounds, viewport, now)
     }
 
     pub(crate) fn remove(&mut self, selection_id: usize) {
@@ -462,10 +424,8 @@ impl CursorAnimationState {
             }
 
             self.translate(AnimationPoint {
-                x: (previous_viewport.scroll_pixel_position.x - viewport.scroll_pixel_position.x)
-                    as f32,
-                y: (previous_viewport.scroll_pixel_position.y - viewport.scroll_pixel_position.y)
-                    as f32,
+                x: (previous_viewport.scroll_pixel_position.x - viewport.scroll_pixel_position.x) as f32,
+                y: (previous_viewport.scroll_pixel_position.y - viewport.scroll_pixel_position.y) as f32,
             });
             if let Some(target_geometry) = self.target_geometry {
                 previous_geometry = target_geometry;
@@ -486,11 +446,7 @@ impl CursorAnimationState {
         self.target_geometry = Some(target_geometry);
 
         if logical_position_changed && geometry_changed {
-            let elapsed = if self.active {
-                self.elapsed_since_last_frame(now)
-            } else {
-                Duration::ZERO
-            };
+            let elapsed = if self.active { self.elapsed_since_last_frame(now) } else { Duration::ZERO };
             self.retarget(target_geometry);
             self.advance(elapsed);
             self.last_frame_at = Some(now);
@@ -500,10 +456,8 @@ impl CursorAnimationState {
             self.last_frame_at = Some(now);
         }
 
-        self.active.then(|| {
-            self.corners
-                .map(|corner| point(px(corner.current_position.x), px(corner.current_position.y)))
-        })
+        self.active
+            .then(|| self.corners.map(|corner| point(px(corner.current_position.x), px(corner.current_position.y))))
     }
 
     fn translate(&mut self, delta: AnimationPoint) {
@@ -557,9 +511,10 @@ impl CursorAnimationState {
         for (index, corner) in self.corners.iter_mut().enumerate() {
             corner.retarget(geometry, ranks[index]);
         }
-        self.active = self.corners.iter().any(|corner| {
-            corner.horizontal_animation.position != 0.0 || corner.vertical_animation.position != 0.0
-        });
+        self.active = self
+            .corners
+            .iter()
+            .any(|corner| corner.horizontal_animation.position != 0.0 || corner.vertical_animation.position != 0.0);
     }
 
     fn elapsed_since_last_frame(&self, now: Instant) -> Duration {
@@ -575,9 +530,7 @@ impl CursorAnimationState {
             .target_geometry
             .map(|geometry| geometry.width.max(geometry.height) * MAX_TRAIL_DISTANCE_FACTOR)
             .unwrap_or_default();
-        self.active = self.corners.iter_mut().fold(false, |active, corner| {
-            corner.update(elapsed_seconds, max_trail_distance) || active
-        });
+        self.active = self.corners.iter_mut().any(|corner| corner.update(elapsed_seconds, max_trail_distance));
 
         if !self.active
             && let Some(target_geometry) = self.target_geometry
@@ -593,10 +546,7 @@ fn nearly_equal(left: f32, right: f32) -> bool {
     (left - right).abs() <= GEOMETRY_EPSILON
 }
 
-pub(crate) fn animated_corners_overlap_target(
-    target_bounds: Bounds<Pixels>,
-    corners: &[Point<Pixels>; 4],
-) -> bool {
+pub(crate) fn animated_corners_overlap_target(target_bounds: Bounds<Pixels>, corners: &[Point<Pixels>; 4]) -> bool {
     let min_x = corners
         .iter()
         .map(|p| p.x)

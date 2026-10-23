@@ -1,26 +1,59 @@
-use gpui::{KeyContext, canvas};
-use settings::Settings;
-use theme_settings::ThemeSettings;
-use ui::{
-    ActiveTheme, Color, Context, Disableable, DocumentationAside, DocumentationSide, FluentBuilder,
-    InteractiveElement, IntoElement, Label, LabelCommon, ListItem, ListItemSpacing, ParentElement,
-    Render, ScrollAxes, Scrollbars, Styled, StyledExt, Window, WithScrollbar, div, h_flex,
-    rems_from_px, utils::WithRemSize, v_flex,
-};
+use std::sync::Arc;
 
-use crate::shape::Shape;
-use crate::{
-    ElementContainer, Picker, PickerDelegate, PickerEditorPosition, Preview, ToggleMultiSelect,
-    head::Head,
-    preview::Layout,
-    render::window_controls::{Bottom, Left, LeftCorner, Middle, Right, RightCorner},
-};
-use crate::{persistence, preview};
 use gpui::Action as _;
 use gpui::Focusable as _;
-use std::sync::Arc;
-use ui::{Divider, Tooltip, prelude::*};
+use gpui::KeyContext;
+use gpui::canvas;
+use settings::Settings;
+use theme_settings::ThemeSettings;
+use ui::ActiveTheme;
+use ui::Color;
+use ui::Context;
+use ui::Disableable;
+use ui::Divider;
+use ui::DocumentationAside;
+use ui::DocumentationSide;
+use ui::FluentBuilder;
+use ui::InteractiveElement;
+use ui::IntoElement;
+use ui::Label;
+use ui::LabelCommon;
+use ui::ListItem;
+use ui::ListItemSpacing;
+use ui::ParentElement;
+use ui::Render;
+use ui::ScrollAxes;
+use ui::Scrollbars;
+use ui::Styled;
+use ui::StyledExt;
+use ui::Tooltip;
+use ui::Window;
+use ui::WithScrollbar;
+use ui::div;
+use ui::h_flex;
+use ui::prelude::*;
+use ui::rems_from_px;
+use ui::utils::WithRemSize;
+use ui::v_flex;
 use ui_input::ErasedEditor;
+
+use crate::ElementContainer;
+use crate::Picker;
+use crate::PickerDelegate;
+use crate::PickerEditorPosition;
+use crate::Preview;
+use crate::ToggleMultiSelect;
+use crate::head::Head;
+use crate::persistence;
+use crate::preview;
+use crate::preview::Layout;
+use crate::render::window_controls::Bottom;
+use crate::render::window_controls::Left;
+use crate::render::window_controls::LeftCorner;
+use crate::render::window_controls::Middle;
+use crate::render::window_controls::Right;
+use crate::render::window_controls::RightCorner;
+use crate::shape::Shape;
 
 pub mod window_controls;
 
@@ -31,36 +64,17 @@ impl<D: PickerDelegate> Render for Picker<D> {
         // horizontal
         let rendered_layout = self.preview_layout_rendered(window);
         let content = match &self.preview {
-            Some(
-                preview @ Preview {
-                    layout: Layout::Below,
-                    ..
-                },
-            ) => self
-                .render_with_preview_below(preview, window, cx)
-                .into_any_element(),
+            Some(preview @ Preview { layout: Layout::Below, .. }) => {
+                self.render_with_preview_below(preview, window, cx).into_any_element()
+            }
             // render sideways based on bounds
-            Some(
-                preview @ Preview {
-                    layout: Layout::Right,
-                    ..
-                },
-            ) if rendered_layout == Some(Layout::Below) => self
-                .render_with_preview_below(preview, window, cx)
-                .into_any_element(),
-            Some(
-                preview @ Preview {
-                    layout: Layout::Right,
-                    ..
-                },
-            ) => self
-                .render_with_preview_right(preview, window, cx)
-                .into_any_element(),
-            Some(Preview {
-                layout: Layout::Hidden,
-                ..
-            })
-            | None => self.render_results(window, cx).into_any_element(),
+            Some(preview @ Preview { layout: Layout::Right, .. }) if rendered_layout == Some(Layout::Below) => {
+                self.render_with_preview_below(preview, window, cx).into_any_element()
+            }
+            Some(preview @ Preview { layout: Layout::Right, .. }) => {
+                self.render_with_preview_right(preview, window, cx).into_any_element()
+            }
+            Some(Preview { layout: Layout::Hidden, .. }) | None => self.render_results(window, cx).into_any_element(),
         };
 
         // The border, background and rounding wrap the whole picker (results and
@@ -74,40 +88,28 @@ impl<D: PickerDelegate> Render for Picker<D> {
             .when(has_preview, |this| this.overflow_hidden())
             .child(content);
 
-        let layout = self
-            .preview_layout_rendered(window)
-            .unwrap_or(Layout::Hidden);
+        let layout = self.preview_layout_rendered(window).unwrap_or(Layout::Hidden);
 
-        div()
-            .relative()
-            .child(content)
-            .when(self.is_resizable(), |this| {
-                this.left(self.shape.horizontal_offset(window))
-                    .child(self.render_resize(Left, window, cx))
-                    .child(self.render_resize(Right(layout), window, cx))
-                    .child(self.render_resize(Bottom(layout), window, cx))
-                    .child(self.render_resize(LeftCorner(layout), window, cx))
-                    .child(self.render_resize(RightCorner(layout), window, cx))
-            })
+        div().relative().child(content).when(self.is_resizable(), |this| {
+            this.left(self.shape.horizontal_offset(window))
+                .child(self.render_resize(Left, window, cx))
+                .child(self.render_resize(Right(layout), window, cx))
+                .child(self.render_resize(Bottom(layout), window, cx))
+                .child(self.render_resize(LeftCorner(layout), window, cx))
+                .child(self.render_resize(RightCorner(layout), window, cx))
+        })
     }
 }
 
 impl<D: PickerDelegate> Picker<D> {
-    fn render_editor(
-        &self,
-        editor: &Arc<dyn ErasedEditor>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> gpui::Div {
+    fn render_editor(&self, editor: &Arc<dyn ErasedEditor>, window: &mut Window, cx: &mut Context<Self>) -> gpui::Div {
         if let Some(custom) = self.delegate.render_editor(editor, window, cx) {
             return custom;
         }
         let editor_position = self.delegate.editor_position();
 
         v_flex()
-            .when(editor_position == PickerEditorPosition::End, |this| {
-                this.child(Divider::horizontal())
-            })
+            .when(editor_position == PickerEditorPosition::End, |this| this.child(Divider::horizontal()))
             .child(
                 h_flex()
                     .h_9()
@@ -120,14 +122,12 @@ impl<D: PickerDelegate> Picker<D> {
                         this.child(self.render_multi_select_toggle(cx))
                     }),
             )
-            .when(editor_position == PickerEditorPosition::Start, |this| {
-                this.child(Divider::horizontal())
-            })
+            .when(editor_position == PickerEditorPosition::Start, |this| this.child(Divider::horizontal()))
     }
 
     /// The multi-select toggle is picker-owned so it can reflect the mode,
     /// which delegates don't know about.
-    fn render_multi_select_toggle(&self, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_multi_select_toggle(&self, cx: &Context<Self>) -> impl IntoElement {
         let active = self.select_instead_of_open;
         let focus_handle = self.focus_handle(cx);
         IconButton::new("picker-multi-select-toggle", IconName::FileMultiple)
@@ -141,11 +141,7 @@ impl<D: PickerDelegate> Picker<D> {
             }))
     }
 
-    pub(crate) fn render_results(
-        &self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    pub(crate) fn render_results(&self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let ui_font_size = ThemeSettings::get_global(cx).ui_font_size(cx);
         let window_size = window.viewport_size();
         let rem_size = window.rem_size();
@@ -225,11 +221,7 @@ impl<D: PickerDelegate> Picker<D> {
                         .flex_grow_1()
                         .min_h_0()
                         .when_some(
-                            self.shape.results_max_height(
-                                &self.size_bounds,
-                                self.fill_height(),
-                                window,
-                            ),
+                            self.shape.results_max_height(&self.size_bounds, self.fill_height(), window),
                             |this, max_height| this.max_h(max_height),
                         )
                         .overflow_hidden()
@@ -298,8 +290,7 @@ impl<D: PickerDelegate> Picker<D> {
         if is_wide_window {
             let aside_index = self.delegate.documentation_aside_index();
             let picker_bounds = self.picker_bounds.get();
-            let item_bounds =
-                aside_index.and_then(|ix| self.item_bounds.borrow().get(&ix).copied());
+            let item_bounds = aside_index.and_then(|ix| self.item_bounds.borrow().get(&ix).copied());
 
             let item_position = match (picker_bounds, item_bounds) {
                 (Some(picker_bounds), Some(item_bounds)) => {
@@ -318,24 +309,15 @@ impl<D: PickerDelegate> Picker<D> {
                     this.child(
                         h_flex()
                             .absolute()
-                            .when(aside.side == DocumentationSide::Left, |el| {
-                                el.right_full().mr_1()
-                            })
-                            .when(aside.side == DocumentationSide::Right, |el| {
-                                el.left_full().ml_1()
-                            })
+                            .when(aside.side == DocumentationSide::Left, |el| el.right_full().mr_1())
+                            .when(aside.side == DocumentationSide::Right, |el| el.left_full().ml_1())
                             .top(top)
                             .h(height)
                             .child(render_aside(aside, cx)),
                     )
                 })
         } else {
-            v_flex()
-                .w_full()
-                .gap_1()
-                .justify_end()
-                .child(render_aside(aside, cx))
-                .child(menu)
+            v_flex().w_full().gap_1().justify_end().child(render_aside(aside, cx)).child(menu)
         }
     }
 
@@ -349,37 +331,23 @@ impl<D: PickerDelegate> Picker<D> {
             .relative()
             .child(
                 v_flex()
-                    .h(self
-                        .shape
-                        .height(Some(preview::Layout::Below), &self.size_bounds, window))
+                    .h(self.shape.height(Some(preview::Layout::Below), &self.size_bounds, window))
                     .child(
                         div()
-                            .h(self.shape.results_height(
-                                preview::Layout::Below,
-                                &self.size_bounds,
-                                window,
-                            ))
+                            .h(self.shape.results_height(preview::Layout::Below, &self.size_bounds, window))
                             .overflow_hidden()
                             .child(self.render_results(window, cx)),
                     )
                     .child(
                         div()
-                            .h(self.shape.preview_height(
-                                preview::Layout::Below,
-                                &self.size_bounds,
-                                window,
-                            ))
+                            .h(self.shape.preview_height(preview::Layout::Below, &self.size_bounds, window))
                             .border_t_1()
                             .border_color(cx.theme().colors().border_variant)
                             .child(preview.render(cx)),
                     ),
             )
             .when(self.is_resizable(), |this| {
-                this.child(self.render_resize(
-                    window_controls::Middle(preview::Layout::Below),
-                    window,
-                    cx,
-                ))
+                this.child(self.render_resize(window_controls::Middle(preview::Layout::Below), window, cx))
             })
     }
 
@@ -393,57 +361,27 @@ impl<D: PickerDelegate> Picker<D> {
             .relative()
             .child(
                 h_flex()
-                    .h(self
-                        .shape
-                        .height(Some(Layout::Right), &self.size_bounds, window))
+                    .h(self.shape.height(Some(Layout::Right), &self.size_bounds, window))
+                    .child(div().flex_1().h_full().overflow_hidden().child(self.render_results(window, cx)))
                     .child(
                         div()
-                            .flex_1()
-                            .h_full()
-                            .overflow_hidden()
-                            .child(self.render_results(window, cx)),
-                    )
-                    .child(
-                        div()
-                            .w(self
-                                .shape
-                                .preview_width(Layout::Right, &self.size_bounds, window))
-                            .map(|this| {
-                                self.shape.apply_height(
-                                    Some(Layout::Right),
-                                    &self.size_bounds,
-                                    this,
-                                    window,
-                                )
-                            })
+                            .w(self.shape.preview_width(Layout::Right, &self.size_bounds, window))
+                            .map(|this| self.shape.apply_height(Some(Layout::Right), &self.size_bounds, this, window))
                             .border_l_1()
                             .border_color(cx.theme().colors().border_variant)
                             .overflow_hidden()
                             .child(preview.render(cx)),
                     ),
             )
-            .when(self.is_resizable(), |this| {
-                this.child(self.render_resize(Middle(Layout::Right), window, cx))
-            })
+            .when(self.is_resizable(), |this| this.child(self.render_resize(Middle(Layout::Right), window, cx)))
     }
 
-    fn finish_any_completed_resize(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<'_, Picker<D>>,
-    ) {
+    fn finish_any_completed_resize(&mut self, window: &mut Window, cx: &mut Context<'_, Picker<D>>) {
         if let Shape::Resizing(pos) = self.shape
             && !cx.has_active_drag()
         {
-            let centered =
-                Shape::centered_and_relative(pos, self.preview_layout_rendered(window), window);
-            persistence::store_shape_for_this_layout(
-                D::name(),
-                self.preview_layout(),
-                centered,
-                window,
-                cx,
-            );
+            let centered = Shape::centered_and_relative(pos, self.preview_layout_rendered(window), window);
+            persistence::store_shape_for_this_layout(D::name(), self.preview_layout(), centered, window, cx);
             self.shape = Shape::HorizontallyCentered(centered);
             if let Some(preview) = &mut self.preview {
                 preview.adjust_to_new_size(window, cx);

@@ -1,4 +1,5 @@
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
 /// A sandbox writable-path grant, paired with the canonical target it was
 /// resolved to when it was approved.
@@ -27,30 +28,22 @@ pub struct GrantedWritePath {
 impl GrantedWritePath {
     /// A grant from a bare requested path with no resolved canonical target
     /// (resolved fresh at enforcement time).
-    pub fn from_requested(requested: PathBuf) -> Self {
-        Self {
-            requested,
-            resolved: None,
-            on_windows_fs: false,
-        }
+    pub const fn from_requested(requested: PathBuf) -> Self {
+        Self { requested, resolved: None, on_windows_fs: false }
     }
 
     /// A grant whose canonical target was resolved when it was approved. Assumes
     /// a native (non-Windows-hosted) filesystem; use [`Self::resolved_on_fs`] to
     /// record the Windows/WSL DrvFs classification.
-    pub fn resolved(requested: PathBuf, resolved: PathBuf) -> Self {
+    pub const fn resolved(requested: PathBuf, resolved: PathBuf) -> Self {
         Self::resolved_on_fs(requested, resolved, false)
     }
 
     /// A grant whose canonical target was resolved when it was approved,
     /// recording whether that target lives on a Windows-hosted (DrvFs)
     /// filesystem.
-    pub fn resolved_on_fs(requested: PathBuf, resolved: PathBuf, on_windows_fs: bool) -> Self {
-        Self {
-            requested,
-            resolved: Some(resolved),
-            on_windows_fs,
-        }
+    pub const fn resolved_on_fs(requested: PathBuf, resolved: PathBuf, on_windows_fs: bool) -> Self {
+        Self { requested, resolved: Some(resolved), on_windows_fs }
     }
 
     /// The path used for lexical subtree/coverage/dedup logic: the resolved
@@ -106,20 +99,10 @@ impl<'de> serde::Deserialize<'de> for GrantedWritePath {
         }
 
         Ok(match StringOrObject::deserialize(deserializer)? {
-            StringOrObject::String(requested) => Self {
-                requested,
-                resolved: None,
-                on_windows_fs: false,
-            },
-            StringOrObject::Object(Object {
-                requested,
-                resolved,
-                on_windows_fs,
-            }) => Self {
-                requested,
-                resolved,
-                on_windows_fs,
-            },
+            StringOrObject::String(requested) => Self { requested, resolved: None, on_windows_fs: false },
+            StringOrObject::Object(Object { requested, resolved, on_windows_fs }) => {
+                Self { requested, resolved, on_windows_fs }
+            }
         })
     }
 }

@@ -17,38 +17,24 @@ pub struct Indicator {
 }
 
 impl Indicator {
-    pub fn dot() -> Self {
-        Self {
-            kind: IndicatorKind::Dot,
-            border_color: None,
-            color: Color::Default,
-        }
+    pub const fn dot() -> Self {
+        Self { kind: IndicatorKind::Dot, border_color: None, color: Color::Default }
     }
 
-    pub fn bar() -> Self {
-        Self {
-            kind: IndicatorKind::Bar,
-            border_color: None,
-
-            color: Color::Default,
-        }
+    pub const fn bar() -> Self {
+        Self { kind: IndicatorKind::Bar, border_color: None, color: Color::Default }
     }
 
     pub fn icon(icon: impl Into<AnyIcon>) -> Self {
-        Self {
-            kind: IndicatorKind::Icon(icon.into()),
-            border_color: None,
-
-            color: Color::Default,
-        }
+        Self { kind: IndicatorKind::Icon(icon.into()), border_color: None, color: Color::Default }
     }
 
-    pub fn color(mut self, color: Color) -> Self {
+    pub const fn color(mut self, color: Color) -> Self {
         self.color = color;
         self
     }
 
-    pub fn border_color(mut self, color: Color) -> Self {
+    pub const fn border_color(mut self, color: Color) -> Self {
         self.border_color = Some(color);
         self
     }
@@ -68,18 +54,11 @@ impl RenderOnce for Indicator {
         };
 
         match self.kind {
-            IndicatorKind::Icon(icon) => container
-                .child(icon.map(|icon| icon.custom_size(rems_from_px(8_f32)).color(self.color))),
-            IndicatorKind::Dot => container
-                .w_1p5()
-                .h_1p5()
-                .rounded_full()
-                .bg(self.color.color(cx)),
-            IndicatorKind::Bar => container
-                .w_full()
-                .h_1p5()
-                .rounded_t_sm()
-                .bg(self.color.color(cx)),
+            IndicatorKind::Icon(icon) => {
+                container.child(icon.map(|icon| icon.custom_size(rems_from_px(8_f32)).color(self.color)))
+            }
+            IndicatorKind::Dot => container.w_1p5().h_1p5().rounded_full().bg(self.color.color(cx)),
+            IndicatorKind::Bar => container.w_full().h_1p5().rounded_t_sm().bg(self.color.color(cx)),
         }
     }
 }
@@ -102,24 +81,12 @@ impl Component for Indicator {
                     "Dot Indicators",
                     vec![
                         single_example("Default", Indicator::dot().into_any_element()),
-                        single_example(
-                            "Success",
-                            Indicator::dot().color(Color::Success).into_any_element(),
-                        ),
-                        single_example(
-                            "Warning",
-                            Indicator::dot().color(Color::Warning).into_any_element(),
-                        ),
-                        single_example(
-                            "Error",
-                            Indicator::dot().color(Color::Error).into_any_element(),
-                        ),
+                        single_example("Success", Indicator::dot().color(Color::Success).into_any_element()),
+                        single_example("Warning", Indicator::dot().color(Color::Warning).into_any_element()),
+                        single_example("Error", Indicator::dot().color(Color::Error).into_any_element()),
                         single_example(
                             "With Border",
-                            Indicator::dot()
-                                .color(Color::Accent)
-                                .border_color(Color::Default)
-                                .into_any_element(),
+                            Indicator::dot().color(Color::Accent).border_color(Color::Default).into_any_element(),
                         ),
                     ],
                 ),
@@ -127,44 +94,26 @@ impl Component for Indicator {
                     "Bar Indicators",
                     vec![
                         single_example("Default", Indicator::bar().into_any_element()),
-                        single_example(
-                            "Success",
-                            Indicator::bar().color(Color::Success).into_any_element(),
-                        ),
-                        single_example(
-                            "Warning",
-                            Indicator::bar().color(Color::Warning).into_any_element(),
-                        ),
-                        single_example(
-                            "Error",
-                            Indicator::bar().color(Color::Error).into_any_element(),
-                        ),
+                        single_example("Success", Indicator::bar().color(Color::Success).into_any_element()),
+                        single_example("Warning", Indicator::bar().color(Color::Warning).into_any_element()),
+                        single_example("Error", Indicator::bar().color(Color::Error).into_any_element()),
                     ],
                 ),
                 example_group_with_title(
                     "Icon Indicators",
                     vec![
-                        single_example(
-                            "Default",
-                            Indicator::icon(Icon::new(IconName::Circle)).into_any_element(),
-                        ),
+                        single_example("Default", Indicator::icon(Icon::new(IconName::Circle)).into_any_element()),
                         single_example(
                             "Success",
-                            Indicator::icon(Icon::new(IconName::Check))
-                                .color(Color::Success)
-                                .into_any_element(),
+                            Indicator::icon(Icon::new(IconName::Check)).color(Color::Success).into_any_element(),
                         ),
                         single_example(
                             "Warning",
-                            Indicator::icon(Icon::new(IconName::Warning))
-                                .color(Color::Warning)
-                                .into_any_element(),
+                            Indicator::icon(Icon::new(IconName::Warning)).color(Color::Warning).into_any_element(),
                         ),
                         single_example(
                             "Error",
-                            Indicator::icon(Icon::new(IconName::Close))
-                                .color(Color::Error)
-                                .into_any_element(),
+                            Indicator::icon(Icon::new(IconName::Close)).color(Color::Error).into_any_element(),
                         ),
                     ],
                 ),

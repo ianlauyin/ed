@@ -1,13 +1,25 @@
 use std::rc::Rc;
 
-use crate::PlatformStyle;
-use crate::utils::capitalize;
-use crate::{Icon, IconName, IconSize, h_flex, prelude::*};
-use gpui::{
-    Action, AnyElement, App, FocusHandle, Global, IntoElement, KeybindingKeystroke, Keystroke,
-    Modifiers, Window, relative,
-};
+use gpui::Action;
+use gpui::AnyElement;
+use gpui::App;
+use gpui::FocusHandle;
+use gpui::Global;
+use gpui::IntoElement;
+use gpui::KeybindingKeystroke;
+use gpui::Keystroke;
+use gpui::Modifiers;
+use gpui::Window;
+use gpui::relative;
 use itertools::Itertools;
+
+use crate::Icon;
+use crate::IconName;
+use crate::IconSize;
+use crate::PlatformStyle;
+use crate::h_flex;
+use crate::prelude::*;
+use crate::utils::capitalize;
 
 #[derive(Debug)]
 enum Source {
@@ -28,16 +40,10 @@ enum Source {
 impl Clone for Source {
     fn clone(&self) -> Self {
         match self {
-            Source::Action {
-                action,
-                focus_handle,
-            } => Source::Action {
-                action: action.boxed_clone(),
-                focus_handle: focus_handle.clone(),
-            },
-            Source::Keystrokes { keystrokes } => Source::Keystrokes {
-                keystrokes: keystrokes.clone(),
-            },
+            Source::Action { action, focus_handle } => {
+                Source::Action { action: action.boxed_clone(), focus_handle: focus_handle.clone() }
+            }
+            Source::Keystrokes { keystrokes } => Source::Keystrokes { keystrokes: keystrokes.clone() },
         }
     }
 }
@@ -86,10 +92,7 @@ impl KeyBinding {
     }
     pub fn has_binding(&self, window: &Window) -> bool {
         match &self.source {
-            Source::Action {
-                action,
-                focus_handle: Some(focus),
-            } => window
+            Source::Action { action, focus_handle: Some(focus) } => window
                 .highest_precedence_binding_for_action_in(action.as_ref(), focus)
                 .or_else(|| window.highest_precedence_binding_for_action(action.as_ref()))
                 .is_some(),
@@ -110,10 +113,7 @@ impl KeyBinding {
 
     pub fn new(action: &dyn Action, focus_handle: Option<FocusHandle>, _cx: &App) -> Self {
         Self {
-            source: Source::Action {
-                action: action.boxed_clone(),
-                focus_handle,
-            },
+            source: Source::Action { action: action.boxed_clone(), focus_handle },
             size: None,
             style: KeyBindingStyle::Default,
             color: None,
@@ -122,7 +122,7 @@ impl KeyBinding {
         }
     }
 
-    pub fn from_keystrokes(keystrokes: Rc<[KeybindingKeystroke]>) -> Self {
+    pub const fn from_keystrokes(keystrokes: Rc<[KeybindingKeystroke]>) -> Self {
         Self {
             source: Source::Keystrokes { keystrokes },
             size: None,
@@ -134,7 +134,7 @@ impl KeyBinding {
     }
 
     /// Sets the [`PlatformStyle`] for this [`KeyBinding`].
-    pub fn platform_style(mut self, platform_style: PlatformStyle) -> Self {
+    pub const fn platform_style(mut self, platform_style: PlatformStyle) -> Self {
         self.platform_style = platform_style;
         self
     }
@@ -146,20 +146,20 @@ impl KeyBinding {
     }
 
     /// Sets how this keybinding is presented.
-    pub fn style(mut self, style: KeyBindingStyle) -> Self {
+    pub const fn style(mut self, style: KeyBindingStyle) -> Self {
         self.style = style;
         self
     }
 
     /// Sets the color used to render the keybinding.
-    pub fn color(mut self, color: Color) -> Self {
+    pub const fn color(mut self, color: Color) -> Self {
         self.color = Some(color);
         self
     }
 
     /// Sets whether this keybinding is currently disabled.
     /// Disabled keybinds will be rendered in a dimmed state.
-    pub fn disabled(mut self, disabled: bool) -> Self {
+    pub const fn disabled(mut self, disabled: bool) -> Self {
         self.disabled = disabled;
         self
     }
@@ -169,16 +169,11 @@ impl KeyBinding {
     /// binding.
     fn resolve_keystrokes(&self, window: &Window, cx: &App) -> Option<Vec<KeybindingKeystroke>> {
         let keystrokes = match &self.source {
-            Source::Action {
-                action,
-                focus_handle,
-            } => {
+            Source::Action { action, focus_handle } => {
                 let binding = focus_handle
                     .clone()
                     .or_else(|| window.focused(cx))
-                    .and_then(|focus| {
-                        window.highest_precedence_binding_for_action_in(action.as_ref(), &focus)
-                    })
+                    .and_then(|focus| window.highest_precedence_binding_for_action_in(action.as_ref(), &focus))
                     .or_else(|| window.highest_precedence_binding_for_action(action.as_ref()))?;
                 binding.keystrokes().to_vec()
             }
@@ -196,9 +191,7 @@ impl KeyBinding {
         let keystrokes = self.resolve_keystrokes(window, cx)?;
         let text = keystrokes
             .iter()
-            .map(|keystroke| {
-                keystroke_text(keystroke.modifiers(), keystroke.key(), self.platform_style)
-            })
+            .map(|keystroke| keystroke_text(keystroke.modifiers(), keystroke.key(), self.platform_style))
             .join(" ");
         Some(text.into())
     }
@@ -261,14 +254,9 @@ impl RenderOnce for KeyBinding {
         };
 
         match self.source {
-            Source::Action {
-                action,
-                focus_handle,
-            } => focus_handle
+            Source::Action { action, focus_handle } => focus_handle
                 .or_else(|| window.focused(cx))
-                .and_then(|focus| {
-                    window.highest_precedence_binding_for_action_in(action.as_ref(), &focus)
-                })
+                .and_then(|focus| window.highest_precedence_binding_for_action_in(action.as_ref(), &focus))
                 .or_else(|| window.highest_precedence_binding_for_action(action.as_ref()))
                 .map(|binding| render_keybinding(binding.keystrokes())),
             Source::Keystrokes { keystrokes } => Some(render_keybinding(keystrokes.as_ref())),
@@ -283,13 +271,7 @@ pub fn render_keybinding_keystroke(
     size: impl Into<Option<AbsoluteLength>>,
     platform_style: PlatformStyle,
 ) -> Vec<AnyElement> {
-    render_keybinding_keystroke_with_style(
-        keystroke,
-        color,
-        size,
-        platform_style,
-        KeyBindingStyle::Default,
-    )
+    render_keybinding_keystroke_with_style(keystroke, color, size, platform_style, KeyBindingStyle::Default)
 }
 
 fn render_keybinding_keystroke_with_style(
@@ -301,27 +283,14 @@ fn render_keybinding_keystroke_with_style(
 ) -> Vec<AnyElement> {
     let size = size.into();
     let mut elements = Vec::new();
-    let modifiers = render_modifiers_with_style(
-        keystroke.modifiers(),
-        platform_style,
-        color,
-        size,
-        true,
-        style,
-    )
-    .collect::<Vec<_>>();
+    let modifiers = render_modifiers_with_style(keystroke.modifiers(), platform_style, color, size, true, style)
+        .collect::<Vec<_>>();
     if style == KeyBindingStyle::Label && !modifiers.is_empty() {
         elements.push(h_flex().children(modifiers).mr_0p5().into_any_element());
     } else {
         elements.extend(modifiers);
     }
-    elements.push(render_key(
-        keystroke.key(),
-        color,
-        platform_style,
-        size,
-        style,
-    ));
+    elements.push(render_key(keystroke.key(), color, platform_style, size, style));
     elements
 }
 
@@ -356,14 +325,7 @@ pub fn render_modifiers(
     size: Option<AbsoluteLength>,
     trailing_separator: bool,
 ) -> impl Iterator<Item = AnyElement> {
-    render_modifiers_with_style(
-        modifiers,
-        platform_style,
-        color,
-        size,
-        trailing_separator,
-        KeyBindingStyle::Default,
-    )
+    render_modifiers_with_style(modifiers, platform_style, color, size, trailing_separator, KeyBindingStyle::Default)
 }
 
 fn render_modifiers_with_style(
@@ -392,39 +354,19 @@ fn render_modifiers_with_style(
 
     let table = {
         [
-            Modifier {
-                enabled: modifiers.function,
-                mac: mac_modifier(IconName::Control, "Fn"),
-            },
-            Modifier {
-                enabled: modifiers.control,
-                mac: mac_modifier(IconName::Control, "⌃"),
-            },
-            Modifier {
-                enabled: modifiers.alt,
-                mac: mac_modifier(IconName::Option, "⌥"),
-            },
-            Modifier {
-                enabled: modifiers.platform,
-                mac: mac_modifier(IconName::Command, "⌘"),
-            },
-            Modifier {
-                enabled: modifiers.shift,
-                mac: mac_modifier(IconName::Shift, "⇧"),
-            },
+            Modifier { enabled: modifiers.function, mac: mac_modifier(IconName::Control, "Fn") },
+            Modifier { enabled: modifiers.control, mac: mac_modifier(IconName::Control, "⌃") },
+            Modifier { enabled: modifiers.alt, mac: mac_modifier(IconName::Option, "⌥") },
+            Modifier { enabled: modifiers.platform, mac: mac_modifier(IconName::Command, "⌘") },
+            Modifier { enabled: modifiers.shift, mac: mac_modifier(IconName::Shift, "⇧") },
         ]
     };
 
-    let filtered = table
-        .into_iter()
-        .filter(|modifier| modifier.enabled)
-        .collect::<Vec<_>>();
+    let filtered = table.into_iter().filter(|modifier| modifier.enabled).collect::<Vec<_>>();
 
-    let platform_keys = filtered
-        .into_iter()
-        .map(move |modifier| match platform_style {
-            PlatformStyle::Mac => Some(modifier.mac),
-        });
+    let platform_keys = filtered.into_iter().map(move |modifier| match platform_style {
+        PlatformStyle::Mac => Some(modifier.mac),
+    });
 
     let separator = match platform_style {
         PlatformStyle::Mac => None,
@@ -432,20 +374,15 @@ fn render_modifiers_with_style(
 
     let platform_keys = itertools::intersperse(platform_keys, separator.clone());
 
-    platform_keys
-        .chain(if modifiers.modified() && trailing_separator {
-            Some(separator)
-        } else {
-            None
-        })
-        .flatten()
-        .map(move |key_or_icon| match key_or_icon {
+    platform_keys.chain(if modifiers.modified() && trailing_separator { Some(separator) } else { None }).flatten().map(
+        move |key_or_icon| match key_or_icon {
             KeyOrIcon::Key(key) => match style {
                 KeyBindingStyle::Default => Key::new(key, color).size(size).into_any_element(),
                 KeyBindingStyle::Label => LabelKey::new(key, color).size(size).into_any_element(),
             },
             KeyOrIcon::Icon(icon) => KeyIcon::new(icon, color).size(size).into_any_element(),
-        })
+        },
+    )
 }
 
 #[derive(IntoElement)]
@@ -458,19 +395,11 @@ pub struct Key {
 impl RenderOnce for Key {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
         let single_char = self.key.len() == 1;
-        let size = self
-            .size
-            .unwrap_or_else(|| TextSize::default().rems(cx).into());
+        let size = self.size.unwrap_or_else(|| TextSize::default().rems(cx).into());
 
         div()
             .py_0()
-            .map(|this| {
-                if single_char {
-                    this.w(size).flex().flex_none().justify_center()
-                } else {
-                    this.px_0p5()
-                }
-            })
+            .map(|this| if single_char { this.w(size).flex().flex_none().justify_center() } else { this.px_0p5() })
             .h(size)
             .text_size(size)
             .line_height(relative(1.))
@@ -481,11 +410,7 @@ impl RenderOnce for Key {
 
 impl Key {
     pub fn new(key: impl Into<SharedString>, color: Option<Color>) -> Self {
-        Self {
-            key: key.into(),
-            color,
-            size: None,
-        }
+        Self { key: key.into(), color, size: None }
     }
 
     pub fn size(mut self, size: impl Into<Option<AbsoluteLength>>) -> Self {
@@ -503,24 +428,15 @@ struct LabelKey {
 
 impl RenderOnce for LabelKey {
     fn render(self, window: &mut Window, _cx: &mut App) -> impl IntoElement {
-        let size = self
-            .size
-            .map(|size| LabelSize::Custom(size.to_rems(window.rem_size())))
-            .unwrap_or_default();
+        let size = self.size.map(|size| LabelSize::Custom(size.to_rems(window.rem_size()))).unwrap_or_default();
 
-        Label::new(self.key)
-            .size(size)
-            .color(self.color.unwrap_or(Color::Default))
+        Label::new(self.key).size(size).color(self.color.unwrap_or(Color::Default))
     }
 }
 
 impl LabelKey {
     fn new(key: impl Into<SharedString>, color: Option<Color>) -> Self {
-        Self {
-            key: key.into(),
-            color,
-            size: None,
-        }
+        Self { key: key.into(), color, size: None }
     }
 
     fn size(mut self, size: impl Into<Option<AbsoluteLength>>) -> Self {
@@ -547,12 +463,8 @@ impl RenderOnce for KeyIcon {
 }
 
 impl KeyIcon {
-    pub fn new(icon: IconName, color: Option<Color>) -> Self {
-        Self {
-            icon,
-            color,
-            size: None,
-        }
+    pub const fn new(icon: IconName, color: Option<Color>) -> Self {
+        Self { icon, color, size: None }
     }
 
     pub fn size(mut self, size: impl Into<Option<AbsoluteLength>>) -> Self {
@@ -569,18 +481,12 @@ pub fn text_for_action(action: &dyn Action, window: &Window, cx: &App) -> Option
 
 pub fn text_for_keystrokes(keystrokes: &[Keystroke], _cx: &App) -> String {
     let platform_style = PlatformStyle::platform();
-    keystrokes
-        .iter()
-        .map(|keystroke| keystroke_text(&keystroke.modifiers, &keystroke.key, platform_style))
-        .join(" ")
+    keystrokes.iter().map(|keystroke| keystroke_text(&keystroke.modifiers, &keystroke.key, platform_style)).join(" ")
 }
 
 pub fn text_for_keybinding_keystrokes(keystrokes: &[KeybindingKeystroke], _cx: &App) -> String {
     let platform_style = PlatformStyle::platform();
-    keystrokes
-        .iter()
-        .map(|keystroke| keystroke_text(keystroke.modifiers(), keystroke.key(), platform_style))
-        .join(" ")
+    keystrokes.iter().map(|keystroke| keystroke_text(keystroke.modifiers(), keystroke.key(), platform_style)).join(" ")
 }
 
 pub fn text_for_keystroke(modifiers: &Modifiers, key: &str, _cx: &App) -> String {
@@ -663,9 +569,7 @@ impl Component for KeyBinding {
                 "Platform Styles",
                 vec![single_example(
                     "Mac Style",
-                    keybinding("cmd-s")
-                        .platform_style(PlatformStyle::Mac)
-                        .into_any_element(),
+                    keybinding("cmd-s").platform_style(PlatformStyle::Mac).into_any_element(),
                 )],
             )])
             .into_any_element()

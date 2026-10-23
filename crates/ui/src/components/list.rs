@@ -1,3 +1,4 @@
+#[allow(clippy::module_inception)]
 mod list;
 mod list_bullet_item;
 mod list_header;

@@ -205,7 +205,7 @@ impl Toolbar {
         self.items.iter().find_map(|(item, _)| item.to_any().downcast().ok())
     }
 
-    pub fn hidden(&self) -> bool {
+    pub const fn hidden(&self) -> bool {
         self.hidden
     }
 

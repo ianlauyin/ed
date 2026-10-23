@@ -1,25 +1,25 @@
-use crate::{
-    AssetSource, DevicePixels, IsZero, RenderImage, Result, SharedString, Size,
-    swap_rgba_pa_to_bgra,
-};
+use std::hash::Hash;
+use std::sync::Arc;
+use std::sync::LazyLock;
+
 use image::Frame;
 use resvg::tiny_skia::Pixmap;
 use smallvec::SmallVec;
-use std::{
-    hash::Hash,
-    sync::{Arc, LazyLock},
-};
+
+use crate::AssetSource;
+use crate::DevicePixels;
+use crate::IsZero;
+use crate::RenderImage;
+use crate::Result;
+use crate::SharedString;
+use crate::Size;
+use crate::swap_rgba_pa_to_bgra;
 
 #[cfg(target_os = "macos")]
 const EMOJI_FONT_FAMILIES: &[&str] = &["Apple Color Emoji", ".AppleColorEmojiUI"];
 
 #[cfg(target_os = "linux")]
-const EMOJI_FONT_FAMILIES: &[&str] = &[
-    "Noto Color Emoji",
-    "Emoji One",
-    "Twitter Color Emoji",
-    "JoyPixels",
-];
+const EMOJI_FONT_FAMILIES: &[&str] = &["Noto Color Emoji", "Emoji One", "Twitter Color Emoji", "JoyPixels"];
 
 fn is_emoji_presentation(c: char) -> bool {
     static EMOJI_PRESENTATION_REGEX: LazyLock<regex::Regex> =
@@ -30,10 +30,7 @@ fn is_emoji_presentation(c: char) -> bool {
 
 fn font_has_char(db: &usvg::fontdb::Database, id: usvg::fontdb::ID, ch: char) -> bool {
     db.with_face_data(id, |font_data, face_index| {
-        ttf_parser::Face::parse(font_data, face_index)
-            .ok()
-            .and_then(|face| face.glyph_index(ch))
-            .is_some()
+        ttf_parser::Face::parse(font_data, face_index).ok().and_then(|face| face.glyph_index(ch)).is_some()
     })
     .unwrap_or(false)
 }
@@ -128,38 +125,27 @@ impl SvgRenderer {
                 }
                 // fontdb doesn't recognize CSS system font keywords like "system-ui"
                 // or "ui-sans-serif", so fall back to sans-serif before any face.
-                let sans_query = usvg::fontdb::Query {
-                    families: &[usvg::fontdb::Family::SansSerif],
-                    ..Default::default()
-                };
-                db.query(&sans_query)
-                    .or_else(|| db.faces().next().map(|f| f.id))
+                let sans_query =
+                    usvg::fontdb::Query { families: &[usvg::fontdb::Family::SansSerif], ..Default::default() };
+                db.query(&sans_query).or_else(|| db.faces().next().map(|f| f.id))
             }
         });
         let default_fallback_selection = usvg::FontResolver::default_fallback_selector();
-        let fallback_selection = Box::new(
-            move |ch: char, fonts: &[usvg::fontdb::ID], db: &mut Arc<usvg::fontdb::Database>| {
-                if is_emoji_presentation(ch) {
-                    if let Some(id) = select_emoji_font(ch, fonts, db.as_ref(), EMOJI_FONT_FAMILIES)
-                    {
-                        return Some(id);
-                    }
+        let fallback_selection =
+            Box::new(move |ch: char, fonts: &[usvg::fontdb::ID], db: &mut Arc<usvg::fontdb::Database>| {
+                if is_emoji_presentation(ch)
+                    && let Some(id) = select_emoji_font(ch, fonts, db.as_ref(), EMOJI_FONT_FAMILIES)
+                {
+                    return Some(id);
                 }
 
                 default_fallback_selection(ch, fonts, db)
-            },
-        );
+            });
         let options = usvg::Options {
-            font_resolver: usvg::FontResolver {
-                select_font: font_resolver,
-                select_fallback: fallback_selection,
-            },
+            font_resolver: usvg::FontResolver { select_font: font_resolver, select_fallback: fallback_selection },
             ..Default::default()
         };
-        Self {
-            asset_source,
-            usvg_options: Arc::new(options),
-        }
+        Self { asset_source, usvg_options: Arc::new(options) }
     }
 
     /// Parses SVG data into a [`ParsedSvg`] that can be rasterized at any scale.
@@ -168,24 +154,18 @@ impl SvgRenderer {
     }
 
     /// Rasterizes a previously parsed SVG into an image buffer.
-    pub fn render_parsed(
-        &self,
-        svg: &ParsedSvg,
-        size: impl Into<SvgSize>,
-    ) -> Result<Arc<RenderImage>, usvg::Error> {
+    pub fn render_parsed(&self, svg: &ParsedSvg, size: impl Into<SvgSize>) -> Result<Arc<RenderImage>, usvg::Error> {
         let (size, image_scale_factor) = match size.into() {
             SvgSize::Size(size) => (SvgSize::Size(size), 1.0),
             SvgSize::ExactSize(size) => (SvgSize::ExactSize(size), 1.0),
-            SvgSize::ScaleFactor(scale_factor) => (
-                SvgSize::ScaleFactor(scale_factor * SMOOTH_SVG_SCALE_FACTOR),
-                SMOOTH_SVG_SCALE_FACTOR,
-            ),
+            SvgSize::ScaleFactor(scale_factor) => {
+                (SvgSize::ScaleFactor(scale_factor * SMOOTH_SVG_SCALE_FACTOR), SMOOTH_SVG_SCALE_FACTOR)
+            }
         };
         let pixmap = rasterize_tree(&svg.0, size)?;
-        let mut buffer =
-            image::ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.take()).unwrap();
+        let mut buffer = image::ImageBuffer::from_raw(pixmap.width(), pixmap.height(), pixmap.take()).unwrap();
 
-        for pixel in buffer.chunks_exact_mut(4) {
+        for pixel in buffer.as_chunks_mut::<4>().0 {
             swap_rgba_pa_to_bgra(pixel);
         }
 
@@ -195,11 +175,7 @@ impl SvgRenderer {
     }
 
     /// Renders the given bytes into an image buffer.
-    pub fn render_single_frame(
-        &self,
-        bytes: &[u8],
-        scale_factor: f32,
-    ) -> Result<Arc<RenderImage>, usvg::Error> {
+    pub fn render_single_frame(&self, bytes: &[u8], scale_factor: f32) -> Result<Arc<RenderImage>, usvg::Error> {
         let svg = self.parse_svg(bytes)?;
         self.render_parsed(&svg, scale_factor)
     }
@@ -215,15 +191,8 @@ impl SvgRenderer {
             let pixmap = self.render_pixmap(bytes, SvgSize::Size(params.size))?;
 
             // Convert the pixmap's pixels into an alpha mask.
-            let size = Size::new(
-                DevicePixels(pixmap.width() as i32),
-                DevicePixels(pixmap.height() as i32),
-            );
-            let alpha_mask = pixmap
-                .pixels()
-                .iter()
-                .map(|p| p.alpha())
-                .collect::<Vec<_>>();
+            let size = Size::new(DevicePixels(pixmap.width() as i32), DevicePixels(pixmap.height() as i32));
+            let alpha_mask = pixmap.pixels().iter().map(|p| p.alpha()).collect::<Vec<_>>();
 
             Ok(Some((size, alpha_mask)))
         };
@@ -269,13 +238,9 @@ fn rasterize_tree(tree: &usvg::Tree, size: SvgSize) -> Result<Pixmap, usvg::Erro
     height *= scale;
 
     // Render the SVG to a pixmap with the specified width and height.
-    let mut pixmap = resvg::tiny_skia::Pixmap::new(width as u32, height as u32)
-        .ok_or(usvg::Error::InvalidSize)?;
+    let mut pixmap = resvg::tiny_skia::Pixmap::new(width as u32, height as u32).ok_or(usvg::Error::InvalidSize)?;
 
-    let transform = resvg::tiny_skia::Transform::from_scale(
-        width / svg_size.width(),
-        height / svg_size.height(),
-    );
+    let transform = resvg::tiny_skia::Transform::from_scale(width / svg_size.width(), height / svg_size.height());
 
     resvg::render(tree, transform, &mut pixmap.as_mut());
 

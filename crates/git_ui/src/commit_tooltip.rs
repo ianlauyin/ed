@@ -1,22 +1,39 @@
-use crate::commit_view::CommitView;
 use anyhow::Result;
 use editor::hover_markdown_style;
 use git::blame::BlameEntry;
 use git::commit::ParsedCommitMessage;
 use git::repository::CommitSummary;
 use git_ui_core::notifications::show_error_toast;
-use gpui::{
-    App, Element, Entity, MouseButton, ParentElement, Render, ScrollHandle,
-    StatefulInteractiveElement, Task, WeakEntity, Window, prelude::*,
-};
-use markdown::{Markdown, MarkdownElement};
+use gpui::App;
+use gpui::Element;
+use gpui::Entity;
+use gpui::MouseButton;
+use gpui::ParentElement;
+use gpui::Render;
+use gpui::ScrollHandle;
+use gpui::StatefulInteractiveElement;
+use gpui::Task;
+use gpui::WeakEntity;
+use gpui::Window;
+use gpui::prelude::*;
+use markdown::Markdown;
+use markdown::MarkdownElement;
 use notifications::status_toast::StatusToast;
-use project::git_store::{Repository, UnshallowState};
+use project::git_store::Repository;
+use project::git_store::UnshallowState;
 use settings::Settings;
 use theme_settings::ThemeSettings;
-use time::{OffsetDateTime, UtcOffset};
-use ui::{Chip, CopyButton, Divider, Tooltip, prelude::*, tooltip_container};
+use time::OffsetDateTime;
+use time::UtcOffset;
+use ui::Chip;
+use ui::CopyButton;
+use ui::Divider;
+use ui::Tooltip;
+use ui::prelude::*;
+use ui::tooltip_container;
 use workspace::Workspace;
+
+use crate::commit_view::CommitView;
 
 #[derive(Clone, Debug)]
 pub struct CommitDetails {
@@ -36,23 +53,18 @@ pub(crate) fn commit_tag_chips(tag_names: &[SharedString]) -> Option<impl IntoEl
         return None;
     }
 
-    let (visible_tags, hidden_tags) =
-        tag_names.split_at(tag_names.len().min(MAX_COMMIT_TOOLTIP_TAG_CHIPS));
+    let (visible_tags, hidden_tags) = tag_names.split_at(tag_names.len().min(MAX_COMMIT_TOOLTIP_TAG_CHIPS));
 
     Some(
         h_flex().max_w(relative(0.6)).gap_1().child(
             h_flex()
                 .gap_1()
                 .min_w_0()
-                .children(
-                    visible_tags
-                        .iter()
-                        .map(|tag_name| Chip::new(tag_name.clone()).truncate()),
-                )
+                .children(visible_tags.iter().map(|tag_name| Chip::new(tag_name.clone()).truncate()))
                 .when(!hidden_tags.is_empty(), |this| {
                     let hidden_tags = hidden_tags.to_vec();
-                    this.child(Chip::new(format!("+{}", hidden_tags.len())).tooltip(
-                        Tooltip::element(move |_window, cx| {
+                    this.child(Chip::new(format!("+{}", hidden_tags.len())).tooltip(Tooltip::element(
+                        move |_window, cx| {
                             v_flex()
                                 .gap_1()
                                 .children(itertools::Itertools::intersperse_with(
@@ -65,8 +77,8 @@ pub(crate) fn commit_tag_chips(tag_names: &[SharedString]) -> Option<impl IntoEl
                                     || Divider::horizontal().into_any_element(),
                                 ))
                                 .into_any_element()
-                        }),
-                    ))
+                        },
+                    )))
                 })
                 .child(Divider::vertical()),
         ),
@@ -99,11 +111,7 @@ impl CommitTooltip {
             CommitDetails {
                 sha: blame.sha.to_string().into(),
                 commit_time,
-                author_name: blame
-                    .author
-                    .clone()
-                    .unwrap_or("<no name>".to_string())
-                    .into(),
+                author_name: blame.author.clone().unwrap_or("<no name>".to_string()).into(),
                 author_email: blame.author_mail.clone().unwrap_or("".to_string()).into(),
                 message: details,
                 tag_names,
@@ -123,23 +131,13 @@ impl CommitTooltip {
     ) -> Self {
         let markdown = cx.new(|cx| {
             Markdown::new(
-                commit
-                    .message
-                    .as_ref()
-                    .map(|message| message.message.clone())
-                    .unwrap_or_default(),
+                commit.message.as_ref().map(|message| message.message.clone()).unwrap_or_default(),
                 None,
                 None,
                 cx,
             )
         });
-        Self {
-            commit,
-            repository,
-            workspace,
-            scroll_handle: ScrollHandle::new(),
-            markdown,
-        }
+        Self { commit, repository, workspace, scroll_handle: ScrollHandle::new(), markdown }
     }
 }
 
@@ -163,10 +161,7 @@ impl Render for CommitTooltip {
             local_offset,
             time_format::TimestampFormat::MediumAbsolute,
         );
-        let markdown_style = {
-            let style = hover_markdown_style(window, cx);
-            style
-        };
+        let markdown_style = { hover_markdown_style(window, cx) };
 
         let message = self
             .commit
@@ -187,20 +182,9 @@ impl Render for CommitTooltip {
         let workspace = self.workspace.clone();
         let commit_summary = CommitSummary {
             sha: self.commit.sha.clone(),
-            subject: self
-                .commit
-                .message
-                .as_ref()
-                .map_or(Default::default(), |message| {
-                    message
-                        .message
-                        .split('\n')
-                        .next()
-                        .unwrap()
-                        .trim_end()
-                        .to_string()
-                        .into()
-                }),
+            subject: self.commit.message.as_ref().map_or(Default::default(), |message| {
+                message.message.split('\n').next().unwrap().trim_end().to_string().into()
+            }),
             commit_timestamp: self.commit.commit_time.unix_timestamp(),
             author_name: self.commit.author_name.clone(),
             has_parent: false,
@@ -208,9 +192,7 @@ impl Render for CommitTooltip {
         let boundary_notice = self
             .commit
             .boundary
-            .then(|| {
-                shallow_boundary_notice(self.repository.clone(), self.workspace.clone(), window, cx)
-            })
+            .then(|| shallow_boundary_notice(self.repository.clone(), self.workspace.clone(), window, cx))
             .flatten();
 
         tooltip_container(cx, move |this, cx| {
@@ -228,11 +210,7 @@ impl Render for CommitTooltip {
                                 .flex_wrap()
                                 .child(author)
                                 .when(!author_email.is_empty(), |this| {
-                                    this.child(
-                                        div()
-                                            .text_color(cx.theme().colors().text_muted)
-                                            .child(author_email),
-                                    )
+                                    this.child(div().text_color(cx.theme().colors().text_muted).child(author_email))
                                 })
                                 .border_b_1()
                                 .border_color(cx.theme().colors().border_variant),
@@ -264,18 +242,14 @@ impl Render for CommitTooltip {
                                         .min_w_0()
                                         .children(commit_tag_chips(&tag_names))
                                         .child(
-                                            Button::new(
-                                                "commit-sha-button",
-                                                short_commit_id.clone(),
-                                            )
-                                            .color(Color::Muted)
-                                            .start_icon(
-                                                Icon::new(IconName::FileGit)
-                                                    .size(IconSize::Small)
-                                                    .color(Color::Muted),
-                                            )
-                                            .on_click(
-                                                move |_, window, cx| {
+                                            Button::new("commit-sha-button", short_commit_id.clone())
+                                                .color(Color::Muted)
+                                                .start_icon(
+                                                    Icon::new(IconName::FileGit)
+                                                        .size(IconSize::Small)
+                                                        .color(Color::Muted),
+                                                )
+                                                .on_click(move |_, window, cx| {
                                                     CommitView::open(
                                                         commit_summary.sha.to_string(),
                                                         repo.downgrade(),
@@ -286,14 +260,10 @@ impl Render for CommitTooltip {
                                                         cx,
                                                     );
                                                     cx.stop_propagation();
-                                                },
-                                            ),
+                                                }),
                                         )
                                         .child(Divider::vertical())
-                                        .child(
-                                            CopyButton::new("copy-commit-sha", full_sha)
-                                                .tooltip_label("Copy SHA"),
-                                        ),
+                                        .child(CopyButton::new("copy-commit-sha", full_sha).tooltip_label("Copy SHA")),
                                 ),
                         ),
                 )
@@ -305,12 +275,7 @@ fn blame_entry_timestamp(blame_entry: &BlameEntry, format: time_format::Timestam
     match blame_entry.author_offset_date_time() {
         Ok(timestamp) => {
             let local_offset = UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC);
-            time_format::format_localized_timestamp(
-                timestamp,
-                time::OffsetDateTime::now_utc(),
-                local_offset,
-                format,
-            )
+            time_format::format_localized_timestamp(timestamp, time::OffsetDateTime::now_utc(), local_offset, format)
         }
         Err(_) => "Error parsing date".to_string(),
     }
@@ -332,11 +297,8 @@ pub(crate) fn shallow_boundary_notice(
     }
     let in_flight = unshallow_state == UnshallowState::InProgress;
     let icon_width = rems(1.).to_pixels(window.rem_size());
-    let can_fetch = workspace
-        .read_with(cx, |workspace, cx| {
-            !workspace.project().read(cx).is_read_only(cx)
-        })
-        .unwrap_or(false);
+    let can_fetch =
+        workspace.read_with(cx, |workspace, cx| !workspace.project().read(cx).is_read_only(cx)).unwrap_or(false);
     Some(
         v_flex()
             .py_1()
@@ -424,17 +386,9 @@ pub(crate) fn fetch_unshallow(
             match result {
                 Ok(_) => {
                     workspace.update(cx, |workspace, cx| {
-                        let toast = StatusToast::new(
-                            "Fetched the missing commit history",
-                            cx,
-                            |this, _| {
-                                this.icon(
-                                    Icon::new(IconName::GitBranch)
-                                        .size(IconSize::Small)
-                                        .color(Color::Muted),
-                                )
-                            },
-                        );
+                        let toast = StatusToast::new("Fetched the missing commit history", cx, |this, _| {
+                            this.icon(Icon::new(IconName::GitBranch).size(IconSize::Small).color(Color::Muted))
+                        });
                         workspace.toggle_status_toast(toast, cx);
                     });
                     Ok(())

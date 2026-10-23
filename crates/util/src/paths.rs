@@ -1,23 +1,26 @@
-use globset::{Glob, GlobBuilder, GlobSet, GlobSetBuilder};
-use itertools::Itertools;
-use regex::Regex;
-use serde::{Deserialize, Serialize};
 use std::cmp::Ordering;
 use std::error::Error;
-use std::fmt::{Display, Formatter};
+use std::ffi::OsStr;
+use std::fmt::Display;
+use std::fmt::Formatter;
 use std::mem;
+use std::path::Path;
+use std::path::PathBuf;
 use std::path::StripPrefixError;
 use std::sync::Arc;
-use std::{
-    ffi::OsStr,
-    path::{Path, PathBuf},
-    sync::LazyLock,
-};
+use std::sync::LazyLock;
 
+use globset::Glob;
+use globset::GlobBuilder;
+use globset::GlobSet;
+use globset::GlobSetBuilder;
+use itertools::Itertools;
+pub use path::PathStyle;
 use path::rel_path::RelPath;
 use path::rel_path::RelPathBuf;
-
-pub use path::PathStyle;
+use regex::Regex;
+use serde::Deserialize;
+use serde::Serialize;
 
 /// Returns the path to the user's home directory.
 pub fn home_dir() -> &'static PathBuf {
@@ -80,9 +83,7 @@ impl<T: AsRef<Path>> PathExt for T {
             return file_name.strip_prefix('.');
         }
 
-        path.extension()
-            .and_then(|e| e.to_str())
-            .or_else(|| path.file_stem()?.to_str())
+        path.extension().and_then(|e| e.to_str()).or_else(|| path.file_stem()?.to_str())
     }
 
     fn multiple_extensions(&self) -> Option<String> {
@@ -104,15 +105,8 @@ impl<T: AsRef<Path>> PathExt for T {
 
     fn try_shell_safe(&self, shell_kind: crate::shell::ShellKind) -> anyhow::Result<String> {
         use anyhow::Context;
-        let path_str = self
-            .as_ref()
-            .to_str()
-            .with_context(|| "Path contains invalid UTF-8")?;
-        shell_kind
-            .try_quote(path_str)
-            .as_deref()
-            .map(ToOwned::to_owned)
-            .context("Failed to quote path")
+        let path_str = self.as_ref().to_str().with_context(|| "Path contains invalid UTF-8")?;
+        shell_kind.try_quote(path_str).as_deref().map(ToOwned::to_owned).context("Failed to quote path")
     }
 }
 
@@ -128,28 +122,15 @@ pub fn path_ends_with(base: &Path, suffix: &Path) -> bool {
 /// unusual casing. Callers should restrict `name` to ASCII; for ASCII
 /// inputs `eq_ignore_ascii_case` is safe and stable across platforms.
 pub fn component_matches_ignore_ascii_case(component: &OsStr, name: &str) -> bool {
-    component
-        .to_str()
-        .is_some_and(|s| s.eq_ignore_ascii_case(name))
+    component.to_str().is_some_and(|s| s.eq_ignore_ascii_case(name))
 }
 
 pub fn strip_path_suffix<'a>(base: &'a Path, suffix: &Path) -> Option<&'a Path> {
-    if let Some(remainder) = base
-        .as_os_str()
-        .as_encoded_bytes()
-        .strip_suffix(suffix.as_os_str().as_encoded_bytes())
+    if let Some(remainder) = base.as_os_str().as_encoded_bytes().strip_suffix(suffix.as_os_str().as_encoded_bytes())
+        && remainder.last().is_none_or(|last_byte| std::path::is_separator(*last_byte as char))
     {
-        if remainder
-            .last()
-            .is_none_or(|last_byte| std::path::is_separator(*last_byte as char))
-        {
-            let os_str = unsafe {
-                OsStr::from_encoded_bytes_unchecked(
-                    &remainder[0..remainder.len().saturating_sub(1)],
-                )
-            };
-            return Some(Path::new(os_str));
-        }
+        let os_str = unsafe { OsStr::from_encoded_bytes_unchecked(&remainder[0..remainder.len().saturating_sub(1)]) };
+        return Some(Path::new(os_str));
     }
     None
 }
@@ -162,7 +143,7 @@ pub struct SanitizedPath(Path);
 
 impl SanitizedPath {
     pub fn new<T: AsRef<Path> + ?Sized>(path: &T) -> &Self {
-        return Self::unchecked_new(path.as_ref());
+        Self::unchecked_new(path.as_ref())
     }
 
     pub fn unchecked_new<T: AsRef<Path> + ?Sized>(path: &T) -> &Self {
@@ -173,7 +154,7 @@ impl SanitizedPath {
     pub fn from_arc(path: Arc<Path>) -> Arc<Self> {
         // safe because `Path` and `SanitizedPath` have the same repr and Drop impl
 
-        return unsafe { mem::transmute::<Arc<Path>, Arc<Self>>(path) };
+        unsafe { mem::transmute::<Arc<Path>, Arc<Self>>(path) }
     }
 
     pub fn new_arc<T: AsRef<Path> + ?Sized>(path: &T) -> Arc<Self> {
@@ -194,7 +175,7 @@ impl SanitizedPath {
         self.0.starts_with(&prefix.0)
     }
 
-    pub fn as_path(&self) -> &Path {
+    pub const fn as_path(&self) -> &Path {
         &self.0
     }
 
@@ -266,7 +247,7 @@ pub struct RemotePathBuf {
 }
 
 impl RemotePathBuf {
-    pub fn new(string: String, style: PathStyle) -> Self {
+    pub const fn new(string: String, style: PathStyle) -> Self {
         Self { style, string }
     }
 
@@ -274,7 +255,7 @@ impl RemotePathBuf {
         Self::new(path.to_string(), style)
     }
 
-    pub fn path_style(&self) -> PathStyle {
+    pub const fn path_style(&self) -> PathStyle {
         self.style
     }
 
@@ -425,12 +406,8 @@ pub struct PathWithPosition {
 
 impl PathWithPosition {
     /// Returns a PathWithPosition from a path.
-    pub fn from_path(path: PathBuf) -> Self {
-        Self {
-            path,
-            row: None,
-            column: None,
-        }
+    pub const fn from_path(path: PathBuf) -> Self {
+        Self { path, row: None, column: None }
     }
 
     /// Parses a string that possibly has `:row:column` or `(row, column)` suffix.
@@ -521,43 +498,27 @@ impl PathWithPosition {
     pub fn parse_str(s: &str) -> Self {
         let trimmed = s.trim();
         let path = Path::new(trimmed);
-        let Some(maybe_file_name_with_row_col) = path.file_name().unwrap_or_default().to_str()
-        else {
-            return Self {
-                path: Path::new(s).to_path_buf(),
-                row: None,
-                column: None,
-            };
+        let Some(maybe_file_name_with_row_col) = path.file_name().unwrap_or_default().to_str() else {
+            return Self { path: Path::new(s).to_path_buf(), row: None, column: None };
         };
         if maybe_file_name_with_row_col.is_empty() {
-            return Self {
-                path: Path::new(s).to_path_buf(),
-                row: None,
-                column: None,
-            };
+            return Self { path: Path::new(s).to_path_buf(), row: None, column: None };
         }
 
         // Let's avoid repeated init cost on this. It is subject to thread contention, but
         // so far this code isn't called from multiple hot paths. Getting contention here
         // in the future seems unlikely.
-        static SUFFIX_RE: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(ROW_COL_CAPTURE_REGEX).unwrap());
-        match SUFFIX_RE
-            .captures(maybe_file_name_with_row_col)
-            .and_then(|captures| {
-                let file_name_end = captures.iter().skip(1).flatten().next()?.end();
-                let (_, [_, row, column]) = captures.extract();
-                Some((file_name_end, row, column))
-            }) {
+        static SUFFIX_RE: LazyLock<Regex> = LazyLock::new(|| Regex::new(ROW_COL_CAPTURE_REGEX).unwrap());
+        match SUFFIX_RE.captures(maybe_file_name_with_row_col).and_then(|captures| {
+            let file_name_end = captures.iter().skip(1).flatten().next()?.end();
+            let (_, [_, row, column]) = captures.extract();
+            Some((file_name_end, row, column))
+        }) {
             Some((file_name_end, maybe_row, maybe_column)) => {
                 let row = maybe_row.parse::<u32>().ok();
                 let column = maybe_column.parse::<u32>().ok();
 
-                Self {
-                    path: path.with_file_name(&maybe_file_name_with_row_col[..file_name_end]),
-                    row,
-                    column,
-                }
+                Self { path: path.with_file_name(&maybe_file_name_with_row_col[..file_name_end]), row, column }
             }
             None => {
                 // The `ROW_COL_CAPTURE_REGEX` deals with separated digits only,
@@ -568,21 +529,18 @@ impl PathWithPosition {
                     return Self::from_path(path.to_path_buf());
                 };
                 let delimiter = ':';
-                let mut path_parts = file_name
-                    .rsplitn(3, delimiter)
-                    .collect::<Vec<_>>()
-                    .into_iter()
-                    .rev()
-                    .fuse();
-                let mut path_string = path_parts.next().expect("rsplitn should have the rest of the string as its last parameter that we reversed").to_owned();
+                let mut path_parts = file_name.rsplitn(3, delimiter).collect::<Vec<_>>().into_iter().rev().fuse();
+                let mut path_string = path_parts
+                    .next()
+                    .expect("rsplitn should have the rest of the string as its last parameter that we reversed")
+                    .to_owned();
                 let mut row = None;
                 let mut column = None;
                 if let Some(maybe_row) = path_parts.next() {
                     if let Ok(parsed_row) = maybe_row.parse::<u32>() {
                         row = Some(parsed_row);
-                        if let Some(parsed_column) = path_parts
-                            .next()
-                            .and_then(|maybe_col| maybe_col.parse::<u32>().ok())
+                        if let Some(parsed_column) =
+                            path_parts.next().and_then(|maybe_col| maybe_col.parse::<u32>().ok())
                         {
                             column = Some(parsed_column);
                         }
@@ -597,11 +555,7 @@ impl PathWithPosition {
                 }
 
                 Self {
-                    path: if row.is_some() {
-                        path.with_file_name(path_string)
-                    } else {
-                        path.to_path_buf()
-                    },
+                    path: if row.is_some() { path.with_file_name(path_string) } else { path.to_path_buf() },
                     row,
                     column,
                 }
@@ -609,15 +563,8 @@ impl PathWithPosition {
         }
     }
 
-    pub fn map_path<E>(
-        self,
-        mapping: impl FnOnce(PathBuf) -> Result<PathBuf, E>,
-    ) -> Result<PathWithPosition, E> {
-        Ok(PathWithPosition {
-            path: mapping(self.path)?,
-            row: self.row,
-            column: self.column,
-        })
+    pub fn map_path<E>(self, mapping: impl FnOnce(PathBuf) -> Result<PathBuf, E>) -> Result<PathWithPosition, E> {
+        Ok(PathWithPosition { path: mapping(self.path)?, row: self.row, column: self.column })
     }
 
     pub fn to_string(&self, path_to_string: &dyn Fn(&PathBuf) -> String) -> String {
@@ -643,10 +590,7 @@ pub struct PathMatcher {
 
 impl std::fmt::Debug for PathMatcher {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("PathMatcher")
-            .field("sources", &self.sources)
-            .field("path_style", &self.path_style)
-            .finish()
+        f.debug_struct("PathMatcher").field("sources", &self.sources).field("path_style", &self.path_style).finish()
     }
 }
 
@@ -665,11 +609,7 @@ impl PathMatcher {
     ) -> Result<Self, globset::Error> {
         let globs = globs
             .into_iter()
-            .map(|as_str| {
-                GlobBuilder::new(as_str.as_ref())
-                    .backslash_escape(path_style.is_posix())
-                    .build()
-            })
+            .map(|as_str| GlobBuilder::new(as_str.as_ref()).backslash_escape(path_style.is_posix()).build())
             .collect::<Result<Vec<_>, _>>()?;
         Self::from_globs(globs, path_style)
     }
@@ -684,10 +624,7 @@ impl PathMatcher {
         let globs = globs
             .into_iter()
             .filter_map(|pattern| {
-                match GlobBuilder::new(pattern.as_ref())
-                    .backslash_escape(path_style.is_posix())
-                    .build()
-                {
+                match GlobBuilder::new(pattern.as_ref()).backslash_escape(path_style.is_posix()).build() {
                     Ok(glob) => Some(glob),
                     Err(error) => {
                         on_error(error);
@@ -700,10 +637,7 @@ impl PathMatcher {
             Ok(matcher) => matcher,
             Err(error) => {
                 on_error(error);
-                Self {
-                    path_style,
-                    ..Self::default()
-                }
+                Self { path_style, ..Self::default() }
             }
         }
     }
@@ -715,9 +649,7 @@ impl PathMatcher {
                 let glob = glob.glob();
                 Some((
                     glob.to_string(),
-                    RelPath::new(&glob.as_ref(), path_style)
-                        .ok()
-                        .map(std::borrow::Cow::into_owned)?,
+                    RelPath::new(glob.as_ref(), path_style).ok().map(std::borrow::Cow::into_owned)?,
                     glob.ends_with(path_style.separators_ch()),
                 ))
             })
@@ -727,11 +659,7 @@ impl PathMatcher {
             glob_builder.add(single_glob);
         }
         let glob = glob_builder.build()?;
-        Ok(PathMatcher {
-            glob,
-            sources,
-            path_style,
-        })
+        Ok(PathMatcher { glob, sources, path_style })
     }
 
     pub fn sources(&self) -> impl Iterator<Item = &str> + Clone {
@@ -740,11 +668,7 @@ impl PathMatcher {
 
     pub fn is_match<P: AsRef<RelPath>>(&self, other: P) -> bool {
         let other = other.as_ref();
-        if self
-            .sources
-            .iter()
-            .any(|(_, source, _)| other.starts_with(source) || other.ends_with(source))
-        {
+        if self.sources.iter().any(|(_, source, _)| other.starts_with(source) || other.ends_with(source)) {
             return true;
         }
         let other_path = other.display(self.path_style);
@@ -753,15 +677,16 @@ impl PathMatcher {
             return true;
         }
 
-        self.glob
-            .is_match(other_path.into_owned() + self.path_style.primary_separator())
+        self.glob.is_match(other_path.into_owned() + self.path_style.primary_separator())
     }
 
     pub fn is_match_std_path<P: AsRef<Path>>(&self, other: P) -> bool {
         let other = other.as_ref();
-        if self.sources.iter().any(|(_, source, _)| {
-            other.starts_with(source.as_std_path()) || other.ends_with(source.as_std_path())
-        }) {
+        if self
+            .sources
+            .iter()
+            .any(|(_, source, _)| other.starts_with(source.as_std_path()) || other.ends_with(source.as_std_path()))
+        {
             return true;
         }
         self.glob.is_match(other)
@@ -770,11 +695,7 @@ impl PathMatcher {
 
 impl Default for PathMatcher {
     fn default() -> Self {
-        Self {
-            path_style: PathStyle::local(),
-            glob: GlobSet::empty(),
-            sources: vec![],
-        }
+        Self { path_style: PathStyle::local(), glob: GlobSet::empty(), sources: vec![] }
     }
 }
 
@@ -812,10 +733,7 @@ impl Default for PathMatcher {
 ///
 /// The function advances both iterators past their respective numeric sequences,
 /// regardless of the comparison result.
-fn compare_numeric_segments<I>(
-    a_iter: &mut std::iter::Peekable<I>,
-    b_iter: &mut std::iter::Peekable<I>,
-) -> Ordering
+fn compare_numeric_segments<I>(a_iter: &mut std::iter::Peekable<I>, b_iter: &mut std::iter::Peekable<I>) -> Ordering
 where
     I: Iterator<Item = char>,
 {
@@ -906,10 +824,7 @@ pub fn natural_sort(a: &str, b: &str) -> Ordering {
                         ordering => return ordering,
                     }
                 } else {
-                    match a_char
-                        .to_ascii_lowercase()
-                        .cmp(&b_char.to_ascii_lowercase())
-                    {
+                    match a_char.to_ascii_lowercase().cmp(&b_char.to_ascii_lowercase()) {
                         Ordering::Equal => {
                             a_iter.next();
                             b_iter.next();
@@ -926,11 +841,7 @@ pub fn natural_sort(a: &str, b: &str) -> Ordering {
 /// This is useful when comparing individual path components where we want to keep walking
 /// deeper components before deciding on casing.
 fn natural_sort_no_tiebreak(a: &str, b: &str) -> Ordering {
-    if a.eq_ignore_ascii_case(b) {
-        Ordering::Equal
-    } else {
-        natural_sort(a, b)
-    }
+    if a.eq_ignore_ascii_case(b) { Ordering::Equal } else { natural_sort(a, b) }
 }
 
 fn stem_and_extension(filename: &str) -> (Option<&str>, Option<&str>) {
@@ -1000,13 +911,7 @@ fn case_group_key(name: &str, order: SortOrder) -> u8 {
                 0
             }
         }
-        SortOrder::Lower => {
-            if first.is_uppercase() {
-                1
-            } else {
-                0
-            }
-        }
+        SortOrder::Lower if first.is_uppercase() => 1,
         _ => 0,
     }
 }
@@ -1025,16 +930,8 @@ fn compare_strings_no_tiebreak(a: &str, b: &str, order: SortOrder) -> Ordering {
     }
 }
 
-pub fn compare_rel_paths(
-    (path_a, a_is_file): (&RelPath, bool),
-    (path_b, b_is_file): (&RelPath, bool),
-) -> Ordering {
-    compare_rel_paths_by(
-        (path_a, a_is_file),
-        (path_b, b_is_file),
-        SortMode::DirectoriesFirst,
-        SortOrder::Default,
-    )
+pub fn compare_rel_paths((path_a, a_is_file): (&RelPath, bool), (path_b, b_is_file): (&RelPath, bool)) -> Ordering {
+    compare_rel_paths_by((path_a, a_is_file), (path_b, b_is_file), SortMode::DirectoriesFirst, SortOrder::Default)
 }
 
 pub fn compare_rel_paths_by(
@@ -1065,28 +962,15 @@ pub fn compare_rel_paths_by(
                     return file_dir_ordering;
                 }
 
-                let (a_stem, a_ext) = a_leaf_file
-                    .then(|| stem_and_extension(component_a))
-                    .unwrap_or_default();
-                let (b_stem, b_ext) = b_leaf_file
-                    .then(|| stem_and_extension(component_b))
-                    .unwrap_or_default();
-                let a_key = if a_leaf_file {
-                    a_stem
-                } else {
-                    Some(component_a)
-                };
-                let b_key = if b_leaf_file {
-                    b_stem
-                } else {
-                    Some(component_b)
-                };
+                let (a_stem, a_ext) = if a_leaf_file { stem_and_extension(component_a) } else { Default::default() };
+                let (b_stem, b_ext) = if b_leaf_file { stem_and_extension(component_b) } else { Default::default() };
+                let a_key = if a_leaf_file { a_stem } else { Some(component_a) };
+                let b_key = if b_leaf_file { b_stem } else { Some(component_b) };
 
                 let ordering = match (a_key, b_key) {
                     (Some(a), Some(b)) => {
-                        let name_cmp = case_group_key(a, order)
-                            .cmp(&case_group_key(b, order))
-                            .then_with(|| match mode {
+                        let name_cmp =
+                            case_group_key(a, order).cmp(&case_group_key(b, order)).then_with(|| match mode {
                                 SortMode::DirectoriesFirst => compare_strings(a, b, order),
                                 _ => compare_strings_no_tiebreak(a, b, order),
                             });
@@ -1104,9 +988,7 @@ pub fn compare_rel_paths_by(
                         name_cmp.then_with(|| {
                             if a_leaf_file && b_leaf_file {
                                 match order {
-                                    SortOrder::Unicode => {
-                                        a_ext.unwrap_or_default().cmp(b_ext.unwrap_or_default())
-                                    }
+                                    SortOrder::Unicode => a_ext.unwrap_or_default().cmp(b_ext.unwrap_or_default()),
                                     _ => {
                                         let a_ext_str = a_ext.unwrap_or_default().to_lowercase();
                                         let b_ext_str = b_ext.unwrap_or_default().to_lowercase();
@@ -1139,10 +1021,7 @@ pub fn compare_rel_paths_by(
     }
 }
 
-pub fn compare_paths(
-    (path_a, a_is_file): (&Path, bool),
-    (path_b, b_is_file): (&Path, bool),
-) -> Ordering {
+pub fn compare_paths((path_a, a_is_file): (&Path, bool), (path_b, b_is_file): (&Path, bool)) -> Ordering {
     let mut components_a = path_a.components().peekable();
     let mut components_b = path_b.components().peekable();
 
@@ -1154,20 +1033,12 @@ pub fn compare_paths(
 
                 let ordering = a_is_file.cmp(&b_is_file).then_with(|| {
                     let path_a = Path::new(component_a.as_os_str());
-                    let path_string_a = if a_is_file {
-                        path_a.file_stem()
-                    } else {
-                        path_a.file_name()
-                    }
-                    .map(|s| s.to_string_lossy());
+                    let path_string_a =
+                        if a_is_file { path_a.file_stem() } else { path_a.file_name() }.map(|s| s.to_string_lossy());
 
                     let path_b = Path::new(component_b.as_os_str());
-                    let path_string_b = if b_is_file {
-                        path_b.file_stem()
-                    } else {
-                        path_b.file_name()
-                    }
-                    .map(|s| s.to_string_lossy());
+                    let path_string_b =
+                        if b_is_file { path_b.file_stem() } else { path_b.file_name() }.map(|s| s.to_string_lossy());
 
                     let compare_components = match (path_string_a, path_string_b) {
                         (Some(a), Some(b)) => natural_sort(&a, &b),
@@ -1202,6 +1073,7 @@ pub trait UrlExt {
     /// A version of `url::Url::to_file_path` that does platform handling based on the provided `PathStyle` instead of the host platform.
     ///
     /// Prefer using this over `url::Url::to_file_path` when you need to handle paths in a cross-platform way as is the case for remoting interactions.
+    #[allow(clippy::result_unit_err, reason = "mirrors `url::Url::to_file_path`")]
     fn to_file_path_ext(&self, path_style: PathStyle) -> Result<PathBuf, ()>;
 }
 
@@ -1211,9 +1083,7 @@ impl UrlExt for url::Url {
         if let Some(segments) = self.path_segments() {
             let host = match self.host() {
                 None | Some(url::Host::Domain("localhost")) => None,
-                Some(_) if source_path_style.is_windows() && self.scheme() == "file" => {
-                    self.host_str()
-                }
+                Some(_) if source_path_style.is_windows() && self.scheme() == "file" => self.host_str(),
                 _ => return Err(()),
             };
 
@@ -1226,12 +1096,8 @@ impl UrlExt for url::Url {
                 str_len.saturating_sub(self.scheme().len() + 3)
             };
             return match source_path_style {
-                PathStyle::Unix => {
-                    file_url_segments_to_pathbuf_posix(estimated_capacity, host, segments)
-                }
-                PathStyle::Windows => {
-                    file_url_segments_to_pathbuf_windows(estimated_capacity, host, segments)
-                }
+                PathStyle::Unix => file_url_segments_to_pathbuf_posix(estimated_capacity, host, segments),
+                PathStyle::Windows => file_url_segments_to_pathbuf_windows(estimated_capacity, host, segments),
             };
         }
 
@@ -1287,9 +1153,7 @@ impl UrlExt for url::Url {
 
                 match first.len() {
                     2 => {
-                        if !first.starts_with(|c| char::is_ascii_alphabetic(&c))
-                            || first.as_bytes()[1] != b':'
-                        {
+                        if !first.starts_with(|c| char::is_ascii_alphabetic(&c)) || first.as_bytes()[1] != b':' {
                             return Err(());
                         }
 
@@ -1301,10 +1165,7 @@ impl UrlExt for url::Url {
                             return Err(());
                         }
                         let bytes = first.as_bytes();
-                        if bytes[1] != b'%'
-                            || bytes[2] != b'3'
-                            || (bytes[3] != b'a' && bytes[3] != b'A')
-                        {
+                        if bytes[1] != b'%' || bytes[2] != b'3' || (bytes[3] != b'a' && bytes[3] != b'A') {
                             return Err(());
                         }
 

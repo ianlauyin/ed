@@ -1,35 +1,58 @@
-use crate::{
-    branch_picker,
-    diff_multibuffer::DiffMultibuffer,
-    project_diff::{self, CompareWithBranch, DeployBranchDiff, ProjectDiff},
-};
-use anyhow::{Context as _, Result, anyhow};
-use editor::{Addon, Editor, EditorEvent, HiddenDiffHunkRenderer, SplittableEditor};
+use std::any::Any;
+use std::any::TypeId;
+use std::sync::Arc;
+
+use anyhow::Context as _;
+use anyhow::Result;
+use anyhow::anyhow;
+use editor::Addon;
+use editor::Editor;
+use editor::EditorEvent;
+use editor::HiddenDiffHunkRenderer;
+use editor::SplittableEditor;
 use git::status::FileStatus;
-use gpui::{
-    App, AppContext as _, Entity, EventEmitter, FocusHandle, Focusable, Render, SharedString,
-    Subscription, Task, WeakEntity,
-};
-use language::{BufferId, Capability};
-use project::{
-    Project, ProjectPath,
-    git_store::{
-        Repository,
-        diff_buffer_list::{self, DiffBase},
-    },
-};
-use std::{
-    any::{Any, TypeId},
-    sync::Arc,
-};
-use ui::{DiffStat, Divider, PopoverMenu, Tooltip, prelude::*};
-use workspace::{
-    ItemHandle, ItemNavHistory, SerializableItem, ToolbarItemEvent, ToolbarItemLocation,
-    ToolbarItemView, Workspace,
-    item::{Item, ItemEvent, SaveOptions},
-    notifications::NotifyTaskExt,
-    searchable::SearchableItemHandle,
-};
+use gpui::App;
+use gpui::AppContext as _;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::Render;
+use gpui::SharedString;
+use gpui::Subscription;
+use gpui::Task;
+use gpui::WeakEntity;
+use language::BufferId;
+use language::Capability;
+use project::Project;
+use project::ProjectPath;
+use project::git_store::Repository;
+use project::git_store::diff_buffer_list::DiffBase;
+use project::git_store::diff_buffer_list::{self};
+use ui::DiffStat;
+use ui::Divider;
+use ui::PopoverMenu;
+use ui::Tooltip;
+use ui::prelude::*;
+use workspace::ItemHandle;
+use workspace::ItemNavHistory;
+use workspace::SerializableItem;
+use workspace::ToolbarItemEvent;
+use workspace::ToolbarItemLocation;
+use workspace::ToolbarItemView;
+use workspace::Workspace;
+use workspace::item::Item;
+use workspace::item::ItemEvent;
+use workspace::item::SaveOptions;
+use workspace::notifications::NotifyTaskExt;
+use workspace::searchable::SearchableItemHandle;
+
+use crate::branch_picker;
+use crate::diff_multibuffer::DiffMultibuffer;
+use crate::project_diff::CompareWithBranch;
+use crate::project_diff::DeployBranchDiff;
+use crate::project_diff::ProjectDiff;
+use crate::project_diff::{self};
 
 /// The workspace item for a branch (merge-base) diff: "Changes since {branch}".
 /// It wraps a single [`DiffMultibuffer`] over [`DiffBase::Merge`] and delegates
@@ -53,9 +76,7 @@ impl Addon for BranchDiffAddon {
     }
 
     fn override_status_for_buffer_id(&self, buffer_id: BufferId, cx: &App) -> Option<FileStatus> {
-        self.branch_diff
-            .read(cx)
-            .status_for_buffer_id(buffer_id, cx)
+        self.branch_diff.read(cx).status_for_buffer_id(buffer_id, cx)
     }
 }
 
@@ -68,11 +89,7 @@ impl BranchDiff {
         workspace::register_serializable_item::<Self>(cx);
     }
 
-    pub(crate) fn deploy_branch_diff(
-        workspace: &mut Workspace,
-        window: &mut Window,
-        cx: &mut Context<Workspace>,
-    ) {
+    pub(crate) fn deploy_branch_diff(workspace: &Workspace, window: &mut Window, cx: &mut Context<Workspace>) {
         let project = workspace.project().clone();
         let Some(intended_repo) = project.read(cx).active_repository(cx) else {
             let workspace = cx.entity().downgrade();
@@ -96,14 +113,7 @@ impl BranchDiff {
                         ProjectDiff::deploy_at(workspace, None, window, cx);
                         return;
                     };
-                    Self::deploy_branch_diff_with_base_ref(
-                        workspace,
-                        project,
-                        intended_repo,
-                        base_ref,
-                        window,
-                        cx,
-                    );
+                    Self::deploy_branch_diff_with_base_ref(workspace, project, intended_repo, base_ref, window, cx);
                 })?;
 
                 anyhow::Ok(())
@@ -128,11 +138,9 @@ impl BranchDiff {
                 .detach_and_notify_err(workspace, window, cx);
             return;
         };
-        let selected_branch = workspace.active_item_as::<Self>(cx).and_then(|item| {
-            match item.read(cx).diff_base(cx) {
-                DiffBase::Merge { base_ref } => Some(base_ref.clone()),
-                DiffBase::Head | DiffBase::Index | DiffBase::Staged => None,
-            }
+        let selected_branch = workspace.active_item_as::<Self>(cx).and_then(|item| match item.read(cx).diff_base(cx) {
+            DiffBase::Merge { base_ref } => Some(base_ref.clone()),
+            DiffBase::Head | DiffBase::Index | DiffBase::Staged => None,
         });
         let workspace_handle = workspace.weak_handle();
         let on_select = Arc::new({
@@ -156,14 +164,7 @@ impl BranchDiff {
         });
 
         workspace.toggle_modal(window, cx, |window, cx| {
-            branch_picker::select_modal(
-                workspace_handle,
-                Some(repository),
-                selected_branch,
-                on_select,
-                window,
-                cx,
-            )
+            branch_picker::select_modal(workspace_handle, Some(repository), selected_branch, on_select, window, cx)
         });
     }
 
@@ -180,9 +181,7 @@ impl BranchDiff {
             matches!(
                 item.diff_base(cx),
                 DiffBase::Merge { base_ref: existing_base_ref } if existing_base_ref == &base_ref
-            ) && item
-                .repo(cx)
-                .is_some_and(|repo| repo.read(cx).id == intended_repo.read(cx).id)
+            ) && item.repo(cx).is_some_and(|repo| repo.read(cx).id == intended_repo.read(cx).id)
         });
         if let Some(existing) = existing {
             workspace.activate_item(&existing, true, true, window, cx);
@@ -195,14 +194,7 @@ impl BranchDiff {
             .spawn(cx, async move |cx| {
                 let this = cx
                     .update(|window, cx| {
-                        Self::new_with_branch_base(
-                            project,
-                            workspace.clone(),
-                            base_ref,
-                            intended_repo,
-                            window,
-                            cx,
-                        )
+                        Self::new_with_branch_base(project, workspace.clone(), base_ref, intended_repo, window, cx)
                     })?
                     .await?;
                 workspace
@@ -220,22 +212,12 @@ impl BranchDiff {
         workspace: Entity<Workspace>,
         base_ref: SharedString,
         repo: Entity<Repository>,
-        window: &mut Window,
-        cx: &mut App,
+        window: &Window,
+        cx: &App,
     ) -> Task<Result<Entity<Self>>> {
         window.spawn(cx, async move |cx| {
             cx.update(|window, cx| {
-                cx.new(|cx| {
-                    Self::new_with_base_ref(
-                        project,
-                        workspace,
-                        base_ref,
-                        Some(repo),
-                        None,
-                        window,
-                        cx,
-                    )
-                })
+                cx.new(|cx| Self::new_with_base_ref(project, workspace, base_ref, Some(repo), None, window, cx))
             })
         })
     }
@@ -251,14 +233,7 @@ impl BranchDiff {
     ) -> Self {
         let branch_diff = branch_diff.unwrap_or_else(|| {
             let git_store = project.read(cx).git_store().clone();
-            cx.new(|cx| {
-                diff_buffer_list::DiffBufferList::new(
-                    DiffBase::Merge { base_ref },
-                    git_store,
-                    repo,
-                    cx,
-                )
-            })
+            cx.new(|cx| diff_buffer_list::DiffBufferList::new(DiffBase::Merge { base_ref }, git_store, repo, cx))
         });
         let branch_diff_for_addon = branch_diff.clone();
         let diff = cx.new(|cx| {
@@ -270,9 +245,7 @@ impl BranchDiff {
                     editor.set_diff_hunk_renderer(Some(Arc::new(HiddenDiffHunkRenderer)), cx);
                     editor.rhs_editor().update(cx, move |rhs_editor, _cx| {
                         rhs_editor.set_read_only(false);
-                        rhs_editor.register_addon(BranchDiffAddon {
-                            branch_diff: branch_diff_for_addon,
-                        });
+                        rhs_editor.register_addon(BranchDiffAddon { branch_diff: branch_diff_for_addon });
                     });
                 },
                 project.clone(),
@@ -290,15 +263,8 @@ impl BranchDiff {
         workspace: Entity<Workspace>,
         cx: &mut Context<Self>,
     ) -> Self {
-        let diff_event_subscription = cx.subscribe(&diff, |_, _, event: &EditorEvent, cx| {
-            cx.emit(event.clone())
-        });
-        Self {
-            diff,
-            project,
-            workspace: workspace.downgrade(),
-            _diff_event_subscription: diff_event_subscription,
-        }
+        let diff_event_subscription = cx.subscribe(&diff, |_, _, event: &EditorEvent, cx| cx.emit(event.clone()));
+        Self { diff, project, workspace: workspace.downgrade(), _diff_event_subscription: diff_event_subscription }
     }
 
     pub(crate) fn diff_base<'a>(&'a self, cx: &'a App) -> &'a DiffBase {
@@ -309,7 +275,7 @@ impl BranchDiff {
         self.diff.read(cx).repo(cx)
     }
 
-    fn set_merge_base(&mut self, base_ref: SharedString, cx: &mut Context<Self>) {
+    fn set_merge_base(&self, base_ref: SharedString, cx: &mut Context<Self>) {
         self.diff.update(cx, |diff, cx| {
             diff.branch_diff().update(cx, |branch_diff, cx| {
                 branch_diff.set_diff_base(DiffBase::Merge { base_ref }, cx);
@@ -338,18 +304,11 @@ impl Item for BranchDiff {
     }
 
     fn deactivated(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.diff
-            .update(cx, |diff, cx| diff.deactivated(window, cx));
+        self.diff.update(cx, |diff, cx| diff.deactivated(window, cx));
     }
 
-    fn navigate(
-        &mut self,
-        data: Arc<dyn Any + Send>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        self.diff
-            .update(cx, |diff, cx| diff.navigate(data, window, cx))
+    fn navigate(&mut self, data: Arc<dyn Any + Send>, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        self.diff.update(cx, |diff, cx| diff.navigate(data, window, cx))
     }
 
     fn tab_tooltip_text(&self, cx: &App) -> Option<SharedString> {
@@ -367,11 +326,7 @@ impl Item for BranchDiff {
         Some(Box::new(self.diff.read(cx).editor().clone()))
     }
 
-    fn for_each_project_item(
-        &self,
-        cx: &App,
-        f: &mut dyn FnMut(gpui::EntityId, &dyn project::ProjectItem),
-    ) {
+    fn for_each_project_item(&self, cx: &App, f: &mut dyn FnMut(gpui::EntityId, &dyn project::ProjectItem)) {
         self.diff.read(cx).for_each_project_item(cx, f);
     }
 
@@ -379,14 +334,8 @@ impl Item for BranchDiff {
         self.diff.read(cx).active_project_path(cx)
     }
 
-    fn set_nav_history(
-        &mut self,
-        nav_history: ItemNavHistory,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.diff
-            .update(cx, |diff, cx| diff.set_nav_history(nav_history, cx));
+    fn set_nav_history(&mut self, nav_history: ItemNavHistory, _: &mut Window, cx: &mut Context<Self>) {
+        self.diff.update(cx, |diff, cx| diff.set_nav_history(nav_history, cx));
     }
 
     fn can_split(&self) -> bool {
@@ -411,17 +360,9 @@ impl Item for BranchDiff {
         let repo = self.repo(cx);
         let project = self.project.clone();
         let branch_diff = self.diff.read(cx).branch_diff().clone();
-        Task::ready(Some(cx.new(|cx| {
-            Self::new_with_base_ref(
-                project,
-                workspace,
-                base_ref,
-                repo,
-                Some(branch_diff),
-                window,
-                cx,
-            )
-        })))
+        Task::ready(Some(
+            cx.new(|cx| Self::new_with_base_ref(project, workspace, base_ref, repo, Some(branch_diff), window, cx)),
+        ))
     }
 
     fn is_dirty(&self, cx: &App) -> bool {
@@ -443,8 +384,7 @@ impl Item for BranchDiff {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
-        self.diff
-            .update(cx, |diff, cx| diff.save(options, project, window, cx))
+        self.diff.update(cx, |diff, cx| diff.save(options, project, window, cx))
     }
 
     fn save_as(
@@ -457,14 +397,8 @@ impl Item for BranchDiff {
         unreachable!()
     }
 
-    fn reload(
-        &mut self,
-        project: Entity<Project>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<()>> {
-        self.diff
-            .update(cx, |diff, cx| diff.reload(project, window, cx))
+    fn reload(&mut self, project: Entity<Project>, window: &mut Window, cx: &mut Context<Self>) -> Task<Result<()>> {
+        self.diff.update(cx, |diff, cx| diff.reload(project, window, cx))
     }
 
     fn act_as_type<'a>(
@@ -478,15 +412,7 @@ impl Item for BranchDiff {
         } else if type_id == TypeId::of::<DiffMultibuffer>() {
             Some(self.diff.clone().into())
         } else if type_id == TypeId::of::<Editor>() {
-            Some(
-                self.diff
-                    .read(cx)
-                    .editor()
-                    .read(cx)
-                    .rhs_editor()
-                    .clone()
-                    .into(),
-            )
+            Some(self.diff.read(cx).editor().read(cx).rhs_editor().clone().into())
         } else if type_id == TypeId::of::<SplittableEditor>() {
             Some(self.diff.read(cx).editor().clone().into())
         } else if type_id == TypeId::of::<diff_buffer_list::DiffBufferList>() {
@@ -496,15 +422,8 @@ impl Item for BranchDiff {
         }
     }
 
-    fn added_to_workspace(
-        &mut self,
-        workspace: &mut Workspace,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.diff.update(cx, |diff, cx| {
-            diff.added_to_workspace(workspace, window, cx)
-        });
+    fn added_to_workspace(&mut self, workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Self>) {
+        self.diff.update(cx, |diff, cx| diff.added_to_workspace(workspace, window, cx));
     }
 }
 
@@ -519,12 +438,7 @@ impl SerializableItem for BranchDiff {
         "BranchDiff"
     }
 
-    fn cleanup(
-        _: workspace::WorkspaceId,
-        _: Vec<workspace::ItemId>,
-        _: &mut Window,
-        _: &mut App,
-    ) -> Task<Result<()>> {
+    fn cleanup(_: workspace::WorkspaceId, _: Vec<workspace::ItemId>, _: &mut Window, _: &mut App) -> Task<Result<()>> {
         Task::ready(Ok(()))
     }
 
@@ -544,9 +458,7 @@ impl SerializableItem for BranchDiff {
             };
             let workspace = workspace.upgrade().context("workspace gone")?;
             cx.update(|window, cx| {
-                cx.new(|cx| {
-                    Self::new_with_base_ref(project, workspace, base_ref, None, None, window, cx)
-                })
+                cx.new(|cx| Self::new_with_base_ref(project, workspace, base_ref, None, None, window, cx))
             })
         })
     }
@@ -564,10 +476,7 @@ impl SerializableItem for BranchDiff {
         };
         let diff_base = DiffBase::Merge { base_ref };
         let db = project_diff::persistence::ProjectDiffDb::global(cx);
-        Some(cx.background_spawn(async move {
-            db.save_project_diff_base(item_id, workspace_id, diff_base)
-                .await
-        }))
+        Some(cx.background_spawn(async move { db.save_project_diff_base(item_id, workspace_id, diff_base).await }))
     }
 
     fn should_serialize(&self, _: &Self::Event) -> bool {
@@ -580,7 +489,7 @@ pub struct BranchDiffToolbar {
 }
 
 impl BranchDiffToolbar {
-    pub fn new(_cx: &mut Context<Self>) -> Self {
+    pub const fn new(_cx: &mut Context<Self>) -> Self {
         Self { branch_diff: None }
     }
 
@@ -598,23 +507,12 @@ impl ToolbarItemView for BranchDiffToolbar {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) -> ToolbarItemLocation {
-        self.branch_diff = active_pane_item
-            .and_then(|item| item.act_as::<BranchDiff>(cx))
-            .map(|entity| entity.downgrade());
-        if self.branch_diff.is_some() {
-            ToolbarItemLocation::PrimaryRight
-        } else {
-            ToolbarItemLocation::Hidden
-        }
+        self.branch_diff =
+            active_pane_item.and_then(|item| item.act_as::<BranchDiff>(cx)).map(|entity| entity.downgrade());
+        if self.branch_diff.is_some() { ToolbarItemLocation::PrimaryRight } else { ToolbarItemLocation::Hidden }
     }
 
-    fn pane_focus_update(
-        &mut self,
-        _pane_focused: bool,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) {
-    }
+    fn pane_focus_update(&mut self, _pane_focused: bool, _window: &mut Window, _cx: &mut Context<Self>) {}
 }
 
 impl Render for BranchDiffToolbar {
@@ -622,11 +520,7 @@ impl Render for BranchDiffToolbar {
         let Some(branch_diff) = self.branch_diff(cx) else {
             return div();
         };
-        let (additions, deletions) = branch_diff
-            .read(cx)
-            .diff
-            .read(cx)
-            .calculate_changed_lines(cx);
+        let (additions, deletions) = branch_diff.read(cx).diff.read(cx).calculate_changed_lines(cx);
         let diff_base = branch_diff.read(cx).diff_base(cx).clone();
         let DiffBase::Merge { base_ref } = diff_base else {
             return div();
@@ -637,13 +531,7 @@ impl Render for BranchDiffToolbar {
         let workspace = branch_diff.read(cx).workspace.clone();
         let view_for_picker = branch_diff.downgrade();
 
-        let is_multibuffer_empty = branch_diff
-            .read(cx)
-            .diff
-            .read(cx)
-            .multibuffer()
-            .read(cx)
-            .is_empty();
+        let is_multibuffer_empty = branch_diff.read(cx).diff.read(cx).multibuffer().read(cx).is_empty();
 
         h_flex()
             .my_neg_1()
@@ -652,21 +540,15 @@ impl Render for BranchDiffToolbar {
             .flex_wrap()
             .justify_between()
             .when(!is_multibuffer_empty, |this| {
-                this.child(DiffStat::new(
-                    "branch-diff-stat",
-                    additions as usize,
-                    deletions as usize,
-                ))
+                this.child(DiffStat::new("branch-diff-stat", additions as usize, deletions as usize))
             })
             .child(Divider::vertical().ml_1())
             .child(
                 PopoverMenu::new("branch-diff-base-branch-picker")
                     .menu(move |window, cx| {
                         let view_for_picker = view_for_picker.clone();
-                        let on_select = Arc::new(
-                            move |branch: git::repository::Branch,
-                                  _window: &mut Window,
-                                  cx: &mut App| {
+                        let on_select =
+                            Arc::new(move |branch: git::repository::Branch, _window: &mut Window, cx: &mut App| {
                                 let base_ref: SharedString = branch.name().to_owned().into();
                                 view_for_picker
                                     .update(cx, |branch_diff, cx| {
@@ -674,8 +556,7 @@ impl Render for BranchDiffToolbar {
                                         cx.notify();
                                     })
                                     .ok();
-                            },
-                        );
+                            });
 
                         Some(branch_picker::select_popover(
                             workspace.clone(),
@@ -687,11 +568,8 @@ impl Render for BranchDiffToolbar {
                         ))
                     })
                     .trigger_with_tooltip(
-                        Button::new("branch-diff-base-branch", base_ref_label).end_icon(
-                            Icon::new(IconName::ChevronDown)
-                                .size(IconSize::XSmall)
-                                .color(Color::Muted),
-                        ),
+                        Button::new("branch-diff-base-branch", base_ref_label)
+                            .end_icon(Icon::new(IconName::ChevronDown).size(IconSize::XSmall).color(Color::Muted)),
                         Tooltip::text("Select Base Branch"),
                     ),
             )

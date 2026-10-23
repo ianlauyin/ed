@@ -1,4 +1,10 @@
-use gpui::{Hsla, IntoElement, PathBuilder, Refineable as _, StyleRefinement, canvas, point};
+use gpui::Hsla;
+use gpui::IntoElement;
+use gpui::PathBuilder;
+use gpui::Refineable as _;
+use gpui::StyleRefinement;
+use gpui::canvas;
+use gpui::point;
 
 use crate::prelude::*;
 
@@ -83,12 +89,12 @@ impl Divider {
         }
     }
 
-    pub fn inset(mut self) -> Self {
+    pub const fn inset(mut self) -> Self {
         self.inset = true;
         self
     }
 
-    pub fn color(mut self, color: DividerColor) -> Self {
+    pub const fn color(mut self, color: DividerColor) -> Self {
         self.color = color;
         self
     }
@@ -137,17 +143,10 @@ impl Styled for Divider {
 impl RenderOnce for Divider {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
         let mut base = match self.direction {
-            DividerDirection::Horizontal => div()
-                .min_w_0()
-                .h_px()
-                .max_h_px()
-                .w_full()
-                .when(self.inset, |this| this.mx_1p5()),
-            DividerDirection::Vertical => div()
-                .min_w_0()
-                .w_px()
-                .h_4()
-                .when(self.inset, |this| this.my_1p5()),
+            DividerDirection::Horizontal => {
+                div().min_w_0().h_px().max_h_px().w_full().when(self.inset, |this| this.mx_1p5())
+            }
+            DividerDirection::Vertical => div().min_w_0().w_px().h_4().when(self.inset, |this| this.my_1p5()),
         };
 
         base.style().refine(&self.style);
@@ -179,9 +178,7 @@ impl Component for Divider {
                         single_example("Default", Divider::horizontal().into_any_element()),
                         single_example(
                             "Border Color",
-                            Divider::horizontal()
-                                .color(DividerColor::Border)
-                                .into_any_element(),
+                            Divider::horizontal().color(DividerColor::Border).into_any_element(),
                         ),
                         single_example("Inset", Divider::horizontal().inset().into_any_element()),
                         single_example("Dashed", Divider::horizontal_dashed().into_any_element()),
@@ -190,31 +187,13 @@ impl Component for Divider {
                 example_group_with_title(
                     "Vertical Dividers",
                     vec![
-                        single_example(
-                            "Default",
-                            div().h_16().child(Divider::vertical()).into_any_element(),
-                        ),
+                        single_example("Default", div().h_16().child(Divider::vertical()).into_any_element()),
                         single_example(
                             "Border Color",
-                            div()
-                                .h_16()
-                                .child(Divider::vertical().color(DividerColor::Border))
-                                .into_any_element(),
+                            div().h_16().child(Divider::vertical().color(DividerColor::Border)).into_any_element(),
                         ),
-                        single_example(
-                            "Inset",
-                            div()
-                                .h_16()
-                                .child(Divider::vertical().inset())
-                                .into_any_element(),
-                        ),
-                        single_example(
-                            "Dashed",
-                            div()
-                                .h_16()
-                                .child(Divider::vertical_dashed())
-                                .into_any_element(),
-                        ),
+                        single_example("Inset", div().h_16().child(Divider::vertical().inset()).into_any_element()),
+                        single_example("Dashed", div().h_16().child(Divider::vertical_dashed()).into_any_element()),
                     ],
                 ),
                 example_group_with_title(

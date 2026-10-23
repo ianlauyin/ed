@@ -5,7 +5,10 @@ mod env_config;
 pub mod filter;
 pub mod sink;
 
-pub use sink::{flush, init_output_file, init_output_stderr, init_output_stdout};
+pub use sink::flush;
+pub use sink::init_output_file;
+pub use sink::init_output_stderr;
+pub use sink::init_output_stdout;
 
 pub const SCOPE_DEPTH_MAX: usize = 4;
 
@@ -34,13 +37,7 @@ fn get_env_config() -> Option<String> {
     std::env::var("ZED_LOG")
         .or_else(|_| std::env::var("RUST_LOG"))
         .ok()
-        .or_else(|| {
-            if std::env::var("CI").is_ok() {
-                Some("info".to_owned())
-            } else {
-                None
-            }
-        })
+        .or_else(|| if std::env::var("CI").is_ok() { Some("info".to_owned()) } else { None })
 }
 
 pub fn process_env(filter: Option<String>) {
@@ -219,9 +216,7 @@ pub const fn scoped_logger(parent: Logger, name: &'static str) -> Logger {
 #[macro_export]
 macro_rules! default_logger {
     () => {
-        $crate::Logger {
-            scope: $crate::private::scope_new(&[$crate::crate_name!()]),
-        }
+        $crate::Logger { scope: $crate::private::scope_new(&[$crate::crate_name!()]) }
     };
 }
 
@@ -336,16 +331,10 @@ impl Drop for Timer {
 impl Timer {
     #[must_use = "Timer will stop when dropped, the result of this function should be saved in a variable prefixed with `_` if it should stop when dropped"]
     pub fn new(logger: Logger, name: &'static str) -> Self {
-        Self {
-            logger,
-            name,
-            start_time: std::time::Instant::now(),
-            warn_if_longer_than: None,
-            done: false,
-        }
+        Self { logger, name, start_time: std::time::Instant::now(), warn_if_longer_than: None, done: false }
     }
 
-    pub fn warn_if_gt(mut self, warn_limit: std::time::Duration) -> Self {
+    pub const fn warn_if_gt(mut self, warn_limit: std::time::Duration) -> Self {
         self.warn_if_longer_than = Some(warn_limit);
         self
     }

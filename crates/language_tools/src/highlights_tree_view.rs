@@ -1,27 +1,67 @@
-use editor::{
-    Anchor, Editor, HighlightKey, MultiBufferSnapshot, SelectionEffects, ToPoint,
-    scroll::Autoscroll,
-};
-use gpui::{
-    Action, App, AppContext as _, Context, Div, Entity, EntityId, EventEmitter, FocusHandle,
-    Focusable, HighlightStyle, Hsla, InteractiveElement, IntoElement, MouseButton, MouseDownEvent,
-    MouseMoveEvent, ParentElement, Render, ScrollStrategy, SharedString, Styled, Task,
-    UniformListScrollHandle, WeakEntity, Window, actions, div, rems, uniform_list,
-};
-use language::{BufferId, Point, ToOffset};
-use menu::{SelectNext, SelectPrevious};
-use std::{mem, ops::Range, sync::Arc, time::Duration};
+use std::mem;
+use std::ops::Range;
+use std::sync::Arc;
+use std::time::Duration;
+
+use editor::Anchor;
+use editor::Editor;
+use editor::HighlightKey;
+use editor::MultiBufferSnapshot;
+use editor::SelectionEffects;
+use editor::ToPoint;
+use editor::scroll::Autoscroll;
+use gpui::Action;
+use gpui::App;
+use gpui::AppContext as _;
+use gpui::Context;
+use gpui::Div;
+use gpui::Entity;
+use gpui::EntityId;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::HighlightStyle;
+use gpui::Hsla;
+use gpui::InteractiveElement;
+use gpui::IntoElement;
+use gpui::MouseButton;
+use gpui::MouseDownEvent;
+use gpui::MouseMoveEvent;
+use gpui::ParentElement;
+use gpui::Render;
+use gpui::ScrollStrategy;
+use gpui::SharedString;
+use gpui::Styled;
+use gpui::Task;
+use gpui::UniformListScrollHandle;
+use gpui::WeakEntity;
+use gpui::Window;
+use gpui::actions;
+use gpui::div;
+use gpui::rems;
+use gpui::uniform_list;
+use language::BufferId;
+use language::Point;
+use language::ToOffset;
+use menu::SelectNext;
+use menu::SelectPrevious;
 use theme::ActiveTheme;
 use theme::SyntaxTheme;
-use ui::{
-    ButtonLike, ContextMenu, PopoverMenu, PopoverMenuHandle, Tooltip, WithScrollbar, prelude::*,
-};
-
-use workspace::{
-    Event as WorkspaceEvent, SplitDirection, ToolbarItemEvent, ToolbarItemLocation,
-    ToolbarItemView, Workspace,
-    item::{Item, ItemHandle},
-};
+use ui::ButtonLike;
+use ui::ContextMenu;
+use ui::PopoverMenu;
+use ui::PopoverMenuHandle;
+use ui::Tooltip;
+use ui::WithScrollbar;
+use ui::prelude::*;
+use workspace::Event as WorkspaceEvent;
+use workspace::SplitDirection;
+use workspace::ToolbarItemEvent;
+use workspace::ToolbarItemLocation;
+use workspace::ToolbarItemView;
+use workspace::Workspace;
+use workspace::item::Item;
+use workspace::item::ItemHandle;
 
 actions!(
     dev,
@@ -43,19 +83,13 @@ actions!(
     ]
 );
 
-pub fn init(cx: &mut App) {
+pub fn init(cx: &App) {
     cx.observe_new(move |workspace: &mut Workspace, _, _| {
         workspace.register_action(move |workspace, _: &OpenHighlightsTreeView, window, cx| {
             let active_item = workspace.active_item(cx);
             let workspace_handle = workspace.weak_handle();
-            let highlights_tree_view =
-                cx.new(|cx| HighlightsTreeView::new(workspace_handle, active_item, window, cx));
-            workspace.split_item(
-                SplitDirection::Right,
-                Box::new(highlights_tree_view),
-                window,
-                cx,
-            )
+            let highlights_tree_view = cx.new(|cx| HighlightsTreeView::new(workspace_handle, active_item, window, cx));
+            workspace.split_item(SplitDirection::Right, Box::new(highlights_tree_view), window, cx)
         });
     })
     .detach();
@@ -79,19 +113,13 @@ impl HighlightCategory {
     fn label(&self) -> SharedString {
         match self {
             HighlightCategory::Text(key) => format!("text: {key:?}").into(),
-            HighlightCategory::SyntaxToken {
-                capture_name,
-                theme_key: Some(theme_key),
-            } => format!("syntax: {capture_name} \u{2192} {theme_key}").into(),
-            HighlightCategory::SyntaxToken {
-                capture_name,
-                theme_key: None,
-            } => format!("syntax: {capture_name}").into(),
-            HighlightCategory::SemanticToken {
-                token_type,
-                token_modifiers,
-                theme_key,
-            } => {
+            HighlightCategory::SyntaxToken { capture_name, theme_key: Some(theme_key) } => {
+                format!("syntax: {capture_name} \u{2192} {theme_key}").into()
+            }
+            HighlightCategory::SyntaxToken { capture_name, theme_key: None } => {
+                format!("syntax: {capture_name}").into()
+            }
+            HighlightCategory::SemanticToken { token_type, token_modifiers, theme_key } => {
                 let label = match (token_type, token_modifiers) {
                     (Some(token_type), Some(modifiers)) => {
                         format!("semantic token: {token_type} [{modifiers}]")
@@ -200,10 +228,8 @@ impl HighlightsTreeView {
 
         this.handle_item_updated(active_item, window, cx);
 
-        cx.subscribe_in(
-            &workspace_handle.upgrade().unwrap(),
-            window,
-            move |this, workspace, event, window, cx| match event {
+        cx.subscribe_in(&workspace_handle.upgrade().unwrap(), window, move |this, workspace, event, window, cx| {
+            match event {
                 WorkspaceEvent::ItemAdded { .. } | WorkspaceEvent::ActiveItemChanged => {
                     this.handle_item_updated(workspace.read(cx).active_item(cx), window, cx)
                 }
@@ -211,8 +237,8 @@ impl HighlightsTreeView {
                     this.handle_item_removed(item_id, window, cx);
                 }
                 _ => {}
-            },
-        )
+            }
+        })
         .detach();
 
         this
@@ -221,7 +247,7 @@ impl HighlightsTreeView {
     fn handle_item_updated(
         &mut self,
         active_item: Option<Box<dyn ItemHandle>>,
-        window: &mut Window,
+        window: &Window,
         cx: &mut Context<Self>,
     ) {
         let active_editor = match active_item {
@@ -244,26 +270,14 @@ impl HighlightsTreeView {
             }
         };
 
-        let is_different_editor = self
-            .editor
-            .as_ref()
-            .is_none_or(|state| state.editor != active_editor);
+        let is_different_editor = self.editor.as_ref().is_none_or(|state| state.editor != active_editor);
         if is_different_editor {
             self.set_editor(active_editor, window, cx);
         }
     }
 
-    fn handle_item_removed(
-        &mut self,
-        item_id: &EntityId,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        if self
-            .editor
-            .as_ref()
-            .is_some_and(|state| state.editor.entity_id() == *item_id)
-        {
+    fn handle_item_removed(&mut self, item_id: &EntityId, _window: &mut Window, cx: &mut Context<Self>) {
+        if self.editor.as_ref().is_some_and(|state| state.editor.entity_id() == *item_id) {
             self.clear(cx);
         }
     }
@@ -280,7 +294,7 @@ impl HighlightsTreeView {
         cx.notify();
     }
 
-    fn set_editor(&mut self, editor: Entity<Editor>, window: &mut Window, cx: &mut Context<Self>) {
+    fn set_editor(&mut self, editor: Entity<Editor>, window: &Window, cx: &mut Context<Self>) {
         if let Some(state) = &self.editor {
             if state.editor == editor {
                 return;
@@ -288,19 +302,15 @@ impl HighlightsTreeView {
             Self::clear_editor_highlights(&state.editor, cx);
         }
 
-        let subscription =
-            cx.subscribe_in(&editor, window, |this, _, event, window, cx| match event {
-                editor::EditorEvent::Reparsed(_) => this.schedule_refresh_highlights(window, cx),
-                editor::EditorEvent::SelectionsChanged { .. } => {
-                    this.update_selection_from_editor(cx);
-                }
-                _ => return,
-            });
-
-        self.editor = Some(EditorState {
-            editor,
-            _subscription: subscription,
+        let subscription = cx.subscribe_in(&editor, window, |this, _, event, window, cx| match event {
+            editor::EditorEvent::Reparsed(_) => this.schedule_refresh_highlights(window, cx),
+            editor::EditorEvent::SelectionsChanged { .. } => {
+                this.update_selection_from_editor(cx);
+            }
+            _ => (),
         });
+
+        self.editor = Some(EditorState { editor, _subscription: subscription });
         self.refresh_task = Task::ready(());
         self.cached_entries.clear();
         self.display_items.clear();
@@ -310,23 +320,15 @@ impl HighlightsTreeView {
         cx.notify();
     }
 
-    fn schedule_refresh_highlights(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn schedule_refresh_highlights(&mut self, window: &Window, cx: &Context<Self>) {
         self.refresh_task = cx.spawn_in(window, async move |this, cx| {
-            cx.background_executor()
-                .timer(Duration::from_millis(30))
-                .await;
+            cx.background_executor().timer(Duration::from_millis(30)).await;
 
-            let Some(input) = this
-                .update(cx, |this, cx| this.highlight_refresh_input(cx))
-                .ok()
-                .flatten()
-            else {
+            let Some(input) = this.update(cx, |this, cx| this.highlight_refresh_input(cx)).ok().flatten() else {
                 return;
             };
 
-            let new_highlights = cx
-                .background_spawn(async move { build_highlight_entries(input) })
-                .await;
+            let new_highlights = cx.background_spawn(async move { build_highlight_entries(input) }).await;
 
             this.update_in(cx, |this, _window, cx| {
                 this.apply_highlight_refresh(new_highlights, cx);
@@ -344,20 +346,17 @@ impl HighlightsTreeView {
         let multi_buffer_snapshot = multi_buffer.read(cx).snapshot(cx);
         let syntax_theme = cx.theme().syntax().clone();
 
-        let (text_highlights, semantic_token_highlights) =
-            display_map.update(cx, |display_map, _| {
-                let text_highlights = display_map
-                    .all_text_highlights()
-                    .map(|(key, highlights)| (*key, highlights.clone()))
-                    .collect::<Vec<_>>();
-                let semantic_token_highlights = display_map
-                    .all_semantic_token_highlights()
-                    .map(|(buffer_id, (tokens, interner))| {
-                        (*buffer_id, tokens.clone(), interner.clone())
-                    })
-                    .collect::<Vec<_>>();
-                (text_highlights, semantic_token_highlights)
-            });
+        let (text_highlights, semantic_token_highlights) = display_map.update(cx, |display_map, _| {
+            let text_highlights = display_map
+                .all_text_highlights()
+                .map(|(key, highlights)| (*key, highlights.clone()))
+                .collect::<Vec<_>>();
+            let semantic_token_highlights = display_map
+                .all_semantic_token_highlights()
+                .map(|(buffer_id, (tokens, interner))| (*buffer_id, tokens.clone(), interner.clone()))
+                .collect::<Vec<_>>();
+            (text_highlights, semantic_token_highlights)
+        });
 
         let mut semantic_highlights = Vec::new();
         project.read(cx).lsp_store().update(cx, |lsp_store, cx| {
@@ -368,43 +367,35 @@ impl HighlightsTreeView {
                     .and_then(|buffer| buffer.read(cx).language().map(|language| language.name()));
 
                 for token in tokens.iter() {
-                    let Some(stylizer) = lsp_store.get_or_create_token_stylizer(
-                        token.server_id,
-                        language_name.as_ref(),
-                        cx,
-                    ) else {
+                    let Some(stylizer) =
+                        lsp_store.get_or_create_token_stylizer(token.server_id, language_name.as_ref(), cx)
+                    else {
                         continue;
                     };
 
-                    let theme_key = stylizer
-                        .rules_for_token(token.token_type)
-                        .and_then(|rules| {
-                            rules
-                                .iter()
-                                .filter(|rule| {
-                                    rule.token_modifiers.iter().all(|modifier| {
-                                        stylizer.has_modifier(token.token_modifiers, modifier)
-                                    })
-                                })
-                                .fold(None, |theme_key, rule| {
-                                    rule.style
-                                        .iter()
-                                        .find(|style_name| {
-                                            syntax_theme.style_for_name(style_name).is_some()
-                                        })
-                                        .map(|style_name| SharedString::from(style_name.clone()))
-                                        .or(theme_key)
-                                })
-                        });
+                    let theme_key = stylizer.rules_for_token(token.token_type).and_then(|rules| {
+                        rules
+                            .iter()
+                            .filter(|rule| {
+                                rule.token_modifiers
+                                    .iter()
+                                    .all(|modifier| stylizer.has_modifier(token.token_modifiers, modifier))
+                            })
+                            .fold(None, |theme_key, rule| {
+                                rule.style
+                                    .iter()
+                                    .find(|style_name| syntax_theme.style_for_name(style_name).is_some())
+                                    .map(|style_name| SharedString::from(style_name.clone()))
+                                    .or(theme_key)
+                            })
+                    });
 
                     semantic_highlights.push(SemanticHighlightEntry {
                         range: token.range.start..token.range.end,
                         style: interner[token.style],
                         category: HighlightCategory::SemanticToken {
                             token_type: stylizer.token_type_name(token.token_type).cloned(),
-                            token_modifiers: stylizer
-                                .token_modifiers(token.token_modifiers)
-                                .map(SharedString::from),
+                            token_modifiers: stylizer.token_modifiers(token.token_modifiers).map(SharedString::from),
                             theme_key,
                         },
                     });
@@ -412,19 +403,10 @@ impl HighlightsTreeView {
             }
         });
 
-        Some(HighlightRefreshInput {
-            multi_buffer_snapshot,
-            text_highlights,
-            semantic_highlights,
-            syntax_theme,
-        })
+        Some(HighlightRefreshInput { multi_buffer_snapshot, text_highlights, semantic_highlights, syntax_theme })
     }
 
-    fn apply_highlight_refresh(
-        &mut self,
-        new_highlights: Vec<HighlightEntry>,
-        cx: &mut Context<Self>,
-    ) {
+    fn apply_highlight_refresh(&mut self, new_highlights: Vec<HighlightEntry>, cx: &mut Context<Self>) {
         let Some(editor) = self.editor.as_ref().map(|state| state.editor.clone()) else {
             return;
         };
@@ -453,16 +435,12 @@ impl HighlightsTreeView {
             }
 
             if !self.is_singleton {
-                let excerpt_changed = last_range_end.is_none_or(|anchor| {
-                    snapshot
-                        .excerpt_containing(anchor..entry.range.start)
-                        .is_none()
-                });
+                let excerpt_changed = last_range_end
+                    .is_none_or(|anchor| snapshot.excerpt_containing(anchor..entry.range.start).is_none());
                 if excerpt_changed {
                     last_range_end = Some(entry.range.end);
                     let label = excerpt_label_for(entry, snapshot, cx);
-                    self.display_items
-                        .push(DisplayItem::ExcerptSeparator { label });
+                    self.display_items.push(DisplayItem::ExcerptSeparator { label });
                 }
             }
 
@@ -470,7 +448,7 @@ impl HighlightsTreeView {
         }
     }
 
-    fn should_show_entry(&self, entry: &HighlightEntry) -> bool {
+    const fn should_show_entry(&self, entry: &HighlightEntry) -> bool {
         match entry.category {
             HighlightCategory::Text(_) => self.show_text_highlights,
             HighlightCategory::SyntaxToken { .. } => self.show_syntax_tokens,
@@ -485,10 +463,7 @@ impl HighlightsTreeView {
 
         let (cursor_position, multi_buffer_snapshot) = {
             let editor = editor_state.editor.read(cx);
-            (
-                editor.selections.newest_anchor().head(),
-                editor.buffer().read(cx).snapshot(cx),
-            )
+            (editor.selections.newest_anchor().head(), editor.buffer().read(cx).snapshot(cx))
         };
 
         let should_update_selection = !mem::take(&mut self.skip_next_scroll);
@@ -497,8 +472,7 @@ impl HighlightsTreeView {
             return;
         }
 
-        let should_notify =
-            self.update_selection_for_cursor(&cursor_position, &multi_buffer_snapshot, true);
+        let should_notify = self.update_selection_for_cursor(&cursor_position, &multi_buffer_snapshot, true);
         self.sync_editor_highlight_for_selected_entry(cx);
         if should_notify {
             cx.notify();
@@ -512,8 +486,7 @@ impl HighlightsTreeView {
         should_scroll: bool,
     ) -> bool {
         let cursor_point = cursor.to_point(snapshot);
-        let Some((cursor_buffer, cursor_point)) = snapshot.point_to_buffer_point(cursor_point)
-        else {
+        let Some((cursor_buffer, cursor_point)) = snapshot.point_to_buffer_point(cursor_point) else {
             let changed = self.selected_item_ix.take().is_some();
             return changed;
         };
@@ -537,16 +510,8 @@ impl HighlightsTreeView {
             })
             .min_by_key(|(_, _, entry)| {
                 (
-                    entry
-                        .buffer_point_range
-                        .end
-                        .row
-                        .saturating_sub(entry.buffer_point_range.start.row),
-                    entry
-                        .buffer_point_range
-                        .end
-                        .column
-                        .saturating_sub(entry.buffer_point_range.start.column),
+                    entry.buffer_point_range.end.row.saturating_sub(entry.buffer_point_range.start.row),
+                    entry.buffer_point_range.end.column.saturating_sub(entry.buffer_point_range.start.column),
                 )
             })
             .map(|(display_ix, entry_ix, _)| (display_ix, entry_ix));
@@ -556,8 +521,7 @@ impl HighlightsTreeView {
         self.selected_item_ix = selected_item_ix;
 
         if should_scroll && let Some((display_ix, _)) = best {
-            self.list_scroll_handle
-                .scroll_to_item(display_ix, ScrollStrategy::Center);
+            self.list_scroll_handle.scroll_to_item(display_ix, ScrollStrategy::Center);
             return true;
         }
 
@@ -590,16 +554,8 @@ impl HighlightsTreeView {
             .gap_1()
             .child(style_preview)
             .child(Label::new(entry.range_display.clone()).color(Color::Default))
-            .child(
-                Label::new(entry.category.label())
-                    .size(LabelSize::Small)
-                    .color(Color::Muted),
-            )
-            .text_bg(if selected {
-                colors.element_selected
-            } else {
-                Hsla::default()
-            })
+            .child(Label::new(entry.category.label()).size(LabelSize::Small).color(Color::Muted))
+            .text_bg(if selected { colors.element_selected } else { Hsla::default() })
             .pl(rems(0.5))
             .hover(|style| style.bg(colors.element_hover))
     }
@@ -612,19 +568,10 @@ impl HighlightsTreeView {
             .bg(colors.surface_background)
             .border_b_1()
             .border_color(colors.border_variant)
-            .child(
-                Label::new(label.clone())
-                    .size(LabelSize::Small)
-                    .color(Color::Muted),
-            )
+            .child(Label::new(label.clone()).size(LabelSize::Small).color(Color::Muted))
     }
 
-    fn compute_items(
-        &mut self,
-        visible_range: Range<usize>,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Vec<Div> {
+    fn compute_items(&self, visible_range: Range<usize>, _window: &mut Window, cx: &Context<Self>) -> Vec<Div> {
         let mut items = Vec::new();
 
         for display_ix in visible_range {
@@ -666,22 +613,20 @@ impl HighlightsTreeView {
                                 cx.notify();
                             }),
                         )
-                        .on_mouse_move(cx.listener(
-                            move |tree_view, _: &MouseMoveEvent, window, cx| {
-                                if tree_view.hovered_item_ix != Some(entry_ix) {
-                                    tree_view.hovered_item_ix = Some(entry_ix);
-                                    tree_view.update_editor_with_range_for_entry(
-                                        entry_ix,
-                                        window,
-                                        cx,
-                                        &mut |editor, range, key, _, cx| {
-                                            Self::set_editor_highlights(editor, key, &[range], cx);
-                                        },
-                                    );
-                                    cx.notify();
-                                }
-                            },
-                        ));
+                        .on_mouse_move(cx.listener(move |tree_view, _: &MouseMoveEvent, window, cx| {
+                            if tree_view.hovered_item_ix != Some(entry_ix) {
+                                tree_view.hovered_item_ix = Some(entry_ix);
+                                tree_view.update_editor_with_range_for_entry(
+                                    entry_ix,
+                                    window,
+                                    cx,
+                                    &mut |editor, range, key, _, cx| {
+                                        Self::set_editor_highlights(editor, key, &[range], cx);
+                                    },
+                                );
+                                cx.notify();
+                            }
+                        }));
 
                     items.push(rendered);
                 }
@@ -691,12 +636,7 @@ impl HighlightsTreeView {
         items
     }
 
-    fn set_editor_highlights(
-        editor: &mut Editor,
-        key: usize,
-        ranges: &[Range<Anchor>],
-        cx: &mut Context<Editor>,
-    ) {
+    fn set_editor_highlights(editor: &mut Editor, key: usize, ranges: &[Range<Anchor>], cx: &mut Context<Editor>) {
         editor.highlight_background(
             HighlightKey::HighlightsTreeView(key),
             ranges,
@@ -760,11 +700,7 @@ impl HighlightsTreeView {
 
         let current_pos = self
             .selected_item_ix
-            .and_then(|selected| {
-                entry_display_items
-                    .iter()
-                    .position(|(_, entry_ix)| *entry_ix == selected)
-            })
+            .and_then(|selected| entry_display_items.iter().position(|(_, entry_ix)| *entry_ix == selected))
             .unwrap_or(0);
 
         let new_pos = if delta < 0 {
@@ -776,35 +712,21 @@ impl HighlightsTreeView {
         if let Some(&(display_ix, entry_ix)) = entry_display_items.get(new_pos) {
             self.selected_item_ix = Some(entry_ix);
             self.skip_next_scroll = true;
-            self.list_scroll_handle
-                .scroll_to_item(display_ix, ScrollStrategy::Center);
+            self.list_scroll_handle.scroll_to_item(display_ix, ScrollStrategy::Center);
 
-            self.update_editor_with_range_for_entry(
-                entry_ix,
-                window,
-                cx,
-                &mut |editor, mut range, _, window, cx| {
-                    mem::swap(&mut range.start, &mut range.end);
-                    editor.change_selections(
-                        SelectionEffects::scroll(Autoscroll::newest()),
-                        window,
-                        cx,
-                        |selections| {
-                            selections.select_ranges([range]);
-                        },
-                    );
-                },
-            );
+            self.update_editor_with_range_for_entry(entry_ix, window, cx, &mut |editor, mut range, _, window, cx| {
+                mem::swap(&mut range.start, &mut range.end);
+                editor.change_selections(SelectionEffects::scroll(Autoscroll::newest()), window, cx, |selections| {
+                    selections.select_ranges([range]);
+                });
+            });
 
             cx.notify();
         }
     }
 
     fn entry_count(&self) -> usize {
-        self.cached_entries
-            .iter()
-            .filter(|entry| self.should_show_entry(entry))
-            .count()
+        self.cached_entries.iter().filter(|entry| self.should_show_entry(entry)).count()
     }
 }
 
@@ -837,43 +759,27 @@ impl Render for HighlightsTreeView {
                     .vertical_scrollbar_for(&self.list_scroll_handle, window, cx)
                     .into_any_element()
                 } else {
-                    let inner_content = v_flex()
-                        .items_center()
-                        .text_center()
-                        .gap_2()
-                        .max_w_3_5()
-                        .map(|this| {
-                            if self.editor.is_some() {
-                                let has_any = !self.cached_entries.is_empty();
-                                if has_any {
-                                    this.child(Label::new("All highlights are filtered out"))
-                                        .child(
-                                            Label::new(
-                                                "Enable text, syntax, or semantic highlights in the toolbar",
-                                            )
-                                            .size(LabelSize::Small),
-                                        )
-                                } else {
-                                    this.child(Label::new("No highlights found")).child(
-                                        Label::new(
-                                            "The editor has no text, syntax, or semantic token highlights",
-                                        )
+                    let inner_content = v_flex().items_center().text_center().gap_2().max_w_3_5().map(|this| {
+                        if self.editor.is_some() {
+                            let has_any = !self.cached_entries.is_empty();
+                            if has_any {
+                                this.child(Label::new("All highlights are filtered out")).child(
+                                    Label::new("Enable text, syntax, or semantic highlights in the toolbar")
                                         .size(LabelSize::Small),
-                                    )
-                                }
+                                )
                             } else {
-                                this.child(Label::new("Not attached to an editor")).child(
-                                    Label::new("Focus an editor to show highlights")
+                                this.child(Label::new("No highlights found")).child(
+                                    Label::new("The editor has no text, syntax, or semantic token highlights")
                                         .size(LabelSize::Small),
                                 )
                             }
-                        });
+                        } else {
+                            this.child(Label::new("Not attached to an editor"))
+                                .child(Label::new("Focus an editor to show highlights").size(LabelSize::Small))
+                        }
+                    });
 
-                    this.h_flex()
-                        .size_full()
-                        .justify_center()
-                        .child(inner_content)
-                        .into_any_element()
+                    this.h_flex().size_full().justify_center().child(inner_content).into_any_element()
                 }
             })
     }
@@ -937,11 +843,7 @@ impl Default for HighlightsTreeToolbarItemView {
 
 impl HighlightsTreeToolbarItemView {
     pub fn new() -> Self {
-        Self {
-            tree_view: None,
-            _subscription: None,
-            toggle_settings_handle: PopoverMenuHandle::default(),
-        }
+        Self { tree_view: None, _subscription: None, toggle_settings_handle: PopoverMenuHandle::default() }
     }
 
     fn render_header(&self, cx: &Context<Self>) -> Option<ButtonLike> {
@@ -966,11 +868,7 @@ impl HighlightsTreeToolbarItemView {
             .as_ref()
             .map(|view| {
                 let v = view.read(cx);
-                (
-                    v.show_text_highlights,
-                    v.show_syntax_tokens,
-                    v.show_semantic_tokens,
-                )
+                (v.show_text_highlights, v.show_syntax_tokens, v.show_semantic_tokens)
             })
             .unwrap_or((true, true, true));
 
@@ -1002,9 +900,10 @@ impl HighlightsTreeToolbarItemView {
                                 if let Some(view) = tree_view.as_ref() {
                                     view.update(cx, |view, cx| {
                                         view.show_text_highlights = !view.show_text_highlights;
-                                        let snapshot = view.editor.as_ref().map(|s| {
-                                            s.editor.read(cx).buffer().read(cx).snapshot(cx)
-                                        });
+                                        let snapshot = view
+                                            .editor
+                                            .as_ref()
+                                            .map(|s| s.editor.read(cx).buffer().read(cx).snapshot(cx));
                                         if let Some(snapshot) = snapshot {
                                             view.rebuild_display_items(&snapshot, cx);
                                         }
@@ -1026,9 +925,10 @@ impl HighlightsTreeToolbarItemView {
                                 if let Some(view) = tree_view.as_ref() {
                                     view.update(cx, |view, cx| {
                                         view.show_syntax_tokens = !view.show_syntax_tokens;
-                                        let snapshot = view.editor.as_ref().map(|s| {
-                                            s.editor.read(cx).buffer().read(cx).snapshot(cx)
-                                        });
+                                        let snapshot = view
+                                            .editor
+                                            .as_ref()
+                                            .map(|s| s.editor.read(cx).buffer().read(cx).snapshot(cx));
                                         if let Some(snapshot) = snapshot {
                                             view.rebuild_display_items(&snapshot, cx);
                                         }
@@ -1049,9 +949,10 @@ impl HighlightsTreeToolbarItemView {
                                 if let Some(view) = tree_view_for_semantic.as_ref() {
                                     view.update(cx, |view, cx| {
                                         view.show_semantic_tokens = !view.show_semantic_tokens;
-                                        let snapshot = view.editor.as_ref().map(|s| {
-                                            s.editor.read(cx).buffer().read(cx).snapshot(cx)
-                                        });
+                                        let snapshot = view
+                                            .editor
+                                            .as_ref()
+                                            .map(|s| s.editor.read(cx).buffer().read(cx).snapshot(cx));
                                         if let Some(snapshot) = snapshot {
                                             view.rebuild_display_items(&snapshot, cx);
                                         }
@@ -1071,10 +972,7 @@ impl HighlightsTreeToolbarItemView {
 
 impl Render for HighlightsTreeToolbarItemView {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        h_flex()
-            .gap_1()
-            .children(self.render_header(cx))
-            .child(self.render_settings_button(cx))
+        h_flex().gap_1().children(self.render_header(cx)).child(self.render_settings_button(cx))
     }
 }
 
@@ -1100,11 +998,7 @@ impl ToolbarItemView for HighlightsTreeToolbarItemView {
     }
 }
 
-fn excerpt_label_for(
-    entry: &HighlightEntry,
-    snapshot: &MultiBufferSnapshot,
-    cx: &App,
-) -> SharedString {
+fn excerpt_label_for(entry: &HighlightEntry, snapshot: &MultiBufferSnapshot, cx: &App) -> SharedString {
     let path_label = snapshot
         .anchor_to_buffer_anchor(entry.range.start)
         .and_then(|(anchor, _)| snapshot.buffer_for_id(anchor.buffer_id))
@@ -1163,9 +1057,7 @@ fn build_highlight_entries(
     }
 
     for excerpt_range in multi_buffer_snapshot.excerpts() {
-        let Some(buffer_snapshot) =
-            multi_buffer_snapshot.buffer_for_id(excerpt_range.context.start.buffer_id)
-        else {
+        let Some(buffer_snapshot) = multi_buffer_snapshot.buffer_for_id(excerpt_range.context.start.buffer_id) else {
             continue;
         };
 
@@ -1173,21 +1065,13 @@ fn build_highlight_entries(
         let end_offset = excerpt_range.context.end.to_offset(buffer_snapshot);
         let range = start_offset..end_offset;
 
-        let captures = buffer_snapshot.captures(range, |grammar| {
-            grammar
-                .highlights_config
-                .as_ref()
-                .map(|config| &config.query)
-        });
+        let captures =
+            buffer_snapshot.captures(range, |grammar| grammar.highlights_config.as_ref().map(|config| &config.query));
         let grammars = captures.grammars().to_vec();
-        let highlight_maps = grammars
-            .iter()
-            .map(|grammar| grammar.highlight_map())
-            .collect::<Vec<_>>();
+        let highlight_maps = grammars.iter().map(|grammar| grammar.highlight_map()).collect::<Vec<_>>();
 
         for capture in captures {
-            let Some(highlight_id) =
-                highlight_maps[capture.grammar_index].get(language::CaptureId(capture.index))
+            let Some(highlight_id) = highlight_maps[capture.grammar_index].get(language::CaptureId(capture.index))
             else {
                 continue;
             };
@@ -1195,9 +1079,8 @@ fn build_highlight_entries(
                 continue;
             };
 
-            let theme_key = syntax_theme
-                .get_capture_name(highlight_id)
-                .map(|theme_key| SharedString::from(theme_key.to_string()));
+            let theme_key =
+                syntax_theme.get_capture_name(highlight_id).map(|theme_key| SharedString::from(theme_key.to_string()));
 
             let capture_name = grammars[capture.grammar_index]
                 .highlights_config
@@ -1229,10 +1112,7 @@ fn build_highlight_entries(
                 buffer_id,
                 range_display,
                 style,
-                category: HighlightCategory::SyntaxToken {
-                    capture_name,
-                    theme_key,
-                },
+                category: HighlightCategory::SyntaxToken { capture_name, theme_key },
                 buffer_point_range,
             });
         }
@@ -1246,9 +1126,7 @@ fn build_highlight_entries(
             .then_with(|| a.category.cmp(&b.category))
     });
     entries.dedup_by(|a, b| {
-        a.buffer_id == b.buffer_id
-            && a.buffer_point_range == b.buffer_point_range
-            && a.category == b.category
+        a.buffer_id == b.buffer_id && a.buffer_point_range == b.buffer_point_range && a.category == b.category
     });
 
     entries
@@ -1260,16 +1138,10 @@ fn format_anchor_range(
 ) -> Option<(SharedString, BufferId, Range<Point>)> {
     let start = range.start.to_point(snapshot);
     let end = range.end.to_point(snapshot);
-    let ((start_buffer, start), (_, end)) = snapshot
-        .point_to_buffer_point(start)
-        .zip(snapshot.point_to_buffer_point(end))?;
-    let display = SharedString::from(format!(
-        "[{}:{} - {}:{}]",
-        start.row + 1,
-        start.column + 1,
-        end.row + 1,
-        end.column + 1,
-    ));
+    let ((start_buffer, start), (_, end)) =
+        snapshot.point_to_buffer_point(start).zip(snapshot.point_to_buffer_point(end))?;
+    let display =
+        SharedString::from(format!("[{}:{} - {}:{}]", start.row + 1, start.column + 1, end.row + 1, end.column + 1,));
     Some((display, start_buffer.remote_id(), start..end))
 }
 
@@ -1308,16 +1180,15 @@ fn render_style_preview(style: HighlightStyle, selected: bool, cx: &App) -> Div 
         parts.push("underline".to_string());
     }
 
-    let label_text = if parts.is_empty() {
-        "none".to_string()
-    } else {
-        parts.join(" ")
-    };
+    let label_text = if parts.is_empty() { "none".to_string() } else { parts.join(" ") };
 
-    preview.child(Label::new(label_text).size(LabelSize::Small).when_some(
-        display_color.filter(|_| selected),
-        |label, display_color| label.color(Color::Custom(display_color)),
-    ))
+    preview.child(
+        Label::new(label_text)
+            .size(LabelSize::Small)
+            .when_some(display_color.filter(|_| selected), |label, display_color| {
+                label.color(Color::Custom(display_color))
+            }),
+    )
 }
 
 fn format_hsla_as_hex(color: Hsla) -> String {
@@ -1326,9 +1197,5 @@ fn format_hsla_as_hex(color: Hsla) -> String {
     let g = (rgba.g * 255.0).round() as u8;
     let b = (rgba.b * 255.0).round() as u8;
     let a = (rgba.a * 255.0).round() as u8;
-    if a == 255 {
-        format!("#{:02X}{:02X}{:02X}", r, g, b)
-    } else {
-        format!("#{:02X}{:02X}{:02X}{:02X}", r, g, b, a)
-    }
+    if a == 255 { format!("#{:02X}{:02X}{:02X}", r, g, b) } else { format!("#{:02X}{:02X}{:02X}{:02X}", r, g, b, a) }
 }

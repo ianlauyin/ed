@@ -1,34 +1,86 @@
 mod image_info;
 mod image_viewer_settings;
 
-use std::{path::Path, sync::Arc};
+use std::path::Path;
+use std::sync::Arc;
 
 use anyhow::Context as _;
-use editor::{
-    Editor, EditorEvent, EditorSettings, RevealInFileManager, actions::SelectAll,
-    items::entry_git_aware_label_color,
-};
+use editor::Editor;
+use editor::EditorEvent;
+use editor::EditorSettings;
+use editor::RevealInFileManager;
+use editor::actions::SelectAll;
+use editor::items::entry_git_aware_label_color;
 use file_icons::FileIcons;
-use gpui::{
-    AnyElement, App, Bounds, Context, DispatchPhase, Element, ElementId, Entity, EventEmitter,
-    FocusHandle, Focusable, Font, GlobalElementId, InteractiveElement, IntoElement, LayoutId,
-    MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, ParentElement, PinchEvent, Pixels,
-    Point, Render, RenderImage, ScrollDelta, ScrollWheelEvent, Style, Styled, Subscription, Task,
-    WeakEntity, Window, actions, checkerboard, div, img, point, px, size,
-};
+use gpui::AnyElement;
+use gpui::App;
+use gpui::Bounds;
+use gpui::Context;
+use gpui::DispatchPhase;
+use gpui::Element;
+use gpui::ElementId;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::Font;
+use gpui::GlobalElementId;
+use gpui::InteractiveElement;
+use gpui::IntoElement;
+use gpui::LayoutId;
+use gpui::MouseButton;
+use gpui::MouseDownEvent;
+use gpui::MouseMoveEvent;
+use gpui::MouseUpEvent;
+use gpui::ParentElement;
+use gpui::PinchEvent;
+use gpui::Pixels;
+use gpui::Point;
+use gpui::Render;
+use gpui::RenderImage;
+use gpui::ScrollDelta;
+use gpui::ScrollWheelEvent;
+use gpui::Style;
+use gpui::Styled;
+use gpui::Subscription;
+use gpui::Task;
+use gpui::WeakEntity;
+use gpui::Window;
+use gpui::actions;
+use gpui::checkerboard;
+use gpui::div;
+use gpui::img;
+use gpui::point;
+use gpui::px;
+use gpui::size;
 use language::File as _;
 use persistence::ImageViewerDb;
-use project::{ImageItem, Project, ProjectPath, image_store::ImageItemEvent};
+use project::ImageItem;
+use project::Project;
+use project::ProjectPath;
+use project::image_store::ImageItemEvent;
 use settings::Settings;
 use theme_settings::ThemeSettings;
-use ui::{Tooltip, prelude::*};
-use util::{ResultExt as _, paths::PathExt};
-use workspace::{
-    ItemId, ItemSettings, Pane, ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView, Workspace,
-    WorkspaceId, delete_unloaded_items,
-    invalid_item_view::InvalidItemView,
-    item::{HighlightedText, Item, ItemHandle, ProjectItem, SerializableItem, TabContentParams},
-};
+use ui::Tooltip;
+use ui::prelude::*;
+use util::ResultExt as _;
+use util::paths::PathExt;
+use workspace::ItemId;
+use workspace::ItemSettings;
+use workspace::Pane;
+use workspace::ToolbarItemEvent;
+use workspace::ToolbarItemLocation;
+use workspace::ToolbarItemView;
+use workspace::Workspace;
+use workspace::WorkspaceId;
+use workspace::delete_unloaded_items;
+use workspace::invalid_item_view::InvalidItemView;
+use workspace::item::HighlightedText;
+use workspace::item::Item;
+use workspace::item::ItemHandle;
+use workspace::item::ProjectItem;
+use workspace::item::SerializableItem;
+use workspace::item::TabContentParams;
 
 pub use crate::image_info::*;
 pub use crate::image_viewer_settings::*;
@@ -89,7 +141,7 @@ impl DisplayedImage {
 }
 
 impl ImageView {
-    fn is_dragging(&self) -> bool {
+    const fn is_dragging(&self) -> bool {
         self.last_mouse_position.is_some()
     }
 
@@ -129,10 +181,7 @@ impl ImageView {
             }
         }
 
-        self.displayed_image = Some(DisplayedImage {
-            source_image: image.clone(),
-            render_image,
-        });
+        self.displayed_image = Some(DisplayedImage { source_image: image.clone(), render_image });
     }
 
     pub fn new(
@@ -156,10 +205,7 @@ impl ImageView {
         })
         .detach();
 
-        let image_size = image_item
-            .read(cx)
-            .image_metadata
-            .map(|m| (m.width, m.height));
+        let image_size = image_item.read(cx).image_metadata.map(|m| (m.width, m.height));
 
         Self {
             image_item,
@@ -175,21 +221,10 @@ impl ImageView {
         }
     }
 
-    fn on_image_event(
-        &mut self,
-        _: Entity<ImageItem>,
-        event: &ImageItemEvent,
-        cx: &mut Context<Self>,
-    ) {
+    fn on_image_event(&mut self, _: Entity<ImageItem>, event: &ImageItemEvent, cx: &mut Context<Self>) {
         match event {
-            ImageItemEvent::MetadataUpdated
-            | ImageItemEvent::FileHandleChanged
-            | ImageItemEvent::Reloaded => {
-                self.image_size = self
-                    .image_item
-                    .read(cx)
-                    .image_metadata
-                    .map(|m| (m.width, m.height));
+            ImageItemEvent::MetadataUpdated | ImageItemEvent::FileHandleChanged | ImageItemEvent::Reloaded => {
+                self.image_size = self.image_item.read(cx).image_metadata.map(|m| (m.width, m.height));
                 cx.emit(ImageViewEvent::TitleChanged);
                 cx.notify();
             }
@@ -228,35 +263,19 @@ impl ImageView {
         scale_x.min(scale_y).min(1.0)
     }
 
-    fn zoom_to_actual_size(
-        &mut self,
-        _: &ZoomToActualSize,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn zoom_to_actual_size(&mut self, _: &ZoomToActualSize, _window: &mut Window, cx: &mut Context<Self>) {
         self.zoom_level = 1.0;
         self.pan_offset = Point::default();
         cx.notify();
     }
 
-    fn reveal_in_file_manager(
-        &mut self,
-        _: &RevealInFileManager,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn reveal_in_file_manager(&mut self, _: &RevealInFileManager, _window: &mut Window, cx: &mut Context<Self>) {
         if let Some(path) = self.image_item.read(cx).abs_path(cx) {
-            self.project
-                .update(cx, |project, cx| project.reveal_path(&path, cx));
+            self.project.update(cx, |project, cx| project.reveal_path(&path, cx));
         }
     }
 
-    fn set_zoom(
-        &mut self,
-        new_zoom: f32,
-        zoom_center: Option<Point<Pixels>>,
-        cx: &mut Context<Self>,
-    ) {
+    fn set_zoom(&mut self, new_zoom: f32, zoom_center: Option<Point<Pixels>>, cx: &mut Context<Self>) {
         let old_zoom = self.zoom_level;
         self.zoom_level = new_zoom.clamp(MIN_ZOOM, MAX_ZOOM);
 
@@ -276,22 +295,13 @@ impl ImageView {
         cx.notify();
     }
 
-    fn handle_scroll_wheel(
-        &mut self,
-        event: &ScrollWheelEvent,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn handle_scroll_wheel(&mut self, event: &ScrollWheelEvent, _window: &mut Window, cx: &mut Context<Self>) {
         if event.modifiers.control || event.modifiers.platform {
             let delta: f32 = match event.delta {
                 ScrollDelta::Pixels(pixels) => pixels.y.into(),
                 ScrollDelta::Lines(lines) => lines.y * SCROLL_LINE_MULTIPLIER,
             };
-            let zoom_factor = if delta > 0.0 {
-                1.0 + delta.abs() * 0.01
-            } else {
-                1.0 / (1.0 + delta.abs() * 0.01)
-            };
+            let zoom_factor = if delta > 0.0 { 1.0 + delta.abs() * 0.01 } else { 1.0 / (1.0 + delta.abs() * 0.01) };
             self.set_zoom(self.zoom_level * zoom_factor, Some(event.position), cx);
         } else {
             let delta = match event.delta {
@@ -303,34 +313,19 @@ impl ImageView {
         }
     }
 
-    fn handle_mouse_down(
-        &mut self,
-        event: &MouseDownEvent,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn handle_mouse_down(&mut self, event: &MouseDownEvent, _window: &mut Window, cx: &mut Context<Self>) {
         if event.button == MouseButton::Left || event.button == MouseButton::Middle {
             self.last_mouse_position = Some(event.position);
             cx.notify();
         }
     }
 
-    fn handle_mouse_up(
-        &mut self,
-        _event: &MouseUpEvent,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn handle_mouse_up(&mut self, _event: &MouseUpEvent, _window: &mut Window, cx: &mut Context<Self>) {
         self.last_mouse_position = None;
         cx.notify();
     }
 
-    fn handle_mouse_move(
-        &mut self,
-        event: &MouseMoveEvent,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn handle_mouse_move(&mut self, event: &MouseMoveEvent, _window: &mut Window, cx: &mut Context<Self>) {
         if self.is_dragging() {
             if let Some(last_pos) = self.last_mouse_position {
                 let delta = event.position - last_pos;
@@ -352,7 +347,7 @@ struct ImageContentElement {
 }
 
 impl ImageContentElement {
-    fn new(image_view: Entity<ImageView>) -> Self {
+    const fn new(image_view: Entity<ImageView>) -> Self {
         Self { image_view }
     }
 }
@@ -385,10 +380,7 @@ impl Element for ImageContentElement {
     ) -> (LayoutId, Self::RequestLayoutState) {
         (
             window.request_layout(
-                Style {
-                    size: size(relative(1.).into(), relative(1.).into()),
-                    ..Default::default()
-                },
+                Style { size: size(relative(1.).into(), relative(1.).into()), ..Default::default() },
                 [],
                 cx,
             ),
@@ -410,11 +402,7 @@ impl Element for ImageContentElement {
         let first_layout = image_view.container_bounds.is_none();
 
         let initial_zoom_level = first_layout
-            .then(|| {
-                image_view
-                    .image_size
-                    .map(|image_size| ImageView::compute_fit_to_view_zoom(bounds, image_size))
-            })
+            .then(|| image_view.image_size.map(|image_size| ImageView::compute_fit_to_view_zoom(bounds, image_size)))
             .flatten();
 
         let zoom_level = initial_zoom_level.unwrap_or(image_view.zoom_level);
@@ -424,9 +412,7 @@ impl Element for ImageContentElement {
 
         let is_dragging = image_view.is_dragging();
 
-        let scaled_size = image_view
-            .image_size
-            .map(|(w, h)| (px(w as f32 * zoom_level), px(h as f32 * zoom_level)));
+        let scaled_size = image_view.image_size.map(|(w, h)| (px(w as f32 * zoom_level), px(h as f32 * zoom_level)));
 
         let (mut left, mut top) = (px(0.0), px(0.0));
         let mut scaled_width = px(0.0);
@@ -452,36 +438,33 @@ impl Element for ImageContentElement {
             }
         });
 
-        let mut image_content = div()
-            .relative()
-            .size_full()
-            .child(
-                div()
-                    .absolute()
-                    .left(left)
-                    .top(top)
-                    .w(scaled_width)
-                    .h(scaled_height)
-                    .child(
-                        div()
-                            .size_full()
-                            .absolute()
-                            .top_0()
-                            .left_0()
-                            .child(div().size_full().bg(checkerboard(
-                                cx.theme().colors().panel_background,
-                                BASE_SQUARE_SIZE * zoom_level,
-                            )))
-                            .border_1()
-                            .border_color(border_color),
-                    )
-                    .child({
-                        img(image)
-                            .id(("image-viewer-image", self.image_view.entity_id()))
-                            .size_full()
-                    }),
-            )
-            .into_any_element();
+        let mut image_content =
+            div()
+                .relative()
+                .size_full()
+                .child(
+                    div()
+                        .absolute()
+                        .left(left)
+                        .top(top)
+                        .w(scaled_width)
+                        .h(scaled_height)
+                        .child(
+                            div()
+                                .size_full()
+                                .absolute()
+                                .top_0()
+                                .left_0()
+                                .child(div().size_full().bg(checkerboard(
+                                    cx.theme().colors().panel_background,
+                                    BASE_SQUARE_SIZE * zoom_level,
+                                )))
+                                .border_1()
+                                .border_color(border_color),
+                        )
+                        .child(img(image).id(("image-viewer-image", self.image_view.entity_id())).size_full()),
+                )
+                .into_any_element();
 
         image_content.prepaint_as_root(bounds.origin, bounds.size.into(), window, cx);
         Some((image_content, is_dragging))
@@ -536,11 +519,7 @@ impl Item for ImageView {
         }
     }
 
-    fn for_each_project_item(
-        &self,
-        cx: &App,
-        f: &mut dyn FnMut(gpui::EntityId, &dyn project::ProjectItem),
-    ) {
+    fn for_each_project_item(&self, cx: &App, f: &mut dyn FnMut(gpui::EntityId, &dyn project::ProjectItem)) {
         f(self.image_item.entity_id(), self.image_item.read(cx))
     }
 
@@ -566,9 +545,7 @@ impl Item for ImageView {
             self.project
                 .read(cx)
                 .entry_for_path(&project_path, cx)
-                .map(|entry| {
-                    entry_git_aware_label_color(git_status, entry.is_ignored, params.selected)
-                })
+                .map(|entry| entry_git_aware_label_color(git_status, entry.is_ignored, params.selected))
                 .unwrap_or_else(|| params.text_color())
         } else {
             params.text_color()
@@ -582,43 +559,24 @@ impl Item for ImageView {
     }
 
     fn tab_content_text(&self, _: usize, cx: &App) -> SharedString {
-        self.image_item
-            .read(cx)
-            .file
-            .file_name(cx)
-            .to_string()
-            .into()
+        self.image_item.read(cx).file.file_name(cx).to_string().into()
     }
 
     fn tab_icon(&self, _: &Window, cx: &App) -> Option<Icon> {
         let path = self.image_item.read(cx).abs_path(cx)?;
-        ItemSettings::get_global(cx)
-            .file_icons
-            .then(|| FileIcons::get_icon(&path, cx))
-            .flatten()
-            .map(Icon::from_path)
+        ItemSettings::get_global(cx).file_icons.then(|| FileIcons::get_icon(&path, cx)).flatten().map(Icon::from_path)
     }
 
     fn breadcrumb_location(&self, cx: &App) -> ToolbarItemLocation {
         let show_breadcrumb = EditorSettings::get_global(cx).toolbar.breadcrumbs;
-        if show_breadcrumb {
-            ToolbarItemLocation::PrimaryLeft
-        } else {
-            ToolbarItemLocation::Hidden
-        }
+        if show_breadcrumb { ToolbarItemLocation::PrimaryLeft } else { ToolbarItemLocation::Hidden }
     }
 
     fn breadcrumbs(&self, cx: &App) -> Option<(Vec<HighlightedText>, Option<Font>)> {
         let text = breadcrumbs_text_for_image(self.project.read(cx), self.image_item.read(cx), cx);
         let font = ThemeSettings::get_global(cx).buffer_font.clone();
 
-        Some((
-            vec![HighlightedText {
-                text: text.into(),
-                highlights: vec![],
-            }],
-            Some(font),
-        ))
+        Some((vec![HighlightedText { text: text.into(), highlights: vec![] }], Some(font)))
     }
 
     fn can_split(&self) -> bool {
@@ -682,30 +640,19 @@ impl SerializableItem for ImageView {
     ) -> Task<anyhow::Result<Entity<Self>>> {
         let db = ImageViewerDb::global(cx);
         window.spawn(cx, async move |cx| {
-            let image_path = db
-                .get_image_path(item_id, workspace_id)?
-                .context("No image path found")?;
+            let image_path = db.get_image_path(item_id, workspace_id)?.context("No image path found")?;
 
             let (worktree, relative_path) = project
-                .update(cx, |project, cx| {
-                    project.find_or_create_worktree(image_path.clone(), false, cx)
-                })
+                .update(cx, |project, cx| project.find_or_create_worktree(image_path.clone(), false, cx))
                 .await
                 .context("Path not found")?;
             let worktree_id = worktree.update(cx, |worktree, _cx| worktree.id());
 
-            let project_path = ProjectPath {
-                worktree_id,
-                path: relative_path,
-            };
+            let project_path = ProjectPath { worktree_id, path: relative_path };
 
-            let image_item = project
-                .update(cx, |project, cx| project.open_image(project_path, cx))
-                .await?;
+            let image_item = project.update(cx, |project, cx| project.open_image(project_path, cx)).await?;
 
-            cx.update(
-                |window, cx| Ok(cx.new(|cx| ImageView::new(image_item, project, window, cx))),
-            )?
+            cx.update(|window, cx| Ok(cx.new(|cx| ImageView::new(image_item, project, window, cx))))?
         })
     }
 
@@ -765,7 +712,7 @@ impl Render for ImageView {
             .relative()
             .bg(cx.theme().colors().editor_background)
             .child({
-                let container = div()
+                div()
                     .id("image-container")
                     .size_full()
                     .overflow_hidden()
@@ -781,9 +728,7 @@ impl Render for ImageView {
                     .on_mouse_up(MouseButton::Left, cx.listener(Self::handle_mouse_up))
                     .on_mouse_up(MouseButton::Middle, cx.listener(Self::handle_mouse_up))
                     .on_mouse_move(cx.listener(Self::handle_mouse_move))
-                    .child(ImageContentElement::new(cx.entity()));
-
-                container
+                    .child(ImageContentElement::new(cx.entity()))
             })
     }
 }
@@ -826,13 +771,8 @@ pub struct ImageViewToolbarControls {
 }
 
 impl ImageViewToolbarControls {
-    pub fn new() -> Self {
-        Self {
-            image_view: None,
-            _subscription: None,
-            zoom_editor: None,
-            _zoom_subscription: None,
-        }
+    pub const fn new() -> Self {
+        Self { image_view: None, _subscription: None, zoom_editor: None, _zoom_subscription: None }
     }
 
     fn start_editing_zoom(&mut self, window: &mut Window, cx: &mut Context<Self>) {
@@ -860,11 +800,8 @@ impl ImageViewToolbarControls {
                 EditorEvent::Blurred => this.commit_edit(cx),
                 EditorEvent::Edited { .. } => {
                     let text = editor.read(cx).text(cx);
-                    let sanitized = text
-                        .chars()
-                        .filter(|ch| ch.is_ascii_digit())
-                        .take(ZOOM_EDITOR_MAX_DIGITS)
-                        .collect::<String>();
+                    let sanitized =
+                        text.chars().filter(|ch| ch.is_ascii_digit()).take(ZOOM_EDITOR_MAX_DIGITS).collect::<String>();
                     if sanitized != text {
                         editor.update(cx, |editor, cx| editor.set_text(sanitized, window, cx));
                     }
@@ -889,11 +826,7 @@ impl ImageViewToolbarControls {
         };
 
         let input = editor.read(cx).text(cx);
-        let parsed = input
-            .trim()
-            .parse::<u32>()
-            .ok()
-            .filter(|parsed| *parsed > 0);
+        let parsed = input.trim().parse::<u32>().ok().filter(|parsed| *parsed > 0);
 
         let Some(parsed) = parsed else {
             self.cancel_edit(cx);
@@ -917,6 +850,12 @@ impl ImageViewToolbarControls {
         self.zoom_editor = None;
         self._zoom_subscription = None;
         cx.notify();
+    }
+}
+
+impl Default for ImageViewToolbarControls {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -945,15 +884,11 @@ impl Render for ImageViewToolbarControls {
             )
             .child(if let Some(editor) = self.zoom_editor.as_ref() {
                 // Grow with input, defaulting to 3-digit zoom.
-                let editor_width = px((editor
-                    .read(cx)
-                    .text(cx)
-                    .chars()
-                    .count()
-                    .clamp(ZOOM_EDITOR_MIN_DIGITS, ZOOM_EDITOR_MAX_DIGITS)
-                    as f32
-                    * ZOOM_EDITOR_APPROX_CHAR_WIDTH)
-                    + ZOOM_EDITOR_HORIZONTAL_PADDING);
+                let editor_width =
+                    px((editor.read(cx).text(cx).chars().count().clamp(ZOOM_EDITOR_MIN_DIGITS, ZOOM_EDITOR_MAX_DIGITS)
+                        as f32
+                        * ZOOM_EDITOR_APPROX_CHAR_WIDTH)
+                        + ZOOM_EDITOR_HORIZONTAL_PADDING);
 
                 h_flex()
                     .w(editor_width)
@@ -987,9 +922,7 @@ impl Render for ImageViewToolbarControls {
                     .cursor_pointer()
                     .child(Label::new(zoom_percentage).size(LabelSize::Small))
                     .id("zoom-label")
-                    .tooltip(|_window, cx| {
-                        Tooltip::with_meta("Edit Zoom", None, "Right-click to reset to 100%.", cx)
-                    })
+                    .tooltip(|_window, cx| Tooltip::with_meta("Edit Zoom", None, "Right-click to reset to 100%.", cx))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.start_editing_zoom(window, cx);
                     }))
@@ -1074,12 +1007,13 @@ pub fn init(cx: &mut App) {
 mod persistence {
     use std::path::PathBuf;
 
-    use db::{
-        query,
-        sqlez::{domain::Domain, thread_safe_connection::ThreadSafeConnection},
-        sqlez_macros::sql,
-    };
-    use workspace::{ItemId, WorkspaceDb, WorkspaceId};
+    use db::query;
+    use db::sqlez::domain::Domain;
+    use db::sqlez::thread_safe_connection::ThreadSafeConnection;
+    use db::sqlez_macros::sql;
+    use workspace::ItemId;
+    use workspace::WorkspaceDb;
+    use workspace::WorkspaceId;
 
     pub struct ImageViewerDb(ThreadSafeConnection);
 

@@ -747,10 +747,9 @@ impl Pane {
             }
         } else if self.should_display_welcome_page
             && let Some(welcome_page) = self.welcome_page.as_ref()
+            && self.focus_handle.is_focused(window)
         {
-            if self.focus_handle.is_focused(window) {
-                welcome_page.read(cx).focus_handle(cx).focus(window, cx);
-            }
+            welcome_page.read(cx).focus_handle(cx).focus(window, cx);
         }
     }
 
@@ -770,23 +769,23 @@ impl Pane {
 
     fn project_events(&mut self, _project: Entity<Project>, event: &project::Event, cx: &mut Context<Self>) {
         match event {
-            project::Event::DiskBasedDiagnosticsFinished { .. } | project::Event::DiagnosticsUpdated { .. } => {
-                if ItemSettings::get_global(cx).show_diagnostics != ShowDiagnostics::Off {
-                    self.diagnostic_summary_update = cx.spawn(async move |this, cx| {
-                        cx.background_executor().timer(Duration::from_millis(30)).await;
-                        this.update(cx, |this, cx| {
-                            this.update_diagnostics(cx);
-                            cx.notify();
-                        })
-                        .log_err();
-                    });
-                }
+            project::Event::DiskBasedDiagnosticsFinished { .. } | project::Event::DiagnosticsUpdated { .. }
+                if ItemSettings::get_global(cx).show_diagnostics != ShowDiagnostics::Off =>
+            {
+                self.diagnostic_summary_update = cx.spawn(async move |this, cx| {
+                    cx.background_executor().timer(Duration::from_millis(30)).await;
+                    this.update(cx, |this, cx| {
+                        this.update_diagnostics(cx);
+                        cx.notify();
+                    })
+                    .log_err();
+                });
             }
             _ => {}
         }
     }
 
-    fn update_diagnostics(&mut self, cx: &mut Context<Self>) {
+    fn update_diagnostics(&mut self, cx: &Context<Self>) {
         let Some(project) = self.project.upgrade() else {
             return;
         };
@@ -839,11 +838,11 @@ impl Pane {
         cx.notify();
     }
 
-    pub fn active_item_index(&self) -> usize {
+    pub const fn active_item_index(&self) -> usize {
         self.active_item_index
     }
 
-    pub fn is_active_item_pinned(&self) -> bool {
+    pub const fn is_active_item_pinned(&self) -> bool {
         self.is_tab_pinned(self.active_item_index)
     }
 
@@ -858,16 +857,16 @@ impl Pane {
         self.should_display_tab_bar = Rc::new(should_display_tab_bar);
     }
 
-    pub fn tab_bar_displayed(&self) -> bool {
+    pub const fn tab_bar_displayed(&self) -> bool {
         self.tab_bar_displayed
     }
 
     /// Pill tabs sit inside the card instead of on the chrome above it.
-    pub fn set_tab_style(&mut self, tab_style: TabStyle) {
+    pub const fn set_tab_style(&mut self, tab_style: TabStyle) {
         self.tab_style = tab_style;
     }
 
-    pub fn set_should_display_welcome_page(&mut self, should_display_welcome_page: bool) {
+    pub const fn set_should_display_welcome_page(&mut self, should_display_welcome_page: bool) {
         self.should_display_welcome_page = should_display_welcome_page;
     }
 
@@ -917,11 +916,11 @@ impl Pane {
         ItemNavHistory { history: self.nav_history.clone(), item: Arc::new(item.downgrade()) }
     }
 
-    pub fn nav_history(&self) -> &NavHistory {
+    pub const fn nav_history(&self) -> &NavHistory {
         &self.nav_history
     }
 
-    pub fn nav_history_mut(&mut self) -> &mut NavHistory {
+    pub const fn nav_history_mut(&mut self) -> &mut NavHistory {
         &mut self.nav_history
     }
 
@@ -991,11 +990,11 @@ impl Pane {
         }
     }
 
-    fn history_updated(&mut self, cx: &mut Context<Self>) {
+    fn history_updated(&self, cx: &mut Context<Self>) {
         self.toolbar.update(cx, |_, cx| cx.notify());
     }
 
-    pub fn preview_item_id(&self) -> Option<EntityId> {
+    pub const fn preview_item_id(&self) -> Option<EntityId> {
         self.preview_item_id
     }
 
@@ -1051,11 +1050,11 @@ impl Pane {
     }
 
     /// Should only be used when deserializing a pane.
-    pub fn set_pinned_count(&mut self, count: usize) {
+    pub const fn set_pinned_count(&mut self, count: usize) {
         self.pinned_tab_count = count;
     }
 
-    pub fn pinned_count(&self) -> usize {
+    pub const fn pinned_count(&self) -> usize {
         self.pinned_tab_count
     }
 
@@ -2329,7 +2328,7 @@ impl Pane {
         }
     }
 
-    pub fn toolbar(&self) -> &Entity<Toolbar> {
+    pub const fn toolbar(&self) -> &Entity<Toolbar> {
         &self.toolbar
     }
 
@@ -2354,14 +2353,14 @@ impl Pane {
         Some(())
     }
 
-    fn update_toolbar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn update_toolbar(&self, window: &mut Window, cx: &mut Context<Self>) {
         let active_item = self.items.get(self.active_item_index).map(|item| item.as_ref());
         self.toolbar.update(cx, |toolbar, cx| {
             toolbar.set_active_item(active_item, window, cx);
         });
     }
 
-    fn update_status_bar(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn update_status_bar(&self, window: &Window, cx: &mut Context<Self>) {
         let workspace = self.workspace.clone();
         let pane = cx.entity();
 
@@ -2385,7 +2384,7 @@ impl Pane {
         })
     }
 
-    pub fn icon_color(selected: bool) -> Color {
+    pub const fn icon_color(selected: bool) -> Color {
         if selected { Color::Default } else { Color::Muted }
     }
 
@@ -2415,21 +2414,15 @@ impl Pane {
         }
     }
 
-    fn pin_tab_at(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
+    fn pin_tab_at(&mut self, ix: usize, window: &Window, cx: &mut Context<Self>) {
         self.change_tab_pin_state(ix, PinOperation::Pin, window, cx);
     }
 
-    fn unpin_tab_at(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Self>) {
+    fn unpin_tab_at(&mut self, ix: usize, window: &Window, cx: &mut Context<Self>) {
         self.change_tab_pin_state(ix, PinOperation::Unpin, window, cx);
     }
 
-    fn change_tab_pin_state(
-        &mut self,
-        ix: usize,
-        operation: PinOperation,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn change_tab_pin_state(&mut self, ix: usize, operation: PinOperation, window: &Window, cx: &mut Context<Self>) {
         maybe!({
             let pane = cx.entity();
 
@@ -2473,7 +2466,7 @@ impl Pane {
         });
     }
 
-    fn is_tab_pinned(&self, ix: usize) -> bool {
+    const fn is_tab_pinned(&self, ix: usize) -> bool {
         self.pinned_tab_count > ix
     }
 
@@ -2536,8 +2529,8 @@ impl Pane {
         item: &dyn ItemHandle,
         detail: usize,
         focus_handle: &FocusHandle,
-        window: &mut Window,
-        cx: &mut Context<Pane>,
+        window: &Window,
+        cx: &Context<Pane>,
     ) -> impl IntoElement + use<> {
         let is_active = ix == self.active_item_index;
         let is_preview = self.preview_item_id.map(|id| id == item.item_id()).unwrap_or(false);
@@ -2746,7 +2739,7 @@ impl Pane {
             );
 
         let single_entry_to_resolve = (self.items[ix].buffer_kind(cx) == ItemBufferKind::Singleton)
-            .then(|| self.items[ix].project_entry_ids(cx).get(0).copied())
+            .then(|| self.items[ix].project_entry_ids(cx).first().copied())
             .flatten();
 
         let total_items = self.items.len();
@@ -3207,10 +3200,10 @@ impl Pane {
     }
 
     fn render_unpinned_tabs_container(
-        &mut self,
+        &self,
         unpinned_tabs: Vec<AnyElement>,
         tab_count: usize,
-        cx: &mut Context<Pane>,
+        cx: &Context<Pane>,
     ) -> impl IntoElement {
         h_flex()
             .id("unpinned tabs")
@@ -3224,7 +3217,7 @@ impl Pane {
             .child(self.render_tab_bar_drop_target(tab_count, cx))
     }
 
-    fn render_tab_bar_drop_target(&self, tab_count: usize, cx: &mut Context<Pane>) -> impl IntoElement {
+    fn render_tab_bar_drop_target(&self, tab_count: usize, cx: &Context<Pane>) -> impl IntoElement {
         div()
             .id("tab_bar_drop_target")
             .min_w_6()
@@ -3254,7 +3247,7 @@ impl Pane {
             }))
     }
 
-    fn render_pinned_tab_bar_drop_target(&self, cx: &mut Context<Pane>) -> impl IntoElement {
+    fn render_pinned_tab_bar_drop_target(&self, cx: &Context<Pane>) -> impl IntoElement {
         div()
             .id("pinned_tabs_border")
             .min_w_6()
@@ -3331,7 +3324,7 @@ impl Pane {
         cx.notify();
     }
 
-    pub fn is_zoomed(&self) -> bool {
+    pub const fn is_zoomed(&self) -> bool {
         self.zoomed
     }
 
@@ -3516,7 +3509,7 @@ impl Pane {
     }
 
     fn handle_dragged_selection_drop(
-        &mut self,
+        &self,
         dragged_selection: &DraggedSelection,
         dragged_onto: Option<usize>,
         window: &mut Window,
@@ -3532,7 +3525,7 @@ impl Pane {
     }
 
     fn handle_project_entry_drop(
-        &mut self,
+        &self,
         project_entry_id: &ProjectEntryId,
         target: Option<usize>,
         window: &mut Window,
@@ -3552,9 +3545,9 @@ impl Pane {
                 cx.defer_in(window, move |workspace, window, cx| {
                     if let Some(project_path) = workspace.project().read(cx).path_for_entry(project_entry_id, cx) {
                         let load_path_task = workspace.load_path(project_path.clone(), window, cx);
-                        cx.spawn_in(window, async move |workspace, mut cx| {
+                        cx.spawn_in(window, async move |workspace, cx| {
                             if let Some((project_entry_id, build_item)) =
-                                load_path_task.await.notify_workspace_async_err(workspace.clone(), &mut cx)
+                                load_path_task.await.notify_workspace_async_err(workspace.clone(), cx)
                             {
                                 let (to_pane, new_item_handle) = workspace
                                     .update_in(cx, |workspace, window, cx| {
@@ -3598,7 +3591,7 @@ impl Pane {
             .log_err();
     }
 
-    fn handle_external_paths_drop(&mut self, paths: &ExternalPaths, window: &mut Window, cx: &mut Context<Self>) {
+    fn handle_external_paths_drop(&self, paths: &ExternalPaths, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(active_item) = self.active_item()
             && active_item.handle_drop(self, paths, window, cx)
         {
@@ -3676,7 +3669,7 @@ impl Pane {
             .log_err();
     }
 
-    pub fn display_nav_history_buttons(&mut self, display: Option<bool>) {
+    pub const fn display_nav_history_buttons(&mut self, display: Option<bool>) {
         self.display_nav_history_buttons = display;
     }
 
@@ -3694,7 +3687,7 @@ impl Pane {
             .collect()
     }
 
-    fn clean_item_ids(&self, cx: &mut Context<Pane>) -> Vec<EntityId> {
+    fn clean_item_ids(&self, cx: &Context<Pane>) -> Vec<EntityId> {
         self.items()
             .filter_map(|item| {
                 if !item.is_dirty(cx) {
@@ -3717,18 +3710,18 @@ impl Pane {
         }
     }
 
-    fn multibuffer_item_ids(&self, cx: &mut Context<Pane>) -> Vec<EntityId> {
+    fn multibuffer_item_ids(&self, cx: &Context<Pane>) -> Vec<EntityId> {
         self.items()
             .filter(|item| item.buffer_kind(cx) == ItemBufferKind::Multibuffer)
             .map(|item| item.item_id())
             .collect()
     }
 
-    pub fn drag_split_direction(&self) -> Option<SplitDirection> {
+    pub const fn drag_split_direction(&self) -> Option<SplitDirection> {
         self.drag_split_direction
     }
 
-    pub fn set_zoom_out_on_close(&mut self, zoom_out_on_close: bool) {
+    pub const fn set_zoom_out_on_close(&mut self, zoom_out_on_close: bool) {
         self.zoom_out_on_close = zoom_out_on_close;
     }
 }

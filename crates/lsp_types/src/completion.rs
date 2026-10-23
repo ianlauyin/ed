@@ -1,14 +1,20 @@
-use serde::{Deserialize, Serialize};
-
-use crate::{
-    Command, Documentation, MarkupKind, PartialResultParams, TagSupport,
-    TextDocumentPositionParams, TextDocumentRegistrationOptions, TextEdit, WorkDoneProgressOptions,
-    WorkDoneProgressParams,
-};
-
-use crate::Range;
-use serde_json::Value;
 use std::fmt::Debug;
+
+use serde::Deserialize;
+use serde::Serialize;
+use serde_json::Value;
+
+use crate::Command;
+use crate::Documentation;
+use crate::MarkupKind;
+use crate::PartialResultParams;
+use crate::Range;
+use crate::TagSupport;
+use crate::TextDocumentPositionParams;
+use crate::TextDocumentRegistrationOptions;
+use crate::TextEdit;
+use crate::WorkDoneProgressOptions;
+use crate::WorkDoneProgressParams;
 
 /// Defines how to interpret the insert text in a completion item
 #[derive(Eq, PartialEq, Clone, Copy, Serialize, Deserialize)]
@@ -88,11 +94,7 @@ pub struct CompletionItemCapability {
     /// tags have to handle unknown tags gracefully. Clients especially need to
     /// preserve unknown tags when sending a completion item back to the server in
     /// a resolve call.
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "TagSupport::deserialize_compat"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "TagSupport::deserialize_compat")]
     pub tag_support: Option<TagSupport<CompletionItemTag>>,
 
     /// Client support insert replace edit to control different behavior if a
@@ -312,18 +314,11 @@ impl<'de> Deserialize<'de> for CompletionTextEdit {
                 }
                 if let Some(range) = range {
                     Ok(CompletionTextEdit::Edit(TextEdit {
-                        new_text: new_text
-                            .ok_or_else(|| serde::de::Error::missing_field("newText"))?,
+                        new_text: new_text.ok_or_else(|| serde::de::Error::missing_field("newText"))?,
                         range,
                     }))
-                } else if let (Some(new_text), Some(insert), Some(replace)) =
-                    (new_text, insert, replace)
-                {
-                    Ok(CompletionTextEdit::InsertAndReplace(InsertReplaceEdit {
-                        new_text,
-                        insert,
-                        replace,
-                    }))
+                } else if let (Some(new_text), Some(insert), Some(replace)) = (new_text, insert, replace) {
+                    Ok(CompletionTextEdit::InsertAndReplace(InsertReplaceEdit { new_text, insert, replace }))
                 } else {
                     Err(serde::de::Error::custom("missing required fields"))
                 }
@@ -453,8 +448,7 @@ impl<'de> Deserialize<'de> for CompletionResponse {
             where
                 A: serde::de::MapAccess<'de>,
             {
-                let list: CompletionList =
-                    Deserialize::deserialize(serde::de::value::MapAccessDeserializer::new(map))?;
+                let list: CompletionList = Deserialize::deserialize(serde::de::value::MapAccessDeserializer::new(map))?;
                 Ok(CompletionResponse::List(list))
             }
         }
@@ -720,11 +714,7 @@ pub struct CompletionListItemDefaults {
 impl CompletionItem {
     /// Create a CompletionItem with the minimum possible info (label and detail).
     pub fn new_simple(label: String, detail: String) -> CompletionItem {
-        CompletionItem {
-            label,
-            detail: Some(detail),
-            ..Self::default()
-        }
+        CompletionItem { label, detail: Some(detail), ..Self::default() }
     }
 }
 
@@ -754,39 +744,31 @@ mod tests {
 
     #[test]
     fn test_tag_support_deserialization() {
-        let mut empty = CompletionItemCapability::default();
-        empty.tag_support = None;
+        let empty = CompletionItemCapability { tag_support: None, ..Default::default() };
 
         test_deserialization(r#"{}"#, &empty);
         test_deserialization(r#"{"tagSupport": false}"#, &empty);
 
-        let mut t = CompletionItemCapability::default();
-        t.tag_support = Some(TagSupport { value_set: vec![] });
+        let t = CompletionItemCapability { tag_support: Some(TagSupport { value_set: vec![] }), ..Default::default() };
         test_deserialization(r#"{"tagSupport": true}"#, &t);
 
-        let mut t = CompletionItemCapability::default();
-        t.tag_support = Some(TagSupport {
-            value_set: vec![CompletionItemTag::DEPRECATED],
-        });
+        let t = CompletionItemCapability {
+            tag_support: Some(TagSupport { value_set: vec![CompletionItemTag::DEPRECATED] }),
+            ..Default::default()
+        };
         test_deserialization(r#"{"tagSupport": {"valueSet": [1]}}"#, &t);
     }
 
     #[test]
     fn test_debug_enum() {
         assert_eq!(format!("{:?}", CompletionItemKind::TEXT), "Text");
-        assert_eq!(
-            format!("{:?}", CompletionItemKind::TYPE_PARAMETER),
-            "TypeParameter"
-        );
+        assert_eq!(format!("{:?}", CompletionItemKind::TYPE_PARAMETER), "TypeParameter");
     }
 
     #[test]
     fn test_try_from_enum() {
         use std::convert::TryInto;
         assert_eq!("Text".try_into(), Ok(CompletionItemKind::TEXT));
-        assert_eq!(
-            "TypeParameter".try_into(),
-            Ok(CompletionItemKind::TYPE_PARAMETER)
-        );
+        assert_eq!("TypeParameter".try_into(), Ok(CompletionItemKind::TYPE_PARAMETER));
     }
 }

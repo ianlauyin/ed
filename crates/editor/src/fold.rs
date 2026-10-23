@@ -21,33 +21,19 @@ impl EditorSnapshot {
         let folded = self.is_line_folded(buffer_row);
         let mut is_foldable = false;
 
-        if let Some(crease) = self
-            .crease_snapshot
-            .query_row(buffer_row, self.buffer_snapshot())
-        {
+        if let Some(crease) = self.crease_snapshot.query_row(buffer_row, self.buffer_snapshot()) {
             is_foldable = true;
             match crease {
                 Crease::Inline { render_toggle, .. } | Crease::Block { render_toggle, .. } => {
                     if let Some(render_toggle) = render_toggle {
-                        let toggle_callback =
-                            Arc::new(move |folded, window: &mut Window, cx: &mut App| {
-                                if folded {
-                                    editor.update(cx, |editor, cx| {
-                                        editor.fold_at(buffer_row, window, cx)
-                                    });
-                                } else {
-                                    editor.update(cx, |editor, cx| {
-                                        editor.unfold_at(buffer_row, window, cx)
-                                    });
-                                }
-                            });
-                        return Some((render_toggle)(
-                            buffer_row,
-                            folded,
-                            toggle_callback,
-                            window,
-                            cx,
-                        ));
+                        let toggle_callback = Arc::new(move |folded, window: &mut Window, cx: &mut App| {
+                            if folded {
+                                editor.update(cx, |editor, cx| editor.fold_at(buffer_row, window, cx));
+                            } else {
+                                editor.update(cx, |editor, cx| editor.unfold_at(buffer_row, window, cx));
+                            }
+                        });
+                        return Some((render_toggle)(buffer_row, folded, toggle_callback, window, cx));
                     }
                 }
             }
@@ -80,9 +66,8 @@ impl EditorSnapshot {
         cx: &mut App,
     ) -> Option<AnyElement> {
         let folded = self.is_line_folded(buffer_row);
-        if let Crease::Inline { render_trailer, .. } = self
-            .crease_snapshot
-            .query_row(buffer_row, self.buffer_snapshot())?
+        if let Crease::Inline { render_trailer, .. } =
+            self.crease_snapshot.query_row(buffer_row, self.buffer_snapshot())?
         {
             let render_trailer = render_trailer.as_ref()?;
             Some(render_trailer(buffer_row, folded, window, cx))
@@ -93,12 +78,7 @@ impl EditorSnapshot {
 }
 
 impl Editor {
-    pub fn toggle_fold(
-        &mut self,
-        _: &actions::ToggleFold,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn toggle_fold(&mut self, _: &actions::ToggleFold, window: &mut Window, cx: &mut Context<Self>) {
         if self.buffer_kind(cx) == ItemBufferKind::Singleton {
             let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
             let selection = self.selections.newest::<Point>(&display_map);
@@ -106,8 +86,7 @@ impl Editor {
             let range = if selection.is_empty() {
                 let point = selection.head().to_display_point(&display_map);
                 let start = DisplayPoint::new(point.row(), 0).to_point(&display_map);
-                let end = DisplayPoint::new(point.row(), display_map.line_len(point.row()))
-                    .to_point(&display_map);
+                let end = DisplayPoint::new(point.row(), display_map.line_len(point.row())).to_point(&display_map);
                 start..end
             } else {
                 selection.range()
@@ -125,9 +104,7 @@ impl Editor {
                 .flat_map(|range| multi_buffer_snapshot.buffer_ids_for_range(range))
                 .collect();
 
-            let should_unfold = buffer_ids
-                .iter()
-                .any(|buffer_id| self.is_buffer_folded(*buffer_id, cx));
+            let should_unfold = buffer_ids.iter().any(|buffer_id| self.is_buffer_folded(*buffer_id, cx));
 
             for buffer_id in buffer_ids {
                 if should_unfold {
@@ -151,8 +128,7 @@ impl Editor {
         let range = if selection.is_empty() {
             let point = selection.head().to_display_point(&display_map);
             let start = DisplayPoint::new(point.row(), 0).to_point(&display_map);
-            let end = DisplayPoint::new(point.row(), display_map.line_len(point.row()))
-                .to_point(&display_map);
+            let end = DisplayPoint::new(point.row(), display_map.line_len(point.row())).to_point(&display_map);
             start..end
         } else {
             selection.range()
@@ -178,8 +154,7 @@ impl Editor {
                     let mut found = false;
                     let mut row = range.start.row;
                     while row <= range.end.row {
-                        if let Some(crease) = display_map.crease_for_buffer_row(MultiBufferRow(row))
-                        {
+                        if let Some(crease) = display_map.crease_for_buffer_row(MultiBufferRow(row)) {
                             found = true;
                             row = crease.range().end.row + 1;
                             to_fold.push(crease);
@@ -218,25 +193,15 @@ impl Editor {
         }
     }
 
-    pub fn toggle_fold_all(
-        &mut self,
-        _: &actions::ToggleFoldAll,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn toggle_fold_all(&mut self, _: &actions::ToggleFoldAll, window: &mut Window, cx: &mut Context<Self>) {
         let has_folds = if self.buffer.read(cx).is_singleton() {
             let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
-            let has_folds = display_map
-                .folds_in_range(MultiBufferOffset(0)..display_map.buffer_snapshot().len())
-                .next()
-                .is_some();
-            has_folds
+
+            display_map.folds_in_range(MultiBufferOffset(0)..display_map.buffer_snapshot().len()).next().is_some()
         } else {
             let snapshot = self.buffer.read(cx).snapshot(cx);
-            let has_folds = snapshot
-                .all_buffer_ids()
-                .any(|buffer_id| self.is_buffer_folded(buffer_id, cx));
-            has_folds
+
+            snapshot.all_buffer_ids().any(|buffer_id| self.is_buffer_folded(buffer_id, cx))
         };
 
         if has_folds {
@@ -246,84 +211,39 @@ impl Editor {
         }
     }
 
-    pub fn fold_at_level_1(
-        &mut self,
-        _: &actions::FoldAtLevel1,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn fold_at_level_1(&mut self, _: &actions::FoldAtLevel1, window: &mut Window, cx: &mut Context<Self>) {
         self.fold_at_level(&actions::FoldAtLevel(1), window, cx);
     }
 
-    pub fn fold_at_level_2(
-        &mut self,
-        _: &actions::FoldAtLevel2,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn fold_at_level_2(&mut self, _: &actions::FoldAtLevel2, window: &mut Window, cx: &mut Context<Self>) {
         self.fold_at_level(&actions::FoldAtLevel(2), window, cx);
     }
 
-    pub fn fold_at_level_3(
-        &mut self,
-        _: &actions::FoldAtLevel3,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn fold_at_level_3(&mut self, _: &actions::FoldAtLevel3, window: &mut Window, cx: &mut Context<Self>) {
         self.fold_at_level(&actions::FoldAtLevel(3), window, cx);
     }
 
-    pub fn fold_at_level_4(
-        &mut self,
-        _: &actions::FoldAtLevel4,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn fold_at_level_4(&mut self, _: &actions::FoldAtLevel4, window: &mut Window, cx: &mut Context<Self>) {
         self.fold_at_level(&actions::FoldAtLevel(4), window, cx);
     }
 
-    pub fn fold_at_level_5(
-        &mut self,
-        _: &actions::FoldAtLevel5,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn fold_at_level_5(&mut self, _: &actions::FoldAtLevel5, window: &mut Window, cx: &mut Context<Self>) {
         self.fold_at_level(&actions::FoldAtLevel(5), window, cx);
     }
 
-    pub fn fold_at_level_6(
-        &mut self,
-        _: &actions::FoldAtLevel6,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn fold_at_level_6(&mut self, _: &actions::FoldAtLevel6, window: &mut Window, cx: &mut Context<Self>) {
         self.fold_at_level(&actions::FoldAtLevel(6), window, cx);
     }
 
-    pub fn fold_at_level_7(
-        &mut self,
-        _: &actions::FoldAtLevel7,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn fold_at_level_7(&mut self, _: &actions::FoldAtLevel7, window: &mut Window, cx: &mut Context<Self>) {
         self.fold_at_level(&actions::FoldAtLevel(7), window, cx);
     }
 
-    pub fn fold_at_level_8(
-        &mut self,
-        _: &actions::FoldAtLevel8,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn fold_at_level_8(&mut self, _: &actions::FoldAtLevel8, window: &mut Window, cx: &mut Context<Self>) {
         self.fold_at_level(&actions::FoldAtLevel(8), window, cx);
     }
 
-    pub fn fold_at_level_9(
-        &mut self,
-        _: &actions::FoldAtLevel9,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn fold_at_level_9(&mut self, _: &actions::FoldAtLevel9, window: &mut Window, cx: &mut Context<Self>) {
         self.fold_at_level(&actions::FoldAtLevel(9), window, cx);
     }
 
@@ -333,10 +253,7 @@ impl Editor {
             let snapshot = self.buffer.read(cx).snapshot(cx);
 
             for row in 0..snapshot.max_row().0 {
-                if let Some(foldable_range) = self
-                    .snapshot(window, cx)
-                    .crease_for_buffer_row(MultiBufferRow(row))
-                {
+                if let Some(foldable_range) = self.snapshot(window, cx).crease_for_buffer_row(MultiBufferRow(row)) {
                     fold_ranges.push(foldable_range);
                 }
             }
@@ -365,10 +282,7 @@ impl Editor {
         let snapshot = self.buffer.read(cx).snapshot(cx);
 
         let ranges = snapshot
-            .text_object_ranges(
-                MultiBufferOffset(0)..snapshot.len(),
-                TreeSitterOptions::default(),
-            )
+            .text_object_ranges(MultiBufferOffset(0)..snapshot.len(), TreeSitterOptions::default())
             .filter_map(|(range, obj)| (obj == TextObject::InsideFunction).then_some(range))
             .collect::<Vec<_>>();
 
@@ -380,12 +294,7 @@ impl Editor {
         self.fold_creases(creases, true, window, cx);
     }
 
-    pub fn fold_recursive(
-        &mut self,
-        _: &actions::FoldRecursive,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn fold_recursive(&mut self, _: &actions::FoldRecursive, window: &mut Window, cx: &mut Context<Self>) {
         let mut to_fold = Vec::new();
         let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
         let selections = self.selections.all_adjusted(&display_map);
@@ -421,12 +330,7 @@ impl Editor {
         self.fold_creases(to_fold, true, window, cx);
     }
 
-    pub fn fold_at(
-        &mut self,
-        buffer_row: MultiBufferRow,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn fold_at(&mut self, buffer_row: MultiBufferRow, window: &mut Window, cx: &mut Context<Self>) {
         let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
 
         if let Some(crease) = display_map.crease_for_buffer_row(buffer_row) {
@@ -471,12 +375,7 @@ impl Editor {
         }
     }
 
-    pub fn unfold_recursive(
-        &mut self,
-        _: &UnfoldRecursive,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn unfold_recursive(&mut self, _: &UnfoldRecursive, _window: &mut Window, cx: &mut Context<Self>) {
         let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
         let selections = self.selections.all::<Point>(&display_map);
         let ranges = selections
@@ -494,19 +393,11 @@ impl Editor {
         self.unfold_ranges(&ranges, true, true, cx);
     }
 
-    pub fn unfold_at(
-        &mut self,
-        buffer_row: MultiBufferRow,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn unfold_at(&mut self, buffer_row: MultiBufferRow, _window: &mut Window, cx: &mut Context<Self>) {
         let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
 
-        let intersection_range = Point::new(buffer_row.0, 0)
-            ..Point::new(
-                buffer_row.0,
-                display_map.buffer_snapshot().line_len(buffer_row),
-            );
+        let intersection_range =
+            Point::new(buffer_row.0, 0)..Point::new(buffer_row.0, display_map.buffer_snapshot().line_len(buffer_row));
 
         let autoscroll = self
             .selections
@@ -517,20 +408,10 @@ impl Editor {
         self.unfold_ranges(&[intersection_range], true, autoscroll, cx);
     }
 
-    pub fn unfold_all(
-        &mut self,
-        _: &actions::UnfoldAll,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn unfold_all(&mut self, _: &actions::UnfoldAll, _window: &mut Window, cx: &mut Context<Self>) {
         if self.buffer.read(cx).is_singleton() {
             let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
-            self.unfold_ranges(
-                &[MultiBufferOffset(0)..display_map.buffer_snapshot().len()],
-                true,
-                true,
-                cx,
-            );
+            self.unfold_ranges(&[MultiBufferOffset(0)..display_map.buffer_snapshot().len()], true, true, cx);
         } else {
             self.toggle_fold_multiple_buffers = cx.spawn(async move |editor, cx| {
                 editor
@@ -545,12 +426,7 @@ impl Editor {
         }
     }
 
-    pub fn fold_selected_ranges(
-        &mut self,
-        _: &FoldSelectedRanges,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn fold_selected_ranges(&mut self, _: &FoldSelectedRanges, window: &mut Window, cx: &mut Context<Self>) {
         let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
         let selections = self.selections.all_adjusted(&display_map);
         let ranges = selections
@@ -568,10 +444,8 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         let display_map = self.display_map.update(cx, |map, cx| map.snapshot(cx));
-        let ranges = ranges
-            .into_iter()
-            .map(|r| Crease::simple(r, display_map.fold_placeholder.clone()))
-            .collect::<Vec<_>>();
+        let ranges =
+            ranges.into_iter().map(|r| Crease::simple(r, display_map.fold_placeholder.clone())).collect::<Vec<_>>();
         self.fold_creases(ranges, auto_scroll, window, cx);
     }
 
@@ -619,27 +493,18 @@ impl Editor {
         self.fold_buffers([buffer_id], cx);
     }
 
-    pub fn fold_buffers(
-        &mut self,
-        buffer_ids: impl IntoIterator<Item = BufferId>,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn fold_buffers(&mut self, buffer_ids: impl IntoIterator<Item = BufferId>, cx: &mut Context<Self>) {
         if self.buffer().read(cx).is_singleton() {
             return;
         }
 
-        let ids_to_fold: Vec<BufferId> = buffer_ids
-            .into_iter()
-            .filter(|id| !self.is_buffer_folded(*id, cx))
-            .collect();
+        let ids_to_fold: Vec<BufferId> = buffer_ids.into_iter().filter(|id| !self.is_buffer_folded(*id, cx)).collect();
 
         if ids_to_fold.is_empty() {
             return;
         }
 
-        self.display_map.update(cx, |display_map, cx| {
-            display_map.fold_buffers(ids_to_fold.clone(), cx)
-        });
+        self.display_map.update(cx, |display_map, cx| display_map.fold_buffers(ids_to_fold.clone(), cx));
 
         let snapshot = self.display_snapshot(cx);
         let previous = self.selections.disjoint_anchors_arc();
@@ -652,10 +517,7 @@ impl Editor {
             self.invalidate_add_selection_goals_after_change(Some(&previous));
         }
 
-        cx.emit(EditorEvent::BufferFoldToggled {
-            ids: ids_to_fold,
-            folded: true,
-        });
+        cx.emit(EditorEvent::BufferFoldToggled { ids: ids_to_fold, folded: true });
         self.inlay_hint_visibility_changed(cx);
         cx.notify();
     }
@@ -667,10 +529,7 @@ impl Editor {
         self.display_map.update(cx, |display_map, cx| {
             display_map.unfold_buffers([buffer_id], cx);
         });
-        cx.emit(EditorEvent::BufferFoldToggled {
-            ids: vec![buffer_id],
-            folded: false,
-        });
+        cx.emit(EditorEvent::BufferFoldToggled { ids: vec![buffer_id], folded: false });
         self.inlay_hint_visibility_changed(cx);
         cx.notify();
     }
@@ -717,8 +576,7 @@ impl Editor {
         widths: impl IntoIterator<Item = (ChunkRendererId, Pixels)>,
         cx: &mut Context<Self>,
     ) -> bool {
-        self.display_map
-            .update(cx, |map, cx| map.update_fold_widths(widths, cx))
+        self.display_map.update(cx, |map, cx| map.update_fold_widths(widths, cx))
     }
 
     pub fn default_fold_placeholder(&self, cx: &App) -> FoldPlaceholder {
@@ -730,8 +588,7 @@ impl Editor {
         creases: impl IntoIterator<Item = Crease<Anchor>>,
         cx: &mut Context<Self>,
     ) -> Vec<CreaseId> {
-        self.display_map
-            .update(cx, |map, cx| map.insert_creases(creases, cx))
+        self.display_map.update(cx, |map, cx| map.insert_creases(creases, cx))
     }
 
     pub fn remove_creases(
@@ -739,16 +596,10 @@ impl Editor {
         ids: impl IntoIterator<Item = CreaseId>,
         cx: &mut Context<Self>,
     ) -> Vec<(CreaseId, Range<Anchor>)> {
-        self.display_map
-            .update(cx, |map, cx| map.remove_creases(ids, cx))
+        self.display_map.update(cx, |map, cx| map.remove_creases(ids, cx))
     }
 
-    pub(super) fn fold_at_level(
-        &mut self,
-        fold_at: &FoldAtLevel,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn fold_at_level(&mut self, fold_at: &FoldAtLevel, window: &mut Window, cx: &mut Context<Self>) {
         if !self.buffer.read(cx).is_singleton() {
             return;
         }
@@ -767,10 +618,7 @@ impl Editor {
 
         while let Some((mut start_row, end_row, current_level)) = stack.pop() {
             while start_row < end_row {
-                match self
-                    .snapshot(window, cx)
-                    .crease_for_buffer_row(MultiBufferRow(start_row))
-                {
+                match self.snapshot(window, cx).crease_for_buffer_row(MultiBufferRow(start_row)) {
                     Some(crease) => {
                         let nested_start_row = crease.range().start.row + 1;
                         let nested_end_row = crease.range().end.row;
@@ -779,10 +627,10 @@ impl Editor {
                             stack.push((nested_start_row, nested_end_row, current_level + 1));
                         } else if current_level == fold_at_level {
                             // Fold if and only if there is no selection completely contained within the fold region
-                            if !row_ranges_to_keep.iter().any(|selection| {
-                                selection.end >= nested_start_row
-                                    && selection.start <= nested_end_row
-                            }) {
+                            if !row_ranges_to_keep
+                                .iter()
+                                .any(|selection| selection.end >= nested_start_row && selection.start <= nested_end_row)
+                            {
                                 to_fold.push(crease);
                             }
                         }
@@ -805,11 +653,7 @@ impl Editor {
         let buffer_ids: HashSet<BufferId> = self
             .selections
             .disjoint_anchor_ranges()
-            .chain(
-                self.selections
-                    .pending_anchor()
-                    .map(|selection| selection.range()),
-            )
+            .chain(self.selections.pending_anchor().map(|selection| selection.range()))
             .flat_map(|range| snapshot.buffer_ids_for_range(range))
             .collect();
         for buffer_id in buffer_ids {
@@ -821,15 +665,12 @@ impl Editor {
         use text::ToOffset as _;
 
         if self.mode.is_minimap()
-            || WorkspaceSettings::get(None, cx).restore_on_startup
-                == RestoreOnStartupBehavior::EmptyTab
+            || WorkspaceSettings::get(None, cx).restore_on_startup == RestoreOnStartupBehavior::EmptyTab
         {
             return;
         }
 
-        let display_snapshot = self
-            .display_map
-            .update(cx, |display_map, cx| display_map.snapshot(cx));
+        let display_snapshot = self.display_map.update(cx, |display_map, cx| display_map.snapshot(cx));
         let Some(buffer_snapshot) = display_snapshot.buffer_snapshot().as_singleton() else {
             return;
         };
@@ -851,8 +692,7 @@ impl Editor {
 
         // Get file path for path-based fold storage (survives tab close)
         let Some(file_path) = self.buffer().read(cx).as_singleton().and_then(|buffer| {
-            project::File::from_dyn(buffer.read(cx).file())
-                .map(|file| Arc::<Path>::from(file.abs_path(cx)))
+            project::File::from_dyn(buffer.read(cx).file()).map(|file| Arc::<Path>::from(file.abs_path(cx)))
         }) else {
             return;
         };
@@ -862,16 +702,8 @@ impl Editor {
         let db_folds = display_snapshot
             .folds_in_range(MultiBufferOffset(0)..display_snapshot.buffer_snapshot().len())
             .map(|fold| {
-                let start = fold
-                    .range
-                    .start
-                    .text_anchor_in(buffer_snapshot)
-                    .to_offset(buffer_snapshot);
-                let end = fold
-                    .range
-                    .end
-                    .text_anchor_in(buffer_snapshot)
-                    .to_offset(buffer_snapshot);
+                let start = fold.range.start.text_anchor_in(buffer_snapshot).to_offset(buffer_snapshot);
+                let end = fold.range.end.text_anchor_in(buffer_snapshot).to_offset(buffer_snapshot);
 
                 // Extract fingerprints - content at fold boundaries for validation on restore
                 // Both fingerprints must be INSIDE the fold to avoid capturing surrounding
@@ -880,13 +712,11 @@ impl Editor {
                 // end_fp: last min(32, fold_len) bytes of fold content
                 // Clip to character boundaries to handle multibyte UTF-8 characters.
                 let fold_len = end - start;
-                let start_fp_end = buffer_snapshot
-                    .clip_offset(start + std::cmp::min(FINGERPRINT_LEN, fold_len), Bias::Left);
-                let start_fp: String = buffer_snapshot
-                    .text_for_range(start..start_fp_end)
-                    .collect();
-                let end_fp_start = buffer_snapshot
-                    .clip_offset(end.saturating_sub(FINGERPRINT_LEN).max(start), Bias::Right);
+                let start_fp_end =
+                    buffer_snapshot.clip_offset(start + std::cmp::min(FINGERPRINT_LEN, fold_len), Bias::Left);
+                let start_fp: String = buffer_snapshot.text_for_range(start..start_fp_end).collect();
+                let end_fp_start =
+                    buffer_snapshot.clip_offset(end.saturating_sub(FINGERPRINT_LEN).max(start), Bias::Right);
                 let end_fp: String = buffer_snapshot.text_for_range(end_fp_start..end).collect();
 
                 (start, end, start_fp, end_fp)
@@ -904,19 +734,13 @@ impl Editor {
             } else {
                 db.save_file_folds(workspace_id, file_path, db_folds)
                     .await
-                    .with_context(|| {
-                        format!("persisting file folds for workspace {workspace_id:?}")
-                    })
+                    .with_context(|| format!("persisting file folds for workspace {workspace_id:?}"))
                     .log_err();
             }
         });
     }
 
-    pub(super) fn refresh_single_line_folds(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) {
+    pub(super) fn refresh_single_line_folds(&mut self, window: &Window, cx: &mut Context<Editor>) {
         struct NewlineFold;
         let type_id = std::any::TypeId::of::<NewlineFold>();
         if !self.mode.is_single_line() {
@@ -974,10 +798,7 @@ impl Editor {
                 type_tag: Some(type_id),
                 collapsed_text: None,
             };
-            let creases = new_newlines
-                .into_iter()
-                .map(|range| Crease::simple(range, placeholder.clone()))
-                .collect();
+            let creases = new_newlines.into_iter().map(|range| Crease::simple(range, placeholder.clone())).collect();
             this.update(cx, |this, cx| {
                 this.display_map.update(cx, |display_map, cx| {
                     display_map.remove_folds_with_type(existing_newlines, type_id, cx);
@@ -998,16 +819,12 @@ impl Editor {
         cx: &mut Context<Editor>,
     ) {
         if self.mode.is_minimap()
-            || WorkspaceSettings::get(None, cx).restore_on_startup
-                == RestoreOnStartupBehavior::EmptyTab
+            || WorkspaceSettings::get(None, cx).restore_on_startup == RestoreOnStartupBehavior::EmptyTab
         {
             return;
         }
 
-        let Some(folds) = EditorDb::global(cx)
-            .get_file_folds(workspace_id, &file_path)
-            .log_err()
-        else {
+        let Some(folds) = EditorDb::global(cx).get_file_folds(workspace_id, &file_path).log_err() else {
             return;
         };
         if folds.is_empty() {
@@ -1019,9 +836,7 @@ impl Editor {
 
         // Helper: search for fingerprint in buffer, return offset if found
         let find_fingerprint = |fingerprint: &str, search_start: usize| -> Option<usize> {
-            let search_start = snapshot
-                .clip_offset(MultiBufferOffset(search_start), Bias::Left)
-                .0;
+            let search_start = snapshot.clip_offset(MultiBufferOffset(search_start), Bias::Left).0;
             let search_end = snapshot_len.saturating_sub(fingerprint.len());
 
             let mut byte_offset = search_start;
@@ -1046,8 +861,8 @@ impl Editor {
                 let efp = end_fp?;
                 let efp_len = efp.len();
 
-                let start_matches = stored_start < snapshot_len
-                    && snapshot.contains_str_at(MultiBufferOffset(stored_start), &sfp);
+                let start_matches =
+                    stored_start < snapshot_len && snapshot.contains_str_at(MultiBufferOffset(stored_start), &sfp);
                 let efp_check_pos = stored_end.saturating_sub(efp_len);
                 let end_matches = efp_check_pos >= stored_start
                     && stored_end <= snapshot_len

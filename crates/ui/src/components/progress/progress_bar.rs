@@ -30,31 +30,31 @@ impl ProgressBar {
     }
 
     /// Sets the current value of the progress bar.
-    pub fn value(mut self, value: f32) -> Self {
+    pub const fn value(mut self, value: f32) -> Self {
         self.value = value;
         self
     }
 
     /// Sets the maximum value of the progress bar.
-    pub fn max_value(mut self, max_value: f32) -> Self {
+    pub const fn max_value(mut self, max_value: f32) -> Self {
         self.max_value = max_value;
         self
     }
 
     /// Sets the background color of the progress bar.
-    pub fn bg_color(mut self, color: Hsla) -> Self {
+    pub const fn bg_color(mut self, color: Hsla) -> Self {
         self.bg_color = color;
         self
     }
 
     /// Sets the foreground color of the progress bar.
-    pub fn fg_color(mut self, color: Hsla) -> Self {
+    pub const fn fg_color(mut self, color: Hsla) -> Self {
         self.fg_color = color;
         self
     }
 
     /// Sets the over limit color of the progress bar.
-    pub fn over_color(mut self, color: Hsla) -> Self {
+    pub const fn over_color(mut self, color: Hsla) -> Self {
         self.over_color = color;
         self
     }
@@ -71,11 +71,7 @@ impl RenderOnce for ProgressBar {
             .p_0p5()
             .rounded_full()
             .bg(self.bg_color)
-            .shadow(vec![gpui::BoxShadow::new(
-                px(0.),
-                px(1.),
-                gpui::black().opacity(0.08),
-            )])
+            .shadow(vec![gpui::BoxShadow::new(px(0.), px(1.), gpui::black().opacity(0.08))])
             .child(
                 div()
                     .h_full()
@@ -107,32 +103,17 @@ impl Component for ProgressBar {
                 .gap_2()
                 .child(
                     container()
-                        .child(
-                            h_flex()
-                                .justify_between()
-                                .child(Label::new("0%"))
-                                .child(Label::new("Empty")),
-                        )
+                        .child(h_flex().justify_between().child(Label::new("0%")).child(Label::new("Empty")))
                         .child(ProgressBar::new("empty", 0.0, max_value, cx)),
                 )
                 .child(
                     container()
-                        .child(
-                            h_flex()
-                                .justify_between()
-                                .child(Label::new("38%"))
-                                .child(Label::new("Partial")),
-                        )
+                        .child(h_flex().justify_between().child(Label::new("38%")).child(Label::new("Partial")))
                         .child(ProgressBar::new("partial", max_value * 0.35, max_value, cx)),
                 )
                 .child(
                     container()
-                        .child(
-                            h_flex()
-                                .justify_between()
-                                .child(Label::new("100%"))
-                                .child(Label::new("Complete")),
-                        )
+                        .child(h_flex().justify_between().child(Label::new("100%")).child(Label::new("Complete")))
                         .child(ProgressBar::new("filled", max_value, max_value, cx)),
                 )
                 .into_any_element(),

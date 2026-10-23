@@ -1,10 +1,20 @@
 use std::sync::Arc;
 
-use component::{Component, ComponentScope, example_group_with_title, single_example};
-use gpui::{AnyElement, AnyView, ClickEvent, MouseButton, MouseDownEvent, Pixels, px};
+use component::Component;
+use component::ComponentScope;
+use component::example_group_with_title;
+use component::single_example;
+use gpui::AnyElement;
+use gpui::AnyView;
+use gpui::ClickEvent;
+use gpui::MouseButton;
+use gpui::MouseDownEvent;
+use gpui::Pixels;
+use gpui::px;
 use smallvec::SmallVec;
 
-use crate::{Disclosure, prelude::*};
+use crate::Disclosure;
+use crate::prelude::*;
 
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, Default)]
 pub enum ListItemSpacing {
@@ -98,25 +108,22 @@ impl ListItem {
         self
     }
 
-    pub fn spacing(mut self, spacing: ListItemSpacing) -> Self {
+    pub const fn spacing(mut self, spacing: ListItemSpacing) -> Self {
         self.spacing = spacing;
         self
     }
 
-    pub fn selectable(mut self, has_hover: bool) -> Self {
+    pub const fn selectable(mut self, has_hover: bool) -> Self {
         self.selectable = has_hover;
         self
     }
 
-    pub fn always_show_disclosure_icon(mut self, show: bool) -> Self {
+    pub const fn always_show_disclosure_icon(mut self, show: bool) -> Self {
         self.always_show_disclosure_icon = show;
         self
     }
 
-    pub fn on_click(
-        mut self,
-        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
+    pub fn on_click(mut self, handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
         self.on_click = Some(Box::new(handler));
         self
     }
@@ -139,17 +146,17 @@ impl ListItem {
         self
     }
 
-    pub fn inset(mut self, inset: bool) -> Self {
+    pub const fn inset(mut self, inset: bool) -> Self {
         self.inset = inset;
         self
     }
 
-    pub fn indent_level(mut self, indent_level: usize) -> Self {
+    pub const fn indent_level(mut self, indent_level: usize) -> Self {
         self.indent_level = indent_level;
         self
     }
 
-    pub fn indent_step_size(mut self, indent_step_size: Pixels) -> Self {
+    pub const fn indent_step_size(mut self, indent_step_size: Pixels) -> Self {
         self.indent_step_size = indent_step_size;
         self
     }
@@ -159,10 +166,7 @@ impl ListItem {
         self
     }
 
-    pub fn on_toggle(
-        mut self,
-        on_toggle: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
+    pub fn on_toggle(mut self, on_toggle: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
         self.on_toggle = Some(Arc::new(on_toggle));
         self
     }
@@ -178,8 +182,7 @@ impl ListItem {
     }
 
     pub fn end_slot_on_hover<E: IntoElement>(mut self, end_slot_on_hover: E) -> Self {
-        self.end_slot_visibility =
-            EndSlotVisibility::SwapOnHover(end_slot_on_hover.into_any_element());
+        self.end_slot_visibility = EndSlotVisibility::SwapOnHover(end_slot_on_hover.into_any_element());
         self
     }
 
@@ -188,22 +191,22 @@ impl ListItem {
         self
     }
 
-    pub fn outlined(mut self) -> Self {
+    pub const fn outlined(mut self) -> Self {
         self.outlined = true;
         self
     }
 
-    pub fn rounded(mut self) -> Self {
+    pub const fn rounded(mut self) -> Self {
         self.rounded = true;
         self
     }
 
-    pub fn overflow_x(mut self) -> Self {
+    pub const fn overflow_x(mut self) -> Self {
         self.overflow_x = true;
         self
     }
 
-    pub fn focused(mut self, focused: bool) -> Self {
+    pub const fn focused(mut self, focused: bool) -> Self {
         self.focused = Some(focused);
         self
     }
@@ -249,8 +252,7 @@ impl RenderOnce for ListItem {
             .relative()
             // When an item is inset draw the indent spacing outside of the item
             .when(self.inset, |this| {
-                this.ml(self.indent_level as f32 * self.indent_step_size)
-                    .px(DynamicSpacing::Base04.rems(cx))
+                this.ml(self.indent_level as f32 * self.indent_step_size).px(DynamicSpacing::Base04.rems(cx))
             })
             .when(!self.inset, |this| {
                 this.when_some(self.focused, |this, focused| {
@@ -259,17 +261,13 @@ impl RenderOnce for ListItem {
                             DockSide::Left => this.border_l_2(),
                             DockSide::Right => this.border_r_2(),
                         })
-                        .when(focused && !self.disabled, |this| {
-                            this.border_color(cx.theme().colors().border_focused)
-                        })
+                        .when(focused && !self.disabled, |this| this.border_color(cx.theme().colors().border_focused))
                 })
                 .when(self.selectable && !self.disabled, |this| {
                     this.hover(|style| style.bg(cx.theme().colors().ghost_element_hover))
                         .active(|style| style.bg(cx.theme().colors().ghost_element_active))
                         .when(self.outlined, |this| this.rounded_sm())
-                        .when(self.selected, |this| {
-                            this.bg(cx.theme().colors().ghost_element_selected)
-                        })
+                        .when(self.selected, |this| this.bg(cx.theme().colors().ghost_element_selected))
                 })
             })
             .when(self.rounded, |this| this.rounded_sm())
@@ -290,8 +288,7 @@ impl RenderOnce for ListItem {
                     .when(self.inset, |this| {
                         this.when_some(self.focused, |this, focused| {
                             if focused && !self.disabled {
-                                this.border_1()
-                                    .border_color(cx.theme().colors().border_focused)
+                                this.border_1().border_color(cx.theme().colors().border_focused)
                             } else {
                                 this.border_1()
                             }
@@ -299,20 +296,14 @@ impl RenderOnce for ListItem {
                         .when(self.selectable && !self.disabled, |this| {
                             this.hover(|style| style.bg(cx.theme().colors().ghost_element_hover))
                                 .active(|style| style.bg(cx.theme().colors().ghost_element_active))
-                                .when(self.selected, |this| {
-                                    this.bg(cx.theme().colors().ghost_element_selected)
-                                })
+                                .when(self.selected, |this| this.bg(cx.theme().colors().ghost_element_selected))
                         })
                     })
-                    .when_some(
-                        self.on_click.filter(|_| !self.disabled),
-                        |this, on_click| this.cursor_pointer().on_click(on_click),
-                    )
+                    .when_some(self.on_click.filter(|_| !self.disabled), |this, on_click| {
+                        this.cursor_pointer().on_click(on_click)
+                    })
                     .when(self.outlined, |this| {
-                        this.border_1()
-                            .border_color(cx.theme().colors().border)
-                            .rounded_sm()
-                            .overflow_hidden()
+                        this.border_1().border_color(cx.theme().colors().border).rounded_sm().overflow_hidden()
                     })
                     .when_some(self.on_secondary_mouse_down, |this, on_mouse_down| {
                         this.on_mouse_down(MouseButton::Right, move |event, window, cx| {
@@ -333,13 +324,8 @@ impl RenderOnce for ListItem {
                             .flex()
                             .absolute()
                             .left(rems(-1.))
-                            .when(is_open && !self.always_show_disclosure_icon, |this| {
-                                this.visible_on_hover("")
-                            })
-                            .child(
-                                Disclosure::new("toggle", is_open)
-                                    .on_toggle_expanded(self.on_toggle),
-                            )
+                            .when(is_open && !self.always_show_disclosure_icon, |this| this.visible_on_hover(""))
+                            .child(Disclosure::new("toggle", is_open).on_toggle_expanded(self.on_toggle))
                     }))
                     .child(
                         h_flex()
@@ -347,13 +333,11 @@ impl RenderOnce for ListItem {
                             .flex_shrink_0()
                             .flex_basis(relative(0.25))
                             .gap(DynamicSpacing::Base06.rems(cx))
-                            .map(|list_content| {
-                                if self.overflow_x {
-                                    list_content
-                                } else {
-                                    list_content.overflow_hidden()
-                                }
-                            })
+                            .map(
+                                |list_content| {
+                                    if self.overflow_x { list_content } else { list_content.overflow_hidden() }
+                                },
+                            )
                             .children(self.start_slot)
                             .children(self.children),
                     )
@@ -362,14 +346,9 @@ impl RenderOnce for ListItem {
                         EndSlotVisibility::Always if let Some(end_slot) = self.end_slot => {
                             this.child(h_flex().flex_shrink_1().overflow_hidden().child(end_slot))
                         }
-                        EndSlotVisibility::OnHover if let Some(end_slot) = self.end_slot => this
-                            .child(
-                                h_flex()
-                                    .flex_shrink_1()
-                                    .overflow_hidden()
-                                    .visible_on_hover("list_item")
-                                    .child(end_slot),
-                            ),
+                        EndSlotVisibility::OnHover if let Some(end_slot) = self.end_slot => this.child(
+                            h_flex().flex_shrink_1().overflow_hidden().visible_on_hover("list_item").child(end_slot),
+                        ),
                         EndSlotVisibility::SwapOnHover(hover_slot) => this.child(
                             h_flex()
                                 .relative()
@@ -412,9 +391,7 @@ impl Component for ListItem {
                     vec![
                         single_example(
                             "Simple",
-                            ListItem::new("simple")
-                                .child(Label::new("Simple list item"))
-                                .into_any_element(),
+                            ListItem::new("simple").child(Label::new("Simple list item")).into_any_element(),
                         ),
                         single_example(
                             "With Icon",

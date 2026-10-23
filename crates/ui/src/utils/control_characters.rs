@@ -22,13 +22,11 @@ const DELETE_SYMBOL: char = '␡';
 ///
 /// C1 controls (`U+0080..=U+009F`) are deliberately left alone: they have no
 /// Control Pictures equivalent to map onto.
-fn printable_substitute(character: char) -> Option<char> {
+const fn printable_substitute(character: char) -> Option<char> {
     match character {
         '\n' => Some(LINE_FEED_SYMBOL),
         '\x7f' => Some(DELETE_SYMBOL),
-        character if character.is_ascii_control() => {
-            char::from_u32(CONTROL_PICTURES_START + character as u32)
-        }
+        character if character.is_ascii_control() => char::from_u32(CONTROL_PICTURES_START + character as u32),
         _ => None,
     }
 }
@@ -55,8 +53,7 @@ fn printable_substitute(character: char) -> Option<char> {
 /// assert_eq!(replace_control_characters("tab\there.rs"), "tab␉here.rs");
 /// ```
 pub fn replace_control_characters(text: &str) -> Cow<'_, str> {
-    let Some(first_control_character) = text.find(|character: char| character.is_ascii_control())
-    else {
+    let Some(first_control_character) = text.find(|character: char| character.is_ascii_control()) else {
         return Cow::Borrowed(text);
     };
 
@@ -96,10 +93,7 @@ pub fn replace_control_characters(text: &str) -> Cow<'_, str> {
 /// assert_eq!(replaced.as_deref(), Some("a␉b"));
 /// assert_eq!(offsets, vec![0, 4]);
 /// ```
-pub fn replace_control_characters_remapping_offsets(
-    text: &str,
-    offsets: &mut [usize],
-) -> Option<String> {
+pub fn replace_control_characters_remapping_offsets(text: &str, offsets: &mut [usize]) -> Option<String> {
     // Control characters are single bytes below 0x80, so scanning raw bytes
     // cannot mistake a UTF-8 continuation byte for one.
     if !text.bytes().any(|byte| byte.is_ascii_control()) {

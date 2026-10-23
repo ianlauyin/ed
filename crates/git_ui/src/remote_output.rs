@@ -1,6 +1,6 @@
 use anyhow::Context as _;
-
-use git::repository::{Remote, RemoteCommandOutput};
+use git::repository::Remote;
+use git::repository::RemoteCommandOutput;
 use ui::SharedString;
 use util::ResultExt as _;
 
@@ -12,7 +12,7 @@ pub enum RemoteAction {
 }
 
 impl RemoteAction {
-    pub fn name(&self) -> &'static str {
+    pub const fn name(&self) -> &'static str {
         match self {
             RemoteAction::Fetch(_) => "fetch",
             RemoteAction::Pull(_) => "pull",
@@ -35,43 +35,26 @@ pub fn format_output(action: &RemoteAction, output: RemoteCommandOutput) -> Succ
     match action {
         RemoteAction::Fetch(remote) => {
             if output.stderr.is_empty() {
-                SuccessMessage {
-                    message: "Fetch: Already up to date".into(),
-                    style: SuccessStyle::Toast,
-                }
+                SuccessMessage { message: "Fetch: Already up to date".into(), style: SuccessStyle::Toast }
             } else {
                 let message = match remote {
                     Some(remote) => format!("Synchronized with {}", remote.name),
                     None => "Synchronized with remotes".into(),
                 };
-                SuccessMessage {
-                    message,
-                    style: SuccessStyle::ToastWithLog { output },
-                }
+                SuccessMessage { message, style: SuccessStyle::ToastWithLog { output } }
             }
         }
         RemoteAction::Pull(remote_ref) => {
             let get_changes = |output: &RemoteCommandOutput| -> anyhow::Result<u32> {
-                let last_line = output
-                    .stdout
-                    .lines()
-                    .last()
-                    .context("Failed to get last line of output")?
-                    .trim();
+                let last_line = output.stdout.lines().last().context("Failed to get last line of output")?.trim();
 
-                let files_changed = last_line
-                    .split_whitespace()
-                    .next()
-                    .context("Failed to get first word of last line")?
-                    .parse()?;
+                let files_changed =
+                    last_line.split_whitespace().next().context("Failed to get first word of last line")?.parse()?;
 
                 Ok(files_changed)
             };
             if output.stdout.ends_with("Already up to date.\n") {
-                SuccessMessage {
-                    message: "Pull: Already up to date".into(),
-                    style: SuccessStyle::Toast,
-                }
+                SuccessMessage { message: "Pull: Already up to date".into(), style: SuccessStyle::Toast }
             } else if output.stdout.starts_with("Updating") {
                 let files_changed = get_changes(&output).log_err();
                 let message = if let Some(files_changed) = files_changed {
@@ -84,10 +67,7 @@ pub fn format_output(action: &RemoteAction, output: RemoteCommandOutput) -> Succ
                 } else {
                     format!("Fast forwarded from {}", remote_ref.name)
                 };
-                SuccessMessage {
-                    message,
-                    style: SuccessStyle::ToastWithLog { output },
-                }
+                SuccessMessage { message, style: SuccessStyle::ToastWithLog { output } }
             } else if output.stdout.starts_with("Merge") {
                 let files_changed = get_changes(&output).log_err();
                 let message = if let Some(files_changed) = files_changed {
@@ -100,10 +80,7 @@ pub fn format_output(action: &RemoteAction, output: RemoteCommandOutput) -> Succ
                 } else {
                     format!("Merged from {}", remote_ref.name)
                 };
-                SuccessMessage {
-                    message,
-                    style: SuccessStyle::ToastWithLog { output },
-                }
+                SuccessMessage { message, style: SuccessStyle::ToastWithLog { output } }
             } else if output.stdout.contains("Successfully rebased") {
                 SuccessMessage {
                     message: format!("Successfully rebased from {}", remote_ref.name),
@@ -118,10 +95,7 @@ pub fn format_output(action: &RemoteAction, output: RemoteCommandOutput) -> Succ
         }
         RemoteAction::Push(branch_name, remote_ref) => {
             if output.stderr.ends_with("Everything up-to-date\n") {
-                SuccessMessage {
-                    message: "Push: Everything is up-to-date".to_string(),
-                    style: SuccessStyle::Toast,
-                }
+                SuccessMessage { message: "Push: Everything is up-to-date".to_string(), style: SuccessStyle::Toast }
             } else {
                 SuccessMessage {
                     message: format!("Pushed {} to {}", branch_name, remote_ref.name),

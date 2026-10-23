@@ -1,11 +1,30 @@
-use std::cmp::{self, min};
-use std::iter::repeat;
+use std::cmp::min;
+use std::cmp::{self};
+use std::iter::repeat_n;
 
 /// Most of the code, and specifically the constants, in this are copied from Alacritty,
 /// with modifications for our circumstances
-use gpui::{Modifiers, MouseButton, Pixels, Point as GpuiPoint, ScrollWheelEvent, px};
+use gpui::Modifiers;
+/// Most of the code, and specifically the constants, in this are copied from Alacritty,
+/// with modifications for our circumstances
+use gpui::MouseButton;
+/// Most of the code, and specifically the constants, in this are copied from Alacritty,
+/// with modifications for our circumstances
+use gpui::Pixels;
+/// Most of the code, and specifically the constants, in this are copied from Alacritty,
+/// with modifications for our circumstances
+use gpui::Point as GpuiPoint;
+/// Most of the code, and specifically the constants, in this are copied from Alacritty,
+/// with modifications for our circumstances
+use gpui::ScrollWheelEvent;
+/// Most of the code, and specifically the constants, in this are copied from Alacritty,
+/// with modifications for our circumstances
+use gpui::px;
 
-use crate::{Modes, Point, SelectionSide, TerminalBounds};
+use crate::Modes;
+use crate::Point;
+use crate::SelectionSide;
+use crate::TerminalBounds;
 
 enum MouseFormat {
     Sgr,
@@ -13,7 +32,7 @@ enum MouseFormat {
 }
 
 impl MouseFormat {
-    fn from_mode(mode: Modes) -> Self {
+    const fn from_mode(mode: Modes) -> Self {
         if mode.contains(Modes::SGR_MOUSE) {
             MouseFormat::Sgr
         } else if mode.contains(Modes::UTF8_MOUSE) {
@@ -39,7 +58,7 @@ enum MouseButtonCode {
 }
 
 impl MouseButtonCode {
-    fn from_move_button(e: Option<MouseButton>) -> Self {
+    const fn from_move_button(e: Option<MouseButton>) -> Self {
         match e {
             Some(gpui::MouseButton::Left) => MouseButtonCode::LeftMove,
             Some(gpui::MouseButton::Middle) => MouseButtonCode::MiddleMove,
@@ -49,7 +68,7 @@ impl MouseButtonCode {
         }
     }
 
-    fn from_button(e: MouseButton) -> Self {
+    const fn from_button(e: MouseButton) -> Self {
         match e {
             gpui::MouseButton::Left => MouseButtonCode::LeftButton,
             gpui::MouseButton::Middle => MouseButtonCode::MiddleButton,
@@ -64,14 +83,10 @@ impl MouseButtonCode {
             gpui::ScrollDelta::Lines(lines) => lines.y > 0.,
         };
 
-        if is_positive {
-            MouseButtonCode::ScrollUp
-        } else {
-            MouseButtonCode::ScrollDown
-        }
+        if is_positive { MouseButtonCode::ScrollUp } else { MouseButtonCode::ScrollDown }
     }
 
-    fn is_other(&self) -> bool {
+    const fn is_other(&self) -> bool {
         matches!(self, MouseButtonCode::Other)
     }
 }
@@ -83,14 +98,8 @@ pub(crate) fn scroll_report(
     mode: Modes,
 ) -> Option<impl Iterator<Item = Vec<u8>>> {
     if mode.intersects(Modes::MOUSE_MODE) {
-        mouse_report(
-            point,
-            MouseButtonCode::from_scroll(e),
-            true,
-            e.modifiers,
-            MouseFormat::from_mode(mode),
-        )
-        .map(|report| repeat(report).take(scroll_lines.unsigned_abs() as usize))
+        mouse_report(point, MouseButtonCode::from_scroll(e), true, e.modifiers, MouseFormat::from_mode(mode))
+            .map(|report| repeat_n(report, scroll_lines.unsigned_abs() as usize))
     } else {
         None
     }
@@ -117,13 +126,7 @@ pub(crate) fn mouse_button_report(
 ) -> Option<Vec<u8>> {
     let button = MouseButtonCode::from_button(button);
     if !button.is_other() && mode.intersects(Modes::MOUSE_MODE) {
-        mouse_report(
-            point,
-            button,
-            pressed,
-            modifiers,
-            MouseFormat::from_mode(mode),
-        )
+        mouse_report(point, button, pressed, modifiers, MouseFormat::from_mode(mode))
     } else {
         None
     }
@@ -149,11 +152,7 @@ pub(crate) fn mouse_moved_report(
     }
 }
 
-pub(crate) fn grid_point(
-    pos: GpuiPoint<Pixels>,
-    cur_size: TerminalBounds,
-    display_offset: usize,
-) -> Point {
+pub(crate) fn grid_point(pos: GpuiPoint<Pixels>, cur_size: TerminalBounds, display_offset: usize) -> Point {
     grid_point_and_side(pos, cur_size, display_offset).0
 }
 
@@ -165,11 +164,7 @@ pub(crate) fn grid_point_and_side(
     let mut column = (pos.x / cur_size.cell_width) as usize;
     let cell_x = cmp::max(px(0.), pos.x) % cur_size.cell_width;
     let half_cell_width = cur_size.cell_width / 2.0;
-    let mut side = if cell_x > half_cell_width {
-        SelectionSide::Right
-    } else {
-        SelectionSide::Left
-    };
+    let mut side = if cell_x > half_cell_width { SelectionSide::Right } else { SelectionSide::Left };
 
     let last_column = cur_size.num_columns().saturating_sub(1);
     if column > last_column {
@@ -187,10 +182,7 @@ pub(crate) fn grid_point_and_side(
     }
 
     let display_offset = i32::try_from(display_offset).unwrap_or(i32::MAX);
-    (
-        Point::new(line.saturating_sub(display_offset), column),
-        side,
-    )
+    (Point::new(line.saturating_sub(display_offset), column), side)
 }
 
 ///Generate the bytes to send to the terminal, from the cell location, a mouse event, and the terminal mode
@@ -217,9 +209,7 @@ fn mouse_report(
     }
 
     match format {
-        MouseFormat::Sgr => {
-            Some(sgr_mouse_report(point, button as u8 + mods, pressed).into_bytes())
-        }
+        MouseFormat::Sgr => Some(sgr_mouse_report(point, button as u8 + mods, pressed).into_bytes()),
         MouseFormat::Normal(utf8) => {
             if pressed {
                 normal_mouse_report(point, button as u8 + mods, utf8)
@@ -264,13 +254,7 @@ fn normal_mouse_report(point: Point, button: u8, utf8: bool) -> Option<Vec<u8>> 
 fn sgr_mouse_report(point: Point, button: u8, pressed: bool) -> String {
     let c = if pressed { 'M' } else { 'm' };
 
-    let msg = format!(
-        "\x1b[<{};{};{}{}",
-        button,
-        point.column + 1,
-        point.line + 1,
-        c
-    );
+    let msg = format!("\x1b[<{};{};{}{}", button, point.column + 1, point.line + 1, c);
 
     msg
 }

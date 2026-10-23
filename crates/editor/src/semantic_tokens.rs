@@ -1,31 +1,43 @@
-use std::{collections::hash_map, sync::Arc, time::Duration};
+use std::collections::hash_map;
+use std::sync::Arc;
+use std::time::Duration;
 
-use collections::{HashMap, HashSet};
+use collections::HashMap;
+use collections::HashSet;
 use futures::future::join_all;
-use gpui::{
-    App, Context, FontStyle, FontWeight, HighlightStyle, StrikethroughStyle, Task, UnderlineStyle,
-};
+use gpui::App;
+use gpui::Context;
+use gpui::FontStyle;
+use gpui::FontWeight;
+use gpui::HighlightStyle;
+use gpui::StrikethroughStyle;
+use gpui::Task;
+use gpui::UnderlineStyle;
 use itertools::Itertools;
-use language::{LanguageName, LanguageRegistry, language_settings::LanguageSettings};
+use language::LanguageName;
+use language::LanguageRegistry;
+use language::language_settings::LanguageSettings;
 use lsp::LanguageServerId;
-use project::{
-    LspStore,
-    lsp_store::{BufferSemanticToken, BufferSemanticTokens, SemanticTokenStylizer, TokenType},
-    project_settings::ProjectSettings,
-};
-use settings::{
-    SemanticTokenColorOverride, SemanticTokenFontStyle, SemanticTokenFontWeight, SemanticTokenRule,
-    SemanticTokenRules, Settings as _,
-};
+use project::LspStore;
+use project::lsp_store::BufferSemanticToken;
+use project::lsp_store::BufferSemanticTokens;
+use project::lsp_store::SemanticTokenStylizer;
+use project::lsp_store::TokenType;
+use project::project_settings::ProjectSettings;
+use settings::SemanticTokenColorOverride;
+use settings::SemanticTokenFontStyle;
+use settings::SemanticTokenFontWeight;
+use settings::SemanticTokenRule;
+use settings::SemanticTokenRules;
+use settings::Settings as _;
 use text::BufferId;
 use theme::SyntaxTheme;
 use ui::ActiveTheme as _;
 
-use crate::{
-    Editor,
-    actions::ToggleSemanticHighlights,
-    display_map::{HighlightStyleInterner, SemanticTokenHighlight},
-};
+use crate::Editor;
+use crate::actions::ToggleSemanticHighlights;
+use crate::display_map::HighlightStyleInterner;
+use crate::display_map::SemanticTokenHighlight;
 
 pub(super) struct SemanticTokenState {
     rules: SemanticTokenRules,
@@ -37,21 +49,18 @@ pub(super) struct SemanticTokenState {
 impl SemanticTokenState {
     pub(super) fn new(cx: &App, enabled: bool) -> Self {
         Self {
-            rules: ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .semantic_token_rules
-                .clone(),
+            rules: ProjectSettings::get_global(cx).global_lsp_settings.semantic_token_rules.clone(),
             enabled,
             update_task: Task::ready(()),
             fetched_for_buffers: HashMap::default(),
         }
     }
 
-    pub(super) fn enabled(&self) -> bool {
+    pub(super) const fn enabled(&self) -> bool {
         self.enabled
     }
 
-    pub(super) fn toggle_enabled(&mut self) {
+    pub(super) const fn toggle_enabled(&mut self) {
         self.enabled = !self.enabled;
     }
 
@@ -85,7 +94,7 @@ impl Editor {
         supports
     }
 
-    pub fn semantic_highlights_enabled(&self) -> bool {
+    pub const fn semantic_highlights_enabled(&self) -> bool {
         self.semantic_token_state.enabled()
     }
 
@@ -128,18 +137,11 @@ impl Editor {
 
         let mut invalidate_semantic_highlights_for_buffers = HashSet::default();
         if server_refreshed {
-            invalidate_semantic_highlights_for_buffers.extend(
-                self.semantic_token_state
-                    .fetched_for_buffers
-                    .drain()
-                    .map(|(buffer_id, _)| buffer_id),
-            );
+            invalidate_semantic_highlights_for_buffers
+                .extend(self.semantic_token_state.fetched_for_buffers.drain().map(|(buffer_id, _)| buffer_id));
         }
 
-        let Some((sema, project)) = self
-            .semantics_provider
-            .clone()
-            .zip(self.project.as_ref().map(|p| p.downgrade()))
+        let Some((sema, project)) = self.semantics_provider.clone().zip(self.project.as_ref().map(|p| p.downgrade()))
         else {
             return;
         };
@@ -152,9 +154,7 @@ impl Editor {
             .filter_map(|editor_buffer| {
                 let editor_buffer_id = editor_buffer.read(cx).remote_id();
                 if self.registered_buffers.contains_key(&editor_buffer_id)
-                    && LanguageSettings::for_buffer(editor_buffer.read(cx), cx)
-                        .semantic_tokens
-                        .enabled()
+                    && LanguageSettings::for_buffer(editor_buffer.read(cx), cx).semantic_tokens.enabled()
                 {
                     Some((editor_buffer_id, editor_buffer))
                 } else {
@@ -171,48 +171,33 @@ impl Editor {
             .copied()
             .filter(|buffer_id| !buffers_to_query.contains_key(buffer_id))
             .filter(|buffer_id| {
-                !self
-                    .buffer
-                    .read(cx)
-                    .buffer(*buffer_id)
-                    .is_some_and(|buffer| {
-                        let buffer = buffer.read(cx);
-                        LanguageSettings::for_buffer(&buffer, cx)
-                            .semantic_tokens
-                            .enabled()
-                    })
+                !self.buffer.read(cx).buffer(*buffer_id).is_some_and(|buffer| {
+                    let buffer = buffer.read(cx);
+                    LanguageSettings::for_buffer(buffer, cx).semantic_tokens.enabled()
+                })
             })
             .collect::<Vec<_>>()
         {
-            self.semantic_token_state
-                .invalidate_buffer(&buffer_with_disabled_tokens);
+            self.semantic_token_state.invalidate_buffer(&buffer_with_disabled_tokens);
             self.display_map.update(cx, |display_map, _| {
                 display_map.invalidate_semantic_highlights(buffer_with_disabled_tokens);
             });
         }
 
         self.semantic_token_state.update_task = cx.spawn(async move |editor, cx| {
-            cx.background_executor()
-                .timer(Duration::from_millis(50))
-                .await;
+            cx.background_executor().timer(Duration::from_millis(50)).await;
             let Some(all_semantic_tokens_task) = editor
                 .update(cx, |editor, cx| {
                     buffers_to_query
                         .into_iter()
                         .filter_map(|(buffer_id, buffer)| {
-                            let known_version = editor
-                                .semantic_token_state
-                                .fetched_for_buffers
-                                .get(&buffer_id);
+                            let known_version = editor.semantic_token_state.fetched_for_buffers.get(&buffer_id);
                             let query_version = buffer.read(cx).version();
-                            if known_version.is_some_and(|known_version| {
-                                !query_version.changed_since(known_version)
-                            }) {
+                            if known_version.is_some_and(|known_version| !query_version.changed_since(known_version)) {
                                 None
                             } else {
-                                sema.semantic_tokens(buffer, cx).map(|task| async move {
-                                    (buffer_id, query_version, task.await)
-                                })
+                                sema.semantic_tokens(buffer, cx)
+                                    .map(|task| async move { (buffer_id, query_version, task.await) })
                             }
                         })
                         .collect::<Vec<_>>()
@@ -239,9 +224,7 @@ impl Editor {
 
                     for (buffer_id, query_version, tokens) in all_semantic_tokens {
                         let tokens = match tokens {
-                            Ok(BufferSemanticTokens {
-                                tokens: Some(tokens),
-                            }) => tokens,
+                            Ok(BufferSemanticTokens { tokens: Some(tokens) }) => tokens,
                             Ok(BufferSemanticTokens { tokens: None }) => {
                                 editor.display_map.update(cx, |display_map, _| {
                                     display_map.invalidate_semantic_highlights(buffer_id);
@@ -257,11 +240,7 @@ impl Editor {
                             }
                         };
 
-                        match editor
-                            .semantic_token_state
-                            .fetched_for_buffers
-                            .entry(buffer_id)
-                        {
+                        match editor.semantic_token_state.fetched_for_buffers.entry(buffer_id) {
                             hash_map::Entry::Occupied(mut o) => {
                                 if query_version.changed_since(o.get()) {
                                     o.insert(query_version);
@@ -297,11 +276,9 @@ impl Editor {
                                 let mut token_highlights = Vec::new();
                                 let mut interner = HighlightStyleInterner::default();
                                 for (server_id, server_tokens) in tokens {
-                                    let Some(stylizer) = lsp_store.get_or_create_token_stylizer(
-                                        server_id,
-                                        language_name.as_ref(),
-                                        cx,
-                                    ) else {
+                                    let Some(stylizer) =
+                                        lsp_store.get_or_create_token_stylizer(server_id, language_name.as_ref(), cx)
+                                    else {
                                         continue;
                                     };
                                     let theme = cx.theme().syntax();
@@ -322,10 +299,8 @@ impl Editor {
                                         .cmp(&b.range.start, &multi_buffer_snapshot)
                                         .then_with(|| a.precedence.cmp(&b.precedence))
                                 });
-                                Arc::make_mut(&mut display_map.semantic_token_highlights).insert(
-                                    buffer_id,
-                                    (Arc::from(token_highlights), Arc::new(interner)),
-                                );
+                                Arc::make_mut(&mut display_map.semantic_token_highlights)
+                                    .insert(buffer_id, (Arc::from(token_highlights), Arc::new(interner)));
                             });
                         });
                     }
@@ -343,9 +318,7 @@ fn server_precedences(
     language_name: Option<&LanguageName>,
     tokens: &HashMap<LanguageServerId, Arc<[BufferSemanticToken]>>,
 ) -> HashMap<LanguageServerId, u32> {
-    let ordered_adapters = language_name
-        .map(|language_name| languages.lsp_adapters(language_name))
-        .unwrap_or_default();
+    let ordered_adapters = language_name.map(|language_name| languages.lsp_adapters(language_name)).unwrap_or_default();
 
     // We base this on the ids that are present rather than the adapter count,
     // otherwise a server we can't resolve an adapter for outranks the
@@ -355,13 +328,9 @@ fn server_precedences(
     tokens
         .keys()
         .map(|&server_id| {
-            let configured_precedence = lsp_store
-                .language_server_adapter_for_id(server_id)
-                .and_then(|adapter| {
-                    ordered_adapters
-                        .iter()
-                        .position(|ordered_adapter| ordered_adapter.name == adapter.name)
-                });
+            let configured_precedence = lsp_store.language_server_adapter_for_id(server_id).and_then(|adapter| {
+                ordered_adapters.iter().position(|ordered_adapter| ordered_adapter.name == adapter.name)
+            });
             let precedence = match configured_precedence {
                 Some(index) => configured_base + index,
                 None => server_id.0,
@@ -380,11 +349,7 @@ fn buffer_into_editor_highlights<'a, 'b>(
     theme: &'a SyntaxTheme,
 ) -> impl Iterator<Item = SemanticTokenHighlight> + use<'a, 'b> {
     multi_buffer_snapshot
-        .text_anchors_to_visible_anchors(
-            buffer_tokens
-                .iter()
-                .flat_map(|token| [token.range.start, token.range.end]),
-        )
+        .text_anchors_to_visible_anchors(buffer_tokens.iter().flat_map(|token| [token.range.start, token.range.end]))
         .into_iter()
         .tuples::<(_, _)>()
         .zip(buffer_tokens)
@@ -410,11 +375,7 @@ fn convert_token(
     modifiers: u32,
 ) -> Option<HighlightStyle> {
     let rules = stylizer.rules_for_token(token_type)?;
-    let filter = |rule: &&SemanticTokenRule| {
-        rule.token_modifiers
-            .iter()
-            .all(|m| stylizer.has_modifier(modifiers, m))
-    };
+    let filter = |rule: &&SemanticTokenRule| rule.token_modifiers.iter().all(|m| stylizer.has_modifier(modifiers, m));
     let last = rules.last()?;
     if last.no_style_defined() && filter(&last) {
         return None;
@@ -422,11 +383,8 @@ fn convert_token(
 
     let mut highlight = HighlightStyle::default();
 
-    for rule in rules.into_iter().filter(filter) {
-        let style = rule
-            .style
-            .iter()
-            .find_map(|style| theme.style_for_name(style));
+    for rule in rules.iter().filter(filter) {
+        let style = rule.style.iter().find_map(|style| theme.style_for_name(style));
 
         macro_rules! overwrite {
             (
@@ -442,35 +400,19 @@ fn convert_token(
             };
         }
 
-        overwrite!(
-            highlight.color,
-            SemanticTokenRule::foreground_color,
-            Into::into,
-        );
+        overwrite!(highlight.color, SemanticTokenRule::foreground_color, Into::into,);
 
-        overwrite!(
-            highlight.background_color,
-            SemanticTokenRule::background_color,
-            Into::into,
-        );
+        overwrite!(highlight.background_color, SemanticTokenRule::background_color, Into::into,);
 
-        overwrite!(
-            highlight.font_weight,
-            SemanticTokenRule::font_weight,
-            |w| match w {
-                SemanticTokenFontWeight::Normal => FontWeight::NORMAL,
-                SemanticTokenFontWeight::Bold => FontWeight::BOLD,
-            },
-        );
+        overwrite!(highlight.font_weight, SemanticTokenRule::font_weight, |w| match w {
+            SemanticTokenFontWeight::Normal => FontWeight::NORMAL,
+            SemanticTokenFontWeight::Bold => FontWeight::BOLD,
+        },);
 
-        overwrite!(
-            highlight.font_style,
-            SemanticTokenRule::font_style,
-            |s| match s {
-                SemanticTokenFontStyle::Normal => FontStyle::Normal,
-                SemanticTokenFontStyle::Italic => FontStyle::Italic,
-            },
-        );
+        overwrite!(highlight.font_style, SemanticTokenRule::font_style, |s| match s {
+            SemanticTokenFontStyle::Normal => FontStyle::Normal,
+            SemanticTokenFontStyle::Italic => FontStyle::Italic,
+        },);
 
         overwrite!(highlight.underline, SemanticTokenRule::underline, |u| {
             UnderlineStyle {
@@ -484,18 +426,14 @@ fn convert_token(
             }
         });
 
-        overwrite!(
-            highlight.strikethrough,
-            SemanticTokenRule::strikethrough,
-            |s| StrikethroughStyle {
-                thickness: 1.0.into(),
-                color: match s {
-                    SemanticTokenColorOverride::InheritForeground(true) => highlight.color,
-                    SemanticTokenColorOverride::InheritForeground(false) => None,
-                    SemanticTokenColorOverride::Replace(c) => Some(c.into()),
-                },
+        overwrite!(highlight.strikethrough, SemanticTokenRule::strikethrough, |s| StrikethroughStyle {
+            thickness: 1.0.into(),
+            color: match s {
+                SemanticTokenColorOverride::InheritForeground(true) => highlight.color,
+                SemanticTokenColorOverride::InheritForeground(false) => None,
+                SemanticTokenColorOverride::Replace(c) => Some(c.into()),
             },
-        );
+        },);
     }
     Some(highlight)
 }

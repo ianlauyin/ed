@@ -17,23 +17,34 @@ use std::time::Duration;
 use scheduler::Instant;
 use smallvec::SmallVec;
 
-use crate::{
-    Axis, GestureEvent, InputEvent, IsZero, Modifiers, MouseButton, MouseDownEvent, MouseEvent,
-    MouseUpEvent, Pixels, PlatformInput, Point, ScrollDelta, ScrollWheelEvent, TouchEvent, TouchId,
-    TouchPhase, point, px, seal::Sealed,
-};
+use crate::Axis;
+use crate::GestureEvent;
+use crate::InputEvent;
+use crate::IsZero;
+use crate::Modifiers;
+use crate::MouseButton;
+use crate::MouseDownEvent;
+use crate::MouseEvent;
+use crate::MouseUpEvent;
+use crate::Pixels;
+use crate::PlatformInput;
+use crate::Point;
+use crate::ScrollDelta;
+use crate::ScrollWheelEvent;
+use crate::TouchEvent;
+use crate::TouchId;
+use crate::TouchPhase;
+use crate::point;
+use crate::px;
+use crate::seal::Sealed;
 
 const SCROLL_EVENT_SEPARATION: Duration = Duration::from_millis(28);
 
 fn dominant_axis(delta: Point<Pixels>) -> Axis {
-    if delta.x.abs() <= delta.y.abs() {
-        Axis::Vertical
-    } else {
-        Axis::Horizontal
-    }
+    if delta.x.abs() <= delta.y.abs() { Axis::Vertical } else { Axis::Horizontal }
 }
 
-fn lock_delta_to_axis(delta: &mut Point<Pixels>, axis: Axis) {
+const fn lock_delta_to_axis(delta: &mut Point<Pixels>, axis: Axis) {
     match axis {
         Axis::Vertical => delta.x = Pixels::ZERO,
         Axis::Horizontal => delta.y = Pixels::ZERO,
@@ -81,9 +92,7 @@ impl OngoingScroll {
         }
 
         let starts_new_gesture = touch_phase == TouchPhase::Started
-            || self
-                .last_event
-                .is_none_or(|last_event| now.duration_since(last_event) >= SCROLL_EVENT_SEPARATION);
+            || self.last_event.is_none_or(|last_event| now.duration_since(last_event) >= SCROLL_EVENT_SEPARATION);
         let mut axis = self.axis;
         if starts_new_gesture {
             axis = Some(dominant_axis(*delta));
@@ -174,10 +183,8 @@ pub enum ScrollPhysics {
 
 impl ScrollPhysics {
     /// iOS scroll feel: `UIScrollView`'s normal deceleration rate.
-    pub fn ios() -> Self {
-        Self::Exponential {
-            decay_per_ms: 0.998,
-        }
+    pub const fn ios() -> Self {
+        Self::Exponential { decay_per_ms: 0.998 }
     }
 
     /// Android scroll feel: `OverScroller` with stock friction, at Android's
@@ -186,11 +193,8 @@ impl ScrollPhysics {
     /// that fling in physical pixels, or know the display's true density in
     /// their logical space, should construct
     /// [`ScrollPhysics::FrictionSpline`] directly.
-    pub fn android() -> Self {
-        Self::FrictionSpline {
-            friction: 0.015,
-            pixels_per_inch: 160.,
-        }
+    pub const fn android() -> Self {
+        Self::FrictionSpline { friction: 0.015, pixels_per_inch: 160. }
     }
 
     /// How long a fling released at `speed` pixels per second coasts before
@@ -204,10 +208,7 @@ impl ScrollPhysics {
                 let milliseconds = (MOMENTUM_STOP_VELOCITY / speed).ln() / decay_per_ms.ln();
                 Duration::from_secs_f32(milliseconds / 1000.)
             }
-            Self::FrictionSpline {
-                friction,
-                pixels_per_inch,
-            } => {
+            Self::FrictionSpline { friction, pixels_per_inch } => {
                 if speed <= 0. {
                     return Duration::ZERO;
                 }
@@ -234,10 +235,7 @@ impl ScrollPhysics {
                 let milliseconds = elapsed.as_secs_f32() * 1000.;
                 (speed / 1000.) * (decay_per_ms.powf(milliseconds) - 1.) / decay_per_ms.ln()
             }
-            Self::FrictionSpline {
-                friction,
-                pixels_per_inch,
-            } => {
+            Self::FrictionSpline { friction, pixels_per_inch } => {
                 let deceleration = friction_spline::deceleration(speed, friction, pixels_per_inch);
                 let rate = friction_spline::deceleration_rate();
                 let total_distance = friction as f64
@@ -307,9 +305,7 @@ mod friction_spline {
 
     /// AOSP's `getSplineDeceleration`.
     pub(super) fn deceleration(speed: f32, friction: f32, pixels_per_inch: f32) -> f64 {
-        (INFLEXION as f64 * speed as f64
-            / (friction as f64 * physical_coefficient(pixels_per_inch)))
-        .ln()
+        (INFLEXION as f64 * speed as f64 / (friction as f64 * physical_coefficient(pixels_per_inch))).ln()
     }
 
     /// Fraction of the total fling distance covered at fraction `time` of
@@ -349,20 +345,10 @@ pub struct GestureKinds {
 
 impl GestureKinds {
     /// No gestures; gpui core's portable recognizers handle everything.
-    pub const NONE: Self = Self {
-        tap: false,
-        long_press: false,
-        pan: false,
-        pinch: false,
-    };
+    pub const NONE: Self = Self { tap: false, long_press: false, pan: false, pinch: false };
 
     /// All gesture kinds.
-    pub const ALL: Self = Self {
-        tap: true,
-        long_press: true,
-        pan: true,
-        pinch: true,
-    };
+    pub const ALL: Self = Self { tap: true, long_press: true, pan: true, pinch: true };
 }
 
 /// A direct touch drag claimed by an element before touch input becomes a tap,
@@ -399,11 +385,7 @@ pub struct LongPressEvent {
 
 impl Default for LongPressEvent {
     fn default() -> Self {
-        Self {
-            phase: TouchPhase::Started,
-            start_position: Point::default(),
-            position: Point::default(),
-        }
+        Self { phase: TouchPhase::Started, start_position: Point::default(), position: Point::default() }
     }
 }
 
@@ -557,27 +539,15 @@ struct Momentum {
 }
 
 impl TouchGestureRecognizer {
-    pub(crate) fn new(tuning: GestureTuning) -> Self {
-        Self {
-            tuning,
-            state: TouchGestureState::Idle,
-            momentum: None,
-            last_tap: None,
-        }
+    pub(crate) const fn new(tuning: GestureTuning) -> Self {
+        Self { tuning, state: TouchGestureState::Idle, momentum: None, last_tap: None }
     }
 
-    pub(crate) fn handle_event(
-        &mut self,
-        event: &TouchEvent,
-    ) -> SmallVec<[RecognizedTouchGesture; 2]> {
+    pub(crate) fn handle_event(&mut self, event: &TouchEvent) -> SmallVec<[RecognizedTouchGesture; 2]> {
         self.handle_event_at(event, Instant::now())
     }
 
-    fn handle_event_at(
-        &mut self,
-        event: &TouchEvent,
-        now: Instant,
-    ) -> SmallVec<[RecognizedTouchGesture; 2]> {
+    fn handle_event_at(&mut self, event: &TouchEvent, now: Instant) -> SmallVec<[RecognizedTouchGesture; 2]> {
         let mut recognized = SmallVec::new();
         match event.phase {
             TouchPhase::Started => {
@@ -625,12 +595,9 @@ impl TouchGestureRecognizer {
                 }
             }
             TouchPhase::Moved => match mem::replace(&mut self.state, TouchGestureState::Idle) {
-                TouchGestureState::Pending {
-                    mut touch,
-                    deadline,
-                    long_press_offered,
-                    touch_drag_offered,
-                } if touch.id == event.id => {
+                TouchGestureState::Pending { mut touch, deadline, long_press_offered, touch_drag_offered }
+                    if touch.id == event.id =>
+                {
                     touch.velocity_tracker.push(now, event.position);
                     touch.last_position = event.position;
                     let accumulated = event.position - touch.start_position;
@@ -657,12 +624,8 @@ impl TouchGestureRecognizer {
                         )));
                         self.state = TouchGestureState::Panning { touch, axis };
                     } else {
-                        self.state = TouchGestureState::Pending {
-                            touch,
-                            deadline,
-                            long_press_offered,
-                            touch_drag_offered,
-                        };
+                        self.state =
+                            TouchGestureState::Pending { touch, deadline, long_press_offered, touch_drag_offered };
                     }
                 }
                 TouchGestureState::Panning { mut touch, axis } if touch.id == event.id => {
@@ -728,11 +691,7 @@ impl TouchGestureRecognizer {
                         }
                         _ => 1,
                     };
-                    self.last_tap = Some(CompletedTap {
-                        position: event.position,
-                        time: now,
-                        count: tap_count,
-                    });
+                    self.last_tap = Some(CompletedTap { position: event.position, time: now, count: tap_count });
                     recognized.push(RecognizedTouchGesture::Tap {
                         down: MouseDownEvent {
                             button: MouseButton::Left,
@@ -756,18 +715,12 @@ impl TouchGestureRecognizer {
                     // estimate. But a release long after the last movement
                     // means the finger had already stopped, so nothing
                     // flings.
-                    let finger_stopped =
-                        touch
-                            .velocity_tracker
-                            .latest_sample_time()
-                            .is_none_or(|latest| {
-                                now.duration_since(latest) > VELOCITY_ASSUME_STOPPED_GAP
-                            });
-                    let mut velocity = if finger_stopped {
-                        Point::default()
-                    } else {
-                        touch.velocity_tracker.velocity()
-                    };
+                    let finger_stopped = touch
+                        .velocity_tracker
+                        .latest_sample_time()
+                        .is_none_or(|latest| now.duration_since(latest) > VELOCITY_ASSUME_STOPPED_GAP);
+                    let mut velocity =
+                        if finger_stopped { Point::default() } else { touch.velocity_tracker.velocity() };
                     match axis {
                         Axis::Vertical => velocity.x = 0.,
                         Axis::Horizontal => velocity.y = 0.,
@@ -780,8 +733,7 @@ impl TouchGestureRecognizer {
                         let speed = speed.min(MAX_FLING_VELOCITY);
                         let duration = self.tuning.scroll_physics.fling_duration(speed);
                         if !duration.is_zero() {
-                            let total_distance =
-                                self.tuning.scroll_physics.fling_distance(speed, duration);
+                            let total_distance = self.tuning.scroll_physics.fling_distance(speed, duration);
                             // Prediction may have left the content ahead of
                             // the raw release position. Emitting that
                             // correction here would visibly snap the content
@@ -789,11 +741,10 @@ impl TouchGestureRecognizer {
                             // it into the fling instead: start the curve
                             // already advanced by the overshoot, keeping the
                             // total travel exact while staying monotonic.
-                            let overshoot = -(f32::from(release_delta.x) * direction.x
-                                + f32::from(release_delta.y) * direction.y);
+                            let overshoot =
+                                -(f32::from(release_delta.x) * direction.x + f32::from(release_delta.y) * direction.y);
                             let emitted_distance = if overshoot > 0. && overshoot < total_distance {
-                                release_delta +=
-                                    point(px(direction.x * overshoot), px(direction.y * overshoot));
+                                release_delta += point(px(direction.x * overshoot), px(direction.y * overshoot));
                                 overshoot
                             } else {
                                 0.
@@ -861,25 +812,14 @@ impl TouchGestureRecognizer {
     }
 
     pub(crate) fn pending_long_press(&self) -> Option<(TouchId, Duration)> {
-        let TouchGestureState::Pending {
-            touch,
-            deadline,
-            long_press_offered: false,
-            ..
-        } = &self.state
-        else {
+        let TouchGestureState::Pending { touch, deadline, long_press_offered: false, .. } = &self.state else {
             return None;
         };
         Some((touch.id, deadline.saturating_duration_since(Instant::now())))
     }
 
     pub(crate) fn offer_long_press(&mut self, id: TouchId) -> Option<RecognizedTouchGesture> {
-        let TouchGestureState::Pending {
-            touch,
-            long_press_offered,
-            ..
-        } = &mut self.state
-        else {
+        let TouchGestureState::Pending { touch, long_press_offered, .. } = &mut self.state else {
             return None;
         };
         if touch.id != id || *long_press_offered {
@@ -899,22 +839,15 @@ impl TouchGestureRecognizer {
         }
         let state = mem::replace(&mut self.state, TouchGestureState::Idle);
         self.state = match state {
-            TouchGestureState::Pending {
-                touch,
-                long_press_offered: true,
-                ..
-            } => TouchGestureState::LongPressing(touch),
+            TouchGestureState::Pending { touch, long_press_offered: true, .. } => {
+                TouchGestureState::LongPressing(touch)
+            }
             other => other,
         };
     }
 
     pub(crate) fn offer_touch_drag(&mut self, id: TouchId) -> Option<RecognizedTouchGesture> {
-        let TouchGestureState::Pending {
-            touch,
-            touch_drag_offered,
-            ..
-        } = &mut self.state
-        else {
+        let TouchGestureState::Pending { touch, touch_drag_offered, .. } = &mut self.state else {
             return None;
         };
         if touch.id != id || *touch_drag_offered {
@@ -934,16 +867,14 @@ impl TouchGestureRecognizer {
         }
         let state = mem::replace(&mut self.state, TouchGestureState::Idle);
         self.state = match state {
-            TouchGestureState::Pending {
-                touch,
-                touch_drag_offered: true,
-                ..
-            } => TouchGestureState::TouchDragging(touch),
+            TouchGestureState::Pending { touch, touch_drag_offered: true, .. } => {
+                TouchGestureState::TouchDragging(touch)
+            }
             other => other,
         };
     }
 
-    pub(crate) fn has_momentum(&self) -> bool {
+    pub(crate) const fn has_momentum(&self) -> bool {
         self.momentum.is_some()
     }
 
@@ -957,47 +888,24 @@ impl TouchGestureRecognizer {
     fn tick_momentum_at(&mut self, now: Instant) -> Option<RecognizedTouchGesture> {
         let momentum = self.momentum.as_mut()?;
         let elapsed = now.duration_since(momentum.started_at);
-        let distance = self
-            .tuning
-            .scroll_physics
-            .fling_distance(momentum.speed, elapsed);
+        let distance = self.tuning.scroll_physics.fling_distance(momentum.speed, elapsed);
         // Prediction overshoot can start momentum ahead of its curve. Hold
         // that position until the curve catches up instead of stepping back.
         let step = (distance - momentum.emitted_distance).max(0.);
         momentum.emitted_distance = momentum.emitted_distance.max(distance);
-        let delta = point(
-            px(momentum.direction.x * step),
-            px(momentum.direction.y * step),
-        );
+        let delta = point(px(momentum.direction.x * step), px(momentum.direction.y * step));
         let position = momentum.position;
         if elapsed >= momentum.duration {
             self.momentum = None;
-            Some(RecognizedTouchGesture::Scroll(scroll_event(
-                position,
-                delta,
-                TouchPhase::Ended,
-            )))
+            Some(RecognizedTouchGesture::Scroll(scroll_event(position, delta, TouchPhase::Ended)))
         } else {
-            Some(RecognizedTouchGesture::Scroll(scroll_event(
-                position,
-                delta,
-                TouchPhase::Moved,
-            )))
+            Some(RecognizedTouchGesture::Scroll(scroll_event(position, delta, TouchPhase::Moved)))
         }
     }
 }
 
-fn scroll_event(
-    position: Point<Pixels>,
-    delta: Point<Pixels>,
-    touch_phase: TouchPhase,
-) -> ScrollWheelEvent {
-    ScrollWheelEvent {
-        position,
-        delta: ScrollDelta::Pixels(delta),
-        modifiers: Modifiers::default(),
-        touch_phase,
-    }
+fn scroll_event(position: Point<Pixels>, delta: Point<Pixels>, touch_phase: TouchPhase) -> ScrollWheelEvent {
+    ScrollWheelEvent { position, delta: ScrollDelta::Pixels(delta), modifiers: Modifiers::default(), touch_phase }
 }
 
 /// Estimates the velocity a touch had at its newest sample.
@@ -1036,9 +944,7 @@ impl VelocityTracker {
         let mut previous_time = *newest_time;
         for (time, position) in self.samples.iter().rev() {
             let age = newest_time.duration_since(*time);
-            if age > VELOCITY_WINDOW
-                || previous_time.duration_since(*time) > VELOCITY_ASSUME_STOPPED_GAP
-            {
+            if age > VELOCITY_WINDOW || previous_time.duration_since(*time) > VELOCITY_ASSUME_STOPPED_GAP {
                 break;
             }
             previous_time = *time;
@@ -1052,17 +958,14 @@ impl VelocityTracker {
             if elapsed <= f64::EPSILON {
                 return 0.;
             }
-            ((values.first().copied().unwrap_or(0.) - values.last().copied().unwrap_or(0.))
-                / elapsed) as f32
+            ((values.first().copied().unwrap_or(0.) - values.last().copied().unwrap_or(0.)) / elapsed) as f32
         };
         if times_seconds.len() < 3 {
             return point(endpoint_estimate(&horizontal), endpoint_estimate(&vertical));
         }
         point(
-            quadratic_velocity_at_newest(&times_seconds, &horizontal).map_or_else(
-                || endpoint_estimate(&horizontal),
-                |velocity| velocity as f32,
-            ),
+            quadratic_velocity_at_newest(&times_seconds, &horizontal)
+                .map_or_else(|| endpoint_estimate(&horizontal), |velocity| velocity as f32),
             quadratic_velocity_at_newest(&times_seconds, &vertical)
                 .map_or_else(|| endpoint_estimate(&vertical), |velocity| velocity as f32),
         )
@@ -1089,14 +992,12 @@ fn quadratic_velocity_at_newest(times: &[f64], values: &[f64]) -> Option<f64> {
     }
     // Cramer's rule on the 3×3 normal equations, solved for the linear
     // coefficient only.
-    let determinant = count * (sum_t2 * sum_t4 - sum_t3 * sum_t3)
-        - sum_t1 * (sum_t1 * sum_t4 - sum_t3 * sum_t2)
+    let determinant = count * (sum_t2 * sum_t4 - sum_t3 * sum_t3) - sum_t1 * (sum_t1 * sum_t4 - sum_t3 * sum_t2)
         + sum_t2 * (sum_t1 * sum_t3 - sum_t2 * sum_t2);
     if determinant.abs() < 1e-12 {
         return None;
     }
-    let linear_determinant = count * (sum_vt * sum_t4 - sum_t3 * sum_vt2)
-        - sum_v * (sum_t1 * sum_t4 - sum_t3 * sum_t2)
+    let linear_determinant = count * (sum_vt * sum_t4 - sum_t3 * sum_vt2) - sum_v * (sum_t1 * sum_t4 - sum_t3 * sum_t2)
         + sum_t2 * (sum_t1 * sum_vt2 - sum_vt * sum_t2);
     Some(linear_determinant / determinant)
 }

@@ -1,17 +1,28 @@
 use anyhow::Error;
-use etagere::euclid::{Point2D, Vector2D};
+use etagere::euclid::Point2D;
+use etagere::euclid::Vector2D;
 use lyon::geom::Angle;
-use lyon::math::{Vector, vector};
-use lyon::path::traits::SvgPathBuilder;
-use lyon::path::{ArcFlags, Polygon};
-use lyon::tessellation::{
-    BuffersBuilder, FillTessellator, FillVertex, StrokeTessellator, StrokeVertex, VertexBuffers,
-};
-
 pub use lyon::math::Transform;
-pub use lyon::tessellation::{FillOptions, FillRule, StrokeOptions};
+use lyon::math::Vector;
+use lyon::math::vector;
+use lyon::path::ArcFlags;
+use lyon::path::Polygon;
+use lyon::path::traits::SvgPathBuilder;
+use lyon::tessellation::BuffersBuilder;
+pub use lyon::tessellation::FillOptions;
+pub use lyon::tessellation::FillRule;
+use lyon::tessellation::FillTessellator;
+use lyon::tessellation::FillVertex;
+pub use lyon::tessellation::StrokeOptions;
+use lyon::tessellation::StrokeTessellator;
+use lyon::tessellation::StrokeVertex;
+use lyon::tessellation::VertexBuffers;
 
-use crate::{Path, Pixels, Point, point, px};
+use crate::Path;
+use crate::Pixels;
+use crate::Point;
+use crate::point;
+use crate::px;
 
 /// Style of the PathBuilder
 pub enum PathStyle {
@@ -32,19 +43,13 @@ pub struct PathBuilder {
 
 impl From<lyon::path::Builder> for PathBuilder {
     fn from(builder: lyon::path::Builder) -> Self {
-        Self {
-            raw: builder.with_svg(),
-            ..Default::default()
-        }
+        Self { raw: builder.with_svg(), ..Default::default() }
     }
 }
 
 impl From<lyon::path::builder::WithSvg<lyon::path::BuilderImpl>> for PathBuilder {
     fn from(raw: lyon::path::builder::WithSvg<lyon::path::BuilderImpl>) -> Self {
-        Self {
-            raw,
-            ..Default::default()
-        }
+        Self { raw, ..Default::default() }
     }
 }
 
@@ -86,10 +91,7 @@ impl Default for PathBuilder {
 impl PathBuilder {
     /// Creates a new [`PathBuilder`] to build a Stroke path.
     pub fn stroke(width: Pixels) -> Self {
-        Self {
-            style: PathStyle::Stroke(StrokeOptions::default().with_line_width(width.0)),
-            ..Self::default()
-        }
+        Self { style: PathStyle::Stroke(StrokeOptions::default().with_line_width(width.0)), ..Self::default() }
     }
 
     /// Creates a new [`PathBuilder`] to build a Fill path.
@@ -141,14 +143,8 @@ impl PathBuilder {
     /// Adds a cubic Bézier to the [`Path`] given its two control points
     /// and its end point.
     #[inline]
-    pub fn cubic_bezier_to(
-        &mut self,
-        to: Point<Pixels>,
-        control_a: Point<Pixels>,
-        control_b: Point<Pixels>,
-    ) {
-        self.raw
-            .cubic_bezier_to(control_a.into(), control_b.into(), to.into());
+    pub fn cubic_bezier_to(&mut self, to: Point<Pixels>, control_a: Point<Pixels>, control_b: Point<Pixels>) {
+        self.raw.cubic_bezier_to(control_a.into(), control_b.into(), to.into());
     }
 
     /// Adds an elliptical arc.
@@ -160,12 +156,7 @@ impl PathBuilder {
         sweep: bool,
         to: Point<Pixels>,
     ) {
-        self.raw.arc_to(
-            radii.into(),
-            Angle::degrees(x_rotation.into()),
-            ArcFlags { large_arc, sweep },
-            to.into(),
-        );
+        self.raw.arc_to(radii.into(), Angle::degrees(x_rotation.into()), ArcFlags { large_arc, sweep }, to.into());
     }
 
     /// Equivalent to `arc_to` in relative coordinates.
@@ -188,10 +179,7 @@ impl PathBuilder {
     /// Adds a polygon.
     pub fn add_polygon(&mut self, points: &[Point<Pixels>], closed: bool) {
         let points = points.iter().copied().map(|p| p.into()).collect::<Vec<_>>();
-        self.raw.add_polygon(Polygon {
-            points: points.as_ref(),
-            closed,
-        });
+        self.raw.add_polygon(Polygon { points: points.as_ref(), closed });
     }
 
     /// Close the current sub-path.
@@ -202,7 +190,7 @@ impl PathBuilder {
 
     /// Applies a transform to the path.
     #[inline]
-    pub fn transform(&mut self, transform: Transform) {
+    pub const fn transform(&mut self, transform: Transform) {
         self.transform = Some(transform);
     }
 
@@ -254,10 +242,7 @@ impl PathBuilder {
         }
     }
 
-    fn tessellate_fill(
-        path: &lyon::path::Path,
-        options: &FillOptions,
-    ) -> Result<Path<Pixels>, Error> {
+    fn tessellate_fill(path: &lyon::path::Path, options: &FillOptions) -> Result<Path<Pixels>, Error> {
         // Will contain the result of the tessellation.
         let mut buf: VertexBuffers<lyon::math::Point, u16> = VertexBuffers::new();
         let mut tessellator = FillTessellator::new();
@@ -279,8 +264,7 @@ impl PathBuilder {
     ) -> Result<Path<Pixels>, Error> {
         let path = if let Some(dash_array) = dash_array {
             let measurements = lyon::algorithms::measure::PathMeasurements::from_path(path, 0.01);
-            let mut sampler = measurements
-                .create_sampler(path, lyon::algorithms::measure::SampleType::Normalized);
+            let mut sampler = measurements.create_sampler(path, lyon::algorithms::measure::SampleType::Normalized);
             let mut builder = lyon::path::Path::builder();
 
             let total_length = sampler.length();
@@ -336,10 +320,7 @@ impl PathBuilder {
             let v1 = buf.vertices[i1];
             let v2 = buf.vertices[i2];
 
-            path.push_triangle(
-                (v0.into(), v1.into(), v2.into()),
-                (point(0., 1.), point(0., 1.), point(0., 1.)),
-            );
+            path.push_triangle((v0.into(), v1.into(), v2.into()), (point(0., 1.), point(0., 1.), point(0., 1.)));
         }
 
         path

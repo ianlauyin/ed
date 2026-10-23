@@ -48,7 +48,7 @@ pub enum CompletedJobStatus {
 }
 
 impl GitJobDebugQueue {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { pending: VecDeque::new(), running: VecDeque::new(), completed: VecDeque::new() }
     }
 
@@ -196,6 +196,12 @@ impl GitJobDebugQueue {
             "wait_time": wait_time,
             "run_time": run_time,
         })
+    }
+}
+
+impl Default for GitJobDebugQueue {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

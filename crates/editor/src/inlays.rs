@@ -17,12 +17,18 @@ pub mod inlay_hints;
 
 use std::sync::OnceLock;
 
-use gpui::{Context, HighlightStyle, Hsla, Rgba};
+use gpui::Context;
+use gpui::HighlightStyle;
+use gpui::Hsla;
+use gpui::Rgba;
 use multi_buffer::Anchor;
-use project::{InlayHint, InlayId};
+use project::InlayHint;
+use project::InlayId;
 use text::Rope;
 
-use crate::{Editor, HighlightKey, hover_links::InlayHighlight};
+use crate::Editor;
+use crate::HighlightKey;
+use crate::hover_links::InlayHighlight;
 
 /// A splice to send into the `inlay_map` for updating the visible inlays on the screen.
 /// "Visible" inlays may not be displayed in the buffer right away, but those are ready to be displayed on further buffer scroll, pane item activations, etc. right away without additional LSP queries or settings changes.
@@ -35,7 +41,7 @@ pub struct InlaySplice {
 }
 
 impl InlaySplice {
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.to_remove.is_empty() && self.to_insert.is_empty()
     }
 }
@@ -65,27 +71,15 @@ impl Inlay {
         if needs_left_padding {
             text.push_front(" ");
         }
-        Self {
-            id,
-            position,
-            content: InlayContent::Text(text),
-        }
+        Self { id, position, content: InlayContent::Text(text) }
     }
 
     pub fn color(id: usize, position: Anchor, color: Rgba) -> Self {
-        Self {
-            id: InlayId::Color(id),
-            position,
-            content: InlayContent::Color(color.into()),
-        }
+        Self { id: InlayId::Color(id), position, content: InlayContent::Color(color.into()) }
     }
 
     pub fn repl_result<T: Into<Rope>>(id: usize, position: Anchor, text: T) -> Self {
-        Self {
-            id: InlayId::ReplResult(id),
-            position,
-            content: InlayContent::Text(text.into()),
-        }
+        Self { id: InlayId::ReplResult(id), position, content: InlayContent::Text(text.into()) }
     }
 
     pub fn text(&self) -> &Rope {
@@ -99,19 +93,13 @@ impl Inlay {
 
 impl Editor {
     /// Modify which hints are displayed in the editor.
-    pub fn splice_inlays(
-        &mut self,
-        to_remove: &[InlayId],
-        to_insert: Vec<Inlay>,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn splice_inlays(&mut self, to_remove: &[InlayId], to_insert: Vec<Inlay>, cx: &mut Context<Self>) {
         if let Some(inlay_hints) = &mut self.inlay_hints {
             for id_to_remove in to_remove {
                 inlay_hints.remove_inlay(id_to_remove);
             }
             inlay_hints.remove_pending_text_edit(|target| {
-                to_remove.contains(&target.hint_id)
-                    && !to_insert.iter().any(|inlay| inlay.id == target.hint_id)
+                to_remove.contains(&target.hint_id) && !to_insert.iter().any(|inlay| inlay.id == target.hint_id)
             });
         }
         self.display_map.update(cx, |display_map, cx| {
@@ -121,14 +109,13 @@ impl Editor {
     }
 
     pub(crate) fn highlight_inlays(
-        &mut self,
+        &self,
         key: HighlightKey,
         highlights: Vec<InlayHighlight>,
         style: HighlightStyle,
         cx: &mut Context<Self>,
     ) {
-        self.display_map
-            .update(cx, |map, _| map.highlight_inlays(key, highlights, style));
+        self.display_map.update(cx, |map, _| map.highlight_inlays(key, highlights, style));
         cx.notify();
     }
 }

@@ -1,9 +1,20 @@
+use std::ops::Range;
+use std::sync::Arc;
+use std::time::Duration;
+
 use collections::HashMap;
-use gpui::{AppContext, Context, Entity, Window};
+use gpui::AppContext;
+use gpui::Context;
+use gpui::Entity;
+use gpui::Window;
 use itertools::Itertools;
 use language::Buffer;
-use std::{ops::Range, sync::Arc, time::Duration};
-use text::{Anchor, AnchorRangeExt, Bias, BufferId, ToOffset, ToPoint};
+use text::Anchor;
+use text::AnchorRangeExt;
+use text::Bias;
+use text::BufferId;
+use text::ToOffset;
+use text::ToPoint;
 use util::ResultExt;
 
 use crate::Editor;
@@ -22,15 +33,13 @@ impl LinkedEditingRanges {
         snapshot: &text::BufferSnapshot,
     ) -> Option<&(Range<Anchor>, Vec<Range<Anchor>>)> {
         let ranges_for_buffer = self.0.get(&id)?;
-        let lower_bound = ranges_for_buffer
-            .partition_point(|(range, _)| range.start.cmp(&anchor.start, snapshot).is_le());
+        let lower_bound =
+            ranges_for_buffer.partition_point(|(range, _)| range.start.cmp(&anchor.start, snapshot).is_le());
         if lower_bound == 0 {
             // None of the linked ranges contains `anchor`.
             return None;
         }
-        ranges_for_buffer
-            .get(lower_bound - 1)
-            .filter(|(range, _)| range.end.cmp(&anchor.end, snapshot).is_ge())
+        ranges_for_buffer.get(lower_bound - 1).filter(|(range, _)| range.end.cmp(&anchor.end, snapshot).is_ge())
     }
     pub(super) fn is_empty(&self) -> bool {
         self.0.is_empty()
@@ -44,11 +53,7 @@ impl LinkedEditingRanges {
 const UPDATE_DEBOUNCE: Duration = Duration::from_millis(50);
 
 // TODO do not refresh anything at all, if the settings/capabilities do not have it enabled.
-pub(super) fn refresh_linked_ranges(
-    editor: &mut Editor,
-    window: &mut Window,
-    cx: &mut Context<Editor>,
-) -> Option<()> {
+pub(super) fn refresh_linked_ranges(editor: &mut Editor, window: &Window, cx: &Context<Editor>) -> Option<()> {
     if !editor.lsp_data_enabled() || editor.pending_rename.is_some() {
         return None;
     }
@@ -65,8 +70,7 @@ pub(super) fn refresh_linked_ranges(
                 let snapshot = display_snapshot.buffer_snapshot();
                 let buffer = editor.buffer.read(cx);
                 for selection in selections.iter() {
-                    if let Some((_, range)) =
-                        snapshot.anchor_range_to_buffer_anchor_range(selection.range())
+                    if let Some((_, range)) = snapshot.anchor_range_to_buffer_anchor_range(selection.range())
                         && let Some(buffer) = buffer.buffer(range.start.buffer_id)
                     {
                         applicable_selections.push((buffer, range.start, range.end));
@@ -87,7 +91,7 @@ pub(super) fn refresh_linked_ranges(
                     let cx = cx.to_async();
                     let highlights = async move {
                         let edits = linked_edits_task.await.log_err()?;
-                        let snapshot = cx.read_entity(&buffer, |buffer, _| buffer.snapshot());
+                        let snapshot = cx.read_entity(buffer, |buffer, _| buffer.snapshot());
                         let buffer_id = snapshot.remote_id();
 
                         // Find the range containing our current selection.
@@ -98,20 +102,16 @@ pub(super) fn refresh_linked_ranges(
                         let start_point = start.to_point(&snapshot);
                         let end_point = end.to_point(&snapshot);
                         let _current_selection_contains_range = edits.iter().find(|range| {
-                            range.start.to_point(&snapshot) <= start_point
-                                && range.end.to_point(&snapshot) >= end_point
+                            range.start.to_point(&snapshot) <= start_point && range.end.to_point(&snapshot) >= end_point
                         });
                         _current_selection_contains_range?;
                         // Now link every range as each-others sibling.
                         let mut siblings: HashMap<Range<Anchor>, Vec<_>> = Default::default();
-                        let mut insert_sorted_anchor =
-                            |key: &Range<Anchor>, value: &Range<Anchor>| {
-                                siblings.entry(key.clone()).or_default().push(value.clone());
-                            };
+                        let mut insert_sorted_anchor = |key: &Range<Anchor>, value: &Range<Anchor>| {
+                            siblings.entry(key.clone()).or_default().push(value.clone());
+                        };
                         for items in edits.into_iter().combinations(2) {
-                            let Ok([first, second]): Result<[_; 2], _> = items.try_into() else {
-                                unreachable!()
-                            };
+                            let Ok([first, second]): Result<[_; 2], _> = items.try_into() else { unreachable!() };
 
                             insert_sorted_anchor(&first, &second);
                             insert_sorted_anchor(&second, &first);
@@ -135,18 +135,11 @@ pub(super) fn refresh_linked_ranges(
                     return;
                 }
                 for (buffer_id, ranges) in highlights.into_iter().flatten() {
-                    this.linked_edit_ranges
-                        .0
-                        .entry(buffer_id)
-                        .or_default()
-                        .extend(ranges);
+                    this.linked_edit_ranges.0.entry(buffer_id).or_default().extend(ranges);
                 }
                 for (buffer_id, values) in this.linked_edit_ranges.0.iter_mut() {
-                    let Some(snapshot) = this
-                        .buffer
-                        .read(cx)
-                        .buffer(*buffer_id)
-                        .map(|buffer| buffer.read(cx).snapshot())
+                    let Some(snapshot) =
+                        this.buffer.read(cx).buffer(*buffer_id).map(|buffer| buffer.read(cx).snapshot())
                     else {
                         continue;
                     };
@@ -175,19 +168,10 @@ impl LinkedEdits {
 
     /// Queries the editor's linked editing ranges for the given anchor range and, if any
     /// are found, records them paired with `text` for later application.
-    pub(crate) fn push(
-        &mut self,
-        editor: &Editor,
-        anchor_range: Range<Anchor>,
-        text: Arc<str>,
-        cx: &gpui::App,
-    ) {
+    pub(crate) fn push(&mut self, editor: &Editor, anchor_range: Range<Anchor>, text: Arc<str>, cx: &gpui::App) {
         if let Some(editing_ranges) = editor.linked_editing_ranges_for(anchor_range, cx) {
             for (buffer, ranges) in editing_ranges {
-                self.0
-                    .entry(buffer)
-                    .or_default()
-                    .extend(ranges.into_iter().map(|range| (range, text.clone())));
+                self.0.entry(buffer).or_default().extend(ranges.into_iter().map(|range| (range, text.clone())));
             }
         }
     }
@@ -228,5 +212,11 @@ impl LinkedEdits {
                 buffer.edit(edits, None, cx);
             });
         }
+    }
+}
+
+impl Default for LinkedEdits {
+    fn default() -> Self {
+        Self::new()
     }
 }

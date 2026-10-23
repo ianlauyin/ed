@@ -1,8 +1,20 @@
-use crate::{BufferSnapshot, Language, Point, ToPoint, ToTreeSitterPoint};
-use fuzzy_nucleo::{Case, LengthPenalty, StringMatch, StringMatchCandidate};
-use gpui::{BackgroundExecutor, HighlightStyle, SharedString};
-use std::{ops::Range, sync::Arc};
+use std::ops::Range;
+use std::sync::Arc;
+
+use fuzzy_nucleo::Case;
+use fuzzy_nucleo::LengthPenalty;
+use fuzzy_nucleo::StringMatch;
+use fuzzy_nucleo::StringMatchCandidate;
+use gpui::BackgroundExecutor;
+use gpui::HighlightStyle;
+use gpui::SharedString;
 use theme::SyntaxTheme;
+
+use crate::BufferSnapshot;
+use crate::Language;
+use crate::Point;
+use crate::ToPoint;
+use crate::ToTreeSitterPoint;
 
 /// An outline of all the symbols contained in a buffer.
 #[derive(Debug)]
@@ -45,14 +57,14 @@ pub enum OutlineSearchEntry {
 }
 
 impl OutlineSearchEntry {
-    pub fn candidate_id(&self) -> usize {
+    pub const fn candidate_id(&self) -> usize {
         match self {
             Self::Match(m) => m.candidate_id,
             Self::Ancestor { candidate_id } => *candidate_id,
         }
     }
 
-    pub fn as_match(&self) -> Option<&StringMatch> {
+    pub const fn as_match(&self) -> Option<&StringMatch> {
         match self {
             Self::Match(m) => Some(m),
             Self::Ancestor { .. } => None,
@@ -73,21 +85,14 @@ impl<T: ToPoint> OutlineItem<T> {
         OutlineItem {
             depth: self.depth,
             range: self.range.start.to_point(buffer)..self.range.end.to_point(buffer),
-            selection_range: self.selection_range.start.to_point(buffer)
-                ..self.selection_range.end.to_point(buffer),
+            selection_range: self.selection_range.start.to_point(buffer)..self.selection_range.end.to_point(buffer),
             source_range_for_text: self.source_range_for_text.start.to_point(buffer)
                 ..self.source_range_for_text.end.to_point(buffer),
             text: self.text.clone(),
             highlight_ranges: self.highlight_ranges.clone(),
             name_ranges: self.name_ranges.clone(),
-            body_range: self
-                .body_range
-                .as_ref()
-                .map(|r| r.start.to_point(buffer)..r.end.to_point(buffer)),
-            annotation_range: self
-                .annotation_range
-                .as_ref()
-                .map(|r| r.start.to_point(buffer)..r.end.to_point(buffer)),
+            body_range: self.body_range.as_ref().map(|r| r.start.to_point(buffer)..r.end.to_point(buffer)),
+            annotation_range: self.annotation_range.as_ref().map(|r| r.start.to_point(buffer)..r.end.to_point(buffer)),
         }
     }
 
@@ -103,20 +108,13 @@ impl<T: ToPoint> OutlineItem<T> {
         let mut cursor = node.walk();
         loop {
             let node = cursor.node();
-            if node.start_position() >= range.start.to_ts_point()
-                && node.end_position() <= range.end.to_ts_point()
-            {
+            if node.start_position() >= range.start.to_ts_point() && node.end_position() <= range.end.to_ts_point() {
                 break;
             }
             // If we can't descend further, the current node is the most specific
             // ancestor that contains `range.start`. Bail out rather than spinning
             // forever re-checking the same node.
-            if cursor
-                .goto_first_child_for_point(range.start.to_ts_point())
-                .is_none()
-            {
-                return None;
-            }
+            cursor.goto_first_child_for_point(range.start.to_ts_point())?;
         }
 
         if !cursor.goto_last_child() {
@@ -169,11 +167,7 @@ impl<T> Outline<T> {
             candidates.push(StringMatchCandidate::new(id, &path_text));
         }
 
-        Self {
-            items,
-            candidates,
-            leaf_offsets,
-        }
+        Self { items, candidates, leaf_offsets }
     }
 
     /// Find the most similar symbol to the provided query using normalized Levenshtein distance.
@@ -203,11 +197,7 @@ impl<T> Outline<T> {
     /// Find all outline symbols that match with the nucleo fuzzy matcher, ordered by tree position.
     /// Each real match is preceded by [`OutlineSearchEntry::Ancestor`] rows carrying parent
     /// `candidate_id`s, so callers can render tree context above the match.
-    pub async fn search(
-        &self,
-        query: &str,
-        executor: BackgroundExecutor,
-    ) -> Vec<OutlineSearchEntry> {
+    pub async fn search(&self, query: &str, executor: BackgroundExecutor) -> Vec<OutlineSearchEntry> {
         let query = query.trim_start();
         if query.is_empty() {
             return Vec::new();
@@ -240,9 +230,7 @@ impl<T> Outline<T> {
         matches.retain_mut(|string_match| {
             let leaf_offset = self.leaf_offsets[string_match.candidate_id];
             let total = string_match.positions.len();
-            string_match
-                .positions
-                .retain(|position| *position >= leaf_offset);
+            string_match.positions.retain(|position| *position >= leaf_offset);
             let kept = string_match.positions.len();
             if single_atom && kept != total {
                 return false;
@@ -253,9 +241,7 @@ impl<T> Outline<T> {
             for position in &mut string_match.positions {
                 *position -= leaf_offset;
             }
-            string_match
-                .string
-                .clone_from(&self.items[string_match.candidate_id].text);
+            string_match.string.clone_from(&self.items[string_match.candidate_id].text);
             true
         });
 
@@ -283,10 +269,7 @@ pub fn highlight_ranges_from_text(
 /// a given candidate index. Ancestors that already appear earlier in the output
 /// either as their own match or as an ancestor of an earlier match, are not
 /// duplicated.
-fn expand_tree(
-    depth_at: impl Fn(usize) -> usize,
-    matches: Vec<StringMatch>,
-) -> Vec<OutlineSearchEntry> {
+fn expand_tree(depth_at: impl Fn(usize) -> usize, matches: Vec<StringMatch>) -> Vec<OutlineSearchEntry> {
     debug_assert!(matches.is_sorted_by_key(|m| m.candidate_id));
     let mut out = Vec::with_capacity(matches.len());
     let mut prev_item_ix = 0;
@@ -298,10 +281,7 @@ fn expand_tree(
                 break;
             }
             if depth_at(ix) == cur_depth - 1 {
-                out.insert(
-                    insertion_ix,
-                    OutlineSearchEntry::Ancestor { candidate_id: ix },
-                );
+                out.insert(insertion_ix, OutlineSearchEntry::Ancestor { candidate_id: ix });
                 cur_depth -= 1;
             }
         }

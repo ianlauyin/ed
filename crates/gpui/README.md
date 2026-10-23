@@ -29,10 +29,6 @@ fn main() {
 This fork supports macOS only. Rendering uses Metal. Enable `font-kit` for glyph
 rasterization; without it the placeholder text system lays out text but renders no glyphs.
 
-### Additional Topics
-
-- [Ownership and data flow](_ownership_and_data_flow)
-
 ### Dependencies
 
 GPUI has various system dependencies that it needs in order to work.

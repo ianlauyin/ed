@@ -4,71 +4,140 @@ mod alacritty;
 mod pty_info;
 pub mod terminal_settings;
 
-use anyhow::Context as _;
-use anyhow::{Result, bail};
-use futures_lite::future::yield_now;
-use log::trace;
-
-use futures::{
-    FutureExt,
-    channel::mpsc::{UnboundedReceiver, unbounded},
-};
+use std::borrow::Cow;
+use std::cmp::min;
+use std::cmp::{self};
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::{self};
+use std::ops::BitOr;
+use std::ops::BitOrAssign;
+use std::ops::Deref;
+use std::ops::Range as StdRange;
+use std::os::unix::process::ExitStatusExt;
+use std::path::Path;
+use std::path::PathBuf;
+use std::process::ExitStatus;
+use std::sync::Arc;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
+use std::time::Instant;
 
 use alacritty_terminal::grid::Dimensions as _;
-use itertools::Itertools as _;
-use mappings::mouse::{
-    alt_scroll, grid_point, grid_point_and_side, mouse_button_report, mouse_moved_report,
-    scroll_report,
-};
-
-use async_channel::{Receiver, Sender};
-use collections::{HashMap, VecDeque};
+use anyhow::Context as _;
+use anyhow::Result;
+use anyhow::bail;
+use async_channel::Receiver;
+use async_channel::Sender;
+use collections::HashMap;
+use collections::VecDeque;
+use futures::FutureExt;
 use futures::StreamExt;
-use pty_info::{ProcessIdGetter, PtyProcessInfo};
-use serde::{Deserialize, Serialize};
+use futures::channel::mpsc::UnboundedReceiver;
+use futures::channel::mpsc::unbounded;
+use futures_lite::future::yield_now;
+use gpui::App;
+use gpui::AppContext as _;
+use gpui::BackgroundExecutor;
+use gpui::Bounds;
+use gpui::ClipboardItem;
+use gpui::Context;
+use gpui::EventEmitter;
+use gpui::Hsla;
+use gpui::Keystroke;
+use gpui::Modifiers;
+use gpui::MouseButton;
+use gpui::MouseDownEvent;
+use gpui::MouseMoveEvent;
+use gpui::MouseUpEvent;
+use gpui::Pixels;
+use gpui::Point as GpuiPoint;
+use gpui::Rgba;
+use gpui::ScrollWheelEvent;
+use gpui::Size;
+use gpui::Task;
+use gpui::TouchPhase;
+use gpui::Window;
+use gpui::actions;
+use gpui::black;
+use gpui::px;
+use itertools::Itertools as _;
+use log::trace;
+use mappings::mouse::alt_scroll;
+use mappings::mouse::grid_point;
+use mappings::mouse::grid_point_and_side;
+use mappings::mouse::mouse_button_report;
+use mappings::mouse::mouse_moved_report;
+use mappings::mouse::scroll_report;
+use pty_info::ProcessIdGetter;
+use pty_info::PtyProcessInfo;
+use serde::Deserialize;
+use serde::Serialize;
 use settings::Settings;
-use task::{HideStrategy, Shell, ShellKind, SpawnInTerminal};
-use terminal_settings::{AlternateScroll, CursorShape as SettingsCursorShape, TerminalSettings};
-use theme::{ActiveTheme, Theme};
-use urlencoding;
-use util::{ResultExt as _, paths::PathStyle, truncate_and_trailoff};
-
-use std::os::unix::process::ExitStatusExt;
-use std::{
-    borrow::Cow,
-    cmp::{self, min},
-    fmt::{self, Display, Formatter},
-    ops::{BitOr, BitOrAssign, Deref, Range as StdRange},
-    path::{Path, PathBuf},
-    process::ExitStatus,
-    sync::{
-        Arc,
-        atomic::{AtomicU64, Ordering},
-    },
-    time::{Duration, Instant},
-};
+use task::HideStrategy;
+use task::Shell;
+use task::ShellKind;
+use task::SpawnInTerminal;
+use terminal_settings::AlternateScroll;
+use terminal_settings::CursorShape as SettingsCursorShape;
+use terminal_settings::TerminalSettings;
+use theme::ActiveTheme;
+use theme::Theme;
 use thiserror::Error;
-use vte::ansi::{Attr, Handler, Processor, StdSyncHandler};
-pub use vte::ansi::{Color, NamedColor, Rgb};
+use util::ResultExt as _;
+use util::paths::PathStyle;
+use util::truncate_and_trailoff;
+use vte::ansi::Attr;
+pub use vte::ansi::Color;
+use vte::ansi::Handler;
+pub use vte::ansi::NamedColor;
+use vte::ansi::Processor;
+pub use vte::ansi::Rgb;
+use vte::ansi::StdSyncHandler;
 
-use gpui::{
-    App, AppContext as _, BackgroundExecutor, Bounds, ClipboardItem, Context, EventEmitter, Hsla,
-    Keystroke, Modifiers, MouseButton, MouseDownEvent, MouseMoveEvent, MouseUpEvent, Pixels,
-    Point as GpuiPoint, Rgba, ScrollWheelEvent, Size, Task, TouchPhase, Window, actions, black, px,
-};
-
+use crate::alacritty::AlacrittyCell;
+use crate::alacritty::AlacrittyGridIterator;
+use crate::alacritty::AlacrittyHyperlink;
+use crate::alacritty::AlacrittySearch;
+use crate::alacritty::AlacrittyTerm;
+use crate::alacritty::AlacrittyTermConfig;
+use crate::alacritty::AlacrittyTermLock;
+use crate::alacritty::HyperlinkMatch;
+use crate::alacritty::PtySender;
+use crate::alacritty::RegexSearches;
+use crate::alacritty::append_text_to_term;
+use crate::alacritty::apply_config;
+use crate::alacritty::clear_saved_screen;
+use crate::alacritty::content_text;
 use crate::alacritty::current_child_signal_mask;
-use crate::alacritty::{
-    AlacrittyCell, AlacrittyGridIterator, AlacrittyHyperlink, AlacrittySearch, AlacrittyTerm,
-    AlacrittyTermConfig, AlacrittyTermLock, HyperlinkMatch, PtySender, RegexSearches,
-    append_text_to_term, apply_config, clear_saved_screen, content_text, display_offset,
-    display_only_term_config, find_from_terminal_point, full_content_range, last_non_empty_lines,
-    make_content, new_term, open_pty, pty_options, pty_term_config, resize, screen_lines,
-    scroll_display, scroll_to_point, search_matches, selection_text, set_default_cursor_style,
-    set_selection as set_term_selection, shrink_to_used, spawn_event_loop,
-    toggle_vi_mode as toggle_term_vi_mode, total_lines, update_selection as update_term_selection,
-    update_selection_to_vi_cursor, update_vi_cursor_for_scroll, vi_goto_point, vi_motion,
-};
+use crate::alacritty::display_offset;
+use crate::alacritty::display_only_term_config;
+use crate::alacritty::find_from_terminal_point;
+use crate::alacritty::full_content_range;
+use crate::alacritty::last_non_empty_lines;
+use crate::alacritty::make_content;
+use crate::alacritty::new_term;
+use crate::alacritty::open_pty;
+use crate::alacritty::pty_options;
+use crate::alacritty::pty_term_config;
+use crate::alacritty::resize;
+use crate::alacritty::screen_lines;
+use crate::alacritty::scroll_display;
+use crate::alacritty::scroll_to_point;
+use crate::alacritty::search_matches;
+use crate::alacritty::selection_text;
+use crate::alacritty::set_default_cursor_style;
+use crate::alacritty::set_selection as set_term_selection;
+use crate::alacritty::shrink_to_used;
+use crate::alacritty::spawn_event_loop;
+use crate::alacritty::toggle_vi_mode as toggle_term_vi_mode;
+use crate::alacritty::total_lines;
+use crate::alacritty::update_selection as update_term_selection;
+use crate::alacritty::update_selection_to_vi_cursor;
+use crate::alacritty::update_vi_cursor_for_scroll;
+use crate::alacritty::vi_goto_point;
+use crate::alacritty::vi_motion;
 use crate::mappings::colors::to_vte_rgb;
 use crate::mappings::keys::to_esc_str;
 
@@ -151,33 +220,28 @@ enum SelectionType {
 }
 
 impl Selection {
-    fn new(selection_type: SelectionType, point: Point, side: SelectionSide) -> Self {
+    const fn new(selection_type: SelectionType, point: Point, side: SelectionSide) -> Self {
         let anchor = SelectionAnchor { point, side };
-        Self {
-            ty: selection_type,
-            start: anchor,
-            end: anchor,
-            head: point,
-        }
+        Self { ty: selection_type, start: anchor, end: anchor, head: point }
     }
 
-    fn simple_range(range: Range) -> Self {
+    const fn simple_range(range: Range) -> Self {
         let mut selection = Self::new(SelectionType::Simple, range.start(), SelectionSide::Left);
         selection.update(range.end(), SelectionSide::Right);
         selection
     }
 
-    fn update(&mut self, point: Point, side: SelectionSide) {
+    const fn update(&mut self, point: Point, side: SelectionSide) {
         self.end = SelectionAnchor { point, side };
         self.head = point;
     }
 }
 
-pub fn is_default_background_color(color: Color) -> bool {
+pub const fn is_default_background_color(color: Color) -> bool {
     matches!(color, Color::Named(NamedColor::Background))
 }
 
-pub fn is_app_chosen_exact_color(color: Color) -> bool {
+pub const fn is_app_chosen_exact_color(color: Color) -> bool {
     matches!(color, Color::Spec(_) | Color::Indexed(16..=255))
 }
 
@@ -218,17 +282,13 @@ struct StyledAnsiTextHandler {
 impl StyledAnsiTextHandler {
     fn finish(mut self) -> ParsedAnsiText {
         if self.current_foreground_range_start < self.text.len() {
-            self.foreground_spans.push((
-                self.current_foreground_range_start..self.text.len(),
-                self.current_foreground_color,
-            ));
+            self.foreground_spans
+                .push((self.current_foreground_range_start..self.text.len(), self.current_foreground_color));
         }
 
         if self.current_background_range_start < self.text.len() {
-            self.background_spans.push((
-                self.current_background_range_start..self.text.len(),
-                self.current_background_color,
-            ));
+            self.background_spans
+                .push((self.current_background_range_start..self.text.len(), self.current_background_color));
         }
 
         ParsedAnsiText {
@@ -239,19 +299,15 @@ impl StyledAnsiTextHandler {
     }
 
     fn break_foreground_span(&mut self, color: Option<Color>) {
-        self.foreground_spans.push((
-            self.current_foreground_range_start..self.text.len(),
-            self.current_foreground_color,
-        ));
+        self.foreground_spans
+            .push((self.current_foreground_range_start..self.text.len(), self.current_foreground_color));
         self.current_foreground_color = color;
         self.current_foreground_range_start = self.text.len();
     }
 
     fn break_background_span(&mut self, color: Option<Color>) {
-        self.background_spans.push((
-            self.current_background_range_start..self.text.len(),
-            self.current_background_color,
-        ));
+        self.background_spans
+            .push((self.current_background_range_start..self.text.len(), self.current_background_color));
         self.current_background_color = color;
         self.current_background_range_start = self.text.len();
     }
@@ -369,8 +425,7 @@ impl Modes {
     pub const MOUSE_DRAG: Self = Self(1 << 14);
     pub const MOUSE_MOTION: Self = Self(1 << 15);
     pub const VI: Self = Self(1 << 16);
-    pub const MOUSE_MODE: Self =
-        Self(Self::MOUSE_REPORT_CLICK.0 | Self::MOUSE_DRAG.0 | Self::MOUSE_MOTION.0);
+    pub const MOUSE_MODE: Self = Self(Self::MOUSE_REPORT_CLICK.0 | Self::MOUSE_DRAG.0 | Self::MOUSE_MOTION.0);
 
     pub const fn empty() -> Self {
         Self::NONE
@@ -384,11 +439,11 @@ impl Modes {
         self.0 & other.0 != 0
     }
 
-    pub fn insert(&mut self, other: Self) {
+    pub const fn insert(&mut self, other: Self) {
         self.0 |= other.0;
     }
 
-    pub fn remove(&mut self, other: Self) {
+    pub const fn remove(&mut self, other: Self) {
         self.0 &= !other.0;
     }
 }
@@ -440,7 +495,7 @@ pub struct Point {
 }
 
 impl Point {
-    pub fn new(line: i32, column: usize) -> Self {
+    pub const fn new(line: i32, column: usize) -> Self {
         Self { line, column }
     }
 }
@@ -452,15 +507,15 @@ pub struct Range {
 }
 
 impl Range {
-    pub fn new(start: Point, end: Point) -> Self {
+    pub const fn new(start: Point, end: Point) -> Self {
         Self { start, end }
     }
 
-    pub fn start(&self) -> Point {
+    pub const fn start(&self) -> Point {
         self.start
     }
 
-    pub fn end(&self) -> Point {
+    pub const fn end(&self) -> Point {
         self.end
     }
 
@@ -477,7 +532,7 @@ pub struct SelectionRange {
 }
 
 impl SelectionRange {
-    pub fn point_range(self) -> Range {
+    pub const fn point_range(self) -> Range {
         Range::new(self.start, self.end)
     }
 }
@@ -528,10 +583,7 @@ impl Default for Content {
             screen_lines: Default::default(),
             selection_text: Default::default(),
             selection: Default::default(),
-            cursor: Cursor {
-                shape: CursorShape::Block,
-                point: Point::new(0, 0),
-            },
+            cursor: Cursor { shape: CursorShape::Block, point: Point::new(0, 0) },
             cursor_char: Default::default(),
             terminal_bounds: Default::default(),
             last_hovered_word: None,
@@ -594,10 +646,7 @@ const DEBUG_LINE_HEIGHT: Pixels = px(5.);
 
 /// Inserts Zed-specific environment variables for terminal sessions.
 /// Used by both local terminals and remote terminals (via SSH).
-pub fn insert_zed_terminal_env(
-    env: &mut HashMap<String, String>,
-    version: &impl std::fmt::Display,
-) {
+pub fn insert_zed_terminal_env(env: &mut HashMap<String, String>, version: &impl std::fmt::Display) {
     env.insert("ZED_TERM".to_string(), "true".to_string());
     env.insert("TERM_PROGRAM".to_string(), "zed".to_string());
     env.insert("TERM".to_string(), "xterm-256color".to_string());
@@ -710,12 +759,8 @@ pub struct TerminalBounds {
 }
 
 impl TerminalBounds {
-    pub fn new(line_height: Pixels, cell_width: Pixels, bounds: Bounds<Pixels>) -> Self {
-        TerminalBounds {
-            cell_width,
-            line_height,
-            bounds,
-        }
+    pub const fn new(line_height: Pixels, cell_width: Pixels, bounds: Bounds<Pixels>) -> Self {
+        TerminalBounds { cell_width, line_height, bounds }
     }
 
     pub fn num_lines(&self) -> usize {
@@ -731,19 +776,19 @@ impl TerminalBounds {
         raw.next_up().floor() as usize
     }
 
-    pub fn height(&self) -> Pixels {
+    pub const fn height(&self) -> Pixels {
         self.bounds.size.height
     }
 
-    pub fn width(&self) -> Pixels {
+    pub const fn width(&self) -> Pixels {
         self.bounds.size.width
     }
 
-    pub fn cell_width(&self) -> Pixels {
+    pub const fn cell_width(&self) -> Pixels {
         self.cell_width
     }
 
-    pub fn line_height(&self) -> Pixels {
+    pub const fn line_height(&self) -> Pixels {
         self.line_height
     }
 }
@@ -755,10 +800,7 @@ impl Default for TerminalBounds {
             DEBUG_CELL_WIDTH,
             Bounds {
                 origin: GpuiPoint::default(),
-                size: Size {
-                    width: DEBUG_TERMINAL_WIDTH,
-                    height: DEBUG_TERMINAL_HEIGHT,
-                },
+                size: Size { width: DEBUG_TERMINAL_WIDTH, height: DEBUG_TERMINAL_HEIGHT },
             },
         )
     }
@@ -819,11 +861,7 @@ impl Display for TerminalError {
         let dir_string: String = self.fmt_directory();
         let shell = self.fmt_shell();
 
-        write!(
-            f,
-            "Working directory: {} Shell command: `{}`, IOError: {}",
-            dir_string, shell, self.source
-        )
+        write!(f, "Working directory: {} Shell command: `{}`, IOError: {}", dir_string, shell, self.source)
     }
 }
 
@@ -853,9 +891,7 @@ fn init_command_startup_marker_command(shell_kind: ShellKind, marker_id: u64) ->
             )
         }
         ShellKind::Nushell => {
-            format!(
-                "print $\"{INIT_COMMAND_STARTUP_MARKER_PREFIX}({marker_id}){INIT_COMMAND_STARTUP_MARKER_SUFFIX}\""
-            )
+            format!("print $\"{INIT_COMMAND_STARTUP_MARKER_PREFIX}({marker_id}){INIT_COMMAND_STARTUP_MARKER_SUFFIX}\"")
         }
         ShellKind::Posix
         | ShellKind::Csh
@@ -878,20 +914,17 @@ pub struct TerminalMode(TerminalModeKind);
 enum TerminalModeKind {
     Interactive,
     InteractiveWithCompletion(Sender<Option<ExitStatus>>),
-    Task {
-        state: TaskState,
-        completion_tx: Sender<Option<ExitStatus>>,
-    },
+    Task { state: TaskState, completion_tx: Sender<Option<ExitStatus>> },
 }
 
 impl TerminalMode {
     /// Creates a terminal for an interactive shell.
-    pub fn interactive() -> Self {
+    pub const fn interactive() -> Self {
         Self(TerminalModeKind::Interactive)
     }
 
     /// Creates an interactive terminal that reports when its shell exits.
-    pub fn interactive_with_completion(completion_tx: Sender<Option<ExitStatus>>) -> Self {
+    pub const fn interactive_with_completion(completion_tx: Sender<Option<ExitStatus>>) -> Self {
         Self(TerminalModeKind::InteractiveWithCompletion(completion_tx))
     }
 
@@ -899,11 +932,7 @@ impl TerminalMode {
     pub fn task(spawned_task: SpawnInTerminal) -> Self {
         let (completion_tx, completion_rx) = async_channel::bounded(1);
         Self(TerminalModeKind::Task {
-            state: TaskState {
-                status: TaskStatus::Running,
-                completion_rx,
-                spawned_task,
-            },
+            state: TaskState { status: TaskStatus::Running, completion_rx, spawned_task },
             completion_tx,
         })
     }
@@ -945,19 +974,12 @@ impl TerminalBuilder {
     ) -> TerminalBuilder {
         let terminal_bounds = normalize_terminal_bounds(terminal_bounds);
 
-        let scrolling_history = max_scroll_history_lines
-            .unwrap_or(DEFAULT_SCROLL_HISTORY_LINES)
-            .min(MAX_SCROLL_HISTORY_LINES);
+        let scrolling_history =
+            max_scroll_history_lines.unwrap_or(DEFAULT_SCROLL_HISTORY_LINES).min(MAX_SCROLL_HISTORY_LINES);
         let config = display_only_term_config(scrolling_history, cursor_shape);
 
         let (events_tx, events_rx) = unbounded();
-        let term = new_term(
-            &config,
-            terminal_bounds,
-            events_tx.clone(),
-            alternate_scroll,
-            0,
-        );
+        let term = new_term(&config, terminal_bounds, events_tx.clone(), alternate_scroll, 0);
 
         let terminal = Terminal {
             task: None,
@@ -971,10 +993,7 @@ impl TerminalBuilder {
             output_generation: 0,
             title_override: None,
             events: VecDeque::with_capacity(10),
-            last_content: Content {
-                terminal_bounds,
-                ..Default::default()
-            },
+            last_content: Content { terminal_bounds, ..Default::default() },
             last_mouse: None,
             mouse_down_position: None,
             matches: Vec::new(),
@@ -1012,10 +1031,7 @@ impl TerminalBuilder {
             pending_cwd_boundary: None,
         };
 
-        TerminalBuilder {
-            terminal,
-            events_rx,
-        }
+        TerminalBuilder { terminal, events_rx }
     }
 
     pub fn new(
@@ -1040,22 +1056,16 @@ impl TerminalBuilder {
         // When set, run the command as a plain subprocess instead.
         let no_pty = HeadlessTerminal::is_enabled(cx);
 
-        let child_signal_mask = match current_child_signal_mask()
-            .context("failed to capture terminal child signal mask")
-        {
-            Ok(signal_mask) => Some(signal_mask),
-            Err(error) => return Task::ready(Err(error)),
-        };
+        let child_signal_mask =
+            match current_child_signal_mask().context("failed to capture terminal child signal mask") {
+                Ok(signal_mask) => Some(signal_mask),
+                Err(error) => return Task::ready(Err(error)),
+            };
         let fut = async move {
             let (task, completion_tx) = match mode.0 {
                 TerminalModeKind::Interactive => (None, None),
-                TerminalModeKind::InteractiveWithCompletion(completion_tx) => {
-                    (None, Some(completion_tx))
-                }
-                TerminalModeKind::Task {
-                    state,
-                    completion_tx,
-                } => (Some(state), Some(completion_tx)),
+                TerminalModeKind::InteractiveWithCompletion(completion_tx) => (None, Some(completion_tx)),
+                TerminalModeKind::Task { state, completion_tx } => (Some(state), Some(completion_tx)),
             };
 
             // Remove SHLVL so the spawned shell initializes it to 1, matching
@@ -1067,8 +1077,7 @@ impl TerminalBuilder {
             // and the Project doesn't have a locale set, then
             // set a fallback for our child environment to use.
             if std::env::var("LANG").is_err() {
-                env.entry("LANG".to_string())
-                    .or_insert_with(|| "en_US.UTF-8".to_string());
+                env.entry("LANG".to_string()).or_insert_with(|| "en_US.UTF-8".to_string());
             }
 
             insert_zed_terminal_env(&mut env, &version);
@@ -1081,31 +1090,20 @@ impl TerminalBuilder {
             }
 
             impl ShellParams {
-                fn new(
-                    program: String,
-                    args: Option<Vec<String>>,
-                    title_override: Option<String>,
-                ) -> Self {
+                fn new(program: String, args: Option<Vec<String>>, title_override: Option<String>) -> Self {
                     log::debug!("Using {program} as shell");
-                    Self {
-                        program,
-                        args,
-                        title_override,
-                    }
+                    Self { program, args, title_override }
                 }
             }
 
             let shell_params = match shell.clone() {
                 Shell::System => None,
                 Shell::Program(program) => Some(ShellParams::new(program, None, None)),
-                Shell::WithArguments {
-                    program,
-                    args,
-                    title_override,
-                } => Some(ShellParams::new(program, Some(args), title_override)),
+                Shell::WithArguments { program, args, title_override } => {
+                    Some(ShellParams::new(program, Some(args), title_override))
+                }
             };
-            let terminal_title_override =
-                shell_params.as_ref().and_then(|e| e.title_override.clone());
+            let terminal_title_override = shell_params.as_ref().and_then(|e| e.title_override.clone());
 
             let scrolling_history = if task.is_some() {
                 // Tasks like `cargo build --all` may produce a lot of output, ergo allow maximum scrolling.
@@ -1113,9 +1111,7 @@ impl TerminalBuilder {
                 // cause excessive memory usage over time.
                 MAX_SCROLL_HISTORY_LINES
             } else {
-                max_scroll_history_lines
-                    .unwrap_or(DEFAULT_SCROLL_HISTORY_LINES)
-                    .min(MAX_SCROLL_HISTORY_LINES)
+                max_scroll_history_lines.unwrap_or(DEFAULT_SCROLL_HISTORY_LINES).min(MAX_SCROLL_HISTORY_LINES)
             };
             let config = pty_term_config(scrolling_history, cursor_shape);
 
@@ -1123,23 +1119,14 @@ impl TerminalBuilder {
             //TODO: Remove with a bounded sender which can be dispatched on &self
             let (events_tx, events_rx) = unbounded();
             //Set up the terminal...
-            let term = new_term(
-                &config,
-                TerminalBounds::default(),
-                events_tx.clone(),
-                alternate_scroll,
-                0,
-            );
+            let term = new_term(&config, TerminalBounds::default(), events_tx.clone(), alternate_scroll, 0);
 
             // When `no_pty` is set (headless hosts), run the task as a plain
             // subprocess and pump its piped output into the same emulator the
             // PTY path would feed.
             let (terminal_type, subprocess) = if no_pty {
                 let (program, args) = match &shell_params {
-                    Some(params) => (
-                        params.program.clone(),
-                        params.args.clone().unwrap_or_default(),
-                    ),
+                    Some(params) => (params.program.clone(), params.args.clone().unwrap_or_default()),
                     None => (util::shell::get_system_shell(), Vec::new()),
                 };
                 let subprocess = match spawn_task_subprocess(
@@ -1164,12 +1151,9 @@ impl TerminalBuilder {
                 };
                 (TerminalType::DisplayOnly, Some(subprocess))
             } else {
-                let alacritty_shell = shell_params.as_ref().map(|params| {
-                    (
-                        params.program.clone(),
-                        params.args.clone().unwrap_or_default(),
-                    )
-                });
+                let alacritty_shell = shell_params
+                    .as_ref()
+                    .map(|params| (params.program.clone(), params.args.clone().unwrap_or_default()));
                 let pty_options = pty_options(
                     alacritty_shell,
                     working_directory.clone(),
@@ -1198,16 +1182,9 @@ impl TerminalBuilder {
                 let pty_info = PtyProcessInfo::new(ProcessIdGetter::from(&pty));
 
                 //And connect them together
-                let pty_tx =
-                    spawn_event_loop(term.clone(), events_tx, pty, pty_options.drain_on_exit)?;
+                let pty_tx = spawn_event_loop(term.clone(), events_tx, pty, pty_options.drain_on_exit)?;
 
-                (
-                    TerminalType::Pty {
-                        resources: PtyResources::Active(pty_tx),
-                        info: Arc::new(pty_info),
-                    },
-                    None,
-                )
+                (TerminalType::Pty { resources: PtyResources::Active(pty_tx), info: Arc::new(pty_info) }, None)
             };
 
             let terminal = Terminal {
@@ -1231,10 +1208,7 @@ impl TerminalBuilder {
                 scroll_px: px(0.),
                 next_link_id: 0,
                 selection_phase: SelectionPhase::Ended,
-                hyperlink_regex_searches: RegexSearches::new(
-                    &path_hyperlink_regexes,
-                    path_hyperlink_timeout,
-                ),
+                hyperlink_regex_searches: RegexSearches::new(&path_hyperlink_regexes, path_hyperlink_timeout),
                 vi_mode_enabled: false,
                 is_remote_terminal,
                 last_mouse_move_time: Instant::now(),
@@ -1275,10 +1249,7 @@ impl TerminalBuilder {
                 pending_cwd_boundary: None,
             };
 
-            Ok(TerminalBuilder {
-                terminal,
-                events_rx,
-            })
+            Ok(TerminalBuilder { terminal, events_rx })
         };
         cx.background_spawn(fut)
     }
@@ -1295,10 +1266,7 @@ impl TerminalBuilder {
                 'outer: loop {
                     let mut events = Vec::new();
 
-                    let mut timer = cx
-                        .background_executor()
-                        .timer(std::time::Duration::from_millis(4))
-                        .fuse();
+                    let mut timer = cx.background_executor().timer(std::time::Duration::from_millis(4)).fuse();
 
                     let mut wakeup = None;
                     loop {
@@ -1330,10 +1298,7 @@ impl TerminalBuilder {
 
                     terminal.update(cx, |this, cx| {
                         if let Some(generation) = wakeup {
-                            this.process_pty_event(
-                                PtyEvent::Event(TerminalBackendEvent::Wakeup, generation),
-                                cx,
-                            );
+                            this.process_pty_event(PtyEvent::Event(TerminalBackendEvent::Wakeup, generation), cx);
                         }
 
                         for event in events {
@@ -1357,10 +1322,7 @@ enum PtyResources {
 }
 
 enum TerminalType {
-    Pty {
-        resources: PtyResources,
-        info: Arc<PtyProcessInfo>,
-    },
+    Pty { resources: PtyResources, info: Arc<PtyProcessInfo> },
     DisplayOnly,
 }
 
@@ -1456,10 +1418,8 @@ impl TaskStatus {
         }
     }
 
-    fn register_task_exit(&mut self, error_code: i32) {
-        *self = TaskStatus::Completed {
-            success: error_code == 0,
-        };
+    const fn register_task_exit(&mut self, error_code: i32) {
+        *self = TaskStatus::Completed { success: error_code == 0 };
     }
 }
 
@@ -1486,9 +1446,7 @@ impl Terminal {
     fn process_event(&mut self, event: TerminalBackendEvent, cx: &mut Context<Self>) {
         match event {
             TerminalBackendEvent::Title(_) | TerminalBackendEvent::ResetTitle => {}
-            TerminalBackendEvent::ClipboardStore(data) => {
-                cx.write_to_clipboard(ClipboardItem::new_string(data))
-            }
+            TerminalBackendEvent::ClipboardStore(data) => cx.write_to_clipboard(ClipboardItem::new_string(data)),
             TerminalBackendEvent::ClipboardLoad(format) => {
                 self.write_to_pty(
                     match &cx.read_from_clipboard().and_then(|item| item.text()) {
@@ -1551,7 +1509,7 @@ impl Terminal {
         &mut self,
         event: &InternalEvent,
         term: &mut AlacrittyTerm,
-        window: &mut Window,
+        window: &Window,
         cx: &mut Context<Self>,
     ) {
         match event {
@@ -1559,15 +1517,10 @@ impl Terminal {
                 let new_bounds = normalize_terminal_bounds(new_bounds);
                 trace!("Resizing: new_bounds={new_bounds:?}");
 
-                let columns_changed =
-                    self.last_content.terminal_bounds.num_columns() != new_bounds.num_columns();
+                let columns_changed = self.last_content.terminal_bounds.num_columns() != new_bounds.num_columns();
                 self.last_content.terminal_bounds = new_bounds;
 
-                if let TerminalType::Pty {
-                    resources: PtyResources::Active(pty_tx),
-                    ..
-                } = &self.terminal_type
-                {
+                if let TerminalType::Pty { resources: PtyResources::Active(pty_tx), .. } = &self.terminal_type {
                     pty_tx.resize(new_bounds);
                 }
 
@@ -1612,11 +1565,8 @@ impl Terminal {
             }
             InternalEvent::UpdateSelection(position) => {
                 trace!("Updating selection: position={position:?}");
-                let (point, side) = grid_point_and_side(
-                    *position,
-                    self.last_content.terminal_bounds,
-                    display_offset(term),
-                );
+                let (point, side) =
+                    grid_point_and_side(*position, self.last_content.terminal_bounds, display_offset(term));
 
                 if update_term_selection(term, point, side) {
                     self.selection_head = Some(point);
@@ -1658,18 +1608,9 @@ impl Terminal {
             InternalEvent::FindHyperlink(position, open) => {
                 trace!("Finding hyperlink at position: position={position:?}, open={open:?}");
 
-                let point = grid_point(
-                    *position,
-                    self.last_content.terminal_bounds,
-                    display_offset(term),
-                );
+                let point = grid_point(*position, self.last_content.terminal_bounds, display_offset(term));
 
-                match find_from_terminal_point(
-                    term,
-                    point,
-                    &mut self.hyperlink_regex_searches,
-                    self.path_style,
-                ) {
+                match find_from_terminal_point(term, point, &mut self.hyperlink_regex_searches, self.path_style) {
                     Some(hyperlink) => {
                         let history_size = term.history_size();
                         self.process_hyperlink(hyperlink, *open, history_size, cx);
@@ -1695,33 +1636,22 @@ impl Terminal {
         history_size: usize,
         cx: &mut Context<Self>,
     ) {
-        let HyperlinkMatch {
-            text: maybe_url_or_path,
-            is_url,
-            range,
-        } = hyperlink;
+        let HyperlinkMatch { text: maybe_url_or_path, is_url, range } = hyperlink;
         let prev_hovered_word = self.last_content.last_hovered_word.take();
         let match_line = range.start().line;
         let working_directory = self.cwd_at_line(match_line, history_size);
 
         let target = if is_url {
             if let Some(path) = maybe_url_or_path.strip_prefix("file://") {
-                let decoded_path = urlencoding::decode(path)
-                    .map(|decoded| decoded.into_owned())
-                    .unwrap_or(path.to_owned());
+                let decoded_path =
+                    urlencoding::decode(path).map(|decoded| decoded.into_owned()).unwrap_or(path.to_owned());
 
-                MaybeNavigationTarget::PathLike(PathLikeTarget {
-                    maybe_path: decoded_path,
-                    working_directory,
-                })
+                MaybeNavigationTarget::PathLike(PathLikeTarget { maybe_path: decoded_path, working_directory })
             } else {
                 MaybeNavigationTarget::Url(maybe_url_or_path.clone())
             }
         } else {
-            MaybeNavigationTarget::PathLike(PathLikeTarget {
-                maybe_path: maybe_url_or_path.clone(),
-                working_directory,
-            })
+            MaybeNavigationTarget::PathLike(PathLikeTarget { maybe_path: maybe_url_or_path.clone(), working_directory })
         };
 
         if open {
@@ -1739,12 +1669,7 @@ impl Terminal {
 
     fn find_hyperlink_at_point(&mut self, point: Point) -> Option<HyperlinkMatch> {
         let term_lock = self.term.lock();
-        find_from_terminal_point(
-            &term_lock,
-            point,
-            &mut self.hyperlink_regex_searches,
-            self.path_style,
-        )
+        find_from_terminal_point(&term_lock, point, &mut self.hyperlink_regex_searches, self.path_style)
     }
 
     fn update_selected_word(
@@ -1763,22 +1688,18 @@ impl Terminal {
             return;
         }
 
-        self.last_content.last_hovered_word = Some(HoveredWord {
-            word,
-            word_match,
-            id: self.next_link_id(),
-        });
+        self.last_content.last_hovered_word = Some(HoveredWord { word, word_match, id: self.next_link_id() });
         cx.emit(Event::NewNavigationTarget(Some(navigation_target)));
         cx.notify()
     }
 
-    fn next_link_id(&mut self) -> usize {
+    const fn next_link_id(&mut self) -> usize {
         let res = self.next_link_id;
         self.next_link_id = self.next_link_id.wrapping_add(1);
         res
     }
 
-    pub fn last_content(&self) -> &Content {
+    pub const fn last_content(&self) -> &Content {
         &self.last_content
     }
 
@@ -1797,9 +1718,7 @@ impl Terminal {
     /// Terminal byte streams already contain their control sequences and must not be normalized.
     pub fn write_raw_output(&mut self, bytes: &[u8], cx: &mut Context<Self>) {
         let mut term = self.term.lock();
-        self.output_processor
-            .get_or_insert_with(Processor::<StdSyncHandler>::new)
-            .advance(&mut *term, bytes);
+        self.output_processor.get_or_insert_with(Processor::<StdSyncHandler>::new).advance(&mut *term, bytes);
         drop(term);
         self.detect_init_command_startup_marker();
         cx.emit(Event::Wakeup);
@@ -1817,22 +1736,13 @@ impl Terminal {
             bail!("display output generation exhausted");
         };
         let bounds = self.last_content.terminal_bounds;
-        let term = new_term(
-            &self.term_config,
-            bounds,
-            events_tx.clone(),
-            self.template.alternate_scroll,
-            generation,
-        );
+        let term = new_term(&self.term_config, bounds, events_tx.clone(), self.template.alternate_scroll, generation);
         self.output_generation = generation;
         self.term = term;
         self.output_processor = None;
         // The new emulator already has the latest requested size; older resizes can truncate it.
         self.events.clear();
-        self.last_content = Content {
-            terminal_bounds: bounds,
-            ..Default::default()
-        };
+        self.last_content = Content { terminal_bounds: bounds, ..Default::default() };
         self.last_mouse = None;
         self.mouse_down_position = None;
         self.matches.clear();
@@ -1840,19 +1750,15 @@ impl Terminal {
         self.scroll_px = px(0.);
         self.next_link_id = 0;
         self.selection_phase = SelectionPhase::Ended;
-        self.hyperlink_regex_searches = RegexSearches::new(
-            &self.template.path_hyperlink_regexes,
-            self.template.path_hyperlink_timeout,
-        );
+        self.hyperlink_regex_searches =
+            RegexSearches::new(&self.template.path_hyperlink_regexes, self.template.path_hyperlink_timeout);
         self.vi_mode_enabled = false;
         self.last_hyperlink_search_position = None;
         self.mouse_down_hyperlink = None;
         self.cwd_history.clear();
         self.pending_cwd_boundary = None;
         self.write_raw_output(bytes, cx);
-        cx.emit(Event::BlinkChanged(
-            self.term.lock().cursor_style().blinking,
-        ));
+        cx.emit(Event::BlinkChanged(self.term.lock().cursor_style().blinking));
         cx.emit(Event::NewNavigationTarget(None));
         cx.emit(Event::OutputReplaced);
         Ok(())
@@ -1874,22 +1780,16 @@ impl Terminal {
         if let Some(search_match) = self.matches.get(index).cloned() {
             self.set_selection(Some(Selection::simple_range(search_match)));
             if self.vi_mode_enabled {
-                self.events
-                    .push_back(InternalEvent::MoveViCursorToPoint(search_match.end()));
+                self.events.push_back(InternalEvent::MoveViCursorToPoint(search_match.end()));
             } else {
-                self.events
-                    .push_back(InternalEvent::ScrollToPoint(search_match.start()));
+                self.events.push_back(InternalEvent::ScrollToPoint(search_match.start()));
             }
         }
     }
 
     pub fn select_matches(&mut self, matches: &[Range]) {
-        let matches_to_select = self
-            .matches
-            .iter()
-            .filter(|self_match| matches.contains(self_match))
-            .cloned()
-            .collect::<Vec<_>>();
+        let matches_to_select =
+            self.matches.iter().filter(|self_match| matches.contains(self_match)).cloned().collect::<Vec<_>>();
         for match_to_select in matches_to_select {
             self.set_selection(Some(Selection::simple_range(match_to_select)));
         }
@@ -1903,8 +1803,7 @@ impl Terminal {
     }
 
     fn set_selection(&mut self, selection: Option<Selection>) {
-        self.events
-            .push_back(InternalEvent::SetSelection(selection));
+        self.events.push_back(InternalEvent::SetSelection(selection));
     }
 
     pub fn copy(&mut self, keep_selection: Option<bool>) {
@@ -1920,23 +1819,19 @@ impl Terminal {
     }
 
     pub fn scroll_line_up(&mut self) {
-        self.events
-            .push_back(InternalEvent::Scroll(Scroll::Delta(1)));
+        self.events.push_back(InternalEvent::Scroll(Scroll::Delta(1)));
     }
 
     pub fn scroll_up_by(&mut self, lines: usize) {
-        self.events
-            .push_back(InternalEvent::Scroll(Scroll::Delta(lines as i32)));
+        self.events.push_back(InternalEvent::Scroll(Scroll::Delta(lines as i32)));
     }
 
     pub fn scroll_line_down(&mut self) {
-        self.events
-            .push_back(InternalEvent::Scroll(Scroll::Delta(-1)));
+        self.events.push_back(InternalEvent::Scroll(Scroll::Delta(-1)));
     }
 
     pub fn scroll_down_by(&mut self, lines: usize) {
-        self.events
-            .push_back(InternalEvent::Scroll(Scroll::Delta(-(lines as i32))));
+        self.events.push_back(InternalEvent::Scroll(Scroll::Delta(-(lines as i32))));
     }
 
     pub fn scroll_page_up(&mut self) {
@@ -1944,8 +1839,7 @@ impl Terminal {
     }
 
     pub fn scroll_page_down(&mut self) {
-        self.events
-            .push_back(InternalEvent::Scroll(Scroll::PageDown));
+        self.events.push_back(InternalEvent::Scroll(Scroll::PageDown));
     }
 
     pub fn scroll_to_top(&mut self) {
@@ -1956,11 +1850,11 @@ impl Terminal {
         self.events.push_back(InternalEvent::Scroll(Scroll::Bottom));
     }
 
-    pub fn scrolled_to_top(&self) -> bool {
+    pub const fn scrolled_to_top(&self) -> bool {
         self.last_content.scrolled_to_top
     }
 
-    pub fn scrolled_to_bottom(&self) -> bool {
+    pub const fn scrolled_to_bottom(&self) -> bool {
         self.last_content.scrolled_to_bottom
     }
 
@@ -1992,11 +1886,7 @@ impl Terminal {
     /// (This is a no-op for display-only terminals.)
     fn write_to_pty(&self, input: impl Into<Cow<'static, [u8]>>) {
         let input = input.into();
-        if let TerminalType::Pty {
-            resources: PtyResources::Active(pty_tx),
-            ..
-        } = &self.terminal_type
-        {
+        if let TerminalType::Pty { resources: PtyResources::Active(pty_tx), .. } = &self.terminal_type {
             if log::log_enabled!(log::Level::Debug) {
                 if let Ok(str) = str::from_utf8(&input) {
                     log::debug!("Writing to PTY: {:?}", str);
@@ -2083,7 +1973,7 @@ impl Terminal {
         self.write_input(input);
     }
 
-    pub fn is_pty(&self) -> bool {
+    pub const fn is_pty(&self) -> bool {
         matches!(self.terminal_type, TerminalType::Pty { .. })
     }
 
@@ -2118,10 +2008,8 @@ impl Terminal {
         let input = input.into();
         if !self.is_remote_terminal && input.contains(&b'\r') {
             let term = self.term.lock_unfair();
-            self.pending_cwd_boundary = Some(Self::scrollback_position(
-                term.grid().cursor.point.line.0,
-                term.history_size(),
-            ));
+            self.pending_cwd_boundary =
+                Some(Self::scrollback_position(term.grid().cursor.point.line.0, term.history_size()));
         }
 
         self.events.push_back(InternalEvent::Scroll(Scroll::Bottom));
@@ -2171,8 +2059,7 @@ impl Terminal {
                 x: cursor.column as f32 * self.last_content.terminal_bounds.cell_width,
                 y: cursor.line as f32 * self.last_content.terminal_bounds.line_height,
             };
-            self.events
-                .push_back(InternalEvent::UpdateSelection(cursor_pos));
+            self.events.push_back(InternalEvent::UpdateSelection(cursor_pos));
             self.events.push_back(InternalEvent::ViMotion(motion));
             return;
         }
@@ -2204,8 +2091,7 @@ impl Terminal {
                 let selection_type = SelectionType::Simple;
                 let side = SelectionSide::Right;
                 let selection = Selection::new(selection_type, point, side);
-                self.events
-                    .push_back(InternalEvent::SetSelection(Some(selection)));
+                self.events.push_back(InternalEvent::SetSelection(Some(selection)));
             }
 
             "V" => {
@@ -2213,8 +2099,7 @@ impl Terminal {
                 let selection_type = SelectionType::Lines;
                 let side = SelectionSide::Right;
                 let selection = Selection::new(selection_type, point, side);
-                self.events
-                    .push_back(InternalEvent::SetSelection(Some(selection)));
+                self.events.push_back(InternalEvent::SetSelection(Some(selection)));
             }
 
             "escape" => {
@@ -2252,12 +2137,7 @@ impl Terminal {
         }
     }
 
-    pub fn try_modifiers_change(
-        &mut self,
-        modifiers: &Modifiers,
-        window: &Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn try_modifiers_change(&mut self, modifiers: &Modifiers, window: &Window, cx: &mut Context<Self>) {
         self.schedule_find_hyperlink(*modifiers, window.mouse_position(), cx);
     }
 
@@ -2322,23 +2202,12 @@ impl Terminal {
     }
 
     fn mouse_changed(&mut self, point: Point, side: SelectionSide) -> bool {
-        match self.last_mouse {
-            Some((old_point, old_side)) => {
-                if old_point == point && old_side == side {
-                    false
-                } else {
-                    self.last_mouse = Some((point, side));
-                    true
-                }
-            }
-            None => {
-                self.last_mouse = Some((point, side));
-                true
-            }
-        }
+        let changed = self.last_mouse != Some((point, side));
+        self.last_mouse = Some((point, side));
+        changed
     }
 
-    pub fn mouse_mode(&self, shift: bool) -> bool {
+    pub const fn mouse_mode(&self, shift: bool) -> bool {
         self.last_content.mode.intersects(Modes::MOUSE_MODE) && !shift
     }
 
@@ -2352,19 +2221,11 @@ impl Terminal {
             // `mouse_up` resolves it: release on the same link opens it,
             // otherwise the gesture is dropped.
             if self.mouse_down_hyperlink.is_none() {
-                let (point, side) = grid_point_and_side(
-                    position,
-                    self.last_content.terminal_bounds,
-                    self.last_content.display_offset,
-                );
+                let (point, side) =
+                    grid_point_and_side(position, self.last_content.terminal_bounds, self.last_content.display_offset);
 
                 if self.mouse_changed(point, side) {
-                    let bytes = mouse_moved_report(
-                        point,
-                        e.pressed_button,
-                        e.modifiers,
-                        self.last_content.mode,
-                    );
+                    let bytes = mouse_moved_report(point, e.pressed_button, e.modifiers, self.last_content.mode);
 
                     if let Some(bytes) = bytes {
                         self.write_to_pty(bytes);
@@ -2377,12 +2238,7 @@ impl Terminal {
         cx.notify();
     }
 
-    fn schedule_find_hyperlink(
-        &mut self,
-        modifiers: Modifiers,
-        position: GpuiPoint<Pixels>,
-        cx: &mut Context<Self>,
-    ) {
+    fn schedule_find_hyperlink(&mut self, modifiers: Modifiers, position: GpuiPoint<Pixels>, cx: &mut Context<Self>) {
         if self.selection_phase == SelectionPhase::Selecting
             || !modifiers.secondary()
             || !self.last_content.terminal_bounds.bounds.contains(&position)
@@ -2393,17 +2249,13 @@ impl Terminal {
 
         // Throttle hyperlink searches to avoid excessive processing
         let now = Instant::now();
-        let throttle = !self
-            .last_hyperlink_search_position
-            .map_or(true, |last_pos| {
-                // Only search if mouse moved significantly or enough time passed
-                let distance_moved = ((position.x - last_pos.x).abs()
-                    + (position.y - last_pos.y).abs())
-                    > FIND_HYPERLINK_THROTTLE_PX;
-                let time_elapsed =
-                    now.duration_since(self.last_mouse_move_time) > FIND_HYPERLINK_THROTTLE;
-                distance_moved || time_elapsed
-            });
+        let throttle = !self.last_hyperlink_search_position.is_none_or(|last_pos| {
+            // Only search if mouse moved significantly or enough time passed
+            let distance_moved =
+                ((position.x - last_pos.x).abs() + (position.y - last_pos.y).abs()) > FIND_HYPERLINK_THROTTLE_PX;
+            let time_elapsed = now.duration_since(self.last_mouse_move_time) > FIND_HYPERLINK_THROTTLE;
+            distance_moved || time_elapsed
+        });
 
         if throttle {
             return;
@@ -2411,39 +2263,24 @@ impl Terminal {
 
         self.last_mouse_move_time = now;
         self.last_hyperlink_search_position = Some(position);
-        self.events.push_back(InternalEvent::FindHyperlink(
-            position - self.last_content.terminal_bounds.bounds.origin,
-            false,
-        ));
+        self.events
+            .push_back(InternalEvent::FindHyperlink(position - self.last_content.terminal_bounds.bounds.origin, false));
         cx.notify();
     }
 
     pub fn select_word_at_event_position(&mut self, e: &MouseDownEvent) {
         let position = e.position - self.last_content.terminal_bounds.bounds.origin;
-        let (point, side) = grid_point_and_side(
-            position,
-            self.last_content.terminal_bounds,
-            self.last_content.display_offset,
-        );
+        let (point, side) =
+            grid_point_and_side(position, self.last_content.terminal_bounds, self.last_content.display_offset);
         let selection = Selection::new(SelectionType::Semantic, point, side);
-        self.events
-            .push_back(InternalEvent::SetSelection(Some(selection)));
+        self.events.push_back(InternalEvent::SetSelection(Some(selection)));
     }
 
-    pub fn mouse_drag(
-        &mut self,
-        e: &MouseMoveEvent,
-        region: Bounds<Pixels>,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn mouse_drag(&mut self, e: &MouseMoveEvent, region: Bounds<Pixels>, cx: &mut Context<Self>) {
         let position = e.position - self.last_content.terminal_bounds.bounds.origin;
         if !self.mouse_mode(e.modifiers.shift) {
             if let Some(hyperlink) = &self.mouse_down_hyperlink {
-                let point = grid_point(
-                    position,
-                    self.last_content.terminal_bounds,
-                    self.last_content.display_offset,
-                );
+                let point = grid_point(position, self.last_content.terminal_bounds, self.last_content.display_offset);
 
                 if !hyperlink.range.contains(point) {
                     self.mouse_down_hyperlink = None;
@@ -2465,8 +2302,7 @@ impl Terminal {
             self.selection_phase = SelectionPhase::Selecting;
             // Alacritty has the same ordering, of first updating the selection
             // then scrolling 15ms later
-            self.events
-                .push_back(InternalEvent::UpdateSelection(position));
+            self.events.push_back(InternalEvent::UpdateSelection(position));
 
             // Doesn't make sense to scroll the alt screen
             if !self.last_content.mode.contains(Modes::ALT_SCREEN) {
@@ -2475,8 +2311,7 @@ impl Terminal {
                     None => return,
                 };
 
-                self.events
-                    .push_back(InternalEvent::Scroll(Scroll::Delta(scroll_lines)));
+                self.events.push_back(InternalEvent::Scroll(Scroll::Delta(scroll_lines)));
             }
 
             cx.notify();
@@ -2502,16 +2337,11 @@ impl Terminal {
 
     pub fn mouse_down(&mut self, e: &MouseDownEvent, cx: &mut Context<Self>) {
         let position = e.position - self.last_content.terminal_bounds.bounds.origin;
-        let point = grid_point(
-            position,
-            self.last_content.terminal_bounds,
-            self.last_content.display_offset,
-        );
+        let point = grid_point(position, self.last_content.terminal_bounds, self.last_content.display_offset);
 
         if e.button == MouseButton::Left
             && e.modifiers.secondary()
-            && (TerminalSettings::get_global(cx).open_links_in_mouse_mode
-                || !self.mouse_mode(e.modifiers.shift))
+            && (TerminalSettings::get_global(cx).open_links_in_mouse_mode || !self.mouse_mode(e.modifiers.shift))
         {
             self.mouse_down_hyperlink = self.find_hyperlink_at_point(point);
 
@@ -2521,56 +2351,47 @@ impl Terminal {
         }
 
         if self.mouse_mode(e.modifiers.shift) {
-            let bytes =
-                mouse_button_report(point, e.button, e.modifiers, true, self.last_content.mode);
+            let bytes = mouse_button_report(point, e.button, e.modifiers, true, self.last_content.mode);
 
             if let Some(bytes) = bytes {
                 self.write_to_pty(bytes);
             }
         } else {
-            match e.button {
-                MouseButton::Left => {
-                    self.mouse_down_position = Some(e.position);
-                    let (point, side) = grid_point_and_side(
-                        position,
-                        self.last_content.terminal_bounds,
-                        self.last_content.display_offset,
-                    );
+            if e.button == MouseButton::Left {
+                self.mouse_down_position = Some(e.position);
+                let (point, side) =
+                    grid_point_and_side(position, self.last_content.terminal_bounds, self.last_content.display_offset);
 
-                    let selection_type = match e.click_count {
-                        0 => return, //This is a release
-                        1 => Some(SelectionType::Simple),
-                        2 => Some(SelectionType::Semantic),
-                        3 => Some(SelectionType::Lines),
-                        _ => None,
-                    };
+                let selection_type = match e.click_count {
+                    0 => return, //This is a release
+                    1 => Some(SelectionType::Simple),
+                    2 => Some(SelectionType::Semantic),
+                    3 => Some(SelectionType::Lines),
+                    _ => None,
+                };
 
-                    if selection_type == Some(SelectionType::Simple) && e.modifiers.shift {
-                        if self.last_content.selection.is_some() {
-                            // Shift+click extends the existing selection to this point.
-                            self.events
-                                .push_back(InternalEvent::UpdateSelection(position));
-                        } else {
-                            // With no selection yet, Shift is the escape hatch for
-                            // selecting text while an app has mouse tracking enabled,
-                            // so anchor a selection here for the drag to extend.
-                            self.events.push_back(InternalEvent::SetSelection(Some(
-                                Selection::new(SelectionType::Simple, point, side),
-                            )));
-                        }
-                        return;
+                if selection_type == Some(SelectionType::Simple) && e.modifiers.shift {
+                    if self.last_content.selection.is_some() {
+                        // Shift+click extends the existing selection to this point.
+                        self.events.push_back(InternalEvent::UpdateSelection(position));
+                    } else {
+                        // With no selection yet, Shift is the escape hatch for
+                        // selecting text while an app has mouse tracking enabled,
+                        // so anchor a selection here for the drag to extend.
+                        self.events.push_back(InternalEvent::SetSelection(Some(Selection::new(
+                            SelectionType::Simple,
+                            point,
+                            side,
+                        ))));
                     }
-
-                    let selection = selection_type
-                        .map(|selection_type| Selection::new(selection_type, point, side));
-
-                    if let Some(selection) = selection {
-                        self.events
-                            .push_back(InternalEvent::SetSelection(Some(selection)));
-                    }
+                    return;
                 }
 
-                _ => {}
+                let selection = selection_type.map(|selection_type| Selection::new(selection_type, point, side));
+
+                if let Some(selection) = selection {
+                    self.events.push_back(InternalEvent::SetSelection(Some(selection)));
+                }
             }
         }
     }
@@ -2580,18 +2401,13 @@ impl Terminal {
 
         let position = e.position - self.last_content.terminal_bounds.bounds.origin;
         if let Some(mouse_down_hyperlink) = self.mouse_down_hyperlink.take() {
-            let point = grid_point(
-                position,
-                self.last_content.terminal_bounds,
-                self.last_content.display_offset,
-            );
+            let point = grid_point(position, self.last_content.terminal_bounds, self.last_content.display_offset);
 
             if self
                 .find_hyperlink_at_point(point)
                 .is_some_and(|mouse_up_hyperlink| mouse_up_hyperlink == mouse_down_hyperlink)
             {
-                self.events
-                    .push_back(InternalEvent::ProcessHyperlink(mouse_down_hyperlink, true));
+                self.events.push_back(InternalEvent::ProcessHyperlink(mouse_down_hyperlink, true));
                 self.selection_phase = SelectionPhase::Ended;
                 self.last_mouse = None;
                 self.mouse_down_position = None;
@@ -2607,14 +2423,9 @@ impl Terminal {
         }
 
         if self.mouse_mode(e.modifiers.shift) {
-            let point = grid_point(
-                position,
-                self.last_content.terminal_bounds,
-                self.last_content.display_offset,
-            );
+            let point = grid_point(position, self.last_content.terminal_bounds, self.last_content.display_offset);
 
-            let bytes =
-                mouse_button_report(point, e.button, e.modifiers, false, self.last_content.mode);
+            let bytes = mouse_button_report(point, e.button, e.modifiers, false, self.last_content.mode);
 
             if let Some(bytes) = bytes {
                 self.write_to_pty(bytes);
@@ -2626,18 +2437,11 @@ impl Terminal {
 
             //Hyperlinks
             if self.selection_phase == SelectionPhase::Ended {
-                let mouse_cell_index =
-                    content_index_for_mouse(position, &self.last_content.terminal_bounds);
-                if let Some(link) = self
-                    .last_content
-                    .cells
-                    .get(mouse_cell_index)
-                    .and_then(|cell| cell.hyperlink())
-                {
+                let mouse_cell_index = content_index_for_mouse(position, &self.last_content.terminal_bounds);
+                if let Some(link) = self.last_content.cells.get(mouse_cell_index).and_then(|cell| cell.hyperlink()) {
                     cx.open_url(link.uri());
                 } else if e.modifiers.secondary() {
-                    self.events
-                        .push_back(InternalEvent::FindHyperlink(position, true));
+                    self.events.push_back(InternalEvent::FindHyperlink(position, true));
                 }
             }
         }
@@ -2662,22 +2466,15 @@ impl Terminal {
                     self.last_content.display_offset,
                 );
 
-                if let Some(scrolls) = scroll_report(point, scroll_lines, e, self.last_content.mode)
-                {
+                if let Some(scrolls) = scroll_report(point, scroll_lines, e, self.last_content.mode) {
                     for scroll in scrolls {
                         self.write_to_pty(scroll);
                     }
                 };
-            } else if self
-                .last_content
-                .mode
-                .contains(Modes::ALT_SCREEN | Modes::ALTERNATE_SCROLL)
-                && !e.shift
-            {
+            } else if self.last_content.mode.contains(Modes::ALT_SCREEN | Modes::ALTERNATE_SCROLL) && !e.shift {
                 self.write_to_pty(alt_scroll(scroll_lines));
             } else {
-                self.events
-                    .push_back(InternalEvent::Scroll(Scroll::Delta(scroll_lines)));
+                self.events.push_back(InternalEvent::Scroll(Scroll::Delta(scroll_lines)));
             }
         }
     }
@@ -2686,11 +2483,7 @@ impl Terminal {
         self.schedule_find_hyperlink(window.modifiers(), window.mouse_position(), cx);
     }
 
-    fn determine_scroll_lines(
-        &mut self,
-        e: &ScrollWheelEvent,
-        scroll_multiplier: f32,
-    ) -> Option<i32> {
+    fn determine_scroll_lines(&mut self, e: &ScrollWheelEvent, scroll_multiplier: f32) -> Option<i32> {
         let line_height = self.last_content.terminal_bounds.line_height;
         match e.touch_phase {
             /* Reset scroll state on started */
@@ -2739,11 +2532,9 @@ impl Terminal {
     /// Normalizes the command name of the foreground process, if one is known.
     pub fn foreground_process_command_name(&self) -> Option<String> {
         match &self.terminal_type {
-            TerminalType::Pty { info, .. } => info
-                .current
-                .read()
-                .as_ref()
-                .and_then(|process| foreground_process_command_from_argv(&process.argv)),
+            TerminalType::Pty { info, .. } => {
+                info.current.read().as_ref().and_then(|process| foreground_process_command_from_argv(&process.argv))
+            }
             TerminalType::DisplayOnly => None,
         }
     }
@@ -2756,11 +2547,7 @@ impl Terminal {
     /// remote host, in case Zed is connected to a remote host.
     fn client_side_working_directory(&self) -> Option<PathBuf> {
         match &self.terminal_type {
-            TerminalType::Pty { info, .. } => info
-                .current
-                .read()
-                .as_ref()
-                .map(|process| process.cwd.clone()),
+            TerminalType::Pty { info, .. } => info.current.read().as_ref().map(|process| process.cwd.clone()),
             TerminalType::DisplayOnly => None,
         }
     }
@@ -2774,31 +2561,21 @@ impl Terminal {
             let term = self.term.lock_unfair();
             Self::scrollback_position(term.grid().cursor.point.line.0, term.history_size())
         });
-        self.cwd_history.push(CwdHistoryEntry {
-            scrollback_position,
-            working_directory: new_working_directory,
-        });
+        self.cwd_history.push(CwdHistoryEntry { scrollback_position, working_directory: new_working_directory });
     }
 
     fn reset_cwd_history(&mut self) {
         self.pending_cwd_boundary = None;
         self.cwd_history = self
             .working_directory()
-            .map(|working_directory| {
-                vec![CwdHistoryEntry {
-                    scrollback_position: i32::MIN,
-                    working_directory,
-                }]
-            })
+            .map(|working_directory| vec![CwdHistoryEntry { scrollback_position: i32::MIN, working_directory }])
             .unwrap_or_default();
     }
 
     fn cwd_at_line(&self, line: i32, history_size: usize) -> Option<PathBuf> {
         // Once the scrollback cap is reached, evictions move retained lines without changing
         // `history_size`, so stored row offsets no longer identify their original lines.
-        if self.is_remote_terminal
-            || self.cwd_history.is_empty()
-            || history_size >= self.term_config.scrolling_history
+        if self.is_remote_terminal || self.cwd_history.is_empty() || history_size >= self.term_config.scrolling_history
         {
             return self.working_directory();
         }
@@ -2826,45 +2603,45 @@ impl Terminal {
                     task_state.spawned_task.full_label.clone()
                 }
             }
-            None => self
-                .title_override
-                .as_ref()
-                .map(|title_override| title_override.to_string())
-                .unwrap_or_else(|| match &self.terminal_type {
-                    TerminalType::Pty { info, .. } => info
-                        .current
-                        .read()
-                        .as_ref()
-                        .map(|fpi| {
-                            let process_file = fpi
-                                .cwd
-                                .file_name()
-                                .map(|name| name.to_string_lossy().into_owned())
-                                .unwrap_or_default();
+            None => {
+                self.title_override.as_ref().map(|title_override| title_override.to_string()).unwrap_or_else(|| {
+                    match &self.terminal_type {
+                        TerminalType::Pty { info, .. } => info
+                            .current
+                            .read()
+                            .as_ref()
+                            .map(|fpi| {
+                                let process_file = fpi
+                                    .cwd
+                                    .file_name()
+                                    .map(|name| name.to_string_lossy().into_owned())
+                                    .unwrap_or_default();
 
-                            let argv = fpi.argv.as_slice();
-                            let process_name = format!(
-                                "{}{}",
-                                fpi.name,
-                                if !argv.is_empty() {
-                                    format!(" {}", (argv[1..]).join(" "))
+                                let argv = fpi.argv.as_slice();
+                                let process_name = format!(
+                                    "{}{}",
+                                    fpi.name,
+                                    if !argv.is_empty() {
+                                        format!(" {}", (argv[1..]).join(" "))
+                                    } else {
+                                        "".to_string()
+                                    }
+                                );
+                                let (process_file, process_name) = if truncate {
+                                    (
+                                        truncate_and_trailoff(&process_file, MAX_CHARS),
+                                        truncate_and_trailoff(&process_name, MAX_CHARS),
+                                    )
                                 } else {
-                                    "".to_string()
-                                }
-                            );
-                            let (process_file, process_name) = if truncate {
-                                (
-                                    truncate_and_trailoff(&process_file, MAX_CHARS),
-                                    truncate_and_trailoff(&process_name, MAX_CHARS),
-                                )
-                            } else {
-                                (process_file, process_name)
-                            };
-                            format!("{process_file} — {process_name}")
-                        })
-                        .unwrap_or_else(|| "Terminal".to_string()),
-                    TerminalType::DisplayOnly => "Terminal".to_string(),
-                }),
+                                    (process_file, process_name)
+                                };
+                                format!("{process_file} — {process_name}")
+                            })
+                            .unwrap_or_else(|| "Terminal".to_string()),
+                        TerminalType::DisplayOnly => "Terminal".to_string(),
+                    }
+                })
+            }
         }
     }
 
@@ -2891,14 +2668,8 @@ impl Terminal {
     }
 
     /// Returns whether this terminal still owns its live PTY sender.
-    pub fn has_active_pty_resources(&self) -> bool {
-        matches!(
-            self.terminal_type,
-            TerminalType::Pty {
-                resources: PtyResources::Active(_),
-                ..
-            }
-        )
+    pub const fn has_active_pty_resources(&self) -> bool {
+        matches!(self.terminal_type, TerminalType::Pty { resources: PtyResources::Active(_), .. })
     }
 
     /// Releases live PTY resources, including the parse buffer used by
@@ -2910,8 +2681,7 @@ impl Terminal {
         let TerminalType::Pty { resources, info } = &mut self.terminal_type else {
             return;
         };
-        let PtyResources::Active(pty_tx) = std::mem::replace(resources, PtyResources::Released)
-        else {
+        let PtyResources::Active(pty_tx) = std::mem::replace(resources, PtyResources::Released) else {
             return;
         };
         let info = info.clone();
@@ -2946,7 +2716,7 @@ impl Terminal {
         }
     }
 
-    pub fn task(&self) -> Option<&TaskState> {
+    pub const fn task(&self) -> Option<&TaskState> {
         self.task.as_ref()
     }
 
@@ -2962,11 +2732,7 @@ impl Terminal {
         Task::ready(None)
     }
 
-    fn register_task_finished(
-        &mut self,
-        exit_status: Option<ExitStatus>,
-        cx: &mut Context<Terminal>,
-    ) {
+    fn register_task_finished(&mut self, exit_status: Option<ExitStatus>, cx: &mut Context<Terminal>) {
         if let Some(tx) = &self.completion_tx {
             tx.try_send(exit_status).ok();
         }
@@ -2982,11 +2748,8 @@ impl Terminal {
                 //    even if the shell exits with a non-zero code (e.g. after `false`).
                 // 2. Shell spawn failures (bad $SHELL) - don't close, so the user sees
                 //    the error. Spawn failures never receive keyboard input.
-                let should_close = if self.keyboard_input_sent {
-                    true
-                } else {
-                    self.child_exited.is_none_or(|e| e.code() == Some(0))
-                };
+                let should_close =
+                    if self.keyboard_input_sent { true } else { self.child_exited.is_none_or(|e| e.code() == Some(0)) };
                 if should_close {
                     cx.emit(Event::CloseTerminal);
                 }
@@ -3036,12 +2799,12 @@ impl Terminal {
         }
     }
 
-    pub fn vi_mode_enabled(&self) -> bool {
+    pub const fn vi_mode_enabled(&self) -> bool {
         self.vi_mode_enabled
     }
 
     pub fn clone_builder(&self, cx: &App, cwd: Option<PathBuf>) -> Task<Result<TerminalBuilder>> {
-        let working_directory = self.working_directory().or_else(|| cwd);
+        let working_directory = self.working_directory().or(cwd);
         TerminalBuilder::new(
             working_directory,
             TerminalMode::interactive(),
@@ -3062,11 +2825,7 @@ impl Terminal {
 
 const TASK_DELIMITER: &str = "⏵ ";
 fn task_summary(task: &TaskState, exit_status: Option<ExitStatus>) -> (bool, String, String) {
-    let escaped_full_label = task
-        .spawned_task
-        .full_label
-        .replace("\r\n", "\r")
-        .replace('\n', "\r");
+    let escaped_full_label = task.spawned_task.full_label.replace("\r\n", "\r").replace('\n', "\r");
     let task_label = |suffix: &str| format!("{TASK_DELIMITER}Task `{escaped_full_label}` {suffix}");
     let (success, task_line) = match exit_status {
         Some(status) => {
@@ -3076,24 +2835,14 @@ fn task_summary(task: &TaskState, exit_status: Option<ExitStatus>) -> (bool, Str
 
             match (code, signal) {
                 (Some(0), _) => (true, task_label("finished successfully")),
-                (Some(code), _) => (
-                    false,
-                    task_label(&format!("finished with exit code: {code}")),
-                ),
-                (None, Some(signal)) => (
-                    false,
-                    task_label(&format!("terminated by signal: {signal}")),
-                ),
+                (Some(code), _) => (false, task_label(&format!("finished with exit code: {code}"))),
+                (None, Some(signal)) => (false, task_label(&format!("terminated by signal: {signal}"))),
                 (None, None) => (false, task_label("finished")),
             }
         }
         None => (false, task_label("finished")),
     };
-    let escaped_command_label = task
-        .spawned_task
-        .command_label
-        .replace("\r\n", "\r")
-        .replace('\n', "\r");
+    let escaped_command_label = task.spawned_task.command_label.replace("\r\n", "\r").replace('\n', "\r");
     let command_line = format!("{TASK_DELIMITER}Command: {escaped_command_label}");
     (success, task_line, command_line)
 }
@@ -3144,8 +2893,9 @@ fn spawn_task_subprocess(
     events_tx: futures::channel::mpsc::UnboundedSender<PtyEvent>,
     executor: &BackgroundExecutor,
 ) -> Result<SubprocessHandle> {
-    use futures::io::AsyncReadExt as _;
     use std::process::Stdio;
+
+    use futures::io::AsyncReadExt as _;
 
     let mut command = util::command::new_std_command(&program);
     command.args(&args);
@@ -3154,8 +2904,7 @@ fn spawn_task_subprocess(
         command.current_dir(directory);
     }
 
-    let mut child =
-        util::process::Child::spawn(command, Stdio::null(), Stdio::piped(), Stdio::piped())?;
+    let mut child = util::process::Child::spawn(command, Stdio::null(), Stdio::piped(), Stdio::piped())?;
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
     let child = Arc::new(parking_lot::Mutex::new(Some(child)));
@@ -3183,18 +2932,12 @@ fn spawn_task_subprocess(
                                 return;
                             }
                             Ok(count) => {
-                                let converted =
-                                    convert_lf_to_crlf(&buffer[..count], &mut previous_byte_was_cr);
+                                let converted = convert_lf_to_crlf(&buffer[..count], &mut previous_byte_was_cr);
                                 {
                                     let mut term = term.lock();
                                     processor.advance(&mut *term, &converted);
                                 }
-                                events_tx
-                                    .unbounded_send(PtyEvent::Event(
-                                        TerminalBackendEvent::Wakeup,
-                                        0,
-                                    ))
-                                    .ok();
+                                events_tx.unbounded_send(PtyEvent::Event(TerminalBackendEvent::Wakeup, 0)).ok();
                             }
                         }
                     }
@@ -3231,10 +2974,7 @@ fn spawn_task_subprocess(
         }
     });
 
-    Ok(SubprocessHandle {
-        child,
-        _reader: reader,
-    })
+    Ok(SubprocessHandle { child, _reader: reader })
 }
 
 impl Drop for Terminal {
@@ -3271,9 +3011,7 @@ fn normalize_path_command_name(command: &str) -> Option<String> {
     }
 
     if command.is_empty()
-        || !command.chars().all(|character| {
-            character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.')
-        })
+        || !command.chars().all(|character| character.is_ascii_alphanumeric() || matches!(character, '-' | '_' | '.'))
     {
         return None;
     }
@@ -3282,30 +3020,18 @@ fn normalize_path_command_name(command: &str) -> Option<String> {
 }
 
 fn foreground_process_command_from_argv(argv: &[String]) -> Option<String> {
-    let command = argv
-        .first()
-        .and_then(|command| normalize_path_command_name(command));
+    let command = argv.first().and_then(|command| normalize_path_command_name(command));
 
-    if !matches!(
-        command.as_deref(),
-        Some("node" | "python" | "python3" | "bun" | "deno")
-    ) {
+    if !matches!(command.as_deref(), Some("node" | "python" | "python3" | "bun" | "deno")) {
         return command;
     }
 
-    argv.iter()
-        .skip(1)
-        .filter_map(|argument| normalize_script_command_name(argument))
-        .next()
-        .or(command)
+    argv.iter().skip(1).filter_map(|argument| normalize_script_command_name(argument)).next().or(command)
 }
 
 fn normalize_script_command_name(argument: &str) -> Option<String> {
     let path = Path::new(argument);
-    let file_stem = path
-        .file_stem()
-        .and_then(|file_stem| file_stem.to_str())
-        .and_then(normalize_path_command_name)?;
+    let file_stem = path.file_stem().and_then(|file_stem| file_stem.to_str()).and_then(normalize_path_command_name)?;
 
     if file_stem != "index" {
         return Some(file_stem);
@@ -3408,11 +3134,5 @@ fn rgb_for_index(i: u8) -> (u8, u8, u8) {
 }
 
 pub fn rgba_color(r: u8, g: u8, b: u8) -> Hsla {
-    Rgba {
-        r: (r as f32 / 255.),
-        g: (g as f32 / 255.),
-        b: (b as f32 / 255.),
-        a: 1.,
-    }
-    .into()
+    Rgba { r: (r as f32 / 255.), g: (g as f32 / 255.), b: (b as f32 / 255.), a: 1. }.into()
 }

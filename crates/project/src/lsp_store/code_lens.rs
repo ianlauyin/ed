@@ -145,26 +145,26 @@ impl LspStore {
         let current_servers = self.language_server_ids_for_request(buffer, &GetCodeLens, cx);
 
         let mut servers_to_query = None;
-        if let Some(lsp_data) = self.current_lsp_data(buffer_id) {
-            if let Some(cached_lens) = &mut lsp_data.code_lens {
-                if !version_queried_for.changed_since(&lsp_data.buffer_version) {
-                    match missing_servers_to_query(
-                        &mut cached_lens.lens,
-                        &mut cached_lens.fetched_servers,
-                        &current_servers,
-                    ) {
-                        Some(missing_servers) => servers_to_query = Some(missing_servers),
-                        None => {
-                            return Task::ready(Ok(Some(flatten_cache(&cached_lens.lens)))).shared();
-                        }
+        if let Some(lsp_data) = self.current_lsp_data(buffer_id)
+            && let Some(cached_lens) = &mut lsp_data.code_lens
+        {
+            if !version_queried_for.changed_since(&lsp_data.buffer_version) {
+                match missing_servers_to_query(
+                    &mut cached_lens.lens,
+                    &mut cached_lens.fetched_servers,
+                    &current_servers,
+                ) {
+                    Some(missing_servers) => servers_to_query = Some(missing_servers),
+                    None => {
+                        return Task::ready(Ok(Some(flatten_cache(&cached_lens.lens)))).shared();
                     }
                 }
-                if let Some(running) = cached_lens.update.as_ref()
-                    && !version_queried_for.changed_since(&running.version)
-                    && servers_to_query.as_ref().is_none_or(|missing| missing.is_subset(&running.servers))
-                {
-                    return running.task.clone();
-                }
+            }
+            if let Some(running) = cached_lens.update.as_ref()
+                && !version_queried_for.changed_since(&running.version)
+                && servers_to_query.as_ref().is_none_or(|missing| missing.is_subset(&running.servers))
+            {
+                return running.task.clone();
             }
         }
 

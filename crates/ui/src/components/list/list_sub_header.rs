@@ -1,5 +1,9 @@
+use component::Component;
+use component::ComponentScope;
+use component::example_group_with_title;
+use component::single_example;
+
 use crate::prelude::*;
-use component::{Component, ComponentScope, example_group_with_title, single_example};
 
 #[derive(IntoElement, RegisterComponent)]
 pub struct ListSubHeader {
@@ -12,16 +16,10 @@ pub struct ListSubHeader {
 
 impl ListSubHeader {
     pub fn new(label: impl Into<SharedString>) -> Self {
-        Self {
-            label: label.into(),
-            start_slot: None,
-            end_slot: None,
-            inset: false,
-            selected: false,
-        }
+        Self { label: label.into(), start_slot: None, end_slot: None, inset: false, selected: false }
     }
 
-    pub fn left_icon(mut self, left_icon: Option<IconName>) -> Self {
+    pub const fn left_icon(mut self, left_icon: Option<IconName>) -> Self {
         self.start_slot = left_icon;
         self
     }
@@ -31,7 +29,7 @@ impl ListSubHeader {
         self
     }
 
-    pub fn inset(mut self, inset: bool) -> Self {
+    pub const fn inset(mut self, inset: bool) -> Self {
         self.inset = inset;
         self
     }
@@ -56,9 +54,7 @@ impl RenderOnce for ListSubHeader {
                 div()
                     .h_5()
                     .when(self.inset, |this| this.px_2())
-                    .when(self.selected, |this| {
-                        this.bg(cx.theme().colors().ghost_element_selected)
-                    })
+                    .when(self.selected, |this| this.bg(cx.theme().colors().ghost_element_selected))
                     .flex()
                     .flex_1()
                     .w_full()
@@ -70,16 +66,8 @@ impl RenderOnce for ListSubHeader {
                             .flex()
                             .gap_1()
                             .items_center()
-                            .children(
-                                self.start_slot.map(|i| {
-                                    Icon::new(i).color(Color::Muted).size(IconSize::Small)
-                                }),
-                            )
-                            .child(
-                                Label::new(self.label.clone())
-                                    .color(Color::Muted)
-                                    .size(LabelSize::Small),
-                            ),
+                            .children(self.start_slot.map(|i| Icon::new(i).color(Color::Muted).size(IconSize::Small)))
+                            .child(Label::new(self.label.clone()).color(Color::Muted).size(LabelSize::Small)),
                     )
                     .children(self.end_slot),
             )
@@ -103,15 +91,10 @@ impl Component for ListSubHeader {
                 example_group_with_title(
                     "Basic Sub-headers",
                     vec![
-                        single_example(
-                            "Simple",
-                            ListSubHeader::new("Subsection").into_any_element(),
-                        ),
+                        single_example("Simple", ListSubHeader::new("Subsection").into_any_element()),
                         single_example(
                             "With Icon",
-                            ListSubHeader::new("Documents")
-                                .left_icon(Some(IconName::File))
-                                .into_any_element(),
+                            ListSubHeader::new("Documents").left_icon(Some(IconName::File)).into_any_element(),
                         ),
                         single_example(
                             "With End Slot",
@@ -126,16 +109,9 @@ impl Component for ListSubHeader {
                     vec![
                         single_example(
                             "Selected",
-                            ListSubHeader::new("Selected")
-                                .toggle_state(true)
-                                .into_any_element(),
+                            ListSubHeader::new("Selected").toggle_state(true).into_any_element(),
                         ),
-                        single_example(
-                            "Inset",
-                            ListSubHeader::new("Inset Sub-header")
-                                .inset(true)
-                                .into_any_element(),
-                        ),
+                        single_example("Inset", ListSubHeader::new("Inset Sub-header").inset(true).into_any_element()),
                     ],
                 ),
             ])

@@ -1,10 +1,16 @@
-use gpui::{Action, Entity, OwnedMenu, OwnedMenuItem, actions};
-
+use gpui::Action;
+use gpui::Entity;
+use gpui::OwnedMenu;
+use gpui::OwnedMenuItem;
+use gpui::actions;
 use schemars::JsonSchema;
 use serde::Deserialize;
-
 use smallvec::SmallVec;
-use ui::{ContextMenu, PopoverMenu, PopoverMenuHandle, Tooltip, prelude::*};
+use ui::ContextMenu;
+use ui::PopoverMenu;
+use ui::PopoverMenuHandle;
+use ui::Tooltip;
+use ui::prelude::*;
 
 actions!(
     app_menu,
@@ -39,22 +45,13 @@ pub struct ApplicationMenu {
 }
 
 impl ApplicationMenu {
-    pub fn new(_: &mut Window, cx: &mut Context<Self>) -> Self {
+    pub fn new(_: &mut Window, cx: &Context<Self>) -> Self {
         let entries = Self::build_entries(cx.get_menus().unwrap_or_default());
-        Self {
-            entries,
-            pending_menu_open: None,
-        }
+        Self { entries, pending_menu_open: None }
     }
 
     fn build_entries(menus: Vec<OwnedMenu>) -> SmallVec<[MenuEntry; 8]> {
-        menus
-            .into_iter()
-            .map(|menu| MenuEntry {
-                menu,
-                handle: PopoverMenuHandle::default(),
-            })
-            .collect()
+        menus.into_iter().map(|menu| MenuEntry { menu, handle: PopoverMenuHandle::default() }).collect()
     }
 
     fn sanitize_menu_items(items: Vec<OwnedMenuItem>) -> Vec<OwnedMenuItem> {
@@ -91,53 +88,35 @@ impl ApplicationMenu {
         cleaned
     }
 
-    fn build_menu_from_items(
-        entry: MenuEntry,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Entity<ContextMenu> {
+    fn build_menu_from_items(entry: MenuEntry, window: &mut Window, cx: &mut App) -> Entity<ContextMenu> {
         ContextMenu::build(window, cx, |menu, window, cx| {
             // Grab current focus handle so menu can shown items in context with the focused element
             let menu = menu.when_some(window.focused(cx), |menu, focused| menu.context(focused));
             let sanitized_items = Self::sanitize_menu_items(entry.menu.items);
 
-            sanitized_items
-                .into_iter()
-                .fold(menu, |menu, item| match item {
-                    OwnedMenuItem::Separator => menu.separator(),
-                    OwnedMenuItem::Action {
-                        name,
-                        action,
-                        checked,
-                        disabled,
-                        ..
-                    } => menu.action_checked_with_disabled(name, action, checked, disabled),
-                    OwnedMenuItem::Submenu(submenu) => {
-                        submenu
-                            .items
-                            .into_iter()
-                            .fold(menu, |menu, item| match item {
-                                OwnedMenuItem::Separator => menu.separator(),
-                                OwnedMenuItem::Action {
-                                    name,
-                                    action,
-                                    checked,
-                                    disabled,
-                                    ..
-                                } => menu
-                                    .action_checked_with_disabled(name, action, checked, disabled),
-                                OwnedMenuItem::Submenu(_) => menu,
-                                OwnedMenuItem::SystemMenu(_) => {
-                                    // A system menu doesn't make sense in this context, so ignore it
-                                    menu
-                                }
-                            })
-                    }
-                    OwnedMenuItem::SystemMenu(_) => {
-                        // A system menu doesn't make sense in this context, so ignore it
-                        menu
-                    }
-                })
+            sanitized_items.into_iter().fold(menu, |menu, item| match item {
+                OwnedMenuItem::Separator => menu.separator(),
+                OwnedMenuItem::Action { name, action, checked, disabled, .. } => {
+                    menu.action_checked_with_disabled(name, action, checked, disabled)
+                }
+                OwnedMenuItem::Submenu(submenu) => {
+                    submenu.items.into_iter().fold(menu, |menu, item| match item {
+                        OwnedMenuItem::Separator => menu.separator(),
+                        OwnedMenuItem::Action { name, action, checked, disabled, .. } => {
+                            menu.action_checked_with_disabled(name, action, checked, disabled)
+                        }
+                        OwnedMenuItem::Submenu(_) => menu,
+                        OwnedMenuItem::SystemMenu(_) => {
+                            // A system menu doesn't make sense in this context, so ignore it
+                            menu
+                        }
+                    })
+                }
+                OwnedMenuItem::SystemMenu(_) => {
+                    // A system menu doesn't make sense in this context, so ignore it
+                    menu
+                }
+            })
         })
     }
 
@@ -148,26 +127,18 @@ impl ApplicationMenu {
         let entry = entry.clone();
 
         // Application menu must have same ids as first menu item in standard menu
-        div()
-            .id(format!("{}-menu-item", menu_name))
-            .occlude()
-            .child(
-                PopoverMenu::new(format!("{}-menu-popover", menu_name))
-                    .menu(move |window, cx| {
-                        Self::build_menu_from_items(entry.clone(), window, cx).into()
-                    })
-                    .trigger_with_tooltip(
-                        IconButton::new(
-                            SharedString::from(format!("{}-menu-trigger", menu_name)),
-                            ui::IconName::Menu,
-                        )
+        div().id(format!("{}-menu-item", menu_name)).occlude().child(
+            PopoverMenu::new(format!("{}-menu-popover", menu_name))
+                .menu(move |window, cx| Self::build_menu_from_items(entry.clone(), window, cx).into())
+                .trigger_with_tooltip(
+                    IconButton::new(SharedString::from(format!("{}-menu-trigger", menu_name)), ui::IconName::Menu)
                         .style(ButtonStyle::Subtle)
                         .icon_size(IconSize::Small)
                         .tab_index(0isize),
-                        Tooltip::text("Open Application Menu"),
-                    )
-                    .with_handle(handle),
-            )
+                    Tooltip::text("Open Application Menu"),
+                )
+                .with_handle(handle),
+        )
     }
 
     fn render_standard_menu(&self, entry: &MenuEntry) -> impl IntoElement {
@@ -176,28 +147,19 @@ impl ApplicationMenu {
         let menu_name = entry.menu.name.clone();
         let entry = entry.clone();
 
-        let all_handles: Vec<_> = self
-            .entries
-            .iter()
-            .map(|entry| entry.handle.clone())
-            .collect();
+        let all_handles: Vec<_> = self.entries.iter().map(|entry| entry.handle.clone()).collect();
 
         div()
             .id(format!("{}-menu-item", menu_name))
             .occlude()
             .child(
                 PopoverMenu::new(format!("{}-menu-popover", menu_name))
-                    .menu(move |window, cx| {
-                        Self::build_menu_from_items(entry.clone(), window, cx).into()
-                    })
+                    .menu(move |window, cx| Self::build_menu_from_items(entry.clone(), window, cx).into())
                     .trigger(
-                        Button::new(
-                            SharedString::from(format!("{}-menu-trigger", menu_name)),
-                            menu_name,
-                        )
-                        .style(ButtonStyle::Subtle)
-                        .label_size(LabelSize::Small)
-                        .tab_index(0isize),
+                        Button::new(SharedString::from(format!("{}-menu-trigger", menu_name)), menu_name)
+                            .style(ButtonStyle::Subtle)
+                            .label_size(LabelSize::Small)
+                            .tab_index(0isize),
                     )
                     .with_handle(current_handle.clone()),
             )
@@ -216,8 +178,7 @@ impl ApplicationMenu {
     }
 
     pub fn all_menus_shown(&self) -> bool {
-        self.entries.iter().any(|entry| entry.handle.is_deployed())
-            || self.pending_menu_open.is_some()
+        self.entries.iter().any(|entry| entry.handle.is_deployed()) || self.pending_menu_open.is_some()
     }
 }
 
@@ -226,10 +187,8 @@ impl Render for ApplicationMenu {
         let all_menus_shown = self.all_menus_shown();
 
         if let Some(pending_menu_open) = self.pending_menu_open.take()
-            && let Some(entry) = self
-                .entries
-                .iter()
-                .find(|entry| entry.menu.name == pending_menu_open && !entry.handle.is_deployed())
+            && let Some(entry) =
+                self.entries.iter().find(|entry| entry.menu.name == pending_menu_open && !entry.handle.is_deployed())
         {
             let handle_to_show = entry.handle.clone();
             let handles_to_hide: Vec<_> = self
@@ -262,11 +221,7 @@ impl Render for ApplicationMenu {
                 this.child(self.render_application_menu(&self.entries[0]))
             })
             .when(all_menus_shown, |this| {
-                this.children(
-                    self.entries
-                        .iter()
-                        .map(|entry| self.render_standard_menu(entry)),
-                )
+                this.children(self.entries.iter().map(|entry| self.render_standard_menu(entry)))
             })
     }
 }

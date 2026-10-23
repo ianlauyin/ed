@@ -1,8 +1,11 @@
-use crate::prelude::*;
-use gpui::{AnimationElement, AnimationExt, Styled};
 use std::time::Duration;
 
+use gpui::AnimationElement;
+use gpui::AnimationExt;
+use gpui::Styled;
 use gpui::ease_out_quint;
+
+use crate::prelude::*;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum AnimationDuration {
@@ -12,14 +15,14 @@ pub enum AnimationDuration {
 }
 
 impl AnimationDuration {
-    pub fn duration(&self) -> Duration {
+    pub const fn duration(&self) -> Duration {
         Duration::from_millis(*self as u64)
     }
 }
 
-impl Into<std::time::Duration> for AnimationDuration {
-    fn into(self) -> Duration {
-        self.duration()
+impl From<AnimationDuration> for std::time::Duration {
+    fn from(val: AnimationDuration) -> Self {
+        val.duration()
     }
 }
 
@@ -32,11 +35,7 @@ pub enum AnimationDirection {
 }
 
 pub trait DefaultAnimations: Styled + Sized + Element {
-    fn animate_in(
-        self,
-        animation_type: AnimationDirection,
-        fade_in: bool,
-    ) -> AnimationElement<Self> {
+    fn animate_in(self, animation_type: AnimationDirection, fade_in: bool) -> AnimationElement<Self> {
         let animation_name = match animation_type {
             AnimationDirection::FromBottom => "animate_from_bottom",
             AnimationDirection::FromLeft => "animate_from_left",
@@ -44,10 +43,7 @@ pub trait DefaultAnimations: Styled + Sized + Element {
             AnimationDirection::FromTop => "animate_from_top",
         };
 
-        let animation_id = self.id().map_or_else(
-            || ElementId::from(animation_name),
-            |id| (id, animation_name).into(),
-        );
+        let animation_id = self.id().map_or_else(|| ElementId::from(animation_name), |id| (id, animation_name).into());
 
         self.with_animation(
             animation_id,
@@ -62,18 +58,10 @@ pub trait DefaultAnimations: Styled + Sized + Element {
                 }
 
                 match animation_type {
-                    AnimationDirection::FromBottom => {
-                        this.bottom(px(start_pos + delta * (end_pos - start_pos)))
-                    }
-                    AnimationDirection::FromLeft => {
-                        this.left(px(start_pos + delta * (end_pos - start_pos)))
-                    }
-                    AnimationDirection::FromRight => {
-                        this.right(px(start_pos + delta * (end_pos - start_pos)))
-                    }
-                    AnimationDirection::FromTop => {
-                        this.top(px(start_pos + delta * (end_pos - start_pos)))
-                    }
+                    AnimationDirection::FromBottom => this.bottom(px(start_pos + delta * (end_pos - start_pos))),
+                    AnimationDirection::FromLeft => this.left(px(start_pos + delta * (end_pos - start_pos))),
+                    AnimationDirection::FromRight => this.right(px(start_pos + delta * (end_pos - start_pos))),
+                    AnimationDirection::FromTop => this.top(px(start_pos + delta * (end_pos - start_pos))),
                 }
             },
         )

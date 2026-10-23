@@ -1,14 +1,20 @@
-use anyhow::{Context as _, bail};
-use schemars::{JsonSchema, json_schema};
-use serde::{
-    Deserialize, Deserializer, Serialize, Serializer,
-    de::{self, Visitor},
-};
 use std::borrow::Cow;
-use std::{
-    fmt::{self, Display, Formatter},
-    hash::{Hash, Hasher},
-};
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::{self};
+use std::hash::Hash;
+use std::hash::Hasher;
+
+use anyhow::Context as _;
+use anyhow::bail;
+use schemars::JsonSchema;
+use schemars::json_schema;
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
+use serde::de::Visitor;
+use serde::de::{self};
 
 /// Convert an RGB hex color code number to a color type
 pub fn rgb(hex: u32) -> Rgba {
@@ -92,13 +98,8 @@ impl Rgba {
     /// ```
     ///
     /// This will return the same blue color, fully transparent.
-    pub fn alpha(&self, a: f32) -> Self {
-        Rgba {
-            r: self.r,
-            g: self.g,
-            b: self.b,
-            a: a.clamp(0., 1.),
-        }
+    pub const fn alpha(&self, a: f32) -> Self {
+        Rgba { r: self.r, g: self.g, b: self.b, a: a.clamp(0., 1.) }
     }
 
     /// Returns a new RGBA color with the same red, green, and blue channels,
@@ -124,12 +125,7 @@ impl Rgba {
     ///
     /// This will return the same blue color scaled down to 40% opacity.
     pub fn opacity(&self, factor: f32) -> Self {
-        Rgba {
-            r: self.r,
-            g: self.g,
-            b: self.b,
-            a: self.a * factor.clamp(0., 1.),
-        }
+        Rgba { r: self.r, g: self.g, b: self.b, a: self.a * factor.clamp(0., 1.) }
     }
 }
 
@@ -212,12 +208,7 @@ impl From<Hsla> for Rgba {
             _ => (cm, m, xm),
         };
 
-        Rgba {
-            r: r.clamp(0., 1.),
-            g: g.clamp(0., 1.),
-            b: b.clamp(0., 1.),
-            a: color.a,
-        }
+        Rgba { r: r.clamp(0., 1.), g: g.clamp(0., 1.), b: b.clamp(0., 1.), a: color.a }
     }
 }
 
@@ -259,9 +250,8 @@ impl TryFrom<&'_ str> for Rgba {
                 )?;
                 let a = if hex.len() == RGBA {
                     u8::from_str_radix(
-                        hex.get(3..4).with_context(|| {
-                            format!("{INVALID_UNICODE}: a component of #rgba for value: '{value}'")
-                        })?,
+                        hex.get(3..4)
+                            .with_context(|| format!("{INVALID_UNICODE}: a component of #rgba for value: '{value}'"))?,
                         16,
                     )?
                 } else {
@@ -279,35 +269,26 @@ impl TryFrom<&'_ str> for Rgba {
             RRGGBB | RRGGBBAA => {
                 let r = u8::from_str_radix(
                     hex.get(0..2).with_context(|| {
-                        format!(
-                            "{}: r component of #rrggbb/#rrggbbaa for value: '{}'",
-                            INVALID_UNICODE, value
-                        )
+                        format!("{}: r component of #rrggbb/#rrggbbaa for value: '{}'", INVALID_UNICODE, value)
                     })?,
                     16,
                 )?;
                 let g = u8::from_str_radix(
                     hex.get(2..4).with_context(|| {
-                        format!(
-                            "{INVALID_UNICODE}: g component of #rrggbb/#rrggbbaa for value: '{value}'"
-                        )
+                        format!("{INVALID_UNICODE}: g component of #rrggbb/#rrggbbaa for value: '{value}'")
                     })?,
                     16,
                 )?;
                 let b = u8::from_str_radix(
                     hex.get(4..6).with_context(|| {
-                        format!(
-                            "{INVALID_UNICODE}: b component of #rrggbb/#rrggbbaa for value: '{value}'"
-                        )
+                        format!("{INVALID_UNICODE}: b component of #rrggbb/#rrggbbaa for value: '{value}'")
                     })?,
                     16,
                 )?;
                 let a = if hex.len() == RRGGBBAA {
                     u8::from_str_radix(
                         hex.get(6..8).with_context(|| {
-                            format!(
-                                "{INVALID_UNICODE}: a component of #rrggbbaa for value: '{value}'"
-                            )
+                            format!("{INVALID_UNICODE}: a component of #rrggbbaa for value: '{value}'")
                         })?,
                         16,
                     )?
@@ -319,12 +300,7 @@ impl TryFrom<&'_ str> for Rgba {
             _ => bail!("invalid RGBA hex color: '{value}'. {EXPECTED_FORMATS}"),
         };
 
-        Ok(Rgba {
-            r: r as f32 / 255.,
-            g: g as f32 / 255.,
-            b: b as f32 / 255.,
-            a: a as f32 / 255.,
-        })
+        Ok(Rgba { r: r as f32 / 255., g: g as f32 / 255., b: b as f32 / 255., a: a as f32 / 255. })
     }
 }
 
@@ -383,115 +359,58 @@ impl Hash for Hsla {
 
 impl Display for Hsla {
     fn fmt(&self, f: &mut Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "hsla({:.2}, {:.2}%, {:.2}%, {:.2})",
-            self.h * 360.,
-            self.s * 100.,
-            self.l * 100.,
-            self.a
-        )
+        write!(f, "hsla({:.2}, {:.2}%, {:.2}%, {:.2})", self.h * 360., self.s * 100., self.l * 100., self.a)
     }
 }
 
 /// Construct an [`Hsla`] object from plain values
 pub const fn hsla(h: f32, s: f32, l: f32, a: f32) -> Hsla {
-    Hsla {
-        h: h.clamp(0., 1.),
-        s: s.clamp(0., 1.),
-        l: l.clamp(0., 1.),
-        a: a.clamp(0., 1.),
-    }
+    Hsla { h: h.clamp(0., 1.), s: s.clamp(0., 1.), l: l.clamp(0., 1.), a: a.clamp(0., 1.) }
 }
 
 /// Pure black in [`Hsla`]
 pub const fn black() -> Hsla {
-    Hsla {
-        h: 0.,
-        s: 0.,
-        l: 0.,
-        a: 1.,
-    }
+    Hsla { h: 0., s: 0., l: 0., a: 1. }
 }
 
 /// Transparent black in [`Hsla`]
 pub const fn transparent_black() -> Hsla {
-    Hsla {
-        h: 0.,
-        s: 0.,
-        l: 0.,
-        a: 0.,
-    }
+    Hsla { h: 0., s: 0., l: 0., a: 0. }
 }
 
 /// Transparent white in [`Hsla`]
 pub const fn transparent_white() -> Hsla {
-    Hsla {
-        h: 0.,
-        s: 0.,
-        l: 1.,
-        a: 0.,
-    }
+    Hsla { h: 0., s: 0., l: 1., a: 0. }
 }
 
 /// Opaque grey in [`Hsla`], values will be clamped to the range [0, 1]
 pub const fn opaque_grey(lightness: f32, opacity: f32) -> Hsla {
-    Hsla {
-        h: 0.,
-        s: 0.,
-        l: lightness.clamp(0., 1.),
-        a: opacity.clamp(0., 1.),
-    }
+    Hsla { h: 0., s: 0., l: lightness.clamp(0., 1.), a: opacity.clamp(0., 1.) }
 }
 
 /// Pure white in [`Hsla`]
 pub const fn white() -> Hsla {
-    Hsla {
-        h: 0.,
-        s: 0.,
-        l: 1.,
-        a: 1.,
-    }
+    Hsla { h: 0., s: 0., l: 1., a: 1. }
 }
 
 /// The color red in [`Hsla`]
 pub const fn red() -> Hsla {
-    Hsla {
-        h: 0.,
-        s: 1.,
-        l: 0.5,
-        a: 1.,
-    }
+    Hsla { h: 0., s: 1., l: 0.5, a: 1. }
 }
 
 /// The color blue in [`Hsla`]
 pub const fn blue() -> Hsla {
-    Hsla {
-        h: 0.6666666667,
-        s: 1.,
-        l: 0.5,
-        a: 1.,
-    }
+    Hsla { h: 0.666_666_7, s: 1., l: 0.5, a: 1. }
 }
 
 /// The color green in [`Hsla`]
 pub const fn green() -> Hsla {
-    Hsla {
-        h: 0.3333333333,
-        s: 1.,
-        l: 0.25,
-        a: 1.,
-    }
+    Hsla { h: 0.333_333_34, s: 1., l: 0.25, a: 1. }
 }
 
 /// The color yellow in [`Hsla`]
 pub const fn yellow() -> Hsla {
-    Hsla {
-        h: 0.1666666667,
-        s: 1.,
-        l: 0.5,
-        a: 1.,
-    }
+    Hsla { h: 0.166_666_67, s: 1., l: 0.5, a: 1. }
 }
 
 impl Hsla {
@@ -567,13 +486,8 @@ impl Hsla {
     }
 
     /// Returns a new HSLA color with the same hue, and lightness, but with no saturation.
-    pub fn grayscale(&self) -> Self {
-        Hsla {
-            h: self.h,
-            s: 0.,
-            l: self.l,
-            a: self.a,
-        }
+    pub const fn grayscale(&self) -> Self {
+        Hsla { h: self.h, s: 0., l: self.l, a: self.a }
     }
 
     /// Fade out the color by a given factor. This factor should be between 0.0 and 1.0.
@@ -609,12 +523,7 @@ impl Hsla {
     /// suitable for an element's hover or selected state.
     ///
     pub fn opacity(&self, factor: f32) -> Self {
-        Hsla {
-            h: self.h,
-            s: self.s,
-            l: self.l,
-            a: self.a * factor.clamp(0., 1.),
-        }
+        Hsla { h: self.h, s: self.s, l: self.l, a: self.a * factor.clamp(0., 1.) }
     }
 
     /// Returns a new HSLA color with the same hue, saturation,
@@ -638,13 +547,8 @@ impl Hsla {
     /// ```
     ///
     /// This will return a blue color with 25% opacity.
-    pub fn alpha(&self, a: f32) -> Self {
-        Hsla {
-            h: self.h,
-            s: self.s,
-            l: self.l,
-            a: a.clamp(0., 1.),
-        }
+    pub const fn alpha(&self, a: f32) -> Self {
+        Hsla { h: self.h, s: self.s, l: self.l, a: a.clamp(0., 1.) }
     }
 }
 
@@ -677,12 +581,7 @@ impl From<Rgba> for Hsla {
             ((r - g) / delta + 4.0) / 6.0
         };
 
-        Hsla {
-            h,
-            s,
-            l,
-            a: color.a,
-        }
+        Hsla { h, s, l, a: color.a }
     }
 }
 
@@ -769,16 +668,12 @@ impl std::fmt::Debug for Background {
                 "LinearGradient({}, {:?}, {:?})",
                 self.gradient_angle_or_pattern_height, self.colors[0], self.colors[1]
             ),
-            BackgroundTag::PatternSlash => write!(
-                f,
-                "PatternSlash({:?}, {})",
-                self.solid, self.gradient_angle_or_pattern_height
-            ),
-            BackgroundTag::Checkerboard => write!(
-                f,
-                "Checkerboard({:?}, {})",
-                self.solid, self.gradient_angle_or_pattern_height
-            ),
+            BackgroundTag::PatternSlash => {
+                write!(f, "PatternSlash({:?}, {})", self.solid, self.gradient_angle_or_pattern_height)
+            }
+            BackgroundTag::Checkerboard => {
+                write!(f, "Checkerboard({:?}, {})", self.solid, self.gradient_angle_or_pattern_height)
+            }
         }
     }
 }
@@ -823,10 +718,7 @@ pub fn checkerboard(color: impl Into<Hsla>, size: f32) -> Background {
 
 /// Creates a solid background color.
 pub fn solid_background(color: impl Into<Hsla>) -> Background {
-    Background {
-        solid: color.into(),
-        ..Default::default()
-    }
+    Background { solid: color.into(), ..Default::default() }
 }
 
 /// Creates a LinearGradient background color.
@@ -836,11 +728,7 @@ pub fn solid_background(color: impl Into<Hsla>) -> Background {
 /// The `angle` is in degrees value in the range 0.0 to 360.0.
 ///
 /// <https://developer.mozilla.org/en-US/docs/Web/CSS/gradient/linear-gradient>
-pub fn linear_gradient(
-    angle: f32,
-    from: impl Into<LinearColorStop>,
-    to: impl Into<LinearColorStop>,
-) -> Background {
+pub fn linear_gradient(angle: f32, from: impl Into<LinearColorStop>, to: impl Into<LinearColorStop>) -> Background {
     Background {
         tag: BackgroundTag::LinearGradient,
         gradient_angle_or_pattern_height: angle,
@@ -865,36 +753,26 @@ pub struct LinearColorStop {
 ///
 /// The percentage of the gradient, in the range 0.0 to 1.0.
 pub fn linear_color_stop(color: impl Into<Hsla>, percentage: f32) -> LinearColorStop {
-    LinearColorStop {
-        color: color.into(),
-        percentage,
-    }
+    LinearColorStop { color: color.into(), percentage }
 }
 
 impl LinearColorStop {
     /// Returns a new color stop with the same color, but with a modified alpha value.
     pub fn opacity(&self, factor: f32) -> Self {
-        Self {
-            percentage: self.percentage,
-            color: self.color.opacity(factor),
-        }
+        Self { percentage: self.percentage, color: self.color.opacity(factor) }
     }
 }
 
 impl Background {
     /// Returns the solid color if this is a solid background, None otherwise.
     pub fn as_solid(&self) -> Option<Hsla> {
-        if self.tag == BackgroundTag::Solid {
-            Some(self.solid)
-        } else {
-            None
-        }
+        if self.tag == BackgroundTag::Solid { Some(self.solid) } else { None }
     }
 
     /// Use specified color space for color interpolation.
     ///
     /// <https://developer.mozilla.org/en-US/docs/Web/CSS/color-interpolation-method>
-    pub fn color_space(mut self, color_space: ColorSpace) -> Self {
+    pub const fn color_space(mut self, color_space: ColorSpace) -> Self {
         self.color_space = color_space;
         self
     }
@@ -903,10 +781,7 @@ impl Background {
     pub fn opacity(&self, factor: f32) -> Self {
         let mut background = *self;
         background.solid = background.solid.opacity(factor);
-        background.colors = [
-            self.colors[0].opacity(factor),
-            self.colors[1].opacity(factor),
-        ];
+        background.colors = [self.colors[0].opacity(factor), self.colors[1].opacity(factor)];
         background
     }
 
@@ -923,20 +798,12 @@ impl Background {
 
 impl From<Hsla> for Background {
     fn from(value: Hsla) -> Self {
-        Background {
-            tag: BackgroundTag::Solid,
-            solid: value,
-            ..Default::default()
-        }
+        Background { tag: BackgroundTag::Solid, solid: value, ..Default::default() }
     }
 }
 
 impl From<Rgba> for Background {
     fn from(value: Rgba) -> Self {
-        Background {
-            tag: BackgroundTag::Solid,
-            solid: Hsla::from(value),
-            ..Default::default()
-        }
+        Background { tag: BackgroundTag::Solid, solid: Hsla::from(value), ..Default::default() }
     }
 }

@@ -1,10 +1,17 @@
-use crate::{Oid, repository::RepoPath};
-use anyhow::{Result, anyhow};
+use std::str::FromStr;
+use std::sync::Arc;
+
+use anyhow::Result;
+use anyhow::anyhow;
 use collections::HashMap;
 use gpui::SharedString;
-use serde::{Deserialize, Serialize};
-use std::{str::FromStr, sync::Arc};
-use util::{ResultExt, rel_path::RelPath};
+use serde::Deserialize;
+use serde::Serialize;
+use util::ResultExt;
+use util::rel_path::RelPath;
+
+use crate::Oid;
+use crate::repository::RepoPath;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum FileStatus {
@@ -91,17 +98,11 @@ impl StageStatus {
 
 impl FileStatus {
     pub const fn worktree(worktree_status: StatusCode) -> Self {
-        FileStatus::Tracked(TrackedStatus {
-            index_status: StatusCode::Unmodified,
-            worktree_status,
-        })
+        FileStatus::Tracked(TrackedStatus { index_status: StatusCode::Unmodified, worktree_status })
     }
 
     pub const fn index(index_status: StatusCode) -> Self {
-        FileStatus::Tracked(TrackedStatus {
-            worktree_status: StatusCode::Unmodified,
-            index_status,
-        })
+        FileStatus::Tracked(TrackedStatus { worktree_status: StatusCode::Unmodified, index_status })
     }
 
     /// Generate a FileStatus Code from a byte pair, as described in
@@ -112,16 +113,12 @@ impl FileStatus {
         let status = match bytes {
             [b'?', b'?'] => FileStatus::Untracked,
             [b'!', b'!'] => FileStatus::Ignored,
-            [b'A', b'A'] => UnmergedStatus {
-                first_head: UnmergedStatusCode::Added,
-                second_head: UnmergedStatusCode::Added,
+            [b'A', b'A'] => {
+                UnmergedStatus { first_head: UnmergedStatusCode::Added, second_head: UnmergedStatusCode::Added }.into()
             }
-            .into(),
-            [b'D', b'D'] => UnmergedStatus {
-                first_head: UnmergedStatusCode::Added,
-                second_head: UnmergedStatusCode::Added,
+            [b'D', b'D'] => {
+                UnmergedStatus { first_head: UnmergedStatusCode::Added, second_head: UnmergedStatusCode::Added }.into()
             }
-            .into(),
             [x, b'U'] => UnmergedStatus {
                 first_head: UnmergedStatusCode::from_byte(x)?,
                 second_head: UnmergedStatusCode::Updated,
@@ -132,20 +129,17 @@ impl FileStatus {
                 second_head: UnmergedStatusCode::from_byte(y)?,
             }
             .into(),
-            [x, y] => TrackedStatus {
-                index_status: StatusCode::from_byte(x)?,
-                worktree_status: StatusCode::from_byte(y)?,
+            [x, y] => {
+                TrackedStatus { index_status: StatusCode::from_byte(x)?, worktree_status: StatusCode::from_byte(y)? }
+                    .into()
             }
-            .into(),
         };
         Ok(status)
     }
 
-    pub fn staging(self) -> StageStatus {
+    pub const fn staging(self) -> StageStatus {
         match self {
-            FileStatus::Untracked | FileStatus::Ignored | FileStatus::Unmerged { .. } => {
-                StageStatus::Unstaged
-            }
+            FileStatus::Untracked | FileStatus::Ignored | FileStatus::Unmerged { .. } => StageStatus::Unstaged,
             FileStatus::Tracked(tracked) => match (tracked.index_status, tracked.worktree_status) {
                 (StatusCode::Unmodified, _) => StageStatus::Unstaged,
                 (_, StatusCode::Unmodified) => StageStatus::Staged,
@@ -154,23 +148,19 @@ impl FileStatus {
         }
     }
 
-    pub fn is_conflicted(self) -> bool {
+    pub const fn is_conflicted(self) -> bool {
         matches!(self, FileStatus::Unmerged { .. })
     }
 
-    pub fn is_ignored(self) -> bool {
+    pub const fn is_ignored(self) -> bool {
         matches!(self, FileStatus::Ignored)
     }
 
     pub fn has_changes(&self) -> bool {
-        self.is_modified()
-            || self.is_created()
-            || self.is_deleted()
-            || self.is_untracked()
-            || self.is_conflicted()
+        self.is_modified() || self.is_created() || self.is_deleted() || self.is_untracked() || self.is_conflicted()
     }
 
-    pub fn is_modified(self) -> bool {
+    pub const fn is_modified(self) -> bool {
         match self {
             FileStatus::Tracked(tracked) => matches!(
                 (tracked.index_status, tracked.worktree_status),
@@ -180,7 +170,7 @@ impl FileStatus {
         }
     }
 
-    pub fn is_created(self) -> bool {
+    pub const fn is_created(self) -> bool {
         match self {
             FileStatus::Tracked(tracked) => matches!(
                 (tracked.index_status, tracked.worktree_status),
@@ -199,19 +189,16 @@ impl FileStatus {
             || tracked.worktree_status == StatusCode::Deleted
     }
 
-    pub fn is_untracked(self) -> bool {
+    pub const fn is_untracked(self) -> bool {
         matches!(self, FileStatus::Untracked)
     }
 
-    pub fn summary(self) -> GitSummary {
+    pub const fn summary(self) -> GitSummary {
         match self {
             FileStatus::Ignored => GitSummary::UNCHANGED,
             FileStatus::Untracked => GitSummary::UNTRACKED,
             FileStatus::Unmerged(_) => GitSummary::CONFLICT,
-            FileStatus::Tracked(TrackedStatus {
-                index_status,
-                worktree_status,
-            }) => GitSummary {
+            FileStatus::Tracked(TrackedStatus { index_status, worktree_status }) => GitSummary {
                 index: index_status.to_summary(),
                 worktree: worktree_status.to_summary(),
                 conflict: 0,
@@ -236,38 +223,23 @@ impl StatusCode {
         }
     }
 
-    fn to_summary(self) -> TrackedSummary {
+    const fn to_summary(self) -> TrackedSummary {
         match self {
-            StatusCode::Modified | StatusCode::TypeChanged => TrackedSummary {
-                modified: 1,
-                ..TrackedSummary::UNCHANGED
-            },
-            StatusCode::Added => TrackedSummary {
-                added: 1,
-                ..TrackedSummary::UNCHANGED
-            },
-            StatusCode::Deleted => TrackedSummary {
-                deleted: 1,
-                ..TrackedSummary::UNCHANGED
-            },
-            StatusCode::Renamed | StatusCode::Copied | StatusCode::Unmodified => {
-                TrackedSummary::UNCHANGED
+            StatusCode::Modified | StatusCode::TypeChanged => {
+                TrackedSummary { modified: 1, ..TrackedSummary::UNCHANGED }
             }
+            StatusCode::Added => TrackedSummary { added: 1, ..TrackedSummary::UNCHANGED },
+            StatusCode::Deleted => TrackedSummary { deleted: 1, ..TrackedSummary::UNCHANGED },
+            StatusCode::Renamed | StatusCode::Copied | StatusCode::Unmodified => TrackedSummary::UNCHANGED,
         }
     }
 
-    pub fn index(self) -> FileStatus {
-        FileStatus::Tracked(TrackedStatus {
-            index_status: self,
-            worktree_status: StatusCode::Unmodified,
-        })
+    pub const fn index(self) -> FileStatus {
+        FileStatus::Tracked(TrackedStatus { index_status: self, worktree_status: StatusCode::Unmodified })
     }
 
-    pub fn worktree(self) -> FileStatus {
-        FileStatus::Tracked(TrackedStatus {
-            index_status: StatusCode::Unmodified,
-            worktree_status: self,
-        })
+    pub const fn worktree(self) -> FileStatus {
+        FileStatus::Tracked(TrackedStatus { index_status: StatusCode::Unmodified, worktree_status: self })
     }
 }
 
@@ -290,29 +262,13 @@ pub struct TrackedSummary {
 }
 
 impl TrackedSummary {
-    pub const UNCHANGED: Self = Self {
-        added: 0,
-        modified: 0,
-        deleted: 0,
-    };
+    pub const UNCHANGED: Self = Self { added: 0, modified: 0, deleted: 0 };
 
-    pub const ADDED: Self = Self {
-        added: 1,
-        modified: 0,
-        deleted: 0,
-    };
+    pub const ADDED: Self = Self { added: 1, modified: 0, deleted: 0 };
 
-    pub const MODIFIED: Self = Self {
-        added: 0,
-        modified: 1,
-        deleted: 0,
-    };
+    pub const MODIFIED: Self = Self { added: 0, modified: 1, deleted: 0 };
 
-    pub const DELETED: Self = Self {
-        added: 0,
-        modified: 0,
-        deleted: 1,
-    };
+    pub const DELETED: Self = Self { added: 0, modified: 0, deleted: 1 };
 }
 
 impl std::ops::AddAssign for TrackedSummary {
@@ -357,17 +313,9 @@ pub struct GitSummary {
 }
 
 impl GitSummary {
-    pub const CONFLICT: Self = Self {
-        conflict: 1,
-        count: 1,
-        ..Self::UNCHANGED
-    };
+    pub const CONFLICT: Self = Self { conflict: 1, count: 1, ..Self::UNCHANGED };
 
-    pub const UNTRACKED: Self = Self {
-        untracked: 1,
-        count: 1,
-        ..Self::UNCHANGED
-    };
+    pub const UNTRACKED: Self = Self { untracked: 1, count: 1, ..Self::UNCHANGED };
 
     pub const UNCHANGED: Self = Self {
         index: TrackedSummary::UNCHANGED,
@@ -469,47 +417,30 @@ impl FromStr for GitStatus {
             }
             match (*a_status, *b_status) {
                 (INDEX_DELETED, FileStatus::Untracked) | (FileStatus::Untracked, INDEX_DELETED) => {
-                    *b_status = TrackedStatus {
-                        index_status: StatusCode::Deleted,
-                        worktree_status: StatusCode::Added,
-                    }
-                    .into();
+                    *b_status =
+                        TrackedStatus { index_status: StatusCode::Deleted, worktree_status: StatusCode::Added }.into();
                 }
                 (x, y) if x == y => {}
                 _ => {
-                    log::warn!(
-                        "Unexpected duplicated status entries: {a_status:?} and {b_status:?}"
-                    );
+                    log::warn!("Unexpected duplicated status entries: {a_status:?} and {b_status:?}");
                 }
             }
             true
         });
-        Ok(Self {
-            entries: entries.into(),
-        })
+        Ok(Self { entries: entries.into() })
     }
 }
 
 impl Default for GitStatus {
     fn default() -> Self {
-        Self {
-            entries: Arc::new([]),
-        }
+        Self { entries: Arc::new([]) }
     }
 }
 
 pub enum DiffTreeType {
-    MergeBase {
-        base: SharedString,
-        head: SharedString,
-    },
-    MergeBaseWithWorktree {
-        base: SharedString,
-    },
-    Since {
-        base: SharedString,
-        head: SharedString,
-    },
+    MergeBase { base: SharedString, head: SharedString },
+    MergeBaseWithWorktree { base: SharedString },
+    Since { base: SharedString, head: SharedString },
 }
 
 #[derive(Debug, PartialEq)]
@@ -534,23 +465,11 @@ impl FromStr for TreeDiff {
             let path = RepoPath::from_rel_path(RelPath::from_unix_str(path)?);
 
             let mut fields = status.split(" ").skip(2);
-            let old_sha = fields
-                .next()
-                .ok_or_else(|| anyhow!("expected to find old_sha"))?
-                .to_owned()
-                .parse()?;
-            let _new_sha = fields
-                .next()
-                .ok_or_else(|| anyhow!("expected to find new_sha"))?;
+            let old_sha = fields.next().ok_or_else(|| anyhow!("expected to find old_sha"))?.to_owned().parse()?;
+            let _new_sha = fields.next().ok_or_else(|| anyhow!("expected to find new_sha"))?;
             let status = fields
                 .next()
-                .and_then(|s| {
-                    if s.len() == 1 {
-                        s.as_bytes().first()
-                    } else {
-                        None
-                    }
-                })
+                .and_then(|s| if s.len() == 1 { s.as_bytes().first() } else { None })
                 .ok_or_else(|| anyhow!("expected to find status"))?;
 
             let result = match StatusCode::from_byte(*status)? {
@@ -591,9 +510,7 @@ pub fn parse_numstat(output: &str) -> GitDiffStat {
             continue;
         }
         let mut parts = line.splitn(3, '\t');
-        let (Some(added_str), Some(deleted_str), Some(path_str)) =
-            (parts.next(), parts.next(), parts.next())
-        else {
+        let (Some(added_str), Some(deleted_str), Some(path_str)) = (parts.next(), parts.next(), parts.next()) else {
             continue;
         };
         let Ok(added) = added_str.parse::<u32>() else {
@@ -610,7 +527,5 @@ pub fn parse_numstat(output: &str) -> GitDiffStat {
     entries.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
     entries.dedup_by(|(a, _), (b, _)| a == b);
 
-    GitDiffStat {
-        entries: entries.into(),
-    }
+    GitDiffStat { entries: entries.into() }
 }

@@ -1,57 +1,59 @@
+use std::borrow::Cow;
+use std::str::FromStr;
+use std::sync::Arc;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use collections::HashMap;
-use gpui::{App, AsyncApp, Entity, Task};
-use language::{
-    Buffer, ContextProvider, LanguageName, LanguageRegistry, LocalFile as _, LspAdapter,
-    LspAdapterDelegate,
-};
-use lsp::{LanguageServerBinary, LanguageServerName, Uri};
+use gpui::App;
+use gpui::AsyncApp;
+use gpui::Entity;
+use gpui::Task;
+use language::Buffer;
+use language::ContextProvider;
+use language::LanguageName;
+use language::LanguageRegistry;
+use language::LocalFile as _;
+use language::LspAdapter;
+use language::LspAdapterDelegate;
+use lsp::LanguageServerBinary;
+use lsp::LanguageServerName;
+use lsp::Uri;
 use project::lsp_store::language_server_settings;
-use serde_json::{Value, json};
+use serde_json::Value;
+use serde_json::json;
 use settings::SettingsLocation;
-use std::{borrow::Cow, str::FromStr, sync::Arc};
-use task::{TaskTemplate, TaskTemplates, VariableName};
-use util::{paths::PathStyle, rel_path::RelPath, union_json_value_into};
+use task::TaskTemplate;
+use task::TaskTemplates;
+use task::VariableName;
+use util::paths::PathStyle;
+use util::rel_path::RelPath;
+use util::union_json_value_into;
 
 use crate::PackageJsonData;
 
 pub(crate) struct JsonTaskProvider;
 
 impl ContextProvider for JsonTaskProvider {
-    fn associated_tasks(
-        &self,
-        buffer: Option<Entity<Buffer>>,
-        cx: &App,
-    ) -> gpui::Task<Option<TaskTemplates>> {
+    fn associated_tasks(&self, buffer: Option<Entity<Buffer>>, cx: &App) -> gpui::Task<Option<TaskTemplates>> {
         let file = buffer.as_ref().and_then(|buf| buf.read(cx).file());
         let Some(file) = project::File::from_dyn(file).cloned() else {
             return Task::ready(None);
         };
-        let is_package_json = file
-            .path
-            .ends_with(RelPath::from_unix_str("package.json").unwrap());
-        let is_composer_json = file
-            .path
-            .ends_with(RelPath::from_unix_str("composer.json").unwrap());
+        let is_package_json = file.path.ends_with(RelPath::from_unix_str("package.json").unwrap());
+        let is_composer_json = file.path.ends_with(RelPath::from_unix_str("composer.json").unwrap());
         if !is_package_json && !is_composer_json {
             return Task::ready(None);
         }
 
         cx.spawn(async move |cx| {
-            let contents = file
-                .worktree
-                .update(cx, |this, cx| this.load_file(&file.path, cx))
-                .await
-                .ok()?;
+            let contents = file.worktree.update(cx, |this, cx| this.load_file(&file.path, cx)).await.ok()?;
             let path = cx.update(|cx| file.abs_path(cx)).as_path().into();
             let contents_text = contents.text.to_string();
 
             let task_templates = if is_package_json {
-                let package_json = serde_json_lenient::from_str::<
-                    HashMap<String, serde_json_lenient::Value>,
-                >(&contents_text)
-                .ok()?;
+                let package_json =
+                    serde_json_lenient::from_str::<HashMap<String, serde_json_lenient::Value>>(&contents_text).ok()?;
                 let package_json = PackageJsonData::new(path, package_json);
                 let command = package_json.package_manager.unwrap_or("npm").to_owned();
                 package_json
@@ -67,10 +69,7 @@ impl ContextProvider for JsonTaskProvider {
                     .chain([TaskTemplate {
                         label: "package script $ZED_CUSTOM_script".to_owned(),
                         command: command.clone(),
-                        args: vec![
-                            "run".into(),
-                            VariableName::Custom("script".into()).template_value(),
-                        ],
+                        args: vec!["run".into(), VariableName::Custom("script".into()).template_value()],
                         cwd: Some(VariableName::Dirname.template_value()),
                         tags: vec!["package-script".into()],
                         ..TaskTemplate::default()
@@ -114,7 +113,7 @@ pub struct JsonLspAdapter {
 }
 
 impl JsonLspAdapter {
-    pub fn new(languages: Arc<LanguageRegistry>) -> Self {
+    pub const fn new(languages: Arc<LanguageRegistry>) -> Self {
         Self { languages }
     }
 }
@@ -159,11 +158,8 @@ impl LspAdapter for JsonLspAdapter {
         requested_uri: Option<Uri>,
         cx: &mut AsyncApp,
     ) -> Result<Value> {
-        let requested_path = requested_uri.as_ref().and_then(|uri| {
-            (uri.scheme() == "file")
-                .then(|| uri.to_file_path().ok())
-                .flatten()
-        });
+        let requested_path =
+            requested_uri.as_ref().and_then(|uri| (uri.scheme() == "file").then(|| uri.to_file_path().ok()).flatten());
         let path_in_worktree = requested_path
             .as_ref()
             .and_then(|abs_path| {
@@ -174,10 +170,7 @@ impl LspAdapter for JsonLspAdapter {
         let mut config = cx.update(|cx| {
             let schemas = json_schema_store::all_schema_file_associations(
                 &self.languages,
-                Some(SettingsLocation {
-                    worktree_id: delegate.worktree_id(),
-                    path: path_in_worktree.as_ref(),
-                }),
+                Some(SettingsLocation { worktree_id: delegate.worktree_id(), path: path_in_worktree.as_ref() }),
                 cx,
             );
 
@@ -209,12 +202,9 @@ impl LspAdapter for JsonLspAdapter {
     }
 
     fn language_ids(&self) -> HashMap<LanguageName, String> {
-        [
-            (LanguageName::new_static("JSON"), "json".into()),
-            (LanguageName::new_static("JSONC"), "jsonc".into()),
-        ]
-        .into_iter()
-        .collect()
+        [(LanguageName::new_static("JSON"), "json".into()), (LanguageName::new_static("JSONC"), "jsonc".into())]
+            .into_iter()
+            .collect()
     }
 
     fn is_primary_zed_json_schema_adapter(&self) -> bool {
@@ -265,10 +255,7 @@ fn worktree_root(delegate: &Arc<dyn LspAdapterDelegate>, settings: Option<Value>
             continue;
         }
 
-        *url = delegate
-            .resolve_relative_path(url.clone().into())
-            .to_string_lossy()
-            .into_owned();
+        *url = delegate.resolve_relative_path(url.clone().into()).to_string_lossy().into_owned();
     }
 
     Some(Value::Object(settings_map))

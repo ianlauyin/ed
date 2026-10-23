@@ -1,21 +1,20 @@
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use anyhow::Result;
-use db::{
-    query,
-    sqlez::{
-        bindable::{Bind, Column, StaticColumnCount},
-        domain::Domain,
-        statement::Statement,
-    },
-    sqlez_macros::sql,
-};
+use db::query;
+use db::sqlez::bindable::Bind;
+use db::sqlez::bindable::Column;
+use db::sqlez::bindable::StaticColumnCount;
+use db::sqlez::domain::Domain;
+use db::sqlez::statement::Statement;
+use db::sqlez_macros::sql;
 use fs::MTime;
 use itertools::Itertools as _;
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
-
-use workspace::{ItemId, WorkspaceDb, WorkspaceId};
+use workspace::ItemId;
+use workspace::WorkspaceDb;
+use workspace::WorkspaceId;
 
 #[derive(Clone, Debug, PartialEq, Default)]
 pub(crate) struct SerializedEditor {
@@ -34,20 +33,12 @@ impl StaticColumnCount for SerializedEditor {
 impl Bind for SerializedEditor {
     fn bind(&self, statement: &Statement, start_index: i32) -> Result<i32> {
         let start_index = statement.bind(&self.abs_path, start_index)?;
-        let start_index = statement.bind(
-            &self
-                .abs_path
-                .as_ref()
-                .map(|p| p.to_string_lossy().into_owned()),
-            start_index,
-        )?;
+        let start_index =
+            statement.bind(&self.abs_path.as_ref().map(|p| p.to_string_lossy().into_owned()), start_index)?;
         let start_index = statement.bind(&self.contents, start_index)?;
         let start_index = statement.bind(&self.language, start_index)?;
 
-        let start_index = match self
-            .mtime
-            .and_then(|mtime| mtime.to_seconds_and_nanos_for_persistence())
-        {
+        let start_index = match self.mtime.and_then(|mtime| mtime.to_seconds_and_nanos_for_persistence()) {
             Some((seconds, nanos)) => {
                 let start_index = statement.bind(&(seconds as i64), start_index)?;
                 statement.bind(&(nanos as i32), start_index)?
@@ -63,29 +54,18 @@ impl Bind for SerializedEditor {
 
 impl Column for SerializedEditor {
     fn column(statement: &mut Statement, start_index: i32) -> Result<(Self, i32)> {
-        let (abs_path, start_index): (Option<PathBuf>, i32) =
-            Column::column(statement, start_index)?;
-        let (_abs_path, start_index): (Option<PathBuf>, i32) =
-            Column::column(statement, start_index)?;
-        let (contents, start_index): (Option<String>, i32) =
-            Column::column(statement, start_index)?;
-        let (language, start_index): (Option<String>, i32) =
-            Column::column(statement, start_index)?;
-        let (mtime_seconds, start_index): (Option<i64>, i32) =
-            Column::column(statement, start_index)?;
-        let (mtime_nanos, start_index): (Option<i32>, i32) =
-            Column::column(statement, start_index)?;
+        let (abs_path, start_index): (Option<PathBuf>, i32) = Column::column(statement, start_index)?;
+        let (_abs_path, start_index): (Option<PathBuf>, i32) = Column::column(statement, start_index)?;
+        let (contents, start_index): (Option<String>, i32) = Column::column(statement, start_index)?;
+        let (language, start_index): (Option<String>, i32) = Column::column(statement, start_index)?;
+        let (mtime_seconds, start_index): (Option<i64>, i32) = Column::column(statement, start_index)?;
+        let (mtime_nanos, start_index): (Option<i32>, i32) = Column::column(statement, start_index)?;
 
         let mtime = mtime_seconds
             .zip(mtime_nanos)
             .map(|(seconds, nanos)| MTime::from_seconds_and_nanos(seconds as u64, nanos as u32));
 
-        let editor = Self {
-            abs_path,
-            contents,
-            language,
-            mtime,
-        };
+        let editor = Self { abs_path, contents, language, mtime };
         Ok((editor, start_index))
     }
 }
@@ -278,7 +258,7 @@ impl EditorDb {
             .collect::<Vec<_>>()
         {
             first_selection = last_selection;
-            last_selection = last_selection + count;
+            last_selection += count;
             let query = format!(
                 r#"
 DELETE FROM editor_selections WHERE editor_id = ?1 AND workspace_id = ?2;
@@ -329,11 +309,7 @@ VALUES {placeholders};
         .await
     }
 
-    pub async fn delete_file_folds(
-        &self,
-        workspace_id: WorkspaceId,
-        path: Arc<Path>,
-    ) -> Result<()> {
+    pub async fn delete_file_folds(&self, workspace_id: WorkspaceId, path: Arc<Path>) -> Result<()> {
         self.write(move |conn| {
             conn.exec_bound(sql!(
                 DELETE FROM file_folds WHERE workspace_id = ?1 AND path = ?2;

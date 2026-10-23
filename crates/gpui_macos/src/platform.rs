@@ -1,63 +1,113 @@
-use crate::{
-    AppleActivity, AppleDispatcher, MacDisplay, MacKeyboardLayout, MacKeyboardMapper, MacWindow,
-    events::key_to_native,
-    ns::{
-        NSInteger, NSOperatingSystemVersion, NSUInteger, array_iter, autorelease_pool, drain, id,
-        nil,
-    },
-    ns_string,
-    pasteboard::Pasteboard,
-    renderer, set_active_window_cursor_style,
-    window_appearance::{
-        NSAppearanceNameAqua, NSAppearanceNameDarkAqua, NSAppearanceNameVibrantDark,
-        NSAppearanceNameVibrantLight,
-    },
-};
-use anyhow::{Context as _, anyhow};
+use std::cell::Cell;
+use std::ffi::CStr;
+use std::ffi::c_void;
+use std::os::raw::c_char;
+use std::os::unix::ffi::OsStrExt;
+use std::path::Path;
+use std::path::PathBuf;
+use std::ptr;
+use std::rc::Rc;
+use std::slice;
+use std::str;
+use std::sync::Arc;
+use std::sync::OnceLock;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+
+use anyhow::Context as _;
+use anyhow::anyhow;
 use block2::RcBlock;
-use core_foundation::{base::CFRelease, runloop::CFRunLoopRun, string::CFStringRef};
+use core_foundation::base::CFRelease;
+use core_foundation::runloop::CFRunLoopRun;
+use core_foundation::string::CFStringRef;
 use dispatch2::DispatchQueue;
 use futures::channel::oneshot;
-use gpui::{
-    Action, ActivationPolicy, ActivityGuard, AnyWindowHandle, BackgroundExecutor, ClipboardItem,
-    CursorStyle, ForegroundExecutor, GraphicalEnvironment, KeyContext, Keymap, Menu, MenuItem,
-    OsMenu, OwnedMenu, PathPromptOptions, Platform, PlatformDisplay, PlatformKeyboardLayout,
-    PlatformKeyboardMapper, PlatformTextSystem, PlatformWindow, Result, SystemMenuType, Task,
-    ThermalState, WindowAppearance, WindowKind, WindowParams, WindowingRequest,
-    popup::PopupNotSupportedError,
-};
-use gpui_apple::{
-    keychain,
-    thermal::{self, ThermalObserver},
-};
-use gpui_util::{ResultExt, new_std_command};
+use gpui::Action;
+use gpui::ActivationPolicy;
+use gpui::ActivityGuard;
+use gpui::AnyWindowHandle;
+use gpui::BackgroundExecutor;
+use gpui::ClipboardItem;
+use gpui::CursorStyle;
+use gpui::ForegroundExecutor;
+use gpui::GraphicalEnvironment;
+use gpui::KeyContext;
+use gpui::Keymap;
+use gpui::Menu;
+use gpui::MenuItem;
+use gpui::OsMenu;
+use gpui::OwnedMenu;
+use gpui::PathPromptOptions;
+use gpui::Platform;
+use gpui::PlatformDisplay;
+use gpui::PlatformKeyboardLayout;
+use gpui::PlatformKeyboardMapper;
+use gpui::PlatformTextSystem;
+use gpui::PlatformWindow;
+use gpui::Result;
+use gpui::SystemMenuType;
+use gpui::Task;
+use gpui::ThermalState;
+use gpui::WindowAppearance;
+use gpui::WindowKind;
+use gpui::WindowParams;
+use gpui::WindowingRequest;
+use gpui::popup::PopupNotSupportedError;
+use gpui_apple::keychain;
+use gpui_apple::thermal::ThermalObserver;
+use gpui_apple::thermal::{self};
+use gpui_util::ResultExt;
+use gpui_util::new_std_command;
 use itertools::Itertools;
-use objc2::{
-    ClassType, DefinedClass, MainThreadMarker, MainThreadOnly, class, define_class, msg_send,
-    runtime::{AnyClass, AnyObject, NSObject, Sel},
-    sel,
-};
-use objc2_app_kit::{
-    NSApplication, NSEventModifierFlags, NSModalResponse, NSModalResponseOK, NSOpenPanel,
-    NSResponder, NSSavePanel, NSWorkspace, NSWorkspaceDidWakeNotification,
-    NSWorkspaceWillSleepNotification,
-};
+use objc2::ClassType;
+use objc2::DefinedClass;
+use objc2::MainThreadMarker;
+use objc2::MainThreadOnly;
+use objc2::class;
+use objc2::define_class;
+use objc2::msg_send;
+use objc2::runtime::AnyClass;
+use objc2::runtime::AnyObject;
+use objc2::runtime::NSObject;
+use objc2::runtime::Sel;
+use objc2::sel;
+use objc2_app_kit::NSApplication;
+use objc2_app_kit::NSEventModifierFlags;
+use objc2_app_kit::NSModalResponse;
+use objc2_app_kit::NSModalResponseOK;
+use objc2_app_kit::NSOpenPanel;
+use objc2_app_kit::NSResponder;
+use objc2_app_kit::NSSavePanel;
+use objc2_app_kit::NSWorkspace;
+use objc2_app_kit::NSWorkspaceDidWakeNotification;
+use objc2_app_kit::NSWorkspaceWillSleepNotification;
 use objc2_foundation::NSActivityOptions;
 use parking_lot::Mutex;
 use semver::Version;
-use std::{
-    cell::Cell,
-    ffi::{CStr, c_void},
-    os::{raw::c_char, unix::ffi::OsStrExt},
-    path::{Path, PathBuf},
-    ptr,
-    rc::Rc,
-    slice, str,
-    sync::{
-        Arc, OnceLock,
-        atomic::{AtomicBool, Ordering},
-    },
-};
+
+use crate::AppleActivity;
+use crate::AppleDispatcher;
+use crate::MacDisplay;
+use crate::MacKeyboardLayout;
+use crate::MacKeyboardMapper;
+use crate::MacWindow;
+use crate::events::key_to_native;
+use crate::ns::NSInteger;
+use crate::ns::NSOperatingSystemVersion;
+use crate::ns::NSUInteger;
+use crate::ns::array_iter;
+use crate::ns::autorelease_pool;
+use crate::ns::drain;
+use crate::ns::id;
+use crate::ns::nil;
+use crate::ns_string;
+use crate::pasteboard::Pasteboard;
+use crate::renderer;
+use crate::set_active_window_cursor_style;
+use crate::window_appearance::NSAppearanceNameAqua;
+use crate::window_appearance::NSAppearanceNameDarkAqua;
+use crate::window_appearance::NSAppearanceNameVibrantDark;
+use crate::window_appearance::NSAppearanceNameVibrantLight;
 
 #[allow(non_upper_case_globals)]
 const NSUTF8StringEncoding: NSUInteger = 4;
@@ -225,7 +275,7 @@ pub(crate) struct MacPlatformState {
 
 /// The activation policy that stands for a windowing mode: an app is headless while it has no
 /// Dock icon or menu bar.
-fn activation_policy_for(request: &WindowingRequest) -> ActivationPolicy {
+const fn activation_policy_for(request: &WindowingRequest) -> ActivationPolicy {
     match request {
         WindowingRequest::Headless => ActivationPolicy::Accessory,
         WindowingRequest::Windowed(_) => ActivationPolicy::Regular,
@@ -233,7 +283,7 @@ fn activation_policy_for(request: &WindowingRequest) -> ActivationPolicy {
 }
 
 /// `NSApplicationActivationPolicy` raw value.
-fn native_activation_policy(policy: ActivationPolicy) -> NSInteger {
+const fn native_activation_policy(policy: ActivationPolicy) -> NSInteger {
     match policy {
         ActivationPolicy::Regular => 0,
         ActivationPolicy::Accessory => 1,
@@ -277,9 +327,7 @@ impl MacPlatform {
         #[cfg(not(feature = "font-kit"))]
         let text_system = {
             if !headless {
-                log::warn!(
-                    "gpui_macos was compiled without the `font-kit` feature, so no text will be rendered."
-                );
+                log::warn!("gpui_macos was compiled without the `font-kit` feature, so no text will be rendered.");
             }
             Arc::new(gpui::NoopTextSystem::new())
         };
@@ -387,13 +435,7 @@ impl MacPlatform {
         unsafe {
             match item {
                 MenuItem::Separator => msg_send![class!(NSMenuItem), separatorItem],
-                MenuItem::Action {
-                    name,
-                    action,
-                    os_action,
-                    checked,
-                    disabled,
-                } => {
+                MenuItem::Action { name, action, os_action, checked, disabled } => {
                     // Note that this is intentionally using earlier bindings, whereas typically
                     // later ones take display precedence. See the discussion on
                     // https://github.com/zed-industries/zed/issues/23621
@@ -435,10 +477,7 @@ impl MacPlatform {
                             let keystroke = &keystrokes[0];
                             let mut mask = NSEventModifierFlags(0);
                             for (modifier, flag) in &[
-                                (
-                                    keystroke.modifiers().platform,
-                                    NSEventModifierFlags::Command,
-                                ),
+                                (keystroke.modifiers().platform, NSEventModifierFlags::Command),
                                 (keystroke.modifiers().control, NSEventModifierFlags::Control),
                                 (keystroke.modifiers().alt, NSEventModifierFlags::Option),
                                 (keystroke.modifiers().shift, NSEventModifierFlags::Shift),
@@ -448,11 +487,7 @@ impl MacPlatform {
                                 }
                             }
 
-                            item = new_menu_item(
-                                name,
-                                selector,
-                                key_to_native(keystroke.key()).as_ref(),
-                            );
+                            item = new_menu_item(name, selector, key_to_native(keystroke.key()).as_ref());
                             if Self::os_version() >= Version::new(12, 0, 0) {
                                 let _: () = msg_send![item, setAllowsAutomaticKeyEquivalentLocalization: false];
                             }
@@ -475,11 +510,7 @@ impl MacPlatform {
                     actions.push(action.boxed_clone());
                     item
                 }
-                MenuItem::Submenu(Menu {
-                    name,
-                    items,
-                    disabled,
-                }) => {
+                MenuItem::Submenu(Menu { name, items, disabled }) => {
                     let item = new_autoreleased(class!(NSMenuItem));
                     let submenu = new_autoreleased(class!(NSMenu));
                     let _: () = msg_send![submenu, setDelegate: delegate];
@@ -518,11 +549,7 @@ impl MacPlatform {
             let version: NSOperatingSystemVersion = msg_send![process_info, operatingSystemVersion];
             version
         };
-        Version::new(
-            version.majorVersion as u64,
-            version.minorVersion as u64,
-            version.patchVersion as u64,
-        )
+        Version::new(version.majorVersion as u64, version.minorVersion as u64, version.patchVersion as u64)
     }
 
     // Before the app finishes launching there is no delegate yet;
@@ -652,10 +679,7 @@ impl Platform for MacPlatform {
             fi
         "#;
 
-        #[allow(
-            clippy::disallowed_methods,
-            reason = "We are restarting ourselves, using std command thus is fine"
-        )]
+        #[allow(clippy::disallowed_methods, reason = "We are restarting ourselves, using std command thus is fine")]
         let restart_process = new_std_command("/bin/bash")
             .arg("-c")
             .arg(script)
@@ -716,8 +740,7 @@ impl Platform for MacPlatform {
 
     fn graphical_environment(&self) -> Option<GraphicalEnvironment> {
         let state = self.0.lock();
-        (!state.headless && state.activation_policy == ActivationPolicy::Regular)
-            .then(GraphicalEnvironment::detect)
+        (!state.headless && state.activation_policy == ActivationPolicy::Regular).then(GraphicalEnvironment::detect)
     }
 
     fn hide(&self) {
@@ -746,9 +769,7 @@ impl Platform for MacPlatform {
     }
 
     fn displays(&self) -> Vec<Rc<dyn PlatformDisplay>> {
-        MacDisplay::all()
-            .map(|screen| Rc::new(screen) as Rc<_>)
-            .collect()
+        MacDisplay::all().map(|screen| Rc::new(screen) as Rc<_>).collect()
     }
 
     fn on_displays_changed(&self, callback: Box<dyn FnMut()>) {
@@ -765,11 +786,7 @@ impl Platform for MacPlatform {
         Some(MacWindow::ordered_windows())
     }
 
-    fn open_window(
-        &self,
-        handle: AnyWindowHandle,
-        options: WindowParams,
-    ) -> Result<Box<dyn PlatformWindow>> {
+    fn open_window(&self, handle: AnyWindowHandle, options: WindowParams) -> Result<Box<dyn PlatformWindow>> {
         // Native popups are not implemented on macOS yet. Rejecting lets callers fall back to
         // gpui's in-window popovers.
         if let WindowKind::AnchoredPopup(_) = options.kind {
@@ -843,10 +860,7 @@ impl Platform for MacPlatform {
         self.0.lock().open_urls = Some(callback);
     }
 
-    fn prompt_for_paths(
-        &self,
-        options: PathPromptOptions,
-    ) -> oneshot::Receiver<Result<Option<Vec<PathBuf>>>> {
+    fn prompt_for_paths(&self, options: PathPromptOptions) -> oneshot::Receiver<Result<Option<Vec<PathBuf>>>> {
         use objc2_foundation::NSString;
 
         let marker = self.1;
@@ -896,7 +910,8 @@ impl Platform for MacPlatform {
         directory: &Path,
         suggested_name: Option<&str>,
     ) -> oneshot::Receiver<Result<Option<PathBuf>>> {
-        use objc2_foundation::{NSString, NSURL};
+        use objc2_foundation::NSString;
+        use objc2_foundation::NSURL;
 
         let url = NSURL::from_directory_path(directory);
         let suggested_name = suggested_name.map(NSString::from_str);
@@ -920,18 +935,12 @@ impl Platform for MacPlatform {
                         };
 
                         let result = if response == NSModalResponseOK {
-                            panel
-                                .URL()
-                                .filter(|url| url.isFileURL())
-                                .and_then(|url| url.to_file_path())
-                                .map(|mut path| {
+                            panel.URL().filter(|url| url.isFileURL()).and_then(|url| url.to_file_path()).map(
+                                |mut path| {
                                     let Some(filename) = path.file_name() else {
                                         return path;
                                     };
-                                    let chunks = filename
-                                        .as_bytes()
-                                        .split(|&b| b == b'.')
-                                        .collect::<Vec<_>>();
+                                    let chunks = filename.as_bytes().split(|&b| b == b'.').collect::<Vec<_>>();
 
                                     // https://github.com/zed-industries/zed/issues/16969
                                     // Workaround a bug in macOS Sequoia that adds an extra file-extension
@@ -948,7 +957,8 @@ impl Platform for MacPlatform {
                                     }
 
                                     path
-                                })
+                                },
+                            )
                         } else {
                             None
                         };
@@ -994,16 +1004,8 @@ impl Platform for MacPlatform {
             .lock()
             .background_executor
             .spawn(async move {
-                #[allow(
-                    clippy::disallowed_methods,
-                    reason = "running on a background thread, so blocking is fine"
-                )]
-                new_std_command("open")
-                    .arg("--")
-                    .arg(path)
-                    .status()
-                    .context("invoking open command")
-                    .log_err();
+                #[allow(clippy::disallowed_methods, reason = "running on a background thread, so blocking is fine")]
+                new_std_command("open").arg("--").arg(path).status().context("invoking open command").log_err();
             })
             .detach();
     }
@@ -1052,10 +1054,7 @@ impl Platform for MacPlatform {
     }
 
     fn prevent_idle_sleep(&self, reason: &str) -> Task<Result<ActivityGuard>> {
-        Task::ready(Ok(AppleActivity::begin(
-            reason,
-            NSActivityOptions::UserInitiated,
-        )))
+        Task::ready(Ok(AppleActivity::begin(reason, NSActivityOptions::UserInitiated)))
     }
 
     fn keyboard_layout(&self) -> Box<dyn PlatformKeyboardLayout> {
@@ -1105,8 +1104,7 @@ impl Platform for MacPlatform {
     fn add_recent_document(&self, path: &Path) {
         if let Some(path_str) = path.to_str() {
             unsafe {
-                let document_controller: id =
-                    msg_send![class!(NSDocumentController), sharedDocumentController];
+                let document_controller: id = msg_send![class!(NSDocumentController), sharedDocumentController];
                 let url: id = msg_send![class!(NSURL), fileURLWithPath: ns_string(path_str)];
                 let _: () = msg_send![document_controller, noteNewRecentDocumentURL:url];
             }
@@ -1169,26 +1167,22 @@ impl Platform for MacPlatform {
         let url = url.to_string();
         let username = username.to_string();
         let password = password.to_vec();
-        self.background_executor()
-            .spawn(async move { Ok(keychain::write_credentials(&url, &username, &password)?) })
+        self.background_executor().spawn(async move { Ok(keychain::write_credentials(&url, &username, &password)?) })
     }
 
     fn read_credentials(&self, url: &str) -> Task<Result<Option<(String, Vec<u8>)>>> {
         let url = url.to_string();
-        self.background_executor()
-            .spawn(async move { Ok(keychain::read_credentials(&url)?) })
+        self.background_executor().spawn(async move { Ok(keychain::read_credentials(&url)?) })
     }
 
     fn delete_credentials(&self, url: &str) -> Task<Result<()>> {
         let url = url.to_string();
-        self.background_executor()
-            .spawn(async move { Ok(keychain::delete_credentials(&url)?) })
+        self.background_executor().spawn(async move { Ok(keychain::delete_credentials(&url)?) })
     }
 }
 
 unsafe fn path_from_objc(path: id) -> PathBuf {
-    let len: NSUInteger =
-        unsafe { msg_send![path, lengthOfBytesUsingEncoding: NSUTF8StringEncoding] };
+    let len: NSUInteger = unsafe { msg_send![path, lengthOfBytesUsingEncoding: NSUTF8StringEncoding] };
     let bytes: *const c_char = unsafe { msg_send![path, UTF8String] };
     let path = str::from_utf8(unsafe { slice::from_raw_parts(bytes.cast::<u8>(), len) }).unwrap();
     PathBuf::from(path)
@@ -1243,8 +1237,7 @@ fn did_finish_launching(this: &AnyObject, _: id) {
         let policy = get_mac_platform(this).0.lock().activation_policy;
         let _: bool = msg_send![app, setActivationPolicy: native_activation_policy(policy)];
 
-        let notification_center: *mut AnyObject =
-            msg_send![class!(NSNotificationCenter), defaultCenter];
+        let notification_center: *mut AnyObject = msg_send![class!(NSNotificationCenter), defaultCenter];
         let name = ns_string("NSTextInputContextKeyboardSelectionDidChangeNotification");
         let _: () = msg_send![notification_center, addObserver: this,
             selector: sel!(onKeyboardLayoutChange:),
@@ -1336,11 +1329,7 @@ fn on_keyboard_layout_change(this: &AnyObject, _: id) {
     if let Some(mut callback) = lock.on_keyboard_layout_change.take() {
         drop(lock);
         callback();
-        platform
-            .0
-            .lock()
-            .on_keyboard_layout_change
-            .get_or_insert(callback);
+        platform.0.lock().on_keyboard_layout_change.get_or_insert(callback);
     }
 }
 
@@ -1359,11 +1348,7 @@ fn on_screen_parameters_change(this: &AnyObject, _: id) {
         let callback = platform.0.lock().on_displays_changed.take();
         if let Some(mut callback) = callback {
             callback();
-            platform
-                .0
-                .lock()
-                .on_displays_changed
-                .get_or_insert(callback);
+            platform.0.lock().on_displays_changed.get_or_insert(callback);
         }
     }
 }
@@ -1468,11 +1453,7 @@ fn validate_menu_item(this: &AnyObject, item: id) -> bool {
                 drop(lock);
                 result = callback(action.as_ref());
             }
-            platform
-                .0
-                .lock()
-                .validate_menu_command
-                .get_or_insert(callback);
+            platform.0.lock().validate_menu_command.get_or_insert(callback);
         }
         result
     }
@@ -1494,11 +1475,7 @@ fn handle_dock_menu(this: &AnyObject, _: id) -> id {
     unsafe {
         let platform = get_mac_platform(this);
         let state = platform.0.lock();
-        if let Some(id) = state.dock_menu {
-            id
-        } else {
-            nil
-        }
+        if let Some(id) = state.dock_menu { id } else { nil }
     }
 }
 
@@ -1506,10 +1483,7 @@ fn handle_dock_menu(this: &AnyObject, _: id) -> id {
 unsafe extern "C" {
     pub(super) fn TISCopyCurrentKeyboardLayoutInputSource() -> *mut AnyObject;
     pub(super) fn TISCopyCurrentKeyboardInputSource() -> *mut AnyObject;
-    pub(super) fn TISGetInputSourceProperty(
-        inputSource: *mut AnyObject,
-        propertyKey: *const c_void,
-    ) -> *mut AnyObject;
+    pub(super) fn TISGetInputSourceProperty(inputSource: *mut AnyObject, propertyKey: *const c_void) -> *mut AnyObject;
 
     pub(super) fn UCKeyTranslate(
         keyLayoutPtr: *const ::std::os::raw::c_void,

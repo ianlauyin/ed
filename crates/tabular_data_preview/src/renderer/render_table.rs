@@ -1,19 +1,28 @@
-use crate::types::TableCell;
-use gpui::{AnyElement, Entity, Hsla};
 use std::ops::Range;
-use ui::{ColumnWidthConfig, ResizableColumnsState, Table, UncheckedTableRow, div, prelude::*};
 
-use crate::{
-    TableView,
-    settings::RowRenderMechanism,
-    types::{AnyColumn, DataCellId, DisplayCellId, DisplayRow},
-};
+use gpui::AnyElement;
+use gpui::Entity;
+use gpui::Hsla;
+use ui::ColumnWidthConfig;
+use ui::ResizableColumnsState;
+use ui::Table;
+use ui::UncheckedTableRow;
+use ui::div;
+use ui::prelude::*;
+
+use crate::TableView;
+use crate::settings::RowRenderMechanism;
+use crate::types::AnyColumn;
+use crate::types::DataCellId;
+use crate::types::DisplayCellId;
+use crate::types::DisplayRow;
+use crate::types::TableCell;
 
 impl TableView {
     pub(crate) fn create_table(
         &self,
         current_widths: &Entity<ResizableColumnsState>,
-        cx: &mut Context<Self>,
+        cx: &Context<Self>,
     ) -> AnyElement {
         let row_count = self.engine.d2d_mapping().visible_row_count();
         let cols = current_widths.read(cx).cols();
@@ -30,11 +39,7 @@ impl TableView {
                 .and_then(|h| h.display_value().cloned())
                 .unwrap_or_else(|| format!("Col {}", i + 1).into());
 
-            headers.push(self.create_header_element_with_sort_button(
-                header_text,
-                cx,
-                AnyColumn::from(i),
-            ));
+            headers.push(self.create_header_element_with_sort_button(header_text, cx, AnyColumn::from(i)));
         }
 
         Table::new(cols)
@@ -63,29 +68,25 @@ impl TableView {
                             })
                         })
                     }
-                    RowRenderMechanism::UniformList => {
-                        table.uniform_list("tabular-data-table", row_count, {
-                            cx.processor(move |this, range: Range<usize>, _window, cx| {
-                                this.performance_metrics
-                                    .rendered_indices
-                                    .extend(range.clone());
+                    RowRenderMechanism::UniformList => table.uniform_list("tabular-data-table", row_count, {
+                        cx.processor(move |this, range: Range<usize>, _window, cx| {
+                            this.performance_metrics.rendered_indices.extend(range.clone());
 
-                                let row_height = this.row_height;
-                                range
-                                    .filter_map(|display_index| {
-                                        Self::render_single_table_row(
-                                            this,
-                                            cols,
-                                            DisplayRow(display_index),
-                                            row_identifier_text_color,
-                                            row_height,
-                                            cx,
-                                        )
-                                    })
-                                    .collect()
-                            })
+                            let row_height = this.row_height;
+                            range
+                                .filter_map(|display_index| {
+                                    Self::render_single_table_row(
+                                        this,
+                                        cols,
+                                        DisplayRow(display_index),
+                                        row_identifier_text_color,
+                                        row_height,
+                                        cx,
+                                    )
+                                })
+                                .collect()
                         })
-                    }
+                    }),
                 }
             })
             .into_any_element()
@@ -119,28 +120,15 @@ impl TableView {
             let display_cell_id = DisplayCellId::new(display_row, col);
             let data_cell_id = DataCellId::new(data_row, col);
 
-            let is_focus_cell = this
-                .selection
-                .as_ref()
-                .is_some_and(|selection| selection.focus == data_cell_id);
+            let is_focus_cell = this.selection.as_ref().is_some_and(|selection| selection.focus == data_cell_id);
 
-            let cell_bg = if is_focus_cell {
-                Some(cx.theme().colors().element_selected)
-            } else {
-                None
-            };
+            let cell_bg = if is_focus_cell { Some(cx.theme().colors().element_selected) } else { None };
 
             let cell = div()
                 .size_full()
-                .when(
-                    !this.settings.multiline_cells_effectively_enabled(),
-                    |div| {
-                        div.whitespace_nowrap()
-                            .text_ellipsis()
-                            .h(row_height)
-                            .overflow_hidden()
-                    },
-                )
+                .when(!this.settings.multiline_cells_effectively_enabled(), |div| {
+                    div.whitespace_nowrap().text_ellipsis().h(row_height).overflow_hidden()
+                })
                 .child(TableView::create_selectable_cell(
                     display_cell_id,
                     cell_content,
@@ -153,19 +141,17 @@ impl TableView {
                     .size_full()
                     .when_some(cell_bg, |div, color| div.bg(color))
                     .when(this.settings.show_debug_info, |parent| {
-                        parent.child(div().text_color(row_identifier_text_color).child(
-                            match table_cell {
-                                TableCell::Real { position: pos, .. } => {
-                                    let slv = pos.start.timestamp().value;
-                                    let so = pos.start.offset;
-                                    let elv = pos.end.timestamp().value;
-                                    let eo = pos.end.offset;
-                                    format!("Pos {so}(L{slv})-{eo}(L{elv})")
-                                }
-                                TableCell::Virtual => "Virtual cell".into(),
-                                TableCell::Generated(_) => "Generated cell".into(),
-                            },
-                        ))
+                        parent.child(div().text_color(row_identifier_text_color).child(match table_cell {
+                            TableCell::Real { position: pos, .. } => {
+                                let slv = pos.start.timestamp().value;
+                                let so = pos.start.offset;
+                                let elv = pos.end.timestamp().value;
+                                let eo = pos.end.offset;
+                                format!("Pos {so}(L{slv})-{eo}(L{elv})")
+                            }
+                            TableCell::Virtual => "Virtual cell".into(),
+                            TableCell::Generated(_) => "Generated cell".into(),
+                        }))
                     })
                     .child(cell)
                     .into_any_element(),

@@ -45,14 +45,14 @@ impl OpenTarget {
         }
     }
 
-    pub fn is_dir(&self) -> bool {
+    pub const fn is_dir(&self) -> bool {
         match self {
             OpenTarget::Worktree(_, entry, ..) => entry.is_dir(),
             OpenTarget::Path(_, is_dir, ..) => *is_dir,
         }
     }
 
-    pub fn path(&self) -> &PathWithPosition {
+    pub const fn path(&self) -> &PathWithPosition {
         match self {
             OpenTarget::Worktree(path, ..) => path,
             OpenTarget::Path(path, ..) => path,
@@ -159,14 +159,14 @@ fn resolve_open_target_internal(
         PathMatching::Exact => &["."],
     };
     for prefix_str in prefixes_to_strip {
-        if let Some(stripped) = original_path.path.strip_prefix(prefix_str).ok() {
+        if let Ok(stripped) = original_path.path.strip_prefix(prefix_str) {
             potential_paths.push(PathWithPosition {
                 path: stripped.to_owned(),
                 row: original_path.row,
                 column: original_path.column,
             });
         }
-        if let Some(stripped) = path_with_position.path.strip_prefix(prefix_str).ok() {
+        if let Ok(stripped) = path_with_position.path.strip_prefix(prefix_str) {
             potential_paths.push(PathWithPosition {
                 path: stripped.to_owned(),
                 row: path_with_position.row,
@@ -260,10 +260,8 @@ fn resolve_open_target_internal(
         }
     }
 
-    if open_target.is_some() {
-        if is_cwd_in_worktree {
-            return Task::ready(open_target);
-        }
+    if open_target.is_some() && is_cwd_in_worktree {
+        return Task::ready(open_target);
     }
 
     let project = workspace.read(cx).project().clone();
@@ -390,12 +388,12 @@ fn local_paths_to_check(
 ) -> Vec<PathWithPosition> {
     cwd.iter()
         .flat_map(|cwd| {
-            potential_paths.iter().filter_map(|path_to_check| {
-                path_to_check.path.is_relative().then(|| PathWithPosition {
+            potential_paths.iter().filter(|&path_to_check| path_to_check.path.is_relative()).map(|path_to_check| {
+                PathWithPosition {
                     path: cwd.join(&path_to_check.path),
                     row: path_to_check.row,
                     column: path_to_check.column,
-                })
+                }
             })
         })
         .chain(potential_paths.iter().flat_map(|path_to_check| {

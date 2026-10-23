@@ -1,22 +1,22 @@
-use crate::{Envelope, PeerId};
-use anyhow::{Context as _, Result};
+use std::any::Any;
+use std::any::TypeId;
+use std::cmp;
+use std::fmt::Debug;
+use std::fmt::{self};
+use std::marker::PhantomData;
+use std::time::Instant;
+
+use anyhow::Context as _;
+use anyhow::Result;
 use serde::Serialize;
-use std::{
-    any::{Any, TypeId},
-    cmp,
-    fmt::{self, Debug},
-};
-use std::{marker::PhantomData, time::Instant};
+
+use crate::Envelope;
+use crate::PeerId;
 
 pub trait EnvelopedMessage: Clone + Debug + Serialize + Sized + Send + Sync + 'static {
     const NAME: &'static str;
     const PRIORITY: MessagePriority;
-    fn into_envelope(
-        self,
-        id: u32,
-        responding_to: Option<u32>,
-        original_sender_id: Option<PeerId>,
-    ) -> Envelope;
+    fn into_envelope(self, id: u32, responding_to: Option<u32>, original_sender_id: Option<PeerId>) -> Envelope;
     fn from_envelope(envelope: Envelope) -> Option<Self>;
 }
 
@@ -62,22 +62,11 @@ pub struct ProtoLspResponse<R> {
 
 impl ProtoLspResponse<Box<dyn AnyTypedEnvelope>> {
     pub fn into_response<T: LspRequestMessage>(self) -> Result<ProtoLspResponse<T::Response>> {
-        let envelope = self
-            .response
-            .into_any()
-            .downcast::<TypedEnvelope<T::Response>>()
-            .map_err(|_| {
-                anyhow::anyhow!(
-                    "cannot downcast LspResponse to {} for message {}",
-                    T::Response::NAME,
-                    T::NAME,
-                )
-            })?;
+        let envelope = self.response.into_any().downcast::<TypedEnvelope<T::Response>>().map_err(|_| {
+            anyhow::anyhow!("cannot downcast LspResponse to {} for message {}", T::Response::NAME, T::NAME,)
+        })?;
 
-        Ok(ProtoLspResponse {
-            server_id: self.server_id,
-            response: envelope.payload,
-        })
+        Ok(ProtoLspResponse { server_id: self.server_id, response: envelope.payload })
     }
 }
 
@@ -127,22 +116,20 @@ impl<T: EnvelopedMessage> AnyTypedEnvelope for TypedEnvelope<T> {
 }
 
 impl PeerId {
-    pub fn from_u64(peer_id: u64) -> Self {
+    pub const fn from_u64(peer_id: u64) -> Self {
         let owner_id = (peer_id >> 32) as u32;
         let id = peer_id as u32;
         Self { owner_id, id }
     }
 
-    pub fn as_u64(self) -> u64 {
+    pub const fn as_u64(self) -> u64 {
         ((self.owner_id as u64) << 32) | (self.id as u64)
     }
 }
 
 impl Ord for PeerId {
     fn cmp(&self, other: &Self) -> cmp::Ordering {
-        self.owner_id
-            .cmp(&other.owner_id)
-            .then_with(|| self.id.cmp(&other.id))
+        self.owner_id.cmp(&other.owner_id).then_with(|| self.id.cmp(&other.id))
     }
 }
 
@@ -183,17 +170,12 @@ pub struct TypedEnvelope<T> {
 
 impl<T> TypedEnvelope<T> {
     pub fn original_sender_id(&self) -> Result<PeerId> {
-        self.original_sender_id
-            .context("missing original_sender_id")
+        self.original_sender_id.context("missing original_sender_id")
     }
 }
 
 impl<T: RequestMessage> TypedEnvelope<T> {
-    pub fn receipt(&self) -> Receipt<T> {
-        Receipt {
-            sender_id: self.sender_id,
-            message_id: self.message_id,
-            payload_type: PhantomData,
-        }
+    pub const fn receipt(&self) -> Receipt<T> {
+        Receipt { sender_id: self.sender_id, message_id: self.message_id, payload_type: PhantomData }
     }
 }

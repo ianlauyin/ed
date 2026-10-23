@@ -4,12 +4,7 @@ impl Editor {
     /// Toggles an action selection menu for the latest selection.
     /// May show LSP code actions, code lens' command, runnables and potentially more entities applicable as actions.
     /// Previous menu toggled with this method will be closed.
-    pub fn toggle_code_actions(
-        &mut self,
-        action: &ToggleCodeActions,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn toggle_code_actions(&mut self, action: &ToggleCodeActions, window: &mut Window, cx: &mut Context<Self>) {
         let quick_launch = action.quick_launch;
         let mut context_menu = self.context_menu.borrow_mut();
         if let Some(CodeContextMenu::CodeActions(code_actions)) = context_menu.as_ref() {
@@ -34,28 +29,19 @@ impl Editor {
             Some(CodeActionSource::Indicator(row)) | Some(CodeActionSource::RunMenu(row)) => {
                 DisplayPoint::new(*row, 0).to_point(&snapshot)
             }
-            _ => self
-                .selections
-                .newest::<Point>(&snapshot.display_snapshot)
-                .head(),
+            _ => self.selections.newest::<Point>(&snapshot.display_snapshot).head(),
         };
         let Some((buffer, buffer_row)) = snapshot
             .buffer_snapshot()
             .buffer_line_for_row(MultiBufferRow(multibuffer_point.row))
             .and_then(|(buffer_snapshot, range)| {
-                self.buffer()
-                    .read(cx)
-                    .buffer(buffer_snapshot.remote_id())
-                    .map(|buffer| (buffer, range.start.row))
+                self.buffer().read(cx).buffer(buffer_snapshot.remote_id()).map(|buffer| (buffer, range.start.row))
             })
         else {
             return;
         };
         let buffer_id = buffer.read(cx).remote_id();
-        let tasks = self
-            .runnables
-            .runnables((buffer_id, buffer_row))
-            .map(|t| Arc::new(t.to_owned()));
+        let tasks = self.runnables.runnables((buffer_id, buffer_row)).map(|t| Arc::new(t.to_owned()));
 
         let project = self.project.clone();
         let runnable_task = match deployed_from {
@@ -66,28 +52,21 @@ impl Editor {
                 if let Some(tasks) = &tasks
                     && let Some(project) = project
                 {
-                    task_context_task =
-                        Self::build_tasks_context(&project, &buffer, buffer_row, tasks, cx);
+                    task_context_task = Self::build_tasks_context(&project, &buffer, buffer_row, tasks, cx);
                 }
 
                 cx.spawn_in(window, async move |_, cx| {
                     let task_context = match workspace {
-                        Some(ws) => task_context_task
-                            .await
-                            .notify_workspace_async_err(ws, cx)
-                            .flatten(),
+                        Some(ws) => task_context_task.await.notify_workspace_async_err(ws, cx).flatten(),
                         None => task_context_task.await.ok().flatten(),
                     };
 
-                    let resolved_tasks =
-                        tasks
-                            .zip(task_context)
-                            .map(|(tasks, task_context)| ResolvedTasks {
-                                templates: tasks.resolve(&task_context).collect(),
-                                position: snapshot
-                                    .buffer_snapshot()
-                                    .anchor_before(Point::new(multibuffer_point.row, tasks.column)),
-                            });
+                    let resolved_tasks = tasks.zip(task_context).map(|(tasks, task_context)| ResolvedTasks {
+                        templates: tasks.resolve(&task_context).collect(),
+                        position: snapshot
+                            .buffer_snapshot()
+                            .anchor_before(Point::new(multibuffer_point.row, tasks.column)),
+                    });
                     anyhow::Ok(resolved_tasks)
                 })
             }
@@ -121,12 +100,8 @@ impl Editor {
 
             editor.update_in(cx, |editor, window, cx| {
                 let spawn_straight_away = quick_launch
-                    && resolved_tasks
-                        .as_ref()
-                        .is_some_and(|tasks| tasks.templates.len() == 1)
-                    && code_actions
-                        .as_ref()
-                        .is_none_or(|actions| actions.is_empty());
+                    && resolved_tasks.as_ref().is_some_and(|tasks| tasks.templates.len() == 1)
+                    && code_actions.as_ref().is_none_or(|actions| actions.is_empty());
 
                 crate::hover_popover::hide_hover(editor, cx);
                 let actions = CodeActionContents::new(resolved_tasks, code_actions);
@@ -137,21 +112,16 @@ impl Editor {
                     return Task::ready(Ok(()));
                 }
 
-                *editor.context_menu.borrow_mut() =
-                    Some(CodeContextMenu::CodeActions(CodeActionsMenu {
-                        buffer,
-                        actions,
-                        selected_item: Default::default(),
-                        scroll_handle: UniformListScrollHandle::default(),
-                        deployed_from,
-                    }));
+                *editor.context_menu.borrow_mut() = Some(CodeContextMenu::CodeActions(CodeActionsMenu {
+                    buffer,
+                    actions,
+                    selected_item: Default::default(),
+                    scroll_handle: UniformListScrollHandle::default(),
+                    deployed_from,
+                }));
                 cx.notify();
                 if spawn_straight_away
-                    && let Some(task) = editor.confirm_code_action(
-                        &ConfirmCodeAction { item_ix: Some(0) },
-                        window,
-                        cx,
-                    )
+                    && let Some(task) = editor.confirm_code_action(&ConfirmCodeAction { item_ix: Some(0) }, window, cx)
                 {
                     return task;
                 }
@@ -180,30 +150,23 @@ impl Editor {
             return None;
         }
 
-        let actions_menu =
-            if let CodeContextMenu::CodeActions(menu) = self.hide_context_menu(window, cx)? {
-                menu
-            } else {
-                return None;
-            };
+        let actions_menu = if let CodeContextMenu::CodeActions(menu) = self.hide_context_menu(window, cx)? {
+            menu
+        } else {
+            return None;
+        };
 
         let action_ix = action.item_ix.unwrap_or(actions_menu.selected_item);
         let action = actions_menu.actions.get(action_ix)?;
         let title = action.label();
-        let runnable_task_key =
-            self.runnable_task_key_for_source(&actions_menu.deployed_from, window, cx);
+        let runnable_task_key = self.runnable_task_key_for_source(&actions_menu.deployed_from, window, cx);
         let buffer = actions_menu.buffer;
         let workspace = self.workspace()?;
 
         match action {
             CodeActionsItem::Task(_, resolved_task) => {
                 if let Some((buffer_id, buffer_row)) = runnable_task_key {
-                    self.set_runnable_task_status(
-                        buffer_id,
-                        buffer_row,
-                        RunnableTaskStatus::Running,
-                        cx,
-                    );
+                    self.set_runnable_task_status(buffer_id, buffer_row, RunnableTaskStatus::Running, cx);
                 }
                 let editor = cx.weak_entity();
                 workspace.update(cx, |workspace, cx| {
@@ -233,19 +196,11 @@ impl Editor {
                 })
             }
             CodeActionsItem::CodeAction { action, provider } => {
-                let apply_code_action =
-                    provider.apply_code_action(buffer, action, true, window, cx);
+                let apply_code_action = provider.apply_code_action(buffer, action, true, window, cx);
                 let workspace = workspace.downgrade();
                 Some(cx.spawn_in(window, async move |editor, cx| {
                     let project_transaction = apply_code_action.await?;
-                    Self::open_project_transaction(
-                        &editor,
-                        workspace,
-                        project_transaction,
-                        title,
-                        cx,
-                    )
-                    .await
+                    Self::open_project_transaction(&editor, workspace, project_transaction, title, cx).await
                 }))
             }
         }
@@ -254,7 +209,7 @@ impl Editor {
     fn runnable_task_key_for_source(
         &self,
         source: &Option<CodeActionSource>,
-        window: &mut Window,
+        window: &Window,
         cx: &mut Context<Self>,
     ) -> Option<(BufferId, BufferRow)> {
         let display_row = match source {
@@ -262,17 +217,13 @@ impl Editor {
             _ => return None,
         };
         let snapshot = self.snapshot(window, cx);
-        let multibuffer_row =
-            MultiBufferRow(DisplayPoint::new(display_row, 0).to_point(&snapshot).row);
-        let (buffer_snapshot, range) = snapshot
-            .buffer_snapshot()
-            .buffer_line_for_row(multibuffer_row)?;
+        let multibuffer_row = MultiBufferRow(DisplayPoint::new(display_row, 0).to_point(&snapshot).row);
+        let (buffer_snapshot, range) = snapshot.buffer_snapshot().buffer_line_for_row(multibuffer_row)?;
         Some((buffer_snapshot.remote_id(), range.start.row))
     }
 
     pub fn code_actions_enabled_for_toolbar(&self, cx: &App) -> bool {
-        !self.code_action_providers.is_empty()
-            && EditorSettings::get_global(cx).toolbar.code_actions
+        !self.code_action_providers.is_empty() && EditorSettings::get_global(cx).toolbar.code_actions
     }
 
     pub fn has_available_code_actions_for_selection(&self) -> bool {
@@ -283,7 +234,7 @@ impl Editor {
         }
     }
 
-    pub fn context_menu(&self) -> &RefCell<Option<CodeContextMenu>> {
+    pub const fn context_menu(&self) -> &RefCell<Option<CodeContextMenu>> {
         &self.context_menu
     }
 
@@ -292,7 +243,7 @@ impl Editor {
         icon_size: ui::IconSize,
         display_row: DisplayRow,
         is_active: bool,
-        cx: &mut Context<Self>,
+        cx: &Context<Self>,
     ) -> AnyElement {
         let show_tooltip = !self.context_menu_visible();
         IconButton::new("inline_code_actions", ui::IconName::BoltFilled)
@@ -306,10 +257,7 @@ impl Editor {
                     move |_window, cx| {
                         Tooltip::for_action_in(
                             "Toggle Code Actions",
-                            &ToggleCodeActions {
-                                deployed_from: None,
-                                quick_launch: false,
-                            },
+                            &ToggleCodeActions { deployed_from: None, quick_launch: false },
                             &focus_handle,
                             cx,
                         )
@@ -320,9 +268,7 @@ impl Editor {
                 window.focus(&editor.focus_handle(cx), cx);
                 editor.toggle_code_actions(
                     &crate::actions::ToggleCodeActions {
-                        deployed_from: Some(crate::actions::CodeActionSource::Indicator(
-                            display_row,
-                        )),
+                        deployed_from: Some(crate::actions::CodeActionSource::Indicator(display_row)),
                         quick_launch: false,
                     },
                     window,
@@ -332,16 +278,10 @@ impl Editor {
             .into_any_element()
     }
 
-    pub(super) fn refresh_code_actions_for_selection(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn refresh_code_actions_for_selection(&mut self, window: &Window, cx: &Context<Self>) {
         self.code_actions_for_selection = CodeActionsForSelection::Fetching(
             cx.spawn_in(window, async move |editor, cx| {
-                cx.background_executor()
-                    .timer(CODE_ACTIONS_DEBOUNCE_TIMEOUT)
-                    .await;
+                cx.background_executor().timer(CODE_ACTIONS_DEBOUNCE_TIMEOUT).await;
 
                 let (start_buffer, start, _, end, _newest_selection) = editor
                     .update(cx, |editor, cx| {
@@ -350,14 +290,12 @@ impl Editor {
                             return None;
                         }
                         let display_snapshot = editor.display_snapshot(cx);
-                        let newest_selection_adjusted =
-                            editor.selections.newest_adjusted(&display_snapshot);
+                        let newest_selection_adjusted = editor.selections.newest_adjusted(&display_snapshot);
                         let buffer = editor.buffer.read(cx);
 
                         let (start_buffer, start) =
                             buffer.text_anchor_for_position(newest_selection_adjusted.start, cx)?;
-                        let (end_buffer, end) =
-                            buffer.text_anchor_for_position(newest_selection_adjusted.end, cx)?;
+                        let (end_buffer, end) = buffer.text_anchor_for_position(newest_selection_adjusted.end, cx)?;
 
                         Some((start_buffer, start, end_buffer, end, newest_selection))
                     })
@@ -371,25 +309,20 @@ impl Editor {
                         let tasks = editor
                             .code_action_providers
                             .iter()
-                            .map(|provider| {
-                                provider.code_actions(&start_buffer, start..end, window, cx)
-                            })
+                            .map(|provider| provider.code_actions(&start_buffer, start..end, window, cx))
                             .collect::<Vec<_>>();
                         (providers, tasks)
                     })
                     .ok()?;
 
                 let mut actions = Vec::new();
-                for (provider, provider_actions) in
-                    providers.into_iter().zip(future::join_all(tasks).await)
-                {
+                for (provider, provider_actions) in providers.into_iter().zip(future::join_all(tasks).await) {
                     if let Some(provider_actions) = provider_actions.log_err() {
-                        actions.extend(provider_actions.into_iter().map(|action| {
-                            AvailableCodeAction {
-                                action,
-                                provider: provider.clone(),
-                            }
-                        }));
+                        actions.extend(
+                            provider_actions
+                                .into_iter()
+                                .map(|action| AvailableCodeAction { action, provider: provider.clone() }),
+                        );
                     }
                 }
 
@@ -400,14 +333,10 @@ impl Editor {
                             None
                         } else {
                             let new_actions = ActionFetchReady {
-                                location: Location {
-                                    buffer: start_buffer,
-                                    range: start..end,
-                                },
+                                location: Location { buffer: start_buffer, range: start..end },
                                 actions: Rc::from(actions),
                             };
-                            editor.code_actions_for_selection =
-                                CodeActionsForSelection::Ready(new_actions.clone());
+                            editor.code_actions_for_selection = CodeActionsForSelection::Ready(new_actions.clone());
                             Some(new_actions)
                         };
                         cx.notify();
@@ -457,10 +386,7 @@ impl CodeActionProvider for Entity<Project> {
         self.update(cx, |project, cx| {
             let code_actions = project.code_actions(buffer, range, None, cx);
             cx.background_spawn(async move {
-                let code_actions = code_actions
-                    .await
-                    .context("code action fetch")?
-                    .unwrap_or_default();
+                let code_actions = code_actions.await.context("code action fetch")?.unwrap_or_default();
                 Ok(code_actions)
             })
         })
@@ -474,8 +400,6 @@ impl CodeActionProvider for Entity<Project> {
         _window: &mut Window,
         cx: &mut App,
     ) -> Task<Result<ProjectTransaction>> {
-        self.update(cx, |project, cx| {
-            project.apply_code_action(buffer_handle, action, push_to_history, cx)
-        })
+        self.update(cx, |project, cx| project.apply_code_action(buffer_handle, action, push_to_history, cx))
     }
 }

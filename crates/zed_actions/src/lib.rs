@@ -1,7 +1,11 @@
-use gpui::{Action, actions};
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use gpui::Action;
+use gpui::actions;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, sync::Arc};
+use serde::Deserialize;
+use serde::Serialize;
 
 // If the zed binary doesn't use anything in this crate, it will be optimized away
 // and the actions won't initialize. So we just provide an empty initialization function
@@ -10,7 +14,7 @@ use std::{path::PathBuf, sync::Arc};
 // These may provide relevant context:
 // https://github.com/rust-lang/rust/issues/47384
 // https://github.com/mmastrac/rust-ctor/issues/280
-pub fn init() {}
+pub const fn init() {}
 
 /// Opens a URL in the system's default web browser.
 #[derive(Clone, PartialEq, Deserialize, JsonSchema, Action)]
@@ -149,10 +153,7 @@ pub enum NewWorktreeBranchTarget {
     /// Create a detached worktree at the tip of an existing branch.
     ExistingBranch { name: String },
     /// Create a detached worktree at the tip of a remote-tracking branch.
-    RemoteBranch {
-        remote_name: String,
-        branch_name: String,
-    },
+    RemoteBranch { remote_name: String, branch_name: String },
 }
 
 /// Creates a new git worktree and switches the workspace to it.
@@ -285,7 +286,8 @@ pub mod theme_selector {
 }
 
 pub mod search {
-    use gpui::{Action, actions};
+    use gpui::Action;
+    use gpui::actions;
 
     /// Opens a new project search filtered down to the given directory.
     ///
@@ -315,7 +317,8 @@ pub mod search {
     );
 }
 pub mod buffer_search {
-    use gpui::{Action, actions};
+    use gpui::Action;
+    use gpui::actions;
     use schemars::JsonSchema;
     use serde::Deserialize;
 
@@ -333,20 +336,12 @@ pub mod buffer_search {
     }
 
     impl Deploy {
-        pub fn find() -> Self {
-            Self {
-                focus: true,
-                replace_enabled: false,
-                selection_search_enabled: false,
-            }
+        pub const fn find() -> Self {
+            Self { focus: true, replace_enabled: false, selection_search_enabled: false }
         }
 
-        pub fn replace() -> Self {
-            Self {
-                focus: true,
-                replace_enabled: true,
-                selection_search_enabled: false,
-            }
+        pub const fn replace() -> Self {
+            Self { focus: true, replace_enabled: true, selection_search_enabled: false }
         }
     }
 
@@ -398,7 +393,10 @@ pub enum RevealTarget {
 pub mod outline {
     use std::sync::OnceLock;
 
-    use gpui::{AnyView, App, Window, actions};
+    use gpui::AnyView;
+    use gpui::App;
+    use gpui::Window;
+    use gpui::actions;
 
     actions!(
         outline,
@@ -411,10 +409,7 @@ pub mod outline {
     pub static TOGGLE_OUTLINE: OnceLock<fn(AnyView, &mut Window, &mut App)> = OnceLock::new();
 }
 
-actions!(
-    call_hierarchy,
-    [ShowIncomingCalls, ShowOutgoingCalls, ToggleDirection]
-);
+actions!(call_hierarchy, [ShowIncomingCalls, ShowOutgoingCalls, ToggleDirection]);
 
 pub mod preview {
     pub mod markdown {

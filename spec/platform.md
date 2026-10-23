@@ -29,6 +29,7 @@ remote detection, command execution, and proxy startup are removed.
 - The native menu bar has no Help menu.
 - CLI installation is manual. The editor has no CLI installer, installation menu
   item, or commands for installing the CLI or registering its URL scheme.
+- CLI shell completions are generated for bash, fish, and zsh only.
 - Git operations (including clones and commit signing) and SSH connections require
   authentication that works without user input, such as an SSH agent or cached
   credentials. Password/passphrase requests fail instead of opening a prompt.

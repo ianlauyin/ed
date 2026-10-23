@@ -1,27 +1,39 @@
 pub mod file_finder_settings;
 
+use std::path::Path;
+use std::path::PathBuf;
+use std::path::{self};
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{self};
+
 use file_finder_settings::FileFinderSettings;
 use file_icons::FileIcons;
 use futures::channel::oneshot;
-use fuzzy::{CharBag, StringMatch, StringMatchCandidate};
-use gpui::{HighlightStyle, StyledText, Task};
-use picker::{Picker, PickerDelegate};
-use project::{DirectoryItem, DirectoryLister};
+use fuzzy::CharBag;
+use fuzzy::StringMatch;
+use fuzzy::StringMatchCandidate;
+use gpui::HighlightStyle;
+use gpui::StyledText;
+use gpui::Task;
+use picker::Picker;
+use picker::PickerDelegate;
+use project::DirectoryItem;
+use project::DirectoryLister;
+use settings::ProjectPanelSortMode;
+use settings::Settings;
 use settings::SettingsStore;
-use settings::{ProjectPanelSortMode, Settings};
-use std::{
-    path::{self, Path, PathBuf},
-    sync::{
-        Arc,
-        atomic::{self, AtomicBool},
-    },
-};
-use ui::{Context, LabelLike, ListItem, Window};
-use ui::{HighlightedLabel, ListItemSpacing, prelude::*};
-use util::{
-    ResultExt, maybe,
-    paths::{PathStyle, compare_paths},
-};
+use ui::Context;
+use ui::HighlightedLabel;
+use ui::LabelLike;
+use ui::ListItem;
+use ui::ListItemSpacing;
+use ui::Window;
+use ui::prelude::*;
+use util::ResultExt;
+use util::maybe;
+use util::paths::PathStyle;
+use util::paths::compare_paths;
 use workspace::Workspace;
 
 pub struct OpenPathPrompt;
@@ -37,8 +49,7 @@ pub struct OpenPathDelegate {
     prompt_root: String,
     path_style: PathStyle,
     replace_prompt: Task<()>,
-    render_footer:
-        Arc<dyn Fn(&mut Window, &mut Context<Picker<Self>>) -> Option<AnyElement> + 'static>,
+    render_footer: Arc<dyn Fn(&mut Window, &mut Context<Picker<Self>>) -> Option<AnyElement> + 'static>,
     hidden_entries: bool,
     sort_mode: ProjectPanelSortMode,
 }
@@ -59,9 +70,7 @@ impl OpenPathDelegate {
             tx: Some(tx),
             lister,
             selected_index: 0,
-            directory_state: DirectoryState::None {
-                create: creating_path,
-            },
+            directory_state: DirectoryState::None { create: creating_path },
             string_matches: Vec::new(),
             cancel_flag: Arc::new(AtomicBool::new(false)),
             should_dismiss: true,
@@ -79,15 +88,13 @@ impl OpenPathDelegate {
 
     pub fn with_footer(
         mut self,
-        footer: Arc<
-            dyn Fn(&mut Window, &mut Context<Picker<Self>>) -> Option<AnyElement> + 'static,
-        >,
+        footer: Arc<dyn Fn(&mut Window, &mut Context<Picker<Self>>) -> Option<AnyElement> + 'static>,
     ) -> Self {
         self.render_footer = footer;
         self
     }
 
-    pub fn show_hidden(mut self) -> Self {
+    pub const fn show_hidden(mut self) -> Self {
         self.hidden_entries = true;
         self
     }
@@ -97,20 +104,13 @@ impl OpenPathDelegate {
                 let id = self.string_matches.get(selected_match_index)?.candidate_id;
                 entries.iter().find(|entry| entry.path.id == id).cloned()
             }
-            DirectoryState::Create {
-                user_input,
-                entries,
-                ..
-            } => {
+            DirectoryState::Create { user_input, entries, .. } => {
                 let mut i = selected_match_index;
                 if let Some(user_input) = user_input
                     && (!user_input.exists || !user_input.is_dir)
                 {
                     if i == 0 {
-                        return Some(CandidateInfo {
-                            path: user_input.file.clone(),
-                            is_dir: false,
-                        });
+                        return Some(CandidateInfo { path: user_input.file.clone(), is_dir: false });
                     } else {
                         i -= 1;
                     }
@@ -122,7 +122,7 @@ impl OpenPathDelegate {
         }
     }
 
-    fn current_dir(&self) -> &'static str {
+    const fn current_dir(&self) -> &'static str {
         match self.path_style {
             PathStyle::Unix => "./",
             PathStyle::Windows => ".\\",
@@ -132,19 +132,9 @@ impl OpenPathDelegate {
 
 #[derive(Debug)]
 enum DirectoryState {
-    List {
-        parent_path: String,
-        entries: Vec<CandidateInfo>,
-        error: Option<SharedString>,
-    },
-    Create {
-        parent_path: String,
-        user_input: Option<UserInput>,
-        entries: Vec<CandidateInfo>,
-    },
-    None {
-        create: bool,
-    },
+    List { parent_path: String, entries: Vec<CandidateInfo>, error: Option<SharedString> },
+    Create { parent_path: String, user_input: Option<UserInput>, entries: Vec<CandidateInfo> },
+    None { create: bool },
 }
 
 #[derive(Debug, Clone)]
@@ -161,11 +151,7 @@ struct CandidateInfo {
 }
 
 impl OpenPathPrompt {
-    pub fn register(
-        workspace: &mut Workspace,
-        _window: Option<&mut Window>,
-        _: &mut Context<Workspace>,
-    ) {
+    pub fn register(workspace: &mut Workspace, _window: Option<&mut Window>, _: &mut Context<Workspace>) {
         workspace.set_prompt_for_open_path(Box::new(|workspace, lister, window, cx| {
             let (tx, rx) = futures::channel::oneshot::channel();
             Self::prompt_for_open_path(workspace, lister, false, None, tx, window, cx);
@@ -173,18 +159,12 @@ impl OpenPathPrompt {
         }));
     }
 
-    pub fn register_new_path(
-        workspace: &mut Workspace,
-        _window: Option<&mut Window>,
-        _: &mut Context<Workspace>,
-    ) {
-        workspace.set_prompt_for_new_path(Box::new(
-            |workspace, lister, suggested_name, window, cx| {
-                let (tx, rx) = futures::channel::oneshot::channel();
-                Self::prompt_for_new_path(workspace, lister, suggested_name, tx, window, cx);
-                rx
-            },
-        ));
+    pub fn register_new_path(workspace: &mut Workspace, _window: Option<&mut Window>, _: &mut Context<Workspace>) {
+        workspace.set_prompt_for_new_path(Box::new(|workspace, lister, suggested_name, window, cx| {
+            let (tx, rx) = futures::channel::oneshot::channel();
+            Self::prompt_for_new_path(workspace, lister, suggested_name, tx, window, cx);
+            rx
+        }));
     }
 
     fn prompt_for_open_path(
@@ -197,8 +177,7 @@ impl OpenPathPrompt {
         cx: &mut Context<Workspace>,
     ) {
         workspace.toggle_modal(window, cx, |window, cx| {
-            let delegate =
-                OpenPathDelegate::new(tx, lister.clone(), creating_path, cx).show_hidden();
+            let delegate = OpenPathDelegate::new(tx, lister.clone(), creating_path, cx).show_hidden();
             let picker = Picker::uniform_list(delegate, window, cx);
             let mut query = lister.default_query(cx);
             if let Some(suggested_name) = suggested_name {
@@ -230,11 +209,7 @@ impl PickerDelegate for OpenPathDelegate {
 
     fn match_count(&self) -> usize {
         let user_input = if let DirectoryState::Create { user_input, .. } = &self.directory_state {
-            user_input
-                .as_ref()
-                .filter(|input| !input.exists || !input.is_dir)
-                .into_iter()
-                .count()
+            user_input.as_ref().filter(|input| !input.exists || !input.is_dir).into_iter().count()
         } else {
             0
         };
@@ -250,12 +225,7 @@ impl PickerDelegate for OpenPathDelegate {
         cx.notify();
     }
 
-    fn update_matches(
-        &mut self,
-        query: String,
-        window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) -> Task<()> {
+    fn update_matches(&mut self, query: String, window: &mut Window, cx: &mut Context<Picker<Self>>) -> Task<()> {
         let lister = &self.lister;
         let input_is_empty = query.is_empty();
         let (dir, suffix) = get_dir_and_suffix(query, self.path_style);
@@ -268,14 +238,8 @@ impl PickerDelegate for OpenPathDelegate {
                     Some(lister.list_directory(dir.clone(), cx))
                 }
             }
-            DirectoryState::Create {
-                parent_path,
-                user_input,
-                ..
-            } => {
-                if parent_path == &dir
-                    && user_input.as_ref().map(|input| &input.file.string) == Some(&suffix)
-                {
+            DirectoryState::Create { parent_path, user_input, .. } => {
+                if parent_path == &dir && user_input.as_ref().map(|input| &input.file.string) == Some(&suffix) {
                     None
                 } else {
                     Some(lister.list_directory(dir.clone(), cx))
@@ -300,8 +264,7 @@ impl PickerDelegate for OpenPathDelegate {
                 if this
                     .update(cx, |this, _| {
                         let new_state = match &this.delegate.directory_state {
-                            DirectoryState::None { create: false }
-                            | DirectoryState::List { .. } => match paths {
+                            DirectoryState::None { create: false } | DirectoryState::List { .. } => match paths {
                                 Ok(paths) => DirectoryState::List {
                                     entries: path_candidates(parent_path_is_root, paths, sort_mode),
                                     parent_path: dir.clone(),
@@ -313,11 +276,9 @@ impl PickerDelegate for OpenPathDelegate {
                                     error: Some(SharedString::from(e.to_string())),
                                 },
                             },
-                            DirectoryState::None { create: true }
-                            | DirectoryState::Create { .. } => match paths {
+                            DirectoryState::None { create: true } | DirectoryState::Create { .. } => match paths {
                                 Ok(paths) => {
-                                    let mut entries =
-                                        path_candidates(parent_path_is_root, paths, sort_mode);
+                                    let mut entries = path_candidates(parent_path_is_root, paths, sort_mode);
                                     let mut exists = false;
                                     let mut is_dir = false;
                                     let mut new_id = None;
@@ -340,11 +301,7 @@ impl PickerDelegate for OpenPathDelegate {
                                             is_dir,
                                         })
                                     };
-                                    DirectoryState::Create {
-                                        entries,
-                                        parent_path: dir.clone(),
-                                        user_input,
-                                    }
+                                    DirectoryState::Create { entries, parent_path: dir.clone(), user_input }
                                 }
                                 Err(_) => DirectoryState::Create {
                                     entries: Vec::new(),
@@ -365,19 +322,12 @@ impl PickerDelegate for OpenPathDelegate {
                 }
             }
 
-            let Ok(mut new_entries) =
-                this.update(cx, |this, _| match &this.delegate.directory_state {
-                    DirectoryState::List {
-                        entries,
-                        error: None,
-                        ..
-                    }
-                    | DirectoryState::Create { entries, .. } => entries.clone(),
-                    DirectoryState::List { error: Some(_), .. } | DirectoryState::None { .. } => {
-                        Vec::new()
-                    }
-                })
-            else {
+            let Ok(mut new_entries) = this.update(cx, |this, _| match &this.delegate.directory_state {
+                DirectoryState::List { entries, error: None, .. } | DirectoryState::Create { entries, .. } => {
+                    entries.clone()
+                }
+                DirectoryState::List { error: Some(_), .. } | DirectoryState::None { .. } => Vec::new(),
+            }) else {
                 return;
             };
 
@@ -385,11 +335,7 @@ impl PickerDelegate for OpenPathDelegate {
                 new_entries.retain(|entry| !entry.path.string.starts_with('.'));
             }
 
-            let max_id = new_entries
-                .iter()
-                .map(|entry| entry.path.id)
-                .max()
-                .unwrap_or(0);
+            let max_id = new_entries.iter().map(|entry| entry.path.id).max().unwrap_or(0);
 
             if suffix.is_empty() {
                 let should_prepend_with_current_dir = this
@@ -403,9 +349,7 @@ impl PickerDelegate for OpenPathDelegate {
                     })
                     .unwrap_or(false);
 
-                let current_dir_in_new_entries = new_entries
-                    .iter()
-                    .any(|entry| &entry.path.string == current_dir);
+                let current_dir_in_new_entries = new_entries.iter().any(|entry| entry.path.string == current_dir);
 
                 if should_prepend_with_current_dir && !current_dir_in_new_entries {
                     new_entries.insert(
@@ -432,44 +376,34 @@ impl PickerDelegate for OpenPathDelegate {
                             string: m.path.string.clone(),
                         })
                         .collect();
-                    this.delegate.directory_state =
-                        match &this.delegate.directory_state {
-                            DirectoryState::None { create: false }
-                            | DirectoryState::List { .. } => DirectoryState::List {
-                                parent_path: dir.clone(),
-                                entries: new_entries,
-                                error: None,
-                            },
-                            DirectoryState::None { create: true }
-                            | DirectoryState::Create { .. } => DirectoryState::Create {
-                                parent_path: dir.clone(),
-                                user_input: None,
-                                entries: new_entries,
-                            },
-                        };
+                    this.delegate.directory_state = match &this.delegate.directory_state {
+                        DirectoryState::None { create: false } | DirectoryState::List { .. } => {
+                            DirectoryState::List { parent_path: dir.clone(), entries: new_entries, error: None }
+                        }
+                        DirectoryState::None { create: true } | DirectoryState::Create { .. } => {
+                            DirectoryState::Create { parent_path: dir.clone(), user_input: None, entries: new_entries }
+                        }
+                    };
                     cx.notify();
                 })
                 .ok();
                 return;
             }
 
-            let Ok(is_create_state) =
-                this.update(cx, |this, _| match &this.delegate.directory_state {
-                    DirectoryState::Create { .. } => true,
-                    DirectoryState::List { .. } => false,
-                    DirectoryState::None { create } => *create,
-                })
-            else {
+            let Ok(is_create_state) = this.update(cx, |this, _| match &this.delegate.directory_state {
+                DirectoryState::Create { .. } => true,
+                DirectoryState::List { .. } => false,
+                DirectoryState::None { create } => *create,
+            }) else {
                 return;
             };
 
             let candidates = new_entries
                 .iter()
                 .filter_map(|entry| {
-                    if is_create_state && !entry.is_dir && Some(&suffix) == Some(&entry.path.string)
+                    if (is_create_state && !entry.is_dir && Some(&suffix) == Some(&entry.path.string))
+                        || (!suffix.is_empty() && entry.path.string == current_dir)
                     {
-                        None
-                    } else if !suffix.is_empty() && entry.path.string == current_dir {
                         None
                     } else {
                         Some(&entry.path)
@@ -493,7 +427,7 @@ impl PickerDelegate for OpenPathDelegate {
 
             this.update(cx, |this, cx| {
                 this.delegate.selected_index = 0;
-                this.delegate.string_matches = matches.clone();
+                this.delegate.string_matches.clone_from(&matches);
                 this.delegate.string_matches.sort_by_key(|m| {
                     (
                         new_entries
@@ -506,11 +440,7 @@ impl PickerDelegate for OpenPathDelegate {
                 });
                 this.delegate.directory_state = match &this.delegate.directory_state {
                     DirectoryState::None { create: false } | DirectoryState::List { .. } => {
-                        DirectoryState::List {
-                            entries: new_entries,
-                            parent_path: dir.clone(),
-                            error: None,
-                        }
+                        DirectoryState::List { entries: new_entries, parent_path: dir.clone(), error: None }
                     }
                     DirectoryState::None { create: true } => DirectoryState::Create {
                         entries: new_entries,
@@ -543,36 +473,23 @@ impl PickerDelegate for OpenPathDelegate {
             .ok();
         })
     }
-    fn select_child(
-        &mut self,
-        _window: &mut Window,
-        _cx: &mut Context<Picker<Self>>,
-    ) -> Option<String> {
+    fn select_child(&mut self, _window: &mut Window, _cx: &mut Context<Picker<Self>>) -> Option<String> {
         let candidate = self.get_entry(self.selected_index)?;
         if candidate.path.string.is_empty() || !candidate.is_dir {
             return None;
         }
         let path_style = self.path_style;
         match &self.directory_state {
-            DirectoryState::List { parent_path, .. }
-            | DirectoryState::Create { parent_path, .. } => Some(format!(
-                "{}{}{}",
-                parent_path,
-                candidate.path.string,
-                path_style.primary_separator()
-            )),
+            DirectoryState::List { parent_path, .. } | DirectoryState::Create { parent_path, .. } => {
+                Some(format!("{}{}{}", parent_path, candidate.path.string, path_style.primary_separator()))
+            }
             DirectoryState::None { .. } => None,
         }
     }
 
-    fn select_parent(
-        &mut self,
-        _window: &mut Window,
-        _cx: &mut Context<Picker<Self>>,
-    ) -> Option<String> {
+    fn select_parent(&mut self, _window: &mut Window, _cx: &mut Context<Picker<Self>>) -> Option<String> {
         let parent_path = match &self.directory_state {
-            DirectoryState::List { parent_path, .. }
-            | DirectoryState::Create { parent_path, .. } => parent_path,
+            DirectoryState::List { parent_path, .. } | DirectoryState::Create { parent_path, .. } => parent_path,
             DirectoryState::None { .. } => return None,
         };
         if parent_path == &self.prompt_root {
@@ -601,21 +518,13 @@ impl PickerDelegate for OpenPathDelegate {
                         "{}{}{}",
                         parent_path,
                         candidate.path.string,
-                        if candidate.is_dir {
-                            path_style.primary_separator()
-                        } else {
-                            ""
-                        }
+                        if candidate.is_dir { path_style.primary_separator() } else { "" }
                     )),
                     DirectoryState::List { parent_path, .. } => Some(format!(
                         "{}{}{}",
                         parent_path,
                         candidate.path.string,
-                        if candidate.is_dir {
-                            path_style.primary_separator()
-                        } else {
-                            ""
-                        }
+                        if candidate.is_dir { path_style.primary_separator() } else { "" }
                     )),
                     DirectoryState::None { .. } => return None,
                 }
@@ -632,52 +541,46 @@ impl PickerDelegate for OpenPathDelegate {
         match &self.directory_state {
             DirectoryState::None { .. } => return,
             DirectoryState::List { parent_path, .. } => {
-                let confirmed_path =
-                    if parent_path == &self.prompt_root && candidate.path.string.is_empty() {
-                        PathBuf::from(&self.prompt_root)
-                    } else {
-                        let Some(confirmed_path) = self
-                            .path_style
-                            .join_path_preserving_components(
-                                Path::new(self.lister.resolve_tilde(parent_path, cx).as_ref()),
-                                &candidate.path.string,
-                            )
-                            .log_err()
-                        else {
-                            return;
-                        };
-                        confirmed_path
+                let confirmed_path = if parent_path == &self.prompt_root && candidate.path.string.is_empty() {
+                    PathBuf::from(&self.prompt_root)
+                } else {
+                    let Some(confirmed_path) = self
+                        .path_style
+                        .join_path_preserving_components(
+                            Path::new(self.lister.resolve_tilde(parent_path, cx).as_ref()),
+                            &candidate.path.string,
+                        )
+                        .log_err()
+                    else {
+                        return;
                     };
+                    confirmed_path
+                };
                 if let Some(tx) = self.tx.take() {
                     tx.send(Some(vec![confirmed_path])).ok();
                 }
             }
-            DirectoryState::Create {
-                parent_path,
-                user_input,
-                ..
-            } => match user_input {
+            DirectoryState::Create { parent_path, user_input, .. } => match user_input {
                 None => return,
                 Some(user_input) => {
                     if user_input.is_dir {
                         return;
                     }
-                    let prompted_path =
-                        if parent_path == &self.prompt_root && user_input.file.string.is_empty() {
-                            PathBuf::from(&self.prompt_root)
-                        } else {
-                            let Some(prompted_path) = self
-                                .path_style
-                                .join_path_preserving_components(
-                                    Path::new(self.lister.resolve_tilde(parent_path, cx).as_ref()),
-                                    &user_input.file.string,
-                                )
-                                .log_err()
-                            else {
-                                return;
-                            };
-                            prompted_path
+                    let prompted_path = if parent_path == &self.prompt_root && user_input.file.string.is_empty() {
+                        PathBuf::from(&self.prompt_root)
+                    } else {
+                        let Some(prompted_path) = self
+                            .path_style
+                            .join_path_preserving_components(
+                                Path::new(self.lister.resolve_tilde(parent_path, cx).as_ref()),
+                                &user_input.file.string,
+                            )
+                            .log_err()
+                        else {
+                            return;
                         };
+                        prompted_path
+                    };
                     if user_input.exists {
                         self.should_dismiss = false;
                         let answer = window.prompt(
@@ -741,11 +644,7 @@ impl PickerDelegate for OpenPathDelegate {
             DirectoryState::Create { user_input, .. } => {
                 if let Some(user_input) = user_input {
                     if !user_input.exists || !user_input.is_dir {
-                        if ix == 0 {
-                            None
-                        } else {
-                            self.string_matches.get(ix - 1)
-                        }
+                        if ix == 0 { None } else { self.string_matches.get(ix - 1) }
                     } else {
                         self.string_matches.get(ix)
                     }
@@ -760,8 +659,7 @@ impl PickerDelegate for OpenPathDelegate {
         // async updates. When that happens, render the row without highlights.
         let mut match_positions = string_match
             .filter(|string_match| {
-                string_match.candidate_id == candidate.path.id
-                    && string_match.string == candidate.path.string
+                string_match.candidate_id == candidate.path.id && string_match.string == candidate.path.string
             })
             .map(|string_match| string_match.positions.clone())
             .unwrap_or_default();
@@ -794,10 +692,7 @@ impl PickerDelegate for OpenPathDelegate {
                     match_positions.iter_mut().for_each(|position| {
                         *position += self.prompt_root.len();
                     });
-                    (
-                        format!("{}{}", self.prompt_root, candidate.path.string),
-                        match_positions,
-                    )
+                    (format!("{}{}", self.prompt_root, candidate.path.string), match_positions)
                 } else {
                     (candidate.path.string, match_positions)
                 };
@@ -810,19 +705,12 @@ impl PickerDelegate for OpenPathDelegate {
                         .child(HighlightedLabel::new(label, indices)),
                 )
             }
-            DirectoryState::Create {
-                parent_path,
-                user_input,
-                ..
-            } => {
+            DirectoryState::Create { parent_path, user_input, .. } => {
                 let (label, delta) = if *parent_path == self.prompt_root {
                     match_positions.iter_mut().for_each(|position| {
                         *position += self.prompt_root.len();
                     });
-                    (
-                        format!("{}{}", self.prompt_root, candidate.path.string),
-                        self.prompt_root.len(),
-                    )
+                    (format!("{}{}", self.prompt_root, candidate.path.string), self.prompt_root.len())
                 } else {
                     (candidate.path.string.clone(), 0)
                 };
@@ -832,28 +720,18 @@ impl PickerDelegate for OpenPathDelegate {
                         let label_len = label.len();
                         if user_input.file.string == candidate.path.string {
                             if user_input.exists {
-                                let label = if user_input.is_dir {
-                                    label
-                                } else {
-                                    format!("{label} (replace)")
-                                };
+                                let label = if user_input.is_dir { label } else { format!("{label} (replace)") };
                                 StyledText::new(label)
                                     .with_default_highlights(
                                         &window.text_style(),
-                                        vec![(
-                                            delta..label_len,
-                                            HighlightStyle::color(Color::Conflict.color(cx)),
-                                        )],
+                                        vec![(delta..label_len, HighlightStyle::color(Color::Conflict.color(cx)))],
                                     )
                                     .into_any_element()
                             } else {
                                 StyledText::new(format!("{label} (create)"))
                                     .with_default_highlights(
                                         &window.text_style(),
-                                        vec![(
-                                            delta..label_len,
-                                            HighlightStyle::color(Color::Created.color(cx)),
-                                        )],
+                                        vec![(delta..label_len, HighlightStyle::color(Color::Created.color(cx)))],
                                     )
                                     .into_any_element()
                             }
@@ -877,20 +755,14 @@ impl PickerDelegate for OpenPathDelegate {
         }
     }
 
-    fn render_footer(
-        &self,
-        window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) -> Option<AnyElement> {
+    fn render_footer(&self, window: &mut Window, cx: &mut Context<Picker<Self>>) -> Option<AnyElement> {
         (self.render_footer)(window, cx)
     }
 
     fn no_matches_text(&self, _window: &mut Window, _cx: &mut App) -> Option<SharedString> {
         Some(match &self.directory_state {
             DirectoryState::Create { .. } => SharedString::from("Type a path…"),
-            DirectoryState::List {
-                error: Some(error), ..
-            } => error.clone(),
+            DirectoryState::List { error: Some(error), .. } => error.clone(),
             DirectoryState::List { .. } | DirectoryState::None { .. } => {
                 SharedString::from("No such file or directory")
             }
@@ -898,24 +770,14 @@ impl PickerDelegate for OpenPathDelegate {
     }
 
     fn placeholder_text(&self, _window: &mut Window, _cx: &mut App) -> Arc<str> {
-        Arc::from(
-            format!(
-                "[directory{}]filename.ext",
-                self.path_style.primary_separator()
-            )
-            .as_str(),
-        )
+        Arc::from(format!("[directory{}]filename.ext", self.path_style.primary_separator()).as_str())
     }
 
     fn separators_after_indices(&self) -> Vec<usize> {
         let Some(m) = self.string_matches.first() else {
             return Vec::new();
         };
-        if m.string == self.current_dir() {
-            vec![0]
-        } else {
-            Vec::new()
-        }
+        if m.string == self.current_dir() { vec![0] } else { Vec::new() }
     }
 }
 
@@ -925,10 +787,7 @@ fn path_candidates(
     sort_mode: ProjectPanelSortMode,
 ) -> Vec<CandidateInfo> {
     if parent_path_is_root {
-        children.push(DirectoryItem {
-            is_dir: true,
-            path: PathBuf::default(),
-        });
+        children.push(DirectoryItem { is_dir: true, path: PathBuf::default() });
     }
 
     children.sort_by(|a, b| {
@@ -965,10 +824,7 @@ fn get_dir_and_suffix(query: String, path_style: PathStyle) -> (String, String) 
         PathStyle::Windows => {
             let last_sep = query.rfind('\\').into_iter().chain(query.rfind('/')).max();
             let (mut dir, suffix) = if let Some(index) = last_sep {
-                (
-                    query[..index + 1].to_string(),
-                    query[index + 1..].to_string(),
-                )
+                (query[..index + 1].to_string(), query[index + 1..].to_string())
             } else {
                 (query, String::new())
             };

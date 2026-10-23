@@ -1,14 +1,20 @@
-use std::{path::Path, sync::Arc};
+use std::path::Path;
+use std::sync::Arc;
 
 use anyhow::Context;
-use collections::{BTreeMap, HashMap};
+use collections::BTreeMap;
+use collections::HashMap;
 use gpui::Rgba;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use settings_macros::{MergeFrom, with_fallible_options};
+use serde::Deserialize;
+use serde::Serialize;
+use settings_macros::MergeFrom;
+use settings_macros::with_fallible_options;
 use util::serde::default_true;
 
-use crate::{AllLanguageSettingsContent, DelayMs, SplicingVec};
+use crate::AllLanguageSettingsContent;
+use crate::DelayMs;
+use crate::SplicingVec;
 
 #[with_fallible_options]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
@@ -239,19 +245,12 @@ pub struct LspSettings {
 
 impl Default for LspSettings {
     fn default() -> Self {
-        Self {
-            binary: None,
-            initialization_options: None,
-            settings: None,
-            enable_lsp_tasks: true,
-        }
+        Self { binary: None, initialization_options: None, settings: None, enable_lsp_tasks: true }
     }
 }
 
 #[with_fallible_options]
-#[derive(
-    Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom, Hash,
-)]
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom, Hash)]
 pub struct BinarySettings {
     pub arguments: Option<Vec<String>>,
     pub env: Option<BTreeMap<String, String>>,
@@ -302,24 +301,15 @@ impl SemanticTokenRules {
     pub const FILE_NAME: &'static str = "semantic_token_rules.json";
 
     pub fn load(file_path: &Path) -> anyhow::Result<Self> {
-        let rules_content = std::fs::read_to_string(file_path).with_context(|| {
-            anyhow::anyhow!(
-                "Could not read semantic token rules from {}",
-                file_path.display()
-            )
-        })?;
+        let rules_content = std::fs::read_to_string(file_path)
+            .with_context(|| anyhow::anyhow!("Could not read semantic token rules from {}", file_path.display()))?;
 
-        Self::parse(&rules_content).with_context(|| {
-            anyhow::anyhow!(
-                "Failed to parse semantic token rules from {}",
-                file_path.display()
-            )
-        })
+        Self::parse(&rules_content)
+            .with_context(|| anyhow::anyhow!("Failed to parse semantic token rules from {}", file_path.display()))
     }
 
     pub fn parse(file_content: &str) -> anyhow::Result<Self> {
-        serde_json_lenient::from_str::<SemanticTokenRules>(file_content)
-            .context("failed to parse semantic token rules")
+        serde_json_lenient::from_str::<SemanticTokenRules>(file_content).context("failed to parse semantic token rules")
     }
 }
 
@@ -346,7 +336,7 @@ pub struct SemanticTokenRule {
 }
 
 impl SemanticTokenRule {
-    pub fn no_style_defined(&self) -> bool {
+    pub const fn no_style_defined(&self) -> bool {
         self.style.is_empty()
             && self.foreground_color.is_none()
             && self.background_color.is_none()
@@ -407,9 +397,7 @@ pub enum SemanticTokenFontStyle {
 }
 
 #[with_fallible_options]
-#[derive(
-    Default, Copy, Clone, PartialEq, Eq, Debug, Serialize, Deserialize, JsonSchema, MergeFrom,
-)]
+#[derive(Default, Copy, Clone, PartialEq, Eq, Debug, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct SessionSettingsContent {
     /// Whether or not to restore unsaved buffers on restart.
     ///
@@ -608,9 +596,7 @@ pub struct DiagnosticsSettingsContent {
 }
 
 #[with_fallible_options]
-#[derive(
-    Clone, Copy, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq,
-)]
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
 pub struct LspPullDiagnosticsSettingsContent {
     /// Whether to pull for diagnostics or not.
     ///
@@ -624,9 +610,7 @@ pub struct LspPullDiagnosticsSettingsContent {
 }
 
 #[with_fallible_options]
-#[derive(
-    Clone, Copy, Debug, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Eq,
-)]
+#[derive(Clone, Copy, Debug, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Eq)]
 pub struct InlineDiagnosticsSettingsContent {
     /// Whether or not to show inline diagnostics
     ///

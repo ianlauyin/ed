@@ -14,11 +14,8 @@ pub struct UnboundedSyncSender<T: Send> {
 }
 
 impl<T: Send> UnboundedSyncSender<T> {
-    pub fn new(sender: Sender<T>) -> Self {
-        Self {
-            cloneable_sender: Mutex::new(sender),
-            local_senders: ThreadLocal::new(),
-        }
+    pub const fn new(sender: Sender<T>) -> Self {
+        Self { cloneable_sender: Mutex::new(sender), local_senders: ThreadLocal::new() }
     }
 }
 
@@ -26,7 +23,6 @@ impl<T: Send> Deref for UnboundedSyncSender<T> {
     type Target = Sender<T>;
 
     fn deref(&self) -> &Self::Target {
-        self.local_senders
-            .get_or(|| self.cloneable_sender.lock().clone())
+        self.local_senders.get_or(|| self.cloneable_sender.lock().clone())
     }
 }

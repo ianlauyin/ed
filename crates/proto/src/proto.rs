@@ -4,17 +4,23 @@ pub mod error;
 mod macros;
 mod typed_envelope;
 
+use std::cmp;
+use std::iter;
+use std::mem;
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
+
 pub use error::*;
-pub use prost::{DecodeError, Message};
-use std::{
-    cmp,
-    fmt::Debug,
-    iter, mem,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+pub use prost::DecodeError;
+pub use prost::Message;
 pub use typed_envelope::*;
 
-include!(concat!(env!("OUT_DIR"), "/zed.messages.rs"));
+mod generated {
+    #![allow(clippy::missing_const_for_fn)]
+    include!(concat!(env!("OUT_DIR"), "/zed.messages.rs"));
+}
+pub use generated::*;
 
 pub const REMOTE_SERVER_PEER_ID: PeerId = PeerId { owner_id: 0, id: 0 };
 pub const REMOTE_SERVER_PROJECT_ID: u64 = 0;
@@ -293,10 +299,7 @@ messages!(
 request_messages!(
     (AllocateWorktreeId, AllocateWorktreeIdResponse),
     (ApplyCodeAction, ApplyCodeActionResponse),
-    (
-        ApplyCompletionAdditionalEdits,
-        ApplyCompletionAdditionalEditsResponse
-    ),
+    (ApplyCompletionAdditionalEdits, ApplyCompletionAdditionalEditsResponse),
     (Commit, Ack),
     (RunGitHook, Ack),
     (CopyProjectEntry, ProjectEntryResponse),
@@ -351,10 +354,7 @@ request_messages!(
     (RefreshDocumentSymbols, Ack),
     (ReloadBuffers, ReloadBuffersResponse),
     (RenameProjectEntry, ProjectEntryResponse),
-    (
-        ResolveCompletionDocumentation,
-        ResolveCompletionDocumentationResponse
-    ),
+    (ResolveCompletionDocumentation, ResolveCompletionDocumentationResponse),
     (ResolveInlayHint, ResolveInlayHintResponse),
     (ResolveCodeAction, ResolveCodeActionResponse),
     (GetDocumentColor, GetDocumentColorResponse),
@@ -633,19 +633,14 @@ entity_messages!(
 
 impl From<Timestamp> for SystemTime {
     fn from(val: Timestamp) -> Self {
-        UNIX_EPOCH
-            .checked_add(Duration::new(val.seconds, val.nanos))
-            .unwrap()
+        UNIX_EPOCH.checked_add(Duration::new(val.seconds, val.nanos)).unwrap()
     }
 }
 
 impl From<SystemTime> for Timestamp {
     fn from(time: SystemTime) -> Self {
         let duration = time.duration_since(UNIX_EPOCH).unwrap_or_default();
-        Self {
-            seconds: duration.as_secs(),
-            nanos: duration.subsec_nanos(),
-        }
+        Self { seconds: duration.as_secs(), nanos: duration.subsec_nanos() }
     }
 }
 
@@ -653,10 +648,7 @@ impl From<u128> for Nonce {
     fn from(nonce: u128) -> Self {
         let upper_half = (nonce >> 64) as u64;
         let lower_half = nonce as u64;
-        Self {
-            upper_half,
-            lower_half,
-        }
+        Self { upper_half, lower_half }
     }
 }
 
@@ -678,23 +670,11 @@ pub fn split_worktree_update(mut message: UpdateWorktree) -> impl Iterator<Item 
             return None;
         }
 
-        let updated_entries_chunk_size = cmp::min(
-            message.updated_entries.len(),
-            MAX_WORKTREE_UPDATE_MAX_CHUNK_SIZE,
-        );
-        let updated_entries: Vec<_> = message
-            .updated_entries
-            .drain(..updated_entries_chunk_size)
-            .collect();
+        let updated_entries_chunk_size = cmp::min(message.updated_entries.len(), MAX_WORKTREE_UPDATE_MAX_CHUNK_SIZE);
+        let updated_entries: Vec<_> = message.updated_entries.drain(..updated_entries_chunk_size).collect();
 
-        let removed_entries_chunk_size = cmp::min(
-            message.removed_entries.len(),
-            MAX_WORKTREE_UPDATE_MAX_CHUNK_SIZE,
-        );
-        let removed_entries = message
-            .removed_entries
-            .drain(..removed_entries_chunk_size)
-            .collect();
+        let removed_entries_chunk_size = cmp::min(message.removed_entries.len(), MAX_WORKTREE_UPDATE_MAX_CHUNK_SIZE);
+        let removed_entries = message.removed_entries.drain(..removed_entries_chunk_size).collect();
 
         let mut updated_repositories = Vec::new();
         let mut limit = MAX_WORKTREE_UPDATE_MAX_CHUNK_SIZE;
@@ -705,14 +685,8 @@ pub fn split_worktree_update(mut message: UpdateWorktree) -> impl Iterator<Item 
             updated_repositories.push(RepositoryEntry {
                 repository_id: repo.repository_id,
                 branch_summary: repo.branch_summary.clone(),
-                updated_statuses: repo
-                    .updated_statuses
-                    .drain(..updated_statuses_limit)
-                    .collect(),
-                removed_statuses: repo
-                    .removed_statuses
-                    .drain(..removed_statuses_limit)
-                    .collect(),
+                updated_statuses: repo.updated_statuses.drain(..updated_statuses_limit).collect(),
+                removed_statuses: repo.removed_statuses.drain(..removed_statuses_limit).collect(),
                 current_merge_conflicts: repo.current_merge_conflicts.clone(),
             });
             if repo.removed_statuses.is_empty() && repo.updated_statuses.is_empty() {
@@ -728,11 +702,7 @@ pub fn split_worktree_update(mut message: UpdateWorktree) -> impl Iterator<Item 
             && message.removed_entries.is_empty()
             && message.updated_repositories.is_empty();
 
-        let removed_repositories = if done {
-            mem::take(&mut message.removed_repositories)
-        } else {
-            Default::default()
-        };
+        let removed_repositories = if done { mem::take(&mut message.removed_repositories) } else { Default::default() };
 
         Some(UpdateWorktree {
             project_id: message.project_id,
@@ -751,9 +721,7 @@ pub fn split_worktree_update(mut message: UpdateWorktree) -> impl Iterator<Item 
     })
 }
 
-pub fn split_repository_update(
-    mut update: UpdateRepository,
-) -> impl Iterator<Item = UpdateRepository> {
+pub fn split_repository_update(mut update: UpdateRepository) -> impl Iterator<Item = UpdateRepository> {
     let mut updated_statuses_iter = mem::take(&mut update.updated_statuses).into_iter().fuse();
     let mut removed_statuses_iter = mem::take(&mut update.removed_statuses).into_iter().fuse();
     let branch_list = mem::take(&mut update.branch_list);
@@ -761,14 +729,10 @@ pub fn split_repository_update(
     std::iter::from_fn({
         let update = update.clone();
         move || {
-            let updated_statuses = updated_statuses_iter
-                .by_ref()
-                .take(MAX_WORKTREE_UPDATE_MAX_CHUNK_SIZE)
-                .collect::<Vec<_>>();
-            let removed_statuses = removed_statuses_iter
-                .by_ref()
-                .take(MAX_WORKTREE_UPDATE_MAX_CHUNK_SIZE)
-                .collect::<Vec<_>>();
+            let updated_statuses =
+                updated_statuses_iter.by_ref().take(MAX_WORKTREE_UPDATE_MAX_CHUNK_SIZE).collect::<Vec<_>>();
+            let removed_statuses =
+                removed_statuses_iter.by_ref().take(MAX_WORKTREE_UPDATE_MAX_CHUNK_SIZE).collect::<Vec<_>>();
             if updated_statuses.is_empty() && removed_statuses.is_empty() {
                 return None;
             }
@@ -793,14 +757,12 @@ pub fn split_repository_update(
 }
 
 impl LspQuery {
-    pub fn query_name_and_write_permissions(&self) -> (&str, bool) {
+    pub const fn query_name_and_write_permissions(&self) -> (&str, bool) {
         match self.request {
             Some(lsp_query::Request::GetHover(_)) => ("GetHover", false),
             Some(lsp_query::Request::GetCodeActions(_)) => ("GetCodeActions", true),
             Some(lsp_query::Request::GetCodeLens(_)) => ("GetCodeLens", true),
-            Some(lsp_query::Request::GetDocumentDiagnostics(_)) => {
-                ("GetDocumentDiagnostics", false)
-            }
+            Some(lsp_query::Request::GetDocumentDiagnostics(_)) => ("GetDocumentDiagnostics", false),
             Some(lsp_query::Request::GetDefinition(_)) => ("GetDefinition", false),
             Some(lsp_query::Request::GetDeclaration(_)) => ("GetDeclaration", false),
             Some(lsp_query::Request::GetTypeDefinition(_)) => ("GetTypeDefinition", false),

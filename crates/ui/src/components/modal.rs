@@ -1,8 +1,10 @@
-use crate::{IconButtonShape, prelude::*};
-
-use gpui::{prelude::FluentBuilder, *};
+use gpui::prelude::FluentBuilder;
+use gpui::*;
 use smallvec::SmallVec;
 use theme::ActiveTheme;
+
+use crate::IconButtonShape;
+use crate::prelude::*;
 
 #[derive(IntoElement)]
 pub struct Modal {
@@ -44,12 +46,12 @@ impl Modal {
         self
     }
 
-    pub fn show_dismiss(mut self, show: bool) -> Self {
+    pub const fn show_dismiss(mut self, show: bool) -> Self {
         self.header.show_dismiss_button = show;
         self
     }
 
-    pub fn show_back(mut self, show: bool) -> Self {
+    pub const fn show_back(mut self, show: bool) -> Self {
         self.header.show_back_button = show;
         self
     }
@@ -75,13 +77,9 @@ impl RenderOnce for Modal {
                     .w_full()
                     .flex_1()
                     .gap(DynamicSpacing::Base08.rems(cx))
-                    .when_some(
-                        self.container_scroll_handler,
-                        |this, container_scroll_handle| {
-                            this.overflow_y_scroll()
-                                .track_scroll(&container_scroll_handle)
-                        },
-                    )
+                    .when_some(self.container_scroll_handler, |this, container_scroll_handle| {
+                        this.overflow_y_scroll().track_scroll(&container_scroll_handle)
+                    })
                     .children(self.children),
             )
             .children(self.footer)
@@ -135,12 +133,12 @@ impl ModalHeader {
         self
     }
 
-    pub fn show_dismiss_button(mut self, show: bool) -> Self {
+    pub const fn show_dismiss_button(mut self, show: bool) -> Self {
         self.show_dismiss_button = show;
         self
     }
 
-    pub fn show_back_button(mut self, show: bool) -> Self {
+    pub const fn show_back_button(mut self, show: bool) -> Self {
         self.show_back_button = show;
         self
     }
@@ -157,13 +155,8 @@ impl RenderOnce for ModalHeader {
         let mut children = self.children;
 
         if let Some(headline) = self.headline {
-            children.insert(
-                0,
-                Headline::new(headline)
-                    .size(HeadlineSize::Small)
-                    .color(Color::Muted)
-                    .into_any_element(),
-            );
+            children
+                .insert(0, Headline::new(headline).size(HeadlineSize::Small).color(Color::Muted).into_any_element());
         }
 
         h_flex()
@@ -176,13 +169,11 @@ impl RenderOnce for ModalHeader {
             .pb(DynamicSpacing::Base04.rems(cx))
             .gap(DynamicSpacing::Base08.rems(cx))
             .when(self.show_back_button, |this| {
-                this.child(
-                    IconButton::new("back", IconName::ArrowLeft)
-                        .shape(IconButtonShape::Square)
-                        .on_click(|_, window, cx| {
-                            window.dispatch_action(menu::Cancel.boxed_clone(), cx);
-                        }),
-                )
+                this.child(IconButton::new("back", IconName::ArrowLeft).shape(IconButtonShape::Square).on_click(
+                    |_, window, cx| {
+                        window.dispatch_action(menu::Cancel.boxed_clone(), cx);
+                    },
+                ))
             })
             .child(
                 v_flex()
@@ -194,18 +185,15 @@ impl RenderOnce for ModalHeader {
                             .gap_1()
                             .justify_between()
                             .child(
-                                h_flex()
-                                    .gap_1()
-                                    .when_some(self.icon, |this, icon| this.child(icon))
-                                    .children(children),
+                                h_flex().gap_1().when_some(self.icon, |this, icon| this.child(icon)).children(children),
                             )
                             .when(self.show_dismiss_button, |this| {
                                 this.child(
-                                    IconButton::new("dismiss", IconName::Close)
-                                        .icon_size(IconSize::Small)
-                                        .on_click(|_, window, cx| {
+                                    IconButton::new("dismiss", IconName::Close).icon_size(IconSize::Small).on_click(
+                                        |_, window, cx| {
                                             window.dispatch_action(menu::Cancel.boxed_clone(), cx);
-                                        }),
+                                        },
+                                    ),
                                 )
                             }),
                     )
@@ -229,9 +217,7 @@ impl Default for ModalRow {
 
 impl ModalRow {
     pub fn new() -> Self {
-        Self {
-            children: SmallVec::new(),
-        }
+        Self { children: SmallVec::new() }
     }
 }
 
@@ -260,11 +246,8 @@ impl Default for ModalFooter {
 }
 
 impl ModalFooter {
-    pub fn new() -> Self {
-        Self {
-            start_slot: None,
-            end_slot: None,
-        }
+    pub const fn new() -> Self {
+        Self { start_slot: None, end_slot: None }
     }
 
     pub fn start_slot<E: IntoElement>(mut self, start_slot: impl Into<Option<E>>) -> Self {
@@ -310,26 +293,14 @@ impl Default for Section {
 
 impl Section {
     pub fn new() -> Self {
-        Self {
-            contained: false,
-            padded: true,
-            header: None,
-            meta: None,
-            children: SmallVec::new(),
-        }
+        Self { contained: false, padded: true, header: None, meta: None, children: SmallVec::new() }
     }
 
     pub fn new_contained() -> Self {
-        Self {
-            contained: true,
-            padded: true,
-            header: None,
-            meta: None,
-            children: SmallVec::new(),
-        }
+        Self { contained: true, padded: true, header: None, meta: None, children: SmallVec::new() }
     }
 
-    pub fn contained(mut self, contained: bool) -> Self {
+    pub const fn contained(mut self, contained: bool) -> Self {
         self.contained = contained;
         self
     }
@@ -343,7 +314,7 @@ impl Section {
         self.meta = Some(meta.into());
         self
     }
-    pub fn padded(mut self, padded: bool) -> Self {
+    pub const fn padded(mut self, padded: bool) -> Self {
         self.padded = padded;
         self
     }
@@ -361,34 +332,22 @@ impl RenderOnce for Section {
         section_bg.fade_out(0.96);
 
         let children = if self.contained {
-            v_flex()
-                .flex_1()
-                .when(self.padded, |this| this.px(DynamicSpacing::Base12.rems(cx)))
-                .child(
-                    v_flex()
-                        .w_full()
-                        .rounded_sm()
-                        .border_1()
-                        .border_color(cx.theme().colors().border)
-                        .bg(section_bg)
-                        .child(
-                            div()
-                                .flex()
-                                .flex_1()
-                                .pb_2()
-                                .size_full()
-                                .children(self.children),
-                        ),
-                )
+            v_flex().flex_1().when(self.padded, |this| this.px(DynamicSpacing::Base12.rems(cx))).child(
+                v_flex()
+                    .w_full()
+                    .rounded_sm()
+                    .border_1()
+                    .border_color(cx.theme().colors().border)
+                    .bg(section_bg)
+                    .child(div().flex().flex_1().pb_2().size_full().children(self.children)),
+            )
         } else {
             v_flex()
                 .w_full()
                 .flex_1()
                 .gap_y(DynamicSpacing::Base04.rems(cx))
                 .pb_2()
-                .when(self.padded, |this| {
-                    this.px(DynamicSpacing::Base06.rems(cx) + DynamicSpacing::Base06.rems(cx))
-                })
+                .when(self.padded, |this| this.px(DynamicSpacing::Base06.rems(cx) + DynamicSpacing::Base06.rems(cx)))
                 .children(self.children)
         };
 
@@ -421,10 +380,7 @@ pub struct SectionHeader {
 
 impl SectionHeader {
     pub fn new(label: impl Into<SharedString>) -> Self {
-        Self {
-            label: label.into(),
-            end_slot: None,
-        }
+        Self { label: label.into(), end_slot: None }
     }
 
     pub fn end_slot<E: IntoElement>(mut self, end_slot: impl Into<Option<E>>) -> Self {
@@ -435,27 +391,17 @@ impl SectionHeader {
 
 impl RenderOnce for SectionHeader {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        h_flex()
-            .id(self.label.clone())
-            .w_full()
-            .px(DynamicSpacing::Base08.rems(cx))
-            .child(
-                div()
-                    .h_7()
-                    .flex()
-                    .items_center()
-                    .justify_between()
-                    .w_full()
-                    .gap(DynamicSpacing::Base04.rems(cx))
-                    .child(
-                        div().flex_1().child(
-                            Label::new(self.label.clone())
-                                .size(LabelSize::Small)
-                                .into_element(),
-                        ),
-                    )
-                    .child(h_flex().children(self.end_slot)),
-            )
+        h_flex().id(self.label.clone()).w_full().px(DynamicSpacing::Base08.rems(cx)).child(
+            div()
+                .h_7()
+                .flex()
+                .items_center()
+                .justify_between()
+                .w_full()
+                .gap(DynamicSpacing::Base04.rems(cx))
+                .child(div().flex_1().child(Label::new(self.label.clone()).size(LabelSize::Small).into_element()))
+                .child(h_flex().children(self.end_slot)),
+        )
     }
 }
 

@@ -1,46 +1,77 @@
-use crate::remote_connections::{
-    Connection, RemoteConnectionModal, RemoteConnectionPrompt, RemoteSettings, SshConnection,
-    SshConnectionHeader, connect, determine_paths_with_positions, open_remote_project,
-};
+use crate::remote_connections::Connection;
+use crate::remote_connections::RemoteConnectionModal;
+use crate::remote_connections::RemoteConnectionPrompt;
+use crate::remote_connections::RemoteSettings;
+use crate::remote_connections::SshConnection;
+use crate::remote_connections::SshConnectionHeader;
+use crate::remote_connections::connect;
+use crate::remote_connections::determine_paths_with_positions;
+use crate::remote_connections::open_remote_project;
 mod filter;
 
+use std::collections::BTreeSet;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+
 use editor::Editor;
-use filter::{FilterData, FilteredServer};
-use futures::{FutureExt, channel::oneshot, future::Shared};
-use gpui::{
-    Action, AnyElement, App, ClipboardItem, Context, DismissEvent, Entity, EventEmitter,
-    FocusHandle, Focusable, PromptLevel, Subscription, Task, TaskExt, WeakEntity, Window,
-};
+use filter::FilterData;
+use filter::FilteredServer;
+use futures::FutureExt;
+use futures::channel::oneshot;
+use futures::future::Shared;
+use gpui::Action;
+use gpui::AnyElement;
+use gpui::App;
+use gpui::ClipboardItem;
+use gpui::Context;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::PromptLevel;
+use gpui::Subscription;
+use gpui::Task;
+use gpui::TaskExt;
+use gpui::WeakEntity;
+use gpui::Window;
 use log::info;
 use open_path_prompt::OpenPathDelegate;
-use picker::{Picker, PickerDelegate, PickerEditorPosition};
+use picker::Picker;
+use picker::PickerDelegate;
+use picker::PickerEditorPosition;
 use project::Project;
-use remote::{
-    RemoteClient, RemoteConnectionOptions, SshConnectionOptions,
-    remote_client::ConnectionIdentifier,
-};
-use settings::{
-    RemoteProject, RemoteSettingsContent, Settings as _, SettingsStore, update_settings_file,
-};
-use std::{
-    collections::BTreeSet,
-    path::PathBuf,
-    sync::{Arc, atomic::AtomicBool},
-};
-
-use ui::{
-    HighlightedLabel, IconButtonShape, KeyBinding, ListItem, ListSeparator, Navigable,
-    NavigableEntry, Tooltip, prelude::*,
-};
-use util::{
-    ResultExt,
-    paths::{PathStyle, RemotePathBuf},
-};
-use workspace::{
-    DismissDecision, ModalView, MultiWorkspace, OpenOptions, Toast, Workspace,
-    notifications::{DetachAndPromptErr, NotificationId},
-    open_remote_project_with_existing_connection,
-};
+use remote::RemoteClient;
+use remote::RemoteConnectionOptions;
+use remote::SshConnectionOptions;
+use remote::remote_client::ConnectionIdentifier;
+use settings::RemoteProject;
+use settings::RemoteSettingsContent;
+use settings::Settings as _;
+use settings::SettingsStore;
+use settings::update_settings_file;
+use ui::HighlightedLabel;
+use ui::IconButtonShape;
+use ui::KeyBinding;
+use ui::ListItem;
+use ui::ListSeparator;
+use ui::Navigable;
+use ui::NavigableEntry;
+use ui::Tooltip;
+use ui::prelude::*;
+use util::ResultExt;
+use util::paths::PathStyle;
+use util::paths::RemotePathBuf;
+use workspace::DismissDecision;
+use workspace::ModalView;
+use workspace::MultiWorkspace;
+use workspace::OpenOptions;
+use workspace::Toast;
+use workspace::Workspace;
+use workspace::notifications::DetachAndPromptErr;
+use workspace::notifications::NotificationId;
+use workspace::open_remote_project_with_existing_connection;
 
 pub struct RemoteServerProjects {
     mode: Mode,
@@ -66,20 +97,12 @@ impl CreateRemoteServer {
         address_editor.update(cx, |this, cx| {
             this.focus_handle(cx).focus(window, cx);
         });
-        Self {
-            address_editor,
-            address_error: None,
-            ssh_prompt: None,
-            _creating: None,
-        }
+        Self { address_editor, address_error: None, ssh_prompt: None, _creating: None }
     }
 }
 
 enum ProjectPickerData {
-    Ssh {
-        connection_string: SharedString,
-        nickname: Option<SharedString>,
-    },
+    Ssh { connection_string: SharedString, nickname: Option<SharedString> },
 }
 
 struct ProjectPicker {
@@ -95,10 +118,7 @@ struct EditNicknameState {
 
 impl EditNicknameState {
     fn new(index: SshServerIndex, window: &mut Window, cx: &mut App) -> Self {
-        let this = Self {
-            index,
-            editor: cx.new(|cx| Editor::single_line(window, cx)),
-        };
+        let this = Self { index, editor: cx.new(|cx| Editor::single_line(window, cx)) };
         let starting_text = RemoteSettings::get_global(cx)
             .ssh_connections()
             .nth(index.0)
@@ -164,24 +184,17 @@ impl ProjectPicker {
                         return None;
                     };
 
-                    let app_state = workspace
-                        .read_with(cx, |workspace, _| workspace.app_state().clone())
-                        .ok()?;
+                    let app_state = workspace.read_with(cx, |workspace, _| workspace.app_state().clone()).ok()?;
 
-                    let remote_connection = project.read_with(cx, |project, cx| {
-                        project.remote_client()?.read(cx).connection()
-                    })?;
+                    let remote_connection =
+                        project.read_with(cx, |project, cx| project.remote_client()?.read(cx).connection())?;
 
-                    let (paths, paths_with_positions) =
-                        determine_paths_with_positions(&remote_connection, paths).await;
+                    let (paths, paths_with_positions) = determine_paths_with_positions(&remote_connection, paths).await;
 
                     cx.update(|_, cx| {
                         let fs = app_state.fs.clone();
                         update_settings_file(fs, cx, {
-                            let paths = paths
-                                .iter()
-                                .map(|path| path.to_string_lossy().into_owned())
-                                .collect();
+                            let paths = paths.iter().map(|path| path.to_string_lossy().into_owned()).collect();
                             move |settings, _| match index {
                                 ServerIndex::Ssh(index) => {
                                     if let Some(server) = settings
@@ -199,13 +212,10 @@ impl ProjectPicker {
                     .log_err();
 
                     let window = if create_new_window {
-                        let options = cx
-                            .update(|_, cx| (app_state.build_window_options)(None, cx))
-                            .log_err()?;
+                        let options = cx.update(|_, cx| (app_state.build_window_options)(None, cx)).log_err()?;
                         cx.open_window(options, |window, cx| {
-                            let workspace = cx.new(|cx| {
-                                Workspace::new(None, project.clone(), app_state.clone(), window, cx)
-                            });
+                            let workspace =
+                                cx.new(|cx| Workspace::new(None, project.clone(), app_state.clone(), window, cx));
                             cx.new(|cx| MultiWorkspace::new(workspace, window, cx))
                         })
                         .log_err()
@@ -234,14 +244,11 @@ impl ProjectPicker {
                                         active_editor.update(cx, |editor, cx| {
                                             let row = row.saturating_sub(1);
                                             let col = path.column.unwrap_or(0).saturating_sub(1);
-                                            let Some(buffer) =
-                                                editor.buffer().read(cx).as_singleton()
-                                            else {
+                                            let Some(buffer) = editor.buffer().read(cx).as_singleton() else {
                                                 return;
                                             };
                                             let buffer_snapshot = buffer.read(cx).snapshot();
-                                            let point =
-                                                buffer_snapshot.point_from_external_input(row, col);
+                                            let point = buffer_snapshot.point_from_external_input(row, col);
                                             editor.go_to_singleton_buffer_point(point, window, cx);
                                         });
                                     })
@@ -258,11 +265,7 @@ impl ProjectPicker {
                 }
             })
             .shared();
-        cx.new(|_| Self {
-            _path_task,
-            picker,
-            data,
-        })
+        cx.new(|_| Self { _path_task, picker, data })
     }
 }
 
@@ -270,22 +273,14 @@ impl gpui::Render for ProjectPicker {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         v_flex()
             .child(match &self.data {
-                ProjectPickerData::Ssh {
-                    connection_string,
-                    nickname,
-                } => SshConnectionHeader {
+                ProjectPickerData::Ssh { connection_string, nickname } => SshConnectionHeader {
                     connection_string: connection_string.clone(),
                     paths: Default::default(),
                     nickname: nickname.clone(),
                 }
                 .render(window, cx),
             })
-            .child(
-                div()
-                    .border_t_1()
-                    .border_color(cx.theme().colors().border_variant)
-                    .child(self.picker.clone()),
-            )
+            .child(div().border_t_1().border_color(cx.theme().colors().border_variant).child(self.picker.clone()))
     }
 }
 
@@ -315,11 +310,7 @@ struct ProjectEntry {
 
 #[derive(Clone)]
 enum RemoteEntry {
-    Project {
-        projects: Vec<ProjectEntry>,
-        connection: Connection,
-        index: ServerIndex,
-    },
+    Project { projects: Vec<ProjectEntry>, connection: Connection, index: ServerIndex },
 }
 
 impl RemoteEntry {
@@ -337,15 +328,12 @@ impl RemoteEntry {
     /// index the host here to keep it searchable.
     fn host_alias(&self) -> Option<&str> {
         match self {
-            Self::Project {
-                connection: Connection::Ssh(c),
-                ..
-            } if c.nickname.is_some() => Some(&c.host),
+            Self::Project { connection: Connection::Ssh(c), .. } if c.nickname.is_some() => Some(&c.host),
             _ => None,
         }
     }
 
-    fn connection(&self) -> &Connection {
+    const fn connection(&self) -> &Connection {
         match self {
             Self::Project { connection, .. } => connection,
         }
@@ -362,33 +350,21 @@ struct DefaultState {
 }
 
 impl DefaultState {
-    fn new(cx: &mut App) -> Self {
-        let ssh_servers = RemoteSettings::get_global(cx)
-            .ssh_connections()
-            .enumerate()
-            .map(|(index, connection)| {
-                let projects = connection
-                    .projects
-                    .iter()
-                    .map(|project| ProjectEntry {
-                        project: project.clone(),
-                    })
-                    .collect();
-                RemoteEntry::Project {
-                    projects,
-                    index: ServerIndex::Ssh(SshServerIndex(index)),
-                    connection: connection.into(),
-                }
-            });
+    fn new(cx: &App) -> Self {
+        let ssh_servers = RemoteSettings::get_global(cx).ssh_connections().enumerate().map(|(index, connection)| {
+            let projects =
+                connection.projects.iter().map(|project| ProjectEntry { project: project.clone() }).collect();
+            RemoteEntry::Project {
+                projects,
+                index: ServerIndex::Ssh(SshServerIndex(index)),
+                connection: connection.into(),
+            }
+        });
 
         let servers = ssh_servers.collect::<Vec<RemoteEntry>>();
 
         let filter_data = Arc::new(FilterData::build(&servers));
-        Self {
-            servers,
-            filtered_servers: None,
-            filter_data,
-        }
+        Self { servers, filtered_servers: None, filter_data }
     }
 
     fn filter_sync(&mut self, query: &str) {
@@ -402,15 +378,11 @@ impl DefaultState {
 
 #[derive(Clone)]
 enum ViewServerOptionsState {
-    Ssh {
-        connection: SshConnectionOptions,
-        server_index: SshServerIndex,
-        entries: [NavigableEntry; 4],
-    },
+    Ssh { connection: SshConnectionOptions, server_index: SshServerIndex, entries: [NavigableEntry; 4] },
 }
 
 impl ViewServerOptionsState {
-    fn entries(&self) -> &[NavigableEntry] {
+    const fn entries(&self) -> &[NavigableEntry] {
         match self {
             Self::Ssh { entries, .. } => entries,
         }
@@ -429,7 +401,7 @@ impl Mode {
     /// The default mode is backed by [`RemoteServerProjects::default_picker`],
     /// which is rebuilt from settings independently, so this just selects the
     /// variant and ignores its arguments.
-    fn default_mode() -> Self {
+    const fn default_mode() -> Self {
         Self::Default
     }
 }
@@ -437,29 +409,15 @@ impl Mode {
 enum RemoteMatch {
     AddServer,
     Separator,
-    ServerHeader {
-        server: usize,
-        host_positions: Vec<usize>,
-    },
-    Project {
-        server: usize,
-        project: usize,
-        positions: Vec<usize>,
-    },
-    OpenFolder {
-        server: usize,
-    },
-    ViewServerOptions {
-        server: usize,
-    },
+    ServerHeader { server: usize, host_positions: Vec<usize> },
+    Project { server: usize, project: usize, positions: Vec<usize> },
+    OpenFolder { server: usize },
+    ViewServerOptions { server: usize },
 }
 
 impl RemoteMatch {
-    fn is_selectable(&self) -> bool {
-        !matches!(
-            self,
-            RemoteMatch::Separator | RemoteMatch::ServerHeader { .. }
-        )
+    const fn is_selectable(&self) -> bool {
+        !matches!(self, RemoteMatch::Separator | RemoteMatch::ServerHeader { .. })
     }
 }
 
@@ -472,7 +430,7 @@ struct RemoteServerPickerDelegate {
 }
 
 impl RemoteServerPickerDelegate {
-    fn new(remote_server_projects: WeakEntity<RemoteServerProjects>, cx: &mut App) -> Self {
+    fn new(remote_server_projects: WeakEntity<RemoteServerProjects>, cx: &App) -> Self {
         let mut this = Self {
             remote_server_projects,
             state: DefaultState::new(cx),
@@ -484,7 +442,7 @@ impl RemoteServerPickerDelegate {
         this
     }
 
-    fn reload(&mut self, cx: &mut App) {
+    fn reload(&mut self, cx: &App) {
         self.state = DefaultState::new(cx);
         // Settings/ssh-config changes are rare, so re-applying the active query
         // synchronously here is fine; the per-keystroke path filters off-thread.
@@ -510,25 +468,14 @@ impl RemoteServerPickerDelegate {
             if !matches.is_empty() {
                 matches.push(RemoteMatch::Separator);
             }
-            matches.push(RemoteMatch::ServerHeader {
-                server: server_index,
-                host_positions,
-            });
+            matches.push(RemoteMatch::ServerHeader { server: server_index, host_positions });
             match server {
                 RemoteEntry::Project { .. } => {
                     for (project, positions) in project_matches {
-                        matches.push(RemoteMatch::Project {
-                            server: server_index,
-                            project,
-                            positions,
-                        });
+                        matches.push(RemoteMatch::Project { server: server_index, project, positions });
                     }
-                    matches.push(RemoteMatch::OpenFolder {
-                        server: server_index,
-                    });
-                    matches.push(RemoteMatch::ViewServerOptions {
-                        server: server_index,
-                    });
+                    matches.push(RemoteMatch::OpenFolder { server: server_index });
+                    matches.push(RemoteMatch::ViewServerOptions { server: server_index });
                 }
             }
         };
@@ -537,17 +484,9 @@ impl RemoteServerPickerDelegate {
             None => {
                 for (server_index, server) in self.state.servers.iter().enumerate() {
                     let project_matches = match server {
-                        RemoteEntry::Project { projects, .. } => {
-                            (0..projects.len()).map(|p| (p, Vec::new())).collect()
-                        }
+                        RemoteEntry::Project { projects, .. } => (0..projects.len()).map(|p| (p, Vec::new())).collect(),
                     };
-                    push_server(
-                        &mut matches,
-                        server_index,
-                        server,
-                        Vec::new(),
-                        project_matches,
-                    );
+                    push_server(&mut matches, server_index, server, Vec::new(), project_matches);
                 }
             }
             Some(results) => {
@@ -561,30 +500,16 @@ impl RemoteServerPickerDelegate {
                         .iter()
                         .map(|pm| (pm.project_index, pm.path_positions.clone()))
                         .collect();
-                    push_server(
-                        &mut matches,
-                        server_index,
-                        server,
-                        filtered.host_positions.clone(),
-                        project_matches,
-                    );
+                    push_server(&mut matches, server_index, server, filtered.host_positions.clone(), project_matches);
                 }
             }
         }
 
         self.matches = matches;
-        self.selected_index = self
-            .matches
-            .iter()
-            .position(RemoteMatch::is_selectable)
-            .unwrap_or(0);
+        self.selected_index = self.matches.iter().position(RemoteMatch::is_selectable).unwrap_or(0);
     }
 
-    fn render_server_header(
-        &self,
-        server_index: usize,
-        host_positions: &[usize],
-    ) -> Option<AnyElement> {
+    fn render_server_header(&self, server_index: usize, host_positions: &[usize]) -> Option<AnyElement> {
         let server = self.state.servers.get(server_index)?;
         let connection = server.connection().clone();
         let (main_label, aux_label) = match &connection {
@@ -605,32 +530,18 @@ impl RemoteServerPickerDelegate {
                 .gap_1()
                 .overflow_hidden()
                 .child(
-                    h_flex()
-                        .gap_1()
-                        .max_w_96()
-                        .overflow_hidden()
-                        .text_ellipsis()
-                        .child(
-                            HighlightedLabel::new(main_label, host_positions.to_vec())
-                                .size(LabelSize::Small)
-                                .color(Color::Muted),
-                        ),
+                    h_flex().gap_1().max_w_96().overflow_hidden().text_ellipsis().child(
+                        HighlightedLabel::new(main_label, host_positions.to_vec())
+                            .size(LabelSize::Small)
+                            .color(Color::Muted),
+                    ),
                 )
-                .children(
-                    aux_label
-                        .map(|label| Label::new(label).size(LabelSize::Small).color(Color::Muted)),
-                )
+                .children(aux_label.map(|label| Label::new(label).size(LabelSize::Small).color(Color::Muted)))
                 .into_any_element(),
         )
     }
 
-    fn render_action_item(
-        &self,
-        ix: usize,
-        icon: IconName,
-        label: &'static str,
-        selected: bool,
-    ) -> AnyElement {
+    fn render_action_item(&self, ix: usize, icon: IconName, label: &'static str, selected: bool) -> AnyElement {
         ListItem::new(("remote-action", ix))
             .toggle_state(selected)
             .inset(true)
@@ -656,12 +567,7 @@ impl PickerDelegate for RemoteServerPickerDelegate {
         self.selected_index
     }
 
-    fn set_selected_index(
-        &mut self,
-        ix: usize,
-        _window: &mut Window,
-        _cx: &mut Context<Picker<Self>>,
-    ) {
+    fn set_selected_index(&mut self, ix: usize, _window: &mut Window, _cx: &mut Context<Picker<Self>>) {
         self.selected_index = ix;
     }
 
@@ -681,12 +587,7 @@ impl PickerDelegate for RemoteServerPickerDelegate {
         Some("No matching remote projects.".into())
     }
 
-    fn update_matches(
-        &mut self,
-        query: String,
-        window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) -> Task<()> {
+    fn update_matches(&mut self, query: String, window: &mut Window, cx: &mut Context<Picker<Self>>) -> Task<()> {
         self.query = query;
         let query = self.query.trim().to_string();
 
@@ -704,8 +605,7 @@ impl PickerDelegate for RemoteServerPickerDelegate {
             // Picker drops this task on the next keystroke, so out-of-order
             // results can't be applied (mirrors `command_palette`).
             let cancel = AtomicBool::new(false);
-            let Some(results) = filter::run_async(&filter_data, &query, &cancel, executor).await
-            else {
+            let Some(results) = filter::run_async(&filter_data, &query, &cancel, executor).await else {
                 return;
             };
             picker
@@ -733,15 +633,8 @@ impl PickerDelegate for RemoteServerPickerDelegate {
                     })
                     .ok();
             }
-            RemoteMatch::Project {
-                server, project, ..
-            } => {
-                let Some(RemoteEntry::Project {
-                    connection,
-                    index,
-                    projects,
-                    ..
-                }) = self.state.servers.get(*server)
+            RemoteMatch::Project { server, project, .. } => {
+                let Some(RemoteEntry::Project { connection, index, projects, .. }) = self.state.servers.get(*server)
                 else {
                     return;
                 };
@@ -753,9 +646,7 @@ impl PickerDelegate for RemoteServerPickerDelegate {
                 let project = project_entry.project.clone();
                 remote_server_projects
                     .update(cx, |this, cx| {
-                        this.open_remote_project_entry(
-                            index, project, connection, secondary, window, cx,
-                        );
+                        this.open_remote_project_entry(index, project, connection, secondary, window, cx);
                     })
                     .ok();
             }
@@ -765,9 +656,7 @@ impl PickerDelegate for RemoteServerPickerDelegate {
                 };
                 cx.emit(DismissEvent);
                 match server_entry {
-                    RemoteEntry::Project {
-                        connection, index, ..
-                    } => {
+                    RemoteEntry::Project { connection, index, .. } => {
                         let connection = connection.clone();
                         let index = *index;
                         remote_server_projects
@@ -779,10 +668,7 @@ impl PickerDelegate for RemoteServerPickerDelegate {
                 }
             }
             RemoteMatch::ViewServerOptions { server } => {
-                let Some(RemoteEntry::Project {
-                    connection, index, ..
-                }) = self.state.servers.get(*server)
-                else {
+                let Some(RemoteEntry::Project { connection, index, .. }) = self.state.servers.get(*server) else {
                     return;
                 };
                 let connection = connection.clone();
@@ -808,31 +694,17 @@ impl PickerDelegate for RemoteServerPickerDelegate {
         let entry = self.matches.get(ix)?;
         match entry {
             RemoteMatch::Separator => Some(div().child(ListSeparator).into_any_element()),
-            RemoteMatch::ServerHeader {
-                server,
-                host_positions,
-            } => self.render_server_header(*server, host_positions),
-            RemoteMatch::AddServer => {
-                Some(self.render_action_item(ix, IconName::Plus, "Connect SSH Server", selected))
-            }
+            RemoteMatch::ServerHeader { server, host_positions } => self.render_server_header(*server, host_positions),
+            RemoteMatch::AddServer => Some(self.render_action_item(ix, IconName::Plus, "Connect SSH Server", selected)),
             RemoteMatch::OpenFolder { .. } => {
                 Some(self.render_action_item(ix, IconName::Plus, "Open Folder", selected))
             }
-            RemoteMatch::ViewServerOptions { .. } => Some(self.render_action_item(
-                ix,
-                IconName::Settings,
-                "View Server Options",
-                selected,
-            )),
-            RemoteMatch::Project {
-                server,
-                project,
-                positions,
-            } => {
+            RemoteMatch::ViewServerOptions { .. } => {
+                Some(self.render_action_item(ix, IconName::Settings, "View Server Options", selected))
+            }
+            RemoteMatch::Project { server, project, positions } => {
                 let server_entry = self.state.servers.get(*server)?;
-                let RemoteEntry::Project {
-                    projects, index, ..
-                } = server_entry;
+                let RemoteEntry::Project { projects, index, .. } = server_entry;
                 let project_entry = projects.get(*project)?;
                 let server_ix = *index;
                 let remote_project = project_entry.project.clone();
@@ -844,15 +716,8 @@ impl PickerDelegate for RemoteServerPickerDelegate {
                         .toggle_state(selected)
                         .inset(true)
                         .spacing(ui::ListItemSpacing::Sparse)
-                        .start_slot(
-                            Icon::new(IconName::Folder)
-                                .color(Color::Muted)
-                                .size(IconSize::Small),
-                        )
-                        .child(
-                            HighlightedLabel::new(paths.join(", "), positions.clone())
-                                .truncate_start(),
-                        )
+                        .start_slot(Icon::new(IconName::Folder).color(Color::Muted).size(IconSize::Small))
+                        .child(HighlightedLabel::new(paths.join(", "), positions.clone()).truncate_start())
                         .tooltip(Tooltip::text(paths.join("\n")))
                         .end_slot(
                             div().mr_2().child(
@@ -865,11 +730,7 @@ impl PickerDelegate for RemoteServerPickerDelegate {
                                         let remote_project = remote_project.clone();
                                         remote_server_projects
                                             .update(cx, |this, cx| {
-                                                this.delete_remote_project(
-                                                    server_ix,
-                                                    &remote_project,
-                                                    cx,
-                                                );
+                                                this.delete_remote_project(server_ix, &remote_project, cx);
                                             })
                                             .ok();
                                     })),
@@ -882,15 +743,8 @@ impl PickerDelegate for RemoteServerPickerDelegate {
         }
     }
 
-    fn render_footer(
-        &self,
-        _window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) -> Option<AnyElement> {
-        let is_project_selected = matches!(
-            self.matches.get(self.selected_index),
-            Some(RemoteMatch::Project { .. })
-        );
+    fn render_footer(&self, _window: &mut Window, cx: &mut Context<Picker<Self>>) -> Option<AnyElement> {
+        let is_project_selected = matches!(self.matches.get(self.selected_index), Some(RemoteMatch::Project { .. }));
 
         let confirm_button = |label: SharedString| {
             Button::new("select", label)
@@ -904,9 +758,7 @@ impl PickerDelegate for RemoteServerPickerDelegate {
                 .child(
                     Button::new("open_new_window", "New Window")
                         .key_binding(KeyBinding::for_action(&menu::SecondaryConfirm, cx))
-                        .on_click(|_, window, cx| {
-                            window.dispatch_action(menu::SecondaryConfirm.boxed_clone(), cx)
-                        }),
+                        .on_click(|_, window, cx| window.dispatch_action(menu::SecondaryConfirm.boxed_clone(), cx)),
                 )
                 .child(confirm_button("Open".into()))
                 .into_any_element()
@@ -934,13 +786,7 @@ impl RemoteServerProjects {
         workspace: WeakEntity<Workspace>,
         cx: &mut Context<Self>,
     ) -> Self {
-        Self::new_inner(
-            Mode::default_mode(),
-            create_new_window,
-            window,
-            workspace,
-            cx,
-        )
+        Self::new_inner(Mode::default_mode(), create_new_window, window, workspace, cx)
     }
 
     pub fn popover(
@@ -949,8 +795,7 @@ impl RemoteServerProjects {
         window: &mut Window,
         cx: &mut App,
     ) -> Entity<Self> {
-        let create_new_window =
-            create_new_window.unwrap_or_else(|| crate::default_open_in_new_window(cx));
+        let create_new_window = create_new_window.unwrap_or_else(|| crate::default_open_in_new_window(cx));
         cx.new(|cx| {
             let server = Self::new(create_new_window, window, workspace, cx);
             server.focus_handle(cx).focus(window, cx);
@@ -974,10 +819,9 @@ impl RemoteServerProjects {
             let delegate = RemoteServerPickerDelegate::new(remote_server_projects, cx);
             Picker::list(delegate, window, cx).embedded()
         });
-        let settings_subscription =
-            cx.observe_global_in::<SettingsStore>(window, |recent_projects, window, cx| {
-                recent_projects.refresh_default_picker(window, cx);
-            });
+        let settings_subscription = cx.observe_global_in::<SettingsStore>(window, |recent_projects, window, cx| {
+            recent_projects.refresh_default_picker(window, cx);
+        });
 
         let dismiss_subscription = cx.subscribe(&default_picker, |_, _, _, cx| {
             cx.emit(DismissEvent);
@@ -1025,12 +869,7 @@ impl RemoteServerProjects {
         this
     }
 
-    fn create_ssh_server(
-        &mut self,
-        editor: Entity<Editor>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn create_ssh_server(&mut self, editor: Entity<Editor>, window: &mut Window, cx: &mut Context<Self>) {
         let input = get_text(&editor, cx);
         if input.is_empty() {
             return;
@@ -1116,23 +955,21 @@ impl RemoteServerProjects {
         cx: &mut Context<Self>,
     ) {
         self.mode = Mode::ViewServerOptions(match (server_index, connection) {
-            (ServerIndex::Ssh(server_index), RemoteConnectionOptions::Ssh(connection)) => {
-                ViewServerOptionsState::Ssh {
-                    connection,
-                    server_index,
-                    entries: std::array::from_fn(|_| NavigableEntry::focusable(cx)),
-                }
-            }
+            (ServerIndex::Ssh(server_index), RemoteConnectionOptions::Ssh(connection)) => ViewServerOptionsState::Ssh {
+                connection,
+                server_index,
+                entries: std::array::from_fn(|_| NavigableEntry::focusable(cx)),
+            },
         });
         self.focus_handle(cx).focus(window, cx);
         cx.notify();
     }
 
     fn create_remote_project(
-        &mut self,
+        &self,
         index: ServerIndex,
         connection_options: RemoteConnectionOptions,
-        window: &mut Window,
+        window: &Window,
         cx: &mut Context<Self>,
     ) {
         let Some(workspace) = self.workspace.upgrade() else {
@@ -1152,14 +989,8 @@ impl RemoteServerProjects {
                 };
                 let prompt = modal.read(cx).prompt.clone();
 
-                let connect = connect(
-                    ConnectionIdentifier::setup(),
-                    connection_options.clone(),
-                    prompt,
-                    window,
-                    cx,
-                )
-                .prompt_err("Failed to connect", window, cx, |_, _, _| None);
+                let connect = connect(ConnectionIdentifier::setup(), connection_options.clone(), prompt, window, cx)
+                    .prompt_err("Failed to connect", window, cx, |_, _, _| None);
 
                 cx.spawn_in(window, async move |workspace, cx| {
                     let session = connect.await;
@@ -1199,9 +1030,7 @@ impl RemoteServerProjects {
                         .map(|path| RemotePathBuf::new(path, path_style))
                         .unwrap_or_else(|| match path_style {
                             PathStyle::Unix => RemotePathBuf::from_str("/", PathStyle::Unix),
-                            PathStyle::Windows => {
-                                RemotePathBuf::from_str("C:\\", PathStyle::Windows)
-                            }
+                            PathStyle::Windows => RemotePathBuf::from_str("C:\\", PathStyle::Windows),
                         });
 
                     workspace
@@ -1281,7 +1110,7 @@ impl RemoteServerProjects {
 
     /// Rebuilds the default picker's data from the latest settings/ssh-config
     /// and re-applies the current filter query.
-    fn refresh_default_picker(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn refresh_default_picker(&self, window: &mut Window, cx: &mut Context<Self>) {
         self.default_picker.update(cx, |picker, cx| {
             picker.delegate.reload(cx);
             picker.refresh(window, cx);
@@ -1292,18 +1121,15 @@ impl RemoteServerProjects {
     /// created based on the modal's `create_new_window` preference and whether
     /// the confirm was a secondary (platform-modifier) confirm.
     fn open_remote_project_entry(
-        &mut self,
+        &self,
         _index: ServerIndex,
         project: RemoteProject,
         connection: Connection,
         secondary_confirm: bool,
-        window: &mut Window,
+        window: &Window,
         cx: &mut Context<Self>,
     ) {
-        let Some(app_state) = self
-            .workspace
-            .read_with(cx, |workspace, _| workspace.app_state().clone())
-            .log_err()
+        let Some(app_state) = self.workspace.read_with(cx, |workspace, _| workspace.app_state().clone()).log_err()
         else {
             return;
         };
@@ -1320,44 +1146,30 @@ impl RemoteServerProjects {
                 connection.into(),
                 project.paths.into_iter().map(PathBuf::from).collect(),
                 app_state,
-                OpenOptions {
-                    requesting_window: replace_window,
-                    ..OpenOptions::default()
-                },
+                OpenOptions { requesting_window: replace_window, ..OpenOptions::default() },
                 cx,
             )
             .await;
             if let Err(e) = result {
                 log::error!("Failed to connect: {e:#}");
-                cx.prompt(
-                    gpui::PromptLevel::Critical,
-                    "Failed to connect",
-                    Some(&e.to_string()),
-                    &["OK"],
-                )
-                .await
-                .ok();
+                cx.prompt(gpui::PromptLevel::Critical, "Failed to connect", Some(&e.to_string()), &["OK"]).await.ok();
             }
         })
         .detach();
     }
 
     fn update_settings_file(
-        &mut self,
-        cx: &mut Context<Self>,
+        &self,
+        cx: &Context<Self>,
         f: impl FnOnce(&mut RemoteSettingsContent, &App) + Send + Sync + 'static,
     ) {
-        let Some(fs) = self
-            .workspace
-            .read_with(cx, |workspace, _| workspace.app_state().fs.clone())
-            .log_err()
-        else {
+        let Some(fs) = self.workspace.read_with(cx, |workspace, _| workspace.app_state().fs.clone()).log_err() else {
             return;
         };
         update_settings_file(fs, cx, move |setting, cx| f(&mut setting.remote, cx));
     }
 
-    fn delete_ssh_server(&mut self, server: SshServerIndex, cx: &mut Context<Self>) {
+    fn delete_ssh_server(&self, server: SshServerIndex, cx: &Context<Self>) {
         self.update_settings_file(cx, move |setting, _| {
             if let Some(connections) = setting.ssh_connections.as_mut()
                 && connections.get(server.0).is_some()
@@ -1367,12 +1179,7 @@ impl RemoteServerProjects {
         });
     }
 
-    fn delete_remote_project(
-        &mut self,
-        server: ServerIndex,
-        project: &RemoteProject,
-        cx: &mut Context<Self>,
-    ) {
+    fn delete_remote_project(&self, server: ServerIndex, project: &RemoteProject, cx: &Context<Self>) {
         match server {
             ServerIndex::Ssh(server) => {
                 self.delete_ssh_project(server, project, cx);
@@ -1380,43 +1187,28 @@ impl RemoteServerProjects {
         }
     }
 
-    fn delete_ssh_project(
-        &mut self,
-        server: SshServerIndex,
-        project: &RemoteProject,
-        cx: &mut Context<Self>,
-    ) {
+    fn delete_ssh_project(&self, server: SshServerIndex, project: &RemoteProject, cx: &Context<Self>) {
         let project = project.clone();
         self.update_settings_file(cx, move |setting, _| {
-            if let Some(server) = setting
-                .ssh_connections
-                .as_mut()
-                .and_then(|connections| connections.get_mut(server.0))
+            if let Some(server) = setting.ssh_connections.as_mut().and_then(|connections| connections.get_mut(server.0))
             {
                 server.projects.remove(&project);
             }
         });
     }
 
-    fn add_ssh_server(
-        &mut self,
-        connection_options: remote::SshConnectionOptions,
-        cx: &mut Context<Self>,
-    ) {
+    fn add_ssh_server(&self, connection_options: remote::SshConnectionOptions, cx: &Context<Self>) {
         self.update_settings_file(cx, move |setting, _| {
-            setting
-                .ssh_connections
-                .get_or_insert(Default::default())
-                .push(SshConnection {
-                    host: connection_options.host.to_string(),
-                    username: connection_options.username,
-                    port: connection_options.port,
-                    projects: BTreeSet::new(),
-                    nickname: None,
-                    args: connection_options.args.unwrap_or_default(),
-                    port_forwards: connection_options.port_forwards,
-                    connection_timeout: connection_options.connection_timeout,
-                })
+            setting.ssh_connections.get_or_insert(Default::default()).push(SshConnection {
+                host: connection_options.host.to_string(),
+                username: connection_options.username,
+                port: connection_options.port,
+                projects: BTreeSet::new(),
+                nickname: None,
+                args: connection_options.args.unwrap_or_default(),
+                port_forwards: connection_options.port_forwards,
+                connection_timeout: connection_options.connection_timeout,
+            })
         });
     }
 
@@ -1449,56 +1241,43 @@ impl RemoteServerProjects {
                     .border_color(theme.colors().border_variant)
                     .child(state.address_editor.clone()),
             )
-            .child(
-                h_flex()
-                    .bg(theme.colors().editor_background)
-                    .rounded_b_sm()
-                    .w_full()
-                    .map(|this| {
-                        if let Some(ssh_prompt) = ssh_prompt {
-                            this.child(h_flex().w_full().child(ssh_prompt))
-                        } else if let Some(address_error) = &state.address_error {
-                            this.child(
-                                h_flex().p_2().w_full().gap_2().child(
-                                    Label::new(address_error.clone())
-                                        .size(LabelSize::Small)
-                                        .color(Color::Error),
-                                ),
+            .child(h_flex().bg(theme.colors().editor_background).rounded_b_sm().w_full().map(|this| {
+                if let Some(ssh_prompt) = ssh_prompt {
+                    this.child(h_flex().w_full().child(ssh_prompt))
+                } else if let Some(address_error) = &state.address_error {
+                    this.child(
+                        h_flex()
+                            .p_2()
+                            .w_full()
+                            .gap_2()
+                            .child(Label::new(address_error.clone()).size(LabelSize::Small).color(Color::Error)),
+                    )
+                } else {
+                    this.child(
+                        h_flex()
+                            .p_2()
+                            .w_full()
+                            .gap_1()
+                            .child(
+                                Label::new("Enter the command you use to SSH into this server.")
+                                    .color(Color::Muted)
+                                    .size(LabelSize::Small),
                             )
-                        } else {
-                            this.child(
-                                h_flex()
-                                    .p_2()
-                                    .w_full()
-                                    .gap_1()
-                                    .child(
-                                        Label::new(
-                                            "Enter the command you use to SSH into this server.",
-                                        )
-                                        .color(Color::Muted)
-                                        .size(LabelSize::Small),
-                                    )
-                                    .child(
-                                        Button::new("learn-more", "Learn More")
-                                            .label_size(LabelSize::Small)
-                                            .end_icon(
-                                                Icon::new(IconName::ArrowUpRight)
-                                                    .size(IconSize::XSmall),
-                                            )
-                                            .on_click(|_, _, cx| {
-                                                cx.open_url(
-                                                    "https://zed.dev/docs/remote-development",
-                                                );
-                                            }),
-                                    ),
-                            )
-                        }
-                    }),
-            )
+                            .child(
+                                Button::new("learn-more", "Learn More")
+                                    .label_size(LabelSize::Small)
+                                    .end_icon(Icon::new(IconName::ArrowUpRight).size(IconSize::XSmall))
+                                    .on_click(|_, _, cx| {
+                                        cx.open_url("https://zed.dev/docs/remote-development");
+                                    }),
+                            ),
+                    )
+                }
+            }))
     }
 
     fn render_view_options(
-        &mut self,
+        &self,
         options: ViewServerOptionsState,
         window: &mut Window,
         cx: &mut Context<Self>,
@@ -1523,17 +1302,9 @@ impl RemoteServerProjects {
                         .pb_1()
                         .child(ListSeparator)
                         .map(|this| match &options {
-                            ViewServerOptionsState::Ssh {
-                                connection,
-                                entries,
-                                server_index,
-                            } => this.child(self.render_edit_ssh(
-                                connection,
-                                *server_index,
-                                entries,
-                                window,
-                                cx,
-                            )),
+                            ViewServerOptionsState::Ssh { connection, entries, server_index } => {
+                                this.child(self.render_edit_ssh(connection, *server_index, entries, window, cx))
+                            }
                         })
                         .child(ListSeparator)
                         .child({
@@ -1547,14 +1318,10 @@ impl RemoteServerProjects {
                                 }))
                                 .child(
                                     ListItem::new("go-back")
-                                        .toggle_state(
-                                            last_entry.focus_handle.contains_focused(window, cx),
-                                        )
+                                        .toggle_state(last_entry.focus_handle.contains_focused(window, cx))
                                         .inset(true)
                                         .spacing(ui::ListItemSpacing::Sparse)
-                                        .start_slot(
-                                            Icon::new(IconName::ArrowLeft).color(Color::Muted),
-                                        )
+                                        .start_slot(Icon::new(IconName::ArrowLeft).color(Color::Muted))
                                         .child(Label::new("Go Back"))
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             this.mode = Mode::default_mode();
@@ -1579,18 +1346,14 @@ impl RemoteServerProjects {
         connection: &SshConnectionOptions,
         index: SshServerIndex,
         entries: &[NavigableEntry],
-        window: &mut Window,
-        cx: &mut Context<Self>,
+        window: &Window,
+        cx: &Context<Self>,
     ) -> impl IntoElement {
         let connection_string = SharedString::new(connection.host.to_string());
 
         v_flex()
             .child({
-                let label = if connection.nickname.is_some() {
-                    "Edit Nickname"
-                } else {
-                    "Add Nickname to Server"
-                };
+                let label = if connection.nickname.is_some() { "Edit Nickname" } else { "Add Nickname to Server" };
                 div()
                     .id("ssh-options-add-nickname")
                     .track_focus(&entries[0].focus_handle)
@@ -1606,27 +1369,19 @@ impl RemoteServerProjects {
                             .start_slot(Icon::new(IconName::Pencil).color(Color::Muted))
                             .child(Label::new(label))
                             .on_click(cx.listener(move |this, _, window, cx| {
-                                this.mode =
-                                    Mode::EditNickname(EditNicknameState::new(index, window, cx));
+                                this.mode = Mode::EditNickname(EditNicknameState::new(index, window, cx));
                                 cx.notify();
                             })),
                     )
             })
             .child({
                 let workspace = self.workspace.clone();
-                fn callback(
-                    workspace: WeakEntity<Workspace>,
-                    connection_string: SharedString,
-                    cx: &mut App,
-                ) {
+                fn callback(workspace: WeakEntity<Workspace>, connection_string: SharedString, cx: &mut App) {
                     cx.write_to_clipboard(ClipboardItem::new_string(connection_string.to_string()));
                     workspace
                         .update(cx, |this, cx| {
                             struct SshServerAddressCopiedToClipboard;
-                            let notification = format!(
-                                "Copied server address ({}) to clipboard",
-                                connection_string
-                            );
+                            let notification = format!("Copied server address ({}) to clipboard", connection_string);
 
                             this.show_toast(
                                 Toast::new(
@@ -1706,13 +1461,7 @@ impl RemoteServerProjects {
                     .on_action(cx.listener({
                         let connection_string = connection_string.clone();
                         move |_, _: &menu::Confirm, window, cx| {
-                            remove_ssh_server(
-                                cx.entity(),
-                                index,
-                                connection_string.clone(),
-                                window,
-                                cx,
-                            );
+                            remove_ssh_server(cx.entity(), index, connection_string.clone(), window, cx);
                         }
                     }))
                     .child(
@@ -1723,13 +1472,7 @@ impl RemoteServerProjects {
                             .start_slot(Icon::new(IconName::Trash).color(Color::Error))
                             .child(Label::new("Remove Server").color(Color::Error))
                             .on_click(cx.listener(move |_, _, window, cx| {
-                                remove_ssh_server(
-                                    cx.entity(),
-                                    index,
-                                    connection_string.clone(),
-                                    window,
-                                    cx,
-                                );
+                                remove_ssh_server(cx.entity(), index, connection_string.clone(), window, cx);
                             })),
                     )
             })
@@ -1741,13 +1484,8 @@ impl RemoteServerProjects {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> impl IntoElement {
-        let Some(connection) = RemoteSettings::get_global(cx)
-            .ssh_connections()
-            .nth(state.index.0)
-        else {
-            return v_flex()
-                .id("ssh-edit-nickname")
-                .track_focus(&self.focus_handle(cx));
+        let Some(connection) = RemoteSettings::get_global(cx).ssh_connections().nth(state.index.0) else {
+            return v_flex().id("ssh-edit-nickname").track_focus(&self.focus_handle(cx));
         };
 
         let connection_string = connection.host.clone();
@@ -1773,28 +1511,17 @@ impl RemoteServerProjects {
             )
     }
 
-    fn render_default(
-        &mut self,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        v_flex()
-            .size_full()
-            .child(self.default_picker.clone())
-            .into_any_element()
+    fn render_default(&self, _window: &mut Window, _cx: &mut Context<Self>) -> impl IntoElement {
+        v_flex().size_full().child(self.default_picker.clone()).into_any_element()
     }
 }
 
-fn get_text(element: &Entity<Editor>, cx: &mut App) -> String {
+fn get_text(element: &Entity<Editor>, cx: &App) -> String {
     element.read(cx).text(cx).trim().to_string()
 }
 
 impl ModalView for RemoteServerProjects {
-    fn on_before_dismiss(
-        &mut self,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) -> DismissDecision {
+    fn on_before_dismiss(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> DismissDecision {
         DismissDecision::Dismiss(self.allow_dismissal)
     }
 }
@@ -1829,16 +1556,14 @@ impl Render for RemoteServerProjects {
             }))
             .child(match &self.mode {
                 Mode::Default => self.render_default(window, cx).into_any_element(),
-                Mode::ViewServerOptions(state) => self
-                    .render_view_options(state.clone(), window, cx)
-                    .into_any_element(),
+                Mode::ViewServerOptions(state) => {
+                    self.render_view_options(state.clone(), window, cx).into_any_element()
+                }
                 Mode::ProjectPicker(element) => element.clone().into_any_element(),
-                Mode::CreateRemoteServer(state) => self
-                    .render_create_remote_server(state, window, cx)
-                    .into_any_element(),
-                Mode::EditNickname(state) => self
-                    .render_edit_nickname(state, window, cx)
-                    .into_any_element(),
+                Mode::CreateRemoteServer(state) => {
+                    self.render_create_remote_server(state, window, cx).into_any_element()
+                }
+                Mode::EditNickname(state) => self.render_edit_nickname(state, window, cx).into_any_element(),
             })
     }
 }

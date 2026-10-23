@@ -2,18 +2,28 @@ use bitflags::bitflags;
 pub use buffer_search::BufferSearchBar;
 pub use editor::HighlightKey;
 use editor::SearchSettings;
-use gpui::{Action, App, ClickEvent, Entity, FocusHandle, IntoElement, actions};
+use gpui::Action;
+use gpui::App;
+use gpui::ClickEvent;
+use gpui::Entity;
+use gpui::FocusHandle;
+use gpui::IntoElement;
+use gpui::actions;
 use project::search::SearchQuery;
 pub use project_search::ProjectSearchView;
-use ui::{IconButtonShape, Tooltip, prelude::*};
-use util::paths::PathMatcher;
-use workspace::notifications::NotificationId;
-use workspace::{Toast, Workspace};
-pub use zed_actions::search::{
-    FocusSearch, SelectNextMatch, SelectPreviousMatch, ToggleCaseSensitive, ToggleIncludeIgnored,
-};
-
 pub use search_status_button::SEARCH_ICON;
+use ui::IconButtonShape;
+use ui::Tooltip;
+use ui::prelude::*;
+use util::paths::PathMatcher;
+use workspace::Toast;
+use workspace::Workspace;
+use workspace::notifications::NotificationId;
+pub use zed_actions::search::FocusSearch;
+pub use zed_actions::search::SelectNextMatch;
+pub use zed_actions::search::SelectPreviousMatch;
+pub use zed_actions::search::ToggleCaseSensitive;
+pub use zed_actions::search::ToggleIncludeIgnored;
 
 use crate::project_search::ProjectSearchBar;
 
@@ -91,11 +101,11 @@ pub enum SearchSource<'a, 'b> {
 }
 
 impl SearchOption {
-    pub fn as_options(&self) -> SearchOptions {
+    pub const fn as_options(&self) -> SearchOptions {
         SearchOptions::from_bits(1 << *self as u8).unwrap()
     }
 
-    pub fn label(&self) -> &'static str {
+    pub const fn label(&self) -> &'static str {
         match self {
             SearchOption::WholeWord => "Match Whole Words",
             SearchOption::CaseSensitive => "Match Case Sensitivity",
@@ -135,35 +145,32 @@ impl SearchOption {
         let action = self.to_toggle_action();
         let label = self.label();
 
-        IconButton::new(
-            (label, matches!(search_source, SearchSource::Buffer) as u32),
-            self.icon(),
-        )
-        .map(|button| match search_source {
-            SearchSource::Buffer => {
-                let focus_handle = focus_handle.clone();
-                button.on_click(move |_: &ClickEvent, window, cx| {
-                    if !focus_handle.is_focused(window) {
-                        window.focus(&focus_handle, cx);
-                    }
-                    window.dispatch_action(action.boxed_clone(), cx);
-                })
-            }
-            SearchSource::Project(cx) => {
-                let options = self.as_options();
-                button.on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
-                    this.toggle_search_option(options, window, cx);
-                }))
-            }
-        })
-        .shape(IconButtonShape::Square)
-        .toggle_state(active.contains(self.as_options()))
-        .tooltip(move |_window, cx| Tooltip::for_action_in(label, action, &focus_handle, cx))
+        IconButton::new((label, matches!(search_source, SearchSource::Buffer) as u32), self.icon())
+            .map(|button| match search_source {
+                SearchSource::Buffer => {
+                    let focus_handle = focus_handle.clone();
+                    button.on_click(move |_: &ClickEvent, window, cx| {
+                        if !focus_handle.is_focused(window) {
+                            window.focus(&focus_handle, cx);
+                        }
+                        window.dispatch_action(action.boxed_clone(), cx);
+                    })
+                }
+                SearchSource::Project(cx) => {
+                    let options = self.as_options();
+                    button.on_click(cx.listener(move |this, _: &ClickEvent, window, cx| {
+                        this.toggle_search_option(options, window, cx);
+                    }))
+                }
+            })
+            .shape(IconButtonShape::Square)
+            .toggle_state(active.contains(self.as_options()))
+            .tooltip(move |_window, cx| Tooltip::for_action_in(label, action, &focus_handle, cx))
     }
 }
 
 impl SearchOptions {
-    pub fn none() -> SearchOptions {
+    pub const fn none() -> SearchOptions {
         SearchOptions::NONE
     }
 
@@ -223,7 +230,7 @@ impl SearchOptions {
     }
 }
 
-pub(crate) fn show_no_more_matches(window: &mut Window, cx: &mut App) {
+pub(crate) fn show_no_more_matches(window: &Window, cx: &mut App) {
     window.defer(cx, |window, cx| {
         struct NotifType();
         let notification_id = NotificationId::unique::<NotifType>();
@@ -232,21 +239,14 @@ pub(crate) fn show_no_more_matches(window: &mut Window, cx: &mut App) {
             return;
         };
         workspace.update(cx, |workspace, cx| {
-            workspace.show_toast(
-                Toast::new(notification_id.clone(), "No more matches").autohide(),
-                cx,
-            );
+            workspace.show_toast(Toast::new(notification_id.clone(), "No more matches").autohide(), cx);
         })
     });
 }
 
 /// Highlights a search query editor with the fallback regex syntax while regex
 /// mode is on.
-pub(crate) fn highlight_query_as_regex(
-    query_editor: &Entity<editor::Editor>,
-    regex: bool,
-    cx: &mut App,
-) {
+pub(crate) fn highlight_query_as_regex(query_editor: &Entity<editor::Editor>, regex: bool, cx: &mut App) {
     let Some(query_buffer) = query_editor.read(cx).buffer().read(cx).as_singleton() else {
         return;
     };

@@ -49,19 +49,28 @@
 //!
 //!  KeyBinding::new("cmd-k left", pane::SplitLeft, Some("Pane"))
 
-use crate::{
-    Action, ActionRegistry, App, DispatchPhase, EntityId, FocusId, KeyBinding, KeyContext, Keymap,
-    Keystroke, ModifiersChangedEvent, Window,
-};
+use std::any::Any;
+use std::any::TypeId;
+use std::cell::RefCell;
+use std::mem;
+use std::ops::Range;
+use std::rc::Rc;
+
 use collections::FxHashMap;
 use smallvec::SmallVec;
-use std::{
-    any::{Any, TypeId},
-    cell::RefCell,
-    mem,
-    ops::Range,
-    rc::Rc,
-};
+
+use crate::Action;
+use crate::ActionRegistry;
+use crate::App;
+use crate::DispatchPhase;
+use crate::EntityId;
+use crate::FocusId;
+use crate::KeyBinding;
+use crate::KeyContext;
+use crate::Keymap;
+use crate::Keystroke;
+use crate::ModifiersChangedEvent;
+use crate::Window;
 
 /// ID of a node within `DispatchTree`. Note that these are **not** stable between frames, and so a
 /// `DispatchNodeId` should only be used with the `DispatchTree` that provided it.
@@ -107,7 +116,7 @@ impl ReusedSubtree {
         DispatchNodeId((node_id.0 - self.old_range.start) + self.new_range.start)
     }
 
-    pub fn contains_focus(&self) -> bool {
+    pub const fn contains_focus(&self) -> bool {
         self.contains_focus
     }
 }
@@ -159,7 +168,7 @@ impl DispatchTree {
         self.view_node_ids.clear();
     }
 
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.nodes.len()
     }
 
@@ -167,10 +176,7 @@ impl DispatchTree {
         let parent = self.node_stack.last().copied();
         let node_id = DispatchNodeId(self.nodes.len());
 
-        self.nodes.push(DispatchNode {
-            parent,
-            ..Default::default()
-        });
+        self.nodes.push(DispatchNode { parent, ..Default::default() });
         self.node_stack.push(node_id);
         node_id
     }
@@ -271,12 +277,8 @@ impl DispatchTree {
 
         let mut contains_focus = false;
         let mut source_stack = vec![];
-        for (source_node_id, source_node) in source
-            .nodes
-            .iter_mut()
-            .enumerate()
-            .skip(old_range.start)
-            .take(old_range.len())
+        for (source_node_id, source_node) in
+            source.nodes.iter_mut().enumerate().skip(old_range.start).take(old_range.len())
         {
             let source_node_id = DispatchNodeId(source_node_id);
             while let Some(source_ancestor) = source_stack.last() {
@@ -300,11 +302,7 @@ impl DispatchTree {
             self.pop_node();
         }
 
-        ReusedSubtree {
-            old_range,
-            new_range,
-            contains_focus,
-        }
+        ReusedSubtree { old_range, new_range, contains_focus }
     }
 
     pub fn truncate(&mut self, index: usize) {
@@ -325,9 +323,7 @@ impl DispatchTree {
     }
 
     pub fn on_modifiers_changed(&mut self, listener: ModifiersChangedListener) {
-        self.active_node()
-            .modifiers_changed_listeners
-            .push(listener);
+        self.active_node().modifiers_changed_listeners.push(listener);
     }
 
     pub fn on_action(
@@ -335,12 +331,7 @@ impl DispatchTree {
         action_type: TypeId,
         listener: Rc<dyn Fn(&dyn Any, DispatchPhase, &mut Window, &mut App)>,
     ) {
-        self.active_node()
-            .action_listeners
-            .push(DispatchActionListener {
-                action_type,
-                listener,
-            });
+        self.active_node().action_listeners.push(DispatchActionListener { action_type, listener });
     }
 
     pub fn focus_contains(&self, parent: FocusId, child: FocusId) -> bool {
@@ -365,8 +356,7 @@ impl DispatchTree {
         for node_id in self.dispatch_path(target) {
             let node = &self.nodes[node_id.0];
             for DispatchActionListener { action_type, .. } in &node.action_listeners {
-                if let Err(ix) = actions.binary_search_by_key(action_type, |a| a.as_any().type_id())
-                {
+                if let Err(ix) = actions.binary_search_by_key(action_type, |a| a.as_any().type_id()) {
                     // Intentionally silence these errors without logging.
                     // If an action cannot be built by default, it's not available.
                     let action = self.action_registry.build_action_type(action_type).ok();
@@ -382,11 +372,7 @@ impl DispatchTree {
     pub fn is_action_available(&self, action: &dyn Action, target: DispatchNodeId) -> bool {
         for node_id in self.dispatch_path(target) {
             let node = &self.nodes[node_id.0];
-            if node
-                .action_listeners
-                .iter()
-                .any(|listener| listener.action_type == action.as_any().type_id())
-            {
+            if node.action_listeners.iter().any(|listener| listener.action_type == action.as_any().type_id()) {
                 return true;
             }
         }
@@ -398,19 +384,13 @@ impl DispatchTree {
     ///
     /// Bindings are only included if they are the highest precedence match for their keystrokes, so
     /// shadowed bindings are not included.
-    pub fn bindings_for_action(
-        &self,
-        action: &dyn Action,
-        context_stack: &[KeyContext],
-    ) -> Vec<KeyBinding> {
+    pub fn bindings_for_action(&self, action: &dyn Action, context_stack: &[KeyContext]) -> Vec<KeyBinding> {
         // Ideally this would return a `DoubleEndedIterator` to avoid `highest_precedence_*`
         // methods, but this can't be done very cleanly since keymap must be borrowed.
         let keymap = self.keymap.borrow();
         keymap
             .bindings_for_action(action)
-            .filter(|binding| {
-                Self::binding_matches_predicate_and_not_shadowed(&keymap, binding, context_stack)
-            })
+            .filter(|binding| Self::binding_matches_predicate_and_not_shadowed(&keymap, binding, context_stack))
             .cloned()
             .collect()
     }
@@ -426,9 +406,7 @@ impl DispatchTree {
         keymap
             .bindings_for_action(action)
             .rev()
-            .find(|binding| {
-                Self::binding_matches_predicate_and_not_shadowed(&keymap, binding, context_stack)
-            })
+            .find(|binding| Self::binding_matches_predicate_and_not_shadowed(&keymap, binding, context_stack))
             .cloned()
     }
 
@@ -438,11 +416,7 @@ impl DispatchTree {
         context_stack: &[KeyContext],
     ) -> bool {
         let (bindings, _) = keymap.bindings_for_input(&binding.keystrokes, context_stack);
-        if let Some(found) = bindings.iter().next() {
-            found.action.partial_eq(binding.action.as_ref())
-        } else {
-            false
-        }
+        if let Some(found) = bindings.iter().next() { found.action.partial_eq(binding.action.as_ref()) } else { false }
     }
 
     fn bindings_for_input(
@@ -450,15 +424,10 @@ impl DispatchTree {
         input: &[Keystroke],
         dispatch_path: &SmallVec<[DispatchNodeId; 32]>,
     ) -> (SmallVec<[KeyBinding; 1]>, bool, Vec<KeyContext>) {
-        let context_stack: Vec<KeyContext> = dispatch_path
-            .iter()
-            .filter_map(|node_id| self.node(*node_id).context.clone())
-            .collect();
+        let context_stack: Vec<KeyContext> =
+            dispatch_path.iter().filter_map(|node_id| self.node(*node_id).context.clone()).collect();
 
-        let (bindings, partial) = self
-            .keymap
-            .borrow()
-            .bindings_for_input(input, &context_stack);
+        let (bindings, partial) = self.keymap.borrow().bindings_for_input(input, &context_stack);
         (bindings, partial, context_stack)
     }
 
@@ -468,9 +437,7 @@ impl DispatchTree {
         input: &[Keystroke],
         context_stack: &[KeyContext],
     ) -> Vec<KeyBinding> {
-        self.keymap
-            .borrow()
-            .possible_next_bindings_for_input(input, context_stack)
+        self.keymap.borrow().possible_next_bindings_for_input(input, context_stack)
     }
 
     /// dispatch_key processes the keystroke
@@ -497,16 +464,9 @@ impl DispatchTree {
                 ..Default::default()
             };
         } else if !bindings.is_empty() {
-            return DispatchResult {
-                bindings,
-                context_stack,
-                ..Default::default()
-            };
+            return DispatchResult { bindings, context_stack, ..Default::default() };
         } else if input.len() == 1 {
-            return DispatchResult {
-                context_stack,
-                ..Default::default()
-            };
+            return DispatchResult { context_stack, ..Default::default() };
         }
         input.pop();
 
@@ -544,18 +504,12 @@ impl DispatchTree {
         for last in (0..input.len()).rev() {
             let (bindings, _, _) = self.bindings_for_input(&input[0..=last], dispatch_path);
             if !bindings.is_empty() {
-                to_replay.push(Replay {
-                    keystroke: input.drain(0..=last).next_back().unwrap(),
-                    bindings,
-                });
+                to_replay.push(Replay { keystroke: input.drain(0..=last).next_back().unwrap(), bindings });
                 break;
             }
         }
         if to_replay.is_empty() {
-            to_replay.push(Replay {
-                keystroke: input.remove(0),
-                ..Default::default()
-            });
+            to_replay.push(Replay { keystroke: input.remove(0), ..Default::default() });
         }
         (input, to_replay)
     }
@@ -588,10 +542,9 @@ impl DispatchTree {
     pub fn view_path_reversed(&self, view_id: EntityId) -> impl Iterator<Item = EntityId> {
         let mut current_node_id = self.view_node_ids.get(&view_id).copied();
 
-        std::iter::successors(
-            current_node_id.map(|node_id| self.node(node_id)),
-            |node_id| Some(self.node(node_id.parent?)),
-        )
+        std::iter::successors(current_node_id.map(|node_id| self.node(node_id)), |node_id| {
+            Some(self.node(node_id.parent?))
+        })
         .filter_map(|node| node.view_id)
     }
 

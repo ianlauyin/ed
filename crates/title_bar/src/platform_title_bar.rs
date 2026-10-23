@@ -1,14 +1,24 @@
-use gpui::{
-    AnyElement, App, Context, Hsla, InteractiveElement, IntoElement, ParentElement,
-    StatefulInteractiveElement, Styled, WeakEntity, Window, WindowControlArea,
-};
-use smallvec::SmallVec;
 use std::mem;
-use ui::{
-    prelude::*,
-    utils::{TRAFFIC_LIGHT_PADDING, platform_title_bar_height},
-};
-use workspace::{MultiWorkspace, SidebarRenderState, SidebarSide};
+
+use gpui::AnyElement;
+use gpui::App;
+use gpui::Context;
+use gpui::Hsla;
+use gpui::InteractiveElement;
+use gpui::IntoElement;
+use gpui::ParentElement;
+use gpui::StatefulInteractiveElement;
+use gpui::Styled;
+use gpui::WeakEntity;
+use gpui::Window;
+use gpui::WindowControlArea;
+use smallvec::SmallVec;
+use ui::prelude::*;
+use ui::utils::TRAFFIC_LIGHT_PADDING;
+use ui::utils::platform_title_bar_height;
+use workspace::MultiWorkspace;
+use workspace::SidebarRenderState;
+use workspace::SidebarSide;
 
 pub struct PlatformTitleBar {
     id: ElementId,
@@ -19,12 +29,7 @@ pub struct PlatformTitleBar {
 
 impl PlatformTitleBar {
     pub fn new(id: impl Into<ElementId>, _cx: &mut Context<Self>) -> Self {
-        Self {
-            id: id.into(),
-            children: SmallVec::new(),
-            should_move: false,
-            multi_workspace: None,
-        }
+        Self { id: id.into(), children: SmallVec::new(), should_move: false, multi_workspace: None }
     }
 
     pub fn with_multi_workspace(mut self, multi_workspace: WeakEntity<MultiWorkspace>) -> Self {
@@ -55,7 +60,7 @@ impl PlatformTitleBar {
             .unwrap_or_default()
     }
 
-    pub fn is_multi_workspace_enabled(_cx: &App) -> bool {
+    pub const fn is_multi_workspace_enabled(_cx: &App) -> bool {
         false
     }
 }
@@ -68,20 +73,14 @@ impl Render for PlatformTitleBar {
         let sidebar = self.sidebar_render_state(cx);
         let show_left_controls = !(sidebar.open && sidebar.side == SidebarSide::Left);
 
-        let title_bar = h_flex()
+        h_flex()
             .id(self.id.clone())
             .window_control_area(WindowControlArea::Drag)
             .w_full()
             .h(height)
             .on_mouse_down_out(cx.listener(|this, _, _, _| this.should_move = false))
-            .on_mouse_up(
-                gpui::MouseButton::Left,
-                cx.listener(|this, _, _, _| this.should_move = false),
-            )
-            .on_mouse_down(
-                gpui::MouseButton::Left,
-                cx.listener(|this, _, _, _| this.should_move = true),
-            )
+            .on_mouse_up(gpui::MouseButton::Left, cx.listener(|this, _, _, _| this.should_move = false))
+            .on_mouse_down(gpui::MouseButton::Left, cx.listener(|this, _, _, _| this.should_move = true))
             .on_mouse_move(cx.listener(|this, _, window, _| {
                 if this.should_move {
                     this.should_move = false;
@@ -112,9 +111,7 @@ impl Render for PlatformTitleBar {
                     .overflow_x_hidden()
                     .w_full()
                     .children(children),
-            );
-
-        title_bar
+            )
     }
 }
 

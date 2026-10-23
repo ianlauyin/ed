@@ -1,5 +1,4 @@
 use std::ops::Range;
-use std::slice::ChunksExact;
 use std::sync::Arc;
 
 use anyhow::Result;
@@ -499,7 +498,9 @@ impl LspStore {
     }
 }
 
-fn semantic_tokens_provider_legend(provider: &lsp::SemanticTokensServerCapabilities) -> &lsp::SemanticTokensLegend {
+const fn semantic_tokens_provider_legend(
+    provider: &lsp::SemanticTokensServerCapabilities,
+) -> &lsp::SemanticTokensLegend {
     match provider {
         lsp::SemanticTokensServerCapabilities::SemanticTokensOptions(options) => &options.legend,
         lsp::SemanticTokensServerCapabilities::SemanticTokensRegistrationOptions(options) => {
@@ -580,7 +581,7 @@ impl SemanticTokenStylizer {
         SemanticTokenStylizer { server_id, rules_by_token_type, token_type_names: token_types, modifier_mask }
     }
 
-    pub fn server_id(&self) -> LanguageServerId {
+    pub const fn server_id(&self) -> LanguageServerId {
         self.server_id
     }
 
@@ -719,7 +720,7 @@ pub struct ServerSemanticTokens {
 
 pub struct SemanticTokensIter<'a> {
     prev: Option<(u32, u32)>,
-    data: ChunksExact<'a, u32>,
+    data: std::slice::Iter<'a, [u32; 5]>,
 }
 
 // A single item from `data`.
@@ -742,7 +743,7 @@ pub struct SemanticToken {
 }
 
 impl ServerSemanticTokens {
-    pub fn from_full(data: Vec<u32>, result_id: Option<SharedString>) -> Self {
+    pub const fn from_full(data: Vec<u32>, result_id: Option<SharedString>) -> Self {
         ServerSemanticTokens { data, result_id }
     }
 
@@ -755,7 +756,7 @@ impl ServerSemanticTokens {
     }
 
     pub fn tokens(&self) -> SemanticTokensIter<'_> {
-        SemanticTokensIter { prev: None, data: self.data.chunks_exact(5) }
+        SemanticTokensIter { prev: None, data: self.data.as_chunks::<5>().0.iter() }
     }
 }
 

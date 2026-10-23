@@ -1,12 +1,17 @@
+use std::time::Duration;
+
 use collections::HashMap;
 use git::repository::DEFAULT_WORKTREE_DIRECTORY;
-use lsp::{DEFAULT_LSP_REQUEST_TIMEOUT_SECS, LanguageServerName};
+use lsp::DEFAULT_LSP_REQUEST_TIMEOUT_SECS;
+use lsp::LanguageServerName;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 pub use settings::BinarySettings;
 pub use settings::LspSettings;
-use settings::{RegisterSetting, SemanticTokenRules, Settings};
-use std::time::Duration;
+use settings::RegisterSetting;
+use settings::SemanticTokenRules;
+use settings::Settings;
 
 #[derive(Debug, Clone, RegisterSetting)]
 pub struct ProjectSettings {
@@ -109,9 +114,7 @@ pub struct LspNotificationSettings {
 
 impl Default for LspNotificationSettings {
     fn default() -> Self {
-        Self {
-            dismiss_timeout_ms: Some(5000),
-        }
+        Self { dismiss_timeout_ms: Some(5000) }
     }
 }
 
@@ -126,7 +129,7 @@ pub enum DiagnosticSeverity {
 }
 
 impl DiagnosticSeverity {
-    pub fn into_lsp(self) -> Option<lsp::DiagnosticSeverity> {
+    pub const fn into_lsp(self) -> Option<lsp::DiagnosticSeverity> {
         match self {
             DiagnosticSeverity::Off => None,
             DiagnosticSeverity::Error => Some(lsp::DiagnosticSeverity::ERROR),
@@ -177,11 +180,11 @@ impl From<lsp::DiagnosticSeverity> for GoToDiagnosticSeverity {
 }
 
 impl GoToDiagnosticSeverity {
-    pub fn min() -> Self {
+    pub const fn min() -> Self {
         Self::Hint
     }
 
-    pub fn max() -> Self {
+    pub const fn max() -> Self {
         Self::Error
     }
 }
@@ -206,10 +209,7 @@ pub enum GoToDiagnosticSeverityFilter {
 
 impl Default for GoToDiagnosticSeverityFilter {
     fn default() -> Self {
-        Self::Range {
-            min: GoToDiagnosticSeverity::min(),
-            max: GoToDiagnosticSeverity::max(),
-        }
+        Self::Range { min: GoToDiagnosticSeverity::min(), max: GoToDiagnosticSeverity::max() }
     }
 }
 
@@ -302,9 +302,7 @@ pub struct BranchPickerSettings {
 
 impl Default for BranchPickerSettings {
     fn default() -> Self {
-        Self {
-            show_author_name: true,
-        }
+        Self { show_author_name: true }
     }
 }
 
@@ -382,9 +380,7 @@ impl Settings for ProjectSettings {
             gutter_debounce: git.gutter_debounce.unwrap_or_default(),
             branch_picker: {
                 let branch_picker = git.branch_picker.unwrap();
-                BranchPickerSettings {
-                    show_author_name: branch_picker.show_author_name.unwrap(),
-                }
+                BranchPickerSettings { show_author_name: branch_picker.show_author_name.unwrap() }
             },
             hunk_style: git.hunk_style.unwrap(),
             path_style: git.path_style.unwrap().into(),
@@ -395,31 +391,11 @@ impl Settings for ProjectSettings {
                 .unwrap_or_else(|| DEFAULT_WORKTREE_DIRECTORY.to_string()),
         };
         Self {
-            lsp: project
-                .lsp
-                .clone()
-                .into_iter()
-                .map(|(key, value)| (LanguageServerName(key.into()), value))
-                .collect(),
+            lsp: project.lsp.clone().into_iter().map(|(key, value)| (LanguageServerName(key.into()), value)).collect(),
             global_lsp_settings: GlobalLspSettings {
-                button: content
-                    .global_lsp_settings
-                    .as_ref()
-                    .unwrap()
-                    .button
-                    .unwrap(),
-                request_timeout: content
-                    .global_lsp_settings
-                    .as_ref()
-                    .unwrap()
-                    .request_timeout
-                    .unwrap(),
-                max_buffer_line_length: content
-                    .global_lsp_settings
-                    .as_ref()
-                    .unwrap()
-                    .max_buffer_line_length
-                    .unwrap(),
+                button: content.global_lsp_settings.as_ref().unwrap().button.unwrap(),
+                request_timeout: content.global_lsp_settings.as_ref().unwrap().request_timeout.unwrap(),
+                max_buffer_line_length: content.global_lsp_settings.as_ref().unwrap().max_buffer_line_length.unwrap(),
                 notifications: LspNotificationSettings {
                     dismiss_timeout_ms: content
                         .global_lsp_settings

@@ -1,9 +1,17 @@
-use crate::{OffsetUtf16, Point, PointUtf16, TextSummary, Unclipped};
-use gpui_util::{debug_panic, is_utf8_char_boundary};
+use std::cmp;
+use std::ops::Range;
+
+use gpui_util::debug_panic;
+use gpui_util::is_utf8_char_boundary;
 use heapless::String as ArrayString;
-use std::{cmp, ops::Range};
 use sum_tree::Bias;
 use unicode_segmentation::GraphemeCursor;
+
+use crate::OffsetUtf16;
+use crate::Point;
+use crate::PointUtf16;
+use crate::TextSummary;
+use crate::Unclipped;
 
 pub(crate) type Bitmap = u128;
 
@@ -161,17 +169,17 @@ impl Chunk {
     }
 
     #[inline(always)]
-    pub fn chars(&self) -> Bitmap {
+    pub const fn chars(&self) -> Bitmap {
         self.chars
     }
 
     #[inline(always)]
-    pub fn tabs(&self) -> Bitmap {
+    pub const fn tabs(&self) -> Bitmap {
         self.tabs
     }
 
     #[inline(always)]
-    pub fn newlines(&self) -> Bitmap {
+    pub const fn newlines(&self) -> Bitmap {
         self.newlines
     }
 
@@ -220,40 +228,34 @@ pub struct ChunkSlice<'a> {
     text: &'a str,
 }
 
-impl Into<Chunk> for ChunkSlice<'_> {
-    fn into(self) -> Chunk {
+impl From<ChunkSlice<'_>> for Chunk {
+    fn from(val: ChunkSlice<'_>) -> Self {
         Chunk {
-            chars: self.chars,
-            chars_utf16: self.chars_utf16,
-            newlines: self.newlines,
-            tabs: self.tabs,
-            text: self.text.try_into().unwrap(),
+            chars: val.chars,
+            chars_utf16: val.chars_utf16,
+            newlines: val.newlines,
+            tabs: val.tabs,
+            text: val.text.try_into().unwrap(),
         }
     }
 }
 
 impl<'a> ChunkSlice<'a> {
     #[inline(always)]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.text.is_empty()
     }
 
     #[inline(always)]
-    pub fn is_char_boundary(&self, offset: usize) -> bool {
+    pub const fn is_char_boundary(&self, offset: usize) -> bool {
         (1 as Bitmap).unbounded_shl(offset as u32) & self.chars != 0 || offset == self.text.len()
     }
 
     #[inline(always)]
-    pub fn split_at(self, mid: usize) -> (ChunkSlice<'a>, ChunkSlice<'a>) {
+    pub const fn split_at(self, mid: usize) -> (ChunkSlice<'a>, ChunkSlice<'a>) {
         if mid == MAX_BASE {
             let left = self;
-            let right = ChunkSlice {
-                chars: 0,
-                chars_utf16: 0,
-                newlines: 0,
-                tabs: 0,
-                text: "",
-            };
+            let right = ChunkSlice { chars: 0, chars_utf16: 0, newlines: 0, tabs: 0, text: "" };
             (left, right)
         } else {
             let mask = ((1 as Bitmap) << mid) - 1;
@@ -279,27 +281,16 @@ impl<'a> ChunkSlice<'a> {
     #[inline(always)]
     pub fn slice(self, mut range: Range<usize>) -> Self {
         if range.start == MAX_BASE {
-            Self {
-                chars: 0,
-                chars_utf16: 0,
-                newlines: 0,
-                tabs: 0,
-                text: "",
-            }
+            Self { chars: 0, chars_utf16: 0, newlines: 0, tabs: 0, text: "" }
         } else {
             if !self.assert_char_boundary::<false>(range.start) {
                 range.start = self.text.ceil_char_boundary(range.start);
             }
             if !self.assert_char_boundary::<false>(range.end) {
-                range.end = if range.end < range.start {
-                    range.start
-                } else {
-                    self.text.floor_char_boundary(range.end)
-                };
+                range.end =
+                    if range.end < range.start { range.start } else { self.text.floor_char_boundary(range.end) };
             }
-            let mask = (1 as Bitmap)
-                .unbounded_shl(range.end as u32)
-                .wrapping_sub(1);
+            let mask = (1 as Bitmap).unbounded_shl(range.end as u32).wrapping_sub(1);
             Self {
                 chars: (self.chars & mask) >> range.start,
                 chars_utf16: (self.chars_utf16 & mask) >> range.start,
@@ -329,19 +320,19 @@ impl<'a> ChunkSlice<'a> {
 
     /// Get length in bytes
     #[inline(always)]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.text.len()
     }
 
     /// Get length in UTF-16 code units
     #[inline(always)]
-    pub fn len_utf16(&self) -> OffsetUtf16 {
+    pub const fn len_utf16(&self) -> OffsetUtf16 {
         OffsetUtf16(self.chars_utf16.count_ones() as usize)
     }
 
     /// Get point representing number of lines and length of last line
     #[inline(always)]
-    pub fn lines(&self) -> Point {
+    pub const fn lines(&self) -> Point {
         let row = self.newlines.count_ones();
         let column = self.newlines.leading_zeros() - (Bitmap::BITS - self.text.len() as u32);
         Point::new(row, column)
@@ -349,19 +340,19 @@ impl<'a> ChunkSlice<'a> {
 
     /// Get number of chars in first line
     #[inline(always)]
-    pub fn first_line_chars(&self) -> u32 {
+    pub const fn first_line_chars(&self) -> u32 {
         (self.chars & saturating_shl_mask(self.newlines.trailing_zeros())).count_ones()
     }
 
     /// Get number of chars in last line
     #[inline(always)]
-    pub fn last_line_chars(&self) -> u32 {
+    pub const fn last_line_chars(&self) -> u32 {
         (self.chars & saturating_shr_mask(self.newlines.leading_zeros())).count_ones()
     }
 
     /// Get number of UTF-16 code units in last line
     #[inline(always)]
-    pub fn last_line_len_utf16(&self) -> u32 {
+    pub const fn last_line_len_utf16(&self) -> u32 {
         (self.chars_utf16 & saturating_shr_mask(self.newlines.leading_zeros())).count_ones()
     }
 
@@ -394,15 +385,11 @@ impl<'a> ChunkSlice<'a> {
 
         let row_chars = chars.count_ones() as u8;
         *total_chars += usize::from(row_chars);
-        if row_chars > longest_row_chars {
-            (row, row_chars as u32)
-        } else {
-            (longest_row, longest_row_chars as u32)
-        }
+        if row_chars > longest_row_chars { (row, row_chars as u32) } else { (longest_row, longest_row_chars as u32) }
     }
 
     #[inline(always)]
-    pub fn offset_to_point(&self, offset: usize) -> Point {
+    pub const fn offset_to_point(&self, offset: usize) -> Point {
         let mask = (1 as Bitmap).unbounded_shl(offset as u32).wrapping_sub(1);
         let row = (self.newlines & mask).count_ones();
         let newline_ix = Bitmap::BITS - (self.newlines & mask).leading_zeros();
@@ -413,21 +400,13 @@ impl<'a> ChunkSlice<'a> {
     #[inline(always)]
     pub fn point_to_offset(&self, point: Point) -> usize {
         if point.row > self.lines().row {
-            debug_panic!(
-                "point {:?} extends beyond rows for string {:?}",
-                point,
-                self.text
-            );
+            debug_panic!("point {:?} extends beyond rows for string {:?}", point, self.text);
             return self.len();
         }
 
         let row_offset_range = self.offset_range_for_row(point.row);
         if point.column > row_offset_range.len() as u32 {
-            debug_panic!(
-                "point {:?} extends beyond row for string {:?}",
-                point,
-                self.text
-            );
+            debug_panic!("point {:?} extends beyond row for string {:?}", point, self.text);
             row_offset_range.end
         } else {
             row_offset_range.start + point.column as usize
@@ -448,25 +427,21 @@ impl<'a> ChunkSlice<'a> {
         }
     }
 
-    pub fn floor_char_boundary(&self, index: usize) -> usize {
+    pub const fn floor_char_boundary(&self, index: usize) -> usize {
         self.text.floor_char_boundary(index)
     }
 
     #[inline(always)]
     pub fn point_to_offset_utf16(&self, point: Point) -> OffsetUtf16 {
         if point.row > self.lines().row {
-            debug_panic!(
-                "point {:?} extends beyond rows for string {:?}",
-                point,
-                self.text
-            );
+            debug_panic!("point {:?} extends beyond rows for string {:?}", point, self.text);
             return self.len_utf16();
         }
         self.offset_to_offset_utf16(self.point_to_offset(point))
     }
 
     #[inline(always)]
-    pub fn offset_to_offset_utf16(&self, offset: usize) -> OffsetUtf16 {
+    pub const fn offset_to_offset_utf16(&self, offset: usize) -> OffsetUtf16 {
         let mask = (1 as Bitmap).unbounded_shl(offset as u32).wrapping_sub(1);
         OffsetUtf16((self.chars_utf16 & mask).count_ones() as usize)
     }
@@ -481,25 +456,20 @@ impl<'a> ChunkSlice<'a> {
             if ix == MAX_BASE {
                 MAX_BASE
             } else {
-                let utf8_additional_len = cmp::min(
-                    (self.chars_utf16 >> ix).trailing_zeros() as usize,
-                    self.text.len() - ix,
-                );
+                let utf8_additional_len =
+                    cmp::min((self.chars_utf16 >> ix).trailing_zeros() as usize, self.text.len() - ix);
                 ix + utf8_additional_len
             }
         }
     }
 
     #[inline(always)]
-    pub fn offset_to_point_utf16(&self, offset: usize) -> PointUtf16 {
+    pub const fn offset_to_point_utf16(&self, offset: usize) -> PointUtf16 {
         let mask = saturating_shl_mask(offset as u32);
         let row = (self.newlines & saturating_shl_mask(offset as u32)).count_ones();
         let newline_ix = Bitmap::BITS - (self.newlines & mask).leading_zeros();
-        let column = if newline_ix as usize == MAX_BASE {
-            0
-        } else {
-            ((self.chars_utf16 & mask) >> newline_ix).count_ones()
-        };
+        let column =
+            if newline_ix as usize == MAX_BASE { 0 } else { ((self.chars_utf16 & mask) >> newline_ix).count_ones() };
         PointUtf16::new(row, column)
     }
 
@@ -513,11 +483,7 @@ impl<'a> ChunkSlice<'a> {
         let lines = self.lines();
         if point.row > lines.row {
             if !clip {
-                debug_panic!(
-                    "point {:?} is beyond this chunk's extent {:?}",
-                    point,
-                    self.text
-                );
+                debug_panic!("point {:?} is beyond this chunk's extent {:?}", point, self.text);
             }
             return self.len();
         }
@@ -526,11 +492,7 @@ impl<'a> ChunkSlice<'a> {
         let line = self.slice(row_offset_range.clone());
         if point.column > line.last_line_len_utf16() {
             if !clip {
-                debug_panic!(
-                    "point {:?} is beyond the end of the line in chunk {:?}",
-                    point,
-                    self.text
-                );
+                debug_panic!("point {:?} is beyond the end of the line in chunk {:?}", point, self.text);
             }
             return row_offset_range.end;
         }
@@ -544,11 +506,7 @@ impl<'a> ChunkSlice<'a> {
                     offset -= 1;
                 }
                 if !clip {
-                    debug_panic!(
-                        "point {:?} is within character in chunk {:?}",
-                        point,
-                        self.text,
-                    );
+                    debug_panic!("point {:?} is within character in chunk {:?}", point, self.text,);
                 }
             }
         }
@@ -598,9 +556,7 @@ impl<'a> ChunkSlice<'a> {
 
             let mut grapheme_cursor = GraphemeCursor::new(column, bytes.len(), true);
             loop {
-                if line.is_char_boundary(column)
-                    && grapheme_cursor.is_boundary(line.text, 0).unwrap_or(false)
-                {
+                if line.is_char_boundary(column) && grapheme_cursor.is_boundary(line.text, 0).unwrap_or(false) {
                     break;
                 }
 
@@ -656,20 +612,14 @@ impl<'a> ChunkSlice<'a> {
         let row_len = if row_start == MAX_BASE {
             0
         } else {
-            cmp::min(
-                (self.newlines >> row_start).trailing_zeros(),
-                (self.text.len() - row_start) as u32,
-            )
+            cmp::min((self.newlines >> row_start).trailing_zeros(), (self.text.len() - row_start) as u32)
         };
         row_start..row_start + row_len as usize
     }
 
     #[inline(always)]
-    pub fn tabs(&self) -> Tabs {
-        Tabs {
-            tabs: self.tabs,
-            chars: self.chars,
-        }
+    pub const fn tabs(&self) -> Tabs {
+        Tabs { tabs: self.tabs, chars: self.chars }
     }
 }
 
@@ -697,10 +647,7 @@ impl Iterator for Tabs {
         let char_offset = (self.chars & chars_mask).count_ones() as usize;
 
         // Since tabs are 1 byte the tab offset is the same as the byte offset
-        let position = TabPosition {
-            byte_offset: tab_offset,
-            char_offset,
-        };
+        let position = TabPosition { byte_offset: tab_offset, char_offset };
         // Remove the tab we've just seen
         self.tabs ^= 1 << tab_offset;
 
@@ -710,7 +657,7 @@ impl Iterator for Tabs {
 
 /// Finds the n-th bit that is set to 1.
 #[inline(always)]
-fn nth_set_bit(v: u128, n: usize) -> usize {
+const fn nth_set_bit(v: u128, n: usize) -> usize {
     let low = v as u64;
     let high = (v >> 64) as u64;
 
@@ -727,22 +674,14 @@ fn nth_set_bit(v: u128, n: usize) -> usize {
 #[track_caller]
 fn panic_char_boundary(text: &str, offset: usize) -> ! {
     if offset > text.len() {
-        panic!(
-            "byte index {} is out of bounds of `{:?}` (length: {})",
-            offset,
-            text,
-            text.len()
-        );
+        panic!("byte index {} is out of bounds of `{:?}` (length: {})", offset, text, text.len());
     }
     // find the character
     let char_start = text.floor_char_boundary(offset);
     // `char_start` must be less than len and a char boundary
     let ch = text.get(char_start..).unwrap().chars().next().unwrap();
     let char_range = char_start..char_start + ch.len_utf8();
-    panic!(
-        "byte index {} is not a char boundary; it is inside {:?} (bytes {:?})",
-        offset, ch, char_range,
-    );
+    panic!("byte index {} is not a char boundary; it is inside {:?} (bytes {:?})", offset, ch, char_range,);
 }
 
 #[cold]
@@ -750,12 +689,7 @@ fn panic_char_boundary(text: &str, offset: usize) -> ! {
 #[track_caller]
 fn log_err_char_boundary(text: &str, offset: usize) {
     if offset >= text.len() {
-        log::error!(
-            "byte index {} is out of bounds of `{:?}` (length: {})",
-            offset,
-            text,
-            text.len()
-        );
+        log::error!("byte index {} is out of bounds of `{:?}` (length: {})", offset, text, text.len());
         return;
     }
     // find the character
@@ -763,16 +697,11 @@ fn log_err_char_boundary(text: &str, offset: usize) {
     // `char_start` must be less than len and a char boundary
     let ch = text.get(char_start..).unwrap().chars().next().unwrap();
     let char_range = char_start..char_start + ch.len_utf8();
-    log::error!(
-        "byte index {} is not a char boundary; it is inside {:?} (bytes {:?})",
-        offset,
-        ch,
-        char_range,
-    );
+    log::error!("byte index {} is not a char boundary; it is inside {:?} (bytes {:?})", offset, ch, char_range,);
 }
 
 #[inline(always)]
-fn nth_set_bit_u64(v: u64, mut n: u64) -> u64 {
+const fn nth_set_bit_u64(v: u64, mut n: u64) -> u64 {
     let v = v.reverse_bits();
     let mut s: u64 = 64;
 

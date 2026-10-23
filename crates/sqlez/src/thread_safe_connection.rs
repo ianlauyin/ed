@@ -1,17 +1,22 @@
+use std::marker::PhantomData;
+use std::ops::Deref;
+use std::sync::Arc;
+use std::sync::LazyLock;
+use std::thread;
+use std::time::Duration;
+
 use anyhow::Context as _;
 use collections::HashMap;
-use futures::{Future, FutureExt, channel::oneshot};
-use parking_lot::{Mutex, RwLock};
-use std::{
-    marker::PhantomData,
-    ops::Deref,
-    sync::{Arc, LazyLock},
-    thread,
-    time::Duration,
-};
+use futures::Future;
+use futures::FutureExt;
+use futures::channel::oneshot;
+use parking_lot::Mutex;
+use parking_lot::RwLock;
 use thread_local::ThreadLocal;
 
-use crate::{connection::Connection, domain::Schema, util::UnboundedSyncSender};
+use crate::connection::Connection;
+use crate::domain::Schema;
+use crate::util::UnboundedSyncSender;
 
 const SCHEMA_RETRIES: usize = 10;
 const CONNECTION_INITIALIZE_RETRIES: usize = 50;
@@ -52,14 +57,14 @@ impl<S: Schema> ThreadSafeConnectionBuilder<S> {
     /// Sets the query to run every time a connection is opened. This must
     /// be infallible (EG only use pragma statements) and not cause writes.
     /// to the db or it will panic.
-    pub fn with_connection_initialize_query(mut self, initialize_query: &'static str) -> Self {
+    pub const fn with_connection_initialize_query(mut self, initialize_query: &'static str) -> Self {
         self.connection.connection_initialize_query = Some(initialize_query);
         self
     }
 
     /// Queues an initialization query for the database file. This must be infallible
     /// but may cause changes to the database file such as with `PRAGMA journal_mode`
-    pub fn with_db_initialization_query(mut self, initialize_query: &'static str) -> Self {
+    pub const fn with_db_initialization_query(mut self, initialize_query: &'static str) -> Self {
         self.db_initialize_query = Some(initialize_query);
         self
     }
@@ -68,40 +73,32 @@ impl<S: Schema> ThreadSafeConnectionBuilder<S> {
     /// the connection will call the write_queue_constructor for each database file in
     /// this process. The constructor is responsible for setting up a background thread or
     /// async task which handles queued writes with the provided connection.
-    pub fn with_write_queue_constructor(
-        mut self,
-        write_queue_constructor: WriteQueueConstructor,
-    ) -> Self {
+    pub fn with_write_queue_constructor(mut self, write_queue_constructor: WriteQueueConstructor) -> Self {
         self.write_queue_constructor = Some(write_queue_constructor);
         self
     }
 
     pub async fn build(self) -> anyhow::Result<ThreadSafeConnection> {
-        self.connection
-            .initialize_queues(self.write_queue_constructor);
+        self.connection.initialize_queues(self.write_queue_constructor);
 
         let db_initialize_query = self.db_initialize_query;
 
         self.connection
             .write(move |connection| {
                 if let Some(db_initialize_query) = db_initialize_query {
-                    connection.exec(db_initialize_query).with_context(|| {
-                        format!(
-                            "Db initialize query failed to execute: {}",
-                            db_initialize_query
-                        )
-                    })?()?;
+                    connection
+                        .exec(db_initialize_query)
+                        .with_context(|| format!("Db initialize query failed to execute: {}", db_initialize_query))?(
+                    )?;
                 }
 
                 // Retry in case another process is creating the schema at the same time.
-                let mut schema_result =
-                    anyhow::Result::<()>::Err(anyhow::anyhow!("Schema never created"));
+                let mut schema_result = anyhow::Result::<()>::Err(anyhow::anyhow!("Schema never created"));
 
-                let foreign_keys_enabled: bool =
-                    connection.select_row::<i32>("PRAGMA foreign_keys")?()
-                        .unwrap_or(None)
-                        .map(|enabled| enabled != 0)
-                        .unwrap_or(false);
+                let foreign_keys_enabled: bool = connection.select_row::<i32>("PRAGMA foreign_keys")?()
+                    .unwrap_or(None)
+                    .map(|enabled| enabled != 0)
+                    .unwrap_or(false);
 
                 connection.exec("PRAGMA foreign_keys = OFF;")?()?;
 
@@ -130,8 +127,7 @@ impl ThreadSafeConnection {
         if !QUEUES.read().contains_key(&self.uri) {
             let mut queues = QUEUES.write();
             if !queues.contains_key(&self.uri) {
-                let mut write_queue_constructor =
-                    write_queue_constructor.unwrap_or_else(background_thread_queue);
+                let mut write_queue_constructor = write_queue_constructor.unwrap_or_else(background_thread_queue);
                 queues.insert(self.uri.clone(), write_queue_constructor());
                 return true;
             }
@@ -171,9 +167,8 @@ impl ThreadSafeConnection {
     ) -> impl Future<Output = T> {
         // Check and invalidate queue and maybe recreate queue
         let queues = QUEUES.read();
-        let write_channel = queues
-            .get(&self.uri)
-            .expect("Queues are inserted when build is called. This should always succeed");
+        let write_channel =
+            queues.get(&self.uri).expect("Queues are inserted when build is called. This should always succeed");
 
         // Create a one shot channel for the result of the queued write
         // so we can await on the result
@@ -193,44 +188,27 @@ impl ThreadSafeConnection {
         uri: &str,
         connection_initialize_query: Option<&'static str>,
     ) -> Connection {
-        let mut connection = if persistent {
-            Self::open_file(uri)
-        } else {
-            Self::open_shared_memory(uri)
-        };
+        let mut connection = if persistent { Self::open_file(uri) } else { Self::open_shared_memory(uri) };
 
         if let Some(initialize_query) = connection_initialize_query {
             let mut last_error = None;
             let initialized = (0..CONNECTION_INITIALIZE_RETRIES).any(|attempt| {
-                match connection
-                    .exec(initialize_query)
-                    .and_then(|mut statement| statement())
-                {
+                match connection.exec(initialize_query).and_then(|mut statement| statement()) {
                     Ok(()) => true,
-                    Err(err)
-                        if is_schema_lock_error(&err)
-                            && attempt + 1 < CONNECTION_INITIALIZE_RETRIES =>
-                    {
+                    Err(err) if is_schema_lock_error(&err) && attempt + 1 < CONNECTION_INITIALIZE_RETRIES => {
                         last_error = Some(err);
                         thread::sleep(CONNECTION_INITIALIZE_RETRY_DELAY);
                         false
                     }
                     Err(err) => {
-                        panic!(
-                            "Initialize query failed to execute: {}\n\nCaused by:\n{err:#}",
-                            initialize_query
-                        )
+                        panic!("Initialize query failed to execute: {}\n\nCaused by:\n{err:#}", initialize_query)
                     }
                 }
             });
 
             if !initialized {
-                let err = last_error
-                    .expect("connection initialization retries should record the last error");
-                panic!(
-                    "Initialize query failed to execute after retries: {}\n\nCaused by:\n{err:#}",
-                    initialize_query
-                );
+                let err = last_error.expect("connection initialization retries should record the last error");
+                panic!("Initialize query failed to execute after retries: {}\n\nCaused by:\n{err:#}", initialize_query);
             }
         }
 
@@ -256,12 +234,8 @@ impl ThreadSafeConnection {
         connection_initialize_query: Option<&'static str>,
         write_queue_constructor: Option<WriteQueueConstructor>,
     ) -> Self {
-        let connection = Self {
-            uri: Arc::from(uri),
-            persistent,
-            connection_initialize_query,
-            connections: Default::default(),
-        };
+        let connection =
+            Self { uri: Arc::from(uri), persistent, connection_initialize_query, connections: Default::default() };
 
         connection.initialize_queues(write_queue_constructor);
         connection
@@ -272,9 +246,8 @@ impl Deref for ThreadSafeConnection {
     type Target = Connection;
 
     fn deref(&self) -> &Self::Target {
-        self.connections.get_or(|| {
-            Self::create_connection(self.persistent, &self.uri, self.connection_initialize_query)
-        })
+        self.connections
+            .get_or(|| Self::create_connection(self.persistent, &self.uri, self.connection_initialize_query))
     }
 }
 
@@ -295,9 +268,7 @@ pub fn background_thread_queue() -> WriteQueueConstructor {
 
         let sender = UnboundedSyncSender::new(sender);
         Box::new(move |queued_write| {
-            sender
-                .send(queued_write)
-                .expect("Could not send write action to background thread");
+            sender.send(queued_write).expect("Could not send write action to background thread");
         })
     })
 }

@@ -2,9 +2,11 @@ use futures::future::join_all;
 use itertools::Itertools;
 use language::language_settings::LanguageSettings;
 use text::BufferId;
-use ui::{Context, Window};
+use ui::Context;
+use ui::Window;
 
-use crate::{Editor, LSP_REQUEST_DEBOUNCE_TIMEOUT};
+use crate::Editor;
+use crate::LSP_REQUEST_DEBOUNCE_TIMEOUT;
 
 impl Editor {
     pub(super) fn refresh_folding_ranges(
@@ -29,17 +31,13 @@ impl Editor {
                 let id = buffer.read(cx).remote_id();
                 (for_buffer.is_none_or(|target| target == id))
                     && self.registered_buffers.contains_key(&id)
-                    && LanguageSettings::for_buffer(buffer.read(cx), cx)
-                        .document_folding_ranges
-                        .enabled()
+                    && LanguageSettings::for_buffer(buffer.read(cx), cx).document_folding_ranges.enabled()
             })
             .unique_by(|buffer| buffer.read(cx).remote_id())
             .collect::<Vec<_>>();
 
         self.refresh_folding_ranges_task = cx.spawn(async move |editor, cx| {
-            cx.background_executor()
-                .timer(LSP_REQUEST_DEBOUNCE_TIMEOUT)
-                .await;
+            cx.background_executor().timer(LSP_REQUEST_DEBOUNCE_TIMEOUT).await;
 
             let Some(tasks) = editor
                 .update(cx, |_, cx| {
@@ -86,11 +84,7 @@ impl Editor {
     /// Removes LSP folding creases for buffers whose `lsp_folding_ranges`
     /// setting has been turned off, and triggers a refresh so newly-enabled
     /// buffers get their ranges fetched.
-    pub(super) fn clear_disabled_lsp_folding_ranges(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn clear_disabled_lsp_folding_ranges(&mut self, window: &Window, cx: &mut Context<Self>) {
         if !self.use_document_folding_ranges {
             return;
         }
@@ -102,9 +96,7 @@ impl Editor {
             .into_iter()
             .filter(|buffer| {
                 let buffer = buffer.read(cx);
-                !LanguageSettings::for_buffer(&buffer, cx)
-                    .document_folding_ranges
-                    .enabled()
+                !LanguageSettings::for_buffer(buffer, cx).document_folding_ranges.enabled()
             })
             .map(|buffer| buffer.read(cx).remote_id())
             .collect::<Vec<_>>();

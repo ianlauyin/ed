@@ -56,15 +56,27 @@
 //! -------------------
 //! ```
 
-use std::{any::type_name, marker::PhantomData};
+use std::any::type_name;
+use std::marker::PhantomData;
 
-use gpui::{
-    ClickEvent, Context, CursorStyle, DragMoveEvent, MouseButton, Point, Stateful, Styled, Window,
-};
+use gpui::ClickEvent;
+use gpui::Context;
+use gpui::CursorStyle;
+use gpui::DragMoveEvent;
+use gpui::MouseButton;
+use gpui::Point;
+use gpui::Stateful;
+use gpui::Styled;
+use gpui::Window;
 use ui::prelude::*;
 
-use crate::shape::{Centered, PositionAndShape, Shape, SizeBounds};
-use crate::{Picker, PickerDelegate, preview::Layout};
+use crate::Picker;
+use crate::PickerDelegate;
+use crate::preview::Layout;
+use crate::shape::Centered;
+use crate::shape::PositionAndShape;
+use crate::shape::Shape;
+use crate::shape::SizeBounds;
 
 pub struct DragPreview;
 
@@ -102,24 +114,13 @@ pub(crate) trait Side: Copy + 'static {
     /// The resize cursor for this side's handle.
     fn cursor(&self) -> CursorStyle;
     /// Places and sizes the grab strip along this side's edge.
-    fn position(
-        &self,
-        div: gpui::Stateful<Div>,
-        shape: PositionAndShape,
-        window: &Window,
-    ) -> gpui::Stateful<Div>;
+    fn position(&self, div: gpui::Stateful<Div>, shape: PositionAndShape, window: &Window) -> gpui::Stateful<Div>;
     fn current_position_and_shape(
         &self,
         shape_before: PositionAndShape,
         mouse_movement: Point<Pixels>,
     ) -> PositionAndShape;
-    fn clamp(
-        &self,
-        working: &mut PositionAndShape,
-        bounds: &SizeBounds,
-        layout: Option<Layout>,
-        window: &Window,
-    );
+    fn clamp(&self, working: &mut PositionAndShape, bounds: &SizeBounds, layout: Option<Layout>, window: &Window);
     fn revert_to_default_size(&self, shape: &mut Shape, default: &Centered, window: &Window);
 }
 
@@ -129,12 +130,7 @@ impl Side for Left {
     fn cursor(&self) -> CursorStyle {
         CursorStyle::ResizeColumn
     }
-    fn position(
-        &self,
-        div: gpui::Stateful<Div>,
-        _: PositionAndShape,
-        window: &Window,
-    ) -> gpui::Stateful<Div> {
+    fn position(&self, div: gpui::Stateful<Div>, _: PositionAndShape, window: &Window) -> gpui::Stateful<Div> {
         div.top_0()
             .bottom(Self::corner_clearance(window))
             .w(Self::handle_width(window))
@@ -148,13 +144,7 @@ impl Side for Left {
         shape_before.left += mouse_movement.x;
         shape_before
     }
-    fn clamp(
-        &self,
-        working: &mut PositionAndShape,
-        bounds: &SizeBounds,
-        layout: Option<Layout>,
-        window: &Window,
-    ) {
+    fn clamp(&self, working: &mut PositionAndShape, bounds: &SizeBounds, layout: Option<Layout>, window: &Window) {
         bounds.clamp_left_edge(working, layout, window);
         bounds.clamp_divider(working, layout, window);
     }
@@ -168,12 +158,7 @@ impl Side for Right {
     fn cursor(&self) -> CursorStyle {
         CursorStyle::ResizeColumn
     }
-    fn position(
-        &self,
-        div: gpui::Stateful<Div>,
-        _: PositionAndShape,
-        window: &Window,
-    ) -> gpui::Stateful<Div> {
+    fn position(&self, div: gpui::Stateful<Div>, _: PositionAndShape, window: &Window) -> gpui::Stateful<Div> {
         div.top_0()
             .bottom(Self::corner_clearance(window))
             .w(Self::handle_width(window))
@@ -190,13 +175,7 @@ impl Side for Right {
         shape_before.right += mouse_movement.x;
         shape_before
     }
-    fn clamp(
-        &self,
-        working: &mut PositionAndShape,
-        bounds: &SizeBounds,
-        layout: Option<Layout>,
-        window: &Window,
-    ) {
+    fn clamp(&self, working: &mut PositionAndShape, bounds: &SizeBounds, layout: Option<Layout>, window: &Window) {
         bounds.clamp_right_edge(working, layout, window);
         bounds.clamp_divider(working, layout, window);
     }
@@ -218,12 +197,7 @@ impl Side for Middle {
         }
     }
 
-    fn position(
-        &self,
-        div: gpui::Stateful<Div>,
-        shape: PositionAndShape,
-        window: &Window,
-    ) -> gpui::Stateful<Div> {
+    fn position(&self, div: gpui::Stateful<Div>, shape: PositionAndShape, window: &Window) -> gpui::Stateful<Div> {
         match self.0 {
             Layout::Hidden => {
                 unreachable!("This resize handle is not drawn when the preview is hidden")
@@ -255,13 +229,7 @@ impl Side for Middle {
         }
         shape_before
     }
-    fn clamp(
-        &self,
-        working: &mut PositionAndShape,
-        bounds: &SizeBounds,
-        layout: Option<Layout>,
-        window: &Window,
-    ) {
+    fn clamp(&self, working: &mut PositionAndShape, bounds: &SizeBounds, layout: Option<Layout>, window: &Window) {
         // The divider only moves the preview; the outer edges are unchanged.
         bounds.clamp_divider(working, layout, window);
     }
@@ -276,12 +244,7 @@ impl Side for Bottom {
     fn cursor(&self) -> CursorStyle {
         CursorStyle::ResizeRow
     }
-    fn position(
-        &self,
-        div: gpui::Stateful<Div>,
-        _: PositionAndShape,
-        window: &Window,
-    ) -> gpui::Stateful<Div> {
+    fn position(&self, div: gpui::Stateful<Div>, _: PositionAndShape, window: &Window) -> gpui::Stateful<Div> {
         div.left(Self::corner_clearance(window))
             .right(Self::corner_clearance(window))
             .h(Self::handle_width(window))
@@ -298,13 +261,7 @@ impl Side for Bottom {
         shape_before.bottom += mouse_movement.y;
         shape_before
     }
-    fn clamp(
-        &self,
-        working: &mut PositionAndShape,
-        bounds: &SizeBounds,
-        layout: Option<Layout>,
-        window: &Window,
-    ) {
+    fn clamp(&self, working: &mut PositionAndShape, bounds: &SizeBounds, layout: Option<Layout>, window: &Window) {
         bounds.clamp_bottom_edge(working, layout, window);
         bounds.clamp_divider(working, layout, window);
     }
@@ -318,12 +275,7 @@ impl Side for LeftCorner {
     fn cursor(&self) -> CursorStyle {
         CursorStyle::ResizeUpRightDownLeft
     }
-    fn position(
-        &self,
-        div: gpui::Stateful<Div>,
-        _: PositionAndShape,
-        window: &Window,
-    ) -> gpui::Stateful<Div> {
+    fn position(&self, div: gpui::Stateful<Div>, _: PositionAndShape, window: &Window) -> gpui::Stateful<Div> {
         div.w(Self::handle_width(window))
             .h(Self::handle_width(window))
             .left(-Self::handle_offset(window))
@@ -343,13 +295,7 @@ impl Side for LeftCorner {
         shape_before.bottom += mouse_movement.y;
         shape_before
     }
-    fn clamp(
-        &self,
-        working: &mut PositionAndShape,
-        bounds: &SizeBounds,
-        layout: Option<Layout>,
-        window: &Window,
-    ) {
+    fn clamp(&self, working: &mut PositionAndShape, bounds: &SizeBounds, layout: Option<Layout>, window: &Window) {
         bounds.clamp_left_edge(working, layout, window);
         bounds.clamp_bottom_edge(working, layout, window);
         bounds.clamp_divider(working, layout, window);
@@ -365,12 +311,7 @@ impl Side for RightCorner {
     fn cursor(&self) -> CursorStyle {
         CursorStyle::ResizeUpLeftDownRight
     }
-    fn position(
-        &self,
-        div: gpui::Stateful<Div>,
-        _: PositionAndShape,
-        window: &Window,
-    ) -> gpui::Stateful<Div> {
+    fn position(&self, div: gpui::Stateful<Div>, _: PositionAndShape, window: &Window) -> gpui::Stateful<Div> {
         div.w(Self::handle_width(window))
             .h(Self::handle_width(window))
             .right(-Self::handle_offset(window))
@@ -390,13 +331,7 @@ impl Side for RightCorner {
         shape_before.bottom += mouse_movement.y;
         shape_before
     }
-    fn clamp(
-        &self,
-        working: &mut PositionAndShape,
-        bounds: &SizeBounds,
-        layout: Option<Layout>,
-        window: &Window,
-    ) {
+    fn clamp(&self, working: &mut PositionAndShape, bounds: &SizeBounds, layout: Option<Layout>, window: &Window) {
         bounds.clamp_right_edge(working, layout, window);
         bounds.clamp_bottom_edge(working, layout, window);
         bounds.clamp_divider(working, layout, window);
@@ -408,12 +343,7 @@ impl Side for RightCorner {
 }
 
 impl<S: Side> ResizeDrag<S> {
-    fn start_new(
-        shape: Shape,
-        bounds: &SizeBounds,
-        layout: Option<Layout>,
-        window: &mut Window,
-    ) -> Self {
+    fn start_new(shape: Shape, bounds: &SizeBounds, layout: Option<Layout>, window: &Window) -> Self {
         Self {
             mouse_pos_before: window.mouse_position(),
             // Before rendering we always clamp so the current shape may not be
@@ -426,55 +356,35 @@ impl<S: Side> ResizeDrag<S> {
 
 impl<D: PickerDelegate> Picker<D> {
     /// Resizes the picker modal by dragging the handle on the given side or corner
-    pub(crate) fn render_resize<S: Side>(
-        &self,
-        side: S,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
-        render_resize_handle(
-            side,
-            self.shape,
-            &self.size_bounds,
-            self.preview_layout_rendered(window),
-            window,
-        )
-        .on_drag_move::<ResizeDrag<S>>(cx.listener(
-            move |picker, event: &DragMoveEvent<ResizeDrag<S>>, window, cx| {
-                let drag = event.drag(cx);
-                let delta = event.event.position - drag.mouse_pos_before;
-                let mut working = side.current_position_and_shape(drag.shape_before, delta);
-                side.clamp(
-                    &mut working,
-                    &picker.size_bounds,
-                    picker.preview_layout_rendered(window),
-                    window,
-                );
-                picker.shape = Shape::Resizing(working);
-                cx.notify();
-            },
-        ))
-        .on_click(cx.listener(move |picker, event: &ClickEvent, window, cx| {
-            picker.reset_size_to_default_on_double_click(side, event, window, cx)
-        }))
+    pub(crate) fn render_resize<S: Side>(&self, side: S, window: &Window, cx: &Context<Self>) -> impl IntoElement {
+        render_resize_handle(side, self.shape, &self.size_bounds, self.preview_layout_rendered(window), window)
+            .on_drag_move::<ResizeDrag<S>>(cx.listener(
+                move |picker, event: &DragMoveEvent<ResizeDrag<S>>, window, cx| {
+                    let drag = event.drag(cx);
+                    let delta = event.event.position - drag.mouse_pos_before;
+                    let mut working = side.current_position_and_shape(drag.shape_before, delta);
+                    side.clamp(&mut working, &picker.size_bounds, picker.preview_layout_rendered(window), window);
+                    picker.shape = Shape::Resizing(working);
+                    cx.notify();
+                },
+            ))
+            .on_click(cx.listener(move |picker, event: &ClickEvent, window, cx| {
+                picker.reset_size_to_default_on_double_click(side, event, window, cx)
+            }))
     }
 
     fn reset_size_to_default_on_double_click<S: Side>(
         &mut self,
         side: S,
         event: &ClickEvent,
-        window: &mut Window,
+        window: &Window,
         cx: &mut Context<Picker<D>>,
     ) {
         if event.click_count() < 2 {
             return;
         }
         side.revert_to_default_size(&mut self.shape, &self.default_shape, window);
-        let pos = self.shape.clamped_position_and_size(
-            self.preview_layout_rendered(window),
-            &self.size_bounds,
-            window,
-        );
+        let pos = self.shape.clamped_position_and_size(self.preview_layout_rendered(window), &self.size_bounds, window);
         self.shape = Shape::Resizing(pos);
         cx.notify();
     }
@@ -487,28 +397,19 @@ fn render_resize_handle<S: Side>(
     shape: Shape,
     bounds: &SizeBounds,
     layout: Option<Layout>,
-    window: &mut Window,
+    window: &Window,
 ) -> Stateful<Div> {
     div()
         .id(S::id())
         .absolute()
         .cursor(side.cursor())
-        .map(|handle| {
-            side.position(
-                handle,
-                shape.clamped_position_and_size(layout, bounds, window),
-                window,
-            )
-        })
+        .map(|handle| side.position(handle, shape.clamped_position_and_size(layout, bounds, window), window))
         .block_mouse_except_scroll()
         .on_mouse_down(MouseButton::Left, do_nothing)
-        .on_drag(
-            ResizeDrag::<S>::start_new(shape, bounds, layout, window),
-            |_, _, _, cx| cx.new(|_| DragPreview),
-        )
+        .on_drag(ResizeDrag::<S>::start_new(shape, bounds, layout, window), |_, _, _, cx| cx.new(|_| DragPreview))
 }
 
-fn do_nothing(_: &gpui::MouseDownEvent, window: &mut Window, cx: &mut App) {
+const fn do_nothing(_: &gpui::MouseDownEvent, window: &mut Window, cx: &mut App) {
     window.prevent_default();
     cx.stop_propagation();
 }

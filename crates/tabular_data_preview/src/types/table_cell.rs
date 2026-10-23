@@ -37,17 +37,11 @@ impl TableCell {
         let start_anchor = buffer_snapshot.anchor_before(start_offset);
         let end_anchor = buffer_snapshot.anchor_after(end_offset);
 
-        Self::Real {
-            position: CellContentSpan {
-                start: start_anchor,
-                end: end_anchor,
-            },
-            cached_value: content,
-        }
+        Self::Real { position: CellContentSpan { start: start_anchor, end: end_anchor }, cached_value: content }
     }
 
     /// Get the display value for this cell
-    pub fn display_value(&self) -> Option<&SharedString> {
+    pub const fn display_value(&self) -> Option<&SharedString> {
         match self {
             TableCell::Real { cached_value, .. } => Some(cached_value),
             TableCell::Generated(value) => Some(value),

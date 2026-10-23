@@ -1,14 +1,41 @@
-use editor::{Editor, EditorEvent, MBTextSummary, MultiBufferSnapshot};
-use gpui::{App, Entity, FocusHandle, Focusable, Styled, Subscription, Task, WeakEntity};
-use settings::{RegisterSetting, Settings};
-use std::{fmt::Write, num::NonZeroU32, time::Duration};
-use text::{Point, Selection};
-use ui::{
-    Button, ButtonCommon, Clickable, Context, FluentBuilder, IntoElement, LabelSize, ParentElement,
-    Render, Tooltip, Window, div,
-};
+use std::fmt::Write;
+use std::num::NonZeroU32;
+use std::time::Duration;
+
+use editor::Editor;
+use editor::EditorEvent;
+use editor::MBTextSummary;
+use editor::MultiBufferSnapshot;
+use gpui::App;
+use gpui::Entity;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::Styled;
+use gpui::Subscription;
+use gpui::Task;
+use gpui::WeakEntity;
+use settings::RegisterSetting;
+use settings::Settings;
+use text::Point;
+use text::Selection;
+use ui::Button;
+use ui::ButtonCommon;
+use ui::Clickable;
+use ui::Context;
+use ui::FluentBuilder;
+use ui::IntoElement;
+use ui::LabelSize;
+use ui::ParentElement;
+use ui::Render;
+use ui::Tooltip;
+use ui::Window;
+use ui::div;
 use util::paths::FILE_ROW_COLUMN_DELIMITER;
-use workspace::{HideStatusItem, StatusBarSettings, StatusItemView, Workspace, item::ItemHandle};
+use workspace::HideStatusItem;
+use workspace::StatusBarSettings;
+use workspace::StatusItemView;
+use workspace::Workspace;
+use workspace::item::ItemHandle;
 
 #[derive(Copy, Clone, Debug, Default, PartialOrd, PartialEq)]
 pub(crate) struct SelectionStats {
@@ -37,27 +64,21 @@ pub struct UserCaretPosition {
 }
 
 impl UserCaretPosition {
-    pub(crate) fn at_selection_end(
-        selection: &Selection<Point>,
-        snapshot: &MultiBufferSnapshot,
-    ) -> Self {
+    pub(crate) fn at_selection_end(selection: &Selection<Point>, snapshot: &MultiBufferSnapshot) -> Self {
         let selection_end = selection.head();
-        let (line, character) =
-            if let Some((buffer_snapshot, point)) = snapshot.point_to_buffer_point(selection_end) {
-                let line_start = Point::new(point.row, 0);
+        let (line, character) = if let Some((buffer_snapshot, point)) = snapshot.point_to_buffer_point(selection_end) {
+            let line_start = Point::new(point.row, 0);
 
-                let chars_to_last_position = buffer_snapshot
-                    .text_summary_for_range::<text::TextSummary, _>(line_start..point)
-                    .chars as u32;
-                (line_start.row, chars_to_last_position)
-            } else {
-                let line_start = Point::new(selection_end.row, 0);
+            let chars_to_last_position =
+                buffer_snapshot.text_summary_for_range::<text::TextSummary, _>(line_start..point).chars as u32;
+            (line_start.row, chars_to_last_position)
+        } else {
+            let line_start = Point::new(selection_end.row, 0);
 
-                let chars_to_last_position = snapshot
-                    .text_summary_for_range::<MBTextSummary, _>(line_start..selection_end)
-                    .chars as u32;
-                (selection_end.row, chars_to_last_position)
-            };
+            let chars_to_last_position =
+                snapshot.text_summary_for_range::<MBTextSummary, _>(line_start..selection_end).chars as u32;
+            (selection_end.row, chars_to_last_position)
+        };
 
         Self {
             line: NonZeroU32::new(line + 1).expect("added 1"),
@@ -82,15 +103,13 @@ impl CursorPosition {
         &mut self,
         editor: &Entity<Editor>,
         debounce: Option<Duration>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
+        window: &Window,
+        cx: &Context<Self>,
     ) {
         let editor = editor.downgrade();
         self.update_position = cx.spawn_in(window, async move |cursor_position, cx| {
-            let is_singleton = editor
-                .update(cx, |editor, cx| editor.buffer().read(cx).is_singleton())
-                .ok()
-                .unwrap_or(true);
+            let is_singleton =
+                editor.update(cx, |editor, cx| editor.buffer().read(cx).is_singleton()).ok().unwrap_or(true);
 
             if !is_singleton && let Some(debounce) = debounce {
                 cx.background_executor().timer(debounce).await;
@@ -115,11 +134,8 @@ impl CursorPosition {
                                     for selection in editor.selections.all_adjusted(&snapshot) {
                                         let selection_summary = snapshot
                                             .buffer_snapshot()
-                                            .text_summary_for_range::<MBTextSummary, _>(
-                                            selection.start..selection.end,
-                                        );
-                                        cursor_position.selected_count.characters +=
-                                            selection_summary.chars;
+                                            .text_summary_for_range::<MBTextSummary, _>(selection.start..selection.end);
+                                        cursor_position.selected_count.characters += selection_summary.chars;
                                         if selection.end != selection.start {
                                             cursor_position.selected_count.lines +=
                                                 (selection.end.row - selection.start.row) as usize;
@@ -127,19 +143,16 @@ impl CursorPosition {
                                                 cursor_position.selected_count.lines += 1;
                                             }
                                         }
-                                        if last_selection.as_ref().is_none_or(|last_selection| {
-                                            selection.id > last_selection.id
-                                        }) {
+                                        if last_selection
+                                            .as_ref()
+                                            .is_none_or(|last_selection| selection.id > last_selection.id)
+                                        {
                                             last_selection = Some(selection);
                                         }
                                     }
                                 }
-                                cursor_position.position = last_selection.map(|s| {
-                                    UserCaretPosition::at_selection_end(
-                                        &s,
-                                        snapshot.buffer_snapshot(),
-                                    )
-                                });
+                                cursor_position.position = last_selection
+                                    .map(|s| UserCaretPosition::at_selection_end(&s, snapshot.buffer_snapshot()));
                                 cursor_position.context = Some(editor.focus_handle(cx));
                             }
                         }
@@ -155,20 +168,11 @@ impl CursorPosition {
     }
 
     fn write_position(&self, text: &mut String, cx: &App) {
-        if self.selected_count
-            <= (SelectionStats {
-                selections: 1,
-                ..Default::default()
-            })
-        {
+        if self.selected_count <= (SelectionStats { selections: 1, ..Default::default() }) {
             // Do not write out anything if we have just one empty selection.
             return;
         }
-        let SelectionStats {
-            lines,
-            characters,
-            selections,
-        } = self.selected_count;
+        let SelectionStats { lines, characters, selections } = self.selected_count;
         let format = LineIndicatorFormat::get(None, cx);
         let is_short_format = format == &LineIndicatorFormat::Short;
         let lines = (lines > 1).then_some((lines, "line"));
@@ -185,11 +189,7 @@ impl CursorPosition {
                 write!(text, ", ").unwrap();
             }
             let name = if is_short_format { &name[..1] } else { name };
-            let plural_suffix = if count > 1 && !is_short_format {
-                "s"
-            } else {
-                ""
-            };
+            let plural_suffix = if count > 1 && !is_short_format { "s" } else { "" };
             write!(text, "{count} {name}{plural_suffix}").unwrap();
             wrote_once = true;
         }
@@ -204,10 +204,7 @@ impl Render for CursorPosition {
         }
 
         div().when_some(self.position, |el, position| {
-            let mut text = format!(
-                "{}{FILE_ROW_COLUMN_DELIMITER}{}",
-                position.line, position.character,
-            );
+            let mut text = format!("{}{FILE_ROW_COLUMN_DELIMITER}{}", position.line, position.character,);
             self.write_position(&mut text, cx);
 
             let context = self.context.clone();
@@ -219,9 +216,8 @@ impl Render for CursorPosition {
                     .on_click(cx.listener(|this, _, window, cx| {
                         if let Some(workspace) = this.workspace.upgrade() {
                             workspace.update(cx, |workspace, cx| {
-                                if let Some(editor) = workspace
-                                    .active_item(cx)
-                                    .and_then(|item| item.act_as::<Editor>(cx))
+                                if let Some(editor) =
+                                    workspace.active_item(cx).and_then(|item| item.act_as::<Editor>(cx))
                                     && let Some(buffer) = editor.read(cx).active_buffer(cx)
                                 {
                                     workspace.toggle_modal(window, cx, |window, cx| {
@@ -232,17 +228,10 @@ impl Render for CursorPosition {
                         }
                     }))
                     .tooltip(move |_window, cx| match context.as_ref() {
-                        Some(context) => Tooltip::for_action_in(
-                            "Go to Line/Column",
-                            &editor::actions::ToggleGoToLine,
-                            context,
-                            cx,
-                        ),
-                        None => Tooltip::for_action(
-                            "Go to Line/Column",
-                            &editor::actions::ToggleGoToLine,
-                            cx,
-                        ),
+                        Some(context) => {
+                            Tooltip::for_action_in("Go to Line/Column", &editor::actions::ToggleGoToLine, context, cx)
+                        }
+                        None => Tooltip::for_action("Go to Line/Column", &editor::actions::ToggleGoToLine, cx),
                     }),
             )
         })
@@ -259,20 +248,12 @@ impl StatusItemView for CursorPosition {
         cx: &mut Context<Self>,
     ) {
         if let Some(editor) = active_pane_item.and_then(|item| item.act_as::<Editor>(cx)) {
-            self._observe_active_editor = Some(cx.subscribe_in(
-                &editor,
-                window,
-                |cursor_position, editor, event, window, cx| match event {
-                    EditorEvent::SelectionsChanged { .. } => Self::update_position(
-                        cursor_position,
-                        editor,
-                        Some(UPDATE_DEBOUNCE),
-                        window,
-                        cx,
-                    ),
-                    _ => {}
-                },
-            ));
+            self._observe_active_editor =
+                Some(cx.subscribe_in(&editor, window, |cursor_position, editor, event, window, cx| {
+                    if let EditorEvent::SelectionsChanged { .. } = event {
+                        Self::update_position(cursor_position, editor, Some(UPDATE_DEBOUNCE), window, cx)
+                    }
+                }));
             self.update_position(&editor, None, window, cx);
         } else {
             self.position = None;
@@ -284,10 +265,7 @@ impl StatusItemView for CursorPosition {
 
     fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
         Some(HideStatusItem::new(|settings| {
-            settings
-                .status_bar
-                .get_or_insert_default()
-                .cursor_position_button = Some(false);
+            settings.status_bar.get_or_insert_default().cursor_position_button = Some(false);
         }))
     }
 }

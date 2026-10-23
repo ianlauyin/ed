@@ -30,7 +30,7 @@ impl SearchHistoryCursor {
     }
 
     /// Takes the stored draft query, if any.
-    pub fn take_draft(&mut self) -> Option<String> {
+    pub const fn take_draft(&mut self) -> Option<String> {
         self.draft.take()
     }
 }
@@ -43,12 +43,8 @@ pub struct SearchHistory {
 }
 
 impl SearchHistory {
-    pub fn new(max_history_len: Option<usize>, insertion_behavior: QueryInsertionBehavior) -> Self {
-        SearchHistory {
-            max_history_len,
-            insertion_behavior,
-            history: VecDeque::new(),
-        }
+    pub const fn new(max_history_len: Option<usize>, insertion_behavior: QueryInsertionBehavior) -> Self {
+        SearchHistory { max_history_len, insertion_behavior, history: VecDeque::new() }
     }
 
     pub fn add(&mut self, cursor: &mut SearchHistoryCursor, search_string: String) {
@@ -83,9 +79,7 @@ impl SearchHistory {
     }
 
     pub fn current(&self, cursor: &SearchHistoryCursor) -> Option<&str> {
-        cursor
-            .selection
-            .and_then(|selected_ix| self.history.get(selected_ix).map(|s| s.as_str()))
+        cursor.selection.and_then(|selected_ix| self.history.get(selected_ix).map(|s| s.as_str()))
     }
 
     /// Get the previous history entry using the given `SearchHistoryCursor`.
@@ -94,15 +88,9 @@ impl SearchHistory {
     /// `current_query` is the current text in the search editor. If it differs
     /// from the history entry at the cursor position (or if the cursor has no
     /// selection), it is saved as a draft so it can be restored later.
-    pub fn previous(
-        &mut self,
-        cursor: &mut SearchHistoryCursor,
-        current_query: &str,
-    ) -> Option<&str> {
-        let matches_history = cursor
-            .selection
-            .and_then(|i| self.history.get(i))
-            .is_some_and(|entry| entry == current_query);
+    pub fn previous(&mut self, cursor: &mut SearchHistoryCursor, current_query: &str) -> Option<&str> {
+        let matches_history =
+            cursor.selection.and_then(|i| self.history.get(i)).is_some_and(|entry| entry == current_query);
         if !matches_history {
             cursor.draft = Some(current_query.to_string());
         }
@@ -115,10 +103,6 @@ impl SearchHistory {
         let previous = self.history.get(prev_index)?;
         cursor.selection = Some(prev_index);
         Some(previous)
-    }
-
-    pub fn len(&self) -> usize {
-        self.history.len()
     }
 
     /// Iterate over history entries from newest to oldest.

@@ -5,14 +5,19 @@ pub mod repository;
 pub mod stash;
 pub mod status;
 
-pub use crate::remote::*;
+use std::fmt::Write as _;
+use std::fmt::{self};
+use std::str::FromStr;
+
 use anyhow::Result;
-use gpui::{Action, actions};
+use gpui::Action;
+use gpui::actions;
 pub use repository::RemoteCommandOutput;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use std::fmt::{self, Write as _};
-use std::str::FromStr;
+use serde::Deserialize;
+use serde::Serialize;
+
+pub use crate::remote::*;
 
 pub const DOT_GIT: &str = ".git";
 pub const GITIGNORE: &str = ".gitignore";
@@ -183,14 +188,14 @@ enum OidFormat {
 }
 
 impl OidFormat {
-    fn byte_len(self) -> usize {
+    const fn byte_len(self) -> usize {
         match self {
             Self::Sha1 => SHA1_BYTE_LENGTH,
             Self::Sha256 => SHA256_BYTE_LENGTH,
         }
     }
 
-    fn hex_len(self) -> usize {
+    const fn hex_len(self) -> usize {
         match self {
             Self::Sha1 => SHA1_HEX_LENGTH,
             Self::Sha256 => SHA256_HEX_LENGTH,
@@ -212,10 +217,7 @@ impl Oid {
 
         let mut oid_bytes = [0u8; SHA256_BYTE_LENGTH];
         oid_bytes[..bytes.len()].copy_from_slice(bytes);
-        Ok(Self {
-            bytes: oid_bytes,
-            format,
-        })
+        Ok(Self { bytes: oid_bytes, format })
     }
 
     pub fn as_bytes(&self) -> &[u8] {
@@ -250,11 +252,7 @@ impl Oid {
     fn hex_digit(&self, index: usize) -> char {
         debug_assert!(index < self.format.hex_len());
         let byte = self.as_bytes()[index / 2];
-        let nibble = if index & 1 == 0 {
-            byte >> 4
-        } else {
-            byte & 0x0f
-        };
+        let nibble = if index & 1 == 0 { byte >> 4 } else { byte & 0x0f };
         char::from(HEX_DIGITS[nibble as usize])
     }
 }
@@ -296,7 +294,7 @@ impl FromStr for Oid {
     }
 }
 
-fn decode_hex_digit(byte: u8) -> Option<u8> {
+const fn decode_hex_digit(byte: u8) -> Option<u8> {
     match byte {
         b'0'..=b'9' => Some(byte - b'0'),
         b'a'..=b'f' => Some(byte - b'a' + 10),
@@ -359,17 +357,17 @@ pub enum RunHook {
 }
 
 impl RunHook {
-    pub fn as_str(&self) -> &str {
+    pub const fn as_str(&self) -> &str {
         match self {
             Self::PreCommit => "pre-commit",
         }
     }
 
-    pub fn to_proto(&self) -> i32 {
-        *self as i32
+    pub const fn to_proto(self) -> i32 {
+        self as i32
     }
 
-    pub fn from_proto(value: i32) -> Option<Self> {
+    pub const fn from_proto(value: i32) -> Option<Self> {
         match value {
             0 => Some(Self::PreCommit),
             _ => None,

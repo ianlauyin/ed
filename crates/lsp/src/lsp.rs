@@ -1,45 +1,66 @@
 mod input_handler;
 
+use std::any::TypeId;
+use std::collections::BTreeSet;
+use std::ffi::OsStr;
+use std::ffi::OsString;
+use std::fmt;
+use std::io::Write;
+use std::ops::DerefMut;
+use std::path::Path;
+use std::path::PathBuf;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::Weak;
+use std::sync::atomic::AtomicI32;
+use std::sync::atomic::Ordering::SeqCst;
+use std::task::Poll;
+use std::time::Duration;
+use std::time::Instant;
+
+use anyhow::Context as _;
+use anyhow::Result;
+use anyhow::anyhow;
+use collections::HashMap;
+use futures::AsyncBufReadExt;
+use futures::AsyncRead;
+use futures::AsyncWrite;
+use futures::AsyncWriteExt;
+use futures::Future;
+use futures::FutureExt;
+use futures::StreamExt;
+use futures::channel::oneshot::Canceled;
+use futures::channel::oneshot::{self};
+use futures::future::Either;
+use futures::future::{self};
+use futures::io::BufReader;
+use futures::io::BufWriter;
+use futures::select;
+use gpui::App;
+use gpui::AppContext as _;
+use gpui::AsyncApp;
+use gpui::BackgroundExecutor;
+use gpui::SharedString;
+use gpui::Task;
+use gpui_util::ResultExt;
+use gpui_util::TryFutureExt;
 pub use lsp_types::request::*;
 pub use lsp_types::*;
-
-use anyhow::{Context as _, Result, anyhow};
-use collections::HashMap;
-use futures::{
-    AsyncBufReadExt, AsyncRead, AsyncWrite, AsyncWriteExt, Future, FutureExt, StreamExt,
-    channel::oneshot::{self, Canceled},
-    future::{self, Either},
-    io::{BufReader, BufWriter},
-    select,
-};
-use gpui::{App, AppContext as _, AsyncApp, BackgroundExecutor, SharedString, Task};
 use notification::DidChangeWorkspaceFolders;
-use parking_lot::{Mutex, RwLock};
-use postage::{barrier, prelude::Stream};
+use parking_lot::Mutex;
+use parking_lot::RwLock;
+use postage::barrier;
+use postage::prelude::Stream;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use serde_json::{Value, json, value::RawValue};
-use util::command::{Child, Stdio};
-
-use gpui_util::{ResultExt, TryFutureExt};
-use std::path::Path;
-use std::{
-    any::TypeId,
-    collections::BTreeSet,
-    ffi::{OsStr, OsString},
-    fmt,
-    io::Write,
-    ops::DerefMut,
-    path::PathBuf,
-    pin::Pin,
-    sync::{
-        Arc, Weak,
-        atomic::{AtomicI32, Ordering::SeqCst},
-    },
-    task::Poll,
-    time::{Duration, Instant},
-};
+use serde::Deserialize;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
+use serde_json::Value;
+use serde_json::json;
+use serde_json::value::RawValue;
 use util::ConnectionResult;
+use util::command::Child;
+use util::command::Stdio;
 
 const JSON_RPC_VERSION: &str = "2.0";
 const CONTENT_LEN_HEADER: &str = "Content-Length: ";
@@ -51,8 +72,7 @@ pub const DEFAULT_LSP_REQUEST_TIMEOUT_SECS: u64 = 120;
 /// A timeout representing the value of [DEFAULT_LSP_REQUEST_TIMEOUT_SECS].
 ///
 /// Should **only be used** in tests and as a fallback when a corresponding config value cannot be obtained!
-pub const DEFAULT_LSP_REQUEST_TIMEOUT: Duration =
-    Duration::from_secs(DEFAULT_LSP_REQUEST_TIMEOUT_SECS);
+pub const DEFAULT_LSP_REQUEST_TIMEOUT: Duration = Duration::from_secs(DEFAULT_LSP_REQUEST_TIMEOUT_SECS);
 
 /// The shutdown timeout for LSP servers.
 const SERVER_SHUTDOWN_TIMEOUT: Duration = Duration::from_secs(5);
@@ -143,19 +163,17 @@ pub enum LanguageServerSelector {
 pub struct LanguageServerId(pub usize);
 
 impl LanguageServerId {
-    pub fn from_proto(id: u64) -> Self {
+    pub const fn from_proto(id: u64) -> Self {
         Self(id as usize)
     }
 
-    pub fn to_proto(self) -> u64 {
+    pub const fn to_proto(self) -> u64 {
         self.0 as u64
     }
 }
 
 /// A name of a language server.
-#[derive(
-    Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize, JsonSchema,
-)]
+#[derive(Clone, Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Deserialize, Serialize, JsonSchema)]
 #[serde(transparent)]
 pub struct LanguageServerName(pub SharedString);
 
@@ -234,11 +252,7 @@ fn deserialize_params<T: DeserializeOwned + 'static>(params: Value) -> serde_jso
 }
 
 fn deserialize_result<T: DeserializeOwned + 'static>(result: &str) -> serde_json::Result<T> {
-    if TypeId::of::<T>() == TypeId::of::<()>() {
-        serde_json::from_str("null")
-    } else {
-        serde_json::from_str(result)
-    }
+    if TypeId::of::<T>() == TypeId::of::<()>() { serde_json::from_str("null") } else { serde_json::from_str(result) }
 }
 
 /// Language server protocol RPC request message.
@@ -358,30 +372,19 @@ pub struct ResponseError {
 
 impl ResponseError {
     pub fn new(code: ResponseErrorCode, message: impl Into<String>) -> Self {
-        Self {
-            code,
-            message: message.into(),
-            data: None,
-        }
+        Self { code, message: message.into(), data: None }
     }
 
     pub fn server_cancelled() -> Self {
-        Self::new(
-            ResponseErrorCode::ServerCancelled,
-            "server cancelled the request",
-        )
+        Self::new(ResponseErrorCode::ServerCancelled, "server cancelled the request")
     }
 
     pub fn method_not_found(method: &str) -> Self {
-        Self::new(
-            ResponseErrorCode::MethodNotFound,
-            format!("Unrecognized method `{method}`"),
-        )
+        Self::new(ResponseErrorCode::MethodNotFound, format!("Unrecognized method `{method}`"))
     }
 
     pub fn is_request_denied(&self) -> bool {
-        self.code == ResponseErrorCode::ServerCancelled
-            || self.code == ResponseErrorCode::ContentModified
+        self.code == ResponseErrorCode::ServerCancelled || self.code == ResponseErrorCode::ContentModified
     }
 
     pub fn should_retrigger(&self) -> bool {
@@ -389,9 +392,7 @@ impl ResponseError {
             && self
                 .data
                 .clone()
-                .and_then(|data| {
-                    serde_json::from_value::<DiagnosticServerCancellationData>(data).log_err()
-                })
+                .and_then(|data| serde_json::from_value::<DiagnosticServerCancellationData>(data).log_err())
                 .is_none_or(|data| data.retrigger_request)
     }
 }
@@ -414,7 +415,7 @@ struct LspRequest<F> {
 }
 
 impl<F> LspRequest<F> {
-    pub fn new(id: i32, request: F) -> Self {
+    pub const fn new(id: i32, request: F) -> Self {
         Self { id, request }
     }
 }
@@ -510,13 +511,9 @@ impl LanguageServer {
         workspace_folders: Option<Arc<Mutex<BTreeSet<Uri>>>>,
         cx: &mut AsyncApp,
     ) -> Result<Self> {
-        let working_dir = if root_path.is_dir() {
-            root_path
-        } else {
-            root_path.parent().unwrap_or_else(|| Path::new("/"))
-        };
-        let root_uri = Uri::from_file_path(&working_dir)
-            .map_err(|()| anyhow!("{working_dir:?} is not a valid URI"))?;
+        let working_dir =
+            if root_path.is_dir() { root_path } else { root_path.parent().unwrap_or_else(|| Path::new("/")) };
+        let root_uri = Uri::from_file_path(working_dir).map_err(|()| anyhow!("{working_dir:?} is not a valid URI"))?;
         log::info!(
             "starting language server process. binary path: \
             {:?}, working directory: {:?}, args: {:?}",
@@ -534,9 +531,7 @@ impl LanguageServer {
             .stderr(Stdio::piped())
             .kill_on_drop(true);
 
-        let mut server = command
-            .spawn()
-            .with_context(|| format!("failed to spawn command {command:?}",))?;
+        let mut server = command.spawn().with_context(|| format!("failed to spawn command {command:?}",))?;
 
         let stdin = server.stdin.take().unwrap();
         let stdout = server.stdout.take().unwrap();
@@ -580,7 +575,7 @@ impl LanguageServer {
         binary: LanguageServerBinary,
         root_uri: Uri,
         workspace_folders: Option<Arc<Mutex<BTreeSet<Uri>>>>,
-        cx: &mut AsyncApp,
+        cx: &AsyncApp,
         on_unhandled_notification: F,
     ) -> Self
     where
@@ -591,10 +586,8 @@ impl LanguageServer {
     {
         let (outbound_tx, outbound_rx) = async_channel::unbounded::<String>();
         let (output_done_tx, output_done_rx) = barrier::channel();
-        let notification_handlers =
-            Arc::new(Mutex::new(HashMap::<_, NotificationHandler>::default()));
-        let response_handlers =
-            Arc::new(Mutex::new(Some(HashMap::<_, ResponseHandler>::default())));
+        let notification_handlers = Arc::new(Mutex::new(HashMap::<_, NotificationHandler>::default()));
+        let response_handlers = Arc::new(Mutex::new(Some(HashMap::<_, ResponseHandler>::default())));
         let pending_respond_tasks = PendingRespondTasks::default();
         let io_handlers = Arc::new(Mutex::new(HashMap::default()));
 
@@ -638,11 +631,9 @@ impl LanguageServer {
             .map(|stderr| {
                 let io_handlers = io_handlers.clone();
                 let stderr_captures = stderr_capture.clone();
-                cx.background_spawn(async move {
-                    Self::handle_stderr(stderr, io_handlers, stderr_captures)
-                        .log_err()
-                        .await
-                })
+                cx.background_spawn(
+                    async move { Self::handle_stderr(stderr, io_handlers, stderr_captures).log_err().await },
+                )
             })
             .unwrap_or_else(|| Task::ready(None));
         let input_task = cx.background_spawn(async move {
@@ -660,13 +651,9 @@ impl LanguageServer {
             .log_err()
         });
 
-        let configuration = DidChangeConfigurationParams {
-            settings: Value::Null,
-        }
-        .into();
+        let configuration = DidChangeConfigurationParams { settings: Value::Null }.into();
 
-        let (notification_tx, notification_rx) =
-            async_channel::unbounded::<NotificationSerializer>();
+        let (notification_tx, notification_rx) = async_channel::unbounded::<NotificationSerializer>();
         cx.background_spawn({
             let outbound_tx = outbound_tx.clone();
             async move {
@@ -689,11 +676,7 @@ impl LanguageServer {
             io_handlers,
             name: server_name,
             version: None,
-            process_name: binary
-                .path
-                .file_name()
-                .map(|name| Arc::from(name.to_string_lossy()))
-                .unwrap_or_default(),
+            process_name: binary.path.file_name().map(|name| Arc::from(name.to_string_lossy())).unwrap_or_default(),
             binary,
             capabilities: Default::default(),
             configuration,
@@ -742,14 +725,14 @@ impl LanguageServer {
 
         while let Some(msg) = input_handler.incoming_messages.next().await {
             if msg.method == <notification::Cancel as notification::Notification>::METHOD {
-                if let Some(params) = msg.params {
-                    if let Ok(cancel_params) = serde_json::from_value::<CancelParams>(params) {
-                        let id = match cancel_params.id {
-                            NumberOrString::Number(id) => RequestId::Int(id),
-                            NumberOrString::String(id) => RequestId::Str(id),
-                        };
-                        pending_respond_tasks.lock().remove(&id);
-                    }
+                if let Some(params) = msg.params
+                    && let Ok(cancel_params) = serde_json::from_value::<CancelParams>(params)
+                {
+                    let id = match cancel_params.id {
+                        NumberOrString::Number(id) => RequestId::Int(id),
+                        NumberOrString::String(id) => RequestId::Str(id),
+                    };
+                    pending_respond_tasks.lock().remove(&id);
                 }
                 continue;
             }
@@ -853,14 +836,7 @@ impl LanguageServer {
     ) -> InitializeParams {
         let workspace_folders = self.workspace_folders.as_ref().map_or_else(
             || vec![workspace_folder_for_uri(self.root_uri.clone())],
-            |folders| {
-                folders
-                    .lock()
-                    .iter()
-                    .cloned()
-                    .map(workspace_folder_for_uri)
-                    .collect()
-            },
+            |folders| folders.lock().iter().cloned().map(workspace_folder_for_uri).collect(),
         );
 
         #[allow(deprecated)]
@@ -894,17 +870,10 @@ impl LanguageServer {
                         dynamic_registration: Some(true),
                         ..WorkspaceSymbolClientCapabilities::default()
                     }),
-                    inlay_hint: Some(InlayHintWorkspaceClientCapabilities {
-                        refresh_support: Some(true),
-                    }),
-                    diagnostics: pull_diagnostics.then_some(
-                        DiagnosticWorkspaceClientCapabilities {
-                            refresh_support: Some(true),
-                        },
-                    ),
-                    code_lens: Some(CodeLensWorkspaceClientCapabilities {
-                        refresh_support: Some(true),
-                    }),
+                    inlay_hint: Some(InlayHintWorkspaceClientCapabilities { refresh_support: Some(true) }),
+                    diagnostics: pull_diagnostics
+                        .then_some(DiagnosticWorkspaceClientCapabilities { refresh_support: Some(true) }),
+                    code_lens: Some(CodeLensWorkspaceClientCapabilities { refresh_support: Some(true) }),
                     workspace_edit: Some(WorkspaceEditClientCapabilities {
                         resource_operations: Some(vec![
                             ResourceOperationKind::Create,
@@ -922,22 +891,13 @@ impl LanguageServer {
                         ..WorkspaceFileOperationsClientCapabilities::default()
                     }),
                     apply_edit: Some(true),
-                    execute_command: Some(ExecuteCommandClientCapabilities {
-                        dynamic_registration: Some(true),
-                    }),
-                    semantic_tokens: Some(SemanticTokensWorkspaceClientCapabilities {
-                        refresh_support: Some(true),
-                    }),
+                    execute_command: Some(ExecuteCommandClientCapabilities { dynamic_registration: Some(true) }),
+                    semantic_tokens: Some(SemanticTokensWorkspaceClientCapabilities { refresh_support: Some(true) }),
                     ..WorkspaceClientCapabilities::default()
                 }),
                 text_document: Some(TextDocumentClientCapabilities {
-                    definition: Some(GotoCapability {
-                        link_support: Some(true),
-                        dynamic_registration: Some(true),
-                    }),
-                    document_highlight: Some(DocumentHighlightClientCapabilities {
-                        dynamic_registration: Some(true),
-                    }),
+                    definition: Some(GotoCapability { link_support: Some(true), dynamic_registration: Some(true) }),
+                    document_highlight: Some(DocumentHighlightClientCapabilities { dynamic_registration: Some(true) }),
                     code_action: Some(CodeActionClientCapabilities {
                         code_action_literal_support: Some(CodeActionLiteralSupport {
                             code_action_kind: CodeActionKindLiteralSupport {
@@ -976,21 +936,13 @@ impl LanguageServer {
                                 ],
                             }),
                             deprecated_support: Some(true),
-                            tag_support: Some(TagSupport {
-                                value_set: vec![CompletionItemTag::DEPRECATED],
-                            }),
+                            tag_support: Some(TagSupport { value_set: vec![CompletionItemTag::DEPRECATED] }),
                             insert_replace_support: Some(true),
                             label_details_support: Some(true),
                             insert_text_mode_support: Some(InsertTextModeSupport {
-                                value_set: vec![
-                                    InsertTextMode::AS_IS,
-                                    InsertTextMode::ADJUST_INDENTATION,
-                                ],
+                                value_set: vec![InsertTextMode::AS_IS, InsertTextMode::ADJUST_INDENTATION],
                             }),
-                            documentation_format: Some(vec![
-                                MarkupKind::Markdown,
-                                MarkupKind::PlainText,
-                            ]),
+                            documentation_format: Some(vec![MarkupKind::Markdown, MarkupKind::PlainText]),
                             ..CompletionItemCapability::default()
                         }),
                         insert_text_mode: Some(InsertTextMode::ADJUST_INDENTATION),
@@ -1009,9 +961,7 @@ impl LanguageServer {
                     }),
                     rename: Some(RenameClientCapabilities {
                         prepare_support: Some(true),
-                        prepare_support_default_behavior: Some(
-                            PrepareSupportDefaultBehavior::IDENTIFIER,
-                        ),
+                        prepare_support_default_behavior: Some(PrepareSupportDefaultBehavior::IDENTIFIER),
                         dynamic_registration: Some(true),
                         ..RenameClientCapabilities::default()
                     }),
@@ -1054,12 +1004,8 @@ impl LanguageServer {
                         }),
                         code_description_support: Some(true),
                     }),
-                    formatting: Some(DynamicRegistrationClientCapabilities {
-                        dynamic_registration: Some(true),
-                    }),
-                    range_formatting: Some(DynamicRegistrationClientCapabilities {
-                        dynamic_registration: Some(true),
-                    }),
+                    formatting: Some(DynamicRegistrationClientCapabilities { dynamic_registration: Some(true) }),
+                    range_formatting: Some(DynamicRegistrationClientCapabilities { dynamic_registration: Some(true) }),
                     on_type_formatting: Some(DynamicRegistrationClientCapabilities {
                         dynamic_registration: Some(true),
                     }),
@@ -1068,12 +1014,8 @@ impl LanguageServer {
                         dynamic_registration: Some(true),
                         ..TextDocumentSyncClientCapabilities::default()
                     }),
-                    code_lens: Some(CodeLensClientCapabilities {
-                        dynamic_registration: Some(true),
-                    }),
-                    call_hierarchy: Some(CallHierarchyClientCapabilities {
-                        dynamic_registration: Some(true),
-                    }),
+                    code_lens: Some(CodeLensClientCapabilities { dynamic_registration: Some(true) }),
+                    call_hierarchy: Some(CallHierarchyClientCapabilities { dynamic_registration: Some(true) }),
                     document_symbol: Some(DocumentSymbolClientCapabilities {
                         hierarchical_document_symbol_support: Some(true),
                         dynamic_registration: Some(true),
@@ -1084,9 +1026,7 @@ impl LanguageServer {
                         related_document_support: Some(true),
                         markup_message_support: Some(true),
                     }),
-                    color_provider: Some(DocumentColorClientCapabilities {
-                        dynamic_registration: Some(true),
-                    }),
+                    color_provider: Some(DocumentColorClientCapabilities { dynamic_registration: Some(true) }),
                     document_link: Some(DocumentLinkClientCapabilities {
                         dynamic_registration: Some(true),
                         tooltip_support: Some(true),
@@ -1095,9 +1035,7 @@ impl LanguageServer {
                         dynamic_registration: Some(true),
                         line_folding_only: Some(false),
                         range_limit: None,
-                        folding_range: Some(FoldingRangeCapability {
-                            collapsed_text: Some(true),
-                        }),
+                        folding_range: Some(FoldingRangeCapability { collapsed_text: Some(true) }),
                         folding_range_kind: Some(FoldingRangeKindCapability {
                             value_set: Some(vec![
                                 FoldingRangeKind::Comment,
@@ -1149,13 +1087,7 @@ impl LanguageServer {
                 .request::<request::Initialize>(params, timeout)
                 .await
                 .into_response()
-                .with_context(|| {
-                    format!(
-                        "initializing server {}, id {}",
-                        self.name(),
-                        self.server_id()
-                    )
-                })?;
+                .with_context(|| format!("initializing server {}, id {}", self.name(), self.server_id()))?;
             if let Some(info) = response.server_info {
                 self.version = info.version.map(SharedString::from);
                 self.process_name = info.name.into();
@@ -1274,10 +1206,7 @@ impl LanguageServer {
     {
         let id = self.next_id.fetch_add(1, SeqCst);
         self.io_handlers.lock().insert(id, Box::new(f));
-        Subscription::Io {
-            id,
-            io_handlers: Some(Arc::downgrade(&self.io_handlers)),
-        }
+        Subscription::Io { id, io_handlers: Some(Arc::downgrade(&self.io_handlers)) }
     }
 
     /// Removes a request handler registers via [`Self::on_request`].
@@ -1309,14 +1238,8 @@ impl LanguageServer {
                 }
             }),
         );
-        assert!(
-            prev_handler.is_none(),
-            "registered multiple handlers for the same LSP method"
-        );
-        Subscription::Notification {
-            method,
-            notification_handlers: Some(Arc::downgrade(&self.notification_handlers)),
-        }
+        assert!(prev_handler.is_none(), "registered multiple handlers for the same LSP method");
+        Subscription::Notification { method, notification_handlers: Some(Arc::downgrade(&self.notification_handlers)) }
     }
 
     #[must_use]
@@ -1350,20 +1273,16 @@ impl LanguageServer {
                                         Err(error) => Response {
                                             jsonrpc: JSON_RPC_VERSION,
                                             id: id.clone(),
-                                            value: LspResult::Error(Some(
-                                                match error.downcast::<ResponseError>() {
-                                                    Ok(response_error) => response_error,
-                                                    Err(error) => ResponseError::new(
-                                                        ResponseErrorCode::RequestFailed,
-                                                        error.to_string(),
-                                                    ),
-                                                },
-                                            )),
+                                            value: LspResult::Error(Some(match error.downcast::<ResponseError>() {
+                                                Ok(response_error) => response_error,
+                                                Err(error) => ResponseError::new(
+                                                    ResponseErrorCode::RequestFailed,
+                                                    error.to_string(),
+                                                ),
+                                            })),
                                         },
                                     };
-                                    if let Some(response) =
-                                        serde_json::to_string(&response).log_err()
-                                    {
+                                    if let Some(response) = serde_json::to_string(&response).log_err() {
                                         outbound_tx.try_send(response).ok();
                                     }
                                     pending_respond_tasks.lock().remove(&id);
@@ -1378,10 +1297,7 @@ impl LanguageServer {
                                 jsonrpc: JSON_RPC_VERSION,
                                 id,
                                 result: None,
-                                error: Some(ResponseError::new(
-                                    ResponseErrorCode::ParseError,
-                                    error.to_string(),
-                                )),
+                                error: Some(ResponseError::new(ResponseErrorCode::ParseError, error.to_string())),
                             };
                             if let Some(response) = serde_json::to_string(&response).log_err() {
                                 outbound_tx.try_send(response).ok();
@@ -1391,14 +1307,8 @@ impl LanguageServer {
                 }
             }),
         );
-        assert!(
-            prev_handler.is_none(),
-            "registered multiple handlers for the same LSP method"
-        );
-        Subscription::Notification {
-            method,
-            notification_handlers: Some(Arc::downgrade(&self.notification_handlers)),
-        }
+        assert!(prev_handler.is_none(), "registered multiple handlers for the same LSP method");
+        Subscription::Notification { method, notification_handlers: Some(Arc::downgrade(&self.notification_handlers)) }
     }
 
     /// Get the name of the running language server.
@@ -1456,7 +1366,7 @@ impl LanguageServer {
     }
 
     /// Get the ID of the running language server.
-    pub fn server_id(&self) -> LanguageServerId {
+    pub const fn server_id(&self) -> LanguageServerId {
         self.server_id
     }
 
@@ -1466,7 +1376,7 @@ impl LanguageServer {
     }
 
     /// Get the binary information of the running language server.
-    pub fn binary(&self) -> &LanguageServerBinary {
+    pub const fn binary(&self) -> &LanguageServerBinary {
         &self.binary
     }
 
@@ -1543,9 +1453,7 @@ impl LanguageServer {
                 );
             });
 
-        let send = outbound_tx
-            .try_send(message)
-            .context("failed to write to language server's stdin");
+        let send = outbound_tx.try_send(message).context("failed to write to language server's stdin");
 
         let response_handlers = Arc::clone(response_handlers);
         let notification_serializers = notification_serializers.downgrade();
@@ -1562,9 +1470,7 @@ impl LanguageServer {
                 if let Some(notification_serializers) = notification_serializers.upgrade() {
                     Self::notify_internal::<notification::Cancel>(
                         &notification_serializers,
-                        CancelParams {
-                            id: NumberOrString::Number(id),
-                        },
+                        CancelParams { id: NumberOrString::Number(id) },
                     )
                     .ok();
                 }
@@ -1628,19 +1534,12 @@ impl LanguageServer {
 
     /// Internal function to return a Future from a configured timeout duration.
     /// If the duration is zero or `Duration::MAX`, the returned future never completes.
-    fn request_timeout_future(
-        executor: BackgroundExecutor,
-        request_timeout: Duration,
-    ) -> impl Future<Output = String> {
+    fn request_timeout_future(executor: BackgroundExecutor, request_timeout: Duration) -> impl Future<Output = String> {
         if request_timeout == Duration::MAX || request_timeout == Duration::ZERO {
             return Either::Left(future::pending::<String>());
         }
 
-        Either::Right(
-            executor
-                .timer(request_timeout)
-                .map(move |_| format!("which took over {request_timeout:?}")),
-        )
+        Either::Right(executor.timer(request_timeout).map(move |_| format!("which took over {request_timeout:?}")))
     }
 
     /// Obtain a request timer for the LSP.
@@ -1661,12 +1560,7 @@ impl LanguageServer {
         params: T::Params,
     ) -> Result<()> {
         let serializer = NotificationSerializer(Box::new(move || {
-            serde_json::to_string(&Notification {
-                jsonrpc: JSON_RPC_VERSION,
-                method: T::METHOD,
-                params,
-            })
-            .unwrap()
+            serde_json::to_string(&Notification { jsonrpc: JSON_RPC_VERSION, method: T::METHOD, params }).unwrap()
         }));
 
         outbound_tx.send_blocking(serializer)?;
@@ -1679,11 +1573,8 @@ impl LanguageServer {
             .capabilities()
             .workspace
             .and_then(|ws| {
-                ws.workspace_folders.and_then(|folders| {
-                    folders
-                        .change_notifications
-                        .map(|caps| matches!(caps, OneOf::Left(false)))
-                })
+                ws.workspace_folders
+                    .and_then(|folders| folders.change_notifications.map(|caps| matches!(caps, OneOf::Left(false))))
             })
             .unwrap_or(true)
         {
@@ -1696,10 +1587,7 @@ impl LanguageServer {
         let is_new_folder = workspace_folders.lock().insert(uri.clone());
         if is_new_folder {
             let params = DidChangeWorkspaceFoldersParams {
-                event: WorkspaceFoldersChangeEvent {
-                    added: vec![workspace_folder_for_uri(uri)],
-                    removed: vec![],
-                },
+                event: WorkspaceFoldersChangeEvent { added: vec![workspace_folder_for_uri(uri)], removed: vec![] },
             };
             self.notify::<DidChangeWorkspaceFolders>(params).ok();
         }
@@ -1711,11 +1599,8 @@ impl LanguageServer {
             .capabilities()
             .workspace
             .and_then(|ws| {
-                ws.workspace_folders.and_then(|folders| {
-                    folders
-                        .change_notifications
-                        .map(|caps| !matches!(caps, OneOf::Left(false)))
-                })
+                ws.workspace_folders
+                    .and_then(|folders| folders.change_notifications.map(|caps| !matches!(caps, OneOf::Left(false))))
             })
             .unwrap_or(true)
         {
@@ -1727,10 +1612,7 @@ impl LanguageServer {
         let was_removed = workspace_folders.lock().remove(&uri);
         if was_removed {
             let params = DidChangeWorkspaceFoldersParams {
-                event: WorkspaceFoldersChangeEvent {
-                    added: vec![],
-                    removed: vec![workspace_folder_for_uri(uri)],
-                },
+                event: WorkspaceFoldersChangeEvent { added: vec![], removed: vec![workspace_folder_for_uri(uri)] },
             };
             self.notify::<DidChangeWorkspaceFolders>(params).ok();
         }
@@ -1742,42 +1624,26 @@ impl LanguageServer {
         let mut workspace_folders = workspace_folders.lock();
 
         let old_workspace_folders = std::mem::take(&mut *workspace_folders);
-        let added: Vec<_> = folders
-            .difference(&old_workspace_folders)
-            .cloned()
-            .map(workspace_folder_for_uri)
-            .collect();
+        let added: Vec<_> = folders.difference(&old_workspace_folders).cloned().map(workspace_folder_for_uri).collect();
 
-        let removed: Vec<_> = old_workspace_folders
-            .difference(&folders)
-            .cloned()
-            .map(workspace_folder_for_uri)
-            .collect();
+        let removed: Vec<_> =
+            old_workspace_folders.difference(&folders).cloned().map(workspace_folder_for_uri).collect();
         *workspace_folders = folders;
         let should_notify = !added.is_empty() || !removed.is_empty();
         if should_notify {
             drop(workspace_folders);
-            let params = DidChangeWorkspaceFoldersParams {
-                event: WorkspaceFoldersChangeEvent { added, removed },
-            };
+            let params = DidChangeWorkspaceFoldersParams { event: WorkspaceFoldersChangeEvent { added, removed } };
             self.notify::<DidChangeWorkspaceFolders>(params).ok();
         }
     }
 
     pub fn workspace_folders(&self) -> BTreeSet<Uri> {
-        self.workspace_folders.as_ref().map_or_else(
-            || BTreeSet::from_iter([self.root_uri.clone()]),
-            |folders| folders.lock().clone(),
-        )
+        self.workspace_folders
+            .as_ref()
+            .map_or_else(|| BTreeSet::from_iter([self.root_uri.clone()]), |folders| folders.lock().clone())
     }
 
-    pub fn register_buffer(
-        &self,
-        uri: Uri,
-        language_id: String,
-        version: i32,
-        initial_text: String,
-    ) {
+    pub fn register_buffer(&self, uri: Uri, language_id: String, version: i32, initial_text: String) {
         self.notify::<notification::DidOpenTextDocument>(DidOpenTextDocumentParams {
             text_document: TextDocumentItem::new(uri, language_id, version, initial_text),
         })
@@ -1804,10 +1670,7 @@ impl Subscription {
     /// Detaching a subscription handle prevents it from unsubscribing on drop.
     pub fn detach(&mut self) {
         match self {
-            Subscription::Notification {
-                notification_handlers,
-                ..
-            } => *notification_handlers = None,
+            Subscription::Notification { notification_handlers, .. } => *notification_handlers = None,
             Subscription::Io { io_handlers, .. } => *io_handlers = None,
         }
     }
@@ -1831,10 +1694,7 @@ impl fmt::Debug for LanguageServer {
 impl Drop for Subscription {
     fn drop(&mut self) {
         match self {
-            Subscription::Notification {
-                method,
-                notification_handlers,
-            } => {
+            Subscription::Notification { method, notification_handlers } => {
                 if let Some(handlers) = notification_handlers.as_ref().and_then(|h| h.upgrade()) {
                     handlers.lock().remove(method);
                 }

@@ -1,9 +1,13 @@
-use crate::{
-    DynamicRegistrationClientCapabilities, Range, StaticRegistrationOptions,
-    TextDocumentIdentifier, TextDocumentRegistrationOptions, WorkDoneProgressOptions,
-    WorkDoneProgressParams,
-};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
+
+use crate::DynamicRegistrationClientCapabilities;
+use crate::Range;
+use crate::StaticRegistrationOptions;
+use crate::TextDocumentIdentifier;
+use crate::TextDocumentRegistrationOptions;
+use crate::WorkDoneProgressOptions;
+use crate::WorkDoneProgressParams;
 
 pub type InlineValueClientCapabilities = DynamicRegistrationClientCapabilities;
 
@@ -132,7 +136,7 @@ pub struct InlineValueEvaluatableExpression {
 /// - directly as a text value (class InlineValueText).
 /// - as a name to use for a variable lookup (class InlineValueVariableLookup)
 /// - as an evaluatable expression (class InlineValueEvaluatableExpression)
-/// The InlineValue types combines all inline value types into one type.
+///   The InlineValue types combines all inline value types into one type.
 ///
 /// @since 3.17.0
 #[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]
@@ -184,16 +188,13 @@ pub struct InlineValueWorkspaceClientCapabilities {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::test_serialization;
     use crate::Position;
+    use crate::tests::test_serialization;
 
     #[test]
     fn inline_values() {
         test_serialization(
-            &InlineValueText {
-                range: Range::new(Position::new(0, 0), Position::new(0, 4)),
-                text: "one".to_owned(),
-            },
+            &InlineValueText { range: Range::new(Position::new(0, 0), Position::new(0, 4)), text: "one".to_owned() },
             r#"{"range":{"start":{"line":0,"character":0},"end":{"line":0,"character":4}},"text":"one"}"#,
         );
 

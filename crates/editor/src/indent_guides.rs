@@ -1,13 +1,23 @@
-use std::{cmp::Ordering, ops::Range, time::Duration};
+use std::cmp::Ordering;
+use std::ops::Range;
+use std::time::Duration;
 
 use collections::HashSet;
-use gpui::{App, AppContext as _, Context, Task, Window};
+use gpui::App;
+use gpui::AppContext as _;
+use gpui::Context;
+use gpui::Task;
+use gpui::Window;
 use language::language_settings::LanguageSettings;
-use multi_buffer::{IndentGuide, MultiBufferRow, ToPoint};
-use text::{LineIndent, Point};
+use multi_buffer::IndentGuide;
+use multi_buffer::MultiBufferRow;
+use multi_buffer::ToPoint;
+use text::LineIndent;
+use text::Point;
 use util::ResultExt;
 
-use crate::{DisplaySnapshot, Editor};
+use crate::DisplaySnapshot;
+use crate::Editor;
 
 struct ActiveIndentedRange {
     row_range: Range<MultiBufferRow>,
@@ -23,7 +33,7 @@ pub struct ActiveIndentGuidesState {
 }
 
 impl ActiveIndentGuidesState {
-    pub fn should_refresh(&self) -> bool {
+    pub const fn should_refresh(&self) -> bool {
         self.pending_refresh.is_none() && self.dirty
     }
 }
@@ -37,9 +47,7 @@ impl Editor {
     ) -> Option<Vec<IndentGuide>> {
         let show_indent_guides = self.should_show_indent_guides().unwrap_or_else(|| {
             if let Some(buffer) = self.buffer().read(cx).as_singleton() {
-                LanguageSettings::for_buffer(buffer.read(cx), cx)
-                    .indent_guides
-                    .enabled
+                LanguageSettings::for_buffer(buffer.read(cx), cx).indent_guides.enabled
             } else {
                 true
             }
@@ -74,12 +82,7 @@ impl Editor {
             .active_indent_range
             .as_ref()
             .map(|active_indent_range| {
-                should_recalculate_indented_range(
-                    state.cursor_row,
-                    cursor_row,
-                    active_indent_range,
-                    snapshot,
-                )
+                should_recalculate_indented_range(state.cursor_row, cursor_row, active_indent_range, snapshot)
             })
             .unwrap_or(state.cursor_row != cursor_row)
         {
@@ -101,10 +104,7 @@ impl Editor {
             let task = cx.background_spawn(resolve_indented_range(snapshot, cursor_row));
 
             // Try to resolve the indent in a short amount of time, otherwise move it to a background task.
-            match cx
-                .foreground_executor()
-                .block_with_timeout(Duration::from_micros(200), task)
-            {
+            match cx.foreground_executor().block_with_timeout(Duration::from_micros(200), task) {
                 Ok(result) => state.active_indent_range = result,
                 Err(future) => {
                     state.pending_refresh = Some(cx.spawn_in(window, async move |editor, cx| {
@@ -123,12 +123,9 @@ impl Editor {
 
         let active_indent_range = state.active_indent_range.as_ref()?;
 
-        let candidates = indent_guides
-            .iter()
-            .enumerate()
-            .filter(|(_, indent_guide)| {
-                indent_guide.indent_level() == active_indent_range.indent.len(indent_guide.tab_size)
-            });
+        let candidates = indent_guides.iter().enumerate().filter(|(_, indent_guide)| {
+            indent_guide.indent_level() == active_indent_range.indent.len(indent_guide.tab_size)
+        });
 
         let mut matches = HashSet::default();
         for (i, indent) in candidates {
@@ -150,20 +147,16 @@ pub fn indent_guides_in_range(
     snapshot: &DisplaySnapshot,
     cx: &App,
 ) -> Vec<IndentGuide> {
-    let start_offset = snapshot
-        .buffer_snapshot()
-        .point_to_offset(Point::new(visible_buffer_range.start.0, 0));
-    let end_offset = snapshot
-        .buffer_snapshot()
-        .point_to_offset(Point::new(visible_buffer_range.end.0, 0));
+    let start_offset = snapshot.buffer_snapshot().point_to_offset(Point::new(visible_buffer_range.start.0, 0));
+    let end_offset = snapshot.buffer_snapshot().point_to_offset(Point::new(visible_buffer_range.end.0, 0));
     let start_anchor = snapshot.buffer_snapshot().anchor_before(start_offset);
     let end_anchor = snapshot.buffer_snapshot().anchor_after(end_offset);
 
     let mut fold_ranges = Vec::<Range<Point>>::new();
     let folds = snapshot.folds_in_range(start_offset..end_offset).peekable();
     for fold in folds {
-        let start = fold.range.start.to_point(&snapshot.buffer_snapshot());
-        let end = fold.range.end.to_point(&snapshot.buffer_snapshot());
+        let start = fold.range.start.to_point(snapshot.buffer_snapshot());
+        let end = fold.range.end.to_point(snapshot.buffer_snapshot());
         if let Some(last_range) = fold_ranges.last_mut()
             && last_range.end >= start
         {
@@ -202,10 +195,7 @@ pub fn indent_guides_in_range(
         .collect()
 }
 
-async fn resolve_indented_range(
-    snapshot: DisplaySnapshot,
-    buffer_row: MultiBufferRow,
-) -> Option<ActiveIndentedRange> {
+async fn resolve_indented_range(snapshot: DisplaySnapshot, buffer_row: MultiBufferRow) -> Option<ActiveIndentedRange> {
     snapshot
         .buffer_snapshot()
         .enclosing_indent(buffer_row)

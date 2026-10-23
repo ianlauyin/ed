@@ -1,8 +1,10 @@
-use std::{
-    cmp::Ordering,
-    fmt::{self, Debug},
-    ops::{Add, AddAssign, Range, Sub},
-};
+use std::cmp::Ordering;
+use std::fmt::Debug;
+use std::fmt::{self};
+use std::ops::Add;
+use std::ops::AddAssign;
+use std::ops::Range;
+use std::ops::Sub;
 
 /// A zero-indexed point in a text buffer consisting of a row and column.
 #[derive(Clone, Copy, Default, Eq, PartialEq, Hash)]
@@ -18,26 +20,17 @@ impl Debug for Point {
 }
 
 impl Point {
-    pub const MAX: Self = Self {
-        row: u32::MAX,
-        column: u32::MAX,
-    };
+    pub const MAX: Self = Self { row: u32::MAX, column: u32::MAX };
 
-    pub fn new(row: u32, column: u32) -> Self {
+    pub const fn new(row: u32, column: u32) -> Self {
         Point { row, column }
     }
 
-    pub fn row_range(range: Range<u32>) -> Range<Self> {
-        Point {
-            row: range.start,
-            column: 0,
-        }..Point {
-            row: range.end,
-            column: 0,
-        }
+    pub const fn row_range(range: Range<u32>) -> Range<Self> {
+        Point { row: range.start, column: 0 }..Point { row: range.end, column: 0 }
     }
 
-    pub fn zero() -> Self {
+    pub const fn zero() -> Self {
         Point::new(0, 0)
     }
 
@@ -50,16 +43,12 @@ impl Point {
         point
     }
 
-    pub fn is_zero(&self) -> bool {
+    pub const fn is_zero(&self) -> bool {
         self.row == 0 && self.column == 0
     }
 
     pub fn saturating_sub(self, other: Self) -> Self {
-        if self < other {
-            Self::zero()
-        } else {
-            self - other
-        }
+        if self < other { Self::zero() } else { self - other }
     }
 }
 

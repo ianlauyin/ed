@@ -1,8 +1,10 @@
+use gpui::App;
+use gpui::WindowBackgroundAppearance;
+
 use crate::prelude::*;
-use gpui::{App, WindowBackgroundAppearance};
 
 /// Returns the [WindowBackgroundAppearance].
-fn window_appearance(cx: &mut App) -> WindowBackgroundAppearance {
+fn window_appearance(cx: &App) -> WindowBackgroundAppearance {
     cx.theme().styles.window_background_appearance
 }
 

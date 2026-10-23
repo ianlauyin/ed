@@ -20,7 +20,7 @@ impl InlineSpan {
     }
 }
 
-fn is_inline_span_tag(tag: &MarkdownTag) -> bool {
+const fn is_inline_span_tag(tag: &MarkdownTag) -> bool {
     matches!(
         tag,
         MarkdownTag::Emphasis
@@ -32,7 +32,7 @@ fn is_inline_span_tag(tag: &MarkdownTag) -> bool {
     )
 }
 
-fn is_inline_span_tag_end(tag: &MarkdownTagEnd) -> bool {
+const fn is_inline_span_tag_end(tag: &MarkdownTagEnd) -> bool {
     matches!(
         tag,
         MarkdownTagEnd::Emphasis
@@ -200,7 +200,7 @@ fn snap_out_of_delimiters(spans: &[InlineSpan], selection: Range<usize>) -> Opti
             break;
         }
     }
-    (start < end).then(|| start..end)
+    (start < end).then_some(start..end)
 }
 
 fn selection_is_only_inside_code_spans(spans: &[InlineSpan], selection: &Range<usize>) -> bool {

@@ -38,21 +38,31 @@
 //! To ease trusting multiple directory worktrees at once, it's possible to trust a parent directory of a certain directory worktree opened in Zed.
 //! Trusting a directory means trusting all its subdirectories as well, including all current and potential directory worktrees.
 
-use collections::{HashMap, HashSet};
-use gpui::{
-    App, AppContext as _, Context, Entity, EventEmitter, Global, SharedString, Task, WeakEntity,
-};
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use collections::HashMap;
+use collections::HashSet;
+use gpui::App;
+use gpui::AppContext as _;
+use gpui::Context;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::Global;
+use gpui::SharedString;
+use gpui::Task;
+use gpui::WeakEntity;
 use remote::RemoteConnectionOptions;
+use rpc::AnyProtoClient;
 use rpc::ProjectId;
-use rpc::{AnyProtoClient, proto};
-use settings::{Settings as _, WorktreeId};
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use rpc::proto;
+use settings::Settings as _;
+use settings::WorktreeId;
 use util::debug_panic;
 
-use crate::{project_settings::ProjectSettings, worktree_store::WorktreeStore};
+use crate::project_settings::ProjectSettings;
+use crate::worktree_store::WorktreeStore;
 
 pub fn init(db_trusted_paths: DbTrustedPaths, cx: &mut App) {
     if TrustedWorktrees::try_get_global(cx).is_none() {
@@ -90,10 +100,7 @@ pub fn track_worktree_trust(
                         .collect::<Vec<_>>();
                     if !trusted_paths.is_empty() {
                         upstream_client
-                            .send(proto::TrustWorktrees {
-                                project_id: upstream_project_id.0,
-                                trusted_paths,
-                            })
+                            .send(proto::TrustWorktrees { project_id: upstream_project_id.0, trusted_paths })
                             .ok();
                     }
                 }
@@ -116,11 +123,7 @@ impl TrustedWorktrees {
     /// Whether the given project store has any restricted worktrees.
     pub fn has_restricted_worktrees(worktree_store: &Entity<WorktreeStore>, cx: &App) -> bool {
         Self::try_get_global(cx)
-            .map(|trusted| {
-                trusted
-                    .read(cx)
-                    .has_restricted_worktrees(worktree_store, cx)
-            })
+            .map(|trusted| trusted.read(cx).has_restricted_worktrees(worktree_store, cx))
             .unwrap_or(false)
     }
 }
@@ -158,15 +161,11 @@ pub struct RemoteHostLocation {
 impl From<RemoteConnectionOptions> for RemoteHostLocation {
     fn from(options: RemoteConnectionOptions) -> Self {
         let (user_name, host_name) = match options {
-            RemoteConnectionOptions::Ssh(ssh) => (
-                ssh.username.map(SharedString::new),
-                SharedString::new(ssh.host.to_string()),
-            ),
+            RemoteConnectionOptions::Ssh(ssh) => {
+                (ssh.username.map(SharedString::new), SharedString::new(ssh.host.to_string()))
+            }
         };
-        Self {
-            user_name,
-            host_identifier: host_name,
-        }
+        Self { user_name, host_identifier: host_name }
     }
 }
 
@@ -186,24 +185,18 @@ pub enum PathTrust {
 impl PathTrust {
     fn to_proto(&self) -> proto::PathTrust {
         match self {
-            Self::Worktree(worktree_id) => proto::PathTrust {
-                content: Some(proto::path_trust::Content::WorktreeId(
-                    worktree_id.to_proto(),
-                )),
-            },
+            Self::Worktree(worktree_id) => {
+                proto::PathTrust { content: Some(proto::path_trust::Content::WorktreeId(worktree_id.to_proto())) }
+            }
             Self::AbsPath(path_buf) => proto::PathTrust {
-                content: Some(proto::path_trust::Content::AbsPath(
-                    path_buf.to_string_lossy().to_string(),
-                )),
+                content: Some(proto::path_trust::Content::AbsPath(path_buf.to_string_lossy().to_string())),
             },
         }
     }
 
     pub fn from_proto(proto: proto::PathTrust) -> Option<Self> {
         Some(match proto.content? {
-            proto::path_trust::Content::WorktreeId(id) => {
-                Self::Worktree(WorktreeId::from_proto(id))
-            }
+            proto::path_trust::Content::WorktreeId(id) => Self::Worktree(WorktreeId::from_proto(id)),
             proto::path_trust::Content::AbsPath(path) => Self::AbsPath(PathBuf::from(path)),
         })
     }
@@ -233,21 +226,12 @@ impl TrustedWorktreesStore {
     }
 
     /// Whether a particular worktree store has associated worktrees that are restricted, or an associated host is restricted.
-    pub fn has_restricted_worktrees(
-        &self,
-        worktree_store: &Entity<WorktreeStore>,
-        cx: &App,
-    ) -> bool {
-        self.restricted
-            .get(&worktree_store.downgrade())
-            .is_some_and(|restricted_worktrees| {
-                restricted_worktrees.iter().any(|restricted_worktree| {
-                    worktree_store
-                        .read(cx)
-                        .worktree_for_id(*restricted_worktree, cx)
-                        .is_some()
-                })
-            })
+    pub fn has_restricted_worktrees(&self, worktree_store: &Entity<WorktreeStore>, cx: &App) -> bool {
+        self.restricted.get(&worktree_store.downgrade()).is_some_and(|restricted_worktrees| {
+            restricted_worktrees
+                .iter()
+                .any(|restricted_worktree| worktree_store.read(cx).worktree_for_id(*restricted_worktree, cx).is_some())
+        })
     }
 
     /// Adds certain entities on this host to the trusted list.
@@ -264,47 +248,37 @@ impl TrustedWorktreesStore {
         let mut new_trusted_other_worktrees = HashSet::default();
         let mut new_trusted_abs_paths = HashSet::default();
         for trusted_path in trusted_paths.iter().chain(
-            self.trusted_paths
-                .remove(&weak_worktree_store)
-                .iter()
-                .flat_map(|current_trusted| current_trusted.iter()),
+            self.trusted_paths.remove(&weak_worktree_store).iter().flat_map(|current_trusted| current_trusted.iter()),
         ) {
             match trusted_path {
                 PathTrust::Worktree(worktree_id) => {
-                    if let Some(restricted_worktrees) =
-                        self.restricted.get_mut(&weak_worktree_store)
-                    {
+                    if let Some(restricted_worktrees) = self.restricted.get_mut(&weak_worktree_store) {
                         restricted_worktrees.remove(worktree_id);
                         if restricted_worktrees.is_empty() {
                             self.restricted.remove(&weak_worktree_store);
                         }
                     };
 
-                    if let Some(worktree) =
-                        worktree_store.read(cx).worktree_for_id(*worktree_id, cx)
-                    {
+                    if let Some(worktree) = worktree_store.read(cx).worktree_for_id(*worktree_id, cx) {
                         if worktree.read(cx).is_single_file() {
                             new_trusted_single_file_worktrees.insert(*worktree_id);
                         } else {
-                            new_trusted_other_worktrees
-                                .insert((worktree.read(cx).abs_path(), *worktree_id));
+                            new_trusted_other_worktrees.insert((worktree.read(cx).abs_path(), *worktree_id));
                         }
                     }
                 }
                 PathTrust::AbsPath(abs_path) => {
                     debug_assert!(
-                        worktree_store.read(cx).path_style().is_absolute(&abs_path),
+                        worktree_store.read(cx).path_style().is_absolute(abs_path),
                         "Cannot trust non-absolute path {abs_path:?} on path style {style:?}",
                         style = worktree_store.read(cx).path_style()
                     );
-                    if let Some((worktree_id, is_file)) =
-                        find_worktree_in_store(worktree_store.read(cx), abs_path, cx)
+                    if let Some((worktree_id, is_file)) = find_worktree_in_store(worktree_store.read(cx), abs_path, cx)
                     {
                         if is_file {
                             new_trusted_single_file_worktrees.insert(worktree_id);
                         } else {
-                            new_trusted_other_worktrees
-                                .insert((Arc::from(abs_path.as_path()), worktree_id));
+                            new_trusted_other_worktrees.insert((Arc::from(abs_path.as_path()), worktree_id));
                         }
                     }
                     new_trusted_abs_paths.insert(abs_path.clone());
@@ -313,9 +287,7 @@ impl TrustedWorktreesStore {
         }
 
         new_trusted_other_worktrees.retain(|(worktree_abs_path, _)| {
-            new_trusted_abs_paths
-                .iter()
-                .all(|new_trusted_path| !worktree_abs_path.starts_with(new_trusted_path))
+            new_trusted_abs_paths.iter().all(|new_trusted_path| !worktree_abs_path.starts_with(new_trusted_path))
         });
         if !new_trusted_other_worktrees.is_empty() {
             new_trusted_single_file_worktrees.clear();
@@ -325,10 +297,7 @@ impl TrustedWorktreesStore {
             let new_restricted_worktrees = restricted_worktrees
                 .into_iter()
                 .filter(|restricted_worktree| {
-                    let Some(worktree) = worktree_store
-                        .read(cx)
-                        .worktree_for_id(*restricted_worktree, cx)
-                    else {
+                    let Some(worktree) = worktree_store.read(cx).worktree_for_id(*restricted_worktree, cx) else {
                         return false;
                     };
                     let is_file = worktree.read(cx).is_single_file();
@@ -341,57 +310,36 @@ impl TrustedWorktreesStore {
 
                     let restricted_worktree_path = worktree.read(cx).abs_path();
                     let retain = (!is_file || new_trusted_other_worktrees.is_empty())
-                        && new_trusted_abs_paths.iter().all(|new_trusted_path| {
-                            !restricted_worktree_path.starts_with(new_trusted_path)
-                        });
+                        && new_trusted_abs_paths
+                            .iter()
+                            .all(|new_trusted_path| !restricted_worktree_path.starts_with(new_trusted_path));
                     if !retain {
                         trusted_paths.insert(PathTrust::Worktree(*restricted_worktree));
                     }
                     retain
                 })
                 .collect();
-            self.restricted
-                .insert(weak_worktree_store.clone(), new_restricted_worktrees);
+            self.restricted.insert(weak_worktree_store.clone(), new_restricted_worktrees);
         }
 
         {
-            let trusted_paths = self
-                .trusted_paths
-                .entry(weak_worktree_store.clone())
-                .or_default();
+            let trusted_paths = self.trusted_paths.entry(weak_worktree_store.clone()).or_default();
             trusted_paths.extend(new_trusted_abs_paths.into_iter().map(PathTrust::AbsPath));
             trusted_paths.extend(
-                new_trusted_other_worktrees
-                    .into_iter()
-                    .map(|(_, worktree_id)| PathTrust::Worktree(worktree_id)),
+                new_trusted_other_worktrees.into_iter().map(|(_, worktree_id)| PathTrust::Worktree(worktree_id)),
             );
-            trusted_paths.extend(
-                new_trusted_single_file_worktrees
-                    .into_iter()
-                    .map(PathTrust::Worktree),
-            );
+            trusted_paths.extend(new_trusted_single_file_worktrees.into_iter().map(PathTrust::Worktree));
         }
 
-        if let Some(store_data) = self.worktree_stores.get(&weak_worktree_store) {
-            if let Some((upstream_client, upstream_project_id)) = &store_data.upstream_client {
-                let trusted_paths = trusted_paths
-                    .iter()
-                    .map(|trusted_path| trusted_path.to_proto())
-                    .collect::<Vec<_>>();
-                if !trusted_paths.is_empty() {
-                    upstream_client
-                        .send(proto::TrustWorktrees {
-                            project_id: upstream_project_id.0,
-                            trusted_paths,
-                        })
-                        .ok();
-                }
+        if let Some(store_data) = self.worktree_stores.get(&weak_worktree_store)
+            && let Some((upstream_client, upstream_project_id)) = &store_data.upstream_client
+        {
+            let trusted_paths = trusted_paths.iter().map(|trusted_path| trusted_path.to_proto()).collect::<Vec<_>>();
+            if !trusted_paths.is_empty() {
+                upstream_client.send(proto::TrustWorktrees { project_id: upstream_project_id.0, trusted_paths }).ok();
             }
         }
-        cx.emit(TrustedWorktreesEvent::Trusted(
-            weak_worktree_store,
-            trusted_paths,
-        ));
+        cx.emit(TrustedWorktreesEvent::Trusted(weak_worktree_store, trusted_paths));
     }
 
     /// Restricts certain entities on this host.
@@ -406,20 +354,14 @@ impl TrustedWorktreesStore {
         for restricted_path in restricted_paths {
             match restricted_path {
                 PathTrust::Worktree(worktree_id) => {
-                    self.restricted
-                        .entry(worktree_store.clone())
-                        .or_default()
-                        .insert(worktree_id);
+                    self.restricted.entry(worktree_store.clone()).or_default().insert(worktree_id);
                     restricted.insert(PathTrust::Worktree(worktree_id));
                 }
                 PathTrust::AbsPath(..) => debug_panic!("Unexpected: cannot restrict an abs path"),
             }
         }
 
-        cx.emit(TrustedWorktreesEvent::Restricted(
-            worktree_store,
-            restricted,
-        ));
+        cx.emit(TrustedWorktreesEvent::Restricted(worktree_store, restricted));
     }
 
     /// Erases all trust information.
@@ -478,16 +420,13 @@ impl TrustedWorktreesStore {
         if let Some(trusted_paths) = self.trusted_paths.get(&weak_worktree_store) {
             let auto_trusted = worktree_store.read_with(cx, |worktree_store, cx| {
                 trusted_paths.iter().any(|trusted_path| match trusted_path {
-                    PathTrust::Worktree(worktree_id) => worktree_store
-                        .worktree_for_id(*worktree_id, cx)
-                        .is_some_and(|worktree| {
+                    PathTrust::Worktree(worktree_id) => {
+                        worktree_store.worktree_for_id(*worktree_id, cx).is_some_and(|worktree| {
                             let worktree = worktree.read(cx);
-                            worktree_path.starts_with(&worktree.abs_path())
-                                || (is_file && !worktree.is_single_file())
-                        }),
-                    PathTrust::AbsPath(trusted_path) => {
-                        is_file || worktree_path.starts_with(trusted_path)
+                            worktree_path.starts_with(worktree.abs_path()) || (is_file && !worktree.is_single_file())
+                        })
                     }
+                    PathTrust::AbsPath(trusted_path) => is_file || worktree_path.starts_with(trusted_path),
                 })
             });
             if auto_trusted {
@@ -495,14 +434,10 @@ impl TrustedWorktreesStore {
             }
         }
 
-        self.restricted
-            .entry(weak_worktree_store.clone())
-            .or_default()
-            .insert(worktree_id);
+        self.restricted.entry(weak_worktree_store.clone()).or_default().insert(worktree_id);
         log::info!("Worktree {worktree_path:?} is not trusted");
         if let Some(store_data) = self.worktree_stores.get(&weak_worktree_store) {
-            if let Some((downstream_client, downstream_project_id)) = &store_data.downstream_client
-            {
+            if let Some((downstream_client, downstream_project_id)) = &store_data.downstream_client {
                 downstream_client
                     .send(proto::RestrictWorktrees {
                         project_id: downstream_project_id.0,
@@ -540,9 +475,7 @@ impl TrustedWorktreesStore {
             .into_iter()
             .flatten()
             .filter_map(|&restricted_worktree_id| {
-                let worktree = worktree_store
-                    .read(cx)
-                    .worktree_for_id(restricted_worktree_id, cx)?;
+                let worktree = worktree_store.read(cx).worktree_for_id(restricted_worktree_id, cx)?;
                 let worktree = worktree.read(cx);
                 let abs_path = worktree.abs_path();
                 if worktree.is_single_file() {
@@ -554,11 +487,7 @@ impl TrustedWorktreesStore {
             })
             .collect::<HashSet<_>>();
 
-        if !other_paths.is_empty() {
-            return other_paths;
-        } else {
-            single_file_paths
-        }
+        if !other_paths.is_empty() { other_paths } else { single_file_paths }
     }
 
     /// Switches the "trust nothing" mode to "automatically trust everything".
@@ -581,29 +510,26 @@ impl TrustedWorktreesStore {
 
     pub fn schedule_serialization<S>(&mut self, cx: &mut Context<Self>, serialize: S)
     where
-        S: FnOnce(HashMap<Option<RemoteHostLocation>, HashSet<PathBuf>>, &App) -> Task<()>
-            + 'static,
+        S: FnOnce(HashMap<Option<RemoteHostLocation>, HashSet<PathBuf>>, &App) -> Task<()> + 'static,
     {
         self.worktree_trust_serialization = serialize(self.trusted_paths_for_serialization(cx), cx);
     }
 
     fn trusted_paths_for_serialization(
         &mut self,
-        cx: &mut Context<Self>,
+        cx: &Context<Self>,
     ) -> HashMap<Option<RemoteHostLocation>, HashSet<PathBuf>> {
         let new_trusted_paths = self
             .trusted_paths
             .iter()
             .filter_map(|(worktree_store, paths)| {
-                let host = self.worktree_stores.get(&worktree_store)?.host.clone();
+                let host = self.worktree_stores.get(worktree_store)?.host.clone();
                 let abs_paths = paths
                     .iter()
                     .flat_map(|path| match path {
                         PathTrust::Worktree(worktree_id) => worktree_store
                             .upgrade()
-                            .and_then(|worktree_store| {
-                                worktree_store.read(cx).worktree_for_id(*worktree_id, cx)
-                            })
+                            .and_then(|worktree_store| worktree_store.read(cx).worktree_for_id(*worktree_id, cx))
                             .map(|worktree| worktree.read(cx).abs_path().to_path_buf()),
                         PathTrust::AbsPath(abs_path) => Some(abs_path.clone()),
                     })
@@ -612,13 +538,11 @@ impl TrustedWorktreesStore {
             })
             .chain(self.db_trusted_paths.drain())
             .fold(HashMap::default(), |mut acc, (host, paths)| {
-                acc.entry(host)
-                    .or_insert_with(HashSet::default)
-                    .extend(paths);
+                acc.entry(host).or_insert_with(HashSet::default).extend(paths);
                 acc
             });
 
-        self.db_trusted_paths = new_trusted_paths.clone();
+        self.db_trusted_paths.clone_from(&new_trusted_paths);
         new_trusted_paths
     }
 
@@ -628,18 +552,13 @@ impl TrustedWorktreesStore {
         remote_host: Option<RemoteHostLocation>,
         downstream_client: Option<(AnyProtoClient, ProjectId)>,
         upstream_client: Option<(AnyProtoClient, ProjectId)>,
-        cx: &mut Context<Self>,
+        cx: &Context<Self>,
     ) {
-        self.worktree_stores
-            .retain(|worktree_store, _| worktree_store.is_upgradable());
+        self.worktree_stores.retain(|worktree_store, _| worktree_store.is_upgradable());
         let weak_worktree_store = worktree_store.downgrade();
         self.worktree_stores.insert(
             weak_worktree_store.clone(),
-            StoreData {
-                host: remote_host.clone(),
-                downstream_client,
-                upstream_client,
-            },
+            StoreData { host: remote_host.clone(), downstream_client, upstream_client },
         );
 
         let mut new_trusted_paths = HashSet::default();
@@ -655,11 +574,9 @@ impl TrustedWorktreesStore {
                 new_trusted_paths
                     .into_iter()
                     .map(|path_trust| match path_trust {
-                        PathTrust::AbsPath(abs_path) => {
-                            find_worktree_in_store(worktree_store.read(cx), &abs_path, cx)
-                                .map(|(worktree_id, _)| PathTrust::Worktree(worktree_id))
-                                .unwrap_or_else(|| PathTrust::AbsPath(abs_path))
-                        }
+                        PathTrust::AbsPath(abs_path) => find_worktree_in_store(worktree_store.read(cx), &abs_path, cx)
+                            .map(|(worktree_id, _)| PathTrust::Worktree(worktree_id))
+                            .unwrap_or_else(|| PathTrust::AbsPath(abs_path)),
                         other => other,
                     })
                     .collect(),
@@ -668,15 +585,7 @@ impl TrustedWorktreesStore {
     }
 }
 
-fn find_worktree_in_store(
-    worktree_store: &WorktreeStore,
-    abs_path: &Path,
-    cx: &App,
-) -> Option<(WorktreeId, bool)> {
-    let (worktree, path_in_worktree) = worktree_store.find_worktree(&abs_path, cx)?;
-    if path_in_worktree.is_empty() {
-        Some((worktree.read(cx).id(), worktree.read(cx).is_single_file()))
-    } else {
-        None
-    }
+fn find_worktree_in_store(worktree_store: &WorktreeStore, abs_path: &Path, cx: &App) -> Option<(WorktreeId, bool)> {
+    let (worktree, path_in_worktree) = worktree_store.find_worktree(abs_path, cx)?;
+    if path_in_worktree.is_empty() { Some((worktree.read(cx).id(), worktree.read(cx).is_single_file())) } else { None }
 }

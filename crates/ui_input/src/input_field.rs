@@ -1,8 +1,12 @@
-use component::{example_group, single_example};
-
-use gpui::{App, FocusHandle, Focusable, Hsla, Length};
 use std::sync::Arc;
 
+use component::example_group;
+use component::single_example;
+use gpui::App;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::Hsla;
+use gpui::Length;
 use ui::Tooltip;
 use ui::prelude::*;
 
@@ -54,9 +58,7 @@ impl Focusable for InputField {
 
 impl InputField {
     pub fn new(window: &mut Window, cx: &mut App, placeholder_text: &str) -> Self {
-        let editor_factory = crate::ERASED_EDITOR_FACTORY
-            .get()
-            .expect("ErasedEditorFactory to be initialized");
+        let editor_factory = crate::ERASED_EDITOR_FACTORY.get().expect("ErasedEditorFactory to be initialized");
         let editor = (editor_factory)(window, cx);
         editor.set_placeholder_text(placeholder_text, window, cx);
 
@@ -74,7 +76,7 @@ impl InputField {
         }
     }
 
-    pub fn start_icon(mut self, icon: IconName) -> Self {
+    pub const fn start_icon(mut self, icon: IconName) -> Self {
         self.start_icon = Some(icon);
         self
     }
@@ -84,7 +86,7 @@ impl InputField {
         self
     }
 
-    pub fn label_size(mut self, size: LabelSize) -> Self {
+    pub const fn label_size(mut self, size: LabelSize) -> Self {
         self.label_size = size;
         self
     }
@@ -94,18 +96,18 @@ impl InputField {
         self
     }
 
-    pub fn tab_index(mut self, index: isize) -> Self {
+    pub const fn tab_index(mut self, index: isize) -> Self {
         self.tab_index = Some(index);
         self
     }
 
-    pub fn tab_stop(mut self, tab_stop: bool) -> Self {
+    pub const fn tab_stop(mut self, tab_stop: bool) -> Self {
         self.tab_stop = tab_stop;
         self
     }
 
     /// Sets this field as a masked/sensitive input (e.g., for passwords or API keys).
-    pub fn masked(mut self, masked: bool) -> Self {
+    pub const fn masked(mut self, masked: bool) -> Self {
         self.masked = Some(masked);
         self
     }
@@ -176,9 +178,7 @@ impl Render for InputField {
             .id(self.placeholder.clone())
             .w_full()
             .gap_1()
-            .when_some(self.label.clone(), |this, label| {
-                this.child(Label::new(label).size(self.label_size))
-            })
+            .when_some(self.label.clone(), |this, label| this.child(Label::new(label).size(self.label_size)))
             .child(
                 h_flex()
                     .track_focus(&configured_handle)
@@ -193,38 +193,27 @@ impl Render for InputField {
                     .bg(style.background_color)
                     .border_1()
                     .border_color(style.border_color)
-                    .when(
-                        editor.focus_handle(cx).contains_focused(window, cx),
-                        |this| this.border_color(theme_color.border_focused),
-                    )
+                    .when(editor.focus_handle(cx).contains_focused(window, cx), |this| {
+                        this.border_color(theme_color.border_focused)
+                    })
                     .when(has_error, |this| this.border_color(error_border))
                     .when_some(self.start_icon, |this, icon| {
-                        this.gap_1()
-                            .child(Icon::new(icon).size(IconSize::Small).color(Color::Muted))
+                        this.gap_1().child(Icon::new(icon).size(IconSize::Small).color(Color::Muted))
                     })
                     .child(self.editor.render(window, cx))
                     .when_some(self.masked, |this, is_masked| {
                         this.child(
-                            IconButton::new(
-                                "toggle-masked",
-                                if is_masked {
-                                    IconName::Eye
-                                } else {
-                                    IconName::EyeOff
-                                },
-                            )
-                            .icon_size(IconSize::Small)
-                            .icon_color(Color::Muted)
-                            .tooltip(Tooltip::text(if is_masked { "Show" } else { "Hide" }))
-                            .on_click(cx.listener(
-                                |this, _, window, cx| {
+                            IconButton::new("toggle-masked", if is_masked { IconName::Eye } else { IconName::EyeOff })
+                                .icon_size(IconSize::Small)
+                                .icon_color(Color::Muted)
+                                .tooltip(Tooltip::text(if is_masked { "Show" } else { "Hide" }))
+                                .on_click(cx.listener(|this, _, window, cx| {
                                     if let Some(ref mut masked) = this.masked {
                                         *masked = !*masked;
                                         this.editor.set_masked(*masked, window, cx);
                                         cx.notify();
                                     }
-                                },
-                            )),
+                                })),
                         )
                     }),
             )
@@ -246,26 +235,16 @@ impl Component for InputField {
     }
 
     fn preview(window: &mut Window, cx: &mut App) -> AnyElement {
-        let input_small =
-            cx.new(|cx| InputField::new(window, cx, "placeholder").label("Small Label"));
+        let input_small = cx.new(|cx| InputField::new(window, cx, "placeholder").label("Small Label"));
 
-        let input_regular = cx.new(|cx| {
-            InputField::new(window, cx, "placeholder")
-                .label("Regular Label")
-                .label_size(LabelSize::Default)
-        });
+        let input_regular = cx
+            .new(|cx| InputField::new(window, cx, "placeholder").label("Regular Label").label_size(LabelSize::Default));
 
         v_flex()
             .gap_6()
             .children(vec![example_group(vec![
-                single_example(
-                    "Small Label (Default)",
-                    div().child(input_small).into_any_element(),
-                ),
-                single_example(
-                    "Regular Label",
-                    div().child(input_regular).into_any_element(),
-                ),
+                single_example("Small Label (Default)", div().child(input_small).into_any_element()),
+                single_example("Regular Label", div().child(input_regular).into_any_element()),
             ])])
             .into_any_element()
     }

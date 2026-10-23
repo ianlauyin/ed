@@ -3,7 +3,6 @@ use std::sync::Arc;
 
 use anyhow::Context;
 use anyhow::Result;
-use async_recursion::async_recursion;
 use db::sqlez::bindable::Bind;
 use db::sqlez::bindable::Column;
 use db::sqlez::bindable::StaticColumnCount;
@@ -72,7 +71,7 @@ pub struct SerializedProjectGroup {
     pub expanded: bool,
 }
 
-fn default_expanded() -> bool {
+const fn default_expanded() -> bool {
     true
 }
 
@@ -154,7 +153,7 @@ pub struct DockStructure {
 }
 
 impl RemoteConnectionKind {
-    pub(crate) fn serialize(&self) -> &'static str {
+    pub(crate) const fn serialize(&self) -> &'static str {
         match self {
             RemoteConnectionKind::Ssh => "ssh",
         }
@@ -216,7 +215,6 @@ pub(crate) enum SerializedPaneGroup {
 }
 
 impl SerializedPaneGroup {
-    #[async_recursion(?Send)]
     pub(crate) async fn deserialize(
         self,
         project: &Entity<Project>,
@@ -231,7 +229,7 @@ impl SerializedPaneGroup {
                 let mut items = Vec::new();
                 for child in children {
                     if let Some((new_member, active_pane, new_items)) =
-                        child.deserialize(project, workspace_id, workspace.clone(), cx).await
+                        Box::pin(child.deserialize(project, workspace_id, workspace.clone(), cx)).await
                     {
                         members.push(new_member);
                         items.extend(new_items);
@@ -283,7 +281,7 @@ pub struct SerializedPane {
 }
 
 impl SerializedPane {
-    pub fn new(children: Vec<SerializedItem>, active: bool, pinned_count: usize) -> Self {
+    pub const fn new(children: Vec<SerializedItem>, active: bool, pinned_count: usize) -> Self {
         SerializedPane { children, active, pinned_count }
     }
 

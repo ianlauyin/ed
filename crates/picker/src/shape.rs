@@ -1,6 +1,10 @@
+use gpui::Pixels;
+use gpui::Rems;
+use gpui::Size;
 use gpui::Window;
-use gpui::{Pixels, Rems, Size};
-use ui::{Div, Styled, rems_from_px};
+use ui::Div;
+use ui::Styled;
+use ui::rems_from_px;
 
 use crate::preview::Layout;
 
@@ -45,37 +49,24 @@ macro_rules! relative_size {
         }
 
         impl $name {
-            pub const FULL: Self = Self {
-                viewport_fraction: 1.0,
-                rems: Rems::ZERO,
-            };
+            pub const FULL: Self = Self { viewport_fraction: 1.0, rems: Rems::ZERO };
 
             pub const fn viewport(fraction: f32) -> Self {
                 debug_assert!(fraction <= 1.0);
                 debug_assert!(fraction >= 0.0);
-                Self {
-                    viewport_fraction: fraction.clamp(0.0, 1.0),
-                    rems: Rems::ZERO,
-                }
+                Self { viewport_fraction: fraction.clamp(0.0, 1.0), rems: Rems::ZERO }
             }
 
             pub const fn rems(val: Rems) -> Self {
-                Self {
-                    viewport_fraction: 0.0,
-                    rems: val,
-                }
+                Self { viewport_fraction: 0.0, rems: val }
             }
 
             pub fn as_pixels(&self, window: &Window) -> Pixels {
-                self.viewport_fraction * window.viewport_size().$accessor
-                    + self.rems * window.rem_size()
+                self.viewport_fraction * window.viewport_size().$accessor + self.rems * window.rem_size()
             }
 
             pub fn from_pixels(width: Pixels, window: &Window) -> Self {
-                Self {
-                    viewport_fraction: width / window.viewport_size().$accessor,
-                    rems: Rems::ZERO,
-                }
+                Self { viewport_fraction: width / window.viewport_size().$accessor, rems: Rems::ZERO }
             }
 
             /// Returns this size as [`Rems`] when it has no viewport-relative
@@ -87,8 +78,7 @@ macro_rules! relative_size {
 
             pub fn as_viewport_fraction(&self, window: &Window) -> ViewportFraction {
                 ViewportFraction(
-                    self.viewport_fraction
-                        + self.rems * window.rem_size() / window.viewport_size().$accessor,
+                    self.viewport_fraction + self.rems * window.rem_size() / window.viewport_size().$accessor,
                 )
             }
         }
@@ -97,10 +87,7 @@ macro_rules! relative_size {
             type Output = Self;
 
             fn add(self, rhs: Self) -> Self::Output {
-                Self {
-                    viewport_fraction: self.viewport_fraction + rhs.viewport_fraction,
-                    rems: self.rems + rhs.rems,
-                }
+                Self { viewport_fraction: self.viewport_fraction + rhs.viewport_fraction, rems: self.rems + rhs.rems }
             }
         }
 
@@ -108,10 +95,7 @@ macro_rules! relative_size {
             type Output = Self;
 
             fn sub(self, rhs: Self) -> Self::Output {
-                Self {
-                    viewport_fraction: self.viewport_fraction - rhs.viewport_fraction,
-                    rems: self.rems - rhs.rems,
-                }
+                Self { viewport_fraction: self.viewport_fraction - rhs.viewport_fraction, rems: self.rems - rhs.rems }
             }
         }
 
@@ -119,10 +103,7 @@ macro_rules! relative_size {
             type Output = Self;
 
             fn sub(self, rhs: Rems) -> Self::Output {
-                Self {
-                    viewport_fraction: self.viewport_fraction,
-                    rems: self.rems - rhs,
-                }
+                Self { viewport_fraction: self.viewport_fraction, rems: self.rems - rhs }
             }
         }
 
@@ -157,10 +138,7 @@ pub struct ViewportFraction(f32);
 impl ViewportFraction {
     pub(crate) const ZERO: Self = Self(0.0);
     pub(crate) fn fraction(v: f32) -> Self {
-        debug_assert!(
-            (0.0..=1.0).contains(&v),
-            "ViewportFraction must be between zero and one"
-        );
+        debug_assert!((0.0..=1.0).contains(&v), "ViewportFraction must be between zero and one");
         Self(v)
     }
 
@@ -181,7 +159,7 @@ impl ViewportFraction {
 
     /// Returns the fraction of the viewport that this describes.
     /// Guaranteed to be between zero and one
-    pub(crate) fn raw(&self) -> f32 {
+    pub(crate) const fn raw(&self) -> f32 {
         self.0
     }
 }
@@ -205,7 +183,7 @@ impl Centered {
     /// The default size for a plain picker (no preview): a fixed standard width
     /// and a standard *max* height that the picker shrinks below when it has
     /// little content.
-    pub(crate) fn simple() -> Self {
+    pub(crate) const fn simple() -> Self {
         Centered {
             width: RelativeWidth::rems(crate::DEFAULT_MODAL_WIDTH),
             height: RelativeHeight::rems(crate::DEFAULT_MODAL_MAX_HEIGHT),
@@ -241,14 +219,8 @@ impl Default for SizeBounds {
             // Modals are placed at 5 rems from the top we also do not want them to go
             // over the lower bar so clear another 5 rems there.
             max_height: (RelativeHeight::FULL - Rems(10.0)) * 0.95,
-            min_results: Size {
-                width: rems_from_px(280_f32),
-                height: rems_from_px(320_f32),
-            },
-            min_preview: Size {
-                width: rems_from_px(128_f32),
-                height: rems_from_px(96_f32),
-            },
+            min_results: Size { width: rems_from_px(280_f32), height: rems_from_px(320_f32) },
+            min_preview: Size { width: rems_from_px(128_f32), height: rems_from_px(96_f32) },
         }
     }
 }
@@ -281,27 +253,13 @@ impl SizeBounds {
     }
 
     /// Clamps a width in pixels to the configured min/max width.
-    pub(crate) fn clamp_width(
-        &self,
-        width: Pixels,
-        layout: Option<Layout>,
-        window: &Window,
-    ) -> Pixels {
-        width
-            .min(self.max_width.as_pixels(window))
-            .max(self.min_width(layout, window))
+    pub(crate) fn clamp_width(&self, width: Pixels, layout: Option<Layout>, window: &Window) -> Pixels {
+        width.min(self.max_width.as_pixels(window)).max(self.min_width(layout, window))
     }
 
     /// Clamps a height in pixels to the configured min/max height.
-    pub(crate) fn clamp_height(
-        &self,
-        height: Pixels,
-        layout: Option<Layout>,
-        window: &Window,
-    ) -> Pixels {
-        height
-            .min(self.max_height.as_pixels(window))
-            .max(self.min_height(layout, window))
+    pub(crate) fn clamp_height(&self, height: Pixels, layout: Option<Layout>, window: &Window) -> Pixels {
+        height.min(self.max_height.as_pixels(window)).max(self.min_height(layout, window))
     }
 
     /// Clamps the picker's width by moving its left edge back into bounds.
@@ -309,12 +267,7 @@ impl SizeBounds {
     /// For a preview-to-the-right drag the preview is corrected by the same
     /// amount any snap moves the edge, so the results pane keeps its size at the
     /// boundary.
-    pub(crate) fn clamp_left_edge(
-        &self,
-        working: &mut PositionAndShape,
-        layout: Option<Layout>,
-        window: &Window,
-    ) {
+    pub(crate) fn clamp_left_edge(&self, working: &mut PositionAndShape, layout: Option<Layout>, window: &Window) {
         let target_width = self.clamp_width(working.right - working.left, layout, window);
         let new_left = working.right - target_width;
         let correction = new_left - working.left;
@@ -326,12 +279,7 @@ impl SizeBounds {
 
     /// Clamps the picker's width by moving its right edge back into bounds.
     /// See [`Self::clamp_left_edge`].
-    pub(crate) fn clamp_right_edge(
-        &self,
-        working: &mut PositionAndShape,
-        layout: Option<Layout>,
-        window: &Window,
-    ) {
+    pub(crate) fn clamp_right_edge(&self, working: &mut PositionAndShape, layout: Option<Layout>, window: &Window) {
         let target_width = self.clamp_width(working.right - working.left, layout, window);
         let new_right = working.left + target_width;
         let correction = new_right - working.right;
@@ -343,12 +291,7 @@ impl SizeBounds {
 
     /// Clamps the picker's height by moving its bottom edge back into bounds.
     /// See [`Self::clamp_left_edge`].
-    pub(crate) fn clamp_bottom_edge(
-        &self,
-        working: &mut PositionAndShape,
-        layout: Option<Layout>,
-        window: &Window,
-    ) {
+    pub(crate) fn clamp_bottom_edge(&self, working: &mut PositionAndShape, layout: Option<Layout>, window: &Window) {
         let target_height = self.clamp_height(working.bottom - working.top, layout, window);
         let new_bottom = working.top + target_height;
         let correction = new_bottom - working.bottom;
@@ -361,24 +304,15 @@ impl SizeBounds {
     /// Clamps the divider between the results and the preview so both panes stay
     /// above their minimums. Runs last in each side's clamp so the divider gets
     /// the final say after the outer edges have been bounded.
-    pub(crate) fn clamp_divider(
-        &self,
-        working: &mut PositionAndShape,
-        layout: Option<Layout>,
-        window: &Window,
-    ) {
+    pub(crate) fn clamp_divider(&self, working: &mut PositionAndShape, layout: Option<Layout>, window: &Window) {
         let rem = window.rem_size();
         let (total, min_preview, min_results) = match layout {
-            Some(Layout::Right) => (
-                working.right - working.left,
-                self.min_preview.width * rem,
-                self.min_results.width * rem,
-            ),
-            Some(Layout::Below) => (
-                working.bottom - working.top,
-                self.min_preview.height * rem,
-                self.min_results.height * rem,
-            ),
+            Some(Layout::Right) => {
+                (working.right - working.left, self.min_preview.width * rem, self.min_results.width * rem)
+            }
+            Some(Layout::Below) => {
+                (working.bottom - working.top, self.min_preview.height * rem, self.min_results.height * rem)
+            }
             Some(Layout::Hidden) | None => return,
         };
         let max_preview = (total - min_results).max(min_preview);
@@ -388,9 +322,7 @@ impl SizeBounds {
     pub(crate) fn would_clamp_width_if_horizontal(&self, shape: &Shape, window: &Window) -> bool {
         let min_width = self.min_width(Some(Layout::Right), window);
 
-        let unbounded_width = shape
-            .picker_position_and_size(Some(Layout::Right), window)
-            .width();
+        let unbounded_width = shape.picker_position_and_size(Some(Layout::Right), window).width();
 
         unbounded_width <= min_width
     }
@@ -427,11 +359,7 @@ impl Shape {
     ) -> PositionAndShape {
         match self {
             Shape::Resizing(pos) => *pos,
-            Shape::HorizontallyCentered(Centered {
-                width,
-                height,
-                preview_size,
-            }) => PositionAndShape {
+            Shape::HorizontallyCentered(Centered { width, height, preview_size }) => PositionAndShape {
                 //        W              V: full width     xxxxx: picker modal
                 // -----xxxxx------      left = (V - W) / 2
                 //     L     R           right = left + W = (V/2 - W/2) + W =  V/2 + W/2
@@ -537,66 +465,31 @@ impl Shape {
         }
     }
 
-    pub(crate) fn results_max_height(
-        &self,
-        bounds: &SizeBounds,
-        fill_height: bool,
-        window: &Window,
-    ) -> Option<Pixels> {
-        if fill_height {
-            None
-        } else {
-            Some(self.height(None, bounds, window))
-        }
+    pub(crate) fn results_max_height(&self, bounds: &SizeBounds, fill_height: bool, window: &Window) -> Option<Pixels> {
+        if fill_height { None } else { Some(self.height(None, bounds, window)) }
     }
 
     /// The clamped total height of the picker for the given layout.
-    pub(crate) fn height(
-        &self,
-        layout: Option<Layout>,
-        bounds: &SizeBounds,
-        window: &Window,
-    ) -> Pixels {
+    pub(crate) fn height(&self, layout: Option<Layout>, bounds: &SizeBounds, window: &Window) -> Pixels {
         let pos = self.clamped_position_and_size(layout, bounds, window);
         pos.bottom - pos.top
     }
 
-    pub(crate) fn apply_height(
-        &self,
-        layout: Option<Layout>,
-        bounds: &SizeBounds,
-        div: Div,
-        window: &Window,
-    ) -> Div {
+    pub(crate) fn apply_height(&self, layout: Option<Layout>, bounds: &SizeBounds, div: Div, window: &Window) -> Div {
         div.h(self.height(layout, bounds, window))
     }
 
-    pub(crate) fn results_height(
-        &self,
-        layout: Layout,
-        bounds: &SizeBounds,
-        window: &Window,
-    ) -> Pixels {
+    pub(crate) fn results_height(&self, layout: Layout, bounds: &SizeBounds, window: &Window) -> Pixels {
         let pos = self.results_position_and_size(layout, bounds, window);
         pos.bottom - pos.top
     }
 
-    pub(crate) fn preview_width(
-        &self,
-        layout: Layout,
-        bounds: &SizeBounds,
-        window: &Window,
-    ) -> Pixels {
+    pub(crate) fn preview_width(&self, layout: Layout, bounds: &SizeBounds, window: &Window) -> Pixels {
         let pos = self.preview_position_and_size(layout, bounds, window);
         pos.right - pos.left
     }
 
-    pub(crate) fn preview_height(
-        &self,
-        layout: Layout,
-        bounds: &SizeBounds,
-        window: &Window,
-    ) -> Pixels {
+    pub(crate) fn preview_height(&self, layout: Layout, bounds: &SizeBounds, window: &Window) -> Pixels {
         let pos = self.preview_position_and_size(layout, bounds, window);
         pos.bottom - pos.top
     }
@@ -632,25 +525,20 @@ impl Shape {
         }
     }
 
-    pub(crate) fn reset_width(&mut self, default: &Centered) {
+    pub(crate) const fn reset_width(&mut self, default: &Centered) {
         if let Shape::HorizontallyCentered(Centered { width, .. }) = self {
             *width = default.width;
         }
     }
 
-    pub(crate) fn reset_height(&mut self, default: &Centered) {
+    pub(crate) const fn reset_height(&mut self, default: &Centered) {
         if let Shape::HorizontallyCentered(Centered { height, .. }) = self {
             *height = default.height;
         }
     }
 
     pub(crate) fn center_divider(&mut self, layout: Layout, window: &Window) {
-        if let Shape::HorizontallyCentered(Centered {
-            width,
-            height,
-            preview_size,
-        }) = self
-        {
+        if let Shape::HorizontallyCentered(Centered { width, height, preview_size }) = self {
             let total = match layout {
                 Layout::Right => width.as_viewport_fraction(window),
                 Layout::Below => height.as_viewport_fraction(window),

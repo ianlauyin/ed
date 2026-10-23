@@ -1,14 +1,14 @@
-use std::{
-    collections::{HashMap, HashSet},
-    sync::Arc,
-};
+use std::collections::HashMap;
+use std::collections::HashSet;
+use std::sync::Arc;
 
-use ui::{SharedString, table_row::TableRow};
+use ui::SharedString;
+use ui::table_row::TableRow;
 
-use crate::{
-    table_data_engine::TableDataEngine,
-    types::{AnyColumn, DataRow, TableCell},
-};
+use crate::table_data_engine::TableDataEngine;
+use crate::types::AnyColumn;
+use crate::types::DataRow;
+use crate::types::TableCell;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum FilterEntryState {
@@ -34,7 +34,7 @@ pub struct FilterEntry {
 }
 
 impl FilterEntry {
-    pub(crate) fn occurred_times(&self) -> usize {
+    pub(crate) const fn occurred_times(&self) -> usize {
         self.rows.len()
     }
 }
@@ -66,36 +66,22 @@ impl TableDataEngine {
             .ok_or_else(|| anyhow::anyhow!("Expected {column:?} to have filter entries"))?;
 
         let empty = HashSet::new();
-        let active_column_filters = self
-            .filter_stack
-            .retention_config
-            .get(&column)
-            .unwrap_or(&empty);
+        let active_column_filters = self.filter_stack.retention_config.get(&column).unwrap_or(&empty);
 
         // Rows that survive every *other* active column's filter. `column`'s own
         // filter is excluded so its entries reflect what selecting them would
         // add rather than being constrained by the current selection.
-        let rows_passing_other_filters =
-            retain_rows(&self.contents.rows, &self.filter_stack, Some(column));
+        let rows_passing_other_filters = retain_rows(&self.contents.rows, &self.filter_stack, Some(column));
 
         // Only used to populate `Unavailable::blocked_by`, which the UI doesn't
         // display by name; any other currently active column is a valid choice.
-        let blocking_column = self
-            .filter_stack
-            .retention_config
-            .keys()
-            .find(|&&col| col != column)
-            .copied();
+        let blocking_column = self.filter_stack.retention_config.keys().find(|&&col| col != column).copied();
 
         all_column_entries
             .iter()
             .map(|entry| {
-                let adjusted_rows: Vec<DataRow> = entry
-                    .rows
-                    .iter()
-                    .filter(|row| rows_passing_other_filters.contains(row))
-                    .copied()
-                    .collect();
+                let adjusted_rows: Vec<DataRow> =
+                    entry.rows.iter().filter(|row| rows_passing_other_filters.contains(row)).copied().collect();
 
                 let is_applied = active_column_filters.contains(&entry.content);
                 let state = if adjusted_rows.is_empty() {
@@ -106,21 +92,12 @@ impl TableDataEngine {
                             entry.content
                         )
                     })?;
-                    FilterEntryState::Unavailable {
-                        blocked_by,
-                        is_applied,
-                    }
+                    FilterEntryState::Unavailable { blocked_by, is_applied }
                 } else {
                     FilterEntryState::Available { is_applied }
                 };
 
-                Ok((
-                    FilterEntry {
-                        content: entry.content.clone(),
-                        rows: adjusted_rows,
-                    },
-                    state,
-                ))
+                Ok((FilterEntry { content: entry.content.clone(), rows: adjusted_rows }, state))
             })
             .collect::<anyhow::Result<Vec<_>>>()
             .map(Arc::new)
@@ -132,16 +109,9 @@ impl TableDataEngine {
 
     /// Toggle a filter value for a column. Returns `true` if the filter was
     /// added, `false` if it was removed.
-    pub(crate) fn toggle_filter(
-        &mut self,
-        column: AnyColumn,
-        value: Option<SharedString>,
-    ) -> anyhow::Result<bool> {
-        let is_currently_applied = self
-            .filter_stack
-            .retention_config
-            .get(&column)
-            .is_some_and(|filters| filters.contains(&value));
+    pub(crate) fn toggle_filter(&mut self, column: AnyColumn, value: Option<SharedString>) -> anyhow::Result<bool> {
+        let is_currently_applied =
+            self.filter_stack.retention_config.get(&column).is_some_and(|filters| filters.contains(&value));
 
         if is_currently_applied {
             self.remove_filter(column, value)?;
@@ -152,23 +122,14 @@ impl TableDataEngine {
         }
     }
 
-    fn remove_filter(
-        &mut self,
-        column: AnyColumn,
-        value: Option<SharedString>,
-    ) -> anyhow::Result<()> {
+    fn remove_filter(&mut self, column: AnyColumn, value: Option<SharedString>) -> anyhow::Result<()> {
         let entries = self
             .filter_stack
             .retention_config
             .get_mut(&column)
-            .ok_or_else(|| {
-                anyhow::anyhow!("Expected {column:?} to be present in active filters")
-            })?;
+            .ok_or_else(|| anyhow::anyhow!("Expected {column:?} to be present in active filters"))?;
 
-        debug_assert!(
-            entries.contains(&value),
-            "Expected value to be present in {column:?} active filters"
-        );
+        debug_assert!(entries.contains(&value), "Expected value to be present in {column:?} active filters");
 
         if entries.len() == 1 {
             self.filter_stack.retention_config.remove(&column);
@@ -179,11 +140,7 @@ impl TableDataEngine {
     }
 
     fn apply_filter(&mut self, column: AnyColumn, value: Option<SharedString>) {
-        self.filter_stack
-            .retention_config
-            .entry(column)
-            .or_default()
-            .insert(value);
+        self.filter_stack.retention_config.entry(column).or_default().insert(value);
     }
 }
 
@@ -199,19 +156,12 @@ pub fn calculate_available_filters(
         let mut value_to_rows: HashMap<Option<SharedString>, Vec<DataRow>> = HashMap::new();
 
         for (row_index, row) in content_rows.iter().enumerate() {
-            let cell_value = row
-                .get(column)
-                .and_then(|cell| cell.display_value().cloned());
-            value_to_rows
-                .entry(cell_value)
-                .or_default()
-                .push(DataRow(row_index));
+            let cell_value = row.get(column).and_then(|cell| cell.display_value().cloned());
+            value_to_rows.entry(cell_value).or_default().push(DataRow(row_index));
         }
 
-        let filter_entries: Vec<FilterEntry> = value_to_rows
-            .into_iter()
-            .map(|(content, rows)| FilterEntry { content, rows })
-            .collect();
+        let filter_entries: Vec<FilterEntry> =
+            value_to_rows.into_iter().map(|(content, rows)| FilterEntry { content, rows }).collect();
 
         available_filters.insert(column, filter_entries);
     }

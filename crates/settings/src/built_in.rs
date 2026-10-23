@@ -9,12 +9,8 @@ pub fn settings() -> SettingsContent {
         theme: theme_settings(),
         workspace: workspace_settings(),
         editor: editor_settings(),
-        remote: RemoteSettingsContent {
-            ssh_connections: Some(vec![]),
-        },
-        command_palette: Some(CommandPaletteSettingsContent {
-            use_command_history: Some(true),
-        }),
+        remote: RemoteSettingsContent { ssh_connections: Some(vec![]) },
+        command_palette: Some(CommandPaletteSettingsContent { use_command_history: Some(true) }),
         file_finder: Some(FileFinderSettingsContent {
             file_icons: Some(true),
             modal_max_width: Some(ModalWidthContent::Large),
@@ -22,9 +18,7 @@ pub fn settings() -> SettingsContent {
             include_ignored: Some(IncludeIgnoredContent::Smart),
             prefill_query_from_selection: Some(true),
         }),
-        call_hierarchy: Some(CallHierarchySettingsContent {
-            modal_max_width: Some(ModalWidthContent::Medium),
-        }),
+        call_hierarchy: Some(CallHierarchySettingsContent { modal_max_width: Some(ModalWidthContent::Medium) }),
         git_panel: Some(GitPanelSettingsContent {
             button: Some(true),
             dock: Some(DockPosition::Left),
@@ -55,9 +49,7 @@ pub fn settings() -> SettingsContent {
             show_tab_bar_buttons: Some(true),
             show_pinned_tabs_in_separate_row: Some(false),
         }),
-        tab_switcher: Some(TabSwitcherSettingsContent {
-            show_file_preview: Some(true),
-        }),
+        tab_switcher: Some(TabSwitcherSettingsContent { show_file_preview: Some(true) }),
         status_bar: Some(StatusBarSettingsContent {
             show: Some(true),
             active_language_button: Some(true),
@@ -97,12 +89,8 @@ pub fn settings() -> SettingsContent {
             }),
             git_gutter: Some(GitGutterSetting::TrackedFiles),
             gutter_debounce: Some(0),
-            branch_picker: Some(BranchPickerSettingsContent {
-                show_author_name: Some(true),
-            }),
-            file_diff: Some(FileDiffSettingsContent {
-                show_full_file: Some(true),
-            }),
+            branch_picker: Some(BranchPickerSettingsContent { show_author_name: Some(true) }),
+            file_diff: Some(FileDiffSettingsContent { show_full_file: Some(true) }),
             hunk_style: Some(GitHunkStyleSetting::StagedHollow),
             path_style: Some(GitPathStyle::FileNameFirst),
             show_stage_restore_buttons: Some(true),
@@ -112,9 +100,7 @@ pub fn settings() -> SettingsContent {
             button: Some(true),
             request_timeout: Some(120),
             max_buffer_line_length: Some(20000),
-            notifications: Some(LspNotificationSettingsContent {
-                dismiss_timeout_ms: Some(5000),
-            }),
+            notifications: Some(LspNotificationSettingsContent { dismiss_timeout_ms: Some(5000) }),
             semantic_token_rules: Some(SemanticTokenRules {
                 rules: vec![
                     SemanticTokenRule {
@@ -130,9 +116,7 @@ pub fn settings() -> SettingsContent {
                 ],
             }),
         }),
-        image_viewer: Some(ImageViewerSettingsContent {
-            unit: Some(ImageFileSizeUnit::Binary),
-        }),
+        image_viewer: Some(ImageViewerSettingsContent { unit: Some(ImageFileSizeUnit::Binary) }),
         markdown_preview: Some(MarkdownPreviewSettingsContent {
             font_family: None,
             code_font_family: None,
@@ -156,9 +140,7 @@ pub fn settings() -> SettingsContent {
             indent_size: Some(PixelSetting(20.0)),
             auto_reveal_entries: Some(true),
             auto_fold_dirs: Some(true),
-            indent_guides: Some(IndentGuidesSettingsContent {
-                show: Some(ShowIndentGuides::Always),
-            }),
+            indent_guides: Some(IndentGuidesSettingsContent { show: Some(ShowIndentGuides::Always) }),
             expand_outlines_with_depth: Some(100),
             multi_buffer_hide_symbols: Some(false),
         }),
@@ -177,9 +159,7 @@ pub fn settings() -> SettingsContent {
             auto_fold_dirs: Some(true),
             starts_open: Some(true),
             show_diagnostics: Some(ShowDiagnostics::All),
-            indent_guides: Some(ProjectPanelIndentGuidesSettings {
-                show: Some(ShowIndentGuides::Always),
-            }),
+            indent_guides: Some(ProjectPanelIndentGuidesSettings { show: Some(ShowIndentGuides::Always) }),
             hide_root: Some(false),
             hide_hidden: Some(false),
             sticky_scroll: Some(true),
@@ -195,10 +175,7 @@ pub fn settings() -> SettingsContent {
             git_status_indicator: Some(false),
         }),
         reduce_motion: Some(ReduceMotionMode::Off),
-        session: Some(SessionSettingsContent {
-            restore_unsaved_buffers: Some(true),
-            trust_all_worktrees: Some(false),
-        }),
+        session: Some(SessionSettingsContent { restore_unsaved_buffers: Some(true), trust_all_worktrees: Some(false) }),
         terminal: terminal_settings(),
         title_bar: Some(TitleBarSettingsContent {
             show_branch_status_icon: Some(true),
@@ -217,27 +194,28 @@ fn terminal_settings() -> Option<TerminalSettingsContent> {
             working_directory: Some(WorkingDirectory::CurrentProjectDirectory),
             env: Some(Default::default()),
             detect_venv: Some(true),
-            path_hyperlink_regexes: Some(
-                PathHyperlinkRegexes(
-                    vec![
-                        PathHyperlinkRegex::SingleLine("File \"(?<path>[^\"]+)\", line (?<line>[0-9]+)"
-                        .into()), PathHyperlinkRegex::MultiLine(vec!["(?x)".into(),
-                        "(?<path>".into(), "    (".into(),
-                        "        # multi-char path: first char (not opening delimiter, space, or box drawing char)"
-                        .into(), "        [^({\\[<\"'`\\ \\u2500-\\u257F]".into(),
-                        "        # middle chars: non-space, and colon/paren only if not followed by digit/paren/space"
-                        .into(), "        ([^\\ :(]|[:(][^0-9()\\ ])*".into(),
-                        "        # last char: not closing delimiter or colon".into(),
-                        "        [^()}\\]>\"'`.,;:\\ ]".into(), "    |".into(),
-                        "        # single-char path: not delimiter, punctuation, space, or box drawing char"
-                        .into(), "        [^(){}\\[\\]<>\"'`.,;:\\ \\u2500-\\u257F]"
-                        .into(), "    )".into(),
-                        "    # optional line/column suffix (included in path for PathWithPosition::parse_str)"
-                        .into(), "    (:+[0-9]+(:[0-9]+)?|:?\\([0-9]+([,:]?[0-9]+)?\\))?"
-                        .into(), ")".into()])
-                    ],
-                ),
-            ),
+            path_hyperlink_regexes: Some(PathHyperlinkRegexes(vec![
+                PathHyperlinkRegex::SingleLine("File \"(?<path>[^\"]+)\", line (?<line>[0-9]+)".into()),
+                PathHyperlinkRegex::MultiLine(vec![
+                    "(?x)".into(),
+                    "(?<path>".into(),
+                    "    (".into(),
+                    "        # multi-char path: first char (not opening delimiter, space, or box drawing char)".into(),
+                    "        [^({\\[<\"'`\\ \\u2500-\\u257F]".into(),
+                    "        # middle chars: non-space, and colon/paren only if not followed by digit/paren/space"
+                        .into(),
+                    "        ([^\\ :(]|[:(][^0-9()\\ ])*".into(),
+                    "        # last char: not closing delimiter or colon".into(),
+                    "        [^()}\\]>\"'`.,;:\\ ]".into(),
+                    "    |".into(),
+                    "        # single-char path: not delimiter, punctuation, space, or box drawing char".into(),
+                    "        [^(){}\\[\\]<>\"'`.,;:\\ \\u2500-\\u257F]".into(),
+                    "    )".into(),
+                    "    # optional line/column suffix (included in path for PathWithPosition::parse_str)".into(),
+                    "    (:+[0-9]+(:[0-9]+)?|:?\\([0-9]+([,:]?[0-9]+)?\\))?".into(),
+                    ")".into(),
+                ]),
+            ])),
             path_hyperlink_timeout_ms: Some(1),
         },
         line_height: Some(TerminalLineHeight::Comfortable),
@@ -261,13 +239,11 @@ fn terminal_settings() -> Option<TerminalSettingsContent> {
     })
 }
 
-fn editor_settings() -> EditorSettingsContent {
+const fn editor_settings() -> EditorSettingsContent {
     EditorSettingsContent {
         cursor_blink: Some(true),
         cursor_shape: Some(CursorShape::Bar),
-        cursor_animation: Some(CursorAnimationSettingsContent {
-            enabled: Some(true),
-        }),
+        cursor_animation: Some(CursorAnimationSettingsContent { enabled: Some(true) }),
         snippet_sort_order: Some(SnippetSortOrder::Inline),
         current_line_highlight: Some(CurrentLineHighlight::All),
         selection_highlight: Some(true),
@@ -277,11 +253,7 @@ fn editor_settings() -> EditorSettingsContent {
         hover_popover_delay: Some(DelayMs(300)),
         hover_popover_sticky: Some(true),
         hover_popover_hiding_delay: Some(DelayMs(300)),
-        toolbar: Some(ToolbarContent {
-            breadcrumbs: Some(true),
-            quick_actions: Some(true),
-            code_actions: Some(false),
-        }),
+        toolbar: Some(ToolbarContent { breadcrumbs: Some(true), quick_actions: Some(true), code_actions: Some(false) }),
         minimap: Some(MinimapContent {
             show: Some(ShowMinimap::Always),
             display_in: Some(DisplayIn::ActiveEditor),
@@ -319,10 +291,7 @@ fn editor_settings() -> EditorSettingsContent {
         go_to_definition_scroll_strategy: Some(GoToDefinitionScrollStrategy::Center),
         diagnostics_max_severity: Some(DiagnosticSeverityContent::All),
         inline_code_actions: Some(true),
-        drag_and_drop_selection: Some(DragAndDropSelectionContent {
-            enabled: Some(true),
-            delay: Some(DelayMs(300)),
-        }),
+        drag_and_drop_selection: Some(DragAndDropSelectionContent { enabled: Some(true), delay: Some(DelayMs(300)) }),
         lsp_document_colors: Some(DocumentColorsRenderMode::Inlay),
         lsp_document_links: Some(true),
         completion_menu_scrollbar: Some(ShowScrollbar::Never),
@@ -367,10 +336,7 @@ fn workspace_settings() -> WorkspaceSettingsContent {
         window_title_format: Some(DEFAULT_WINDOW_TITLE_FORMAT.into()),
         window_title_separator: Some(" — ".into()),
         window_decorations: Some(WindowDecorations::Client),
-        focus_follows_mouse: Some(FocusFollowsMouse {
-            enabled: Some(false),
-            debounce_ms: Some(250),
-        }),
+        focus_follows_mouse: Some(FocusFollowsMouse { enabled: Some(false), debounce_ms: Some(250) }),
     }
 }
 
@@ -379,9 +345,7 @@ fn theme_settings() -> Box<ThemeSettingsContent> {
         ui_font_size: Some(FontSize(16.0)),
         ui_font_family: Some(FontFamilyName(".SystemUIFont".into())),
         ui_font_fallbacks: None,
-        ui_font_features: Some(FontFeaturesContent(
-            [("calt".into(), 0)].into_iter().collect(),
-        )),
+        ui_font_features: Some(FontFeaturesContent([("calt".into(), 0)].into_iter().collect())),
         ui_font_weight: Some(FontWeightContent(400.0)),
         buffer_font_family: Some(FontFamilyName("JetBrainsMono Nerd Font".into())),
         buffer_font_fallbacks: None,
@@ -460,19 +424,14 @@ fn language_settings() -> AllLanguageSettingsContent {
             ensure_final_newline_on_save: Some(true),
             line_ending: Some(LineEndingSetting::EnforceLf),
             formatter: Some(FormatterList::Single(Formatter::Auto)),
-            jsx_tag_auto_close: Some(JsxTagAutoCloseSettingsContent {
-                enabled: Some(true),
-            }),
+            jsx_tag_auto_close: Some(JsxTagAutoCloseSettingsContent { enabled: Some(true) }),
             enable_language_server: Some(true),
             semantic_tokens: Some(SemanticTokens::Combined),
             document_folding_ranges: Some(DocumentFoldingRanges::Off),
             document_symbols: Some(DocumentSymbols::On),
             allow_rewrap: Some(RewrapBehavior::InComments),
             show_whitespaces: Some(ShowWhitespaceSetting::Selection),
-            whitespace_map: Some(WhitespaceMapContent {
-                space: Some('•'),
-                tab: Some('→'),
-            }),
+            whitespace_map: Some(WhitespaceMapContent { space: Some('•'), tab: Some('→') }),
             extend_comment_on_newline: Some(true),
             extend_list_on_newline: Some(true),
             indent_list_on_tab: Some(true),
@@ -520,27 +479,16 @@ fn language_settings() -> AllLanguageSettingsContent {
         languages: language_overrides(),
         file_types: Some(FileTypeMap(
             [
-                (
-                    "JSONC".into(),
-                    ExtendingSet(["tsconfig*.json".into()].into_iter().collect()),
-                ),
+                ("JSONC".into(), ExtendingSet(["tsconfig*.json".into()].into_iter().collect())),
                 (
                     "Markdown".into(),
                     ExtendingSet(
-                        [
-                            ".rules".into(),
-                            ".cursorrules".into(),
-                            ".windsurfrules".into(),
-                            ".clinerules".into(),
-                        ]
-                        .into_iter()
-                        .collect(),
+                        [".rules".into(), ".cursorrules".into(), ".windsurfrules".into(), ".clinerules".into()]
+                            .into_iter()
+                            .collect(),
                     ),
                 ),
-                (
-                    "Env".into(),
-                    ExtendingSet([".env.*".into()].into_iter().collect()),
-                ),
+                ("Env".into(), ExtendingSet([".env.*".into()].into_iter().collect())),
             ]
             .into_iter()
             .collect(),
@@ -551,20 +499,8 @@ fn language_settings() -> AllLanguageSettingsContent {
 fn language_overrides() -> LanguageToSettingsMap {
     LanguageToSettingsMap(
         [
-            (
-                "C".into(),
-                LanguageSettingsContent {
-                    use_on_type_format: Some(false),
-                    ..Default::default()
-                },
-            ),
-            (
-                "C++".into(),
-                LanguageSettingsContent {
-                    use_on_type_format: Some(false),
-                    ..Default::default()
-                },
-            ),
+            ("C".into(), LanguageSettingsContent { use_on_type_format: Some(false), ..Default::default() }),
+            ("C++".into(), LanguageSettingsContent { use_on_type_format: Some(false), ..Default::default() }),
             (
                 "Diff".into(),
                 LanguageSettingsContent {
@@ -585,21 +521,11 @@ fn language_overrides() -> LanguageToSettingsMap {
                 "Go".into(),
                 LanguageSettingsContent {
                     hard_tabs: Some(true),
-                    code_actions_on_format: Some(
-                        [("source.organizeImports".into(), true)]
-                            .into_iter()
-                            .collect(),
-                    ),
+                    code_actions_on_format: Some([("source.organizeImports".into(), true)].into_iter().collect()),
                     ..Default::default()
                 },
             ),
-            (
-                "JSON".into(),
-                LanguageSettingsContent {
-                    preferred_line_length: Some(120),
-                    ..Default::default()
-                },
-            ),
+            ("JSON".into(), LanguageSettingsContent { preferred_line_length: Some(120), ..Default::default() }),
             (
                 "Markdown".into(),
                 LanguageSettingsContent {
@@ -631,24 +557,13 @@ fn language_overrides() -> LanguageToSettingsMap {
                 "Python".into(),
                 LanguageSettingsContent {
                     formatter: Some(FormatterList::Single(Formatter::LanguageServer(
-                        LanguageServerFormatterSpecifier::Specific {
-                            name: "ruff".into(),
-                        },
+                        LanguageServerFormatterSpecifier::Specific { name: "ruff".into() },
                     ))),
-                    code_actions_on_format: Some(
-                        [("source.organizeImports.ruff".into(), true)]
-                            .into_iter()
-                            .collect(),
-                    ),
+                    code_actions_on_format: Some([("source.organizeImports.ruff".into(), true)].into_iter().collect()),
                     ..Default::default()
                 },
             ),
-            (
-                "Rust".into(),
-                LanguageSettingsContent {
-                    ..Default::default()
-                },
-            ),
+            ("Rust".into(), LanguageSettingsContent { ..Default::default() }),
         ]
         .into_iter()
         .collect(),

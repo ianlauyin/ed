@@ -1,5 +1,13 @@
-use gpui::{Action, App, Context, Div, Entity, InteractiveElement, Window, div};
-use workspace::{Pane, Workspace};
+use gpui::Action;
+use gpui::App;
+use gpui::Context;
+use gpui::Div;
+use gpui::Entity;
+use gpui::InteractiveElement;
+use gpui::Window;
+use gpui::div;
+use workspace::Pane;
+use workspace::Workspace;
 
 use crate::BufferSearchBar;
 
@@ -8,11 +16,9 @@ pub trait SearchActionsRegistrar {
     fn register_handler<A: Action>(&mut self, callback: impl ActionExecutor<A>);
 }
 
-type SearchBarActionCallback<A> =
-    fn(&mut BufferSearchBar, &A, &mut Window, &mut Context<BufferSearchBar>);
+type SearchBarActionCallback<A> = fn(&mut BufferSearchBar, &A, &mut Window, &mut Context<BufferSearchBar>);
 
-type GetSearchBar<T> =
-    for<'a, 'b> fn(&'a T, &'a mut Window, &mut Context<'b, T>) -> Option<Entity<BufferSearchBar>>;
+type GetSearchBar<T> = for<'a, 'b> fn(&'a T, &'a mut Window, &mut Context<'b, T>) -> Option<Entity<BufferSearchBar>>;
 
 /// Registers search actions on a div that can be taken out.
 pub struct DivRegistrar<'a, 'b, T: 'static> {
@@ -23,11 +29,7 @@ pub struct DivRegistrar<'a, 'b, T: 'static> {
 
 impl<'a, 'b, T: 'static> DivRegistrar<'a, 'b, T> {
     pub fn new(search_getter: GetSearchBar<T>, cx: &'a mut Context<'b, T>) -> Self {
-        Self {
-            div: Some(div()),
-            cx,
-            search_getter,
-        }
+        Self { div: Some(div()), cx, search_getter }
     }
     pub fn into_div(self) -> Div {
         // This option is always Some; it's an option in the first place because we want to call methods
@@ -43,9 +45,7 @@ impl<T: 'static> SearchActionsRegistrar for DivRegistrar<'_, '_, T> {
             div.on_action(self.cx.listener(move |this, action, window, cx| {
                 let should_notify = (getter)(this, window, cx)
                     .map(|search_bar| {
-                        search_bar.update(cx, |search_bar, cx| {
-                            callback.execute(search_bar, action, window, cx)
-                        })
+                        search_bar.update(cx, |search_bar, cx| callback.execute(search_bar, action, window, cx))
                     })
                     .unwrap_or(false);
                 if should_notify {
@@ -64,11 +64,8 @@ pub struct PaneDivRegistrar {
 }
 
 impl PaneDivRegistrar {
-    pub fn new(div: Div, pane: Entity<Pane>) -> Self {
-        Self {
-            div: Some(div),
-            pane,
-        }
+    pub const fn new(div: Div, pane: Entity<Pane>) -> Self {
+        Self { div: Some(div), pane }
     }
 
     pub fn into_div(self) -> Div {
@@ -81,16 +78,10 @@ impl SearchActionsRegistrar for PaneDivRegistrar {
         let pane = self.pane.clone();
         self.div = self.div.take().map(|div| {
             div.on_action(move |action: &A, window: &mut Window, cx: &mut App| {
-                let search_bar = pane
-                    .read(cx)
-                    .toolbar()
-                    .read(cx)
-                    .item_of_type::<BufferSearchBar>();
+                let search_bar = pane.read(cx).toolbar().read(cx).item_of_type::<BufferSearchBar>();
                 let should_notify = search_bar
                     .map(|search_bar| {
-                        search_bar.update(cx, |search_bar, cx| {
-                            callback.execute(search_bar, action, window, cx)
-                        })
+                        search_bar.update(cx, |search_bar, cx| callback.execute(search_bar, action, window, cx))
                     })
                     .unwrap_or(false);
                 if should_notify {
@@ -123,9 +114,8 @@ impl SearchActionsRegistrar for Workspace {
             pane.update(cx, |this, cx| {
                 this.toolbar().update(cx, move |this, cx| {
                     if let Some(search_bar) = this.item_of_type::<BufferSearchBar>() {
-                        let should_notify = search_bar.update(cx, move |search_bar, cx| {
-                            callback.execute(search_bar, action, window, cx)
-                        });
+                        let should_notify = search_bar
+                            .update(cx, move |search_bar, cx| callback.execute(search_bar, action, window, cx));
                         if should_notify {
                             cx.notify();
                         } else {

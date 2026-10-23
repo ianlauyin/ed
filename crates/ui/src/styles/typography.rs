@@ -1,11 +1,19 @@
-use crate::prelude::*;
-use gpui::{
-    AnyElement, App, IntoElement, ParentElement, Rems, RenderOnce, SharedString, Styled, Window,
-    div, rems,
-};
+use gpui::AnyElement;
+use gpui::App;
+use gpui::IntoElement;
+use gpui::ParentElement;
+use gpui::Rems;
+use gpui::RenderOnce;
+use gpui::SharedString;
+use gpui::Styled;
+use gpui::Window;
+use gpui::div;
+use gpui::rems;
 use theme::ActiveTheme;
 
-use crate::{Color, rems_from_px};
+use crate::Color;
+use crate::prelude::*;
+use crate::rems_from_px;
 
 /// Extends [`gpui::Styled`] with typography-related styling methods.
 pub trait StyledTypography: Styled + Sized {
@@ -178,7 +186,7 @@ pub enum HeadlineSize {
 
 impl HeadlineSize {
     /// Returns the headline size in rems.
-    pub fn rems(self) -> Rems {
+    pub const fn rems(self) -> Rems {
         match self {
             Self::XSmall => rems(0.88),
             Self::Small => rems(1.0),
@@ -189,7 +197,7 @@ impl HeadlineSize {
     }
 
     /// Returns the line height for the headline size.
-    pub fn line_height(self) -> Rems {
+    pub const fn line_height(self) -> Rems {
         match self {
             Self::XSmall => rems(1.6),
             Self::Small => rems(1.6),
@@ -225,21 +233,17 @@ impl RenderOnce for Headline {
 impl Headline {
     /// Create a new headline element.
     pub fn new(text: impl Into<SharedString>) -> Self {
-        Self {
-            size: HeadlineSize::default(),
-            text: text.into(),
-            color: Color::default(),
-        }
+        Self { size: HeadlineSize::default(), text: text.into(), color: Color::default() }
     }
 
     /// Set the size of the headline.
-    pub fn size(mut self, size: HeadlineSize) -> Self {
+    pub const fn size(mut self, size: HeadlineSize) -> Self {
         self.size = size;
         self
     }
 
     /// Set the color of the headline.
-    pub fn color(mut self, color: Color) -> Self {
+    pub const fn color(mut self, color: Color) -> Self {
         self.color = color;
         self
     }
@@ -260,31 +264,14 @@ impl Component for Headline {
             .children(vec![
                 single_example(
                     "XLarge",
-                    Headline::new("XLarge Headline")
-                        .size(HeadlineSize::XLarge)
-                        .into_any_element(),
+                    Headline::new("XLarge Headline").size(HeadlineSize::XLarge).into_any_element(),
                 ),
-                single_example(
-                    "Large",
-                    Headline::new("Large Headline")
-                        .size(HeadlineSize::Large)
-                        .into_any_element(),
-                ),
-                single_example(
-                    "Medium (Default)",
-                    Headline::new("Medium Headline").into_any_element(),
-                ),
-                single_example(
-                    "Small",
-                    Headline::new("Small Headline")
-                        .size(HeadlineSize::Small)
-                        .into_any_element(),
-                ),
+                single_example("Large", Headline::new("Large Headline").size(HeadlineSize::Large).into_any_element()),
+                single_example("Medium (Default)", Headline::new("Medium Headline").into_any_element()),
+                single_example("Small", Headline::new("Small Headline").size(HeadlineSize::Small).into_any_element()),
                 single_example(
                     "XSmall",
-                    Headline::new("XSmall Headline")
-                        .size(HeadlineSize::XSmall)
-                        .into_any_element(),
+                    Headline::new("XSmall Headline").size(HeadlineSize::XSmall).into_any_element(),
                 ),
             ])
             .into_any_element()

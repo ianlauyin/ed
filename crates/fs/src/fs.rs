@@ -1,48 +1,56 @@
 pub mod fs_watcher;
 mod git_clone_progress;
 
-use parking_lot::Mutex;
-use slotmap::{KeyData, SlotMap};
+use std::ffi::CString;
 use std::ffi::OsString;
-use std::sync::atomic::{AtomicU8, AtomicUsize, Ordering};
+use std::io::Write;
+use std::io::{self};
+#[cfg(target_os = "macos")]
+use std::mem::MaybeUninit;
+use std::os::fd::AsFd;
+use std::os::fd::AsRawFd;
+use std::os::unix::ffi::OsStrExt;
+use std::os::unix::fs::FileTypeExt;
+use std::os::unix::fs::MetadataExt;
+use std::os::unix::fs::PermissionsExt;
+use std::path::Path;
+use std::path::PathBuf;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::atomic::AtomicU8;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+use std::time::Duration;
 use std::time::Instant;
-use util::maybe;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
-use anyhow::{Context as _, Result};
+use anyhow::Context as _;
+use anyhow::Result;
+use futures::AsyncRead;
+use futures::Stream;
+use futures::StreamExt;
+use futures::future::BoxFuture;
 use futures::stream::iter;
+use git::repository::GitRepository;
+use git::repository::RealGitRepository;
 use gpui::App;
 use gpui::BackgroundExecutor;
 use gpui::Global;
 use gpui::ReadGlobal as _;
 use gpui::SharedString;
-
-use std::ffi::CString;
-use util::command::{Stdio, new_command};
-
-use std::os::fd::{AsFd, AsRawFd};
-
-use std::os::unix::ffi::OsStrExt;
-
-use std::os::unix::fs::{FileTypeExt, MetadataExt, PermissionsExt};
-
-#[cfg(target_os = "macos")]
-use std::mem::MaybeUninit;
-
-use futures::{AsyncRead, Stream, StreamExt, future::BoxFuture};
-use git::repository::{GitRepository, RealGitRepository};
-
+use parking_lot::Mutex;
 use rope::Rope;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
+use slotmap::KeyData;
+use slotmap::SlotMap;
 use smol::io::AsyncWriteExt;
-use std::{
-    io::{self, Write},
-    path::{Path, PathBuf},
-    pin::Pin,
-    sync::Arc,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
 use tempfile::TempDir;
 use text::LineEnding;
+use util::command::Stdio;
+use util::command::new_command;
+use util::maybe;
 
 pub trait Watcher: Send + Sync {
     fn add(&self, path: &Path) -> Result<()>;
@@ -73,16 +81,14 @@ impl From<PathEvent> for PathBuf {
     }
 }
 
+// async_trait marks its boxed futures `#[must_use]`
+#[allow(clippy::double_must_use)]
 #[async_trait::async_trait]
 pub trait Fs: Send + Sync {
     async fn create_dir(&self, path: &Path) -> Result<()>;
     async fn create_symlink(&self, path: &Path, target: PathBuf) -> Result<()>;
     async fn create_file(&self, path: &Path, options: CreateOptions) -> Result<()>;
-    async fn create_file_with(
-        &self,
-        path: &Path,
-        content: Pin<&mut (dyn AsyncRead + Send)>,
-    ) -> Result<()>;
+    async fn create_file_with(&self, path: &Path, content: Pin<&mut (dyn AsyncRead + Send)>) -> Result<()>;
     async fn copy_file(&self, source: &Path, target: &Path, options: CopyOptions) -> Result<()>;
     async fn rename(&self, source: &Path, target: &Path, options: RenameOptions) -> Result<()>;
 
@@ -115,10 +121,7 @@ pub trait Fs: Send + Sync {
     async fn is_dir(&self, path: &Path) -> bool;
     async fn metadata(&self, path: &Path) -> Result<Option<Metadata>>;
     async fn read_link(&self, path: &Path) -> Result<PathBuf>;
-    async fn read_dir(
-        &self,
-        path: &Path,
-    ) -> Result<Pin<Box<dyn Send + Stream<Item = Result<PathBuf>>>>>;
+    async fn read_dir(&self, path: &Path) -> Result<Pin<Box<dyn Send + Stream<Item = Result<PathBuf>>>>>;
 
     /// Creates the native file watcher now rather than on the first `watch`, so a
     /// failure to start it (e.g. inotify instance limits) can be reported at startup.
@@ -139,18 +142,10 @@ pub trait Fs: Send + Sync {
         &self,
         path: &Path,
         latency: Duration,
-    ) -> (
-        Pin<Box<dyn Send + Stream<Item = Vec<PathEvent>>>>,
-        Arc<dyn Watcher>,
-    );
+    ) -> (Pin<Box<dyn Send + Stream<Item = Vec<PathEvent>>>>, Arc<dyn Watcher>);
 
-    fn open_repo(
-        &self,
-        abs_dot_git: &Path,
-        git_binary_path: Option<&Path>,
-    ) -> Result<Arc<dyn GitRepository>>;
-    async fn git_init(&self, abs_work_directory: &Path, fallback_branch_name: String)
-    -> Result<()>;
+    fn open_repo(&self, abs_dot_git: &Path, git_binary_path: Option<&Path>) -> Result<Arc<dyn GitRepository>>;
+    async fn git_init(&self, abs_work_directory: &Path, fallback_branch_name: String) -> Result<()>;
     async fn git_clone(&self, abs_work_directory: &Path, repo_url: &str) -> Result<()>;
     async fn git_config(&self, abs_work_directory: &Path, args: Vec<String>) -> Result<String>;
     fn is_fake(&self) -> bool;
@@ -176,7 +171,7 @@ struct TrashedEntry {
     ///
     /// * Freedesktop – Path to the `.trashinfo` file.
     /// * macOS & Windows – Full path to the file/directory in the system's
-    /// trash.
+    ///   trash.
     pub id: OsString,
     /// Name of the file/directory at the time of trashing, including extension.
     pub name: OsString,
@@ -186,11 +181,7 @@ struct TrashedEntry {
 
 impl From<trash::TrashItem> for TrashedEntry {
     fn from(item: trash::TrashItem) -> Self {
-        Self {
-            id: item.id,
-            name: item.name,
-            original_parent: item.original_parent,
-        }
+        Self { id: item.id, name: item.name, original_parent: item.original_parent }
     }
 }
 
@@ -227,9 +218,7 @@ impl From<trash::Error> for TrashRestoreError {
         match err {
             trash::Error::RestoreCollision { path, .. } => Self::Collision { path },
             trash::Error::Unknown { description } => Self::Unknown { description },
-            other => Self::Unknown {
-                description: other.to_string(),
-            },
+            other => Self::Unknown { description: other.to_string() },
         }
     }
 }
@@ -327,11 +316,7 @@ impl JobTracker {
         let id = info.id;
         {
             let mut subs = subscribers.lock();
-            subs.retain(|sender| {
-                sender
-                    .unbounded_send(JobEvent::Started { info: info.clone() })
-                    .is_ok()
-            });
+            subs.retain(|sender| sender.unbounded_send(JobEvent::Started { info: info.clone() }).is_ok());
         }
         Self { id, subscribers }
     }
@@ -339,12 +324,7 @@ impl JobTracker {
     fn update(&self, message: SharedString) {
         let mut subscribers = self.subscribers.lock();
         subscribers.retain(|sender| {
-            sender
-                .unbounded_send(JobEvent::Updated {
-                    id: self.id,
-                    message: message.clone(),
-                })
-                .is_ok()
+            sender.unbounded_send(JobEvent::Updated { id: self.id, message: message.clone() }).is_ok()
         });
     }
 }
@@ -352,11 +332,7 @@ impl JobTracker {
 impl Drop for JobTracker {
     fn drop(&mut self) {
         let mut subs = self.subscribers.lock();
-        subs.retain(|sender| {
-            sender
-                .unbounded_send(JobEvent::Completed { id: self.id })
-                .is_ok()
-        });
+        subs.retain(|sender| sender.unbounded_send(JobEvent::Completed { id: self.id }).is_ok());
     }
 }
 
@@ -368,16 +344,13 @@ impl MTime {
 
     /// Conversion intended for persistence.
     pub fn to_seconds_and_nanos_for_persistence(self) -> Option<(u64, u32)> {
-        self.0
-            .duration_since(UNIX_EPOCH)
-            .ok()
-            .map(|duration| (duration.as_secs(), duration.subsec_nanos()))
+        self.0.duration_since(UNIX_EPOCH).ok().map(|duration| (duration.as_secs(), duration.subsec_nanos()))
     }
 
     /// Returns the value wrapped by this `MTime`, for presentation to the user. The name including
     /// "_for_user" is to discourage misuse - this method should not be used when making decisions
     /// about file dirtiness.
-    pub fn timestamp_for_user(self) -> SystemTime {
+    pub const fn timestamp_for_user(self) -> SystemTime {
         self.0
     }
 
@@ -432,10 +405,7 @@ impl FileHandle for std::fs::File {
         let fd = self.as_fd();
         let fd_path = format!("/proc/self/fd/{}", fd.as_raw_fd());
         let new_path = std::fs::read_link(fd_path)?;
-        if new_path
-            .file_name()
-            .is_some_and(|f| f.to_string_lossy().ends_with(" (deleted)"))
-        {
+        if new_path.file_name().is_some_and(|f| f.to_string_lossy().ends_with(" (deleted)")) {
             anyhow::bail!("file was deleted")
         };
 
@@ -444,10 +414,9 @@ impl FileHandle for std::fs::File {
 
     #[cfg(target_os = "macos")]
     fn current_path(&self, _: &Arc<dyn Fs>) -> Result<PathBuf> {
-        use std::{
-            ffi::{CStr, OsStr},
-            os::unix::ffi::OsStrExt,
-        };
+        use std::ffi::CStr;
+        use std::ffi::OsStr;
+        use std::os::unix::ffi::OsStrExt;
 
         let fd = self.as_fd();
         let mut path_buf = MaybeUninit::<[u8; libc::PATH_MAX as usize]>::uninit();
@@ -469,14 +438,8 @@ impl RealFs {
     pub fn new(executor: BackgroundExecutor) -> Arc<Self> {
         Arc::new_cyclic(|this| Self {
             this: this.clone(),
-            native_watcher: fs_watcher::OsWatcher::new(
-                fs_watcher::OsWatcherKind::Native,
-                executor.clone(),
-            ),
-            poll_watcher: fs_watcher::OsWatcher::new(
-                fs_watcher::OsWatcherKind::Poll,
-                executor.clone(),
-            ),
+            native_watcher: fs_watcher::OsWatcher::new(fs_watcher::OsWatcherKind::Native, executor.clone()),
+            poll_watcher: fs_watcher::OsWatcher::new(fs_watcher::OsWatcherKind::Poll, executor.clone()),
             executor,
             next_job_id: Arc::new(AtomicUsize::new(0)),
             job_event_subscribers: Arc::new(Mutex::new(Vec::new())),
@@ -505,19 +468,12 @@ fn rename_without_replace(source: &Path, target: &Path) -> io::Result<()> {
         )
     };
 
-    if result == 0 {
-        Ok(())
-    } else {
-        Err(io::Error::last_os_error())
-    }
+    if result == 0 { Ok(()) } else { Err(io::Error::last_os_error()) }
 }
 
 fn path_to_c_string(path: &Path) -> io::Result<CString> {
     CString::new(path.as_os_str().as_bytes()).map_err(|_| {
-        io::Error::new(
-            io::ErrorKind::InvalidInput,
-            format!("path contains interior NUL: {}", path.display()),
-        )
+        io::Error::new(io::ErrorKind::InvalidInput, format!("path contains interior NUL: {}", path.display()))
     })
 }
 
@@ -534,25 +490,24 @@ fn path_to_c_string(path: &Path) -> io::Result<CString> {
 // ReadDir, which doesn't have this panic in drop.
 
 fn read_dir_entries(path: PathBuf) -> Result<impl Send + Iterator<Item = Result<PathBuf>>> {
-    use rustix::fs::{Dir, Mode, OFlags};
     use std::ffi::OsStr;
     use std::os::unix::ffi::OsStrExt;
 
-    let directory_fd = rustix::fs::open(
-        &path,
-        OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC,
-        Mode::empty(),
-    )
-    .with_context(|| format!("failed to open directory {path:?}"))?;
-    let directory =
-        Dir::new(directory_fd).with_context(|| format!("failed to read directory {path:?}"))?;
+    use rustix::fs::Dir;
+    use rustix::fs::Mode;
+    use rustix::fs::OFlags;
+
+    let directory_fd = rustix::fs::open(&path, OFlags::RDONLY | OFlags::DIRECTORY | OFlags::CLOEXEC, Mode::empty())
+        .with_context(|| format!("failed to open directory {path:?}"))?;
+    let directory = Dir::new(directory_fd).with_context(|| format!("failed to read directory {path:?}"))?;
 
     Ok(directory.filter_map(move |entry| {
         let entry = match entry {
             Ok(entry) => entry,
             Err(error) => {
-                return Some(Err(anyhow::Error::new(error)
-                    .context(format!("failed to read directory entry in {path:?}"))));
+                return Some(Err(
+                    anyhow::Error::new(error).context(format!("failed to read directory entry in {path:?}"))
+                ));
             }
         };
         let name = entry.file_name().to_bytes();
@@ -583,21 +538,13 @@ impl Fs for RealFs {
         } else if !options.ignore_if_exists {
             open_options.create_new(true);
         }
-        open_options
-            .open(path)
-            .await
-            .with_context(|| format!("Failed to create file at {:?}", path))?;
+        open_options.open(path).await.with_context(|| format!("Failed to create file at {:?}", path))?;
         Ok(())
     }
 
-    async fn create_file_with(
-        &self,
-        path: &Path,
-        content: Pin<&mut (dyn AsyncRead + Send)>,
-    ) -> Result<()> {
-        let mut file = smol::fs::File::create(&path)
-            .await
-            .with_context(|| format!("Failed to create file at {:?}", path))?;
+    async fn create_file_with(&self, path: &Path, content: Pin<&mut (dyn AsyncRead + Send)>) -> Result<()> {
+        let mut file =
+            smol::fs::File::create(&path).await.with_context(|| format!("Failed to create file at {:?}", path))?;
         futures::io::copy(content, &mut file).await?;
         Ok(())
     }
@@ -616,10 +563,10 @@ impl Fs for RealFs {
     }
 
     async fn rename(&self, source: &Path, target: &Path, options: RenameOptions) -> Result<()> {
-        if options.create_parents {
-            if let Some(parent) = target.parent() {
-                self.create_dir(parent).await?;
-            }
+        if options.create_parents
+            && let Some(parent) = target.parent()
+        {
+            self.create_dir(parent).await?;
         }
 
         if options.overwrite {
@@ -631,11 +578,7 @@ impl Fs for RealFs {
             {
                 let source = source.to_path_buf();
                 let target = target.to_path_buf();
-                match self
-                    .executor
-                    .spawn(async move { rename_without_replace(&source, &target) })
-                    .await
-                {
+                match self.executor.spawn(async move { rename_without_replace(&source, &target) }).await {
                     Ok(()) => return Ok(()),
                     Err(error) if error.kind() == io::ErrorKind::AlreadyExists => {
                         if options.ignore_if_exists {
@@ -674,16 +617,11 @@ impl Fs for RealFs {
     }
 
     async fn remove_dir(&self, path: &Path, options: RemoveOptions) -> Result<()> {
-        let result = if options.recursive {
-            smol::fs::remove_dir_all(path).await
-        } else {
-            smol::fs::remove_dir(path).await
-        };
+        let result =
+            if options.recursive { smol::fs::remove_dir_all(path).await } else { smol::fs::remove_dir(path).await };
         match result {
             Ok(()) => Ok(()),
-            Err(err) if err.kind() == io::ErrorKind::NotFound && options.ignore_if_not_exists => {
-                Ok(())
-            }
+            Err(err) if err.kind() == io::ErrorKind::NotFound && options.ignore_if_not_exists => Ok(()),
             Err(err) => Err(err)?,
         }
     }
@@ -691,9 +629,7 @@ impl Fs for RealFs {
     async fn remove_file(&self, path: &Path, options: RemoveOptions) -> Result<()> {
         match smol::fs::remove_file(path).await {
             Ok(()) => Ok(()),
-            Err(err) if err.kind() == io::ErrorKind::NotFound && options.ignore_if_not_exists => {
-                Ok(())
-            }
+            Err(err) if err.kind() == io::ErrorKind::NotFound && options.ignore_if_not_exists => Ok(()),
             Err(err) => Err(err)?,
         }
     }
@@ -707,10 +643,8 @@ impl Fs for RealFs {
         // its target and leave the link behind.
         let path = std::path::absolute(path).context("Could not make the path absolute")?;
 
-        let entry = smol::unblock(move || trash::delete_with_info(path))
-            .await
-            .context("Could not trash file or dir")?
-            .into();
+        let entry =
+            smol::unblock(move || trash::delete_with_info(path)).await.context("Could not trash file or dir")?.into();
 
         Ok(self.trash.lock().insert(entry))
     }
@@ -730,18 +664,14 @@ impl Fs for RealFs {
         let path = path.to_path_buf();
         self.executor
             .spawn(async move {
-                std::fs::read_to_string(&path)
-                    .with_context(|| format!("Failed to read file {}", path.display()))
+                std::fs::read_to_string(&path).with_context(|| format!("Failed to read file {}", path.display()))
             })
             .await
     }
 
     async fn load_bytes(&self, path: &Path) -> Result<Vec<u8>> {
         let path = path.to_path_buf();
-        let bytes = self
-            .executor
-            .spawn(async move { std::fs::read(path) })
-            .await?;
+        let bytes = self.executor.spawn(async move { std::fs::read(path) }).await?;
         Ok(bytes)
     }
 
@@ -750,8 +680,7 @@ impl Fs for RealFs {
             // Use the directory of the destination as temp dir to avoid
             // invalid cross-device link error, and XDG_CACHE_DIR for fallback.
             // See https://github.com/zed-industries/zed/pull/8437 for more details.
-            let mut tmp_file =
-                tempfile::NamedTempFile::new_in(path.parent().unwrap_or(paths::temp_dir()))?;
+            let mut tmp_file = tempfile::NamedTempFile::new_in(path.parent().unwrap_or(paths::temp_dir()))?;
             tmp_file.write_all(data.as_bytes())?;
             tmp_file.persist(path)?;
             anyhow::Ok(())
@@ -764,13 +693,10 @@ impl Fs for RealFs {
     async fn save(&self, path: &Path, text: &Rope, line_ending: LineEnding) -> Result<()> {
         let buffer_size = text.summary().len.min(10 * 1024);
         if let Some(path) = path.parent() {
-            self.create_dir(path)
-                .await
-                .with_context(|| format!("Failed to create directory at {:?}", path))?;
+            self.create_dir(path).await.with_context(|| format!("Failed to create directory at {:?}", path))?;
         }
-        let file = smol::fs::File::create(path)
-            .await
-            .with_context(|| format!("Failed to create file at {:?}", path))?;
+        let file =
+            smol::fs::File::create(path).await.with_context(|| format!("Failed to create file at {:?}", path))?;
         let mut writer = smol::io::BufWriter::with_capacity(buffer_size, file);
         for chunk in text::chunks_with_line_ending(text, line_ending) {
             writer.write_all(chunk.as_bytes()).await?;
@@ -781,9 +707,7 @@ impl Fs for RealFs {
 
     async fn write(&self, path: &Path, content: &[u8]) -> Result<()> {
         if let Some(path) = path.parent() {
-            self.create_dir(path)
-                .await
-                .with_context(|| format!("Failed to create directory at {:?}", path))?;
+            self.create_dir(path).await.with_context(|| format!("Failed to create directory at {:?}", path))?;
         }
         let path = path.to_owned();
         let contents = content.to_owned();
@@ -808,25 +732,17 @@ impl Fs for RealFs {
 
     async fn is_file(&self, path: &Path) -> bool {
         let path = path.to_owned();
-        self.executor
-            .spawn(async move { std::fs::metadata(path).is_ok_and(|metadata| metadata.is_file()) })
-            .await
+        self.executor.spawn(async move { std::fs::metadata(path).is_ok_and(|metadata| metadata.is_file()) }).await
     }
 
     async fn is_dir(&self, path: &Path) -> bool {
         let path = path.to_owned();
-        self.executor
-            .spawn(async move { std::fs::metadata(path).is_ok_and(|metadata| metadata.is_dir()) })
-            .await
+        self.executor.spawn(async move { std::fs::metadata(path).is_ok_and(|metadata| metadata.is_dir()) }).await
     }
 
     async fn metadata(&self, path: &Path) -> Result<Option<Metadata>> {
         let path_buf = path.to_owned();
-        let symlink_metadata = match self
-            .executor
-            .spawn(async move { std::fs::symlink_metadata(&path_buf) })
-            .await
-        {
+        let symlink_metadata = match self.executor.spawn(async move { std::fs::symlink_metadata(&path_buf) }).await {
             Ok(metadata) => metadata,
             Err(err) => {
                 return match err.kind() {
@@ -840,18 +756,12 @@ impl Fs for RealFs {
         let metadata = if is_symlink {
             let path_buf = path.to_path_buf();
             // Read target metadata, if the target exists
-            match self
-                .executor
-                .spawn(async move { std::fs::metadata(path_buf) })
-                .await
-            {
+            match self.executor.spawn(async move { std::fs::metadata(path_buf) }).await {
                 Ok(target_metadata) => target_metadata,
                 Err(err) => {
                     if err.kind() != io::ErrorKind::NotFound {
                         // TODO: Also FilesystemLoop when that's stable
-                        log::warn!(
-                            "Failed to read symlink target metadata for path {path:?}: {err}"
-                        );
+                        log::warn!("Failed to read symlink target metadata for path {path:?}: {err}");
                     }
                     // For a broken or recursive symlink, return the symlink metadata. (Or
                     // as edge cases, a symlink into a directory we can't read, which is hard
@@ -883,22 +793,13 @@ impl Fs for RealFs {
 
     async fn read_link(&self, path: &Path) -> Result<PathBuf> {
         let path = path.to_owned();
-        let path = self
-            .executor
-            .spawn(async move { std::fs::read_link(&path) })
-            .await?;
+        let path = self.executor.spawn(async move { std::fs::read_link(&path) }).await?;
         Ok(path)
     }
 
-    async fn read_dir(
-        &self,
-        path: &Path,
-    ) -> Result<Pin<Box<dyn Send + Stream<Item = Result<PathBuf>>>>> {
+    async fn read_dir(&self, path: &Path) -> Result<Pin<Box<dyn Send + Stream<Item = Result<PathBuf>>>>> {
         let path = path.to_owned();
-        let entries = self
-            .executor
-            .spawn(async move { read_dir_entries(path) })
-            .await?;
+        let entries = self.executor.spawn(async move { read_dir_entries(path) }).await?;
         Ok(Box::pin(iter(entries)))
     }
 
@@ -922,14 +823,8 @@ impl Fs for RealFs {
         &self,
         path: &Path,
         latency: Duration,
-    ) -> (
-        Pin<Box<dyn Send + Stream<Item = Vec<PathEvent>>>>,
-        Arc<dyn Watcher>,
-    ) {
-        let this = self
-            .this
-            .upgrade()
-            .expect("RealFs is only constructed inside an Arc");
+    ) -> (Pin<Box<dyn Send + Stream<Item = Vec<PathEvent>>>>, Arc<dyn Watcher>) {
+        let this = self.this.upgrade().expect("RealFs is only constructed inside an Arc");
         fs_watcher::watch(
             this,
             self.native_watcher.clone(),
@@ -941,11 +836,7 @@ impl Fs for RealFs {
         .await
     }
 
-    fn open_repo(
-        &self,
-        dotgit_path: &Path,
-        git_binary_path: Option<&Path>,
-    ) -> Result<Arc<dyn GitRepository>> {
+    fn open_repo(&self, dotgit_path: &Path, git_binary_path: Option<&Path>) -> Result<Arc<dyn GitRepository>> {
         Ok(Arc::new(RealGitRepository::new(
             dotgit_path,
             git_binary_path.map(|path| path.to_path_buf()),
@@ -953,14 +844,10 @@ impl Fs for RealFs {
         )?))
     }
 
-    async fn git_init(
-        &self,
-        abs_work_directory_path: &Path,
-        fallback_branch_name: String,
-    ) -> Result<()> {
+    async fn git_init(&self, abs_work_directory_path: &Path, fallback_branch_name: String) -> Result<()> {
         let result = new_command("git")
             .current_dir(abs_work_directory_path)
-            .args(&["config", "--global", "--get", "init.defaultBranch"])
+            .args(["config", "--global", "--get", "init.defaultBranch"])
             .output()
             .await;
 
@@ -974,7 +861,7 @@ impl Fs for RealFs {
 
         new_command("git")
             .current_dir(abs_work_directory_path)
-            .args(&["init", "-b"])
+            .args(["init", "-b"])
             .arg(branch_name.trim())
             .output()
             .await?;
@@ -984,11 +871,8 @@ impl Fs for RealFs {
 
     async fn git_clone(&self, abs_work_directory: &Path, repo_url: &str) -> Result<()> {
         let job_id = self.next_job_id.fetch_add(1, Ordering::SeqCst);
-        let job_info = JobInfo {
-            id: job_id,
-            start: Instant::now(),
-            message: SharedString::from(format!("Cloning {}", repo_url)),
-        };
+        let job_info =
+            JobInfo { id: job_id, start: Instant::now(), message: SharedString::from(format!("Cloning {}", repo_url)) };
 
         let job_tracker = JobTracker::new(job_info, self.job_event_subscribers.clone());
         let mut child = new_command("git")
@@ -1004,10 +888,7 @@ impl Fs for RealFs {
             .stderr(Stdio::piped())
             .kill_on_drop(true)
             .spawn()?;
-        let stderr = child
-            .stderr
-            .take()
-            .context("failed to read git clone progress")?;
+        let stderr = child.stderr.take().context("failed to read git clone progress")?;
         let stderr_output = git_clone_progress::read(stderr, |message| {
             job_tracker.update(message.into());
         })
@@ -1015,10 +896,7 @@ impl Fs for RealFs {
         let status = child.status().await?;
 
         if !status.success() {
-            anyhow::bail!(
-                "git clone failed: {}",
-                git_clone_progress::failure_message(&stderr_output)
-            );
+            anyhow::bail!("git clone failed: {}", git_clone_progress::failure_message(&stderr_output));
         }
 
         Ok(())
@@ -1072,10 +950,7 @@ impl Fs for RealFs {
             let test_file_1 = temp_dir.path().join("case_sensitivity_test.tmp");
             let test_file_2 = temp_dir.path().join("CASE_SENSITIVITY_TEST.TMP");
 
-            let create_opts = CreateOptions {
-                overwrite: false,
-                ignore_if_exists: false,
-            };
+            let create_opts = CreateOptions { overwrite: false, ignore_if_exists: false };
 
             // Create file1
             self.create_file(&test_file_1, create_opts).await?;
@@ -1085,11 +960,7 @@ impl Fs for RealFs {
                 Ok(_) => Ok(true),
                 Err(e) => {
                     if let Some(io_error) = e.downcast_ref::<io::Error>() {
-                        if io_error.kind() == io::ErrorKind::AlreadyExists {
-                            Ok(false)
-                        } else {
-                            Err(e)
-                        }
+                        if io_error.kind() == io::ErrorKind::AlreadyExists { Ok(false) } else { Err(e) }
                     } else {
                         Err(e)
                     }
@@ -1098,37 +969,24 @@ impl Fs for RealFs {
 
             temp_dir.close()?;
             case_sensitive
-        }).await.unwrap_or_else(|e| {
+        })
+        .await
+        .unwrap_or_else(|e| {
             log::error!(
                 "Failed to determine whether filesystem is case sensitive (falling back to true) due to error: {e:#}"
             );
             true
         });
-        self.is_case_sensitive.store(
-            if res {
-                CASE_SENSITIVE
-            } else {
-                NOT_CASE_SENSITIVE
-            },
-            Ordering::Release,
-        );
+        self.is_case_sensitive.store(if res { CASE_SENSITIVE } else { NOT_CASE_SENSITIVE }, Ordering::Release);
         res
     }
 
     fn original_path_for_trash_id(&self, trash_id: TrashId) -> Option<PathBuf> {
-        self.trash
-            .lock()
-            .get(trash_id)
-            .map(|entry| entry.original_parent.join(&entry.name))
+        self.trash.lock().get(trash_id).map(|entry| entry.original_parent.join(&entry.name))
     }
 
     async fn restore(&self, trash_id: TrashId) -> std::result::Result<PathBuf, TrashRestoreError> {
-        let trashed_entry = self
-            .trash
-            .lock()
-            .get(trash_id)
-            .cloned()
-            .ok_or(TrashRestoreError::AlreadyRestored)?;
+        let trashed_entry = self.trash.lock().get(trash_id).cloned().ok_or(TrashRestoreError::AlreadyRestored)?;
 
         let restored_item_path = trashed_entry.original_parent.join(&trashed_entry.name);
 
@@ -1167,11 +1025,8 @@ pub async fn copy_recursive<'a>(
         let Ok(item_relative_path) = item.strip_prefix(source) else {
             continue;
         };
-        let target_item = if item_relative_path == Path::new("") {
-            target.to_path_buf()
-        } else {
-            target.join(item_relative_path)
-        };
+        let target_item =
+            if item_relative_path == Path::new("") { target.to_path_buf() } else { target.join(item_relative_path) };
         if is_dir {
             if !options.overwrite && fs.metadata(&target_item).await.is_ok_and(|m| m.is_some()) {
                 if options.ignore_if_exists {
@@ -1180,15 +1035,7 @@ pub async fn copy_recursive<'a>(
                     anyhow::bail!("{target_item:?} already exists");
                 }
             }
-            let _ = fs
-                .remove_dir(
-                    &target_item,
-                    RemoveOptions {
-                        recursive: true,
-                        ignore_if_not_exists: true,
-                    },
-                )
-                .await;
+            let _ = fs.remove_dir(&target_item, RemoveOptions { recursive: true, ignore_if_not_exists: true }).await;
             fs.create_dir(&target_item).await?;
         } else {
             fs.copy_file(&item, &target_item, options).await?;
@@ -1214,10 +1061,7 @@ fn read_recursive<'a>(
     use futures::future::FutureExt;
 
     async move {
-        let metadata = fs
-            .metadata(source)
-            .await?
-            .with_context(|| format!("path does not exist: {source:?}"))?;
+        let metadata = fs.metadata(source).await?.with_context(|| format!("path does not exist: {source:?}"))?;
 
         if metadata.is_dir {
             output.push((source.to_path_buf(), true));

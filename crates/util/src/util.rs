@@ -19,26 +19,26 @@ pub mod serde;
 pub mod size;
 pub mod time;
 
-use anyhow::Result;
-use itertools::Either;
-use regex::Regex;
+use std::borrow::Cow;
+use std::cmp::Ordering;
+use std::cmp::{self};
+use std::ops::Range;
+use std::ops::RangeInclusive;
 use std::path::PathBuf;
 use std::sync::LazyLock;
-use std::{
-    borrow::Cow,
-    cmp::{self, Ordering},
-    ops::{Range, RangeInclusive},
-};
-use unicase::UniCase;
 
+use anyhow::Result;
 pub use gpui_util::*;
+use itertools::Either;
 pub use path::PathExt;
 pub use path::normalize_path;
 pub use path::rel_path;
+use regex::Regex;
+use unicase::UniCase;
 
-pub use self::shell::{
-    get_default_system_shell, get_default_system_shell_preferring_bash, get_system_shell,
-};
+pub use self::shell::get_default_system_shell;
+pub use self::shell::get_default_system_shell_preferring_bash;
+pub use self::shell::get_system_shell;
 
 pub fn truncate(s: &str, max_chars: usize) -> &str {
     match s.char_indices().nth(max_chars) {
@@ -98,10 +98,7 @@ pub fn truncate_and_remove_front(s: &str, max_chars: usize) -> String {
         return s.to_string();
     }
     let suffix_char_length = max_chars.saturating_sub(1);
-    let truncation_ix = s
-        .char_indices()
-        .map(|(i, _)| i)
-        .nth_back(suffix_char_length);
+    let truncation_ix = s.char_indices().map(|(i, _)| i).nth_back(suffix_char_length);
     match truncation_ix {
         Some(index) if index > 0 => "…".to_string() + &s[index..],
         _ => s.to_string(),
@@ -203,15 +200,13 @@ Error: Running Zed as root or via sudo is unsupported.
 /// Call during startup, before spawning children that will inherit the limit.
 pub fn increase_open_file_limit() -> Result<()> {
     use anyhow::Context as _;
-    use nix::sys::resource::{Resource::RLIMIT_NOFILE, getrlimit, setrlimit};
+    use nix::sys::resource::Resource::RLIMIT_NOFILE;
+    use nix::sys::resource::getrlimit;
+    use nix::sys::resource::setrlimit;
 
     let (soft_limit, hard_limit) = getrlimit(RLIMIT_NOFILE).context("getrlimit(RLIMIT_NOFILE)")?;
     // These are startup targets, not OS ceilings. Preserve higher inherited limits.
-    let target = if cfg!(target_os = "macos") {
-        10_240
-    } else {
-        65_536
-    };
+    let target = if cfg!(target_os = "macos") { 10_240 } else { 65_536 };
     let mut requested_limit = hard_limit.min(target);
 
     while requested_limit > soft_limit {
@@ -242,25 +237,14 @@ fn load_shell_from_passwd() -> Result<()> {
 
     let uid = unsafe { libc::getuid() };
     let status = unsafe {
-        libc::getpwuid_r(
-            uid,
-            pwd.as_mut_ptr(),
-            buffer.as_mut_ptr() as *mut libc::c_char,
-            buflen,
-            &mut result,
-        )
+        libc::getpwuid_r(uid, pwd.as_mut_ptr(), buffer.as_mut_ptr() as *mut libc::c_char, buflen, &raw mut result)
     };
     anyhow::ensure!(!result.is_null(), "passwd entry for uid {} not found", uid);
 
     // SAFETY: If `getpwuid_r` doesn't error, we have the entry here.
     let entry = unsafe { pwd.assume_init() };
 
-    anyhow::ensure!(
-        status == 0,
-        "call to getpwuid_r failed. uid: {}, status: {}",
-        uid,
-        status
-    );
+    anyhow::ensure!(status == 0, "call to getpwuid_r failed. uid: {}, status: {}", uid, status);
     anyhow::ensure!(
         entry.pw_uid == uid,
         "passwd entry has different uid ({}) than getuid ({}) returned",
@@ -269,15 +253,11 @@ fn load_shell_from_passwd() -> Result<()> {
     );
 
     let shell = unsafe { std::ffi::CStr::from_ptr(entry.pw_shell).to_str().unwrap() };
-    let should_set_shell = std::env::var("SHELL").map_or(true, |shell_env| {
-        shell_env != shell && !std::path::Path::new(&shell_env).exists()
-    });
+    let should_set_shell = std::env::var("SHELL")
+        .map_or(true, |shell_env| shell_env != shell && !std::path::Path::new(&shell_env).exists());
 
     if should_set_shell {
-        log::info!(
-            "updating SHELL environment variable to value from passwd entry: {:?}",
-            shell,
-        );
+        log::info!("updating SHELL environment variable to value from passwd entry: {:?}", shell,);
         unsafe { std::env::set_var("SHELL", shell) };
     }
 
@@ -288,34 +268,25 @@ fn load_shell_from_passwd() -> Result<()> {
 pub fn get_shell_safe_zed_path(shell_kind: shell::ShellKind) -> anyhow::Result<String> {
     use anyhow::Context as _;
     use paths::PathExt;
-    let mut zed_path =
-        std::env::current_exe().context("Failed to determine current zed executable path.")?;
+    let mut zed_path = std::env::current_exe().context("Failed to determine current zed executable path.")?;
     if cfg!(target_os = "linux")
         && !zed_path.is_file()
-        && let Some(truncated) = zed_path
-            .clone()
-            .file_name()
-            .and_then(|s| s.to_str())
-            .and_then(|n| n.strip_suffix(" (deleted)"))
+        && let Some(truncated) =
+            zed_path.clone().file_name().and_then(|s| s.to_str()).and_then(|n| n.strip_suffix(" (deleted)"))
     {
         // Might have been deleted during update; let's use the new binary if there is one.
         zed_path.set_file_name(truncated);
     }
 
-    zed_path
-        .try_shell_safe(shell_kind)
-        .context("Failed to shell-escape Zed executable path.")
+    zed_path.try_shell_safe(shell_kind).context("Failed to shell-escape Zed executable path.")
 }
 
 /// Returns a path for the zed cli executable, this function
 /// should be called from the zed executable, not zed-cli.
 pub fn get_zed_cli_path() -> Result<PathBuf> {
     use anyhow::Context as _;
-    let zed_path =
-        std::env::current_exe().context("Failed to determine current zed executable path.")?;
-    let parent = zed_path
-        .parent()
-        .context("Failed to determine parent directory of zed executable path.")?;
+    let zed_path = std::env::current_exe().context("Failed to determine current zed executable path.")?;
+    let parent = zed_path.parent().context("Failed to determine parent directory of zed executable path.")?;
 
     let possible_locations: &[&str] = {
         // On macOS, the zed executable and zed-cli are inside the app bundle,
@@ -325,19 +296,8 @@ pub fn get_zed_cli_path() -> Result<PathBuf> {
 
     possible_locations
         .iter()
-        .find_map(|p| {
-            parent
-                .join(p)
-                .canonicalize()
-                .ok()
-                .filter(|p| p != &zed_path)
-        })
-        .with_context(|| {
-            format!(
-                "could not find zed-cli from any of: {}",
-                possible_locations.join(", ")
-            )
-        })
+        .find_map(|p| parent.join(p).canonicalize().ok().filter(|p| p != &zed_path))
+        .with_context(|| format!("could not find zed-cli from any of: {}", possible_locations.join(", ")))
 }
 
 pub async fn load_login_shell_environment() -> Result<()> {
@@ -377,9 +337,7 @@ pub async fn load_login_shell_environment() -> Result<()> {
 /// of the terminal.
 ///
 /// For more details: <https://registerspill.thorstenball.com/p/how-to-lose-control-of-your-shell>
-pub fn set_pre_exec_to_start_new_session(
-    command: &mut std::process::Command,
-) -> &mut std::process::Command {
+pub fn set_pre_exec_to_start_new_session(command: &mut std::process::Command) -> &mut std::process::Command {
     // safety: code in pre_exec should be signal safe.
     // https://man7.org/linux/man-pages/man7/signal-safety.7.html
 
@@ -393,10 +351,7 @@ pub fn set_pre_exec_to_start_new_session(
     command
 }
 
-pub fn merge_json_lenient_value_into(
-    source: serde_json_lenient::Value,
-    target: &mut serde_json_lenient::Value,
-) {
+pub fn merge_json_lenient_value_into(source: serde_json_lenient::Value, target: &mut serde_json_lenient::Value) {
     match (source, target) {
         (serde_json_lenient::Value::Object(source), serde_json_lenient::Value::Object(target)) => {
             for (key, value) in source {
@@ -578,19 +533,11 @@ pub fn dev_repo_root() -> Option<&'static std::path::Path> {
     static ROOT: std::sync::OnceLock<Option<PathBuf>> = std::sync::OnceLock::new();
     ROOT.get_or_init(|| {
         let exe = std::env::current_exe().ok();
-        let candidates = [
-            exe.clone(),
-            exe.and_then(|exe| exe.canonicalize().ok()),
-            std::env::current_dir().ok(),
-        ];
-        candidates.into_iter().flatten().find_map(|start| {
-            Some(
-                start
-                    .ancestors()
-                    .find(|dir| dir.join(".git").exists())?
-                    .to_path_buf(),
-            )
-        })
+        let candidates = [exe.clone(), exe.and_then(|exe| exe.canonicalize().ok()), std::env::current_dir().ok()];
+        candidates
+            .into_iter()
+            .flatten()
+            .find_map(|start| Some(start.ancestors().find(|dir| dir.join(".git").exists())?.to_path_buf()))
     })
     .as_deref()
 }
@@ -600,7 +547,12 @@ pub fn dev_repo_root() -> Option<&'static std::path::Path> {
 /// detail). Hidden from the public API.
 #[doc(hidden)]
 pub mod __rust_embed {
-    pub use rust_embed::{EmbeddedFile, Filenames, Metadata, RustEmbed, flate, utils};
+    pub use rust_embed::EmbeddedFile;
+    pub use rust_embed::Filenames;
+    pub use rust_embed::Metadata;
+    pub use rust_embed::RustEmbed;
+    pub use rust_embed::flate;
+    pub use rust_embed::utils;
 }
 
 /// Backs the dev arm of [`fs_embed!`]'s `iter`: every file under the root-relative
@@ -618,9 +570,7 @@ pub fn __fs_embed_iter(
         Some(root) => {
             let matcher = rust_embed::utils::PathMatcher::new(includes, excludes);
             let root = root.join(root_relative).to_string_lossy().into_owned();
-            rust_embed::utils::get_files(root, matcher)
-                .map(|entry| entry.rel_path)
-                .collect()
+            rust_embed::utils::get_files(root, matcher).map(|entry| entry.rel_path).collect()
         }
         None => Vec::new(),
     };
@@ -642,9 +592,8 @@ pub fn __fs_embed_get(
     if !matcher.is_path_included(file_path) {
         return None;
     }
-    let root = dev_repo_root()
-        .expect("dev asset loading requires running from within the checkout")
-        .join(root_relative);
+    let root =
+        dev_repo_root().expect("dev asset loading requires running from within the checkout").join(root_relative);
     rust_embed::utils::read_file_from_fs(&root.join(file_path)).ok()
 }
 
@@ -807,15 +756,13 @@ impl<'a> NumericPrefixWithSuffix<'a> {
 impl Ord for NumericPrefixWithSuffix<'_> {
     fn cmp(&self, other: &Self) -> Ordering {
         match (self.0, other.0) {
-            (None, None) => UniCase::new(self.1)
-                .cmp(&UniCase::new(other.1))
-                .then_with(|| self.1.cmp(other.1).reverse()),
+            (None, None) => {
+                UniCase::new(self.1).cmp(&UniCase::new(other.1)).then_with(|| self.1.cmp(other.1).reverse())
+            }
             (None, Some(_)) => Ordering::Greater,
             (Some(_), None) => Ordering::Less,
             (Some(a), Some(b)) => a.cmp(&b).then_with(|| {
-                UniCase::new(self.1)
-                    .cmp(&UniCase::new(other.1))
-                    .then_with(|| self.1.cmp(other.1).reverse())
+                UniCase::new(self.1).cmp(&UniCase::new(other.1)).then_with(|| self.1.cmp(other.1).reverse())
             }),
         }
     }
@@ -828,8 +775,7 @@ impl PartialOrd for NumericPrefixWithSuffix<'_> {
 }
 
 fn emoji_regex() -> &'static Regex {
-    static EMOJI_REGEX: LazyLock<Regex> =
-        LazyLock::new(|| Regex::new("(\\p{Emoji}|\u{200D})").unwrap());
+    static EMOJI_REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new("(\\p{Emoji}|\u{200D})").unwrap());
     &EMOJI_REGEX
 }
 
@@ -848,10 +794,7 @@ pub fn word_consists_of_emojis(s: &str) -> bool {
 
 /// Similar to `str::split`, but also provides byte-offset ranges of the results. Unlike
 /// `str::split`, this is not generic on pattern types and does not return an `Iterator`.
-pub fn split_str_with_ranges<'s>(
-    s: &'s str,
-    pat: &dyn Fn(char) -> bool,
-) -> Vec<(Range<usize>, &'s str)> {
+pub fn split_str_with_ranges<'s>(s: &'s str, pat: &dyn Fn(char) -> bool) -> Vec<(Range<usize>, &'s str)> {
     let mut result = Vec::new();
     let mut start = 0;
 

@@ -4,37 +4,58 @@ mod line;
 mod line_layout;
 mod line_wrapper;
 
+use core::fmt;
+use std::borrow::Cow;
+use std::cmp;
+use std::collections::VecDeque;
+use std::fmt::Debug;
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::ops::Deref;
+use std::ops::DerefMut;
+use std::ops::Range;
+use std::sync::Arc;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering;
+
+use anyhow::Context as _;
+use anyhow::anyhow;
+use collections::FxHashMap;
+use collections::FxHashSet;
+use derive_more::Add;
+use derive_more::Deref;
+use derive_more::FromStr;
+use derive_more::Sub;
 pub use font_fallbacks::*;
 pub use font_features::*;
+use itertools::Itertools;
 pub use line::*;
 pub use line_layout::*;
 pub use line_wrapper::*;
+use parking_lot::Mutex;
+use parking_lot::RwLock;
+use parking_lot::RwLockUpgradableReadGuard;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
+use smallvec::SmallVec;
+use smallvec::smallvec;
 
-use crate::{
-    Bounds, DevicePixels, Hsla, Pixels, PlatformTextSystem, Point, Result, SharedString, Size,
-    StrikethroughStyle, TextRenderingMode, UnderlineStyle, px,
-};
-use anyhow::{Context as _, anyhow};
-use collections::{FxHashMap, FxHashSet};
-use core::fmt;
-use derive_more::{Add, Deref, FromStr, Sub};
-use itertools::Itertools;
-use parking_lot::{Mutex, RwLock, RwLockUpgradableReadGuard};
-use smallvec::{SmallVec, smallvec};
-use std::{
-    borrow::Cow,
-    cmp,
-    collections::VecDeque,
-    fmt::{Debug, Display, Formatter},
-    hash::{Hash, Hasher},
-    ops::{Deref, DerefMut, Range},
-    sync::{
-        Arc,
-        atomic::{AtomicUsize, Ordering},
-    },
-};
+use crate::Bounds;
+use crate::DevicePixels;
+use crate::Hsla;
+use crate::Pixels;
+use crate::PlatformTextSystem;
+use crate::Point;
+use crate::Result;
+use crate::SharedString;
+use crate::Size;
+use crate::StrikethroughStyle;
+use crate::TextRenderingMode;
+use crate::UnderlineStyle;
+use crate::px;
 
 /// An opaque identifier for a specific font.
 #[derive(Hash, PartialEq, Eq, Clone, Copy, Debug)]
@@ -80,11 +101,8 @@ pub struct MissingGlyph {
 
 impl MissingGlyph {
     /// Creates a missing-glyph report.
-    pub fn new(grapheme: SharedString, font_class: FallbackFontClass) -> Self {
-        Self {
-            grapheme,
-            font_class,
-        }
+    pub const fn new(grapheme: SharedString, font_class: FallbackFontClass) -> Self {
+        Self { grapheme, font_class }
     }
 
     /// Returns the unresolved grapheme cluster.
@@ -93,7 +111,7 @@ impl MissingGlyph {
     }
 
     /// Returns the spacing behavior required of a fallback font.
-    pub fn font_class(&self) -> FallbackFontClass {
+    pub const fn font_class(&self) -> FallbackFontClass {
         self.font_class
     }
 }
@@ -140,10 +158,7 @@ impl MissingGlyphSink for MissingGlyphReporter {
         // Repetitions within a line must not fill the queue before its other
         // missing glyphs. Cross-report deduplication belongs to the receiver.
         for missing_glyph in missing_glyphs.into_iter().unique() {
-            let queued = QueuedMissingGlyph {
-                generation,
-                missing_glyph,
-            };
+            let queued = QueuedMissingGlyph { generation, missing_glyph };
             if self.sender.try_send(queued).is_err() {
                 break;
             }
@@ -170,9 +185,7 @@ impl MissingGlyphReceiver {
     /// # Errors
     ///
     /// Returns [`async_channel::RecvError`] if the reporting channel is closed.
-    pub(crate) async fn recv(
-        &mut self,
-    ) -> std::result::Result<Vec<MissingGlyph>, async_channel::RecvError> {
+    pub(crate) async fn recv(&mut self) -> std::result::Result<Vec<MissingGlyph>, async_channel::RecvError> {
         loop {
             let queued = self.receiver.recv().await?;
             let mut missing_glyphs = Vec::new();
@@ -185,14 +198,10 @@ impl MissingGlyphReceiver {
                     self.state.reset(generation);
                     missing_glyphs.clear();
                 }
-                if queued.generation != generation
-                    || !self.state.reported.insert(queued.missing_glyph.clone())
-                {
+                if queued.generation != generation || !self.state.reported.insert(queued.missing_glyph.clone()) {
                     continue;
                 }
-                self.state
-                    .reported_order
-                    .push_back(queued.missing_glyph.clone());
+                self.state.reported_order.push_back(queued.missing_glyph.clone());
                 missing_glyphs.push(queued.missing_glyph);
                 if self.state.reported.len() > MAX_REPORTED_MISSING_GLYPHS
                     && let Some(expired) = self.state.reported_order.pop_front()
@@ -302,14 +311,11 @@ impl TextSystem {
     /// Only one receiver is available for each text system. Returns `None` when
     /// the receiver was already taken or another caller is taking it.
     pub(crate) fn take_missing_glyph_receiver(&self) -> Option<MissingGlyphReceiver> {
-        self.missing_glyph_receiver
-            .try_lock()
-            .and_then(|mut receiver| receiver.take())
+        self.missing_glyph_receiver.try_lock().and_then(|mut receiver| receiver.take())
     }
 
     pub(crate) fn enable_missing_glyph_reporting(&self) {
-        self.platform_text_system
-            .set_missing_glyph_sink(Some(self.missing_glyph_reporter.clone()));
+        self.platform_text_system.set_missing_glyph_sink(Some(self.missing_glyph_reporter.clone()));
     }
 
     pub(crate) fn disable_missing_glyph_reporting(&self) {
@@ -326,18 +332,12 @@ impl TextSystem {
             }
         }
 
-        let font_id = self
-            .font_ids_by_font
-            .read()
-            .get(font)
-            .map(clone_font_id_result);
+        let font_id = self.font_ids_by_font.read().get(font).map(clone_font_id_result);
         if let Some(font_id) = font_id {
             font_id
         } else {
             let font_id = self.platform_text_system.font_id(font);
-            self.font_ids_by_font
-                .write()
-                .insert(font.clone(), clone_font_id_result(&font_id));
+            self.font_ids_by_font.write().insert(font.clone(), clone_font_id_result(&font_id));
             font_id
         }
     }
@@ -372,10 +372,7 @@ impl TextSystem {
         panic!(
             "failed to resolve font '{}' or any of the fallbacks: {}",
             font.family,
-            self.fallback_font_stack
-                .iter()
-                .map(|fallback| &fallback.family)
-                .join(", ")
+            self.fallback_font_stack.iter().map(|fallback| &fallback.family).join(", ")
         );
     }
 
@@ -403,22 +400,13 @@ impl TextSystem {
     }
 
     /// Get the typographic bounds for the given character, in the given font and size.
-    pub fn typographic_bounds(
-        &self,
-        font_id: FontId,
-        font_size: Pixels,
-        character: char,
-    ) -> Result<Bounds<Pixels>> {
+    pub fn typographic_bounds(&self, font_id: FontId, font_size: Pixels, character: char) -> Result<Bounds<Pixels>> {
         let glyph_id = self
             .platform_text_system
             .glyph_for_char(font_id, character)
             .with_context(|| format!("glyph not found for character '{character}'"))?;
-        let bounds = self
-            .platform_text_system
-            .typographic_bounds(font_id, glyph_id)?;
-        Ok(self.read_metrics(font_id, |metrics| {
-            (bounds / metrics.units_per_em as f32 * font_size.0).map(px)
-        }))
+        let bounds = self.platform_text_system.typographic_bounds(font_id, glyph_id)?;
+        Ok(self.read_metrics(font_id, |metrics| (bounds / metrics.units_per_em as f32 * font_size.0).map(px)))
     }
 
     /// Get the advance width for the given character, in the given font and size.
@@ -427,8 +415,7 @@ impl TextSystem {
             .platform_text_system
             .glyph_for_char(font_id, ch)
             .with_context(|| format!("glyph not found for character '{ch}'"))?;
-        let result = self.platform_text_system.advance(font_id, glyph_id)?
-            / self.units_per_em(font_id) as f32;
+        let result = self.platform_text_system.advance(font_id, glyph_id)? / self.units_per_em(font_id) as f32;
 
         Ok(result * font_size)
     }
@@ -438,16 +425,7 @@ impl TextSystem {
     pub fn layout_width(&self, font_id: FontId, font_size: Pixels, ch: char) -> Pixels {
         let mut buffer = [0; 4];
         let buffer = ch.encode_utf8(&mut buffer);
-        self.platform_text_system
-            .layout_line(
-                buffer,
-                font_size,
-                &[FontRun {
-                    len: buffer.len(),
-                    font_id,
-                }],
-            )
-            .width
+        self.platform_text_system.layout_line(buffer, font_size, &[FontRun { len: buffer.len(), font_id }]).width
     }
 
     /// Returns the width of an `em`.
@@ -507,12 +485,7 @@ impl TextSystem {
     }
 
     /// Get the recommended baseline offset for the given font and line height.
-    pub fn baseline_offset(
-        &self,
-        font_id: FontId,
-        font_size: Pixels,
-        line_height: Pixels,
-    ) -> Pixels {
+    pub fn baseline_offset(&self, font_id: FontId, font_size: Pixels, line_height: Pixels) -> Pixels {
         let ascent = self.ascent(font_id, font_size);
         let descent = self.descent(font_id, font_size);
         let padding_top = (line_height - ascent - descent) / 2.;
@@ -526,9 +499,7 @@ impl TextSystem {
             read(metrics)
         } else {
             let mut lock = RwLockUpgradableReadGuard::upgrade(lock);
-            let metrics = lock
-                .entry(font_id)
-                .or_insert_with(|| self.platform_text_system.font_metrics(font_id));
+            let metrics = lock.entry(font_id).or_insert_with(|| self.platform_text_system.font_metrics(font_id));
             read(metrics)
         }
     }
@@ -537,17 +508,10 @@ impl TextSystem {
     pub fn line_wrapper(self: &Arc<Self>, font: Font, font_size: Pixels) -> LineWrapperHandle {
         let lock = &mut self.wrapper_pool.lock();
         let font_id = self.resolve_font(&font);
-        let wrappers = lock
-            .entry(FontIdWithSize { font_id, font_size })
-            .or_default();
-        let wrapper = wrappers
-            .pop()
-            .unwrap_or_else(|| LineWrapper::new(font_id, font_size, self.clone()));
+        let wrappers = lock.entry(FontIdWithSize { font_id, font_size }).or_default();
+        let wrapper = wrappers.pop().unwrap_or_else(|| LineWrapper::new(font_id, font_size, self.clone()));
 
-        LineWrapperHandle {
-            wrapper: Some(wrapper),
-            text_system: self.clone(),
-        }
+        LineWrapperHandle { wrapper: Some(wrapper), text_system: self.clone() }
     }
 
     /// Get the rasterized size and location of a specific, rendered glyph.
@@ -563,13 +527,9 @@ impl TextSystem {
         }
     }
 
-    pub(crate) fn rasterize_glyph(
-        &self,
-        params: &RenderGlyphParams,
-    ) -> Result<(Size<DevicePixels>, Vec<u8>)> {
+    pub(crate) fn rasterize_glyph(&self, params: &RenderGlyphParams) -> Result<(Size<DevicePixels>, Vec<u8>)> {
         let raster_bounds = self.raster_bounds(params)?;
-        self.platform_text_system
-            .rasterize_glyph(params, raster_bounds)
+        self.platform_text_system.rasterize_glyph(params, raster_bounds)
     }
 
     /// Returns the dilation level to use for a glyph painted in the given color.
@@ -579,13 +539,8 @@ impl TextSystem {
 
     /// Returns the text rendering mode recommended by the platform for the given font and size.
     /// The return value will never be [`TextRenderingMode::PlatformDefault`].
-    pub(crate) fn recommended_rendering_mode(
-        &self,
-        font_id: FontId,
-        font_size: Pixels,
-    ) -> TextRenderingMode {
-        self.platform_text_system
-            .recommended_rendering_mode(font_id, font_size)
+    pub(crate) fn recommended_rendering_mode(&self, font_id: FontId, font_size: Pixels) -> TextRenderingMode {
+        self.platform_text_system.recommended_rendering_mode(font_id, font_size)
     }
 }
 
@@ -634,10 +589,7 @@ impl WindowTextSystem {
         runs: &[TextRun],
         force_width: Option<Pixels>,
     ) -> ShapedLine {
-        debug_assert!(
-            text.find('\n').is_none(),
-            "text argument should not contain newlines"
-        );
+        debug_assert!(text.find('\n').is_none(), "text argument should not contain newlines");
 
         let mut decoration_runs = SmallVec::<[DecorationRun; 32]>::new();
         for run in runs {
@@ -661,11 +613,7 @@ impl WindowTextSystem {
 
         let layout = self.layout_line(&text, font_size, runs, force_width);
 
-        ShapedLine {
-            layout,
-            text,
-            decoration_runs,
-        }
+        ShapedLine { layout, text, decoration_runs }
     }
 
     /// Shape the given line using a caller-provided content hash as the cache key.
@@ -708,32 +656,18 @@ impl WindowTextSystem {
         }
 
         let mut used_force_width = force_width;
-        let layout = self.layout_line_by_hash(
-            text_hash,
-            text_len,
-            font_size,
-            runs,
-            used_force_width,
-            || {
-                let text = materialize_text();
-                debug_assert!(
-                    text.find('\n').is_none(),
-                    "text argument should not contain newlines"
-                );
-                text
-            },
-        );
+        let layout = self.layout_line_by_hash(text_hash, text_len, font_size, runs, used_force_width, || {
+            let text = materialize_text();
+            debug_assert!(text.find('\n').is_none(), "text argument should not contain newlines");
+            text
+        });
 
         // We only materialize actual text on cache miss; on hit we avoid allocations.
         // Since `ShapedLine` carries a `SharedString`, use an empty placeholder for hits.
         // NOTE: Callers must not rely on `ShapedLine.text` for content when using this API.
         let text: SharedString = SharedString::new_static("");
 
-        ShapedLine {
-            layout,
-            text,
-            decoration_runs,
-        }
+        ShapedLine { layout, text, decoration_runs }
     }
 
     /// Shape a multi line string of text, at the given font_size, for painting to the screen.
@@ -793,10 +727,7 @@ impl WindowTextSystem {
                 {
                     font_run.len += run_len_within_line;
                 } else {
-                    font_runs.push(FontRun {
-                        len: run_len_within_line,
-                        font_id,
-                    });
+                    font_runs.push(FontRun { len: run_len_within_line, font_id });
                 }
 
                 // Preserve the remainder of the run for the next line
@@ -816,11 +747,7 @@ impl WindowTextSystem {
             );
             wrapped_lines += layout.wrap_boundaries.len();
 
-            lines.push(WrappedLine {
-                layout,
-                decoration_runs,
-                text: line_text,
-            });
+            lines.push(WrappedLine { layout, decoration_runs, text: line_text });
 
             // Skip `\n` character.
             if let Some(run) = runs.peek_mut() {
@@ -838,24 +765,12 @@ impl WindowTextSystem {
             && let Some(second_line) = split_lines.next()
         {
             let mut line_start = 0;
-            process_line(
-                SharedString::new(first_line),
-                line_start,
-                line_start + first_line.len(),
-            );
+            process_line(SharedString::new(first_line), line_start, line_start + first_line.len());
             line_start += first_line.len() + '\n'.len_utf8();
-            process_line(
-                SharedString::new(second_line),
-                line_start,
-                line_start + second_line.len(),
-            );
+            process_line(SharedString::new(second_line), line_start, line_start + second_line.len());
             for line_text in split_lines {
                 line_start += line_text.len() + '\n'.len_utf8();
-                process_line(
-                    SharedString::new(line_text),
-                    line_start,
-                    line_start + line_text.len(),
-                );
+                process_line(SharedString::new(line_text), line_start, line_start + line_text.len());
             }
         } else {
             let end = text.len();
@@ -907,19 +822,11 @@ impl WindowTextSystem {
             {
                 font_run.len += run.len;
             } else {
-                font_runs.push(FontRun {
-                    len: run.len,
-                    font_id,
-                });
+                font_runs.push(FontRun { len: run.len, font_id });
             }
         }
 
-        let layout = self.line_layout_cache.layout_line(
-            &SharedString::new(text),
-            font_size,
-            &font_runs,
-            force_width,
-        );
+        let layout = self.line_layout_cache.layout_line(SharedString::new(text), font_size, &font_runs, force_width);
 
         self.font_runs_pool.lock().push(font_runs);
 
@@ -930,17 +837,7 @@ impl WindowTextSystem {
     pub fn layout_width(&self, font_id: FontId, font_size: Pixels, ch: char) -> Pixels {
         let mut buffer = [0; 4];
         let buffer: &_ = ch.encode_utf8(&mut buffer);
-        self.line_layout_cache
-            .layout_line(
-                buffer,
-                font_size,
-                &[FontRun {
-                    len: buffer.len(),
-                    font_id,
-                }],
-                None,
-            )
-            .width
+        self.line_layout_cache.layout_line(buffer, font_size, &[FontRun { len: buffer.len(), font_id }], None).width
     }
 
     /// Returns the shaped layout width of an `em`.
@@ -989,20 +886,12 @@ impl WindowTextSystem {
             {
                 font_run.len += run.len;
             } else {
-                font_runs.push(FontRun {
-                    len: run.len,
-                    font_id,
-                });
+                font_runs.push(FontRun { len: run.len, font_id });
             }
         }
 
-        let layout = self.line_layout_cache.try_layout_line_by_hash(
-            text_hash,
-            text_len,
-            font_size,
-            &font_runs,
-            force_width,
-        );
+        let layout =
+            self.line_layout_cache.try_layout_line_by_hash(text_hash, text_len, font_size, &font_runs, force_width);
 
         self.font_runs_pool.lock().push(font_runs);
 
@@ -1051,10 +940,7 @@ impl WindowTextSystem {
             {
                 font_run.len += run.len;
             } else {
-                font_runs.push(FontRun {
-                    len: run.len,
-                    font_id,
-                });
+                font_runs.push(FontRun { len: run.len, font_id });
             }
         }
 
@@ -1090,10 +976,7 @@ impl Drop for LineWrapperHandle {
         let mut state = self.text_system.wrapper_pool.lock();
         let wrapper = self.wrapper.take().unwrap();
         state
-            .get_mut(&FontIdWithSize {
-                font_id: wrapper.font_id,
-                font_size: wrapper.font_size,
-            })
+            .get_mut(&FontIdWithSize { font_id: wrapper.font_id, font_size: wrapper.font_size })
             .unwrap()
             .push(wrapper);
     }
@@ -1310,13 +1193,13 @@ pub fn font(family: impl Into<SharedString>) -> Font {
 
 impl Font {
     /// Set this Font to be bold
-    pub fn bold(mut self) -> Self {
+    pub const fn bold(mut self) -> Self {
         self.weight = FontWeight::BOLD;
         self
     }
 
     /// Set this Font to be italic
-    pub fn italic(mut self) -> Self {
+    pub const fn italic(mut self) -> Self {
         self.style = FontStyle::Italic;
         self
     }
@@ -1409,10 +1292,7 @@ pub fn font_name_with_fallbacks<'a>(name: &'a str, system: &'a str) -> &'a str {
 
 /// Like [`font_name_with_fallbacks`] but accepts and returns [`SharedString`] references.
 #[allow(unused)]
-pub fn font_name_with_fallbacks_shared<'a>(
-    name: &'a SharedString,
-    system: &'a SharedString,
-) -> &'a SharedString {
+pub fn font_name_with_fallbacks_shared<'a>(name: &'a SharedString, system: &'a SharedString) -> &'a SharedString {
     match name.as_str() {
         ".SystemUIFont" => system,
         _ => name,

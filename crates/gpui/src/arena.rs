@@ -1,11 +1,12 @@
-use std::{
-    alloc::{self, handle_alloc_error},
-    cell::Cell,
-    num::NonZeroUsize,
-    ops::{Deref, DerefMut},
-    ptr::{self, NonNull},
-    rc::Rc,
-};
+use std::alloc::handle_alloc_error;
+use std::alloc::{self};
+use std::cell::Cell;
+use std::num::NonZeroUsize;
+use std::ops::Deref;
+use std::ops::DerefMut;
+use std::ptr::NonNull;
+use std::ptr::{self};
+use std::rc::Rc;
 
 struct ArenaElement {
     value: *mut u8,
@@ -45,11 +46,7 @@ impl Chunk {
             handle_alloc_error(layout);
         }
         let end = unsafe { start.add(chunk_size.get()) };
-        Self {
-            start,
-            end,
-            offset: start,
-        }
+        Self { start, end, offset: start }
     }
 
     fn allocate(&mut self, layout: alloc::Layout) -> Option<NonNull<u8>> {
@@ -73,7 +70,7 @@ impl Chunk {
         }
     }
 
-    fn reset(&mut self) {
+    const fn reset(&mut self) {
         self.offset = self.start;
     }
 }
@@ -106,14 +103,14 @@ impl Arena {
         }
     }
 
-    pub fn capacity(&self) -> usize {
+    pub const fn capacity(&self) -> usize {
         self.chunks.len() * self.chunk_size.get()
     }
 
     /// Marks the start of a scope (e.g. a window draw) whose allocations must stay
     /// live until the scope ends, even if `clear` is called by a nested scope in
     /// the meantime.
-    pub fn begin_scope(&mut self) {
+    pub const fn begin_scope(&mut self) {
         self.scope_depth += 1;
     }
 
@@ -123,11 +120,9 @@ impl Arena {
     /// run while an enclosing scope still references arena memory, which is
     /// exactly the use-after-free this bookkeeping exists to prevent, so failing
     /// loudly here is preferable.
-    pub fn end_scope(&mut self) {
-        self.scope_depth = self
-            .scope_depth
-            .checked_sub(1)
-            .expect("Arena::end_scope called without a matching begin_scope");
+    pub const fn end_scope(&mut self) {
+        self.scope_depth =
+            self.scope_depth.checked_sub(1).expect("Arena::end_scope called without a matching begin_scope");
     }
 
     /// Drops all allocations and resets the arena, unless a scope is still active.
@@ -140,10 +135,7 @@ impl Arena {
         if self.scope_depth == 0 {
             self.force_clear();
         } else {
-            log::debug!(
-                "deferring arena clear; {} enclosing scope(s) still active",
-                self.scope_depth
-            );
+            log::debug!("deferring arena clear; {} enclosing scope(s) still active", self.scope_depth);
         }
     }
 
@@ -180,15 +172,9 @@ impl Arena {
         };
 
         unsafe { inner_writer(ptr.cast(), f) };
-        self.elements.push(ArenaElement {
-            value: ptr,
-            drop: drop::<T>,
-        });
+        self.elements.push(ArenaElement { value: ptr, drop: drop::<T> });
 
-        ArenaBox {
-            ptr: ptr.cast(),
-            valid: self.valid.clone(),
-        }
+        ArenaBox { ptr: ptr.cast(), valid: self.valid.clone() }
     }
 
     #[inline(never)]
@@ -197,20 +183,13 @@ impl Arena {
         if self.current_chunk_index >= self.chunks.len() {
             self.chunks.push(Chunk::new(self.chunk_size));
             assert_eq!(self.current_chunk_index, self.chunks.len() - 1);
-            log::trace!(
-                "increased element arena capacity to {}kb",
-                self.capacity() / 1024,
-            );
+            log::trace!("increased element arena capacity to {}kb", self.capacity() / 1024,);
         }
         let current_chunk = &mut self.chunks[self.current_chunk_index];
         if let Some(pointer) = current_chunk.allocate(layout) {
             pointer.as_ptr()
         } else {
-            panic!(
-                "Arena chunk_size of {} is too small to allocate {} bytes",
-                self.chunk_size,
-                layout.size()
-            );
+            panic!("Arena chunk_size of {} is too small to allocate {} bytes", self.chunk_size, layout.size());
         }
     }
 }
@@ -223,18 +202,12 @@ pub struct ArenaBox<T: ?Sized> {
 impl<T: ?Sized> ArenaBox<T> {
     #[inline(always)]
     pub fn map<U: ?Sized>(mut self, f: impl FnOnce(&mut T) -> &mut U) -> ArenaBox<U> {
-        ArenaBox {
-            ptr: f(&mut self),
-            valid: self.valid,
-        }
+        ArenaBox { ptr: f(&mut self), valid: self.valid }
     }
 
     #[track_caller]
     fn validate(&self) {
-        assert!(
-            self.valid.get(),
-            "attempted to dereference an ArenaRef after its Arena was cleared"
-        );
+        assert!(self.valid.get(), "attempted to dereference an ArenaRef after its Arena was cleared");
     }
 }
 

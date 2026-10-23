@@ -1,18 +1,27 @@
 use std::io::Write;
 
-use crate::{
-    RemoteArch, RemoteOs, RemotePlatform,
-    json_log::LogRecord,
-    protocol::{MESSAGE_LEN_SIZE, message_len_from_buffer, read_message_with_len, write_message},
-};
-use anyhow::{Context as _, Result};
-use futures::{
-    AsyncReadExt as _, FutureExt as _, StreamExt as _,
-    channel::mpsc::{Sender, UnboundedReceiver, UnboundedSender},
-};
-use gpui::{AppContext as _, AsyncApp, Task};
+use anyhow::Context as _;
+use anyhow::Result;
+use futures::AsyncReadExt as _;
+use futures::FutureExt as _;
+use futures::StreamExt as _;
+use futures::channel::mpsc::Sender;
+use futures::channel::mpsc::UnboundedReceiver;
+use futures::channel::mpsc::UnboundedSender;
+use gpui::AppContext as _;
+use gpui::AsyncApp;
+use gpui::Task;
 use rpc::proto::Envelope;
 use util::command::Child;
+
+use crate::RemoteArch;
+use crate::RemoteOs;
+use crate::RemotePlatform;
+use crate::json_log::LogRecord;
+use crate::protocol::MESSAGE_LEN_SIZE;
+use crate::protocol::message_len_from_buffer;
+use crate::protocol::read_message_with_len;
+use crate::protocol::write_message;
 
 pub mod ssh;
 
@@ -21,9 +30,7 @@ pub mod ssh;
 fn parse_platform(output: &str) -> Result<RemotePlatform> {
     let output = output.trim();
     let uname = output.rsplit_once('\n').map_or(output, |(_, last)| last);
-    let Some((os, arch)) = uname.split_once(" ") else {
-        anyhow::bail!("unknown uname: {uname:?}")
-    };
+    let Some((os, arch)) = uname.split_once(" ") else { anyhow::bail!("unknown uname: {uname:?}") };
 
     let os = match os {
         "Darwin" => RemoteOs::MacOs,
@@ -65,11 +72,7 @@ pub(crate) fn parse_os_version(os: RemoteOs, output: &str) -> Option<String> {
         RemoteOs::Linux => util::parse_os_release(output),
         RemoteOs::MacOs => {
             // `sw_vers -productVersion` prints a single version line.
-            output
-                .lines()
-                .next_back()
-                .map(|line| line.trim().to_string())
-                .filter(|line| !line.is_empty())
+            output.lines().next_back().map(|line| line.trim().to_string()).filter(|line| !line.is_empty())
         }
     }
 }
@@ -88,22 +91,13 @@ fn parse_shell(output: &str, fallback_shell: &str) -> String {
 }
 
 const HOME_DIR_PROGRAM: &str = "/bin/sh";
-const HOME_DIR_ARGS: [&str; 2] = [
-    "-c",
-    "printf ZED_HOME_BEGIN; echo; pwd; printf ZED_HOME_END",
-];
+const HOME_DIR_ARGS: [&str; 2] = ["-c", "printf ZED_HOME_BEGIN; echo; pwd; printf ZED_HOME_END"];
 
 fn parse_home_dir(output: &str) -> Option<String> {
     let (_, output) = output.split_once("ZED_HOME_BEGIN")?;
     let (home_dir, _) = output.rsplit_once("ZED_HOME_END")?;
-    let line_ending = if home_dir.starts_with("\r\n") {
-        "\r\n"
-    } else {
-        "\n"
-    };
-    let home_dir = home_dir
-        .strip_prefix(line_ending)?
-        .strip_suffix(line_ending)?;
+    let line_ending = if home_dir.starts_with("\r\n") { "\r\n" } else { "\n" };
+    let home_dir = home_dir.strip_prefix(line_ending)?.strip_suffix(line_ending)?;
     (home_dir.starts_with('/') && !home_dir.contains('\u{FFFD}')).then(|| home_dir.to_owned())
 }
 
@@ -146,9 +140,7 @@ fn handle_rpc_messages_over_child_process_stdio(
                 }
 
                 let message_len = message_len_from_buffer(&stdout_buffer);
-                let envelope =
-                    read_message_with_len(&mut child_stdout, &mut stdout_buffer, message_len)
-                        .await?;
+                let envelope = read_message_with_len(&mut child_stdout, &mut stdout_buffer, message_len).await?;
                 connection_activity_tx.try_send(()).ok();
                 incoming_tx.unbounded_send(envelope).ok();
             }
@@ -159,31 +151,21 @@ fn handle_rpc_messages_over_child_process_stdio(
         loop {
             stderr_buffer.resize(stderr_offset + 1024, 0);
 
-            let len = child_stderr
-                .read(&mut stderr_buffer[stderr_offset..])
-                .await?;
+            let len = child_stderr.read(&mut stderr_buffer[stderr_offset..]).await?;
             if len == 0 {
                 return anyhow::Ok(());
             }
 
             stderr_offset += len;
             let mut start_ix = 0;
-            while let Some(ix) = stderr_buffer[start_ix..stderr_offset]
-                .iter()
-                .position(|b| b == &b'\n')
-            {
+            while let Some(ix) = stderr_buffer[start_ix..stderr_offset].iter().position(|b| b == &b'\n') {
                 let line_ix = start_ix + ix;
                 let content = &stderr_buffer[start_ix..line_ix];
                 start_ix = line_ix + 1;
                 if let Ok(record) = serde_json::from_slice::<LogRecord>(content) {
                     record.log(log::logger())
                 } else {
-                    std::io::stderr()
-                        .write_fmt(format_args!(
-                            "(remote) {}\n",
-                            String::from_utf8_lossy(content)
-                        ))
-                        .ok();
+                    std::io::stderr().write_fmt(format_args!("(remote) {}\n", String::from_utf8_lossy(content))).ok();
                 }
             }
             stderr_buffer.drain(0..start_ix);
@@ -206,11 +188,9 @@ fn handle_rpc_messages_over_child_process_stdio(
             }
         };
         let exit_status = remote_proxy_process.status().await?;
-        let status = exit_status.code().unwrap_or_else(|| {
-            let status = std::os::unix::process::ExitStatusExt::signal(&exit_status).unwrap_or(1);
-
-            status
-        });
+        let status = exit_status
+            .code()
+            .unwrap_or_else(|| std::os::unix::process::ExitStatusExt::signal(&exit_status).unwrap_or(1));
         match result {
             Ok(_) => Ok(status),
             Err(error) => Err(error),

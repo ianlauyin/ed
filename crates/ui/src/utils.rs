@@ -17,7 +17,8 @@ pub use apca_contrast::*;
 pub use color_contrast::*;
 pub use constants::*;
 pub use control_characters::*;
-pub use corner_solver::{CornerSolver, inner_corner_radius};
+pub use corner_solver::CornerSolver;
+pub use corner_solver::inner_corner_radius;
 pub use format_distance::*;
 pub use highlight_contrast::*;
 pub use search_input::*;
@@ -59,7 +60,7 @@ pub fn ui_text_style(cx: &App) -> gpui::TextStyle {
 }
 
 /// Returns the platform-appropriate label for the "reveal in file manager" action.
-pub fn reveal_in_file_manager_label(is_remote: bool) -> &'static str {
+pub const fn reveal_in_file_manager_label(is_remote: bool) -> &'static str {
     if true && !is_remote {
         "Reveal in Finder"
     } else if false && !is_remote {

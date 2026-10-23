@@ -5,49 +5,91 @@ mod keystroke;
 /// Types for configuring parent-anchored popup windows such as menus, dropdowns and tooltips.
 pub mod popup;
 
-use crate::{
-    Action, AnyWindowHandle, App, AsyncWindowContext, BackgroundExecutor, Bounds,
-    DEFAULT_WINDOW_SIZE, DevicePixels, DispatchEventResult, Edges, ExternalDragPayload, Font,
-    FontId, FontMetrics, FontRun, ForegroundExecutor, GlyphId, GpuSpecs, Hsla, ImageSource, Keymap,
-    LineLayout, MissingGlyphSink, Pixels, PlatformGestures, PlatformInput, Point, Priority,
-    RenderGlyphParams, RenderImage, RenderImageParams, RenderSvgParams, Scene, ShapedGlyph,
-    ShapedRun, SharedString, Size, SvgRenderer, Task, Window, WindowControlArea, hash, point, px,
-    size,
-};
+use std::borrow::Cow;
+use std::collections::hash_map::Entry;
+use std::ffi::OsString;
+use std::fmt::Debug;
+use std::fmt::{self};
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::io::Cursor;
+use std::ops;
+use std::ops::Range;
+use std::path::Path;
+use std::path::PathBuf;
+use std::rc::Rc;
+use std::sync::Arc;
+use std::time::Duration;
 
-use anyhow::{Context as _, Result};
+use anyhow::Context as _;
+use anyhow::Result;
+pub use app_menu::*;
 use async_task::Runnable;
 use collections::FxHashMap;
 use futures::channel::oneshot;
+use image::AnimationDecoder as _;
+use image::DynamicImage;
+use image::Frame;
 use image::codecs::gif::GifDecoder;
-use image::{AnimationDecoder as _, DynamicImage, Frame};
-use raw_window_handle::{HasDisplayHandle, HasWindowHandle};
+pub use keyboard::*;
+pub use keystroke::*;
+use raw_window_handle::HasDisplayHandle;
+use raw_window_handle::HasWindowHandle;
 use scheduler::Instant;
 pub use scheduler::RunnableMeta;
 use schemars::JsonSchema;
 use seahash::SeaHasher;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use smallvec::SmallVec;
-use std::borrow::Cow;
-use std::collections::hash_map::Entry;
-use std::hash::{Hash, Hasher};
-use std::io::Cursor;
-use std::ops;
-use std::time::Duration;
-use std::{
-    ffi::OsString,
-    fmt::{self, Debug},
-    ops::Range,
-    path::{Path, PathBuf},
-    rc::Rc,
-    sync::Arc,
-};
 use strum::EnumIter;
 use uuid::Uuid;
 
-pub use app_menu::*;
-pub use keyboard::*;
-pub use keystroke::*;
+use crate::Action;
+use crate::AnyWindowHandle;
+use crate::App;
+use crate::AsyncWindowContext;
+use crate::BackgroundExecutor;
+use crate::Bounds;
+use crate::DEFAULT_WINDOW_SIZE;
+use crate::DevicePixels;
+use crate::DispatchEventResult;
+use crate::Edges;
+use crate::ExternalDragPayload;
+use crate::Font;
+use crate::FontId;
+use crate::FontMetrics;
+use crate::FontRun;
+use crate::ForegroundExecutor;
+use crate::GlyphId;
+use crate::GpuSpecs;
+use crate::Hsla;
+use crate::ImageSource;
+use crate::Keymap;
+use crate::LineLayout;
+use crate::MissingGlyphSink;
+use crate::Pixels;
+use crate::PlatformGestures;
+use crate::PlatformInput;
+use crate::Point;
+use crate::Priority;
+use crate::RenderGlyphParams;
+use crate::RenderImage;
+use crate::RenderImageParams;
+use crate::RenderSvgParams;
+use crate::Scene;
+use crate::ShapedGlyph;
+use crate::ShapedRun;
+use crate::SharedString;
+use crate::Size;
+use crate::SvgRenderer;
+use crate::Task;
+use crate::Window;
+use crate::WindowControlArea;
+use crate::hash;
+use crate::point;
+use crate::px;
+use crate::size;
 
 /// Whether the platform is presenting a window's frames.
 ///
@@ -145,9 +187,7 @@ pub struct ActivityGuard {
 impl ActivityGuard {
     /// Runs `release` when the guard is dropped.
     pub fn new(release: impl FnOnce() + Send + 'static) -> Self {
-        Self {
-            _release: gpui_util::defer(Box::new(release)),
-        }
+        Self { _release: gpui_util::defer(Box::new(release)) }
     }
 
     /// A guard for platforms without a corresponding activity.
@@ -165,12 +205,12 @@ pub struct GraphicalEnvironment;
 
 impl GraphicalEnvironment {
     /// Returns the environment of this process's graphical session.
-    pub fn detect() -> Self {
+    pub const fn detect() -> Self {
         Self
     }
 
     /// Does nothing on this platform.
-    pub fn apply_to(&self, _command: &mut std::process::Command) {}
+    pub const fn apply_to(&self, _command: &mut std::process::Command) {}
 }
 
 /// A display mode for [`App::request_windowing`] to switch to.
@@ -196,9 +236,7 @@ pub trait Platform: 'static {
     /// [`Application::with_windowing`].
     fn set_initial_windowing(&self, _request: WindowingRequest) {}
     fn request_windowing(&self, _request: WindowingRequest) -> Task<anyhow::Result<()>> {
-        Task::ready(Err(anyhow::anyhow!(
-            "this platform cannot switch between headless and windowed modes"
-        )))
+        Task::ready(Err(anyhow::anyhow!("this platform cannot switch between headless and windowed modes")))
     }
     fn restart(&self, binary_path: Option<PathBuf>, arguments: Vec<OsString>);
     fn activate(&self, ignoring_other_apps: bool);
@@ -220,11 +258,7 @@ pub trait Platform: 'static {
         None
     }
 
-    fn open_window(
-        &self,
-        handle: AnyWindowHandle,
-        options: WindowParams,
-    ) -> anyhow::Result<Box<dyn PlatformWindow>>;
+    fn open_window(&self, handle: AnyWindowHandle, options: WindowParams) -> anyhow::Result<Box<dyn PlatformWindow>>;
 
     /// Returns the appearance of the application's windows.
     fn window_appearance(&self) -> WindowAppearance;
@@ -247,10 +281,7 @@ pub trait Platform: 'static {
     fn open_url(&self, url: &str);
     fn on_open_urls(&self, callback: Box<dyn FnMut(Vec<String>)>);
 
-    fn prompt_for_paths(
-        &self,
-        options: PathPromptOptions,
-    ) -> oneshot::Receiver<Result<Option<Vec<PathBuf>>>>;
+    fn prompt_for_paths(&self, options: PathPromptOptions) -> oneshot::Receiver<Result<Option<Vec<PathBuf>>>>;
     fn prompt_for_new_path(
         &self,
         directory: &Path,
@@ -429,7 +460,7 @@ pub struct DisplayId(pub(crate) u64);
 
 impl DisplayId {
     /// Create a new `DisplayId` from a raw platform display identifier.
-    pub fn new(id: u64) -> Self {
+    pub const fn new(id: u64) -> Self {
         Self(id)
     }
 }
@@ -512,12 +543,7 @@ pub struct WindowControls {
 impl Default for WindowControls {
     fn default() -> Self {
         // Assume that we can do anything, unless told otherwise
-        Self {
-            fullscreen: true,
-            maximize: true,
-            minimize: true,
-            window_menu: true,
-        }
+        Self { fullscreen: true, maximize: true, minimize: true, window_menu: true }
     }
 }
 
@@ -534,7 +560,7 @@ pub enum WindowButton {
 
 impl WindowButton {
     /// Returns a stable element ID for rendering this button.
-    pub fn id(&self) -> &'static str {
+    pub const fn id(&self) -> &'static str {
         match self {
             WindowButton::Minimize => "minimize",
             WindowButton::Maximize => "maximize",
@@ -573,17 +599,12 @@ pub struct Tiling {
 
 impl Tiling {
     /// Initializes a [`Tiling`] type with all sides tiled
-    pub fn tiled() -> Self {
-        Self {
-            top: true,
-            left: true,
-            right: true,
-            bottom: true,
-        }
+    pub const fn tiled() -> Self {
+        Self { top: true, left: true, right: true, bottom: true }
     }
 
     /// Whether any edge is tiled
-    pub fn is_tiled(&self) -> bool {
+    pub const fn is_tiled(&self) -> bool {
         self.top || self.left || self.right || self.bottom
     }
 }
@@ -840,7 +861,6 @@ pub trait PlatformWindow: HasWindowHandle + HasDisplayHandle {
     fn text_input_state_changed(&self, _change: TextInputStateChange) {}
 
     fn play_system_bell(&self) {}
-
 }
 
 /// Type alias for runnables with metadata.
@@ -860,11 +880,7 @@ pub trait PlatformDispatcher: Send + Sync {
     fn dispatch_on_main_thread(&self, runnable: RunnableVariant, priority: Priority);
     fn dispatch_after(&self, duration: Duration, runnable: RunnableVariant);
 
-    fn dispatch_on_main_thread_when_idle(
-        &self,
-        runnable: RunnableVariant,
-        timeout: Option<Duration>,
-    ) {
+    fn dispatch_on_main_thread_when_idle(&self, runnable: RunnableVariant, timeout: Option<Duration>) {
         let _ = timeout;
         self.dispatch_on_main_thread(runnable, Priority::Low);
     }
@@ -916,8 +932,7 @@ pub trait PlatformTextSystem: Send + Sync {
     /// Layout a line of text with the given font runs.
     fn layout_line(&self, text: &str, font_size: Pixels, runs: &[FontRun]) -> LineLayout;
     /// Returns the recommended text rendering mode for the given font and size.
-    fn recommended_rendering_mode(&self, _font_id: FontId, _font_size: Pixels)
-    -> TextRenderingMode;
+    fn recommended_rendering_mode(&self, _font_id: FontId, _font_size: Pixels) -> TextRenderingMode;
     /// Returns the dilation level to use for a glyph painted in the given color.
     fn glyph_dilation_for_color(&self, _color: Hsla) -> u8 {
         0
@@ -925,12 +940,13 @@ pub trait PlatformTextSystem: Send + Sync {
 }
 
 #[expect(missing_docs)]
+#[derive(Default)]
 pub struct NoopTextSystem;
 
 #[expect(missing_docs)]
 impl NoopTextSystem {
     #[allow(dead_code)]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self
     }
 }
@@ -959,23 +975,14 @@ impl PlatformTextSystem for NoopTextSystem {
             cap_height: 698.0,
             x_height: 516.0,
             bounding_box: Bounds {
-                origin: Point {
-                    x: -260.0,
-                    y: -245.0,
-                },
-                size: Size {
-                    width: 1501.0,
-                    height: 1364.0,
-                },
+                origin: Point { x: -260.0, y: -245.0 },
+                size: Size { width: 1501.0, height: 1364.0 },
             },
         }
     }
 
     fn typographic_bounds(&self, _font_id: FontId, _glyph_id: GlyphId) -> Result<Bounds<f32>> {
-        Ok(Bounds {
-            origin: Point { x: 54.0, y: 0.0 },
-            size: size(392.0, 528.0),
-        })
+        Ok(Bounds { origin: Point { x: 54.0, y: 0.0 }, size: size(392.0, 528.0) })
     }
 
     fn advance(&self, _font_id: FontId, glyph_id: GlyphId) -> Result<Size<f32>> {
@@ -1001,11 +1008,7 @@ impl PlatformTextSystem for NoopTextSystem {
     fn layout_line(&self, text: &str, font_size: Pixels, _runs: &[FontRun]) -> LineLayout {
         let mut position = px(0.);
         let metrics = self.font_metrics(FontId(0));
-        let em_width = font_size
-            * self
-                .advance(FontId(0), self.glyph_for_char(FontId(0), 'm').unwrap())
-                .unwrap()
-                .width
+        let em_width = font_size * self.advance(FontId(0), self.glyph_for_char(FontId(0), 'm').unwrap()).unwrap().width
             / metrics.units_per_em as f32;
         let mut glyphs = Vec::new();
         for (ix, c) in text.char_indices() {
@@ -1027,10 +1030,7 @@ impl PlatformTextSystem for NoopTextSystem {
         }
         let mut runs = Vec::default();
         if !glyphs.is_empty() {
-            runs.push(ShapedRun {
-                font_id: FontId(0),
-                glyphs,
-            });
+            runs.push(ShapedRun { font_id: FontId(0), glyphs });
         } else {
             position = px(0.);
         }
@@ -1045,11 +1045,7 @@ impl PlatformTextSystem for NoopTextSystem {
         }
     }
 
-    fn recommended_rendering_mode(
-        &self,
-        _font_id: FontId,
-        _font_size: Pixels,
-    ) -> TextRenderingMode {
+    fn recommended_rendering_mode(&self, _font_id: FontId, _font_size: Pixels) -> TextRenderingMode {
         TextRenderingMode::Grayscale
     }
 }
@@ -1082,12 +1078,7 @@ pub fn get_gamma_correction_ratios(gamma: f32) -> [f32; 4] {
     let index = ((gamma * 10.0).round() as usize).clamp(10, 22) - 10;
     let ratios = GAMMA_INCORRECT_TARGET_RATIOS[index];
 
-    [
-        ratios[0] * NORM13,
-        ratios[1] * NORM24,
-        ratios[2] * NORM13,
-        ratios[3] * NORM24,
-    ]
+    [ratios[0] * NORM13, ratios[1] * NORM24, ratios[2] * NORM13, ratios[3] * NORM24]
 }
 
 #[derive(PartialEq, Eq, Hash, Clone)]
@@ -1100,7 +1091,7 @@ pub enum AtlasKey {
 
 impl AtlasKey {
     /// Returns the texture kind for this atlas key.
-    pub fn texture_kind(&self) -> AtlasTextureKind {
+    pub const fn texture_kind(&self) -> AtlasTextureKind {
         match self {
             AtlasKey::Glyph(params) => {
                 if params.is_emoji {
@@ -1148,12 +1139,7 @@ pub trait PlatformAtlas {
 
 #[doc(hidden)]
 pub trait AtlasBackend {
-    fn insert(
-        &mut self,
-        kind: AtlasTextureKind,
-        size: Size<DevicePixels>,
-        bytes: &[u8],
-    ) -> Result<AtlasTile>;
+    fn insert(&mut self, kind: AtlasTextureKind, size: Size<DevicePixels>, bytes: &[u8]) -> Result<AtlasTile>;
 
     fn remove(&mut self, tile: AtlasTile);
 }
@@ -1166,10 +1152,7 @@ pub struct AtlasState<Backend> {
 
 impl<Backend> AtlasState<Backend> {
     pub fn new(backend: Backend) -> Self {
-        Self {
-            tiles_by_key: FxHashMap::default(),
-            backend,
-        }
+        Self { tiles_by_key: FxHashMap::default(), backend }
     }
 
     pub fn contains(&self, key: &AtlasKey) -> bool {
@@ -1200,9 +1183,7 @@ impl<Backend: AtlasBackend> AtlasState<Backend> {
                 let Some((size, bytes)) = build()? else {
                     return Ok(None);
                 };
-                let tile = self
-                    .backend
-                    .insert(entry.key().texture_kind(), size, &bytes)?;
+                let tile = self.backend.insert(entry.key().texture_kind(), size, &bytes)?;
                 entry.insert(tile);
                 Ok(Some(tile))
             }
@@ -1229,27 +1210,16 @@ pub struct HeadlessAtlasBackend {
 }
 
 impl AtlasBackend for HeadlessAtlasBackend {
-    fn insert(
-        &mut self,
-        kind: AtlasTextureKind,
-        size: Size<DevicePixels>,
-        _bytes: &[u8],
-    ) -> Result<AtlasTile> {
+    fn insert(&mut self, kind: AtlasTextureKind, size: Size<DevicePixels>, _bytes: &[u8]) -> Result<AtlasTile> {
         self.next_id += 1;
         let texture_id = self.next_id;
         self.next_id += 1;
         let tile_id = self.next_id;
         Ok(AtlasTile {
-            texture_id: AtlasTextureId {
-                index: texture_id,
-                kind,
-            },
+            texture_id: AtlasTextureId { index: texture_id, kind },
             tile_id: TileId(tile_id),
             padding: 0,
-            bounds: Bounds {
-                origin: Point::default(),
-                size,
-            },
+            bounds: Bounds { origin: Point::default(), size },
         })
     }
 
@@ -1278,10 +1248,7 @@ pub struct AtlasTextureList<T> {
 
 impl<T> Default for AtlasTextureList<T> {
     fn default() -> Self {
-        Self {
-            textures: Vec::default(),
-            free_list: Vec::default(),
-        }
+        Self { textures: Vec::default(), free_list: Vec::default() }
     }
 }
 
@@ -1370,41 +1337,21 @@ impl PlatformInputHandler {
     }
 
     pub fn selected_text_range(&mut self, ignore_disabled_input: bool) -> Option<UTF16Selection> {
-        self.cx
-            .update(|window, cx| {
-                self.handler
-                    .selected_text_range(ignore_disabled_input, window, cx)
-            })
-            .ok()
-            .flatten()
+        self.cx.update(|window, cx| self.handler.selected_text_range(ignore_disabled_input, window, cx)).ok().flatten()
     }
 
     pub fn marked_text_range(&mut self) -> Option<Range<usize>> {
-        self.cx
-            .update(|window, cx| self.handler.marked_text_range(window, cx))
-            .ok()
-            .flatten()
+        self.cx.update(|window, cx| self.handler.marked_text_range(window, cx)).ok().flatten()
     }
 
-    pub fn text_for_range(
-        &mut self,
-        range_utf16: Range<usize>,
-        adjusted: &mut Option<Range<usize>>,
-    ) -> Option<String> {
-        self.cx
-            .update(|window, cx| {
-                self.handler
-                    .text_for_range(range_utf16, adjusted, window, cx)
-            })
-            .ok()
-            .flatten()
+    pub fn text_for_range(&mut self, range_utf16: Range<usize>, adjusted: &mut Option<Range<usize>>) -> Option<String> {
+        self.cx.update(|window, cx| self.handler.text_for_range(range_utf16, adjusted, window, cx)).ok().flatten()
     }
 
     pub fn replace_text_in_range(&mut self, replacement_range: Option<Range<usize>>, text: &str) {
         self.cx
             .update(|window, cx| {
-                self.handler
-                    .replace_text_in_range(replacement_range, text, window, cx);
+                self.handler.replace_text_in_range(replacement_range, text, window, cx);
             })
             .ok();
     }
@@ -1417,34 +1364,21 @@ impl PlatformInputHandler {
     ) {
         self.cx
             .update(|window, cx| {
-                self.handler.replace_and_mark_text_in_range(
-                    range_utf16,
-                    new_text,
-                    new_selected_range,
-                    window,
-                    cx,
-                )
+                self.handler.replace_and_mark_text_in_range(range_utf16, new_text, new_selected_range, window, cx)
             })
             .ok();
     }
 
     pub fn unmark_text(&mut self) {
-        self.cx
-            .update(|window, cx| self.handler.unmark_text(window, cx))
-            .ok();
+        self.cx.update(|window, cx| self.handler.unmark_text(window, cx)).ok();
     }
 
     pub fn paste(&mut self, item: ClipboardItem) {
-        self.cx
-            .update(|window, cx| self.handler.paste(item, window, cx))
-            .ok();
+        self.cx.update(|window, cx| self.handler.paste(item, window, cx)).ok();
     }
 
     pub fn bounds_for_range(&mut self, range_utf16: Range<usize>) -> Option<Bounds<Pixels>> {
-        self.cx
-            .update(|window, cx| self.handler.bounds_for_range(range_utf16, window, cx))
-            .ok()
-            .flatten()
+        self.cx.update(|window, cx| self.handler.bounds_for_range(range_utf16, window, cx)).ok().flatten()
     }
 
     #[allow(dead_code)]
@@ -1471,22 +1405,18 @@ impl PlatformInputHandler {
             let caret = selection.range.end;
             if let Some(caret_bounds) = bounds_for_range(caret..caret) {
                 for i in (marked_range.start..caret).rev() {
-                    if let Some(b) = bounds_for_range(i..i) {
-                        if (b.origin.y - caret_bounds.origin.y).abs() > px(0.1) {
-                            line_start = i + 1;
-                            break;
-                        }
+                    if let Some(b) = bounds_for_range(i..i)
+                        && (b.origin.y - caret_bounds.origin.y).abs() > px(0.1)
+                    {
+                        line_start = i + 1;
+                        break;
                     }
                 }
             }
             bounds_for_range(line_start..line_start)
         } else {
             // No active composition — use the selection endpoint.
-            let offset = if selection.reversed {
-                selection.range.start
-            } else {
-                selection.range.end
-            };
+            let offset = if selection.reversed { selection.range.start } else { selection.range.end };
             bounds_for_range(offset..offset)
         }
     }
@@ -1502,43 +1432,27 @@ impl PlatformInputHandler {
     pub fn ime_candidate_bounds(&mut self) -> Option<Bounds<Pixels>> {
         let marked_range = self.marked_text_range();
         let selection = self.selected_text_range(true)?;
-        Self::compute_ime_candidate_bounds(marked_range, &selection, |range| {
-            self.bounds_for_range(range)
-        })
+        Self::compute_ime_candidate_bounds(marked_range, &selection, |range| self.bounds_for_range(range))
     }
 
     #[allow(unused)]
     pub fn character_index_for_point(&mut self, point: Point<Pixels>) -> Option<usize> {
-        self.cx
-            .update(|window, cx| self.handler.character_index_for_point(point, window, cx))
-            .ok()
-            .flatten()
+        self.cx.update(|window, cx| self.handler.character_index_for_point(point, window, cx)).ok().flatten()
     }
 
     /// See [`InputHandler::set_selected_text_range`].
     pub fn set_selected_text_range(&mut self, range_utf16: Range<usize>) {
-        self.cx
-            .update(|window, cx| {
-                self.handler
-                    .set_selected_text_range(range_utf16, window, cx)
-            })
-            .ok();
+        self.cx.update(|window, cx| self.handler.set_selected_text_range(range_utf16, window, cx)).ok();
     }
 
     /// See [`InputHandler::element_bounds`].
     pub fn element_bounds(&mut self) -> Option<Bounds<Pixels>> {
-        self.cx
-            .update(|window, cx| self.handler.element_bounds(window, cx))
-            .ok()
-            .flatten()
+        self.cx.update(|window, cx| self.handler.element_bounds(window, cx)).ok().flatten()
     }
 
     /// See [`InputHandler::text_length_utf16`].
     pub fn text_length_utf16(&mut self) -> Option<usize> {
-        self.cx
-            .update(|window, cx| self.handler.text_length_utf16(window, cx))
-            .ok()
-            .flatten()
+        self.cx.update(|window, cx| self.handler.text_length_utf16(window, cx)).ok().flatten()
     }
 
     #[allow(dead_code)]
@@ -1548,9 +1462,7 @@ impl PlatformInputHandler {
 
     #[allow(dead_code)]
     pub fn query_accepts_text_input(&mut self) -> bool {
-        self.cx
-            .update(|window, cx| self.handler.accepts_text_input(window, cx))
-            .unwrap_or(true)
+        self.cx.update(|window, cx| self.handler.accepts_text_input(window, cx)).unwrap_or(true)
     }
 
     /// See [`InputHandler::prefers_ime_for_printable_keys`].
@@ -1562,27 +1474,19 @@ impl PlatformInputHandler {
         self.cx
             .update(|window, cx| {
                 // The next printable key may complete a chord whose prefix bypassed the IME.
-                !window.has_pending_keystrokes()
-                    && self.handler.prefers_ime_for_printable_keys(window, cx)
+                !window.has_pending_keystrokes() && self.handler.prefers_ime_for_printable_keys(window, cx)
             })
             .unwrap_or(false)
     }
 
     /// See [`InputHandler::text_input_configuration`].
-    pub fn text_input_configuration(
-        &mut self,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> TextInputConfiguration {
+    pub fn text_input_configuration(&mut self, window: &mut Window, cx: &mut App) -> TextInputConfiguration {
         self.handler.text_input_configuration(window, cx)
     }
 
     /// See [`InputHandler::text_input_editable_range`].
     pub fn text_input_editable_range(&mut self) -> Option<Range<usize>> {
-        self.cx
-            .update(|window, cx| self.handler.text_input_editable_range(window, cx))
-            .ok()
-            .flatten()
+        self.cx.update(|window, cx| self.handler.text_input_editable_range(window, cx)).ok().flatten()
     }
 }
 
@@ -1689,12 +1593,7 @@ pub trait InputHandler: 'static {
     /// Get the character offset for the given point in terms of UTF16 characters
     ///
     /// Corresponds to [characterIndexForPoint:](https://developer.apple.com/documentation/appkit/nstextinputclient/characterindex(for:))
-    fn character_index_for_point(
-        &mut self,
-        point: Point<Pixels>,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Option<usize>;
+    fn character_index_for_point(&mut self, point: Point<Pixels>, window: &mut Window, cx: &mut App) -> Option<usize>;
 
     /// Set the range of the user's currently selected text.
     ///
@@ -1705,13 +1604,7 @@ pub trait InputHandler: 'static {
     /// Android `InputConnection.setSelection`).
     ///
     /// range_utf16 is in terms of UTF-16 characters, from 0 to the length of the document
-    fn set_selected_text_range(
-        &mut self,
-        _range_utf16: Range<usize>,
-        _window: &mut Window,
-        _cx: &mut App,
-    ) {
-    }
+    fn set_selected_text_range(&mut self, _range_utf16: Range<usize>, _window: &mut Window, _cx: &mut App) {}
 
     /// Get the bounds of the focused text element in window coordinates, if known.
     ///
@@ -1752,11 +1645,7 @@ pub trait InputHandler: 'static {
     /// when it cannot (a selection spanning a region boundary), platforms
     /// degrade the mirrored IME context rather than widening the range.
     /// `None` places no bound.
-    fn text_input_editable_range(
-        &mut self,
-        _window: &mut Window,
-        _cx: &mut App,
-    ) -> Option<Range<usize>> {
+    fn text_input_editable_range(&mut self, _window: &mut Window, _cx: &mut App) -> Option<Range<usize>> {
         None
     }
 
@@ -1777,11 +1666,7 @@ pub trait InputHandler: 'static {
     /// GPUI re-queries this every frame and forwards it to the platform window
     /// only when it changes, so implementations must be cheap and may vary the
     /// result with application state (e.g. with the cursor's position).
-    fn text_input_configuration(
-        &mut self,
-        _window: &mut Window,
-        _cx: &mut App,
-    ) -> TextInputConfiguration {
+    fn text_input_configuration(&mut self, _window: &mut Window, _cx: &mut App) -> TextInputConfiguration {
         TextInputConfiguration::default()
     }
 }
@@ -1980,7 +1865,7 @@ impl Default for WindowBounds {
 
 impl WindowBounds {
     /// Retrieve the inner bounds
-    pub fn get_bounds(&self) -> Bounds<Pixels> {
+    pub const fn get_bounds(&self) -> Bounds<Pixels> {
         match self {
             WindowBounds::Windowed(bounds) => *bounds,
             WindowBounds::Maximized(bounds) => *bounds,
@@ -2181,12 +2066,12 @@ impl PromptButton {
 
     /// Returns true if this button is a cancel button.
     #[allow(dead_code)]
-    pub fn is_cancel(&self) -> bool {
+    pub const fn is_cancel(&self) -> bool {
         matches!(self, PromptButton::Cancel(_))
     }
 
     /// Returns the label of the button
-    pub fn label(&self) -> &SharedString {
+    pub const fn label(&self) -> &SharedString {
         match self {
             PromptButton::Ok(label) => label,
             PromptButton::Cancel(label) => label,
@@ -2325,9 +2210,7 @@ impl std::fmt::Display for ClipboardReadError {
             Self::Denied(message) => {
                 write!(formatter, "clipboard access was denied: {message}")
             }
-            Self::UnsupportedContent => {
-                formatter.write_str("the clipboard contents are unsupported")
-            }
+            Self::UnsupportedContent => formatter.write_str("the clipboard contents are unsupported"),
         }
     }
 }
@@ -2348,35 +2231,22 @@ pub enum ClipboardEntry {
 impl ClipboardItem {
     /// Create a new ClipboardItem::String with no associated metadata
     pub fn new_string(text: String) -> Self {
-        Self {
-            entries: vec![ClipboardEntry::String(ClipboardString::new(text))],
-        }
+        Self { entries: vec![ClipboardEntry::String(ClipboardString::new(text))] }
     }
 
     /// Create a new ClipboardItem::String with the given text and associated metadata
     pub fn new_string_with_metadata(text: String, metadata: String) -> Self {
-        Self {
-            entries: vec![ClipboardEntry::String(ClipboardString {
-                text,
-                metadata: Some(metadata),
-            })],
-        }
+        Self { entries: vec![ClipboardEntry::String(ClipboardString { text, metadata: Some(metadata) })] }
     }
 
     /// Create a new ClipboardItem::String with the given text and associated metadata
     pub fn new_string_with_json_metadata<T: Serialize>(text: String, metadata: T) -> Self {
-        Self {
-            entries: vec![ClipboardEntry::String(
-                ClipboardString::new(text).with_json_metadata(metadata),
-            )],
-        }
+        Self { entries: vec![ClipboardEntry::String(ClipboardString::new(text).with_json_metadata(metadata))] }
     }
 
     /// Create a new ClipboardItem::Image with the given image with no associated metadata
     pub fn new_image(image: &Image) -> Self {
-        Self {
-            entries: vec![ClipboardEntry::Image(image.clone())],
-        }
+        Self { entries: vec![ClipboardEntry::Image(image.clone())] }
     }
 
     /// Concatenates together all the ClipboardString entries in the item.
@@ -2401,11 +2271,7 @@ impl ClipboardItem {
             }
         }
 
-        if !answer.is_empty() {
-            Some(answer)
-        } else {
-            None
-        }
+        if !answer.is_empty() { Some(answer) } else { None }
     }
 
     /// If this item is one ClipboardEntry::String, returns its metadata.
@@ -2450,9 +2316,7 @@ impl From<Image> for ClipboardEntry {
 
 impl From<ClipboardEntry> for ClipboardItem {
     fn from(value: ClipboardEntry) -> Self {
-        Self {
-            entries: vec![value],
-        }
+        Self { entries: vec![value] }
     }
 }
 
@@ -2528,9 +2392,7 @@ impl ImageFormat {
     /// Returns the ImageFormat for the given mime type, including known aliases.
     pub fn from_mime_type(mime_type: &str) -> Option<Self> {
         use strum::IntoEnumIterator;
-        Self::iter()
-            .find(|format| format.mime_type() == mime_type)
-            .or_else(|| Self::from_mime_type_alias(mime_type))
+        Self::iter().find(|format| format.mime_type() == mime_type).or_else(|| Self::from_mime_type_alias(mime_type))
     }
 
     /// Non-canonical mime types that some producers use in the wild.
@@ -2556,27 +2418,19 @@ pub struct Image {
     pub id: u64,
 }
 
-pub(crate) fn decode_static_image(
-    bytes: &[u8],
-    format: image::ImageFormat,
-) -> Result<SmallVec<[Frame; 1]>> {
-    let decoder = image::ImageReader::with_format(Cursor::new(bytes), format)
-        .into_decoder()
-        .context("creating image decoder")?;
+pub(crate) fn decode_static_image(bytes: &[u8], format: image::ImageFormat) -> Result<SmallVec<[Frame; 1]>> {
+    let decoder =
+        image::ImageReader::with_format(Cursor::new(bytes), format).into_decoder().context("creating image decoder")?;
     decode_static_image_from_decoder(decoder)
 }
 
-pub(crate) fn decode_static_image_from_decoder(
-    mut decoder: impl image::ImageDecoder,
-) -> Result<SmallVec<[Frame; 1]>> {
-    let orientation = decoder
-        .orientation()
-        .context("reading decoder's orientation")?;
+pub(crate) fn decode_static_image_from_decoder(mut decoder: impl image::ImageDecoder) -> Result<SmallVec<[Frame; 1]>> {
+    let orientation = decoder.orientation().context("reading decoder's orientation")?;
     let mut image = DynamicImage::from_decoder(decoder).context("decoding image")?;
     image.apply_orientation(orientation);
 
     let mut data = image.into_rgba8();
-    for pixel in data.chunks_exact_mut(4) {
+    for pixel in data.as_chunks_mut::<4>().0 {
         pixel.swap(0, 2);
     }
 
@@ -2597,38 +2451,22 @@ impl Image {
 
     /// Create an image from a format and bytes
     pub fn from_bytes(format: ImageFormat, bytes: Vec<u8>) -> Self {
-        Self {
-            id: hash(&bytes),
-            format,
-            bytes,
-        }
+        Self { id: hash(&bytes), format, bytes }
     }
 
     /// Get this image's ID
-    pub fn id(&self) -> u64 {
+    pub const fn id(&self) -> u64 {
         self.id
     }
 
     /// Use the GPUI `use_asset` API to make this image renderable
-    pub fn use_render_image(
-        self: Arc<Self>,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Option<Arc<RenderImage>> {
-        ImageSource::Image(self)
-            .use_data(None, window, cx)
-            .and_then(|result| result.ok())
+    pub fn use_render_image(self: Arc<Self>, window: &mut Window, cx: &mut App) -> Option<Arc<RenderImage>> {
+        ImageSource::Image(self).use_data(None, window, cx).and_then(|result| result.ok())
     }
 
     /// Use the GPUI `get_asset` API to make this image renderable
-    pub fn get_render_image(
-        self: Arc<Self>,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Option<Arc<RenderImage>> {
-        ImageSource::Image(self)
-            .get_data(None, window, cx)
-            .and_then(|result| result.ok())
+    pub fn get_render_image(self: Arc<Self>, window: &mut Window, cx: &mut App) -> Option<Arc<RenderImage>> {
+        ImageSource::Image(self).get_data(None, window, cx).and_then(|result| result.ok())
     }
 
     /// Use the GPUI `remove_asset` API to drop this image, if possible.
@@ -2647,7 +2485,7 @@ impl Image {
                     match frame {
                         Ok(mut frame) => {
                             // Convert from RGBA to BGRA.
-                            for pixel in frame.buffer_mut().chunks_exact_mut(4) {
+                            for pixel in frame.buffer_mut().as_chunks_mut::<4>().0 {
                                 pixel.swap(0, 2);
                             }
                             frames.push(frame);
@@ -2671,9 +2509,7 @@ impl Image {
             ImageFormat::Tiff => decode_static_image(&self.bytes, image::ImageFormat::Tiff)?,
             ImageFormat::Ico => decode_static_image(&self.bytes, image::ImageFormat::Ico)?,
             ImageFormat::Svg => {
-                return svg_renderer
-                    .render_single_frame(&self.bytes, 1.0)
-                    .map_err(Into::into);
+                return svg_renderer.render_single_frame(&self.bytes, 1.0).map_err(Into::into);
             }
             ImageFormat::Pnm => decode_static_image(&self.bytes, image::ImageFormat::Pnm)?,
         };
@@ -2682,12 +2518,12 @@ impl Image {
     }
 
     /// Get the format of the clipboard image
-    pub fn format(&self) -> ImageFormat {
+    pub const fn format(&self) -> ImageFormat {
         self.format
     }
 
     /// Get the raw bytes of the clipboard image
-    pub fn bytes(&self) -> &[u8] {
+    pub const fn bytes(&self) -> &[u8] {
         self.bytes.as_slice()
     }
 }
@@ -2703,11 +2539,8 @@ pub struct ClipboardString {
 
 impl ClipboardString {
     /// Create a new clipboard string with the given text
-    pub fn new(text: String) -> Self {
-        Self {
-            text,
-            metadata: None,
-        }
+    pub const fn new(text: String) -> Self {
+        Self { text, metadata: None }
     }
 
     /// Return a new clipboard item with the metadata replaced by the given metadata,
@@ -2718,7 +2551,7 @@ impl ClipboardString {
     }
 
     /// Get the text of the clipboard string
-    pub fn text(&self) -> &String {
+    pub const fn text(&self) -> &String {
         &self.text
     }
 
@@ -2732,9 +2565,7 @@ impl ClipboardString {
     where
         T: for<'a> Deserialize<'a>,
     {
-        self.metadata
-            .as_ref()
-            .and_then(|m| serde_json::from_str(m).ok())
+        self.metadata.as_ref().and_then(|m| serde_json::from_str(m).ok())
     }
 
     /// Compute a hash of the given text for clipboard change detection.
@@ -2747,9 +2578,6 @@ impl ClipboardString {
 
 impl From<String> for ClipboardString {
     fn from(value: String) -> Self {
-        Self {
-            text: value,
-            metadata: None,
-        }
+        Self { text: value, metadata: None }
     }
 }

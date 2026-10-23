@@ -11,11 +11,7 @@ impl Editor {
         }
     }
 
-    pub fn set_soft_wrap_mode(
-        &mut self,
-        mode: language_settings::SoftWrap,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn set_soft_wrap_mode(&mut self, mode: language_settings::SoftWrap, cx: &mut Context<Self>) {
         self.soft_wrap_mode_override = Some(mode);
         cx.notify();
     }
@@ -37,11 +33,8 @@ impl Editor {
         if !self.mode.is_minimap() {
             let font = style.text.font();
             let font_size = style.text.font_size.to_pixels(window.rem_size());
-            let display_map = self
-                .placeholder_display_map
-                .as_ref()
-                .filter(|_| self.is_empty(cx))
-                .unwrap_or(&self.display_map);
+            let display_map =
+                self.placeholder_display_map.as_ref().filter(|_| self.is_empty(cx)).unwrap_or(&self.display_map);
 
             if display_map.update(cx, |map, cx| map.set_font(font, font_size, cx)) {
                 self.inlay_hint_visibility_changed(cx);
@@ -50,7 +43,7 @@ impl Editor {
         self.style = Some(style);
     }
 
-    pub fn set_soft_wrap(&mut self) {
+    pub const fn set_soft_wrap(&mut self) {
         self.soft_wrap_mode_override = Some(language_settings::SoftWrap::EditorWidth)
     }
 
@@ -64,11 +57,7 @@ impl Editor {
         cx.notify();
     }
 
-    pub fn disable_indent_guides_for_buffer(
-        &mut self,
-        buffer_id: BufferId,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn disable_indent_guides_for_buffer(&mut self, buffer_id: BufferId, cx: &mut Context<Self>) {
         self.buffers_with_disabled_indent_guides.insert(buffer_id);
         cx.notify();
     }
@@ -87,23 +76,18 @@ impl Editor {
         if self.minimap_visibility != minimap_visibility {
             if minimap_visibility.visible() && self.minimap.is_none() {
                 let minimap_settings = EditorSettings::get_global(cx).minimap;
-                self.minimap =
-                    self.create_minimap(minimap_settings.with_show_override(), window, cx);
+                self.minimap = self.create_minimap(minimap_settings.with_show_override(), window, cx);
             }
             self.minimap_visibility = minimap_visibility;
             cx.notify();
         }
     }
 
-    pub fn breadcrumbs_visible(&self) -> bool {
+    pub const fn breadcrumbs_visible(&self) -> bool {
         self.breadcrumbs_visibility.visible()
     }
 
-    fn set_breadcrumbs_visibility(
-        &mut self,
-        breadcrumbs_visibility: BreadcrumbsVisibility,
-        cx: &mut Context<Self>,
-    ) {
+    fn set_breadcrumbs_visibility(&mut self, breadcrumbs_visibility: BreadcrumbsVisibility, cx: &mut Context<Self>) {
         if self.breadcrumbs_visibility != breadcrumbs_visibility {
             self.breadcrumbs_visibility = breadcrumbs_visibility;
             cx.emit(EditorEvent::BreadcrumbsChanged);
@@ -111,12 +95,7 @@ impl Editor {
         }
     }
 
-    pub fn toggle_breadcrumb(
-        &mut self,
-        _: &ToggleBreadcrumb,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn toggle_breadcrumb(&mut self, _: &ToggleBreadcrumb, _: &mut Window, cx: &mut Context<Self>) {
         self.set_breadcrumbs_visibility(self.breadcrumbs_visibility.toggle_visibility(), cx);
     }
 
@@ -204,13 +183,9 @@ impl Editor {
         let settings = self.buffer.read(cx).language_settings(cx);
         let mode = self.soft_wrap_mode_override.unwrap_or(settings.soft_wrap);
         match mode {
-            language_settings::SoftWrap::PreferLine | language_settings::SoftWrap::None => {
-                SoftWrap::None
-            }
+            language_settings::SoftWrap::PreferLine | language_settings::SoftWrap::None => SoftWrap::None,
             language_settings::SoftWrap::EditorWidth => SoftWrap::EditorWidth,
-            language_settings::SoftWrap::Bounded => {
-                SoftWrap::Bounded(settings.preferred_line_length)
-            }
+            language_settings::SoftWrap::Bounded => SoftWrap::Bounded(settings.preferred_line_length),
         }
     }
 
@@ -219,15 +194,13 @@ impl Editor {
     pub(super) fn set_wrap_width(&mut self, width: Option<Pixels>, cx: &mut Context<Self>) -> bool {
         let indent = self.soft_wrap_indent(cx);
         let changed = if self.is_empty(cx) {
-            self.placeholder_display_map
-                .as_ref()
-                .map_or(false, |display_map| {
-                    display_map.update(cx, |map, cx| {
-                        let wrap_width_changed = map.set_wrap_width(width, cx);
-                        let indent_changed = map.set_soft_wrap_indent(indent, cx);
-                        wrap_width_changed || indent_changed
-                    })
+            self.placeholder_display_map.as_ref().is_some_and(|display_map| {
+                display_map.update(cx, |map, cx| {
+                    let wrap_width_changed = map.set_wrap_width(width, cx);
+                    let indent_changed = map.set_soft_wrap_indent(indent, cx);
+                    wrap_width_changed || indent_changed
                 })
+            })
         } else {
             self.display_map.update(cx, |map, cx| {
                 let wrap_width_changed = map.set_wrap_width(width, cx);
@@ -255,12 +228,7 @@ impl Editor {
         cx.notify();
     }
 
-    pub(super) fn toggle_tab_bar(
-        &mut self,
-        _: &ToggleTabBar,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn toggle_tab_bar(&mut self, _: &ToggleTabBar, _: &mut Window, cx: &mut Context<Self>) {
         let Some(workspace) = self.workspace() else {
             return;
         };
@@ -271,30 +239,20 @@ impl Editor {
         });
     }
 
-    pub(super) fn toggle_indent_guides(
-        &mut self,
-        _: &ToggleIndentGuides,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let currently_enabled = self.should_show_indent_guides().unwrap_or_else(|| {
-            self.buffer
-                .read(cx)
-                .language_settings(cx)
-                .indent_guides
-                .enabled
-        });
+    pub(super) fn toggle_indent_guides(&mut self, _: &ToggleIndentGuides, _: &mut Window, cx: &mut Context<Self>) {
+        let currently_enabled = self
+            .should_show_indent_guides()
+            .unwrap_or_else(|| self.buffer.read(cx).language_settings(cx).indent_guides.enabled);
         self.show_indent_guides = Some(!currently_enabled);
         cx.notify();
     }
 
-    pub(super) fn should_show_indent_guides(&self) -> Option<bool> {
+    pub(super) const fn should_show_indent_guides(&self) -> Option<bool> {
         self.show_indent_guides
     }
 
     pub(super) fn has_indent_guides_disabled_for_buffer(&self, buffer_id: BufferId) -> bool {
-        self.buffers_with_disabled_indent_guides
-            .contains(&buffer_id)
+        self.buffers_with_disabled_indent_guides.contains(&buffer_id)
     }
 
     pub(super) fn set_number_deleted_lines(&mut self, number: bool, cx: &mut Context<Self>) {
@@ -302,11 +260,11 @@ impl Editor {
         cx.notify();
     }
 
-    pub fn set_delegate_open_excerpts(&mut self, delegate: bool) {
+    pub const fn set_delegate_open_excerpts(&mut self, delegate: bool) {
         self.delegate_open_excerpts = delegate;
     }
 
-    pub(super) fn set_delegate_expand_excerpts(&mut self, delegate: bool) {
+    pub(super) const fn set_delegate_expand_excerpts(&mut self, delegate: bool) {
         self.delegate_expand_excerpts = delegate;
     }
 
@@ -317,7 +275,7 @@ impl Editor {
         self.on_local_selections_changed = callback;
     }
 
-    pub(super) fn set_suppress_selection_callback(&mut self, suppress: bool) {
+    pub(super) const fn set_suppress_selection_callback(&mut self, suppress: bool) {
         self.suppress_selection_callback = suppress;
     }
 }

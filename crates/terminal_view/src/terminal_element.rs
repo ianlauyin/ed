@@ -1,32 +1,86 @@
-use editor::{CursorLayout, EditorSettings, HighlightedRange, HighlightedRangeLine};
-use gpui::{
-    AbsoluteLength, AnyElement, App, AvailableSpace, Bounds, ContentMask, DispatchPhase, Element,
-    ElementId, Entity, FocusHandle, Font, FontFeatures, FontStyle, FontWeight, GlobalElementId,
-    HighlightStyle, Hitbox, Hsla, InputHandler, InteractiveElement, Interactivity, IntoElement,
-    LayoutId, ModifiersChangedEvent, MouseButton, MouseMoveEvent, Pixels, Point as GpuiPoint,
-    StatefulInteractiveElement, StrikethroughStyle, Styled, TextRun, TextStyle, UTF16Selection,
-    UnderlineStyle, WeakEntity, WhiteSpace, Window, div, fill, point, px, relative, size,
-};
+use std::fmt::Debug;
+use std::mem;
+use std::rc::Rc;
+use std::time::Instant;
+
+use editor::CursorLayout;
+use editor::EditorSettings;
+use editor::HighlightedRange;
+use editor::HighlightedRangeLine;
+use gpui::AbsoluteLength;
+use gpui::AnyElement;
+use gpui::App;
+use gpui::AvailableSpace;
+use gpui::Bounds;
+use gpui::ContentMask;
+use gpui::DispatchPhase;
+use gpui::Element;
+use gpui::ElementId;
+use gpui::Entity;
+use gpui::FocusHandle;
+use gpui::Font;
+use gpui::FontFeatures;
+use gpui::FontStyle;
+use gpui::FontWeight;
+use gpui::GlobalElementId;
+use gpui::HighlightStyle;
+use gpui::Hitbox;
+use gpui::Hsla;
+use gpui::InputHandler;
+use gpui::InteractiveElement;
+use gpui::Interactivity;
+use gpui::IntoElement;
+use gpui::LayoutId;
+use gpui::ModifiersChangedEvent;
+use gpui::MouseButton;
+use gpui::MouseMoveEvent;
+use gpui::Pixels;
+use gpui::Point as GpuiPoint;
+use gpui::StatefulInteractiveElement;
+use gpui::StrikethroughStyle;
+use gpui::Styled;
+use gpui::TextRun;
+use gpui::TextStyle;
+use gpui::UTF16Selection;
+use gpui::UnderlineStyle;
+use gpui::WeakEntity;
+use gpui::WhiteSpace;
+use gpui::Window;
+use gpui::div;
+use gpui::fill;
+use gpui::point;
+use gpui::px;
+use gpui::relative;
+use gpui::size;
 use itertools::Itertools;
 use language::CursorShape as EditorCursorShape;
 use settings::Settings;
-use std::time::Instant;
-use terminal::{
-    Cell, Color, Content, CursorShape, IndexedCell, Modes, NamedColor, Point, Range, Terminal,
-    TerminalBounds, is_app_chosen_exact_color as terminal_is_app_chosen_exact_color,
-    is_default_background_color, terminal_settings::TerminalSettings,
-};
-use theme::{ActiveTheme, Theme};
+use terminal::Cell;
+use terminal::Color;
+use terminal::Content;
+use terminal::CursorShape;
+use terminal::IndexedCell;
+use terminal::Modes;
+use terminal::NamedColor;
+use terminal::Point;
+use terminal::Range;
+use terminal::Terminal;
+use terminal::TerminalBounds;
+use terminal::is_app_chosen_exact_color as terminal_is_app_chosen_exact_color;
+use terminal::is_default_background_color;
+use terminal::terminal_settings::TerminalSettings;
+use theme::ActiveTheme;
+use theme::Theme;
 use theme_settings::ThemeSettings;
+use ui::ParentElement;
+use ui::Tooltip;
 use ui::utils::ensure_minimum_contrast;
-use ui::{ParentElement, Tooltip};
 use util::ResultExt;
 use workspace::Workspace;
 
-use std::mem;
-use std::{fmt::Debug, rc::Rc};
-
-use crate::{BlockContext, BlockProperties, TerminalView};
+use crate::BlockContext;
+use crate::BlockProperties;
+use crate::TerminalView;
 
 /// The information generated during layout that is necessary for painting.
 pub struct LayoutState {
@@ -53,18 +107,15 @@ struct DisplayCursor {
 }
 
 impl DisplayCursor {
-    fn from(cursor_point: Point, display_offset: usize) -> Self {
-        Self {
-            line: cursor_point.line + display_offset as i32,
-            col: cursor_point.column,
-        }
+    const fn from(cursor_point: Point, display_offset: usize) -> Self {
+        Self { line: cursor_point.line + display_offset as i32, col: cursor_point.column }
     }
 
-    pub fn line(&self) -> i32 {
+    pub const fn line(&self) -> i32 {
         self.line
     }
 
-    pub fn col(&self) -> usize {
+    pub const fn col(&self) -> usize {
         self.col
     }
 }
@@ -76,15 +127,15 @@ pub struct LayoutPoint {
 }
 
 impl LayoutPoint {
-    fn new(line: i32, column: i32) -> Self {
+    const fn new(line: i32, column: i32) -> Self {
         Self { line, column }
     }
 
-    pub fn line(&self) -> i32 {
+    pub const fn line(&self) -> i32 {
         self.line
     }
 
-    pub fn column(&self) -> i32 {
+    pub const fn column(&self) -> i32 {
         self.column
     }
 }
@@ -100,21 +151,10 @@ pub struct BatchedTextRun {
 }
 
 impl BatchedTextRun {
-    fn new_from_char(
-        start_point: LayoutPoint,
-        c: char,
-        style: TextRun,
-        font_size: AbsoluteLength,
-    ) -> Self {
+    fn new_from_char(start_point: LayoutPoint, c: char, style: TextRun, font_size: AbsoluteLength) -> Self {
         let mut text = String::with_capacity(100); // Pre-allocate for typical line length
         text.push(c);
-        BatchedTextRun {
-            start_point,
-            text,
-            cell_count: 1,
-            style,
-            font_size,
-        }
+        BatchedTextRun { start_point, text, cell_count: 1, style, font_size }
     }
 
     fn can_append(&self, other_style: &TextRun) -> bool {
@@ -143,13 +183,7 @@ impl BatchedTextRun {
         self.style.len += c.len_utf8();
     }
 
-    pub fn paint(
-        &self,
-        origin: GpuiPoint<Pixels>,
-        dimensions: &TerminalBounds,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
+    pub fn paint(&self, origin: GpuiPoint<Pixels>, dimensions: &TerminalBounds, window: &mut Window, cx: &mut App) {
         let pos = GpuiPoint::new(
             origin.x + self.start_point.column as f32 * dimensions.cell_width,
             origin.y + self.start_point.line as f32 * dimensions.line_height,
@@ -163,14 +197,7 @@ impl BatchedTextRun {
                 std::slice::from_ref(&self.style),
                 Some(dimensions.cell_width),
             )
-            .paint(
-                pos,
-                dimensions.line_height,
-                gpui::TextAlign::Left,
-                None,
-                window,
-                cx,
-            )
+            .paint(pos, dimensions.line_height, gpui::TextAlign::Left, None, window, cx)
             .log_err();
     }
 }
@@ -190,36 +217,23 @@ pub struct BlockElementLayoutRect {
 }
 
 impl BlockElementLayoutRect {
-    fn new(point: LayoutPoint, num_of_columns: usize, num_of_lines: usize, color: Hsla) -> Self {
-        Self {
-            point,
-            num_of_columns,
-            num_of_lines,
-            color,
-        }
+    const fn new(point: LayoutPoint, num_of_columns: usize, num_of_lines: usize, color: Hsla) -> Self {
+        Self { point, num_of_columns, num_of_lines, color }
     }
 
-    pub fn paint(
-        &self,
-        origin: GpuiPoint<Pixels>,
-        dimensions: &TerminalBounds,
-        window: &mut Window,
-    ) {
+    pub fn paint(&self, origin: GpuiPoint<Pixels>, dimensions: &TerminalBounds, window: &mut Window) {
         let subcell_width = dimensions.cell_width / BLOCK_SUBCELL_COLUMNS as f32;
         let subcell_height = dimensions.line_height / BLOCK_SUBCELL_LINES as f32;
         let position = point(
             origin.x + self.point.column as f32 * subcell_width,
             origin.y + self.point.line as f32 * subcell_height,
         );
-        let size = size(
-            subcell_width * self.num_of_columns as f32,
-            subcell_height * self.num_of_lines as f32,
-        );
+        let size = size(subcell_width * self.num_of_columns as f32, subcell_height * self.num_of_lines as f32);
 
         window.paint_quad(fill(Bounds::new(position, size), self.color));
     }
 
-    pub fn line(&self) -> i32 {
+    pub const fn line(&self) -> i32 {
         (self.point.line + self.num_of_lines as i32 - 1) / BLOCK_SUBCELL_LINES
     }
 }
@@ -232,20 +246,11 @@ pub struct LayoutRect {
 }
 
 impl LayoutRect {
-    fn new(point: LayoutPoint, num_of_cells: usize, color: Hsla) -> LayoutRect {
-        LayoutRect {
-            point,
-            num_of_cells,
-            color,
-        }
+    const fn new(point: LayoutPoint, num_of_cells: usize, color: Hsla) -> LayoutRect {
+        LayoutRect { point, num_of_cells, color }
     }
 
-    pub fn paint(
-        &self,
-        origin: GpuiPoint<Pixels>,
-        dimensions: &TerminalBounds,
-        window: &mut Window,
-    ) {
+    pub fn paint(&self, origin: GpuiPoint<Pixels>, dimensions: &TerminalBounds, window: &mut Window) {
         let position = {
             let layout_point = self.point;
             point(
@@ -253,11 +258,7 @@ impl LayoutRect {
                 origin.y + layout_point.line as f32 * dimensions.line_height,
             )
         };
-        let size = point(
-            (dimensions.cell_width * self.num_of_cells as f32).ceil(),
-            dimensions.line_height,
-        )
-        .into();
+        let size = point((dimensions.cell_width * self.num_of_cells as f32).ceil(), dimensions.line_height).into();
 
         window.paint_quad(fill(Bounds::new(position, size), self.color));
     }
@@ -274,30 +275,12 @@ struct BackgroundRegion {
 }
 
 impl BackgroundRegion {
-    fn new(line: i32, col: i32, color: Hsla) -> Self {
-        BackgroundRegion {
-            start_line: line,
-            start_col: col,
-            end_line: line,
-            end_col: col,
-            color,
-        }
+    const fn new(line: i32, col: i32, color: Hsla) -> Self {
+        BackgroundRegion { start_line: line, start_col: col, end_line: line, end_col: col, color }
     }
 
-    fn with_extents(
-        start_line: i32,
-        start_col: i32,
-        end_line: i32,
-        end_col: i32,
-        color: Hsla,
-    ) -> Self {
-        BackgroundRegion {
-            start_line,
-            start_col,
-            end_line,
-            end_col,
-            color,
-        }
+    const fn with_extents(start_line: i32, start_col: i32, end_line: i32, end_col: i32, color: Hsla) -> Self {
+        BackgroundRegion { start_line, start_col, end_line, end_col, color }
     }
 
     /// Check if this region can be merged with another region
@@ -436,11 +419,7 @@ impl TerminalElement {
         hyperlink: Option<(HighlightStyle, &Range)>,
         minimum_contrast: f32,
         cx: &App,
-    ) -> (
-        Vec<LayoutRect>,
-        Vec<BatchedTextRun>,
-        Vec<BlockElementLayoutRect>,
-    ) {
+    ) -> (Vec<LayoutRect>, Vec<BatchedTextRun>, Vec<BlockElementLayoutRect>) {
         let start_time = Instant::now();
         let theme = cx.theme();
 
@@ -506,8 +485,7 @@ impl TerminalElement {
                     continue;
                 }
                 // Update tracking for next iteration
-                previous_cell_had_extras =
-                    matches!(cell.zerowidth(), Some(chars) if !chars.is_empty());
+                previous_cell_had_extras = matches!(cell.zerowidth(), Some(chars) if !chars.is_empty());
 
                 //Layout current cell text
                 {
@@ -543,8 +521,7 @@ impl TerminalElement {
                         if let Some(ref mut batch) = current_batch {
                             if batch.can_append(&cell_style)
                                 && batch.start_point.line == cell_point.line
-                                && batch.start_point.column + batch.cell_count as i32
-                                    == cell_point.column
+                                && batch.start_point.column + batch.cell_count as i32 == cell_point.column
                             {
                                 batch.append_char(cell.character());
                                 if let Some(chars) = zero_width_chars {
@@ -626,10 +603,7 @@ impl TerminalElement {
     }
 
     /// Computes the cursor position based on the cursor point and terminal dimensions.
-    fn cursor_position(
-        cursor_point: DisplayCursor,
-        size: TerminalBounds,
-    ) -> Option<GpuiPoint<Pixels>> {
+    fn cursor_position(cursor_point: DisplayCursor, size: TerminalBounds) -> Option<GpuiPoint<Pixels>> {
         if cursor_point.line() < size.num_lines() as i32 {
             // When on pixel boundaries round the origin down
             Some(point(
@@ -649,7 +623,7 @@ impl TerminalElement {
     /// Regular icons (git, folders, etc.) are excluded as they need to remain readable.
     ///
     /// Fixes https://github.com/zed-industries/zed/issues/34234
-    fn is_decorative_character(ch: char) -> bool {
+    const fn is_decorative_character(ch: char) -> bool {
         matches!(
             ch as u32,
             // Unicode Box Drawing and Block Elements
@@ -673,7 +647,7 @@ impl TerminalElement {
     /// 6x6x6 cube at 16..=231 and the 24-step grayscale ramp at 232..=255).
     /// Indices 0..=15 still go through contrast adjustment since those map to
     /// theme-defined ANSI colors that can clash with the theme background.
-    fn is_app_chosen_exact_color(fg: &Color) -> bool {
+    const fn is_app_chosen_exact_color(fg: &Color) -> bool {
         terminal_is_app_chosen_exact_color(*fg)
     }
 
@@ -694,7 +668,7 @@ impl TerminalElement {
 
     /// Returns the filled quadrants of a quadrant character as a bitmap, where
     /// bit `row * 2 + column` is set when that 2x2 subcell is filled.
-    fn quadrant_char_to_filled_bits(ch: char) -> Option<u8> {
+    const fn quadrant_char_to_filled_bits(ch: char) -> Option<u8> {
         Some(match ch {
             '▘' => 0b0001,
             '▝' => 0b0010,
@@ -712,7 +686,7 @@ impl TerminalElement {
 
     /// Returns `(column, line, num_of_columns, num_of_lines)` in subcell units
     /// for block element characters that consist of a single rectangle.
-    fn block_char_to_rect(ch: char) -> Option<(i32, i32, i32, i32)> {
+    const fn block_char_to_rect(ch: char) -> Option<(i32, i32, i32, i32)> {
         let codepoint = ch as u32;
         Some(match codepoint {
             // ▀ upper half
@@ -737,7 +711,7 @@ impl TerminalElement {
     /// Approximates the shade characters `░▒▓` with the foreground color at
     /// reduced opacity instead of the stipple patterns fonts use, trading
     /// pattern fidelity for seamless cell coverage.
-    fn shade_char_to_opacity(ch: char) -> Option<f32> {
+    const fn shade_char_to_opacity(ch: char) -> Option<f32> {
         match ch {
             '░' => Some(0.25),
             '▒' => Some(0.5),
@@ -753,15 +727,7 @@ impl TerminalElement {
         regions: &mut Vec<BackgroundRegion>,
     ) -> bool {
         if let Some((column, line, num_of_columns, num_of_lines)) = Self::block_char_to_rect(ch) {
-            Self::push_block_element_region(
-                point,
-                column,
-                line,
-                num_of_columns,
-                num_of_lines,
-                color,
-                regions,
-            );
+            Self::push_block_element_region(point, column, line, num_of_columns, num_of_lines, color, regions);
             return true;
         }
 
@@ -769,15 +735,7 @@ impl TerminalElement {
             for row in 0..2 {
                 for column in 0..2 {
                     if filled & (1 << (row * 2 + column)) != 0 {
-                        Self::push_block_element_region(
-                            point,
-                            column * 4,
-                            row * 12,
-                            4,
-                            12,
-                            color,
-                            regions,
-                        );
+                        Self::push_block_element_region(point, column * 4, row * 12, 4, 12, color, regions);
                     }
                 }
             }
@@ -788,15 +746,7 @@ impl TerminalElement {
             for row in 0..3 {
                 for column in 0..2 {
                     if filled & (1 << (row * 2 + column)) != 0 {
-                        Self::push_block_element_region(
-                            point,
-                            column * 4,
-                            row * 8,
-                            4,
-                            8,
-                            color,
-                            regions,
-                        );
+                        Self::push_block_element_region(point, column * 4, row * 8, 4, 8, color, regions);
                     }
                 }
             }
@@ -837,14 +787,10 @@ impl TerminalElement {
             return;
         }
 
-        regions.push(BackgroundRegion::with_extents(
-            start_line, start_col, end_line, end_col, color,
-        ));
+        regions.push(BackgroundRegion::with_extents(start_line, start_col, end_line, end_col, color));
     }
 
-    fn block_element_regions_to_rects(
-        regions: Vec<BackgroundRegion>,
-    ) -> Vec<BlockElementLayoutRect> {
+    fn block_element_regions_to_rects(regions: Vec<BackgroundRegion>) -> Vec<BlockElementLayoutRect> {
         merge_background_regions(regions)
             .into_iter()
             .map(|region| {
@@ -882,39 +828,24 @@ impl TerminalElement {
             fg.a *= 0.7;
         }
 
-        let underline =
-            (cell.has_underline() || cell.hyperlink().is_some()).then(|| UnderlineStyle {
-                color: Some(fg),
-                thickness: Pixels::from(1.0),
-                wavy: cell.has_undercurl(),
-            });
-
-        let strikethrough = cell.has_strikeout().then(|| StrikethroughStyle {
+        let underline = (cell.has_underline() || cell.hyperlink().is_some()).then(|| UnderlineStyle {
             color: Some(fg),
             thickness: Pixels::from(1.0),
+            wavy: cell.has_undercurl(),
         });
 
-        let weight = if cell.is_bold() {
-            FontWeight::BOLD
-        } else {
-            text_style.font_weight
-        };
+        let strikethrough =
+            cell.has_strikeout().then(|| StrikethroughStyle { color: Some(fg), thickness: Pixels::from(1.0) });
 
-        let style = if cell.is_italic() {
-            FontStyle::Italic
-        } else {
-            FontStyle::Normal
-        };
+        let weight = if cell.is_bold() { FontWeight::BOLD } else { text_style.font_weight };
+
+        let style = if cell.is_italic() { FontStyle::Italic } else { FontStyle::Normal };
 
         let mut result = TextRun {
             len: cell.character().len_utf8(),
             color: fg,
             background_color: None,
-            font: Font {
-                weight,
-                style,
-                ..text_style.font()
-            },
+            font: Font { weight, style, ..text_style.font() },
             underline,
             strikethrough,
         };
@@ -1001,12 +932,7 @@ impl TerminalElement {
                     if !focus.is_focused(window) {
                         return;
                     }
-                    if button != MouseButton::Left
-                        && !terminal
-                            .read(cx)
-                            .last_content
-                            .mode
-                            .intersects(Modes::MOUSE_MODE)
+                    if button != MouseButton::Left && !terminal.read(cx).last_content.mode.intersects(Modes::MOUSE_MODE)
                     {
                         return;
                     }
@@ -1023,11 +949,7 @@ impl TerminalElement {
                 let focus = focus.clone();
                 move |event, window, cx| {
                     if button == MouseButton::Right
-                        && !terminal
-                            .read(cx)
-                            .last_content
-                            .mode
-                            .intersects(Modes::MOUSE_MODE)
+                        && !terminal.read(cx).last_content.mode.intersects(Modes::MOUSE_MODE)
                     {
                         return;
                     }
@@ -1053,7 +975,7 @@ impl TerminalElement {
         });
     }
 
-    fn rem_size(&self, cx: &mut App) -> Option<Pixels> {
+    fn rem_size(&self, cx: &App) -> Option<Pixels> {
         let settings = ThemeSettings::get_global(cx);
         let buffer_font_size = settings.buffer_font_size(cx);
         let rem_size_scale = {
@@ -1092,14 +1014,12 @@ impl Element for TerminalElement {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        let layout_id =
-            self.interactivity
-                .request_layout(global_id, window, cx, |mut style, window, cx| {
-                    style.size.width = relative(1.).into();
-                    style.size.height = relative(1.).into();
+        let layout_id = self.interactivity.request_layout(global_id, window, cx, |mut style, window, cx| {
+            style.size.width = relative(1.).into();
+            style.size.height = relative(1.).into();
 
-                    window.request_layout(style, None, cx)
-                });
+            window.request_layout(style, None, cx)
+        });
         (layout_id, ())
     }
 
@@ -1112,232 +1032,187 @@ impl Element for TerminalElement {
         cx: &mut App,
     ) -> Self::PrepaintState {
         let rem_size = self.rem_size(cx);
-        self.interactivity.prepaint(
-            global_id,
-            bounds,
-            bounds.size,
-            window,
-            cx,
-            |_, _, hitbox, window, cx| {
-                let hitbox = hitbox.unwrap();
-                let settings = ThemeSettings::get_global(cx);
+        self.interactivity.prepaint(global_id, bounds, bounds.size, window, cx, |_, _, hitbox, window, cx| {
+            let hitbox = hitbox.unwrap();
+            let settings = ThemeSettings::get_global(cx);
 
-                let buffer_font_size = settings.buffer_font_size(cx);
+            let buffer_font_size = settings.buffer_font_size(cx);
 
-                let terminal_settings = TerminalSettings::get_global(cx);
-                let minimum_contrast = terminal_settings.minimum_contrast;
+            let terminal_settings = TerminalSettings::get_global(cx);
+            let minimum_contrast = terminal_settings.minimum_contrast;
 
-                let font_family = terminal_settings.font_family.as_ref().map_or_else(
-                    || settings.buffer_font.family.clone(),
-                    |font_family| font_family.0.clone().into(),
-                );
+            let font_family = terminal_settings
+                .font_family
+                .as_ref()
+                .map_or_else(|| settings.buffer_font.family.clone(), |font_family| font_family.0.clone().into());
 
-                let font_fallbacks = terminal_settings
-                    .font_fallbacks
-                    .as_ref()
-                    .or(settings.buffer_font.fallbacks.as_ref())
-                    .cloned();
+            let font_fallbacks =
+                terminal_settings.font_fallbacks.as_ref().or(settings.buffer_font.fallbacks.as_ref()).cloned();
 
-                let font_features = terminal_settings
-                    .font_features
-                    .as_ref()
-                    .unwrap_or(&FontFeatures::disable_ligatures())
-                    .clone();
+            let font_features =
+                terminal_settings.font_features.as_ref().unwrap_or(&FontFeatures::disable_ligatures()).clone();
 
-                let font_weight = terminal_settings.font_weight.unwrap_or_default();
+            let font_weight = terminal_settings.font_weight.unwrap_or_default();
 
-                let line_height = terminal_settings.line_height.value();
+            let line_height = terminal_settings.line_height.value();
 
-                let font_size = terminal_settings
-                    .font_size
-                    .map_or(buffer_font_size, |size| {
-                        theme_settings::adjusted_font_size(size, cx)
-                    });
+            let font_size = terminal_settings
+                .font_size
+                .map_or(buffer_font_size, |size| theme_settings::adjusted_font_size(size, cx));
 
-                let theme = cx.theme().clone();
+            let theme = cx.theme().clone();
 
-                let link_style = HighlightStyle {
+            let link_style = HighlightStyle {
+                color: Some(theme.colors().link_text_hover),
+                font_weight: Some(font_weight),
+                font_style: None,
+                background_color: None,
+                underline: Some(UnderlineStyle {
+                    thickness: px(1.0),
                     color: Some(theme.colors().link_text_hover),
-                    font_weight: Some(font_weight),
-                    font_style: None,
-                    background_color: None,
-                    underline: Some(UnderlineStyle {
-                        thickness: px(1.0),
-                        color: Some(theme.colors().link_text_hover),
-                        wavy: false,
-                    }),
-                    strikethrough: None,
-                    fade_out: None,
+                    wavy: false,
+                }),
+                strikethrough: None,
+                fade_out: None,
+            };
+
+            let text_style = TextStyle {
+                font_family,
+                font_features,
+                font_weight,
+                font_fallbacks,
+                font_size: font_size.into(),
+                font_style: FontStyle::Normal,
+                line_height: px(line_height).into(),
+                background_color: Some(theme.colors().terminal_ansi_background),
+                white_space: WhiteSpace::Normal,
+                // These are going to be overridden per-cell
+                color: theme.colors().terminal_foreground,
+                ..Default::default()
+            };
+
+            let text_system = cx.text_system();
+            let player_color = theme.player();
+            let match_color = theme.colors().search_match_background;
+            let gutter;
+            let (dimensions, line_height_px) = {
+                let rem_size = window.rem_size();
+                let font_pixels = text_style.font_size.to_pixels(rem_size);
+                let line_height = f32::from(font_pixels) * line_height;
+                let font_id = cx.text_system().resolve_font(&text_style.font());
+
+                let cell_width = text_system.advance(font_id, font_pixels, 'm').unwrap().width;
+                gutter = cell_width;
+
+                let mut size = bounds.size;
+                size.width -= gutter;
+                let available_height = size.height;
+
+                // https://github.com/zed-industries/zed/issues/2750
+                // if the terminal is one column wide, rendering 🦀
+                // causes alacritty to misbehave.
+                if size.width < cell_width * 2.0 {
+                    size.width = cell_width * 2.0;
+                }
+
+                let mut origin = bounds.origin;
+                origin.x += gutter;
+
+                let should_anchor_to_bottom = {
+                    let content = self.terminal.read(cx).last_content();
+                    content.mode.contains(Modes::ALT_SCREEN)
+                        || (content.scrolled_to_bottom && content.bottom_row_occupied)
                 };
+                let scale_factor = window.scale_factor();
+                let line_height_pixels = px(line_height);
+                let line_height_device_px = (f32::from(line_height_pixels) * scale_factor).round().max(1.0) as i32;
+                let available_height_device_px = (f32::from(available_height) * scale_factor).floor().max(0.0) as i32;
 
-                let text_style = TextStyle {
-                    font_family,
-                    font_features,
-                    font_weight,
-                    font_fallbacks,
-                    font_size: font_size.into(),
-                    font_style: FontStyle::Normal,
-                    line_height: px(line_height).into(),
-                    background_color: Some(theme.colors().terminal_ansi_background),
-                    white_space: WhiteSpace::Normal,
-                    // These are going to be overridden per-cell
-                    color: theme.colors().terminal_foreground,
-                    ..Default::default()
-                };
+                let rows = ((available_height_device_px / line_height_device_px) as usize).max(1);
+                let snapped_height_device_px = (rows as i32) * line_height_device_px;
+                let padding_device_px = (available_height_device_px - snapped_height_device_px).max(0);
 
-                let text_system = cx.text_system();
-                let player_color = theme.player();
-                let match_color = theme.colors().search_match_background;
-                let gutter;
-                let (dimensions, line_height_px) = {
-                    let rem_size = window.rem_size();
-                    let font_pixels = text_style.font_size.to_pixels(rem_size);
-                    let line_height = f32::from(font_pixels) * line_height;
-                    let font_id = cx.text_system().resolve_font(&text_style.font());
+                let snapped_height = px(snapped_height_device_px as f32 / scale_factor.max(1.0));
+                let padding = px(padding_device_px as f32 / scale_factor.max(1.0));
 
-                    let cell_width = text_system
-                        .advance(font_id, font_pixels, 'm')
-                        .unwrap()
-                        .width;
-                    gutter = cell_width;
+                size.height = snapped_height;
+                if should_anchor_to_bottom {
+                    origin.y += padding;
+                }
 
-                    let mut size = bounds.size;
-                    size.width -= gutter;
-                    let available_height = size.height;
+                // Snap to device pixels to avoid subpixel jitter while resizing.
+                // Terminal rendering is grid-based; allowing fractional origins can cause the
+                // glyph rasterization to shift between frames, which looks like flicker.
+                let scale_factor = window.scale_factor();
+                let snap_px = |value: Pixels| Pixels::from((f32::from(value) * scale_factor).floor() / scale_factor);
+                origin.x = snap_px(origin.x);
+                origin.y = snap_px(origin.y);
 
-                    // https://github.com/zed-industries/zed/issues/2750
-                    // if the terminal is one column wide, rendering 🦀
-                    // causes alacritty to misbehave.
-                    if size.width < cell_width * 2.0 {
-                        size.width = cell_width * 2.0;
-                    }
+                (TerminalBounds::new(px(line_height), cell_width, Bounds { origin, size }), line_height)
+            };
 
-                    let mut origin = bounds.origin;
-                    origin.x += gutter;
+            let search_matches = self.terminal.read(cx).matches.clone();
 
-                    let should_anchor_to_bottom = {
-                        let content = self.terminal.read(cx).last_content();
-                        content.mode.contains(Modes::ALT_SCREEN)
-                            || (content.scrolled_to_bottom && content.bottom_row_occupied)
-                    };
-                    let scale_factor = window.scale_factor();
-                    let line_height_pixels = px(line_height);
-                    let line_height_device_px = (f32::from(line_height_pixels) * scale_factor)
-                        .round()
-                        .max(1.0) as i32;
-                    let available_height_device_px = (f32::from(available_height) * scale_factor)
-                        .floor()
-                        .max(0.0) as i32;
+            let background_color = theme.colors().terminal_background;
 
-                    let rows =
-                        ((available_height_device_px / line_height_device_px) as usize).max(1);
-                    let snapped_height_device_px = (rows as i32) * line_height_device_px;
-                    let padding_device_px =
-                        (available_height_device_px - snapped_height_device_px).max(0);
+            let (hover_tooltip, hover_match) = self.terminal.update(cx, |terminal, cx| {
+                terminal.set_size(dimensions);
+                terminal.sync(window, cx);
 
-                    let snapped_height =
-                        px(snapped_height_device_px as f32 / scale_factor.max(1.0));
-                    let padding = px(padding_device_px as f32 / scale_factor.max(1.0));
-
-                    size.height = snapped_height;
-                    if should_anchor_to_bottom {
-                        origin.y += padding;
-                    }
-
-                    // Snap to device pixels to avoid subpixel jitter while resizing.
-                    // Terminal rendering is grid-based; allowing fractional origins can cause the
-                    // glyph rasterization to shift between frames, which looks like flicker.
-                    let scale_factor = window.scale_factor();
-                    let snap_px = |value: Pixels| {
-                        Pixels::from((f32::from(value) * scale_factor).floor() / scale_factor)
-                    };
-                    origin.x = snap_px(origin.x);
-                    origin.y = snap_px(origin.y);
-
-                    (
-                        TerminalBounds::new(px(line_height), cell_width, Bounds { origin, size }),
-                        line_height,
-                    )
-                };
-
-                let search_matches = self.terminal.read(cx).matches.clone();
-
-                let background_color = theme.colors().terminal_background;
-
-                let (hover_tooltip, hover_match) = self.terminal.update(cx, |terminal, cx| {
-                    terminal.set_size(dimensions);
-                    terminal.sync(window, cx);
-
-                    if window.modifiers().secondary()
-                        && bounds.contains(&window.mouse_position())
-                        && let Some(registered_hover) = self.terminal_view.read(cx).hover.as_ref()
+                if window.modifiers().secondary()
+                    && bounds.contains(&window.mouse_position())
+                    && let Some(registered_hover) = self.terminal_view.read(cx).hover.as_ref()
+                {
+                    if let Some(last_hovered_word) = terminal.last_content.last_hovered_word.as_ref()
+                        && registered_hover.hovered_word.id == last_hovered_word.id
                     {
-                        if let Some(last_hovered_word) =
-                            terminal.last_content.last_hovered_word.as_ref()
-                            && registered_hover.hovered_word.id == last_hovered_word.id
-                        {
-                            (
-                                Some(registered_hover.tooltip.clone()),
-                                Some(last_hovered_word.word_match),
-                            )
-                        } else {
-                            (None, None)
-                        }
+                        (Some(registered_hover.tooltip.clone()), Some(last_hovered_word.word_match))
                     } else {
                         (None, None)
                     }
-                });
-
-                let scroll_top = self.terminal_view.read(cx).scroll_top;
-                let hyperlink_tooltip = hover_tooltip.map(|hover_tooltip| {
-                    let offset = dimensions.bounds.origin - point(px(0.), scroll_top);
-                    let mut element = div()
-                        .size_full()
-                        .id("terminal-element")
-                        .tooltip(Tooltip::text(hover_tooltip))
-                        .into_any_element();
-                    element.prepaint_as_root(offset, bounds.size.into(), window, cx);
-                    element
-                });
-
-                let Content {
-                    cells,
-                    display_offset,
-                    cursor_char,
-                    selection,
-                    cursor,
-                    ..
-                } = &self.terminal.read(cx).last_content;
-                let display_offset = *display_offset;
-
-                // searches, highlights to a single range representations
-                let mut relative_highlighted_ranges = Vec::new();
-                for search_match in search_matches {
-                    relative_highlighted_ranges.push((search_match, match_color))
+                } else {
+                    (None, None)
                 }
-                if let Some(selection) = selection {
-                    relative_highlighted_ranges
-                        .push((selection.point_range(), player_color.selection));
-                }
+            });
 
-                // then have that representation be converted to the appropriate highlight data structure
+            let scroll_top = self.terminal_view.read(cx).scroll_top;
+            let hyperlink_tooltip = hover_tooltip.map(|hover_tooltip| {
+                let offset = dimensions.bounds.origin - point(px(0.), scroll_top);
+                let mut element =
+                    div().size_full().id("terminal-element").tooltip(Tooltip::text(hover_tooltip)).into_any_element();
+                element.prepaint_as_root(offset, bounds.size.into(), window, cx);
+                element
+            });
 
-                // Calculate the intersection of the terminal's bounds with the current
-                // content mask (the visible viewport after all parent clipping).
-                // This allows us to only render cells that are actually visible, which is
-                // critical for performance when the terminal is partially clipped.
-                let content_bounds = dimensions.bounds;
-                let visible_bounds = window.content_mask().bounds;
-                let intersection = visible_bounds.intersect(&content_bounds);
+            let Content { cells, display_offset, cursor_char, selection, cursor, .. } =
+                &self.terminal.read(cx).last_content;
+            let display_offset = *display_offset;
 
-                // If the terminal is entirely outside the viewport, skip all cell processing.
-                // This handles the case where the terminal has been scrolled past (above or
-                // below the viewport), similar to the editor fix in PR #45077 where start_row
-                // could exceed max_row when the editor was positioned above the viewport.
-                let (rects, batched_text_runs, block_element_rects) = if intersection.size.height
-                    <= px(0.)
-                    || intersection.size.width <= px(0.)
-                {
+            // searches, highlights to a single range representations
+            let mut relative_highlighted_ranges = Vec::new();
+            for search_match in search_matches {
+                relative_highlighted_ranges.push((search_match, match_color))
+            }
+            if let Some(selection) = selection {
+                relative_highlighted_ranges.push((selection.point_range(), player_color.selection));
+            }
+
+            // then have that representation be converted to the appropriate highlight data structure
+
+            // Calculate the intersection of the terminal's bounds with the current
+            // content mask (the visible viewport after all parent clipping).
+            // This allows us to only render cells that are actually visible, which is
+            // critical for performance when the terminal is partially clipped.
+            let content_bounds = dimensions.bounds;
+            let visible_bounds = window.content_mask().bounds;
+            let intersection = visible_bounds.intersect(&content_bounds);
+
+            // If the terminal is entirely outside the viewport, skip all cell processing.
+            // This handles the case where the terminal has been scrolled past (above or
+            // below the viewport), similar to the editor fix in PR #45077 where start_row
+            // could exceed max_row when the editor was positioned above the viewport.
+            let (rects, batched_text_runs, block_element_rects) =
+                if intersection.size.height <= px(0.) || intersection.size.width <= px(0.) {
                     (Vec::new(), Vec::new(), Vec::new())
                 } else if intersection == content_bounds {
                     // Fast path: terminal fully visible, no clipping needed.
@@ -1346,9 +1221,7 @@ impl Element for TerminalElement {
                         cells.iter(),
                         0,
                         &text_style,
-                        hover_match
-                            .as_ref()
-                            .map(|hover_match| (link_style, hover_match)),
+                        hover_match.as_ref().map(|hover_match| (link_style, hover_match)),
                         minimum_contrast,
                         cx,
                     )
@@ -1357,11 +1230,9 @@ impl Element for TerminalElement {
                     // We filter by screen position (enumerated line group index), not by the
                     // cell's internal line number (which can be negative for scrollback
                     // history).
-                    let rows_above_viewport = f32::from(
-                        (intersection.top() - content_bounds.top()).max(px(0.)) / line_height_px,
-                    ) as usize;
-                    let visible_row_count =
-                        f32::from((intersection.size.height / line_height_px).ceil()) as usize + 1;
+                    let rows_above_viewport =
+                        f32::from((intersection.top() - content_bounds.top()).max(px(0.)) / line_height_px) as usize;
+                    let visible_row_count = f32::from((intersection.size.height / line_height_px).ceil()) as usize + 1;
 
                     TerminalElement::layout_grid(
                         // Group cells by line and filter to only the visible screen rows.
@@ -1376,124 +1247,113 @@ impl Element for TerminalElement {
                             .flat_map(|(_, line_cells)| line_cells),
                         rows_above_viewport as i32,
                         &text_style,
-                        hover_match
-                            .as_ref()
-                            .map(|hover_match| (link_style, hover_match)),
+                        hover_match.as_ref().map(|hover_match| (link_style, hover_match)),
                         minimum_contrast,
                         cx,
                     )
                 };
 
-                // Layout cursor. Rectangle is used for IME, so we should lay it out even
-                // if we don't end up showing it.
-                let cursor_point = DisplayCursor::from(cursor.point, display_offset);
-                let cursor_text = {
-                    let str_trxt = cursor_char.to_string();
-                    let len = str_trxt.len();
-                    window.text_system().shape_line(
-                        str_trxt.into(),
-                        text_style.font_size.to_pixels(window.rem_size()),
-                        &[TextRun {
-                            len,
-                            font: text_style.font(),
-                            color: theme.colors().terminal_ansi_background,
-                            ..Default::default()
-                        }],
-                        None,
+            // Layout cursor. Rectangle is used for IME, so we should lay it out even
+            // if we don't end up showing it.
+            let cursor_point = DisplayCursor::from(cursor.point, display_offset);
+            let cursor_text = {
+                let str_trxt = cursor_char.to_string();
+                let len = str_trxt.len();
+                window.text_system().shape_line(
+                    str_trxt.into(),
+                    text_style.font_size.to_pixels(window.rem_size()),
+                    &[TextRun {
+                        len,
+                        font: text_style.font(),
+                        color: theme.colors().terminal_ansi_background,
+                        ..Default::default()
+                    }],
+                    None,
+                )
+            };
+
+            // For whitespace, use cell width to avoid cursor stretching.
+            // For other characters, use the larger of shaped width and cell width
+            // to properly cover wide characters like emojis.
+            let cursor_width = if cursor_char.is_whitespace() {
+                dimensions.cell_width()
+            } else {
+                cursor_text.width.max(dimensions.cell_width())
+            };
+
+            let ime_cursor_bounds = TerminalElement::cursor_position(cursor_point, dimensions).map(|cursor_position| {
+                Bounds { origin: cursor_position, size: size(cursor_width.ceil(), dimensions.line_height) }
+            });
+
+            let cursor = if let CursorShape::Hidden = cursor.shape {
+                None
+            } else {
+                let focused = self.focused;
+                ime_cursor_bounds.map(move |bounds| {
+                    let (shape, text) = match cursor.shape {
+                        CursorShape::Block if !focused => (EditorCursorShape::Hollow, None),
+                        CursorShape::Block => (EditorCursorShape::Block, Some(cursor_text)),
+                        CursorShape::Underline if !focused => (EditorCursorShape::Hollow, None),
+                        CursorShape::Underline => (EditorCursorShape::Underline, None),
+                        CursorShape::Bar if !focused => (EditorCursorShape::Hollow, None),
+                        CursorShape::Bar => (EditorCursorShape::Bar, None),
+                        CursorShape::HollowBlock => (EditorCursorShape::Hollow, None),
+                        CursorShape::Hidden => unreachable!(),
+                    };
+
+                    CursorLayout::new(
+                        bounds.origin,
+                        bounds.size.width,
+                        bounds.size.height,
+                        theme.player().cursor,
+                        shape,
+                        text,
                     )
-                };
+                })
+            };
 
-                // For whitespace, use cell width to avoid cursor stretching.
-                // For other characters, use the larger of shaped width and cell width
-                // to properly cover wide characters like emojis.
-                let cursor_width = if cursor_char.is_whitespace() {
-                    dimensions.cell_width()
-                } else {
-                    cursor_text.width.max(dimensions.cell_width())
-                };
-
-                let ime_cursor_bounds = TerminalElement::cursor_position(cursor_point, dimensions)
-                    .map(|cursor_position| Bounds {
-                        origin: cursor_position,
-                        size: size(cursor_width.ceil(), dimensions.line_height),
+            let block_below_cursor_element = if let Some(block) = &self.block_below_cursor {
+                let terminal = self.terminal.read(cx);
+                if terminal.last_content.display_offset == 0 {
+                    let target_line = terminal.last_content.cursor.point.line + 1;
+                    let render = &block.render;
+                    let mut block_cx = BlockContext { window, context: cx, dimensions };
+                    let element = render(&mut block_cx);
+                    let mut element = div().occlude().child(element).into_any_element();
+                    let available_space = size(
+                        AvailableSpace::Definite(dimensions.width() + gutter),
+                        AvailableSpace::Definite(block.height as f32 * dimensions.line_height()),
+                    );
+                    let origin = GpuiPoint::new(bounds.origin.x, dimensions.bounds.origin.y)
+                        + point(px(0.), target_line as f32 * dimensions.line_height())
+                        - point(px(0.), scroll_top);
+                    window.with_rem_size(rem_size, |window| {
+                        element.prepaint_as_root(origin, available_space, window, cx);
                     });
-
-                let cursor = if let CursorShape::Hidden = cursor.shape {
-                    None
-                } else {
-                    let focused = self.focused;
-                    ime_cursor_bounds.map(move |bounds| {
-                        let (shape, text) = match cursor.shape {
-                            CursorShape::Block if !focused => (EditorCursorShape::Hollow, None),
-                            CursorShape::Block => (EditorCursorShape::Block, Some(cursor_text)),
-                            CursorShape::Underline if !focused => (EditorCursorShape::Hollow, None),
-                            CursorShape::Underline => (EditorCursorShape::Underline, None),
-                            CursorShape::Bar if !focused => (EditorCursorShape::Hollow, None),
-                            CursorShape::Bar => (EditorCursorShape::Bar, None),
-                            CursorShape::HollowBlock => (EditorCursorShape::Hollow, None),
-                            CursorShape::Hidden => unreachable!(),
-                        };
-
-                        CursorLayout::new(
-                            bounds.origin,
-                            bounds.size.width,
-                            bounds.size.height,
-                            theme.player().cursor,
-                            shape,
-                            text,
-                        )
-                    })
-                };
-
-                let block_below_cursor_element = if let Some(block) = &self.block_below_cursor {
-                    let terminal = self.terminal.read(cx);
-                    if terminal.last_content.display_offset == 0 {
-                        let target_line = terminal.last_content.cursor.point.line + 1;
-                        let render = &block.render;
-                        let mut block_cx = BlockContext {
-                            window,
-                            context: cx,
-                            dimensions,
-                        };
-                        let element = render(&mut block_cx);
-                        let mut element = div().occlude().child(element).into_any_element();
-                        let available_space = size(
-                            AvailableSpace::Definite(dimensions.width() + gutter),
-                            AvailableSpace::Definite(
-                                block.height as f32 * dimensions.line_height(),
-                            ),
-                        );
-                        let origin = GpuiPoint::new(bounds.origin.x, dimensions.bounds.origin.y)
-                            + point(px(0.), target_line as f32 * dimensions.line_height())
-                            - point(px(0.), scroll_top);
-                        window.with_rem_size(rem_size, |window| {
-                            element.prepaint_as_root(origin, available_space, window, cx);
-                        });
-                        Some(element)
-                    } else {
-                        None
-                    }
+                    Some(element)
                 } else {
                     None
-                };
-
-                LayoutState {
-                    hitbox,
-                    batched_text_runs,
-                    block_element_rects,
-                    cursor,
-                    ime_cursor_bounds,
-                    background_color,
-                    dimensions,
-                    rects,
-                    relative_highlighted_ranges,
-                    display_offset,
-                    hyperlink_tooltip,
-                    block_below_cursor_element,
-                    base_text_style: text_style,
                 }
-            },
-        )
+            } else {
+                None
+            };
+
+            LayoutState {
+                hitbox,
+                batched_text_runs,
+                block_element_rects,
+                cursor,
+                ime_cursor_bounds,
+                background_color,
+                dimensions,
+                rects,
+                relative_highlighted_ranges,
+                display_offset,
+                hyperlink_tooltip,
+                block_below_cursor_element,
+                base_text_style: text_style,
+            }
+        })
     }
 
     fn paint(
@@ -1512,9 +1372,7 @@ impl Element for TerminalElement {
 
             let origin = layout.dimensions.bounds.origin - GpuiPoint::new(px(0.), scroll_top);
             let scale_factor = window.scale_factor();
-            let snap_px = |value: Pixels| {
-                Pixels::from((f32::from(value) * scale_factor).floor() / scale_factor)
-            };
+            let snap_px = |value: Pixels| Pixels::from((f32::from(value) * scale_factor).floor() / scale_factor);
             let origin = point(snap_px(origin.x), snap_px(origin.y));
 
             let marked_text_cloned: Option<String> = {
@@ -1541,132 +1399,110 @@ impl Element for TerminalElement {
             let original_cursor = layout.cursor.take();
             let hyperlink_tooltip = layout.hyperlink_tooltip.take();
             let block_below_cursor_element = layout.block_below_cursor_element.take();
-            self.interactivity.paint(
-                global_id,
-                bounds,
-                Some(&layout.hitbox),
-                window,
-                cx,
-                |_, window, cx| {
-                    window.handle_input(&self.focus, terminal_input_handler, cx);
+            self.interactivity.paint(global_id, bounds, Some(&layout.hitbox), window, cx, |_, window, cx| {
+                window.handle_input(&self.focus, terminal_input_handler, cx);
 
-                    window.on_key_event({
-                        let this = self.terminal.clone();
-                        move |event: &ModifiersChangedEvent, phase, window, cx| {
-                            if phase != DispatchPhase::Bubble {
-                                return;
-                            }
-
-                            this.update(cx, |term, cx| {
-                                term.try_modifiers_change(&event.modifiers, window, cx)
-                            });
+                window.on_key_event({
+                    let this = self.terminal.clone();
+                    move |event: &ModifiersChangedEvent, phase, window, cx| {
+                        if phase != DispatchPhase::Bubble {
+                            return;
                         }
-                    });
 
-                    for rect in &layout.rects {
-                        rect.paint(origin, &layout.dimensions, window);
+                        this.update(cx, |term, cx| term.try_modifiers_change(&event.modifiers, window, cx));
                     }
+                });
 
-                    for (relative_highlighted_range, color) in &layout.relative_highlighted_ranges {
-                        if let Some((start_y, highlighted_range_lines)) =
-                            to_highlighted_range_lines(relative_highlighted_range, layout, origin)
-                        {
-                            let corner_radius = if EditorSettings::get_global(cx).rounded_selection
-                            {
-                                0.15 * layout.dimensions.line_height
-                            } else {
-                                Pixels::ZERO
-                            };
-                            let hr = HighlightedRange {
-                                start_y,
-                                line_height: layout.dimensions.line_height,
-                                lines: highlighted_range_lines,
-                                color: *color,
-                                corner_radius: corner_radius,
-                            };
-                            hr.paint(true, bounds, window);
-                        }
-                    }
+                for rect in &layout.rects {
+                    rect.paint(origin, &layout.dimensions, window);
+                }
 
-                    // Paint batched text runs instead of individual cells
-                    let text_paint_start = Instant::now();
-                    for batch in &layout.batched_text_runs {
-                        batch.paint(origin, &layout.dimensions, window, cx);
-                    }
-                    for block_element_rect in &layout.block_element_rects {
-                        block_element_rect.paint(origin, &layout.dimensions, window);
-                    }
-                    let text_paint_time = text_paint_start.elapsed();
-
-                    if let Some(text_to_mark) = &marked_text_cloned
-                        && !text_to_mark.is_empty()
-                        && let Some(ime_bounds) = layout.ime_cursor_bounds
+                for (relative_highlighted_range, color) in &layout.relative_highlighted_ranges {
+                    if let Some((start_y, highlighted_range_lines)) =
+                        to_highlighted_range_lines(relative_highlighted_range, layout, origin)
                     {
-                        let ime_position = (ime_bounds + origin).origin;
-                        let mut ime_style = layout.base_text_style.clone();
-                        ime_style.underline = Some(UnderlineStyle {
-                            color: Some(ime_style.color),
-                            thickness: px(1.0),
-                            wavy: false,
-                        });
-
-                        let shaped_line = window.text_system().shape_line(
-                            text_to_mark.clone().into(),
-                            ime_style.font_size.to_pixels(window.rem_size()),
-                            &[TextRun {
-                                len: text_to_mark.len(),
-                                font: ime_style.font(),
-                                color: ime_style.color,
-                                underline: ime_style.underline,
-                                ..Default::default()
-                            }],
-                            None,
-                        );
-
-                        // Paint background to cover terminal text behind marked text
-                        let ime_background_bounds = Bounds::new(
-                            ime_position,
-                            size(shaped_line.width, layout.dimensions.line_height),
-                        );
-                        window.paint_quad(fill(ime_background_bounds, layout.background_color));
-
-                        shaped_line
-                            .paint(
-                                ime_position,
-                                layout.dimensions.line_height,
-                                gpui::TextAlign::Left,
-                                None,
-                                window,
-                                cx,
-                            )
-                            .log_err();
+                        let corner_radius = if EditorSettings::get_global(cx).rounded_selection {
+                            0.15 * layout.dimensions.line_height
+                        } else {
+                            Pixels::ZERO
+                        };
+                        let hr = HighlightedRange {
+                            start_y,
+                            line_height: layout.dimensions.line_height,
+                            lines: highlighted_range_lines,
+                            color: *color,
+                            corner_radius,
+                        };
+                        hr.paint(true, bounds, window);
                     }
+                }
 
-                    if self.cursor_visible
-                        && marked_text_cloned.is_none()
-                        && let Some(mut cursor) = original_cursor
-                    {
-                        cursor.paint(origin, window, cx);
-                    }
+                // Paint batched text runs instead of individual cells
+                let text_paint_start = Instant::now();
+                for batch in &layout.batched_text_runs {
+                    batch.paint(origin, &layout.dimensions, window, cx);
+                }
+                for block_element_rect in &layout.block_element_rects {
+                    block_element_rect.paint(origin, &layout.dimensions, window);
+                }
+                let text_paint_time = text_paint_start.elapsed();
 
-                    if let Some(mut element) = block_below_cursor_element {
-                        element.paint(window, cx);
-                    }
+                if let Some(text_to_mark) = &marked_text_cloned
+                    && !text_to_mark.is_empty()
+                    && let Some(ime_bounds) = layout.ime_cursor_bounds
+                {
+                    let ime_position = (ime_bounds + origin).origin;
+                    let mut ime_style = layout.base_text_style.clone();
+                    ime_style.underline =
+                        Some(UnderlineStyle { color: Some(ime_style.color), thickness: px(1.0), wavy: false });
 
-                    if let Some(mut element) = hyperlink_tooltip {
-                        element.paint(window, cx);
-                    }
-
-                    log::debug!(
-                        "Terminal paint: {} text runs, {} rects, \
-                        text paint took {:?}, total paint took {total_paint_time:?}",
-                        layout.batched_text_runs.len(),
-                        layout.rects.len(),
-                        text_paint_time,
-                        total_paint_time = paint_start.elapsed()
+                    let shaped_line = window.text_system().shape_line(
+                        text_to_mark.clone().into(),
+                        ime_style.font_size.to_pixels(window.rem_size()),
+                        &[TextRun {
+                            len: text_to_mark.len(),
+                            font: ime_style.font(),
+                            color: ime_style.color,
+                            underline: ime_style.underline,
+                            ..Default::default()
+                        }],
+                        None,
                     );
-                },
-            );
+
+                    // Paint background to cover terminal text behind marked text
+                    let ime_background_bounds =
+                        Bounds::new(ime_position, size(shaped_line.width, layout.dimensions.line_height));
+                    window.paint_quad(fill(ime_background_bounds, layout.background_color));
+
+                    shaped_line
+                        .paint(ime_position, layout.dimensions.line_height, gpui::TextAlign::Left, None, window, cx)
+                        .log_err();
+                }
+
+                if self.cursor_visible
+                    && marked_text_cloned.is_none()
+                    && let Some(mut cursor) = original_cursor
+                {
+                    cursor.paint(origin, window, cx);
+                }
+
+                if let Some(mut element) = block_below_cursor_element {
+                    element.paint(window, cx);
+                }
+
+                if let Some(mut element) = hyperlink_tooltip {
+                    element.paint(window, cx);
+                }
+
+                log::debug!(
+                    "Terminal paint: {} text runs, {} rects, \
+                        text paint took {:?}, total paint took {total_paint_time:?}",
+                    layout.batched_text_runs.len(),
+                    layout.rects.len(),
+                    text_paint_time,
+                    total_paint_time = paint_start.elapsed()
+                );
+            });
         });
     }
 }
@@ -1695,17 +1531,10 @@ impl InputHandler for TerminalInputHandler {
         // Always return a valid selection for IME positioning,
         // even in ALT_SCREEN mode (fullscreen TUI apps like opencode, vim, etc.)
         // The terminal still has a cursor position that should be used for IME candidate window placement.
-        Some(UTF16Selection {
-            range: 0..0,
-            reversed: false,
-        })
+        Some(UTF16Selection { range: 0..0, reversed: false })
     }
 
-    fn marked_text_range(
-        &mut self,
-        _window: &mut Window,
-        cx: &mut App,
-    ) -> Option<std::ops::Range<usize>> {
+    fn marked_text_range(&mut self, _window: &mut Window, cx: &mut App) -> Option<std::ops::Range<usize>> {
         self.terminal_view.read(cx).marked_text_range()
     }
 

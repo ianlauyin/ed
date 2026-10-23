@@ -1,40 +1,67 @@
-use std::{
-    cell::LazyCell,
-    collections::BTreeSet,
-    io::{Cursor, ErrorKind, Read},
-    ops::Range,
-    path::{Path, PathBuf},
-    pin::pin,
-    sync::Arc,
-    time::Duration,
-};
+use std::cell::LazyCell;
+use std::collections::BTreeSet;
+use std::io::Cursor;
+use std::io::ErrorKind;
+use std::io::Read;
+use std::ops::Range;
+use std::path::Path;
+use std::path::PathBuf;
+use std::pin::pin;
+use std::sync::Arc;
+use std::time::Duration;
 
 use anyhow::Context;
-use async_channel::{Receiver, Sender, bounded, unbounded};
+use async_channel::Receiver;
+use async_channel::Sender;
+use async_channel::bounded;
+use async_channel::unbounded;
 use collections::HashMap;
-use fs::{Fs, ReadSeek};
+use encoding_rs::Encoding;
+use file_content::ByteContent;
+use file_content::DecodingReader;
+use file_content::FILE_ANALYSIS_BYTES;
+use file_content::decode_byte_header;
+use file_content::detect_encoding;
+use fs::Fs;
+use fs::ReadSeek;
 use futures::FutureExt as _;
-use futures::{SinkExt, StreamExt, select_biased, stream::FuturesOrdered};
-use gpui::{App, AppContext, AsyncApp, BackgroundExecutor, Entity, Priority, Task};
-use language::{Buffer, BufferSnapshot, Point};
+use futures::SinkExt;
+use futures::StreamExt;
+use futures::select_biased;
+use futures::stream::FuturesOrdered;
+use gpui::App;
+use gpui::AppContext;
+use gpui::AsyncApp;
+use gpui::BackgroundExecutor;
+use gpui::Entity;
+use gpui::Priority;
+use gpui::Task;
+use language::Buffer;
+use language::BufferSnapshot;
+use language::Point;
 use parking_lot::Mutex;
 use postage::oneshot;
-use rpc::{AnyProtoClient, proto};
+use rpc::AnyProtoClient;
+use rpc::proto;
 use text::Rope;
+use util::ResultExt;
+use util::maybe;
+use util::rel_path::RelPath;
+use worktree::Entry;
+use worktree::ProjectEntryId;
+use worktree::Snapshot;
+use worktree::Worktree;
+use worktree::WorktreeSettings;
 
-use encoding_rs::Encoding;
-use file_content::{
-    ByteContent, DecodingReader, FILE_ANALYSIS_BYTES, decode_byte_header, detect_encoding,
-};
-use util::{ResultExt, maybe, rel_path::RelPath};
-use worktree::{Entry, ProjectEntryId, Snapshot, Worktree, WorktreeSettings};
-
-use crate::{
-    Project, ProjectItem, ProjectPath, RemotelyCreatedModels,
-    buffer_store::BufferStore,
-    search::{MatchPositionHint, SearchQuery, SearchResult},
-    worktree_store::WorktreeStore,
-};
+use crate::Project;
+use crate::ProjectItem;
+use crate::ProjectPath;
+use crate::RemotelyCreatedModels;
+use crate::buffer_store::BufferStore;
+use crate::search::MatchPositionHint;
+use crate::search::SearchQuery;
+use crate::search::SearchResult;
+use crate::worktree_store::WorktreeStore;
 
 pub struct Search {
     buffer_store: Entity<BufferStore>,
@@ -46,16 +73,9 @@ pub struct Search {
 /// Represents search setup, before it is actually kicked off with Search::into_results
 enum SearchKind {
     /// Search for candidates by inspecting file contents on file system, avoiding loading the buffer unless we know that a given file contains a match.
-    Local {
-        fs: Arc<dyn Fs>,
-        worktrees: Vec<Entity<Worktree>>,
-    },
+    Local { fs: Arc<dyn Fs>, worktrees: Vec<Entity<Worktree>> },
     /// Query remote host for candidates. As of writing, the host runs a local search in "buffers with matches only" mode.
-    Remote {
-        client: AnyProtoClient,
-        remote_id: u64,
-        models: Arc<Mutex<RemotelyCreatedModels>>,
-    },
+    Remote { client: AnyProtoClient, remote_id: u64, models: Arc<Mutex<RemotelyCreatedModels>> },
     /// Run search against a known set of candidates. Even when working with a remote host, this won't round-trip to host.
     OpenBuffersOnly,
 }
@@ -76,19 +96,10 @@ pub struct SearchResults<T> {
 }
 impl SearchResultsHandle {
     pub fn results(self, cx: &mut App) -> SearchResults<SearchResult> {
-        SearchResults {
-            task_handle: (self.trigger_search)(cx),
-            rx: self.results,
-        }
+        SearchResults { task_handle: (self.trigger_search)(cx), rx: self.results }
     }
-    pub fn matching_buffers(
-        self,
-        cx: &mut App,
-    ) -> SearchResults<(Entity<Buffer>, MatchPositionHint)> {
-        SearchResults {
-            task_handle: (self.trigger_search)(cx),
-            rx: self.matching_buffers,
-        }
+    pub fn matching_buffers(self, cx: &mut App) -> SearchResults<(Entity<Buffer>, MatchPositionHint)> {
+        SearchResults { task_handle: (self.trigger_search)(cx), rx: self.matching_buffers }
     }
 }
 
@@ -101,7 +112,7 @@ enum FindSearchCandidates {
         /// - Exclude filters
         /// - Only open buffers
         /// - Scan ignored files
-        /// Put another way: filter out files that can't match (without looking at file contents)
+        ///   Put another way: filter out files that can't match (without looking at file contents)
         input_paths_rx: Receiver<InputPath>,
         /// After that, if the buffer is not yet loaded, we'll figure out if it contains at least one match
         /// based on disk contents of a buffer. This step is not performed for buffers we already have in memory.
@@ -120,17 +131,9 @@ impl Search {
         limit: usize,
         cx: &mut App,
     ) -> Self {
-        let mut worktrees = worktree_store
-            .read(cx)
-            .visible_worktrees(cx)
-            .collect::<Vec<_>>();
+        let mut worktrees = worktree_store.read(cx).visible_worktrees(cx).collect::<Vec<_>>();
         worktrees.sort_by_key(|worktree| worktree.read(cx).id());
-        Self {
-            kind: SearchKind::Local { fs, worktrees },
-            buffer_store,
-            worktree_store,
-            limit,
-        }
+        Self { kind: SearchKind::Local { fs, worktrees }, buffer_store, worktree_store, limit }
     }
 
     pub(crate) fn remote(
@@ -140,27 +143,18 @@ impl Search {
         client_state: (AnyProtoClient, u64, Arc<Mutex<RemotelyCreatedModels>>),
     ) -> Self {
         Self {
-            kind: SearchKind::Remote {
-                client: client_state.0,
-                remote_id: client_state.1,
-                models: client_state.2,
-            },
+            kind: SearchKind::Remote { client: client_state.0, remote_id: client_state.1, models: client_state.2 },
             buffer_store,
             worktree_store,
             limit,
         }
     }
-    pub(crate) fn open_buffers_only(
+    pub(crate) const fn open_buffers_only(
         buffer_store: Entity<BufferStore>,
         worktree_store: Entity<WorktreeStore>,
         limit: usize,
     ) -> Self {
-        Self {
-            kind: SearchKind::OpenBuffersOnly,
-            buffer_store,
-            worktree_store,
-            limit,
-        }
+        Self { kind: SearchKind::OpenBuffersOnly, buffer_store, worktree_store, limit }
     }
 
     pub(crate) const MAX_SEARCH_RESULT_FILES: usize = 5_000;
@@ -176,11 +170,8 @@ impl Search {
         let buffers = self.buffer_store.read(cx);
         for handle in buffers.buffers() {
             let buffer = handle.read(cx);
-            if !buffers.is_searchable(&buffer.remote_id()) {
-                continue;
-            } else if buffer
-                .file()
-                .is_some_and(|file| file.disk_state().is_deleted())
+            if !buffers.is_searchable(&buffer.remote_id())
+                || buffer.file().is_some_and(|file| file.disk_state().is_deleted())
             {
                 continue;
             } else if let Some(entry_id) = buffer.entry_id(cx) {
@@ -205,19 +196,15 @@ impl Search {
         let open_buffers = Arc::new(open_buffers);
         let executor = cx.background_executor().clone();
         let (tx, rx) = unbounded();
-        let (grab_buffer_snapshot_tx, grab_buffer_snapshot_rx) =
-            unbounded::<(Entity<Buffer>, MatchPositionHint)>();
+        let (grab_buffer_snapshot_tx, grab_buffer_snapshot_rx) = unbounded::<(Entity<Buffer>, MatchPositionHint)>();
         let matching_buffers = grab_buffer_snapshot_rx.clone();
         let trigger_search = Box::new(move |cx: &mut App| {
             cx.spawn(async move |cx| {
                 for buffer in unnamed_buffers {
-                    _ = grab_buffer_snapshot_tx
-                        .send((buffer, MatchPositionHint::default()))
-                        .await;
+                    _ = grab_buffer_snapshot_tx.send((buffer, MatchPositionHint::default())).await;
                 }
 
-                let (find_all_matches_tx, find_all_matches_rx) =
-                    bounded(MAX_CONCURRENT_BUFFER_OPENS);
+                let (find_all_matches_tx, find_all_matches_rx) = bounded(MAX_CONCURRENT_BUFFER_OPENS);
                 let query = Arc::new(query);
                 let (candidate_searcher, tasks) = match self.kind {
                     SearchKind::OpenBuffersOnly => {
@@ -225,9 +212,10 @@ impl Search {
                         let fill_requests = cx
                             .background_spawn(async move {
                                 for buffer in open_buffers {
-                                    if let Err(_) = grab_buffer_snapshot_tx
+                                    if grab_buffer_snapshot_tx
                                         .send((buffer, MatchPositionHint::default()))
                                         .await
+                                        .is_err()
                                     {
                                         return;
                                     }
@@ -236,14 +224,9 @@ impl Search {
                             .boxed_local();
                         (FindSearchCandidates::OpenBuffersOnly, vec![fill_requests])
                     }
-                    SearchKind::Local {
-                        fs,
-                        ref mut worktrees,
-                    } => {
-                        let (get_buffer_for_full_scan_tx, get_buffer_for_full_scan_rx) =
-                            unbounded();
-                        let (confirm_contents_will_match_tx, confirm_contents_will_match_rx) =
-                            bounded(64);
+                    SearchKind::Local { fs, ref mut worktrees } => {
+                        let (get_buffer_for_full_scan_tx, get_buffer_for_full_scan_rx) = unbounded();
+                        let (confirm_contents_will_match_tx, confirm_contents_will_match_rx) = bounded(64);
                         let (sorted_search_results_tx, sorted_search_results_rx) = unbounded();
 
                         let (input_paths_tx, input_paths_rx) = unbounded();
@@ -281,22 +264,14 @@ impl Search {
                             tasks,
                         )
                     }
-                    SearchKind::Remote {
-                        client,
-                        remote_id,
-                        models,
-                    } => {
-                        let (handle, rx) = self
-                            .buffer_store
-                            .update(cx, |this, _| this.register_project_search_result_handle());
+                    SearchKind::Remote { client, remote_id, models } => {
+                        let (handle, rx) =
+                            self.buffer_store.update(cx, |this, _| this.register_project_search_result_handle());
 
                         let cancel_ongoing_search = util::defer({
                             let client = client.clone();
                             move || {
-                                _ = client.send(proto::FindSearchCandidatesCancelled {
-                                    project_id: remote_id,
-                                    handle,
-                                });
+                                _ = client.send(proto::FindSearchCandidatesCancelled { project_id: remote_id, handle });
                             }
                         });
                         let request = client.request(proto::FindSearchCandidates {
@@ -325,11 +300,9 @@ impl Search {
 
                                     let wait_for_remote_buffers = cx.spawn(async move |cx| {
                                         while let Ok(buffer_id) = rx.recv().await {
-                                            let buffer =
-                                                buffer_store.update(cx, |buffer_store, cx| {
-                                                    buffer_store
-                                                        .wait_for_remote_buffer(buffer_id, cx)
-                                                });
+                                            let buffer = buffer_store.update(cx, |buffer_store, cx| {
+                                                buffer_store.wait_for_remote_buffer(buffer_id, cx)
+                                            });
                                             buffer_tx.send(buffer).await?;
                                         }
                                         anyhow::Ok(())
@@ -343,11 +316,8 @@ impl Search {
                                         }
                                         anyhow::Ok(())
                                     });
-                                    let (left, right) = futures::future::join(
-                                        wait_for_remote_buffers,
-                                        forward_buffers,
-                                    )
-                                    .await;
+                                    let (left, right) =
+                                        futures::future::join(wait_for_remote_buffers, forward_buffers).await;
                                     left?;
                                     right?;
 
@@ -359,10 +329,7 @@ impl Search {
                                 .log_err();
                             })
                             .boxed_local();
-                        (
-                            FindSearchCandidates::Remote,
-                            vec![issue_remote_buffers_request],
-                        )
+                        (FindSearchCandidates::Remote, vec![issue_remote_buffers_request])
                     }
                 };
 
@@ -414,10 +381,7 @@ impl Search {
                     None
                 };
                 let ensure_matches_are_reported_in_order = if should_find_all_matches {
-                    Some(
-                        Self::ensure_matched_ranges_are_reported_in_order(sorted_matches_rx, tx)
-                            .boxed_local(),
-                    )
+                    Some(Self::ensure_matched_ranges_are_reported_in_order(sorted_matches_rx, tx).boxed_local())
                 } else {
                     drop(tx);
 
@@ -435,11 +399,7 @@ impl Search {
             })
         });
 
-        SearchResultsHandle {
-            results: rx,
-            matching_buffers,
-            trigger_search,
-        }
+        SearchResultsHandle { results: rx, matching_buffers, trigger_search }
     }
 
     fn provide_search_paths(
@@ -454,9 +414,8 @@ impl Search {
                 let gitignored_tracker = PathInclusionMatcher::new(query.clone());
                 let include_ignored = query.include_ignored();
                 for worktree in worktrees {
-                    let scan_complete = worktree.read_with(cx, |worktree, _| {
-                        worktree.as_local().map(|local| local.scan_complete())
-                    });
+                    let scan_complete =
+                        worktree.read_with(cx, |worktree, _| worktree.as_local().map(|local| local.scan_complete()));
                     if let Some(scan_complete) = scan_complete {
                         let mut scan_complete = pin!(scan_complete);
                         if scan_complete.as_mut().now_or_never().is_none() {
@@ -467,20 +426,14 @@ impl Search {
                     }
 
                     let (mut snapshot, worktree_settings) = worktree
-                        .read_with(cx, |this, _| {
-                            Some((this.snapshot(), this.as_local()?.settings()))
-                        })
+                        .read_with(cx, |this, _| Some((this.snapshot(), this.as_local()?.settings())))
                         .context("The worktree is not local")?;
                     if query.include_ignored() {
                         // Pre-fetch all of the ignored directories as they're going to be searched.
                         let mut entries_to_refresh = vec![];
 
                         for entry in snapshot.entries(query.include_ignored(), 0) {
-                            if gitignored_tracker.should_scan_gitignored_dir(
-                                entry,
-                                &snapshot,
-                                &worktree_settings,
-                            ) {
+                            if gitignored_tracker.should_scan_gitignored_dir(entry, &snapshot, &worktree_settings) {
                                 entries_to_refresh.push(entry.path.clone());
                             }
                         }
@@ -541,11 +494,7 @@ impl Search {
                 // This file did not produce a match, hence skip it.
                 continue;
             };
-            if paths_for_full_scan
-                .send((successful_path, line_hint))
-                .await
-                .is_err()
-            {
+            if paths_for_full_scan.send((successful_path, line_hint)).await.is_err() {
                 return;
             };
             matched += 1;
@@ -567,12 +516,9 @@ impl Search {
         let mut rx = pin!(rx.ready_chunks(64));
         _ = maybe!(async move {
             while let Some(requested_paths) = rx.next().await {
-                let line_hints: Vec<MatchPositionHint> =
-                    requested_paths.iter().map(|(_, line)| *line).collect();
-                let sort_keys: Vec<(u64, Arc<RelPath>)> = requested_paths
-                    .iter()
-                    .map(|(path, _)| (path.worktree_id.to_proto(), path.path.clone()))
-                    .collect();
+                let line_hints: Vec<MatchPositionHint> = requested_paths.iter().map(|(_, line)| *line).collect();
+                let sort_keys: Vec<(u64, Arc<RelPath>)> =
+                    requested_paths.iter().map(|(path, _)| (path.worktree_id.to_proto(), path.path.clone())).collect();
                 let mut buffers = buffer_store.update(&mut cx, |this, cx| {
                     requested_paths
                         .into_iter()
@@ -582,14 +528,12 @@ impl Search {
                 let mut line_hints = line_hints.into_iter();
                 let mut sort_keys = sort_keys.into_iter();
                 while let Some(buffer) = buffers.next().await {
-                    let line_hint = line_hints.next().unwrap_or(MatchPositionHint::default());
+                    let line_hint = line_hints.next().unwrap_or_default();
                     if let Some(sort_key) = sort_keys.next() {
                         while let Some((_, entryless_buffer)) =
                             entryless_file_buffers.next_if(|(key, _)| *key < sort_key)
                         {
-                            find_all_matches_tx
-                                .send((entryless_buffer, MatchPositionHint::default()))
-                                .await?;
+                            find_all_matches_tx.send((entryless_buffer, MatchPositionHint::default())).await?;
                         }
                     }
                     if let Some(buffer) = buffer.log_err() {
@@ -598,9 +542,7 @@ impl Search {
                 }
             }
             for (_, entryless_buffer) in entryless_file_buffers {
-                find_all_matches_tx
-                    .send((entryless_buffer, MatchPositionHint::default()))
-                    .await?;
+                find_all_matches_tx.send((entryless_buffer, MatchPositionHint::default())).await?;
             }
             Result::<_, anyhow::Error>::Ok(())
         })
@@ -611,19 +553,14 @@ impl Search {
         rx: Receiver<(Entity<Buffer>, MatchPositionHint)>,
         find_all_matches_tx: Sender<FindAllMatchesRequest>,
         results: Sender<oneshot::Receiver<(Entity<Buffer>, Vec<Range<language::Anchor>>)>>,
-        mut cx: AsyncApp,
+        cx: AsyncApp,
     ) {
         _ = maybe!(async move {
             while let Ok((buffer, line_hint)) = rx.recv().await {
-                let snapshot = buffer.read_with(&mut cx, |buffer, _| buffer.snapshot());
+                let snapshot = buffer.read_with(&cx, |buffer, _| buffer.snapshot());
                 let (tx, rx) = oneshot::channel();
                 find_all_matches_tx
-                    .send(FindAllMatchesRequest {
-                        buffer,
-                        snapshot,
-                        line_hint,
-                        report_matches: tx,
-                    })
+                    .send(FindAllMatchesRequest { buffer, snapshot, line_hint, report_matches: tx })
                     .await?;
                 results.send(rx).await?;
             }
@@ -646,16 +583,14 @@ impl Search {
                     continue;
                 };
 
-                if matched_buffers > Search::MAX_SEARCH_RESULT_FILES
-                    || matches > Search::MAX_SEARCH_RESULT_RANGES
-                {
+                if matched_buffers > Search::MAX_SEARCH_RESULT_FILES || matches > Search::MAX_SEARCH_RESULT_RANGES {
                     _ = tx.send(SearchResult::LimitReached).await;
                     break;
                 }
                 matched_buffers += 1;
                 matches += ranges.len();
 
-                _ = tx.send(SearchResult::Buffer { buffer, ranges }).await?;
+                tx.send(SearchResult::Buffer { buffer, ranges }).await?;
             }
             anyhow::Ok(())
         })
@@ -678,9 +613,8 @@ impl Search {
                         return false;
                     }
                     if !search_query.include_ignored()
-                        && let Some(entry) = b
-                            .entry_id(cx)
-                            .and_then(|entry_id| worktree_store.entry_for_id(entry_id, cx))
+                        && let Some(entry) =
+                            b.entry_id(cx).and_then(|entry_id| worktree_store.entry_for_id(entry_id, cx))
                         && entry.is_ignored
                     {
                         return false;
@@ -697,17 +631,10 @@ impl Search {
     }
 }
 
-fn path_key_sort_key(
-    buffer: &Entity<Buffer>,
-    cx: &App,
-) -> (Option<u64>, Option<Arc<RelPath>>, String) {
+fn path_key_sort_key(buffer: &Entity<Buffer>, cx: &App) -> (Option<u64>, Option<Arc<RelPath>>, String) {
     let buffer = buffer.read(cx);
     match buffer.file() {
-        Some(file) => (
-            Some(file.worktree_id(cx).to_proto()),
-            Some(file.path().clone()),
-            String::new(),
-        ),
+        Some(file) => (Some(file.worktree_id(cx).to_proto()), Some(file.path().clone()), String::new()),
         None => (None, None, buffer.remote_id().to_string()),
     }
 }
@@ -723,27 +650,18 @@ struct Worker {
 
 impl Worker {
     async fn run(self) {
-        let (
-            input_paths_rx,
-            confirm_contents_will_match_rx,
-            mut confirm_contents_will_match_tx,
-            fs,
-        ) = match self.candidates {
-            FindSearchCandidates::Local {
-                fs,
-                input_paths_rx,
-                confirm_contents_will_match_rx,
-                confirm_contents_will_match_tx,
-            } => (
-                input_paths_rx,
-                confirm_contents_will_match_rx,
-                confirm_contents_will_match_tx,
-                Some(fs),
-            ),
-            FindSearchCandidates::Remote | FindSearchCandidates::OpenBuffersOnly => {
-                (unbounded().1, unbounded().1, unbounded().0, None)
-            }
-        };
+        let (input_paths_rx, confirm_contents_will_match_rx, mut confirm_contents_will_match_tx, fs) =
+            match self.candidates {
+                FindSearchCandidates::Local {
+                    fs,
+                    input_paths_rx,
+                    confirm_contents_will_match_rx,
+                    confirm_contents_will_match_tx,
+                } => (input_paths_rx, confirm_contents_will_match_rx, confirm_contents_will_match_tx, Some(fs)),
+                FindSearchCandidates::Remote | FindSearchCandidates::OpenBuffersOnly => {
+                    (unbounded().1, unbounded().1, unbounded().0, None)
+                }
+            };
         // WorkerA: grabs a request for "find all matches in file/a" <- takes 5 minutes
         // right after: WorkerB: grabs a request for "find all matches in file/b" <- takes 5 seconds
         let mut find_all_matches = pin!(self.find_all_matches_rx.fuse());
@@ -800,12 +718,7 @@ struct RequestHandler<'worker> {
 
 impl RequestHandler<'_> {
     async fn handle_find_all_matches(&self, request: FindAllMatchesRequest) {
-        let FindAllMatchesRequest {
-            buffer,
-            snapshot,
-            line_hint,
-            mut report_matches,
-        } = request;
+        let FindAllMatchesRequest { buffer, snapshot, line_hint, mut report_matches } = request;
         let range_offset = match line_hint {
             MatchPositionHint::Line(line_number) if line_number > 0 => {
                 snapshot.point_to_offset(Point::new(line_number, 0))
@@ -821,8 +734,7 @@ impl RequestHandler<'_> {
             .await
             .iter()
             .map(|range| {
-                snapshot.anchor_before(range.start + range_offset)
-                    ..snapshot.anchor_after(range.end + range_offset)
+                snapshot.anchor_before(range.start + range_offset)..snapshot.anchor_after(range.end + range_offset)
             })
             .collect::<Vec<_>>();
 
@@ -832,9 +744,7 @@ impl RequestHandler<'_> {
     async fn handle_find_first_match(&self, mut entry: MatchingEntry) {
         async move {
             let abs_path = entry.worktree_root.join(entry.path.path.as_std_path());
-            let fs = self
-                .fs
-                .context("Trying to query filesystem in remote project search")?;
+            let fs = self.fs.context("Trying to query filesystem in remote project search")?;
             let Some(mut file) = fs.open_sync(&abs_path).await.log_err() else {
                 return anyhow::Ok(());
             };
@@ -848,17 +758,12 @@ impl RequestHandler<'_> {
                 return Ok(());
             }
 
-            let is_plain_utf8 = bom_encoding.is_none()
-                && byte_content == ByteContent::Unknown
-                && is_utf8_prefix(&file_start);
+            let is_plain_utf8 =
+                bom_encoding.is_none() && byte_content == ByteContent::Unknown && is_utf8_prefix(&file_start);
             let encoding = bom_encoding.or(byte_content.encoding());
 
             let first_match = if is_plain_utf8 {
-                match self
-                    .query
-                    .detect(&mut Cursor::new(file_start).chain(&mut *file))
-                    .await
-                {
+                match self.query.detect(&mut Cursor::new(file_start).chain(&mut *file)).await {
                     Ok(line_hint) => line_hint,
                     Err(error)
                         if error
@@ -875,10 +780,7 @@ impl RequestHandler<'_> {
 
             if first_match.is_some() {
                 // Yes, we should scan the whole file.
-                entry
-                    .should_scan_tx
-                    .send((entry.path, MatchPositionHint::default()))
-                    .await?;
+                entry.should_scan_tx.send((entry.path, MatchPositionHint::default())).await?;
             }
             Ok(())
         }
@@ -900,18 +802,12 @@ impl RequestHandler<'_> {
                 encoding
             }
         };
-        self.query
-            .detect(&mut DecodingReader::new(file, encoding))
-            .await
+        self.query.detect(&mut DecodingReader::new(file, encoding)).await
     }
 
     async fn handle_scan_path(&self, req: InputPath) {
         _ = maybe!(async move {
-            let InputPath {
-                entry,
-                snapshot,
-                mut should_scan_tx,
-            } = req;
+            let InputPath { entry, snapshot, mut should_scan_tx } = req;
 
             if entry.is_fifo || !entry.is_file() {
                 return Ok(());
@@ -931,32 +827,21 @@ impl RequestHandler<'_> {
             }
 
             if let Some(text) = self.open_entries.get(&entry.id) {
-                if self
-                    .query
-                    .detect(&mut text.bytes_in_range(0..text.len()))
-                    .await?
-                    .is_none()
-                {
+                if self.query.detect(&mut text.bytes_in_range(0..text.len())).await?.is_none() {
                     return Ok(());
                 }
                 should_scan_tx
                     .send((
-                        ProjectPath {
-                            worktree_id: snapshot.id(),
-                            path: entry.path.clone(),
-                        },
+                        ProjectPath { worktree_id: snapshot.id(), path: entry.path.clone() },
                         MatchPositionHint::default(),
                     ))
                     .await?;
             } else {
                 self.confirm_contents_will_match_tx
                     .send(MatchingEntry {
-                        should_scan_tx: should_scan_tx,
+                        should_scan_tx,
                         worktree_root: snapshot.abs_path().clone(),
-                        path: ProjectPath {
-                            worktree_id: snapshot.id(),
-                            path: entry.path.clone(),
-                        },
+                        path: ProjectPath { worktree_id: snapshot.id(), path: entry.path.clone() },
                     })
                     .await?;
             }
@@ -967,7 +852,7 @@ impl RequestHandler<'_> {
     }
 }
 
-fn is_utf8_prefix(bytes: &[u8]) -> bool {
+const fn is_utf8_prefix(bytes: &[u8]) -> bool {
     match std::str::from_utf8(bytes) {
         Ok(_) => true,
         Err(error) => error.error_len().is_none(),
@@ -1010,10 +895,7 @@ impl PathInclusionMatcher {
         // Then, when checking whether a given directory should be scanned, we check whether it is a non-empty substring of any glob prefix.
         if query.filters_path() {
             included.extend(
-                query
-                    .files_to_include()
-                    .sources()
-                    .flat_map(|glob| Some(wax::Glob::new(glob).ok()?.partition().0)),
+                query.files_to_include().sources().flat_map(|glob| Some(wax::Glob::new(glob).ok()?.partition().0)),
             );
         }
         Self { included, query }
@@ -1042,7 +924,7 @@ impl PathInclusionMatcher {
         let entry_path = &entry.path;
         // 3. Check Exclusions (Pruning)
         // If the current path is a child of an excluded path, we stop.
-        let is_excluded = self.path_is_definitely_excluded(&entry_path, snapshot);
+        let is_excluded = self.path_is_definitely_excluded(entry_path, snapshot);
 
         if is_excluded {
             return false;
@@ -1055,28 +937,20 @@ impl PathInclusionMatcher {
 
         // We scan if the current path is a descendant of an include prefix
         // OR if the current path is an ancestor of an include prefix (we need to go deeper to find it).
-        let is_included = self.included.iter().any(|prefix| {
+
+        self.included.iter().any(|prefix| {
             let (prefix_matches_entry, entry_matches_prefix) = if prefix.is_absolute() {
-                (
-                    prefix.starts_with(&**as_abs_path),
-                    as_abs_path.starts_with(prefix),
-                )
+                (prefix.starts_with(&**as_abs_path), as_abs_path.starts_with(prefix))
             } else {
-                RelPath::new(prefix, snapshot.path_style()).map_or((false, false), |prefix| {
-                    (
-                        prefix.starts_with(entry_path),
-                        entry_path.starts_with(&prefix),
-                    )
-                })
+                RelPath::new(prefix, snapshot.path_style())
+                    .map_or((false, false), |prefix| (prefix.starts_with(entry_path), entry_path.starts_with(&prefix)))
             };
 
             // Logic:
             // 1. entry_matches_prefix: We are inside the target zone (e.g. glob: src/, current: src/lib/). Keep scanning.
             // 2. prefix_matches_entry: We are above the target zone (e.g. glob: src/foo/, current: src/). Keep scanning to reach foo.
             prefix_matches_entry || entry_matches_prefix
-        });
-
-        is_included
+        })
     }
     fn path_is_definitely_excluded(&self, path: &RelPath, snapshot: &Snapshot) -> bool {
         if !self.query.files_to_exclude().sources().next().is_none() {
@@ -1180,11 +1054,7 @@ impl<T: 'static + Send> AdaptiveBatcher<T> {
                 }
             }
         });
-        let this = Self {
-            items,
-            _batch_task,
-            flush_batch,
-        };
+        let this = Self { items, _batch_task, flush_batch };
         (this, batch_rx)
     }
 

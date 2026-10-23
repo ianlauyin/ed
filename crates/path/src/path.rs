@@ -6,14 +6,18 @@
 //!
 //! Adapted from Zed's `util::rel_path` module.
 
+use std::ffi::OsStr;
 use std::os::unix::prelude::OsStrExt;
-use std::{
-    ffi::OsStr,
-    path::{Path, PathBuf},
-};
+use std::path::Path;
+use std::path::PathBuf;
 
-use crate::path_component::{Component, Components, Prefix, PrefixExt, iter_after};
-use crate::rel_path::{RelPath, StripPrefixError};
+use crate::path_component::Component;
+use crate::path_component::Components;
+use crate::path_component::Prefix;
+use crate::path_component::PrefixExt;
+use crate::path_component::iter_after;
+use crate::rel_path::RelPath;
+use crate::rel_path::StripPrefixError;
 
 pub mod abs_path;
 mod path_component;
@@ -49,21 +53,21 @@ impl PathStyle {
     }
 
     #[inline]
-    pub fn primary_separator(&self) -> &'static str {
+    pub const fn primary_separator(&self) -> &'static str {
         match self {
             PathStyle::Unix => "/",
             PathStyle::Windows => "\\",
         }
     }
 
-    pub fn separators(&self) -> &'static [&'static str] {
+    pub const fn separators(&self) -> &'static [&'static str] {
         match self {
             PathStyle::Unix => &["/"],
             PathStyle::Windows => &["\\", "/"],
         }
     }
 
-    pub fn separators_ch(&self) -> &'static [char] {
+    pub const fn separators_ch(&self) -> &'static [char] {
         match self {
             PathStyle::Unix => &['/'],
             PathStyle::Windows => &['\\', '/'],
@@ -101,31 +105,17 @@ impl PathStyle {
         } else {
             Some(format!(
                 "{left}{}{right}",
-                if left.ends_with(self.primary_separator()) {
-                    ""
-                } else {
-                    self.primary_separator()
-                }
+                if left.ends_with(self.primary_separator()) { "" } else { self.primary_separator() }
             ))
         }
     }
 
-    pub fn join_path(
-        self,
-        left: impl AsRef<Path>,
-        right: impl AsRef<Path>,
-    ) -> anyhow::Result<PathBuf> {
-        let left = left
-            .as_ref()
-            .to_str()
-            .ok_or_else(|| anyhow::anyhow!("Path contains invalid UTF-8"))?;
+    pub fn join_path(self, left: impl AsRef<Path>, right: impl AsRef<Path>) -> anyhow::Result<PathBuf> {
+        let left = left.as_ref().to_str().ok_or_else(|| anyhow::anyhow!("Path contains invalid UTF-8"))?;
         let right = right.as_ref();
-        let right_string = right
-            .to_str()
-            .ok_or_else(|| anyhow::anyhow!("Path contains invalid UTF-8"))?;
-        let joined = self
-            .join(left, right_string)
-            .ok_or_else(|| anyhow::anyhow!("Path must be relative: {right:?}"))?;
+        let right_string = right.to_str().ok_or_else(|| anyhow::anyhow!("Path contains invalid UTF-8"))?;
+        let joined =
+            self.join(left, right_string).ok_or_else(|| anyhow::anyhow!("Path must be relative: {right:?}"))?;
         Ok(PathBuf::from(self.normalize(&joined)))
     }
 
@@ -134,17 +124,11 @@ impl PathStyle {
         left: impl AsRef<Path>,
         right: impl AsRef<Path>,
     ) -> anyhow::Result<PathBuf> {
-        let left = left
-            .as_ref()
-            .to_str()
-            .ok_or_else(|| anyhow::anyhow!("Path contains invalid UTF-8"))?;
+        let left = left.as_ref().to_str().ok_or_else(|| anyhow::anyhow!("Path contains invalid UTF-8"))?;
         let right = right.as_ref();
-        let right_string = right
-            .to_str()
-            .ok_or_else(|| anyhow::anyhow!("Path contains invalid UTF-8"))?;
-        let joined = self
-            .join(left, right_string)
-            .ok_or_else(|| anyhow::anyhow!("Path must be relative: {right:?}"))?;
+        let right_string = right.to_str().ok_or_else(|| anyhow::anyhow!("Path contains invalid UTF-8"))?;
+        let joined =
+            self.join(left, right_string).ok_or_else(|| anyhow::anyhow!("Path must be relative: {right:?}"))?;
         Ok(PathBuf::from(&joined))
     }
 
@@ -153,20 +137,13 @@ impl PathStyle {
             PathStyle::Windows => {
                 let drive_and_remainder = path_like.split_once(':').filter(|(drive, _)| {
                     let mut characters = drive.chars();
-                    characters
-                        .next()
-                        .is_some_and(|character| character.is_ascii_alphabetic())
+                    characters.next().is_some_and(|character| character.is_ascii_alphabetic())
                         && characters.next().is_none()
                 });
-                let unc_remainder = path_like
-                    .strip_prefix("\\\\")
-                    .or_else(|| path_like.strip_prefix("//"));
+                let unc_remainder = path_like.strip_prefix("\\\\").or_else(|| path_like.strip_prefix("//"));
 
                 let (prefix, remainder) = if let Some((drive, remainder)) = drive_and_remainder {
-                    if let Some(remainder) = remainder
-                        .strip_prefix('\\')
-                        .or_else(|| remainder.strip_prefix('/'))
-                    {
+                    if let Some(remainder) = remainder.strip_prefix('\\').or_else(|| remainder.strip_prefix('/')) {
                         (format!("{drive}:\\"), remainder)
                     } else {
                         (format!("{drive}:"), remainder)
@@ -181,10 +158,7 @@ impl PathStyle {
                         None => return format!("\\\\{server}\\{remainder}"),
                     };
                     (format!("\\\\{server}\\{share}\\"), remainder)
-                } else if let Some(remainder) = path_like
-                    .strip_prefix('\\')
-                    .or_else(|| path_like.strip_prefix('/'))
-                {
+                } else if let Some(remainder) = path_like.strip_prefix('\\').or_else(|| path_like.strip_prefix('/')) {
                     ("\\".to_string(), remainder)
                 } else {
                     (String::new(), path_like)
@@ -206,29 +180,18 @@ impl PathStyle {
                 }
 
                 let normalized = components.join("\\");
-                if prefix.is_empty() {
-                    normalized
-                } else {
-                    format!("{prefix}{normalized}")
-                }
+                if prefix.is_empty() { normalized } else { format!("{prefix}{normalized}") }
             }
             PathStyle::Unix => {
                 let is_absolute = path_like.starts_with('/');
-                let remainder = if is_absolute {
-                    path_like.trim_start_matches('/')
-                } else {
-                    path_like
-                };
+                let remainder = if is_absolute { path_like.trim_start_matches('/') } else { path_like };
 
                 let mut components = Vec::new();
                 for component in remainder.split(self.separators_ch()) {
                     match component {
                         "" | "." => {}
                         ".." => {
-                            if components
-                                .last()
-                                .is_some_and(|component| *component != "..")
-                            {
+                            if components.last().is_some_and(|component| *component != "..") {
                                 components.pop();
                             } else if !is_absolute {
                                 components.push(component);
@@ -255,10 +218,7 @@ impl PathStyle {
             return (None, path_like);
         };
         let filename_start = pos + self.primary_separator().len();
-        (
-            Some(&path_like[..filename_start]),
-            &path_like[filename_start..],
-        )
+        (Some(&path_like[..filename_start]), &path_like[filename_start..])
     }
 
     pub fn file_name<'a>(&self, path: &'a Path) -> Option<&'a OsStr> {
@@ -272,19 +232,13 @@ impl PathStyle {
         let mut comps = self.components(path);
         let comp = comps.next_back();
         comp.and_then(|p| match p {
-            Component::Normal(_) | Component::CurDir | Component::ParentDir => {
-                Some(comps.as_path())
-            }
+            Component::Normal(_) | Component::CurDir | Component::ParentDir => Some(comps.as_path()),
             _ => None,
         })
     }
 
     pub fn starts_with<P: AsRef<Path>>(&self, path: P, prefix: P) -> bool {
-        iter_after(
-            self.components(path.as_ref()),
-            self.components(prefix.as_ref()),
-        )
-        .is_some()
+        iter_after(self.components(path.as_ref()), self.components(prefix.as_ref())).is_some()
     }
 
     pub fn strip_prefix<'a>(
@@ -292,12 +246,9 @@ impl PathStyle {
         path: &'a (impl AsRef<Path> + ?Sized),
         prefix: impl AsRef<Path>,
     ) -> Result<&'a Path, StripPrefixError> {
-        iter_after(
-            self.components(path.as_ref()),
-            self.components(prefix.as_ref()),
-        )
-        .map(|c| c.as_path())
-        .ok_or(StripPrefixError)
+        iter_after(self.components(path.as_ref()), self.components(prefix.as_ref()))
+            .map(|c| c.as_path())
+            .ok_or(StripPrefixError)
     }
 }
 
@@ -315,21 +266,21 @@ impl PathStyle {
         }
     }
 
-    fn has_prefixes(&self) -> bool {
+    const fn has_prefixes(&self) -> bool {
         match self {
             PathStyle::Unix => false,
             PathStyle::Windows => true,
         }
     }
 
-    fn is_sep_byte(&self, b: u8) -> bool {
+    const fn is_sep_byte(&self, b: u8) -> bool {
         match self {
             Self::Unix => b == b'/',
             Self::Windows => b == b'\\' || b == b'/',
         }
     }
 
-    fn is_verbatim_sep(&self, b: u8) -> bool {
+    const fn is_verbatim_sep(&self, b: u8) -> bool {
         match self {
             Self::Unix => self.is_sep_byte(b),
             Self::Windows => b == b'\\',
@@ -337,11 +288,7 @@ impl PathStyle {
     }
 
     fn has_physical_root(&self, s: &[u8], prefix: Option<Prefix<'_>>) -> bool {
-        let path = if let Some(p) = prefix {
-            &s[p.len()..]
-        } else {
-            s
-        };
+        let path = if let Some(p) = prefix { &s[p.len()..] } else { s };
         !path.is_empty() && self.is_sep_byte(path[0])
     }
 }

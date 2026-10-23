@@ -1,17 +1,35 @@
-use anyhow::{Context as _, Result};
-use derive_more::{Deref, DerefMut};
+use std::borrow::Cow;
+use std::ptr::NonNull;
+
+use anyhow::Context as _;
+use anyhow::Result;
+use derive_more::Deref;
+use derive_more::DerefMut;
 use etagere::BucketedAtlasAllocator;
-use gpui::{
-    AtlasBackend, AtlasKey, AtlasState, AtlasTextureId, AtlasTextureKind, AtlasTextureList,
-    AtlasTile, Bounds, DevicePixels, PlatformAtlas, Point, Size,
-};
-use objc2::{rc::Retained, runtime::ProtocolObject};
-use objc2_metal::{
-    MTLDevice, MTLOrigin, MTLPixelFormat, MTLRegion, MTLSize, MTLStorageMode, MTLTexture,
-    MTLTextureDescriptor, MTLTextureUsage,
-};
+use gpui::AtlasBackend;
+use gpui::AtlasKey;
+use gpui::AtlasState;
+use gpui::AtlasTextureId;
+use gpui::AtlasTextureKind;
+use gpui::AtlasTextureList;
+use gpui::AtlasTile;
+use gpui::Bounds;
+use gpui::DevicePixels;
+use gpui::PlatformAtlas;
+use gpui::Point;
+use gpui::Size;
+use objc2::rc::Retained;
+use objc2::runtime::ProtocolObject;
+use objc2_metal::MTLDevice;
+use objc2_metal::MTLOrigin;
+use objc2_metal::MTLPixelFormat;
+use objc2_metal::MTLRegion;
+use objc2_metal::MTLSize;
+use objc2_metal::MTLStorageMode;
+use objc2_metal::MTLTexture;
+use objc2_metal::MTLTextureDescriptor;
+use objc2_metal::MTLTextureUsage;
 use parking_lot::Mutex;
-use std::{borrow::Cow, ptr::NonNull};
 
 type Device = ProtocolObject<dyn MTLDevice>;
 type Texture = ProtocolObject<dyn MTLTexture>;
@@ -59,16 +77,9 @@ impl PlatformAtlas for MetalAtlas {
 }
 
 impl AtlasBackend for MetalAtlasTextures {
-    fn insert(
-        &mut self,
-        kind: AtlasTextureKind,
-        size: Size<DevicePixels>,
-        bytes: &[u8],
-    ) -> Result<AtlasTile> {
+    fn insert(&mut self, kind: AtlasTextureKind, size: Size<DevicePixels>, bytes: &[u8]) -> Result<AtlasTile> {
         let tile = self.allocate(size, kind).context("failed to allocate")?;
-        let texture = self
-            .texture(tile.texture_id)
-            .context("allocated tile refers to a missing texture")?;
+        let texture = self.texture(tile.texture_id).context("allocated tile refers to a missing texture")?;
         texture.upload(tile.bounds, bytes);
         Ok(tile)
     }
@@ -82,10 +93,8 @@ impl AtlasBackend for MetalAtlasTextures {
             AtlasTextureKind::Subpixel => unreachable!(),
         };
 
-        let Some(texture_slot) = textures
-            .textures
-            .iter_mut()
-            .find(|texture| texture.as_ref().is_some_and(|v| v.id == id))
+        let Some(texture_slot) =
+            textures.textures.iter_mut().find(|texture| texture.as_ref().is_some_and(|v| v.id == id))
         else {
             return;
         };
@@ -103,11 +112,7 @@ impl AtlasBackend for MetalAtlasTextures {
 }
 
 impl MetalAtlasTextures {
-    fn allocate(
-        &mut self,
-        size: Size<DevicePixels>,
-        texture_kind: AtlasTextureKind,
-    ) -> Option<AtlasTile> {
+    fn allocate(&mut self, size: Size<DevicePixels>, texture_kind: AtlasTextureKind) -> Option<AtlasTile> {
         {
             let textures = match texture_kind {
                 AtlasTextureKind::Monochrome => &mut self.monochrome_textures,
@@ -115,11 +120,7 @@ impl MetalAtlasTextures {
                 AtlasTextureKind::Subpixel => unreachable!(),
             };
 
-            if let Some(tile) = textures
-                .iter_mut()
-                .rev()
-                .find_map(|texture| texture.allocate(size))
-            {
+            if let Some(tile) = textures.iter_mut().rev().find_map(|texture| texture.allocate(size)) {
                 return Some(tile);
             }
         }
@@ -128,39 +129,22 @@ impl MetalAtlasTextures {
         texture.allocate(size)
     }
 
-    fn push_texture(
-        &mut self,
-        min_size: Size<DevicePixels>,
-        kind: AtlasTextureKind,
-    ) -> &mut MetalAtlasTexture {
-        const DEFAULT_ATLAS_SIZE: Size<DevicePixels> = Size {
-            width: DevicePixels(1024),
-            height: DevicePixels(1024),
-        };
+    fn push_texture(&mut self, min_size: Size<DevicePixels>, kind: AtlasTextureKind) -> &mut MetalAtlasTexture {
+        const DEFAULT_ATLAS_SIZE: Size<DevicePixels> = Size { width: DevicePixels(1024), height: DevicePixels(1024) };
         // Max texture size on all modern Apple GPUs. Anything bigger than that crashes in validateWithDevice.
-        const MAX_ATLAS_SIZE: Size<DevicePixels> = Size {
-            width: DevicePixels(16384),
-            height: DevicePixels(16384),
-        };
+        const MAX_ATLAS_SIZE: Size<DevicePixels> = Size { width: DevicePixels(16384), height: DevicePixels(16384) };
         let size = min_size.min(&MAX_ATLAS_SIZE).max(&DEFAULT_ATLAS_SIZE);
         let texture_descriptor = MTLTextureDescriptor::new();
         unsafe {
             texture_descriptor.setWidth(i32::from(size.width) as usize);
             texture_descriptor.setHeight(i32::from(size.height) as usize);
         }
-        let pixel_format;
-        let usage;
-        match kind {
-            AtlasTextureKind::Monochrome => {
-                pixel_format = MTLPixelFormat::A8Unorm;
-                usage = MTLTextureUsage::ShaderRead;
-            }
-            AtlasTextureKind::Polychrome => {
-                pixel_format = MTLPixelFormat::BGRA8Unorm;
-                usage = MTLTextureUsage::ShaderRead;
-            }
+
+        let (pixel_format, usage) = match kind {
+            AtlasTextureKind::Monochrome => (MTLPixelFormat::A8Unorm, MTLTextureUsage::ShaderRead),
+            AtlasTextureKind::Polychrome => (MTLPixelFormat::BGRA8Unorm, MTLTextureUsage::ShaderRead),
             AtlasTextureKind::Subpixel => unreachable!(),
-        }
+        };
         texture_descriptor.setPixelFormat(pixel_format);
         texture_descriptor.setUsage(usage);
         // Shared memory mode can be used only on Apple GPU families
@@ -170,10 +154,8 @@ impl MetalAtlasTextures {
         } else {
             MTLStorageMode::Managed
         });
-        let metal_texture = self
-            .device
-            .newTextureWithDescriptor(&texture_descriptor)
-            .expect("failed to create atlas texture");
+        let metal_texture =
+            self.device.newTextureWithDescriptor(&texture_descriptor).expect("failed to create atlas texture");
 
         let texture_list = match kind {
             AtlasTextureKind::Monochrome => &mut self.monochrome_textures,
@@ -184,10 +166,7 @@ impl MetalAtlasTextures {
         let index = texture_list.free_list.pop();
 
         let atlas_texture = MetalAtlasTexture {
-            id: AtlasTextureId {
-                index: index.unwrap_or(texture_list.textures.len()) as u32,
-                kind,
-            },
+            id: AtlasTextureId { index: index.unwrap_or(texture_list.textures.len()) as u32, kind },
             allocator: etagere::BucketedAtlasAllocator::new(size_to_etagere(size)),
             metal_texture: AssertSend(metal_texture),
             live_atlas_keys: 0,
@@ -228,10 +207,7 @@ impl MetalAtlasTexture {
         let tile = AtlasTile {
             texture_id: self.id,
             tile_id: allocation.id.into(),
-            bounds: Bounds {
-                origin: point_from_etagere(allocation.rectangle.min),
-                size,
-            },
+            bounds: Bounds { origin: point_from_etagere(allocation.rectangle.min), size },
             padding: 0,
         };
         self.live_atlas_keys += 1;
@@ -240,11 +216,7 @@ impl MetalAtlasTexture {
 
     fn upload(&self, bounds: Bounds<DevicePixels>, bytes: &[u8]) {
         let region = MTLRegion {
-            origin: MTLOrigin {
-                x: i32::from(bounds.origin.x) as usize,
-                y: i32::from(bounds.origin.y) as usize,
-                z: 0,
-            },
+            origin: MTLOrigin { x: i32::from(bounds.origin.x) as usize, y: i32::from(bounds.origin.y) as usize, z: 0 },
             size: MTLSize {
                 width: i32::from(bounds.size.width) as usize,
                 height: i32::from(bounds.size.height) as usize,
@@ -254,13 +226,12 @@ impl MetalAtlasTexture {
         // Safety: `bytes` holds a full tile of `bytes_per_pixel` pixels, and
         // the region lies within the texture the tile was allocated from.
         unsafe {
-            self.metal_texture
-                .replaceRegion_mipmapLevel_withBytes_bytesPerRow(
-                    region,
-                    0,
-                    NonNull::new(bytes.as_ptr().cast_mut()).unwrap().cast(),
-                    bounds.size.width.to_bytes(self.bytes_per_pixel()) as usize,
-                );
+            self.metal_texture.replaceRegion_mipmapLevel_withBytes_bytesPerRow(
+                region,
+                0,
+                NonNull::new(bytes.as_ptr().cast_mut()).unwrap().cast(),
+                bounds.size.width.to_bytes(self.bytes_per_pixel()) as usize,
+            );
         }
     }
 
@@ -272,11 +243,11 @@ impl MetalAtlasTexture {
         }
     }
 
-    fn decrement_ref_count(&mut self) {
+    const fn decrement_ref_count(&mut self) {
         self.live_atlas_keys -= 1;
     }
 
-    fn is_unreferenced(&mut self) -> bool {
+    const fn is_unreferenced(&self) -> bool {
         self.live_atlas_keys == 0
     }
 }
@@ -286,10 +257,7 @@ fn size_to_etagere(size: Size<DevicePixels>) -> etagere::Size {
 }
 
 fn point_from_etagere(value: etagere::Point) -> Point<DevicePixels> {
-    Point {
-        x: DevicePixels::from(value.x),
-        y: DevicePixels::from(value.y),
-    }
+    Point { x: DevicePixels::from(value.x), y: DevicePixels::from(value.y) }
 }
 
 #[derive(Deref, DerefMut)]

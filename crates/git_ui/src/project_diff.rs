@@ -1,41 +1,66 @@
-use crate::{
-    diff_multibuffer::DiffMultibuffer,
-    git_panel::{GitPanel, GitPanelAddon, GitStatusEntry},
-    staged_diff::StagedDiff,
-    unstaged_diff::UnstagedDiff,
-};
-use anyhow::{Context as _, Result};
+use std::any::Any;
+use std::any::TypeId;
+use std::sync::Arc;
+
+use anyhow::Context as _;
+use anyhow::Result;
 use buffer_diff::DiffHunkSecondaryStatus;
-use editor::{
-    DefaultDiffHunkRenderer, Editor, EditorEvent, SplittableEditor,
-    actions::{GoToHunk, GoToPreviousHunk},
-};
-use git::{Commit, StageAll, StageAndNext, ToggleStaged, UnstageAll, UnstageAndNext};
-use gpui::{
-    Action, App, AppContext as _, Entity, EventEmitter, FocusHandle, Focusable, Render,
-    Subscription, Task, WeakEntity, actions,
-};
+use editor::DefaultDiffHunkRenderer;
+use editor::Editor;
+use editor::EditorEvent;
+use editor::SplittableEditor;
+use editor::actions::GoToHunk;
+use editor::actions::GoToPreviousHunk;
+use git::Commit;
+use git::StageAll;
+use git::StageAndNext;
+use git::ToggleStaged;
+use git::UnstageAll;
+use git::UnstageAndNext;
+use gpui::Action;
+use gpui::App;
+use gpui::AppContext as _;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::Render;
+use gpui::Subscription;
+use gpui::Task;
+use gpui::WeakEntity;
+use gpui::actions;
 use language::Capability;
 use multi_buffer::MultiBuffer;
-use project::{
-    Project, ProjectPath,
-    git_store::{
-        Repository,
-        diff_buffer_list::{self, DiffBase},
-    },
-};
+use project::Project;
+use project::ProjectPath;
+use project::git_store::Repository;
+use project::git_store::diff_buffer_list::DiffBase;
+use project::git_store::diff_buffer_list::{self};
 use schemars::JsonSchema;
 use serde::Deserialize;
-use std::any::{Any, TypeId};
-use std::sync::Arc;
-use ui::{DiffStat, Divider, Tooltip, prelude::*};
-use workspace::{
-    ItemNavHistory, SerializableItem, ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView,
-    Workspace,
-    item::{Item, ItemEvent, ItemHandle, SaveOptions},
-    searchable::SearchableItemHandle,
-};
+use ui::DiffStat;
+use ui::Divider;
+use ui::Tooltip;
+use ui::prelude::*;
+use workspace::ItemNavHistory;
+use workspace::SerializableItem;
+use workspace::ToolbarItemEvent;
+use workspace::ToolbarItemLocation;
+use workspace::ToolbarItemView;
+use workspace::Workspace;
+use workspace::item::Item;
+use workspace::item::ItemEvent;
+use workspace::item::ItemHandle;
+use workspace::item::SaveOptions;
+use workspace::searchable::SearchableItemHandle;
 use zed_actions::git as git_actions;
+
+use crate::diff_multibuffer::DiffMultibuffer;
+use crate::git_panel::GitPanel;
+use crate::git_panel::GitPanelAddon;
+use crate::git_panel::GitStatusEntry;
+use crate::staged_diff::StagedDiff;
+use crate::unstaged_diff::UnstagedDiff;
 
 actions!(
     git,
@@ -67,33 +92,22 @@ pub struct ProjectDiff {
 impl ProjectDiff {
     pub(crate) fn register(workspace: &mut Workspace, cx: &mut Context<Workspace>) {
         workspace.register_action(Self::deploy);
-        workspace.register_action(
-            |workspace, _: &git_actions::ViewUncommittedChanges, window, cx| {
-                Self::deploy_at(workspace, None, window, cx);
-            },
-        );
-        workspace.register_action(
-            |workspace, _: &git_actions::ViewUnstagedChanges, window, cx| {
-                UnstagedDiff::deploy_at(workspace, None, window, cx);
-            },
-        );
-        workspace.register_action(
-            |workspace, _: &git_actions::ViewStagedChanges, window, cx| {
-                StagedDiff::deploy_at(workspace, None, window, cx);
-            },
-        );
+        workspace.register_action(|workspace, _: &git_actions::ViewUncommittedChanges, window, cx| {
+            Self::deploy_at(workspace, None, window, cx);
+        });
+        workspace.register_action(|workspace, _: &git_actions::ViewUnstagedChanges, window, cx| {
+            UnstagedDiff::deploy_at(workspace, None, window, cx);
+        });
+        workspace.register_action(|workspace, _: &git_actions::ViewStagedChanges, window, cx| {
+            StagedDiff::deploy_at(workspace, None, window, cx);
+        });
         workspace.register_action(|workspace, _: &Add, window, cx| {
             Self::deploy_at(workspace, None, window, cx);
         });
         workspace::register_serializable_item::<ProjectDiff>(cx);
     }
 
-    fn deploy(
-        workspace: &mut Workspace,
-        _: &Diff,
-        window: &mut Window,
-        cx: &mut Context<Workspace>,
-    ) {
+    fn deploy(workspace: &mut Workspace, _: &Diff, window: &mut Window, cx: &mut Context<Workspace>) {
         Self::deploy_at(workspace, None, window, cx)
     }
 
@@ -115,23 +129,14 @@ impl ProjectDiff {
             existing
         } else {
             let workspace_handle = cx.entity();
-            let project_diff =
-                cx.new(|cx| Self::new(workspace.project().clone(), workspace_handle, window, cx));
-            workspace.add_item_to_active_pane(
-                Box::new(project_diff.clone()),
-                None,
-                true,
-                window,
-                cx,
-            );
+            let project_diff = cx.new(|cx| Self::new(workspace.project().clone(), workspace_handle, window, cx));
+            workspace.add_item_to_active_pane(Box::new(project_diff.clone()), None, true, window, cx);
             project_diff
         };
 
         if let Some(intended) = &intended_repo {
-            let needs_switch = project_diff
-                .read(cx)
-                .repo(cx)
-                .map_or(true, |current| current.read(cx).id != intended.read(cx).id);
+            let needs_switch =
+                project_diff.read(cx).repo(cx).is_none_or(|current| current.read(cx).id != intended.read(cx).id);
             if needs_switch {
                 project_diff.update(cx, |project_diff, cx| {
                     project_diff.set_repo(Some(intended.clone()), cx);
@@ -158,15 +163,8 @@ impl ProjectDiff {
             existing
         } else {
             let workspace_handle = cx.entity();
-            let project_diff =
-                cx.new(|cx| Self::new(workspace.project().clone(), workspace_handle, window, cx));
-            workspace.add_item_to_active_pane(
-                Box::new(project_diff.clone()),
-                None,
-                true,
-                window,
-                cx,
-            );
+            let project_diff = cx.new(|cx| Self::new(workspace.project().clone(), workspace_handle, window, cx));
+            workspace.add_item_to_active_pane(Box::new(project_diff.clone()), None, true, window, cx);
             project_diff
         };
         project_diff.update(cx, |project_diff, cx| {
@@ -185,8 +183,7 @@ impl ProjectDiff {
         cx: &mut Context<Self>,
     ) -> Self {
         let git_store = project.read(cx).git_store().clone();
-        let branch_diff =
-            cx.new(|cx| diff_buffer_list::DiffBufferList::new(DiffBase::Head, git_store, None, cx));
+        let branch_diff = cx.new(|cx| diff_buffer_list::DiffBufferList::new(DiffBase::Head, git_store, None, cx));
         Self::new_impl(branch_diff, project, workspace, window, cx)
     }
 
@@ -207,9 +204,7 @@ impl ProjectDiff {
                     editor.set_diff_hunk_renderer(Some(Arc::new(DefaultDiffHunkRenderer)), cx);
                     editor.rhs_editor().update(cx, |rhs_editor, _cx| {
                         rhs_editor.set_read_only(false);
-                        rhs_editor.register_addon(GitPanelAddon {
-                            workspace: workspace_handle,
-                        });
+                        rhs_editor.register_addon(GitPanelAddon { workspace: workspace_handle });
                     });
                 },
                 project.clone(),
@@ -251,35 +246,20 @@ impl ProjectDiff {
         self.diff.read(cx).repo(cx)
     }
 
-    pub(crate) fn set_repo(&mut self, repo: Option<Entity<Repository>>, cx: &mut Context<Self>) {
-        self.diff
-            .update(cx, |diff, cx| diff.set_repo(repo.clone(), cx));
+    pub(crate) fn set_repo(&self, repo: Option<Entity<Repository>>, cx: &mut Context<Self>) {
+        self.diff.update(cx, |diff, cx| diff.set_repo(repo.clone(), cx));
     }
 
-    pub fn move_to_entry(
-        &mut self,
-        entry: GitStatusEntry,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.diff
-            .update(cx, |diff, cx| diff.move_to_entry(entry, window, cx));
+    pub fn move_to_entry(&mut self, entry: GitStatusEntry, window: &mut Window, cx: &mut Context<Self>) {
+        self.diff.update(cx, |diff, cx| diff.move_to_entry(entry, window, cx));
     }
 
-    pub fn move_to_project_path(
-        &mut self,
-        project_path: &ProjectPath,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.diff.update(cx, |diff, cx| {
-            diff.move_to_project_path(project_path, window, cx)
-        });
+    pub fn move_to_project_path(&mut self, project_path: &ProjectPath, window: &mut Window, cx: &mut Context<Self>) {
+        self.diff.update(cx, |diff, cx| diff.move_to_project_path(project_path, window, cx));
     }
 
-    fn move_to_beginning(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.diff
-            .update(cx, |diff, cx| diff.move_to_beginning(window, cx));
+    fn move_to_beginning(&self, window: &mut Window, cx: &mut Context<Self>) {
+        self.diff.update(cx, |diff, cx| diff.move_to_beginning(window, cx));
     }
 
     pub fn calculate_changed_lines(&self, cx: &App) -> (u32, u32) {
@@ -307,16 +287,14 @@ impl ProjectDiff {
         let mut has_unstaged_hunks = false;
         for hunk in editor.diff_hunks_in_ranges(&ranges, &snapshot) {
             match hunk.status.secondary {
-                DiffHunkSecondaryStatus::HasSecondaryHunk
-                | DiffHunkSecondaryStatus::SecondaryHunkAdditionPending => {
+                DiffHunkSecondaryStatus::HasSecondaryHunk | DiffHunkSecondaryStatus::SecondaryHunkAdditionPending => {
                     has_unstaged_hunks = true;
                 }
                 DiffHunkSecondaryStatus::OverlapsWithSecondaryHunk => {
                     has_staged_hunks = true;
                     has_unstaged_hunks = true;
                 }
-                DiffHunkSecondaryStatus::NoSecondaryHunk
-                | DiffHunkSecondaryStatus::SecondaryHunkRemovalPending => {
+                DiffHunkSecondaryStatus::NoSecondaryHunk | DiffHunkSecondaryStatus::SecondaryHunkRemovalPending => {
                     has_staged_hunks = true;
                 }
             }
@@ -373,18 +351,11 @@ impl Item for ProjectDiff {
     }
 
     fn deactivated(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.diff
-            .update(cx, |diff, cx| diff.deactivated(window, cx));
+        self.diff.update(cx, |diff, cx| diff.deactivated(window, cx));
     }
 
-    fn navigate(
-        &mut self,
-        data: Arc<dyn Any + Send>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        self.diff
-            .update(cx, |diff, cx| diff.navigate(data, window, cx))
+    fn navigate(&mut self, data: Arc<dyn Any + Send>, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        self.diff.update(cx, |diff, cx| diff.navigate(data, window, cx))
     }
 
     fn tab_tooltip_text(&self, cx: &App) -> Option<SharedString> {
@@ -399,11 +370,7 @@ impl Item for ProjectDiff {
         Some(Box::new(self.diff.read(cx).editor().clone()))
     }
 
-    fn for_each_project_item(
-        &self,
-        cx: &App,
-        f: &mut dyn FnMut(gpui::EntityId, &dyn project::ProjectItem),
-    ) {
+    fn for_each_project_item(&self, cx: &App, f: &mut dyn FnMut(gpui::EntityId, &dyn project::ProjectItem)) {
         self.diff.read(cx).for_each_project_item(cx, f)
     }
 
@@ -411,14 +378,8 @@ impl Item for ProjectDiff {
         self.diff.read(cx).active_project_path(cx)
     }
 
-    fn set_nav_history(
-        &mut self,
-        nav_history: ItemNavHistory,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.diff
-            .update(cx, |diff, cx| diff.set_nav_history(nav_history, cx));
+    fn set_nav_history(&mut self, nav_history: ItemNavHistory, _: &mut Window, cx: &mut Context<Self>) {
+        self.diff.update(cx, |diff, cx| diff.set_nav_history(nav_history, cx));
     }
 
     fn can_split(&self) -> bool {
@@ -437,9 +398,7 @@ impl Item for ProjectDiff {
         let Some(workspace) = self.workspace.upgrade() else {
             return Task::ready(None);
         };
-        Task::ready(Some(cx.new(|cx| {
-            ProjectDiff::new(self.project.clone(), workspace, window, cx)
-        })))
+        Task::ready(Some(cx.new(|cx| ProjectDiff::new(self.project.clone(), workspace, window, cx))))
     }
 
     fn is_dirty(&self, cx: &App) -> bool {
@@ -461,8 +420,7 @@ impl Item for ProjectDiff {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Task<Result<()>> {
-        self.diff
-            .update(cx, |diff, cx| diff.save(options, project, window, cx))
+        self.diff.update(cx, |diff, cx| diff.save(options, project, window, cx))
     }
 
     fn save_as(
@@ -475,14 +433,8 @@ impl Item for ProjectDiff {
         unreachable!()
     }
 
-    fn reload(
-        &mut self,
-        project: Entity<Project>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<()>> {
-        self.diff
-            .update(cx, |diff, cx| diff.reload(project, window, cx))
+    fn reload(&mut self, project: Entity<Project>, window: &mut Window, cx: &mut Context<Self>) -> Task<Result<()>> {
+        self.diff.update(cx, |diff, cx| diff.reload(project, window, cx))
     }
 
     fn act_as_type<'a>(
@@ -494,15 +446,7 @@ impl Item for ProjectDiff {
         if type_id == TypeId::of::<Self>() {
             Some(self_handle.clone().into())
         } else if type_id == TypeId::of::<Editor>() {
-            Some(
-                self.diff
-                    .read(cx)
-                    .editor()
-                    .read(cx)
-                    .rhs_editor()
-                    .clone()
-                    .into(),
-            )
+            Some(self.diff.read(cx).editor().read(cx).rhs_editor().clone().into())
         } else if type_id == TypeId::of::<SplittableEditor>() {
             Some(self.diff.read(cx).editor().clone().into())
         } else if type_id == TypeId::of::<diff_buffer_list::DiffBufferList>() {
@@ -512,15 +456,8 @@ impl Item for ProjectDiff {
         }
     }
 
-    fn added_to_workspace(
-        &mut self,
-        workspace: &mut Workspace,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.diff.update(cx, |diff, cx| {
-            diff.added_to_workspace(workspace, window, cx)
-        });
+    fn added_to_workspace(&mut self, workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Self>) {
+        self.diff.update(cx, |diff, cx| diff.added_to_workspace(workspace, window, cx));
     }
 }
 
@@ -535,12 +472,7 @@ impl SerializableItem for ProjectDiff {
         "ProjectDiff"
     }
 
-    fn cleanup(
-        _: workspace::WorkspaceId,
-        _: Vec<workspace::ItemId>,
-        _: &mut Window,
-        _: &mut App,
-    ) -> Task<Result<()>> {
+    fn cleanup(_: workspace::WorkspaceId, _: Vec<workspace::ItemId>, _: &mut Window, _: &mut App) -> Task<Result<()>> {
         Task::ready(Ok(()))
     }
 
@@ -555,13 +487,10 @@ impl SerializableItem for ProjectDiff {
         window.spawn(cx, async move |cx| {
             cx.update(|window, cx| {
                 let git_store = project.read(cx).git_store().clone();
-                let branch_diff = cx.new(|cx| {
-                    diff_buffer_list::DiffBufferList::new(DiffBase::Head, git_store, None, cx)
-                });
+                let branch_diff =
+                    cx.new(|cx| diff_buffer_list::DiffBufferList::new(DiffBase::Head, git_store, None, cx));
                 let workspace = workspace.upgrade().context("workspace gone")?;
-                anyhow::Ok(
-                    cx.new(|cx| ProjectDiff::new_impl(branch_diff, project, workspace, window, cx)),
-                )
+                anyhow::Ok(cx.new(|cx| ProjectDiff::new_impl(branch_diff, project, workspace, window, cx)))
             })?
         })
     }
@@ -584,12 +513,13 @@ impl SerializableItem for ProjectDiff {
 pub(crate) mod persistence {
 
     use anyhow::Context as _;
-    use db::{
-        sqlez::{domain::Domain, thread_safe_connection::ThreadSafeConnection},
-        sqlez_macros::sql,
-    };
+    use db::sqlez::domain::Domain;
+    use db::sqlez::thread_safe_connection::ThreadSafeConnection;
+    use db::sqlez_macros::sql;
     use project::git_store::diff_buffer_list::DiffBase;
-    use workspace::{ItemId, WorkspaceDb, WorkspaceId};
+    use workspace::ItemId;
+    use workspace::WorkspaceDb;
+    use workspace::WorkspaceId;
 
     pub struct ProjectDiffDb(ThreadSafeConnection);
 
@@ -625,28 +555,21 @@ pub(crate) mod persistence {
                 );
                 let diff_base_str = serde_json::to_string(&diff_base)?;
                 let mut query = connection.exec_bound::<(ItemId, WorkspaceId, String)>(sql_stmt)?;
-                query((item_id, workspace_id, diff_base_str)).context(format!(
-                    "exec_bound failed to execute or parse for: {}",
-                    sql_stmt
-                ))
+                query((item_id, workspace_id, diff_base_str))
+                    .context(format!("exec_bound failed to execute or parse for: {}", sql_stmt))
             })
             .await
         }
 
-        pub fn get_project_diff_base(
-            &self,
-            item_id: ItemId,
-            workspace_id: WorkspaceId,
-        ) -> anyhow::Result<DiffBase> {
-            let sql_stmt =
-                sql!(SELECT diff_base FROM project_diffs WHERE item_id =  ?AND workspace_id =  ?);
-            let diff_base_str = self.select_row_bound::<(ItemId, WorkspaceId), String>(sql_stmt)?(
-                (item_id, workspace_id),
-            )
-            .context(::std::format!(
-                "Error in get_diff_base, select_row_bound failed to execute or parse for: {}",
-                sql_stmt
-            ))?;
+        pub fn get_project_diff_base(&self, item_id: ItemId, workspace_id: WorkspaceId) -> anyhow::Result<DiffBase> {
+            let sql_stmt = sql!(SELECT diff_base FROM project_diffs WHERE item_id =  ?AND workspace_id =  ?);
+            let diff_base_str =
+                self.select_row_bound::<(ItemId, WorkspaceId), String>(sql_stmt)?((item_id, workspace_id)).context(
+                    ::std::format!(
+                        "Error in get_diff_base, select_row_bound failed to execute or parse for: {}",
+                        sql_stmt
+                    ),
+                )?;
             let Some(diff_base_str) = diff_base_str else {
                 return Ok(DiffBase::Head);
             };
@@ -662,10 +585,7 @@ pub struct ProjectDiffToolbar {
 
 impl ProjectDiffToolbar {
     pub fn new(workspace: &Workspace, _: &mut Context<Self>) -> Self {
-        Self {
-            project_diff: None,
-            workspace: workspace.weak_handle(),
-        }
+        Self { project_diff: None, workspace: workspace.weak_handle() }
     }
 
     fn project_diff(&self, _: &App) -> Option<Entity<ProjectDiff>> {
@@ -682,7 +602,7 @@ impl ProjectDiffToolbar {
         })
     }
 
-    fn stage_all(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn stage_all(&self, window: &mut Window, cx: &mut Context<Self>) {
         self.workspace
             .update(cx, |workspace, cx| {
                 if let Some(panel) = workspace.panel::<GitPanel>(cx) {
@@ -694,7 +614,7 @@ impl ProjectDiffToolbar {
             .ok();
     }
 
-    fn unstage_all(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn unstage_all(&self, window: &mut Window, cx: &mut Context<Self>) {
         self.workspace
             .update(cx, |workspace, cx| {
                 let Some(panel) = workspace.panel::<GitPanel>(cx) else {
@@ -717,23 +637,12 @@ impl ToolbarItemView for ProjectDiffToolbar {
         _: &mut Window,
         cx: &mut Context<Self>,
     ) -> ToolbarItemLocation {
-        self.project_diff = active_pane_item
-            .and_then(|item| item.act_as::<ProjectDiff>(cx))
-            .map(|entity| entity.downgrade());
-        if self.project_diff.is_some() {
-            ToolbarItemLocation::PrimaryRight
-        } else {
-            ToolbarItemLocation::Hidden
-        }
+        self.project_diff =
+            active_pane_item.and_then(|item| item.act_as::<ProjectDiff>(cx)).map(|entity| entity.downgrade());
+        if self.project_diff.is_some() { ToolbarItemLocation::PrimaryRight } else { ToolbarItemLocation::Hidden }
     }
 
-    fn pane_focus_update(
-        &mut self,
-        _pane_focused: bool,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) {
-    }
+    fn pane_focus_update(&mut self, _pane_focused: bool, _window: &mut Window, _cx: &mut Context<Self>) {}
 }
 
 impl Render for ProjectDiffToolbar {
@@ -756,12 +665,8 @@ impl Render for ProjectDiffToolbar {
             .flex_wrap()
             .justify_between()
             .when(!is_multibuffer_empty, |this| {
-                this.child(DiffStat::new(
-                    "project-diff-stat",
-                    additions as usize,
-                    deletions as usize,
-                ))
-                .child(Divider::vertical().ml_1())
+                this.child(DiffStat::new("project-diff-stat", additions as usize, deletions as usize))
+                    .child(Divider::vertical().ml_1())
             })
             // n.b. the only reason these arrows are here is because we don't
             // support "undo" for staging so we need a way to go back.
@@ -776,22 +681,16 @@ impl Render for ProjectDiffToolbar {
                                 &GoToPreviousHunk,
                                 &focus_handle,
                             ))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.dispatch_action(&GoToPreviousHunk, window, cx)
-                            })),
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.dispatch_action(&GoToPreviousHunk, window, cx)),
+                            ),
                     )
                     .child(
                         IconButton::new("down", IconName::ArrowDown)
                             .icon_size(IconSize::Small)
                             .disabled(!button_states.prev_next)
-                            .tooltip(Tooltip::for_action_title_in(
-                                "Go to Next Hunk",
-                                &GoToHunk,
-                                &focus_handle,
-                            ))
-                            .on_click(cx.listener(|this, _, window, cx| {
-                                this.dispatch_action(&GoToHunk, window, cx)
-                            })),
+                            .tooltip(Tooltip::for_action_title_in("Go to Next Hunk", &GoToHunk, &focus_handle))
+                            .on_click(cx.listener(|this, _, window, cx| this.dispatch_action(&GoToHunk, window, cx))),
                     ),
             )
             .child(Divider::vertical())
@@ -800,15 +699,11 @@ impl Render for ProjectDiffToolbar {
                     .when(button_states.selection, |this| {
                         this.child(
                             Button::new("stage", "Toggle Staged")
-                                .tooltip(Tooltip::for_action_title_in(
-                                    "Toggle Staged",
-                                    &ToggleStaged,
-                                    &focus_handle,
-                                ))
+                                .tooltip(Tooltip::for_action_title_in("Toggle Staged", &ToggleStaged, &focus_handle))
                                 .disabled(!button_states.stage && !button_states.unstage)
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.dispatch_action(&ToggleStaged, window, cx)
-                                })),
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| this.dispatch_action(&ToggleStaged, window, cx)),
+                                ),
                         )
                     })
                     .when(!button_states.selection, |this| {
@@ -820,9 +715,9 @@ impl Render for ProjectDiffToolbar {
                                     &StageAndNext,
                                     &focus_handle,
                                 ))
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.dispatch_action(&StageAndNext, window, cx)
-                                })),
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| this.dispatch_action(&StageAndNext, window, cx)),
+                                ),
                         )
                         .child(
                             Button::new("unstage", "Unstage")
@@ -832,56 +727,36 @@ impl Render for ProjectDiffToolbar {
                                     &UnstageAndNext,
                                     &focus_handle,
                                 ))
-                                .on_click(cx.listener(|this, _, window, cx| {
-                                    this.dispatch_action(&UnstageAndNext, window, cx)
-                                })),
+                                .on_click(
+                                    cx.listener(|this, _, window, cx| {
+                                        this.dispatch_action(&UnstageAndNext, window, cx)
+                                    }),
+                                ),
                         )
                     }),
             )
             .child(Divider::vertical())
-            .when(
-                button_states.unstage_all && !button_states.stage_all,
-                |this| {
-                    this.child(
-                        Button::new("unstage-all", "Unstage All")
-                            .width(stage_all_button_width)
-                            .tooltip(Tooltip::for_action_title_in(
-                                "Unstage All Changes",
-                                &UnstageAll,
-                                &focus_handle,
-                            ))
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.unstage_all(window, cx)),
-                            ),
-                    )
-                },
-            )
-            .when(
-                !button_states.unstage_all || button_states.stage_all,
-                |this| {
-                    this.child(
-                        Button::new("stage-all", "Stage All")
-                            .width(stage_all_button_width)
-                            .disabled(!button_states.stage_all)
-                            .tooltip(Tooltip::for_action_title_in(
-                                "Stage All Changes",
-                                &StageAll,
-                                &focus_handle,
-                            ))
-                            .on_click(
-                                cx.listener(|this, _, window, cx| this.stage_all(window, cx)),
-                            ),
-                    )
-                },
-            )
+            .when(button_states.unstage_all && !button_states.stage_all, |this| {
+                this.child(
+                    Button::new("unstage-all", "Unstage All")
+                        .width(stage_all_button_width)
+                        .tooltip(Tooltip::for_action_title_in("Unstage All Changes", &UnstageAll, &focus_handle))
+                        .on_click(cx.listener(|this, _, window, cx| this.unstage_all(window, cx))),
+                )
+            })
+            .when(!button_states.unstage_all || button_states.stage_all, |this| {
+                this.child(
+                    Button::new("stage-all", "Stage All")
+                        .width(stage_all_button_width)
+                        .disabled(!button_states.stage_all)
+                        .tooltip(Tooltip::for_action_title_in("Stage All Changes", &StageAll, &focus_handle))
+                        .on_click(cx.listener(|this, _, window, cx| this.stage_all(window, cx))),
+                )
+            })
             .child(Divider::vertical())
             .child(
                 Button::new("commit", "Commit")
-                    .tooltip(Tooltip::for_action_title_in(
-                        "Commit",
-                        &Commit,
-                        &focus_handle,
-                    ))
+                    .tooltip(Tooltip::for_action_title_in("Commit", &Commit, &focus_handle))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.dispatch_action(&Commit, window, cx);
                     })),

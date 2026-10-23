@@ -1,7 +1,8 @@
 use std::borrow::Cow;
 
+use crate::shell::Shell;
+use crate::shell::ShellKind;
 use crate::shell::get_system_shell;
-use crate::shell::{Shell, ShellKind};
 
 /// ShellBuilder is used to turn a user-requested task into a
 /// program that can be executed by the shell.
@@ -26,21 +27,14 @@ impl ShellBuilder {
         };
 
         let kind = ShellKind::new(&program, is_windows);
-        Self {
-            program,
-            args,
-            interactive: true,
-            kind,
-            redirect_stdin: false,
-            substitute_variables: true,
-        }
+        Self { program, args, interactive: true, kind, redirect_stdin: false, substitute_variables: true }
     }
-    pub fn non_interactive(mut self) -> Self {
+    pub const fn non_interactive(mut self) -> Self {
         self.interactive = false;
         self
     }
 
-    pub fn literal_args(mut self) -> Self {
+    pub const fn literal_args(mut self) -> Self {
         self.substitute_variables = false;
         self
     }
@@ -65,27 +59,20 @@ impl ShellBuilder {
                 | ShellKind::Rc
                 | ShellKind::Xonsh
                 | ShellKind::Elvish => {
-                    let interactivity = self.interactive.then_some("-i ").unwrap_or_default();
-                    format!(
-                        "{PROGRAM} {interactivity}-c '{command_to_use_in_label}'",
-                        PROGRAM = self.program
-                    )
+                    let interactivity = if self.interactive { "-i " } else { Default::default() };
+                    format!("{PROGRAM} {interactivity}-c '{command_to_use_in_label}'", PROGRAM = self.program)
                 }
             }
         }
     }
 
-    pub fn redirect_stdin_to_dev_null(mut self) -> Self {
+    pub const fn redirect_stdin_to_dev_null(mut self) -> Self {
         self.redirect_stdin = true;
         self
     }
 
     /// Returns the program and arguments to run this task in a shell.
-    pub fn build(
-        mut self,
-        task_command: Option<String>,
-        task_args: &[String],
-    ) -> (String, Vec<String>) {
+    pub fn build(mut self, task_command: Option<String>, task_args: &[String]) -> (String, Vec<String>) {
         if let Some(task_command) = task_command {
             let task_command = if !task_args.is_empty() {
                 match self.kind.try_quote_prefix_aware(&task_command) {
@@ -133,7 +120,7 @@ impl ShellBuilder {
                     }
                     ShellKind::PowerShell | ShellKind::Pwsh => {
                         combined_command.insert_str(0, "$null | & {");
-                        combined_command.push_str("}");
+                        combined_command.push('}');
                     }
                     ShellKind::Cmd => {
                         combined_command.push_str("< NUL");
@@ -141,8 +128,7 @@ impl ShellBuilder {
                 }
             }
 
-            self.args
-                .extend(self.kind.args_for_shell(self.interactive, combined_command));
+            self.args.extend(self.kind.args_for_shell(self.interactive, combined_command));
         }
 
         (self.program, self.args)
@@ -150,11 +136,7 @@ impl ShellBuilder {
 
     // This should not exist, but our task infra is broken beyond repair right now
     #[doc(hidden)]
-    pub fn build_no_quote(
-        mut self,
-        task_command: Option<String>,
-        task_args: &[String],
-    ) -> (String, Vec<String>) {
+    pub fn build_no_quote(mut self, task_command: Option<String>, task_args: &[String]) -> (String, Vec<String>) {
         if let Some(task_command) = task_command {
             let mut combined_command = task_args.iter().fold(task_command, |mut command, arg| {
                 command.push(' ');
@@ -181,7 +163,7 @@ impl ShellBuilder {
                     }
                     ShellKind::PowerShell | ShellKind::Pwsh => {
                         combined_command.insert_str(0, "$null | & {");
-                        combined_command.push_str("}");
+                        combined_command.push('}');
                     }
                     ShellKind::Cmd => {
                         combined_command.push_str("< NUL");
@@ -189,8 +171,7 @@ impl ShellBuilder {
                 }
             }
 
-            self.args
-                .extend(self.kind.args_for_shell(self.interactive, combined_command));
+            self.args.extend(self.kind.args_for_shell(self.interactive, combined_command));
         }
 
         (self.program, self.args)
@@ -200,11 +181,7 @@ impl ShellBuilder {
     ///
     /// Prefer this over manually constructing a command with the output of `Self::build`,
     /// as this method handles `cmd` weirdness on windows correctly.
-    pub fn build_smol_command(
-        self,
-        task_command: Option<String>,
-        task_args: &[String],
-    ) -> smol::process::Command {
+    pub fn build_smol_command(self, task_command: Option<String>, task_args: &[String]) -> smol::process::Command {
         smol::process::Command::from(self.build_std_command(task_command, task_args))
     }
 
@@ -212,15 +189,11 @@ impl ShellBuilder {
     ///
     /// Prefer this over manually constructing a command with the output of `Self::build`,
     /// as this method handles `cmd` weirdness on windows correctly.
-    pub fn build_std_command(
-        self,
-        mut task_command: Option<String>,
-        task_args: &[String],
-    ) -> std::process::Command {
+    pub fn build_std_command(self, mut task_command: Option<String>, task_args: &[String]) -> std::process::Command {
         if task_args.is_empty() {
             task_command = task_command
                 .as_ref()
-                .map(|cmd| self.kind.try_quote_prefix_aware(&cmd).map(Cow::into_owned))
+                .map(|cmd| self.kind.try_quote_prefix_aware(cmd).map(Cow::into_owned))
                 .unwrap_or(task_command);
         }
         let (program, args) = self.build(task_command, task_args);
@@ -232,7 +205,7 @@ impl ShellBuilder {
         child
     }
 
-    pub fn kind(&self) -> ShellKind {
+    pub const fn kind(&self) -> ShellKind {
         self.kind
     }
 }

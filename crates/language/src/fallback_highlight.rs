@@ -339,7 +339,7 @@ impl Cache {
             }
         }
         self.frontier = self.frontier.min(self.lines.len() as u32);
-        self.version = text.version().clone();
+        self.version.clone_from(text.version());
         true
     }
 
@@ -519,10 +519,10 @@ mod tests {
         set_theme(&theme);
         let mut buffer =
             TextBuffer::new(ReplicaId::LOCAL, BufferId::new(1).unwrap(), "int main() {\n    return 0; // done\n}\n");
-        let highlighter = FallbackHighlighter::for_buffer(None, Some("main.c"), &buffer.snapshot()).unwrap();
+        let highlighter = FallbackHighlighter::for_buffer(None, Some("main.c"), buffer.snapshot()).unwrap();
         assert_eq!(highlighter.syntax_name(), "C");
 
-        let runs = highlighted(&highlighter, &buffer.snapshot(), &theme);
+        let runs = highlighted(&highlighter, buffer.snapshot(), &theme);
         assert!(runs.contains(&("int".into(), "keyword".into())), "{runs:?}");
         assert!(runs.contains(&("return".into(), "keyword".into())), "{runs:?}");
         assert!(runs.contains(&("0".into(), "number".into())), "{runs:?}");
@@ -530,11 +530,11 @@ mod tests {
 
         // Opening a block comment turns the following lines into a comment.
         buffer.edit([(0..0, "/*\n")]);
-        let runs = highlighted(&highlighter, &buffer.snapshot(), &theme);
+        let runs = highlighted(&highlighter, buffer.snapshot(), &theme);
         assert!(runs.iter().all(|(text, capture)| capture == "comment" || text.trim().is_empty()), "{runs:?}");
 
         buffer.undo();
-        let runs = highlighted(&highlighter, &buffer.snapshot(), &theme);
+        let runs = highlighted(&highlighter, buffer.snapshot(), &theme);
         assert!(runs.contains(&("return".into(), "keyword".into())), "{runs:?}");
     }
 
@@ -543,8 +543,8 @@ mod tests {
         let theme = theme();
         set_theme(&theme);
         let buffer = TextBuffer::new(ReplicaId::LOCAL, BufferId::new(1).unwrap(), r"^fn\s+(\w+)\(.*$");
-        let highlighter = FallbackHighlighter::for_syntax_name("Regular Expression", &buffer.snapshot()).unwrap();
-        let runs = highlighted(&highlighter, &buffer.snapshot(), &theme);
+        let highlighter = FallbackHighlighter::for_syntax_name("Regular Expression", buffer.snapshot()).unwrap();
+        let runs = highlighted(&highlighter, buffer.snapshot(), &theme);
         assert!(runs.iter().any(|(text, _)| text == "^"), "{runs:?}");
         assert!(runs.iter().any(|(text, _)| text == r"\s"), "{runs:?}");
     }
@@ -560,7 +560,7 @@ mod tests {
         let content_range = content_start..source.rfind("```").unwrap();
         let from_row = source.find("FROM").unwrap();
         let runs = |range: Range<usize>| {
-            highlight_injection("sql", &text, content_range.clone(), range)
+            highlight_injection("sql", text, content_range.clone(), range)
                 .into_iter()
                 .map(|(range, id)| (source[range].to_string(), theme.get_capture_name(id).unwrap().to_string()))
                 .collect::<Vec<_>>()
@@ -574,7 +574,7 @@ mod tests {
         let tail = runs(from_row..source.len());
         assert!(tail.iter().all(|(text, _)| text != "SELECT"), "{tail:?}");
         assert!(tail.contains(&("FROM".into(), "keyword".into())), "{tail:?}");
-        assert!(highlight_injection("no-such-language", &text, content_range, 0..source.len()).is_empty());
+        assert!(highlight_injection("no-such-language", text, content_range, 0..source.len()).is_empty());
     }
 
     #[test]
@@ -605,8 +605,8 @@ mod tests {
         set_theme(&theme);
         let line = "fn main() { let s = \"a /* b\"; } // c\n";
         let mut buffer = TextBuffer::new(ReplicaId::LOCAL, BufferId::new(1).unwrap(), line.repeat(200));
-        let highlighter = FallbackHighlighter::for_buffer(None, Some("main.rs"), &buffer.snapshot()).unwrap();
-        highlighted(&highlighter, &buffer.snapshot(), &theme);
+        let highlighter = FallbackHighlighter::for_buffer(None, Some("main.rs"), buffer.snapshot()).unwrap();
+        highlighted(&highlighter, buffer.snapshot(), &theme);
 
         let mut rng = 7u64;
         let mut next = |bound: usize| {
@@ -630,11 +630,11 @@ mod tests {
             // stale rows below the frontier.
             if next(2) == 0 {
                 let end = snapshot.point_to_offset(Point::new(snapshot.max_point().row / 2, 0));
-                highlighter.highlight_runs(&snapshot, 0..end);
+                highlighter.highlight_runs(snapshot, 0..end);
                 continue;
             }
-            let fresh = FallbackHighlighter::for_buffer(None, Some("main.rs"), &snapshot).unwrap();
-            assert_eq!(highlighted(&highlighter, &snapshot, &theme), highlighted(&fresh, &snapshot, &theme));
+            let fresh = FallbackHighlighter::for_buffer(None, Some("main.rs"), snapshot).unwrap();
+            assert_eq!(highlighted(&highlighter, snapshot, &theme), highlighted(&fresh, snapshot, &theme));
         }
     }
 
@@ -648,9 +648,9 @@ mod tests {
         let start = std::time::Instant::now();
         LazyLock::force(&SYNTAX_SET);
         eprintln!("load syntaxes: {:?}", start.elapsed());
-        let highlighter = FallbackHighlighter::for_buffer(None, Some("main.c"), &snapshot).unwrap();
+        let highlighter = FallbackHighlighter::for_buffer(None, Some("main.c"), snapshot).unwrap();
         let start = std::time::Instant::now();
-        highlighter.highlight_runs(&snapshot, 0..snapshot.len());
+        highlighter.highlight_runs(snapshot, 0..snapshot.len());
         eprintln!("highlight {} lines: {:?}", snapshot.max_point().row, start.elapsed());
     }
 }

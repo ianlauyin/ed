@@ -1,28 +1,48 @@
-use gpui::{
-    Action, App, AppContext as _, Entity, EventEmitter, FocusHandle, Focusable,
-    KeyBindingContextPredicate, KeyContext, Keystroke, MouseButton, Render, Subscription, Task,
-};
+use gpui::Action;
+use gpui::App;
+use gpui::AppContext as _;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::KeyBindingContextPredicate;
+use gpui::KeyContext;
+use gpui::Keystroke;
+use gpui::MouseButton;
+use gpui::Render;
+use gpui::Subscription;
+use gpui::Task;
 use itertools::Itertools;
 use serde_json::json;
-use ui::{Button, ButtonStyle};
-use ui::{
-    ButtonCommon, Clickable, Context, FluentBuilder, InteractiveElement, Label, LabelCommon,
-    LabelSize, ParentElement, SharedString, StatefulInteractiveElement, Styled, Window, div,
-    h_flex, px, v_flex,
-};
-use workspace::{Item, SplitDirection, Workspace};
+use ui::Button;
+use ui::ButtonCommon;
+use ui::ButtonStyle;
+use ui::Clickable;
+use ui::Context;
+use ui::FluentBuilder;
+use ui::InteractiveElement;
+use ui::Label;
+use ui::LabelCommon;
+use ui::LabelSize;
+use ui::ParentElement;
+use ui::SharedString;
+use ui::StatefulInteractiveElement;
+use ui::Styled;
+use ui::Window;
+use ui::div;
+use ui::h_flex;
+use ui::px;
+use ui::v_flex;
+use workspace::Item;
+use workspace::SplitDirection;
+use workspace::Workspace;
 use zed_actions::dev::OpenKeyContextView;
 
-pub fn init(cx: &mut App) {
+pub fn init(cx: &App) {
     cx.observe_new(|workspace: &mut Workspace, _, _| {
         workspace.register_action(|workspace, _: &OpenKeyContextView, window, cx| {
             let key_context_view = cx.new(|cx| KeyContextView::new(window, cx));
-            workspace.split_item(
-                SplitDirection::Right,
-                Box::new(key_context_view),
-                window,
-                cx,
-            )
+            workspace.split_item(SplitDirection::Right, Box::new(key_context_view), window, cx)
         });
     })
     .detach();
@@ -44,22 +64,14 @@ impl KeyContextView {
             pending.push(e.keystroke.clone());
             let mut possibilities = cx.all_bindings_for_input(&pending);
             possibilities.reverse();
-            this.last_keystrokes = Some(
-                json!(pending.iter().map(|p| p.unparse()).join(" "))
-                    .to_string()
-                    .into(),
-            );
-            this.context_stack = e.context_stack.clone();
+            this.last_keystrokes = Some(json!(pending.iter().map(|p| p.unparse()).join(" ")).to_string().into());
+            this.context_stack.clone_from(&e.context_stack);
             this.last_possibilities = possibilities
                 .into_iter()
                 .map(|binding| {
                     let match_state = if let Some(predicate) = binding.predicate() {
                         if this.matches(&predicate) {
-                            if this.action_matches(&e.action, binding.action()) {
-                                Some(true)
-                            } else {
-                                Some(false)
-                            }
+                            if this.action_matches(&e.action, binding.action()) { Some(true) } else { Some(false) }
                         } else {
                             None
                         }
@@ -78,11 +90,7 @@ impl KeyContextView {
                         name = "(null)"
                     }
 
-                    (
-                        name.to_owned().into(),
-                        json!(predicate).to_string().into(),
-                        match_state,
-                    )
+                    (name.to_owned().into(), json!(predicate).to_string().into(), match_state)
                 })
                 .collect();
             cx.notify();
@@ -124,11 +132,7 @@ impl KeyContextView {
     }
 
     fn action_matches(&self, a: &Option<Box<dyn Action>>, b: &dyn Action) -> bool {
-        if let Some(last_action) = a {
-            last_action.partial_eq(b)
-        } else {
-            b.name() == "ed::NoAction"
-        }
+        if let Some(last_action) = a { last_action.partial_eq(b) } else { b.name() == "ed::NoAction" }
     }
 }
 

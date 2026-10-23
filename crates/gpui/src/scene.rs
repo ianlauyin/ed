@@ -1,18 +1,31 @@
 // todo("windows"): remove
 
-use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use std::fmt::Debug;
+use std::iter::Peekable;
+use std::ops::Add;
+use std::ops::Range;
+use std::ops::Sub;
+use std::slice;
 
-use crate::{
-    AtlasTextureId, AtlasTile, Background, Bounds, ContentMask, Corners, Edges, Hsla, Pixels,
-    Point, Radians, ScaledPixels, Size, bounds_tree::BoundsTree, point,
-};
-use std::{
-    fmt::Debug,
-    iter::Peekable,
-    ops::{Add, Range, Sub},
-    slice,
-};
+use schemars::JsonSchema;
+use serde::Deserialize;
+use serde::Serialize;
+
+use crate::AtlasTextureId;
+use crate::AtlasTile;
+use crate::Background;
+use crate::Bounds;
+use crate::ContentMask;
+use crate::Corners;
+use crate::Edges;
+use crate::Hsla;
+use crate::Pixels;
+use crate::Point;
+use crate::Radians;
+use crate::ScaledPixels;
+use crate::Size;
+use crate::bounds_tree::BoundsTree;
+use crate::point;
 
 #[allow(non_camel_case_types, unused)]
 #[expect(missing_docs)]
@@ -65,15 +78,18 @@ impl Scene {
         self.polychrome_sprites.clear();
     }
 
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.paint_operations.len()
+    }
+
+    pub const fn is_empty(&self) -> bool {
+        self.paint_operations.is_empty()
     }
 
     pub fn push_layer(&mut self, bounds: Bounds<ScaledPixels>) {
         let order = self.primitive_bounds.insert(bounds);
         self.layer_stack.push(order);
-        self.paint_operations
-            .push(PaintOperation::StartLayer(bounds));
+        self.paint_operations.push(PaintOperation::StartLayer(bounds));
     }
 
     pub fn pop_layer(&mut self) {
@@ -83,19 +99,13 @@ impl Scene {
 
     pub fn insert_primitive(&mut self, primitive: impl Into<Primitive>) {
         let mut primitive = primitive.into();
-        let clipped_bounds = primitive
-            .bounds()
-            .intersect(&primitive.content_mask().bounds);
+        let clipped_bounds = primitive.bounds().intersect(&primitive.content_mask().bounds);
 
         if clipped_bounds.is_empty() {
             return;
         }
 
-        let order = self
-            .layer_stack
-            .last()
-            .copied()
-            .unwrap_or_else(|| self.primitive_bounds.insert(clipped_bounds));
+        let order = self.layer_stack.last().copied().unwrap_or_else(|| self.primitive_bounds.insert(clipped_bounds));
         match &mut primitive {
             Primitive::Shadow(shadow) => {
                 shadow.order = order;
@@ -127,8 +137,7 @@ impl Scene {
                 self.polychrome_sprites.push(*sprite);
             }
         }
-        self.paint_operations
-            .push(PaintOperation::Primitive(primitive));
+        self.paint_operations.push(PaintOperation::Primitive(primitive));
     }
 
     pub fn replay(&mut self, range: Range<usize>, prev_scene: &Scene) {
@@ -146,12 +155,9 @@ impl Scene {
         self.quads.sort_by_key(|quad| quad.order);
         self.paths.sort_by_key(|path| path.order);
         self.underlines.sort_by_key(|underline| underline.order);
-        self.monochrome_sprites
-            .sort_by_key(|sprite| (sprite.order, sprite.tile.texture_id.index));
-        self.subpixel_sprites
-            .sort_by_key(|sprite| (sprite.order, sprite.tile.texture_id.index));
-        self.polychrome_sprites
-            .sort_by_key(|sprite| (sprite.order, sprite.tile.texture_id.index));
+        self.monochrome_sprites.sort_by_key(|sprite| (sprite.order, sprite.tile.texture_id.index));
+        self.subpixel_sprites.sort_by_key(|sprite| (sprite.order, sprite.tile.texture_id.index));
+        self.polychrome_sprites.sort_by_key(|sprite| (sprite.order, sprite.tile.texture_id.index));
     }
 
     pub fn batches(&self) -> impl Iterator<Item = PrimitiveBatch> + '_ {
@@ -207,7 +213,7 @@ pub enum Primitive {
 
 #[expect(missing_docs)]
 impl Primitive {
-    pub fn bounds(&self) -> &Bounds<ScaledPixels> {
+    pub const fn bounds(&self) -> &Bounds<ScaledPixels> {
         match self {
             Primitive::Shadow(shadow) => &shadow.bounds,
             Primitive::Quad(quad) => &quad.bounds,
@@ -219,7 +225,7 @@ impl Primitive {
         }
     }
 
-    pub fn content_mask(&self) -> &ContentMask<ScaledPixels> {
+    pub const fn content_mask(&self) -> &ContentMask<ScaledPixels> {
         match self {
             Primitive::Shadow(shadow) => &shadow.content_mask,
             Primitive::Quad(quad) => &quad.content_mask,
@@ -254,28 +260,13 @@ impl<'a> Iterator for BatchIterator<'a> {
 
     fn next(&mut self) -> Option<Self::Item> {
         let mut orders_and_kinds = [
-            (
-                self.shadows_iter.peek().map(|s| s.order),
-                PrimitiveKind::Shadow,
-            ),
+            (self.shadows_iter.peek().map(|s| s.order), PrimitiveKind::Shadow),
             (self.quads_iter.peek().map(|q| q.order), PrimitiveKind::Quad),
             (self.paths_iter.peek().map(|q| q.order), PrimitiveKind::Path),
-            (
-                self.underlines_iter.peek().map(|u| u.order),
-                PrimitiveKind::Underline,
-            ),
-            (
-                self.monochrome_sprites_iter.peek().map(|s| s.order),
-                PrimitiveKind::MonochromeSprite,
-            ),
-            (
-                self.subpixel_sprites_iter.peek().map(|s| s.order),
-                PrimitiveKind::SubpixelSprite,
-            ),
-            (
-                self.polychrome_sprites_iter.peek().map(|s| s.order),
-                PrimitiveKind::PolychromeSprite,
-            ),
+            (self.underlines_iter.peek().map(|u| u.order), PrimitiveKind::Underline),
+            (self.monochrome_sprites_iter.peek().map(|s| s.order), PrimitiveKind::MonochromeSprite),
+            (self.subpixel_sprites_iter.peek().map(|s| s.order), PrimitiveKind::SubpixelSprite),
+            (self.polychrome_sprites_iter.peek().map(|s| s.order), PrimitiveKind::PolychromeSprite),
         ];
         orders_and_kinds.sort_by_key(|(order, kind)| (order.unwrap_or(u32::MAX), *kind));
 
@@ -292,11 +283,7 @@ impl<'a> Iterator for BatchIterator<'a> {
                 let shadows_start = self.shadows_start;
                 let mut shadows_end = shadows_start + 1;
                 self.shadows_iter.next();
-                while self
-                    .shadows_iter
-                    .next_if(|shadow| (shadow.order, batch_kind) < max_order_and_kind)
-                    .is_some()
-                {
+                while self.shadows_iter.next_if(|shadow| (shadow.order, batch_kind) < max_order_and_kind).is_some() {
                     shadows_end += 1;
                 }
                 self.shadows_start = shadows_end;
@@ -306,11 +293,7 @@ impl<'a> Iterator for BatchIterator<'a> {
                 let quads_start = self.quads_start;
                 let mut quads_end = quads_start + 1;
                 self.quads_iter.next();
-                while self
-                    .quads_iter
-                    .next_if(|quad| (quad.order, batch_kind) < max_order_and_kind)
-                    .is_some()
-                {
+                while self.quads_iter.next_if(|quad| (quad.order, batch_kind) < max_order_and_kind).is_some() {
                     quads_end += 1;
                 }
                 self.quads_start = quads_end;
@@ -320,11 +303,7 @@ impl<'a> Iterator for BatchIterator<'a> {
                 let paths_start = self.paths_start;
                 let mut paths_end = paths_start + 1;
                 self.paths_iter.next();
-                while self
-                    .paths_iter
-                    .next_if(|path| (path.order, batch_kind) < max_order_and_kind)
-                    .is_some()
-                {
+                while self.paths_iter.next_if(|path| (path.order, batch_kind) < max_order_and_kind).is_some() {
                     paths_end += 1;
                 }
                 self.paths_start = paths_end;
@@ -352,18 +331,14 @@ impl<'a> Iterator for BatchIterator<'a> {
                 while self
                     .monochrome_sprites_iter
                     .next_if(|sprite| {
-                        (sprite.order, batch_kind) < max_order_and_kind
-                            && sprite.tile.texture_id == texture_id
+                        (sprite.order, batch_kind) < max_order_and_kind && sprite.tile.texture_id == texture_id
                     })
                     .is_some()
                 {
                     sprites_end += 1;
                 }
                 self.monochrome_sprites_start = sprites_end;
-                Some(PrimitiveBatch::MonochromeSprites {
-                    texture_id,
-                    range: sprites_start..sprites_end,
-                })
+                Some(PrimitiveBatch::MonochromeSprites { texture_id, range: sprites_start..sprites_end })
             }
             PrimitiveKind::SubpixelSprite => {
                 let texture_id = self.subpixel_sprites_iter.peek().unwrap().tile.texture_id;
@@ -373,18 +348,14 @@ impl<'a> Iterator for BatchIterator<'a> {
                 while self
                     .subpixel_sprites_iter
                     .next_if(|sprite| {
-                        (sprite.order, batch_kind) < max_order_and_kind
-                            && sprite.tile.texture_id == texture_id
+                        (sprite.order, batch_kind) < max_order_and_kind && sprite.tile.texture_id == texture_id
                     })
                     .is_some()
                 {
                     sprites_end += 1;
                 }
                 self.subpixel_sprites_start = sprites_end;
-                Some(PrimitiveBatch::SubpixelSprites {
-                    texture_id,
-                    range: sprites_start..sprites_end,
-                })
+                Some(PrimitiveBatch::SubpixelSprites { texture_id, range: sprites_start..sprites_end })
             }
             PrimitiveKind::PolychromeSprite => {
                 let texture_id = self.polychrome_sprites_iter.peek().unwrap().tile.texture_id;
@@ -394,18 +365,14 @@ impl<'a> Iterator for BatchIterator<'a> {
                 while self
                     .polychrome_sprites_iter
                     .next_if(|sprite| {
-                        (sprite.order, batch_kind) < max_order_and_kind
-                            && sprite.tile.texture_id == texture_id
+                        (sprite.order, batch_kind) < max_order_and_kind && sprite.tile.texture_id == texture_id
                     })
                     .is_some()
                 {
                     sprites_end += 1;
                 }
                 self.polychrome_sprites_start = sprites_end;
-                Some(PrimitiveBatch::PolychromeSprites {
-                    texture_id,
-                    range: sprites_start..sprites_end,
-                })
+                Some(PrimitiveBatch::PolychromeSprites { texture_id, range: sprites_start..sprites_end })
             }
         }
     }
@@ -442,25 +409,13 @@ impl PrimitiveBatch {
             Self::Paths(range) => format!("paths ({})", range.len()),
             Self::Underlines(range) => format!("underlines ({})", range.len()),
             Self::MonochromeSprites { texture_id, range } => {
-                format!(
-                    "monochrome sprites ({}) on atlas {}",
-                    range.len(),
-                    texture_id.index
-                )
+                format!("monochrome sprites ({}) on atlas {}", range.len(), texture_id.index)
             }
             Self::SubpixelSprites { texture_id, range } => {
-                format!(
-                    "subpixel sprites ({}) on atlas {}",
-                    range.len(),
-                    texture_id.index
-                )
+                format!("subpixel sprites ({}) on atlas {}", range.len(), texture_id.index)
             }
             Self::PolychromeSprites { texture_id, range } => {
-                format!(
-                    "polychrome sprites ({}) on atlas {}",
-                    range.len(),
-                    texture_id.index
-                )
+                format!("polychrome sprites ({}) on atlas {}", range.len(), texture_id.index)
             }
         }
     }
@@ -554,38 +509,26 @@ impl Eq for TransformationMatrix {}
 
 impl TransformationMatrix {
     /// The unit matrix, has no effect.
-    pub fn unit() -> Self {
-        Self {
-            rotation_scale: [[1.0, 0.0], [0.0, 1.0]],
-            translation: [0.0, 0.0],
-        }
+    pub const fn unit() -> Self {
+        Self { rotation_scale: [[1.0, 0.0], [0.0, 1.0]], translation: [0.0, 0.0] }
     }
 
     /// Move the origin by a given point
     pub fn translate(mut self, point: Point<ScaledPixels>) -> Self {
-        self.compose(Self {
-            rotation_scale: [[1.0, 0.0], [0.0, 1.0]],
-            translation: [point.x.0, point.y.0],
-        })
+        self.compose(Self { rotation_scale: [[1.0, 0.0], [0.0, 1.0]], translation: [point.x.0, point.y.0] })
     }
 
     /// Clockwise rotation in radians around the origin
     pub fn rotate(self, angle: Radians) -> Self {
         self.compose(Self {
-            rotation_scale: [
-                [angle.0.cos(), -angle.0.sin()],
-                [angle.0.sin(), angle.0.cos()],
-            ],
+            rotation_scale: [[angle.0.cos(), -angle.0.sin()], [angle.0.sin(), angle.0.cos()]],
             translation: [0.0, 0.0],
         })
     }
 
     /// Scale around the origin
     pub fn scale(self, size: Size<f32>) -> Self {
-        self.compose(Self {
-            rotation_scale: [[size.width, 0.0], [0.0, size.height]],
-            translation: [0.0, 0.0],
-        })
+        self.compose(Self { rotation_scale: [[size.width, 0.0], [0.0, size.height]], translation: [0.0, 0.0] })
     }
 
     /// Perform matrix multiplication with another transformation
@@ -728,10 +671,7 @@ impl Path<Pixels> {
             vertices: Vec::new(),
             start,
             current: start,
-            bounds: Bounds {
-                origin: start,
-                size: Default::default(),
-            },
+            bounds: Bounds { origin: start, size: Default::default() },
             content_mask: Default::default(),
             color: Default::default(),
             contour_count: 0,
@@ -745,11 +685,7 @@ impl Path<Pixels> {
             order: self.order,
             bounds: self.bounds.scale(factor),
             content_mask: self.content_mask.scale(factor),
-            vertices: self
-                .vertices
-                .iter()
-                .map(|vertex| vertex.scale(factor))
-                .collect(),
+            vertices: self.vertices.iter().map(|vertex| vertex.scale(factor)).collect(),
             start: self.start.map(|start| start.scale(factor)),
             current: self.current.scale(factor),
             contour_count: self.contour_count,
@@ -758,7 +694,7 @@ impl Path<Pixels> {
     }
 
     /// Move the start, current point to the given point.
-    pub fn move_to(&mut self, to: Point<Pixels>) {
+    pub const fn move_to(&mut self, to: Point<Pixels>) {
         self.contour_count += 1;
         self.start = to;
         self.current = to;
@@ -768,10 +704,7 @@ impl Path<Pixels> {
     pub fn line_to(&mut self, to: Point<Pixels>) {
         self.contour_count += 1;
         if self.contour_count > 1 {
-            self.push_triangle(
-                (self.start, self.current, to),
-                (point(0., 1.), point(0., 1.), point(0., 1.)),
-            );
+            self.push_triangle((self.start, self.current, to), (point(0., 1.), point(0., 1.), point(0., 1.)));
         }
         self.current = to;
     }
@@ -780,16 +713,10 @@ impl Path<Pixels> {
     pub fn curve_to(&mut self, to: Point<Pixels>, ctrl: Point<Pixels>) {
         self.contour_count += 1;
         if self.contour_count > 1 {
-            self.push_triangle(
-                (self.start, self.current, to),
-                (point(0., 1.), point(0., 1.), point(0., 1.)),
-            );
+            self.push_triangle((self.start, self.current, to), (point(0., 1.), point(0., 1.), point(0., 1.)));
         }
 
-        self.push_triangle(
-            (self.current, ctrl, to),
-            (point(0., 0.), point(0.5, 0.), point(1., 1.)),
-        );
+        self.push_triangle((self.current, ctrl, to), (point(0., 0.), point(0.5, 0.), point(1., 1.)));
         self.current = to;
     }
 
@@ -801,34 +728,13 @@ impl Path<Pixels> {
     ) {
         self.bounds = self
             .bounds
-            .union(&Bounds {
-                origin: xy.0,
-                size: Default::default(),
-            })
-            .union(&Bounds {
-                origin: xy.1,
-                size: Default::default(),
-            })
-            .union(&Bounds {
-                origin: xy.2,
-                size: Default::default(),
-            });
+            .union(&Bounds { origin: xy.0, size: Default::default() })
+            .union(&Bounds { origin: xy.1, size: Default::default() })
+            .union(&Bounds { origin: xy.2, size: Default::default() });
 
-        self.vertices.push(PathVertex {
-            xy_position: xy.0,
-            st_position: st.0,
-            content_mask: Default::default(),
-        });
-        self.vertices.push(PathVertex {
-            xy_position: xy.1,
-            st_position: st.1,
-            content_mask: Default::default(),
-        });
-        self.vertices.push(PathVertex {
-            xy_position: xy.2,
-            st_position: st.2,
-            content_mask: Default::default(),
-        });
+        self.vertices.push(PathVertex { xy_position: xy.0, st_position: st.0, content_mask: Default::default() });
+        self.vertices.push(PathVertex { xy_position: xy.1, st_position: st.1, content_mask: Default::default() });
+        self.vertices.push(PathVertex { xy_position: xy.2, st_position: st.2, content_mask: Default::default() });
     }
 }
 

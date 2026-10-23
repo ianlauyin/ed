@@ -5,24 +5,50 @@
 //! What gets checked comes from each grammar's `spellcheck.scm`; Git Commit
 //! and `.txt` buffers, which have no grammar, are checked as a whole.
 
-use std::{cell::RefCell, ops::Range, rc::Rc, sync::Arc, time::Duration};
+use std::cell::RefCell;
+use std::ops::Range;
+use std::rc::Rc;
+use std::sync::Arc;
+use std::time::Duration;
 
-use anyhow::{Context as _, Result};
-use collections::{HashMap, HashSet};
-use gpui::{
-    App, AppContext as _, Context, Entity, HighlightStyle, Subscription, Task, UnderlineStyle,
-    WeakEntity, Window, px,
-};
-use language::{Buffer, BufferEvent, BufferSnapshot, Point};
+use anyhow::Context as _;
+use anyhow::Result;
+use collections::HashMap;
+use collections::HashSet;
+use gpui::App;
+use gpui::AppContext as _;
+use gpui::Context;
+use gpui::Entity;
+use gpui::HighlightStyle;
+use gpui::Subscription;
+use gpui::Task;
+use gpui::UnderlineStyle;
+use gpui::WeakEntity;
+use gpui::Window;
+use gpui::px;
+use language::Buffer;
+use language::BufferEvent;
+use language::BufferSnapshot;
+use language::Point;
 use lsp::LanguageServerId;
 use multi_buffer::BufferOffset;
-use project::{CodeAction, LspAction, Project, ProjectPath, ProjectTransaction, WorktreeId};
+use project::CodeAction;
+use project::LspAction;
+use project::Project;
+use project::ProjectPath;
+use project::ProjectTransaction;
+use project::WorktreeId;
 use spell_check::PROJECT_WORDS_FILE;
-use text::{BufferId, OffsetRangeExt as _};
+use text::BufferId;
+use text::OffsetRangeExt as _;
 use theme::ActiveTheme as _;
-use util::{ResultExt as _, rel_path::RelPath};
+use util::ResultExt as _;
+use util::rel_path::RelPath;
 
-use crate::{CodeActionProvider, Editor, EditorMode, HighlightKey};
+use crate::CodeActionProvider;
+use crate::Editor;
+use crate::EditorMode;
+use crate::HighlightKey;
 
 const DEBOUNCE: Duration = Duration::from_millis(50);
 const GIT_SCISSORS: &str = "# ------------------------ >8 ------------------------";
@@ -54,23 +80,11 @@ enum CheckMode {
 
 impl SpellCheckState {
     pub(crate) fn for_mode(mode: &EditorMode) -> Option<Self> {
-        matches!(
-            mode,
-            EditorMode::Full { .. } | EditorMode::AutoHeight { .. }
-        )
-        .then(Self::default)
+        matches!(mode, EditorMode::Full { .. } | EditorMode::AutoHeight { .. }).then(Self::default)
     }
 
-    pub(crate) fn code_actions(
-        &self,
-        editor: WeakEntity<Editor>,
-        has_project: bool,
-    ) -> SpellCheckActions {
-        SpellCheckActions {
-            editor,
-            misspellings: self.misspellings.clone(),
-            has_project,
-        }
+    pub(crate) fn code_actions(&self, editor: WeakEntity<Editor>, has_project: bool) -> SpellCheckActions {
+        SpellCheckActions { editor, misspellings: self.misspellings.clone(), has_project }
     }
 }
 
@@ -105,10 +119,8 @@ impl Editor {
                     for (snapshot, range, mode, words) in jobs {
                         for range in misspelled_ranges(&snapshot, range, mode, &words) {
                             let anchors = snapshot.anchor_range_inside(range);
-                            if let Some(start) =
-                                multi_buffer_snapshot.anchor_in_buffer(anchors.start)
-                                && let Some(end) =
-                                    multi_buffer_snapshot.anchor_in_buffer(anchors.end)
+                            if let Some(start) = multi_buffer_snapshot.anchor_in_buffer(anchors.start)
+                                && let Some(end) = multi_buffer_snapshot.anchor_in_buffer(anchors.end)
                             {
                                 highlights.push(start..end);
                             }
@@ -141,11 +153,7 @@ impl Editor {
     /// Words from `spellcheck.txt` at the root of the buffer's worktree, if
     /// the file exists. The file is opened as a buffer, so unsaved edits to it
     /// apply immediately, and remote projects work the same way.
-    fn project_words(
-        &mut self,
-        buffer: &Entity<Buffer>,
-        cx: &mut Context<Self>,
-    ) -> Arc<HashSet<String>> {
+    fn project_words(&mut self, buffer: &Entity<Buffer>, cx: &mut Context<Self>) -> Arc<HashSet<String>> {
         let Some(project) = self.project.clone() else {
             return Arc::default();
         };
@@ -169,12 +177,7 @@ impl Editor {
         Arc::default()
     }
 
-    fn load_project_words(
-        &mut self,
-        worktree_id: WorktreeId,
-        open: Task<Result<Entity<Buffer>>>,
-        cx: &mut Context<Self>,
-    ) {
+    fn load_project_words(&mut self, worktree_id: WorktreeId, open: Task<Result<Entity<Buffer>>>, cx: &Context<Self>) {
         let load = cx.spawn(async move |editor, cx| {
             let Some(buffer) = open.await.log_err() else {
                 return;
@@ -184,17 +187,13 @@ impl Editor {
                     let subscription = cx.subscribe(&buffer, move |editor, buffer, event, cx| {
                         if matches!(
                             event,
-                            BufferEvent::Edited { .. }
-                                | BufferEvent::Reloaded
-                                | BufferEvent::FileHandleChanged
+                            BufferEvent::Edited { .. } | BufferEvent::Reloaded | BufferEvent::FileHandleChanged
                         ) {
                             editor.update_project_words(worktree_id, &buffer, cx);
                         }
                     });
-                    if let Some(words) = editor
-                        .spell_check
-                        .as_mut()
-                        .and_then(|state| state.project_words.get_mut(&worktree_id))
+                    if let Some(words) =
+                        editor.spell_check.as_mut().and_then(|state| state.project_words.get_mut(&worktree_id))
                     {
                         words._buffer = Some((buffer.clone(), subscription));
                     }
@@ -203,48 +202,21 @@ impl Editor {
                 .ok();
         });
         if let Some(state) = self.spell_check.as_mut() {
-            state.project_words.insert(
-                worktree_id,
-                ProjectWords {
-                    words: Arc::default(),
-                    _load: load,
-                    _buffer: None,
-                },
-            );
+            state.project_words.insert(worktree_id, ProjectWords { words: Arc::default(), _load: load, _buffer: None });
         }
     }
 
-    fn update_project_words(
-        &mut self,
-        worktree_id: WorktreeId,
-        buffer: &Entity<Buffer>,
-        cx: &mut Context<Self>,
-    ) {
+    fn update_project_words(&mut self, worktree_id: WorktreeId, buffer: &Entity<Buffer>, cx: &mut Context<Self>) {
         let buffer = buffer.read(cx);
-        let deleted = buffer
-            .file()
-            .is_some_and(|file| file.disk_state() == language::DiskState::Deleted);
-        let words = if deleted {
-            HashSet::default()
-        } else {
-            spell_check::parse_project_words(&buffer.text())
-        };
-        if let Some(entry) = self
-            .spell_check
-            .as_mut()
-            .and_then(|state| state.project_words.get_mut(&worktree_id))
-        {
+        let deleted = buffer.file().is_some_and(|file| file.disk_state() == language::DiskState::Deleted);
+        let words = if deleted { HashSet::default() } else { spell_check::parse_project_words(&buffer.text()) };
+        if let Some(entry) = self.spell_check.as_mut().and_then(|state| state.project_words.get_mut(&worktree_id)) {
             entry.words = Arc::new(words);
             self.refresh_spell_check(cx);
         }
     }
 
-    fn add_project_word(
-        &mut self,
-        worktree_id: WorktreeId,
-        word: String,
-        cx: &mut Context<Self>,
-    ) -> Task<Result<()>> {
+    fn add_project_word(&self, worktree_id: WorktreeId, word: String, cx: &mut Context<Self>) -> Task<Result<()>> {
         let Some(project) = self.project.clone() else {
             return Task::ready(Ok(()));
         };
@@ -252,9 +224,7 @@ impl Editor {
         cx.spawn(async move |editor, cx| {
             let buffer = open.await?;
             buffer.update(cx, |buffer, cx| {
-                if let Some((offset, text)) =
-                    spell_check::project_word_insertion(&buffer.text(), &word)
-                {
+                if let Some((offset, text)) = spell_check::project_word_insertion(&buffer.text(), &word) {
                     buffer.edit([(offset..offset, text)], None, cx);
                 }
             });
@@ -263,10 +233,8 @@ impl Editor {
                 .await
                 .with_context(|| format!("saving {PROJECT_WORDS_FILE}"))?;
             editor.update(cx, |editor, cx| {
-                let loaded = editor
-                    .spell_check
-                    .as_ref()
-                    .is_some_and(|state| state.project_words.contains_key(&worktree_id));
+                let loaded =
+                    editor.spell_check.as_ref().is_some_and(|state| state.project_words.contains_key(&worktree_id));
                 if !loaded {
                     editor.load_project_words(worktree_id, Task::ready(Ok(buffer)), cx);
                 }
@@ -280,39 +248,20 @@ fn words_path() -> &'static RelPath {
     RelPath::from_unix_str(PROJECT_WORDS_FILE).expect("valid relative path")
 }
 
-fn open_words_buffer(
-    project: &Entity<Project>,
-    worktree_id: WorktreeId,
-    cx: &mut App,
-) -> Task<Result<Entity<Buffer>>> {
-    project.update(cx, |project, cx| {
-        project.open_buffer(
-            ProjectPath {
-                worktree_id,
-                path: words_path().into(),
-            },
-            cx,
-        )
-    })
+fn open_words_buffer(project: &Entity<Project>, worktree_id: WorktreeId, cx: &mut App) -> Task<Result<Entity<Buffer>>> {
+    project.update(cx, |project, cx| project.open_buffer(ProjectPath { worktree_id, path: words_path().into() }, cx))
 }
 
 fn check_mode(buffer: &Buffer) -> Option<CheckMode> {
     let language = buffer.language()?;
-    if language
-        .grammar()
-        .is_some_and(|grammar| grammar.spell_check_config.is_some())
-    {
+    if language.grammar().is_some_and(|grammar| grammar.spell_check_config.is_some()) {
         return Some(CheckMode::Syntax);
     }
     match language.name().as_ref() {
         "Git Commit" => Some(CheckMode::WholeText { git_commit: true }),
         // Plain Text also covers files of languages this editor dropped
         // (TOML, SQL, ...), so only real text files are checked.
-        "Plain Text"
-            if buffer
-                .file()
-                .is_none_or(|file| file.path().extension() == Some("txt")) =>
-        {
+        "Plain Text" if buffer.file().is_none_or(|file| file.path().extension() == Some("txt")) => {
             Some(CheckMode::WholeText { git_commit: false })
         }
         _ => None,
@@ -345,9 +294,7 @@ fn misspelled_ranges(
                 .then(|| {
                     (0..=end_row).find(|&row| {
                         snapshot
-                            .text_for_range(
-                                Point::new(row, 0)..Point::new(row, snapshot.line_len(row)),
-                            )
+                            .text_for_range(Point::new(row, 0)..Point::new(row, snapshot.line_len(row)))
                             .eq([GIT_SCISSORS])
                     })
                 })
@@ -358,13 +305,7 @@ fn misspelled_ranges(
                     snapshot.point_to_offset(Point::new(row, 0))
                         ..snapshot.point_to_offset(Point::new(row, snapshot.line_len(row)))
                 })
-                .filter(|line| {
-                    !git_commit
-                        || !snapshot
-                            .chars_at(line.start)
-                            .next()
-                            .is_some_and(|c| c == '#')
-                })
+                .filter(|line| !git_commit || !snapshot.chars_at(line.start).next().is_some_and(|c| c == '#'))
                 .collect()
         }
     };
@@ -466,9 +407,7 @@ impl CodeActionProvider for SpellCheckActions {
         else {
             return Task::ready(Ok(Vec::new()));
         };
-        let word = snapshot
-            .text_for_range(word_range.clone())
-            .collect::<String>();
+        let word = snapshot.text_for_range(word_range.clone()).collect::<String>();
         let anchors = snapshot.anchor_range_inside(word_range);
         let can_add = self.has_project && buffer.read(cx).file().is_some();
         cx.background_spawn(async move {
@@ -511,9 +450,7 @@ impl CodeActionProvider for SpellCheckActions {
             });
             return Task::ready(Ok(ProjectTransaction::default()));
         }
-        let word = data
-            .and_then(|data| data["add"].as_str())
-            .map(str::to_owned);
+        let word = data.and_then(|data| data["add"].as_str()).map(str::to_owned);
         let worktree_id = buffer.read(cx).file().map(|file| file.worktree_id(cx));
         let (Some(word), Some(worktree_id)) = (word, worktree_id) else {
             return Task::ready(Ok(ProjectTransaction::default()));
@@ -521,11 +458,7 @@ impl CodeActionProvider for SpellCheckActions {
         // Called while the editor is being updated; touch it once that ends.
         let editor = self.editor.clone();
         cx.spawn(async move |cx| {
-            editor
-                .update(cx, |editor, cx| {
-                    editor.add_project_word(worktree_id, word, cx)
-                })?
-                .await?;
+            editor.update(cx, |editor, cx| editor.add_project_word(worktree_id, word, cx))?.await?;
             Ok(ProjectTransaction::default())
         })
     }

@@ -23,11 +23,11 @@ use crate::item::WeakItemHandle;
 pub struct SearchToken(u64);
 
 impl SearchToken {
-    pub fn new(value: u64) -> Self {
+    pub const fn new(value: u64) -> Self {
         Self(value)
     }
 
-    pub fn value(&self) -> u64 {
+    pub const fn value(&self) -> u64 {
         self.0
     }
 }
@@ -46,7 +46,7 @@ pub enum Direction {
 }
 
 impl Direction {
-    pub fn opposite(&self) -> Self {
+    pub const fn opposite(&self) -> Self {
         match self {
             Direction::Prev => Direction::Next,
             Direction::Next => Direction::Prev,

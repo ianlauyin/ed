@@ -538,13 +538,7 @@ impl BlockRenderer {
     /// Sets the cursor for the text under the mouse, and returns whether it is
     /// over something clickable. Called before the children paint, so their
     /// cursors take precedence.
-    fn paint_cursor_style(
-        &self,
-        hitbox: &Hitbox,
-        rendered_text: &RenderedText,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> bool {
+    fn paint_cursor_style(&self, hitbox: &Hitbox, rendered_text: &RenderedText, window: &mut Window, cx: &App) -> bool {
         if self.style.prevent_mouse_interaction {
             return false;
         }
@@ -977,7 +971,7 @@ impl BlockRenderer {
             search_match_color: colors.search_match_background,
             active_search_match_color: colors.search_active_match_background,
             selection: (selection.start < selection.end)
-                .then(|| (selection.start..selection.end, self.style.selection_background_color)),
+                .then_some((selection.start..selection.end, self.style.selection_background_color)),
             next_search_highlight_ix: 0,
             base_background: self.style.highlight_base_background,
             minimum_contrast: self.style.minimum_highlight_contrast,
@@ -1150,7 +1144,7 @@ impl RenderPass<'_> {
         }
     }
 
-    fn end(&mut self, range: &Range<usize>, tag: &MarkdownTagEnd, cx: &mut App) {
+    fn end(&mut self, range: &Range<usize>, tag: &MarkdownTagEnd, cx: &App) {
         let renderer = self.renderer;
         let builder = &mut self.builder;
         match tag {
@@ -1251,7 +1245,7 @@ impl RenderPass<'_> {
         dest_url: &SharedString,
         width: Option<DefiniteLength>,
         height: Option<DefiniteLength>,
-        cx: &mut App,
+        cx: &App,
     ) {
         let parsed = &self.frame.parsed;
         let source = if let Some(image) = self.frame.images.get(&range.start) {
@@ -1371,7 +1365,7 @@ impl RenderPass<'_> {
         builder.pop_div();
     }
 
-    fn start_item(&mut self, index: usize, range: &Range<usize>, window: &mut Window) {
+    fn start_item(&mut self, index: usize, range: &Range<usize>, window: &Window) {
         let renderer = self.renderer;
         let parsed = &self.frame.parsed;
         let bullet = if let Some((task_range, checked)) = task_list_marker_for_item(&parsed.events, index) {
@@ -1858,27 +1852,27 @@ impl TableState {
         self.col_index = 0;
     }
 
-    fn start_head(&mut self) {
+    const fn start_head(&mut self) {
         self.in_head = true;
     }
 
-    fn end_head(&mut self) {
+    const fn end_head(&mut self) {
         self.in_head = false;
     }
 
-    fn start_row(&mut self) {
+    const fn start_row(&mut self) {
         self.col_index = 0;
     }
 
-    fn end_row(&mut self) {
+    const fn end_row(&mut self) {
         self.row_index += 1;
     }
 
-    fn start_cell(&mut self) {
+    const fn start_cell(&mut self) {
         self.in_cell = true;
     }
 
-    fn end_cell(&mut self) {
+    const fn end_cell(&mut self) {
         self.in_cell = false;
         self.col_index += 1;
     }
@@ -1894,7 +1888,7 @@ impl TableState {
     }
 }
 
-fn alignment_to_text_align(alignment: Alignment) -> Option<TextAlign> {
+const fn alignment_to_text_align(alignment: Alignment) -> Option<TextAlign> {
     match alignment {
         Alignment::Left => Some(TextAlign::Left),
         Alignment::Center => Some(TextAlign::Center),
@@ -1928,7 +1922,7 @@ struct MarkdownInputHandler {
 }
 
 impl MarkdownInputHandler {
-    pub(crate) fn new(markdown: Entity<Markdown>, rendered_text: RenderedText) -> Self {
+    pub(crate) const fn new(markdown: Entity<Markdown>, rendered_text: RenderedText) -> Self {
         Self { markdown, rendered_text }
     }
 }

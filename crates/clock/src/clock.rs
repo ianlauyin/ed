@@ -1,12 +1,12 @@
 mod system_clock;
 
-use serde::{Deserialize, Serialize};
-use smallvec::SmallVec;
-use std::{
-    cmp::{self, Ordering},
-    fmt,
-};
+use std::cmp::Ordering;
+use std::cmp::{self};
+use std::fmt;
 
+use serde::Deserialize;
+use serde::Serialize;
+use smallvec::SmallVec;
 pub use system_clock::*;
 
 /// A unique identifier for each distributed node.
@@ -21,11 +21,11 @@ impl ReplicaId {
     /// A local branch.
     pub const LOCAL_BRANCH: ReplicaId = ReplicaId(3);
 
-    pub fn new(id: u16) -> Self {
+    pub const fn new(id: u16) -> Self {
         ReplicaId(id)
     }
 
-    pub fn as_u16(&self) -> u16 {
+    pub const fn as_u16(&self) -> u16 {
         self.0
     }
 
@@ -71,9 +71,7 @@ impl Clone for Global {
     fn clone(&self) -> Self {
         // We manually implement clone to avoid the overhead of SmallVec's clone implementation.
         // Using `from_slice` is faster than `clone` for SmallVec as we can use our `Copy` implementation of u32.
-        Self {
-            values: SmallVec::from_slice(&self.values),
-        }
+        Self { values: SmallVec::from_slice(&self.values) }
     }
 
     fn clone_from(&mut self, source: &Self) {
@@ -156,27 +154,19 @@ impl Global {
     }
 
     pub fn observed_any(&self, other: &Self) -> bool {
-        self.iter()
-            .zip(other.iter())
-            .any(|(left, right)| right.value > 0 && left.value >= right.value)
+        self.iter().zip(other.iter()).any(|(left, right)| right.value > 0 && left.value >= right.value)
     }
 
     pub fn observed_all(&self, other: &Self) -> bool {
         if self.values.len() < other.values.len() {
             return false;
         }
-        self.iter()
-            .zip(other.iter())
-            .all(|(left, right)| left.value >= right.value)
+        self.iter().zip(other.iter()).all(|(left, right)| left.value >= right.value)
     }
 
     pub fn changed_since(&self, other: &Self) -> bool {
         self.values.len() > other.values.len()
-            || self
-                .values
-                .iter()
-                .zip(other.values.iter())
-                .any(|(left, right)| left > right)
+            || self.values.iter().zip(other.values.iter()).any(|(left, right)| left > right)
     }
 
     pub fn most_recent(&self) -> Option<Lamport> {
@@ -188,10 +178,7 @@ impl Global {
         self.values
             .iter()
             .enumerate()
-            .map(|(replica_id, seq)| Lamport {
-                replica_id: ReplicaId(replica_id as u16),
-                value: *seq,
-            })
+            .map(|(replica_id, seq)| Lamport { replica_id: ReplicaId(replica_id as u16), value: *seq })
     }
 }
 
@@ -208,9 +195,7 @@ impl FromIterator<Lamport> for Global {
 impl Ord for Lamport {
     fn cmp(&self, other: &Self) -> Ordering {
         // Use the replica id to break ties between concurrent events.
-        self.value
-            .cmp(&other.value)
-            .then_with(|| self.replica_id.cmp(&other.replica_id))
+        self.value.cmp(&other.value).then_with(|| self.replica_id.cmp(&other.replica_id))
     }
 }
 
@@ -221,28 +206,19 @@ impl PartialOrd for Lamport {
 }
 
 impl Lamport {
-    pub const MIN: Self = Self {
-        replica_id: ReplicaId(u16::MIN),
-        value: Seq::MIN,
-    };
+    pub const MIN: Self = Self { replica_id: ReplicaId(u16::MIN), value: Seq::MIN };
 
-    pub const MAX: Self = Self {
-        replica_id: ReplicaId(u16::MAX),
-        value: Seq::MAX,
-    };
+    pub const MAX: Self = Self { replica_id: ReplicaId(u16::MAX), value: Seq::MAX };
 
-    pub fn new(replica_id: ReplicaId) -> Self {
-        Self {
-            value: 1,
-            replica_id,
-        }
+    pub const fn new(replica_id: ReplicaId) -> Self {
+        Self { value: 1, replica_id }
     }
 
-    pub fn as_u64(self) -> u64 {
+    pub const fn as_u64(self) -> u64 {
         ((self.value as u64) << 32) | (self.replica_id.0 as u64)
     }
 
-    pub fn tick(&mut self) -> Self {
+    pub const fn tick(&mut self) -> Self {
         let timestamp = *self;
         self.value += 1;
         timestamp

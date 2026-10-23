@@ -6,27 +6,37 @@ use std::sync::Arc;
 use anyhow::anyhow;
 use collections::HashSet;
 use fs::Fs;
-use gpui::{
-    AsyncWindowContext, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, SharedString,
-    Task, TaskExt, WeakEntity,
-};
+use git::repository::FetchOptions;
+use git::repository::Remote;
+use gpui::AsyncWindowContext;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::SharedString;
+use gpui::Task;
+use gpui::TaskExt;
+use gpui::WeakEntity;
 use project::Project;
 use project::git_store::Repository;
 use project::project_settings::ProjectSettings;
-use project::trusted_worktrees::{PathTrust, TrustedWorktrees};
+use project::trusted_worktrees::PathTrust;
+use project::trusted_worktrees::TrustedWorktrees;
 use remote::RemoteConnectionOptions;
 use settings::Settings;
 use ui::prelude::*;
-use workspace::{
-    MultiWorkspace, OpenMode, PreviousWorkspaceState, ToastView, Workspace, dock::DockPosition,
-};
+use util::ResultExt as _;
+use workspace::MultiWorkspace;
+use workspace::OpenMode;
+use workspace::PreviousWorkspaceState;
+use workspace::ToastView;
+use workspace::Workspace;
+use workspace::dock::DockPosition;
 use zed_actions::NewWorktreeBranchTarget;
 
-use git::repository::{FetchOptions, Remote};
-
-use util::ResultExt as _;
-
-use crate::notifications::{open_output, show_error_toast};
+use crate::notifications::open_output;
+use crate::notifications::show_error_toast;
 use crate::worktree_names;
 
 /// A remote-tracking branch reference parsed into its remote and branch parts,
@@ -44,10 +54,7 @@ impl RemoteBranchName {
         if remote_name.is_empty() || branch_name.is_empty() {
             return None;
         }
-        Some(Self {
-            remote_name: remote_name.to_string(),
-            branch_name: branch_name.to_string(),
-        })
+        Some(Self { remote_name: remote_name.to_string(), branch_name: branch_name.to_string() })
     }
 
     pub fn display_name(&self) -> String {
@@ -68,20 +75,14 @@ impl WorktreeCreateTarget {
     pub fn branch_target(&self) -> NewWorktreeBranchTarget {
         match self {
             WorktreeCreateTarget::CurrentBranch => NewWorktreeBranchTarget::CurrentBranch,
-            WorktreeCreateTarget::DefaultBranch(default_branch) => {
-                NewWorktreeBranchTarget::RemoteBranch {
-                    remote_name: default_branch.remote_name.clone(),
-                    branch_name: default_branch.branch_name.clone(),
-                }
-            }
+            WorktreeCreateTarget::DefaultBranch(default_branch) => NewWorktreeBranchTarget::RemoteBranch {
+                remote_name: default_branch.remote_name.clone(),
+                branch_name: default_branch.branch_name.clone(),
+            },
         }
     }
 
-    pub fn branch_label(
-        &self,
-        has_multiple_repositories: bool,
-        current_branch_name: Option<&str>,
-    ) -> String {
+    pub fn branch_label(&self, has_multiple_repositories: bool, current_branch_name: Option<&str>) -> String {
         match self {
             WorktreeCreateTarget::DefaultBranch(default_branch) => default_branch.display_name(),
             WorktreeCreateTarget::CurrentBranch => {
@@ -109,8 +110,7 @@ pub fn worktree_create_targets(
     let Some(default_branch) = default_branch else {
         return vec![WorktreeCreateTarget::CurrentBranch];
     };
-    let is_different =
-        current_branch_name.is_none_or(|current| current != default_branch.branch_name);
+    let is_different = current_branch_name.is_none_or(|current| current != default_branch.branch_name);
     let mut targets = vec![WorktreeCreateTarget::DefaultBranch(default_branch)];
     if is_different {
         targets.push(WorktreeCreateTarget::CurrentBranch);
@@ -133,7 +133,7 @@ enum RemoteBranchFetchMode {
 }
 
 impl RemoteBranchFetchMode {
-    fn should_fetch(self) -> bool {
+    const fn should_fetch(self) -> bool {
         matches!(self, Self::Fetch)
     }
 }
@@ -191,7 +191,7 @@ impl WorktreeFetchFailedToast {
         branch_target: NewWorktreeBranchTarget,
         focused_dock: Option<DockPosition>,
         fetch_error: &WorktreeFetchError,
-        cx: &mut gpui::Context<Self>,
+        cx: &gpui::Context<Self>,
     ) -> Self {
         Self {
             workspace,
@@ -245,55 +245,41 @@ impl Render for WorktreeFetchFailedToast {
             .flex_none()
             .bg(cx.theme().colors().surface_background)
             .shadow_lg()
+            .child(Icon::new(IconName::XCircle).size(IconSize::Small).color(Color::Error))
+            .child(Label::new(format!("git fetch failed for {}", self.remote_branch_name)))
             .child(
-                Icon::new(IconName::XCircle)
-                    .size(IconSize::Small)
-                    .color(Color::Error),
-            )
-            .child(Label::new(format!(
-                "git fetch failed for {}",
-                self.remote_branch_name
-            )))
-            .child(
-                Button::new(
-                    "use-local-worktree-base",
-                    format!("Use local {}", self.remote_branch_name),
-                )
-                .color(Color::Muted)
-                .on_click(cx.listener(move |_, _event, window, cx| {
-                    cx.emit(DismissEvent);
-                    if let Some(workspace) = workspace_for_retry.upgrade() {
-                        workspace.update(cx, |workspace, cx| {
-                            let task = create_worktree_workspace_inner(
-                                workspace,
-                                &zed_actions::CreateWorktree {
-                                    worktree_name: worktree_name.clone(),
-                                    branch_target: branch_target.clone(),
-                                },
-                                window,
-                                focused_dock,
-                                RemoteBranchFetchMode::UseLocal,
-                                cx,
-                            );
-                            task.detach_and_log_err(cx);
-                        });
-                    }
-                })),
-            )
-            .child(
-                Button::new("view-worktree-fetch-log", "Show Error Logs")
+                Button::new("use-local-worktree-base", format!("Use local {}", self.remote_branch_name))
                     .color(Color::Muted)
                     .on_click(cx.listener(move |_, _event, window, cx| {
                         cx.emit(DismissEvent);
-                        let output = output.clone();
-                        let operation = operation.clone();
-                        workspace_for_log
-                            .update(cx, move |workspace, cx| {
-                                open_output(operation, workspace, &output, window, cx)
-                            })
-                            .ok();
+                        if let Some(workspace) = workspace_for_retry.upgrade() {
+                            workspace.update(cx, |workspace, cx| {
+                                let task = create_worktree_workspace_inner(
+                                    workspace,
+                                    &zed_actions::CreateWorktree {
+                                        worktree_name: worktree_name.clone(),
+                                        branch_target: branch_target.clone(),
+                                    },
+                                    window,
+                                    focused_dock,
+                                    RemoteBranchFetchMode::UseLocal,
+                                    cx,
+                                );
+                                task.detach_and_log_err(cx);
+                            });
+                        }
                     })),
             )
+            .child(Button::new("view-worktree-fetch-log", "Show Error Logs").color(Color::Muted).on_click(cx.listener(
+                move |_, _event, window, cx| {
+                    cx.emit(DismissEvent);
+                    let output = output.clone();
+                    let operation = operation.clone();
+                    workspace_for_log
+                        .update(cx, move |workspace, cx| open_output(operation, workspace, &output, window, cx))
+                        .ok();
+                },
+            )))
             .child(
                 IconButton::new("dismiss-worktree-fetch-failed-toast", IconName::Close)
                     .shape(ui::IconButtonShape::Square)
@@ -308,10 +294,7 @@ impl Render for WorktreeFetchFailedToast {
 
 /// Classifies the project's visible worktrees into git-managed repositories
 /// and non-git paths. Each unique repository is returned only once.
-pub fn classify_worktrees(
-    project: &Project,
-    cx: &gpui::App,
-) -> (Vec<Entity<Repository>>, Vec<PathBuf>) {
+pub fn classify_worktrees(project: &Project, cx: &gpui::App) -> (Vec<Entity<Repository>>, Vec<PathBuf>) {
     let repositories = project.repositories(cx).clone();
     let mut git_repos: Vec<Entity<Repository>> = Vec::new();
     let mut non_git_paths: Vec<PathBuf> = Vec::new();
@@ -330,13 +313,9 @@ pub fn classify_worktrees(
                     None
                 }
             })
-            .max_by(
-                |(left_id, _left_repo, left_depth), (right_id, _right_repo, right_depth)| {
-                    left_depth
-                        .cmp(right_depth)
-                        .then_with(|| left_id.cmp(right_id))
-                },
-            );
+            .max_by(|(left_id, _left_repo, left_depth), (right_id, _right_repo, right_depth)| {
+                left_depth.cmp(right_depth).then_with(|| left_id.cmp(right_id))
+            });
 
         if let Some((id, repo, _)) = matching_repo {
             if seen_repo_ids.insert(id) {
@@ -356,22 +335,16 @@ pub fn resolve_worktree_branch_target(branch_target: &NewWorktreeBranchTarget) -
     match branch_target {
         NewWorktreeBranchTarget::CurrentBranch => None,
         NewWorktreeBranchTarget::ExistingBranch { name } => Some(name.clone()),
-        NewWorktreeBranchTarget::RemoteBranch {
-            remote_name,
-            branch_name,
-        } => Some(format!("refs/remotes/{remote_name}/{branch_name}")),
+        NewWorktreeBranchTarget::RemoteBranch { remote_name, branch_name } => {
+            Some(format!("refs/remotes/{remote_name}/{branch_name}"))
+        }
     }
 }
 
 fn remote_branch_to_fetch(branch_target: &NewWorktreeBranchTarget) -> Option<(&str, &str)> {
     match branch_target {
-        NewWorktreeBranchTarget::RemoteBranch {
-            remote_name,
-            branch_name,
-        } => Some((remote_name, branch_name)),
-        NewWorktreeBranchTarget::CurrentBranch | NewWorktreeBranchTarget::ExistingBranch { .. } => {
-            None
-        }
+        NewWorktreeBranchTarget::RemoteBranch { remote_name, branch_name } => Some((remote_name, branch_name)),
+        NewWorktreeBranchTarget::CurrentBranch | NewWorktreeBranchTarget::ExistingBranch { .. } => None,
     }
 }
 
@@ -385,12 +358,7 @@ async fn fetch_remote_for_worktree_base(
             .iter()
             .map(|repo| {
                 repo.update(cx, |repo, cx| {
-                    repo.fetch(
-                        FetchOptions::Remote(Remote {
-                            name: remote_name.clone().into(),
-                        }),
-                        cx,
-                    )
+                    repo.fetch(FetchOptions::Remote(Remote { name: remote_name.clone().into() }), cx)
                 })
             })
             .collect::<Vec<_>>()
@@ -425,11 +393,7 @@ fn start_worktree_creations(
     rng: &mut impl rand::Rng,
     cx: &mut gpui::App,
 ) -> anyhow::Result<(
-    Vec<(
-        Entity<Repository>,
-        PathBuf,
-        futures::channel::oneshot::Receiver<anyhow::Result<()>>,
-    )>,
+    Vec<(Entity<Repository>, PathBuf, futures::channel::oneshot::Receiver<anyhow::Result<()>>)>,
     Vec<(PathBuf, PathBuf)>,
 )> {
     let mut creation_infos = Vec::new();
@@ -438,14 +402,12 @@ fn start_worktree_creations(
 
     let worktree_name = worktree_name.unwrap_or_else(|| {
         let existing_refs: Vec<&str> = existing_worktree_names.iter().map(|s| s.as_str()).collect();
-        worktree_names::generate_worktree_name(&existing_refs, rng)
-            .unwrap_or_else(|| "worktree".to_string())
+        worktree_names::generate_worktree_name(&existing_refs, rng).unwrap_or_else(|| "worktree".to_string())
     });
 
     for repo in git_repos {
         let (work_dir, new_path, receiver) = repo.update(cx, |repo, _cx| {
-            let new_path =
-                repo.path_for_new_linked_worktree(&worktree_name, worktree_directory_setting)?;
+            let new_path = repo.path_for_new_linked_worktree(&worktree_name, worktree_directory_setting)?;
             if existing_worktree_paths.contains(&new_path) {
                 anyhow::bail!("A worktree already exists at {}", new_path.display());
             }
@@ -456,9 +418,7 @@ fn start_worktree_creations(
             let receiver = if scheduled_paths.contains(&new_path) {
                 None
             } else {
-                let target = git::repository::CreateWorktreeTarget::Detached {
-                    base_sha: base_ref.clone(),
-                };
+                let target = git::repository::CreateWorktreeTarget::Detached { base_sha: base_ref.clone() };
                 Some(repo.create_worktree(target, new_path.clone()))
             };
             anyhow::Ok((work_dir, new_path, receiver))
@@ -477,11 +437,7 @@ fn start_worktree_creations(
 /// creation fails, all successfully-created worktrees are rolled back
 /// (removed) so the project isn't left in a half-migrated state.
 pub async fn await_and_rollback_on_failure(
-    creation_infos: Vec<(
-        Entity<Repository>,
-        PathBuf,
-        futures::channel::oneshot::Receiver<anyhow::Result<()>>,
-    )>,
+    creation_infos: Vec<(Entity<Repository>, PathBuf, futures::channel::oneshot::Receiver<anyhow::Result<()>>)>,
     fs: Arc<dyn Fs>,
     cx: &mut AsyncWindowContext,
 ) -> anyhow::Result<Vec<PathBuf>> {
@@ -516,11 +472,7 @@ pub async fn await_and_rollback_on_failure(
     let mut rollback_futures = Vec::new();
     for (rollback_repo, rollback_path) in &repos_and_paths {
         let receiver = cx
-            .update(|_, cx| {
-                rollback_repo.update(cx, |repo, _cx| {
-                    repo.remove_worktree(rollback_path.clone(), true)
-                })
-            })
+            .update(|_, cx| rollback_repo.update(cx, |repo, _cx| repo.remove_worktree(rollback_path.clone(), true)))
             .ok();
 
         rollback_futures.push((rollback_path.clone(), receiver));
@@ -534,43 +486,26 @@ pub async fn await_and_rollback_on_failure(
             match receiver.await {
                 Ok(Ok(())) => {}
                 Ok(Err(rollback_err)) => {
-                    log::error!(
-                        "git worktree remove failed for {}: {rollback_err}",
-                        path.display()
-                    );
+                    log::error!("git worktree remove failed for {}: {rollback_err}", path.display());
                     git_remove_failed = true;
                 }
                 Err(canceled) => {
-                    log::error!(
-                        "git worktree remove failed for {}: {canceled}",
-                        path.display()
-                    );
+                    log::error!("git worktree remove failed for {}: {canceled}", path.display());
                     git_remove_failed = true;
                 }
             }
         } else {
-            log::error!(
-                "failed to dispatch git worktree remove for {}",
-                path.display()
-            );
+            log::error!("failed to dispatch git worktree remove for {}", path.display());
             git_remove_failed = true;
         }
 
-        if git_remove_failed {
-            if let Err(fs_err) = fs
-                .remove_dir(
-                    &path,
-                    fs::RemoveOptions {
-                        recursive: true,
-                        ignore_if_not_exists: true,
-                    },
-                )
-                .await
-            {
-                let msg = format!("{}: failed to remove directory: {fs_err}", path.display());
-                log::error!("{}", msg);
-                rollback_failures.push(msg);
-            }
+        if git_remove_failed
+            && let Err(fs_err) =
+                fs.remove_dir(&path, fs::RemoveOptions { recursive: true, ignore_if_not_exists: true }).await
+        {
+            let msg = format!("{}: failed to remove directory: {fs_err}", path.display());
+            log::error!("{}", msg);
+            rollback_failures.push(msg);
         }
     }
     let mut error_message = format!("Failed to create worktree: {err}");
@@ -615,12 +550,12 @@ fn maybe_propagate_worktree_trust(
             })
             .collect();
 
-        if !paths_to_trust.is_empty() {
-            if let Some(trusted_store) = TrustedWorktrees::try_get_global(cx) {
-                trusted_store.update(cx, |store, cx| {
-                    store.trust(&worktree_store, paths_to_trust, cx);
-                });
-            }
+        if !paths_to_trust.is_empty()
+            && let Some(trusted_store) = TrustedWorktrees::try_get_global(cx)
+        {
+            trusted_store.update(cx, |store, cx| {
+                store.trust(&worktree_store, paths_to_trust, cx);
+            });
         }
     })
     .ok();
@@ -659,7 +594,7 @@ pub fn handle_create_worktree(
 fn create_worktree_workspace_inner(
     workspace: &mut Workspace,
     action: &zed_actions::CreateWorktree,
-    window: &mut gpui::Window,
+    window: &gpui::Window,
     fallback_focused_dock: Option<DockPosition>,
     remote_branch_fetch_mode: RemoteBranchFetchMode,
     cx: &mut gpui::Context<Workspace>,
@@ -667,9 +602,7 @@ fn create_worktree_workspace_inner(
     let project = workspace.project().clone();
 
     if project.read(cx).repositories(cx).is_empty() {
-        return Task::ready(Err(anyhow!(
-            "create_worktree: no git repository in the project"
-        )));
+        return Task::ready(Err(anyhow!("create_worktree: no git repository in the project")));
     }
 
     // Guard against concurrent creation. We treat a concurrent creation as
@@ -680,8 +613,7 @@ fn create_worktree_workspace_inner(
         return Task::ready(Err(anyhow!("A worktree creation is already in progress")));
     }
 
-    let previous_state =
-        workspace.capture_state_for_worktree_switch(window, fallback_focused_dock, cx);
+    let previous_state = workspace.capture_state_for_worktree_switch(window, fallback_focused_dock, cx);
     let workspace_handle = workspace.weak_handle();
     let window_handle = window.window_handle().downcast::<MultiWorkspace>();
     let remote_connection_options = project.read(cx).remote_connection_options(cx);
@@ -690,20 +622,12 @@ fn create_worktree_workspace_inner(
 
     if git_repos.is_empty() {
         let toast_workspace = cx.entity();
-        show_error_toast(
-            toast_workspace,
-            "worktree create",
-            anyhow!("No git repositories found in the project"),
-            cx,
-        );
+        show_error_toast(toast_workspace, "worktree create", anyhow!("No git repositories found in the project"), cx);
         return Task::ready(Err(anyhow!("No git repositories found in the project")));
     }
 
     if remote_connection_options.is_some() {
-        let is_disconnected = project
-            .read(cx)
-            .remote_client()
-            .is_some_and(|client| client.read(cx).is_disconnected());
+        let is_disconnected = project.read(cx).remote_client().is_some_and(|client| client.read(cx).is_disconnected());
         if is_disconnected {
             let toast_workspace = cx.entity();
             show_error_toast(
@@ -712,23 +636,17 @@ fn create_worktree_workspace_inner(
                 anyhow!("Cannot create worktree: remote connection is not active"),
                 cx,
             );
-            return Task::ready(Err(anyhow!(
-                "Cannot create worktree: remote connection is not active"
-            )));
+            return Task::ready(Err(anyhow!("Cannot create worktree: remote connection is not active")));
         }
     }
 
     let worktree_name = action.worktree_name.clone();
     let branch_target = action.branch_target.clone();
-    let display_name: SharedString = worktree_name
-        .as_deref()
-        .unwrap_or("worktree")
-        .to_string()
-        .into();
+    let display_name: SharedString = worktree_name.as_deref().unwrap_or("worktree").to_string().into();
 
     workspace.set_active_worktree_creation(Some(display_name), false, cx);
 
-    cx.spawn_in(window, async move |_workspace_entity, mut cx| {
+    cx.spawn_in(window, async move |_workspace_entity, cx| {
         let result = do_create_worktree(
             git_repos,
             non_git_paths,
@@ -739,7 +657,7 @@ fn create_worktree_workspace_inner(
             workspace_handle.clone(),
             window_handle,
             remote_connection_options,
-            &mut cx,
+            cx,
         )
         .await;
 
@@ -790,18 +708,15 @@ pub fn handle_switch_worktree(
         return;
     }
 
-    let previous_state =
-        workspace.capture_state_for_worktree_switch(window, fallback_focused_dock, cx);
+    let previous_state = workspace.capture_state_for_worktree_switch(window, fallback_focused_dock, cx);
     let workspace_handle = workspace.weak_handle();
     let window_handle = window.window_handle().downcast::<MultiWorkspace>();
     let remote_connection_options = project.read(cx).remote_connection_options(cx);
 
     let (git_repos, non_git_paths) = classify_worktrees(project.read(cx), cx);
 
-    let git_repo_work_dirs: Vec<PathBuf> = git_repos
-        .iter()
-        .map(|repo| repo.read(cx).work_directory_abs_path.to_path_buf())
-        .collect();
+    let git_repo_work_dirs: Vec<PathBuf> =
+        git_repos.iter().map(|repo| repo.read(cx).work_directory_abs_path.to_path_buf()).collect();
 
     let display_name: SharedString = action.display_name.clone().into();
 
@@ -809,7 +724,7 @@ pub fn handle_switch_worktree(
 
     let worktree_path = action.path.clone();
 
-    cx.spawn_in(window, async move |_workspace_entity, mut cx| {
+    cx.spawn_in(window, async move |_workspace_entity, cx| {
         let result = do_switch_worktree(
             worktree_path,
             git_repo_work_dirs,
@@ -818,7 +733,7 @@ pub fn handle_switch_worktree(
             workspace_handle.clone(),
             window_handle,
             remote_connection_options,
-            &mut cx,
+            cx,
         )
         .await;
 
@@ -850,18 +765,10 @@ async fn do_create_worktree(
     cx: &mut AsyncWindowContext,
 ) -> anyhow::Result<Entity<Workspace>> {
     // List existing worktrees from all repos to detect name collisions
-    let worktree_receivers: Vec<_> = cx.update(|_, cx| {
-        git_repos
-            .iter()
-            .map(|repo| repo.update(cx, |repo, _cx| repo.worktrees()))
-            .collect()
-    })?;
-    let worktree_directory_setting = cx.update(|_, cx| {
-        ProjectSettings::get_global(cx)
-            .git
-            .worktree_directory
-            .clone()
-    })?;
+    let worktree_receivers: Vec<_> =
+        cx.update(|_, cx| git_repos.iter().map(|repo| repo.update(cx, |repo, _cx| repo.worktrees())).collect())?;
+    let worktree_directory_setting =
+        cx.update(|_, cx| ProjectSettings::get_global(cx).git.worktree_directory.clone())?;
 
     let mut existing_worktree_names = Vec::new();
     let mut existing_worktree_paths = HashSet::default();
@@ -869,12 +776,7 @@ async fn do_create_worktree(
         match result {
             Ok(Ok(worktrees)) => {
                 for worktree in worktrees {
-                    if let Some(name) = worktree
-                        .path
-                        .parent()
-                        .and_then(|p| p.file_name())
-                        .and_then(|n| n.to_str())
-                    {
+                    if let Some(name) = worktree.path.parent().and_then(|p| p.file_name()).and_then(|n| n.to_str()) {
                         existing_worktree_names.push(name.to_string());
                     }
                     existing_worktree_paths.insert(worktree.path.clone());
@@ -892,15 +794,8 @@ async fn do_create_worktree(
     {
         let remote_name = remote_name.to_string();
         let branch_name = branch_name.to_string();
-        if let Err(error) =
-            fetch_remote_for_worktree_base(&git_repos, remote_name.clone(), cx).await
-        {
-            return Err(WorktreeFetchError {
-                remote_name,
-                branch_name,
-                source: error,
-            }
-            .into());
+        if let Err(error) = fetch_remote_for_worktree_base(&git_repos, remote_name.clone(), cx).await {
+            return Err(WorktreeFetchError { remote_name, branch_name, source: error }.into());
         }
     }
 
@@ -923,10 +818,8 @@ async fn do_create_worktree(
 
     let fs = cx.update(|_, cx| <dyn Fs>::global(cx))?;
 
-    let creation_pairs: Vec<(Entity<Repository>, PathBuf)> = creation_infos
-        .iter()
-        .map(|(repo, path, _)| (repo.clone(), path.clone()))
-        .collect();
+    let creation_pairs: Vec<(Entity<Repository>, PathBuf)> =
+        creation_infos.iter().map(|(repo, path, _)| (repo.clone(), path.clone())).collect();
 
     let created_paths = await_and_rollback_on_failure(creation_infos, fs, cx).await?;
 
@@ -972,10 +865,8 @@ async fn do_switch_worktree(
     remote_connection_options: Option<RemoteConnectionOptions>,
     cx: &mut AsyncWindowContext,
 ) -> anyhow::Result<Entity<Workspace>> {
-    let path_remapping: Vec<(PathBuf, PathBuf)> = git_repo_work_dirs
-        .iter()
-        .map(|work_dir| (work_dir.clone(), worktree_path.clone()))
-        .collect();
+    let path_remapping: Vec<(PathBuf, PathBuf)> =
+        git_repo_work_dirs.iter().map(|work_dir| (work_dir.clone(), worktree_path.clone())).collect();
 
     let mut all_paths = vec![worktree_path];
     let has_non_git = !non_git_paths.is_empty();
@@ -1010,8 +901,7 @@ async fn open_worktree_workspace(
     operation: WorktreeOperation,
     cx: &mut AsyncWindowContext,
 ) -> anyhow::Result<Entity<Workspace>> {
-    let window_handle = window_handle
-        .ok_or_else(|| anyhow!("No window handle available for workspace creation"))?;
+    let window_handle = window_handle.ok_or_else(|| anyhow!("No window handle available for workspace creation"))?;
 
     let focused_dock = previous_state.focused_dock;
 
@@ -1021,29 +911,18 @@ async fn open_worktree_workspace(
     // files and dock layout.
     let transfer_state = is_creating_new_worktree;
 
-    let source_for_transfer = if transfer_state {
-        Some(workspace.clone())
-    } else {
-        None
-    };
+    let source_for_transfer = if transfer_state { Some(workspace.clone()) } else { None };
 
-    let (workspace_task, modal_workspace) =
-        window_handle.update(cx, |multi_workspace, window, cx| {
-            let path_list = util::path_list::PathList::new(&all_paths);
-            let active_workspace = multi_workspace.workspace().clone();
-            let modal_workspace = active_workspace.clone();
+    let (workspace_task, modal_workspace) = window_handle.update(cx, |multi_workspace, window, cx| {
+        let path_list = util::path_list::PathList::new(&all_paths);
+        let active_workspace = multi_workspace.workspace().clone();
+        let modal_workspace = active_workspace.clone();
 
-            let init: Option<
-                Box<
-                    dyn FnOnce(&mut Workspace, &mut gpui::Window, &mut gpui::Context<Workspace>)
-                        + Send,
-                >,
-            > = if transfer_state {
+        let init: Option<Box<dyn FnOnce(&mut Workspace, &mut gpui::Window, &mut gpui::Context<Workspace>) + Send>> =
+            if transfer_state {
                 let dock_structure = previous_state.dock_structure;
                 Some(Box::new(
-                    move |workspace: &mut Workspace,
-                          window: &mut gpui::Window,
-                          cx: &mut gpui::Context<Workspace>| {
+                    move |workspace: &mut Workspace, window: &mut gpui::Window, cx: &mut gpui::Context<Workspace>| {
                         workspace.set_dock_structure(dock_structure, window, cx);
                     },
                 ))
@@ -1051,26 +930,21 @@ async fn open_worktree_workspace(
                 None
             };
 
-            let task = multi_workspace.find_or_create_workspace(
-                path_list,
-                remote_connection_options,
-                None,
-                move |connection_options, window, cx| {
-                    remote_connection::connect_with_modal(
-                        &active_workspace,
-                        connection_options,
-                        window,
-                        cx,
-                    )
-                },
-                init,
-                OpenMode::Add,
-                source_for_transfer.clone(),
-                window,
-                cx,
-            );
-            (task, modal_workspace)
-        })?;
+        let task = multi_workspace.find_or_create_workspace(
+            path_list,
+            remote_connection_options,
+            None,
+            move |connection_options, window, cx| {
+                remote_connection::connect_with_modal(&active_workspace, connection_options, window, cx)
+            },
+            init,
+            OpenMode::Add,
+            source_for_transfer.clone(),
+            window,
+            cx,
+        );
+        (task, modal_workspace)
+    })?;
 
     let result = workspace_task.await;
     remote_connection::dismiss_connection_modal(&modal_workspace, cx);
@@ -1082,25 +956,13 @@ async fn open_worktree_workspace(
         task.await.log_err();
     }
 
-    new_workspace
-        .update(cx, |workspace, cx| {
-            workspace.project().read(cx).wait_for_initial_scan(cx)
-        })
-        .await;
+    new_workspace.update(cx, |workspace, cx| workspace.project().read(cx).wait_for_initial_scan(cx)).await;
 
     new_workspace
         .update(cx, |workspace, cx| {
-            let repos = workspace
-                .project()
-                .read(cx)
-                .repositories(cx)
-                .values()
-                .cloned()
-                .collect::<Vec<_>>();
+            let repos = workspace.project().read(cx).repositories(cx).values().cloned().collect::<Vec<_>>();
 
-            let tasks = repos
-                .into_iter()
-                .map(|repo| repo.update(cx, |repo, _| repo.barrier()));
+            let tasks = repos.into_iter().map(|repo| repo.update(cx, |repo, _| repo.barrier()));
             futures::future::join_all(tasks)
         })
         .await;
@@ -1112,8 +974,7 @@ async fn open_worktree_workspace(
             new_workspace.update(cx, |workspace, cx| {
                 if has_non_git {
                     struct WorktreeCreationToast;
-                    let toast_id =
-                        workspace::notifications::NotificationId::unique::<WorktreeCreationToast>();
+                    let toast_id = workspace::notifications::NotificationId::unique::<WorktreeCreationToast>();
                     workspace.show_toast(
                         workspace::Toast::new(
                             toast_id,
@@ -1129,9 +990,10 @@ async fn open_worktree_workspace(
                     let best_match = path_remapping
                         .iter()
                         .filter_map(|(old_root, new_root)| {
-                            original_path.strip_prefix(old_root).ok().map(|relative| {
-                                (old_root.components().count(), new_root.join(relative))
-                            })
+                            original_path
+                                .strip_prefix(old_root)
+                                .ok()
+                                .map(|relative| (old_root.components().count(), new_root.join(relative)))
                         })
                         .max_by_key(|(depth, _)| *depth);
 
@@ -1147,35 +1009,30 @@ async fn open_worktree_workspace(
                     None
                 };
 
-                let remapped_active_path =
-                    previous_state.active_file_path.and_then(|p| remap_path(p));
+                let remapped_active_path = previous_state.active_file_path.and_then(remap_path);
 
                 let mut paths_to_open: Vec<PathBuf> = Vec::new();
                 let mut seen = HashSet::default();
                 for path in previous_state.open_file_paths {
-                    if let Some(remapped) = remap_path(path) {
-                        if remapped_active_path.as_ref() != Some(&remapped)
-                            && seen.insert(remapped.clone())
-                        {
-                            paths_to_open.push(remapped);
-                        }
+                    if let Some(remapped) = remap_path(path)
+                        && remapped_active_path.as_ref() != Some(&remapped)
+                        && seen.insert(remapped.clone())
+                    {
+                        paths_to_open.push(remapped);
                     }
                 }
 
-                if let Some(active) = &remapped_active_path {
-                    if seen.insert(active.clone()) {
-                        paths_to_open.push(active.clone());
-                    }
+                if let Some(active) = &remapped_active_path
+                    && seen.insert(active.clone())
+                {
+                    paths_to_open.push(active.clone());
                 }
 
                 if !paths_to_open.is_empty() {
                     let should_focus_center = focused_dock.is_none();
                     let open_task = workspace.open_paths(
                         paths_to_open,
-                        workspace::OpenOptions {
-                            focus: Some(false),
-                            ..Default::default()
-                        },
+                        workspace::OpenOptions { focus: Some(false), ..Default::default() },
                         None,
                         window,
                         cx,

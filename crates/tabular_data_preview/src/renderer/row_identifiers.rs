@@ -1,15 +1,29 @@
-use crate::{
-    TableView,
-    settings::RowIdentifiers,
-    types::{DataRow, DisplayRow, LineNumber},
-};
-use ui::{
-    ActiveTheme as _, AnyElement, ButtonCommon as _, ButtonSize, Clickable, Context,
-    FluentBuilder as _, IconButton, IconButtonShape, IconName, IconSize, IntoElement as _,
-    ParentElement as _, SharedString, Styled as _, StyledTypography as _, Tooltip, div, h_flex,
-};
+use ui::ActiveTheme as _;
+use ui::AnyElement;
+use ui::ButtonCommon as _;
+use ui::ButtonSize;
+use ui::Clickable;
+use ui::Context;
+use ui::FluentBuilder as _;
+use ui::IconButton;
+use ui::IconButtonShape;
+use ui::IconName;
+use ui::IconSize;
+use ui::IntoElement as _;
+use ui::ParentElement as _;
+use ui::SharedString;
+use ui::Styled as _;
+use ui::StyledTypography as _;
+use ui::Tooltip;
+use ui::div;
+use ui::h_flex;
 
 use super::settings::settings_popover_menu;
+use crate::TableView;
+use crate::settings::RowIdentifiers;
+use crate::types::DataRow;
+use crate::types::DisplayRow;
+use crate::types::LineNumber;
 
 pub enum RowIdentDisplayMode {
     /// E.g
@@ -73,11 +87,7 @@ impl TableView {
             .max()
             .unwrap_or_default();
 
-        let digit_count = if max_line_number == 0 {
-            1
-        } else {
-            (max_line_number as f32).log10().floor() as usize + 1
-        };
+        let digit_count = if max_line_number == 0 { 1 } else { (max_line_number as f32).log10().floor() as usize + 1 };
 
         let char_width_px = 9.0; // TODO: get real width of the characters
         let base_width = (digit_count as f32) * char_width_px;
@@ -90,11 +100,7 @@ impl TableView {
     fn calculate_row_number_width(&self) -> f32 {
         let max_row_number = self.engine.contents.rows.len();
 
-        let digit_count = if max_row_number == 0 {
-            1
-        } else {
-            (max_row_number as f32).log10().floor() as usize + 1
-        };
+        let digit_count = if max_row_number == 0 { 1 } else { (max_row_number as f32).log10().floor() as usize + 1 };
 
         let char_width_px = 9.0; // TODO: get real width of the characters
         let base_width = (digit_count as f32) * char_width_px;
@@ -103,10 +109,7 @@ impl TableView {
         (base_width + padding).max(min_width)
     }
 
-    pub(crate) fn create_row_identifier_header(
-        &self,
-        cx: &mut Context<'_, TableView>,
-    ) -> AnyElement {
+    pub(crate) fn create_row_identifier_header(&self, cx: &Context<'_, TableView>) -> AnyElement {
         let has_line_numbers = !self.engine.contents.line_numbers.is_empty();
 
         h_flex()
@@ -119,14 +122,12 @@ impl TableView {
                 // toggling shows its effect on the row identifier column immediately, instead of
                 // being hidden behind the open popover until it's dismissed.
                 let (icon, tooltip_text) = match self.settings.numbering_type {
-                    RowIdentifiers::SrcLines => (
-                        IconName::Code,
-                        "Showing file line numbers.\nClick to show sequential row numbers.",
-                    ),
-                    RowIdentifiers::RowNum => (
-                        IconName::Hash,
-                        "Showing sequential row numbers.\nClick to show file line numbers.",
-                    ),
+                    RowIdentifiers::SrcLines => {
+                        (IconName::Code, "Showing file line numbers.\nClick to show sequential row numbers.")
+                    }
+                    RowIdentifiers::RowNum => {
+                        (IconName::Hash, "Showing sequential row numbers.\nClick to show file line numbers.")
+                    }
                 };
 
                 let view = cx.entity();

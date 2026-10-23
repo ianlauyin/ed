@@ -1,10 +1,22 @@
-use crate::{BufferDiagnosticsEditor, ProjectDiagnosticsEditor, ToggleDiagnosticsRefresh};
-use gpui::{Context, EventEmitter, ParentElement, Render, Window};
+use gpui::Context;
+use gpui::EventEmitter;
+use gpui::ParentElement;
+use gpui::Render;
+use gpui::Window;
 use language::DiagnosticEntry;
-use text::{Anchor, BufferId};
-use ui::{Tooltip, prelude::*};
-use workspace::{ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView, item::ItemHandle};
+use text::Anchor;
+use text::BufferId;
+use ui::Tooltip;
+use ui::prelude::*;
+use workspace::ToolbarItemEvent;
+use workspace::ToolbarItemLocation;
+use workspace::ToolbarItemView;
+use workspace::item::ItemHandle;
 use zed_actions::buffer_search;
+
+use crate::BufferDiagnosticsEditor;
+use crate::ProjectDiagnosticsEditor;
+use crate::ToggleDiagnosticsRefresh;
 
 pub struct ToolbarControls {
     editor: Option<Box<dyn DiagnosticsToolbarEditor>>,
@@ -25,11 +37,7 @@ pub(crate) trait DiagnosticsToolbarEditor: Send + Sync {
     /// with the latest information.
     fn refresh_diagnostics(&self, window: &mut Window, cx: &mut App);
     /// Returns a list of diagnostics for the provided buffer id.
-    fn get_diagnostics_for_buffer(
-        &self,
-        buffer_id: BufferId,
-        cx: &App,
-    ) -> Vec<DiagnosticEntry<Anchor>>;
+    fn get_diagnostics_for_buffer(&self, buffer_id: BufferId, cx: &App) -> Vec<DiagnosticEntry<Anchor>>;
 }
 
 impl Render for ToolbarControls {
@@ -37,29 +45,20 @@ impl Render for ToolbarControls {
         let mut include_warnings = false;
         let mut is_updating = false;
 
-        match &self.editor {
-            Some(editor) => {
-                include_warnings = editor.include_warnings(cx);
-                is_updating = editor.is_updating(cx);
-            }
-            None => {}
+        if let Some(editor) = &self.editor {
+            include_warnings = editor.include_warnings(cx);
+            is_updating = editor.is_updating(cx);
         }
 
-        let (warning_tooltip, warning_color) = if include_warnings {
-            ("Exclude Warnings", Color::Warning)
-        } else {
-            ("Include Warnings", Color::Disabled)
-        };
+        let (warning_tooltip, warning_color) =
+            if include_warnings { ("Exclude Warnings", Color::Warning) } else { ("Include Warnings", Color::Disabled) };
 
         h_flex()
             .gap_1()
             .child({
                 IconButton::new("toggle_search", IconName::MagnifyingGlass)
                     .icon_size(IconSize::Small)
-                    .tooltip(Tooltip::for_action_title(
-                        "Buffer Search",
-                        &buffer_search::Deploy::find(),
-                    ))
+                    .tooltip(Tooltip::for_action_title("Buffer Search", &buffer_search::Deploy::find()))
                     .on_click(|_, window, cx| {
                         window.dispatch_action(Box::new(buffer_search::Deploy::find()), cx);
                     })
@@ -70,10 +69,7 @@ impl Render for ToolbarControls {
                         IconButton::new("stop-updating", IconName::Stop)
                             .icon_color(Color::Error)
                             .icon_size(IconSize::Small)
-                            .tooltip(Tooltip::for_action_title(
-                                "Stop Diagnostics Update",
-                                &ToggleDiagnosticsRefresh,
-                            ))
+                            .tooltip(Tooltip::for_action_title("Stop Diagnostics Update", &ToggleDiagnosticsRefresh))
                             .on_click(cx.listener(move |toolbar_controls, _, _, cx| {
                                 if let Some(editor) = toolbar_controls.editor() {
                                     editor.stop_updating(cx);
@@ -85,10 +81,7 @@ impl Render for ToolbarControls {
                     div.child(
                         IconButton::new("refresh-diagnostics", IconName::ArrowCircle)
                             .icon_size(IconSize::Small)
-                            .tooltip(Tooltip::for_action_title(
-                                "Refresh Diagnostics",
-                                &ToggleDiagnosticsRefresh,
-                            ))
+                            .tooltip(Tooltip::for_action_title("Refresh Diagnostics", &ToggleDiagnosticsRefresh))
                             .on_click(cx.listener({
                                 move |toolbar_controls, _, window, cx| {
                                     if let Some(editor) = toolbar_controls.editor() {

@@ -7,25 +7,36 @@
 //! via [`TableView::set_contents`], whether that content comes from the CSV parser or from some
 //! other producer (e.g. a database result set).
 
-use std::{
-    collections::HashMap,
-    time::{Duration, Instant},
-};
+use std::collections::HashMap;
+use std::time::Duration;
+use std::time::Instant;
 
-use gpui::{
-    App, AppContext, Entity, FocusHandle, Focusable, ListAlignment, ListState, Point, Task, Window,
-};
-use ui::{
-    AbsoluteLength, ResizableColumnsState, SharedString, TableInteractionState,
-    TableResizeBehavior, prelude::*,
-};
+use gpui::App;
+use gpui::AppContext;
+use gpui::Entity;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::ListAlignment;
+use gpui::ListState;
+use gpui::Point;
+use gpui::Task;
+use gpui::Window;
+use ui::AbsoluteLength;
+use ui::ResizableColumnsState;
+use ui::SharedString;
+use ui::TableInteractionState;
+use ui::TableResizeBehavior;
+use ui::prelude::*;
 
-use crate::{
-    MoveFocusedCell, NavigationDirection,
-    settings::TableViewSettings,
-    table_data_engine::{DisplayToDataMapping, TableDataEngine},
-    types::{AnyColumn, DataCellId, DisplayRow, TableLikeContent},
-};
+use crate::MoveFocusedCell;
+use crate::NavigationDirection;
+use crate::settings::TableViewSettings;
+use crate::table_data_engine::DisplayToDataMapping;
+use crate::table_data_engine::TableDataEngine;
+use crate::types::AnyColumn;
+use crate::types::DataCellId;
+use crate::types::DisplayRow;
+use crate::types::TableLikeContent;
 
 /// The keyboard cursor: which cell is currently focused for navigation.
 /// Both fields are stored in data-space so the selection survives sort/filter changes.
@@ -37,15 +48,12 @@ pub struct CellSelection {
 }
 
 impl CellSelection {
-    pub fn new(anchor: DataCellId, focus: DataCellId) -> Self {
+    pub const fn new(anchor: DataCellId, focus: DataCellId) -> Self {
         Self { anchor, focus }
     }
 
-    pub fn single_cell(cell: DataCellId) -> Self {
-        Self {
-            anchor: cell,
-            focus: cell,
-        }
+    pub const fn single_cell(cell: DataCellId) -> Self {
+        Self { anchor: cell, focus: cell }
     }
 
     pub fn is_single_cell(&self) -> bool {
@@ -120,10 +128,8 @@ pub struct TableView {
 impl TableView {
     pub fn new(window: &Window, cx: &mut Context<Self>) -> Self {
         let contents = TableLikeContent::default();
-        let table_interaction_state = cx.new(|cx| {
-            TableInteractionState::new(cx)
-                .with_custom_scrollbar(ui::Scrollbars::new(ui::ScrollAxes::Both))
-        });
+        let table_interaction_state = cx
+            .new(|cx| TableInteractionState::new(cx).with_custom_scrollbar(ui::Scrollbars::new(ui::ScrollAxes::Both)));
         let row_height = window.pixel_snap(window.line_height());
 
         Self {
@@ -155,8 +161,7 @@ impl TableView {
         // The old mapping may reference rows removed by this change. Clear it immediately
         // rather than leaving the list showing stale rows until the background task below
         // recomputes the mapping.
-        self.list_state
-            .reset_with_uniform_height(0, self.row_height + px(1.0));
+        self.list_state.reset_with_uniform_height(0, self.row_height + px(1.0));
         self.sync_column_widths(cx);
         self.is_loading = false;
         self.apply_filter_sort(cx);
@@ -197,12 +202,7 @@ impl TableView {
         self.apply_filter_sort(cx);
     }
 
-    pub fn toggle_filter(
-        &mut self,
-        col: AnyColumn,
-        value: Option<SharedString>,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn toggle_filter(&mut self, col: AnyColumn, value: Option<SharedString>, cx: &mut Context<Self>) {
         if let Err(err) = self.engine.toggle_filter(col, value) {
             log::error!("Failed to toggle filter: {err}");
             return;
@@ -212,16 +212,14 @@ impl TableView {
 
     /// Spawns a background task to recompute the display-to-data mapping after a filter or sort
     /// change. Storing the task cancels any previous in-flight computation automatically.
-    pub(crate) fn apply_filter_sort(&mut self, cx: &mut Context<Self>) {
+    pub(crate) fn apply_filter_sort(&mut self, cx: &Context<Self>) {
         let contents = self.engine.contents.clone();
         let filter_stack = self.engine.filter_stack.clone();
         let sorting = self.engine.applied_sorting;
 
         self.filter_sort_task = Some(cx.spawn(async move |this, cx| {
             let mapping = cx
-                .background_spawn(async move {
-                    DisplayToDataMapping::compute(&contents, &filter_stack, sorting)
-                })
+                .background_spawn(async move { DisplayToDataMapping::compute(&contents, &filter_stack, sorting) })
                 .await;
 
             this.update(cx, |view, cx| {
@@ -229,8 +227,7 @@ impl TableView {
                 let visible_rows = view.engine.d2d_mapping().visible_row_count();
                 // Uses the row height measured on the last render. Cheaper than a full
                 // `.measure_all()` pass; exact row heights are re-measured on scrolling.
-                view.list_state
-                    .reset_with_uniform_height(visible_rows, view.row_height + px(1.0));
+                view.list_state.reset_with_uniform_height(visible_rows, view.row_height + px(1.0));
                 cx.notify();
             })
             .ok();
@@ -238,16 +235,11 @@ impl TableView {
     }
 
     #[inline]
-    pub(crate) fn is_selection_enabled(&self) -> bool {
+    pub(crate) const fn is_selection_enabled(&self) -> bool {
         cfg!(debug_assertions)
     }
 
-    pub(crate) fn move_focused_cell(
-        &mut self,
-        action: &MoveFocusedCell,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn move_focused_cell(&mut self, action: &MoveFocusedCell, window: &mut Window, cx: &mut Context<Self>) {
         if !self.is_selection_enabled() {
             return;
         }
@@ -260,10 +252,7 @@ impl TableView {
         }
 
         let current_pos = self.selection.as_ref().and_then(|selection| {
-            self.engine
-                .d2d_mapping()
-                .get_display_row(selection.focus.row)
-                .map(|r| (r.0, selection.focus.col.0))
+            self.engine.d2d_mapping().get_display_row(selection.focus.row).map(|r| (r.0, selection.focus.col.0))
         });
 
         let (new_row, new_column) = match current_pos {
@@ -306,11 +295,7 @@ impl TableView {
         }
     }
 
-    pub(crate) fn compute_move(
-        &self,
-        current: (usize, usize),
-        direction: NavigationDirection,
-    ) -> (usize, usize) {
+    pub(crate) fn compute_move(&self, current: (usize, usize), direction: NavigationDirection) -> (usize, usize) {
         let row_count = self.engine.d2d_mapping().visible_row_count();
         let column_count = self.engine.contents.number_of_cols;
         let (row, column) = current;
@@ -324,11 +309,7 @@ impl TableView {
     }
 
     pub(crate) fn scroll_to_reveal_column(&self, column_index: usize, window: &Window, cx: &App) {
-        let handle = self
-            .table_interaction_state
-            .read(cx)
-            .horizontal_scroll_handle
-            .clone();
+        let handle = self.table_interaction_state.read(cx).horizontal_scroll_handle.clone();
 
         let widths_state = self.column_widths.read(cx);
         let total_cols = widths_state.cols();
@@ -339,10 +320,8 @@ impl TableView {
         let rem_size = window.rem_size();
         let peek_padding = px(20.0);
 
-        let left_px = widths_state.pinned_width(column_index + 1, rem_size)
-            - widths_state.pinned_width(1, rem_size);
-        let right_px = widths_state.pinned_width(column_index + 2, rem_size)
-            - widths_state.pinned_width(1, rem_size);
+        let left_px = widths_state.pinned_width(column_index + 1, rem_size) - widths_state.pinned_width(1, rem_size);
+        let right_px = widths_state.pinned_width(column_index + 2, rem_size) - widths_state.pinned_width(1, rem_size);
 
         let scroll_x = -handle.offset().x;
         let viewport_width = handle.bounds().size.width;

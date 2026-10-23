@@ -1,11 +1,13 @@
 //! A row chunk is an exclusive range of rows, [`BufferRow`] within a buffer of a certain version, [`Global`].
 //! All but the last chunk are of a constant, given size.
 
-use std::{collections::BTreeSet, ops::Range};
+use std::collections::BTreeSet;
+use std::ops::Range;
 
 use collections::HashMap;
 use parking_lot::Mutex;
-use text::{Anchor, Point};
+use text::Anchor;
+use text::Point;
 use util::RangeExt;
 
 use crate::BufferRow;
@@ -52,12 +54,17 @@ impl RowChunks {
         }
     }
 
-    pub fn version(&self) -> &clock::Global {
+    pub const fn version(&self) -> &clock::Global {
         self.buffer_snapshot.version()
     }
 
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         (self.last_row / self.max_rows_per_chunk) as usize + 1
+    }
+
+    /// Always false: there is at least one chunk, even for an empty buffer.
+    pub const fn is_empty(&self) -> bool {
+        false
     }
 
     pub fn applicable_chunks(&self, ranges: &[Range<Point>]) -> impl Iterator<Item = RowChunk> {
@@ -67,10 +74,8 @@ impl RowChunks {
             // Be lenient and yield multiple chunks if they "touch" the exclusive part of the range.
             // This will result in LSP hints [re-]queried for more ranges, but also more hints already visible when scrolling around.
             let row_range = point_range.start.row..point_range.end.row + 1;
-            let first_id = (point_range.start.row.div_ceil(self.max_rows_per_chunk) as usize)
-                .saturating_sub(1);
-            let last_id =
-                ((point_range.end.row / self.max_rows_per_chunk) as usize).min(last_chunk_id);
+            let first_id = (point_range.start.row.div_ceil(self.max_rows_per_chunk) as usize).saturating_sub(1);
+            let last_id = ((point_range.end.row / self.max_rows_per_chunk) as usize).min(last_chunk_id);
             for id in first_id..=last_id {
                 if self.chunk_row_range(id).to_inclusive().overlaps(&row_range) {
                     chunk_ids.insert(id);
@@ -81,22 +86,12 @@ impl RowChunks {
     }
 
     pub fn previous_chunk(&self, chunk: RowChunk) -> Option<RowChunk> {
-        if chunk.id == 0 || chunk.id > self.len() {
-            None
-        } else {
-            Some(self.chunk(chunk.id - 1))
-        }
+        if chunk.id == 0 || chunk.id > self.len() { None } else { Some(self.chunk(chunk.id - 1)) }
     }
 
     fn chunk_row_range(&self, id: RowChunkId) -> Range<BufferRow> {
-        let start = u32::try_from(id)
-            .unwrap_or(u32::MAX)
-            .saturating_mul(self.max_rows_per_chunk)
-            .min(self.last_row);
-        start
-            ..start
-                .saturating_add(self.max_rows_per_chunk)
-                .min(self.last_row)
+        let start = u32::try_from(id).unwrap_or(u32::MAX).saturating_mul(self.max_rows_per_chunk).min(self.last_row);
+        start..start.saturating_add(self.max_rows_per_chunk).min(self.last_row)
     }
 
     fn chunk(&self, id: RowChunkId) -> RowChunk {
@@ -129,11 +124,11 @@ pub struct RowChunk {
 }
 
 impl RowChunk {
-    pub fn row_range(&self) -> Range<BufferRow> {
+    pub const fn row_range(&self) -> Range<BufferRow> {
         self.start..self.end_exclusive
     }
 
-    pub fn anchor_range(&self) -> Range<Anchor> {
+    pub const fn anchor_range(&self) -> Range<Anchor> {
         self.start_anchor..self.end_anchor
     }
 }

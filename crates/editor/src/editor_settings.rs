@@ -2,14 +2,26 @@ use core::num;
 
 use language::CursorShape;
 use project::project_settings::DiagnosticSeverity;
-pub use settings::{
-    CompletionDetailAlignment, CompletionMenuItemKind, CurrentLineHighlight, DelayMs,
-    DiffViewStyle, DisplayIn, DocumentColorsRenderMode, DoubleClickInMultibuffer,
-    GoToDefinitionFallback, GoToDefinitionScrollStrategy, MinimapThumb, MinimapThumbBorder,
-    MultiCursorModifier, OpenResultsIn, ScrollBeyondLastLine, SeedQuerySetting, ShowMinimap,
-    SnippetSortOrder,
-};
-use settings::{RegisterSetting, Settings};
+pub use settings::CompletionDetailAlignment;
+pub use settings::CompletionMenuItemKind;
+pub use settings::CurrentLineHighlight;
+pub use settings::DelayMs;
+pub use settings::DiffViewStyle;
+pub use settings::DisplayIn;
+pub use settings::DocumentColorsRenderMode;
+pub use settings::DoubleClickInMultibuffer;
+pub use settings::GoToDefinitionFallback;
+pub use settings::GoToDefinitionScrollStrategy;
+pub use settings::MinimapThumb;
+pub use settings::MinimapThumbBorder;
+pub use settings::MultiCursorModifier;
+pub use settings::OpenResultsIn;
+use settings::RegisterSetting;
+pub use settings::ScrollBeyondLastLine;
+pub use settings::SeedQuerySetting;
+use settings::Settings;
+pub use settings::ShowMinimap;
+pub use settings::SnippetSortOrder;
 use ui::scrollbars::ShowScrollbar;
 
 /// Imports from the VSCode settings at
@@ -102,11 +114,8 @@ impl Minimap {
         self.display_in == DisplayIn::ActiveEditor
     }
 
-    pub fn with_show_override(self) -> Self {
-        Self {
-            show: ShowMinimap::Always,
-            ..self
-        }
+    pub const fn with_show_override(self) -> Self {
+        Self { show: ShowMinimap::Always, ..self }
     }
 }
 
@@ -155,9 +164,7 @@ impl Settings for EditorSettings {
         Self {
             cursor_blink: editor.cursor_blink.unwrap(),
             cursor_shape: editor.cursor_shape.map(Into::into),
-            cursor_animation: CursorAnimationSettings {
-                enabled: cursor_animation.enabled.unwrap(),
-            },
+            cursor_animation: CursorAnimationSettings { enabled: cursor_animation.enabled.unwrap() },
             current_line_highlight: editor.current_line_highlight.unwrap(),
             selection_highlight: editor.selection_highlight.unwrap(),
             rounded_selection: editor.rounded_selection.unwrap(),
@@ -216,24 +223,17 @@ impl Settings for EditorSettings {
             lsp_document_colors: editor.lsp_document_colors.unwrap(),
             lsp_document_links: editor.lsp_document_links.unwrap(),
             minimum_contrast_for_highlights: editor.minimum_contrast_for_highlights.unwrap().0,
-            completion_menu_scrollbar: editor
-                .completion_menu_scrollbar
-                .map(ui_scrollbar_settings_from_raw)
-                .unwrap(),
+            completion_menu_scrollbar: editor.completion_menu_scrollbar.map(ui_scrollbar_settings_from_raw).unwrap(),
             completion_detail_alignment: editor.completion_detail_alignment.unwrap(),
             completion_menu_item_kind: editor.completion_menu_item_kind.unwrap(),
             diff_view_style: editor.diff_view_style.unwrap(),
             minimum_split_diff_width: editor.minimum_split_diff_width.unwrap(),
-            file_diff: FileDiffSettings {
-                show_full_file: file_diff.show_full_file.unwrap(),
-            },
+            file_diff: FileDiffSettings { show_full_file: file_diff.show_full_file.unwrap() },
         }
     }
 }
 
-pub fn ui_scrollbar_settings_from_raw(
-    value: settings::ShowScrollbar,
-) -> ui::scrollbars::ShowScrollbar {
+pub const fn ui_scrollbar_settings_from_raw(value: settings::ShowScrollbar) -> ui::scrollbars::ShowScrollbar {
     match value {
         settings::ShowScrollbar::Auto => ShowScrollbar::Auto,
         settings::ShowScrollbar::System => ShowScrollbar::System,

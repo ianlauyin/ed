@@ -1,5 +1,6 @@
-use smallvec::SmallVec;
 use std::iter;
+
+use smallvec::SmallVec;
 
 /// An identifier for a position in a ordered collection.
 ///
@@ -15,9 +16,7 @@ impl Clone for Locator {
     fn clone(&self) -> Self {
         // We manually implement clone to avoid the overhead of SmallVec's clone implementation.
         // Using `from_slice` is faster than `clone` for SmallVec as we can use our `Copy` implementation of u64.
-        Self {
-            0: SmallVec::from_slice(&self.0),
-        }
+        Self(SmallVec::from_slice(&self.0))
     }
 
     fn clone_from(&mut self, source: &Self) {

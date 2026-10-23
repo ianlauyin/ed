@@ -9,3 +9,9 @@ disallowed-methods = [
     { path = "serde_json::from_reader", reason = "Parsing from a buffer is much slower than first reading the buffer into a Vec/String, see https://github.com/serde-rs/json/issues/160#issuecomment-253446892. Use `serde_json::from_slice` instead." },
     { path = "serde_json_lenient::from_reader", reason = "Parsing from a buffer is much slower than first reading the buffer into a Vec/String, see https://github.com/serde-rs/json/issues/160#issuecomment-253446892, Use `serde_json_lenient::from_slice` instead." },
 ]
+allow-indexing-slicing-in-tests = true
+allow-panic-in-tests = true
+allow-unwrap-in-tests = true
+allow-dbg-in-tests = true
+allow-unwrap-types = ["std::sync::LockResult"]  # This allows .unwrap() on Mutex lock results without triggering clippy::unwrap_used
+too-many-lines-threshold = 150

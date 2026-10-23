@@ -1,8 +1,10 @@
-use gpui::{AnyElement, ScrollHandle};
+use gpui::AnyElement;
+use gpui::ScrollHandle;
 use smallvec::SmallVec;
 
+use crate::Tab;
+use crate::TabStyle;
 use crate::prelude::*;
-use crate::{Tab, TabStyle};
 
 #[derive(IntoElement, RegisterComponent)]
 pub struct TabBar {
@@ -26,7 +28,7 @@ impl TabBar {
         }
     }
 
-    pub fn style(mut self, style: TabStyle) -> Self {
+    pub const fn style(mut self, style: TabStyle) -> Self {
         self.style = style;
         self
     }
@@ -36,7 +38,7 @@ impl TabBar {
         self
     }
 
-    pub fn start_children_mut(&mut self) -> &mut SmallVec<[AnyElement; 2]> {
+    pub const fn start_children_mut(&mut self) -> &mut SmallVec<[AnyElement; 2]> {
         &mut self.start_children
     }
 
@@ -44,27 +46,19 @@ impl TabBar {
     where
         Self: Sized,
     {
-        self.start_children_mut()
-            .push(start_child.into_element().into_any());
+        self.start_children_mut().push(start_child.into_element().into_any());
         self
     }
 
-    pub fn start_children(
-        mut self,
-        start_children: impl IntoIterator<Item = impl IntoElement>,
-    ) -> Self
+    pub fn start_children(mut self, start_children: impl IntoIterator<Item = impl IntoElement>) -> Self
     where
         Self: Sized,
     {
-        self.start_children_mut().extend(
-            start_children
-                .into_iter()
-                .map(|child| child.into_any_element()),
-        );
+        self.start_children_mut().extend(start_children.into_iter().map(|child| child.into_any_element()));
         self
     }
 
-    pub fn end_children_mut(&mut self) -> &mut SmallVec<[AnyElement; 2]> {
+    pub const fn end_children_mut(&mut self) -> &mut SmallVec<[AnyElement; 2]> {
         &mut self.end_children
     }
 
@@ -72,8 +66,7 @@ impl TabBar {
     where
         Self: Sized,
     {
-        self.end_children_mut()
-            .push(end_child.into_element().into_any());
+        self.end_children_mut().push(end_child.into_element().into_any());
         self
     }
 
@@ -81,11 +74,7 @@ impl TabBar {
     where
         Self: Sized,
     {
-        self.end_children_mut().extend(
-            end_children
-                .into_iter()
-                .map(|child| child.into_any_element()),
-        );
+        self.end_children_mut().extend(end_children.into_iter().map(|child| child.into_any_element()));
         self
     }
 }
@@ -122,21 +111,14 @@ impl RenderOnce for TabBar {
                 )
             })
             .child(
-                div()
-                    .relative()
-                    .flex_1()
-                    .h_full()
-                    .overflow_x_hidden()
-                    .child(
-                        h_flex()
-                            .id("tabs")
-                            .flex_grow_1()
-                            .overflow_x_scroll()
-                            .when_some(self.scroll_handle, |cx, scroll_handle| {
-                                cx.track_scroll(&scroll_handle)
-                            })
-                            .children(self.children),
-                    ),
+                div().relative().flex_1().h_full().overflow_x_hidden().child(
+                    h_flex()
+                        .id("tabs")
+                        .flex_grow_1()
+                        .overflow_x_scroll()
+                        .when_some(self.scroll_handle, |cx, scroll_handle| cx.track_scroll(&scroll_handle))
+                        .children(self.children),
+                ),
             )
             .when(!self.end_children.is_empty(), |this| {
                 this.child(
@@ -171,10 +153,7 @@ impl Component for TabBar {
                 example_group_with_title(
                     "Basic Usage",
                     vec![
-                        single_example(
-                            "Empty TabBar",
-                            TabBar::new("empty_tab_bar").into_any_element(),
-                        ),
+                        single_example("Empty TabBar", TabBar::new("empty_tab_bar").into_any_element()),
                         single_example(
                             "With Tabs",
                             TabBar::new("tab_bar_with_tabs")

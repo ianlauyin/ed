@@ -11,12 +11,15 @@ mod component_layout;
 
 use std::sync::LazyLock;
 
-pub use component_layout::*;
-
 use collections::HashMap;
-use gpui::{AnyElement, App, SharedString, Window};
+pub use component_layout::*;
+use gpui::AnyElement;
+use gpui::App;
+use gpui::SharedString;
+use gpui::Window;
 use parking_lot::RwLock;
-use strum::{Display, EnumString};
+use strum::Display;
+use strum::EnumString;
 
 pub fn components() -> ComponentRegistry {
     COMPONENT_DATA.read().clone()
@@ -84,8 +87,7 @@ impl ComponentRegistry {
     }
 
     pub fn sorted_components(&self) -> Vec<ComponentMetadata> {
-        let mut components: Vec<ComponentMetadata> =
-            self.components().into_iter().cloned().collect();
+        let mut components: Vec<ComponentMetadata> = self.components().into_iter().cloned().collect();
         components.sort_by_key(|a| a.name());
         components
     }
@@ -96,10 +98,6 @@ impl ComponentRegistry {
 
     pub fn get(&self, id: &ComponentId) -> Option<&ComponentMetadata> {
         self.components.get(id)
-    }
-
-    pub fn len(&self) -> usize {
-        self.components.len()
     }
 }
 
@@ -143,13 +141,7 @@ impl ComponentMetadata {
     }
 
     pub fn scopeless_name(&self) -> SharedString {
-        self.name
-            .clone()
-            .split("::")
-            .last()
-            .unwrap_or(&self.name)
-            .to_string()
-            .into()
+        self.name.clone().split("::").last().unwrap_or(&self.name).to_string().into()
     }
 
     pub fn status(&self) -> ComponentStatus {
@@ -219,11 +211,12 @@ pub trait Component {
     /// An optional description of the component.
     ///
     /// This will be displayed in the component's preview. To show a
-    /// component's doc comment as it's description, derive `Documented`.
+    /// component's doc comment as its description, derive `Documented`
+    /// (re-exported by `ui::component_prelude`).
     ///
     /// Example:
     ///
-    /// ```
+    /// ```ignore
     /// use documented::Documented;
     ///
     /// /// This is a doc comment.
@@ -276,7 +269,7 @@ pub enum ComponentStatus {
 }
 
 impl ComponentStatus {
-    pub fn description(&self) -> &str {
+    pub const fn description(&self) -> &str {
         match self {
             ComponentStatus::WorkInProgress => {
                 "These components are still being designed or refined. \

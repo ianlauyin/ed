@@ -250,7 +250,7 @@ pub(crate) struct SourceMap {
 }
 
 impl SourceMap {
-    pub(crate) fn new(chunks: Vec<(usize, usize)>) -> Self {
+    pub(crate) const fn new(chunks: Vec<(usize, usize)>) -> Self {
         Self { chunks }
     }
 
@@ -356,11 +356,11 @@ const BLOCK_ELEMENTS: &[&str] = &[
 ];
 
 impl HtmlConverter {
-    pub(crate) fn in_link(&self) -> bool {
+    pub(crate) const fn in_link(&self) -> bool {
         self.link_depth > 0
     }
 
-    fn markdown_depth(&self, state: &ParseState) -> usize {
+    const fn markdown_depth(&self, state: &ParseState) -> usize {
         state.depth - self.open_starts
     }
 
@@ -809,7 +809,7 @@ fn push_text(source: &str, state: &mut ParseState, range: Range<usize>, text: Co
     }
 }
 
-fn tag_end(tag: &MarkdownTag) -> MarkdownTagEnd {
+const fn tag_end(tag: &MarkdownTag) -> MarkdownTagEnd {
     match tag {
         MarkdownTag::Paragraph => MarkdownTagEnd::Paragraph,
         MarkdownTag::Heading { level, .. } => MarkdownTagEnd::Heading(*level),

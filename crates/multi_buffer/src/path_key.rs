@@ -1,18 +1,41 @@
-use std::{ops::Range, rc::Rc, sync::Arc};
+use std::ops::Range;
+use std::rc::Rc;
+use std::sync::Arc;
 
-use gpui::{App, AppContext, Context, Entity};
+use gpui::App;
+use gpui::AppContext;
+use gpui::Context;
+use gpui::Entity;
 use itertools::Itertools;
-use language::{Buffer, BufferEditSource, BufferSnapshot};
+use language::Buffer;
+use language::BufferEditSource;
+use language::BufferSnapshot;
 use rope::Point;
-use sum_tree::{Cursor, Dimensions, SumTree};
-use text::{Bias, BufferId, Edit, OffsetRangeExt, Patch};
+use sum_tree::Cursor;
+use sum_tree::Dimensions;
+use sum_tree::SumTree;
+use text::Bias;
+use text::BufferId;
+use text::Edit;
+use text::OffsetRangeExt;
+use text::Patch;
 use util::rel_path::RelPath;
 
-use crate::{
-    Anchor, BufferState, BufferStateSnapshot, DiffChangeKind, Event, Excerpt, ExcerptOffset,
-    ExcerptRange, ExcerptSummary, ExpandExcerptDirection, MultiBuffer, MultiBufferOffset,
-    PathKeyIndex, build_excerpt_ranges, remove_diff_state,
-};
+use crate::Anchor;
+use crate::BufferState;
+use crate::BufferStateSnapshot;
+use crate::DiffChangeKind;
+use crate::Event;
+use crate::Excerpt;
+use crate::ExcerptOffset;
+use crate::ExcerptRange;
+use crate::ExcerptSummary;
+use crate::ExpandExcerptDirection;
+use crate::MultiBuffer;
+use crate::MultiBufferOffset;
+use crate::PathKeyIndex;
+use crate::build_excerpt_ranges;
+use crate::remove_diff_state;
 
 #[derive(PartialEq, Eq, Ord, PartialOrd, Clone, Hash, Debug)]
 pub struct PathKey {
@@ -23,23 +46,14 @@ pub struct PathKey {
 
 impl PathKey {
     pub fn min() -> Self {
-        Self {
-            sort_prefix: None,
-            path: RelPath::empty_arc(),
-        }
+        Self { sort_prefix: None, path: RelPath::empty_arc() }
     }
 
     pub fn sorted(sort_prefix: u64) -> Self {
-        Self {
-            sort_prefix: Some(sort_prefix),
-            path: RelPath::empty_arc(),
-        }
+        Self { sort_prefix: Some(sort_prefix), path: RelPath::empty_arc() }
     }
-    pub fn with_sort_prefix(sort_prefix: u64, path: Arc<RelPath>) -> Self {
-        Self {
-            sort_prefix: Some(sort_prefix),
-            path,
-        }
+    pub const fn with_sort_prefix(sort_prefix: u64, path: Arc<RelPath>) -> Self {
+        Self { sort_prefix: Some(sort_prefix), path }
     }
 
     pub fn for_buffer(buffer: &Entity<Buffer>, cx: &App) -> Self {
@@ -49,9 +63,7 @@ impl PathKey {
         } else {
             Self {
                 sort_prefix: None,
-                path: RelPath::from_unix_str(&buffer.remote_id().to_string())
-                    .unwrap()
-                    .into_arc(),
+                path: RelPath::from_unix_str(&buffer.remote_id().to_string()).unwrap().into_arc(),
             }
         }
     }
@@ -112,12 +124,7 @@ impl MultiBuffer {
         let buffer_snapshot = buffer.read(cx).snapshot();
         let ranges: Vec<_> = ranges.into_iter().collect();
         let excerpt_ranges = build_excerpt_ranges(ranges, context_line_count, &buffer_snapshot);
-        let merged = self.merge_new_with_existing_excerpt_ranges(
-            &path,
-            &buffer_snapshot,
-            excerpt_ranges,
-            cx,
-        );
+        let merged = self.merge_new_with_existing_excerpt_ranges(&path, &buffer_snapshot, excerpt_ranges, cx);
 
         let (inserted, _path_key_index) =
             self.set_merged_excerpt_ranges_for_path(path, buffer, &buffer_snapshot, merged, cx);
@@ -137,9 +144,7 @@ impl MultiBuffer {
             excerpt_ranges.sort_by_key(|range| range.context.start);
             let mut combined_ranges = Vec::new();
             let mut new_ranges = excerpt_ranges.into_iter().peekable();
-            for existing_range in
-                multibuffer_snapshot.excerpts_for_buffer(buffer_snapshot.remote_id())
-            {
+            for existing_range in multibuffer_snapshot.excerpts_for_buffer(buffer_snapshot.remote_id()) {
                 let existing_range = ExcerptRange {
                     context: existing_range.context.to_point(buffer_snapshot),
                     primary: existing_range.primary.to_point(buffer_snapshot),
@@ -195,8 +200,7 @@ impl MultiBuffer {
             let (ranges, merged_excerpt_ranges) = app
                 .background_spawn(async move {
                     let point_ranges = ranges.iter().map(|range| range.to_point(&snapshot));
-                    let excerpt_ranges =
-                        build_excerpt_ranges(point_ranges, context_line_count, &snapshot);
+                    let excerpt_ranges = build_excerpt_ranges(point_ranges, context_line_count, &snapshot);
                     let merged = Self::merge_excerpt_ranges(&excerpt_ranges);
                     (ranges, merged)
                 })
@@ -211,10 +215,7 @@ impl MultiBuffer {
                         merged_excerpt_ranges,
                         cx,
                     );
-                    ranges
-                        .into_iter()
-                        .map(|range| Anchor::range_in_buffer(path_key_index, range))
-                        .collect()
+                    ranges.into_iter().map(|range| Anchor::range_in_buffer(path_key_index, range)).collect()
                 })
                 .ok()
                 .unwrap_or_default()
@@ -233,10 +234,7 @@ impl MultiBuffer {
         }
 
         let snapshot = self.snapshot(cx);
-        let mut sorted_anchors = anchors
-            .into_iter()
-            .filter_map(|anchor| anchor.excerpt_anchor())
-            .collect::<Vec<_>>();
+        let mut sorted_anchors = anchors.into_iter().filter_map(|anchor| anchor.excerpt_anchor()).collect::<Vec<_>>();
         if sorted_anchors.is_empty() {
             return;
         }
@@ -245,10 +243,7 @@ impl MultiBuffer {
         let mut cursor = snapshot.excerpts.cursor::<ExcerptSummary>(());
 
         for (path_index, excerpt_anchors) in &buffers {
-            let path = snapshot
-                .path_keys
-                .get_index(path_index.0 as usize)
-                .expect("anchor from wrong multibuffer");
+            let path = snapshot.path_keys.get_index(path_index.0 as usize).expect("anchor from wrong multibuffer");
 
             let mut excerpt_anchors = excerpt_anchors.peekable();
             let mut ranges = Vec::new();
@@ -257,7 +252,7 @@ impl MultiBuffer {
             let Some((buffer, buffer_snapshot)) = cursor
                 .item()
                 .filter(|excerpt| &excerpt.path_key == path)
-                .map(|excerpt| (excerpt.buffer(&self), excerpt.buffer_snapshot(&snapshot)))
+                .map(|excerpt| (excerpt.buffer(self), excerpt.buffer_snapshot(&snapshot)))
             else {
                 continue;
             };
@@ -271,11 +266,10 @@ impl MultiBuffer {
                 };
 
                 let mut needs_expand = false;
-                while excerpt_anchors.peek().is_some_and(|anchor| {
-                    excerpt
-                        .range
-                        .contains(&anchor.text_anchor(), buffer_snapshot)
-                }) {
+                while excerpt_anchors
+                    .peek()
+                    .is_some_and(|anchor| excerpt.range.contains(&anchor.text_anchor(), buffer_snapshot))
+                {
                     needs_expand = true;
                     excerpt_anchors.next();
                 }
@@ -283,26 +277,22 @@ impl MultiBuffer {
                 if needs_expand {
                     match direction {
                         ExpandExcerptDirection::Up => {
-                            range.context.start.row =
-                                range.context.start.row.saturating_sub(line_count);
+                            range.context.start.row = range.context.start.row.saturating_sub(line_count);
                             range.context.start.column = 0;
                         }
                         ExpandExcerptDirection::Down => {
                             range.context.end.row = (range.context.end.row + line_count)
                                 .min(excerpt.buffer_snapshot(&snapshot).max_point().row);
-                            range.context.end.column = excerpt
-                                .buffer_snapshot(&snapshot)
-                                .line_len(range.context.end.row);
+                            range.context.end.column =
+                                excerpt.buffer_snapshot(&snapshot).line_len(range.context.end.row);
                         }
                         ExpandExcerptDirection::UpAndDown => {
-                            range.context.start.row =
-                                range.context.start.row.saturating_sub(line_count);
+                            range.context.start.row = range.context.start.row.saturating_sub(line_count);
                             range.context.start.column = 0;
                             range.context.end.row = (range.context.end.row + line_count)
                                 .min(excerpt.buffer_snapshot(&snapshot).max_point().row);
-                            range.context.end.column = excerpt
-                                .buffer_snapshot(&snapshot)
-                                .line_len(range.context.end.row);
+                            range.context.end.column =
+                                excerpt.buffer_snapshot(&snapshot).line_len(range.context.end.row);
                         }
                     }
                 }
@@ -332,31 +322,24 @@ impl MultiBuffer {
         let anchor_ranges = new
             .into_iter()
             .map(|r| ExcerptRange {
-                context: buffer_snapshot.anchor_before(r.context.start)
-                    ..buffer_snapshot.anchor_after(r.context.end),
-                primary: buffer_snapshot.anchor_before(r.primary.start)
-                    ..buffer_snapshot.anchor_after(r.primary.end),
+                context: buffer_snapshot.anchor_before(r.context.start)..buffer_snapshot.anchor_after(r.context.end),
+                primary: buffer_snapshot.anchor_before(r.primary.start)..buffer_snapshot.anchor_after(r.primary.end),
             })
             .collect::<Vec<_>>();
         let buffer_snapshot = buffer.read(cx).snapshot();
-        let inserted =
-            self.update_path_excerpts(path.clone(), buffer, &buffer_snapshot, &anchor_ranges, cx);
+        let inserted = self.update_path_excerpts(path.clone(), buffer, &buffer_snapshot, &anchor_ranges, cx);
         let path_key_index = self.get_or_create_path_key_index(&path);
         (inserted, path_key_index)
     }
 
-    pub(crate) fn get_or_create_path_key_index(&mut self, path_key: &PathKey) -> PathKeyIndex {
+    pub(crate) fn get_or_create_path_key_index(&self, path_key: &PathKey) -> PathKeyIndex {
         let mut snapshot = self.snapshot.borrow_mut();
 
         if let Some(existing) = snapshot.path_keys.get_index_of(path_key) {
             return PathKeyIndex(existing as u64);
         }
 
-        PathKeyIndex(
-            Arc::make_mut(&mut snapshot.path_keys)
-                .insert_full(path_key.clone())
-                .0 as u64,
-        )
+        PathKeyIndex(Arc::make_mut(&mut snapshot.path_keys).insert_full(path_key.clone()).0 as u64)
     }
 
     pub fn update_path_excerpts(
@@ -364,20 +347,18 @@ impl MultiBuffer {
         path_key: PathKey,
         buffer: Entity<Buffer>,
         buffer_snapshot: &BufferSnapshot,
-        to_insert: &Vec<ExcerptRange<text::Anchor>>,
+        to_insert: &[ExcerptRange<text::Anchor>],
         cx: &mut Context<Self>,
     ) -> bool {
         let path_key_index = self.get_or_create_path_key_index(&path_key);
-        if let Some(old_path_key) = self
-            .snapshot(cx)
-            .path_for_buffer(buffer_snapshot.remote_id())
+        if let Some(old_path_key) = self.snapshot(cx).path_for_buffer(buffer_snapshot.remote_id())
             && old_path_key != &path_key
         {
             self.remove_excerpts(old_path_key.clone(), cx);
         }
 
-        if to_insert.len() == 0 {
-            self.remove_excerpts(path_key.clone(), cx);
+        if to_insert.is_empty() {
+            self.remove_excerpts(path_key, cx);
 
             return false;
         }
@@ -386,13 +367,11 @@ impl MultiBuffer {
 
         let buffer_id = buffer_snapshot.remote_id();
 
-        let mut snapshot = self.snapshot.get_mut();
-        let mut cursor = snapshot
-            .excerpts
-            .cursor::<Dimensions<PathKey, ExcerptOffset>>(());
+        let snapshot = self.snapshot.get_mut();
+        let mut cursor = snapshot.excerpts.cursor::<Dimensions<PathKey, ExcerptOffset>>(());
         let mut new_excerpts = SumTree::new(());
 
-        let new_ranges = to_insert.clone();
+        let new_ranges = to_insert.to_owned();
         let mut to_insert = to_insert.iter().peekable();
         let mut patch = Patch::empty();
         let mut added_new_excerpt = false;
@@ -402,7 +381,7 @@ impl MultiBuffer {
         // handle the case where the path key used to be associated
         // with a different buffer by removing its excerpts.
         if let Some(excerpt) = cursor.item()
-            && &excerpt.path_key == &path_key
+            && excerpt.path_key == path_key
             && excerpt.buffer_id != buffer_id
         {
             let old_buffer_id = excerpt.buffer_id;
@@ -413,13 +392,8 @@ impl MultiBuffer {
             let before = cursor.position.1;
             cursor.seek_forward(&path_key, Bias::Right);
             let after = cursor.position.1;
-            patch.push(Edit {
-                old: before..after,
-                new: new_excerpts.summary().len()..new_excerpts.summary().len(),
-            });
-            cx.emit(Event::BuffersRemoved {
-                removed_buffer_ids: vec![old_buffer_id],
-            });
+            patch.push(Edit { old: before..after, new: new_excerpts.summary().len()..new_excerpts.summary().len() });
+            cx.emit(Event::BuffersRemoved { removed_buffer_ids: vec![old_buffer_id] });
         }
 
         let mut primary_ranges_changed = false;
@@ -432,8 +406,7 @@ impl MultiBuffer {
             };
             let context_anchors_match = excerpt.range.context == next_excerpt.context;
             if context_anchors_match
-                || excerpt.range.context.to_offset(buffer_snapshot)
-                    == next_excerpt.context.to_offset(buffer_snapshot)
+                || excerpt.range.context.to_offset(buffer_snapshot) == next_excerpt.context.to_offset(buffer_snapshot)
             {
                 let before = new_excerpts.summary().len();
                 new_excerpts.update_last(
@@ -463,22 +436,14 @@ impl MultiBuffer {
                     let old_start = cursor.position.1;
                     let new_start = new_excerpts.summary().len();
                     let text_len = context.end - context.start;
-                    let first_char_len = buffer_snapshot
-                        .chars_at(context.start)
-                        .next()
-                        .map_or(0, char::len_utf8)
-                        .min(text_len);
-                    let last_char_len = buffer_snapshot
-                        .reversed_chars_at(context.end)
-                        .next()
-                        .map_or(0, char::len_utf8)
-                        .min(text_len);
+                    let first_char_len =
+                        buffer_snapshot.chars_at(context.start).next().map_or(0, char::len_utf8).min(text_len);
+                    let last_char_len =
+                        buffer_snapshot.reversed_chars_at(context.end).next().map_or(0, char::len_utf8).min(text_len);
                     for range in [0..first_char_len, text_len - last_char_len..text_len] {
                         patch.push_maybe_empty(Edit {
-                            old: old_start + MultiBufferOffset(range.start)
-                                ..old_start + MultiBufferOffset(range.end),
-                            new: new_start + MultiBufferOffset(range.start)
-                                ..new_start + MultiBufferOffset(range.end),
+                            old: old_start + MultiBufferOffset(range.start)..old_start + MultiBufferOffset(range.end),
+                            new: new_start + MultiBufferOffset(range.start)..new_start + MultiBufferOffset(range.end),
                         });
                     }
                     Excerpt::new(
@@ -495,21 +460,13 @@ impl MultiBuffer {
                 continue;
             }
 
-            if excerpt
-                .range
-                .context
-                .start
-                .cmp(&next_excerpt.context.start, &buffer_snapshot)
-                .is_le()
-            {
+            if excerpt.range.context.start.cmp(&next_excerpt.context.start, buffer_snapshot).is_le() {
                 // remove old excerpt
                 let before = cursor.position.1;
                 cursor.next();
                 let after = cursor.position.1;
-                patch.push(Edit {
-                    old: before..after,
-                    new: new_excerpts.summary().len()..new_excerpts.summary().len(),
-                });
+                patch
+                    .push(Edit { old: before..after, new: new_excerpts.summary().len()..new_excerpts.summary().len() });
             } else {
                 // insert new excerpt
                 let next_excerpt = to_insert.next().unwrap();
@@ -522,20 +479,11 @@ impl MultiBuffer {
                     (),
                 );
                 new_excerpts.push(
-                    Excerpt::new(
-                        path_key.clone(),
-                        path_key_index,
-                        &buffer_snapshot,
-                        next_excerpt.clone(),
-                        false,
-                    ),
+                    Excerpt::new(path_key.clone(), path_key_index, buffer_snapshot, next_excerpt.clone(), false),
                     (),
                 );
                 let after = new_excerpts.summary().len();
-                patch.push_maybe_empty(Edit {
-                    old: cursor.position.1..cursor.position.1,
-                    new: before..after,
-                });
+                patch.push_maybe_empty(Edit { old: cursor.position.1..cursor.position.1, new: before..after });
             }
         }
 
@@ -548,23 +496,16 @@ impl MultiBuffer {
             new_excerpts.update_last(
                 |excerpt| {
                     if excerpt.has_trailing_newline {
-                        before.0.0 = before
-                            .0
-                            .0
-                            .checked_sub(1)
-                            .expect("should have preceding excerpt");
+                        before.0.0 = before.0.0.checked_sub(1).expect("should have preceding excerpt");
                         excerpt.has_trailing_newline = false;
                     }
                 },
                 (),
             );
         }
-        patch.push(Edit {
-            old: before..after,
-            new: new_excerpts.summary().len()..new_excerpts.summary().len(),
-        });
+        patch.push(Edit { old: before..after, new: new_excerpts.summary().len()..new_excerpts.summary().len() });
 
-        while let Some(next_excerpt) = to_insert.next() {
+        for next_excerpt in to_insert {
             added_new_excerpt = true;
             let before = new_excerpts.summary().len();
             new_excerpts.update_last(
@@ -573,21 +514,10 @@ impl MultiBuffer {
                 },
                 (),
             );
-            new_excerpts.push(
-                Excerpt::new(
-                    path_key.clone(),
-                    path_key_index,
-                    &buffer_snapshot,
-                    next_excerpt.clone(),
-                    false,
-                ),
-                (),
-            );
+            new_excerpts
+                .push(Excerpt::new(path_key.clone(), path_key_index, buffer_snapshot, next_excerpt.clone(), false), ());
             let after = new_excerpts.summary().len();
-            patch.push_maybe_empty(Edit {
-                old: cursor.position.1..cursor.position.1,
-                new: before..after,
-            });
+            patch.push_maybe_empty(Edit { old: cursor.position.1..cursor.position.1, new: before..after });
         }
 
         let suffix_start = cursor.position.1;
@@ -599,10 +529,8 @@ impl MultiBuffer {
                 |prev_excerpt| {
                     if !prev_excerpt.has_trailing_newline {
                         prev_excerpt.has_trailing_newline = true;
-                        patch.push(Edit {
-                            old: suffix_start..suffix_start,
-                            new: before..before + MultiBufferOffset(1),
-                        });
+                        patch
+                            .push(Edit { old: suffix_start..suffix_start, new: before..before + MultiBufferOffset(1) });
                     }
                 },
                 (),
@@ -611,8 +539,7 @@ impl MultiBuffer {
         new_excerpts.append(suffix, ());
         drop(cursor);
 
-        let edits =
-            include_preceding_separators(&snapshot.excerpts, &new_excerpts, patch.into_inner());
+        let edits = include_preceding_separators(&snapshot.excerpts, &new_excerpts, patch.into_inner());
         snapshot.excerpts = new_excerpts;
         snapshot.buffers.insert(
             buffer_id,
@@ -641,71 +568,49 @@ impl MultiBuffer {
             snapshot.trailing_excerpt_update_count += 1;
         }
 
-        let edits = Self::sync_diff_transforms(&mut snapshot, edits, DiffChangeKind::BufferEdited);
+        let edits = Self::sync_diff_transforms(snapshot, edits, DiffChangeKind::BufferEdited);
         if !edits.is_empty() {
             self.subscriptions.publish(edits);
-            cx.emit(Event::Edited {
-                edited_buffer: None,
-                source: BufferEditSource::User,
-            });
-            cx.emit(Event::BufferRangesUpdated {
-                buffer,
-                path_key: path_key.clone(),
-                ranges: new_ranges,
-            });
+            cx.emit(Event::Edited { edited_buffer: None, source: BufferEditSource::User });
+            cx.emit(Event::BufferRangesUpdated { buffer, path_key: path_key.clone(), ranges: new_ranges });
             cx.notify();
         } else if primary_ranges_changed {
-            cx.emit(Event::BufferRangesUpdated {
-                buffer,
-                path_key: path_key.clone(),
-                ranges: new_ranges,
-            });
+            cx.emit(Event::BufferRangesUpdated { buffer, path_key: path_key.clone(), ranges: new_ranges });
             cx.notify();
         }
 
         added_new_excerpt
     }
 
-    pub fn ranges_grouped_by_excerpt_path(
-        &self,
-        ranges: &[Range<Anchor>],
-    ) -> Vec<(PathKey, Range<usize>)> {
+    pub fn ranges_grouped_by_excerpt_path(&self, ranges: &[Range<Anchor>]) -> Vec<(PathKey, Range<usize>)> {
         debug_assert!(
-            ranges
-                .iter()
-                .all(|range| matches!(range.start, Anchor::Excerpt(_))),
+            ranges.iter().all(|range| matches!(range.start, Anchor::Excerpt(_))),
             "ranges must start with excerpt anchors, Min/Max starts stall the grouping"
         );
         let snapshot = self.snapshot.borrow();
         let mut grouped: Vec<(PathKey, Range<usize>)> = Vec::new();
         let mut next_range_index = 0;
         for excerpt in snapshot.excerpts.iter() {
-            while ranges
-                .get(next_range_index)
-                .is_some_and(|range| match &range.start {
-                    Anchor::Excerpt(anchor) => {
-                        anchor.path != excerpt.path_key_index
-                            && snapshot
-                                .path_keys
-                                .get_index(anchor.path.0 as usize)
-                                .is_some_and(|path| path < &excerpt.path_key)
-                    }
-                    Anchor::Min | Anchor::Max => false,
-                })
-            {
+            while ranges.get(next_range_index).is_some_and(|range| match &range.start {
+                Anchor::Excerpt(anchor) => {
+                    anchor.path != excerpt.path_key_index
+                        && snapshot
+                            .path_keys
+                            .get_index(anchor.path.0 as usize)
+                            .is_some_and(|path| path < &excerpt.path_key)
+                }
+                Anchor::Min | Anchor::Max => false,
+            }) {
                 next_range_index += 1;
             }
             let span_start = match grouped.last() {
                 Some((last_path, span)) if *last_path == excerpt.path_key => span.start,
                 _ => next_range_index,
             };
-            while ranges
-                .get(next_range_index)
-                .is_some_and(|range| match &range.start {
-                    Anchor::Excerpt(anchor) => anchor.path == excerpt.path_key_index,
-                    Anchor::Min | Anchor::Max => false,
-                })
-            {
+            while ranges.get(next_range_index).is_some_and(|range| match &range.start {
+                Anchor::Excerpt(anchor) => anchor.path == excerpt.path_key_index,
+                Anchor::Min | Anchor::Max => false,
+            }) {
                 next_range_index += 1;
             }
             match grouped.last_mut() {
@@ -731,11 +636,9 @@ impl MultiBuffer {
         assert_eq!(self.history.transaction_depth(), 0);
         self.sync_mut(cx);
 
-        let mut snapshot = self.snapshot.get_mut();
+        let snapshot = self.snapshot.get_mut();
         let old_len = snapshot.excerpts.summary().len();
-        let mut cursor = snapshot
-            .excerpts
-            .cursor::<Dimensions<PathKey, ExcerptOffset>>(());
+        let mut cursor = snapshot.excerpts.cursor::<Dimensions<PathKey, ExcerptOffset>>(());
         let mut new_excerpts = SumTree::new(());
         let mut excerpt_edits: Vec<Edit<ExcerptOffset>> = Vec::new();
         let mut removed_buffer_ids = Vec::new();
@@ -758,18 +661,13 @@ impl MultiBuffer {
                 }
                 _ => {
                     let new_position = new_excerpts.summary().len();
-                    excerpt_edits.push(Edit {
-                        old: edit_start..edit_end,
-                        new: new_position..new_position,
-                    });
+                    excerpt_edits.push(Edit { old: edit_start..edit_end, new: new_position..new_position });
                 }
             }
         }
         let suffix = cursor.suffix();
-        let changed_trailing_excerpt = suffix.is_empty()
-            && excerpt_edits
-                .last()
-                .is_some_and(|last_edit| last_edit.old.end == old_len);
+        let changed_trailing_excerpt =
+            suffix.is_empty() && excerpt_edits.last().is_some_and(|last_edit| last_edit.old.end == old_len);
         new_excerpts.append(suffix, ());
         drop(cursor);
 
@@ -792,20 +690,10 @@ impl MultiBuffer {
                     if excerpt.has_trailing_newline {
                         excerpt.has_trailing_newline = false;
                         if let Some(last_edit) = excerpt_edits.last_mut() {
-                            last_edit.old.start.0.0 = last_edit
-                                .old
-                                .start
-                                .0
-                                .0
-                                .checked_sub(1)
-                                .expect("should have at least one excerpt");
-                            last_edit.new.start.0.0 = last_edit
-                                .new
-                                .start
-                                .0
-                                .0
-                                .checked_sub(1)
-                                .expect("should have at least one excerpt");
+                            last_edit.old.start.0.0 =
+                                last_edit.old.start.0.0.checked_sub(1).expect("should have at least one excerpt");
+                            last_edit.new.start.0.0 =
+                                last_edit.new.start.0.0.checked_sub(1).expect("should have at least one excerpt");
                             last_edit.new.end = last_edit.new.start;
                         }
                     }
@@ -814,19 +702,14 @@ impl MultiBuffer {
             );
         }
 
-        let excerpt_edits =
-            include_preceding_separators(&snapshot.excerpts, &new_excerpts, excerpt_edits);
+        let excerpt_edits = include_preceding_separators(&snapshot.excerpts, &new_excerpts, excerpt_edits);
         snapshot.excerpts = new_excerpts;
 
-        let edits =
-            Self::sync_diff_transforms(&mut snapshot, excerpt_edits, DiffChangeKind::BufferEdited);
+        let edits = Self::sync_diff_transforms(snapshot, excerpt_edits, DiffChangeKind::BufferEdited);
         if !edits.is_empty() {
             self.subscriptions.publish(edits);
         }
-        cx.emit(Event::Edited {
-            edited_buffer: None,
-            source: BufferEditSource::User,
-        });
+        cx.emit(Event::Edited { edited_buffer: None, source: BufferEditSource::User });
         cx.notify();
     }
 
@@ -834,10 +717,8 @@ impl MultiBuffer {
         assert_eq!(self.history.transaction_depth(), 0);
         self.sync_mut(cx);
 
-        let mut snapshot = self.snapshot.get_mut();
-        let mut cursor = snapshot
-            .excerpts
-            .cursor::<Dimensions<PathKey, ExcerptOffset>>(());
+        let snapshot = self.snapshot.get_mut();
+        let mut cursor = snapshot.excerpts.cursor::<Dimensions<PathKey, ExcerptOffset>>(());
         let mut new_excerpts = SumTree::new(());
         new_excerpts.append(cursor.slice(&path, Bias::Left), ());
         let mut edit_start = cursor.position.1;
@@ -858,9 +739,7 @@ impl MultiBuffer {
             remove_diff_state(&mut snapshot.diffs, buffer_id);
             self.buffers.remove(&buffer_id);
             self.diffs.remove(&buffer_id);
-            cx.emit(Event::BuffersRemoved {
-                removed_buffer_ids: vec![buffer_id],
-            })
+            cx.emit(Event::BuffersRemoved { removed_buffer_ids: vec![buffer_id] })
         }
         drop(cursor);
         if changed_trailing_excerpt {
@@ -869,35 +748,23 @@ impl MultiBuffer {
                 |excerpt| {
                     if excerpt.has_trailing_newline {
                         excerpt.has_trailing_newline = false;
-                        edit_start.0.0 = edit_start
-                            .0
-                            .0
-                            .checked_sub(1)
-                            .expect("should have at least one excerpt");
+                        edit_start.0.0 = edit_start.0.0.checked_sub(1).expect("should have at least one excerpt");
                     }
                 },
                 (),
             )
         }
 
-        let edit = Edit {
-            old: edit_start..edit_end,
-            new: edit_start..edit_start,
-        };
-        let excerpt_edits =
-            include_preceding_separators(&snapshot.excerpts, &new_excerpts, vec![edit]);
+        let edit = Edit { old: edit_start..edit_end, new: edit_start..edit_start };
+        let excerpt_edits = include_preceding_separators(&snapshot.excerpts, &new_excerpts, vec![edit]);
         snapshot.excerpts = new_excerpts;
 
-        let edits =
-            Self::sync_diff_transforms(&mut snapshot, excerpt_edits, DiffChangeKind::BufferEdited);
+        let edits = Self::sync_diff_transforms(snapshot, excerpt_edits, DiffChangeKind::BufferEdited);
         if !edits.is_empty() {
             self.subscriptions.publish(edits);
         }
 
-        cx.emit(Event::Edited {
-            edited_buffer: None,
-            source: BufferEditSource::User,
-        });
+        cx.emit(Event::Edited { edited_buffer: None, source: BufferEditSource::User });
         cx.notify();
     }
 }
@@ -911,9 +778,7 @@ fn include_preceding_separators(
     let mut new_cursor = new_excerpts.cursor::<ExcerptOffset>(());
     let mut widened = Patch::empty();
     for mut edit in edits {
-        if follows_separator(&mut old_cursor, edit.old.start)
-            && follows_separator(&mut new_cursor, edit.new.start)
-        {
+        if follows_separator(&mut old_cursor, edit.old.start) && follows_separator(&mut new_cursor, edit.new.start) {
             edit.old.start.0.0 -= 1;
             edit.new.start.0.0 -= 1;
         }
@@ -924,8 +789,5 @@ fn include_preceding_separators(
 
 fn follows_separator(cursor: &mut Cursor<Excerpt, ExcerptOffset>, offset: ExcerptOffset) -> bool {
     cursor.seek(&offset, Bias::Left);
-    cursor.end() == offset
-        && cursor
-            .item()
-            .is_some_and(|excerpt| excerpt.has_trailing_newline)
+    cursor.end() == offset && cursor.item().is_some_and(|excerpt| excerpt.has_trailing_newline)
 }

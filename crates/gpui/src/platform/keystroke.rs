@@ -1,9 +1,10 @@
+use std::error::Error;
+use std::fmt::Display;
+use std::fmt::Write;
+
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use std::{
-    error::Error,
-    fmt::{Display, Write},
-};
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::PlatformKeyboardMapper;
 
@@ -51,11 +52,7 @@ impl Error for InvalidKeystrokeError {}
 
 impl Display for InvalidKeystrokeError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "Invalid keystroke \"{}\". {}",
-            self.keystroke, KEYSTROKE_PARSE_EXPECTED_MESSAGE
-        )
+        write!(f, "Invalid keystroke \"{}\". {}", self.keystroke, KEYSTROKE_PARSE_EXPECTED_MESSAGE)
     }
 }
 
@@ -74,16 +71,9 @@ impl Keystroke {
     /// This method assumes that `self` was typed and `target' is in the keymap, and checks
     /// both possibilities for self against the target.
     pub fn should_match(&self, target: &KeybindingKeystroke) -> bool {
-        if let Some(key_char) = self
-            .key_char
-            .as_ref()
-            .filter(|key_char| key_char != &&self.key)
-        {
-            let ime_modifiers = Modifiers {
-                control: self.modifiers.control,
-                platform: self.modifiers.platform,
-                ..Default::default()
-            };
+        if let Some(key_char) = self.key_char.as_ref().filter(|key_char| key_char != &&self.key) {
+            let ime_modifiers =
+                Modifiers { control: self.modifiers.control, platform: self.modifiers.platform, ..Default::default() };
 
             if &target.inner.key == key_char && target.inner.modifiers == ime_modifiers {
                 return true;
@@ -150,9 +140,7 @@ impl Keystroke {
                     key_char = Some(String::from(&next[1..]));
                     components.next();
                 } else {
-                    return Err(InvalidKeystrokeError {
-                        keystroke: source.to_owned(),
-                    });
+                    return Err(InvalidKeystrokeError { keystroke: source.to_owned() });
                 }
                 continue;
             }
@@ -189,15 +177,9 @@ impl Keystroke {
             }
         });
 
-        let key = key.ok_or_else(|| InvalidKeystrokeError {
-            keystroke: source.to_owned(),
-        })?;
+        let key = key.ok_or_else(|| InvalidKeystrokeError { keystroke: source.to_owned() })?;
 
-        Ok(Keystroke {
-            modifiers,
-            key,
-            key_char,
-        })
+        Ok(Keystroke { modifiers, key, key_char })
     }
 
     /// Produces a representation of this key that Parse can understand.
@@ -210,10 +192,7 @@ impl Keystroke {
     pub fn is_ime_in_progress(&self) -> bool {
         self.key_char.is_none()
             && (is_printable_key(&self.key) || self.key.is_empty())
-            && !(self.modifiers.platform
-                || self.modifiers.control
-                || self.modifiers.function
-                || self.modifiers.alt)
+            && !(self.modifiers.platform || self.modifiers.control || self.modifiers.function || self.modifiers.alt)
     }
 
     /// Returns a new keystroke with the key_char filled.
@@ -255,12 +234,12 @@ impl KeybindingKeystroke {
     }
 
     /// Create a new keybinding keystroke from the given keystroke, without any platform-specific mapping.
-    pub fn from_keystroke(keystroke: Keystroke) -> Self {
+    pub const fn from_keystroke(keystroke: Keystroke) -> Self {
         KeybindingKeystroke { inner: keystroke }
     }
 
     /// Returns the GPUI representation of the keystroke.
-    pub fn inner(&self) -> &Keystroke {
+    pub const fn inner(&self) -> &Keystroke {
         &self.inner
     }
 
@@ -269,8 +248,8 @@ impl KeybindingKeystroke {
     /// Platform-specific behavior:
     /// - On macOS and Linux, this modifiers is the same as `inner.modifiers`, which is the GPUI representation of the keystroke.
     /// - On Windows, this modifiers is the display modifiers, for example, a `ctrl-@` keystroke will have `inner.modifiers` as
-    /// `Modifiers::control()` and `display_modifiers` as `Modifiers::control_shift()`.
-    pub fn modifiers(&self) -> &Modifiers {
+    ///   `Modifiers::control()` and `display_modifiers` as `Modifiers::control_shift()`.
+    pub const fn modifiers(&self) -> &Modifiers {
         &self.inner.modifiers
     }
 
@@ -284,7 +263,7 @@ impl KeybindingKeystroke {
     }
 
     /// Sets the modifiers. On Windows this modifies both `inner.modifiers` and `display_modifiers`.
-    pub fn set_modifiers(&mut self, modifiers: Modifiers) {
+    pub const fn set_modifiers(&mut self, modifiers: Modifiers) {
         self.inner.modifiers = modifiers;
     }
 
@@ -401,7 +380,7 @@ pub struct Modifiers {
 
 impl Modifiers {
     /// Returns whether any modifier key is pressed.
-    pub fn modified(&self) -> bool {
+    pub const fn modified(&self) -> bool {
         self.control || self.alt || self.shift || self.platform || self.function
     }
 
@@ -409,7 +388,7 @@ impl Modifiers {
     ///
     /// On macOS, this is the command key.
     /// On Linux and Windows, this is the control key.
-    pub fn secondary(&self) -> bool {
+    pub const fn secondary(&self) -> bool {
         #[cfg(target_os = "macos")]
         {
             self.platform
@@ -422,12 +401,8 @@ impl Modifiers {
     }
 
     /// Returns how many modifier keys are pressed.
-    pub fn number_of_modifiers(&self) -> u8 {
-        self.control as u8
-            + self.alt as u8
-            + self.shift as u8
-            + self.platform as u8
-            + self.function as u8
+    pub const fn number_of_modifiers(&self) -> u8 {
+        self.control as u8 + self.alt as u8 + self.shift as u8 + self.platform as u8 + self.function as u8
     }
 
     /// Returns [`Modifiers`] with no modifiers.
@@ -437,95 +412,60 @@ impl Modifiers {
 
     /// Returns [`Modifiers`] with just the command key.
     pub fn command() -> Modifiers {
-        Modifiers {
-            platform: true,
-            ..Default::default()
-        }
+        Modifiers { platform: true, ..Default::default() }
     }
 
     /// A Returns [`Modifiers`] with just the secondary key pressed.
     pub fn secondary_key() -> Modifiers {
         #[cfg(target_os = "macos")]
         {
-            Modifiers {
-                platform: true,
-                ..Default::default()
-            }
+            Modifiers { platform: true, ..Default::default() }
         }
 
         #[cfg(target_os = "linux")]
         {
-            Modifiers {
-                control: true,
-                ..Default::default()
-            }
+            Modifiers { control: true, ..Default::default() }
         }
     }
 
     /// Returns [`Modifiers`] with just the windows key.
     pub fn windows() -> Modifiers {
-        Modifiers {
-            platform: true,
-            ..Default::default()
-        }
+        Modifiers { platform: true, ..Default::default() }
     }
 
     /// Returns [`Modifiers`] with just the super key.
     pub fn super_key() -> Modifiers {
-        Modifiers {
-            platform: true,
-            ..Default::default()
-        }
+        Modifiers { platform: true, ..Default::default() }
     }
 
     /// Returns [`Modifiers`] with just control.
     pub fn control() -> Modifiers {
-        Modifiers {
-            control: true,
-            ..Default::default()
-        }
+        Modifiers { control: true, ..Default::default() }
     }
 
     /// Returns [`Modifiers`] with just alt.
     pub fn alt() -> Modifiers {
-        Modifiers {
-            alt: true,
-            ..Default::default()
-        }
+        Modifiers { alt: true, ..Default::default() }
     }
 
     /// Returns [`Modifiers`] with just shift.
     pub fn shift() -> Modifiers {
-        Modifiers {
-            shift: true,
-            ..Default::default()
-        }
+        Modifiers { shift: true, ..Default::default() }
     }
 
     /// Returns [`Modifiers`] with just function.
     pub fn function() -> Modifiers {
-        Modifiers {
-            function: true,
-            ..Default::default()
-        }
+        Modifiers { function: true, ..Default::default() }
     }
 
     /// Returns [`Modifiers`] with command + shift.
     pub fn command_shift() -> Modifiers {
-        Modifiers {
-            shift: true,
-            platform: true,
-            ..Default::default()
-        }
+        Modifiers { shift: true, platform: true, ..Default::default() }
     }
 
     /// Returns [`Modifiers`] with command + shift.
     pub fn control_shift() -> Modifiers {
-        Modifiers {
-            shift: true,
-            control: true,
-            ..Default::default()
-        }
+        Modifiers { shift: true, control: true, ..Default::default() }
     }
 
     /// Checks if this [`Modifiers`] is a subset of another [`Modifiers`].
@@ -700,6 +640,6 @@ fn unparse(modifiers: &Modifiers, key: &str) -> String {
     if modifiers.shift {
         result.push_str("shift-");
     }
-    result.push_str(&key);
+    result.push_str(key);
     result
 }

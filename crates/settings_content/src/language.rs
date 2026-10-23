@@ -1,12 +1,18 @@
 use std::num::NonZeroU32;
+use std::sync::Arc;
 
 use collections::HashMap;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use settings_macros::{MergeFrom, with_fallible_options};
-use std::sync::Arc;
+use serde::Deserialize;
+use serde::Serialize;
+use settings_macros::MergeFrom;
+use settings_macros::with_fallible_options;
 
-use crate::{DocumentFoldingRanges, DocumentSymbols, ExtendingSet, SemanticTokens, merge_from};
+use crate::DocumentFoldingRanges;
+use crate::DocumentSymbols;
+use crate::ExtendingSet;
+use crate::SemanticTokens;
+use crate::merge_from;
 
 /// The state of the modifier keys at some point in time
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema, MergeFrom)]
@@ -65,10 +71,10 @@ impl merge_from::MergeFrom for AllLanguageSettingsContent {
         // A user's language-specific settings override default language-specific settings.
         for (language_name, user_language_settings) in &other.languages.0 {
             if let Some(existing) = self.languages.0.get_mut(language_name) {
-                existing.merge_from(&user_language_settings);
+                existing.merge_from(user_language_settings);
             } else {
                 let mut new_settings = self.defaults.clone();
-                new_settings.merge_from(&user_language_settings);
+                new_settings.merge_from(user_language_settings);
 
                 self.languages.0.insert(language_name.clone(), new_settings);
             }
@@ -501,7 +507,7 @@ impl InlayHintKind {
     }
 
     /// Returns the name of this [`InlayHintKind`].
-    pub fn name(&self) -> &'static str {
+    pub const fn name(&self) -> &'static str {
         match self {
             InlayHintKind::Type => "type",
             InlayHintKind::Parameter => "parameter",
@@ -737,12 +743,10 @@ impl From<LanguageServerVariantContent> for LanguageServerFormatterSpecifier {
 impl From<LanguageServerFormatterSpecifier> for LanguageServerVariantContent {
     fn from(value: LanguageServerFormatterSpecifier) -> Self {
         match value {
-            LanguageServerFormatterSpecifier::Specific { name } => Self::Specific {
-                language_server: LanguageServerSpecifierContent { name: Some(name) },
-            },
-            LanguageServerFormatterSpecifier::Current => {
-                Self::Current(CurrentLanguageServerContent::LanguageServer)
+            LanguageServerFormatterSpecifier::Specific { name } => {
+                Self::Specific { language_server: LanguageServerSpecifierContent { name: Some(name) } }
             }
+            LanguageServerFormatterSpecifier::Current => Self::Current(CurrentLanguageServerContent::LanguageServer),
         }
     }
 }
@@ -751,9 +755,7 @@ impl From<LanguageServerFormatterSpecifier> for LanguageServerVariantContent {
 #[serde(rename_all = "snake_case", untagged)]
 enum LanguageServerVariantContent {
     /// Format code using a specific language server.
-    Specific {
-        language_server: LanguageServerSpecifierContent,
-    },
+    Specific { language_server: LanguageServerSpecifierContent },
     /// Format code using the current language server.
     Current(CurrentLanguageServerContent),
 }

@@ -1,24 +1,49 @@
-use anyhow::{Context as _, Result};
-use db::kvp::KeyValueStore;
-use gpui::{
-    App, AsyncWindowContext, Context, DismissEvent, EventEmitter, FocusHandle, Focusable,
-    PromptButton, PromptLevel, Render, WeakEntity, Window,
-};
 use std::ffi::OsString;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use ui::{
-    ActiveTheme, Color, CommonAnimationExt, Icon, IconName, IconSize, IntoElement, Label,
-    LabelCommon, LabelSize, ParentElement, Styled, StyledExt, div, h_flex, v_flex,
-};
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+
+use anyhow::Context as _;
+use anyhow::Result;
+use db::kvp::KeyValueStore;
+use gpui::App;
+use gpui::AsyncWindowContext;
+use gpui::Context;
+use gpui::DismissEvent;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::PromptButton;
+use gpui::PromptLevel;
+use gpui::Render;
+use gpui::WeakEntity;
+use gpui::Window;
+use ui::ActiveTheme;
+use ui::Color;
+use ui::CommonAnimationExt;
+use ui::Icon;
+use ui::IconName;
+use ui::IconSize;
+use ui::IntoElement;
+use ui::Label;
+use ui::LabelCommon;
+use ui::LabelSize;
+use ui::ParentElement;
+use ui::Styled;
+use ui::StyledExt;
+use ui::div;
+use ui::h_flex;
+use ui::v_flex;
 use util::ResultExt;
 use util::command::new_command;
-use workspace::{ModalView, MultiWorkspace};
+use workspace::ModalView;
+use workspace::MultiWorkspace;
 
 const DONT_ASK_AGAIN_KEY: &str = "move_to_applications_dont_ask_again";
 static PROMPTED_THIS_SESSION: AtomicBool = AtomicBool::new(false);
 
-pub fn init(cx: &mut App) {
+pub fn init(cx: &App) {
     let kvp = KeyValueStore::global(cx);
     if matches!(kvp.read_kvp(DONT_ASK_AGAIN_KEY), Ok(Some(value)) if value == "true") {
         return;
@@ -65,23 +90,13 @@ impl MoveToApplicationsRequest {
         Ok(Some(Self { app_path }))
     }
 
-    async fn prompt(
-        self,
-        workspace: WeakEntity<MultiWorkspace>,
-        cx: &mut AsyncWindowContext,
-    ) -> Result<()> {
+    async fn prompt(self, workspace: WeakEntity<MultiWorkspace>, cx: &mut AsyncWindowContext) -> Result<()> {
         let response = cx
             .prompt(
                 PromptLevel::Info,
                 "Move Zed to Applications?",
-                Some(
-                    "Zed is running from a temporary location. Move it to Applications to finish installing it.",
-                ),
-                &[
-                    PromptButton::ok("Yes"),
-                    PromptButton::cancel("No"),
-                    PromptButton::new("Don't ask me again"),
-                ],
+                Some("Zed is running from a temporary location. Move it to Applications to finish installing it."),
+                &[PromptButton::ok("Yes"), PromptButton::cancel("No"), PromptButton::new("Don't ask me again")],
             )
             .await?;
 
@@ -89,8 +104,7 @@ impl MoveToApplicationsRequest {
             0 => {
                 workspace
                     .update_in(cx, |workspace, window, cx| {
-                        workspace
-                            .toggle_modal(window, cx, |_window, cx| InstallingZedModal::new(cx));
+                        workspace.toggle_modal(window, cx, |_window, cx| InstallingZedModal::new(cx));
                     })
                     .ok();
                 if let Err(error) = move_to_applications(&self.app_path, cx).await {
@@ -113,8 +127,7 @@ impl MoveToApplicationsRequest {
             }
             2 => {
                 let kvp = cx.update(|_window, cx| KeyValueStore::global(cx))?;
-                kvp.write_kvp(DONT_ASK_AGAIN_KEY.to_string(), "true".to_string())
-                    .await?;
+                kvp.write_kvp(DONT_ASK_AGAIN_KEY.to_string(), "true".to_string()).await?;
             }
             _ => {}
         }
@@ -129,11 +142,8 @@ pub struct InstallingZedModal {
 }
 
 impl InstallingZedModal {
-    fn new(cx: &mut Context<Self>) -> Self {
-        Self {
-            focus_handle: cx.focus_handle(),
-            finished: false,
-        }
+    fn new(cx: &Context<Self>) -> Self {
+        Self { focus_handle: cx.focus_handle(), finished: false }
     }
 
     fn finished(&mut self, cx: &mut Context<Self>) {
@@ -145,11 +155,7 @@ impl InstallingZedModal {
 impl EventEmitter<DismissEvent> for InstallingZedModal {}
 
 impl ModalView for InstallingZedModal {
-    fn on_before_dismiss(
-        &mut self,
-        _window: &mut Window,
-        _: &mut Context<Self>,
-    ) -> workspace::DismissDecision {
+    fn on_before_dismiss(&mut self, _window: &mut Window, _: &mut Context<Self>) -> workspace::DismissDecision {
         workspace::DismissDecision::Dismiss(self.finished)
     }
 
@@ -194,22 +200,18 @@ impl Render for InstallingZedModal {
                             .with_rotate_animation(3),
                     )
                     .child(
-                        v_flex()
-                            .gap_1()
-                            .child(Label::new("Moving Zed to Applications"))
-                            .child(
-                                Label::new("Zed will reopen when installation is complete.")
-                                    .size(LabelSize::Small)
-                                    .color(Color::Muted),
-                            ),
+                        v_flex().gap_1().child(Label::new("Moving Zed to Applications")).child(
+                            Label::new("Zed will reopen when installation is complete.")
+                                .size(LabelSize::Small)
+                                .color(Color::Muted),
+                        ),
                     ),
             )
     }
 }
 
 fn should_offer_to_move(app_path: &Path) -> bool {
-    app_path.starts_with(Path::new("/Volumes"))
-        || app_path.to_string_lossy().contains("/AppTranslocation/")
+    app_path.starts_with(Path::new("/Volumes")) || app_path.to_string_lossy().contains("/AppTranslocation/")
 }
 
 async fn move_to_applications(app_path: &Path, cx: &mut AsyncWindowContext) -> Result<()> {
@@ -218,20 +220,13 @@ async fn move_to_applications(app_path: &Path, cx: &mut AsyncWindowContext) -> R
 }
 
 async fn install_destination(app_path: &Path) -> Result<PathBuf> {
-    let app_name = app_path
-        .file_name()
-        .context("invalid app path: missing app bundle name")?;
+    let app_name = app_path.file_name().context("invalid app path: missing app bundle name")?;
 
     let system_destination = Path::new("/Applications").join(app_name);
     if system_destination.exists() {
         copy_app_bundle(app_path, &system_destination)
             .await
-            .with_context(|| {
-                format!(
-                    "failed to replace existing app at {}",
-                    system_destination.display()
-                )
-            })?;
+            .with_context(|| format!("failed to replace existing app at {}", system_destination.display()))?;
         return Ok(system_destination);
     }
 
@@ -240,46 +235,33 @@ async fn install_destination(app_path: &Path) -> Result<PathBuf> {
     {
         copy_app_bundle(app_path, &user_destination)
             .await
-            .with_context(|| {
-                format!(
-                    "failed to replace existing app at {}",
-                    user_destination.display()
-                )
-            })?;
+            .with_context(|| format!("failed to replace existing app at {}", user_destination.display()))?;
         return Ok(user_destination);
     }
 
     match copy_app_bundle(app_path, &system_destination).await {
         Ok(()) => Ok(system_destination),
         Err(system_error) => {
-            let user_applications_directory = user_applications_directory()
-                .context("could not determine a writable Applications directory")?;
+            let user_applications_directory =
+                user_applications_directory().context("could not determine a writable Applications directory")?;
             smol::fs::create_dir_all(&user_applications_directory)
                 .await
-                .with_context(|| {
-                    format!("failed to create {}", user_applications_directory.display())
-                })?;
+                .with_context(|| format!("failed to create {}", user_applications_directory.display()))?;
             let user_destination = user_applications_directory.join(app_name);
-            copy_app_bundle(app_path, &user_destination)
-                .await
-                .with_context(|| {
-                    format!(
-                        "failed to copy app to {} after system Applications copy failed: {system_error:#}",
-                        user_destination.display()
-                    )
-                })?;
+            copy_app_bundle(app_path, &user_destination).await.with_context(|| {
+                format!(
+                    "failed to copy app to {} after system Applications copy failed: {system_error:#}",
+                    user_destination.display()
+                )
+            })?;
             Ok(user_destination)
         }
     }
 }
 
 async fn copy_app_bundle(source: &Path, destination: &Path) -> Result<()> {
-    let parent = destination
-        .parent()
-        .context("invalid destination path: missing parent directory")?;
-    smol::fs::create_dir_all(parent)
-        .await
-        .with_context(|| format!("failed to create {}", parent.display()))?;
+    let parent = destination.parent().context("invalid destination path: missing parent directory")?;
+    smol::fs::create_dir_all(parent).await.with_context(|| format!("failed to create {}", parent.display()))?;
 
     let mut source_with_contents: OsString = source.into();
     source_with_contents.push("/");
@@ -287,20 +269,10 @@ async fn copy_app_bundle(source: &Path, destination: &Path) -> Result<()> {
     destination_with_contents.push("/");
 
     let mut command = new_command("rsync");
-    command
-        .args(["-a", "--delete"])
-        .arg(&source_with_contents)
-        .arg(&destination_with_contents);
-    let output = command
-        .output()
-        .await
-        .with_context(|| format!("failed to run rsync for {}", source.display()))?;
+    command.args(["-a", "--delete"]).arg(&source_with_contents).arg(&destination_with_contents);
+    let output = command.output().await.with_context(|| format!("failed to run rsync for {}", source.display()))?;
 
-    anyhow::ensure!(
-        output.status.success(),
-        "failed to copy app bundle: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
+    anyhow::ensure!(output.status.success(), "failed to copy app bundle: {}", String::from_utf8_lossy(&output.stderr));
 
     Ok(())
 }
@@ -308,10 +280,7 @@ async fn copy_app_bundle(source: &Path, destination: &Path) -> Result<()> {
 async fn restart_into(app_path: PathBuf, cx: &mut AsyncWindowContext) -> Result<()> {
     let workspace_windows = cx
         .update(|_window, cx| {
-            cx.windows()
-                .into_iter()
-                .filter_map(|window| window.downcast::<MultiWorkspace>())
-                .collect::<Vec<_>>()
+            cx.windows().into_iter().filter_map(|window| window.downcast::<MultiWorkspace>()).collect::<Vec<_>>()
         })
         .context("collecting workspace windows before restarting")?;
     if !workspace::prepare_windows_to_quit(&workspace_windows, cx).await {
@@ -325,7 +294,5 @@ async fn restart_into(app_path: PathBuf, cx: &mut AsyncWindowContext) -> Result<
 }
 
 fn user_applications_directory() -> Option<PathBuf> {
-    std::env::var_os("HOME")
-        .map(PathBuf::from)
-        .map(|home| home.join("Applications"))
+    std::env::var_os("HOME").map(PathBuf::from).map(|home| home.join("Applications"))
 }

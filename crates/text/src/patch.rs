@@ -1,8 +1,10 @@
+use std::cmp;
+use std::mem;
+use std::ops::Add;
+use std::ops::AddAssign;
+use std::ops::Sub;
+
 use crate::Edit;
-use std::{
-    cmp, mem,
-    ops::{Add, AddAssign, Sub},
-};
 
 #[derive(Clone, Default, Debug, PartialEq, Eq)]
 pub struct Patch<T>(Vec<Edit<T>>);
@@ -48,7 +50,7 @@ where
         self.0.clear();
     }
 
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
 
@@ -75,13 +77,7 @@ where
 
 impl<T, TDelta> Patch<T>
 where
-    T: 'static
-        + Copy
-        + Ord
-        + Sub<T, Output = TDelta>
-        + Add<TDelta, Output = T>
-        + AddAssign<TDelta>
-        + Default,
+    T: 'static + Copy + Ord + Sub<T, Output = TDelta> + Add<TDelta, Output = T> + AddAssign<TDelta> + Default,
     TDelta: Ord + Copy,
 {
     #[must_use]
@@ -106,10 +102,7 @@ where
 
                     let old_end = old_start + old_edit.old_len();
                     let new_end = new_start + old_edit.new_len();
-                    composed.push(Edit {
-                        old: old_start..old_end,
-                        new: new_start..new_end,
-                    });
+                    composed.push(Edit { old: old_start..old_end, new: new_start..new_end });
                     old_start = old_end;
                     new_start = new_end;
                     old_edits_iter.next();
@@ -127,10 +120,7 @@ where
 
                     let old_end = old_start + new_edit.old_len();
                     let new_end = new_start + new_edit.new_len();
-                    composed.push(Edit {
-                        old: old_start..old_end,
-                        new: new_start..new_end,
-                    });
+                    composed.push(Edit { old: old_start..old_end, new: new_start..new_end });
                     old_start = old_end;
                     new_start = new_end;
                     new_edits_iter.next();
@@ -148,10 +138,7 @@ where
                     let overshoot = new_edit.old.start - old_edit.new.start;
                     let old_end = cmp::min(old_start + overshoot, old_edit.old.end);
                     let new_end = new_start + overshoot;
-                    composed.push(Edit {
-                        old: old_start..old_end,
-                        new: new_start..new_end,
-                    });
+                    composed.push(Edit { old: old_start..old_end, new: new_start..new_end });
 
                     old_edit.old.start = old_end;
                     old_edit.new.start += overshoot;
@@ -165,10 +152,7 @@ where
                     let overshoot = old_edit.new.start - new_edit.old.start;
                     let old_end = old_start + overshoot;
                     let new_end = cmp::min(new_start + overshoot, new_edit.new.end);
-                    composed.push(Edit {
-                        old: old_start..old_end,
-                        new: new_start..new_end,
-                    });
+                    composed.push(Edit { old: old_start..old_end, new: new_start..new_end });
 
                     new_edit.old.start += overshoot;
                     new_edit.new.start = new_end;
@@ -179,10 +163,7 @@ where
                 if old_edit.new.end > new_edit.old.end {
                     let old_end = old_start + cmp::min(old_edit.old_len(), new_edit.old_len());
                     let new_end = new_start + new_edit.new_len();
-                    composed.push(Edit {
-                        old: old_start..old_end,
-                        new: new_start..new_end,
-                    });
+                    composed.push(Edit { old: old_start..old_end, new: new_start..new_end });
 
                     old_edit.old.start = old_end;
                     old_edit.new.start = new_edit.old.end;
@@ -192,10 +173,7 @@ where
                 } else {
                     let old_end = old_start + old_edit.old_len();
                     let new_end = new_start + cmp::min(old_edit.new_len(), new_edit.new_len());
-                    composed.push(Edit {
-                        old: old_start..old_end,
-                        new: new_start..new_end,
-                    });
+                    composed.push(Edit { old: old_start..old_end, new: new_start..new_end });
 
                     new_edit.old.start = old_edit.new.end;
                     new_edit.new.start = new_end;
@@ -223,11 +201,7 @@ where
             }
         };
         if let Some(edit) = self.0.get(ix) {
-            if old >= edit.old.end {
-                edit.new.end + (old - edit.old.end)
-            } else {
-                edit.new.start
-            }
+            if old >= edit.old.end { edit.new.end + (old - edit.old.end) } else { edit.new.start }
         } else {
             old
         }
@@ -245,10 +219,7 @@ where
             Ok(ix) => ix,
             Err(ix) => {
                 if ix == 0 {
-                    return Edit {
-                        old: old..old,
-                        new: old..old,
-                    };
+                    return Edit { old: old..old, new: old..old };
                 } else {
                     ix - 1
                 }
@@ -258,18 +229,12 @@ where
         if let Some(edit) = edits.get(ix) {
             if old > edit.old.end {
                 let translated = edit.new.end + (old - edit.old.end);
-                Edit {
-                    new: translated..translated,
-                    old: old..old,
-                }
+                Edit { new: translated..translated, old: old..old }
             } else {
                 edit.clone()
             }
         } else {
-            Edit {
-                old: old..old,
-                new: old..old,
-            }
+            Edit { old: old..old, new: old..old }
         }
     }
 }

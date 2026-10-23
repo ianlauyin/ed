@@ -1,6 +1,13 @@
+use std::fmt::Debug;
+use std::ops::Add;
+
 use clock::Lamport;
-use std::{fmt::Debug, ops::Add};
-use sum_tree::{ContextLessSummary, Dimension, Edit, Item, KeyedItem, SumTree};
+use sum_tree::ContextLessSummary;
+use sum_tree::Dimension;
+use sum_tree::Edit;
+use sum_tree::Item;
+use sum_tree::KeyedItem;
+use sum_tree::SumTree;
 
 pub trait Operation: Clone + Debug {
     fn lamport_timestamp(&self) -> clock::Lamport;
@@ -22,7 +29,7 @@ pub struct OperationSummary {
 }
 
 impl OperationKey {
-    pub fn new(timestamp: clock::Lamport) -> Self {
+    pub const fn new(timestamp: clock::Lamport) -> Self {
         Self(timestamp)
     }
 }
@@ -49,12 +56,7 @@ impl<T: Operation> OperationQueue<T> {
     pub fn insert(&mut self, mut ops: Vec<T>) {
         ops.sort_unstable_by_key(|op| op.lamport_timestamp());
         ops.dedup_by_key(|op| op.lamport_timestamp());
-        self.0.edit(
-            ops.into_iter()
-                .map(|op| Edit::Insert(OperationItem(op)))
-                .collect(),
-            (),
-        );
+        self.0.edit(ops.into_iter().map(|op| Edit::Insert(OperationItem(op))).collect(), ());
     }
 
     pub fn drain(&mut self) -> Self {
@@ -70,10 +72,7 @@ impl<T: Operation> OperationQueue<T> {
 
 impl ContextLessSummary for OperationSummary {
     fn zero() -> Self {
-        OperationSummary {
-            key: OperationKey::new(Lamport::MIN),
-            len: 0,
-        }
+        OperationSummary { key: OperationKey::new(Lamport::MIN), len: 0 }
     }
 
     fn add_summary(&mut self, other: &Self) {
@@ -88,10 +87,7 @@ impl Add<&Self> for OperationSummary {
 
     fn add(self, other: &Self) -> Self {
         assert!(self.key < other.key);
-        OperationSummary {
-            key: other.key,
-            len: self.len + other.len,
-        }
+        OperationSummary { key: other.key, len: self.len + other.len }
     }
 }
 
@@ -110,10 +106,7 @@ impl<T: Operation> Item for OperationItem<T> {
     type Summary = OperationSummary;
 
     fn summary(&self, _cx: ()) -> Self::Summary {
-        OperationSummary {
-            key: OperationKey::new(self.0.lamport_timestamp()),
-            len: 1,
-        }
+        OperationSummary { key: OperationKey::new(self.0.lamport_timestamp()), len: 1 }
     }
 }
 

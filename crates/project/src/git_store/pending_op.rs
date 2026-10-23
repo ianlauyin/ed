@@ -111,20 +111,22 @@ impl PendingOps {
 
     /// File is staged if the last job is finished and has status Staged.
     pub fn staged(&self) -> bool {
-        if let Some(last) = self.ops.last() {
-            if last.git_status == GitStatus::Staged && last.job_status == JobStatus::Finished {
-                return true;
-            }
+        if let Some(last) = self.ops.last()
+            && last.git_status == GitStatus::Staged
+            && last.job_status == JobStatus::Finished
+        {
+            return true;
         }
         false
     }
 
     /// File is staged if the last job is not finished and has status Staged.
     pub fn staging(&self) -> bool {
-        if let Some(last) = self.ops.last() {
-            if last.git_status == GitStatus::Staged && last.job_status != JobStatus::Finished {
-                return true;
-            }
+        if let Some(last) = self.ops.last()
+            && last.git_status == GitStatus::Staged
+            && last.job_status != JobStatus::Finished
+        {
+            return true;
         }
         false
     }
@@ -141,7 +143,7 @@ impl PendingOp {
         self.job_status == JobStatus::Running
     }
 
-    pub fn finished(&self) -> bool {
+    pub const fn finished(&self) -> bool {
         matches!(self.job_status, JobStatus::Finished | JobStatus::Skipped)
     }
 

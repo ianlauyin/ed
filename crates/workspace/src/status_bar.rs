@@ -190,7 +190,7 @@ impl Render for StatusBar {
 }
 
 impl StatusBar {
-    fn render_left_tools(&self, sidebar: &SidebarStatus, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_left_tools(&self, sidebar: &SidebarStatus, cx: &Context<Self>) -> impl IntoElement {
         h_flex()
             .gap_1()
             .min_w_0()
@@ -206,7 +206,7 @@ impl StatusBar {
             )
     }
 
-    fn render_right_tools(&self, sidebar: &SidebarStatus, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_right_tools(&self, sidebar: &SidebarStatus, cx: &Context<Self>) -> impl IntoElement {
         h_flex()
             .flex_shrink_0()
             .gap_1()
@@ -223,7 +223,7 @@ impl StatusBar {
             })
     }
 
-    fn render_sidebar_toggle(&self, sidebar: &SidebarStatus, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render_sidebar_toggle(&self, sidebar: &SidebarStatus, cx: &Context<Self>) -> impl IntoElement {
         let on_right = sidebar.side == SidebarSide::Right;
         let has_notifications = sidebar.has_notifications;
         let indicator_border = cx.theme().colors().status_bar_background;
@@ -292,7 +292,7 @@ impl StatusBar {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let mut this = Self {
+        let this = Self {
             left_items: Default::default(),
             right_items: Default::default(),
             active_pane: active_pane.clone(),
@@ -389,7 +389,7 @@ impl StatusBar {
         self.update_active_pane_item(window, cx);
     }
 
-    fn update_active_pane_item(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    fn update_active_pane_item(&self, window: &mut Window, cx: &mut Context<Self>) {
         let active_pane_item = self.active_pane.read(cx).active_item();
         for item in self.left_items.iter().chain(&self.right_items) {
             item.set_active_pane_item(active_pane_item.as_deref(), window, cx);
@@ -400,7 +400,7 @@ impl StatusBar {
     /// response to arrow keys. Navigation is clamped to the status bar so
     /// arrows move between items and stop at the ends;
     /// Tab is still used to leave the toolbar.
-    fn move_item_focus(&mut self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
+    fn move_item_focus(&self, forward: bool, window: &mut Window, cx: &mut Context<Self>) {
         let previous = window.focused(cx);
         if forward {
             window.focus_next(cx);

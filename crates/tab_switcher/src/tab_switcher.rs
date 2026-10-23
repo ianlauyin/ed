@@ -1,29 +1,63 @@
-use collections::{HashMap, HashSet};
-use editor::items::{
-    entry_diagnostic_aware_icon_decoration_and_color, entry_git_aware_label_color,
-};
+use std::cmp::Reverse;
+use std::sync::Arc;
+
+use collections::HashMap;
+use collections::HashSet;
+use editor::items::entry_diagnostic_aware_icon_decoration_and_color;
+use editor::items::entry_git_aware_label_color;
 use fuzzy_nucleo::StringMatchCandidate;
-use gpui::{
-    Action, AnyElement, App, Context, DismissEvent, Entity, EntityId, EventEmitter, FocusHandle,
-    Focusable, Modifiers, ModifiersChangedEvent, MouseButton, MouseUpEvent, ParentElement, Point,
-    Render, Styled, Task, TaskExt, WeakEntity, Window, actions, rems,
-};
-use picker::{Picker, PickerDelegate};
+use gpui::Action;
+use gpui::AnyElement;
+use gpui::App;
+use gpui::Context;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::EntityId;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::Modifiers;
+use gpui::ModifiersChangedEvent;
+use gpui::MouseButton;
+use gpui::MouseUpEvent;
+use gpui::ParentElement;
+use gpui::Point;
+use gpui::Render;
+use gpui::Styled;
+use gpui::Task;
+use gpui::TaskExt;
+use gpui::WeakEntity;
+use gpui::Window;
+use gpui::actions;
+use gpui::rems;
+use picker::Picker;
+use picker::PickerDelegate;
 use project::Project;
 use schemars::JsonSchema;
 use serde::Deserialize;
-use settings::{RegisterSetting, Settings, SettingsContent, TabSwitcherSettingsContent};
-use std::{cmp::Reverse, sync::Arc};
-use ui::{
-    DecoratedIcon, IconDecoration, IconDecorationKind, ListItem, ListItemSpacing, Tooltip,
-    prelude::*,
-};
+use settings::RegisterSetting;
+use settings::Settings;
+use settings::SettingsContent;
+use settings::TabSwitcherSettingsContent;
+use ui::DecoratedIcon;
+use ui::IconDecoration;
+use ui::IconDecorationKind;
+use ui::ListItem;
+use ui::ListItemSpacing;
+use ui::Tooltip;
+use ui::prelude::*;
 use util::ResultExt;
-use workspace::{
-    Event as WorkspaceEvent, ModalView, Pane, SaveIntent, Workspace,
-    item::{ItemHandle, ItemSettings, ShowDiagnostics, TabContentParams},
-    pane::{render_item_indicator, tab_details},
-};
+use workspace::Event as WorkspaceEvent;
+use workspace::ModalView;
+use workspace::Pane;
+use workspace::SaveIntent;
+use workspace::Workspace;
+use workspace::item::ItemHandle;
+use workspace::item::ItemSettings;
+use workspace::item::ShowDiagnostics;
+use workspace::item::TabContentParams;
+use workspace::pane::render_item_indicator;
+use workspace::pane::tab_details;
 
 #[derive(Clone, Copy, Debug, RegisterSetting)]
 pub struct TabSwitcherSettings {
@@ -33,9 +67,7 @@ pub struct TabSwitcherSettings {
 impl Settings for TabSwitcherSettings {
     fn from_settings(content: &SettingsContent) -> Self {
         let tab_switcher: &TabSwitcherSettingsContent = content.tab_switcher.as_ref().unwrap();
-        Self {
-            show_file_preview: tab_switcher.show_file_preview.unwrap(),
-        }
+        Self { show_file_preview: tab_switcher.show_file_preview.unwrap() }
     }
 }
 
@@ -74,11 +106,7 @@ pub fn init(cx: &mut App) {
 }
 
 impl TabSwitcher {
-    fn register(
-        workspace: &mut Workspace,
-        _window: Option<&mut Window>,
-        _: &mut Context<Workspace>,
-    ) {
+    fn register(workspace: &mut Workspace, _window: Option<&mut Window>, _: &mut Context<Workspace>) {
         workspace.register_action(|workspace, action: &Toggle, window, cx| {
             let Some(tab_switcher) = workspace.active_modal::<Self>(cx) else {
                 Self::open(workspace, action.select_last, false, false, window, cx);
@@ -86,9 +114,7 @@ impl TabSwitcher {
             };
 
             tab_switcher.update(cx, |tab_switcher, cx| {
-                tab_switcher
-                    .picker
-                    .update(cx, |picker, cx| picker.cycle_selection(window, cx))
+                tab_switcher.picker.update(cx, |picker, cx| picker.cycle_selection(window, cx))
             });
         });
         workspace.register_action(|workspace, _action: &ToggleAll, window, cx| {
@@ -98,9 +124,7 @@ impl TabSwitcher {
             };
 
             tab_switcher.update(cx, |tab_switcher, cx| {
-                tab_switcher
-                    .picker
-                    .update(cx, |picker, cx| picker.cycle_selection(window, cx))
+                tab_switcher.picker.update(cx, |picker, cx| picker.cycle_selection(window, cx))
             });
         });
         workspace.register_action(|workspace, _action: &OpenInActivePane, window, cx| {
@@ -110,9 +134,7 @@ impl TabSwitcher {
             };
 
             tab_switcher.update(cx, |tab_switcher, cx| {
-                tab_switcher
-                    .picker
-                    .update(cx, |picker, cx| picker.cycle_selection(window, cx))
+                tab_switcher.picker.update(cx, |picker, cx| picker.cycle_selection(window, cx))
             });
         });
     }
@@ -126,15 +148,10 @@ impl TabSwitcher {
         cx: &mut Context<Workspace>,
     ) {
         let mut weak_pane = workspace.active_pane().downgrade();
-        for dock in [
-            workspace.left_dock(),
-            workspace.bottom_dock(),
-            workspace.right_dock(),
-        ] {
+        for dock in [workspace.left_dock(), workspace.bottom_dock(), workspace.right_dock()] {
             dock.update(cx, |this, cx| {
-                let Some(panel) = this
-                    .active_panel()
-                    .filter(|panel| panel.panel_focus_handle(cx).contains_focused(window, cx))
+                let Some(panel) =
+                    this.active_panel().filter(|panel| panel.panel_focus_handle(cx).contains_focused(window, cx))
                 else {
                     return;
                 };
@@ -147,11 +164,8 @@ impl TabSwitcher {
         let weak_workspace = workspace.weak_handle();
 
         let project = workspace.project().clone();
-        let original_items: Vec<_> = workspace
-            .panes()
-            .iter()
-            .map(|p| (p.clone(), p.read(cx).active_item_index()))
-            .collect();
+        let original_items: Vec<_> =
+            workspace.panes().iter().map(|p| (p.clone(), p.read(cx).active_item_index())).collect();
         workspace.toggle_modal(window, cx, |window, cx| {
             let delegate = TabSwitcherDelegate::new(
                 project,
@@ -169,17 +183,8 @@ impl TabSwitcher {
         });
     }
 
-    fn new(
-        delegate: TabSwitcherDelegate,
-        window: &mut Window,
-        is_global: bool,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        let init_modifiers = if is_global {
-            None
-        } else {
-            window.modifiers().modified().then_some(window.modifiers())
-        };
+    fn new(delegate: TabSwitcherDelegate, window: &mut Window, is_global: bool, cx: &mut Context<Self>) -> Self {
+        let init_modifiers = if is_global { None } else { window.modifiers().modified().then_some(window.modifiers()) };
         Self {
             picker: cx.new(|cx| {
                 if is_global {
@@ -193,12 +198,7 @@ impl TabSwitcher {
         }
     }
 
-    fn handle_modifiers_changed(
-        &mut self,
-        event: &ModifiersChangedEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn handle_modifiers_changed(&mut self, event: &ModifiersChangedEvent, window: &mut Window, cx: &mut Context<Self>) {
         let Some(init_modifiers) = self.init_modifiers else {
             return;
         };
@@ -212,17 +212,9 @@ impl TabSwitcher {
         }
     }
 
-    fn handle_close_selected_item(
-        &mut self,
-        _: &CloseSelectedItem,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.picker.update(cx, |picker, cx| {
-            picker
-                .delegate
-                .close_item_at(picker.delegate.selected_index(), window, cx)
-        });
+    fn handle_close_selected_item(&mut self, _: &CloseSelectedItem, window: &mut Window, cx: &mut Context<Self>) {
+        self.picker
+            .update(cx, |picker, cx| picker.delegate.close_item_at(picker.delegate.selected_index(), window, cx));
     }
 }
 
@@ -269,13 +261,7 @@ pub struct TabSwitcherDelegate {
 }
 
 impl TabMatch {
-    fn icon(
-        &self,
-        project: &Entity<Project>,
-        selected: bool,
-        window: &Window,
-        cx: &App,
-    ) -> Option<DecoratedIcon> {
+    fn icon(&self, project: &Entity<Project>, selected: bool, window: &Window, cx: &App) -> Option<DecoratedIcon> {
         let icon = self.item.tab_icon(window, cx)?;
         let item_settings = ItemSettings::get_global(cx);
         let show_diagnostics = item_settings.show_diagnostics;
@@ -291,11 +277,7 @@ impl TabMatch {
                     .status_for_project_path(&path, cx)
                     .map(|status| status.summary())
                     .unwrap_or_default();
-                Some(entry_git_aware_label_color(
-                    git_status,
-                    entry.is_ignored,
-                    selected,
-                ))
+                Some(entry_git_aware_label_color(git_status, entry.is_ignored, selected))
             })
             .flatten();
         let colored_icon = icon.color(git_status_color.unwrap_or_default());
@@ -318,25 +300,18 @@ impl TabMatch {
             })
         };
 
-        let decorations =
-            entry_diagnostic_aware_icon_decoration_and_color(most_severe_diagnostic_level)
-                .filter(|(d, _)| {
-                    *d != IconDecorationKind::Triangle
-                        || show_diagnostics != ShowDiagnostics::Errors
-                })
-                .map(|(icon, color)| {
-                    let knockout_item_color = if selected {
-                        cx.theme().colors().element_selected
-                    } else {
-                        cx.theme().colors().element_background
-                    };
-                    IconDecoration::new(icon, knockout_item_color, cx)
-                        .color(color.color(cx))
-                        .position(Point {
-                            x: px(-2.),
-                            y: px(-2.),
-                        })
-                });
+        let decorations = entry_diagnostic_aware_icon_decoration_and_color(most_severe_diagnostic_level)
+            .filter(|(d, _)| *d != IconDecorationKind::Triangle || show_diagnostics != ShowDiagnostics::Errors)
+            .map(|(icon, color)| {
+                let knockout_item_color = if selected {
+                    cx.theme().colors().element_selected
+                } else {
+                    cx.theme().colors().element_background
+                };
+                IconDecoration::new(icon, knockout_item_color, cx)
+                    .color(color.color(cx))
+                    .position(Point { x: px(-2.), y: px(-2.) })
+            });
         Some(DecoratedIcon::new(colored_icon, decorations))
     }
 }
@@ -351,7 +326,7 @@ impl TabSwitcherDelegate {
         workspace: WeakEntity<Workspace>,
         is_all_panes: bool,
         open_in_active_pane: bool,
-        window: &mut Window,
+        window: &Window,
         cx: &mut Context<TabSwitcher>,
         original_items: Vec<(Entity<Pane>, usize)>,
     ) -> Self {
@@ -371,11 +346,7 @@ impl TabSwitcherDelegate {
         }
     }
 
-    fn subscribe_to_updates(
-        workspace: &WeakEntity<Workspace>,
-        window: &mut Window,
-        cx: &mut Context<TabSwitcher>,
-    ) {
+    fn subscribe_to_updates(workspace: &WeakEntity<Workspace>, window: &Window, cx: &mut Context<TabSwitcher>) {
         let Some(workspace) = workspace.upgrade() else {
             return;
         };
@@ -408,12 +379,7 @@ impl TabSwitcherDelegate {
         .detach();
     }
 
-    fn update_all_pane_matches(
-        &mut self,
-        query: String,
-        window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) {
+    fn update_all_pane_matches(&mut self, query: String, window: &mut Window, cx: &mut Context<Picker<Self>>) {
         let Some(workspace) = self.workspace.upgrade() else {
             return;
         };
@@ -421,13 +387,8 @@ impl TabSwitcherDelegate {
         let mut item_index = 0;
         for pane_handle in workspace.read(cx).panes() {
             let pane = pane_handle.read(cx);
-            let items: Vec<Box<dyn ItemHandle>> =
-                pane.items().map(|item| item.boxed_clone()).collect();
-            for ((_detail, item), detail) in items
-                .iter()
-                .enumerate()
-                .zip(tab_details(&items, window, cx))
-            {
+            let items: Vec<Box<dyn ItemHandle>> = pane.items().map(|item| item.boxed_clone()).collect();
+            for ((_detail, item), detail) in items.iter().enumerate().zip(tab_details(&items, window, cx)) {
                 all_items.push(TabMatch {
                     pane: pane_handle.downgrade(),
                     item_index,
@@ -441,19 +402,13 @@ impl TabSwitcherDelegate {
 
         let mut matches = if query.is_empty() {
             let history = workspace.read(cx).recently_activated_items(cx);
-            all_items
-                .sort_by_key(|tab| (Reverse(history.get(&tab.item.item_id())), tab.item_index));
+            all_items.sort_by_key(|tab| (Reverse(history.get(&tab.item.item_id())), tab.item_index));
             all_items
         } else {
             let candidates = all_items
                 .iter()
                 .enumerate()
-                .flat_map(|(ix, tab_match)| {
-                    Some(StringMatchCandidate::new(
-                        ix,
-                        &tab_match.item.tab_content_text(0, cx),
-                    ))
-                })
+                .flat_map(|(ix, tab_match)| Some(StringMatchCandidate::new(ix, tab_match.item.tab_content_text(0, cx))))
                 .collect::<Vec<_>>();
             fuzzy_nucleo::match_strings(
                 &candidates,
@@ -469,30 +424,20 @@ impl TabSwitcherDelegate {
 
         if self.open_in_active_pane {
             let mut seen_paths: HashSet<project::ProjectPath> = HashSet::default();
-            matches.retain(|tab| {
-                if let Some(path) = tab.item.project_path(cx) {
-                    seen_paths.insert(path)
-                } else {
-                    true
-                }
-            });
+            matches.retain(
+                |tab| {
+                    if let Some(path) = tab.item.project_path(cx) { seen_paths.insert(path) } else { true }
+                },
+            );
         }
 
         let selected_item_id = self.selected_item_id();
         self.matches = matches;
-        self.selected_index = if query.is_empty() {
-            self.compute_selected_index(selected_item_id, window, cx)
-        } else {
-            0
-        }
+        self.selected_index =
+            if query.is_empty() { self.compute_selected_index(selected_item_id, window, cx) } else { 0 }
     }
 
-    fn update_matches(
-        &mut self,
-        query: String,
-        window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) {
+    fn update_matches(&mut self, query: String, window: &mut Window, cx: &mut Context<Picker<Self>>) {
         if self.is_all_panes {
             // needed because we need to borrow the workspace, but that may be borrowed when the picker
             // calls update_matches.
@@ -512,11 +457,9 @@ impl TabSwitcherDelegate {
 
         let pane = pane.read(cx);
         let mut history_indices = HashMap::default();
-        pane.activation_history().iter().rev().enumerate().for_each(
-            |(history_index, history_entry)| {
-                history_indices.insert(history_entry.entity_id, history_index);
-            },
-        );
+        pane.activation_history().iter().rev().enumerate().for_each(|(history_index, history_entry)| {
+            history_indices.insert(history_entry.entity_id, history_index);
+        });
 
         let items: Vec<Box<dyn ItemHandle>> = pane.items().map(|item| item.boxed_clone()).collect();
         items
@@ -534,26 +477,17 @@ impl TabSwitcherDelegate {
 
         let non_history_base = history_indices.len();
         self.matches.sort_by(move |a, b| {
-            let a_score = *history_indices
-                .get(&a.item.item_id())
-                .unwrap_or(&(a.item_index + non_history_base));
-            let b_score = *history_indices
-                .get(&b.item.item_id())
-                .unwrap_or(&(b.item_index + non_history_base));
+            let a_score = *history_indices.get(&a.item.item_id()).unwrap_or(&(a.item_index + non_history_base));
+            let b_score = *history_indices.get(&b.item.item_id()).unwrap_or(&(b.item_index + non_history_base));
             a_score.cmp(&b_score)
         });
 
-        self.selected_index = if query.is_empty() {
-            self.compute_selected_index(selected_item_id, window, cx)
-        } else {
-            0
-        }
+        self.selected_index =
+            if query.is_empty() { self.compute_selected_index(selected_item_id, window, cx) } else { 0 }
     }
 
     fn selected_item_id(&self) -> Option<EntityId> {
-        self.matches
-            .get(self.selected_index())
-            .map(|tab_match| tab_match.item.item_id())
+        self.matches.get(self.selected_index()).map(|tab_match| tab_match.item.item_id())
     }
 
     fn compute_selected_index(
@@ -568,10 +502,8 @@ impl TabSwitcherDelegate {
 
         if let Some(selected_item_id) = prev_selected_item_id {
             // If the previously selected item is still in the list, select its new position.
-            if let Some(item_index) = self
-                .matches
-                .iter()
-                .position(|tab_match| tab_match.item.item_id() == selected_item_id)
+            if let Some(item_index) =
+                self.matches.iter().position(|tab_match| tab_match.item.item_id() == selected_item_id)
             {
                 return item_index;
             }
@@ -595,12 +527,7 @@ impl TabSwitcherDelegate {
         0
     }
 
-    fn close_item_at(
-        &mut self,
-        ix: usize,
-        window: &mut Window,
-        cx: &mut Context<Picker<TabSwitcherDelegate>>,
-    ) {
+    fn close_item_at(&self, ix: usize, window: &mut Window, cx: &mut Context<Picker<TabSwitcherDelegate>>) {
         let Some(tab_match) = self.matches.get(ix) else {
             return;
         };
@@ -612,21 +539,14 @@ impl TabSwitcherDelegate {
                 return;
             };
             workspace.update(cx, |workspace, cx| {
-                workspace.close_items_with_project_path(
-                    &project_path,
-                    SaveIntent::Close,
-                    true,
-                    window,
-                    cx,
-                );
+                workspace.close_items_with_project_path(&project_path, SaveIntent::Close, true, window, cx);
             });
         } else {
             let Some(pane) = tab_match.pane.upgrade() else {
                 return;
             };
             pane.update(cx, |pane, cx| {
-                pane.close_item_by_id(tab_match.item.item_id(), SaveIntent::Close, window, cx)
-                    .detach_and_log_err(cx);
+                pane.close_item_by_id(tab_match.item.item_id(), SaveIntent::Close, window, cx).detach_and_log_err(cx);
             });
         }
     }
@@ -634,10 +554,9 @@ impl TabSwitcherDelegate {
     /// Updates the selected index to ensure it matches the pane's active item,
     /// as the pane's active item can be indirectly updated and this method
     /// ensures that the picker can react to those changes.
-    fn sync_selected_index(&mut self, cx: &mut Context<Picker<TabSwitcherDelegate>>) {
+    fn sync_selected_index(&mut self, cx: &Context<Picker<TabSwitcherDelegate>>) {
         let item = if self.is_all_panes {
-            self.workspace
-                .read_with(cx, |workspace, cx| workspace.active_item(cx))
+            self.workspace.read_with(cx, |workspace, cx| workspace.active_item(cx))
         } else {
             self.pane.read_with(cx, |pane, _cx| pane.active_item())
         };
@@ -647,11 +566,8 @@ impl TabSwitcherDelegate {
         };
 
         let item_id = item.item_id();
-        let Some((index, _tab_match)) = self
-            .matches
-            .iter()
-            .enumerate()
-            .find(|(_index, tab_match)| tab_match.item.item_id() == item_id)
+        let Some((index, _tab_match)) =
+            self.matches.iter().enumerate().find(|(_index, tab_match)| tab_match.item.item_id() == item_id)
         else {
             return;
         };
@@ -660,7 +576,7 @@ impl TabSwitcherDelegate {
     }
 
     fn confirm_open_in_active_pane(
-        &mut self,
+        &self,
         selected_match: TabMatch,
         window: &mut Window,
         cx: &mut Context<Picker<TabSwitcherDelegate>>,
@@ -672,29 +588,18 @@ impl TabSwitcherDelegate {
         let current_pane = self
             .pane
             .upgrade()
-            .filter(|pane| {
-                workspace
-                    .read(cx)
-                    .panes()
-                    .iter()
-                    .any(|p| p.entity_id() == pane.entity_id())
-            })
+            .filter(|pane| workspace.read(cx).panes().iter().any(|p| p.entity_id() == pane.entity_id()))
             .or_else(|| selected_match.pane.upgrade());
 
         let Some(current_pane) = current_pane else {
             return;
         };
 
-        if let Some(index) = current_pane
-            .read(cx)
-            .index_for_item(selected_match.item.as_ref())
-        {
+        if let Some(index) = current_pane.read(cx).index_for_item(selected_match.item.as_ref()) {
             current_pane.update(cx, |pane, cx| {
                 pane.activate_item(index, true, true, window, cx);
             });
-        } else if selected_match.item.project_path(cx).is_some()
-            && selected_match.item.can_split(cx)
-        {
+        } else if selected_match.item.project_path(cx).is_some() && selected_match.item.can_split(cx) {
             let Some(workspace) = self.workspace.upgrade() else {
                 return;
             };
@@ -755,12 +660,7 @@ impl PickerDelegate for TabSwitcherDelegate {
         false
     }
 
-    fn set_selected_index(
-        &mut self,
-        ix: usize,
-        window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) {
+    fn set_selected_index(&mut self, ix: usize, window: &mut Window, cx: &mut Context<Picker<Self>>) {
         self.selected_index = ix;
 
         if !self.open_in_active_pane && TabSwitcherSettings::get_global(cx).show_file_preview {
@@ -783,22 +683,12 @@ impl PickerDelegate for TabSwitcherDelegate {
         Vec::new()
     }
 
-    fn update_matches(
-        &mut self,
-        raw_query: String,
-        window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) -> Task<()> {
+    fn update_matches(&mut self, raw_query: String, window: &mut Window, cx: &mut Context<Picker<Self>>) -> Task<()> {
         self.update_matches(raw_query, window, cx);
         Task::ready(())
     }
 
-    fn confirm(
-        &mut self,
-        _secondary: bool,
-        window: &mut Window,
-        cx: &mut Context<Picker<TabSwitcherDelegate>>,
-    ) {
+    fn confirm(&mut self, _secondary: bool, window: &mut Window, cx: &mut Context<Picker<TabSwitcherDelegate>>) {
         let Some(selected_match) = self.matches.get(self.selected_index()).cloned() else {
             return;
         };
@@ -833,9 +723,7 @@ impl PickerDelegate for TabSwitcherDelegate {
             }
         }
 
-        self.tab_switcher
-            .update(cx, |_, cx| cx.emit(DismissEvent))
-            .log_err();
+        self.tab_switcher.update(cx, |_, cx| cx.emit(DismissEvent)).log_err();
     }
 
     fn render_match(
@@ -860,16 +748,8 @@ impl PickerDelegate for TabSwitcherDelegate {
         let icon = tab_match.icon(&self.project, selected, window, cx);
 
         let indicator = render_item_indicator(tab_match.item.boxed_clone(), cx);
-        let indicator_color = if let Some(ref indicator) = indicator {
-            indicator.color
-        } else {
-            Color::default()
-        };
-        let indicator = h_flex()
-            .flex_shrink_0()
-            .children(indicator)
-            .child(div().w_2())
-            .into_any_element();
+        let indicator_color = if let Some(ref indicator) = indicator { indicator.color } else { Color::default() };
+        let indicator = h_flex().flex_shrink_0().children(indicator).child(div().w_2()).into_any_element();
         let close_button = div()
             .id("close-button")
             .on_mouse_up(
@@ -898,21 +778,13 @@ impl PickerDelegate for TabSwitcherDelegate {
                 .spacing(ListItemSpacing::Sparse)
                 .inset(true)
                 .toggle_state(selected)
-                .child(
-                    h_flex()
-                        .when(ix == 0, |row| row)
-                        .w_full()
-                        .min_w_0()
-                        .overflow_hidden()
-                        .child(label),
-                )
+                .child(h_flex().when(ix == 0, |row| row).w_full().min_w_0().overflow_hidden().child(label))
                 .start_slot::<DecoratedIcon>(icon)
                 .map(|el| {
                     if self.selected_index == ix {
                         el.end_slot::<AnyElement>(close_button)
                     } else {
-                        el.end_slot::<AnyElement>(indicator)
-                            .end_slot_on_hover::<AnyElement>(close_button)
+                        el.end_slot::<AnyElement>(indicator).end_slot_on_hover::<AnyElement>(close_button)
                     }
                 }),
         )

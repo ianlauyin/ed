@@ -202,9 +202,7 @@ impl LspStore {
                                 return Some(links_data.links.clone());
                             }
 
-                            let Some(fetched_links) = fetched else {
-                                return None;
-                            };
+                            let fetched_links = fetched?;
 
                             let mut tagged = BufferDocumentLinks::default();
                             for (server_id, server_links) in fetched_links {
@@ -456,7 +454,7 @@ impl LspStore {
         if let Some(tooltip) = &resolved.tooltip {
             link.tooltip = Some(tooltip.clone().into());
         }
-        link.data = resolved.data.clone();
+        link.data.clone_from(&resolved.data);
         link.resolved = true;
         Some(link.clone())
     }

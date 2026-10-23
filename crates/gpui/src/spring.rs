@@ -1,6 +1,10 @@
-use std::{ops::RangeInclusive, time::Duration};
+use std::ops::RangeInclusive;
+use std::time::Duration;
 
-use crate::{Hsla, Pixels, Rems, Rgba};
+use crate::Hsla;
+use crate::Pixels;
+use crate::Rems;
+use crate::Rgba;
 
 const CRITICAL_DAMPING_TOLERANCE: f32 = 1e-4;
 const DEFAULT_SPRING_EPSILON: f32 = 0.001;
@@ -22,11 +26,7 @@ pub struct SpringConfig {
 impl SpringConfig {
     /// Creates a spring from its physical parameters.
     pub const fn new(stiffness: f32, damping: f32, mass: f32) -> Self {
-        Self {
-            stiffness,
-            damping,
-            mass,
-        }
+        Self { stiffness, damping, mass }
     }
 
     /// Returns the natural angular frequency and damping ratio $(\omega_0, \zeta)$.
@@ -54,13 +54,7 @@ impl SpringConfig {
     ///
     /// A first-order hold avoids the frame-rate-dependent lag introduced by
     /// treating a dragged target as stationary between frames.
-    pub fn step_ramp(
-        &self,
-        state: SpringState,
-        target: f32,
-        target_velocity: f32,
-        delta_time: f32,
-    ) -> SpringState {
+    pub fn step_ramp(&self, state: SpringState, target: f32, target_velocity: f32, delta_time: f32) -> SpringState {
         let (natural_frequency, damping_ratio) = self.canonical();
         let steady_state_lag = -2.0 * damping_ratio * target_velocity / natural_frequency;
         let displacement = state.position - target - steady_state_lag;
@@ -69,13 +63,8 @@ impl SpringConfig {
         let target = target + target_velocity * delta_time;
 
         SpringState {
-            position: target
-                + steady_state_lag
-                + propagator[0][0] * displacement
-                + propagator[0][1] * velocity,
-            velocity: target_velocity
-                + propagator[1][0] * displacement
-                + propagator[1][1] * velocity,
+            position: target + steady_state_lag + propagator[0][0] * displacement + propagator[0][1] * velocity,
+            velocity: target_velocity + propagator[1][0] * displacement + propagator[1][1] * velocity,
         }
     }
 
@@ -95,10 +84,7 @@ impl SpringConfig {
             let sine_over_frequency = sine / damped_frequency;
 
             [
-                [
-                    exponential * (cosine + decay * sine_over_frequency),
-                    exponential * sine_over_frequency,
-                ],
+                [exponential * (cosine + decay * sine_over_frequency), exponential * sine_over_frequency],
                 [
                     -exponential * natural_frequency * natural_frequency * sine_over_frequency,
                     exponential * (cosine - decay * sine_over_frequency),
@@ -127,10 +113,7 @@ impl SpringConfig {
             let exponential = (-natural_frequency * delta_time).exp();
 
             [
-                [
-                    exponential * (1.0 + natural_frequency * delta_time),
-                    exponential * delta_time,
-                ],
+                [exponential * (1.0 + natural_frequency * delta_time), exponential * delta_time],
                 [
                     -exponential * natural_frequency * natural_frequency * delta_time,
                     exponential * (1.0 - natural_frequency * delta_time),
@@ -183,19 +166,10 @@ impl SpringConfig {
             let velocity_sine = -damped_frequency * displacement - decay * sine_coefficient;
             let velocity_envelope = velocity_cosine.hypot(velocity_sine);
 
-            find_settle_time(
-                epsilon,
-                velocity_threshold,
-                0.0,
-                natural_frequency,
-                move |time| {
-                    let exponential = (-decay * time).exp();
-                    (
-                        position_envelope * exponential,
-                        velocity_envelope * exponential,
-                    )
-                },
-            )
+            find_settle_time(epsilon, velocity_threshold, 0.0, natural_frequency, move |time| {
+                let exponential = (-decay * time).exp();
+                (position_envelope * exponential, velocity_envelope * exponential)
+            })
         } else if damping_ratio > 1.0 + CRITICAL_DAMPING_TOLERANCE {
             let root = (damping_ratio * damping_ratio - 1.0).sqrt();
             let root_sum = damping_ratio + root;
@@ -205,30 +179,19 @@ impl SpringConfig {
             let slow_coefficient = (state.velocity - fast_root * displacement) / denominator;
             let fast_coefficient = (slow_root * displacement - state.velocity) / denominator;
 
-            find_settle_time(
-                epsilon,
-                velocity_threshold,
-                0.0,
-                natural_frequency,
-                move |time| {
-                    let slow_term = slow_coefficient.abs() * (slow_root * time).exp();
-                    let fast_term = fast_coefficient.abs() * (fast_root * time).exp();
-                    (
-                        slow_term + fast_term,
-                        slow_root.abs() * slow_term + fast_root.abs() * fast_term,
-                    )
-                },
-            )
+            find_settle_time(epsilon, velocity_threshold, 0.0, natural_frequency, move |time| {
+                let slow_term = slow_coefficient.abs() * (slow_root * time).exp();
+                let fast_term = fast_coefficient.abs() * (fast_root * time).exp();
+                (slow_term + fast_term, slow_root.abs() * slow_term + fast_root.abs() * fast_term)
+            })
         } else {
             let linear_coefficient = state.velocity + natural_frequency * displacement;
             let position_constant = displacement.abs();
             let position_linear = linear_coefficient.abs();
             let velocity_constant = (linear_coefficient - natural_frequency * displacement).abs();
             let velocity_linear = natural_frequency * linear_coefficient.abs();
-            let position_decay_start =
-                envelope_decay_start(position_constant, position_linear, natural_frequency);
-            let velocity_decay_start =
-                envelope_decay_start(velocity_constant, velocity_linear, natural_frequency);
+            let position_decay_start = envelope_decay_start(position_constant, position_linear, natural_frequency);
+            let velocity_decay_start = envelope_decay_start(velocity_constant, velocity_linear, natural_frequency);
 
             find_settle_time(
                 epsilon,
@@ -348,28 +311,15 @@ impl AnimationPhase {
     }
 
     /// Interpolates between values assigned to arbitrary phase coordinates.
-    pub fn interpolate_between<T: Interpolate>(
-        self,
-        range: RangeInclusive<f32>,
-        from: T,
-        to: T,
-    ) -> T {
+    pub fn interpolate_between<T: Interpolate>(self, range: RangeInclusive<f32>, from: T, to: T) -> T {
         let (start, end) = range.into_inner();
-        let phase = if start == end {
-            if self.0 < start { 0.0 } else { 1.0 }
-        } else {
-            (self.0 - start) / (end - start)
-        };
+        let phase =
+            if start == end { if self.0 < start { 0.0 } else { 1.0 } } else { (self.0 - start) / (end - start) };
         T::interpolate(from, to, phase)
     }
 
     /// Interpolates over arbitrary phase coordinates without extrapolating.
-    pub fn interpolate_between_clamped<T: Interpolate>(
-        self,
-        range: RangeInclusive<f32>,
-        from: T,
-        to: T,
-    ) -> T {
+    pub fn interpolate_between_clamped<T: Interpolate>(self, range: RangeInclusive<f32>, from: T, to: T) -> T {
         let (start, end) = range.into_inner();
         let phase = if start == end {
             if self.0 < start { 0.0 } else { 1.0 }
@@ -479,44 +429,26 @@ pub struct SpringAnimation<T = ()> {
 
 impl SpringAnimation<()> {
     /// Creates a spring animation builder.
-    pub fn new(config: SpringConfig) -> Self {
-        Self {
-            config,
-            target: (),
-            epsilon: DEFAULT_SPRING_EPSILON,
-            initial: None,
-            playback: SpringPlayback::Running,
-        }
+    pub const fn new(config: SpringConfig) -> Self {
+        Self { config, target: (), epsilon: DEFAULT_SPRING_EPSILON, initial: None, playback: SpringPlayback::Running }
     }
 
     /// Sets the value or path targeted by this spring.
-    pub fn to<T: SpringTarget>(self, target: T) -> SpringAnimation<T> {
-        let SpringAnimation {
-            config,
-            target: (),
-            epsilon,
-            initial,
-            playback,
-        } = self;
-        SpringAnimation {
-            config,
-            target,
-            epsilon,
-            initial,
-            playback,
-        }
+    pub const fn to<T: SpringTarget>(self, target: T) -> SpringAnimation<T> {
+        let SpringAnimation { config, target: (), epsilon, initial, playback } = self;
+        SpringAnimation { config, target, epsilon, initial, playback }
     }
 }
 
 impl<T> SpringAnimation<T> {
     /// Sets the settling tolerance in the target's scalar coordinate space.
-    pub fn with_epsilon(mut self, epsilon: f32) -> Self {
+    pub const fn with_epsilon(mut self, epsilon: f32) -> Self {
         self.epsilon = epsilon;
         self
     }
 
     /// Sets how the spring advances or resolves its current value.
-    pub fn playback(mut self, playback: SpringPlayback) -> Self {
+    pub const fn playback(mut self, playback: SpringPlayback) -> Self {
         self.playback = playback;
         self
     }
@@ -536,10 +468,7 @@ impl<T: SpringTarget> SpringAnimation<T> {
 /// this duration-based form restarts the spring; use [`SpringConfig::step`] when
 /// preserving velocity matters.
 pub fn sampled_easing(config: SpringConfig, epsilon: f32) -> (Duration, impl Fn(f32) -> f32) {
-    let initial_state = SpringState {
-        position: 0.0,
-        velocity: 0.0,
-    };
+    let initial_state = SpringState { position: 0.0, velocity: 0.0 };
     let duration = config.settle_time(initial_state, 1.0, epsilon);
     let duration_seconds = duration.as_secs_f32();
 
@@ -549,19 +478,13 @@ pub fn sampled_easing(config: SpringConfig, epsilon: f32) -> (Duration, impl Fn(
         } else if progress >= 1.0 {
             1.0
         } else {
-            config
-                .step(initial_state, 1.0, progress * duration_seconds)
-                .position
+            config.step(initial_state, 1.0, progress * duration_seconds).position
         }
     })
 }
 
 fn envelope_decay_start(constant: f32, linear: f32, decay: f32) -> f32 {
-    if linear == 0.0 {
-        0.0
-    } else {
-        (1.0 / decay - constant / linear).max(0.0)
-    }
+    if linear == 0.0 { 0.0 } else { (1.0 / decay - constant / linear).max(0.0) }
 }
 
 fn find_settle_time(

@@ -1,3 +1,4 @@
+#[allow(clippy::module_inception)]
 mod button;
 mod button_like;
 mod button_link;

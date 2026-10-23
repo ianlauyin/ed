@@ -1,35 +1,47 @@
+use std::borrow::Cow;
+use std::cmp::Reverse;
+use std::fmt::Display;
+use std::ops::Range;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+use std::sync::LazyLock;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use collections::HashMap;
-use gpui::{App, AppContext, AsyncApp, Entity, SharedString, Task};
+use gpui::App;
+use gpui::AppContext;
+use gpui::AsyncApp;
+use gpui::Entity;
+use gpui::SharedString;
+use gpui::Task;
 pub use language::*;
-use lsp::{InitializeParams, LanguageServerBinary};
+use lsp::InitializeParams;
+use lsp::LanguageServerBinary;
 use project::lsp_store::rust_analyzer_ext::CARGO_DIAGNOSTICS_SOURCE_NAME;
 use project::project_settings::ProjectSettings;
 use regex::Regex;
 use serde_json::json;
-use settings::{SemanticTokenRules, Settings as _};
+use settings::SemanticTokenRules;
+use settings::Settings as _;
 use smallvec::SmallVec;
 use smol::fs::{self};
-use std::cmp::Reverse;
-use std::fmt::Display;
-use std::ops::Range;
-use std::{
-    borrow::Cow,
-    path::{Path, PathBuf},
-    sync::{Arc, LazyLock},
-};
-use task::{TaskTemplate, TaskTemplates, TaskVariables, VariableName};
-use util::command::{Stdio, new_command};
+use task::TaskTemplate;
+use task::TaskTemplates;
+use task::TaskVariables;
+use task::VariableName;
+use util::ResultExt;
+use util::command::Stdio;
+use util::command::new_command;
+use util::maybe;
 use util::merge_json_value_into;
 use util::rel_path::RelPath;
-use util::{ResultExt, maybe};
 
 use crate::language_settings::LanguageSettings;
 
 pub(crate) fn semantic_token_rules() -> SemanticTokenRules {
-    let content = grammars::get_file("rust/semantic_token_rules.json")
-        .expect("missing rust/semantic_token_rules.json");
+    let content = grammars::get_file("rust/semantic_token_rules.json").expect("missing rust/semantic_token_rules.json");
     let json = std::str::from_utf8(&content.data).expect("invalid utf-8 in semantic_token_rules");
     settings::parse_json_with_comments::<SemanticTokenRules>(json)
         .expect("failed to parse rust semantic_token_rules.json")
@@ -40,9 +52,7 @@ pub struct RustLspAdapter;
 const SERVER_NAME: LanguageServerName = LanguageServerName::new_static("rust-analyzer");
 
 impl RustLspAdapter {
-    async fn rustup_rust_analyzer_for_worktree(
-        delegate: &dyn LspAdapterDelegate,
-    ) -> Option<PathBuf> {
+    async fn rustup_rust_analyzer_for_worktree(delegate: &dyn LspAdapterDelegate) -> Option<PathBuf> {
         if !Self::workspace_has_rust_toolchain_override(delegate).await {
             return None;
         }
@@ -68,9 +78,7 @@ impl RustLspAdapter {
                 return None;
             }
             Err(err) => {
-                log::debug!(
-                    "failed to run `rustup which rust-analyzer` in {worktree_root:?}: {err:#}"
-                );
+                log::debug!("failed to run `rustup which rust-analyzer` in {worktree_root:?}: {err:#}");
                 return None;
             }
         };
@@ -81,10 +89,7 @@ impl RustLspAdapter {
 
     async fn workspace_has_rust_toolchain_override(delegate: &dyn LspAdapterDelegate) -> bool {
         for file_name in ["rust-toolchain.toml", "rust-toolchain"] {
-            if fs::metadata(delegate.resolve_relative_path(PathBuf::from(file_name)))
-                .await
-                .is_ok()
-            {
+            if fs::metadata(delegate.resolve_relative_path(PathBuf::from(file_name))).await.is_ok() {
                 return true;
             }
         }
@@ -100,14 +105,7 @@ impl ManifestProvider for CargoManifestProvider {
         SharedString::new_static("Cargo.toml").into()
     }
 
-    fn search(
-        &self,
-        ManifestQuery {
-            path,
-            depth,
-            delegate,
-        }: ManifestQuery,
-    ) -> Option<Arc<RelPath>> {
+    fn search(&self, ManifestQuery { path, depth, delegate }: ManifestQuery) -> Option<Arc<RelPath>> {
         let mut outermost_cargo_toml = None;
         for path in path.ancestors().take(depth) {
             let p = path.join(RelPath::from_unix_str("Cargo.toml").unwrap());
@@ -144,11 +142,7 @@ impl LspAdapter for RustLspAdapter {
                     .await;
                 if result.is_ok() {
                     log::debug!("found rust-analyzer in rustup toolchain override");
-                    return Some(LanguageServerBinary {
-                        path,
-                        env: Some(env),
-                        arguments: vec![],
-                    });
+                    return Some(LanguageServerBinary { path, env: Some(env), arguments: vec![] });
                 }
             }
 
@@ -165,19 +159,11 @@ impl LspAdapter for RustLspAdapter {
                 })
                 .await;
             if let Err(err) = result {
-                log::debug!(
-                    "failed to run rust-analyzer after detecting it in PATH: binary: {:?}: {}",
-                    path,
-                    err
-                );
+                log::debug!("failed to run rust-analyzer after detecting it in PATH: binary: {:?}: {}", path, err);
                 return None;
             }
 
-            Some(LanguageServerBinary {
-                path,
-                env: Some(env),
-                arguments: vec![],
-            })
+            Some(LanguageServerBinary { path, env: Some(env), arguments: vec![] })
         })
         .await
     }
@@ -195,16 +181,12 @@ impl LspAdapter for RustLspAdapter {
             LazyLock::new(|| Regex::new(r"(?m)`([^`]+)\n`$").expect("Failed to create REGEX"));
 
         for diagnostic in &mut params.diagnostics {
-            for message in diagnostic
-                .related_information
-                .iter_mut()
-                .flatten()
-                .map(|info| &mut info.message)
-                .chain(match &mut diagnostic.message {
+            for message in diagnostic.related_information.iter_mut().flatten().map(|info| &mut info.message).chain(
+                match &mut diagnostic.message {
                     lsp::DiagnosticMessage::String(message) => Some(message),
                     lsp::DiagnosticMessage::MarkupContent(_) => None,
-                })
-            {
+                },
+            ) {
                 if let Cow::Owned(sanitized) = REGEX.replace_all(message, "`$1`") {
                     *message = sanitized;
                 }
@@ -213,8 +195,7 @@ impl LspAdapter for RustLspAdapter {
     }
 
     fn diagnostic_message_to_markdown(&self, message: &str) -> Option<String> {
-        static REGEX: LazyLock<Regex> =
-            LazyLock::new(|| Regex::new(r"(?m)\n *").expect("Failed to create REGEX"));
+        static REGEX: LazyLock<Regex> = LazyLock::new(|| Regex::new(r"(?m)\n *").expect("Failed to create REGEX"));
         Some(REGEX.replace_all(message, "\n\n").to_string())
     }
 
@@ -232,19 +213,13 @@ impl LspAdapter for RustLspAdapter {
             .or(completion.detail.as_ref())
             .map(|detail| detail.trim());
         // this tends to contain alias and import information
-        let mut detail_left = completion
-            .label_details
-            .as_ref()
-            .and_then(|detail| detail.detail.as_deref());
+        let mut detail_left = completion.label_details.as_ref().and_then(|detail| detail.detail.as_deref());
         let mk_label = |text: String, filter_range: &dyn Fn() -> Range<usize>, runs| {
             let filter_range = completion
                 .filter_text
                 .as_deref()
                 .and_then(|filter| text.find(filter).map(|ix| ix..ix + filter.len()))
-                .or_else(|| {
-                    text.find(&completion.label)
-                        .map(|ix| ix..ix + completion.label.len())
-                })
+                .or_else(|| text.find(&completion.label).map(|ix| ix..ix + completion.label.len()))
                 .unwrap_or_else(filter_range);
 
             CodeLabel::new(text, filter_range, runs)
@@ -255,45 +230,27 @@ impl LspAdapter for RustLspAdapter {
                 let text = format!("{name}: {signature}");
                 let prefix = "struct S { ";
                 let source = Rope::from_iter([prefix, &text, " }"]);
-                let runs = language
-                    .highlight_text(&source, prefix.len()..prefix.len() + text.len())
-                    .collect();
+                let runs = language.highlight_text(&source, prefix.len()..prefix.len() + text.len()).collect();
                 mk_label(text, &|| 0..completion.label.len(), runs)
             }
-            (
-                Some(signature),
-                Some(lsp::CompletionItemKind::CONSTANT | lsp::CompletionItemKind::VARIABLE),
-            ) if completion.insert_text_format != Some(lsp::InsertTextFormat::SNIPPET) => {
+            (Some(signature), Some(lsp::CompletionItemKind::CONSTANT | lsp::CompletionItemKind::VARIABLE))
+                if completion.insert_text_format != Some(lsp::InsertTextFormat::SNIPPET) =>
+            {
                 let name = &completion.label;
                 let text = format!("{name}: {signature}",);
                 let prefix = "let ";
                 let source = Rope::from_iter([prefix, &text, " = ();"]);
-                let runs = language
-                    .highlight_text(&source, prefix.len()..prefix.len() + text.len())
-                    .collect();
+                let runs = language.highlight_text(&source, prefix.len()..prefix.len() + text.len()).collect();
                 mk_label(text, &|| 0..completion.label.len(), runs)
             }
-            (
-                function_signature,
-                Some(lsp::CompletionItemKind::FUNCTION | lsp::CompletionItemKind::METHOD),
-            ) => {
-                const FUNCTION_PREFIXES: [&str; 6] = [
-                    "async fn",
-                    "async unsafe fn",
-                    "const fn",
-                    "const unsafe fn",
-                    "unsafe fn",
-                    "fn",
-                ];
-                let fn_prefixed = FUNCTION_PREFIXES.iter().find_map(|&prefix| {
-                    function_signature?
-                        .strip_prefix(prefix)
-                        .map(|suffix| (prefix, suffix))
-                });
-                let label = if let Some(label) = completion
-                    .label
-                    .strip_suffix("(…)")
-                    .or_else(|| completion.label.strip_suffix("()"))
+            (function_signature, Some(lsp::CompletionItemKind::FUNCTION | lsp::CompletionItemKind::METHOD)) => {
+                const FUNCTION_PREFIXES: [&str; 6] =
+                    ["async fn", "async unsafe fn", "const fn", "const unsafe fn", "unsafe fn", "fn"];
+                let fn_prefixed = FUNCTION_PREFIXES
+                    .iter()
+                    .find_map(|&prefix| function_signature?.strip_prefix(prefix).map(|suffix| (prefix, suffix)));
+                let label = if let Some(label) =
+                    completion.label.strip_suffix("(…)").or_else(|| completion.label.strip_suffix("()"))
                 {
                     label
                 } else {
@@ -303,24 +260,16 @@ impl LspAdapter for RustLspAdapter {
                 static FULL_SIGNATURE_REGEX: LazyLock<Regex> =
                     LazyLock::new(|| Regex::new(r"fn (.+?)\(").expect("Failed to create REGEX"));
                 if let Some((function_signature, match_)) = function_signature
-                    .filter(|it| it.contains(&label))
+                    .filter(|it| it.contains(label))
                     .and_then(|it| Some((it, FULL_SIGNATURE_REGEX.find(it)?)))
                 {
-                    let runs = language
-                        .highlight_text(function_signature, 0..function_signature.len())
-                        .collect();
-                    mk_label(
-                        function_signature.to_owned(),
-                        &|| match_.range().start + 3..match_.range().end - 1,
-                        runs,
-                    )
+                    let runs = language.highlight_text(function_signature, 0..function_signature.len()).collect();
+                    mk_label(function_signature.to_owned(), &|| match_.range().start + 3..match_.range().end - 1, runs)
                 } else if let Some((prefix, suffix)) = fn_prefixed {
                     let text = format!("{label}{suffix}");
                     let source = Rope::from_iter([prefix, " ", &text, " {}"]);
                     let run_start = prefix.len() + 1;
-                    let runs = language
-                        .highlight_text(&source, run_start..run_start + text.len())
-                        .collect();
+                    let runs = language.highlight_text(&source, run_start..run_start + text.len()).collect();
                     mk_label(text, &|| 0..label.len(), runs)
                 } else if detail_right.is_some_and(|detail| detail.starts_with("macro_rules! ")) {
                     let text = completion.label.clone();
@@ -330,11 +279,7 @@ impl LspAdapter for RustLspAdapter {
                 } else if detail_left.is_none() {
                     return None;
                 } else {
-                    mk_label(
-                        completion.label.clone(),
-                        &|| 0..completion.label.len(),
-                        vec![],
-                    )
+                    mk_label(completion.label.clone(), &|| 0..completion.label.len(), vec![])
                 }
             }
             (_, kind) => {
@@ -343,10 +288,7 @@ impl LspAdapter for RustLspAdapter {
 
                 if completion.insert_text_format == Some(lsp::InsertTextFormat::SNIPPET)
                     && let Some(
-                        lsp::CompletionTextEdit::InsertAndReplace(lsp::InsertReplaceEdit {
-                            new_text,
-                            ..
-                        })
+                        lsp::CompletionTextEdit::InsertAndReplace(lsp::InsertReplaceEdit { new_text, .. })
                         | lsp::CompletionTextEdit::Edit(lsp::TextEdit { new_text, .. }),
                     ) = completion.text_edit.as_ref()
                     && let Ok(mut snippet) = snippet::Snippet::parse(new_text)
@@ -359,11 +301,8 @@ impl LspAdapter for RustLspAdapter {
 
                     let mut text_pos = 0;
 
-                    let mut all_stop_ranges = snippet
-                        .tabstops
-                        .into_iter()
-                        .flat_map(|stop| stop.ranges)
-                        .collect::<SmallVec<[_; 8]>>();
+                    let mut all_stop_ranges =
+                        snippet.tabstops.into_iter().flat_map(|stop| stop.ranges).collect::<SmallVec<[_; 8]>>();
                     all_stop_ranges.sort_unstable_by_key(|a| (a.start, Reverse(a.end)));
 
                     // Placeholders may nest, e.g. `$2` inside `${1:"$2"}`
@@ -383,10 +322,7 @@ impl LspAdapter for RustLspAdapter {
                             }
                             label.push_str(&snippet.text[text_pos..placeholder.snippet_text_end]);
                             text_pos = placeholder.snippet_text_end;
-                            runs.push((
-                                placeholder.label_run_start..label.len(),
-                                HighlightId::TABSTOP_REPLACE_ID,
-                            ));
+                            runs.push((placeholder.label_run_start..label.len(), HighlightId::TABSTOP_REPLACE_ID));
                             open_placeholders.pop();
                         }
 
@@ -398,20 +334,15 @@ impl LspAdapter for RustLspAdapter {
                             label.push('…');
                             runs.push((caret_start..label.len(), HighlightId::TABSTOP_INSERT_ID));
                         } else {
-                            open_placeholders.push(OpenPlaceholder {
-                                snippet_text_end: end_pos,
-                                label_run_start: label.len(),
-                            });
+                            open_placeholders
+                                .push(OpenPlaceholder { snippet_text_end: end_pos, label_run_start: label.len() });
                         }
                     }
 
                     while let Some(placeholder) = open_placeholders.pop() {
                         label.push_str(&snippet.text[text_pos..placeholder.snippet_text_end]);
                         text_pos = placeholder.snippet_text_end;
-                        runs.push((
-                            placeholder.label_run_start..label.len(),
-                            HighlightId::TABSTOP_REPLACE_ID,
-                        ));
+                        runs.push((placeholder.label_run_start..label.len(), HighlightId::TABSTOP_REPLACE_ID));
                     }
 
                     label.push_str(&snippet.text[text_pos..]);
@@ -430,24 +361,16 @@ impl LspAdapter for RustLspAdapter {
                         | lsp::CompletionItemKind::ENUM => Some("type"),
                         lsp::CompletionItemKind::ENUM_MEMBER => Some("variant"),
                         lsp::CompletionItemKind::KEYWORD => Some("keyword"),
-                        lsp::CompletionItemKind::VALUE | lsp::CompletionItemKind::CONSTANT => {
-                            Some("constant")
-                        }
+                        lsp::CompletionItemKind::VALUE | lsp::CompletionItemKind::CONSTANT => Some("constant"),
                         _ => None,
                     });
 
                     label = completion.label.clone();
 
                     if let Some(highlight_name) = highlight_name {
-                        let highlight_id =
-                            language.grammar()?.highlight_id_for_name(highlight_name)?;
-                        runs.push((
-                            0..label.rfind('(').unwrap_or(completion.label.len()),
-                            highlight_id,
-                        ));
-                    } else if detail_left.is_none()
-                        && kind != Some(lsp::CompletionItemKind::SNIPPET)
-                    {
+                        let highlight_id = language.grammar()?.highlight_id_for_name(highlight_name)?;
+                        runs.push((0..label.rfind('(').unwrap_or(completion.label.len()), highlight_id));
+                    } else if detail_left.is_none() && kind != Some(lsp::CompletionItemKind::SNIPPET) {
                         return None;
                     }
                 }
@@ -472,11 +395,7 @@ impl LspAdapter for RustLspAdapter {
         Some(label)
     }
 
-    async fn label_for_symbol(
-        &self,
-        symbol: &language::Symbol,
-        language: &Arc<Language>,
-    ) -> Option<CodeLabel> {
+    async fn label_for_symbol(&self, symbol: &language::Symbol, language: &Arc<Language>) -> Option<CodeLabel> {
         let name = &symbol.name;
         let (prefix, suffix) = match symbol.kind {
             language::SymbolKind::Method | language::SymbolKind::Function => ("fn ", "();"),
@@ -493,10 +412,7 @@ impl LspAdapter for RustLspAdapter {
                     name.to_string(),
                     0..name.len(),
                     language
-                        .highlight_text(
-                            &Rope::from_iter([prefix, name, "}"]),
-                            prefix.len()..prefix.len() + name.len(),
-                        )
+                        .highlight_text(&Rope::from_iter([prefix, name, "}"]), prefix.len()..prefix.len() + name.len())
                         .collect(),
                 ));
             }
@@ -508,21 +424,13 @@ impl LspAdapter for RustLspAdapter {
         Some(CodeLabel::new(
             format!("{prefix}{name}"),
             filter_range,
-            language
-                .highlight_text(&Rope::from_iter([prefix, name, suffix]), display_range)
-                .collect(),
+            language.highlight_text(&Rope::from_iter([prefix, name, suffix]), display_range).collect(),
         ))
     }
 
-    fn prepare_initialize_params(
-        &self,
-        mut original: InitializeParams,
-        cx: &App,
-    ) -> Result<InitializeParams> {
-        let enable_lsp_tasks = ProjectSettings::get_global(cx)
-            .lsp
-            .get(&SERVER_NAME)
-            .is_some_and(|s| s.enable_lsp_tasks);
+    fn prepare_initialize_params(&self, mut original: InitializeParams, cx: &App) -> Result<InitializeParams> {
+        let enable_lsp_tasks =
+            ProjectSettings::get_global(cx).lsp.get(&SERVER_NAME).is_some_and(|s| s.enable_lsp_tasks);
 
         // `rust-analyzer.runSingle` is deliberately not advertised, so the server sends no
         // "Run" / "Run Test" code lenses: gutter runnables already cover them.
@@ -551,11 +459,7 @@ impl LspAdapter for RustLspAdapter {
         Ok(original)
     }
 
-    fn client_command(
-        &self,
-        command_name: &str,
-        _arguments: &[serde_json::Value],
-    ) -> Option<ClientCommand> {
+    fn client_command(&self, command_name: &str, _arguments: &[serde_json::Value]) -> Option<ClientCommand> {
         match command_name {
             "rust-analyzer.showReferences" => Some(ClientCommand::ShowLocations),
             _ => None,
@@ -565,16 +469,13 @@ impl LspAdapter for RustLspAdapter {
 
 pub(crate) struct RustContextProvider;
 
-const RUST_PACKAGE_TASK_VARIABLE: VariableName =
-    VariableName::Custom(Cow::Borrowed("RUST_PACKAGE"));
+const RUST_PACKAGE_TASK_VARIABLE: VariableName = VariableName::Custom(Cow::Borrowed("RUST_PACKAGE"));
 
 /// The bin name corresponding to the current file in Cargo.toml
-const RUST_BIN_NAME_TASK_VARIABLE: VariableName =
-    VariableName::Custom(Cow::Borrowed("RUST_BIN_NAME"));
+const RUST_BIN_NAME_TASK_VARIABLE: VariableName = VariableName::Custom(Cow::Borrowed("RUST_BIN_NAME"));
 
 /// The bin kind (bin/example) corresponding to the current file in Cargo.toml
-const RUST_BIN_KIND_TASK_VARIABLE: VariableName =
-    VariableName::Custom(Cow::Borrowed("RUST_BIN_KIND"));
+const RUST_BIN_KIND_TASK_VARIABLE: VariableName = VariableName::Custom(Cow::Borrowed("RUST_BIN_KIND"));
 
 /// The flag to list required features for executing a bin, if any
 const RUST_BIN_REQUIRED_FEATURES_FLAG_TASK_VARIABLE: VariableName =
@@ -584,17 +485,13 @@ const RUST_BIN_REQUIRED_FEATURES_FLAG_TASK_VARIABLE: VariableName =
 const RUST_BIN_REQUIRED_FEATURES_TASK_VARIABLE: VariableName =
     VariableName::Custom(Cow::Borrowed("RUST_BIN_REQUIRED_FEATURES"));
 
-const RUST_TEST_FRAGMENT_TASK_VARIABLE: VariableName =
-    VariableName::Custom(Cow::Borrowed("RUST_TEST_FRAGMENT"));
+const RUST_TEST_FRAGMENT_TASK_VARIABLE: VariableName = VariableName::Custom(Cow::Borrowed("RUST_TEST_FRAGMENT"));
 
-const RUST_DOC_TEST_NAME_TASK_VARIABLE: VariableName =
-    VariableName::Custom(Cow::Borrowed("RUST_DOC_TEST_NAME"));
+const RUST_DOC_TEST_NAME_TASK_VARIABLE: VariableName = VariableName::Custom(Cow::Borrowed("RUST_DOC_TEST_NAME"));
 
-const RUST_TEST_NAME_TASK_VARIABLE: VariableName =
-    VariableName::Custom(Cow::Borrowed("RUST_TEST_NAME"));
+const RUST_TEST_NAME_TASK_VARIABLE: VariableName = VariableName::Custom(Cow::Borrowed("RUST_TEST_NAME"));
 
-const RUST_MANIFEST_DIRNAME_TASK_VARIABLE: VariableName =
-    VariableName::Custom(Cow::Borrowed("RUST_MANIFEST_DIRNAME"));
+const RUST_MANIFEST_DIRNAME_TASK_VARIABLE: VariableName = VariableName::Custom(Cow::Borrowed("RUST_MANIFEST_DIRNAME"));
 
 impl ContextProvider for RustContextProvider {
     fn build_context(
@@ -604,60 +501,42 @@ impl ContextProvider for RustContextProvider {
         project_env: Option<HashMap<String, String>>,
         cx: &mut gpui::App,
     ) -> Task<Result<TaskVariables>> {
-        let local_abs_path = location
-            .file_location
-            .buffer
-            .read(cx)
-            .file()
-            .and_then(|file| Some(file.as_local()?.abs_path(cx)));
+        let local_abs_path =
+            location.file_location.buffer.read(cx).file().and_then(|file| Some(file.as_local()?.abs_path(cx)));
 
         let mut variables = TaskVariables::default();
 
-        if let (Some(path), Some(stem)) = (&local_abs_path, task_variables.get(&VariableName::Stem))
-        {
+        if let (Some(path), Some(stem)) = (&local_abs_path, task_variables.get(&VariableName::Stem)) {
             let fragment = test_fragment(&variables, path, stem);
             variables.insert(RUST_TEST_FRAGMENT_TASK_VARIABLE, fragment);
         };
-        if let Some(test_name) =
-            task_variables.get(&VariableName::Custom(Cow::Borrowed("_test_name")))
-        {
+        if let Some(test_name) = task_variables.get(&VariableName::Custom(Cow::Borrowed("_test_name"))) {
             variables.insert(RUST_TEST_NAME_TASK_VARIABLE, test_name.into());
         }
-        if let Some(doc_test_name) =
-            task_variables.get(&VariableName::Custom(Cow::Borrowed("_doc_test_name")))
-        {
+        if let Some(doc_test_name) = task_variables.get(&VariableName::Custom(Cow::Borrowed("_doc_test_name"))) {
             variables.insert(RUST_DOC_TEST_NAME_TASK_VARIABLE, doc_test_name.into());
         }
         cx.background_spawn(async move {
-            if let Some(path) = local_abs_path
-                .as_deref()
-                .and_then(|local_abs_path| local_abs_path.parent())
-                && let Some(package_name) =
-                    human_readable_package_name(path, project_env.as_ref()).await
+            if let Some(path) = local_abs_path.as_deref().and_then(|local_abs_path| local_abs_path.parent())
+                && let Some(package_name) = human_readable_package_name(path, project_env.as_ref()).await
             {
                 variables.insert(RUST_PACKAGE_TASK_VARIABLE.clone(), package_name);
             }
             if let Some(path) = local_abs_path.as_ref()
-                && let Some((target, manifest_path)) =
-                    target_info_from_abs_path(path, project_env.as_ref()).await?
+                && let Some((target, manifest_path)) = target_info_from_abs_path(path, project_env.as_ref()).await?
             {
                 if let Some(target) = target {
                     variables.extend(TaskVariables::from_iter([
                         (RUST_PACKAGE_TASK_VARIABLE.clone(), target.package_name),
                         (RUST_BIN_NAME_TASK_VARIABLE.clone(), target.target_name),
-                        (
-                            RUST_BIN_KIND_TASK_VARIABLE.clone(),
-                            target.target_kind.to_string(),
-                        ),
+                        (RUST_BIN_KIND_TASK_VARIABLE.clone(), target.target_kind.to_string()),
                     ]));
                     if target.required_features.is_empty() {
                         variables.insert(RUST_BIN_REQUIRED_FEATURES_FLAG_TASK_VARIABLE, "".into());
                         variables.insert(RUST_BIN_REQUIRED_FEATURES_TASK_VARIABLE, "".into());
                     } else {
-                        variables.insert(
-                            RUST_BIN_REQUIRED_FEATURES_FLAG_TASK_VARIABLE.clone(),
-                            "--features".to_string(),
-                        );
+                        variables
+                            .insert(RUST_BIN_REQUIRED_FEATURES_FLAG_TASK_VARIABLE.clone(), "--features".to_string());
                         variables.insert(
                             RUST_BIN_REQUIRED_FEATURES_TASK_VARIABLE.clone(),
                             target.required_features.join(","),
@@ -673,11 +552,7 @@ impl ContextProvider for RustContextProvider {
         })
     }
 
-    fn associated_tasks(
-        &self,
-        buffer: Option<Entity<Buffer>>,
-        cx: &App,
-    ) -> Task<Option<TaskTemplates>> {
+    fn associated_tasks(&self, buffer: Option<Entity<Buffer>>, cx: &App) -> Task<Option<TaskTemplates>> {
         const DEFAULT_RUN_NAME_STR: &str = "RUST_DEFAULT_PACKAGE_RUN";
         const CUSTOM_TARGET_DIR: &str = "RUST_TARGET_DIR";
 
@@ -692,16 +567,9 @@ impl ContextProvider for RustContextProvider {
         };
         let mut task_templates = vec![
             TaskTemplate {
-                label: format!(
-                    "Check (package: {})",
-                    RUST_PACKAGE_TASK_VARIABLE.template_value(),
-                ),
+                label: format!("Check (package: {})", RUST_PACKAGE_TASK_VARIABLE.template_value(),),
                 command: "cargo".into(),
-                args: vec![
-                    "check".into(),
-                    "-p".into(),
-                    RUST_PACKAGE_TASK_VARIABLE.template_value(),
-                ],
+                args: vec!["check".into(), "-p".into(), RUST_PACKAGE_TASK_VARIABLE.template_value()],
                 cwd: Some("$ZED_DIRNAME".to_owned()),
                 ..TaskTemplate::default()
             },
@@ -793,16 +661,9 @@ impl ContextProvider for RustContextProvider {
                 ..TaskTemplate::default()
             },
             TaskTemplate {
-                label: format!(
-                    "Test (package: {})",
-                    RUST_PACKAGE_TASK_VARIABLE.template_value()
-                ),
+                label: format!("Test (package: {})", RUST_PACKAGE_TASK_VARIABLE.template_value()),
                 command: "cargo".into(),
-                args: vec![
-                    "test".into(),
-                    "-p".into(),
-                    RUST_PACKAGE_TASK_VARIABLE.template_value(),
-                ],
+                args: vec!["test".into(), "-p".into(), RUST_PACKAGE_TASK_VARIABLE.template_value()],
                 cwd: Some(RUST_MANIFEST_DIRNAME_TASK_VARIABLE.template_value()),
                 ..TaskTemplate::default()
             },
@@ -827,10 +688,7 @@ impl ContextProvider for RustContextProvider {
                 .into_iter()
                 .map(|mut task_template| {
                     let mut args = task_template.args.split_off(1);
-                    task_template.args.append(&mut vec![
-                        "--target-dir".to_string(),
-                        custom_target_dir.clone(),
-                    ]);
+                    task_template.args.append(&mut vec!["--target-dir".to_string(), custom_target_dir.clone()]);
                     task_template.args.append(&mut args);
 
                     task_template
@@ -906,9 +764,7 @@ async fn target_info_from_abs_path(
     abs_path: &Path,
     project_env: Option<&HashMap<String, String>>,
 ) -> Result<Option<(Option<TargetInfo>, Arc<Path>)>> {
-    let directory = abs_path
-        .parent()
-        .ok_or_else(|| anyhow::anyhow!("failed to get parent directory"))?;
+    let directory = abs_path.parent().ok_or_else(|| anyhow::anyhow!("failed to get parent directory"))?;
     if !has_cargo_manifest(directory).await? {
         return Ok(None);
     }
@@ -947,10 +803,7 @@ async fn has_cargo_manifest(directory: &Path) -> Result<bool> {
     Ok(false)
 }
 
-fn target_info_from_metadata(
-    metadata: CargoMetadata,
-    abs_path: &Path,
-) -> Option<(Option<TargetInfo>, Arc<Path>)> {
+fn target_info_from_metadata(metadata: CargoMetadata, abs_path: &Path) -> Option<(Option<TargetInfo>, Arc<Path>)> {
     let mut manifest_path = None;
     for package in metadata.packages {
         let Some(manifest_dir_path) = package.manifest_path.parent() else {
@@ -972,11 +825,7 @@ fn target_info_from_metadata(
         };
 
         for target in package.targets {
-            let Some(bin_kind) = target
-                .kind
-                .iter()
-                .find_map(|kind| TargetKind::try_from(kind.as_ref()).ok())
-            else {
+            let Some(bin_kind) = target.kind.iter().find_map(|kind| TargetKind::try_from(kind.as_ref()).ok()) else {
                 continue;
             };
             let target_path = PathBuf::from(target.src_path);
@@ -1007,16 +856,8 @@ async fn human_readable_package_name(
     if let Some(envs) = project_env {
         command.envs(envs);
     }
-    let pkgid = String::from_utf8(
-        command
-            .current_dir(package_directory)
-            .arg("pkgid")
-            .output()
-            .await
-            .log_err()?
-            .stdout,
-    )
-    .ok()?;
+    let pkgid =
+        String::from_utf8(command.current_dir(package_directory).arg("pkgid").output().await.log_err()?.stdout).ok()?;
     Some(package_name_from_pkgid(&pkgid)?.to_owned())
 }
 
@@ -1062,10 +903,9 @@ fn test_fragment(variables: &TaskVariables, path: &Path, stem: &str) -> String {
     } else if stem == "mod" {
         maybe!({ Some(path.parent()?.file_name()?.to_string_lossy().into_owned()) })
     } else if stem == "main" {
-        if let (Some(bin_name), Some(bin_kind)) = (
-            variables.get(&RUST_BIN_NAME_TASK_VARIABLE),
-            variables.get(&RUST_BIN_KIND_TASK_VARIABLE),
-        ) {
+        if let (Some(bin_name), Some(bin_kind)) =
+            (variables.get(&RUST_BIN_NAME_TASK_VARIABLE), variables.get(&RUST_BIN_KIND_TASK_VARIABLE))
+        {
             Some(format!("--{bin_kind}={bin_name}"))
         } else {
             None

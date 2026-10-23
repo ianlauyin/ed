@@ -1,28 +1,61 @@
 use std::ops::Range;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+use std::time::Instant;
 
 use collections::HashMap;
-use gpui::{
-    AnyElement, App, AvailableSpace, ClickEvent, Context, DispatchPhase, Element, MouseButton,
-    MouseClickEvent, MouseDownEvent, MouseMoveEvent, MousePressureEvent, MouseUpEvent,
-    ParentElement, Pixels, PressureStage, ScrollDelta, ScrollWheelEvent, Window, anchored,
-    deferred, point, px,
-};
+use gpui::AnyElement;
+use gpui::App;
+use gpui::AvailableSpace;
+use gpui::ClickEvent;
+use gpui::Context;
+use gpui::DispatchPhase;
+use gpui::Element;
+use gpui::MouseButton;
+use gpui::MouseClickEvent;
+use gpui::MouseDownEvent;
+use gpui::MouseMoveEvent;
+use gpui::MousePressureEvent;
+use gpui::MouseUpEvent;
+use gpui::ParentElement;
+use gpui::Pixels;
+use gpui::PressureStage;
+use gpui::ScrollDelta;
+use gpui::ScrollWheelEvent;
+use gpui::Window;
+use gpui::anchored;
+use gpui::deferred;
+use gpui::point;
+use gpui::px;
 use multi_buffer::MultiBufferRow;
-
 use settings::Settings;
 use sum_tree::Bias;
 use text::SelectionGoal;
-use util::{RangeExt, debug_panic};
+use util::RangeExt;
+use util::debug_panic;
 
-use super::{EditorElement, EditorLayout, LineNumberLayout, PositionMap, SplitSide};
-use crate::{
-    ColumnarMode, DisplayDiffHunk, DisplayPoint, DisplayRow, Editor, EditorSettings,
-    EditorSnapshot, GutterHoverButton, JumpData, SelectPhase, Selection, SelectionDragState,
-    display_map::ToDisplayPoint, editor_settings::DoubleClickInMultibuffer,
-    hover_popover::hover_at, inlays::inlay_hints::HintTarget, mouse_context_menu,
-    scroll::ScrollPixelOffset,
-};
+use super::EditorElement;
+use super::EditorLayout;
+use super::LineNumberLayout;
+use super::PositionMap;
+use super::SplitSide;
+use crate::ColumnarMode;
+use crate::DisplayDiffHunk;
+use crate::DisplayPoint;
+use crate::DisplayRow;
+use crate::Editor;
+use crate::EditorSettings;
+use crate::EditorSnapshot;
+use crate::GutterHoverButton;
+use crate::JumpData;
+use crate::SelectPhase;
+use crate::Selection;
+use crate::SelectionDragState;
+use crate::display_map::ToDisplayPoint;
+use crate::editor_settings::DoubleClickInMultibuffer;
+use crate::hover_popover::hover_at;
+use crate::inlays::inlay_hints::HintTarget;
+use crate::mouse_context_menu;
+use crate::scroll::ScrollPixelOffset;
 
 impl EditorElement {
     pub(crate) fn mouse_moved(
@@ -54,15 +87,8 @@ impl EditorElement {
         } else if text_hovered {
             let current_row = valid_point.row();
             position_map.display_hunks.iter().find_map(|(hunk, _)| {
-                if let DisplayDiffHunk::Unfolded {
-                    display_row_range, ..
-                } = hunk
-                {
-                    if display_row_range.contains(&current_row) {
-                        Some(display_row_range.start)
-                    } else {
-                        None
-                    }
+                if let DisplayDiffHunk::Unfolded { display_row_range, .. } = hunk {
+                    if display_row_range.contains(&current_row) { Some(display_row_range.start) } else { None }
                 } else {
                     None
                 }
@@ -76,59 +102,45 @@ impl EditorElement {
             cx.notify();
         }
 
-        let gutter_hover_button = if gutter_hovered
-            && split_side != Some(SplitSide::Left)
-            && editor.show_runnables != Some(false)
-        {
-            let buffer_anchor = position_map
-                .snapshot
-                .display_point_to_anchor(valid_point, Bias::Left);
+        let gutter_hover_button =
+            if gutter_hovered && split_side != Some(SplitSide::Left) && editor.show_runnables != Some(false) {
+                let buffer_anchor = position_map.snapshot.display_point_to_anchor(valid_point, Bias::Left);
 
-            // The button copies a worktree-relative path, so it would be a no-op
-            // for buffers without a worktree file (e.g. untitled buffers).
-            if position_map
-                .snapshot
-                .buffer_snapshot()
-                .anchor_to_buffer_anchor(buffer_anchor)
-                .is_some_and(|(_, buffer_snapshot)| {
-                    project::File::from_dyn(buffer_snapshot.file()).is_some()
-                })
-            {
-                let is_visible = editor
-                    .gutter_hover_button
-                    .0
-                    .is_some_and(|button| button.is_active);
+                // The button copies a worktree-relative path, so it would be a no-op
+                // for buffers without a worktree file (e.g. untitled buffers).
+                if position_map
+                    .snapshot
+                    .buffer_snapshot()
+                    .anchor_to_buffer_anchor(buffer_anchor)
+                    .is_some_and(|(_, buffer_snapshot)| project::File::from_dyn(buffer_snapshot.file()).is_some())
+                {
+                    let is_visible = editor.gutter_hover_button.0.is_some_and(|button| button.is_active);
 
-                if !is_visible {
-                    editor.gutter_hover_button.1.get_or_insert_with(|| {
-                        cx.spawn(async move |this, cx| {
-                            cx.background_executor()
-                                .timer(Duration::from_millis(200))
-                                .await;
+                    if !is_visible {
+                        editor.gutter_hover_button.1.get_or_insert_with(|| {
+                            cx.spawn(async move |this, cx| {
+                                cx.background_executor().timer(Duration::from_millis(200)).await;
 
-                            this.update(cx, |this, cx| {
-                                if let Some(button) = this.gutter_hover_button.0.as_mut() {
-                                    button.is_active = true;
-                                    cx.notify();
-                                }
+                                this.update(cx, |this, cx| {
+                                    if let Some(button) = this.gutter_hover_button.0.as_mut() {
+                                        button.is_active = true;
+                                        cx.notify();
+                                    }
+                                })
+                                .ok();
                             })
-                            .ok();
-                        })
-                    });
-                }
+                        });
+                    }
 
-                Some(GutterHoverButton {
-                    display_row: valid_point.row(),
-                    is_active: is_visible,
-                })
+                    Some(GutterHoverButton { display_row: valid_point.row(), is_active: is_visible })
+                } else {
+                    editor.gutter_hover_button.1 = None;
+                    None
+                }
             } else {
                 editor.gutter_hover_button.1 = None;
                 None
-            }
-        } else {
-            editor.gutter_hover_button.1 = None;
-            None
-        };
+            };
 
         if gutter_hover_button != editor.gutter_hover_button.0 {
             editor.gutter_hover_button.0 = gutter_hover_button;
@@ -188,37 +200,24 @@ impl EditorElement {
                 window,
                 cx,
             )?;
-            let visible_end_point = editor.display_to_pixel_point(
-                DisplayPoint::new(visible_range.end, 0),
-                editor_snapshot,
-                window,
-                cx,
-            )?;
+            let visible_end_point =
+                editor.display_to_pixel_point(DisplayPoint::new(visible_range.end, 0), editor_snapshot, window, cx)?;
 
             let mouse_context_menu = editor.mouse_context_menu.as_ref()?;
             let (source_display_point, position) = match mouse_context_menu.position {
                 mouse_context_menu::MenuPosition::PinnedToScreen(point) => (None, point),
                 mouse_context_menu::MenuPosition::PinnedToEditor { source, offset } => {
                     let source_display_point = source.to_display_point(editor_snapshot);
-                    let source_point =
-                        editor.to_pixel_point(source, editor_snapshot, window, cx)?;
+                    let source_point = editor.to_pixel_point(source, editor_snapshot, window, cx)?;
                     let position = content_origin + source_point + offset;
                     (Some(source_display_point), position)
                 }
             };
 
-            let source_included = source_display_point.is_none_or(|source_display_point| {
-                visible_range
-                    .to_inclusive()
-                    .contains(&source_display_point.row())
-            });
-            let position_included =
-                visible_start_point.y <= position.y && position.y <= visible_end_point.y;
-            if !source_included && !position_included {
-                None
-            } else {
-                Some(position)
-            }
+            let source_included = source_display_point
+                .is_none_or(|source_display_point| visible_range.to_inclusive().contains(&source_display_point.row()));
+            let position_included = visible_start_point.y <= position.y && position.y <= visible_end_point.y;
+            if !source_included && !position_included { None } else { Some(position) }
         })?;
 
         let mut element = self.editor.read_with(cx, |editor, _| {
@@ -242,12 +241,7 @@ impl EditorElement {
         Some(element)
     }
 
-    pub(super) fn paint_mouse_listeners(
-        &mut self,
-        layout: &EditorLayout,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
+    pub(super) fn paint_mouse_listeners(&self, layout: &EditorLayout, window: &mut Window, cx: &App) {
         if layout.mode.is_minimap() {
             return;
         }
@@ -263,21 +257,12 @@ impl EditorElement {
                 if phase == DispatchPhase::Bubble {
                     match event.button {
                         MouseButton::Left => editor.update(cx, |editor, cx| {
-                            let pending_mouse_down = editor
-                                .pending_mouse_down
-                                .get_or_insert_with(Default::default)
-                                .clone();
+                            let pending_mouse_down =
+                                editor.pending_mouse_down.get_or_insert_with(Default::default).clone();
 
                             *pending_mouse_down.borrow_mut() = Some(event.clone());
 
-                            Self::mouse_left_down(
-                                editor,
-                                event,
-                                &position_map,
-                                line_numbers.as_ref(),
-                                window,
-                                cx,
-                            );
+                            Self::mouse_left_down(editor, event, &position_map, line_numbers.as_ref(), window, cx);
                         }),
                         MouseButton::Right => editor.update(cx, |editor, cx| {
                             Self::mouse_right_down(editor, event, &position_map, window, cx);
@@ -297,9 +282,7 @@ impl EditorElement {
 
             move |event: &MouseUpEvent, phase, window, cx| {
                 if phase == DispatchPhase::Bubble {
-                    editor.update(cx, |editor, cx| {
-                        Self::mouse_up(editor, event, &position_map, window, cx)
-                    });
+                    editor.update(cx, |editor, cx| Self::mouse_up(editor, event, &position_map, window, cx));
                 }
             }
         });
@@ -314,10 +297,7 @@ impl EditorElement {
                 // so that it happens even if another event handler stops
                 // propagation.
                 DispatchPhase::Capture => editor.update(cx, |editor, _cx| {
-                    let pending_mouse_down = editor
-                        .pending_mouse_down
-                        .get_or_insert_with(Default::default)
-                        .clone();
+                    let pending_mouse_down = editor.pending_mouse_down.get_or_insert_with(Default::default).clone();
 
                     let mut pending_mouse_down = pending_mouse_down.borrow_mut();
                     if pending_mouse_down.is_some() && position_map.text_hitbox.is_hovered(window) {
@@ -328,10 +308,7 @@ impl EditorElement {
                 // Fire click handlers during the bubble phase.
                 DispatchPhase::Bubble => editor.update(cx, |editor, cx| {
                     if let Some(mouse_down) = captured_mouse_down.take() {
-                        let event = ClickEvent::Mouse(MouseClickEvent {
-                            down: mouse_down,
-                            up: event.clone(),
-                        });
+                        let event = ClickEvent::Mouse(MouseClickEvent { down: mouse_down, up: event.clone() });
                         Self::click(editor, &event, &position_map, window, cx);
                     }
                 }),
@@ -345,7 +322,7 @@ impl EditorElement {
             move |event: &MousePressureEvent, phase, window, cx| {
                 if phase == DispatchPhase::Bubble {
                     editor.update(cx, |editor, cx| {
-                        Self::pressure_click(editor, &event, &position_map, window, cx);
+                        Self::pressure_click(editor, event, &position_map, window, cx);
                     })
                 }
             }
@@ -375,12 +352,7 @@ impl EditorElement {
         });
     }
 
-    fn paint_scroll_wheel_listener(
-        &mut self,
-        layout: &EditorLayout,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
+    fn paint_scroll_wheel_listener(&self, layout: &EditorLayout, window: &mut Window, cx: &App) {
         window.on_mouse_event({
             let position_map = layout.position_map.clone();
             let editor = self.editor.clone();
@@ -389,25 +361,17 @@ impl EditorElement {
 
             // Set a minimum scroll_sensitivity of 0.01 to make sure the user doesn't
             // accidentally turn off their scrolling.
-            let base_scroll_sensitivity =
-                EditorSettings::get_global(cx).scroll_sensitivity.max(0.01);
+            let base_scroll_sensitivity = EditorSettings::get_global(cx).scroll_sensitivity.max(0.01);
 
             // Use a minimum fast_scroll_sensitivity for same reason above
-            let fast_scroll_sensitivity = EditorSettings::get_global(cx)
-                .fast_scroll_sensitivity
-                .max(0.01);
+            let fast_scroll_sensitivity = EditorSettings::get_global(cx).fast_scroll_sensitivity.max(0.01);
 
             move |event: &ScrollWheelEvent, phase, window, cx| {
                 if phase == DispatchPhase::Bubble && hitbox.should_handle_scroll(window) {
                     delta = delta.coalesce(event.delta);
 
-                    let scroll_sensitivity = {
-                        if event.modifiers.alt {
-                            fast_scroll_sensitivity
-                        } else {
-                            base_scroll_sensitivity
-                        }
-                    };
+                    let scroll_sensitivity =
+                        { if event.modifiers.alt { fast_scroll_sensitivity } else { base_scroll_sensitivity } };
 
                     editor.update(cx, |editor, cx| {
                         let line_height = position_map.line_height;
@@ -415,9 +379,7 @@ impl EditorElement {
                         let delta = match delta {
                             gpui::ScrollDelta::Pixels(mut pixels) => {
                                 //Trackpad
-                                editor
-                                    .scroll_manager
-                                    .filter_scroll_delta(&mut pixels, event.touch_phase);
+                                editor.scroll_manager.filter_scroll_delta(&mut pixels, event.touch_phase);
                                 pixels
                             }
 
@@ -434,8 +396,7 @@ impl EditorElement {
                         let y = (current_scroll_position.y * ScrollPixelOffset::from(line_height)
                             - ScrollPixelOffset::from(delta.y * scroll_sensitivity))
                             / ScrollPixelOffset::from(line_height);
-                        let mut scroll_position =
-                            point(x, y).clamp(&point(0., 0.), &position_map.scroll_max);
+                        let mut scroll_position = point(x, y).clamp(&point(0., 0.), &position_map.scroll_max);
                         let forbid_vertical_scroll = editor.scroll_manager.forbid_vertical_scroll();
                         if forbid_vertical_scroll {
                             scroll_position.y = current_scroll_position.y;
@@ -469,20 +430,12 @@ impl EditorElement {
         let mut click_count = event.click_count;
         let mut modifiers = event.modifiers;
 
-        if let Some(hovered_hunk) =
-            position_map
-                .display_hunks
-                .iter()
-                .find_map(|(hunk, hunk_hitbox)| match hunk {
-                    DisplayDiffHunk::Folded { .. } => None,
-                    DisplayDiffHunk::Unfolded {
-                        multi_buffer_range, ..
-                    } => hunk_hitbox
-                        .as_ref()
-                        .is_some_and(|hitbox| hitbox.is_hovered(window))
-                        .then(|| multi_buffer_range.clone()),
-                })
-        {
+        if let Some(hovered_hunk) = position_map.display_hunks.iter().find_map(|(hunk, hunk_hitbox)| match hunk {
+            DisplayDiffHunk::Folded { .. } => None,
+            DisplayDiffHunk::Unfolded { multi_buffer_range, .. } => {
+                hunk_hitbox.as_ref().is_some_and(|hitbox| hitbox.is_hovered(window)).then(|| multi_buffer_range.clone())
+            }
+        }) {
             editor.toggle_single_diff_hunk(hovered_hunk, cx);
             cx.notify();
             return;
@@ -507,27 +460,18 @@ impl EditorElement {
 
         let is_singleton = editor.buffer().read(cx).is_singleton();
         let double_click_selects = is_singleton
-            || EditorSettings::get_global(cx).double_click_in_multibuffer
-                == DoubleClickInMultibuffer::Select;
+            || EditorSettings::get_global(cx).double_click_in_multibuffer == DoubleClickInMultibuffer::Select;
 
         if click_count == 2
             && double_click_selects
             && !modifiers.modified()
             && let Some((hint, offset_in_hint)) =
                 hint_glyph.and_then(|glyph| position_map.snapshot.inlay_hint_at(glyph))
-            && let Some(buffer_id) = hint
-                .position
-                .raw_text_anchor()
-                .map(|anchor| anchor.buffer_id)
+            && let Some(buffer_id) = hint.position.raw_text_anchor().map(|anchor| anchor.buffer_id)
         {
             let resolved = editor.is_inlay_hint_resolved(buffer_id, hint.id, cx);
             let accepting = editor.apply_inlay_hint_text_edits(
-                [HintTarget {
-                    buffer_id,
-                    hint_id: hint.id,
-                    position: hint.position,
-                }]
-                .into_iter(),
+                [HintTarget { buffer_id, hint_id: hint.id, position: hint.position }].into_iter(),
                 Some(offset_in_hint),
                 window,
                 cx,
@@ -538,12 +482,7 @@ impl EditorElement {
             }
         }
 
-        if EditorSettings::get_global(cx)
-            .drag_and_drop_selection
-            .enabled
-            && click_count == 1
-            && !modifiers.shift
-        {
+        if EditorSettings::get_global(cx).drag_and_drop_selection.enabled && click_count == 1 && !modifiers.shift {
             let newest_anchor = editor.selections.newest_anchor();
             let snapshot = editor.snapshot(window, cx);
             let selection = newest_anchor.map(|anchor| anchor.to_display_point(&snapshot));
@@ -570,17 +509,12 @@ impl EditorElement {
                         modifiers.alt = false;
                     } else {
                         let scroll_position_row = position_map.scroll_position.y;
-                        let display_row = (((event.position - gutter_hitbox.bounds.origin).y
-                            / position_map.line_height)
+                        let display_row = (((event.position - gutter_hitbox.bounds.origin).y / position_map.line_height)
                             as f64
-                            + position_map.scroll_position.y)
-                            as u32;
+                            + position_map.scroll_position.y) as u32;
                         let multi_buffer_row = position_map
                             .snapshot
-                            .display_point_to_point(
-                                DisplayPoint::new(DisplayRow(display_row), 0),
-                                Bias::Right,
-                            )
+                            .display_point_to_point(DisplayPoint::new(DisplayRow(display_row), 0), Bias::Right)
                             .row;
                         let line_offset_from_top = display_row - scroll_position_row as u32;
                         // if double click is made without alt, open the corresponding excerp
@@ -600,31 +534,23 @@ impl EditorElement {
         }
 
         if !is_singleton {
-            let display_row = (ScrollPixelOffset::from(
-                (event.position - gutter_hitbox.bounds.origin).y / position_map.line_height,
-            ) + position_map.scroll_position.y) as u32;
+            let display_row =
+                (ScrollPixelOffset::from((event.position - gutter_hitbox.bounds.origin).y / position_map.line_height)
+                    + position_map.scroll_position.y) as u32;
             let multi_buffer_row = position_map
                 .snapshot
                 .display_point_to_point(DisplayPoint::new(DisplayRow(display_row), 0), Bias::Right)
                 .row;
-            if line_numbers
-                .get(&MultiBufferRow(multi_buffer_row))
-                .is_some_and(|line_layout| {
-                    line_layout.segments.iter().any(|segment| {
-                        segment
-                            .hitbox
-                            .as_ref()
-                            .is_some_and(|hitbox| hitbox.contains(&event.position))
-                    })
-                })
-            {
+            if line_numbers.get(&MultiBufferRow(multi_buffer_row)).is_some_and(|line_layout| {
+                line_layout
+                    .segments
+                    .iter()
+                    .any(|segment| segment.hitbox.as_ref().is_some_and(|hitbox| hitbox.contains(&event.position)))
+            }) {
                 let line_offset_from_top = display_row - position_map.scroll_position.y as u32;
 
                 editor.open_excerpts_common(
-                    Some(JumpData::MultiBufferRow {
-                        row: MultiBufferRow(multi_buffer_row),
-                        line_offset_from_top,
-                    }),
+                    Some(JumpData::MultiBufferRow { row: MultiBufferRow(multi_buffer_row), line_offset_from_top }),
                     modifiers.alt,
                     window,
                     cx,
@@ -649,23 +575,11 @@ impl EditorElement {
                 window,
                 cx,
             );
-        } else if modifiers.shift && !modifiers.control && !modifiers.alt && !modifiers.secondary()
-        {
-            editor.select(
-                SelectPhase::Extend {
-                    position,
-                    click_count,
-                },
-                window,
-                cx,
-            );
+        } else if modifiers.shift && !modifiers.control && !modifiers.alt && !modifiers.secondary() {
+            editor.select(SelectPhase::Extend { position, click_count }, window, cx);
         } else {
             editor.select(
-                SelectPhase::Begin {
-                    position,
-                    add: Editor::is_alt_pressed(&modifiers, cx),
-                    click_count,
-                },
+                SelectPhase::Begin { position, add: Editor::is_alt_pressed(&modifiers, cx), click_count },
                 window,
                 cx,
             );
@@ -684,9 +598,7 @@ impl EditorElement {
             let gutter_right_padding = editor.gutter_dimensions.right_padding;
             let hitbox = &position_map.gutter_hitbox;
 
-            if event.position.x <= hitbox.bounds.right() - gutter_right_padding
-                && editor.project.is_some()
-            {
+            if event.position.x <= hitbox.bounds.right() - gutter_right_padding && editor.project.is_some() {
                 let point_for_position = position_map.point_for_position(event.position);
                 editor.set_gutter_context_menu(
                     point_for_position.nearest_valid.row(),
@@ -753,11 +665,7 @@ impl EditorElement {
         let point_for_position = position_map.point_for_position(event.position);
 
         match editor.selection_drag_state {
-            SelectionDragState::ReadyToDrag {
-                selection: _,
-                ref click_position,
-                mouse_down_time: _,
-            } => {
+            SelectionDragState::ReadyToDrag { selection: _, ref click_position, mouse_down_time: _ } => {
                 if event.position == *click_position {
                     editor.select(
                         SelectPhase::Begin {
@@ -778,9 +686,7 @@ impl EditorElement {
             SelectionDragState::Dragging { ref selection, .. } => {
                 let snapshot = editor.snapshot(window, cx);
                 let selection_display = selection.map(|anchor| anchor.to_display_point(&snapshot));
-                if !point_for_position.intersects_selection(&selection_display)
-                    && text_hitbox.is_hovered(window)
-                {
+                if !point_for_position.intersects_selection(&selection_display) && text_hitbox.is_hovered(window) {
                     let is_cut = !(true && event.modifiers.alt || false && event.modifiers.control);
                     editor.move_selection_on_drop(
                         &selection.clone(),
@@ -836,10 +742,7 @@ impl EditorElement {
         if let Some(mouse_position) = event.mouse_position()
             && !pending_nonempty_selections
             && text_hitbox.is_hovered(window)
-            && !matches!(
-                editor.selection_drag_state,
-                SelectionDragState::Dragging { .. }
-            )
+            && !matches!(editor.selection_drag_state, SelectionDragState::Dragging { .. })
         {
             let point = position_map.point_for_position(mouse_position);
             if let ClickEvent::Mouse(mouse_event) = event
@@ -875,8 +778,7 @@ impl EditorElement {
     ) {
         let text_hitbox = &position_map.text_hitbox;
         let force_click_possible =
-            matches!(editor.prev_pressure_stage, Some(PressureStage::Normal))
-                && event.stage == PressureStage::Force;
+            matches!(editor.prev_pressure_stage, Some(PressureStage::Normal)) && event.stage == PressureStage::Force;
 
         editor.prev_pressure_stage = Some(event.stage);
 
@@ -896,8 +798,7 @@ impl EditorElement {
         cx: &mut Context<Editor>,
     ) {
         if editor.has_autoscroll_request()
-            || !editor.has_pending_selection()
-                && matches!(editor.selection_drag_state, SelectionDragState::None)
+            || !editor.has_pending_selection() && matches!(editor.selection_drag_state, SelectionDragState::None)
         {
             return;
         }
@@ -922,10 +823,7 @@ impl EditorElement {
             let style = editor.style.clone().unwrap_or_default();
             let font_id = window.text_system().resolve_font(&style.text.font());
             let font_size = style.text.font_size.to_pixels(window.rem_size());
-            let em_width = window
-                .text_system()
-                .em_width(font_id, font_size)
-                .unwrap_or(font_size);
+            let em_width = window.text_system().em_width(font_id, font_size).unwrap_or(font_size);
 
             let scroll_margin_x = EditorSettings::get_global(cx).horizontal_scroll_margin;
 
@@ -944,32 +842,19 @@ impl EditorElement {
         };
 
         if !editor.has_pending_selection() {
-            let drop_anchor = position_map
-                .snapshot
-                .display_point_to_anchor(point_for_position.nearest_valid, Bias::Left);
+            let drop_anchor =
+                position_map.snapshot.display_point_to_anchor(point_for_position.nearest_valid, Bias::Left);
             match editor.selection_drag_state {
-                SelectionDragState::Dragging {
-                    ref mut drop_cursor,
-                    ref mut hide_drop_cursor,
-                    ..
-                } => {
+                SelectionDragState::Dragging { ref mut drop_cursor, ref mut hide_drop_cursor, .. } => {
                     drop_cursor.start = drop_anchor;
                     drop_cursor.end = drop_anchor;
                     *hide_drop_cursor = !text_hitbox.is_hovered(window);
                     editor.apply_scroll_delta(scroll_delta, window, cx);
                     cx.notify();
                 }
-                SelectionDragState::ReadyToDrag {
-                    ref selection,
-                    ref click_position,
-                    ref mouse_down_time,
-                } => {
-                    let drag_and_drop_delay = Duration::from_millis(
-                        EditorSettings::get_global(cx)
-                            .drag_and_drop_selection
-                            .delay
-                            .0,
-                    );
+                SelectionDragState::ReadyToDrag { ref selection, ref click_position, ref mouse_down_time } => {
+                    let drag_and_drop_delay =
+                        Duration::from_millis(EditorSettings::get_global(cx).drag_and_drop_selection.delay.0);
                     if mouse_down_time.elapsed() >= drag_and_drop_delay {
                         let drop_cursor = Selection {
                             id: editor.selections.next_selection_id(),
@@ -989,11 +874,7 @@ impl EditorElement {
                         let click_point = position_map.point_for_position(*click_position);
                         editor.selection_drag_state = SelectionDragState::None;
                         editor.select(
-                            SelectPhase::Begin {
-                                position: click_point.nearest_valid,
-                                add: false,
-                                click_count: 1,
-                            },
+                            SelectPhase::Begin { position: click_point.nearest_valid, add: false, click_count: 1 },
                             window,
                             cx,
                         );

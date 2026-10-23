@@ -1,6 +1,7 @@
+use std::io;
+
 use futures::AsyncRead;
 use smol::io::AsyncReadExt;
-use std::io;
 
 pub(crate) async fn read(
     mut stderr: impl AsyncRead + Unpin,
@@ -39,11 +40,8 @@ struct GitCloneProgress {
 }
 
 impl GitCloneProgress {
-    fn new() -> Self {
-        Self {
-            pending: Vec::new(),
-            last_message: None,
-        }
+    const fn new() -> Self {
+        Self { pending: Vec::new(), last_message: None }
     }
 
     fn push(&mut self, bytes: &[u8], mut on_progress: impl FnMut(String)) {

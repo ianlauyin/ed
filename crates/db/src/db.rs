@@ -2,26 +2,31 @@ pub mod kvp;
 pub mod query;
 
 // Re-export
+use std::fs::create_dir_all;
+use std::future::Future;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::LazyLock;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+
 pub use anyhow;
 use anyhow::Context as _;
 pub use gpui;
-use gpui::{App, AppContext, Global};
+use gpui::App;
+use gpui::AppContext;
+use gpui::Global;
 pub use indoc::indoc;
 pub use inventory;
 pub use paths::database_dir;
 pub use sqlez;
-pub use sqlez_macros;
-pub use uuid;
-
 use sqlez::domain::Schema;
 use sqlez::thread_safe_connection::ThreadSafeConnection;
+pub use sqlez_macros;
 use sqlez_macros::sql;
-use std::fs::create_dir_all;
-use std::future::Future;
-use std::path::{Path, PathBuf};
-use std::sync::atomic::AtomicBool;
-use std::sync::{LazyLock, atomic::Ordering};
-use util::{ResultExt, maybe};
+use util::ResultExt;
+use util::maybe;
+pub use uuid;
 
 /// A domain schema registered via `static_connection!` and collected at link time.
 pub struct DomainSchema {
@@ -46,16 +51,14 @@ impl Schema for AppSchema {
         // Sort by name first so the combined schema (and its hash) doesn't depend on link order.
         let mut registrations: Vec<&DomainSchema> = inventory::iter::<DomainSchema>().collect();
         registrations.sort_by_key(|reg| reg.name);
-        topological_sort(&registrations)
-            .into_iter()
-            .map(|reg| reg.schema)
-            .collect()
+        topological_sort(&registrations).into_iter().map(|reg| reg.schema).collect()
     }
 }
 
 impl AppDatabase {
     /// Opens the production database, creating all inventory-registered
     /// domain schemas in dependency order.
+    #[allow(clippy::new_without_default, reason = "opens the on-disk database, not a cheap default")]
     pub fn new() -> Self {
         let db_dir = database_dir();
         let connection = gpui::block_on(open_db::<AppSchema>(db_dir, AppDbScope));
@@ -66,11 +69,7 @@ impl AppDatabase {
     /// the shared LazyLock.
     pub fn global(cx: &App) -> &ThreadSafeConnection {
         #[allow(unreachable_code)]
-        if let Some(db) = cx.try_global::<Self>() {
-            return &db.0;
-        } else {
-            panic!("database not initialized")
-        }
+        if let Some(db) = cx.try_global::<Self>() { &db.0 } else { panic!("database not initialized") }
     }
 }
 
@@ -145,9 +144,7 @@ impl DbScope for GlobalDbScope {
 /// Returns the path to the `AppDatabase` SQLite file for the given scope
 /// under `db_dir`.
 pub fn db_path(db_dir: &Path, scope: impl DbScope) -> PathBuf {
-    db_dir
-        .join(format!("0-{}", scope.scope_name()))
-        .join(DB_FILE_NAME)
+    db_dir.join(format!("0-{}", scope.scope_name())).join(DB_FILE_NAME)
 }
 
 /// Open or create a database at the given directory path.
@@ -159,9 +156,7 @@ pub async fn open_db<S: Schema>(db_dir: &Path, scope: impl DbScope) -> ThreadSaf
 
     let connection = maybe!(async {
         if let Some(parent) = db_path.parent() {
-            create_dir_all(parent)
-                .context("Could not create db directory")
-                .log_err()?;
+            create_dir_all(parent).context("Could not create db directory").log_err()?;
         }
         open_main_db::<S>(&db_path).await
     })
@@ -195,9 +190,7 @@ async fn open_fallback_db<S: Schema>() -> ThreadSafeConnection {
         .with_connection_initialize_query(CONNECTION_INITIALIZE_QUERY)
         .build()
         .await
-        .expect(
-            "Fallback in memory database failed. Likely initialization queries or schemas have fundamental errors",
-        )
+        .expect("Fallback in memory database failed. Likely initialization queries or schemas have fundamental errors")
 }
 
 /// Implements a basic DB wrapper for a given domain
@@ -245,6 +238,5 @@ pub fn write_and_log<F>(cx: &App, db_write: impl FnOnce() -> F + Send + 'static)
 where
     F: Future<Output = anyhow::Result<()>> + Send,
 {
-    cx.background_spawn(async move { db_write().await.log_err() })
-        .detach()
+    cx.background_spawn(async move { db_write().await.log_err() }).detach()
 }

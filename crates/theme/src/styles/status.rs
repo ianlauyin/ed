@@ -3,7 +3,11 @@
 use gpui::Hsla;
 use refineable::Refineable;
 
-use crate::{blue, grass, neutral, red, yellow};
+use crate::blue;
+use crate::grass;
+use crate::neutral;
+use crate::red;
+use crate::yellow;
 
 #[derive(Refineable, Clone, Debug, PartialEq)]
 #[refineable(Debug, serde::Deserialize)]
@@ -181,11 +185,7 @@ impl StatusColors {
         }
     }
 
-    pub fn diagnostic(&self) -> DiagnosticColors {
-        DiagnosticColors {
-            error: self.error,
-            warning: self.warning,
-            info: self.info,
-        }
+    pub const fn diagnostic(&self) -> DiagnosticColors {
+        DiagnosticColors { error: self.error, warning: self.warning, info: self.info }
     }
 }

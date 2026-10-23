@@ -86,11 +86,8 @@ pub fn apca_contrast(text_color: Hsla, background_color: Hsla) -> f32 {
         text_y + (constants.blk_thrs - text_y).powf(constants.blk_clmp)
     };
 
-    let bg_y_clamped = if bg_y > constants.blk_thrs {
-        bg_y
-    } else {
-        bg_y + (constants.blk_thrs - bg_y).powf(constants.blk_clmp)
-    };
+    let bg_y_clamped =
+        if bg_y > constants.blk_thrs { bg_y } else { bg_y + (constants.blk_thrs - bg_y).powf(constants.blk_clmp) };
 
     // Return 0 for extremely low delta Y
     if (bg_y_clamped - text_y_clamped).abs() < constants.delta_y_min {
@@ -98,30 +95,19 @@ pub fn apca_contrast(text_color: Hsla, background_color: Hsla) -> f32 {
     }
 
     let sapc;
-    let output_contrast;
 
-    if bg_y_clamped > text_y_clamped {
+    let output_contrast = if bg_y_clamped > text_y_clamped {
         // Normal polarity: dark text on light background
-        sapc = (bg_y_clamped.powf(constants.norm_bg) - text_y_clamped.powf(constants.norm_txt))
-            * constants.scale_bow;
+        sapc = (bg_y_clamped.powf(constants.norm_bg) - text_y_clamped.powf(constants.norm_txt)) * constants.scale_bow;
 
         // Low contrast smooth rollout to prevent polarity reversal
-        output_contrast = if sapc < constants.lo_clip {
-            0.0
-        } else {
-            sapc - constants.lo_bow_offset
-        };
+        if sapc < constants.lo_clip { 0.0 } else { sapc - constants.lo_bow_offset }
     } else {
         // Reverse polarity: light text on dark background
-        sapc = (bg_y_clamped.powf(constants.rev_bg) - text_y_clamped.powf(constants.rev_txt))
-            * constants.scale_wob;
+        sapc = (bg_y_clamped.powf(constants.rev_bg) - text_y_clamped.powf(constants.rev_txt)) * constants.scale_wob;
 
-        output_contrast = if sapc > -constants.lo_clip {
-            0.0
-        } else {
-            sapc + constants.lo_wob_offset
-        };
-    }
+        if sapc > -constants.lo_clip { 0.0 } else { sapc + constants.lo_wob_offset }
+    };
 
     // Return Lc (lightness contrast) scaled to percentage
     output_contrast * 100.0
@@ -144,11 +130,7 @@ fn srgb_to_y(color: Hsla, constants: &APCAConstants) -> f32 {
 ///
 /// This implementation gradually adjusts the lightness while preserving the hue and
 /// saturation as much as possible, only falling back to black/white when necessary.
-pub fn ensure_minimum_contrast(
-    foreground: Hsla,
-    background: Hsla,
-    minimum_apca_contrast: f32,
-) -> Hsla {
+pub fn ensure_minimum_contrast(foreground: Hsla, background: Hsla, minimum_apca_contrast: f32) -> Hsla {
     if minimum_apca_contrast <= 0.0 {
         return foreground;
     }
@@ -168,8 +150,7 @@ pub fn ensure_minimum_contrast(
     }
 
     // If that's not enough, gradually reduce saturation while adjusting lightness
-    let desaturated =
-        adjust_lightness_and_saturation_for_contrast(foreground, background, minimum_apca_contrast);
+    let desaturated = adjust_lightness_and_saturation_for_contrast(foreground, background, minimum_apca_contrast);
 
     let desaturated_contrast = apca_contrast(desaturated, background).abs();
     if desaturated_contrast >= minimum_apca_contrast {
@@ -177,36 +158,18 @@ pub fn ensure_minimum_contrast(
     }
 
     // Last resort: use black or white
-    let black = Hsla {
-        h: 0.0,
-        s: 0.0,
-        l: 0.0,
-        a: foreground.a,
-    };
+    let black = Hsla { h: 0.0, s: 0.0, l: 0.0, a: foreground.a };
 
-    let white = Hsla {
-        h: 0.0,
-        s: 0.0,
-        l: 1.0,
-        a: foreground.a,
-    };
+    let white = Hsla { h: 0.0, s: 0.0, l: 1.0, a: foreground.a };
 
     let black_contrast = apca_contrast(black, background).abs();
     let white_contrast = apca_contrast(white, background).abs();
 
-    if white_contrast > black_contrast {
-        white
-    } else {
-        black
-    }
+    if white_contrast > black_contrast { white } else { black }
 }
 
 /// Adjusts only the lightness to meet the minimum contrast, preserving hue and saturation
-fn adjust_lightness_for_contrast(
-    foreground: Hsla,
-    background: Hsla,
-    minimum_apca_contrast: f32,
-) -> Hsla {
+fn adjust_lightness_for_contrast(foreground: Hsla, background: Hsla, minimum_apca_contrast: f32) -> Hsla {
     // Determine if we need to go lighter or darker
     let bg_luminance = srgb_to_y(background, &APCAConstants::default());
     let should_go_darker = bg_luminance > 0.5;
@@ -218,12 +181,7 @@ fn adjust_lightness_for_contrast(
 
     for _ in 0..20 {
         let mid = (low + high) / 2.0;
-        let test_color = Hsla {
-            h: foreground.h,
-            s: foreground.s,
-            l: mid,
-            a: foreground.a,
-        };
+        let test_color = Hsla { h: foreground.h, s: foreground.s, l: mid, a: foreground.a };
 
         let contrast = apca_contrast(test_color, background).abs();
 
@@ -248,12 +206,7 @@ fn adjust_lightness_for_contrast(
         }
     }
 
-    Hsla {
-        h: foreground.h,
-        s: foreground.s,
-        l: best_l,
-        a: foreground.a,
-    }
+    Hsla { h: foreground.h, s: foreground.s, l: best_l, a: foreground.a }
 }
 
 /// Adjusts both lightness and saturation to meet the minimum contrast
@@ -266,12 +219,7 @@ fn adjust_lightness_and_saturation_for_contrast(
     let saturation_steps = [1.0, 0.8, 0.6, 0.4, 0.2, 0.0];
 
     for &sat_multiplier in &saturation_steps {
-        let test_color = Hsla {
-            h: foreground.h,
-            s: foreground.s * sat_multiplier,
-            l: foreground.l,
-            a: foreground.a,
-        };
+        let test_color = Hsla { h: foreground.h, s: foreground.s * sat_multiplier, l: foreground.l, a: foreground.a };
 
         let adjusted = adjust_lightness_for_contrast(test_color, background, minimum_apca_contrast);
         let contrast = apca_contrast(adjusted, background).abs();
@@ -282,10 +230,5 @@ fn adjust_lightness_and_saturation_for_contrast(
     }
 
     // If we get here, even grayscale didn't work, so return the grayscale attempt
-    Hsla {
-        h: foreground.h,
-        s: 0.0,
-        l: foreground.l,
-        a: foreground.a,
-    }
+    Hsla { h: foreground.h, s: 0.0, l: foreground.l, a: foreground.a }
 }

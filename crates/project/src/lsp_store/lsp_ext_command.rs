@@ -62,7 +62,7 @@ pub struct ExpandedMacro {
 }
 
 impl ExpandedMacro {
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.name.is_empty() && self.expansion.is_empty()
     }
 }
@@ -180,7 +180,7 @@ pub struct DocsUrls {
 }
 
 impl DocsUrls {
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.web.is_none() && self.local.is_none()
     }
 }
@@ -487,8 +487,7 @@ pub struct LspRunnables {
 }
 
 pub fn runnable_to_task_template(label: String, args: RunnableArgs) -> TaskTemplate {
-    let mut task_template = TaskTemplate::default();
-    task_template.label = label;
+    let mut task_template = TaskTemplate { label, ..Default::default() };
     match args {
         RunnableArgs::Cargo(cargo) => {
             match cargo.override_cargo {

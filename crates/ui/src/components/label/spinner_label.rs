@@ -1,6 +1,10 @@
-use crate::prelude::*;
-use gpui::{Animation, AnimationExt, FontWeight};
 use std::time::Duration;
+
+use gpui::Animation;
+use gpui::AnimationExt;
+use gpui::FontWeight;
+
+use crate::prelude::*;
 
 /// Different types of spinner animations
 #[derive(Debug, Default, Clone, Copy, PartialEq)]
@@ -43,14 +47,13 @@ impl SpinnerVariant {
             SpinnerVariant::Dots => vec!["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"],
             SpinnerVariant::DotsVariant => vec!["⣼", "⣹", "⢻", "⠿", "⡟", "⣏", "⣧", "⣶"],
             SpinnerVariant::Sand => vec![
-                "⠁", "⠂", "⠄", "⡀", "⡈", "⡐", "⡠", "⣀", "⣁", "⣂", "⣄", "⣌", "⣔", "⣤", "⣥", "⣦",
-                "⣮", "⣶", "⣷", "⣿", "⡿", "⠿", "⢟", "⠟", "⡛", "⠛", "⠫", "⢋", "⠋", "⠍", "⡉", "⠉",
-                "⠑", "⠡", "⢁",
+                "⠁", "⠂", "⠄", "⡀", "⡈", "⡐", "⡠", "⣀", "⣁", "⣂", "⣄", "⣌", "⣔", "⣤", "⣥", "⣦", "⣮", "⣶", "⣷", "⣿",
+                "⡿", "⠿", "⢟", "⠟", "⡛", "⠛", "⠫", "⢋", "⠋", "⠍", "⡉", "⠉", "⠑", "⠡", "⢁",
             ],
         }
     }
 
-    fn duration(&self) -> Duration {
+    const fn duration(&self) -> Duration {
         match self {
             SpinnerVariant::Dots => Duration::from_millis(1000),
             SpinnerVariant::DotsVariant => Duration::from_millis(1000),
@@ -58,7 +61,7 @@ impl SpinnerVariant {
         }
     }
 
-    fn animation_id(&self) -> &'static str {
+    const fn animation_id(&self) -> &'static str {
         match self {
             SpinnerVariant::Dots => "spinner_label_dots",
             SpinnerVariant::DotsVariant => "spinner_label_dots_variant",
@@ -76,12 +79,7 @@ impl SpinnerLabel {
         let frames = variant.frames();
         let duration = variant.duration();
 
-        SpinnerLabel {
-            base: Label::new(frames[0]).color(Color::Muted),
-            variant,
-            frames,
-            duration,
-        }
+        SpinnerLabel { base: Label::new(frames[0]).color(Color::Muted), variant, frames, duration }
     }
 
     pub fn dots() -> Self {
@@ -94,6 +92,12 @@ impl SpinnerLabel {
 
     pub fn sand() -> Self {
         Self::with_variant(SpinnerVariant::Sand)
+    }
+}
+
+impl Default for SpinnerLabel {
+    fn default() -> Self {
+        Self::new()
     }
 }
 
@@ -198,10 +202,7 @@ impl Component for SpinnerLabel {
     fn preview(_window: &mut Window, _cx: &mut App) -> AnyElement {
         let examples = vec![
             single_example("Default", SpinnerLabel::new().into_any_element()),
-            single_example(
-                "Dots Variant",
-                SpinnerLabel::dots_variant().into_any_element(),
-            ),
+            single_example("Dots Variant", SpinnerLabel::dots_variant().into_any_element()),
             single_example("Sand Variant", SpinnerLabel::sand().into_any_element()),
         ];
 

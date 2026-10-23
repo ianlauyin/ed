@@ -1,10 +1,21 @@
-use gpui::{Context, Task};
-use parking_lot::{MappedRwLockReadGuard, Mutex, RwLock, RwLockReadGuard};
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
+use std::sync::Arc;
 
-use sysinfo::{Pid, Process, ProcessRefreshKind, ProcessesToUpdate, System, UpdateKind};
+use gpui::Context;
+use gpui::Task;
+use parking_lot::MappedRwLockReadGuard;
+use parking_lot::Mutex;
+use parking_lot::RwLock;
+use parking_lot::RwLockReadGuard;
+use sysinfo::Pid;
+use sysinfo::Process;
+use sysinfo::ProcessRefreshKind;
+use sysinfo::ProcessesToUpdate;
+use sysinfo::System;
+use sysinfo::UpdateKind;
 
-use crate::{Event, Terminal};
+use crate::Event;
+use crate::Terminal;
 
 #[derive(Clone, Copy)]
 pub struct ProcessIdGetter {
@@ -13,11 +24,8 @@ pub struct ProcessIdGetter {
 }
 
 impl ProcessIdGetter {
-    pub(crate) fn new(handle: i32, fallback_pid: u32) -> ProcessIdGetter {
-        ProcessIdGetter {
-            handle,
-            fallback_pid,
-        }
+    pub(crate) const fn new(handle: i32, fallback_pid: u32) -> ProcessIdGetter {
+        ProcessIdGetter { handle, fallback_pid }
     }
 
     pub fn fallback_pid(&self) -> Pid {
@@ -92,7 +100,7 @@ impl PtyProcessInfo {
         }
     }
 
-    pub(crate) fn pid_getter(&self) -> &ProcessIdGetter {
+    pub(crate) const fn pid_getter(&self) -> &ProcessIdGetter {
         &self.pid_getter
     }
 
@@ -109,11 +117,7 @@ impl PtyProcessInfo {
             *system = System::new();
         }
         let pids = [pid, fallback_pid];
-        let pids = if pid == fallback_pid {
-            &pids[..1]
-        } else {
-            &pids[..]
-        };
+        let pids = if pid == fallback_pid { &pids[..1] } else { &pids[..] };
         system.refresh_processes_specifics(ProcessesToUpdate::Some(pids), true, self.refresh_kind);
         drop(system);
         RwLockReadGuard::try_map(self.system.read(), |system| system.process(pid)).ok()
@@ -147,18 +151,14 @@ impl PtyProcessInfo {
         let info = ProcessInfo {
             name: process.name().to_str()?.to_owned(),
             cwd,
-            argv: process
-                .cmd()
-                .iter()
-                .filter_map(|s| s.to_str().map(ToOwned::to_owned))
-                .collect(),
+            argv: process.cmd().iter().filter_map(|s| s.to_str().map(ToOwned::to_owned)).collect(),
         };
         *self.current.write() = Some(info.clone());
         Some(info)
     }
 
     /// Updates the cached process info, emitting a [`Event::TitleChanged`] event if the Zed-relevant info has changed
-    pub(crate) fn emit_title_changed_if_changed(self: &Arc<Self>, cx: &mut Context<'_, Terminal>) {
+    pub(crate) fn emit_title_changed_if_changed(self: &Arc<Self>, cx: &Context<'_, Terminal>) {
         if self.task.lock().is_some() {
             return;
         }
@@ -172,7 +172,7 @@ impl PtyProcessInfo {
                 _ => true,
             };
             if has_changed {
-                *this.current.write() = current.clone();
+                (*this.current.write()).clone_from(&current);
             }
             let changed_cwd = match (previous.as_ref(), current.as_ref()) {
                 (Some(prev), Some(now)) if prev.cwd != now.cwd => Some(now.cwd.clone()),

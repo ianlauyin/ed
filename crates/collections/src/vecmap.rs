@@ -21,27 +21,19 @@ pub struct VecMap<K, V> {
 }
 
 impl<K, V> VecMap<K, V> {
-    pub fn new() -> Self {
-        Self {
-            keys: Vec::new(),
-            values: Vec::new(),
-        }
+    pub const fn new() -> Self {
+        Self { keys: Vec::new(), values: Vec::new() }
     }
 
     pub fn iter(&self) -> Iter<'_, K, V> {
-        Iter {
-            iter: self.keys.iter().zip(self.values.iter()),
-        }
+        Iter { iter: self.keys.iter().zip(self.values.iter()) }
     }
 }
 
 impl<K: Eq, V> VecMap<K, V> {
     pub fn entry(&mut self, key: K) -> Entry<'_, K, V> {
         match self.keys.iter().position(|k| k == &key) {
-            Some(index) => Entry::Occupied(OccupiedEntry {
-                key: &self.keys[index],
-                value: &mut self.values[index],
-            }),
+            Some(index) => Entry::Occupied(OccupiedEntry { key: &self.keys[index], value: &mut self.values[index] }),
             None => Entry::Vacant(VacantEntry { map: self, key }),
         }
     }
@@ -52,10 +44,7 @@ impl<K: Eq, V> VecMap<K, V> {
     /// can avoid cloning the key until a value is inserted under that entry.
     pub fn entry_ref<'a, 'k>(&'a mut self, key: &'k K) -> EntryRef<'k, 'a, K, V> {
         match self.keys.iter().position(|k| k == key) {
-            Some(index) => EntryRef::Occupied(OccupiedEntry {
-                key: &self.keys[index],
-                value: &mut self.values[index],
-            }),
+            Some(index) => EntryRef::Occupied(OccupiedEntry { key: &self.keys[index], value: &mut self.values[index] }),
             None => EntryRef::Vacant(VacantEntryRef { map: self, key }),
         }
     }
@@ -79,7 +68,7 @@ pub enum Entry<'a, K, V> {
 }
 
 impl<'a, K, V> Entry<'a, K, V> {
-    pub fn key(&self) -> &K {
+    pub const fn key(&self) -> &K {
         match self {
             Entry::Occupied(entry) => entry.key,
             Entry::Vacant(entry) => &entry.key,
@@ -138,7 +127,7 @@ pub enum EntryRef<'key, 'map, K, V> {
 }
 
 impl<'key, 'map, K, V> EntryRef<'key, 'map, K, V> {
-    pub fn key(&self) -> &K {
+    pub const fn key(&self) -> &K {
         match self {
             EntryRef::Occupied(entry) => entry.key,
             EntryRef::Vacant(entry) => entry.key,

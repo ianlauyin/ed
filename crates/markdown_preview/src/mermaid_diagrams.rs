@@ -117,14 +117,14 @@ impl MermaidDiagrams {
 
     /// Re-renders every diagram, after the theme or zoom changed, showing
     /// each one's current raster until its new one is ready.
-    fn rerender_all(&mut self, cx: &mut Context<Self>) {
+    fn rerender_all(&mut self, cx: &Context<Self>) {
         for (contents, cached) in &mut self.cache {
             let fallback = cached.latest_image();
             *cached = Arc::new(CachedMermaidDiagram::new(contents.clone(), self.zoom, fallback, cx));
         }
     }
 
-    fn set_zoom(&mut self, zoom: f32, cx: &mut Context<Self>) {
+    fn set_zoom(&mut self, zoom: f32, cx: &Context<Self>) {
         if self.zoom != zoom {
             self.zoom = zoom;
             self.rerender_all(cx);
@@ -256,7 +256,7 @@ impl CachedMermaidDiagram {
         contents: DiagramContents,
         zoom: f32,
         fallback_image: Option<Arc<RenderImage>>,
-        cx: &mut Context<MermaidDiagrams>,
+        cx: &Context<MermaidDiagrams>,
     ) -> Self {
         let render_image = Arc::new(OnceLock::<anyhow::Result<Arc<RenderImage>>>::new());
         let svg_renderer = cx.svg_renderer();

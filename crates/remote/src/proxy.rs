@@ -11,11 +11,11 @@ pub enum ProxyLaunchError {
 }
 
 impl ProxyLaunchError {
-    pub fn to_exit_code(self) -> i32 {
+    pub const fn to_exit_code(self) -> i32 {
         self as i32
     }
 
-    pub fn from_exit_code(exit_code: i32) -> Option<Self> {
+    pub const fn from_exit_code(exit_code: i32) -> Option<Self> {
         match exit_code {
             90 => Some(Self::ServerNotRunning),
             _ => None,

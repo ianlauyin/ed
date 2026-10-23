@@ -31,17 +31,30 @@
 //! elements when you need to take manual control of the layout and painting process, such as when using
 //! your own custom layout algorithm or rendering a code editor.
 
-use crate::{
-    App, ArenaBox, AvailableSpace, Bounds, Context, DispatchNodeId, ElementId,
-    FocusHandle, LayoutId, Pixels, Point, Size, Style, Window, util::FluentBuilder,
-    window::with_element_arena,
-};
-use std::{
-    any::Any,
-    fmt::{self, Debug, Display},
-    mem, panic,
-    sync::Arc,
-};
+use std::any::Any;
+use std::fmt::Debug;
+use std::fmt::Display;
+use std::fmt::{self};
+use std::mem;
+use std::panic;
+use std::sync::Arc;
+
+use crate::App;
+use crate::ArenaBox;
+use crate::AvailableSpace;
+use crate::Bounds;
+use crate::Context;
+use crate::DispatchNodeId;
+use crate::ElementId;
+use crate::FocusHandle;
+use crate::LayoutId;
+use crate::Pixels;
+use crate::Point;
+use crate::Size;
+use crate::Style;
+use crate::Window;
+use crate::util::FluentBuilder;
+use crate::window::with_element_arena;
 
 /// Implemented by types that participate in laying out and painting the contents of a window.
 /// Elements form a tree and are laid out according to web-based layout rules, as implemented by Taffy.
@@ -191,7 +204,8 @@ pub(crate) const EMPTY_PATH_HASH: u64 = 0;
 
 /// The hash of the path `prefix` + `id`, given the hash of `prefix`.
 pub(crate) fn extend_path_hash(prefix: u64, id: &ElementId) -> u64 {
-    use std::hash::{Hash, Hasher};
+    use std::hash::Hash;
+    use std::hash::Hasher;
     let mut hasher = collections::FxHasher::with_seed(prefix as usize);
     id.hash(&mut hasher);
     hasher.finish()
@@ -206,10 +220,7 @@ impl GlobalElementId {
     /// `ids` with its hash already known, as the window's id stack keeps it.
     pub(crate) fn with_hash(ids: &[ElementId], hash: u64) -> Self {
         debug_assert_eq!(hash, ids.iter().fold(EMPTY_PATH_HASH, extend_path_hash));
-        Self {
-            ids: Arc::from(ids),
-            hash,
-        }
+        Self { ids: Arc::from(ids), hash }
     }
 }
 
@@ -304,33 +315,22 @@ enum ElementDrawPhase<RequestLayoutState, PrepaintState> {
 
 /// A wrapper around an implementer of [`Element`] that allows it to be drawn in a window.
 impl<E: Element> Drawable<E> {
-    pub(crate) fn new(element: E) -> Self {
-        Drawable {
-            element,
-            phase: ElementDrawPhase::Start,
-        }
+    pub(crate) const fn new(element: E) -> Self {
+        Drawable { element, phase: ElementDrawPhase::Start }
     }
 
     fn request_layout(&mut self, window: &mut Window, cx: &mut App) -> LayoutId {
         match mem::take(&mut self.phase) {
             ElementDrawPhase::Start => {
-                let global_id = self
-                    .element
-                    .id()
-                    .map(|element_id| prepare_element_id(element_id, window));
+                let global_id = self.element.id().map(|element_id| prepare_element_id(element_id, window));
 
-                let (layout_id, request_layout) =
-                    self.element.request_layout(global_id.as_ref(), window, cx);
+                let (layout_id, request_layout) = self.element.request_layout(global_id.as_ref(), window, cx);
 
                 if global_id.is_some() {
                     window.element_id_stack.pop();
                 }
 
-                self.phase = ElementDrawPhase::RequestLayout {
-                    layout_id,
-                    global_id,
-                    request_layout,
-                };
+                self.phase = ElementDrawPhase::RequestLayout { layout_id, global_id, request_layout };
                 layout_id
             }
             _ => panic!("must call request_layout only once"),
@@ -339,17 +339,8 @@ impl<E: Element> Drawable<E> {
 
     pub(crate) fn prepaint(&mut self, window: &mut Window, cx: &mut App) {
         match mem::take(&mut self.phase) {
-            ElementDrawPhase::RequestLayout {
-                layout_id,
-                global_id,
-                mut request_layout,
-            }
-            | ElementDrawPhase::LayoutComputed {
-                layout_id,
-                global_id,
-                mut request_layout,
-                ..
-            } => {
+            ElementDrawPhase::RequestLayout { layout_id, global_id, mut request_layout }
+            | ElementDrawPhase::LayoutComputed { layout_id, global_id, mut request_layout, .. } => {
                 if let Some(element_id) = self.element.id() {
                     window.element_id_stack.push(element_id);
                     debug_assert_eq!(&**global_id.as_ref().unwrap(), &*window.element_id_stack);
@@ -357,59 +348,29 @@ impl<E: Element> Drawable<E> {
 
                 let bounds = window.layout_bounds(layout_id);
                 let node_id = window.next_frame.dispatch_tree.push_node();
-                let mut prepaint = self.element.prepaint(
-                    global_id.as_ref(),
-                    bounds,
-                    &mut request_layout,
-                    window,
-                    cx,
-                );
+                let mut prepaint = self.element.prepaint(global_id.as_ref(), bounds, &mut request_layout, window, cx);
                 window.next_frame.dispatch_tree.pop_node();
 
                 if global_id.is_some() {
                     window.element_id_stack.pop();
                 }
 
-                self.phase = ElementDrawPhase::Prepaint {
-                    node_id,
-                    global_id,
-                    bounds,
-                    request_layout,
-                    prepaint,
-                };
+                self.phase = ElementDrawPhase::Prepaint { node_id, global_id, bounds, request_layout, prepaint };
             }
             _ => panic!("must call request_layout before prepaint"),
         }
     }
 
-    pub(crate) fn paint(
-        &mut self,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> (E::RequestLayoutState, E::PrepaintState) {
+    pub(crate) fn paint(&mut self, window: &mut Window, cx: &mut App) -> (E::RequestLayoutState, E::PrepaintState) {
         match mem::take(&mut self.phase) {
-            ElementDrawPhase::Prepaint {
-                node_id,
-                global_id,
-                bounds,
-                mut request_layout,
-                mut prepaint,
-                ..
-            } => {
+            ElementDrawPhase::Prepaint { node_id, global_id, bounds, mut request_layout, mut prepaint, .. } => {
                 if let Some(element_id) = self.element.id() {
                     window.element_id_stack.push(element_id);
                     debug_assert_eq!(&**global_id.as_ref().unwrap(), &*window.element_id_stack);
                 }
 
                 window.next_frame.dispatch_tree.set_active_node(node_id);
-                self.element.paint(
-                    global_id.as_ref(),
-                    bounds,
-                    &mut request_layout,
-                    &mut prepaint,
-                    window,
-                    cx,
-                );
+                self.element.paint(global_id.as_ref(), bounds, &mut request_layout, &mut prepaint, window, cx);
 
                 if global_id.is_some() {
                     window.element_id_stack.pop();
@@ -433,18 +394,9 @@ impl<E: Element> Drawable<E> {
         }
 
         let layout_id = match mem::take(&mut self.phase) {
-            ElementDrawPhase::RequestLayout {
-                layout_id,
-                global_id,
-                request_layout,
-            } => {
+            ElementDrawPhase::RequestLayout { layout_id, global_id, request_layout } => {
                 window.compute_layout(layout_id, available_space, cx);
-                self.phase = ElementDrawPhase::LayoutComputed {
-                    layout_id,
-                    global_id,
-                    available_space,
-                    request_layout,
-                };
+                self.phase = ElementDrawPhase::LayoutComputed { layout_id, global_id, available_space, request_layout };
                 layout_id
             }
             ElementDrawPhase::LayoutComputed {
@@ -456,12 +408,7 @@ impl<E: Element> Drawable<E> {
                 if available_space != prev_available_space {
                     window.compute_layout(layout_id, available_space, cx);
                 }
-                self.phase = ElementDrawPhase::LayoutComputed {
-                    layout_id,
-                    global_id,
-                    available_space,
-                    request_layout,
-                };
+                self.phase = ElementDrawPhase::LayoutComputed { layout_id, global_id, available_space, request_layout };
                 layout_id
             }
             _ => panic!("cannot measure after painting"),
@@ -562,12 +509,7 @@ impl AnyElement {
 
     /// Prepaints this element at the given absolute origin.
     /// If any element in the subtree beneath this element is focused, its FocusHandle is returned.
-    pub fn prepaint_at(
-        &mut self,
-        origin: Point<Pixels>,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Option<FocusHandle> {
+    pub fn prepaint_at(&mut self, origin: Point<Pixels>, window: &mut Window, cx: &mut App) -> Option<FocusHandle> {
         window.with_absolute_element_offset(origin, |window| self.prepaint(window, cx))
     }
 
@@ -672,17 +614,7 @@ impl Element for Empty {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        (
-            window.request_layout(
-                Style {
-                    display: crate::Display::None,
-                    ..Default::default()
-                },
-                None,
-                cx,
-            ),
-            (),
-        )
+        (window.request_layout(Style { display: crate::Display::None, ..Default::default() }, None, cx), ())
     }
 
     fn prepaint(

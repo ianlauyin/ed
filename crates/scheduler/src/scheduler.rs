@@ -1,20 +1,19 @@
 mod clock;
 mod executor;
 
-pub use clock::*;
-pub use executor::*;
+use std::any::Any;
+use std::future::Future;
+use std::panic::Location;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::Context;
+use std::task::Poll;
+use std::time::Duration;
 
 use async_task::Runnable;
+pub use clock::*;
+pub use executor::*;
 use futures::channel::oneshot;
-use std::{
-    any::Any,
-    future::Future,
-    panic::Location,
-    pin::Pin,
-    sync::Arc,
-    task::{Context, Poll},
-    time::Duration,
-};
 
 /// Task priority for background tasks.
 ///
@@ -54,10 +53,8 @@ pub struct RunnableMeta {
 
 impl RunnableMeta {
     #[track_caller]
-    pub fn new_with_callers_location() -> Self {
-        Self {
-            location: core::panic::Location::caller(),
-        }
+    pub const fn new_with_callers_location() -> Self {
+        Self { location: core::panic::Location::caller() }
     }
 }
 
@@ -81,11 +78,7 @@ pub trait Scheduler: Send + Sync {
     fn schedule_local(&self, session_id: SessionId, runnable: Runnable<RunnableMeta>);
 
     /// Schedule a background task with the given priority.
-    fn schedule_background_with_priority(
-        &self,
-        runnable: Runnable<RunnableMeta>,
-        priority: Priority,
-    );
+    fn schedule_background_with_priority(&self, runnable: Runnable<RunnableMeta>, priority: Priority);
 
     /// Schedule a background task with default (medium) priority.
     fn schedule_background(&self, runnable: Runnable<RunnableMeta>) {
@@ -110,10 +103,7 @@ pub trait Scheduler: Send + Sync {
     fn spawn_dedicated(
         self: Arc<Self>,
         f: Box<
-            dyn FnOnce(
-                    LocalExecutor,
-                )
-                    -> Pin<Box<dyn Future<Output = Box<dyn Any + Send + Sync>> + 'static>>
+            dyn FnOnce(LocalExecutor) -> Pin<Box<dyn Future<Output = Box<dyn Any + Send + Sync>> + 'static>>
                 + Send
                 + 'static,
         >,
@@ -136,11 +126,7 @@ pub trait Scheduler: Send + Sync {
 /// The caller is responsible for supplying a `session_id` that's distinct from
 /// every other live session on `scheduler`. Concrete schedulers typically wrap
 /// this in an inherent method that allocates the id from their own counter.
-pub fn spawn_dedicated_thread<F, Fut>(
-    session_id: SessionId,
-    scheduler: Arc<dyn Scheduler>,
-    f: F,
-) -> Task<Fut::Output>
+pub fn spawn_dedicated_thread<F, Fut>(session_id: SessionId, scheduler: Arc<dyn Scheduler>, f: F) -> Task<Fut::Output>
 where
     F: FnOnce(LocalExecutor) -> Fut + Send + 'static,
     Fut: Future + 'static,
@@ -173,17 +159,14 @@ where
 fn spawn_dedicated_os_thread(session_id: SessionId, thread_body: impl FnOnce() + Send + 'static) {
     let thread_name = format!("spawn_dedicated session {:?}", session_id);
 
-    std::thread::Builder::new()
-        .name(thread_name)
-        .spawn(thread_body)
-        .expect("failed to spawn dedicated thread");
+    std::thread::Builder::new().name(thread_name).spawn(thread_body).expect("failed to spawn dedicated thread");
 }
 
 #[derive(Copy, Clone, Debug, Eq, PartialEq, Ord, PartialOrd, Hash)]
 pub struct SessionId(u16);
 
 impl SessionId {
-    pub fn new(id: u16) -> Self {
+    pub const fn new(id: u16) -> Self {
         SessionId(id)
     }
 }
@@ -191,7 +174,7 @@ impl SessionId {
 pub struct Timer(oneshot::Receiver<()>);
 
 impl Timer {
-    pub fn new(rx: oneshot::Receiver<()>) -> Self {
+    pub const fn new(rx: oneshot::Receiver<()>) -> Self {
         Timer(rx)
     }
 }

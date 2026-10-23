@@ -1,11 +1,13 @@
-use ordered_float::OrderedFloat;
-use rope::{Point, Rope, TextSummary};
+use std::cmp;
 use std::collections::BTreeSet;
-use std::{
-    cmp,
-    fmt::{self, Debug},
-    ops::Range,
-};
+use std::fmt::Debug;
+use std::fmt::{self};
+use std::ops::Range;
+
+use ordered_float::OrderedFloat;
+use rope::Point;
+use rope::Rope;
+use rope::TextSummary;
 
 #[derive(Default)]
 struct Matrix {
@@ -15,12 +17,8 @@ struct Matrix {
 }
 
 impl Matrix {
-    fn new() -> Self {
-        Self {
-            cells: Vec::new(),
-            rows: 0,
-            cols: 0,
-        }
+    const fn new() -> Self {
+        Self { cells: Vec::new(), rows: 0, cols: 0 }
     }
 
     fn resize(&mut self, rows: usize, cols: usize) {
@@ -44,11 +42,7 @@ impl Matrix {
 
         unsafe {
             let ptr = self.cells.as_mut_ptr();
-            std::ptr::swap_nonoverlapping(
-                ptr.add(col1 * self.rows),
-                ptr.add(col2 * self.rows),
-                self.rows,
-            );
+            std::ptr::swap_nonoverlapping(ptr.add(col1 * self.rows), ptr.add(col2 * self.rows), self.rows);
         }
     }
 
@@ -83,10 +77,7 @@ impl Matrix {
         let current_col_start = current_col * self.rows;
         let previous_col_start = current_col_start - self.rows;
         let (before_current, current_and_after) = self.cells.split_at_mut(current_col_start);
-        (
-            &before_current[previous_col_start..current_col_start],
-            &mut current_and_after[..self.rows],
-        )
+        (&before_current[previous_col_start..current_col_start], &mut current_and_after[..self.rows])
     }
 }
 
@@ -149,8 +140,7 @@ impl StreamingDiff {
     pub fn push_new(&mut self, text: &str) -> Vec<CharOperation> {
         self.new.extend(text.chars());
         self.scores.swap_columns(0, self.scores.cols - 1);
-        self.scores
-            .resize(self.old.len() + 1, self.new.len() - self.new_text_ix + 1);
+        self.scores.resize(self.old.len() + 1, self.new.len() - self.new_text_ix + 1);
 
         for j in self.new_text_ix + 1..=self.new.len() {
             self.current_equal_runs.fill(0);
@@ -204,31 +194,17 @@ impl StreamingDiff {
         let mut i = old_text_ix;
         let mut j = new_text_ix;
         while (i, j) != (self.old_text_ix, self.new_text_ix) {
-            let insertion_score = if j > self.new_text_ix {
-                Some((i, j - 1))
-            } else {
-                None
-            };
-            let deletion_score = if i > self.old_text_ix {
-                Some((i - 1, j))
-            } else {
-                None
-            };
+            let insertion_score = if j > self.new_text_ix { Some((i, j - 1)) } else { None };
+            let deletion_score = if i > self.old_text_ix { Some((i - 1, j)) } else { None };
             let equality_score = if i > self.old_text_ix && j > self.new_text_ix {
-                if self.old[i - 1] == self.new[j - 1] {
-                    Some((i - 1, j - 1))
-                } else {
-                    None
-                }
+                if self.old[i - 1] == self.new[j - 1] { Some((i - 1, j - 1)) } else { None }
             } else {
                 None
             };
 
             let (prev_i, prev_j) = [insertion_score, deletion_score, equality_score]
                 .iter()
-                .max_by_key(|cell| {
-                    cell.map(|(i, j)| OrderedFloat(self.scores.get(i, j - self.new_text_ix)))
-                })
+                .max_by_key(|cell| cell.map(|(i, j)| OrderedFloat(self.scores.get(i, j - self.new_text_ix))))
                 .unwrap()
                 .unwrap();
 
@@ -240,9 +216,7 @@ impl StreamingDiff {
                 }
             } else {
                 if let Some(range) = pending_insert.take() {
-                    hunks.push(CharOperation::Insert {
-                        text: self.new[range].iter().collect(),
-                    });
+                    hunks.push(CharOperation::Insert { text: self.new[range].iter().collect() });
                 }
 
                 let char_len = self.old[i - 1].len_utf8();
@@ -264,9 +238,7 @@ impl StreamingDiff {
         }
 
         if let Some(range) = pending_insert.take() {
-            hunks.push(CharOperation::Insert {
-                text: self.new[range].iter().collect(),
-            });
+            hunks.push(CharOperation::Insert { text: self.new[range].iter().collect() });
         }
 
         hunks.reverse();
@@ -370,8 +342,7 @@ impl LineDiff {
             }
         } else if is_line_end(self.old_end, old_text) {
             if self.buffered_insert.starts_with('\n') {
-                self.inserted_rows
-                    .extend(new_start.row + 1..=self.new_end.row);
+                self.inserted_rows.extend(new_start.row + 1..=self.new_end.row);
                 self.inserted_newline_at_end = true;
             } else {
                 if !self.inserted_newline_at_end {
@@ -393,12 +364,10 @@ impl LineDiff {
         }
 
         let old_start = self.old_end;
-        self.old_end =
-            old_text.offset_to_point(old_text.point_to_offset(self.old_end) + self.buffered_delete);
+        self.old_end = old_text.offset_to_point(old_text.point_to_offset(self.old_end) + self.buffered_delete);
 
         if is_line_end(old_start, old_text) && is_line_end(self.old_end, old_text) {
-            self.deleted_rows
-                .extend(old_start.row + 1..=self.old_end.row);
+            self.deleted_rows.extend(old_start.row + 1..=self.old_end.row);
         } else if is_line_start(old_start)
             && (is_line_start(self.old_end) && self.old_end < old_text.max_point())
             && self.new_end.column == 0
@@ -418,8 +387,7 @@ impl LineDiff {
             return;
         }
 
-        let lines =
-            old_text.offset_to_point(old_text.point_to_offset(self.old_end) + bytes) - self.old_end;
+        let lines = old_text.offset_to_point(old_text.point_to_offset(self.old_end) + bytes) - self.old_end;
         self.old_end += lines;
         self.new_end += lines;
         self.inserted_newline_at_end = false;
@@ -430,9 +398,8 @@ impl LineDiff {
         let old_end_offset = old_start_offset + self.buffered_delete;
 
         let new_chars = self.buffered_insert.chars().rev();
-        let old_chars = old_text
-            .chunks_in_range(old_start_offset..old_end_offset)
-            .flat_map(|chunk| chunk.chars().rev());
+        let old_chars =
+            old_text.chunks_in_range(old_start_offset..old_end_offset).flat_map(|chunk| chunk.chars().rev());
 
         let mut common_suffix_len = 0;
         for (new_ch, old_ch) in new_chars.zip(old_chars) {
@@ -444,8 +411,7 @@ impl LineDiff {
         }
 
         self.buffered_delete -= common_suffix_len;
-        self.buffered_insert
-            .truncate(self.buffered_insert.len() - common_suffix_len);
+        self.buffered_insert.truncate(self.buffered_insert.len() - common_suffix_len);
 
         common_suffix_len
     }
@@ -486,15 +452,9 @@ impl LineDiff {
                 inserted_rows.next();
             } else {
                 // Keep lines until the next deletion, insertion, or the end of the old text.
-                let lines_to_next_deletion = inserted_rows
-                    .peek()
-                    .copied()
-                    .unwrap_or(self.new_end.row + 1)
-                    - new_row;
-                let lines_to_next_insertion =
-                    deleted_rows.peek().copied().unwrap_or(self.old_end.row + 1) - old_row;
-                let kept_lines =
-                    cmp::max(1, cmp::min(lines_to_next_insertion, lines_to_next_deletion));
+                let lines_to_next_deletion = inserted_rows.peek().copied().unwrap_or(self.new_end.row + 1) - new_row;
+                let lines_to_next_insertion = deleted_rows.peek().copied().unwrap_or(self.old_end.row + 1) - old_row;
+                let kept_lines = cmp::max(1, cmp::min(lines_to_next_insertion, lines_to_next_deletion));
                 if kept_lines > 0 {
                     ops.push(LineOperation::Keep { lines: kept_lines });
                     old_row += kept_lines;
@@ -504,16 +464,14 @@ impl LineDiff {
         }
 
         if old_row < self.old_end.row + 1 {
-            ops.push(LineOperation::Keep {
-                lines: self.old_end.row + 1 - old_row,
-            });
+            ops.push(LineOperation::Keep { lines: self.old_end.row + 1 - old_row });
         }
 
         ops
     }
 }
 
-fn is_line_start(point: Point) -> bool {
+const fn is_line_start(point: Point) -> bool {
     point.column == 0
 }
 

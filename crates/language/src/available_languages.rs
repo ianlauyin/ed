@@ -1,12 +1,21 @@
-use crate::{LanguageId, LanguageLoader, LanguageMatcher, LanguageName, ManifestName};
+use std::cell::LazyCell;
+use std::path::Path;
+use std::sync::Arc;
+
 use collections::FxHashMap;
 use globset::GlobSet;
 use gpui::SharedString;
 use smallvec::SmallVec;
-use std::{cell::LazyCell, path::Path, sync::Arc};
 use sum_tree::Bias;
-use text::{Point, Rope};
+use text::Point;
+use text::Rope;
 use unicase::UniCase;
+
+use crate::LanguageId;
+use crate::LanguageLoader;
+use crate::LanguageMatcher;
+use crate::LanguageName;
+use crate::ManifestName;
 
 #[derive(Clone)]
 pub struct AvailableLanguage {
@@ -21,7 +30,7 @@ pub struct AvailableLanguage {
 }
 
 impl AvailableLanguage {
-    pub fn id(&self) -> LanguageId {
+    pub const fn id(&self) -> LanguageId {
         self.id
     }
 
@@ -33,7 +42,7 @@ impl AvailableLanguage {
         &self.matcher
     }
 
-    pub fn hidden(&self) -> bool {
+    pub const fn hidden(&self) -> bool {
         self.hidden
     }
 }
@@ -59,11 +68,7 @@ impl AvailableLanguages {
         manifest_name: Option<ManifestName>,
         load: LanguageLoader,
     ) -> bool {
-        if let Some(existing_language) = self
-            .0
-            .iter_mut()
-            .find(|existing_language| existing_language.name == name)
-        {
+        if let Some(existing_language) = self.0.iter_mut().find(|existing_language| existing_language.name == name) {
             existing_language.id = LanguageId::new();
             existing_language.grammar = grammar;
             existing_language.matcher = matcher;
@@ -93,10 +98,7 @@ impl AvailableLanguages {
     }
 
     pub(super) fn unloaded_language_names(&self) -> Vec<LanguageName> {
-        self.0
-            .iter()
-            .filter_map(|language| (!language.loaded).then_some(language.name.clone()))
-            .collect()
+        self.0.iter().filter_map(|language| (!language.loaded).then_some(language.name.clone())).collect()
     }
 
     pub(super) fn get_language(&self, id: LanguageId) -> Option<&AvailableLanguage> {
@@ -106,21 +108,12 @@ impl AvailableLanguages {
     pub(super) fn find_name_by_extension(&self, extension: &str) -> Option<LanguageName> {
         self.0
             .iter()
-            .find(|language| {
-                language
-                    .matcher
-                    .path_suffixes
-                    .iter()
-                    .any(|suffix| suffix == extension)
-            })
+            .find(|language| language.matcher.path_suffixes.iter().any(|suffix| suffix == extension))
             .map(|language| language.name.clone())
     }
 
     pub(super) fn find_by_exact_name(&self, name: &str) -> Option<AvailableLanguage> {
-        self.0
-            .iter()
-            .find(|language| language.name.0.as_ref() == name)
-            .cloned()
+        self.0.iter().find(|language| language.name.0.as_ref() == name).cloned()
     }
 
     pub(super) fn find_by_modeline_name(&self, modeline_name: &str) -> Option<AvailableLanguage> {
@@ -128,25 +121,14 @@ impl AvailableLanguages {
         self.0
             .iter()
             .find(|language| {
-                language
-                    .matcher
-                    .modeline_aliases
-                    .iter()
-                    .any(|alias| alias.to_lowercase() == modeline_name)
+                language.matcher.modeline_aliases.iter().any(|alias| alias.to_lowercase() == modeline_name)
             })
             .or_else(|| {
                 self.0.iter().find(|language| {
-                    language
-                        .grammar
-                        .as_ref()
-                        .is_some_and(|grammar| grammar.to_lowercase() == modeline_name)
+                    language.grammar.as_ref().is_some_and(|grammar| grammar.to_lowercase() == modeline_name)
                 })
             })
-            .or_else(|| {
-                self.0
-                    .iter()
-                    .find(|language| language.name.0.to_lowercase() == modeline_name)
-            })
+            .or_else(|| self.0.iter().find(|language| language.name.0.to_lowercase() == modeline_name))
             .cloned()
     }
 
@@ -164,16 +146,14 @@ impl AvailableLanguages {
 
     pub(super) fn find_by_name(&self, name: &str) -> Option<LanguageId> {
         let name = UniCase::new(name);
-        self.find_best_match(
-            |language_name, _, current_best_match| match current_best_match {
-                LanguageMatchPrecedence::Undetermined if UniCase::new(&language_name.0) == name => {
-                    Some(LanguageMatchPrecedence::PathOrContent(name.len()))
-                }
-                LanguageMatchPrecedence::Undetermined
-                | LanguageMatchPrecedence::UserConfigured(_)
-                | LanguageMatchPrecedence::PathOrContent(_) => None,
-            },
-        )
+        self.find_best_match(|language_name, _, current_best_match| match current_best_match {
+            LanguageMatchPrecedence::Undetermined if UniCase::new(&language_name.0) == name => {
+                Some(LanguageMatchPrecedence::PathOrContent(name.len()))
+            }
+            LanguageMatchPrecedence::Undetermined
+            | LanguageMatchPrecedence::UserConfigured(_)
+            | LanguageMatchPrecedence::PathOrContent(_) => None,
+        })
     }
 
     pub(super) fn find_by_name_or_extension(&self, string: &str) -> Option<LanguageId> {
@@ -181,19 +161,15 @@ impl AvailableLanguages {
         self.find_best_match(|name, matcher, current_best_match| {
             let name_matches = || {
                 UniCase::new(&name.0) == string
-                    || matcher
-                        .path_suffixes
-                        .iter()
-                        .any(|suffix| UniCase::new(suffix) == string)
+                    || matcher.path_suffixes.iter().any(|suffix| UniCase::new(suffix) == string)
             };
 
             match current_best_match {
                 LanguageMatchPrecedence::Undetermined => {
                     name_matches().then_some(LanguageMatchPrecedence::PathOrContent(string.len()))
                 }
-                LanguageMatchPrecedence::PathOrContent(len) => (string.len() > len
-                    && name_matches())
-                .then_some(LanguageMatchPrecedence::PathOrContent(string.len())),
+                LanguageMatchPrecedence::PathOrContent(len) => (string.len() > len && name_matches())
+                    .then_some(LanguageMatchPrecedence::PathOrContent(string.len())),
                 LanguageMatchPrecedence::UserConfigured(_) => None,
             }
         })
@@ -225,40 +201,32 @@ impl AvailableLanguages {
 
         self.find_best_match(move |language_name, matcher, current_best_match| {
             let path_matches_default_suffix = || {
-                let len = matcher.path_suffixes.iter().fold(
-                    0,
-                    |acc: usize, path_suffix: &SharedString| {
-                        let ext = ".".to_string() + path_suffix;
-                        let matched_suffix_len = path_suffixes
-                            .iter()
-                            .find(|(suffix, _)| {
-                                suffix.ends_with(&ext) || *suffix == path_suffix.as_str()
-                            })
-                            .map(|(suffix, _)| suffix.len());
+                let len = matcher.path_suffixes.iter().fold(0, |acc: usize, path_suffix: &SharedString| {
+                    let ext = ".".to_string() + path_suffix;
+                    let matched_suffix_len = path_suffixes
+                        .iter()
+                        .find(|(suffix, _)| suffix.ends_with(&ext) || *suffix == path_suffix.as_str())
+                        .map(|(suffix, _)| suffix.len());
 
-                        matched_suffix_len.map_or(acc, |len| acc.max(len))
-                    },
-                );
+                    matched_suffix_len.map_or(acc, |len| acc.max(len))
+                });
                 (len > 0).then_some(len)
             };
 
             let path_matches_custom_suffix = || {
-                user_file_types
-                    .and_then(|types| types.get(language_name.as_ref()))
-                    .and_then(|(custom_suffixes, _)| {
-                        path_suffixes
-                            .iter()
-                            .find(|(_, candidate)| custom_suffixes.is_match_candidate(candidate))
-                            .map(|(suffix, _)| suffix.len())
-                    })
+                user_file_types.and_then(|types| types.get(language_name.as_ref())).and_then(|(custom_suffixes, _)| {
+                    path_suffixes
+                        .iter()
+                        .find(|(_, candidate)| custom_suffixes.is_match_candidate(candidate))
+                        .map(|(suffix, _)| suffix.len())
+                })
             };
 
             let content_matches = || {
-                matcher.first_line_pattern.as_ref().is_some_and(|pattern| {
-                    content
-                        .as_ref()
-                        .is_some_and(|content| pattern.is_match(content))
-                })
+                matcher
+                    .first_line_pattern
+                    .as_ref()
+                    .is_some_and(|pattern| content.as_ref().is_some_and(|content| pattern.is_match(content)))
             };
 
             // Only return a match for the given file if we have a better match than
@@ -293,29 +261,20 @@ impl AvailableLanguages {
 
     fn find_best_match(
         &self,
-        callback: impl Fn(
-            &LanguageName,
-            &LanguageMatcher,
-            LanguageMatchPrecedence,
-        ) -> Option<LanguageMatchPrecedence>,
+        callback: impl Fn(&LanguageName, &LanguageMatcher, LanguageMatchPrecedence) -> Option<LanguageMatchPrecedence>,
     ) -> Option<LanguageId> {
         self.0
             .iter()
             .rev()
             .fold(None, |best_language_match, language| {
-                let current_match_type = best_language_match
-                    .as_ref()
-                    .map_or(LanguageMatchPrecedence::default(), |(_, score)| *score);
-                let language_score =
-                    callback(&language.name, &language.matcher, current_match_type);
+                let current_match_type =
+                    best_language_match.as_ref().map_or(LanguageMatchPrecedence::default(), |(_, score)| *score);
+                let language_score = callback(&language.name, &language.matcher, current_match_type);
 
                 match (language_score, current_match_type) {
                     // no current best, so our candidate is better
                     (
-                        Some(
-                            LanguageMatchPrecedence::PathOrContent(_)
-                            | LanguageMatchPrecedence::UserConfigured(_),
-                        ),
+                        Some(LanguageMatchPrecedence::PathOrContent(_) | LanguageMatchPrecedence::UserConfigured(_)),
                         LanguageMatchPrecedence::Undetermined,
                     ) => language_score.map(|new_score| (language, new_score)),
 
@@ -351,9 +310,7 @@ impl AvailableLanguages {
                         }
                     }
                     // no candidate, use current best
-                    (None, _) | (Some(LanguageMatchPrecedence::Undetermined), _) => {
-                        best_language_match
-                    }
+                    (None, _) | (Some(LanguageMatchPrecedence::Undetermined), _) => best_language_match,
                 }
             })
             .map(|(available_language, _)| available_language.id())

@@ -1,6 +1,10 @@
-use futures::{FutureExt, channel::oneshot};
-use gpui::{Context, Task};
-use std::{marker::PhantomData, time::Duration};
+use std::marker::PhantomData;
+use std::time::Duration;
+
+use futures::FutureExt;
+use futures::channel::oneshot;
+use gpui::Context;
+use gpui::Task;
 
 pub struct DebouncedDelay<E: 'static> {
     task: Option<Task<()>>,
@@ -15,12 +19,8 @@ impl<E: 'static> Default for DebouncedDelay<E> {
 }
 
 impl<E: 'static> DebouncedDelay<E> {
-    pub fn new() -> Self {
-        Self {
-            task: None,
-            cancel_channel: None,
-            _phantom_data: PhantomData,
-        }
+    pub const fn new() -> Self {
+        Self { task: None, cancel_channel: None, _phantom_data: PhantomData }
     }
 
     pub fn fire_new<F>(&mut self, delay: Duration, cx: &mut Context<E>, func: F)

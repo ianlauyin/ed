@@ -1,14 +1,25 @@
-use anyhow::{Context as _, Result, anyhow};
-use collections::HashMap;
-use gpui::{Context, Entity, Window};
-use multi_buffer::{BufferOffset, MultiBuffer, ToOffset};
 use std::ops::Range;
+
+use anyhow::Context as _;
+use anyhow::Result;
+use anyhow::anyhow;
+use collections::HashMap;
+use gpui::Context;
+use gpui::Entity;
+use gpui::Window;
+use language::BufferSnapshot;
+use language::JsxTagAutoCloseConfig;
+use language::Node;
+use language::language_settings::LanguageSettings;
+use multi_buffer::BufferOffset;
+use multi_buffer::MultiBuffer;
+use multi_buffer::ToOffset;
+use text::Anchor;
+use text::OffsetRangeExt as _;
 use util::ResultExt as _;
 
-use language::{BufferSnapshot, JsxTagAutoCloseConfig, Node, language_settings::LanguageSettings};
-use text::{Anchor, OffsetRangeExt as _};
-
-use crate::{Editor, SelectionEffects};
+use crate::Editor;
+use crate::SelectionEffects;
 
 pub struct JsxTagCompletionState {
     edit_index: usize,
@@ -34,9 +45,7 @@ pub(crate) fn should_auto_close(
 ) -> Option<Vec<JsxTagCompletionState>> {
     let mut to_auto_edit = vec![];
     for (index, edited_range) in edited_ranges.iter().enumerate() {
-        let text = buffer
-            .text_for_range(edited_range.clone())
-            .collect::<String>();
+        let text = buffer.text_for_range(edited_range.clone()).collect::<String>();
         let edited_range = edited_range.to_offset(buffer);
         if !text.ends_with(">") {
             continue;
@@ -44,10 +53,7 @@ pub(crate) fn should_auto_close(
         let Some(layer) = buffer.smallest_syntax_layer_containing(edited_range.clone()) else {
             continue;
         };
-        let Some(node) = layer
-            .node()
-            .named_descendant_for_byte_range(edited_range.start, edited_range.end)
-        else {
+        let Some(node) = layer.node().named_descendant_for_byte_range(edited_range.start, edited_range.end) else {
             continue;
         };
         let mut jsx_open_tag_node = node;
@@ -62,14 +68,8 @@ pub(crate) fn should_auto_close(
         }
 
         let first_two_chars: Option<[char; 2]> = {
-            let mut chars = buffer
-                .text_for_range(jsx_open_tag_node.byte_range())
-                .flat_map(|chunk| chunk.chars());
-            if let (Some(c1), Some(c2)) = (chars.next(), chars.next()) {
-                Some([c1, c2])
-            } else {
-                None
-            }
+            let mut chars = buffer.text_for_range(jsx_open_tag_node.byte_range()).flat_map(|chunk| chunk.chars());
+            if let (Some(c1), Some(c2)) = (chars.next(), chars.next()) { Some([c1, c2]) } else { None }
         };
         if let Some(chars) = first_two_chars {
             if chars[0] != '<' {
@@ -80,16 +80,9 @@ pub(crate) fn should_auto_close(
             }
         }
 
-        to_auto_edit.push(JsxTagCompletionState {
-            edit_index: index,
-            open_tag_range: jsx_open_tag_node.byte_range(),
-        });
+        to_auto_edit.push(JsxTagCompletionState { edit_index: index, open_tag_range: jsx_open_tag_node.byte_range() });
     }
-    if to_auto_edit.is_empty() {
-        None
-    } else {
-        Some(to_auto_edit)
-    }
+    if to_auto_edit.is_empty() { None } else { Some(to_auto_edit) }
 }
 
 pub(crate) fn generate_auto_close_edits(
@@ -105,10 +98,9 @@ pub(crate) fn generate_auto_close_edits(
             continue;
         };
         let layer_root_node = layer.node();
-        let Some(open_tag) = layer_root_node.descendant_for_byte_range(
-            auto_edit.open_tag_range.start,
-            auto_edit.open_tag_range.end,
-        ) else {
+        let Some(open_tag) =
+            layer_root_node.descendant_for_byte_range(auto_edit.open_tag_range.start, auto_edit.open_tag_range.end)
+        else {
             continue;
         };
         assert!(open_tag.kind() == config.open_tag_node_name);
@@ -116,14 +108,9 @@ pub(crate) fn generate_auto_close_edits(
             .named_child(TS_NODE_TAG_NAME_CHILD_INDEX)
             .filter(|node| {
                 node.kind() == config.tag_name_node_name
-                    || config
-                        .tag_name_node_name_alternates
-                        .iter()
-                        .any(|alternate| alternate == node.kind())
+                    || config.tag_name_node_name_alternates.iter().any(|alternate| alternate == node.kind())
             })
-            .map_or("".to_string(), |node| {
-                buffer.text_for_range(node.byte_range()).collect::<String>()
-            });
+            .map_or("".to_string(), |node| buffer.text_for_range(node.byte_range()).collect::<String>());
 
         /*
          * Naive check to see if the tag is already closed
@@ -224,12 +211,10 @@ pub(crate) fn generate_auto_close_edits(
                     if is_element {
                         let is_first = parent_element_node_count == 0;
                         if !is_first {
-                            let has_open_tag_with_same_tag_name = ancestor
-                                .named_child(0)
-                                .filter(|n| n.kind() == config.open_tag_node_name)
-                                .is_some_and(|element_open_tag_node| {
-                                    tag_node_name_equals(&element_open_tag_node, &tag_name)
-                                });
+                            let has_open_tag_with_same_tag_name =
+                                ancestor.named_child(0).filter(|n| n.kind() == config.open_tag_node_name).is_some_and(
+                                    |element_open_tag_node| tag_node_name_equals(&element_open_tag_node, &tag_name),
+                                );
                             if has_open_tag_with_same_tag_name {
                                 doing_deep_search = true;
                             } else if doing_deep_search {
@@ -238,8 +223,7 @@ pub(crate) fn generate_auto_close_edits(
                         }
                         parent_element_node_count += 1;
                         if !doing_deep_search
-                            && parent_element_node_count
-                                >= ALREADY_CLOSED_PARENT_ELEMENT_WALK_BACK_LIMIT
+                            && parent_element_node_count >= ALREADY_CLOSED_PARENT_ELEMENT_WALK_BACK_LIMIT
                         {
                             break;
                         }
@@ -262,9 +246,8 @@ pub(crate) fn generate_auto_close_edits(
                 erroneous_close_tag_node_name = name;
             }
 
-            let is_after_open_tag = |node: &Node| {
-                node.start_byte() < open_tag.start_byte() && node.end_byte() < open_tag.start_byte()
-            };
+            let is_after_open_tag =
+                |node: &Node| node.start_byte() < open_tag.start_byte() && node.end_byte() < open_tag.start_byte();
 
             // perf: use cursor for more efficient traversal
             // if child -> go to child
@@ -323,8 +306,7 @@ pub(crate) fn refresh_enabled_in_any_buffer(
                     continue;
                 }
                 let should_auto_close =
-                    LanguageSettings::resolve(Some(buffer), Some(&language.name()), cx)
-                        .jsx_tag_auto_close;
+                    LanguageSettings::resolve(Some(buffer), Some(&language.name()), cx).jsx_tag_auto_close;
                 if should_auto_close {
                     found_enabled = true;
                 }
@@ -337,10 +319,7 @@ pub(crate) fn refresh_enabled_in_any_buffer(
 
 pub(crate) type InitialBufferVersionsMap = HashMap<language::BufferId, clock::Global>;
 
-pub(crate) fn construct_initial_buffer_versions_map<
-    D: ToOffset + Copy,
-    _S: Into<std::sync::Arc<str>>,
->(
+pub(crate) fn construct_initial_buffer_versions_map<D: ToOffset + Copy, _S: Into<std::sync::Arc<str>>>(
     editor: &Editor,
     edits: &[(Range<D>, _S)],
     cx: &Context<Editor>,
@@ -370,8 +349,8 @@ pub(crate) fn construct_initial_buffer_versions_map<
 pub(crate) fn handle_from(
     editor: &Editor,
     initial_buffer_versions: InitialBufferVersionsMap,
-    window: &mut Window,
-    cx: &mut Context<Editor>,
+    window: &Window,
+    cx: &Context<Editor>,
 ) {
     if !editor.jsx_tag_auto_close_enabled_in_any_buffer {
         return;
@@ -383,18 +362,14 @@ pub(crate) fn handle_from(
         edits: Vec<Range<Anchor>>,
     }
 
-    let mut edit_contexts =
-        HashMap::<(language::BufferId, language::LanguageId), JsxAutoCloseEditContext>::default();
+    let mut edit_contexts = HashMap::<(language::BufferId, language::LanguageId), JsxAutoCloseEditContext>::default();
 
     for (buffer_id, buffer_version_initial) in initial_buffer_versions {
         let Some(buffer) = editor.buffer.read(cx).buffer(buffer_id) else {
             continue;
         };
         let snapshot = buffer.read(cx).snapshot();
-        for (edit, range) in buffer
-            .read(cx)
-            .anchored_edits_since::<usize>(&buffer_version_initial)
-        {
+        for (edit, range) in buffer.read(cx).anchored_edits_since::<usize>(&buffer_version_initial) {
             let Some(language) = snapshot.language_at(edit.new.end) else {
                 continue;
             };
@@ -421,11 +396,8 @@ pub(crate) fn handle_from(
     }
 
     for ((buffer_id, _), auto_close_context) in edit_contexts {
-        let JsxAutoCloseEditContext {
-            buffer,
-            config: jsx_tag_auto_close_config,
-            edits: edited_ranges,
-        } = auto_close_context;
+        let JsxAutoCloseEditContext { buffer, config: jsx_tag_auto_close_config, edits: edited_ranges } =
+            auto_close_context;
 
         let (buffer_version_initial, mut buffer_parse_status_rx) =
             buffer.read_with(cx, |buffer, _| (buffer.version(), buffer.parse_status()));
@@ -435,8 +407,7 @@ pub(crate) fn handle_from(
                 return Some(());
             };
             if buffer_parse_status == language::ParseStatus::Parsing {
-                let Some(language::ParseStatus::Idle) = buffer_parse_status_rx.recv().await.ok()
-                else {
+                let Some(language::ParseStatus::Idle) = buffer_parse_status_rx.recv().await.ok() else {
                     return Some(());
                 };
             }
@@ -452,17 +423,15 @@ pub(crate) fn handle_from(
             let ensure_no_edits_since_start = || -> Option<()> {
                 let has_edits_since_start = this
                     .read_with(cx, |this, cx| {
-                        this.buffer.read(cx).buffer(buffer_id).is_none_or(|buffer| {
-                            buffer.read(cx).has_edits_since(&buffer_version_initial)
-                        })
+                        this.buffer
+                            .read(cx)
+                            .buffer(buffer_id)
+                            .is_none_or(|buffer| buffer.read(cx).has_edits_since(&buffer_version_initial))
                     })
                     .ok()?;
 
                 if has_edits_since_start {
-                    Err(anyhow!(
-                        "Auto-close Operation Failed - Buffer has edits since start"
-                    ))
-                    .log_err()?;
+                    Err(anyhow!("Auto-close Operation Failed - Buffer has edits since start")).log_err()?;
                 }
 
                 Some(())
@@ -485,9 +454,7 @@ pub(crate) fn handle_from(
                 })
                 .await;
 
-            let edits = edits
-                .context("Auto-close Operation Failed - Failed to compute edits")
-                .log_err()?;
+            let edits = edits.context("Auto-close Operation Failed - Failed to compute edits").log_err()?;
 
             if edits.is_empty() {
                 return Some(());
@@ -496,17 +463,13 @@ pub(crate) fn handle_from(
             // check again after awaiting background task before applying edits
             ensure_no_edits_since_start()?;
 
-            let multi_buffer_snapshot = this
-                .read_with(cx, |this, cx| this.buffer.read(cx).snapshot(cx))
-                .ok()?;
+            let multi_buffer_snapshot = this.read_with(cx, |this, cx| this.buffer.read(cx).snapshot(cx)).ok()?;
 
             let mut base_selections = Vec::new();
             let mut buffer_selection_map = HashMap::default();
 
             {
-                let selections = this
-                    .read_with(cx, |this, _| this.selections.disjoint_anchors_arc())
-                    .ok()?;
+                let selections = this.read_with(cx, |this, _| this.selections.disjoint_anchors_arc()).ok()?;
                 for selection in selections.iter() {
                     let Some(selection_buffer_offset_head) =
                         multi_buffer_snapshot.point_to_buffer_offset(selection.head())
@@ -521,8 +484,7 @@ pub(crate) fn handle_from(
                         continue;
                     };
 
-                    let is_entirely_in_buffer = selection_buffer_offset_head.0.remote_id()
-                        == buffer_id
+                    let is_entirely_in_buffer = selection_buffer_offset_head.0.remote_id() == buffer_id
                         && selection_buffer_offset_tail.0.remote_id() == buffer_id;
                     if !is_entirely_in_buffer {
                         base_selections.push(*selection);
@@ -531,10 +493,8 @@ pub(crate) fn handle_from(
 
                     let selection_buffer_offset_head = selection_buffer_offset_head.1;
                     let selection_buffer_offset_tail = selection_buffer_offset_tail.1;
-                    buffer_selection_map.insert(
-                        (selection_buffer_offset_head, selection_buffer_offset_tail),
-                        (*selection, None),
-                    );
+                    buffer_selection_map
+                        .insert((selection_buffer_offset_head, selection_buffer_offset_tail), (*selection, None));
                 }
             }
 
@@ -544,23 +504,17 @@ pub(crate) fn handle_from(
                 if edit_range_offset.start != edit_range_offset.end {
                     continue;
                 }
-                if let Some(selection) = buffer_selection_map.get_mut(&(
-                    BufferOffset(edit_range_offset.start),
-                    BufferOffset(edit_range_offset.end),
-                )) {
-                    if selection.0.head().bias() != text::Bias::Right
-                        || selection.0.tail().bias() != text::Bias::Right
+                if let Some(selection) = buffer_selection_map
+                    .get_mut(&(BufferOffset(edit_range_offset.start), BufferOffset(edit_range_offset.end)))
+                {
+                    if selection.0.head().bias() != text::Bias::Right || selection.0.tail().bias() != text::Bias::Right
                     {
                         continue;
                     }
                     if selection.1.is_none() {
                         any_selections_need_update = true;
-                        selection.1 = Some(
-                            selection
-                                .0
-                                .clone()
-                                .map(|anchor| multi_buffer_snapshot.anchor_before(anchor)),
-                        );
+                        selection.1 =
+                            Some(selection.0.clone().map(|anchor| multi_buffer_snapshot.anchor_before(anchor)));
                     }
                 }
             }
@@ -570,34 +524,22 @@ pub(crate) fn handle_from(
             });
 
             if any_selections_need_update {
-                let multi_buffer_snapshot = this
-                    .read_with(cx, |this, cx| {
-                        this.buffer.read_with(cx, |buffer, cx| buffer.snapshot(cx))
-                    })
-                    .ok()?;
+                let multi_buffer_snapshot =
+                    this.read_with(cx, |this, cx| this.buffer.read_with(cx, |buffer, cx| buffer.snapshot(cx))).ok()?;
 
-                base_selections.extend(buffer_selection_map.values().map(|selection| {
-                    match &selection.1 {
-                        Some(left_biased_selection) => *left_biased_selection,
-                        None => selection.0,
-                    }
+                base_selections.extend(buffer_selection_map.values().map(|selection| match &selection.1 {
+                    Some(left_biased_selection) => *left_biased_selection,
+                    None => selection.0,
                 }));
 
                 let base_selections = base_selections
                     .into_iter()
-                    .map(|selection| {
-                        selection.map(|anchor| anchor.to_offset(&multi_buffer_snapshot))
-                    })
+                    .map(|selection| selection.map(|anchor| anchor.to_offset(&multi_buffer_snapshot)))
                     .collect::<Vec<_>>();
                 this.update_in(cx, |this, window, cx| {
-                    this.change_selections(
-                        SelectionEffects::no_scroll().completions(false),
-                        window,
-                        cx,
-                        |s| {
-                            s.select(base_selections);
-                        },
-                    );
+                    this.change_selections(SelectionEffects::no_scroll().completions(false), window, cx, |s| {
+                        s.select(base_selections);
+                    });
                 })
                 .ok()?;
             }

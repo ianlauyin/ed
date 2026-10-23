@@ -1,16 +1,35 @@
-use futures::channel::oneshot;
-use fuzzy::{StringMatch, StringMatchCandidate};
-
 use core::cmp;
-use gpui::{
-    App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, InteractiveElement,
-    IntoElement, ParentElement, Render, SharedString, Subscription, Task, WeakEntity, Window, rems,
-};
-use picker::{Picker, PickerDelegate};
 use std::sync::Arc;
-use ui::{HighlightedLabel, ListItem, ListItemSpacing, prelude::*};
+
+use futures::channel::oneshot;
+use fuzzy::StringMatch;
+use fuzzy::StringMatchCandidate;
+use gpui::App;
+use gpui::Context;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::InteractiveElement;
+use gpui::IntoElement;
+use gpui::ParentElement;
+use gpui::Render;
+use gpui::SharedString;
+use gpui::Subscription;
+use gpui::Task;
+use gpui::WeakEntity;
+use gpui::Window;
+use gpui::rems;
+use picker::Picker;
+use picker::PickerDelegate;
+use ui::HighlightedLabel;
+use ui::ListItem;
+use ui::ListItemSpacing;
+use ui::prelude::*;
 use util::ResultExt;
-use workspace::{ModalView, Workspace};
+use workspace::ModalView;
+use workspace::Workspace;
 
 pub struct PickerPrompt {
     pub picker: Entity<Picker<PickerPromptDelegate>>,
@@ -38,9 +57,7 @@ pub fn prompt(
 
         workspace
             .update_in(cx, |workspace, window, cx| {
-                workspace.toggle_modal(window, cx, |window, cx| {
-                    PickerPrompt::new(delegate, 34., window, cx)
-                })
+                workspace.toggle_modal(window, cx, |window, cx| PickerPrompt::new(delegate, 34., window, cx))
             })
             .ok();
 
@@ -49,19 +66,10 @@ pub fn prompt(
 }
 
 impl PickerPrompt {
-    fn new(
-        delegate: PickerPromptDelegate,
-        rem_width: f32,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> Self {
-        let picker =
-            cx.new(|cx| Picker::uniform_list(delegate, window, cx).initial_width(rems(rem_width)));
+    fn new(delegate: PickerPromptDelegate, rem_width: f32, window: &mut Window, cx: &mut Context<Self>) -> Self {
+        let picker = cx.new(|cx| Picker::uniform_list(delegate, window, cx).initial_width(rems(rem_width)));
         let _subscription = cx.subscribe(&picker, |_, _, _, cx| cx.emit(DismissEvent));
-        Self {
-            picker,
-            _subscription,
-        }
+        Self { picker, _subscription }
     }
 }
 impl ModalView for PickerPrompt {}
@@ -75,13 +83,11 @@ impl Focusable for PickerPrompt {
 
 impl Render for PickerPrompt {
     fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
-        v_flex()
-            .child(self.picker.clone())
-            .on_mouse_down_out(cx.listener(|this, _, window, cx| {
-                this.picker.update(cx, |this, cx| {
-                    this.cancel(&Default::default(), window, cx);
-                })
-            }))
+        v_flex().child(self.picker.clone()).on_mouse_down_out(cx.listener(|this, _, window, cx| {
+            this.picker.update(cx, |this, cx| {
+                this.cancel(&Default::default(), window, cx);
+            })
+        }))
     }
 }
 
@@ -95,7 +101,7 @@ pub struct PickerPromptDelegate {
 }
 
 impl PickerPromptDelegate {
-    pub fn new(
+    pub const fn new(
         prompt: Arc<str>,
         options: Vec<SharedString>,
         tx: oneshot::Sender<usize>,
@@ -131,21 +137,11 @@ impl PickerDelegate for PickerPromptDelegate {
         self.selected_index
     }
 
-    fn set_selected_index(
-        &mut self,
-        ix: usize,
-        _window: &mut Window,
-        _: &mut Context<Picker<Self>>,
-    ) {
+    fn set_selected_index(&mut self, ix: usize, _window: &mut Window, _: &mut Context<Picker<Self>>) {
         self.selected_index = ix;
     }
 
-    fn update_matches(
-        &mut self,
-        query: String,
-        window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) -> Task<()> {
+    fn update_matches(&mut self, query: String, window: &mut Window, cx: &mut Context<Picker<Self>>) -> Task<()> {
         cx.spawn_in(window, async move |picker, cx| {
             let candidates = picker.read_with(cx, |picker, _| {
                 picker
@@ -189,8 +185,7 @@ impl PickerDelegate for PickerPromptDelegate {
                     if delegate.matches.is_empty() {
                         delegate.selected_index = 0;
                     } else {
-                        delegate.selected_index =
-                            cmp::min(delegate.selected_index, delegate.matches.len() - 1);
+                        delegate.selected_index = cmp::min(delegate.selected_index, delegate.matches.len() - 1);
                     }
                 })
                 .log_err();
@@ -226,12 +221,8 @@ impl PickerDelegate for PickerPromptDelegate {
                 .spacing(ListItemSpacing::Sparse)
                 .toggle_state(selected)
                 .map(|el| {
-                    let highlights: Vec<_> = hit
-                        .positions
-                        .iter()
-                        .filter(|&&index| index < self.max_match_length)
-                        .copied()
-                        .collect();
+                    let highlights: Vec<_> =
+                        hit.positions.iter().filter(|&&index| index < self.max_match_length).copied().collect();
 
                     el.child(HighlightedLabel::new(shortened_option, highlights))
                 }),

@@ -290,7 +290,7 @@ pub struct CommitFile {
 }
 
 impl CommitFile {
-    pub fn status(&self) -> CommitFileStatus {
+    pub const fn status(&self) -> CommitFileStatus {
         match (&self.old_text, &self.new_text) {
             (None, Some(_)) => CommitFileStatus::Added,
             (Some(_), None) => CommitFileStatus::Deleted,
@@ -343,10 +343,10 @@ fn decode_commit_diff(diff: git::repository::CommitDiff) -> CommitDiff {
 
 #[derive(Clone, Debug)]
 enum DiffBasesChange {
-    SetIndex(Option<String>),
-    SetHead(Option<String>),
-    SetEach { index: Option<String>, head: Option<String> },
-    SetBoth(Option<String>),
+    Index(Option<String>),
+    Head(Option<String>),
+    Each { index: Option<String>, head: Option<String> },
+    Both(Option<String>),
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
@@ -852,7 +852,7 @@ impl GitStore {
                     cx.spawn(async move |this, cx| {
                         let watcher = fs.watch(&path, Duration::from_millis(100));
                         let (mut watcher, _) = watcher.await;
-                        while let Some(_) = watcher.next().await {
+                        while watcher.next().await.is_some() {
                             let Ok(_) = this.update(cx, |this, cx| {
                                 let GitStoreState::Local { project_environment, fs, .. } = &this.state else {
                                     return;
@@ -1015,7 +1015,7 @@ impl GitStore {
         client.add_entity_stream_request_handler(Self::handle_search_commits);
     }
 
-    pub fn is_local(&self) -> bool {
+    pub const fn is_local(&self) -> bool {
         matches!(self.state, GitStoreState::Local { .. })
     }
 
@@ -1180,7 +1180,7 @@ impl GitStore {
                     Self::open_diff_internal(
                         this,
                         DiffKind::Unstaged,
-                        staged_text.await.map(DiffBasesChange::SetIndex),
+                        staged_text.await.map(DiffBasesChange::Index),
                         buffer,
                         cx,
                     )
@@ -1445,7 +1445,7 @@ impl GitStore {
 
     /// Derives the desired index text from the buffer's optimistic patch and
     /// schedules the write.
-    fn write_optimistic_index(&mut self, buffer_id: BufferId, cx: &mut Context<Self>) {
+    fn write_optimistic_index(&self, buffer_id: BufferId, cx: &mut Context<Self>) {
         let Some(diff_state) = self.diffs.get(&buffer_id) else {
             return;
         };
@@ -1519,10 +1519,10 @@ impl GitStore {
                             .or_insert_with(|| cx.new(|cx| BufferGitState::new(git_store, cx)));
 
                         diff_state.update(cx, |state, cx| {
-                            if let Some(oid) = oid {
-                                if let Some(content) = content {
-                                    state.oid_texts.insert(oid, content);
-                                }
+                            if let Some(oid) = oid
+                                && let Some(content) = content
+                            {
+                                state.oid_texts.insert(oid, content);
                             }
                             state.oid_diffs.insert(oid, buffer_diff.downgrade());
                             let buffer = buffer.read(cx);
@@ -1577,7 +1577,7 @@ impl GitStore {
             .entry((buffer_id, DiffKind::Uncommitted))
             .or_insert_with(|| {
                 let changes = if is_symlink {
-                    Task::ready(Ok(DiffBasesChange::SetBoth(None)))
+                    Task::ready(Ok(DiffBasesChange::Both(None)))
                 } else {
                     repo.update(cx, |repo, cx| repo.load_committed_text(buffer_id, repo_path, cx))
                 };
@@ -1637,7 +1637,7 @@ impl GitStore {
             {
                 existing_unstaged_diff
             } else {
-                let diff = match kind {
+                match kind {
                     DiffKind::Unstaged => {
                         let base_text_buffer = diff_state.update(cx, |diff_state, cx| {
                             diff_state.get_or_create_index_text_buffer(index_text_file.clone(), cx)
@@ -1688,8 +1688,7 @@ impl GitStore {
                     DiffKind::SinceOid(_) => {
                         unreachable!("open_diff_internal is not used for OID diffs")
                     }
-                };
-                diff
+                }
             };
             let rx = diff_state.update(cx, |diff_state, cx| {
                 diff_state.language = language;
@@ -2339,16 +2338,16 @@ impl GitStore {
         };
 
         for (repo_id, worktree_ids) in &self.worktree_ids {
-            if worktree_ids.iter().any(|worktree_id| event_paths.contains(&PathTrust::Worktree(*worktree_id))) {
-                if let Some(repo) = self.repositories.get(repo_id) {
-                    let repository_state = repo.read(cx).repository_state.clone();
-                    cx.background_spawn(async move {
-                        if let Ok(RepositoryState::Local(state)) = repository_state.await {
-                            state.backend.set_trusted(is_trusted);
-                        }
-                    })
-                    .detach();
-                }
+            if worktree_ids.iter().any(|worktree_id| event_paths.contains(&PathTrust::Worktree(*worktree_id)))
+                && let Some(repo) = self.repositories.get(repo_id)
+            {
+                let repository_state = repo.read(cx).repository_state.clone();
+                cx.background_spawn(async move {
+                    if let Ok(RepositoryState::Local(state)) = repository_state.await {
+                        state.backend.set_trusted(is_trusted);
+                    }
+                })
+                .detach();
             }
         }
     }
@@ -2401,7 +2400,7 @@ impl GitStore {
                     cx.spawn(async move |_git_store, cx| {
                         async {
                             let diff_bases_change = if is_symlink {
-                                DiffBasesChange::SetBoth(None)
+                                DiffBasesChange::Both(None)
                             } else {
                                 repo.update(cx, |repo, cx| repo.load_committed_text(buffer_id, repo_path, cx)).await?
                             };
@@ -2447,7 +2446,7 @@ impl GitStore {
     }
 
     fn write_index_text_for_buffer_id(
-        &mut self,
+        &self,
         buffer_id: BufferId,
         new_index_text: Option<String>,
         cx: &mut Context<Self>,
@@ -2499,7 +2498,7 @@ impl GitStore {
     }
 
     fn local_worktree_git_repos_changed(
-        &mut self,
+        &self,
         worktree: Entity<Worktree>,
         changed_repos: &UpdatedGitRepositoriesSet,
         cx: &mut Context<Self>,
@@ -2520,7 +2519,7 @@ impl GitStore {
         }
     }
 
-    pub fn repositories(&self) -> &HashMap<RepositoryId, Entity<Repository>> {
+    pub const fn repositories(&self) -> &HashMap<RepositoryId, Entity<Repository>> {
         &self.repositories
     }
 
@@ -2580,7 +2579,7 @@ impl GitStore {
                 cx.background_executor().spawn(async move {
                     client
                         .request(proto::GitInit {
-                            project_id: project_id,
+                            project_id,
                             abs_path: path.to_string_lossy().into_owned(),
                             fallback_branch_name,
                         })
@@ -2741,7 +2740,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::RemoteMessageResponse> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let fetch_options = FetchOptions::from_proto(envelope.payload.remote, envelope.payload.unshallow);
 
         let remote_output = repository_handle
@@ -2757,7 +2756,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::RemoteMessageResponse> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
 
         let options = envelope.payload.options.as_ref().map(|_| match envelope.payload.options() {
             proto::push::PushOptions::SetUpstream => git::repository::PushOptions::SetUpstream,
@@ -2782,7 +2781,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::RemoteMessageResponse> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
 
         let branch_name = envelope.payload.branch_name.map(|name| name.into());
         let remote_name = envelope.payload.remote_name.into();
@@ -2801,7 +2800,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
 
         let entries =
             envelope.payload.paths.into_iter().map(|path| RepoPath::new(&path)).collect::<Result<Vec<_>>>()?;
@@ -2816,7 +2815,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
 
         let entries =
             envelope.payload.paths.into_iter().map(|path| RepoPath::new(&path)).collect::<Result<Vec<_>>>()?;
@@ -2834,7 +2833,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
 
         let message = envelope.payload.message;
 
@@ -2861,7 +2860,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let stash_index = envelope.payload.stash_index.map(|i| i as usize);
 
         repository_handle.update(&mut cx, |repository_handle, cx| repository_handle.stash_pop(stash_index, cx)).await?;
@@ -2875,7 +2874,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let stash_index = envelope.payload.stash_index.map(|i| i as usize);
 
         repository_handle
@@ -2891,7 +2890,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let stash_index = envelope.payload.stash_index.map(|i| i as usize);
 
         repository_handle
@@ -2907,7 +2906,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let repo_path = RepoPath::from_proto(&envelope.payload.path)?;
 
         let (encoding, has_bom) = cx.update(|cx| {
@@ -2943,7 +2942,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let hook = RunHook::from_proto(envelope.payload.hook).context("invalid hook")?;
         repository_handle.update(&mut cx, |repository_handle, cx| repository_handle.run_hook(hook, cx)).await??;
         Ok(proto::Ack {})
@@ -2955,7 +2954,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
 
         let message = SharedString::from(envelope.payload.message);
         let name = envelope.payload.name.map(SharedString::from);
@@ -2986,7 +2985,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::GetRemotesResponse> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
 
         let branch_name = envelope.payload.branch_name;
         let is_push = envelope.payload.is_push;
@@ -3014,7 +3013,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::GitWorktreesResponse> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
 
         let worktrees =
             repository_handle.update(&mut cx, |repository_handle, _| repository_handle.worktrees()).await??;
@@ -3030,7 +3029,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let directory = PathBuf::from(envelope.payload.directory);
         let name = envelope.payload.name;
         let commit = envelope.payload.commit;
@@ -3056,7 +3055,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let path = PathBuf::from(envelope.payload.path);
         let force = envelope.payload.force;
 
@@ -3073,7 +3072,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let old_path = PathBuf::from(envelope.payload.old_path);
         let new_path = PathBuf::from(envelope.payload.new_path);
 
@@ -3090,7 +3089,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::GitWorktreeCreatedAtResponse> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let worktree_path = PathBuf::from(envelope.payload.worktree_path);
 
         let created_at = repository_handle
@@ -3106,7 +3105,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::GitGetHeadShaResponse> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
 
         let head_sha = repository_handle.update(&mut cx, |repository_handle, _| repository_handle.head_sha()).await??;
 
@@ -3119,7 +3118,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::GetCommitDataResponse> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
 
         let shas: Vec<Oid> = envelope.payload.shas.iter().filter_map(|s| Oid::from_str(s).ok()).collect();
 
@@ -3159,7 +3158,7 @@ impl GitStore {
         let payload = envelope.payload;
 
         let repository_id = RepositoryId::from_proto(payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
 
         let log_order = log_order_from_proto(payload.log_order());
         let log_source = log_source_from_proto(payload.log_source.context("missing initial graph data log source")?)?;
@@ -3171,10 +3170,10 @@ impl GitStore {
             let error = response.error.clone();
             let is_loading = response.is_loading;
 
-            if is_loading {
-                if let Some(graph_data) = repository.initial_graph_data.get_mut(&(log_source.clone(), log_order)) {
-                    graph_data.subscribers.push(subscriber_sender);
-                }
+            if is_loading
+                && let Some(graph_data) = repository.initial_graph_data.get_mut(&(log_source.clone(), log_order))
+            {
+                graph_data.subscribers.push(subscriber_sender);
             }
 
             (cached_commits, error, is_loading)
@@ -3238,7 +3237,7 @@ impl GitStore {
         const CHUNK_SIZE: usize = 100;
 
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let log_source =
             log_source_from_proto(envelope.payload.log_source.context("missing search commit log source")?)?;
         let search_args = SearchCommitArgs {
@@ -3258,11 +3257,10 @@ impl GitStore {
             while let Ok(sha) = request_rx.recv().await {
                 shas.push(sha.to_string());
 
-                if shas.len() >= CHUNK_SIZE {
-                    if response_tx.send(Ok(proto::SearchCommitsResponse { shas: mem::take(&mut shas) })).await.is_err()
-                    {
-                        return;
-                    }
+                if shas.len() >= CHUNK_SIZE
+                    && response_tx.send(Ok(proto::SearchCommitsResponse { shas: mem::take(&mut shas) })).await.is_err()
+                {
+                    return;
                 }
             }
 
@@ -3281,7 +3279,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let ref_name = envelope.payload.ref_name;
         match envelope.payload.action {
             Some(proto::git_edit_ref::Action::CreateToCommit(sha)) => {
@@ -3311,7 +3309,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
 
         repository_handle.update(&mut cx, |repository_handle, _| repository_handle.repair_worktrees()).await??;
 
@@ -3324,7 +3322,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::GitBranchesResponse> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
 
         let branches_scan =
             repository_handle.update(&mut cx, |repository_handle, _| repository_handle.branches()).await??;
@@ -3340,7 +3338,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::GetDefaultBranchResponse> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
 
         let branch = repository_handle
             .update(&mut cx, |repository_handle, _| {
@@ -3357,7 +3355,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let branch_name = envelope.payload.branch_name;
         let base_branch = envelope.payload.base_branch;
 
@@ -3374,7 +3372,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let branch_name = envelope.payload.branch_name;
 
         repository_handle
@@ -3390,7 +3388,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let branch = envelope.payload.branch;
         let new_name = envelope.payload.new_name;
 
@@ -3407,7 +3405,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let remote_name = envelope.payload.remote_name;
         let remote_url = envelope.payload.remote_url;
 
@@ -3424,7 +3422,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let is_remote = envelope.payload.is_remote;
         let branch_name = envelope.payload.branch_name;
         let force = envelope.payload.force;
@@ -3442,7 +3440,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let remote_name = envelope.payload.remote_name;
 
         repository_handle
@@ -3458,7 +3456,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::GitCommitDetails> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
 
         let commit = envelope.payload.commit;
         let commit = repository_handle
@@ -3486,7 +3484,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::LoadCommitDiffResponse> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
 
         let commit_diff = repository_handle
             .update(&mut cx, |repository_handle, cx| {
@@ -3518,7 +3516,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
 
         let mode = match envelope.payload.mode() {
             git_reset::ResetMode::Soft => ResetMode::Soft,
@@ -3537,7 +3535,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let paths = envelope.payload.paths.iter().map(|s| RepoPath::from_proto(s)).collect::<Result<Vec<_>>>()?;
 
         repository_handle
@@ -3554,7 +3552,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let repo_path = RepoPath::from_proto(&envelope.payload.path)?;
 
         repository_handle
@@ -3571,7 +3569,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::Ack> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let repo_path = RepoPath::from_proto(&envelope.payload.path)?;
 
         repository_handle
@@ -3588,7 +3586,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::OpenBufferResponse> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository = Self::repository_for_request(&this, repository_id, &cx)?;
         let buffer = repository
             .update(&mut cx, |repository, cx| {
                 repository.open_commit_buffer(None, this.read(cx).buffer_store.clone(), cx)
@@ -3613,7 +3611,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::CheckForPushedCommitsResponse> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
 
         let branches = repository_handle
             .update(&mut cx, |repository_handle, _| repository_handle.check_for_pushed_commits())
@@ -3629,7 +3627,7 @@ impl GitStore {
         mut cx: AsyncApp,
     ) -> Result<proto::GitDiffResponse> {
         let repository_id = RepositoryId::from_proto(envelope.payload.repository_id);
-        let repository_handle = Self::repository_for_request(&this, repository_id, &mut cx)?;
+        let repository_handle = Self::repository_for_request(&this, repository_id, &cx)?;
         let diff_type = match envelope.payload.diff_type() {
             proto::git_diff::DiffType::HeadToIndex => DiffType::HeadToIndex,
             proto::git_diff::DiffType::HeadToWorktree => DiffType::HeadToWorktree,
@@ -3681,7 +3679,7 @@ impl GitStore {
                 .map(|(path, status)| proto::TreeDiffStatus {
                     path: path.as_ref().as_unix_str().to_owned(),
                     status: match status {
-                        TreeDiffStatus::Added {} => proto::tree_diff_status::Status::Added.into(),
+                        TreeDiffStatus::Added => proto::tree_diff_status::Status::Added.into(),
                         TreeDiffStatus::Modified { .. } => proto::tree_diff_status::Status::Modified.into(),
                         TreeDiffStatus::Deleted { .. } => proto::tree_diff_status::Status::Deleted.into(),
                     },
@@ -3852,7 +3850,7 @@ impl GitStore {
         })
     }
 
-    fn repository_for_request(this: &Entity<Self>, id: RepositoryId, cx: &mut AsyncApp) -> Result<Entity<Repository>> {
+    fn repository_for_request(this: &Entity<Self>, id: RepositoryId, cx: &AsyncApp) -> Result<Entity<Repository>> {
         this.read_with(cx, |this, _| this.repositories.get(&id).context("missing repository handle").cloned())
     }
 
@@ -3883,7 +3881,7 @@ impl GitStore {
         &self,
         worktree: &Entity<Worktree>,
         updated_entries: &[(Arc<RelPath>, ProjectEntryId, PathChange)],
-        cx: &mut App,
+        cx: &App,
     ) -> Task<HashMap<Entity<Repository>, Vec<RepoPath>>> {
         let path_style = worktree.read(cx).path_style();
         let mut repo_paths = self
@@ -4024,17 +4022,13 @@ impl BufferGitState {
         buffer
     }
 
-    fn buffer_language_changed(&mut self, buffer: Entity<Buffer>, cx: &mut Context<Self>) {
+    fn buffer_language_changed(&mut self, buffer: Entity<Buffer>, cx: &Context<Self>) {
         self.language = buffer.read(cx).language().cloned();
         self.language_changed = true;
-        let _ = self.recalculate_diffs(buffer.read(cx).text_snapshot(), cx);
+        self.recalculate_diffs(buffer.read(cx).text_snapshot(), cx);
     }
 
-    fn reparse_conflict_markers(
-        &mut self,
-        buffer: text::BufferSnapshot,
-        cx: &mut Context<Self>,
-    ) -> oneshot::Receiver<()> {
+    fn reparse_conflict_markers(&mut self, buffer: text::BufferSnapshot, cx: &Context<Self>) -> oneshot::Receiver<()> {
         let (tx, rx) = oneshot::channel();
 
         let Some(conflict_set) = self.conflict_set.as_ref().and_then(|conflict_set| conflict_set.upgrade()) else {
@@ -4097,7 +4091,7 @@ impl BufferGitState {
 
     /// Whether the index text is known to match the committed text, without
     /// comparing their contents. Always true when both texts were set by a
-    /// single `DiffBasesChange::SetBoth`, which shares one allocation between
+    /// single `DiffBasesChange::Both`, which shares one allocation between
     /// them. May be false even when the contents are equal, if the texts were
     /// loaded separately.
     fn index_matches_head(&self) -> bool {
@@ -4151,14 +4145,14 @@ impl BufferGitState {
         self.pending_index_edits = Some(Vec::new());
     }
 
-    fn clear_pending_hunks(&mut self, cx: &mut Context<Self>) {
+    fn clear_pending_hunks(&self, cx: &mut Context<Self>) {
         for diff in [self.uncommitted_diff(), self.unstaged_diff(), self.staged_diff()].into_iter().flatten() {
             diff.update(cx, |diff, cx| diff.clear_pending_hunks(cx));
         }
     }
 
     fn mark_whole_file_stage_or_unstage_pending(
-        &mut self,
+        &self,
         stage: bool,
         buffer_snapshot: &text::BufferSnapshot,
         cx: &mut Context<Self>,
@@ -4194,7 +4188,7 @@ impl BufferGitState {
         &mut self,
         buffer: text::BufferSnapshot,
         message: proto::UpdateDiffBases,
-        cx: &mut Context<Self>,
+        cx: &Context<Self>,
     ) {
         use proto::update_diff_bases::Mode;
 
@@ -4203,11 +4197,11 @@ impl BufferGitState {
         };
 
         let diff_bases_change = match mode {
-            Mode::HeadOnly => Some(DiffBasesChange::SetHead(message.committed_text)),
-            Mode::IndexOnly => Some(DiffBasesChange::SetIndex(message.staged_text)),
-            Mode::IndexMatchesHead => Some(DiffBasesChange::SetBoth(message.committed_text)),
+            Mode::HeadOnly => Some(DiffBasesChange::Head(message.committed_text)),
+            Mode::IndexOnly => Some(DiffBasesChange::Index(message.staged_text)),
+            Mode::IndexMatchesHead => Some(DiffBasesChange::Both(message.committed_text)),
             Mode::IndexAndHead => {
-                Some(DiffBasesChange::SetEach { index: message.staged_text, head: message.committed_text })
+                Some(DiffBasesChange::Each { index: message.staged_text, head: message.committed_text })
             }
             Mode::Unchanged => None,
         };
@@ -4235,24 +4229,24 @@ impl BufferGitState {
         &mut self,
         buffer: text::BufferSnapshot,
         diff_bases_change: Option<DiffBasesChange>,
-        cx: &mut Context<Self>,
+        cx: &Context<Self>,
     ) {
         match diff_bases_change {
-            Some(DiffBasesChange::SetIndex(index)) => {
+            Some(DiffBasesChange::Index(index)) => {
                 self.index_text = index.map(|mut index| {
                     text::LineEnding::normalize(&mut index);
                     Arc::from(index.as_str())
                 });
                 self.index_changed = true;
             }
-            Some(DiffBasesChange::SetHead(head)) => {
+            Some(DiffBasesChange::Head(head)) => {
                 self.head_text = head.map(|mut head| {
                     text::LineEnding::normalize(&mut head);
                     Arc::from(head.as_str())
                 });
                 self.head_changed = true;
             }
-            Some(DiffBasesChange::SetBoth(text)) => {
+            Some(DiffBasesChange::Both(text)) => {
                 let text = text.map(|mut text| {
                     text::LineEnding::normalize(&mut text);
                     Arc::from(text.as_str())
@@ -4262,7 +4256,7 @@ impl BufferGitState {
                 self.head_changed = true;
                 self.index_changed = true;
             }
-            Some(DiffBasesChange::SetEach { index, head }) => {
+            Some(DiffBasesChange::Each { index, head }) => {
                 self.index_text = index.map(|mut index| {
                     text::LineEnding::normalize(&mut index);
                     Arc::from(index.as_str())
@@ -4280,7 +4274,7 @@ impl BufferGitState {
         self.recalculate_diffs(buffer, cx)
     }
 
-    fn recalculate_diffs(&mut self, buffer: text::BufferSnapshot, cx: &mut Context<Self>) {
+    fn recalculate_diffs(&mut self, buffer: text::BufferSnapshot, cx: &Context<Self>) {
         *self.recalculating_tx.borrow_mut() = true;
 
         let language = self.language.clone();
@@ -4315,10 +4309,8 @@ impl BufferGitState {
 
         self.oid_diffs.retain(|oid, weak| {
             let alive = weak.upgrade().is_some();
-            if !alive {
-                if let Some(oid) = oid {
-                    self.oid_texts.remove(oid);
-                }
+            if !alive && let Some(oid) = oid {
+                self.oid_texts.remove(oid);
             }
             alive
         });
@@ -4580,11 +4572,11 @@ impl BufferGitState {
 }
 
 impl RepositoryId {
-    pub fn to_proto(self) -> u64 {
+    pub const fn to_proto(self) -> u64 {
         self.0
     }
 
-    pub fn from_proto(id: u64) -> Self {
+    pub const fn from_proto(id: u64) -> Self {
         RepositoryId(id)
     }
 }
@@ -4886,7 +4878,7 @@ impl MergeDetails {
 
         // Record the merge state for newly conflicted paths
         for path in &current_conflicted_paths {
-            if self.merge_heads_by_conflicted_path.get(&path).is_none() {
+            if self.merge_heads_by_conflicted_path.get(path).is_none() {
                 conflicts_changed = true;
                 self.merge_heads_by_conflicted_path.insert(path.clone(), heads.clone());
             }
@@ -5095,10 +5087,8 @@ impl Repository {
             RepositoryEvent::TagsChanged => {
                 self.initial_graph_data.clear();
             }
-            RepositoryEvent::StashEntriesChanged => {
-                if self.scan_id > 2 {
-                    self.initial_graph_data.retain(|(log_source, _), _| *log_source != LogSource::All);
-                }
+            RepositoryEvent::StashEntriesChanged if self.scan_id > 2 => {
+                self.initial_graph_data.retain(|(log_source, _), _| *log_source != LogSource::All);
             }
             _ => {}
         }
@@ -5108,7 +5098,7 @@ impl Repository {
         self.git_store.upgrade()
     }
 
-    fn reload_buffer_diff_bases(&mut self, cx: &mut Context<Self>) {
+    fn reload_buffer_diff_bases(&mut self, cx: &Context<Self>) {
         let this = cx.weak_entity();
         let git_store = self.git_store.clone();
         drop(self.send_keyed_job(
@@ -5194,25 +5184,25 @@ impl Repository {
                                     let head_changed = head_text.as_deref() != current_head.as_deref();
                                     if index_changed && head_changed {
                                         if index_text == head_text {
-                                            Some(DiffBasesChange::SetBoth(head_text))
+                                            Some(DiffBasesChange::Both(head_text))
                                         } else {
-                                            Some(DiffBasesChange::SetEach { index: index_text, head: head_text })
+                                            Some(DiffBasesChange::Each { index: index_text, head: head_text })
                                         }
                                     } else if index_changed {
-                                        Some(DiffBasesChange::SetIndex(index_text))
+                                        Some(DiffBasesChange::Index(index_text))
                                     } else if head_changed {
-                                        Some(DiffBasesChange::SetHead(head_text))
+                                        Some(DiffBasesChange::Head(head_text))
                                     } else {
                                         None
                                     }
                                 }
                                 (Some(current_index), None) => {
                                     let index_changed = index_text.as_deref() != current_index.as_deref();
-                                    index_changed.then_some(DiffBasesChange::SetIndex(index_text))
+                                    index_changed.then_some(DiffBasesChange::Index(index_text))
                                 }
                                 (None, Some(current_head)) => {
                                     let head_changed = head_text.as_deref() != current_head.as_deref();
-                                    head_changed.then_some(DiffBasesChange::SetHead(head_text))
+                                    head_changed.then_some(DiffBasesChange::Head(head_text))
                                 }
                                 (None, None) => None,
                             };
@@ -5237,10 +5227,10 @@ impl Repository {
 
                             if let Some((client, project_id)) = downstream_client {
                                 let (staged_text, committed_text, mode) = match diff_bases_change.clone() {
-                                    Some(DiffBasesChange::SetIndex(index)) => (index, None, Mode::IndexOnly),
-                                    Some(DiffBasesChange::SetHead(head)) => (None, head, Mode::HeadOnly),
-                                    Some(DiffBasesChange::SetEach { index, head }) => (index, head, Mode::IndexAndHead),
-                                    Some(DiffBasesChange::SetBoth(text)) => (None, text, Mode::IndexMatchesHead),
+                                    Some(DiffBasesChange::Index(index)) => (index, None, Mode::IndexOnly),
+                                    Some(DiffBasesChange::Head(head)) => (None, head, Mode::HeadOnly),
+                                    Some(DiffBasesChange::Each { index, head }) => (index, head, Mode::IndexAndHead),
+                                    Some(DiffBasesChange::Both(text)) => (None, text, Mode::IndexMatchesHead),
                                     None => (None, None, Mode::Unchanged),
                                 };
                                 client
@@ -5374,7 +5364,7 @@ impl Repository {
         other.read(cx).snapshot.work_directory_abs_path.starts_with(&self.snapshot.work_directory_abs_path)
     }
 
-    pub fn commit_message_buffer(&self) -> Option<&Entity<Buffer>> {
+    pub const fn commit_message_buffer(&self) -> Option<&Entity<Buffer>> {
         self.commit_message_buffer.as_ref()
     }
 
@@ -5428,7 +5418,7 @@ impl Repository {
     fn open_local_commit_buffer(
         language_registry: Option<Arc<LanguageRegistry>>,
         buffer_store: Entity<BufferStore>,
-        cx: &mut Context<Self>,
+        cx: &Context<Self>,
     ) -> Task<Result<Entity<Buffer>>> {
         cx.spawn(async move |repository, cx| {
             let git_commit_language = match language_registry {
@@ -5898,13 +5888,13 @@ impl Repository {
             );
         }
 
-        &self.commit_data.get(&sha).unwrap_or_else(|| {
+        self.commit_data.get(&sha).unwrap_or_else(|| {
             debug_assert!(!has_failed, "This should always be inserted");
             &CommitDataState::Loading(None)
         })
     }
 
-    fn get_handler(&mut self, cx: &mut Context<Self>) -> &mut CommitDataHandler {
+    fn get_handler(&mut self, cx: &Context<Self>) -> &mut CommitDataHandler {
         if matches!(self.commit_data_handler, CommitDataHandlerState::Closed) {
             self.commit_data_handler = CommitDataHandlerState::Open(self.open_commit_data_handler(cx));
         }
@@ -5984,9 +5974,8 @@ impl Repository {
                 }
                 Err(error) => {
                     log::error!("failed to get repository state: {error}");
-                    return;
                 }
-            };
+            }
         })
         .detach();
 
@@ -6778,7 +6767,7 @@ impl Repository {
         Ok(())
     }
 
-    pub fn unshallow_state(&self) -> UnshallowState {
+    pub const fn unshallow_state(&self) -> UnshallowState {
         self.unshallow_state
     }
 
@@ -6967,7 +6956,7 @@ impl Repository {
         encoding: &'static encoding_rs::Encoding,
         has_bom: bool,
         hunk_staging_operation_count: Option<usize>,
-        cx: &mut Context<Self>,
+        cx: &Context<Self>,
     ) -> oneshot::Receiver<anyhow::Result<()>> {
         let id = self.id;
         let this = cx.weak_entity();
@@ -7791,7 +7780,7 @@ impl Repository {
         self.pending_ops = updated;
     }
 
-    fn schedule_scan(&mut self, updates_tx: Option<mpsc::UnboundedSender<DownstreamUpdate>>, cx: &mut Context<Self>) {
+    fn schedule_scan(&mut self, updates_tx: Option<mpsc::UnboundedSender<DownstreamUpdate>>, cx: &Context<Self>) {
         let this = cx.weak_entity();
         drop(self.send_keyed_job("schedule_scan", Some(GitJobKey::ReloadGitState), None, |state, mut cx| async move {
             log::debug!("run scheduled git status scan");
@@ -7815,7 +7804,7 @@ impl Repository {
 
     fn spawn_local_git_worker(
         state: Shared<Task<Result<LocalRepositoryState, String>>>,
-        cx: &mut Context<Self>,
+        cx: &Context<Self>,
     ) -> (mpsc::UnboundedSender<GitJob>, Task<()>) {
         let (job_tx, mut job_rx) = mpsc::unbounded::<GitJob>();
 
@@ -7856,7 +7845,7 @@ impl Repository {
 
     fn spawn_remote_git_worker(
         state: RemoteRepositoryState,
-        cx: &mut Context<Self>,
+        cx: &Context<Self>,
     ) -> (mpsc::UnboundedSender<GitJob>, Task<()>) {
         let (job_tx, mut job_rx) = mpsc::unbounded::<GitJob>();
 
@@ -7932,9 +7921,9 @@ impl Repository {
                     let committed_text = loaded_revisions.next().flatten().map(decode_git_text).transpose()?;
                     let staged_text = loaded_revisions.next().flatten().map(decode_git_text).transpose()?;
                     let diff_bases_change = if committed_text == staged_text {
-                        DiffBasesChange::SetBoth(committed_text)
+                        DiffBasesChange::Both(committed_text)
                     } else {
-                        DiffBasesChange::SetEach { index: staged_text, head: committed_text }
+                        DiffBasesChange::Each { index: staged_text, head: committed_text }
                     };
                     anyhow::Ok(diff_bases_change)
                 }
@@ -7949,9 +7938,9 @@ impl Repository {
                         .await?;
                     let mode = Mode::try_from(response.mode).ok().context("Invalid mode")?;
                     let bases = match mode {
-                        Mode::IndexMatchesHead => DiffBasesChange::SetBoth(response.committed_text),
+                        Mode::IndexMatchesHead => DiffBasesChange::Both(response.committed_text),
                         Mode::IndexAndHead => {
-                            DiffBasesChange::SetEach { head: response.committed_text, index: response.staged_text }
+                            DiffBasesChange::Each { head: response.committed_text, index: response.staged_text }
                         }
                     };
                     Ok(bases)
@@ -8060,7 +8049,7 @@ impl Repository {
         &mut self,
         paths: Vec<RepoPath>,
         updates_tx: Option<mpsc::UnboundedSender<DownstreamUpdate>>,
-        cx: &mut Context<Self>,
+        cx: &Context<Self>,
     ) {
         if !paths.is_empty() {
             self.paths_needing_status_update.push(paths);
@@ -8090,7 +8079,7 @@ impl Repository {
                         let changed_paths = GitStore::coalesce_repo_paths(
                             changed_paths.into_iter().flatten().collect::<BTreeSet<_>>().into_iter().collect(),
                         );
-                        let changed_paths_vec = changed_paths.iter().cloned().collect::<Vec<_>>();
+                        let changed_paths_vec = changed_paths.to_vec();
 
                         let status_task = backend.status(&changed_paths_vec);
                         let diff_stat_future = |diff| {
@@ -8111,11 +8100,11 @@ impl Repository {
                             .await?;
 
                         let diff_stats: HashMap<RepoPath, DiffStat> =
-                            HashMap::from_iter(diff_stats.entries.into_iter().cloned());
+                            HashMap::from_iter(diff_stats.entries.iter().cloned());
                         let staged_diff_stats: HashMap<RepoPath, DiffStat> =
-                            HashMap::from_iter(staged_diff_stats.entries.into_iter().cloned());
+                            HashMap::from_iter(staged_diff_stats.entries.iter().cloned());
                         let unstaged_diff_stats: HashMap<RepoPath, DiffStat> =
-                            HashMap::from_iter(unstaged_diff_stats.entries.into_iter().cloned());
+                            HashMap::from_iter(unstaged_diff_stats.entries.iter().cloned());
 
                         let mut changed_path_statuses = Vec::new();
                         let prev_statuses = prev_snapshot.statuses_by_path.clone();
@@ -8187,7 +8176,7 @@ impl Repository {
         self.active_jobs.values().next().cloned()
     }
 
-    pub fn job_debug_queue(&self) -> &job_debug_queue::GitJobDebugQueue {
+    pub const fn job_debug_queue(&self) -> &job_debug_queue::GitJobDebugQueue {
         &self.job_debug_queue
     }
 
@@ -8199,7 +8188,7 @@ impl Repository {
         &mut self,
         paths: Vec<RepoPath>,
         git_status: pending_op::GitStatus,
-        cx: &mut Context<Self>,
+        cx: &Context<Self>,
         f: AsyncFn,
     ) -> Task<Result<()>>
     where
@@ -8584,7 +8573,7 @@ fn log_source_from_proto(log_source: proto::GitLogSource) -> Result<LogSource> {
     }
 }
 
-fn log_order_to_proto(log_order: LogOrder) -> i32 {
+const fn log_order_to_proto(log_order: LogOrder) -> i32 {
     match log_order {
         LogOrder::DateOrder => proto::get_initial_graph_data::LogOrder::DateOrder as i32,
         LogOrder::TopoOrder => proto::get_initial_graph_data::LogOrder::TopoOrder as i32,
@@ -8593,7 +8582,7 @@ fn log_order_to_proto(log_order: LogOrder) -> i32 {
     }
 }
 
-fn log_order_from_proto(log_order: proto::get_initial_graph_data::LogOrder) -> LogOrder {
+const fn log_order_from_proto(log_order: proto::get_initial_graph_data::LogOrder) -> LogOrder {
     match log_order {
         proto::get_initial_graph_data::LogOrder::DateOrder => LogOrder::DateOrder,
         proto::get_initial_graph_data::LogOrder::TopoOrder => LogOrder::TopoOrder,
@@ -9034,7 +9023,7 @@ fn status_to_proto(status: FileStatus) -> proto::GitFileStatus {
     proto::GitFileStatus { variant: Some(variant) }
 }
 
-fn unmerged_status_to_proto(code: UnmergedStatusCode) -> i32 {
+const fn unmerged_status_to_proto(code: UnmergedStatusCode) -> i32 {
     match code {
         UnmergedStatusCode::Added => proto::GitStatus::Added as _,
         UnmergedStatusCode::Deleted => proto::GitStatus::Deleted as _,
@@ -9042,7 +9031,7 @@ fn unmerged_status_to_proto(code: UnmergedStatusCode) -> i32 {
     }
 }
 
-fn tracked_status_to_proto(code: StatusCode) -> i32 {
+const fn tracked_status_to_proto(code: StatusCode) -> i32 {
     match code {
         StatusCode::Added => proto::GitStatus::Added as _,
         StatusCode::Deleted => proto::GitStatus::Deleted as _,

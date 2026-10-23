@@ -1,18 +1,27 @@
-use super::{HoverTarget, HoveredWord, TerminalView};
+use std::path::PathBuf;
+
 use anyhow::Result;
 use editor::items::open_resolved_target;
-use gpui::{Context, Task, TaskExt, WeakEntity, Window};
-use std::path::PathBuf;
+use gpui::Context;
+use gpui::Task;
+use gpui::TaskExt;
+use gpui::WeakEntity;
+use gpui::Window;
 use terminal::PathLikeTarget;
+use workspace::Workspace;
+use workspace::path_link::OpenTarget;
 use workspace::path_link::PathMatching;
 use workspace::path_link::resolve_open_target;
-use workspace::{Workspace, path_link::OpenTarget};
+
+use super::HoverTarget;
+use super::HoveredWord;
+use super::TerminalView;
 
 pub(super) fn hover_path_like_target(
     workspace: &WeakEntity<Workspace>,
     hovered_word: HoveredWord,
     path_like_target: &PathLikeTarget,
-    cx: &mut Context<TerminalView>,
+    cx: &Context<TerminalView>,
 ) -> Task<()> {
     possible_hover_target(workspace, hovered_word, path_like_target, cx)
 }
@@ -21,7 +30,7 @@ fn possible_hover_target(
     workspace: &WeakEntity<Workspace>,
     hovered_word: HoveredWord,
     path_like_target: &PathLikeTarget,
-    cx: &mut Context<TerminalView>,
+    cx: &Context<TerminalView>,
 ) -> Task<()> {
     let file_to_open_task = resolve_open_target(
         workspace,
@@ -37,8 +46,7 @@ fn possible_hover_target(
                 match file_to_open {
                     Some(OpenTarget::Path(path, ..) | OpenTarget::Worktree(path, ..)) => {
                         terminal_view.hover = Some(HoverTarget {
-                            tooltip: path
-                                .to_string(&|path: &PathBuf| path.to_string_lossy().into_owned()),
+                            tooltip: path.to_string(&|path: &PathBuf| path.to_string_lossy().into_owned()),
                             hovered_word,
                         });
                     }
@@ -54,23 +62,20 @@ fn possible_hover_target(
 
 pub(super) fn open_path_like_target(
     workspace: &WeakEntity<Workspace>,
-    terminal_view: &mut TerminalView,
+    terminal_view: &TerminalView,
     path_like_target: &PathLikeTarget,
-    window: &mut Window,
-    cx: &mut Context<TerminalView>,
+    window: &Window,
+    cx: &Context<TerminalView>,
 ) {
-    {
-        possibly_open_target(workspace, terminal_view, path_like_target, window, cx)
-            .detach_and_log_err(cx)
-    }
+    possibly_open_target(workspace, terminal_view, path_like_target, window, cx).detach_and_log_err(cx)
 }
 
 fn possibly_open_target(
     workspace: &WeakEntity<Workspace>,
-    terminal_view: &mut TerminalView,
+    terminal_view: &TerminalView,
     path_like_target: &PathLikeTarget,
-    window: &mut Window,
-    cx: &mut Context<TerminalView>,
+    window: &Window,
+    cx: &Context<TerminalView>,
 ) -> Task<Result<Option<OpenTarget>>> {
     if terminal_view.hover.is_none() {
         return Task::ready(Ok(None));

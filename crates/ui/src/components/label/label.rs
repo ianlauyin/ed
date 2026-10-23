@@ -1,9 +1,14 @@
 use std::borrow::Cow;
 use std::ops::Range;
 
+use gpui::HighlightStyle;
+use gpui::StyleRefinement;
+use gpui::StyledText;
+use gpui::TextAlign;
+
+use crate::LabelLike;
+use crate::prelude::*;
 use crate::utils::replace_control_characters;
-use crate::{LabelLike, prelude::*};
-use gpui::{HighlightStyle, StyleRefinement, StyledText, TextAlign};
 
 /// A struct representing a label element in the UI.
 ///
@@ -51,16 +56,12 @@ impl Label {
     /// let my_label = Label::new("Hello, World!");
     /// ```
     pub fn new(label: impl Into<SharedString>) -> Self {
-        Self {
-            base: LabelLike::new(),
-            label: label.into(),
-            render_code_spans: false,
-        }
+        Self { base: LabelLike::new(), label: label.into(), render_code_spans: false }
     }
 
     /// When enabled, text wrapped in backticks (e.g. `` `code` ``) will be
     /// rendered in the buffer (monospace) font.
-    pub fn render_code_spans(mut self) -> Self {
+    pub const fn render_code_spans(mut self) -> Self {
         self.render_code_spans = true;
         self
     }
@@ -267,31 +268,21 @@ impl LabelCommon for Label {
 
 impl RenderOnce for Label {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        if self.render_code_spans {
-            if let Some((stripped, code_ranges)) = parse_backtick_spans(&self.label) {
-                let buffer_font_family = theme::theme_settings(cx).buffer_font(cx).family.clone();
-                let background_color = cx.theme().colors().element_background;
+        if self.render_code_spans
+            && let Some((stripped, code_ranges)) = parse_backtick_spans(&self.label)
+        {
+            let buffer_font_family = theme::theme_settings(cx).buffer_font(cx).family.clone();
+            let background_color = cx.theme().colors().element_background;
 
-                let highlights = code_ranges.iter().map(|range| {
-                    (
-                        range.clone(),
-                        HighlightStyle {
-                            background_color: Some(background_color),
-                            ..Default::default()
-                        },
-                    )
-                });
+            let highlights = code_ranges.iter().map(|range| {
+                (range.clone(), HighlightStyle { background_color: Some(background_color), ..Default::default() })
+            });
 
-                let font_overrides = code_ranges
-                    .iter()
-                    .map(|range| (range.clone(), buffer_font_family.clone()));
+            let font_overrides = code_ranges.iter().map(|range| (range.clone(), buffer_font_family.clone()));
 
-                return self.base.child(
-                    StyledText::new(stripped)
-                        .with_highlights(highlights)
-                        .with_font_family_overrides(font_overrides),
-                );
-            }
+            return self.base.child(
+                StyledText::new(stripped).with_highlights(highlights).with_font_family_overrides(font_overrides),
+            );
         }
         self.base.child(self.label)
     }

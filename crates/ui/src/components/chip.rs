@@ -1,5 +1,11 @@
+use gpui::AnyElement;
+use gpui::AnyView;
+use gpui::Hsla;
+use gpui::IntoElement;
+use gpui::ParentElement;
+use gpui::Styled;
+
 use crate::prelude::*;
-use gpui::{AnyElement, AnyView, Hsla, IntoElement, ParentElement, Styled};
 
 /// Chips provide a container for an informative label.
 ///
@@ -42,49 +48,49 @@ impl Chip {
     }
 
     /// Sets the color of the label.
-    pub fn label_color(mut self, color: Color) -> Self {
+    pub const fn label_color(mut self, color: Color) -> Self {
         self.label_color = color;
         self
     }
 
     /// Sets the size of the label.
-    pub fn label_size(mut self, size: LabelSize) -> Self {
+    pub const fn label_size(mut self, size: LabelSize) -> Self {
         self.label_size = size;
         self
     }
 
     /// Sets an icon to display before the label.
-    pub fn icon(mut self, icon: IconName) -> Self {
+    pub const fn icon(mut self, icon: IconName) -> Self {
         self.icon = Some(icon);
         self
     }
 
     /// Sets the color of the icon.
-    pub fn icon_color(mut self, color: Color) -> Self {
+    pub const fn icon_color(mut self, color: Color) -> Self {
         self.icon_color = color;
         self
     }
 
     /// Sets a custom background color for the callout content.
-    pub fn bg_color(mut self, color: Hsla) -> Self {
+    pub const fn bg_color(mut self, color: Hsla) -> Self {
         self.bg_color = Some(color);
         self
     }
 
     /// Sets a custom border color for the chip.
-    pub fn border_color(mut self, color: Hsla) -> Self {
+    pub const fn border_color(mut self, color: Hsla) -> Self {
         self.border_color = Some(color);
         self
     }
 
     /// Sets a custom height for the chip.
-    pub fn height(mut self, height: Pixels) -> Self {
+    pub const fn height(mut self, height: Pixels) -> Self {
         self.height = Some(height);
         self
     }
 
     /// Allows the chip to shrink and truncate its label when space is limited.
-    pub fn truncate(mut self) -> Self {
+    pub const fn truncate(mut self) -> Self {
         self.truncate = true;
         self
     }
@@ -97,9 +103,7 @@ impl Chip {
 
 impl RenderOnce for Chip {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let bg_color = self
-            .bg_color
-            .unwrap_or(cx.theme().colors().element_background);
+        let bg_color = self.bg_color.unwrap_or(cx.theme().colors().element_background);
 
         let border_color = self.border_color.unwrap_or(cx.theme().colors().border);
 
@@ -115,18 +119,10 @@ impl RenderOnce for Chip {
             .bg(bg_color)
             .overflow_hidden()
             .when_some(self.icon, |this, icon| {
-                this.child(
-                    Icon::new(icon)
-                        .size(IconSize::XSmall)
-                        .color(self.icon_color),
-                )
+                this.child(Icon::new(icon).size(IconSize::XSmall).color(self.icon_color))
             })
             .child(
-                Label::new(self.label.clone())
-                    .size(self.label_size)
-                    .color(self.label_color)
-                    .buffer_font(cx)
-                    .truncate(),
+                Label::new(self.label.clone()).size(self.label_size).color(self.label_color).buffer_font(cx).truncate(),
             )
             .id(self.label.clone())
             .when_some(self.tooltip, |this, tooltip| this.tooltip(tooltip))
@@ -148,22 +144,15 @@ impl Component for Chip {
             single_example("Default", Chip::new("Chip Example").into_any_element()),
             single_example(
                 "Customized Label Color",
-                Chip::new("Chip Example")
-                    .label_color(Color::Accent)
-                    .into_any_element(),
+                Chip::new("Chip Example").label_color(Color::Accent).into_any_element(),
             ),
             single_example(
                 "Customized Label Size",
-                Chip::new("Chip Example")
-                    .label_size(LabelSize::Large)
-                    .label_color(Color::Accent)
-                    .into_any_element(),
+                Chip::new("Chip Example").label_size(LabelSize::Large).label_color(Color::Accent).into_any_element(),
             ),
             single_example(
                 "Customized Background Color",
-                Chip::new("Chip Example")
-                    .bg_color(cx.theme().colors().text_accent.opacity(0.1))
-                    .into_any_element(),
+                Chip::new("Chip Example").bg_color(cx.theme().colors().text_accent.opacity(0.1)).into_any_element(),
             ),
         ];
 

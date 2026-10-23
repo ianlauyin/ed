@@ -1,27 +1,38 @@
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
 
-use anyhow::{Context as _, Result};
+use anyhow::Context as _;
+use anyhow::Result;
 use editor::Editor;
-use futures::{FutureExt as _, channel::oneshot, select};
-use gpui::{AppContext, AsyncApp, PromptLevel, WindowHandle};
-
+use futures::FutureExt as _;
+use futures::channel::oneshot;
+use futures::select;
+use gpui::AppContext;
+use gpui::AsyncApp;
+use gpui::PromptLevel;
+use gpui::WindowHandle;
 use project::trusted_worktrees;
-use remote::{Interactive, RemoteConnection, RemoteConnectionOptions, SshConnectionOptions};
+use remote::Interactive;
+use remote::RemoteConnection;
+use remote::RemoteConnectionOptions;
+use remote::SshConnectionOptions;
+pub use remote_connection::RemoteClientDelegate;
+pub use remote_connection::RemoteConnectionModal;
+pub use remote_connection::RemoteConnectionPrompt;
+pub use remote_connection::SshConnectionHeader;
+pub use remote_connection::connect;
+use settings::ExtendingVec;
+use settings::RegisterSetting;
+use settings::Settings;
 pub use settings::SshConnection;
-use settings::{ExtendingVec, RegisterSetting, Settings};
 use util::paths::PathWithPosition;
-use workspace::{
-    AppState, MultiWorkspace, OpenOptions, SerializedWorkspaceLocation, Workspace,
-    find_existing_workspace,
-};
-
-pub use remote_connection::{
-    RemoteClientDelegate, RemoteConnectionModal, RemoteConnectionPrompt, SshConnectionHeader,
-    connect,
-};
+use workspace::AppState;
+use workspace::MultiWorkspace;
+use workspace::OpenOptions;
+use workspace::SerializedWorkspaceLocation;
+use workspace::Workspace;
+use workspace::find_existing_workspace;
 
 #[derive(RegisterSetting)]
 pub struct RemoteSettings {
@@ -35,10 +46,7 @@ impl RemoteSettings {
 
     pub fn fill_connection_options_from_settings(&self, options: &mut SshConnectionOptions) {
         for conn in self.ssh_connections() {
-            if conn.host == options.host.to_string()
-                && conn.username == options.username
-                && conn.port == options.port
-            {
+            if conn.host == options.host.to_string() && conn.username == options.username && conn.port == options.port {
                 options.nickname = conn.nickname;
                 options.args = Some(conn.args);
                 options.port_forwards = conn.port_forwards;
@@ -53,12 +61,7 @@ impl RemoteSettings {
         port: Option<u16>,
         username: Option<String>,
     ) -> SshConnectionOptions {
-        let mut options = SshConnectionOptions {
-            host: host.into(),
-            port,
-            username,
-            ..Default::default()
-        };
+        let mut options = SshConnectionOptions { host: host.into(), port, username, ..Default::default() };
         self.fill_connection_options_from_settings(&mut options);
         options
     }
@@ -86,9 +89,7 @@ impl From<SshConnection> for Connection {
 impl Settings for RemoteSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let remote = &content.remote;
-        Self {
-            ssh_connections: remote.ssh_connections.clone().unwrap_or_default().into(),
-        }
+        Self { ssh_connections: remote.ssh_connections.clone().unwrap_or_default().into() }
     }
 }
 
@@ -130,10 +131,7 @@ pub async fn open_remote_project(
                     existing_workspace.update(cx, |workspace, cx| {
                         workspace.open_paths(
                             resolved_paths,
-                            OpenOptions {
-                                visible: Some(open_visible),
-                                ..Default::default()
-                            },
+                            OpenOptions { visible: Some(open_visible), ..Default::default() },
                             None,
                             window,
                             cx,
@@ -153,36 +151,26 @@ pub async fn open_remote_project(
                 });
             });
 
-            let items = open_results
-                .into_iter()
-                .map(|r| r.and_then(|r| r.ok()))
-                .collect::<Vec<_>>();
+            let items = open_results.into_iter().map(|r| r.and_then(|r| r.ok())).collect::<Vec<_>>();
             navigate_to_positions(&existing_window, items, &paths_with_positions, cx);
 
             return Ok(existing_window);
         }
         // If the remote connection is dead (e.g. server not running after failed reconnect),
         // fall through to establish a fresh connection instead of showing an error.
-        log::info!(
-            "existing remote workspace found but connection is dead, starting fresh connection"
-        );
+        log::info!("existing remote workspace found but connection is dead, starting fresh connection");
     }
 
     let (window, initial_workspace) = if let Some(window) = open_options.requesting_window {
-        let workspace = window.update(cx, |multi_workspace, _, _| {
-            multi_workspace.workspace().clone()
-        })?;
+        let workspace = window.update(cx, |multi_workspace, _, _| multi_workspace.workspace().clone())?;
         (window, workspace)
     } else {
         let workspace_position = cx
-            .update(|cx| {
-                workspace::remote_workspace_position_from_db(connection_options.clone(), &paths, cx)
-            })
+            .update(|cx| workspace::remote_workspace_position_from_db(connection_options.clone(), &paths, cx))
             .await
             .context("fetching remote workspace position from db")?;
 
-        let mut options =
-            cx.update(|cx| (app_state.build_window_options)(workspace_position.display, cx));
+        let mut options = cx.update(|cx| (app_state.build_window_options)(workspace_position.display, cx));
         options.window_bounds = workspace_position.window_bounds;
 
         let window = cx.open_window(options, |window, cx| {
@@ -190,9 +178,7 @@ pub async fn open_remote_project(
                 app_state.languages.clone(),
                 app_state.fs.clone(),
                 None,
-                project::LocalProjectFlags {
-                    init_worktree_trust: false,
-                },
+                project::LocalProjectFlags { init_worktree_trust: false },
                 cx,
             );
             let workspace = cx.new(|cx| {
@@ -202,9 +188,7 @@ pub async fn open_remote_project(
             });
             cx.new(|cx| MultiWorkspace::new(workspace, window, cx))
         })?;
-        let workspace = window.update(cx, |multi_workspace, _, _cx| {
-            multi_workspace.workspace().clone()
-        })?;
+        let workspace = window.update(cx, |multi_workspace, _, _cx| multi_workspace.workspace().clone())?;
         (window, workspace)
     };
 
@@ -222,11 +206,7 @@ pub async fn open_remote_project(
                         RemoteConnectionModal::new(&connection_options, paths, window, cx)
                     });
 
-                    let ui = workspace
-                        .active_modal::<RemoteConnectionModal>(cx)?
-                        .read(cx)
-                        .prompt
-                        .clone();
+                    let ui = workspace.active_modal::<RemoteConnectionModal>(cx)?.read(cx).prompt.clone();
 
                     ui.update(cx, |ui, _cx| {
                         ui.set_cancellation_tx(cancel_tx);
@@ -280,16 +260,13 @@ pub async fn open_remote_project(
                 }
 
                 if created_new_window {
-                    window
-                        .update(cx, |_, window, _| window.remove_window())
-                        .ok();
+                    window.update(cx, |_, window, _| window.remove_window()).ok();
                 }
                 return Ok(window);
             }
         };
 
-        let (paths, paths_with_positions) =
-            determine_paths_with_positions(&remote_connection, paths.clone()).await;
+        let (paths, paths_with_positions) = determine_paths_with_positions(&remote_connection, paths.clone()).await;
 
         let opened = cx
             .update(|cx| {
@@ -332,9 +309,7 @@ pub async fn open_remote_project(
                 }
 
                 if created_new_window {
-                    window
-                        .update(cx, |_, window, _| window.remove_window())
-                        .ok();
+                    window.update(cx, |_, window, _| window.remove_window()).ok();
                 }
                 initial_workspace.update(cx, |workspace, cx| {
                     trusted_worktrees::track_worktree_trust(
@@ -397,13 +372,11 @@ pub(crate) async fn determine_paths_with_positions(
     let mut paths_with_positions = Vec::<PathWithPosition>::new();
     for path in &mut paths {
         if let Some(path_str) = path.to_str() {
-            let path_with_position = PathWithPosition::parse_str(&path_str);
-            if path_with_position.row.is_some() {
-                if !path_exists(&remote_connection, &path).await {
-                    *path = path_with_position.path.clone();
-                    paths_with_positions.push(path_with_position);
-                    continue;
-                }
+            let path_with_position = PathWithPosition::parse_str(path_str);
+            if path_with_position.row.is_some() && !path_exists(remote_connection, path).await {
+                path.clone_from(&path_with_position.path);
+                paths_with_positions.push(path_with_position);
+                continue;
             }
         }
         paths_with_positions.push(PathWithPosition::from_path(path.clone()))
@@ -422,11 +395,7 @@ async fn path_exists(connection: &Arc<dyn RemoteConnection>, path: &Path) -> boo
     ) else {
         return false;
     };
-    let Ok(mut child) = util::command::new_command(command.program)
-        .args(command.args)
-        .envs(command.env)
-        .spawn()
-    else {
+    let Ok(mut child) = util::command::new_command(command.program).args(command.args).envs(command.env).spawn() else {
         return false;
     };
     child.status().await.is_ok_and(|status| status.success())

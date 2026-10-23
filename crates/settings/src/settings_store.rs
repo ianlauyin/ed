@@ -1,18 +1,26 @@
-use anyhow::Result;
-use collections::{HashMap, TypeIdHashMap, hash_map};
-use gpui::{App, AsyncApp, BorrowAppContext, Global, SharedString, UpdateGlobal};
+use std::any::Any;
+use std::any::TypeId;
+use std::any::type_name;
+use std::fmt::Debug;
+use std::str;
 
-use std::{
-    any::{Any, TypeId, type_name},
-    fmt::Debug,
-    str,
-};
+use anyhow::Result;
+use collections::HashMap;
+use collections::TypeIdHashMap;
+use collections::hash_map;
+use gpui::App;
+use gpui::AsyncApp;
+use gpui::BorrowAppContext;
+use gpui::Global;
+use gpui::SharedString;
+use gpui::UpdateGlobal;
 use util::rel_path::RelPath;
 
-use crate::{
-    SemanticTokenRules, WorktreeId,
-    settings_content::{LanguageDefaultsContent, SettingsContent, merge_from::MergeFrom},
-};
+use crate::SemanticTokenRules;
+use crate::WorktreeId;
+use crate::settings_content::LanguageDefaultsContent;
+use crate::settings_content::SettingsContent;
+use crate::settings_content::merge_from::MergeFrom;
 
 /// A typed view of the built-in settings.
 pub trait Settings: 'static + Send + Sync + Sized {
@@ -53,11 +61,7 @@ pub trait Settings: 'static + Send + Sync + Sized {
     where
         Self: Sized,
     {
-        if cx.has_global::<SettingsStore>() {
-            cx.global::<SettingsStore>().try_get(None)
-        } else {
-            None
-        }
+        if cx.has_global::<SettingsStore>() { cx.global::<SettingsStore>().try_get(None) } else { None }
     }
 
     #[track_caller]
@@ -117,7 +121,7 @@ pub struct SettingValue<T> {
 #[doc(hidden)]
 pub trait AnySettingValue: 'static + Send + Sync {
     fn setting_type_name(&self) -> &'static str;
-    fn from_settings(&self, s: &SettingsContent) -> Box<dyn Any>;
+    fn value_from_settings(&self, s: &SettingsContent) -> Box<dyn Any>;
     fn value_for_path(&self, path: Option<SettingsLocation>) -> &dyn Any;
     fn set_global_value(&mut self, value: Box<dyn Any>);
 }
@@ -125,9 +129,7 @@ pub trait AnySettingValue: 'static + Send + Sync {
 impl SettingsStore {
     pub fn new(cx: &mut App, settings: SettingsContent) -> Self {
         if !cx.has_global::<DefaultSemanticTokenRules>() {
-            cx.set_global(DefaultSemanticTokenRules(
-                crate::built_in_semantic_token_rules::rules(),
-            ));
+            cx.set_global(DefaultSemanticTokenRules(crate::built_in_semantic_token_rules::rules()));
         }
         let merged_settings = settings.clone();
         let mut this = Self {
@@ -175,7 +177,7 @@ impl SettingsStore {
         setting_value.set_global_value(value);
     }
 
-    pub fn merged_settings(&self) -> &SettingsContent {
+    pub const fn merged_settings(&self) -> &SettingsContent {
         &self.merged_settings
     }
 
@@ -217,7 +219,7 @@ impl SettingsStore {
         cx.refresh_windows();
     }
 
-    pub fn settings(&self) -> &SettingsContent {
+    pub const fn settings(&self) -> &SettingsContent {
         &self.settings
     }
 
@@ -226,11 +228,7 @@ impl SettingsStore {
     /// These rules are registered by built-in language modules.
     /// They are stored separately from the global rules and are only
     /// applied to buffers of the matching language by the `SemanticTokenStylizer`.
-    pub fn set_language_semantic_token_rules(
-        &mut self,
-        language: SharedString,
-        rules: SemanticTokenRules,
-    ) {
+    pub fn set_language_semantic_token_rules(&mut self, language: SharedString, rules: SemanticTokenRules) {
         self.language_semantic_token_rules.insert(language, rules);
     }
 
@@ -245,11 +243,7 @@ impl SettingsStore {
         self.language_semantic_token_rules.get(language)
     }
 
-    pub fn set_language_defaults(
-        &mut self,
-        content: LanguageDefaultsContent,
-        _cx: &mut App,
-    ) -> Result<()> {
+    pub fn set_language_defaults(&mut self, content: LanguageDefaultsContent, _cx: &mut App) -> Result<()> {
         self.language_defaults = Some(content.all_languages);
         self.recompute_values();
         Ok(())
@@ -268,7 +262,7 @@ impl SettingsStore {
             }
         }
         for setting_value in self.setting_values.values_mut() {
-            let value = setting_value.from_settings(&self.merged_settings);
+            let value = setting_value.value_from_settings(&self.merged_settings);
             setting_value.set_global_value(value);
         }
     }
@@ -276,14 +270,12 @@ impl SettingsStore {
 
 impl Debug for SettingsStore {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("SettingsStore")
-            .field("settings", &self.settings)
-            .finish_non_exhaustive()
+        f.debug_struct("SettingsStore").field("settings", &self.settings).finish_non_exhaustive()
     }
 }
 
 impl<T: Settings> AnySettingValue for SettingValue<T> {
-    fn from_settings(&self, s: &SettingsContent) -> Box<dyn Any> {
+    fn value_from_settings(&self, s: &SettingsContent) -> Box<dyn Any> {
         Box::new(T::from_settings(s))
     }
 

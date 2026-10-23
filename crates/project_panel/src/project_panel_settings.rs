@@ -56,17 +56,17 @@ pub struct AutoOpenSettings {
 
 impl AutoOpenSettings {
     #[inline]
-    pub fn should_open_on_create(self) -> bool {
+    pub const fn should_open_on_create(self) -> bool {
         self.on_create
     }
 
     #[inline]
-    pub fn should_open_on_paste(self) -> bool {
+    pub const fn should_open_on_paste(self) -> bool {
         self.on_paste
     }
 
     #[inline]
-    pub fn should_open_on_drop(self) -> bool {
+    pub const fn should_open_on_drop(self) -> bool {
         self.on_drop
     }
 }

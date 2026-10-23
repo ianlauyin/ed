@@ -1,5 +1,8 @@
 use anyhow::Result;
-use futures::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use futures::AsyncRead;
+use futures::AsyncReadExt;
+use futures::AsyncWrite;
+use futures::AsyncWriteExt;
 use rpc::proto::Envelope;
 
 #[derive(Debug, Copy, Clone, Hash, PartialEq, Eq)]
@@ -22,10 +25,7 @@ pub async fn read_message_with_len<S: AsyncRead + Unpin>(
     Ok(Envelope::decode_from_slice(buffer.as_slice())?)
 }
 
-pub async fn read_message<S: AsyncRead + Unpin>(
-    stream: &mut S,
-    buffer: &mut Vec<u8>,
-) -> Result<Envelope> {
+pub async fn read_message<S: AsyncRead + Unpin>(stream: &mut S, buffer: &mut Vec<u8>) -> Result<Envelope> {
     buffer.resize(MESSAGE_LEN_SIZE, 0);
     stream.read_exact(buffer).await?;
 
@@ -40,9 +40,7 @@ pub async fn write_message<S: AsyncWrite + Unpin>(
     message: Envelope,
 ) -> Result<()> {
     let message_len = message.encoded_size() as u32;
-    stream
-        .write_all(message_len.to_le_bytes().as_slice())
-        .await?;
+    stream.write_all(message_len.to_le_bytes().as_slice()).await?;
     buffer.clear();
     buffer.reserve(message_len as usize);
     message.encode_to_buffer(buffer)?;
@@ -50,10 +48,7 @@ pub async fn write_message<S: AsyncWrite + Unpin>(
     Ok(())
 }
 
-pub async fn write_size_prefixed_buffer<S: AsyncWrite + Unpin>(
-    stream: &mut S,
-    buffer: &mut Vec<u8>,
-) -> Result<()> {
+pub async fn write_size_prefixed_buffer<S: AsyncWrite + Unpin>(stream: &mut S, buffer: &mut [u8]) -> Result<()> {
     let len = buffer.len() as u32;
     stream.write_all(len.to_le_bytes().as_slice()).await?;
     stream.write_all(buffer).await?;

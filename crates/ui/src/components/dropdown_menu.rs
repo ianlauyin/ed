@@ -1,8 +1,14 @@
-use gpui::{Anchor, AnyView, Entity, Pixels, Point};
-
-use crate::{ButtonLike, ContextMenu, PopoverMenu, prelude::*};
+use gpui::Anchor;
+use gpui::AnyView;
+use gpui::Entity;
+use gpui::Pixels;
+use gpui::Point;
 
 use super::PopoverMenuHandle;
+use crate::ButtonLike;
+use crate::ContextMenu;
+use crate::PopoverMenu;
+use crate::prelude::*;
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum DropdownStyle {
@@ -37,11 +43,7 @@ pub struct DropdownMenu {
 }
 
 impl DropdownMenu {
-    pub fn new(
-        id: impl Into<ElementId>,
-        label: impl Into<SharedString>,
-        menu: Entity<ContextMenu>,
-    ) -> Self {
+    pub fn new(id: impl Into<ElementId>, label: impl Into<SharedString>, menu: Entity<ContextMenu>) -> Self {
         Self {
             id: id.into(),
             label: LabelKind::Text(label.into()),
@@ -60,11 +62,7 @@ impl DropdownMenu {
         }
     }
 
-    pub fn new_with_element(
-        id: impl Into<ElementId>,
-        label: AnyElement,
-        menu: Entity<ContextMenu>,
-    ) -> Self {
+    pub fn new_with_element(id: impl Into<ElementId>, label: AnyElement, menu: Entity<ContextMenu>) -> Self {
         Self {
             id: id.into(),
             label: LabelKind::Element(label),
@@ -83,30 +81,27 @@ impl DropdownMenu {
         }
     }
 
-    pub fn style(mut self, style: DropdownStyle) -> Self {
+    pub const fn style(mut self, style: DropdownStyle) -> Self {
         self.style = style;
         self
     }
 
-    pub fn trigger_size(mut self, size: ButtonSize) -> Self {
+    pub const fn trigger_size(mut self, size: ButtonSize) -> Self {
         self.trigger_size = size;
         self
     }
 
-    pub fn trigger_tooltip(
-        mut self,
-        tooltip: impl Fn(&mut Window, &mut App) -> AnyView + 'static,
-    ) -> Self {
+    pub fn trigger_tooltip(mut self, tooltip: impl Fn(&mut Window, &mut App) -> AnyView + 'static) -> Self {
         self.trigger_tooltip = Some(Box::new(tooltip));
         self
     }
 
-    pub fn trigger_icon(mut self, icon: IconName) -> Self {
+    pub const fn trigger_icon(mut self, icon: IconName) -> Self {
         self.trigger_icon = Some(icon);
         self
     }
 
-    pub fn full_width(mut self, full_width: bool) -> Self {
+    pub const fn full_width(mut self, full_width: bool) -> Self {
         self.full_width = full_width;
         self
     }
@@ -117,23 +112,23 @@ impl DropdownMenu {
     }
 
     /// Defines which corner of the handle to attach the menu's anchor to.
-    pub fn attach(mut self, attach: Anchor) -> Self {
+    pub const fn attach(mut self, attach: Anchor) -> Self {
         self.attach = Some(attach);
         self
     }
 
     /// Offsets the position of the menu by that many pixels.
-    pub fn offset(mut self, offset: Point<Pixels>) -> Self {
+    pub const fn offset(mut self, offset: Point<Pixels>) -> Self {
         self.offset = Some(offset);
         self
     }
 
-    pub fn tab_index(mut self, arg: isize) -> Self {
+    pub const fn tab_index(mut self, arg: isize) -> Self {
         self.tab_index = Some(arg);
         self
     }
 
-    pub fn no_chevron(mut self) -> Self {
+    pub const fn no_chevron(mut self) -> Self {
         self.chevron = false;
         self
     }
@@ -165,9 +160,7 @@ impl RenderOnce for DropdownMenu {
                     Button::new(self.id.clone(), text)
                         .style(button_style)
                         .when_some(self.trigger_icon.filter(|_| self.chevron), |this, icon| {
-                            this.end_icon(
-                                Icon::new(icon).size(IconSize::XSmall).color(Color::Muted),
-                            )
+                            this.end_icon(Icon::new(icon).size(IconSize::XSmall).color(Color::Muted))
                         })
                         .when(full_width, |this| this.full_width())
                         .size(trigger_size)
@@ -183,11 +176,7 @@ impl RenderOnce for DropdownMenu {
                         .child(element)
                         .style(button_style)
                         .when(self.chevron, |this| {
-                            this.child(
-                                Icon::new(IconName::ChevronUpDown)
-                                    .size(IconSize::XSmall)
-                                    .color(Color::Muted),
-                            )
+                            this.child(Icon::new(IconName::ChevronUpDown).size(IconSize::XSmall).color(Color::Muted))
                         })
                         .when(full_width, |this| this.full_width())
                         .size(trigger_size)
@@ -213,13 +202,9 @@ impl RenderOnce for DropdownMenu {
             .menu(move |_window, _cx| Some(self.menu.clone()));
 
         popover = match (text_button, element_button, self.trigger_tooltip) {
-            (Some(text_button), None, Some(tooltip)) => {
-                popover.trigger_with_tooltip(text_button, tooltip)
-            }
+            (Some(text_button), None, Some(tooltip)) => popover.trigger_with_tooltip(text_button, tooltip),
             (Some(text_button), None, None) => popover.trigger(text_button),
-            (None, Some(element_button), Some(tooltip)) => {
-                popover.trigger_with_tooltip(element_button, tooltip)
-            }
+            (None, Some(element_button), Some(tooltip)) => popover.trigger_with_tooltip(element_button, tooltip),
             (None, Some(element_button), None) => popover.trigger(element_button),
             _ => popover,
         };
@@ -259,18 +244,18 @@ impl Component for DropdownMenu {
         let menu_with_submenu = ContextMenu::build(window, cx, |this, _, _| {
             this.entry("Toggle All Docks", None, |_, _| {})
                 .submenu("Editor Layout", |menu, _, _| {
-                    menu.entry("Split Up", None, |_, _| {})
-                        .entry("Split Down", None, |_, _| {})
-                        .separator()
-                        .entry("Split Side", None, |_, _| {})
+                    menu.entry("Split Up", None, |_, _| {}).entry("Split Down", None, |_, _| {}).separator().entry(
+                        "Split Side",
+                        None,
+                        |_, _| {},
+                    )
                 })
                 .separator()
                 .entry("Project Panel", None, |_, _| {})
                 .entry("Outline Panel", None, |_, _| {})
                 .separator()
                 .submenu("Autofill", |menu, _, _| {
-                    menu.entry("Contact…", None, |_, _| {})
-                        .entry("Passwords…", None, |_, _| {})
+                    menu.entry("Contact…", None, |_, _| {}).entry("Passwords…", None, |_, _| {})
                 })
         });
 
@@ -282,8 +267,7 @@ impl Component for DropdownMenu {
                     vec![
                         single_example(
                             "Default",
-                            DropdownMenu::new("default", "Select an option", menu.clone())
-                                .into_any_element(),
+                            DropdownMenu::new("default", "Select an option", menu.clone()).into_any_element(),
                         ),
                         single_example(
                             "Full Width",
@@ -297,8 +281,7 @@ impl Component for DropdownMenu {
                     "Submenus",
                     vec![single_example(
                         "With Submenus",
-                        DropdownMenu::new("submenu", "Submenu", menu_with_submenu)
-                            .into_any_element(),
+                        DropdownMenu::new("submenu", "Submenu", menu_with_submenu).into_any_element(),
                     )],
                 ),
                 example_group_with_title(
@@ -322,9 +305,7 @@ impl Component for DropdownMenu {
                     "States",
                     vec![single_example(
                         "Disabled",
-                        DropdownMenu::new("disabled", "Disabled Dropdown", menu)
-                            .disabled(true)
-                            .into_any_element(),
+                        DropdownMenu::new("disabled", "Disabled Dropdown", menu).disabled(true).into_any_element(),
                     )],
                 ),
             ])

@@ -1,10 +1,9 @@
-use std::{
-    cell::RefCell,
-    ffi::{CStr, CString},
-    marker::PhantomData,
-    path::Path,
-    ptr,
-};
+use std::cell::RefCell;
+use std::ffi::CStr;
+use std::ffi::CString;
+use std::marker::PhantomData;
+use std::path::Path;
+use std::ptr;
 
 use anyhow::Result;
 use libsqlite3_sys::*;
@@ -19,20 +18,11 @@ unsafe impl Send for Connection {}
 
 impl Connection {
     fn open_with_flags(uri: &str, persistent: bool, flags: i32) -> Result<Self> {
-        let mut connection = Self {
-            sqlite3: ptr::null_mut(),
-            persistent,
-            write: RefCell::new(true),
-            _sqlite: PhantomData,
-        };
+        let mut connection =
+            Self { sqlite3: ptr::null_mut(), persistent, write: RefCell::new(true), _sqlite: PhantomData };
 
         unsafe {
-            sqlite3_open_v2(
-                CString::new(uri)?.as_ptr(),
-                &mut connection.sqlite3,
-                flags,
-                ptr::null(),
-            );
+            sqlite3_open_v2(CString::new(uri)?.as_ptr(), &raw mut connection.sqlite3, flags, ptr::null());
 
             // Turn on extended error codes
             sqlite3_extended_result_codes(connection.sqlite3, 1);
@@ -53,11 +43,7 @@ impl Connection {
     }
 
     pub(crate) fn open(uri: &str, persistent: bool) -> Result<Self> {
-        Self::open_with_flags(
-            uri,
-            persistent,
-            SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX | SQLITE_OPEN_READWRITE,
-        )
+        Self::open_with_flags(uri, persistent, SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX | SQLITE_OPEN_READWRITE)
     }
 
     /// Attempts to open the database at uri. If it fails, a shared memory db will be opened
@@ -69,18 +55,18 @@ impl Connection {
     pub fn open_memory(uri: Option<&str>) -> Self {
         if let Some(uri) = uri {
             let in_memory_path = format!("file:{}?mode=memory&cache=shared", uri);
-            return Self::open_with_flags(
+            Self::open_with_flags(
                 &in_memory_path,
                 false,
                 SQLITE_OPEN_CREATE | SQLITE_OPEN_NOMUTEX | SQLITE_OPEN_READWRITE | SQLITE_OPEN_URI,
             )
-            .expect("Could not create fallback in memory db");
+            .expect("Could not create fallback in memory db")
         } else {
             Self::open(":memory:", false).expect("Could not create fallback in memory db")
         }
     }
 
-    pub fn persistent(&self) -> bool {
+    pub const fn persistent(&self) -> bool {
         self.persistent
     }
 
@@ -124,8 +110,7 @@ impl Connection {
             let mut raw_statement = ptr::null_mut::<sqlite3_stmt>();
             let mut remaining_sql_ptr = ptr::null();
 
-            let (res, offset, message, _conn) = if let Some((table_to_alter, column)) = alter_table
-            {
+            let (res, offset, message, _conn) = if let Some((table_to_alter, column)) = alter_table {
                 // ALTER TABLE is a weird statement. When preparing the statement the table's
                 // existence is checked *before* syntax checking any other part of the statement.
                 // Therefore, we need to make sure that the table has been created before calling
@@ -134,18 +119,15 @@ impl Connection {
 
                 let temp_connection = Connection::open_memory(None);
                 //This should always succeed, if it doesn't then you really should know about it
-                temp_connection
-                    .exec(&format!("CREATE TABLE {table_to_alter}({column})"))
-                    .unwrap()()
-                .unwrap();
+                temp_connection.exec(&format!("CREATE TABLE {table_to_alter}({column})")).unwrap()().unwrap();
 
                 unsafe {
                     sqlite3_prepare_v2(
                         temp_connection.sqlite3,
                         remaining_sql.as_ptr(),
                         -1,
-                        &mut raw_statement,
-                        &mut remaining_sql_ptr,
+                        &raw mut raw_statement,
+                        &raw mut remaining_sql_ptr,
                     )
                 };
 
@@ -165,31 +147,22 @@ impl Connection {
                         self.sqlite3,
                         remaining_sql.as_ptr(),
                         -1,
-                        &mut raw_statement,
-                        &mut remaining_sql_ptr,
+                        &raw mut raw_statement,
+                        &raw mut remaining_sql_ptr,
                     )
                 };
 
                 let offset = unsafe { sqlite3_error_offset(self.sqlite3) };
 
-                unsafe {
-                    (
-                        sqlite3_errcode(self.sqlite3),
-                        offset,
-                        sqlite3_errmsg(self.sqlite3),
-                        None,
-                    )
-                }
+                unsafe { (sqlite3_errcode(self.sqlite3), offset, sqlite3_errmsg(self.sqlite3), None) }
             };
 
             unsafe { sqlite3_finalize(raw_statement) };
 
             if res == 1 && offset >= 0 {
                 let sub_statement_correction = remaining_sql.as_ptr() as usize - sql_start as usize;
-                let err_msg = String::from_utf8_lossy(unsafe {
-                    CStr::from_ptr(message as *const _).to_bytes()
-                })
-                .into_owned();
+                let err_msg =
+                    String::from_utf8_lossy(unsafe { CStr::from_ptr(message as *const _).to_bytes() }).into_owned();
 
                 return Some((err_msg, offset as usize + sub_statement_correction));
             }
@@ -211,10 +184,7 @@ impl Connection {
             let message = if message.is_null() {
                 None
             } else {
-                Some(
-                    String::from_utf8_lossy(CStr::from_ptr(message as *const _).to_bytes())
-                        .into_owned(),
-                )
+                Some(String::from_utf8_lossy(CStr::from_ptr(message as *const _).to_bytes()).into_owned())
             };
 
             anyhow::bail!("Sqlite call failed with code {code} and message: {message:?}")

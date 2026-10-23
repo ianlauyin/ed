@@ -1,22 +1,47 @@
-use crate::{
-    ActiveTooltip, AnyView, App, Bounds, DispatchPhase, Element, ElementId, GlobalElementId,
-    HighlightStyle, Hitbox, HitboxBehavior, IntoElement, LayoutId, MouseDownEvent, MouseMoveEvent,
-    MouseUpEvent, Pixels, Point, SharedString, Size, TextOverflow, TextRun, TextStyle, TooltipId,
-    TruncateFrom, WhiteSpace, Window, WrappedLine, WrappedLineLayout,
-    register_tooltip_mouse_handlers, set_tooltip_on_window,
-};
+use std::borrow::Cow;
+use std::cell::Cell;
+use std::cell::RefCell;
+use std::mem;
+use std::ops::Range;
+use std::rc::Rc;
+use std::sync::Arc;
+
 use anyhow::Context as _;
 use gpui_util::ResultExt;
 use itertools::Itertools;
 use smallvec::SmallVec;
-use std::{
-    borrow::Cow,
-    cell::{Cell, RefCell},
-    mem,
-    ops::Range,
-    rc::Rc,
-    sync::Arc,
-};
+
+use crate::ActiveTooltip;
+use crate::AnyView;
+use crate::App;
+use crate::Bounds;
+use crate::DispatchPhase;
+use crate::Element;
+use crate::ElementId;
+use crate::GlobalElementId;
+use crate::HighlightStyle;
+use crate::Hitbox;
+use crate::HitboxBehavior;
+use crate::IntoElement;
+use crate::LayoutId;
+use crate::MouseDownEvent;
+use crate::MouseMoveEvent;
+use crate::MouseUpEvent;
+use crate::Pixels;
+use crate::Point;
+use crate::SharedString;
+use crate::Size;
+use crate::TextOverflow;
+use crate::TextRun;
+use crate::TextStyle;
+use crate::TooltipId;
+use crate::TruncateFrom;
+use crate::WhiteSpace;
+use crate::Window;
+use crate::WrappedLine;
+use crate::WrappedLineLayout;
+use crate::register_tooltip_mouse_handlers;
+use crate::set_tooltip_on_window;
 
 impl Element for &'static str {
     type RequestLayoutState = TextLayout;
@@ -170,7 +195,7 @@ impl StyledText {
     }
 
     /// Get the layout for this element. This can be used to map indices to pixels and vice versa.
-    pub fn layout(&self) -> &TextLayout {
+    pub const fn layout(&self) -> &TextLayout {
         &self.layout
     }
 
@@ -181,24 +206,15 @@ impl StyledText {
         default_style: &TextStyle,
         highlights: impl IntoIterator<Item = (Range<usize>, HighlightStyle)>,
     ) -> Self {
-        debug_assert!(
-            self.delayed_highlights.is_none(),
-            "Can't use `with_default_highlights` and `with_highlights`"
-        );
+        debug_assert!(self.delayed_highlights.is_none(), "Can't use `with_default_highlights` and `with_highlights`");
         let runs = Self::compute_runs(&self.text, default_style, highlights);
         self.with_runs(runs)
     }
 
     /// Set the styling attributes for the given text, as well as
     /// as any ranges of text that have had their style customized.
-    pub fn with_highlights(
-        mut self,
-        highlights: impl IntoIterator<Item = (Range<usize>, HighlightStyle)>,
-    ) -> Self {
-        debug_assert!(
-            self.runs.is_none(),
-            "Can't use `with_highlights` and `with_default_highlights`"
-        );
+    pub fn with_highlights(mut self, highlights: impl IntoIterator<Item = (Range<usize>, HighlightStyle)>) -> Self {
+        debug_assert!(self.runs.is_none(), "Can't use `with_highlights` and `with_default_highlights`");
         self.delayed_highlights = Some(
             highlights
                 .into_iter()
@@ -224,12 +240,7 @@ impl StyledText {
                 runs.push(default_style.clone().to_run(range.start - ix));
             }
             debug_assert!(text.is_char_boundary(range.end));
-            runs.push(
-                default_style
-                    .clone()
-                    .highlight(highlight)
-                    .to_run(range.len()),
-            );
+            runs.push(default_style.clone().highlight(highlight).to_run(range.len()));
             ix = range.end;
         }
         if ix < text.len() {
@@ -262,10 +273,7 @@ impl StyledText {
         self
     }
 
-    fn apply_font_family_overrides(
-        runs: &mut [TextRun],
-        overrides: &[(Range<usize>, SharedString)],
-    ) {
+    fn apply_font_family_overrides(runs: &mut [TextRun], overrides: &[(Range<usize>, SharedString)]) {
         let mut byte_offset = 0;
         let mut override_idx = 0;
         for run in runs.iter_mut() {
@@ -320,14 +328,13 @@ impl Element for StyledText {
     ) -> (LayoutId, Self::RequestLayoutState) {
         let font_family_overrides = self.delayed_font_family_overrides.take();
         let mut runs = self.runs.take().or_else(|| {
-            self.delayed_highlights.take().map(|delayed_highlights| {
-                Self::compute_runs(&self.text, &window.text_style(), delayed_highlights)
-            })
+            self.delayed_highlights
+                .take()
+                .map(|delayed_highlights| Self::compute_runs(&self.text, &window.text_style(), delayed_highlights))
         });
 
         if let Some(ref overrides) = font_family_overrides {
-            let runs =
-                runs.get_or_insert_with(|| vec![window.text_style().to_run(self.text.len())]);
+            let runs = runs.get_or_insert_with(|| vec![window.text_style().to_run(self.text.len())]);
             Self::apply_font_family_overrides(runs, overrides);
         }
 
@@ -389,26 +396,12 @@ struct TextLayoutInner {
 }
 
 impl TextLayout {
-    fn layout(
-        &self,
-        text: SharedString,
-        runs: Option<Vec<TextRun>>,
-        window: &mut Window,
-        _: &mut App,
-    ) -> LayoutId {
+    fn layout(&self, text: SharedString, runs: Option<Vec<TextRun>>, window: &mut Window, _: &mut App) -> LayoutId {
         let text_style = window.text_style();
         let font_size = text_style.font_size.to_pixels(window.rem_size());
-        let line_height = window.pixel_snap(
-            text_style
-                .line_height
-                .to_pixels(font_size.into(), window.rem_size()),
-        );
+        let line_height = window.pixel_snap(text_style.line_height.to_pixels(font_size.into(), window.rem_size()));
 
-        let runs = if let Some(runs) = runs {
-            runs
-        } else {
-            vec![text_style.to_run(text.len())]
-        };
+        let runs = if let Some(runs) = runs { runs } else { vec![text_style.to_run(text.len())] };
         window.request_measured_layout(Default::default(), {
             let element_state = self.clone();
 
@@ -471,13 +464,9 @@ impl TextLayout {
                             &runs,
                             truncate_from,
                         )
-                    } else if let Some(unclipped) = window
-                        .text_system()
-                        .shape_text(text.clone(), font_size, &runs, None, None)
-                        .log_err()
-                        && unclipped
-                            .iter()
-                            .all(|line| line.size(line_height).width <= truncate_width)
+                    } else if let Some(unclipped) =
+                        window.text_system().shape_text(text.clone(), font_size, &runs, None, None).log_err()
+                        && unclipped.iter().all(|line| line.size(line_height).width <= truncate_width)
                     {
                         // The truncation decision below sums per-character advances,
                         // which overestimates the shaped width (no kerning), truncating
@@ -547,17 +536,13 @@ impl TextLayout {
 
     fn prepaint(&self, bounds: Bounds<Pixels>, text: &str) {
         let mut element_state = self.0.borrow_mut();
-        let element_state = element_state
-            .as_mut()
-            .with_context(|| format!("measurement has not been performed on {text}"))
-            .unwrap();
+        let element_state =
+            element_state.as_mut().with_context(|| format!("measurement has not been performed on {text}")).unwrap();
         element_state.bounds = Some(bounds);
     }
 
     fn paint(&self, text: &str, window: &mut Window, cx: &mut App) {
-        self.paint_lines(TextPaintPass::All, window, cx)
-            .with_context(|| format!("failed to paint {text}"))
-            .unwrap();
+        self.paint_lines(TextPaintPass::All, window, cx).with_context(|| format!("failed to paint {text}")).unwrap();
     }
 
     /// Paints the backgrounds of the text runs without the glyphs, so that callers can paint
@@ -572,45 +557,21 @@ impl TextLayout {
         self.paint_lines(TextPaintPass::Foreground, window, cx)
     }
 
-    fn paint_lines(
-        &self,
-        pass: TextPaintPass,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> anyhow::Result<()> {
+    fn paint_lines(&self, pass: TextPaintPass, window: &mut Window, cx: &mut App) -> anyhow::Result<()> {
         let element_state = self.0.borrow();
-        let element_state = element_state
-            .as_ref()
-            .context("measurement has not been performed")?;
-        let bounds = element_state
-            .bounds
-            .context("prepaint has not been performed")?;
+        let element_state = element_state.as_ref().context("measurement has not been performed")?;
+        let bounds = element_state.bounds.context("prepaint has not been performed")?;
 
         let line_height = element_state.line_height;
         let mut line_origin = bounds.origin;
         let text_style = window.text_style();
         for line in &element_state.lines {
             if matches!(pass, TextPaintPass::All | TextPaintPass::Background) {
-                line.paint_background(
-                    line_origin,
-                    line_height,
-                    text_style.text_align,
-                    Some(bounds),
-                    window,
-                    cx,
-                )
-                .log_err();
+                line.paint_background(line_origin, line_height, text_style.text_align, Some(bounds), window, cx)
+                    .log_err();
             }
             if matches!(pass, TextPaintPass::All | TextPaintPass::Foreground) {
-                line.paint(
-                    line_origin,
-                    line_height,
-                    text_style.text_align,
-                    Some(bounds),
-                    window,
-                    cx,
-                )
-                .log_err();
+                line.paint(line_origin, line_height, text_style.text_align, Some(bounds), window, cx).log_err();
             }
             line_origin.y += line.size(line_height).height;
         }
@@ -620,12 +581,8 @@ impl TextLayout {
     /// Get the byte index into the input of the pixel position.
     pub fn index_for_position(&self, mut position: Point<Pixels>) -> Result<usize, usize> {
         let element_state = self.0.borrow();
-        let element_state = element_state
-            .as_ref()
-            .expect("measurement has not been performed");
-        let bounds = element_state
-            .bounds
-            .expect("prepaint has not been performed");
+        let element_state = element_state.as_ref().expect("measurement has not been performed");
+        let bounds = element_state.bounds.expect("prepaint has not been performed");
 
         if position.y < bounds.top() {
             return Err(0);
@@ -654,12 +611,8 @@ impl TextLayout {
     /// Get the pixel position for the given byte index.
     pub fn position_for_index(&self, index: usize) -> Option<Point<Pixels>> {
         let element_state = self.0.borrow();
-        let element_state = element_state
-            .as_ref()
-            .expect("measurement has not been performed");
-        let bounds = element_state
-            .bounds
-            .expect("prepaint has not been performed");
+        let element_state = element_state.as_ref().expect("measurement has not been performed");
+        let bounds = element_state.bounds.expect("prepaint has not been performed");
         let line_height = element_state.line_height;
 
         let mut line_origin = bounds.origin;
@@ -685,9 +638,7 @@ impl TextLayout {
     /// Retrieve the layout for the line containing the given byte index.
     pub fn line_layout_for_index(&self, index: usize) -> Option<Arc<WrappedLineLayout>> {
         let element_state = self.0.borrow();
-        let element_state = element_state
-            .as_ref()
-            .expect("measurement has not been performed");
+        let element_state = element_state.as_ref().expect("measurement has not been performed");
         let mut line_start_ix = 0;
 
         for line in &element_state.lines {
@@ -732,16 +683,14 @@ impl TextLayout {
         self.0.borrow().as_ref().unwrap().len
     }
 
+    /// Whether the underlying text is empty.
+    pub fn is_empty(&self) -> bool {
+        self.len() == 0
+    }
+
     /// The text for this layout.
     pub fn text(&self) -> String {
-        self.0
-            .borrow()
-            .as_ref()
-            .unwrap()
-            .lines
-            .iter()
-            .map(|s| &s.text)
-            .join("\n")
+        self.0.borrow().as_ref().unwrap().lines.iter().map(|s| &s.text).join("\n")
     }
 
     /// The text for this layout (with soft-wraps as newlines)
@@ -751,9 +700,7 @@ impl TextLayout {
         for wrapped in self.0.borrow().as_ref().unwrap().lines.iter() {
             let mut seen = 0;
             for boundary in wrapped.layout.wrap_boundaries.iter() {
-                let index = wrapped.layout.unwrapped_layout.runs[boundary.run_ix].glyphs
-                    [boundary.glyph_ix]
-                    .index;
+                let index = wrapped.layout.unwrapped_layout.runs[boundary.run_ix].glyphs[boundary.glyph_ix].index;
 
                 accumulator.push_str(&wrapped.text[seen..index]);
                 accumulator.push('\n');
@@ -772,8 +719,7 @@ impl TextLayout {
 pub struct InteractiveText {
     element_id: ElementId,
     text: StyledText,
-    click_listener:
-        Option<Box<dyn Fn(&[Range<usize>], InteractiveTextClickEvent, &mut Window, &mut App)>>,
+    click_listener: Option<Box<dyn Fn(&[Range<usize>], InteractiveTextClickEvent, &mut Window, &mut App)>>,
     hover_listener: Option<Box<dyn Fn(Option<usize>, MouseMoveEvent, &mut Window, &mut App)>>,
     tooltip_builder: Option<Rc<dyn Fn(usize, &mut Window, &mut App) -> Option<AnyView>>>,
     tooltip_id: Option<TooltipId>,
@@ -818,8 +764,7 @@ impl InteractiveText {
     ) -> Self {
         self.click_listener = Some(Box::new(move |ranges, event, window, cx| {
             for (range_ix, range) in ranges.iter().enumerate() {
-                if range.contains(&event.mouse_down_index) && range.contains(&event.mouse_up_index)
-                {
+                if range.contains(&event.mouse_down_index) && range.contains(&event.mouse_up_index) {
                     listener(range_ix, window, cx);
                 }
             }
@@ -839,10 +784,7 @@ impl InteractiveText {
     }
 
     /// tooltip lets you specify a tooltip for a given character index in the string.
-    pub fn tooltip(
-        mut self,
-        builder: impl Fn(usize, &mut Window, &mut App) -> Option<AnyView> + 'static,
-    ) -> Self {
+    pub fn tooltip(mut self, builder: impl Fn(usize, &mut Window, &mut App) -> Option<AnyView> + 'static) -> Self {
         self.tooltip_builder = Some(Rc::new(builder));
         self
     }
@@ -877,28 +819,24 @@ impl Element for InteractiveText {
         window: &mut Window,
         cx: &mut App,
     ) -> Hitbox {
-        window.with_optional_element_state::<InteractiveTextState, _>(
-            global_id,
-            |interactive_state, window| {
-                let mut interactive_state = interactive_state
-                    .map(|interactive_state| interactive_state.unwrap_or_default());
+        window.with_optional_element_state::<InteractiveTextState, _>(global_id, |interactive_state, window| {
+            let mut interactive_state =
+                interactive_state.map(|interactive_state| interactive_state.unwrap_or_default());
 
-                if let Some(interactive_state) = interactive_state.as_mut() {
-                    if self.tooltip_builder.is_some() {
-                        self.tooltip_id =
-                            set_tooltip_on_window(&interactive_state.active_tooltip, window);
-                    } else {
-                        // If there is no longer a tooltip builder, remove the active tooltip.
-                        interactive_state.long_press_tooltip_active.set(false);
-                        interactive_state.active_tooltip.take();
-                    }
+            if let Some(interactive_state) = interactive_state.as_mut() {
+                if self.tooltip_builder.is_some() {
+                    self.tooltip_id = set_tooltip_on_window(&interactive_state.active_tooltip, window);
+                } else {
+                    // If there is no longer a tooltip builder, remove the active tooltip.
+                    interactive_state.long_press_tooltip_active.set(false);
+                    interactive_state.active_tooltip.take();
                 }
+            }
 
-                self.text.prepaint(None, bounds, state, window, cx);
-                let hitbox = window.insert_hitbox(bounds, HitboxBehavior::Normal);
-                (hitbox, interactive_state)
-            },
-        )
+            self.text.prepaint(None, bounds, state, window, cx);
+            let hitbox = window.insert_hitbox(bounds, HitboxBehavior::Normal);
+            (hitbox, interactive_state)
+        })
     }
 
     fn paint(
@@ -912,141 +850,123 @@ impl Element for InteractiveText {
     ) {
         let current_view = window.current_view();
         let text_layout = self.text.layout().clone();
-        window.with_element_state::<InteractiveTextState, _>(
-            global_id.unwrap(),
-            |interactive_state, window| {
-                let mut interactive_state = interactive_state.unwrap_or_default();
-                if let Some(click_listener) = self.click_listener.take() {
-                    let mouse_position = window.mouse_position();
-                    if let Ok(ix) = text_layout.index_for_position(mouse_position)
-                        && self
-                            .clickable_ranges
-                            .iter()
-                            .any(|range| range.contains(&ix))
-                    {
-                        window.set_cursor_style(crate::CursorStyle::PointingHand, hitbox)
-                    }
-
-                    let text_layout = text_layout.clone();
-                    let mouse_down = interactive_state.mouse_down_index.clone();
-                    if let Some(mouse_down_index) = mouse_down.get() {
-                        let hitbox = hitbox.clone();
-                        let clickable_ranges = mem::take(&mut self.clickable_ranges);
-                        window.on_mouse_event(
-                            move |event: &MouseUpEvent, phase, window: &mut Window, cx| {
-                                if phase == DispatchPhase::Bubble && hitbox.is_hovered(window) {
-                                    if let Ok(mouse_up_index) =
-                                        text_layout.index_for_position(event.position)
-                                    {
-                                        click_listener(
-                                            &clickable_ranges,
-                                            InteractiveTextClickEvent {
-                                                mouse_down_index,
-                                                mouse_up_index,
-                                            },
-                                            window,
-                                            cx,
-                                        )
-                                    }
-
-                                    mouse_down.take();
-                                    window.refresh();
-                                }
-                            },
-                        );
-                    } else {
-                        let hitbox = hitbox.clone();
-                        window.on_mouse_event(move |event: &MouseDownEvent, phase, window, _| {
-                            if phase == DispatchPhase::Bubble
-                                && hitbox.is_hovered(window)
-                                && let Ok(mouse_down_index) =
-                                    text_layout.index_for_position(event.position)
-                            {
-                                mouse_down.set(Some(mouse_down_index));
-                                window.refresh();
-                            }
-                        });
-                    }
+        window.with_element_state::<InteractiveTextState, _>(global_id.unwrap(), |interactive_state, window| {
+            let mut interactive_state = interactive_state.unwrap_or_default();
+            if let Some(click_listener) = self.click_listener.take() {
+                let mouse_position = window.mouse_position();
+                if let Ok(ix) = text_layout.index_for_position(mouse_position)
+                    && self.clickable_ranges.iter().any(|range| range.contains(&ix))
+                {
+                    window.set_cursor_style(crate::CursorStyle::PointingHand, hitbox)
                 }
 
-                window.on_mouse_event({
-                    let mut hover_listener = self.hover_listener.take();
+                let text_layout = text_layout.clone();
+                let mouse_down = interactive_state.mouse_down_index.clone();
+                if let Some(mouse_down_index) = mouse_down.get() {
                     let hitbox = hitbox.clone();
-                    let text_layout = text_layout.clone();
-                    let hovered_index = interactive_state.hovered_index.clone();
-                    move |event: &MouseMoveEvent, phase, window, cx| {
+                    let clickable_ranges = mem::take(&mut self.clickable_ranges);
+                    window.on_mouse_event(move |event: &MouseUpEvent, phase, window: &mut Window, cx| {
                         if phase == DispatchPhase::Bubble && hitbox.is_hovered(window) {
-                            let current = hovered_index.get();
-                            let updated = text_layout.index_for_position(event.position).ok();
-                            if current != updated {
-                                hovered_index.set(updated);
-                                if let Some(hover_listener) = hover_listener.as_ref() {
-                                    hover_listener(updated, event.clone(), window, cx);
-                                }
-                                cx.notify(current_view);
+                            if let Ok(mouse_up_index) = text_layout.index_for_position(event.position) {
+                                click_listener(
+                                    &clickable_ranges,
+                                    InteractiveTextClickEvent { mouse_down_index, mouse_up_index },
+                                    window,
+                                    cx,
+                                )
                             }
+
+                            mouse_down.take();
+                            window.refresh();
                         }
+                    });
+                } else {
+                    let hitbox = hitbox.clone();
+                    window.on_mouse_event(move |event: &MouseDownEvent, phase, window, _| {
+                        if phase == DispatchPhase::Bubble
+                            && hitbox.is_hovered(window)
+                            && let Ok(mouse_down_index) = text_layout.index_for_position(event.position)
+                        {
+                            mouse_down.set(Some(mouse_down_index));
+                            window.refresh();
+                        }
+                    });
+                }
+            }
+
+            window.on_mouse_event({
+                let mut hover_listener = self.hover_listener.take();
+                let hitbox = hitbox.clone();
+                let text_layout = text_layout.clone();
+                let hovered_index = interactive_state.hovered_index.clone();
+                move |event: &MouseMoveEvent, phase, window, cx| {
+                    if phase == DispatchPhase::Bubble && hitbox.is_hovered(window) {
+                        let current = hovered_index.get();
+                        let updated = text_layout.index_for_position(event.position).ok();
+                        if current != updated {
+                            hovered_index.set(updated);
+                            if let Some(hover_listener) = hover_listener.as_ref() {
+                                hover_listener(updated, event.clone(), window, cx);
+                            }
+                            cx.notify(current_view);
+                        }
+                    }
+                }
+            });
+
+            if let Some(tooltip_builder) = self.tooltip_builder.clone() {
+                let active_tooltip = interactive_state.active_tooltip.clone();
+                let build_tooltip = Rc::new({
+                    let tooltip_is_hoverable = false;
+                    let text_layout = text_layout.clone();
+                    move |window: &mut Window, cx: &mut App| {
+                        text_layout
+                            .index_for_position(window.mouse_position())
+                            .ok()
+                            .and_then(|position| tooltip_builder(position, window, cx))
+                            .map(|view| (view, tooltip_is_hoverable))
                     }
                 });
 
-                if let Some(tooltip_builder) = self.tooltip_builder.clone() {
-                    let active_tooltip = interactive_state.active_tooltip.clone();
-                    let build_tooltip = Rc::new({
-                        let tooltip_is_hoverable = false;
-                        let text_layout = text_layout.clone();
-                        move |window: &mut Window, cx: &mut App| {
-                            text_layout
-                                .index_for_position(window.mouse_position())
-                                .ok()
-                                .and_then(|position| tooltip_builder(position, window, cx))
-                                .map(|view| (view, tooltip_is_hoverable))
-                        }
-                    });
+                // Use bounds instead of testing hitbox since this is called during prepaint.
+                let check_is_hovered_during_prepaint = Rc::new({
+                    let source_bounds = hitbox.bounds;
+                    let text_layout = text_layout.clone();
+                    let pending_mouse_down = interactive_state.mouse_down_index.clone();
+                    move |window: &Window| {
+                        text_layout.index_for_position(window.mouse_position()).is_ok()
+                            && source_bounds.contains(&window.mouse_position())
+                            && pending_mouse_down.get().is_none()
+                    }
+                });
 
-                    // Use bounds instead of testing hitbox since this is called during prepaint.
-                    let check_is_hovered_during_prepaint = Rc::new({
-                        let source_bounds = hitbox.bounds;
-                        let text_layout = text_layout.clone();
-                        let pending_mouse_down = interactive_state.mouse_down_index.clone();
-                        move |window: &Window| {
-                            text_layout
-                                .index_for_position(window.mouse_position())
-                                .is_ok()
-                                && source_bounds.contains(&window.mouse_position())
-                                && pending_mouse_down.get().is_none()
-                        }
-                    });
+                let check_is_hovered = Rc::new({
+                    let hitbox = hitbox.clone();
+                    let text_layout = text_layout.clone();
+                    let pending_mouse_down = interactive_state.mouse_down_index.clone();
+                    move |window: &Window| {
+                        text_layout.index_for_position(window.mouse_position()).is_ok()
+                            && hitbox.is_hovered(window)
+                            && pending_mouse_down.get().is_none()
+                    }
+                });
 
-                    let check_is_hovered = Rc::new({
-                        let hitbox = hitbox.clone();
-                        let text_layout = text_layout.clone();
-                        let pending_mouse_down = interactive_state.mouse_down_index.clone();
-                        move |window: &Window| {
-                            text_layout
-                                .index_for_position(window.mouse_position())
-                                .is_ok()
-                                && hitbox.is_hovered(window)
-                                && pending_mouse_down.get().is_none()
-                        }
-                    });
+                register_tooltip_mouse_handlers(
+                    &active_tooltip,
+                    self.tooltip_id,
+                    build_tooltip,
+                    check_is_hovered,
+                    check_is_hovered_during_prepaint,
+                    interactive_state.long_press_tooltip_active.clone(),
+                    None,
+                    window,
+                );
+            }
 
-                    register_tooltip_mouse_handlers(
-                        &active_tooltip,
-                        self.tooltip_id,
-                        build_tooltip,
-                        check_is_hovered,
-                        check_is_hovered_during_prepaint,
-                        interactive_state.long_press_tooltip_active.clone(),
-                        None,
-                        window,
-                    );
-                }
+            self.text.paint(None, bounds, &mut (), &mut (), window, cx);
 
-                self.text.paint(None, bounds, &mut (), &mut (), window, cx);
-
-                ((), interactive_state)
-            },
-        );
+            ((), interactive_state)
+        });
     }
 }
 

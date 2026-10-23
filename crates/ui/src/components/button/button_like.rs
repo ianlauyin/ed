@@ -1,12 +1,24 @@
 use documented::Documented;
-use gpui::{
-    AnyElement, AnyView, ClickEvent, CursorStyle, DefiniteLength, FocusHandle, Hsla, MouseButton,
-    MouseClickEvent, MouseDownEvent, MouseUpEvent, Rems, StyleRefinement, relative,
-    transparent_black,
-};
+use gpui::AnyElement;
+use gpui::AnyView;
+use gpui::ClickEvent;
+use gpui::CursorStyle;
+use gpui::DefiniteLength;
+use gpui::FocusHandle;
+use gpui::Hsla;
+use gpui::MouseButton;
+use gpui::MouseClickEvent;
+use gpui::MouseDownEvent;
+use gpui::MouseUpEvent;
+use gpui::Rems;
+use gpui::StyleRefinement;
+use gpui::relative;
+use gpui::transparent_black;
 use smallvec::SmallVec;
 
-use crate::{DynamicSpacing, ElevationIndex, prelude::*};
+use crate::DynamicSpacing;
+use crate::ElevationIndex;
+use crate::prelude::*;
 
 /// A trait for buttons that can be Selected. Enables setting the [`ButtonStyle`] of a button when it is selected.
 pub trait SelectableButton: Toggleable {
@@ -69,7 +81,7 @@ pub enum TintColor {
 }
 
 impl TintColor {
-    fn button_like_style(self, cx: &mut App) -> ButtonLikeStyles {
+    fn button_like_style(self, cx: &App) -> ButtonLikeStyles {
         match self {
             TintColor::Accent => ButtonLikeStyles {
                 background: cx.theme().status().info_background,
@@ -166,24 +178,9 @@ pub(crate) struct ButtonLikeRounding {
 }
 
 impl ButtonLikeRounding {
-    pub const ALL: Self = Self {
-        top_left: true,
-        top_right: true,
-        bottom_right: true,
-        bottom_left: true,
-    };
-    pub const LEFT: Self = Self {
-        top_left: true,
-        top_right: false,
-        bottom_right: false,
-        bottom_left: true,
-    };
-    pub const RIGHT: Self = Self {
-        top_left: false,
-        top_right: true,
-        bottom_right: true,
-        bottom_left: false,
-    };
+    pub const ALL: Self = Self { top_left: true, top_right: true, bottom_right: true, bottom_left: true };
+    pub const LEFT: Self = Self { top_left: true, top_right: false, bottom_right: false, bottom_left: true };
+    pub const RIGHT: Self = Self { top_left: false, top_right: true, bottom_right: true, bottom_left: false };
 }
 
 #[derive(Debug, Clone)]
@@ -197,7 +194,7 @@ pub(crate) struct ButtonLikeStyles {
     pub icon_color: Hsla,
 }
 
-fn element_bg_from_elevation(elevation: Option<ElevationIndex>, cx: &mut App) -> Hsla {
+fn element_bg_from_elevation(elevation: Option<ElevationIndex>, cx: &App) -> Hsla {
     match elevation {
         Some(ElevationIndex::Background) => cx.theme().colors().element_background,
         Some(ElevationIndex::ElevatedSurface) => cx.theme().colors().elevated_surface_background,
@@ -208,11 +205,7 @@ fn element_bg_from_elevation(elevation: Option<ElevationIndex>, cx: &mut App) ->
 }
 
 impl ButtonStyle {
-    pub(crate) fn enabled(
-        self,
-        elevation: Option<ElevationIndex>,
-        cx: &mut App,
-    ) -> ButtonLikeStyles {
+    pub(crate) fn enabled(self, elevation: Option<ElevationIndex>, cx: &App) -> ButtonLikeStyles {
         match self {
             ButtonStyle::Filled => ButtonLikeStyles {
                 background: element_bg_from_elevation(elevation, cx),
@@ -254,11 +247,7 @@ impl ButtonStyle {
         }
     }
 
-    pub(crate) fn hovered(
-        self,
-        elevation: Option<ElevationIndex>,
-        cx: &mut App,
-    ) -> ButtonLikeStyles {
+    pub(crate) fn hovered(self, elevation: Option<ElevationIndex>, cx: &App) -> ButtonLikeStyles {
         match self {
             ButtonStyle::Filled => {
                 let mut filled_background = element_bg_from_elevation(elevation, cx);
@@ -312,7 +301,7 @@ impl ButtonStyle {
         }
     }
 
-    pub(crate) fn active(self, cx: &mut App) -> ButtonLikeStyles {
+    pub(crate) fn active(self, cx: &App) -> ButtonLikeStyles {
         match self {
             ButtonStyle::Filled => ButtonLikeStyles {
                 background: cx.theme().colors().element_active,
@@ -357,7 +346,7 @@ impl ButtonStyle {
     }
 
     #[allow(unused)]
-    pub(crate) fn focused(self, window: &mut Window, cx: &mut App) -> ButtonLikeStyles {
+    pub(crate) fn focused(self, window: &Window, cx: &App) -> ButtonLikeStyles {
         match self {
             ButtonStyle::Filled => ButtonLikeStyles {
                 background: cx.theme().colors().element_background,
@@ -400,12 +389,7 @@ impl ButtonStyle {
     }
 
     #[allow(unused)]
-    pub(crate) fn disabled(
-        self,
-        elevation: Option<ElevationIndex>,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> ButtonLikeStyles {
+    pub(crate) fn disabled(self, elevation: Option<ElevationIndex>, window: &Window, cx: &App) -> ButtonLikeStyles {
         match self {
             ButtonStyle::Filled => ButtonLikeStyles {
                 background: cx.theme().colors().element_disabled,
@@ -547,7 +531,7 @@ impl ButtonLike {
         self
     }
 
-    pub fn height(mut self, height: DefiniteLength) -> Self {
+    pub const fn height(mut self, height: DefiniteLength) -> Self {
         self.height = Some(height);
         self
     }
@@ -557,18 +541,12 @@ impl ButtonLike {
         self
     }
 
-    pub fn on_right_click(
-        mut self,
-        handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
-    ) -> Self {
+    pub fn on_right_click(mut self, handler: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static) -> Self {
         self.on_right_click = Some(Box::new(handler));
         self
     }
 
-    pub fn hoverable_tooltip(
-        mut self,
-        tooltip: impl Fn(&mut Window, &mut App) -> AnyView + 'static,
-    ) -> Self {
+    pub fn hoverable_tooltip(mut self, tooltip: impl Fn(&mut Window, &mut App) -> AnyView + 'static) -> Self {
         self.hoverable_tooltip = Some(Box::new(tooltip));
         self
     }
@@ -672,19 +650,12 @@ impl ParentElement for ButtonLike {
 
 impl RenderOnce for ButtonLike {
     fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
-        let style = self
-            .selected_style
-            .filter(|_| self.selected)
-            .unwrap_or(self.style);
+        let style = self.selected_style.filter(|_| self.selected).unwrap_or(self.style);
 
-        let is_outlined = matches!(
-            self.style,
-            ButtonStyle::Outlined | ButtonStyle::OutlinedGhost | ButtonStyle::OutlinedCustom(_)
-        );
+        let is_outlined =
+            matches!(self.style, ButtonStyle::Outlined | ButtonStyle::OutlinedGhost | ButtonStyle::OutlinedCustom(_));
 
-        let active_background = self
-            .active_background
-            .unwrap_or_else(|| style.active(cx).background);
+        let active_background = self.active_background.unwrap_or_else(|| style.active(cx).background);
 
         self.base
             .h_flex()
@@ -694,16 +665,12 @@ impl RenderOnce for ButtonLike {
                 // move focus outside the view.
                 this.tab_index(tab_index).tab_stop(!self.disabled)
             })
-            .when_some(self.focus_handle, |this, focus_handle| {
-                this.track_focus(&focus_handle)
-            })
+            .when_some(self.focus_handle, |this, focus_handle| this.track_focus(&focus_handle))
             .font_ui(cx)
             .group("")
             .flex_none()
             .h(self.height.unwrap_or(self.size.rems().into()))
-            .when_some(self.width, |this, width| {
-                this.w(width).justify_center().text_center()
-            })
+            .when_some(self.width, |this, width| this.w(width).justify_center().text_center())
             .when(is_outlined, |this| this.border_1())
             .when_some(self.rounding, |this, rounding| {
                 this.when(rounding.top_left, |this| this.rounded_tl_sm())
@@ -714,9 +681,7 @@ impl RenderOnce for ButtonLike {
             .gap(DynamicSpacing::Base04.rems(cx))
             .map(|this| match self.size {
                 ButtonSize::Large | ButtonSize::Medium => this.px(DynamicSpacing::Base08.rems(cx)),
-                ButtonSize::Default | ButtonSize::Compact => {
-                    this.px(DynamicSpacing::Base04.rems(cx))
-                }
+                ButtonSize::Default | ButtonSize::Compact => this.px(DynamicSpacing::Base04.rems(cx)),
                 ButtonSize::None => this.px_px(),
             })
             .border_color(style.enabled(self.layer, cx).border_color)
@@ -737,59 +702,47 @@ impl RenderOnce for ButtonLike {
                     .hover(focus_color)
                     .map(|this| {
                         if is_outlined {
-                            this.focus_visible(|s| {
-                                s.border_color(cx.theme().colors().border_focused)
-                            })
+                            this.focus_visible(|s| s.border_color(cx.theme().colors().border_focused))
                         } else {
                             this.focus_visible(focus_color)
                         }
                     })
                     .active(|active| active.bg(active_background))
             })
-            .when_some(
-                self.on_right_click.filter(|_| !self.disabled),
-                |this, on_right_click| {
-                    this.on_mouse_down(MouseButton::Right, |_event, window, cx| {
-                        window.prevent_default();
-                        cx.stop_propagation();
-                    })
-                    .on_mouse_up(
-                        MouseButton::Right,
-                        move |event, window, cx| {
-                            cx.stop_propagation();
-                            let click_event = ClickEvent::Mouse(MouseClickEvent {
-                                down: MouseDownEvent {
-                                    button: MouseButton::Right,
-                                    position: event.position,
-                                    modifiers: event.modifiers,
-                                    click_count: 1,
-                                    first_mouse: false,
-                                },
-                                up: MouseUpEvent {
-                                    button: MouseButton::Right,
-                                    position: event.position,
-                                    modifiers: event.modifiers,
-                                    click_count: 1,
-                                },
-                            });
-                            (on_right_click)(&click_event, window, cx)
+            .when_some(self.on_right_click.filter(|_| !self.disabled), |this, on_right_click| {
+                this.on_mouse_down(MouseButton::Right, |_event, window, cx| {
+                    window.prevent_default();
+                    cx.stop_propagation();
+                })
+                .on_mouse_up(MouseButton::Right, move |event, window, cx| {
+                    cx.stop_propagation();
+                    let click_event = ClickEvent::Mouse(MouseClickEvent {
+                        down: MouseDownEvent {
+                            button: MouseButton::Right,
+                            position: event.position,
+                            modifiers: event.modifiers,
+                            click_count: 1,
+                            first_mouse: false,
                         },
-                    )
-                },
-            )
-            .when_some(
-                self.on_click.filter(|_| !self.disabled),
-                |this, on_click| {
-                    this.on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default())
-                        .on_click(move |event, window, cx| {
-                            cx.stop_propagation();
-                            (on_click)(event, window, cx)
-                        })
-                },
-            )
-            .when_some(self.tooltip, |this, tooltip| {
-                this.tooltip(move |window, cx| tooltip(window, cx))
+                        up: MouseUpEvent {
+                            button: MouseButton::Right,
+                            position: event.position,
+                            modifiers: event.modifiers,
+                            click_count: 1,
+                        },
+                    });
+                    (on_right_click)(&click_event, window, cx)
+                })
             })
+            .when_some(self.on_click.filter(|_| !self.disabled), |this, on_click| {
+                this.on_mouse_down(MouseButton::Left, |_, window, _| window.prevent_default()).on_click(
+                    move |event, window, cx| {
+                        cx.stop_propagation();
+                        (on_click)(event, window, cx)
+                    },
+                )
+            })
+            .when_some(self.tooltip, |this, tooltip| this.tooltip(move |window, cx| tooltip(window, cx)))
             .when_some(self.hoverable_tooltip, |this, tooltip| {
                 this.hoverable_tooltip(move |window, cx| tooltip(window, cx))
             })
@@ -818,9 +771,7 @@ impl Component for ButtonLike {
                 example_group(vec![
                     single_example(
                         "Default",
-                        ButtonLike::new("default")
-                            .child(Label::new("Default"))
-                            .into_any_element(),
+                        ButtonLike::new("default").child(Label::new("Default")).into_any_element(),
                     ),
                     single_example(
                         "Filled",

@@ -1,5 +1,9 @@
+use gpui::AnyElement;
+use gpui::FocusHandle;
+use gpui::ScrollAnchor;
+use gpui::ScrollHandle;
+
 use crate::prelude::*;
-use gpui::{AnyElement, FocusHandle, ScrollAnchor, ScrollHandle};
 
 /// An element that can be navigated through via keyboard. Intended for use with scrollable views that want to use
 #[derive(IntoElement)]
@@ -20,26 +24,17 @@ pub struct NavigableEntry {
 impl NavigableEntry {
     /// Creates a new [NavigableEntry] for a given scroll handle.
     pub fn new(scroll_handle: &ScrollHandle, cx: &App) -> Self {
-        Self {
-            focus_handle: cx.focus_handle(),
-            scroll_anchor: Some(ScrollAnchor::for_handle(scroll_handle.clone())),
-        }
+        Self { focus_handle: cx.focus_handle(), scroll_anchor: Some(ScrollAnchor::for_handle(scroll_handle.clone())) }
     }
     /// Create a new [NavigableEntry] that cannot be scrolled to.
     pub fn focusable(cx: &App) -> Self {
-        Self {
-            focus_handle: cx.focus_handle(),
-            scroll_anchor: None,
-        }
+        Self { focus_handle: cx.focus_handle(), scroll_anchor: None }
     }
 }
 impl Navigable {
     /// Creates new empty [Navigable] wrapper.
-    pub fn new(child: AnyElement) -> Self {
-        Self {
-            child,
-            selectable_children: vec![],
-        }
+    pub const fn new(child: AnyElement) -> Self {
+        Self { child, selectable_children: vec![] }
     }
 
     /// Add a new entry that can be navigated to via keyboard.
@@ -51,14 +46,8 @@ impl Navigable {
         self
     }
 
-    fn find_focused(
-        selectable_children: &[NavigableEntry],
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Option<usize> {
-        selectable_children
-            .iter()
-            .position(|entry| entry.focus_handle.contains_focused(window, cx))
+    fn find_focused(selectable_children: &[NavigableEntry], window: &Window, cx: &App) -> Option<usize> {
+        selectable_children.iter().position(|entry| entry.focus_handle.contains_focused(window, cx))
     }
 }
 
@@ -70,9 +59,7 @@ impl RenderOnce for Navigable {
 
                 move |_: &menu::SelectNext, window, cx| {
                     let target = Self::find_focused(&children, window, cx)
-                        .and_then(|index| {
-                            index.checked_add(1).filter(|index| *index < children.len())
-                        })
+                        .and_then(|index| index.checked_add(1).filter(|index| *index < children.len()))
                         .unwrap_or(0);
                     if let Some(entry) = children.get(target) {
                         entry.focus_handle.focus(window, cx);

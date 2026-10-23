@@ -20,7 +20,7 @@ use crate::Workspace;
 const DEFAULT_TOAST_DURATION: Duration = Duration::from_secs(10);
 const MINIMUM_RESUME_DURATION: Duration = Duration::from_millis(800);
 
-pub fn init(cx: &mut App) {
+pub fn init(cx: &App) {
     cx.observe_new(|workspace: &mut Workspace, _window, _cx| {
         workspace.register_action(|_workspace, _: &toast::RunAction, window, cx| {
             let workspace = cx.entity();
@@ -106,7 +106,7 @@ impl Default for ToastLayer {
 }
 
 impl ToastLayer {
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self { active_toast: None, duration_remaining: None, dismiss_timer: None }
     }
 
@@ -162,7 +162,7 @@ impl ToastLayer {
         active_toast.toast.view().downcast::<V>().ok()
     }
 
-    pub fn has_active_toast(&self) -> bool {
+    pub const fn has_active_toast(&self) -> bool {
         self.active_toast.is_some()
     }
 

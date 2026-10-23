@@ -362,19 +362,19 @@ impl MultiWorkspace {
         cx.notify();
     }
 
-    pub fn sidebar_open(&self) -> bool {
+    pub const fn sidebar_open(&self) -> bool {
         self.sidebar_open
     }
 
     pub fn sidebar_has_notifications(&self, cx: &App) -> bool {
-        self.sidebar.as_ref().map_or(false, |s| s.has_notifications(cx))
+        self.sidebar.as_ref().is_some_and(|s| s.has_notifications(cx))
     }
 
     pub fn is_threads_list_view_active(&self, cx: &App) -> bool {
-        self.sidebar.as_ref().map_or(false, |s| s.is_threads_list_view_active(cx))
+        self.sidebar.as_ref().is_some_and(|s| s.is_threads_list_view_active(cx))
     }
 
-    pub fn multi_workspace_enabled(&self, _cx: &App) -> bool {
+    pub const fn multi_workspace_enabled(&self, _cx: &App) -> bool {
         false
     }
 
@@ -513,15 +513,14 @@ impl MultiWorkspace {
         let project = workspace.read(cx).project().clone();
         cx.subscribe_in(&project, window, {
             let workspace = workspace.downgrade();
-            move |this, _project, event, _window, cx| match event {
-                project::Event::WorktreePathsChanged { old_worktree_paths } => {
-                    if let Some(workspace) = workspace.upgrade() {
-                        let host = workspace.read(cx).project().read(cx).remote_connection_options(cx);
-                        let old_key = ProjectGroupKey::from_worktree_paths(old_worktree_paths, host);
-                        this.handle_project_group_key_change(&workspace, &old_key, cx);
-                    }
+            move |this, _project, event, _window, cx| {
+                if let project::Event::WorktreePathsChanged { old_worktree_paths } = event
+                    && let Some(workspace) = workspace.upgrade()
+                {
+                    let host = workspace.read(cx).project().read(cx).remote_connection_options(cx);
+                    let old_key = ProjectGroupKey::from_worktree_paths(old_worktree_paths, host);
+                    this.handle_project_group_key_change(&workspace, &old_key, cx);
                 }
-                _ => {}
             }
         })
         .detach();
@@ -678,7 +677,7 @@ impl MultiWorkspace {
         self.activate(workspace, None, window, cx);
     }
 
-    fn register_workspace(&mut self, workspace: &Entity<Workspace>, window: &Window, cx: &mut Context<Self>) {
+    fn register_workspace(&self, workspace: &Entity<Workspace>, window: &Window, cx: &mut Context<Self>) {
         Self::subscribe_to_workspace(workspace, window, cx);
         let weak_self = cx.weak_entity();
         let active_workspace_id = self.active_workspace_id.clone();
@@ -816,9 +815,7 @@ impl MultiWorkspace {
 
         let workspaces = self.workspaces_for_project_group(group_key, cx);
 
-        let task = self.remove(workspaces, RemovalIntent::CloseProject, window, cx);
-
-        task
+        self.remove(workspaces, RemovalIntent::CloseProject, window, cx)
     }
 
     /// Returns the nearest retained workspace outside the project group at
@@ -1214,7 +1211,7 @@ impl MultiWorkspace {
         }));
     }
 
-    fn serialize_now(&mut self, cx: &mut Context<Self>) -> impl Future<Output = ()> + use<> {
+    fn serialize_now(&self, cx: &Context<Self>) -> impl Future<Output = ()> + use<> {
         let state = MultiWorkspaceState {
             active_workspace_id: self.workspace().read(cx).database_id(),
             project_groups: self
@@ -1321,7 +1318,7 @@ impl MultiWorkspace {
         let available = |workspace: &Entity<Workspace>| {
             !excluding.contains(workspace) && !workspace.read(cx).project().read(cx).is_disconnected(cx)
         };
-        self.last_active_workspace_for_group(key, cx).filter(&available).or_else(|| {
+        self.last_active_workspace_for_group(key, cx).filter(available).or_else(|| {
             self.held
                 .iter()
                 .filter(|held| held.pinned)

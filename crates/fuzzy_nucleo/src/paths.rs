@@ -1,20 +1,23 @@
-use gpui::BackgroundExecutor;
-use path::{PathStyle, rel_path::RelPath};
-use std::{
-    cmp::Ordering,
-    sync::{
-        Arc,
-        atomic::{self, AtomicBool},
-    },
-};
-
-use nucleo::Utf32Str;
-use nucleo::pattern::Pattern;
+use std::cmp::Ordering;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{self};
 
 use fuzzy::CharBag;
+use gpui::BackgroundExecutor;
+use nucleo::Utf32Str;
+use nucleo::pattern::Pattern;
+use path::PathStyle;
+use path::rel_path::RelPath;
 
-use crate::matcher::{self, LENGTH_PENALTY};
-use crate::{Cancelled, Case, Query, case_penalty, count_case_mismatches, positions_from_sorted};
+use crate::Cancelled;
+use crate::Case;
+use crate::Query;
+use crate::case_penalty;
+use crate::count_case_mismatches;
+use crate::matcher::LENGTH_PENALTY;
+use crate::matcher::{self};
+use crate::positions_from_sorted;
 
 #[derive(Clone, Debug)]
 pub struct PathMatchCandidate<'a> {
@@ -34,11 +37,7 @@ impl<'a> PathMatchCandidate<'a> {
             char_bag.extend(prefix.as_unix_str().chars().map(|c| c.to_ascii_lowercase()));
         }
         char_bag.extend(path.as_unix_str().chars().map(|c| c.to_ascii_lowercase()));
-        Self {
-            is_dir,
-            path,
-            char_bag,
-        }
+        Self { is_dir, path, char_bag }
     }
 }
 
@@ -87,11 +86,7 @@ impl Ord for PathMatch {
         self.score
             .total_cmp(&other.score)
             .then_with(|| self.worktree_id.cmp(&other.worktree_id))
-            .then_with(|| {
-                other
-                    .distance_to_relative_ancestor
-                    .cmp(&self.distance_to_relative_ancestor)
-            })
+            .then_with(|| other.distance_to_relative_ancestor.cmp(&self.distance_to_relative_ancestor))
             .then_with(|| self.path.cmp(&other.path))
     }
 }
@@ -110,26 +105,15 @@ pub(crate) fn distance_between_paths(path: &RelPath, relative_to: &RelPath) -> u
 }
 
 #[inline]
-fn get_filename_match_bonus(
-    candidate_buf: &str,
-    pattern: &Pattern,
-    matcher: &mut nucleo::Matcher,
-) -> f64 {
-    let Some(filename) = std::path::Path::new(candidate_buf)
-        .file_name()
-        .and_then(|f| f.to_str())
-        .filter(|f| !f.is_empty())
+fn get_filename_match_bonus(candidate_buf: &str, pattern: &Pattern, matcher: &mut nucleo::Matcher) -> f64 {
+    let Some(filename) =
+        std::path::Path::new(candidate_buf).file_name().and_then(|f| f.to_str()).filter(|f| !f.is_empty())
     else {
         return 0.0;
     };
     let mut buf = Vec::new();
     let haystack = Utf32Str::new(filename, &mut buf);
-    let score: u32 = pattern
-        .atoms
-        .iter()
-        .filter_map(|atom| atom.score(haystack, matcher))
-        .map(|s| s as u32)
-        .sum();
+    let score: u32 = pattern.atoms.iter().filter_map(|atom| atom.score(haystack, matcher)).map(|s| s as u32).sum();
 
     score as f64 / filename.len().max(1) as f64
 }
@@ -181,12 +165,8 @@ fn path_match_helper<'a>(
             continue;
         };
 
-        let case_mismatches = count_case_mismatches(
-            query.query_chars.as_deref(),
-            &matched_chars,
-            &candidate_buf,
-            &mut candidate_chars,
-        );
+        let case_mismatches =
+            count_case_mismatches(query.query_chars.as_deref(), &matched_chars, &candidate_buf, &mut candidate_chars);
 
         matched_chars.sort_unstable();
         matched_chars.dedup();
@@ -201,20 +181,12 @@ fn path_match_helper<'a>(
             score: adjusted_score,
             positions,
             worktree_id,
-            path: if root_is_file {
-                Arc::clone(path_prefix)
-            } else {
-                candidate.path.into()
-            },
-            path_prefix: if root_is_file {
-                RelPath::empty_arc()
-            } else {
-                Arc::clone(path_prefix)
-            },
+            path: if root_is_file { Arc::clone(path_prefix) } else { candidate.path.into() },
+            path_prefix: if root_is_file { RelPath::empty_arc() } else { Arc::clone(path_prefix) },
             is_dir: candidate.is_dir,
-            distance_to_relative_ancestor: relative_to.as_ref().map_or(usize::MAX, |relative_to| {
-                distance_between_paths(candidate.path, relative_to.as_ref())
-            }),
+            distance_to_relative_ancestor: relative_to
+                .as_ref()
+                .map_or(usize::MAX, |relative_to| distance_between_paths(candidate.path, relative_to.as_ref())),
         });
     }
     Ok(())
@@ -239,7 +211,7 @@ pub fn match_fixed_path_set(
 
     let root_is_file = worktree_root_name.is_some() && candidates.iter().all(|c| c.path.is_empty());
 
-    let path_prefix = worktree_root_name.unwrap_or_else(|| RelPath::empty_arc());
+    let path_prefix = worktree_root_name.unwrap_or_else(RelPath::empty_arc);
 
     let mut results = Vec::new();
 
@@ -277,11 +249,7 @@ pub async fn match_path_sets<'a, Set: PathMatchCandidateSet<'a>>(
 
     let path_style = candidate_sets[0].path_style();
 
-    let query = if path_style.is_windows() {
-        query.replace('\\', "/")
-    } else {
-        query.to_owned()
-    };
+    let query = if path_style.is_windows() { query.replace('\\', "/") } else { query.to_owned() };
 
     let Some(query) = Query::build(&query, case) else {
         return Vec::new();
@@ -289,19 +257,13 @@ pub async fn match_path_sets<'a, Set: PathMatchCandidateSet<'a>>(
 
     let num_cpus = executor.num_cpus().min(path_count);
     let segment_size = path_count.div_ceil(num_cpus);
-    let mut segment_results = (0..num_cpus)
-        .map(|_| Vec::with_capacity(max_results))
-        .collect::<Vec<_>>();
+    let mut segment_results = (0..num_cpus).map(|_| Vec::with_capacity(max_results)).collect::<Vec<_>>();
     let mut config = nucleo::Config::DEFAULT;
     config.set_match_paths();
     let mut matchers = matcher::get_matchers(num_cpus, config);
     executor
         .scoped(|scope| {
-            for (segment_idx, (results, matcher)) in segment_results
-                .iter_mut()
-                .zip(matchers.iter_mut())
-                .enumerate()
-            {
+            for (segment_idx, (results, matcher)) in segment_results.iter_mut().zip(matchers.iter_mut()).enumerate() {
                 let query = &query;
                 let relative_to = relative_to.clone();
                 scope.spawn(async move {

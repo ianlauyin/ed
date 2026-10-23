@@ -1,10 +1,16 @@
-use anyhow::{Context, anyhow};
+use anyhow::Context;
+use anyhow::anyhow;
 use db::kvp::KeyValueStore;
 use gpui::App;
 use ui::Window;
 
 use crate::preview;
-use crate::shape::{self, Centered, RelativeHeight, RelativeWidth, Shape, ViewportFraction};
+use crate::shape::Centered;
+use crate::shape::RelativeHeight;
+use crate::shape::RelativeWidth;
+use crate::shape::Shape;
+use crate::shape::ViewportFraction;
+use crate::shape::{self};
 
 const PICKERS_NAMESPACE: &str = "pickers_v2";
 
@@ -28,10 +34,7 @@ pub(crate) fn store_shape_for_this_layout(
         // Must be written after the shape or loading can break
         // if this future is ever cancelled.
         kvp.scoped(PICKERS_NAMESPACE)
-            .write(
-                last_layout_key(picker_delegate),
-                layout_as_str(preview_layout).to_string(),
-            )
+            .write(last_layout_key(picker_delegate), layout_as_str(preview_layout).to_string())
             .await
     });
 }
@@ -40,18 +43,11 @@ pub(crate) fn store_shape_for_this_layout(
 ///
 /// Changing the preview position (e.g. right/below/hidden) without resizing
 /// must still be remembered, so this is called whenever the layout changes.
-pub(crate) fn store_last_layout(
-    picker_delegate: &'static str,
-    preview_layout: Option<preview::Layout>,
-    cx: &App,
-) {
+pub(crate) fn store_last_layout(picker_delegate: &'static str, preview_layout: Option<preview::Layout>, cx: &App) {
     let kvp = KeyValueStore::global(cx);
     db::write_and_log(cx, async move || {
         kvp.scoped(PICKERS_NAMESPACE)
-            .write(
-                last_layout_key(picker_delegate),
-                layout_as_str(preview_layout).to_string(),
-            )
+            .write(last_layout_key(picker_delegate), layout_as_str(preview_layout).to_string())
             .await
     });
 }
@@ -103,7 +99,7 @@ fn last_layout_key(picker_delegate: &'static str) -> String {
     format!("{picker_delegate}/LAST_PREVIEW_LAYOUT")
 }
 
-fn layout_as_str(layout: Option<preview::Layout>) -> &'static str {
+const fn layout_as_str(layout: Option<preview::Layout>) -> &'static str {
     match layout {
         Some(preview::Layout::Hidden) => "hidden",
         Some(preview::Layout::Below) => "below",

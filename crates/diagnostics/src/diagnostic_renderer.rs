@@ -1,18 +1,31 @@
-use std::{ops::Range, sync::Arc};
+use std::ops::Range;
+use std::sync::Arc;
 
-use editor::{
-    Anchor, Editor, EditorSnapshot, ToOffset,
-    display_map::{BlockContext, BlockPlacement, BlockProperties, BlockStyle},
-    hover_popover::diagnostics_markdown_style,
-};
-use gpui::{AppContext, Entity, Focusable, WeakEntity};
-use language::{BufferId, Diagnostic, DiagnosticEntryRef, LanguageRegistry};
+use editor::Anchor;
+use editor::Editor;
+use editor::EditorSnapshot;
+use editor::ToOffset;
+use editor::display_map::BlockContext;
+use editor::display_map::BlockPlacement;
+use editor::display_map::BlockProperties;
+use editor::display_map::BlockStyle;
+use editor::hover_popover::diagnostics_markdown_style;
+use gpui::AppContext;
+use gpui::Entity;
+use gpui::Focusable;
+use gpui::WeakEntity;
+use language::BufferId;
+use language::Diagnostic;
+use language::DiagnosticEntryRef;
+use language::LanguageRegistry;
 use lsp::DiagnosticSeverity;
-use markdown::{Markdown, MarkdownElement};
+use markdown::Markdown;
+use markdown::MarkdownElement;
 use settings::Settings;
 use text::Point;
 use theme_settings::ThemeSettings;
-use ui::{CopyButton, prelude::*};
+use ui::CopyButton;
+use ui::prelude::*;
 use util::maybe;
 
 use crate::toolbar_controls::DiagnosticsToolbarEditor;
@@ -27,17 +40,14 @@ impl DiagnosticRenderer {
         language_registry: Option<Arc<LanguageRegistry>>,
         cx: &mut App,
     ) -> Vec<DiagnosticBlock> {
-        let Some(primary_ix) = diagnostic_group
-            .iter()
-            .position(|d| d.diagnostic.is_primary)
-        else {
+        let Some(primary_ix) = diagnostic_group.iter().position(|d| d.diagnostic.is_primary) else {
             return Vec::new();
         };
         let primary = &diagnostic_group[primary_ix];
         let group_id = primary.diagnostic.group_id;
         let mut results = vec![];
         for entry in diagnostic_group.iter() {
-            let mut markdown = Self::markdown(&entry.diagnostic);
+            let mut markdown = Self::markdown(entry.diagnostic);
             if entry.diagnostic.is_primary {
                 let diagnostic = &primary.diagnostic;
                 append_source_and_code(&mut markdown, diagnostic);
@@ -46,9 +56,7 @@ impl DiagnosticRenderer {
                     if entry.range.start.row.abs_diff(primary.range.start.row) >= 5 {
                         markdown.push_str("\n- hint: [");
                         markdown.push_str(&Markdown::escape(entry.diagnostic.message.as_str()));
-                        markdown.push_str(&format!(
-                            "](file://#diagnostic-{buffer_id}-{group_id}-{ix})\n",
-                        ))
+                        markdown.push_str(&format!("](file://#diagnostic-{buffer_id}-{group_id}-{ix})\n",))
                     }
                 }
 
@@ -57,24 +65,18 @@ impl DiagnosticRenderer {
                     severity: primary.diagnostic.severity,
                     diagnostics_editor: diagnostics_editor.clone(),
                     copy_message: primary.diagnostic.message.as_shared_string().clone(),
-                    markdown: cx.new(|cx| {
-                        Markdown::new(markdown.into(), language_registry.clone(), None, cx)
-                    }),
+                    markdown: cx.new(|cx| Markdown::new(markdown.into(), language_registry.clone(), None, cx)),
                 });
             } else {
                 append_source_and_code(&mut markdown, entry.diagnostic);
 
-                markdown.push_str(&format!(
-                    " ([back](file://#diagnostic-{buffer_id}-{group_id}-{primary_ix}))"
-                ));
+                markdown.push_str(&format!(" ([back](file://#diagnostic-{buffer_id}-{group_id}-{primary_ix}))"));
                 results.push(DiagnosticBlock {
                     initial_range: entry.range.clone(),
                     severity: entry.diagnostic.severity,
                     diagnostics_editor: diagnostics_editor.clone(),
                     copy_message: entry.diagnostic.message.as_shared_string().clone(),
-                    markdown: cx.new(|cx| {
-                        Markdown::new(markdown.into(), language_registry.clone(), None, cx)
-                    }),
+                    markdown: cx.new(|cx| Markdown::new(markdown.into(), language_registry.clone(), None, cx)),
                 });
             }
         }
@@ -98,10 +100,7 @@ fn append_source_and_code(markdown: &mut String, diagnostic: &Diagnostic) {
     if diagnostic.source.is_none() && diagnostic.code.is_none() {
         return;
     }
-    let is_lsp_markdown = diagnostic
-        .message
-        .lsp_markup()
-        .is_some_and(|(kind, _)| kind == &lsp::MarkupKind::Markdown);
+    let is_lsp_markdown = diagnostic.message.lsp_markup().is_some_and(|(kind, _)| kind == &lsp::MarkupKind::Markdown);
     if is_lsp_markdown {
         markdown.push_str("\n\n(");
     } else {
@@ -137,24 +136,14 @@ impl editor::DiagnosticRenderer for DiagnosticRenderer {
         language_registry: Option<Arc<LanguageRegistry>>,
         cx: &mut App,
     ) -> Vec<BlockProperties<Anchor>> {
-        let blocks = Self::diagnostic_blocks_for_group(
-            diagnostic_group,
-            buffer_id,
-            None,
-            language_registry,
-            cx,
-        );
+        let blocks = Self::diagnostic_blocks_for_group(diagnostic_group, buffer_id, None, language_registry, cx);
 
         blocks
             .into_iter()
             .map(|block| {
                 let editor = editor.clone();
                 BlockProperties {
-                    placement: BlockPlacement::Near(
-                        snapshot
-                            .buffer_snapshot()
-                            .anchor_after(block.initial_range.start),
-                    ),
+                    placement: BlockPlacement::Near(snapshot.buffer_snapshot().anchor_after(block.initial_range.start)),
                     height: Some(1),
                     style: BlockStyle::Flex,
                     render: Arc::new(move |bcx| block.render_block(editor.clone(), bcx)),
@@ -172,25 +161,11 @@ impl editor::DiagnosticRenderer for DiagnosticRenderer {
         language_registry: Option<Arc<LanguageRegistry>>,
         cx: &mut App,
     ) -> Option<Entity<Markdown>> {
-        let blocks = Self::diagnostic_blocks_for_group(
-            diagnostic_group,
-            buffer_id,
-            None,
-            language_registry,
-            cx,
-        );
-        blocks
-            .into_iter()
-            .find_map(|block| (block.initial_range == range).then(|| block.markdown))
+        let blocks = Self::diagnostic_blocks_for_group(diagnostic_group, buffer_id, None, language_registry, cx);
+        blocks.into_iter().find_map(|block| (block.initial_range == range).then_some(block.markdown))
     }
 
-    fn open_link(
-        &self,
-        editor: &mut Editor,
-        link: SharedString,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) {
+    fn open_link(&self, editor: &mut Editor, link: SharedString, window: &mut Window, cx: &mut Context<Editor>) {
         DiagnosticBlock::open_link(editor, &None, link, window, cx);
     }
 }
@@ -213,9 +188,7 @@ impl DiagnosticBlock {
 
         let (background_color, border_color) = match self.severity {
             DiagnosticSeverity::ERROR => (status_colors.error_background, status_colors.error),
-            DiagnosticSeverity::WARNING => {
-                (status_colors.warning_background, status_colors.warning)
-            }
+            DiagnosticSeverity::WARNING => (status_colors.warning_background, status_colors.warning),
             DiagnosticSeverity::INFORMATION => (status_colors.info_background, status_colors.info),
             DiagnosticSeverity::HINT => (status_colors.hint_background, status_colors.hint),
             _ => (status_colors.ignored_background, status_colors.ignored),
@@ -245,26 +218,20 @@ impl DiagnosticBlock {
             .border_color(border_color)
             .child(
                 div().flex_1().min_w_0().child(
-                    MarkdownElement::new(
-                        self.markdown.clone(),
-                        diagnostics_markdown_style(bcx.window, cx),
-                    )
-                    .hide_code_block_copy_button()
-                    .on_url_click({
-                        move |link, window, cx| {
-                            editor
-                                .update(cx, |editor, cx| {
-                                    Self::open_link(editor, &diagnostics_editor, link, window, cx)
-                                })
-                                .ok();
-                        }
-                    }),
+                    MarkdownElement::new(self.markdown.clone(), diagnostics_markdown_style(bcx.window, cx))
+                        .hide_code_block_copy_button()
+                        .on_url_click({
+                            move |link, window, cx| {
+                                editor
+                                    .update(cx, |editor, cx| {
+                                        Self::open_link(editor, &diagnostics_editor, link, window, cx)
+                                    })
+                                    .ok();
+                            }
+                        }),
                 ),
             )
-            .child(
-                CopyButton::new(copy_button_id, self.copy_message.clone())
-                    .tooltip_label("Copy Diagnostic"),
-            )
+            .child(CopyButton::new(copy_button_id, self.copy_message.clone()).tooltip_label("Copy Diagnostic"))
             .into_any_element()
     }
 
@@ -298,30 +265,20 @@ impl DiagnosticBlock {
                 .nth(ix)
             {
                 let multibuffer = editor.buffer().read(cx);
-                if let Some(anchor_range) = multibuffer
-                    .snapshot(cx)
-                    .buffer_anchor_range_to_anchor_range(diagnostic.range)
+                if let Some(anchor_range) =
+                    multibuffer.snapshot(cx).buffer_anchor_range_to_anchor_range(diagnostic.range)
                 {
                     Self::jump_to(editor, anchor_range, window, cx);
-                    return;
                 }
             }
-        } else if let Some(diagnostic) = editor
-            .snapshot(window, cx)
-            .buffer_snapshot()
-            .diagnostic_group(buffer_id, group_id)
-            .nth(ix)
+        } else if let Some(diagnostic) =
+            editor.snapshot(window, cx).buffer_snapshot().diagnostic_group(buffer_id, group_id).nth(ix)
         {
             Self::jump_to(editor, diagnostic.range, window, cx)
-        };
+        }
     }
 
-    fn jump_to<I: ToOffset>(
-        editor: &mut Editor,
-        range: Range<I>,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) {
+    fn jump_to<I: ToOffset>(editor: &mut Editor, range: Range<I>, window: &mut Window, cx: &mut Context<Editor>) {
         let snapshot = &editor.buffer().read(cx).snapshot(cx);
         let range = range.start.to_offset(snapshot)..range.end.to_offset(snapshot);
 

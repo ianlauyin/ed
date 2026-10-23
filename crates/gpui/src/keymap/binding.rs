@@ -1,10 +1,16 @@
 use std::rc::Rc;
 
-use crate::{
-    Action, AsKeystroke, DummyKeyboardMapper, InvalidKeystrokeError, KeyBindingContextPredicate,
-    KeybindingKeystroke, Keystroke, PlatformKeyboardMapper, SharedString,
-};
 use smallvec::SmallVec;
+
+use crate::Action;
+use crate::AsKeystroke;
+use crate::DummyKeyboardMapper;
+use crate::InvalidKeystrokeError;
+use crate::KeyBindingContextPredicate;
+use crate::KeybindingKeystroke;
+use crate::Keystroke;
+use crate::PlatformKeyboardMapper;
+use crate::SharedString;
 
 /// A keybinding and its associated metadata, from the keymap.
 pub struct KeyBinding {
@@ -31,17 +37,8 @@ impl Clone for KeyBinding {
 impl KeyBinding {
     /// Construct a new keybinding from the given data. Panics on parse error.
     pub fn new<A: Action>(keystrokes: &str, action: A, context: Option<&str>) -> Self {
-        let context_predicate =
-            context.map(|context| KeyBindingContextPredicate::parse(context).unwrap().into());
-        Self::load(
-            keystrokes,
-            Box::new(action),
-            context_predicate,
-            false,
-            None,
-            &DummyKeyboardMapper,
-        )
-        .unwrap()
+        let context_predicate = context.map(|context| KeyBindingContextPredicate::parse(context).unwrap().into());
+        Self::load(keystrokes, Box::new(action), context_predicate, false, None, &DummyKeyboardMapper).unwrap()
     }
 
     /// Load a keybinding from the given raw data.
@@ -57,31 +54,21 @@ impl KeyBinding {
             .split_whitespace()
             .map(|source| {
                 let keystroke = Keystroke::parse(source)?;
-                Ok(KeybindingKeystroke::new_with_mapper(
-                    keystroke,
-                    use_key_equivalents,
-                    keyboard_mapper,
-                ))
+                Ok(KeybindingKeystroke::new_with_mapper(keystroke, use_key_equivalents, keyboard_mapper))
             })
             .collect::<std::result::Result<_, _>>()?;
 
-        Ok(Self {
-            keystrokes,
-            action,
-            context_predicate,
-            meta: None,
-            action_input,
-        })
+        Ok(Self { keystrokes, action, context_predicate, meta: None, action_input })
     }
 
     /// Set the metadata for this binding.
-    pub fn with_meta(mut self, meta: KeyBindingMetaIndex) -> Self {
+    pub const fn with_meta(mut self, meta: KeyBindingMetaIndex) -> Self {
         self.meta = Some(meta);
         self
     }
 
     /// Set the metadata for this binding.
-    pub fn set_meta(&mut self, meta: KeyBindingMetaIndex) {
+    pub const fn set_meta(&mut self, meta: KeyBindingMetaIndex) {
         self.meta = Some(meta);
     }
 
@@ -116,7 +103,7 @@ impl KeyBinding {
     }
 
     /// Get the metadata for this binding
-    pub fn meta(&self) -> Option<KeyBindingMetaIndex> {
+    pub const fn meta(&self) -> Option<KeyBindingMetaIndex> {
         self.meta
     }
 

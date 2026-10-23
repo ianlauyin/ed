@@ -2,11 +2,17 @@ mod binding;
 mod context;
 
 pub use binding::*;
+use collections::HashSet;
+use collections::TypeIdHashMap;
 pub use context::*;
-
-use crate::{Action, AsKeystroke, Keystroke, Unbind, is_no_action, is_unbind};
-use collections::{HashSet, TypeIdHashMap};
 use smallvec::SmallVec;
+
+use crate::Action;
+use crate::AsKeystroke;
+use crate::Keystroke;
+use crate::Unbind;
+use crate::is_no_action;
+use crate::is_unbind;
 
 /// An opaque identifier of which version of the keymap is currently active.
 /// The keymap's version is changed whenever bindings are added or removed.
@@ -27,10 +33,7 @@ pub struct Keymap {
 pub struct BindingIndex(usize);
 
 fn disabled_binding_matches_context(disabled_binding: &KeyBinding, binding: &KeyBinding) -> bool {
-    match (
-        &disabled_binding.context_predicate,
-        &binding.context_predicate,
-    ) {
+    match (&disabled_binding.context_predicate, &binding.context_predicate) {
         (None, _) => true,
         (Some(_), None) => false,
         (Some(disabled_predicate), Some(predicate)) => disabled_predicate.is_superset(predicate),
@@ -55,7 +58,7 @@ impl Keymap {
     }
 
     /// Get the current version of the keymap.
-    pub fn version(&self) -> KeymapVersion {
+    pub const fn version(&self) -> KeymapVersion {
         self.version
     }
 
@@ -66,10 +69,7 @@ impl Keymap {
             if is_no_action(&*binding.action) || is_unbind(&*binding.action) {
                 self.disabled_binding_indices.push(self.bindings.len());
             } else {
-                self.binding_indices_by_action_id
-                    .entry(action_id)
-                    .or_default()
-                    .push(self.bindings.len());
+                self.binding_indices_by_action_id.entry(action_id).or_default().push(self.bindings.len());
             }
             self.bindings.push(binding);
         }
@@ -97,11 +97,8 @@ impl Keymap {
         action: &'a dyn Action,
     ) -> impl 'a + DoubleEndedIterator<Item = &'a KeyBinding> {
         let action_id = action.type_id();
-        let binding_indices = self
-            .binding_indices_by_action_id
-            .get(&action_id)
-            .map_or(&[] as _, SmallVec::as_slice)
-            .iter();
+        let binding_indices =
+            self.binding_indices_by_action_id.get(&action_id).map_or(&[] as _, SmallVec::as_slice).iter();
 
         binding_indices.filter_map(|ix| {
             let binding = &self.bindings[*ix];
@@ -138,11 +135,7 @@ impl Keymap {
     pub fn all_bindings_for_input(&self, input: &[Keystroke]) -> Vec<KeyBinding> {
         self.bindings()
             .rev()
-            .filter(|binding| {
-                binding
-                    .match_keystrokes(input)
-                    .is_some_and(|pending| !pending)
-            })
+            .filter(|binding| binding.match_keystrokes(input).is_some_and(|pending| !pending))
             .cloned()
             .collect()
     }
@@ -167,18 +160,9 @@ impl Keymap {
         input: &[impl AsKeystroke],
         context_stack: &[KeyContext],
     ) -> (SmallVec<[KeyBinding; 1]>, bool) {
-        let (bindings, pending) = self.resolve_bindings_for_input(
-            input,
-            context_stack,
-            self.bindings().enumerate().rev(),
-        );
-        (
-            bindings
-                .into_iter()
-                .map(|(_, binding)| binding.clone())
-                .collect(),
-            pending,
-        )
+        let (bindings, pending) =
+            self.resolve_bindings_for_input(input, context_stack, self.bindings().enumerate().rev());
+        (bindings.into_iter().map(|(_, binding)| binding.clone()).collect(), pending)
     }
 
     /// Same as `bindings_for_input`, but only looks at `keymap_bindings` instead of the whole
@@ -213,9 +197,7 @@ impl Keymap {
             }
         }
 
-        matched_bindings.sort_by(|(depth_a, ix_a, _), (depth_b, ix_b, _)| {
-            depth_b.cmp(depth_a).then(ix_b.cmp(ix_a))
-        });
+        matched_bindings.sort_by(|(depth_a, ix_a, _), (depth_b, ix_b, _)| depth_b.cmp(depth_a).then(ix_b.cmp(ix_a)));
 
         let mut bindings: SmallVec<[_; 1]> = SmallVec::new();
         let mut first_binding_index = None;
@@ -242,10 +224,7 @@ impl Keymap {
                 continue;
             }
 
-            if unbound_bindings
-                .iter()
-                .any(|disabled_binding| binding_is_unbound(disabled_binding, binding))
-            {
+            if unbound_bindings.iter().any(|disabled_binding| binding_is_unbound(disabled_binding, binding)) {
                 continue;
             }
 
@@ -292,11 +271,7 @@ impl Keymap {
             .bindings()
             .enumerate()
             .rev()
-            .filter(|(_, binding)| {
-                binding
-                    .match_keystrokes(input)
-                    .is_some_and(|pending| pending)
-            })
+            .filter(|(_, binding)| binding.match_keystrokes(input).is_some_and(|pending| pending))
             .collect::<Vec<_>>();
 
         let mut full_input = SmallVec::<[&Keystroke; 4]>::new();
@@ -310,11 +285,7 @@ impl Keymap {
                 // like `ß`.
                 full_input.clear();
                 full_input.extend(input.iter());
-                full_input.extend(
-                    binding.keystrokes[input.len()..]
-                        .iter()
-                        .map(AsKeystroke::as_keystroke),
-                );
+                full_input.extend(binding.keystrokes[input.len()..].iter().map(AsKeystroke::as_keystroke));
                 let (dispatched, _) = self.resolve_bindings_for_input(
                     &full_input,
                     context_stack,
@@ -326,13 +297,8 @@ impl Keymap {
                     .then_some((depth, ix, binding))
             })
             .collect::<Vec<_>>();
-        candidates.sort_unstable_by(|(depth_a, ix_a, _), (depth_b, ix_b, _)| {
-            depth_b.cmp(depth_a).then(ix_b.cmp(ix_a))
-        });
+        candidates.sort_unstable_by(|(depth_a, ix_a, _), (depth_b, ix_b, _)| depth_b.cmp(depth_a).then(ix_b.cmp(ix_a)));
 
-        candidates
-            .into_iter()
-            .map(|(_, _, binding)| binding.clone())
-            .collect()
+        candidates.into_iter().map(|(_, _, binding)| binding.clone()).collect()
     }
 }

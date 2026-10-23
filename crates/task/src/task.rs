@@ -3,20 +3,27 @@
 mod serde_helpers;
 mod task_template;
 
-use anyhow::Context as _;
-use collections::{HashMap, HashSet, hash_map};
-use gpui::SharedString;
-use serde::{Deserialize, Serialize};
 use std::borrow::Cow;
 use std::path::PathBuf;
 use std::str::FromStr;
 use std::sync::Arc;
 
-pub use task_template::{
-    HideStrategy, RevealStrategy, SaveStrategy, TaskTemplate, TaskTemplates,
-    substitute_variables_in_map, substitute_variables_in_str,
-};
-pub use util::shell::{Shell, ShellKind};
+use anyhow::Context as _;
+use collections::HashMap;
+use collections::HashSet;
+use collections::hash_map;
+use gpui::SharedString;
+use serde::Deserialize;
+use serde::Serialize;
+pub use task_template::HideStrategy;
+pub use task_template::RevealStrategy;
+pub use task_template::SaveStrategy;
+pub use task_template::TaskTemplate;
+pub use task_template::TaskTemplates;
+pub use task_template::substitute_variables_in_map;
+pub use task_template::substitute_variables_in_str;
+pub use util::shell::Shell;
+pub use util::shell::ShellKind;
 pub use util::shell_builder::ShellBuilder;
 pub use zed_actions::RevealTarget;
 
@@ -73,15 +80,8 @@ impl SpawnInTerminal {
             label: self.label.clone(),
             command: self.command.clone(),
             args: self.args.clone(),
-            env: self
-                .env
-                .iter()
-                .map(|(k, v)| (k.clone(), v.clone()))
-                .collect(),
-            cwd: self
-                .cwd
-                .clone()
-                .map(|cwd| cwd.to_string_lossy().into_owned()),
+            env: self.env.iter().map(|(k, v)| (k.clone(), v.clone())).collect(),
+            cwd: self.cwd.clone().map(|cwd| cwd.to_string_lossy().into_owned()),
         }
     }
 
@@ -119,17 +119,17 @@ pub struct ResolvedTask {
 
 impl ResolvedTask {
     /// A task template before the resolution.
-    pub fn original_task(&self) -> &TaskTemplate {
+    pub const fn original_task(&self) -> &TaskTemplate {
         &self.original_task
     }
 
     /// Variables that were substituted during the task template resolution.
-    pub fn substituted_variables(&self) -> &HashSet<VariableName> {
+    pub const fn substituted_variables(&self) -> &HashSet<VariableName> {
         &self.substituted_variables
     }
 
     /// A human-readable label to display in the UI.
-    pub fn display_label(&self) -> &str {
+    pub const fn display_label(&self) -> &str {
         self.resolved.label.as_str()
     }
 }
@@ -222,9 +222,7 @@ impl FromStr for VariableName {
             "GIT_REPOSITORY_PATH" => Self::GitRepositoryPath,
             "GIT_REF" => Self::GitRef,
             _ => {
-                if let Some(custom_name) =
-                    without_prefix.strip_prefix(ZED_CUSTOM_VARIABLE_NAME_PREFIX)
-                {
+                if let Some(custom_name) = without_prefix.strip_prefix(ZED_CUSTOM_VARIABLE_NAME_PREFIX) {
                     Self::Custom(Cow::Owned(custom_name.to_owned()))
                 } else {
                     return Err(());
@@ -261,10 +259,7 @@ impl std::fmt::Display for VariableName {
             Self::GitRepositoryName => write!(f, "{ZED_VARIABLE_NAME_PREFIX}GIT_REPOSITORY_NAME"),
             Self::GitRepositoryPath => write!(f, "{ZED_VARIABLE_NAME_PREFIX}GIT_REPOSITORY_PATH"),
             Self::GitRef => write!(f, "{ZED_VARIABLE_NAME_PREFIX}GIT_REF"),
-            Self::Custom(s) => write!(
-                f,
-                "{ZED_VARIABLE_NAME_PREFIX}{ZED_CUSTOM_VARIABLE_NAME_PREFIX}{s}"
-            ),
+            Self::Custom(s) => write!(f, "{ZED_VARIABLE_NAME_PREFIX}{ZED_CUSTOM_VARIABLE_NAME_PREFIX}{s}"),
         }
     }
 }
@@ -289,13 +284,7 @@ impl TaskVariables {
     }
     /// Clear out variables obtained from tree-sitter queries, which are prefixed with '_' character
     pub fn sweep(&mut self) {
-        self.0.retain(|name, _| {
-            if let VariableName::Custom(name) = name {
-                !name.starts_with('_')
-            } else {
-                true
-            }
-        })
+        self.0.retain(|name, _| if let VariableName::Custom(name) = name { !name.starts_with('_') } else { true })
     }
 
     pub fn iter(&self) -> impl Iterator<Item = (&VariableName, &String)> {
@@ -360,11 +349,9 @@ pub fn shell_from_proto(proto: proto::Shell) -> anyhow::Result<Shell> {
     let shell = match shell_type {
         proto::shell::ShellType::System(_) => Shell::System,
         proto::shell::ShellType::Program(program) => Shell::Program(program),
-        proto::shell::ShellType::WithArguments(program) => Shell::WithArguments {
-            program: program.program,
-            args: program.args,
-            title_override: None,
-        },
+        proto::shell::ShellType::WithArguments(program) => {
+            Shell::WithArguments { program: program.program, args: program.args, title_override: None }
+        }
     };
     Ok(shell)
 }
@@ -373,13 +360,9 @@ pub fn shell_to_proto(shell: Shell) -> proto::Shell {
     let shell_type = match shell {
         Shell::System => proto::shell::ShellType::System(proto::System {}),
         Shell::Program(program) => proto::shell::ShellType::Program(program),
-        Shell::WithArguments {
-            program,
-            args,
-            title_override: _,
-        } => proto::shell::ShellType::WithArguments(proto::shell::WithArguments { program, args }),
+        Shell::WithArguments { program, args, title_override: _ } => {
+            proto::shell::ShellType::WithArguments(proto::shell::WithArguments { program, args })
+        }
     };
-    proto::Shell {
-        shell_type: Some(shell_type),
-    }
+    proto::Shell { shell_type: Some(shell_type) }
 }

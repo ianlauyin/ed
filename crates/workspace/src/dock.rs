@@ -324,7 +324,7 @@ enum DockRestoreState {
 }
 
 impl DockRestoreState {
-    fn pending(&self) -> Option<&DockData> {
+    const fn pending(&self) -> Option<&DockData> {
         match self {
             Self::Restoring { pending } => pending.as_ref(),
             Self::Finished => None,
@@ -361,12 +361,12 @@ impl From<settings::DockPosition> for DockPosition {
     }
 }
 
-impl Into<settings::DockPosition> for DockPosition {
-    fn into(self) -> settings::DockPosition {
-        match self {
-            Self::Left => settings::DockPosition::Left,
-            Self::Bottom => settings::DockPosition::Bottom,
-            Self::Right => settings::DockPosition::Right,
+impl From<DockPosition> for settings::DockPosition {
+    fn from(val: DockPosition) -> Self {
+        match val {
+            DockPosition::Left => settings::DockPosition::Left,
+            DockPosition::Bottom => settings::DockPosition::Bottom,
+            DockPosition::Right => settings::DockPosition::Right,
         }
     }
 }
@@ -382,7 +382,7 @@ impl From<TerminalDockPosition> for DockPosition {
 }
 
 impl DockPosition {
-    fn label(&self) -> &'static str {
+    const fn label(&self) -> &'static str {
         match self {
             Self::Left => "Left",
             Self::Bottom => "Bottom",
@@ -390,7 +390,7 @@ impl DockPosition {
         }
     }
 
-    pub fn axis(&self) -> Axis {
+    pub const fn axis(&self) -> Axis {
         match self {
             Self::Left | Self::Right => Axis::Horizontal,
             Self::Bottom => Axis::Vertical,
@@ -520,11 +520,11 @@ impl Dock {
         dock
     }
 
-    pub fn position(&self) -> DockPosition {
+    pub const fn position(&self) -> DockPosition {
         self.position
     }
 
-    pub fn is_open(&self) -> bool {
+    pub const fn is_open(&self) -> bool {
         self.is_open
     }
 
@@ -563,7 +563,7 @@ impl Dock {
         self.active_panel_index.and_then(|index| self.panel_entries.get_mut(index))
     }
 
-    pub fn active_panel_index(&self) -> Option<usize> {
+    pub const fn active_panel_index(&self) -> Option<usize> {
         self.active_panel_index
     }
 
@@ -868,7 +868,7 @@ impl Dock {
         }
     }
 
-    pub fn panels_len(&self) -> usize {
+    pub const fn panels_len(&self) -> usize {
         self.panel_entries.len()
     }
 
@@ -1343,17 +1343,15 @@ impl Render for PanelButtons {
                                     IconPosition::Start,
                                     None,
                                     move |window, cx| {
-                                        if !currently_flexible {
-                                            if let Some(ws) = workspace_for_flex.upgrade() {
-                                                ws.update(cx, |workspace, cx| {
-                                                    workspace.toggle_dock_panel_flexible_size(
-                                                        &dock_for_flex,
-                                                        panel_for_flex.as_ref(),
-                                                        window,
-                                                        cx,
-                                                    );
-                                                });
-                                            }
+                                        if !currently_flexible && let Some(ws) = workspace_for_flex.upgrade() {
+                                            ws.update(cx, |workspace, cx| {
+                                                workspace.toggle_dock_panel_flexible_size(
+                                                    &dock_for_flex,
+                                                    panel_for_flex.as_ref(),
+                                                    window,
+                                                    cx,
+                                                );
+                                            });
                                         }
                                     },
                                 );
@@ -1366,17 +1364,15 @@ impl Render for PanelButtons {
                                     IconPosition::Start,
                                     None,
                                     move |window, cx| {
-                                        if currently_flexible {
-                                            if let Some(ws) = workspace_for_fixed.upgrade() {
-                                                ws.update(cx, |workspace, cx| {
-                                                    workspace.toggle_dock_panel_flexible_size(
-                                                        &dock_for_fixed,
-                                                        panel_for_fixed.as_ref(),
-                                                        window,
-                                                        cx,
-                                                    );
-                                                });
-                                            }
+                                        if currently_flexible && let Some(ws) = workspace_for_fixed.upgrade() {
+                                            ws.update(cx, |workspace, cx| {
+                                                workspace.toggle_dock_panel_flexible_size(
+                                                    &dock_for_fixed,
+                                                    panel_for_fixed.as_ref(),
+                                                    window,
+                                                    cx,
+                                                );
+                                            });
                                         }
                                     },
                                 );

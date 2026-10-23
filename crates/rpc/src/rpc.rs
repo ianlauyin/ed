@@ -5,7 +5,9 @@ mod peer;
 pub use conn::Connection;
 pub use peer::*;
 pub use proto;
-pub use proto::{Receipt, TypedEnvelope, error::*};
+pub use proto::Receipt;
+pub use proto::TypedEnvelope;
+pub use proto::error::*;
 mod macros;
 
 #[cfg(feature = "gpui")]
@@ -19,7 +21,7 @@ pub const PROTOCOL_VERSION: u32 = 68;
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy)]
 pub struct ProjectId(pub u64);
 impl ProjectId {
-    pub fn to_proto(self) -> u64 {
+    pub const fn to_proto(self) -> u64 {
         self.0
     }
 }

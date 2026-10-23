@@ -1,29 +1,57 @@
-use crate::{
-    Anchor, DisplayPoint, Editor, EditorSettings, EditorSnapshot, FindAllReferences,
-    GotoDefinitionKind, HighlightKey, Navigated, PointForPosition, SelectPhase,
-    editor_settings::GoToDefinitionFallback, scroll::ScrollAmount,
-};
-use gpui::{
-    Action, App, AsyncWindowContext, Context, Entity, Focusable, HighlightStyle, Modifiers, Pixels,
-    Task, UnderlineStyle, WeakEntity, Window, px,
-};
-use language::{Bias, ToOffset};
-use linkify::{LinkFinder, LinkKind};
+use std::ops::Range;
+use std::str::FromStr as _;
+use std::sync::Arc;
+use std::sync::LazyLock;
+
+use gpui::Action;
+use gpui::App;
+use gpui::AsyncWindowContext;
+use gpui::Context;
+use gpui::Entity;
+use gpui::Focusable;
+use gpui::HighlightStyle;
+use gpui::Modifiers;
+use gpui::Pixels;
+use gpui::Task;
+use gpui::UnderlineStyle;
+use gpui::WeakEntity;
+use gpui::Window;
+use gpui::px;
+use language::Bias;
+use language::ToOffset;
+use linkify::LinkFinder;
+use linkify::LinkKind;
 use lsp::LanguageServerId;
-use project::{InlayId, Location, LocationLink, Project, ProjectPath, ResolvedPath};
+use project::InlayId;
+use project::Location;
+use project::LocationLink;
+use project::Project;
+use project::ProjectPath;
+use project::ResolvedPath;
 use regex::Regex;
-use settings::{OpenResultsIn, Settings};
-use std::{
-    ops::Range,
-    str::FromStr as _,
-    sync::{Arc, LazyLock},
-};
+use settings::OpenResultsIn;
+use settings::Settings;
 use text::OffsetRangeExt;
 use theme::ActiveTheme as _;
-use util::{
-    ResultExt, TryFutureExt as _, markdown::source_position_from_fragment, paths::PathWithPosition,
-};
+use util::ResultExt;
+use util::TryFutureExt as _;
+use util::markdown::source_position_from_fragment;
+use util::paths::PathWithPosition;
 use workspace::pane::NavigationEntry;
+
+use crate::Anchor;
+use crate::DisplayPoint;
+use crate::Editor;
+use crate::EditorSettings;
+use crate::EditorSnapshot;
+use crate::FindAllReferences;
+use crate::GotoDefinitionKind;
+use crate::HighlightKey;
+use crate::Navigated;
+use crate::PointForPosition;
+use crate::SelectPhase;
+use crate::editor_settings::GoToDefinitionFallback;
+use crate::scroll::ScrollAmount;
 
 #[derive(Clone, Action)]
 #[action(no_json, no_register)]
@@ -66,22 +94,18 @@ impl RangeInEditor {
         }
     }
 
-    pub fn point_within_range(
-        &self,
-        trigger_point: &TriggerPoint,
-        snapshot: &EditorSnapshot,
-    ) -> bool {
+    pub fn point_within_range(&self, trigger_point: &TriggerPoint, snapshot: &EditorSnapshot) -> bool {
         match (self, trigger_point) {
             (Self::Text(range), TriggerPoint::Text(point)) => {
                 let buffer_snapshot = snapshot.buffer_snapshot();
-                if !range.start.is_valid(&buffer_snapshot)
-                    || !range.end.is_valid(&buffer_snapshot)
-                    || !point.is_valid(&buffer_snapshot)
+                if !range.start.is_valid(buffer_snapshot)
+                    || !range.end.is_valid(buffer_snapshot)
+                    || !point.is_valid(buffer_snapshot)
                 {
                     return false;
                 }
-                let point_after_start = range.start.cmp(point, &buffer_snapshot).is_le();
-                let point_after_end = range.end.cmp(point, &buffer_snapshot).is_ge();
+                let point_after_start = range.start.cmp(point, buffer_snapshot).is_le();
+                let point_after_end = range.end.cmp(point, buffer_snapshot).is_ge();
                 point_after_start && point_after_end
             }
             (Self::Inlay(highlight), TriggerPoint::InlayHint(point, _, _)) => {
@@ -89,8 +113,7 @@ impl RangeInEditor {
                     && highlight.range.contains(&point.range.start)
                     && highlight.range.contains(&point.range.end)
             }
-            (Self::Inlay(_), TriggerPoint::Text(_))
-            | (Self::Text(_), TriggerPoint::InlayHint(_, _, _)) => false,
+            (Self::Inlay(_), TriggerPoint::Text(_)) | (Self::Text(_), TriggerPoint::InlayHint(_, _, _)) => false,
         }
     }
 }
@@ -120,13 +143,7 @@ pub fn document_link_target_to_hover_link(target: &str, server_id: LanguageServe
             .and_then(source_position_from_fragment)
             .map(|(line, character)| lsp::Position { line, character })
             .unwrap_or_default();
-        return HoverLink::LspLocation(
-            lsp::Location {
-                uri,
-                range: lsp::Range::new(position, position),
-            },
-            server_id,
-        );
+        return HoverLink::LspLocation(lsp::Location { uri, range: lsp::Range::new(position, position) }, server_id);
     }
     HoverLink::Url(target.to_string())
 }
@@ -145,7 +162,7 @@ pub enum TriggerPoint {
 }
 
 impl TriggerPoint {
-    fn anchor(&self) -> &Anchor {
+    const fn anchor(&self) -> &Anchor {
         match self {
             TriggerPoint::Text(anchor) => anchor,
             TriggerPoint::InlayHint(inlay_range, _, _) => &inlay_range.inlay_position,
@@ -163,13 +180,8 @@ pub fn exclude_link_to_position(
     // (i.e., currently cursor upon definition).
     let snapshot = buffer.read(cx).snapshot();
     !(buffer == &location.target.buffer
-        && current_position
-            .bias_right(&snapshot)
-            .cmp(&location.target.range.start, &snapshot)
-            .is_ge()
-        && current_position
-            .cmp(&location.target.range.end, &snapshot)
-            .is_le())
+        && current_position.bias_right(&snapshot).cmp(&location.target.range.start, &snapshot).is_ge()
+        && current_position.cmp(&location.target.range.end, &snapshot).is_le())
 }
 
 impl Editor {
@@ -197,9 +209,7 @@ impl Editor {
         match point_for_position.as_valid() {
             Some(point) if hint_glyph.is_none() => {
                 let trigger_point = TriggerPoint::Text(
-                    snapshot
-                        .buffer_snapshot()
-                        .anchor_before(point.to_offset(&snapshot.display_snapshot, Bias::Left)),
+                    snapshot.buffer_snapshot().anchor_before(point.to_offset(&snapshot.display_snapshot, Bias::Left)),
                 );
 
                 show_link_definition(modifiers.shift, self, trigger_point, snapshot, window, cx);
@@ -230,24 +240,17 @@ impl Editor {
         window: &mut Window,
         cx: &mut Context<Editor>,
     ) {
-        let kind = if modifiers.shift {
-            GotoDefinitionKind::Type
-        } else {
-            GotoDefinitionKind::Symbol
-        };
+        let kind = if modifiers.shift { GotoDefinitionKind::Type } else { GotoDefinitionKind::Symbol };
         let split = Self::is_alt_pressed(&modifiers, cx);
         let snapshot = self.snapshot(window, cx);
-        let position = snapshot
-            .buffer_snapshot()
-            .anchor_before(point.next_valid.to_point(&snapshot.display_snapshot));
+        let position = snapshot.buffer_snapshot().anchor_before(point.next_valid.to_point(&snapshot.display_snapshot));
         let origin = self.navigation_entry(position, cx);
         let cached = self.hovered_link_state.take();
         self.hide_hovered_link(cx);
         let refresh = cached.as_ref().is_none_or(|state| {
             state.links.is_empty()
                 || (matches!(state.last_trigger_point, TriggerPoint::Text(_))
-                    && (state.preferred_kind != kind
-                        || state.task.as_ref().is_some_and(|task| !task.is_ready())))
+                    && (state.preferred_kind != kind || state.task.as_ref().is_some_and(|task| !task.is_ready())))
         });
         let mut links = cached.map(|state| state.links).unwrap_or_default();
         if refresh || !self.lsp_data_enabled() {
@@ -257,19 +260,10 @@ impl Editor {
             });
         }
         if refresh && point.as_valid().is_some() {
-            self.select(
-                SelectPhase::Begin {
-                    position: point.next_valid,
-                    add: false,
-                    click_count: 1,
-                },
-                window,
-                cx,
-            );
+            self.select(SelectPhase::Begin { position: point.next_valid, add: false, click_count: 1 }, window, cx);
         }
         self.select(SelectPhase::End, window, cx);
-        let Some((buffer, anchor)) = self.buffer.read(cx).text_anchor_for_position(position, cx)
-        else {
+        let Some((buffer, anchor)) = self.buffer.read(cx).text_anchor_for_position(position, cx) else {
             return;
         };
         links.retain(|link| match link {
@@ -280,10 +274,8 @@ impl Editor {
             // `exclude_link_to_position` above, one level coarser — file rather than position.
             HoverLink::File(target) => match &target.resolved_path {
                 ResolvedPath::ProjectPath { project_path, .. } => {
-                    let current_project_path = buffer
-                        .read(cx)
-                        .file()
-                        .map(|file| ProjectPath::from_file(file.as_ref(), cx));
+                    let current_project_path =
+                        buffer.read(cx).file().map(|file| ProjectPath::from_file(file.as_ref(), cx));
                     Some(project_path) != current_project_path.as_ref()
                 }
                 ResolvedPath::AbsPath { .. } => true,
@@ -291,11 +283,7 @@ impl Editor {
             _ => true,
         });
         let definitions = (refresh && self.lsp_data_enabled() && point.as_valid().is_some())
-            .then(|| {
-                self.semantics_provider
-                    .as_ref()?
-                    .definitions(&buffer, anchor, kind, cx)
-            })
+            .then(|| self.semantics_provider.as_ref()?.definitions(&buffer, anchor, kind, cx))
             .flatten();
         if let Some(definitions) = definitions {
             let workspace = self.workspace().map(|workspace| workspace.downgrade());
@@ -312,18 +300,13 @@ impl Editor {
                             links.extend(
                                 definitions
                                     .into_iter()
-                                    .filter(|link| {
-                                        exclude_link_to_position(&buffer, &anchor, link, cx)
-                                    })
+                                    .filter(|link| exclude_link_to_position(&buffer, &anchor, link, cx))
                                     .map(HoverLink::Text),
                             );
                         } else {
-                            links.retain(|link| {
-                                matches!(link, HoverLink::Url(_) | HoverLink::File(_))
-                            });
+                            links.retain(|link| matches!(link, HoverLink::Url(_) | HoverLink::File(_)));
                         }
-                        editor
-                            .reveal_clicked_links(kind, links, position, origin, split, window, cx);
+                        editor.reveal_clicked_links(kind, links, position, origin, split, window, cx);
                     })
                     .ok();
             })
@@ -344,43 +327,28 @@ impl Editor {
             cx.propagate();
             return;
         }
-        if !self.lsp_data_enabled()
-            || !self
-                .buffer
-                .read(cx)
-                .snapshot(cx)
-                .can_resolve(&action.position)
-        {
+        if !self.lsp_data_enabled() || !self.buffer.read(cx).snapshot(cx).can_resolve(&action.position) {
             return;
         }
         let links = action
             .locations
             .iter()
             .cloned()
-            .map(|target| {
-                HoverLink::Text(LocationLink {
-                    origin: None,
-                    target,
-                })
-            })
+            .map(|target| HoverLink::Text(LocationLink { origin: None, target }))
             .collect::<Vec<_>>();
         self.open_clicked_links(action.kind, links, action.origin.clone(), false, window, cx);
     }
 
-    pub fn scroll_hover(
-        &mut self,
-        amount: ScrollAmount,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
+    pub fn scroll_hover(&mut self, amount: ScrollAmount, window: &mut Window, cx: &mut Context<Self>) -> bool {
         let selection = self.selections.newest_anchor().head();
         let snapshot = self.snapshot(window, cx);
 
-        if let Some(popover) = self.hover_state.info_popovers.iter().find(|popover| {
-            popover
-                .symbol_range
-                .point_within_range(&TriggerPoint::Text(selection), &snapshot)
-        }) {
+        if let Some(popover) = self
+            .hover_state
+            .info_popovers
+            .iter()
+            .find(|popover| popover.symbol_range.point_within_range(&TriggerPoint::Text(selection), &snapshot))
+        {
             popover.scroll(amount, window, cx);
             true
         } else if let Some(context_menu) = self.context_menu.borrow_mut().as_mut() {
@@ -454,9 +422,7 @@ impl Editor {
                 return;
             }
             let focus_handle = editor
-                .read_with(cx, |editor, cx| {
-                    editor.lsp_data_enabled().then(|| editor.focus_handle(cx))
-                })
+                .read_with(cx, |editor, cx| editor.lsp_data_enabled().then(|| editor.focus_handle(cx)))
                 .ok()
                 .flatten();
             if let Some(focus_handle) = focus_handle {
@@ -487,21 +453,20 @@ pub fn show_link_definition(
         _ => GotoDefinitionKind::Type,
     };
 
-    let (mut hovered_link_state, is_cached) =
-        if let Some(existing) = editor.hovered_link_state.take() {
-            (existing, true)
-        } else {
-            (
-                HoveredLinkState {
-                    last_trigger_point: trigger_point.clone(),
-                    symbol_range: None,
-                    preferred_kind,
-                    links: vec![],
-                    task: None,
-                },
-                false,
-            )
-        };
+    let (mut hovered_link_state, is_cached) = if let Some(existing) = editor.hovered_link_state.take() {
+        (existing, true)
+    } else {
+        (
+            HoveredLinkState {
+                last_trigger_point: trigger_point.clone(),
+                symbol_range: None,
+                preferred_kind,
+                links: vec![],
+                task: None,
+            },
+            false,
+        )
+    };
 
     if editor.pending_rename.is_some() {
         return;
@@ -525,9 +490,7 @@ pub fn show_link_definition(
             || hovered_link_state
                 .symbol_range
                 .as_ref()
-                .is_some_and(|symbol_range| {
-                    symbol_range.point_within_range(&trigger_point, snapshot)
-                })
+                .is_some_and(|symbol_range| symbol_range.point_within_range(&trigger_point, snapshot))
         {
             editor.hovered_link_state = Some(hovered_link_state);
             return;
@@ -552,25 +515,17 @@ pub fn show_link_definition(
             // Resolution is deduplicated by `LspStore`; awaiting here only
             // blocks until either the cached resolved entry is returned or
             // the in-flight `Shared` task completes.
-            let resolved_document_links = this
-                .update(cx, |editor, cx| {
-                    editor.document_links_at(buffer.clone(), anchor, cx)
-                })
-                .ok()
-                .flatten();
+            let resolved_document_links =
+                this.update(cx, |editor, cx| editor.document_links_at(buffer.clone(), anchor, cx)).ok().flatten();
             let resolved_document_links = match resolved_document_links {
                 Some(task) => task.await,
                 None => Vec::new(),
             };
             let snapshot = this.read_with(cx, |editor, cx| editor.buffer.read(cx).snapshot(cx))?;
-            let detected_document_link =
-                resolved_document_links
-                    .into_iter()
-                    .find_map(|(server_id, link)| {
-                        let multi_buffer_range =
-                            snapshot.buffer_anchor_range_to_anchor_range(link.range.clone())?;
-                        Some((link.range, multi_buffer_range, link.target, server_id))
-                    });
+            let detected_document_link = resolved_document_links.into_iter().find_map(|(server_id, link)| {
+                let multi_buffer_range = snapshot.buffer_anchor_range_to_anchor_range(link.range.clone())?;
+                Some((link.range, multi_buffer_range, link.target, server_id))
+            });
             drop(snapshot);
 
             let result = match &trigger_point {
@@ -582,27 +537,20 @@ pub fn show_link_definition(
                     // detection at the same position: the server tells us the
                     // exact range and target, while `find_url`/`find_file` are
                     // best-effort text matches.
-                    if let Some((_, multi_buffer_range, Some(target), server_id)) =
-                        detected_document_link.clone()
-                    {
+                    if let Some((_, multi_buffer_range, Some(target), server_id)) = detected_document_link.clone() {
                         symbol_range = Some(RangeInEditor::Text(multi_buffer_range));
                         links.push(document_link_target_to_hover_link(&target, server_id));
                     } else if let Some((url_range, url)) = find_url(&buffer, anchor, cx) {
-                        let snapshot =
-                            this.read_with(cx, |editor, cx| editor.buffer.read(cx).snapshot(cx))?;
-                        if let Some(range) = snapshot.buffer_anchor_range_to_anchor_range(url_range)
-                        {
+                        let snapshot = this.read_with(cx, |editor, cx| editor.buffer.read(cx).snapshot(cx))?;
+                        if let Some(range) = snapshot.buffer_anchor_range_to_anchor_range(url_range) {
                             symbol_range = Some(RangeInEditor::Text(range));
                         }
                         links.push(HoverLink::Url(url));
                     } else if let Some((filename_range, file_target)) =
                         find_file(&buffer, project.clone(), anchor, cx).await
                     {
-                        let snapshot =
-                            this.read_with(cx, |editor, cx| editor.buffer.read(cx).snapshot(cx))?;
-                        if let Some(range) =
-                            snapshot.buffer_anchor_range_to_anchor_range(filename_range)
-                        {
+                        let snapshot = this.read_with(cx, |editor, cx| editor.buffer.read(cx).snapshot(cx))?;
+                        if let Some(range) = snapshot.buffer_anchor_range_to_anchor_range(filename_range) {
                             symbol_range = Some(RangeInEditor::Text(range));
                         }
                         links.push(HoverLink::File(file_target));
@@ -612,21 +560,16 @@ pub fn show_link_definition(
                     // reveals every applicable target (e.g. a position that
                     // carries both a document link and a definition).
                     if let Some(provider) = provider {
-                        let task = cx.update(|_, cx| {
-                            provider.definitions(&buffer, anchor, preferred_kind, cx)
-                        })?;
+                        let task = cx.update(|_, cx| provider.definitions(&buffer, anchor, preferred_kind, cx))?;
                         if let Some(task) = task
                             && let Some(definition_result) = task.await.ok().flatten()
                         {
                             if symbol_range.is_none() {
-                                let snapshot = this.read_with(cx, |editor, cx| {
-                                    editor.buffer.read(cx).snapshot(cx)
-                                })?;
+                                let snapshot = this.read_with(cx, |editor, cx| editor.buffer.read(cx).snapshot(cx))?;
                                 symbol_range = definition_result.iter().find_map(|link| {
                                     link.origin.as_ref().and_then(|origin| {
-                                        let range = snapshot.buffer_anchor_range_to_anchor_range(
-                                            origin.range.clone(),
-                                        )?;
+                                        let range =
+                                            snapshot.buffer_anchor_range_to_anchor_range(origin.range.clone())?;
                                         Some(RangeInEditor::Text(range))
                                     })
                                 });
@@ -635,11 +578,7 @@ pub fn show_link_definition(
                         }
                     }
 
-                    if links.is_empty() {
-                        None
-                    } else {
-                        Some((symbol_range, links))
-                    }
+                    if links.is_empty() { None } else { Some((symbol_range, links)) }
                 }
                 TriggerPoint::InlayHint(highlight, lsp_location, server_id) => Some((
                     Some(RangeInEditor::Inlay(highlight.clone())),
@@ -655,52 +594,40 @@ pub fn show_link_definition(
                     return;
                 };
                 hovered_link_state.preferred_kind = preferred_kind;
-                hovered_link_state.symbol_range = result
-                    .as_ref()
-                    .and_then(|(symbol_range, _)| symbol_range.clone())
-                    .or_else(|| {
+                hovered_link_state.symbol_range =
+                    result.as_ref().and_then(|(symbol_range, _)| symbol_range.clone()).or_else(|| {
                         // Even if we have no click target yet (e.g. an
                         // unresolved document link), record the link's range
                         // so subsequent mouse moves on the same link
                         // short-circuit in `show_link_definition`.
                         detected_document_link
                             .as_ref()
-                            .map(|(_, multi_buffer_range, _, _)| {
-                                RangeInEditor::Text(multi_buffer_range.clone())
-                            })
+                            .map(|(_, multi_buffer_range, _, _)| RangeInEditor::Text(multi_buffer_range.clone()))
                     });
 
                 if let Some((symbol_range, definitions)) = result {
                     hovered_link_state.links = definitions;
 
-                    let underline_hovered_link = !hovered_link_state.links.is_empty()
-                        || hovered_link_state.symbol_range.is_some();
+                    let underline_hovered_link =
+                        !hovered_link_state.links.is_empty() || hovered_link_state.symbol_range.is_some();
 
                     if underline_hovered_link {
                         let style = HighlightStyle {
-                            underline: Some(UnderlineStyle {
-                                thickness: px(1.),
-                                ..UnderlineStyle::default()
-                            }),
+                            underline: Some(UnderlineStyle { thickness: px(1.), ..UnderlineStyle::default() }),
                             color: Some(cx.theme().colors().link_text_hover),
                             ..HighlightStyle::default()
                         };
-                        let highlight_range =
-                            symbol_range.unwrap_or_else(|| match &trigger_point {
-                                TriggerPoint::Text(trigger_anchor) => {
-                                    let snapshot = editor.buffer.read(cx).snapshot(cx);
-                                    // If no symbol range returned from language server, use the surrounding word.
-                                    let (offset_range, _) =
-                                        snapshot.surrounding_word(*trigger_anchor, None);
-                                    RangeInEditor::Text(
-                                        snapshot.anchor_before(offset_range.start)
-                                            ..snapshot.anchor_after(offset_range.end),
-                                    )
-                                }
-                                TriggerPoint::InlayHint(highlight, _, _) => {
-                                    RangeInEditor::Inlay(highlight.clone())
-                                }
-                            });
+                        let highlight_range = symbol_range.unwrap_or_else(|| match &trigger_point {
+                            TriggerPoint::Text(trigger_anchor) => {
+                                let snapshot = editor.buffer.read(cx).snapshot(cx);
+                                // If no symbol range returned from language server, use the surrounding word.
+                                let (offset_range, _) = snapshot.surrounding_word(*trigger_anchor, None);
+                                RangeInEditor::Text(
+                                    snapshot.anchor_before(offset_range.start)..snapshot.anchor_after(offset_range.end),
+                                )
+                            }
+                            TriggerPoint::InlayHint(highlight, _, _) => RangeInEditor::Inlay(highlight.clone()),
+                        });
 
                         // When the server reports no `originSelectionRange`, fall back
                         // to the highlighted word as the symbol range so that hovering
@@ -713,36 +640,21 @@ pub fn show_link_definition(
                         }
 
                         match highlight_range {
-                            RangeInEditor::Text(text_range) => editor.highlight_text(
-                                HighlightKey::HoveredLinkState,
-                                vec![text_range],
-                                style,
-                                cx,
-                            ),
-                            RangeInEditor::Inlay(highlight) => editor.highlight_inlays(
-                                HighlightKey::HoveredLinkState,
-                                vec![highlight],
-                                style,
-                                cx,
-                            ),
+                            RangeInEditor::Text(text_range) => {
+                                editor.highlight_text(HighlightKey::HoveredLinkState, vec![text_range], style, cx)
+                            }
+                            RangeInEditor::Inlay(highlight) => {
+                                editor.highlight_inlays(HighlightKey::HoveredLinkState, vec![highlight], style, cx)
+                            }
                         }
                     }
-                } else if let Some((_, multi_buffer_range, _, _)) = detected_document_link.as_ref()
-                {
+                } else if let Some((_, multi_buffer_range, _, _)) = detected_document_link.as_ref() {
                     let style = HighlightStyle {
-                        underline: Some(UnderlineStyle {
-                            thickness: px(1.),
-                            ..UnderlineStyle::default()
-                        }),
+                        underline: Some(UnderlineStyle { thickness: px(1.), ..UnderlineStyle::default() }),
                         color: Some(cx.theme().colors().link_text_hover),
                         ..HighlightStyle::default()
                     };
-                    editor.highlight_text(
-                        HighlightKey::HoveredLinkState,
-                        vec![multi_buffer_range.clone()],
-                        style,
-                        cx,
-                    );
+                    editor.highlight_text(HighlightKey::HoveredLinkState, vec![multi_buffer_range.clone()], style, cx);
                 } else {
                     // When no links are found, we don't want to completely
                     // throw away the `HoveredLinkState`, we'll want to at least
@@ -788,10 +700,7 @@ pub(crate) fn find_url(
         return None;
     }
 
-    for ch in snapshot
-        .chars_at(offset)
-        .take(LIMIT - (offset - token_start))
-    {
+    for ch in snapshot.chars_at(offset).take(LIMIT - (offset - token_start)) {
         if ch.is_whitespace() {
             found_end = true;
             break;
@@ -806,15 +715,13 @@ pub(crate) fn find_url(
 
     let mut finder = LinkFinder::new();
     finder.kinds(&[LinkKind::Url]);
-    let input = snapshot
-        .text_for_range(token_start..token_end)
-        .collect::<String>();
+    let input = snapshot.text_for_range(token_start..token_end).collect::<String>();
 
     let relative_offset = offset - token_start;
     for link in finder.links(&input) {
         if link.start() <= relative_offset && link.end() >= relative_offset {
-            let range = snapshot.anchor_before(token_start + link.start())
-                ..snapshot.anchor_after(token_start + link.end());
+            let range =
+                snapshot.anchor_before(token_start + link.start())..snapshot.anchor_after(token_start + link.end());
             return Some((range, link.as_str().to_string()));
         }
     }
@@ -862,9 +769,7 @@ pub(crate) fn find_url_from_range(
         return None;
     }
 
-    let text = snapshot
-        .text_for_range(token_start..token_end)
-        .collect::<String>();
+    let text = snapshot.text_for_range(token_start..token_end).collect::<String>();
 
     let mut finder = LinkFinder::new();
     finder.kinds(&[LinkKind::Url]);
@@ -888,11 +793,7 @@ pub struct ResolvedFileTarget {
 
 impl ResolvedFileTarget {
     /// After opening a file, navigate the editor to the row/column position if present.
-    pub fn navigate_item_to_position(
-        &self,
-        item: Box<dyn crate::ItemHandle>,
-        cx: &mut AsyncWindowContext,
-    ) {
+    pub fn navigate_item_to_position(&self, item: Box<dyn crate::ItemHandle>, cx: &mut AsyncWindowContext) {
         if let Some(row) = self.row {
             let col = self.column.unwrap_or(0);
             if let Some(active_editor) = item.downcast::<crate::Editor>() {
@@ -904,10 +805,7 @@ impl ResolvedFileTarget {
                         let Some(buffer) = editor.buffer().read(cx).as_singleton() else {
                             return;
                         };
-                        let point = buffer
-                            .read(cx)
-                            .snapshot()
-                            .point_from_external_input(row, col);
+                        let point = buffer.read(cx).snapshot().point_from_external_input(row, col);
                         editor.go_to_singleton_buffer_point_silently(point, window, cx);
                     })
                     .log_err();
@@ -935,9 +833,7 @@ pub(crate) async fn find_file(
         cx: &mut AsyncWindowContext,
     ) -> Option<ResolvedPath> {
         project
-            .update(cx, |project, cx| {
-                project.resolve_path_in_buffer(candidate_file_path, buffer, cx)
-            })
+            .update(cx, |project, cx| project.resolve_path_in_buffer(candidate_file_path, buffer, cx))
             .await
             .filter(|s| s.is_file())
     }
@@ -959,14 +855,10 @@ pub(crate) async fn find_file(
     // 4. With language-specific file extensions appended to stripped path
     for (pattern_candidate, pattern_range) in &pattern_candidates {
         // Try the raw candidate first.
-        if let Some(existing_path) = check_path(&pattern_candidate, &project, buffer, cx).await {
+        if let Some(existing_path) = check_path(pattern_candidate, &project, buffer, cx).await {
             return Some((
                 make_range(pattern_range),
-                ResolvedFileTarget {
-                    resolved_path: existing_path,
-                    row: None,
-                    column: None,
-                },
+                ResolvedFileTarget { resolved_path: existing_path, row: None, column: None },
             ));
         }
 
@@ -976,17 +868,13 @@ pub(crate) async fn find_file(
         let parsed_path = parsed.path.to_string_lossy();
 
         // Try resolving just the path portion (without :row:col).
-        if parsed.row.is_some() {
-            if let Some(existing_path) = check_path(&parsed_path, &project, buffer, cx).await {
-                return Some((
-                    make_range(pattern_range),
-                    ResolvedFileTarget {
-                        resolved_path: existing_path,
-                        row: parsed.row,
-                        column: parsed.column,
-                    },
-                ));
-            }
+        if parsed.row.is_some()
+            && let Some(existing_path) = check_path(&parsed_path, &project, buffer, cx).await
+        {
+            return Some((
+                make_range(pattern_range),
+                ResolvedFileTarget { resolved_path: existing_path, row: parsed.row, column: parsed.column },
+            ));
         }
 
         // Try with language-specific suffixes.
@@ -997,16 +885,10 @@ pub(crate) async fn find_file(
                 }
 
                 let suffixed_candidate = format!("{pattern_candidate}.{suffix}");
-                if let Some(existing_path) =
-                    check_path(&suffixed_candidate, &project, buffer, cx).await
-                {
+                if let Some(existing_path) = check_path(&suffixed_candidate, &project, buffer, cx).await {
                     return Some((
                         make_range(pattern_range),
-                        ResolvedFileTarget {
-                            resolved_path: existing_path,
-                            row: None,
-                            column: None,
-                        },
+                        ResolvedFileTarget { resolved_path: existing_path, row: None, column: None },
                     ));
                 }
             }
@@ -1019,16 +901,10 @@ pub(crate) async fn find_file(
                     }
 
                     let suffixed_candidate = format!("{parsed_path}.{suffix}");
-                    if let Some(existing_path) =
-                        check_path(&suffixed_candidate, &project, buffer, cx).await
-                    {
+                    if let Some(existing_path) = check_path(&suffixed_candidate, &project, buffer, cx).await {
                         return Some((
                             make_range(pattern_range),
-                            ResolvedFileTarget {
-                                resolved_path: existing_path,
-                                row: parsed.row,
-                                column: parsed.column,
-                            },
+                            ResolvedFileTarget { resolved_path: existing_path, row: parsed.row, column: parsed.column },
                         ));
                     }
                 }
@@ -1048,9 +924,7 @@ fn link_pattern_file_candidates(candidate: &str) -> Vec<(String, Range<usize>)> 
 
     // Punctuation that commonly wraps file paths in prose/markdown
     const LEADING_PUNCTUATION: &[char] = &['`', '(', '[', '{', '<', '"', '\''];
-    const TRAILING_PUNCTUATION: &[char] = &[
-        '`', ')', ']', '}', '>', '"', '\'', '.', ',', ':', ';', '!', '?',
-    ];
+    const TRAILING_PUNCTUATION: &[char] = &['`', ')', ']', '}', '>', '"', '\'', '.', ',', ':', ';', '!', '?'];
 
     let candidate_len = candidate.len();
     let mut candidates = Vec::new();
@@ -1084,14 +958,14 @@ fn link_pattern_file_candidates(candidate: &str) -> Vec<(String, Range<usize>)> 
 
     // Extract markdown link destination: [title](path) or ](path) -> path
     // This also handles bare (path) wrapping.
-    if let Some(captures) = MD_LINK_REGEX.captures(candidate) {
-        if let Some(link) = captures.get(1) {
-            let link_str = link.as_str().to_string();
-            let link_range = link.range();
-            // Avoid duplicate if punctuation trimming already found this
-            if !candidates.iter().any(|(s, _)| s == &link_str) {
-                candidates.push((link_str, link_range));
-            }
+    if let Some(captures) = MD_LINK_REGEX.captures(candidate)
+        && let Some(link) = captures.get(1)
+    {
+        let link_str = link.as_str().to_string();
+        let link_range = link.range();
+        // Avoid duplicate if punctuation trimming already found this
+        if !candidates.iter().any(|(s, _)| s == &link_str) {
+            candidates.push((link_str, link_range));
         }
     }
 
@@ -1107,7 +981,7 @@ fn surrounding_filename(
 ) -> Option<(Range<text::Anchor>, String)> {
     const LIMIT: usize = 2048;
 
-    let offset = position.to_offset(&snapshot);
+    let offset = position.to_offset(snapshot);
     let mut token_start = offset;
     let mut token_end = offset;
     let mut found_start = false;
@@ -1150,10 +1024,7 @@ fn surrounding_filename(
 
     filename = filename.chars().rev().collect();
 
-    let mut forwards = snapshot
-        .chars_at(offset)
-        .take(LIMIT - (offset - token_start))
-        .peekable();
+    let mut forwards = snapshot.chars_at(offset).take(LIMIT - (offset - token_start)).peekable();
     while let Some(ch) = forwards.next() {
         // Skip escaped whitespace
         if ch == '\\' && forwards.peek().is_some_and(|ch| ch.is_whitespace()) {

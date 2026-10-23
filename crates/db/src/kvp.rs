@@ -3,11 +3,10 @@ use gpui::App;
 use sqlez_macros::sql;
 use util::ResultExt as _;
 
-use crate::{
-    query,
-    sqlez::{domain::Domain, thread_safe_connection::ThreadSafeConnection},
-    write_and_log,
-};
+use crate::query;
+use crate::sqlez::domain::Domain;
+use crate::sqlez::thread_safe_connection::ThreadSafeConnection;
+use crate::write_and_log;
 
 pub struct KeyValueStore(crate::sqlez::thread_safe_connection::ThreadSafeConnection);
 
@@ -41,10 +40,7 @@ pub trait Dismissable {
     const KEY: &'static str;
 
     fn dismissed(cx: &App) -> bool {
-        KeyValueStore::global(cx)
-            .read_kvp(Self::KEY)
-            .log_err()
-            .is_some_and(|s| s.is_some())
+        KeyValueStore::global(cx).read_kvp(Self::KEY).log_err().is_some_and(|s| s.is_some())
     }
 
     fn set_dismissed(is_dismissed: bool, cx: &mut App) {
@@ -83,11 +79,8 @@ impl KeyValueStore {
         }
     }
 
-    pub fn scoped<'a>(&'a self, namespace: &'a str) -> ScopedKeyValueStore<'a> {
-        ScopedKeyValueStore {
-            store: self,
-            namespace,
-        }
+    pub const fn scoped<'a>(&'a self, namespace: &'a str) -> ScopedKeyValueStore<'a> {
+        ScopedKeyValueStore { store: self, namespace }
     }
 }
 
@@ -120,9 +113,12 @@ impl ScopedKeyValueStore<'_> {
         let namespace = self.namespace.to_owned();
         self.store
             .write(move |connection| {
-                connection.exec_bound::<(&str, &str)>(
-                    "DELETE FROM scoped_kv_store WHERE namespace = (?) AND key = (?)",
-                )?((&namespace, &key))
+                connection
+                    .exec_bound::<(&str, &str)>("DELETE FROM scoped_kv_store WHERE namespace = (?) AND key = (?)")?(
+                    (
+                    &namespace, &key,
+                )
+                )
                 .context("Failed to delete from scoped_kv_store")
             })
             .await
@@ -132,11 +128,8 @@ impl ScopedKeyValueStore<'_> {
         let namespace = self.namespace.to_owned();
         self.store
             .write(move |connection| {
-                connection
-                    .exec_bound::<&str>("DELETE FROM scoped_kv_store WHERE namespace = (?)")?(
-                    &namespace,
-                )
-                .context("Failed to delete_all from scoped_kv_store")
+                connection.exec_bound::<&str>("DELETE FROM scoped_kv_store WHERE namespace = (?)")?(&namespace)
+                    .context("Failed to delete_all from scoped_kv_store")
             })
             .await
     }
@@ -161,14 +154,10 @@ impl std::ops::Deref for GlobalKeyValueStore {
     }
 }
 
-static GLOBAL_KEY_VALUE_STORE: std::sync::LazyLock<GlobalKeyValueStore> =
-    std::sync::LazyLock::new(|| {
-        let db_dir = crate::database_dir();
-        GlobalKeyValueStore(gpui::block_on(crate::open_db::<GlobalKeyValueStore>(
-            db_dir,
-            crate::GlobalDbScope,
-        )))
-    });
+static GLOBAL_KEY_VALUE_STORE: std::sync::LazyLock<GlobalKeyValueStore> = std::sync::LazyLock::new(|| {
+    let db_dir = crate::database_dir();
+    GlobalKeyValueStore(gpui::block_on(crate::open_db::<GlobalKeyValueStore>(db_dir, crate::GlobalDbScope)))
+});
 
 impl GlobalKeyValueStore {
     pub fn global() -> &'static Self {

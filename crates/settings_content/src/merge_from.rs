@@ -72,7 +72,7 @@ impl<T: Clone + MergeFrom> MergeFrom for Option<T> {
 
 impl<T: Clone> MergeFrom for Vec<T> {
     fn merge_from(&mut self, other: &Self) {
-        *self = other.clone()
+        self.clone_from(other)
     }
 }
 

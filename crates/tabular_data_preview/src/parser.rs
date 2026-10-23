@@ -1,19 +1,26 @@
-use indexmap::{IndexMap, IndexSet};
+use std::path::Path;
+use std::time::Duration;
+use std::time::Instant;
 
 use anyhow::Context as _;
-use serde_json::value::RawValue;
-
-use crate::{
-    TabularDataPreviewPane,
-    types::TableLikeContent,
-    types::{LineNumber, TableCell},
-};
 use editor::Editor;
-use gpui::{App, AppContext, Context, Entity, Subscription, Task};
-use std::path::Path;
-use std::time::{Duration, Instant};
+use gpui::App;
+use gpui::AppContext;
+use gpui::Context;
+use gpui::Entity;
+use gpui::Subscription;
+use gpui::Task;
+use indexmap::IndexMap;
+use indexmap::IndexSet;
+use serde_json::value::RawValue;
 use text::BufferSnapshot;
-use ui::{SharedString, table_row::TableRow};
+use ui::SharedString;
+use ui::table_row::TableRow;
+
+use crate::TabularDataPreviewPane;
+use crate::types::LineNumber;
+use crate::types::TableCell;
+use crate::types::TableLikeContent;
 
 pub(crate) const REPARSE_DEBOUNCE: Duration = Duration::from_millis(200);
 
@@ -46,10 +53,7 @@ impl TabularFormat {
     }
 
     pub(crate) fn from_extension(ext: &str) -> Option<Self> {
-        TABULAR_FORMATS
-            .iter()
-            .find(|(name, _)| name.eq_ignore_ascii_case(ext))
-            .map(|(_, format)| *format)
+        TABULAR_FORMATS.iter().find(|(name, _)| name.eq_ignore_ascii_case(ext)).map(|(_, format)| *format)
     }
 
     fn parse(self, buffer_snapshot: &BufferSnapshot) -> anyhow::Result<TableLikeContent> {
@@ -71,23 +75,18 @@ pub(crate) fn editor_file_extension<'a>(editor: &Entity<Editor>, cx: &'a App) ->
 }
 
 impl TabularDataPreviewPane {
-    pub(crate) fn parse_from_active_editor(
-        &mut self,
-        wait_for_debounce: bool,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn parse_from_active_editor(&mut self, wait_for_debounce: bool, cx: &mut Context<Self>) {
         let editor = self.active_editor_state.editor.clone();
         self.is_parsing = true;
-        self.table
-            .update(cx, |table, cx| table.set_loading(true, cx));
+        self.table.update(cx, |table, cx| table.set_loading(true, cx));
         self.parsing_task = Some(self.parse_in_background(wait_for_debounce, editor, cx));
     }
 
     fn parse_in_background(
-        &mut self,
+        &self,
         wait_for_debounce: bool,
         editor: Entity<Editor>,
-        cx: &mut Context<Self>,
+        cx: &Context<Self>,
     ) -> Task<anyhow::Result<()>> {
         cx.spawn(async move |view, cx| {
             if wait_for_debounce {
@@ -112,23 +111,14 @@ impl TabularDataPreviewPane {
             }
 
             let (buffer_snapshot, format) = view.update(cx, |_, cx| {
-                let buffer_ref = editor
-                    .read(cx)
-                    .buffer()
-                    .read(cx)
-                    .as_singleton()
-                    .map(|b| b.read(cx).text_snapshot());
+                let buffer_ref = editor.read(cx).buffer().read(cx).as_singleton().map(|b| b.read(cx).text_snapshot());
 
                 let extension = editor_file_extension(&editor, cx);
 
-                let format = extension
-                    .and_then(TabularFormat::from_extension)
-                    .unwrap_or_else(|| {
-                        log::warn!(
-                            "unrecognized tabular data extension {extension:?}, defaulting to CSV"
-                        );
-                        TabularFormat::Csv
-                    });
+                let format = extension.and_then(TabularFormat::from_extension).unwrap_or_else(|| {
+                    log::warn!("unrecognized tabular data extension {extension:?}, defaulting to CSV");
+                    TabularFormat::Csv
+                });
 
                 (buffer_ref, format)
             })?;
@@ -143,9 +133,7 @@ impl TabularDataPreviewPane {
             };
 
             let instant = Instant::now();
-            let parsed_contents = cx
-                .background_spawn(async move { format.parse(&buffer_snapshot) })
-                .await;
+            let parsed_contents = cx.background_spawn(async move { format.parse(&buffer_snapshot) }).await;
             let parse_duration = instant.elapsed();
             let parse_end_time: Instant = Instant::now();
             log::debug!("Parsed data in {}ms", parse_duration.as_millis());
@@ -156,8 +144,7 @@ impl TabularDataPreviewPane {
                     Ok(contents) => contents,
                     Err(error) => {
                         view.parse_error = Some(format!("{error:#}").into());
-                        view.table
-                            .update(cx, |table, cx| table.set_loading(false, cx));
+                        view.table.update(cx, |table, cx| table.set_loading(false, cx));
                         cx.notify();
                         return;
                     }
@@ -166,10 +153,7 @@ impl TabularDataPreviewPane {
                 log::debug!("Parsed {} rows", parsed_contents.rows.len());
                 view.parse_error = None;
                 view.table.update(cx, |table, cx| {
-                    table
-                        .performance_metrics
-                        .timings
-                        .insert("Parsing", (parse_duration, Instant::now()));
+                    table.performance_metrics.timings.insert("Parsing", (parse_duration, Instant::now()));
                     // `set_contents` recomputes filters/widths/mapping and clears the loading state.
                     table.set_contents(parsed_contents, cx);
                 });
@@ -190,13 +174,8 @@ fn from_json_lines(buffer_snapshot: &BufferSnapshot) -> anyhow::Result<TableLike
         if line.trim().is_empty() {
             continue;
         }
-        let record: IndexMap<String, &RawValue> =
-            serde_json::from_str(line).with_context(|| {
-                format!(
-                    "Cannot preview JSONL line {}: expected a JSON object",
-                    line_index + 1
-                )
-            })?;
+        let record: IndexMap<String, &RawValue> = serde_json::from_str(line)
+            .with_context(|| format!("Cannot preview JSONL line {}: expected a JSON object", line_index + 1))?;
         columns.extend(record.keys().cloned());
         records.push(record);
         line_numbers.push(LineNumber::Line(line_index + 1));
@@ -204,10 +183,7 @@ fn from_json_lines(buffer_snapshot: &BufferSnapshot) -> anyhow::Result<TableLike
 
     let number_of_cols = columns.len();
     let headers = TableRow::from_vec(
-        columns
-            .iter()
-            .map(|name| TableCell::Generated(name.clone().into()))
-            .collect(),
+        columns.iter().map(|name| TableCell::Generated(name.clone().into())).collect(),
         number_of_cols,
     );
     let rows = records
@@ -237,12 +213,7 @@ fn from_json_lines(buffer_snapshot: &BufferSnapshot) -> anyhow::Result<TableLike
         })
         .collect::<anyhow::Result<Vec<_>>>()?;
 
-    Ok(TableLikeContent {
-        headers,
-        rows,
-        line_numbers,
-        number_of_cols,
-    })
+    Ok(TableLikeContent { headers, rows, line_numbers, number_of_cols })
 }
 
 fn compact_json(raw: &str) -> String {
@@ -271,18 +242,14 @@ fn compact_json(raw: &str) -> String {
     compact
 }
 
-pub fn from_buffer_with_delimiter(
-    buffer_snapshot: &BufferSnapshot,
-    delimiter: char,
-) -> TableLikeContent {
+pub fn from_buffer_with_delimiter(buffer_snapshot: &BufferSnapshot, delimiter: char) -> TableLikeContent {
     let text = buffer_snapshot.text();
 
     if text.trim().is_empty() {
         return TableLikeContent::default();
     }
 
-    let (parsed_cells_with_positions, line_numbers) =
-        parse_delimited_text_with_positions(&text, delimiter);
+    let (parsed_cells_with_positions, line_numbers) = parse_delimited_text_with_positions(&text, delimiter);
     if parsed_cells_with_positions.is_empty() {
         return TableLikeContent::default();
     }
@@ -294,32 +261,24 @@ pub fn from_buffer_with_delimiter(
     };
 
     // Convert to TableCell objects with buffer positions
-    let headers = create_table_row(&buffer_snapshot, max_number_of_cols, raw_headers);
+    let headers = create_table_row(buffer_snapshot, max_number_of_cols, raw_headers);
 
     let rows = parsed_cells_with_positions
         .into_iter()
         .skip(1)
-        .map(|row| create_table_row(&buffer_snapshot, max_number_of_cols, row))
+        .map(|row| create_table_row(buffer_snapshot, max_number_of_cols, row))
         .collect();
 
     let row_line_numbers = line_numbers.into_iter().skip(1).collect();
 
-    TableLikeContent {
-        headers,
-        rows,
-        line_numbers: row_line_numbers,
-        number_of_cols: max_number_of_cols,
-    }
+    TableLikeContent { headers, rows, line_numbers: row_line_numbers, number_of_cols: max_number_of_cols }
 }
 
 /// Parse delimited text and track byte positions for each cell
 fn parse_delimited_text_with_positions(
     text: &str,
     delimiter: char,
-) -> (
-    Vec<Vec<(SharedString, std::ops::Range<usize>)>>,
-    Vec<LineNumber>,
-) {
+) -> (Vec<Vec<(SharedString, std::ops::Range<usize>)>>, Vec<LineNumber>) {
     let mut rows = Vec::new();
     let mut line_numbers = Vec::new();
     let mut current_row: Vec<(SharedString, std::ops::Range<usize>)> = Vec::new();
@@ -361,10 +320,7 @@ fn parse_delimited_text_with_positions(
                 if current_field.is_empty() && !in_quotes {
                     field_start_offset = current_offset;
                 }
-                current_row.push((
-                    current_field.clone().into(),
-                    field_start_offset..field_end_offset,
-                ));
+                current_row.push((current_field.clone().into(), field_start_offset..field_end_offset));
                 current_field.clear();
                 field_start_offset = current_offset + char_byte_len;
             }
@@ -376,16 +332,11 @@ fn parse_delimited_text_with_positions(
                     if current_field.is_empty() && current_row.is_empty() {
                         field_start_offset = 0;
                     }
-                    current_row.push((
-                        current_field.clone().into(),
-                        field_start_offset..field_end_offset,
-                    ));
+                    current_row.push((current_field.clone().into(), field_start_offset..field_end_offset));
                     current_field.clear();
 
                     // Only add non-empty rows
-                    if !current_row.is_empty()
-                        && !current_row.iter().all(|(field, _)| field.trim().is_empty())
-                    {
+                    if !current_row.is_empty() && !current_row.iter().all(|(field, _)| field.trim().is_empty()) {
                         rows.push(current_row);
                         // Add line number info for this row
                         let line_info = if row_start_line == current_line - 1 {
@@ -414,16 +365,11 @@ fn parse_delimited_text_with_positions(
                     if !in_quotes {
                         // Row separator (only when not inside quotes)
                         let field_end_offset = current_offset;
-                        current_row.push((
-                            current_field.clone().into(),
-                            field_start_offset..field_end_offset,
-                        ));
+                        current_row.push((current_field.clone().into(), field_start_offset..field_end_offset));
                         current_field.clear();
 
                         // Only add non-empty rows
-                        if !current_row.is_empty()
-                            && !current_row.iter().all(|(field, _)| field.trim().is_empty())
-                        {
+                        if !current_row.is_empty() && !current_row.iter().all(|(field, _)| field.trim().is_empty()) {
                             rows.push(current_row);
                             // Add line number info for this row
                             let line_info = if row_start_line == current_line - 1 {
@@ -456,10 +402,7 @@ fn parse_delimited_text_with_positions(
     // Add the last field and row if not empty
     if !current_field.is_empty() || !current_row.is_empty() {
         let field_end_offset = current_offset;
-        current_row.push((
-            current_field.clone().into(),
-            field_start_offset..field_end_offset,
-        ));
+        current_row.push((current_field.clone().into(), field_start_offset..field_end_offset));
     }
     if !current_row.is_empty() && !current_row.iter().all(|(field, _)| field.trim().is_empty()) {
         rows.push(current_row);
@@ -482,9 +425,7 @@ fn create_table_row(
 ) -> TableRow<TableCell> {
     let mut raw_row = row
         .into_iter()
-        .map(|(content, range)| {
-            TableCell::from_buffer_position(content, range.start, range.end, &buffer_snapshot)
-        })
+        .map(|(content, range)| TableCell::from_buffer_position(content, range.start, range.end, buffer_snapshot))
         .collect::<Vec<_>>();
 
     let append_elements = max_number_of_cols - raw_row.len();

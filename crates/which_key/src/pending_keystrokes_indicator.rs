@@ -1,20 +1,43 @@
-use gpui::{
-    Action as _, Anchor, Animation, AnimationExt, App, Context, HoverListenerMode, InputPreference,
-    KeybindingKeystroke, KeystrokeEvent, Render, ScrollHandle, Subscription, Task, Window,
-    anchored, deferred,
-};
-use settings::{Settings, SettingsStore};
-use std::{rc::Rc, time::Duration};
-use ui::{
-    ButtonLike, CircularProgress, KeyBinding, KeyBindingStyle, prelude::*, tooltip_container,
-};
-use util::ResultExt;
-use workspace::{HideStatusItem, StatusBarSettings, StatusItemView, item::ItemHandle};
+use std::rc::Rc;
+use std::time::Duration;
 
-use crate::{
-    ShowPendingBindings, bindings_for_pending_input, map_pending_keystrokes,
-    pending_bindings::{PendingBindingRow, PendingBindings, prepare_pending_bindings},
-};
+use gpui::Action as _;
+use gpui::Anchor;
+use gpui::Animation;
+use gpui::AnimationExt;
+use gpui::App;
+use gpui::Context;
+use gpui::HoverListenerMode;
+use gpui::InputPreference;
+use gpui::KeybindingKeystroke;
+use gpui::KeystrokeEvent;
+use gpui::Render;
+use gpui::ScrollHandle;
+use gpui::Subscription;
+use gpui::Task;
+use gpui::Window;
+use gpui::anchored;
+use gpui::deferred;
+use settings::Settings;
+use settings::SettingsStore;
+use ui::ButtonLike;
+use ui::CircularProgress;
+use ui::KeyBinding;
+use ui::KeyBindingStyle;
+use ui::prelude::*;
+use ui::tooltip_container;
+use util::ResultExt;
+use workspace::HideStatusItem;
+use workspace::StatusBarSettings;
+use workspace::StatusItemView;
+use workspace::item::ItemHandle;
+
+use crate::ShowPendingBindings;
+use crate::bindings_for_pending_input;
+use crate::map_pending_keystrokes;
+use crate::pending_bindings::PendingBindingRow;
+use crate::pending_bindings::PendingBindings;
+use crate::pending_bindings::prepare_pending_bindings;
 
 const POPOVER_HIDE_DELAY: Duration = Duration::from_millis(300);
 
@@ -38,7 +61,7 @@ struct PopoverState {
 }
 
 impl PopoverState {
-    fn is_pointer_over(&self) -> bool {
+    const fn is_pointer_over(&self) -> bool {
         self.indicator_pointer_over || self.pointer_over
     }
 }
@@ -58,28 +81,26 @@ struct IndicatorTimeout {
 
 impl PendingKeystrokesIndicator {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let pending_input_subscription =
-            cx.observe_pending_input(window, |this: &mut Self, window, cx| {
-                if this.refresh_render_state(window, cx) {
-                    cx.notify();
-                }
-                this.update_popover_state(window, cx);
-            });
+        let pending_input_subscription = cx.observe_pending_input(window, |this: &mut Self, window, cx| {
+            if this.refresh_render_state(window, cx) {
+                cx.notify();
+            }
+            this.update_popover_state(window, cx);
+        });
 
         let mut enabled = Self::enabled(cx);
-        let settings_subscription =
-            cx.observe_global_in::<SettingsStore>(window, move |this, window, cx| {
-                let new_enabled = Self::enabled(cx);
-                if new_enabled == enabled {
-                    return;
-                }
+        let settings_subscription = cx.observe_global_in::<SettingsStore>(window, move |this, window, cx| {
+            let new_enabled = Self::enabled(cx);
+            if new_enabled == enabled {
+                return;
+            }
 
-                enabled = new_enabled;
-                if this.refresh_render_state(window, cx) {
-                    cx.notify();
-                }
-                this.update_popover_state(window, cx);
-            });
+            enabled = new_enabled;
+            if this.refresh_render_state(window, cx) {
+                cx.notify();
+            }
+            this.update_popover_state(window, cx);
+        });
 
         Self {
             render_state: None,
@@ -109,10 +130,8 @@ impl PendingKeystrokesIndicator {
         let bindings = prepare_pending_bindings(bindings_for_pending_input(window, keystrokes), cx);
 
         let keystrokes = map_pending_keystrokes(keystrokes, cx.keyboard_mapper().as_ref());
-        let pending_keys_changed = self
-            .render_state
-            .as_ref()
-            .is_none_or(|previous| previous.keystrokes.as_ref() != keystrokes.as_slice());
+        let pending_keys_changed =
+            self.render_state.as_ref().is_none_or(|previous| previous.keystrokes.as_ref() != keystrokes.as_slice());
         if pending_keys_changed {
             self.popover_scroll_handle.set_offset(Default::default());
         }
@@ -149,26 +168,16 @@ impl PendingKeystrokesIndicator {
         self.render_state.take().is_some()
     }
 
-    fn render_state(&self) -> Option<&Rc<IndicatorRenderState>> {
+    const fn render_state(&self) -> Option<&Rc<IndicatorRenderState>> {
         self.render_state.as_ref()
     }
 
-    fn set_indicator_pointer_over(
-        &mut self,
-        pointer_over: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn set_indicator_pointer_over(&mut self, pointer_over: bool, window: &mut Window, cx: &mut Context<Self>) {
         self.popover.indicator_pointer_over = pointer_over;
         self.update_popover_state(window, cx);
     }
 
-    fn set_popover_pointer_over(
-        &mut self,
-        pointer_over: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn set_popover_pointer_over(&mut self, pointer_over: bool, window: &mut Window, cx: &mut Context<Self>) {
         self.popover.pointer_over = pointer_over;
         self.update_popover_state(window, cx);
     }
@@ -207,12 +216,7 @@ impl PendingKeystrokesIndicator {
         }
     }
 
-    fn handle_intercepted_keystroke(
-        &mut self,
-        event: &KeystrokeEvent,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn handle_intercepted_keystroke(&mut self, event: &KeystrokeEvent, window: &mut Window, cx: &mut Context<Self>) {
         if event.input_preference == InputPreference::CharacterInput
             || !window.has_pending_keystrokes()
             || !Self::enabled(cx)
@@ -221,14 +225,9 @@ impl PendingKeystrokesIndicator {
         }
 
         // Only the highest-precedence binding counts, so user overrides can disable the shortcut.
-        let (bindings, _) = cx
-            .key_bindings()
-            .borrow()
-            .bindings_for_input(std::slice::from_ref(&event.keystroke), &event.context_stack);
-        if !bindings
-            .first()
-            .is_some_and(|binding| binding.action().partial_eq(&ShowPendingBindings))
-        {
+        let (bindings, _) =
+            cx.key_bindings().borrow().bindings_for_input(std::slice::from_ref(&event.keystroke), &event.context_stack);
+        if !bindings.first().is_some_and(|binding| binding.action().partial_eq(&ShowPendingBindings)) {
             return;
         }
 
@@ -253,9 +252,7 @@ impl Render for PendingKeystrokesIndicator {
         });
         // Inactive workspaces in the same window keep their indicators alive. Storing the
         // subscription in element state ensures only the rendered indicator intercepts input.
-        window.use_keyed_state("pending-keystrokes-interceptor", cx, |_, cx| {
-            cx.intercept_keystrokes(listener)
-        });
+        window.use_keyed_state("pending-keystrokes-interceptor", cx, |_, cx| cx.intercept_keystrokes(listener));
 
         let button = ButtonLike::new("pending-keystrokes-indicator")
             .on_click(|_, window, cx| {
@@ -265,15 +262,10 @@ impl Render for PendingKeystrokesIndicator {
                 let remaining_fraction = if timeout.timeout_duration.is_zero() {
                     0.0
                 } else {
-                    (timeout.remaining_duration.as_secs_f32()
-                        / timeout.timeout_duration.as_secs_f32())
-                    .clamp(0.0, 1.0)
+                    (timeout.remaining_duration.as_secs_f32() / timeout.timeout_duration.as_secs_f32()).clamp(0.0, 1.0)
                 };
                 button.child(if cx.reduce_motion() {
-                    Icon::new(IconName::CountdownTimer)
-                        .size(IconSize::XSmall)
-                        .color(Color::Muted)
-                        .into_any_element()
+                    Icon::new(IconName::CountdownTimer).size(IconSize::XSmall).color(Color::Muted).into_any_element()
                 } else {
                     let progress = CircularProgress::new(
                         remaining_fraction,
@@ -288,14 +280,9 @@ impl Render for PendingKeystrokesIndicator {
                     } else {
                         progress
                             .with_animation(
-                                (
-                                    "pending-keystrokes-countdown",
-                                    render_state.pending_input_generation,
-                                ),
+                                ("pending-keystrokes-countdown", render_state.pending_input_generation),
                                 Animation::new(timeout.remaining_duration).with_max_fps(30.0),
-                                move |progress, delta| {
-                                    progress.value(remaining_fraction * (1.0 - delta))
-                                },
+                                move |progress, delta| progress.value(remaining_fraction * (1.0 - delta)),
                             )
                             .into_any_element()
                     }
@@ -313,41 +300,30 @@ impl Render for PendingKeystrokesIndicator {
             let max_panel_width = px((f32::from(viewport_size.width) * 0.5).min(480.0));
             let max_content_height = px(f32::from(viewport_size.height) * 0.4);
             let anchored_popover = deferred(
-                anchored()
-                    .anchor(Anchor::BottomRight)
-                    .snap_to_window_with_margin(px(8.))
-                    .child(
-                        div()
-                            .id("pending-keystrokes-popover")
-                            .pb_2()
-                            .occlude()
-                            .on_hover(cx.listener(|this, pointer_over: &bool, window, cx| {
-                                this.set_popover_pointer_over(*pointer_over, window, cx);
-                            }))
-                            .hover_listener_mode(HoverListenerMode::InputModalityIndependent)
-                            .child(tooltip_container(cx, |el, _| {
-                                el.p_0().max_w(max_panel_width).overflow_hidden().child(
-                                    PendingBindings::new(
-                                        "pending-keystrokes-popover-content",
-                                        popover_render_state.keystrokes.clone(),
-                                        popover_render_state.bindings.clone(),
-                                        self.popover_scroll_handle.clone(),
-                                        max_panel_width,
-                                        max_content_height,
-                                    ),
-                                )
-                            })),
-                    ),
+                anchored().anchor(Anchor::BottomRight).snap_to_window_with_margin(px(8.)).child(
+                    div()
+                        .id("pending-keystrokes-popover")
+                        .pb_2()
+                        .occlude()
+                        .on_hover(cx.listener(|this, pointer_over: &bool, window, cx| {
+                            this.set_popover_pointer_over(*pointer_over, window, cx);
+                        }))
+                        .hover_listener_mode(HoverListenerMode::InputModalityIndependent)
+                        .child(tooltip_container(cx, |el, _| {
+                            el.p_0().max_w(max_panel_width).overflow_hidden().child(PendingBindings::new(
+                                "pending-keystrokes-popover-content",
+                                popover_render_state.keystrokes.clone(),
+                                popover_render_state.bindings.clone(),
+                                self.popover_scroll_handle.clone(),
+                                max_panel_width,
+                                max_content_height,
+                            ))
+                        })),
+                ),
             )
             .with_priority(1);
 
-            div()
-                .absolute()
-                .top_0()
-                .right_0()
-                .w_0()
-                .h_0()
-                .child(anchored_popover)
+            div().absolute().top_0().right_0().w_0().h_0().child(anchored_popover)
         });
 
         div()
@@ -374,10 +350,7 @@ impl StatusItemView for PendingKeystrokesIndicator {
 
     fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
         Some(HideStatusItem::new(|settings| {
-            settings
-                .status_bar
-                .get_or_insert_default()
-                .pending_keystrokes_indicator = Some(false);
+            settings.status_bar.get_or_insert_default().pending_keystrokes_indicator = Some(false);
         }))
     }
 }

@@ -1,25 +1,45 @@
+use std::borrow::Cow;
+use std::fmt::Write;
+use std::path::PathBuf;
+use std::str::FromStr;
+use std::sync::Arc;
+
 use anyhow::Result;
 use async_trait::async_trait;
 use collections::HashMap;
-use gpui::{App, AsyncApp, Entity, SharedString, Task};
+use gpui::App;
+use gpui::AsyncApp;
+use gpui::Entity;
+use gpui::SharedString;
+use gpui::Task;
+use language::Buffer;
+use language::ContextLocation;
+use language::ContextProvider;
+use language::LanguageName;
+use language::LspAdapter;
+use language::LspAdapterDelegate;
+use language::ManifestName;
+use language::ManifestProvider;
+use language::ManifestQuery;
+use language::Symbol;
 use language::language_settings::LanguageSettings;
-use language::{Buffer, ContextLocation, Symbol};
-use language::{ContextProvider, LspAdapter, LspAdapterDelegate};
-use language::{LanguageName, ManifestName, ManifestProvider, ManifestQuery};
+use lsp::CompletionItemKind;
+use lsp::LanguageServerBinary;
 use lsp::LanguageServerName;
-use lsp::{CompletionItemKind, LanguageServerBinary, Uri};
+use lsp::Uri;
 use project::lsp_store::language_server_settings;
-use serde_json::{Value, json};
+use serde_json::Value;
+use serde_json::json;
 use settings::SemanticTokenRules;
-use std::str::FromStr;
-use std::{borrow::Cow, fmt::Write, path::PathBuf, sync::Arc};
-use task::{TaskTemplate, TaskTemplates, VariableName};
+use task::TaskTemplate;
+use task::TaskTemplates;
+use task::VariableName;
 use util::paths::PathStyle;
 use util::rel_path::RelPath;
 
 pub(crate) fn semantic_token_rules() -> SemanticTokenRules {
-    let content = grammars::get_file("python/semantic_token_rules.json")
-        .expect("missing python/semantic_token_rules.json");
+    let content =
+        grammars::get_file("python/semantic_token_rules.json").expect("missing python/semantic_token_rules.json");
     let json = std::str::from_utf8(&content.data).expect("invalid utf-8 in semantic_token_rules");
     settings::parse_json_with_comments::<SemanticTokenRules>(json)
         .expect("failed to parse python semantic_token_rules.json")
@@ -40,11 +60,7 @@ async fn python_tool_binary(
     arguments: &[&str],
 ) -> Option<LanguageServerBinary> {
     let env = delegate.shell_env().await;
-    let in_venv = delegate
-        .worktree_root_path()
-        .join(VENV_DIR)
-        .join(VENV_BIN_DIR)
-        .join(tool);
+    let in_venv = delegate.worktree_root_path().join(VENV_DIR).join(VENV_BIN_DIR).join(tool);
     for candidate in [in_venv, PathBuf::from(tool)] {
         if let Some(path) = delegate.which(candidate.as_os_str()).await {
             return Some(LanguageServerBinary {
@@ -59,10 +75,7 @@ async fn python_tool_binary(
     Some(LanguageServerBinary {
         path: uvx,
         env: Some(env),
-        arguments: std::iter::once(tool)
-            .chain(arguments.iter().copied())
-            .map(Into::into)
-            .collect(),
+        arguments: std::iter::once(tool).chain(arguments.iter().copied()).map(Into::into).collect(),
     })
 }
 
@@ -73,14 +86,7 @@ impl ManifestProvider for PyprojectTomlManifestProvider {
         SharedString::new_static("pyproject.toml").into()
     }
 
-    fn search(
-        &self,
-        ManifestQuery {
-            path,
-            depth,
-            delegate,
-        }: ManifestQuery,
-    ) -> Option<Arc<RelPath>> {
+    fn search(&self, ManifestQuery { path, depth, delegate }: ManifestQuery) -> Option<Arc<RelPath>> {
         let mut innermost_pyproject = None;
         let mut outermost_workspace_root = None;
 
@@ -103,8 +109,8 @@ impl ManifestProvider for PyprojectTomlManifestProvider {
 }
 
 enum TestRunner {
-    UNITTEST,
-    PYTEST,
+    Unittest,
+    Pytest,
 }
 
 impl FromStr for TestRunner {
@@ -112,17 +118,14 @@ impl FromStr for TestRunner {
 
     fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
         match s {
-            "unittest" => Ok(Self::UNITTEST),
-            "pytest" => Ok(Self::PYTEST),
+            "unittest" => Ok(Self::Unittest),
+            "pytest" => Ok(Self::Pytest),
             _ => Err(()),
         }
     }
 }
 
-fn label_for_python_symbol(
-    symbol: &Symbol,
-    language: &Arc<language::Language>,
-) -> Option<language::CodeLabel> {
+fn label_for_python_symbol(symbol: &Symbol, language: &Arc<language::Language>) -> Option<language::CodeLabel> {
     let name = &symbol.name;
     let (text, filter_range, display_range) = match symbol.kind {
         language::SymbolKind::Method | language::SymbolKind::Function => {
@@ -148,9 +151,7 @@ fn label_for_python_symbol(
     Some(language::CodeLabel::new(
         text[display_range.clone()].to_string(),
         filter_range,
-        language
-            .highlight_text(text.as_str(), display_range)
-            .collect(),
+        language.highlight_text(text.as_str(), display_range).collect(),
     ))
 }
 
@@ -195,11 +196,7 @@ impl LspAdapter for TyLspAdapter {
         let highlight_id = highlight_id_for_completion(item.kind?, grammar)?;
 
         let mut text = label.clone();
-        if let Some(completion_details) = item
-            .label_details
-            .as_ref()
-            .and_then(|details| details.detail.as_ref())
-        {
+        if let Some(completion_details) = item.label_details.as_ref().and_then(|details| details.detail.as_ref()) {
             write!(&mut text, " {}", completion_details).ok();
         }
 
@@ -207,10 +204,7 @@ impl LspAdapter for TyLspAdapter {
             text,
             label_len,
             item.filter_text.as_deref(),
-            highlight_id
-                .map(|id| (0..label_len, id))
-                .into_iter()
-                .collect(),
+            highlight_id.map(|id| (0..label_len, id)).into_iter().collect(),
         ))
     }
 
@@ -229,10 +223,7 @@ impl LspAdapter for TyLspAdapter {
         cx: &mut AsyncApp,
     ) -> Result<Value> {
         let settings = cx
-            .update(|cx| {
-                language_server_settings(delegate.as_ref(), &self.name(), cx)
-                    .and_then(|s| s.settings.clone())
-            })
+            .update(|cx| language_server_settings(delegate.as_ref(), &self.name(), cx).and_then(|s| s.settings.clone()))
             .unwrap_or_else(|| json!({}));
         Ok(json!({ "ty": settings }))
     }
@@ -269,11 +260,9 @@ impl LspAdapter for RuffLspAdapter {
 
 pub(crate) struct PythonContextProvider;
 
-const PYTHON_TEST_TARGET_TASK_VARIABLE: VariableName =
-    VariableName::Custom(Cow::Borrowed("PYTHON_TEST_TARGET"));
+const PYTHON_TEST_TARGET_TASK_VARIABLE: VariableName = VariableName::Custom(Cow::Borrowed("PYTHON_TEST_TARGET"));
 
-const PYTHON_MODULE_NAME_TASK_VARIABLE: VariableName =
-    VariableName::Custom(Cow::Borrowed("PYTHON_MODULE_NAME"));
+const PYTHON_MODULE_NAME_TASK_VARIABLE: VariableName = VariableName::Custom(Cow::Borrowed("PYTHON_MODULE_NAME"));
 
 /// Every Python task runs through `uv run python`, so uv picks (and syncs) the
 /// project's `.venv`.
@@ -281,10 +270,7 @@ fn uv_python_task(label: String, args: impl IntoIterator<Item = String>) -> Task
     TaskTemplate {
         label,
         command: "uv".to_owned(),
-        args: ["run".to_owned(), "python".to_owned()]
-            .into_iter()
-            .chain(args)
-            .collect(),
+        args: ["run".to_owned(), "python".to_owned()].into_iter().chain(args).collect(),
         cwd: Some(VariableName::WorktreeRoot.template_value()),
         ..TaskTemplate::default()
     }
@@ -299,21 +285,15 @@ impl ContextProvider for PythonContextProvider {
         cx: &mut gpui::App,
     ) -> Task<Result<task::TaskVariables>> {
         let test_target = match selected_test_runner(Some(&location.file_location.buffer), cx) {
-            TestRunner::UNITTEST => self.build_unittest_target(variables),
-            TestRunner::PYTEST => self.build_pytest_target(variables),
+            TestRunner::Unittest => self.build_unittest_target(variables),
+            TestRunner::Pytest => self.build_pytest_target(variables),
         };
         let module_target = self.build_module_target(variables);
 
-        Task::ready(Ok(task::TaskVariables::from_iter(
-            test_target.into_iter().chain([module_target]),
-        )))
+        Task::ready(Ok(task::TaskVariables::from_iter(test_target.into_iter().chain([module_target]))))
     }
 
-    fn associated_tasks(
-        &self,
-        buffer: Option<Entity<Buffer>>,
-        cx: &App,
-    ) -> Task<Option<TaskTemplates>> {
+    fn associated_tasks(&self, buffer: Option<Entity<Buffer>>, cx: &App) -> Task<Option<TaskTemplates>> {
         let test_runner = selected_test_runner(buffer.as_ref(), cx);
         let file = VariableName::File.template_value_with_whitespace();
         let test_target = PYTHON_TEST_TARGET_TASK_VARIABLE.template_value_with_whitespace();
@@ -321,33 +301,21 @@ impl ContextProvider for PythonContextProvider {
         let mut tasks = vec![
             uv_python_task(
                 "execute selection".to_owned(),
-                [
-                    "-c".to_owned(),
-                    VariableName::SelectedText.template_value_with_whitespace(),
-                ],
+                ["-c".to_owned(), VariableName::SelectedText.template_value_with_whitespace()],
             ),
-            uv_python_task(
-                format!("run '{}'", VariableName::File.template_value()),
-                [file.clone()],
-            ),
+            uv_python_task(format!("run '{}'", VariableName::File.template_value()), [file.clone()]),
             TaskTemplate {
                 tags: vec!["python-module-main-method".to_owned()],
                 ..uv_python_task(
                     format!("run module '{}'", VariableName::File.template_value()),
-                    [
-                        "-m".to_owned(),
-                        PYTHON_MODULE_NAME_TASK_VARIABLE.template_value(),
-                    ],
+                    ["-m".to_owned(), PYTHON_MODULE_NAME_TASK_VARIABLE.template_value()],
                 )
             },
         ];
 
         let (runner, target_tags) = match test_runner {
-            TestRunner::UNITTEST => (
-                "unittest",
-                ["python-unittest-class", "python-unittest-method"],
-            ),
-            TestRunner::PYTEST => ("pytest", ["python-pytest-class", "python-pytest-method"]),
+            TestRunner::Unittest => ("unittest", ["python-unittest-class", "python-unittest-method"]),
+            TestRunner::Pytest => ("pytest", ["python-pytest-class", "python-pytest-method"]),
         };
         tasks.extend([
             // Run tests for an entire file
@@ -378,23 +346,16 @@ fn selected_test_runner(location: Option<&Entity<Buffer>>, cx: &App) -> TestRunn
         .variables
         .get(TEST_RUNNER_VARIABLE)
         .and_then(|val| TestRunner::from_str(val).ok())
-        .unwrap_or(TestRunner::PYTEST)
+        .unwrap_or(TestRunner::Pytest)
 }
 
 impl PythonContextProvider {
-    fn build_unittest_target(
-        &self,
-        variables: &task::TaskVariables,
-    ) -> Option<(VariableName, String)> {
-        let python_module_name =
-            python_module_name_from_relative_path(variables.get(&VariableName::RelativeFile)?)?;
+    fn build_unittest_target(&self, variables: &task::TaskVariables) -> Option<(VariableName, String)> {
+        let python_module_name = python_module_name_from_relative_path(variables.get(&VariableName::RelativeFile)?)?;
 
-        let unittest_class_name =
-            variables.get(&VariableName::Custom(Cow::Borrowed("_unittest_class_name")));
+        let unittest_class_name = variables.get(&VariableName::Custom(Cow::Borrowed("_unittest_class_name")));
 
-        let unittest_method_name = variables.get(&VariableName::Custom(Cow::Borrowed(
-            "_unittest_method_name",
-        )));
+        let unittest_method_name = variables.get(&VariableName::Custom(Cow::Borrowed("_unittest_method_name")));
 
         let unittest_target_str = match (unittest_class_name, unittest_method_name) {
             (Some(class_name), Some(method_name)) => {
@@ -406,23 +367,15 @@ impl PythonContextProvider {
             (None, Some(_)) => return None,
         };
 
-        Some((
-            PYTHON_TEST_TARGET_TASK_VARIABLE.clone(),
-            unittest_target_str,
-        ))
+        Some((PYTHON_TEST_TARGET_TASK_VARIABLE.clone(), unittest_target_str))
     }
 
-    fn build_pytest_target(
-        &self,
-        variables: &task::TaskVariables,
-    ) -> Option<(VariableName, String)> {
+    fn build_pytest_target(&self, variables: &task::TaskVariables) -> Option<(VariableName, String)> {
         let file_path = variables.get(&VariableName::RelativeFile)?;
 
-        let pytest_class_name =
-            variables.get(&VariableName::Custom(Cow::Borrowed("_pytest_class_name")));
+        let pytest_class_name = variables.get(&VariableName::Custom(Cow::Borrowed("_pytest_class_name")));
 
-        let pytest_method_name =
-            variables.get(&VariableName::Custom(Cow::Borrowed("_pytest_method_name")));
+        let pytest_method_name = variables.get(&VariableName::Custom(Cow::Borrowed("_pytest_method_name")));
 
         let pytest_target_str = match (pytest_class_name, pytest_method_name) {
             (Some(class_name), Some(method_name)) => {
@@ -443,7 +396,7 @@ impl PythonContextProvider {
     fn build_module_target(&self, variables: &task::TaskVariables) -> (VariableName, String) {
         let python_module_name = variables
             .get(&VariableName::RelativeFile)
-            .and_then(|module| python_module_name_from_relative_path(module))
+            .and_then(python_module_name_from_relative_path)
             .unwrap_or_default();
 
         (PYTHON_MODULE_NAME_TASK_VARIABLE.clone(), python_module_name)
@@ -453,10 +406,5 @@ impl PythonContextProvider {
 fn python_module_name_from_relative_path(relative_path: &str) -> Option<String> {
     let rel_path = RelPath::new(relative_path.as_ref(), PathStyle::local()).ok()?;
     let path_with_dots = rel_path.display(PathStyle::Unix).replace('/', ".");
-    Some(
-        path_with_dots
-            .strip_suffix(".py")
-            .map(ToOwned::to_owned)
-            .unwrap_or(path_with_dots),
-    )
+    Some(path_with_dots.strip_suffix(".py").map(ToOwned::to_owned).unwrap_or(path_with_dots))
 }

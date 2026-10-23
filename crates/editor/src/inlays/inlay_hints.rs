@@ -1,40 +1,63 @@
-use std::{
-    collections::hash_map,
-    ops::{ControlFlow, Range},
-    time::Duration,
-};
+use std::collections::hash_map;
+use std::ops::ControlFlow;
+use std::ops::Range;
+use std::time::Duration;
 
 use clock::Global;
-use collections::{HashMap, HashSet};
-use futures::{
-    FutureExt as _,
-    channel::oneshot,
-    future::{Shared, join_all},
-};
-use gpui::{App, Entity, Pixels, Task, TaskExt};
+use collections::HashMap;
+use collections::HashSet;
+use futures::FutureExt as _;
+use futures::channel::oneshot;
+use futures::future::Shared;
+use futures::future::join_all;
+use gpui::App;
+use gpui::Entity;
+use gpui::Pixels;
+use gpui::Task;
+use gpui::TaskExt;
 use itertools::Itertools;
-use language::{
-    BufferRow, BufferSnapshot,
-    language_settings::{InlayHintKind, InlayHintSettings},
-};
+use language::BufferRow;
+use language::BufferSnapshot;
+use language::language_settings::InlayHintKind;
+use language::language_settings::InlayHintSettings;
 use lsp::LanguageServerId;
-use multi_buffer::{Anchor, MultiBufferSnapshot};
-use project::{
-    CodeAction, HoverBlock, HoverBlockKind, InlayHint, InlayHintLabel, InlayHintLabelPartTooltip,
-    InlayHintTooltip, InvalidationStrategy, LspAction, ResolveState,
-    lsp_store::{CacheInlayHints, LspStore, ResolvedHint},
-};
-use text::{Bias, BufferId, ToOffset};
-use ui::{Context, Window};
+use multi_buffer::Anchor;
+use multi_buffer::MultiBufferSnapshot;
+use project::CodeAction;
+use project::HoverBlock;
+use project::HoverBlockKind;
+use project::InlayHint;
+use project::InlayHintLabel;
+use project::InlayHintLabelPartTooltip;
+use project::InlayHintTooltip;
+use project::InvalidationStrategy;
+use project::LspAction;
+use project::ResolveState;
+use project::lsp_store::CacheInlayHints;
+use project::lsp_store::LspStore;
+use project::lsp_store::ResolvedHint;
+use text::Bias;
+use text::BufferId;
+use text::ToOffset;
+use ui::Context;
+use ui::Window;
 
-use super::{Inlay, InlayId};
-use crate::{
-    AcceptInlayHint, DisplayPoint, Editor, EditorSnapshot, ToggleInlayHints, debounce_value,
-    display_map::{DisplayMap, DisplaySnapshot},
-    hover_links::{InlayHighlight, TriggerPoint, show_link_definition},
-    hover_popover::{self, InlayHover},
-    inlays::InlaySplice,
-};
+use super::Inlay;
+use super::InlayId;
+use crate::AcceptInlayHint;
+use crate::DisplayPoint;
+use crate::Editor;
+use crate::EditorSnapshot;
+use crate::ToggleInlayHints;
+use crate::debounce_value;
+use crate::display_map::DisplayMap;
+use crate::display_map::DisplaySnapshot;
+use crate::hover_links::InlayHighlight;
+use crate::hover_links::TriggerPoint;
+use crate::hover_links::show_link_definition;
+use crate::hover_popover::InlayHover;
+use crate::hover_popover::{self};
+use crate::inlays::InlaySplice;
 
 #[derive(Debug)]
 pub(crate) struct HoveredInlayHintCommand {
@@ -44,17 +67,11 @@ pub(crate) struct HoveredInlayHintCommand {
 }
 
 impl HoveredInlayHintCommand {
-    pub(crate) fn contains_glyph(
-        &self,
-        snapshot: &EditorSnapshot,
-        hint_glyph: Option<DisplayPoint>,
-    ) -> bool {
+    pub(crate) fn contains_glyph(&self, snapshot: &EditorSnapshot, hint_glyph: Option<DisplayPoint>) -> bool {
         if !snapshot.can_resolve(&self.highlight.inlay_position) {
             return false;
         }
-        let Some((hint, offset_in_hint)) =
-            hint_glyph.and_then(|glyph| snapshot.inlay_hint_at(glyph))
-        else {
+        let Some((hint, offset_in_hint)) = hint_glyph.and_then(|glyph| snapshot.inlay_hint_at(glyph)) else {
             return false;
         };
         hint.id == self.highlight.inlay && self.highlight.range.contains(&offset_in_hint)
@@ -64,7 +81,7 @@ impl HoveredInlayHintCommand {
 pub fn inlay_hint_settings(
     location: Anchor,
     snapshot: &MultiBufferSnapshot,
-    cx: &mut Context<Editor>,
+    cx: &Context<Editor>,
 ) -> InlayHintSettings {
     snapshot.language_settings_at(location, cx).inlay_hints
 }
@@ -167,11 +184,7 @@ impl LspInlayHintData {
         current_hints: impl IntoIterator<Item = Inlay>,
         snapshot: &MultiBufferSnapshot,
     ) {
-        if self
-            .hovered_command
-            .as_ref()
-            .is_some_and(|command| buffer_ids.contains(&command.buffer_id))
-        {
+        if self.hovered_command.as_ref().is_some_and(|command| buffer_ids.contains(&command.buffer_id)) {
             self.hovered_command = None;
         }
         self.remove_pending_text_edit(|target| buffer_ids.contains(&target.buffer_id));
@@ -187,10 +200,10 @@ impl LspInlayHintData {
             self.hint_chunk_fetching.remove(buffer_id);
         }
         for hint in current_hints {
-            if let Some((text_anchor, _)) = snapshot.anchor_to_buffer_anchor(hint.position) {
-                if buffer_ids.contains(&text_anchor.buffer_id) {
-                    self.added_hints.remove(&hint.id);
-                }
+            if let Some((text_anchor, _)) = snapshot.anchor_to_buffer_anchor(hint.position)
+                && buffer_ids.contains(&text_anchor.buffer_id)
+            {
+                self.added_hints.remove(&hint.id);
             }
         }
     }
@@ -213,22 +226,14 @@ impl LspInlayHintData {
     }
 
     pub(super) fn remove_pending_text_edit(&mut self, remove: impl FnOnce(&HintTarget) -> bool) {
-        if self
-            .pending_text_edit
-            .as_ref()
-            .is_some_and(|pending| remove(&pending.target))
-        {
+        if self.pending_text_edit.as_ref().is_some_and(|pending| remove(&pending.target)) {
             self.pending_text_edit = None;
         }
     }
 
     pub(super) fn remove_inlay(&mut self, inlay_id: &InlayId) {
         self.added_hints.remove(inlay_id);
-        if self
-            .hovered_command
-            .as_ref()
-            .is_some_and(|command| command.highlight.inlay == *inlay_id)
-        {
+        if self.hovered_command.as_ref().is_some_and(|command| command.highlight.inlay == *inlay_id) {
             self.hovered_command = None;
         }
     }
@@ -272,11 +277,7 @@ impl LspInlayHintData {
                                 .into_iter()
                                 .filter_map(|inlay| {
                                     let inlay_kind = self.added_hints.get(&inlay.id).copied()?;
-                                    if !self.allowed_hint_kinds.contains(&inlay_kind) {
-                                        Some(inlay.id)
-                                    } else {
-                                        None
-                                    }
+                                    if !self.allowed_hint_kinds.contains(&inlay_kind) { Some(inlay.id) } else { None }
                                 })
                                 .collect(),
                             to_insert: Vec::new(),
@@ -308,11 +309,7 @@ impl LspInlayHintData {
                             .into_iter()
                             .filter_map(|inlay| {
                                 let inlay_kind = self.added_hints.get(&inlay.id).copied()?;
-                                if !self.allowed_hint_kinds.contains(&inlay_kind) {
-                                    Some(inlay.id)
-                                } else {
-                                    None
-                                }
+                                if !self.allowed_hint_kinds.contains(&inlay_kind) { Some(inlay.id) } else { None }
                             })
                             .collect(),
                         to_insert: Vec::new(),
@@ -323,10 +320,7 @@ impl LspInlayHintData {
         }
     }
 
-    fn pending_refreshes(
-        &self,
-        buffer_ids: &HashSet<BufferId>,
-    ) -> Vec<Shared<oneshot::Receiver<()>>> {
+    fn pending_refreshes(&self, buffer_ids: &HashSet<BufferId>) -> Vec<Shared<oneshot::Receiver<()>>> {
         self.hint_refresh_tasks
             .iter()
             .filter(|(buffer_id, _)| buffer_ids.contains(buffer_id))
@@ -336,11 +330,11 @@ impl LspInlayHintData {
             .collect()
     }
 
-    fn should_refresh(&self) -> bool {
+    const fn should_refresh(&self) -> bool {
         self.enabled || self.modifiers_override
     }
 
-    fn should_show(&self) -> bool {
+    const fn should_show(&self) -> bool {
         self.enabled != self.modifiers_override
     }
 }
@@ -374,24 +368,11 @@ impl Editor {
         supports
     }
 
-    pub fn toggle_inlay_hints(
-        &mut self,
-        _: &ToggleInlayHints,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.refresh_inlay_hints(
-            InlayHintRefreshReason::Toggle(!self.inlay_hints_enabled()),
-            cx,
-        );
+    pub fn toggle_inlay_hints(&mut self, _: &ToggleInlayHints, _: &mut Window, cx: &mut Context<Self>) {
+        self.refresh_inlay_hints(InlayHintRefreshReason::Toggle(!self.inlay_hints_enabled()), cx);
     }
 
-    pub fn accept_inlay_hint(
-        &mut self,
-        _: &AcceptInlayHint,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn accept_inlay_hint(&mut self, _: &AcceptInlayHint, window: &mut Window, cx: &mut Context<Self>) {
         if !self.can_accept_inlay_hint(cx) {
             return;
         }
@@ -404,9 +385,7 @@ impl Editor {
             return;
         }
         let display_snapshot = self.display_snapshot(cx);
-        let targets = self
-            .inlay_hints_at_selections(&display_snapshot, cx)
-            .collect::<Vec<_>>();
+        let targets = self.inlay_hints_at_selections(&display_snapshot, cx).collect::<Vec<_>>();
         self.apply_inlay_hint_text_edits(targets.into_iter(), None, window, cx);
     }
 
@@ -415,9 +394,7 @@ impl Editor {
     }
 
     pub fn clear_inlay_hints(&mut self, cx: &mut Context<Self>) {
-        let to_remove = Self::visible_inlay_hints(self.display_map.read(cx))
-            .map(|inlay| inlay.id)
-            .collect::<Vec<_>>();
+        let to_remove = Self::visible_inlay_hints(self.display_map.read(cx)).map(|inlay| inlay.id).collect::<Vec<_>>();
         self.splice_inlays(&to_remove, Vec::new(), cx);
     }
 
@@ -439,9 +416,7 @@ impl Editor {
             }
             let buffer_id = hint.position.raw_text_anchor()?.buffer_id;
             let lsp_store = self.project()?.read(cx).lsp_store();
-            let resolved = lsp_store.update(cx, |lsp_store, cx| {
-                lsp_store.resolved_hint(buffer_id, hint.id, cx)
-            })?;
+            let resolved = lsp_store.update(cx, |lsp_store, cx| lsp_store.resolved_hint(buffer_id, hint.id, cx))?;
             Some((hint.id, buffer_id, resolved))
         });
         let Some((hint_id, buffer_id, resolved_hint)) = resolved_hint else {
@@ -470,16 +445,12 @@ impl Editor {
             let snapshot = editor.snapshot(window, cx);
             if snapshot.scroll_position() != scroll_position
                 || !editor.lsp_data_enabled()
-                || !editor
-                    .inlay_hints
-                    .as_ref()
-                    .is_some_and(|hints| hints.added_hints.contains_key(&hint_id))
+                || !editor.inlay_hints.as_ref().is_some_and(|hints| hints.added_hints.contains_key(&hint_id))
             {
                 return None;
             }
-            let (hovered_hint, offset_in_hint) = hint_glyph
-                .and_then(|glyph| snapshot.inlay_hint_at(glyph))
-                .filter(|(hint, _)| hint.id == hint_id)?;
+            let (hovered_hint, offset_in_hint) =
+                hint_glyph.and_then(|glyph| snapshot.inlay_hint_at(glyph)).filter(|(hint, _)| hint.id == hint_id)?;
             let mut go_to_definition_updated = false;
             let mut hover_task = None;
             let mut inlay_command_updated = false;
@@ -489,18 +460,8 @@ impl Editor {
                 .and_then(|inlay_hints| inlay_hints.hovered_command.as_ref())
                 .map(|command| command.highlight.clone());
             let original_text = cached_hint.text();
-            let actual_left_padding = if cached_hint.padding_left && !original_text.starts_with(" ")
-            {
-                1
-            } else {
-                0
-            };
-            let actual_right_padding = if cached_hint.padding_right && !original_text.ends_with(" ")
-            {
-                1
-            } else {
-                0
-            };
+            let actual_left_padding = if cached_hint.padding_left && !original_text.starts_with(" ") { 1 } else { 0 };
+            let actual_right_padding = if cached_hint.padding_right && !original_text.ends_with(" ") { 1 } else { 0 };
             match cached_hint.label {
                 InlayHintLabel::String(_) => {
                     if let Some(tooltip) = cached_hint.tooltip {
@@ -508,20 +469,17 @@ impl Editor {
                             editor,
                             InlayHover {
                                 tooltip: match tooltip {
-                                    InlayHintTooltip::String(text) => HoverBlock {
-                                        text,
-                                        kind: HoverBlockKind::PlainText,
-                                    },
-                                    InlayHintTooltip::MarkupContent(content) => HoverBlock {
-                                        text: content.value,
-                                        kind: content.kind,
-                                    },
+                                    InlayHintTooltip::String(text) => {
+                                        HoverBlock { text, kind: HoverBlockKind::PlainText }
+                                    }
+                                    InlayHintTooltip::MarkupContent(content) => {
+                                        HoverBlock { text: content.value, kind: content.kind }
+                                    }
                                 },
                                 range: InlayHighlight {
                                     inlay: hovered_hint.id,
                                     inlay_position: hovered_hint.position,
-                                    range: actual_left_padding
-                                        ..hovered_hint.text().len() - actual_right_padding,
+                                    range: actual_left_padding..hovered_hint.text().len() - actual_right_padding,
                                 },
                             },
                             window,
@@ -561,15 +519,11 @@ impl Editor {
                                 editor,
                                 InlayHover {
                                     tooltip: match tooltip {
-                                        InlayHintLabelPartTooltip::String(text) => HoverBlock {
-                                            text,
-                                            kind: HoverBlockKind::PlainText,
-                                        },
+                                        InlayHintLabelPartTooltip::String(text) => {
+                                            HoverBlock { text, kind: HoverBlockKind::PlainText }
+                                        }
                                         InlayHintLabelPartTooltip::MarkupContent(content) => {
-                                            HoverBlock {
-                                                text: content.value,
-                                                kind: content.kind,
-                                            }
+                                            HoverBlock { text: content.value, kind: content.kind }
                                         }
                                     },
                                     range: highlight.clone(),
@@ -616,9 +570,7 @@ impl Editor {
             hover_task
         };
         self.hover_state.hint_hover_task = match resolved_hint {
-            ResolvedHint::Resolved(hint) => {
-                update_hover(self, window, cx, hint, secondary_held, shift_held)
-            }
+            ResolvedHint::Resolved(hint) => update_hover(self, window, cx, hint, secondary_held, shift_held),
             ResolvedHint::Resolving(task) => Some(cx.spawn_in(window, async move |editor, cx| {
                 let Some(hint) = task.await else {
                     return;
@@ -643,34 +595,21 @@ impl Editor {
         self.lsp_data_enabled()
             && !self.read_only(cx)
             && self.project().is_some()
-            && self
-                .inlay_hints
-                .as_ref()
-                .is_some_and(|inlay_hints| inlay_hints.should_show())
+            && self.inlay_hints.as_ref().is_some_and(|inlay_hints| inlay_hints.should_show())
     }
 
     pub(crate) fn inlay_hint_visibility_changed(&mut self, cx: &mut Context<Self>) {
-        if self
-            .inlay_hints
-            .as_ref()
-            .is_none_or(|inlay_hints| inlay_hints.pending_text_edit.is_none())
-        {
+        if self.inlay_hints.as_ref().is_none_or(|inlay_hints| inlay_hints.pending_text_edit.is_none()) {
             return;
         }
         let display_snapshot = self.display_snapshot(cx);
         if let Some(inlay_hints) = &mut self.inlay_hints {
-            inlay_hints.remove_pending_text_edit(|target| {
-                !display_snapshot.is_inlay_visible(target.hint_id, target.position)
-            });
+            inlay_hints
+                .remove_pending_text_edit(|target| !display_snapshot.is_inlay_visible(target.hint_id, target.position));
         }
     }
 
-    pub(crate) fn is_inlay_hint_resolved(
-        &self,
-        buffer_id: BufferId,
-        hint_id: InlayId,
-        cx: &App,
-    ) -> bool {
+    pub(crate) fn is_inlay_hint_resolved(&self, buffer_id: BufferId, hint_id: InlayId, cx: &App) -> bool {
         self.project().is_some_and(|project| {
             project
                 .read(cx)
@@ -706,27 +645,19 @@ impl Editor {
             let Some((has_text_edits, resolved)) = lsp_store
                 .read(cx)
                 .cached_inlay_hint(target.buffer_id, target.hint_id)
-                .map(|hint| {
-                    (
-                        hint.has_text_edits(),
-                        hint.resolve_state == ResolveState::Resolved,
-                    )
-                })
+                .map(|hint| (hint.has_text_edits(), hint.resolve_state == ResolveState::Resolved))
             else {
-                if self.accept_inlay_hint_after_refresh(
-                    clicked_label_offset.map(|offset| (target, offset)),
-                    window,
-                    cx,
-                ) {
+                if self.accept_inlay_hint_after_refresh(clicked_label_offset.map(|offset| (target, offset)), window, cx)
+                {
                     return true;
                 }
                 continue;
             };
             let needs_resolve = !has_text_edits || (clicked_label_offset.is_some() && !resolved);
             let resolve = if needs_resolve {
-                match lsp_store.update(cx, |lsp_store, cx| {
-                    lsp_store.resolved_hint(target.buffer_id, target.hint_id, cx)
-                }) {
+                match lsp_store
+                    .update(cx, |lsp_store, cx| lsp_store.resolved_hint(target.buffer_id, target.hint_id, cx))
+                {
                     Some(ResolvedHint::Resolving(resolve)) => Some(resolve),
                     Some(ResolvedHint::Resolved(_)) if has_text_edits => None,
                     Some(ResolvedHint::Resolved(_)) | None => continue,
@@ -760,12 +691,7 @@ impl Editor {
                                         cx,
                                     )
                                 {
-                                    editor.apply_inlay_hint_text_edits(
-                                        targets,
-                                        clicked_label_offset,
-                                        window,
-                                        cx,
-                                    );
+                                    editor.apply_inlay_hint_text_edits(targets, clicked_label_offset, window, cx);
                                 }
                             })
                             .ok();
@@ -773,8 +699,7 @@ impl Editor {
                 });
                 return true;
             }
-            if self.apply_inlay_hint_text_edit(&lsp_store, target, clicked_label_offset, window, cx)
-            {
+            if self.apply_inlay_hint_text_edit(&lsp_store, target, clicked_label_offset, window, cx) {
                 return true;
             }
         }
@@ -783,11 +708,7 @@ impl Editor {
 
     /// Updates inlay hints for the visible ranges of the singleton buffer(s).
     /// Based on its parameters, either invalidates the previous data, or appends to it.
-    pub(crate) fn refresh_inlay_hints(
-        &mut self,
-        reason: InlayHintRefreshReason,
-        cx: &mut Context<Self>,
-    ) {
+    pub(crate) fn refresh_inlay_hints(&mut self, reason: InlayHintRefreshReason, cx: &mut Context<Self>) {
         if !self.lsp_data_enabled() || self.inlay_hints.is_none() {
             return;
         }
@@ -823,38 +744,24 @@ impl Editor {
             | InlayHintRefreshReason::ServerRemoved
             | InlayHintRefreshReason::LanguageServerRegistered
             | InlayHintRefreshReason::RefreshRequested { .. } => true,
-            InlayHintRefreshReason::NewLinesShown | InlayHintRefreshReason::BuffersRemoved(_) => {
-                false
-            }
+            InlayHintRefreshReason::NewLinesShown | InlayHintRefreshReason::BuffersRemoved(_) => false,
             InlayHintRefreshReason::BufferEdited(buffer_id) => {
-                let Some(affected_language) = self
-                    .buffer()
-                    .read(cx)
-                    .buffer(buffer_id)
-                    .and_then(|buffer| buffer.read(cx).language().cloned())
+                let Some(affected_language) =
+                    self.buffer().read(cx).buffer(buffer_id).and_then(|buffer| buffer.read(cx).language().cloned())
                 else {
                     return;
                 };
 
-                invalidate_hints_for_buffers.extend(
-                    self.buffer()
-                        .read(cx)
-                        .all_buffers()
-                        .into_iter()
-                        .filter_map(|buffer| {
-                            let buffer = buffer.read(cx);
-                            if buffer.language() == Some(&affected_language) {
-                                Some(buffer.remote_id())
-                            } else {
-                                None
-                            }
-                        }),
-                );
+                invalidate_hints_for_buffers.extend(self.buffer().read(cx).all_buffers().into_iter().filter_map(
+                    |buffer| {
+                        let buffer = buffer.read(cx);
+                        if buffer.language() == Some(&affected_language) { Some(buffer.remote_id()) } else { None }
+                    },
+                ));
 
                 semantics_provider.invalidate_inlay_hints(&invalidate_hints_for_buffers, cx);
-                visible_excerpts.retain(|(buffer_snapshot, _, _)| {
-                    buffer_snapshot.language() == Some(&affected_language)
-                });
+                visible_excerpts
+                    .retain(|(buffer_snapshot, _, _)| buffer_snapshot.language() == Some(&affected_language));
                 false
             }
         };
@@ -865,9 +772,7 @@ impl Editor {
             return;
         };
 
-        if invalidate_cache.should_invalidate()
-            && !matches!(reason, InlayHintRefreshReason::RefreshRequested { .. })
-        {
+        if invalidate_cache.should_invalidate() && !matches!(reason, InlayHintRefreshReason::RefreshRequested { .. }) {
             if invalidate_hints_for_buffers.is_empty() {
                 inlay_hints.clear();
             } else {
@@ -878,9 +783,7 @@ impl Editor {
                 );
             }
         }
-        inlay_hints
-            .invalidate_hints_for_buffers
-            .extend(invalidate_hints_for_buffers);
+        inlay_hints.invalidate_hints_for_buffers.extend(invalidate_hints_for_buffers);
 
         let mut buffers_to_query = HashMap::default();
         for (buffer_snapshot, visible_range, _) in visible_excerpts {
@@ -895,17 +798,14 @@ impl Editor {
             };
 
             let buffer_version = buffer_snapshot.version().clone();
-            let buffer_anchor_range = buffer_snapshot.anchor_before(visible_range.start)
-                ..buffer_snapshot.anchor_after(visible_range.end);
+            let buffer_anchor_range =
+                buffer_snapshot.anchor_before(visible_range.start)..buffer_snapshot.anchor_after(visible_range.end);
 
-            let visible_excerpts =
-                buffers_to_query
-                    .entry(buffer_id)
-                    .or_insert_with(|| VisibleExcerpts {
-                        ranges: Vec::new(),
-                        buffer_version: buffer_version.clone(),
-                        buffer: buffer.clone(),
-                    });
+            let visible_excerpts = buffers_to_query.entry(buffer_id).or_insert_with(|| VisibleExcerpts {
+                ranges: Vec::new(),
+                buffer_version: buffer_version.clone(),
+                buffer: buffer.clone(),
+            });
             visible_excerpts.buffer_version = buffer_version;
             visible_excerpts.ranges.push(buffer_anchor_range);
         }
@@ -915,15 +815,9 @@ impl Editor {
                 continue;
             };
 
-            let (fetched_for_version, fetched_chunks) = inlay_hints
-                .hint_chunk_fetching
-                .entry(buffer_id)
-                .or_default();
-            if visible_excerpts
-                .buffer_version
-                .changed_since(fetched_for_version)
-            {
-                *fetched_for_version = visible_excerpts.buffer_version.clone();
+            let (fetched_for_version, fetched_chunks) = inlay_hints.hint_chunk_fetching.entry(buffer_id).or_default();
+            if visible_excerpts.buffer_version.changed_since(fetched_for_version) {
+                fetched_for_version.clone_from(&visible_excerpts.buffer_version);
                 fetched_chunks.clear();
                 inlay_hints.hint_refresh_tasks.remove(&buffer_id);
             }
@@ -940,19 +834,15 @@ impl Editor {
             if applicable_chunks.is_empty() && !ignore_previous_fetches {
                 continue;
             }
-            inlay_hints
-                .hint_refresh_tasks
-                .entry(buffer_id)
-                .or_default()
-                .push(spawn_editor_hints_refresh(
-                    buffer_id,
-                    invalidate_cache,
-                    debounce,
-                    visible_excerpts,
-                    known_chunks,
-                    applicable_chunks,
-                    cx,
-                ));
+            inlay_hints.hint_refresh_tasks.entry(buffer_id).or_default().push(spawn_editor_hints_refresh(
+                buffer_id,
+                invalidate_cache,
+                debounce,
+                visible_excerpts,
+                known_chunks,
+                applicable_chunks,
+                cx,
+            ));
         }
     }
 
@@ -961,15 +851,16 @@ impl Editor {
     }
 
     pub(crate) fn activate_hovered_inlay_hint_command(
-        &mut self,
+        &self,
         snapshot: &EditorSnapshot,
         down: Option<DisplayPoint>,
         up: Option<DisplayPoint>,
         cx: &mut Context<Self>,
     ) -> bool {
-        let Some(state) = self.hovered_inlay_hint_command().filter(|state| {
-            state.contains_glyph(snapshot, down) && state.contains_glyph(snapshot, up)
-        }) else {
+        let Some(state) = self
+            .hovered_inlay_hint_command()
+            .filter(|state| state.contains_glyph(snapshot, down) && state.contains_glyph(snapshot, up))
+        else {
             return false;
         };
         let Some(buffer) = self.buffer().read(cx).buffer(state.buffer_id) else {
@@ -979,19 +870,12 @@ impl Editor {
             return false;
         };
         let action = state.action.clone();
-        project
-            .update(cx, |project, cx| {
-                project.apply_code_action(buffer, action, true, cx)
-            })
-            .detach_and_log_err(cx);
+        project.update(cx, |project, cx| project.apply_code_action(buffer, action, true, cx)).detach_and_log_err(cx);
         true
     }
 
     fn is_buffer_read_only(&self, buffer_id: BufferId, cx: &App) -> bool {
-        self.buffer
-            .read(cx)
-            .buffer(buffer_id)
-            .is_none_or(|buffer| buffer.read(cx).read_only())
+        self.buffer.read(cx).buffer(buffer_id).is_none_or(|buffer| buffer.read(cx).read_only())
     }
 
     fn apply_inlay_hint_text_edit(
@@ -1005,16 +889,9 @@ impl Editor {
         if !self.lsp_data_enabled() || self.read_only(cx) {
             return false;
         }
-        let HintTarget {
-            buffer_id,
-            hint_id,
-            position,
-        } = target;
+        let HintTarget { buffer_id, hint_id, position } = target;
         let display_snapshot = self.display_snapshot(cx);
-        if !self
-            .inlay_hints
-            .as_ref()
-            .is_some_and(|inlay_hints| inlay_hints.added_hints.contains_key(&hint_id))
+        if !self.inlay_hints.as_ref().is_some_and(|inlay_hints| inlay_hints.added_hints.contains_key(&hint_id))
             || !display_snapshot.is_inlay_visible(hint_id, position)
         {
             return false;
@@ -1027,23 +904,14 @@ impl Editor {
             return false;
         };
         if clicked_label_offset.is_some_and(|offset| {
-            cached_hint.resolve_state != ResolveState::Resolved
-                || label_part_has_command(cached_hint, offset)
+            cached_hint.resolve_state != ResolveState::Resolved || label_part_has_command(cached_hint, offset)
         }) {
             return false;
         }
-        let Some(text_edits) = cached_hint
-            .text_edits
-            .clone()
-            .filter(|text_edits| !text_edits.edits.is_empty())
-        else {
+        let Some(text_edits) = cached_hint.text_edits.clone().filter(|text_edits| !text_edits.edits.is_empty()) else {
             return false;
         };
-        if buffer_snapshot.read_only()
-            || !buffer_snapshot
-                .version()
-                .observed_all(&text_edits.buffer_version)
-        {
+        if buffer_snapshot.read_only() || !buffer_snapshot.version().observed_all(&text_edits.buffer_version) {
             return false;
         }
         self.finalize_last_transaction(cx);
@@ -1058,7 +926,7 @@ impl Editor {
     fn accept_inlay_hint_after_refresh(
         &mut self,
         clicked_hint: Option<(HintTarget, usize)>,
-        window: &mut Window,
+        window: &Window,
         cx: &mut Context<Self>,
     ) -> bool {
         let snapshot = self.display_snapshot(cx);
@@ -1082,11 +950,7 @@ impl Editor {
             self.selections
                 .all_adjusted(&snapshot)
                 .into_iter()
-                .flat_map(|selection| {
-                    snapshot
-                        .buffer_snapshot()
-                        .range_to_buffer_ranges(selection.range())
-                })
+                .flat_map(|selection| snapshot.buffer_snapshot().range_to_buffer_ranges(selection.range()))
                 .map(|(buffer, _, _)| buffer.remote_id())
                 .collect::<HashSet<_>>()
         };
@@ -1107,9 +971,9 @@ impl Editor {
                     if join_all(refreshes).await.iter().any(Result::is_err) {
                         break false;
                     }
-                    let Ok(Some(pending)) = editor.read_with(cx, |editor, _| {
-                        Some(editor.inlay_hints.as_ref()?.pending_refreshes(&buffer_ids))
-                    }) else {
+                    let Ok(Some(pending)) = editor
+                        .read_with(cx, |editor, _| Some(editor.inlay_hints.as_ref()?.pending_refreshes(&buffer_ids)))
+                    else {
                         return;
                     };
                     if pending.is_empty() {
@@ -1135,29 +999,20 @@ impl Editor {
                             let position = target.position.bias_right(buffer_snapshot);
                             let hint = Self::visible_inlay_hints(editor.display_map.read(cx))
                                 .filter(|hint| {
-                                    hint.position
-                                        .bias_right(buffer_snapshot)
-                                        .cmp(&position, buffer_snapshot)
-                                        .is_eq()
+                                    hint.position.bias_right(buffer_snapshot).cmp(&position, buffer_snapshot).is_eq()
                                         && hint.text().chars().eq(text.chars())
                                         && snapshot.is_inlay_visible(hint.id, hint.position)
                                 })
                                 .exactly_one()
                                 .ok()?;
-                            vec![HintTarget {
-                                hint_id: hint.id,
-                                position: hint.position,
-                                ..*target
-                            }]
+                            vec![HintTarget { hint_id: hint.id, position: hint.position, ..*target }]
                         } else {
                             if editor.selections.all_anchors(&snapshot) != selections
                                 || editor.selections.line_mode() != line_mode
                             {
                                 return None;
                             }
-                            editor
-                                .inlay_hints_at_selections(&snapshot, cx)
-                                .collect::<Vec<_>>()
+                            editor.inlay_hints_at_selections(&snapshot, cx).collect::<Vec<_>>()
                         };
                         editor.apply_inlay_hint_text_edits(
                             targets.into_iter(),
@@ -1183,29 +1038,23 @@ impl Editor {
     ) -> impl Iterator<Item = HintTarget> + 'a {
         let inlays = self.display_map.read(cx).current_inlays().as_slice();
         let buffer_snapshot = display_snapshot.buffer_snapshot();
-        self.selections
-            .all_adjusted(display_snapshot)
-            .into_iter()
-            .flat_map(move |selection| {
-                let start = buffer_snapshot.anchor_before(selection.start);
-                let end = buffer_snapshot.anchor_after(selection.end);
-                let first_inlay = inlays
-                    .partition_point(|inlay| inlay.position.cmp(&start, buffer_snapshot).is_lt());
-                inlays[first_inlay..]
-                    .iter()
-                    .take_while(move |inlay| inlay.position.cmp(&end, buffer_snapshot).is_le())
-                    .filter(|inlay| matches!(inlay.id, InlayId::Hint(_)))
-                    .filter(move |inlay| {
-                        display_snapshot.is_inlay_visible(inlay.id, inlay.position)
+        self.selections.all_adjusted(display_snapshot).into_iter().flat_map(move |selection| {
+            let start = buffer_snapshot.anchor_before(selection.start);
+            let end = buffer_snapshot.anchor_after(selection.end);
+            let first_inlay = inlays.partition_point(|inlay| inlay.position.cmp(&start, buffer_snapshot).is_lt());
+            inlays[first_inlay..]
+                .iter()
+                .take_while(move |inlay| inlay.position.cmp(&end, buffer_snapshot).is_le())
+                .filter(|inlay| matches!(inlay.id, InlayId::Hint(_)))
+                .filter(move |inlay| display_snapshot.is_inlay_visible(inlay.id, inlay.position))
+                .filter_map(|inlay| {
+                    Some(HintTarget {
+                        buffer_id: inlay.position.raw_text_anchor()?.buffer_id,
+                        hint_id: inlay.id,
+                        position: inlay.position,
                     })
-                    .filter_map(|inlay| {
-                        Some(HintTarget {
-                            buffer_id: inlay.position.raw_text_anchor()?.buffer_id,
-                            hint_id: inlay.id,
-                            position: inlay.position,
-                        })
-                    })
-            })
+                })
+        })
     }
 
     fn refresh_editor_data(
@@ -1213,22 +1062,16 @@ impl Editor {
         reason: &InlayHintRefreshReason,
         cx: &mut Context<'_, Editor>,
     ) -> Option<InvalidationStrategy> {
-        let Some(inlay_hints) = self.inlay_hints.as_mut() else {
-            return None;
-        };
+        let inlay_hints = self.inlay_hints.as_mut()?;
 
         let invalidate_cache = match reason {
             InlayHintRefreshReason::ModifiersChanged(enabled) => {
-                match inlay_hints.modifiers_override(*enabled) {
-                    Some(enabled) => {
-                        if enabled {
-                            InvalidationStrategy::None
-                        } else {
-                            self.clear_inlay_hints(cx);
-                            return None;
-                        }
-                    }
-                    None => return None,
+                let enabled = inlay_hints.modifiers_override(*enabled)?;
+                if enabled {
+                    InvalidationStrategy::None
+                } else {
+                    self.clear_inlay_hints(cx);
+                    return None;
                 }
             }
             InlayHintRefreshReason::Toggle(enabled) => {
@@ -1244,23 +1087,15 @@ impl Editor {
                 }
             }
             InlayHintRefreshReason::SettingsChange(new_settings) => {
-                let visible_inlay_hints =
-                    Self::visible_inlay_hints(self.display_map.read(cx)).collect::<Vec<_>>();
+                let visible_inlay_hints = Self::visible_inlay_hints(self.display_map.read(cx)).collect::<Vec<_>>();
                 match inlay_hints.update_settings(*new_settings, visible_inlay_hints) {
-                    ControlFlow::Break(Some(InlaySplice {
-                        to_remove,
-                        to_insert,
-                    })) => {
+                    ControlFlow::Break(Some(InlaySplice { to_remove, to_insert })) => {
                         self.splice_inlays(&to_remove, to_insert, cx);
                         return None;
                     }
                     ControlFlow::Break(None) => return None,
                     ControlFlow::Continue(splice) => {
-                        if let Some(InlaySplice {
-                            to_remove,
-                            to_insert,
-                        }) = splice
-                        {
+                        if let Some(InlaySplice { to_remove, to_insert }) = splice {
                             self.splice_inlays(&to_remove, to_insert, cx);
                         }
                         InvalidationStrategy::None
@@ -1274,32 +1109,23 @@ impl Editor {
                     .current_inlays()
                     .filter_map(|inlay| {
                         let anchor = inlay.position.raw_text_anchor()?;
-                        if buffers_removed.contains(&anchor.buffer_id) {
-                            Some(inlay.id)
-                        } else {
-                            None
-                        }
+                        if buffers_removed.contains(&anchor.buffer_id) { Some(inlay.id) } else { None }
                     })
                     .collect::<Vec<_>>();
                 self.splice_inlays(&to_remove, Vec::new(), cx);
                 return None;
             }
             InlayHintRefreshReason::ServerRemoved => InvalidationStrategy::BufferEdited,
-            InlayHintRefreshReason::NewLinesShown
-            | InlayHintRefreshReason::LanguageServerRegistered => InvalidationStrategy::None,
+            InlayHintRefreshReason::NewLinesShown | InlayHintRefreshReason::LanguageServerRegistered => {
+                InvalidationStrategy::None
+            }
             InlayHintRefreshReason::BufferEdited(_) => InvalidationStrategy::BufferEdited,
             InlayHintRefreshReason::RefreshRequested { server_id } => {
-                InvalidationStrategy::RefreshRequested {
-                    server_id: *server_id,
-                }
+                InvalidationStrategy::RefreshRequested { server_id: *server_id }
             }
         };
 
-        if !self
-            .inlay_hints
-            .as_ref()
-            .is_some_and(LspInlayHintData::should_refresh)
-        {
+        if !self.inlay_hints.as_ref().is_some_and(LspInlayHintData::should_refresh) {
             return None;
         }
 
@@ -1307,14 +1133,11 @@ impl Editor {
     }
 
     fn visible_inlay_hints(display_map: &DisplayMap) -> impl Iterator<Item = Inlay> + use<'_> {
-        display_map
-            .current_inlays()
-            .filter(move |inlay| matches!(inlay.id, InlayId::Hint(_)))
-            .cloned()
+        display_map.current_inlays().filter(move |inlay| matches!(inlay.id, InlayId::Hint(_))).cloned()
     }
 
     fn inlay_hints_for_buffer(
-        &mut self,
+        &self,
         invalidate_cache: InvalidationStrategy,
         buffer_excerpts: VisibleExcerpts,
         known_chunks: Option<(Global, HashSet<Range<BufferRow>>)>,
@@ -1323,20 +1146,12 @@ impl Editor {
         let semantics_provider = self.semantics_provider()?;
 
         let new_hint_tasks = semantics_provider
-            .inlay_hints(
-                invalidate_cache,
-                buffer_excerpts.buffer,
-                buffer_excerpts.ranges,
-                known_chunks,
-                cx,
-            )
+            .inlay_hints(invalidate_cache, buffer_excerpts.buffer, buffer_excerpts.ranges, known_chunks, cx)
             .unwrap_or_default();
 
         let mut hint_tasks = None;
         for (row_range, new_hints_task) in new_hint_tasks {
-            hint_tasks
-                .get_or_insert_with(Vec::new)
-                .push(cx.spawn(async move |_, _| (row_range, new_hints_task.await)));
+            hint_tasks.get_or_insert_with(Vec::new).push(cx.spawn(async move |_, _| (row_range, new_hints_task.await)));
         }
         hint_tasks
     }
@@ -1362,11 +1177,7 @@ impl Editor {
             return;
         };
         let should_show = inlay_hints.should_show();
-        let Some(buffer_snapshot) = self
-            .buffer
-            .read(cx)
-            .buffer(buffer_id)
-            .map(|buffer| buffer.read(cx).snapshot())
+        let Some(buffer_snapshot) = self.buffer.read(cx).buffer(buffer_id).map(|buffer| buffer.read(cx).snapshot())
         else {
             return;
         };
@@ -1394,8 +1205,7 @@ impl Editor {
             // edit task) would have their hints removed but remain marked as "already
             // fetched" in hint_chunk_fetching, preventing re-fetch on the next
             // NewLinesShown. Fix: retain only chunks that this task has results for.
-            let task_chunk_ranges: HashSet<&Range<BufferRow>> =
-                new_hints.iter().map(|(range, _)| range).collect();
+            let task_chunk_ranges: HashSet<&Range<BufferRow>> = new_hints.iter().map(|(range, _)| range).collect();
             if let Some((_, fetched_chunks)) = inlay_hints.hint_chunk_fetching.get_mut(&buffer_id) {
                 fetched_chunks.retain(|chunk| task_chunk_ranges.contains(chunk));
             }
@@ -1403,11 +1213,7 @@ impl Editor {
 
         // Already displayed hints that survive this splice: `added_hints` keeps them from
         // being re-inserted, so they must take part in the shared-bias decision explicitly.
-        let surviving_visible_hints = if invalidating
-            || inlay_hints
-                .invalidate_hints_for_buffers
-                .contains(&buffer_id)
-        {
+        let surviving_visible_hints = if invalidating || inlay_hints.invalidate_hints_for_buffers.contains(&buffer_id) {
             Vec::new()
         } else {
             visible_hints_for_buffer
@@ -1427,21 +1233,19 @@ impl Editor {
                 let chunks_fetched = inlay_hints.hint_chunk_fetching.get_mut(&buffer_id);
                 match hints_result {
                     Ok(new_hints) => {
-                        if new_hints.is_empty() {
-                            if let Some((_, chunks_fetched)) = chunks_fetched {
-                                chunks_fetched.remove(&chunk_range);
-                            }
+                        if new_hints.is_empty()
+                            && let Some((_, chunks_fetched)) = chunks_fetched
+                        {
+                            chunks_fetched.remove(&chunk_range);
                         }
                         Some(new_hints)
                     }
                     Err(e) => {
-                        log::error!(
-                            "Failed to query inlays for buffer row range {chunk_range:?}, {e:#}"
-                        );
-                        if let Some((for_version, chunks_fetched)) = chunks_fetched {
-                            if for_version == &query_version {
-                                chunks_fetched.remove(&chunk_range);
-                            }
+                        log::error!("Failed to query inlays for buffer row range {chunk_range:?}, {e:#}");
+                        if let Some((for_version, chunks_fetched)) = chunks_fetched
+                            && for_version == &query_version
+                        {
+                            chunks_fetched.remove(&chunk_range);
                         }
                         None
                     }
@@ -1458,28 +1262,17 @@ impl Editor {
             })
             .collect::<Vec<_>>();
 
-        let rebiased_inlays = normalize_hint_biases(
-            &mut new_hints,
-            surviving_visible_hints,
-            &buffer_snapshot,
-            &multi_buffer_snapshot,
-        );
+        let rebiased_inlays =
+            normalize_hint_biases(&mut new_hints, surviving_visible_hints, &buffer_snapshot, &multi_buffer_snapshot);
 
         // `splice_inlays` drops removed ids from `added_hints`: remember the kinds to
         // restore, falling back to the fetched copy's kind if the id was not tracked.
         let rebiased_kinds = rebiased_inlays
             .iter()
             .filter_map(|inlay| {
-                let kind = inlay_hints
-                    .added_hints
-                    .get(&inlay.id)
-                    .copied()
-                    .or_else(|| {
-                        new_hints
-                            .iter()
-                            .find(|(_, hint_id, _, _)| *hint_id == inlay.id)
-                            .map(|(_, _, hint, _)| hint.kind)
-                    })?;
+                let kind = inlay_hints.added_hints.get(&inlay.id).copied().or_else(|| {
+                    new_hints.iter().find(|(_, hint_id, _, _)| *hint_id == inlay.id).map(|(_, _, hint, _)| hint.kind)
+                })?;
                 Some((inlay.id, kind))
             })
             .collect::<Vec<_>>();
@@ -1487,10 +1280,7 @@ impl Editor {
 
         // Ids that must not be inserted from `new_hints`: re-biased inlays are re-inserted
         // separately, and each id is inserted at most once per batch.
-        let mut seen_ids = rebiased_inlays
-            .iter()
-            .map(|inlay| inlay.id)
-            .collect::<HashSet<InlayId>>();
+        let mut seen_ids = rebiased_inlays.iter().map(|inlay| inlay.id).collect::<HashSet<InlayId>>();
 
         // Already displayed hints go first, so they claim the (offset, text) dedup slot and
         // suppress identical copies from other servers, independently of the servers'
@@ -1499,23 +1289,16 @@ impl Editor {
             !(inlay_hints.added_hints.contains_key(hint_id) || seen_ids.contains(hint_id))
         });
 
-        let mut inserted_hint_text: HashMap<usize, HashMap<String, LanguageServerId>> =
-            HashMap::default();
+        let mut inserted_hint_text: HashMap<usize, HashMap<String, LanguageServerId>> = HashMap::default();
         let new_hints = new_hints
             .into_iter()
             // Hidden kinds must not claim a dedup slot, or they could suppress a visible
             // identical hint from another server.
-            .filter(|(_, _, hint, _)| {
-                should_show && inlay_hints.allowed_hint_kinds.contains(&hint.kind)
-            })
+            .filter(|(_, _, hint, _)| should_show && inlay_hints.allowed_hint_kinds.contains(&hint.kind))
             // Deduplicate identical hints from different servers by (offset, text),
             // independently of the anchor bias.
             .filter(|(server_id, _, hint, offset)| {
-                match inserted_hint_text
-                    .entry(*offset)
-                    .or_default()
-                    .entry(hint.text().to_string())
-                {
+                match inserted_hint_text.entry(*offset).or_default().entry(hint.text().to_string()) {
                     hash_map::Entry::Occupied(o) => o.get() == server_id,
                     hash_map::Entry::Vacant(v) => {
                         v.insert(*server_id);
@@ -1524,9 +1307,7 @@ impl Editor {
                 }
             })
             // Skip already shown hints; `added_hints` is updated after the splice.
-            .filter(|(_, hint_id, _, _)| {
-                !inlay_hints.added_hints.contains_key(hint_id) && seen_ids.insert(*hint_id)
-            })
+            .filter(|(_, hint_id, _, _)| !inlay_hints.added_hints.contains_key(hint_id) && seen_ids.insert(*hint_id))
             .map(|(_, hint_id, hint, _)| (hint_id, hint))
             .sorted_by(|(_, a), (_, b)| a.position.cmp(&b.position, &buffer_snapshot))
             .collect::<Vec<_>>();
@@ -1540,23 +1321,18 @@ impl Editor {
                     .text_anchors_to_visible_anchors(new_hints.iter().map(|(_, h)| h.position))
                     .into_iter()
                     .zip(&new_hints)
-                    .filter_map(|(position, (hint_id, hint))| {
-                        Some(Inlay::hint(*hint_id, position?, hint))
-                    }),
+                    .filter_map(|(position, (hint_id, hint))| Some(Inlay::hint(*hint_id, position?, hint))),
             )
             .collect();
 
-        let invalidate_hints_for_buffers =
-            std::mem::take(&mut inlay_hints.invalidate_hints_for_buffers);
+        let invalidate_hints_for_buffers = std::mem::take(&mut inlay_hints.invalidate_hints_for_buffers);
         if !invalidate_hints_for_buffers.is_empty() {
             hints_to_remove.extend(
                 Self::visible_inlay_hints(self.display_map.read(cx))
                     .filter(|inlay| {
                         multi_buffer_snapshot
                             .anchor_to_buffer_anchor(inlay.position)
-                            .is_none_or(|(anchor, _)| {
-                                invalidate_hints_for_buffers.contains(&anchor.buffer_id)
-                            })
+                            .is_none_or(|(anchor, _)| invalidate_hints_for_buffers.contains(&anchor.buffer_id))
                     })
                     .map(|inlay| inlay.id),
             );
@@ -1568,9 +1344,7 @@ impl Editor {
         // `added_hints`, including re-biased hints re-inserted under the same id.
         if let Some(inlay_hints) = &mut self.inlay_hints {
             let fetched = new_hints.iter().map(|(id, hint)| (*id, hint.kind));
-            inlay_hints
-                .added_hints
-                .extend(rebiased_kinds.into_iter().chain(fetched));
+            inlay_hints.added_hints.extend(rebiased_kinds.into_iter().chain(fetched));
         }
     }
 }
@@ -1588,12 +1362,8 @@ fn normalize_hint_biases(
     multi_buffer_snapshot: &MultiBufferSnapshot,
 ) -> Vec<Inlay> {
     let mut bias_by_offset: HashMap<usize, Bias> = HashMap::default();
-    let fetched = new_hints
-        .iter()
-        .map(|(_, _, hint, offset)| (*offset, hint.position.bias));
-    let displayed = displayed_hints
-        .iter()
-        .map(|(_, bias, offset)| (*offset, *bias));
+    let fetched = new_hints.iter().map(|(_, _, hint, offset)| (*offset, hint.position.bias));
+    let displayed = displayed_hints.iter().map(|(_, bias, offset)| (*offset, *bias));
     for (offset, bias) in fetched.chain(displayed) {
         bias_by_offset
             .entry(offset)
@@ -1613,18 +1383,13 @@ fn normalize_hint_biases(
 
     let offsets_to_rebias = displayed_hints
         .iter()
-        .filter(|(_, bias, offset)| {
-            *bias == Bias::Left && bias_by_offset.get(offset) == Some(&Bias::Right)
-        })
+        .filter(|(_, bias, offset)| *bias == Bias::Left && bias_by_offset.get(offset) == Some(&Bias::Right))
         .map(|(_, _, offset)| *offset)
         .collect::<HashSet<_>>();
     displayed_hints
         .into_iter()
         .filter(|(_, _, offset)| offsets_to_rebias.contains(offset))
-        .map(|(inlay, _, _)| Inlay {
-            position: inlay.position.bias_right(multi_buffer_snapshot),
-            ..inlay
-        })
+        .map(|(inlay, _, _)| Inlay { position: inlay.position.bias_right(multi_buffer_snapshot), ..inlay })
         .collect()
 }
 
@@ -1635,9 +1400,7 @@ fn label_part_has_command(hint: &InlayHint, offset_in_hint: usize) -> bool {
     let left_padding = usize::from(hint.padding_left && !hint.text().starts_with(" "));
     offset_in_hint
         .checked_sub(left_padding)
-        .and_then(|offset_in_label| {
-            hover_popover::find_hovered_hint_part(label_parts.clone(), offset_in_label)
-        })
+        .and_then(|offset_in_label| hover_popover::find_hovered_hint_part(label_parts.clone(), offset_in_label))
         .is_some_and(|(part, _)| part.command.is_some())
 }
 
@@ -1655,7 +1418,7 @@ fn spawn_editor_hints_refresh(
     buffer_excerpts: VisibleExcerpts,
     known_chunks: Option<(Global, HashSet<Range<BufferRow>>)>,
     applicable_chunks: Vec<Range<BufferRow>>,
-    cx: &mut Context<'_, Editor>,
+    cx: &Context<'_, Editor>,
 ) -> HintRefreshTask {
     let (finished_sender, finished) = oneshot::channel();
     let task = cx.spawn(async move |editor, cx| {
@@ -1665,9 +1428,7 @@ fn spawn_editor_hints_refresh(
 
         let query_version = buffer_excerpts.buffer_version.clone();
         let Some(hint_tasks) = editor
-            .update(cx, |editor, cx| {
-                editor.inlay_hints_for_buffer(invalidate_cache, buffer_excerpts, known_chunks, cx)
-            })
+            .update(cx, |editor, cx| editor.inlay_hints_for_buffer(invalidate_cache, buffer_excerpts, known_chunks, cx))
             .ok()
         else {
             return;
@@ -1692,19 +1453,10 @@ fn spawn_editor_hints_refresh(
         let new_hints = join_all(hint_tasks).await;
         editor
             .update(cx, |editor, cx| {
-                editor.apply_fetched_hints(
-                    buffer_id,
-                    query_version,
-                    invalidate_cache,
-                    new_hints,
-                    cx,
-                );
+                editor.apply_fetched_hints(buffer_id, query_version, invalidate_cache, new_hints, cx);
             })
             .ok();
         finished_sender.send(()).ok();
     });
-    HintRefreshTask {
-        task,
-        finished: finished.shared(),
-    }
+    HintRefreshTask { task, finished: finished.shared() }
 }

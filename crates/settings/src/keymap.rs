@@ -1,9 +1,13 @@
-use collections::HashMap;
-use gpui::{
-    Action as _, App, KeyBinding, KeyBindingContextPredicate, KeyBindingMetaIndex, NoAction,
-};
-use serde_json::Value;
 use std::rc::Rc;
+
+use collections::HashMap;
+use gpui::Action as _;
+use gpui::App;
+use gpui::KeyBinding;
+use gpui::KeyBindingContextPredicate;
+use gpui::KeyBindingMetaIndex;
+use gpui::NoAction;
+use serde_json::Value;
 
 /// A binding constructed in Rust. Contexts and keyboard-position mapping retain
 /// GPUI's normal semantics; later bindings take precedence at the same depth.
@@ -19,7 +23,7 @@ pub struct KeyBindingSpec {
 }
 
 impl KeyBindingSpec {
-    pub fn new(keystrokes: &'static str, action: &'static str) -> Self {
+    pub const fn new(keystrokes: &'static str, action: &'static str) -> Self {
         Self {
             keystrokes,
             action: Some(action),
@@ -31,13 +35,10 @@ impl KeyBindingSpec {
     }
 
     pub fn disabled(keystrokes: &'static str) -> Self {
-        Self {
-            action: None,
-            ..Self::new(keystrokes, "")
-        }
+        Self { action: None, ..Self::new(keystrokes, "") }
     }
 
-    pub fn with_override(mut self) -> Self {
+    pub const fn with_override(mut self) -> Self {
         self.is_override = true;
         self
     }
@@ -65,9 +66,7 @@ pub fn built_in_key_bindings(cx: &App) -> Vec<KeyBinding> {
                     .entry(context)
                     .or_insert_with(|| {
                         KeyBindingContextPredicate::parse(context)
-                            .unwrap_or_else(|error| {
-                                panic!("invalid built-in context {context}: {error}")
-                            })
+                            .unwrap_or_else(|error| panic!("invalid built-in context {context}: {error}"))
                             .into()
                     })
                     .clone()
@@ -80,12 +79,7 @@ pub fn built_in_key_bindings(cx: &App) -> Vec<KeyBinding> {
                 binding.input.map(|input| input.to_string().into()),
                 cx.keyboard_mapper().as_ref(),
             )
-            .unwrap_or_else(|error| {
-                panic!(
-                    "invalid built-in keystrokes {}: {error}",
-                    binding.keystrokes
-                )
-            })
+            .unwrap_or_else(|error| panic!("invalid built-in keystrokes {}: {error}", binding.keystrokes))
             .with_meta(KeyBindingMetaIndex(if binding.is_override { 0 } else { 2 }))
         })
         .collect()

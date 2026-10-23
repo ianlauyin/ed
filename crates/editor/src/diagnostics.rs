@@ -20,13 +20,7 @@ pub trait DiagnosticRenderer {
         cx: &mut App,
     ) -> Option<Entity<markdown::Markdown>>;
 
-    fn open_link(
-        &self,
-        editor: &mut Editor,
-        link: SharedString,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    );
+    fn open_link(&self, editor: &mut Editor, link: SharedString, window: &mut Window, cx: &mut Context<Editor>);
 }
 
 pub fn set_diagnostic_renderer(renderer: impl DiagnosticRenderer + 'static, cx: &mut App) {
@@ -68,12 +62,7 @@ pub(super) enum ActiveDiagnostic {
 }
 
 impl Editor {
-    pub fn go_to_diagnostic(
-        &mut self,
-        action: &GoToDiagnostic,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn go_to_diagnostic(&mut self, action: &GoToDiagnostic, window: &mut Window, cx: &mut Context<Self>) {
         if !self.diagnostics_enabled() {
             return;
         }
@@ -134,9 +123,7 @@ impl Editor {
         cx: &mut Context<Self>,
     ) {
         let buffer = self.buffer.read(cx).snapshot(cx);
-        let selection = self
-            .selections
-            .newest::<MultiBufferOffset>(&self.display_snapshot(cx));
+        let selection = self.selections.newest::<MultiBufferOffset>(&self.display_snapshot(cx));
 
         let before = Self::diagnostics_before_cursor(&buffer, selection.start, severity);
         let after = Self::diagnostics_after_cursor(&buffer, selection.start, severity);
@@ -149,8 +136,8 @@ impl Editor {
         let mut target = None;
 
         for diagnostic in after.chain(before) {
-            let contains_cursor = diagnostic.range.contains(&selection.start)
-                || diagnostic.range.end == selection.head();
+            let contains_cursor =
+                diagnostic.range.contains(&selection.start) || diagnostic.range.end == selection.head();
 
             if !contains_cursor {
                 continue;
@@ -165,9 +152,7 @@ impl Editor {
 
         match (target, cursor_on_active) {
             (Some(diagnostic), false) => self.activate_diagnostic(&buffer, diagnostic, window, cx),
-            _ => self.go_to_diagnostic_in_direction(
-                &buffer, &selection, direction, severity, window, cx,
-            ),
+            _ => self.go_to_diagnostic_in_direction(&buffer, &selection, direction, severity, window, cx),
         }
     }
 
@@ -204,22 +189,20 @@ impl Editor {
     ) {
         let mut active_group_id = None;
         if let ActiveDiagnostic::Group(active_group) = &self.active_diagnostics
-            && active_group.active_range.start.to_offset(&buffer) == selection.start
+            && active_group.active_range.start.to_offset(buffer) == selection.start
         {
             active_group_id = Some(active_group.group_id);
         }
 
-        let before = Self::diagnostics_before_cursor(&buffer, selection.start, severity);
-        let after = Self::diagnostics_after_cursor(&buffer, selection.start, severity);
+        let before = Self::diagnostics_before_cursor(buffer, selection.start, severity);
+        let after = Self::diagnostics_after_cursor(buffer, selection.start, severity);
 
         let mut found: Option<DiagnosticEntryRef<MultiBufferOffset>> = None;
         if direction == Direction::Prev {
-            'outer: for prev_diagnostics in [before.collect::<Vec<_>>(), after.collect::<Vec<_>>()]
-            {
+            'outer: for prev_diagnostics in [before.collect::<Vec<_>>(), after.collect::<Vec<_>>()] {
                 for diagnostic in prev_diagnostics.into_iter().rev() {
                     if diagnostic.range.start != selection.start
-                        || active_group_id
-                            .is_some_and(|active| diagnostic.diagnostic.group_id < active)
+                        || active_group_id.is_some_and(|active| diagnostic.diagnostic.group_id < active)
                     {
                         found = Some(diagnostic);
                         break 'outer;
@@ -241,7 +224,7 @@ impl Editor {
             return;
         };
 
-        self.activate_diagnostic(&buffer, next_diagnostic, window, cx);
+        self.activate_diagnostic(buffer, next_diagnostic, window, cx);
     }
 
     pub fn set_all_diagnostics_active(&mut self, cx: &mut Context<Self>) {
@@ -267,15 +250,15 @@ impl Editor {
         self.inline_diagnostics.clear();
     }
 
-    pub fn diagnostics_enabled(&self) -> bool {
+    pub const fn diagnostics_enabled(&self) -> bool {
         self.diagnostics_enabled && self.lsp_data_enabled()
     }
 
-    pub fn inline_diagnostics_enabled(&self) -> bool {
+    pub const fn inline_diagnostics_enabled(&self) -> bool {
         self.inline_diagnostics_enabled && self.diagnostics_enabled()
     }
 
-    pub fn show_inline_diagnostics(&self) -> bool {
+    pub const fn show_inline_diagnostics(&self) -> bool {
         self.show_inline_diagnostics
     }
 
@@ -290,22 +273,13 @@ impl Editor {
     }
 
     pub fn set_max_diagnostics_severity(&mut self, severity: DiagnosticSeverity, cx: &mut App) {
-        self.diagnostics_max_severity = if self.diagnostics_enabled() {
-            severity
-        } else {
-            DiagnosticSeverity::Off
-        };
+        self.diagnostics_max_severity = if self.diagnostics_enabled() { severity } else { DiagnosticSeverity::Off };
         self.display_map.update(cx, |display_map, _| {
             display_map.diagnostics_max_severity = self.diagnostics_max_severity;
         });
     }
 
-    pub fn toggle_diagnostics(
-        &mut self,
-        _: &ToggleDiagnostics,
-        window: &mut Window,
-        cx: &mut Context<Editor>,
-    ) {
+    pub fn toggle_diagnostics(&mut self, _: &ToggleDiagnostics, window: &mut Window, cx: &mut Context<Editor>) {
         let diagnostics_enabled =
             self.diagnostics_enabled() && self.diagnostics_max_severity != DiagnosticSeverity::Off;
         self.diagnostics_enabled = !diagnostics_enabled;
@@ -333,14 +307,14 @@ impl Editor {
         self.active_diagnostics == ActiveDiagnostic::All
     }
 
-    pub(super) fn active_diagnostic_group_id(&self) -> Option<usize> {
+    pub(super) const fn active_diagnostic_group_id(&self) -> Option<usize> {
         match &self.active_diagnostics {
             ActiveDiagnostic::Group(group) => Some(group.group_id),
             _ => None,
         }
     }
 
-    pub(super) fn has_active_diagnostic_group(&self) -> bool {
+    pub(super) const fn has_active_diagnostic_group(&self) -> bool {
         matches!(self.active_diagnostics, ActiveDiagnostic::Group(_))
     }
 
@@ -353,16 +327,12 @@ impl Editor {
             let buffer = self.buffer.read(cx).snapshot(cx);
             let primary_range_start = active_diagnostics.active_range.start.to_offset(&buffer);
             let primary_range_end = active_diagnostics.active_range.end.to_offset(&buffer);
-            let is_valid = buffer
-                .diagnostics_in_range::<MultiBufferOffset>(primary_range_start..primary_range_end)
-                .any(|entry| {
+            let is_valid =
+                buffer.diagnostics_in_range::<MultiBufferOffset>(primary_range_start..primary_range_end).any(|entry| {
                     entry.diagnostic.is_primary
                         && !entry.range.is_empty()
                         && entry.range.start == primary_range_start
-                        && entry
-                            .diagnostic
-                            .message
-                            .rendered_eq(&active_diagnostics.active_message)
+                        && entry.diagnostic.message.rendered_eq(&active_diagnostics.active_message)
                 });
 
             if !is_valid {
@@ -375,7 +345,7 @@ impl Editor {
         &mut self,
         buffer_id: BufferId,
         diagnostic: DiagnosticEntryRef<'_, MultiBufferOffset>,
-        window: &mut Window,
+        window: &Window,
         cx: &mut Context<Self>,
     ) {
         if !self.diagnostics_enabled() || matches!(self.active_diagnostics, ActiveDiagnostic::All) {
@@ -386,26 +356,15 @@ impl Editor {
 
         let blocks = if let Some(renderer) = GlobalDiagnosticRenderer::global(cx) {
             let snapshot = self.snapshot(window, cx);
-            let diagnostic_group = buffer
-                .diagnostic_group(buffer_id, diagnostic.diagnostic.group_id)
-                .collect::<Vec<_>>();
+            let diagnostic_group =
+                buffer.diagnostic_group(buffer_id, diagnostic.diagnostic.group_id).collect::<Vec<_>>();
 
-            let language_registry = self
-                .project()
-                .map(|project| project.read(cx).languages().clone());
+            let language_registry = self.project().map(|project| project.read(cx).languages().clone());
 
-            let blocks = renderer.render_group(
-                diagnostic_group,
-                buffer_id,
-                snapshot,
-                cx.weak_entity(),
-                language_registry,
-                cx,
-            );
+            let blocks =
+                renderer.render_group(diagnostic_group, buffer_id, snapshot, cx.weak_entity(), language_registry, cx);
 
-            self.display_map.update(cx, |display_map, cx| {
-                display_map.insert_blocks(blocks, cx).into_iter().collect()
-            })
+            self.display_map.update(cx, |display_map, cx| display_map.insert_blocks(blocks, cx).into_iter().collect())
         } else {
             // Ensure that, even if there's no global renderer set, we still use
             // an empty set of blocks, such that we can record the active group
@@ -414,8 +373,7 @@ impl Editor {
         };
 
         self.active_diagnostics = ActiveDiagnostic::Group(ActiveDiagnosticGroup {
-            active_range: buffer.anchor_before(diagnostic.range.start)
-                ..buffer.anchor_after(diagnostic.range.end),
+            active_range: buffer.anchor_before(diagnostic.range.start)..buffer.anchor_after(diagnostic.range.end),
             active_message: diagnostic.diagnostic.message.clone(),
             group_id: diagnostic.diagnostic.group_id,
             blocks,
@@ -437,17 +395,9 @@ impl Editor {
         }
     }
 
-    pub(super) fn refresh_inline_diagnostics(
-        &mut self,
-        debounce: bool,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let max_severity = ProjectSettings::get_global(cx)
-            .diagnostics
-            .inline
-            .max_severity
-            .unwrap_or(self.diagnostics_max_severity);
+    pub(super) fn refresh_inline_diagnostics(&mut self, debounce: bool, window: &Window, cx: &mut Context<Self>) {
+        let max_severity =
+            ProjectSettings::get_global(cx).diagnostics.inline.max_severity.unwrap_or(self.diagnostics_max_severity);
 
         if !self.inline_diagnostics_enabled()
             || !self.diagnostics_enabled()
@@ -460,31 +410,22 @@ impl Editor {
             return;
         }
 
-        let debounce_ms = ProjectSettings::get_global(cx)
-            .diagnostics
-            .inline
-            .update_debounce_ms;
-        let debounce = if debounce && debounce_ms > 0 {
-            Some(Duration::from_millis(debounce_ms))
-        } else {
-            None
-        };
+        let debounce_ms = ProjectSettings::get_global(cx).diagnostics.inline.update_debounce_ms;
+        let debounce = if debounce && debounce_ms > 0 { Some(Duration::from_millis(debounce_ms)) } else { None };
         self.inline_diagnostics_update = cx.spawn_in(window, async move |editor, cx| {
             if let Some(debounce) = debounce {
                 cx.background_executor().timer(debounce).await;
             }
-            let Some(snapshot) = editor.upgrade().map(|editor| {
-                editor.update(cx, |editor, cx| editor.buffer().read(cx).snapshot(cx))
-            }) else {
+            let Some(snapshot) =
+                editor.upgrade().map(|editor| editor.update(cx, |editor, cx| editor.buffer().read(cx).snapshot(cx)))
+            else {
                 return;
             };
 
             let new_inline_diagnostics = cx
                 .background_spawn(async move {
                     let mut inline_diagnostics = Vec::<(Anchor, InlineDiagnostic)>::new();
-                    for diagnostic_entry in
-                        snapshot.diagnostics_in_range(MultiBufferOffset(0)..snapshot.len())
-                    {
+                    for diagnostic_entry in snapshot.diagnostics_in_range(MultiBufferOffset(0)..snapshot.len()) {
                         let message = diagnostic_entry
                             .diagnostic
                             .message
@@ -492,16 +433,10 @@ impl Editor {
                             .split_once('\n')
                             .map(|(line, _)| line)
                             .map(SharedString::new)
-                            .unwrap_or_else(|| {
-                                diagnostic_entry
-                                    .diagnostic
-                                    .message
-                                    .as_shared_string()
-                                    .clone()
-                            });
+                            .unwrap_or_else(|| diagnostic_entry.diagnostic.message.as_shared_string().clone());
                         let start_anchor = snapshot.anchor_before(diagnostic_entry.range.start);
-                        let (Ok(i) | Err(i)) = inline_diagnostics
-                            .binary_search_by(|(probe, _)| probe.cmp(&start_anchor, &snapshot));
+                        let (Ok(i) | Err(i)) =
+                            inline_diagnostics.binary_search_by(|(probe, _)| probe.cmp(&start_anchor, &snapshot));
                         inline_diagnostics.insert(
                             i,
                             (
@@ -529,21 +464,14 @@ impl Editor {
         });
     }
 
-    pub(super) fn pull_diagnostics(
-        &mut self,
-        buffer_id: BufferId,
-        _window: &Window,
-        cx: &mut Context<Self>,
-    ) -> Option<()> {
+    pub(super) fn pull_diagnostics(&mut self, buffer_id: BufferId, _window: &Window, cx: &Context<Self>) -> Option<()> {
         // `ActiveDiagnostic::All` is a special mode where editor's diagnostics are managed by the external view,
         // skip any LSP updates for it.
 
         if self.active_diagnostics == ActiveDiagnostic::All || !self.diagnostics_enabled() {
             return None;
         }
-        let pull_diagnostics_settings = ProjectSettings::get_global(cx)
-            .diagnostics
-            .lsp_pull_diagnostics;
+        let pull_diagnostics_settings = ProjectSettings::get_global(cx).diagnostics.lsp_pull_diagnostics;
         if !pull_diagnostics_settings.enabled {
             return None;
         }
@@ -554,9 +482,7 @@ impl Editor {
         self.pull_diagnostics_task = cx.spawn(async move |_, cx| {
             cx.background_executor().timer(debounce).await;
             if let Ok(task) = project.update(cx, |project, cx| {
-                project.lsp_store().update(cx, |lsp_store, cx| {
-                    lsp_store.pull_diagnostics_for_buffer(buffer, cx)
-                })
+                project.lsp_store().update(cx, |lsp_store, cx| lsp_store.pull_diagnostics_for_buffer(buffer, cx))
             }) {
                 task.await.log_err();
             }
@@ -572,11 +498,7 @@ impl Editor {
         Some(())
     }
 
-    pub(super) fn update_diagnostics_state(
-        &mut self,
-        window: &mut Window,
-        cx: &mut Context<'_, Editor>,
-    ) {
+    pub(super) fn update_diagnostics_state(&mut self, window: &Window, cx: &mut Context<'_, Editor>) {
         if !self.diagnostics_enabled() {
             return;
         }
@@ -586,7 +508,7 @@ impl Editor {
         cx.notify();
     }
 
-    pub fn any_active_diagnostics(&self) -> bool {
+    pub const fn any_active_diagnostics(&self) -> bool {
         match &self.active_diagnostics {
             ActiveDiagnostic::None => false,
             ActiveDiagnostic::All => true,
