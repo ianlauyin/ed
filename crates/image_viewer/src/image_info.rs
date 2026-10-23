@@ -1,4 +1,3 @@
-use gpui::App;
 use gpui::Context;
 use gpui::Entity;
 use gpui::IntoElement;
@@ -11,7 +10,6 @@ use project::image_store::ImageMetadata;
 use settings::Settings;
 use ui::prelude::*;
 use util::size::format_file_size;
-use workspace::HideStatusItem;
 use workspace::ItemHandle;
 use workspace::StatusItemView;
 use workspace::Workspace;
@@ -106,10 +104,5 @@ impl StatusItemView for ImageInfo {
             self.metadata = None;
         }
         cx.notify();
-    }
-
-    fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
-        // The image info is only visible when an image viewer item is active.
-        None
     }
 }

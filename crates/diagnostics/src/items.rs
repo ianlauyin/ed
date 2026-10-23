@@ -2,7 +2,6 @@ use std::time::Duration;
 
 use editor::Editor;
 use editor::MultiBufferOffset;
-use gpui::App;
 use gpui::Context;
 use gpui::Entity;
 use gpui::EventEmitter;
@@ -28,7 +27,6 @@ use ui::Tooltip;
 use ui::h_flex;
 use ui::prelude::*;
 use util::ResultExt;
-use workspace::HideStatusItem;
 use workspace::StatusItemView;
 use workspace::ToolbarItemEvent;
 use workspace::Workspace;
@@ -218,11 +216,5 @@ impl StatusItemView for DiagnosticIndicator {
             self._observe_active_editor = None;
         }
         cx.notify();
-    }
-
-    fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
-        Some(HideStatusItem::new(|settings| {
-            settings.diagnostics.get_or_insert_default().button = Some(false);
-        }))
     }
 }

@@ -40,6 +40,10 @@ because it hurt readability; an opaque window is also cheaper to composite.
   There is no gap under the title bar. When the status bar is shown, it replaces
   the bottom gap and pads its content evenly above and below, so the icons sit
   centred between the card and the window edge.
+- Status bar items have no "Hide Button" right-click entry; they are hidden only
+  through their settings. Items without other menu entries (search, cursor
+  position, language, diagnostics, …) have no right-click menu at all; dock
+  panel buttons keep theirs for dock position and flex/fixed width.
 - Tabs fill the tab bar's full height with rounded top corners and square
   bottoms. The tab bar has no bottom line and no borders between tabs. It is
   inset 10px on the left (the card radius), so the first tab meets the card's

@@ -27,7 +27,6 @@ use ui::KeyBindingStyle;
 use ui::prelude::*;
 use ui::tooltip_container;
 use util::ResultExt;
-use workspace::HideStatusItem;
 use workspace::StatusBarSettings;
 use workspace::StatusItemView;
 use workspace::item::ItemHandle;
@@ -346,11 +345,5 @@ impl StatusItemView for PendingKeystrokesIndicator {
         _window: &mut Window,
         _cx: &mut Context<Self>,
     ) {
-    }
-
-    fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
-        Some(HideStatusItem::new(|settings| {
-            settings.status_bar.get_or_insert_default().pending_keystrokes_indicator = Some(false);
-        }))
     }
 }

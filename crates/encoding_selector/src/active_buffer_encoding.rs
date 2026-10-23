@@ -1,7 +1,6 @@
 use editor::Editor;
 use encoding_rs::Encoding;
 use encoding_rs::UTF_8;
-use gpui::App;
 use gpui::Context;
 use gpui::Entity;
 use gpui::IntoElement;
@@ -18,8 +17,6 @@ use ui::ButtonCommon;
 use ui::Clickable;
 use ui::LabelSize;
 use ui::Tooltip;
-use workspace::EncodingDisplayOptions;
-use workspace::HideStatusItem;
 use workspace::StatusBarSettings;
 use workspace::StatusItemView;
 use workspace::Workspace;
@@ -138,11 +135,5 @@ impl StatusItemView for ActiveBufferEncoding {
         }
 
         cx.notify();
-    }
-
-    fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
-        Some(HideStatusItem::new(|settings| {
-            settings.status_bar.get_or_insert_default().active_encoding_button = Some(EncodingDisplayOptions::Disabled);
-        }))
     }
 }

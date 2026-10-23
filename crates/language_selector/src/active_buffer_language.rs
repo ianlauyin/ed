@@ -1,14 +1,30 @@
 use editor::Editor;
-use gpui::{
-    App, Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription, WeakEntity,
-    Window, div,
-};
-use language::{LanguageName, PLAIN_TEXT};
+use gpui::Context;
+use gpui::Entity;
+use gpui::IntoElement;
+use gpui::ParentElement;
+use gpui::Render;
+use gpui::Styled;
+use gpui::Subscription;
+use gpui::WeakEntity;
+use gpui::Window;
+use gpui::div;
+use language::LanguageName;
+use language::PLAIN_TEXT;
 use settings::Settings as _;
-use ui::{Button, ButtonCommon, Clickable, FluentBuilder, LabelSize, Tooltip};
-use workspace::{HideStatusItem, StatusBarSettings, StatusItemView, Workspace, item::ItemHandle};
+use ui::Button;
+use ui::ButtonCommon;
+use ui::Clickable;
+use ui::FluentBuilder;
+use ui::LabelSize;
+use ui::Tooltip;
+use workspace::StatusBarSettings;
+use workspace::StatusItemView;
+use workspace::Workspace;
+use workspace::item::ItemHandle;
 
-use crate::{LanguageSelector, Toggle};
+use crate::LanguageSelector;
+use crate::Toggle;
 
 pub struct ActiveBufferLanguage {
     active_language: Option<Option<LanguageName>>,
@@ -18,11 +34,7 @@ pub struct ActiveBufferLanguage {
 
 impl ActiveBufferLanguage {
     pub fn new(workspace: &Workspace) -> Self {
-        Self {
-            active_language: None,
-            workspace: workspace.weak_handle(),
-            _observe_active_editor: None,
-        }
+        Self { active_language: None, workspace: workspace.weak_handle(), _observe_active_editor: None }
     }
 
     fn update_language(&mut self, editor: Entity<Editor>, _: &mut Window, cx: &mut Context<Self>) {
@@ -31,17 +43,12 @@ impl ActiveBufferLanguage {
         let editor = editor.read(cx);
         if let Some(buffer) = editor.active_buffer(cx) {
             let buffer = buffer.read(cx);
-            let language = buffer
-                .language()
-                .filter(|language| **language != *PLAIN_TEXT)
-                .map(|language| language.name());
+            let language =
+                buffer.language().filter(|language| **language != *PLAIN_TEXT).map(|language| language.name());
             // Files with no registered language (e.g. TOML) still show
             // the name of the syntax they are highlighted with.
             self.active_language = Some(language.or_else(|| {
-                buffer
-                    .fallback_syntax_name()
-                    .map(LanguageName::new)
-                    .or_else(|| Some(buffer.language()?.name()))
+                buffer.fallback_syntax_name().map(LanguageName::new).or_else(|| Some(buffer.language()?.name()))
             }));
         }
 
@@ -68,9 +75,7 @@ impl Render for ActiveBufferLanguage {
                     .tab_index(0isize)
                     .on_click(cx.listener(|this, _, window, cx| {
                         if let Some(workspace) = this.workspace.upgrade() {
-                            workspace.update(cx, |workspace, cx| {
-                                LanguageSelector::toggle(workspace, window, cx)
-                            });
+                            workspace.update(cx, |workspace, cx| LanguageSelector::toggle(workspace, window, cx));
                         }
                     }))
                     .tooltip(|_window, cx| Tooltip::for_action("Select Language", &Toggle, cx)),
@@ -87,8 +92,7 @@ impl StatusItemView for ActiveBufferLanguage {
         cx: &mut Context<Self>,
     ) {
         if let Some(editor) = active_pane_item.and_then(|item| item.downcast::<Editor>()) {
-            self._observe_active_editor =
-                Some(cx.observe_in(&editor, window, Self::update_language));
+            self._observe_active_editor = Some(cx.observe_in(&editor, window, Self::update_language));
             self.update_language(editor, window, cx);
         } else {
             self.active_language = None;
@@ -96,14 +100,5 @@ impl StatusItemView for ActiveBufferLanguage {
         }
 
         cx.notify();
-    }
-
-    fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
-        Some(HideStatusItem::new(|settings| {
-            settings
-                .status_bar
-                .get_or_insert_default()
-                .active_language_button = Some(false);
-        }))
     }
 }

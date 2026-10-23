@@ -660,9 +660,4 @@ impl Render for ActivityIndicator {
 
 impl StatusItemView for ActivityIndicator {
     fn set_active_pane_item(&mut self, _: Option<&dyn ItemHandle>, _window: &mut Window, _: &mut Context<Self>) {}
-
-    fn hide_setting(&self, _: &App) -> Option<workspace::HideStatusItem> {
-        // Activity indicator auto-hides when there's no work to display.
-        None
-    }
 }

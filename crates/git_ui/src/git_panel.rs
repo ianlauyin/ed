@@ -6814,12 +6814,6 @@ impl Panel for GitPanel {
     fn activation_priority(&self) -> u32 {
         3
     }
-
-    fn hide_button_setting(&self, _: &App) -> Option<workspace::HideStatusItem> {
-        Some(workspace::HideStatusItem::new(|settings| {
-            settings.git_panel.get_or_insert_default().button = Some(false);
-        }))
-    }
 }
 
 pub fn panel_editor_container(_window: &mut Window, cx: &mut App) -> Div {

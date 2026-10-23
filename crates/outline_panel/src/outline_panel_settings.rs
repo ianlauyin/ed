@@ -1,6 +1,10 @@
 use gpui::Pixels;
-pub use settings::{DockSide, FolderIndicator, Settings, ShowIndentGuides};
-use settings::{IntoGpui, RegisterSetting};
+pub use settings::DockSide;
+pub use settings::FolderIndicator;
+use settings::IntoGpui;
+use settings::RegisterSetting;
+pub use settings::Settings;
+pub use settings::ShowIndentGuides;
 
 #[derive(Debug, Clone, Copy, PartialEq, RegisterSetting)]
 pub struct OutlinePanelSettings {
@@ -33,17 +37,9 @@ impl Settings for OutlinePanelSettings {
             file_icons: panel.file_icons.unwrap(),
             folder_indicator: panel.folder_indicator.unwrap(),
             git_status: panel.git_status.unwrap()
-                && content
-                    .git
-                    .as_ref()
-                    .unwrap()
-                    .enabled
-                    .unwrap()
-                    .is_git_status_enabled(),
+                && content.git.as_ref().unwrap().enabled.unwrap().is_git_status_enabled(),
             indent_size: *panel.indent_size.unwrap(),
-            indent_guides: IndentGuidesSettings {
-                show: panel.indent_guides.unwrap().show.unwrap(),
-            },
+            indent_guides: IndentGuidesSettings { show: panel.indent_guides.unwrap().show.unwrap() },
             auto_reveal_entries: panel.auto_reveal_entries.unwrap(),
             auto_fold_dirs: panel.auto_fold_dirs.unwrap(),
             expand_outlines_with_depth: panel.expand_outlines_with_depth.unwrap(),

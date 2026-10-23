@@ -1,5 +1,4 @@
 use editor::EditorSettings;
-use gpui::App;
 use gpui::FocusHandle;
 use settings::Settings as _;
 use ui::ButtonCommon;
@@ -9,7 +8,6 @@ use ui::Render;
 use ui::Tooltip;
 use ui::Window;
 use ui::prelude::*;
-use workspace::HideStatusItem;
 use workspace::ItemHandle;
 use workspace::StatusItemView;
 
@@ -66,11 +64,5 @@ impl StatusItemView for SearchButton {
         cx: &mut Context<Self>,
     ) {
         self.pane_item_focus_handle = active_pane_item.map(|item| item.item_focus_handle(cx));
-    }
-
-    fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
-        Some(HideStatusItem::new(|settings| {
-            settings.editor.search.get_or_insert_default().button = Some(false);
-        }))
     }
 }

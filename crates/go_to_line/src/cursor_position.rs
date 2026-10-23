@@ -31,7 +31,6 @@ use ui::Tooltip;
 use ui::Window;
 use ui::div;
 use util::paths::FILE_ROW_COLUMN_DELIMITER;
-use workspace::HideStatusItem;
 use workspace::StatusBarSettings;
 use workspace::StatusItemView;
 use workspace::Workspace;
@@ -261,12 +260,6 @@ impl StatusItemView for CursorPosition {
         }
 
         cx.notify();
-    }
-
-    fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
-        Some(HideStatusItem::new(|settings| {
-            settings.status_bar.get_or_insert_default().cursor_position_button = Some(false);
-        }))
     }
 }
 
