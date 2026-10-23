@@ -31,7 +31,6 @@ path = { workspace = true, features = ["serde"] }
 futures-lite.workspace = true
 shlex.workspace = true
 smol.workspace = true
-async-fs.workspace = true
 dirs.workspace = true
 
 log.workspace = true
