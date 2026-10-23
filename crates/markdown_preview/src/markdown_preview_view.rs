@@ -207,7 +207,7 @@ impl MarkdownPreviewView {
             let workspace::Event::ItemAdded { item } = event else {
                 return;
             };
-            if cx.global_mut::<SuppressedAutoPreviews>().0.remove(&item.item_id()) {
+            if cx.global_mut::<SuppressedAutoPreviews>().0.contains(&item.item_id()) {
                 return;
             }
             if !MarkdownPreviewSettings::get_global(cx).open_markdown_files_in_preview || workspace.is_restoring() {
@@ -920,8 +920,13 @@ impl MarkdownPreviewView {
                     return;
                 };
                 if !workspace.activate_item(&editor, true, true, window, cx) {
-                    // Re-adding the source emits `ItemAdded`; suppress its automatic preview once.
-                    cx.global_mut::<SuppressedAutoPreviews>().0.insert(editor.entity_id());
+                    let editor_entity_id = editor.entity_id();
+                    // Re-adding the source emits `ItemAdded`; suppress its automatic preview for the editor's lifetime.
+                    cx.global_mut::<SuppressedAutoPreviews>().0.insert(editor_entity_id);
+                    App::observe_release(cx, &editor, move |_, cx| {
+                        cx.global_mut::<SuppressedAutoPreviews>().0.remove(&editor_entity_id);
+                    })
+                    .detach();
                     workspace.add_item(pane.clone(), Box::new(editor), None, true, true, window, cx);
                 }
 

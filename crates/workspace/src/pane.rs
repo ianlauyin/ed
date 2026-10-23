@@ -1219,6 +1219,8 @@ impl Pane {
     ) {
         let item_already_exists = self.items.iter().any(|existing_item| existing_item.item_id() == item.item_id());
 
+        let mut replaces_existing_item_in_pane = false;
+
         if !item_already_exists {
             self.close_items_on_item_open(window, cx);
         }
@@ -1279,7 +1281,7 @@ impl Pane {
                 if existing_item_is_active && destination_index.is_none() {
                     insertion_index = existing_item_index;
                 } else {
-                    self.items.remove(existing_item_index);
+                    let removed_item = self.items.remove(existing_item_index);
                     if existing_item_index < self.active_item_index {
                         self.active_item_index -= 1;
                     }
@@ -1291,6 +1293,10 @@ impl Pane {
                         self.active_item_index = insertion_index;
                     } else if insertion_index <= self.active_item_index {
                         self.active_item_index += 1;
+                    }
+
+                    if removed_item.item_id() != item.item_id() {
+                        replaces_existing_item_in_pane = true;
                     }
                 }
 
@@ -1314,7 +1320,11 @@ impl Pane {
             }
         }
 
-        cx.emit(Event::AddItem { item });
+        // Only new or replacing items count as added: listeners such as markdown auto preview would otherwise treat
+        // reordering a tab as a fresh open.
+        if existing_item_index.is_none() || replaces_existing_item_in_pane {
+            cx.emit(Event::AddItem { item });
+        }
     }
 
     pub fn add_item(

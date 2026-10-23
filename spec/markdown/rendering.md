@@ -12,7 +12,10 @@
 - The preview also opens HTML files (toolbar button, project panel, Open
   Preview), rendered through the same HTML tag subset below as one HTML
   document, not as markdown. It is not a browser: no CSS, scripts or forms.
-  Only markdown files auto-open in the preview.
+  Only markdown files auto-open in the preview. Auto-open reacts only to a
+  tab newly added to a pane, never to reordering or moving an existing tab;
+  after returning from the preview to its editor, that editor never auto-opens
+  the preview again while it lives.
 - HTML in markdown (preview only; elsewhere it shows as raw text): a small
   tag lexer maps a whitelist of tags onto the same events markdown syntax
   produces, so there is one renderer and no HTML parser dependency. Tags may
