@@ -41,10 +41,16 @@ pub(crate) enum Kind {
 }
 
 /// A node of a layered layout. Mirrors Pele's `LNode`.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub(crate) struct LNode {
     /// Height along the flow.
     pub(crate) h: f64,
+    /// A port's place across the flow outside its group; `NaN` if unknown. A first or last rank
+    /// whose ports all have one keeps them in that order.
+    pub(crate) hint: f64,
+    /// A place across the flow to start the order from; `NaN` if unknown. Used only where every
+    /// node of a rank has one.
+    pub(crate) key: f64,
     /// What the node stands for.
     pub(crate) kind: Kind,
     /// Keeps the node first (negative) or last (positive) in its rank; 0 leaves it free.
@@ -60,6 +66,23 @@ pub(crate) struct LNode {
     pub(crate) x: f64,
     /// Center y after layout.
     pub(crate) y: f64,
+}
+
+impl Default for LNode {
+    fn default() -> Self {
+        Self {
+            h: 0.0,
+            hint: f64::NAN,
+            key: f64::NAN,
+            kind: Kind::Node,
+            pin: 0.0,
+            rank: 0,
+            span: 0.0,
+            w: 0.0,
+            x: 0.0,
+            y: 0.0,
+        }
+    }
 }
 
 /// An edge of a layered layout. Mirrors Pele's `LEdge`.
@@ -119,10 +142,82 @@ pub(crate) struct LayeredOptions {
 /// The size of a layered layout.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
 pub(crate) struct LayeredResult {
+    /// With `order_only`: the crossings of the order found.
+    pub(crate) crossings: u64,
+    /// With `order_only`: the crossings of the order before groups or sweeps changed it.
+    pub(crate) declared: u64,
     /// Height along the flow.
     pub(crate) height: f64,
     /// Width across the flow.
     pub(crate) width: f64,
+}
+
+/// Groups whose members are kept side by side within each rank. Mirrors Pele's `groups`
+/// option.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub(crate) struct Groups {
+    /// The group of each of the caller's nodes, if any.
+    pub(crate) of: Vec<Option<usize>>,
+    /// The group that holds each group, if any.
+    pub(crate) parent: Vec<Option<usize>>,
+}
+
+impl Groups {
+    /// Whether the groups cover `real` nodes, name only groups there are, and hold no group in
+    /// itself.
+    fn valid(&self, real: usize) -> bool {
+        let count = self.parent.len();
+        let inside = |g: &Option<usize>| g.is_none_or(|g| g < count);
+        if self.of.len() < real || !self.of.iter().all(inside) || !self.parent.iter().all(inside) {
+            return false;
+        }
+        (0..count).all(|g| {
+            let mut at = Some(g);
+            let mut steps = 0;
+            while let Some(p) = at {
+                if steps > count {
+                    return false;
+                }
+                steps += 1;
+                at = self.parent[p];
+            }
+            true
+        })
+    }
+
+    /// The parent of group `g`, if any.
+    fn up(&self, g: Option<usize>) -> Option<usize> {
+        g.and_then(|g| self.parent[g])
+    }
+
+    /// How many groups hold `g`, itself included; 0 for none.
+    fn depth(&self, mut g: Option<usize>) -> usize {
+        let mut d = 0;
+        while g.is_some() {
+            d += 1;
+            g = self.up(g);
+        }
+        d
+    }
+
+    /// The innermost group that holds both `x` and `y`, if any.
+    fn common(&self, mut x: Option<usize>, mut y: Option<usize>) -> Option<usize> {
+        let mut dx = self.depth(x);
+        let mut dy = self.depth(y);
+        while dx > dy {
+            x = self.up(x);
+            dx -= 1;
+        }
+        while dy > dx {
+            y = self.up(y);
+            dy -= 1;
+        }
+        while x != y {
+            x = self.up(x);
+            y = self.up(y);
+        }
+        x
+    }
 }
 
 /// A node of the given size and kind, as Pele's `lnode` creates it.
@@ -242,7 +337,7 @@ fn clamp(x: f64, lo: f64, hi: f64) -> f64 {
 
 /// V8's `Math.hypot` for two values: a compensated sum of squares scaled by the larger value.
 /// It differs from `f64::hypot` in the last bit, and the result feeds comparisons.
-fn hypot(x: f64, y: f64) -> f64 {
+pub(crate) fn hypot(x: f64, y: f64) -> f64 {
     let x = x.abs();
     let y = y.abs();
     if x == f64::INFINITY || y == f64::INFINITY {
@@ -292,13 +387,37 @@ fn sort_range(list: &mut [usize], from: usize, to: usize, key: &[usize]) {
 /// where edges spread along their nodes. Returns the size of the drawing.
 ///
 /// An edge whose endpoint names no node makes the whole layout empty, where Pele throws.
-#[expect(clippy::many_single_char_names, reason = "names mirror Pele's layered.ts for side-by-side review")]
 pub(crate) fn layered(nodes: &mut [LNode], edges: &mut [LEdge], opt: &LayeredOptions) -> LayeredResult {
+    layered_with(nodes, edges, opt, None, false)
+}
+
+/// `layered` with Pele's `groups` and `order_only` options. With `groups`, the members of each
+/// group stay side by side within every rank. With `order_only`, the layout stops once the nodes
+/// are ordered: each node's `x` is its place across the flow, each edge's `points` are `rank,
+/// place` pairs from its first node to its last along the flow, and the result holds the
+/// crossings of the order found and of the order before it was changed, but no size. Groups
+/// that name no group there is, or hold themselves, are left out.
+#[expect(clippy::many_single_char_names, reason = "names mirror Pele's layered.ts for side-by-side review")]
+pub(crate) fn layered_with(
+    nodes: &mut [LNode],
+    edges: &mut [LEdge],
+    opt: &LayeredOptions,
+    groups: Option<&Groups>,
+    order_only: bool,
+) -> LayeredResult {
     let real = nodes.len();
     if real == 0 || !valid(real, edges) {
         return LayeredResult::default();
     }
     let m = edges.len();
+    if real == 1 && m == 0 && nodes[0].kind == Kind::Node {
+        let node = &mut nodes[0];
+        node.rank = 0;
+        node.x = node.w / 2.0;
+        node.y = node.h / 2.0;
+        return LayeredResult { height: node.h, width: node.w, ..LayeredResult::default() };
+    }
+    let groups = groups.filter(|groups| groups.valid(real));
 
     // Every edge gets a middle rank of its own when labels or parallel edges need the room.
     let mut step = 1;
@@ -364,6 +483,10 @@ pub(crate) fn layered(nodes: &mut [LNode], edges: &mut [LEdge], opt: &LayeredOpt
     let mut etk = vec![End::Held; ends];
     let mut first_seg = vec![0usize; m];
     let mut last_seg = vec![0usize; m];
+    let mut key = vec![f64::NAN; n];
+    for (i, node) in nodes.iter().enumerate() {
+        key[i] = node.key;
+    }
     let mut offsets = false;
     {
         let mut next = real;
@@ -408,6 +531,7 @@ pub(crate) fn layered(nodes: &mut [LNode], edges: &mut [LEdge], opt: &LayeredOpt
                 let d = next;
                 next += 1;
                 ranks[d] = r;
+                key[d] = key[a] + ((key[b] - key[a]) * float(r - ra)) / float(rb - ra);
                 if label_rank == Some(r) {
                     w[d] = e.label_w;
                     h[d] = e.label_h;
@@ -434,6 +558,22 @@ pub(crate) fn layered(nodes: &mut [LNode], edges: &mut [LEdge], opt: &LayeredOpt
             ce += 1;
         }
     }
+
+    // A bend belongs to the innermost group that holds both ends of its edge.
+    let grp = groups.map(|groups| {
+        let mut grp = vec![None; n];
+        grp[..real].copy_from_slice(&groups.of[..real]);
+        for (ei, e) in edges.iter().enumerate() {
+            let Some(d0) = first_dummy[ei] else {
+                continue;
+            };
+            let common = groups.common(groups.of[e.tail], groups.of[e.head]);
+            for g in &mut grp[d0..d0 + span[ei] - 1] {
+                *g = common;
+            }
+        }
+        grp
+    });
 
     let mut succ_start = vec![0usize; n + 1];
     let mut pred_start = vec![0usize; n + 1];
@@ -500,10 +640,35 @@ pub(crate) fn layered(nodes: &mut [LNode], edges: &mut [LEdge], opt: &LayeredOpt
         }
     }
 
+    // Sorts a rank by `key`, keeping the order of ties, if it has two nodes or more and every one
+    // has a key.
+    let sort_rank = |order: &mut [usize], r: usize, key: &dyn Fn(usize) -> f64| {
+        let layer = &mut order[layer_start[r]..layer_start[r + 1]];
+        if layer.len() < 2 || layer.iter().any(|&v| key(v).is_nan()) {
+            return false;
+        }
+        layer.sort_by(|&a, &b| cmp(key(a), key(b)));
+        true
+    };
+    for r in 0..=max_rank {
+        sort_rank(&mut order, r, &|v| key[v]);
+    }
+
     if nodes.iter().any(|v| v.pin != 0.0) {
         for r in 0..=max_rank {
             let pin = |v: usize| if v < real { nodes[v].pin } else { 0.0 };
             order[layer_start[r]..layer_start[r + 1]].sort_by(|&a, &b| cmp(pin(a), pin(b)));
+        }
+    }
+    // Ports keep the order of where their edges go outside the group, so that they do not cross
+    // there.
+    let mut fixed = vec![false; max_rank + 1];
+    let hint = |v: usize| {
+        if v < real && matches!(nodes[v].kind, Kind::StartPort | Kind::EndPort) { nodes[v].hint } else { f64::NAN }
+    };
+    for r in [0, max_rank] {
+        if sort_rank(&mut order, r, &hint) {
+            fixed[r] = true;
         }
     }
 
@@ -512,6 +677,9 @@ pub(crate) fn layered(nodes: &mut [LNode], edges: &mut [LEdge], opt: &LayeredOpt
         efd,
         et,
         etd,
+        fixed,
+        grp,
+        group_parent: groups.map_or_else(Vec::new, |groups| groups.parent.clone()),
         kind,
         layer_start,
         max_rank,
@@ -529,9 +697,31 @@ pub(crate) fn layered(nodes: &mut [LNode], edges: &mut [LEdge], opt: &LayeredOpt
     };
     g.set_positions();
 
+    let mut crossings = 0;
+    let mut declared = 0;
     if segments > 0 && max_rank > 0 {
-        reduce_crossings(&mut g, nodes);
+        (crossings, declared) = reduce_crossings(&mut g, nodes);
         g.set_positions();
+    }
+    if order_only {
+        let at = position(&mut g, opt);
+        for (i, node) in nodes.iter_mut().enumerate() {
+            node.x = at[i];
+        }
+        for (ei, e) in edges.iter_mut().enumerate() {
+            let (a, b) = if e.reversed { (e.head, e.tail) } else { (e.tail, e.head) };
+            let mut pts = vec![float(g.rank[a]), at[a]];
+            if !direct[ei]
+                && let Some(d0) = first_dummy[ei]
+            {
+                for d in d0..d0 + span[ei] - 1 {
+                    pts.extend([float(g.rank[d]), at[d]]);
+                }
+            }
+            pts.extend([float(g.rank[b]), at[b]]);
+            e.points = pts;
+        }
+        return LayeredResult { crossings, declared, ..LayeredResult::default() };
     }
 
     if spans {
@@ -837,7 +1027,7 @@ pub(crate) fn layered(nodes: &mut [LNode], edges: &mut [LEdge], opt: &LayeredOpt
         e.points = pts;
     }
 
-    LayeredResult { height, width: max_x - min_x }
+    LayeredResult { height, width: max_x - min_x, ..LayeredResult::default() }
 }
 
 /// The pieces of edges that each cross one gap. Where only some pieces get a level to turn
@@ -871,6 +1061,12 @@ struct Graph {
     et: Vec<usize>,
     /// Where each segment attaches on its head, from the middle.
     etd: Vec<f64>,
+    /// Ranks whose order stays as it is.
+    fixed: Vec<bool>,
+    /// With groups, the group of each node, bends included.
+    grp: Option<Vec<Option<usize>>>,
+    /// With groups, the group that holds each group.
+    group_parent: Vec<Option<usize>>,
     /// Each node's kind.
     kind: Vec<Kind>,
     /// Where each rank starts in `order`, with one more entry for the end.
@@ -1381,9 +1577,34 @@ fn settle(
     free: &[Vec<u32>; 2],
     empty: Option<&[bool]>,
 ) {
-    let mut ids = Vec::new();
-    let mut room = Vec::new();
-    let mut all = Vec::new();
+    // The order of the ends and the room between them stay the same from pass to pass. Every end
+    // on a side, in order: the held ones divide the rest into runs.
+    let mut sides = Vec::new();
+    for v in 0..g.real {
+        let span = nodes[v].span.min(g.w[v]);
+        if span <= 0.0 || nodes[v].kind != Kind::Node {
+            continue;
+        }
+        for side in 0..2 {
+            let mut ids = Vec::new();
+            let mut room = Vec::new();
+            side_ends(g, v, side, span, if side == 0 { etk } else { efk }, &mut ids, &mut room);
+            if ids.is_empty() {
+                continue;
+            }
+            if room.len() < ids.len() {
+                room.resize(ids.len(), 0.0);
+            }
+            if ids.len() == 1 {
+                room[0] = 0.0;
+            }
+            let (start, list, other) =
+                if side == 0 { (&g.pred_start, &g.pred_e, &g.ef) } else { (&g.succ_start, &g.succ_e, &g.et) };
+            let mut all = list[start[v]..start[v + 1]].to_vec();
+            all.sort_by(|&a: &usize, &b: &usize| g.pos[other[a]].cmp(&g.pos[other[b]]).then(a.cmp(&b)));
+            sides.push((v, side, span, ids, room, all));
+        }
+    }
     let mut sum: Vec<f64> = Vec::new();
     let mut count: Vec<usize> = Vec::new();
     // The ends of an edge follow each other, so the nodes are gone over until none moves.
@@ -1391,31 +1612,10 @@ fn settle(
     let mut pass = 0;
     while moved && pass < 6 {
         moved = false;
-        for v in 0..g.real {
-            let span = nodes[v].span.min(g.w[v]);
-            if span <= 0.0 || nodes[v].kind != Kind::Node {
-                continue;
-            }
-            for side in 0..2 {
+        for (v, side, span, ids, room, all) in &sides {
+            let (v, side, span) = (*v, *side, *span);
+            {
                 let kinds = if side == 0 { etk } else { efk };
-                side_ends(g, v, side, span, kinds, &mut ids, &mut room);
-                if ids.is_empty() {
-                    continue;
-                }
-                if room.len() < ids.len() {
-                    room.resize(ids.len(), 0.0);
-                }
-                if ids.len() == 1 {
-                    room[0] = 0.0;
-                }
-                // Every end on the side in order; the held ones divide the rest into runs.
-                all.clear();
-                {
-                    let (start, list, other) =
-                        if side == 0 { (&g.pred_start, &g.pred_e, &g.ef) } else { (&g.succ_start, &g.succ_e, &g.et) };
-                    all.extend_from_slice(&list[start[v]..start[v + 1]]);
-                    all.sort_by(|&a: &usize, &b: &usize| g.pos[other[a]].cmp(&g.pos[other[b]]).then(a.cmp(&b)));
-                }
                 let dx = |g: &Graph, k: usize| if side == 0 { g.etd[k] } else { g.efd[k] };
                 let mut k = 0;
                 let mut lo = -span / 2.0;
@@ -1676,9 +1876,26 @@ impl Bounds<'_> {
     }
 }
 
-/// The least distance from the points of one sampled curve to the polyline of another.
-fn reach(points: &[f64; 2 * SAMPLES + 2], line: &[f64; 2 * SAMPLES + 2]) -> f64 {
-    let mut least = f64::INFINITY;
+/// The pairs of places in `list` whose pieces lie near enough across the flow to meet or clash,
+/// smaller place first. No pair left out can.
+fn near_pairs(bounds: &Bounds<'_>, list: &[usize]) -> Vec<(usize, usize)> {
+    let (lo, hi) = (&bounds.lo, &bounds.hi);
+    let mut by_lo: Vec<usize> = (0..list.len()).collect();
+    by_lo.sort_by(|&a, &b| cmp(lo[list[a]], lo[list[b]]));
+    let mut pairs = Vec::new();
+    for (x, &i) in by_lo.iter().enumerate() {
+        let reach = hi[list[i]] + 4.0 * IN_LINE;
+        for &j in by_lo[x + 1..].iter().take_while(|&&j| lo[list[j]] <= reach) {
+            pairs.push((i.min(j), i.max(j)));
+        }
+    }
+    pairs
+}
+
+/// Whether a point of one sampled curve comes within `limit` of the polyline of another.
+fn reaches(points: &[f64; 2 * SAMPLES + 2], line: &[f64; 2 * SAMPLES + 2], limit: f64) -> bool {
+    // The cheap check on the square allows for its rounding before `hypot` settles it.
+    let bound = limit * limit * (1.0 + 1e-9);
     for i in 0..=SAMPLES {
         let px = points[2 * i];
         let py = points[2 * i + 1];
@@ -1690,13 +1907,14 @@ fn reach(points: &[f64; 2 * SAMPLES + 2], line: &[f64; 2 * SAMPLES + 2]) -> f64 
                 den = 1.0;
             }
             let t = clamp(((px - line[2 * j]) * dx + (py - line[2 * j + 1]) * dy) / den, 0.0, 1.0);
-            let d = hypot(px - line[2 * j] - t * dx, py - line[2 * j + 1] - t * dy);
-            if d < least {
-                least = d;
+            let ex = px - line[2 * j] - t * dx;
+            let ey = py - line[2 * j + 1] - t * dy;
+            if ex * ex + ey * ey < bound && hypot(ex, ey) < limit {
+                return true;
             }
         }
     }
-    least
+    false
 }
 
 /// Gives the pieces of one gap in `list` their tracks, and each the number of tracks that the
@@ -1717,32 +1935,40 @@ fn lay(bounds: &Bounds<'_>, track: &mut [isize], levels: &mut [usize], list: &mu
         }
         i
     };
+    let weighed = count <= MAX_WEIGHED;
+    // Only pieces near each other are paired, so that a crowded gap stores no pair for each two.
+    let pairs = if weighed { near_pairs(bounds, list) } else { Vec::new() };
+    let mut clashes: Vec<Vec<usize>> = if weighed { vec![Vec::new(); count] } else { Vec::new() };
+    for &(i, j) in &pairs {
+        if bounds.clash(list[i], list[j]) {
+            clashes[i].push(j);
+            clashes[j].push(i);
+        }
+    }
     let mut sequence: Vec<usize> = (0..count).collect();
-    if count <= MAX_WEIGHED {
+    if weighed {
         // above[j] lists the pieces that should be above list[j]. A piece is placed once all
         // that should be above it are, and when none is free, the one with the fewest waiting.
         let mut waiting = vec![0usize; count];
         let mut after: Vec<Vec<usize>> = vec![Vec::new(); count];
         above = vec![Vec::new(); count];
-        for i in 0..count {
-            for j in i + 1..count {
-                let a = list[i];
-                let b = list[j];
-                if !bounds.meet(a, b) {
-                    continue;
-                }
-                let root = find(&mut group, i);
-                group[root] = find(&mut group, j);
-                let ab = bounds.crossings(a, b);
-                let ba = bounds.crossings(b, a);
-                if ab == ba {
-                    continue;
-                }
-                let (first, second) = if ab < ba { (i, j) } else { (j, i) };
-                above[second].push(first);
-                after[first].push(second);
-                waiting[second] += 1;
+        for &(i, j) in &pairs {
+            let a = list[i];
+            let b = list[j];
+            if !bounds.meet(a, b) {
+                continue;
             }
+            let root = find(&mut group, i);
+            group[root] = find(&mut group, j);
+            let ab = bounds.crossings(a, b);
+            let ba = bounds.crossings(b, a);
+            if ab == ba {
+                continue;
+            }
+            let (first, second) = if ab < ba { (i, j) } else { (j, i) };
+            above[second].push(first);
+            after[first].push(second);
+            waiting[second] += 1;
         }
         let mut placed = vec![false; count];
         sequence.clear();
@@ -1771,7 +1997,9 @@ fn lay(bounds: &Bounds<'_>, track: &mut [isize], levels: &mut [usize], list: &mu
     }
     // Each piece takes the first track below those it should be under that has room for it.
     // `sequence` holds places in `list`.
-    let mut rows: Vec<Vec<usize>> = Vec::new();
+    let mut taken = BTreeSet::new();
+    let mut on_track: Vec<Vec<usize>> = Vec::new();
+    let mut rows: isize = 0;
     for &i in &sequence {
         let k = list[i];
         let mut t: isize = 0;
@@ -1782,21 +2010,32 @@ fn lay(bounds: &Bounds<'_>, track: &mut [isize], levels: &mut [usize], list: &mu
                 }
             }
         }
-        loop {
-            let slot = usize::try_from(t).unwrap_or(0);
-            if rows.len() <= slot {
-                rows.resize(slot + 1, Vec::new());
+        if weighed {
+            taken.clear();
+            taken.extend(clashes[i].iter().map(|&o| track[list[o]]));
+            while taken.contains(&t) {
+                t += 1;
             }
-            if rows[slot].iter().all(|&other| !bounds.clash(k, other)) {
-                rows[slot].push(k);
-                break;
+        } else {
+            loop {
+                let slot = usize::try_from(t).unwrap_or(0);
+                if on_track.len() <= slot {
+                    on_track.resize(slot + 1, Vec::new());
+                }
+                if on_track[slot].iter().all(|&other| !bounds.clash(k, other)) {
+                    on_track[slot].push(k);
+                    break;
+                }
+                t += 1;
             }
-            t += 1;
         }
         track[k] = t;
+        if t >= rows {
+            rows = t + 1;
+        }
     }
-    let mut first = vec![isize::MAX; count];
-    let mut last = vec![isize::MIN; count];
+    let mut first = vec![rows; count];
+    let mut last = vec![-1; count];
     for (i, &k) in list.iter().enumerate() {
         let root = find(&mut group, i);
         first[root] = first[root].min(track[k]);
@@ -1809,7 +2048,7 @@ fn lay(bounds: &Bounds<'_>, track: &mut [isize], levels: &mut [usize], list: &mu
             track[k] -= first[root];
         }
     }
-    rows.len()
+    usize::try_from(rows).unwrap_or(0)
 }
 
 /// Gives every piece that does not run straight down a track across its gap, and counts the
@@ -1838,6 +2077,9 @@ fn assign_tracks(pieces: &mut Pieces, track_count: &mut [usize], curved: bool, r
             by_rank.push((r, vec![k]));
         }
     }
+    if by_rank.is_empty() {
+        return;
+    }
     let bounds = Bounds {
         from,
         hi: (0..total).map(|k| from[k].max(to[k])).collect(),
@@ -1846,15 +2088,16 @@ fn assign_tracks(pieces: &mut Pieces, track_count: &mut [usize], curved: bool, r
     };
     let mut line_a = [0.0; 2 * SAMPLES + 2];
     let mut line_b = [0.0; 2 * SAMPLES + 2];
-    // The least distance between a and b as plain curves across a gap that leaves them
-    // `height` to turn in.
-    let mut nearest = |a: usize, b: usize, height: f64| {
+    // Whether a and b come within `limit` of each other as plain curves across a gap that leaves
+    // them `height` to turn in.
+    let mut near = |a: usize, b: usize, height: f64, limit: f64| {
         let h = (height / 2.0).max(height - 2.0 * LEVEL_LEAD);
         bounds.sample(a, h, &mut line_a);
         bounds.sample(b, h, &mut line_b);
-        reach(&line_a, &line_b).min(reach(&line_b, &line_a))
+        reaches(&line_a, &line_b, limit) || reaches(&line_b, &line_a, limit)
     };
     let mut in_level = vec![false; total];
+    let mut beside = vec![false; total];
     let mut turning = Vec::new();
 
     for (r, mut all) in by_rank {
@@ -1876,20 +2119,19 @@ fn assign_tracks(pieces: &mut Pieces, track_count: &mut [usize], curved: bool, r
                 turning.push(k);
             }
         }
-        for i in 0..all.len() {
-            for j in i + 1..all.len() {
-                let a = all[i];
-                let b = all[j];
-                if (in_level[a] && in_level[b]) || !bounds.clash(a, b) || (from[a] < to[a]) != (from[b] < to[b]) {
-                    continue;
-                }
-                let limit = if wide[a] || wide[b] { LEVEL_CLEAR } else { LEVEL_TOUCH };
-                if nearest(a, b, room[r]) < limit {
-                    for k in [a, b] {
-                        if !in_level[k] {
-                            in_level[k] = true;
-                            turning.push(k);
-                        }
+        let pairs = near_pairs(&bounds, &all);
+        for &(i, j) in &pairs {
+            let a = all[i];
+            let b = all[j];
+            if (in_level[a] && in_level[b]) || !bounds.clash(a, b) || (from[a] < to[a]) != (from[b] < to[b]) {
+                continue;
+            }
+            let limit = if wide[a] || wide[b] { LEVEL_CLEAR } else { LEVEL_TOUCH };
+            if near(a, b, room[r], limit) {
+                for k in [a, b] {
+                    if !in_level[k] {
+                        in_level[k] = true;
+                        turning.push(k);
                     }
                 }
             }
@@ -1903,10 +2145,10 @@ fn assign_tracks(pieces: &mut Pieces, track_count: &mut [usize], curved: bool, r
         }
         let mut crossing = 0;
         let mut alongside = 0;
-        for i in 0..turning.len() {
-            for j in i + 1..turning.len() {
-                let a = turning[i];
-                let b = turning[j];
+        for &(i, j) in &pairs {
+            let a = all[i];
+            let b = all[j];
+            if in_level[a] && in_level[b] {
                 if !bounds.overlap(a, b) {
                     continue;
                 }
@@ -1915,6 +2157,9 @@ fn assign_tracks(pieces: &mut Pieces, track_count: &mut [usize], curved: bool, r
                 } else if !bounds.mates(a, b) {
                     alongside += 1;
                 }
+            } else if (in_level[a] || in_level[b]) && bounds.meet(a, b) {
+                beside[a] = true;
+                beside[b] = true;
             }
         }
         if crossing > alongside {
@@ -1927,16 +2172,14 @@ fn assign_tracks(pieces: &mut Pieces, track_count: &mut [usize], curved: bool, r
         } else {
             // With them go the short pieces that could cross one of them, so that each has its
             // place among the levels and crosses none.
-            let mut members: Vec<usize> = all
-                .iter()
-                .copied()
-                .filter(|&k| in_level[k] || (!wide[k] && turning.iter().any(|&j| bounds.meet(k, j))))
-                .collect();
+            let mut members: Vec<usize> =
+                all.iter().copied().filter(|&k| in_level[k] || (!wide[k] && beside[k])).collect();
             lay(&bounds, track, levels, &mut members, curved);
             track_count[r] = members.iter().map(|&k| levels[k]).max().unwrap_or(0);
         }
-        for &k in &turning {
+        for &k in &all {
             in_level[k] = false;
+            beside[k] = false;
         }
     }
 }
@@ -2096,48 +2339,102 @@ fn past_labels(
 
 /// Reusable buffers for counting crossings.
 struct Counter {
-    /// Segments of one node, for sorting.
-    ids: Vec<usize>,
-    /// With offsets, each segment's place along its head's side.
+    /// With offsets, each node's segments out in the order of their offsets.
+    leaving: Vec<usize>,
+    /// With offsets, whether a node's segments out leave it at more than one offset.
+    mixed: Vec<bool>,
+    /// With offsets, each segment's place along its head's side, set rank by rank.
     place: Option<Vec<usize>>,
+    /// With offsets, each segment's place among the offsets that its head's segments in arrive
+    /// at.
+    place_in: Vec<usize>,
+    /// With offsets, how many offsets each node's segments in arrive at.
+    places: Vec<usize>,
     /// Each segment's head place, rank by rank.
     targets: Vec<usize>,
     /// Accumulation tree.
     tree: Vec<u32>,
 }
 
+impl Counter {
+    /// Buffers for `g`, whose widest rank holds `widest` nodes. With offsets, edges that reach one
+    /// node at different offsets take separate places along it, which do not depend on the order
+    /// of the nodes and so are worked out once.
+    #[expect(clippy::float_cmp, reason = "Pele compares offsets exactly")]
+    fn new(g: &Graph, widest: usize) -> Self {
+        let segments = g.ef.len();
+        let mut counter = Counter {
+            leaving: Vec::new(),
+            mixed: Vec::new(),
+            place: None,
+            place_in: Vec::new(),
+            places: Vec::new(),
+            targets: vec![0; segments],
+            tree: Vec::new(),
+        };
+        if g.offsets {
+            let mut arriving = g.pred_e.clone();
+            let mut leaving = g.succ_e.clone();
+            let mut place_in = vec![0; segments];
+            let mut places = vec![0; g.n];
+            let mut mixed = vec![false; g.n];
+            for v in 0..g.n {
+                places[v] = 1;
+                let (from, to) = (g.pred_start[v], g.pred_start[v + 1]);
+                if by_offset(&mut arriving[from..to], &g.etd) {
+                    for k in from + 1..to {
+                        if g.etd[arriving[k]] != g.etd[arriving[k - 1]] {
+                            places[v] += 1;
+                        }
+                        place_in[arriving[k]] = places[v] - 1;
+                    }
+                }
+                if by_offset(&mut leaving[g.succ_start[v]..g.succ_start[v + 1]], &g.efd) {
+                    mixed[v] = true;
+                }
+            }
+            counter.leaving = leaving;
+            counter.mixed = mixed;
+            counter.place = Some(vec![0; segments]);
+            counter.place_in = place_in;
+            counter.places = places;
+        }
+        let size = if g.offsets { widest + segments } else { widest }.next_power_of_two();
+        counter.tree = vec![0; 2 * size];
+        counter
+    }
+}
+
+/// Sorts `list` by `dx` if its segments do not all have the same offset, and says whether it did.
+#[expect(clippy::float_cmp, reason = "Pele compares offsets exactly")]
+fn by_offset(list: &mut [usize], dx: &[f64]) -> bool {
+    let Some(&first) = list.first() else {
+        return false;
+    };
+    if list.iter().all(|&k| dx[k] == dx[first]) {
+        return false;
+    }
+    list.sort_by(|&a, &b| cmp(dx[a], dx[b]));
+    true
+}
+
 /// Counts the crossings between every two neighbouring ranks.
 #[expect(clippy::float_cmp, reason = "Pele compares offsets exactly")]
 fn count_crossings(g: &Graph, c: &mut Counter) -> u64 {
-    let Counter { ids, place, targets, tree } = c;
+    let Counter { leaving, mixed, place, place_in, places, targets, tree } = c;
     let ls = &g.layer_start;
     let mut total = 0u64;
     for r in 0..g.max_rank {
         let mut south_len = ls[r + 2] - ls[r + 1];
         if let Some(place) = place.as_mut() {
-            let mut places = 0;
+            let mut next = 0;
             for &v in &g.order[ls[r + 1]..ls[r + 2]] {
-                let from = g.pred_start[v];
-                let to = g.pred_start[v + 1];
-                let mixed = (from + 1..to).any(|k| g.etd[g.pred_e[k]] != g.etd[g.pred_e[from]]);
-                if mixed {
-                    ids.clear();
-                    ids.extend_from_slice(&g.pred_e[from..to]);
-                    ids.sort_by(|&a, &b| cmp(g.etd[a], g.etd[b]));
-                    for k in 0..ids.len() {
-                        if k > 0 && g.etd[ids[k]] != g.etd[ids[k - 1]] {
-                            places += 1;
-                        }
-                        place[ids[k]] = places;
-                    }
-                } else {
-                    for &e in &g.pred_e[from..to] {
-                        place[e] = places;
-                    }
+                for &e in &g.pred_e[g.pred_start[v]..g.pred_start[v + 1]] {
+                    place[e] = next + place_in[e];
                 }
-                places += 1;
+                next += places[v];
             }
-            south_len = places;
+            south_len = next;
         }
         if south_len < 2 {
             continue;
@@ -2147,22 +2444,25 @@ fn count_crossings(g: &Graph, c: &mut Counter) -> u64 {
             let from = g.succ_start[v];
             let to = g.succ_start[v + 1];
             let t0 = t;
-            for &e in &g.succ_e[from..to] {
-                targets[t] = place.as_ref().map_or(g.pos[g.et[e]], |place| place[e]);
+            for k in from..to {
+                targets[t] = place.as_ref().map_or(g.pos[g.et[g.succ_e[k]]], |place| place[leaving[k]]);
                 t += 1;
             }
             if t - t0 < 2 {
                 continue;
             }
-            let mixed = place.is_some() && (from + 1..to).any(|k| g.efd[g.succ_e[k]] != g.efd[g.succ_e[from]]);
-            if let Some(place) = place.as_ref()
-                && mixed
-            {
-                ids.clear();
-                ids.extend_from_slice(&g.succ_e[from..to]);
-                ids.sort_by(|&a, &b| cmp(g.efd[a], g.efd[b]).then(place[a].cmp(&place[b])));
-                for (k, &id) in ids.iter().enumerate() {
-                    targets[t0 + k] = place[id];
+            if place.is_some() && mixed[v] {
+                // Edges that leave at one offset are sorted by where they go, so that ends they
+                // share do not count as crossings.
+                for a in t0 + 1..t {
+                    let item = targets[a];
+                    let dx = g.efd[leaving[from + a - t0]];
+                    let mut b = a;
+                    while b > t0 && g.efd[leaving[from + b - 1 - t0]] == dx && targets[b - 1] > item {
+                        targets[b] = targets[b - 1];
+                        b -= 1;
+                    }
+                    targets[b] = item;
                 }
             } else {
                 targets[t0..t].sort_unstable();
@@ -2188,12 +2488,125 @@ fn count_crossings(g: &Graph, c: &mut Counter) -> u64 {
     total
 }
 
-/// One barycenter sweep down (from the ranks above) or up, ties broken left or right.
+/// Buffers for keeping the members of each group side by side within a rank.
+struct Arrange {
+    /// How many groups hold each group, itself included.
+    depth: Vec<usize>,
+    /// Where in `order` each group's first member in the rank is.
+    first: Vec<usize>,
+    /// How many members of each group the rank holds.
+    count: Vec<usize>,
+    /// The sum of the keys of each group's members in the rank.
+    sum: Vec<f64>,
+}
+
+impl Arrange {
+    /// Buffers for the groups of `g`.
+    fn new(g: &Graph) -> Self {
+        let groups = g.group_parent.len();
+        let mut depth = vec![0; groups];
+        for (gr, d) in depth.iter_mut().enumerate() {
+            let mut p = Some(gr);
+            while let Some(at) = p {
+                *d += 1;
+                p = g.group_parent[at];
+            }
+        }
+        Arrange { depth, first: vec![0; groups], count: vec![0; groups], sum: vec![0.0; groups] }
+    }
+}
+
+/// Orders rank `r` by `key`, keeping each group's members side by side: two nodes are ordered as
+/// the groups or nodes that hold them inside the innermost group that holds both, a group by
+/// the mean key of its members in the rank, ties by which comes first.
+#[expect(clippy::many_single_char_names, reason = "names mirror Pele's layered.ts for side-by-side review")]
+fn arrange(g: &mut Graph, a: &mut Arrange, r: usize, key: &[f64]) {
+    let Some(grp) = g.grp.as_ref() else {
+        return;
+    };
+    let parent = &g.group_parent;
+    let n = g.n;
+    let s = g.layer_start[r];
+    let e = g.layer_start[r + 1];
+    for &v in &g.order[s..e] {
+        let mut gr = grp[v];
+        while let Some(at) = gr {
+            a.sum[at] = 0.0;
+            a.count[at] = 0;
+            gr = parent[at];
+        }
+    }
+    for i in s..e {
+        let v = g.order[i];
+        let mut gr = grp[v];
+        while let Some(at) = gr {
+            if a.count[at] == 0 {
+                a.first[at] = i;
+            }
+            a.sum[at] += key[v];
+            a.count[at] += 1;
+            gr = parent[at];
+        }
+    }
+    // Groups take the items from `n` on, one for each.
+    let value = |item: usize| if item >= n { a.sum[item - n] / float(a.count[item - n]) } else { key[item] };
+    let first = |item: usize| if item >= n { a.first[item - n] } else { s + g.pos[item] };
+    let depth = |gr: Option<usize>| gr.map_or(0, |gr| a.depth[gr]);
+    let compare = |&x: &usize, &y: &usize| {
+        let (mut ix, mut iy) = (x, y);
+        let (mut cx, mut cy) = (grp[x], grp[y]);
+        let (mut dx, mut dy) = (depth(cx), depth(cy));
+        while dx > dy
+            && let Some(at) = cx
+        {
+            ix = n + at;
+            cx = parent[at];
+            dx -= 1;
+        }
+        while dy > dx
+            && let Some(at) = cy
+        {
+            iy = n + at;
+            cy = parent[at];
+            dy -= 1;
+        }
+        while cx != cy
+            && let (Some(ax), Some(ay)) = (cx, cy)
+        {
+            ix = n + ax;
+            cx = parent[ax];
+            iy = n + ay;
+            cy = parent[ay];
+        }
+        cmp(value(ix), value(iy)).then(first(ix).cmp(&first(iy)))
+    };
+    let mut row = g.order[s..e].to_vec();
+    row.sort_by(compare);
+    g.order[s..e].copy_from_slice(&row);
+    for i in s..e {
+        g.pos[g.order[i]] = i - s;
+    }
+}
+
+/// One barycenter sweep down (from the ranks above) or up, ties broken left or right. With
+/// groups, each rank is arranged by its barycenters, and a node with no neighbours in the rank it
+/// looks to keeps its share of the way along its own.
 #[expect(clippy::many_single_char_names, reason = "names mirror Pele's layered.ts for side-by-side review")]
 #[expect(clippy::float_cmp, reason = "Pele marks nodes without neighbours with exactly -1")]
-fn sweep(g: &mut Graph, nodes: &[LNode], bary: &mut [f64], moving: &mut [usize], down: bool, bias_right: bool) {
+fn sweep(
+    g: &mut Graph,
+    nodes: &[LNode],
+    bary: &mut [f64],
+    moving: &mut [usize],
+    groups: &mut Arrange,
+    down: bool,
+    bias_right: bool,
+) {
     for step in 1..=g.max_rank {
         let r = if down { step } else { g.max_rank - step };
+        if g.fixed[r] {
+            continue;
+        }
         let s = g.layer_start[r];
         let e = g.layer_start[r + 1];
         let mut movable = 0;
@@ -2214,6 +2627,12 @@ fn sweep(g: &mut Graph, nodes: &[LNode], bary: &mut [f64], moving: &mut [usize],
             let from = start[v];
             let to = start[v + 1];
             if from == to {
+                if g.grp.is_some() {
+                    let ls = &g.layer_start;
+                    let across = if down { ls[r] - ls[r - 1] } else { ls[r + 2] - ls[r + 1] };
+                    bary[v] = float((i - s) * across) / float(e - s);
+                    continue;
+                }
                 bary[v] = -1.0;
                 continue;
             }
@@ -2228,6 +2647,10 @@ fn sweep(g: &mut Graph, nodes: &[LNode], bary: &mut [f64], moving: &mut [usize],
             bary[v] = sum / float(to - from);
             moving[movable] = v;
             movable += 1;
+        }
+        if g.grp.is_some() {
+            arrange(g, groups, r, bary);
+            continue;
         }
         if movable < 2 {
             continue;
@@ -2250,6 +2673,60 @@ fn sweep(g: &mut Graph, nodes: &[LNode], bary: &mut [f64], moving: &mut [usize],
     }
 }
 
+/// Where segment `e` meets the rank above (`up`) or below, counted in places along it.
+fn place_at(g: &Graph, e: usize, up: bool) -> f64 {
+    let u = if up { g.ef[e] } else { g.et[e] };
+    let dx = if up { g.efd[e] } else { g.etd[e] };
+    if g.offsets && g.w[u] > 0.0 { float(g.pos[u]) + dx / g.w[u] } else { float(g.pos[u]) }
+}
+
+/// How often the edges of `a` and `b` cross, with `a` to the left of `b`.
+#[expect(clippy::many_single_char_names, reason = "names mirror Pele's layered.ts for side-by-side review")]
+fn crossings_between(g: &Graph, a: usize, b: usize) -> usize {
+    let mut c = 0;
+    for (start, list, up) in [(&g.pred_start, &g.pred_e, true), (&g.succ_start, &g.succ_e, false)] {
+        for &k in &list[start[a]..start[a + 1]] {
+            let x = place_at(g, k, up);
+            c += list[start[b]..start[b + 1]].iter().filter(|&&j| x > place_at(g, j, up)).count();
+        }
+    }
+    c
+}
+
+/// Swaps neighbouring nodes where that crosses less, which the barycenter sweeps can miss.
+#[expect(clippy::float_cmp, reason = "Pele compares pins exactly")]
+fn transpose(g: &mut Graph, nodes: &[LNode]) {
+    let real = g.real;
+    let pin = |v: usize| if v < real { nodes[v].pin } else { 0.0 };
+    for _ in 0..8 {
+        let mut improved = false;
+        for r in 0..=g.max_rank {
+            if g.fixed[r] {
+                continue;
+            }
+            let s = g.layer_start[r];
+            for i in s..g.layer_start[r + 1].saturating_sub(1) {
+                let a = g.order[i];
+                let b = g.order[i + 1];
+                if pin(a) != pin(b) || g.grp.as_ref().is_some_and(|grp| grp[a] != grp[b]) {
+                    continue;
+                }
+                if crossings_between(g, b, a) >= crossings_between(g, a, b) {
+                    continue;
+                }
+                g.order[i] = b;
+                g.order[i + 1] = a;
+                g.pos[b] = i - s;
+                g.pos[a] = i + 1 - s;
+                improved = true;
+            }
+        }
+        if !improved {
+            break;
+        }
+    }
+}
+
 /// How many pairs of nodes in one rank are not in the order they were given.
 fn out_of_order(g: &Graph) -> usize {
     let mut total = 0;
@@ -2265,29 +2742,43 @@ fn out_of_order(g: &Graph) -> usize {
     total
 }
 
-/// Orders each rank to reduce crossings by barycenter sweeps, keeping the best order found.
-/// Small graphs try two sweep orders and a mirror image, keeping the one closest to the order
-/// the nodes were given among those with the fewest crossings.
-fn reduce_crossings(g: &mut Graph, nodes: &[LNode]) {
-    let segments = g.ef.len();
+/// Orders each rank to reduce crossings by barycenter sweeps and swaps of neighbours, keeping the
+/// best order found. With groups, each group's members stay side by side, from a start that
+/// orders each rank by the groups' places in it. Small graphs try two sweep orders and a mirror
+/// image, keeping the one closest to the order the nodes were given among those with the fewest
+/// crossings. Returns the crossings of the order kept and of the order given.
+fn reduce_crossings(g: &mut Graph, nodes: &[LNode]) -> (u64, u64) {
     let widest = (0..=g.max_rank).map(|r| g.layer_start[r + 1] - g.layer_start[r]).max().unwrap_or(0);
-    // With offsets, edges that reach one node at different offsets take separate places.
-    let place = g.offsets.then(|| vec![0usize; segments]);
-    let size = if place.is_some() { widest + segments } else { widest }.next_power_of_two();
-    let mut counter = Counter { ids: Vec::new(), place, targets: vec![0; segments], tree: vec![0; 2 * size] };
-
-    let mut best = count_crossings(g, &mut counter);
-    if best == 0 {
-        return;
+    if widest < 2 {
+        return (0, 0);
     }
-    let mut best_order = g.order.clone();
+    let mut counter = Counter::new(g, widest);
+
+    let declared = count_crossings(g, &mut counter);
     let mut bary = vec![0.0; g.n];
     let mut moving = vec![0usize; widest];
+    let mut groups = Arrange::new(g);
+    if g.grp.is_some() {
+        let mut at = vec![0.0; g.n];
+        for r in 0..=g.max_rank {
+            let s = g.layer_start[r];
+            for i in s..g.layer_start[r + 1] {
+                at[g.order[i]] = float(i - s);
+            }
+            arrange(g, &mut groups, r, &at);
+        }
+    }
+    let mut best = if g.grp.is_some() { count_crossings(g, &mut counter) } else { declared };
+    if best == 0 {
+        return (0, declared);
+    }
+    let mut best_order = g.order.clone();
+    // An order has to cross less than both the grouped start and the order given.
+    let start = best.min(declared);
 
     // The sweeps run twice from the same start, going down first and going up first. When both
     // cross as little, the one that keeps more nodes in their given order wins.
     let initial = g.order.clone();
-    let start = best;
     let small = g.n <= 600;
     let mut chosen = best_order.clone();
     let mut chosen_out = usize::MAX;
@@ -2301,7 +2792,7 @@ fn reduce_crossings(g: &mut Graph, nodes: &[LNode]) {
         let mut stale = 0;
         let mut i = 0;
         while stale < 4 && i < MAX_SWEEPS {
-            sweep(g, nodes, &mut bary, &mut moving, (i + attempt).is_multiple_of(2), i % 4 >= 2);
+            sweep(g, nodes, &mut bary, &mut moving, &mut groups, (i + attempt).is_multiple_of(2), i % 4 >= 2);
             let c = count_crossings(g, &mut counter);
             if c < found {
                 found = c;
@@ -2315,6 +2806,15 @@ fn reduce_crossings(g: &mut Graph, nodes: &[LNode]) {
             stale += 1;
         }
         g.order.copy_from_slice(&found_order);
+        if small && found > 0 {
+            g.set_positions();
+            transpose(g, nodes);
+            let c = count_crossings(g, &mut counter);
+            if c < found {
+                found = c;
+                found_order.copy_from_slice(&g.order);
+            }
+        }
         let out = if small { out_of_order(g) } else { 0 };
         if attempt == 0 || found < best || (found == best && out < chosen_out) {
             best = found;
@@ -2325,10 +2825,14 @@ fn reduce_crossings(g: &mut Graph, nodes: &[LNode]) {
     g.order.copy_from_slice(&chosen);
     g.set_positions();
     best_order.copy_from_slice(&chosen);
+    // The grouped start may have been kept with more crossings than the order given.
+    if g.grp.is_some() {
+        best = count_crossings(g, &mut counter);
+    }
 
     // A drawing and its mirror image cross as often too. Of those two, likewise.
-    if !small || nodes.iter().any(|v| v.pin != 0.0) || chosen_out == 0 {
-        return;
+    if !small || nodes.iter().any(|v| v.pin != 0.0) || chosen_out == 0 || g.fixed[0] || g.fixed[g.max_rank] {
+        return (best, declared);
     }
     for r in 0..=g.max_rank {
         g.order[g.layer_start[r]..g.layer_start[r + 1]].reverse();
@@ -2337,6 +2841,7 @@ fn reduce_crossings(g: &mut Graph, nodes: &[LNode]) {
     if count_crossings(g, &mut counter) > best || out_of_order(g) >= chosen_out {
         g.order.copy_from_slice(&best_order);
     }
+    (best, declared)
 }
 
 /// Half the room a node, bend, or port takes across the flow, with its share of the gap beside
@@ -2595,4 +3100,88 @@ fn position(g: &mut Graph, opt: &LayeredOptions) -> Vec<f64> {
             f64::midpoint(b, c)
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn options() -> LayeredOptions {
+        LayeredOptions { edge_sep: 16.0, node_sep: 40.0, port_sep: 20.0, rank_sep: 48.0, ..LayeredOptions::default() }
+    }
+
+    #[test]
+    #[expect(clippy::float_cmp, reason = "ranks are whole numbers")]
+    fn orders_groups_side_by_side_and_counts_the_crossings_of_that_order() {
+        let mut nodes = vec![lnode(40.0, 40.0, Kind::Node); 6];
+        let of = vec![Some(0), Some(1), Some(0), None, Some(0), None];
+        let mut edges = vec![
+            ledge(0, 4, 1, 0.0, 0.0),
+            ledge(1, 4, 1, 0.0, 0.0),
+            ledge(2, 5, 1, 0.0, 0.0),
+            ledge(3, 4, 1, 0.0, 0.0),
+            ledge(3, 5, 1, 0.0, 0.0),
+        ];
+        let groups = Groups { of: of.clone(), parent: vec![None, None] };
+        let result = layered_with(&mut nodes, &mut edges, &options(), Some(&groups), true);
+        // Points are `rank, place` pairs.
+        let mut pieces = Vec::new();
+        for e in &edges {
+            for k in (2..e.points.len()).step_by(2) {
+                pieces.push((e.points[k - 2], e.points[k - 1], e.points[k + 1]));
+            }
+        }
+        let mut crossed = 0;
+        for i in 0..pieces.len() {
+            for j in i + 1..pieces.len() {
+                let (r, a0, a1) = pieces[i];
+                let (s, b0, b1) = pieces[j];
+                if r == s && (a0 - b0) * (a1 - b1) < 0.0 {
+                    crossed += 1;
+                }
+            }
+        }
+        assert_eq!(result.crossings, crossed);
+        for i in 0..nodes.len() {
+            for j in 0..nodes.len() {
+                if of[i].is_none() || of[j] != of[i] || nodes[i].rank != nodes[j].rank || nodes[i].x >= nodes[j].x {
+                    continue;
+                }
+                for k in 0..nodes.len() {
+                    let between = nodes[k].rank == nodes[i].rank && nodes[k].x > nodes[i].x && nodes[k].x < nodes[j].x;
+                    assert!(!(between && of[k] != of[i]), "node {k} between {i} and {j}");
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn lays_out_a_single_node_at_its_own_size() {
+        let mut nodes = vec![lnode(30.0, 20.0, Kind::Node)];
+        let result = layered(&mut nodes, &mut [], &options());
+        assert_eq!((result.width, result.height), (30.0, 20.0));
+        assert_eq!((nodes[0].x, nodes[0].y, nodes[0].rank), (15.0, 10.0, 0));
+    }
+
+    #[test]
+    fn ignores_groups_that_hold_themselves() {
+        let mut nodes = vec![lnode(40.0, 40.0, Kind::Node); 3];
+        let mut edges = vec![ledge(0, 1, 1, 0.0, 0.0), ledge(0, 2, 1, 0.0, 0.0)];
+        let groups = Groups { of: vec![Some(0), Some(1), Some(0)], parent: vec![Some(1), Some(0)] };
+        let result = layered_with(&mut nodes, &mut edges, &options(), Some(&groups), true);
+        assert_eq!(result.crossings, 0);
+        assert!(nodes.iter().all(|v| v.x.is_finite()));
+    }
+
+    #[test]
+    fn keeps_the_order_of_fully_hinted_ports() {
+        // Three start ports whose hints reverse the order their edges were declared in.
+        let mut nodes = vec![lnode(40.0, 40.0, Kind::Node); 3];
+        for hint in [3.0, 2.0, 1.0] {
+            nodes.push(LNode { hint, ..lnode(0.0, 0.0, Kind::StartPort) });
+        }
+        let mut edges = (0..3).map(|i| ledge(i + 3, i, 1, 0.0, 0.0)).collect::<Vec<_>>();
+        layered(&mut nodes, &mut edges, &options());
+        assert!(nodes[5].x < nodes[4].x && nodes[4].x < nodes[3].x);
+    }
 }
