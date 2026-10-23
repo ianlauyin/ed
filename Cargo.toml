@@ -49,7 +49,7 @@ members = [
     "crates/markdown",
     "crates/markdown_preview",
     "crates/menu",
-    "crates/mermaid_render",
+    "crates/mermaid",
     "crates/multi_buffer",
     "crates/net",
     "crates/notifications",
@@ -166,7 +166,7 @@ lsp_types = { path = "crates/lsp_types" }
 markdown = { path = "crates/markdown" }
 markdown_preview = { path = "crates/markdown_preview" }
 menu = { path = "crates/menu" }
-mermaid_render = { path = "crates/mermaid_render" }
+mermaid = { path = "crates/mermaid" }
 multi_buffer = { path = "crates/multi_buffer" }
 net = { path = "crates/net" }
 notifications = { path = "crates/notifications" }
@@ -308,7 +308,6 @@ log = { version = "0.4", default-features = false, features = ["std"] }
 lru = "0.16"
 mach2 = "0.6"
 markup5ever_rcdom = "0.39"
-merman = { version = "=0.9.0", default-features = false }
 nix = "0.30"
 nucleo = { package = "nucleo-matcher", version = "0.3" }
 objc2 = "0.6.5"
@@ -374,7 +373,6 @@ prost = "0.14"
 prost-build = { version = "0.14", default-features = false }
 protox = "0.9"
 pulldown-cmark = { version = "0.13.0", default-features = false }
-quick-xml = "0.41"
 quote = "1.0.9"
 rand = { version = "0.9", default-features = false, features = ["std", "std_rng", "os_rng"] }
 raw-window-handle = "0.6"

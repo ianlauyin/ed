@@ -9,7 +9,7 @@ use itertools::Itertools;
 use language::CodeLabel;
 use language::{Buffer, LanguageName, LanguageRegistry};
 use lsp::{CompletionItemKind, CompletionItemTag};
-use markdown::{CopyButtonVisibility, Markdown, MarkdownElement};
+use markdown::{Markdown, MarkdownElement};
 use multi_buffer::Anchor;
 use ordered_float::OrderedFloat;
 use project::lsp_store::CompletionDocumentation;
@@ -1311,11 +1311,7 @@ impl CompletionsMenu {
         let editor = cx.weak_entity();
         div().child(
             MarkdownElement::new(markdown, hover_markdown_style(window, cx))
-                .code_block_renderer(markdown::CodeBlockRenderer::Default {
-                    copy_button_visibility: CopyButtonVisibility::Hidden,
-                    wrap_button_visibility: markdown::WrapButtonVisibility::Hidden,
-                    border: false,
-                })
+                .hide_code_block_copy_button()
                 .on_url_click(move |link, window, cx| {
                     open_markdown_url(
                         editor

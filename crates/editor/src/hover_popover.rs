@@ -16,7 +16,7 @@ use gpui::{
 };
 use language::{CharKind, DiagnosticEntry, Language, LanguageRegistry};
 use lsp::DiagnosticSeverity;
-use markdown::{CopyButtonVisibility, Markdown, MarkdownElement, MarkdownStyle};
+use markdown::{Markdown, MarkdownElement, MarkdownStyle};
 use multi_buffer::{MultiBufferOffset, MultiBufferSnapshot, ToOffset, ToPoint};
 use project::{HoverBlock, HoverBlockKind, InlayHintLabelPart};
 use settings::Settings;
@@ -1369,11 +1369,7 @@ impl InfoPopover {
                         .child(
                             MarkdownElement::new(markdown, hover_markdown_style(window, cx))
                                 .scroll_handle(self.scroll_handle.clone())
-                                .code_block_renderer(markdown::CodeBlockRenderer::Default {
-                                    copy_button_visibility: CopyButtonVisibility::Hidden,
-                                    wrap_button_visibility: markdown::WrapButtonVisibility::Hidden,
-                                    border: false,
-                                })
+                                .hide_code_block_copy_button()
                                 .on_url_click(move |link, window, cx| {
                                     open_markdown_url(
                                         this2
@@ -1541,11 +1537,7 @@ impl DiagnosticPopover {
                                     self.markdown.clone(),
                                     diagnostics_markdown_style(window, cx),
                                 )
-                                .code_block_renderer(markdown::CodeBlockRenderer::Default {
-                                    copy_button_visibility: CopyButtonVisibility::Hidden,
-                                    wrap_button_visibility: markdown::WrapButtonVisibility::Hidden,
-                                    border: false,
-                                })
+                                .hide_code_block_copy_button()
                                 .on_url_click(
                                     move |link, window, cx| {
                                         if let Some(renderer) = GlobalDiagnosticRenderer::global(cx)

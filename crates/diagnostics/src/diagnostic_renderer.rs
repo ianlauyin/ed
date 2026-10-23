@@ -8,7 +8,7 @@ use editor::{
 use gpui::{AppContext, Entity, Focusable, WeakEntity};
 use language::{BufferId, Diagnostic, DiagnosticEntryRef, LanguageRegistry};
 use lsp::DiagnosticSeverity;
-use markdown::{CopyButtonVisibility, Markdown, MarkdownElement};
+use markdown::{Markdown, MarkdownElement};
 use settings::Settings;
 use text::Point;
 use theme_settings::ThemeSettings;
@@ -249,11 +249,7 @@ impl DiagnosticBlock {
                         self.markdown.clone(),
                         diagnostics_markdown_style(bcx.window, cx),
                     )
-                    .code_block_renderer(markdown::CodeBlockRenderer::Default {
-                        copy_button_visibility: CopyButtonVisibility::Hidden,
-                        wrap_button_visibility: markdown::WrapButtonVisibility::Hidden,
-                        border: false,
-                    })
+                    .hide_code_block_copy_button()
                     .on_url_click({
                         move |link, window, cx| {
                             editor

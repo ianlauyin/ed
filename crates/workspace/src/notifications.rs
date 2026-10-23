@@ -7,7 +7,7 @@ use gpui::{
     DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, PromptLevel, Render, ScrollHandle,
     Task, TextStyleRefinement, UnderlineStyle, WeakEntity,
 };
-use markdown::{CopyButtonVisibility, Markdown, MarkdownElement, MarkdownStyle};
+use markdown::{Markdown, MarkdownElement, MarkdownStyle};
 use parking_lot::Mutex;
 use project::project_settings::ProjectSettings;
 use settings::Settings;
@@ -384,11 +384,7 @@ impl Render for LanguageServerPrompt {
                     .child(
                         MarkdownElement::new(self.markdown.clone(), markdown_style(window, cx))
                             .text_size(TextSize::Small.rems(cx))
-                            .code_block_renderer(markdown::CodeBlockRenderer::Default {
-                                copy_button_visibility: CopyButtonVisibility::Hidden,
-                                wrap_button_visibility: markdown::WrapButtonVisibility::Hidden,
-                                border: false,
-                            })
+                            .hide_code_block_copy_button()
                             .on_url_click(|link, window, cx| {
                                 if let Some(workspace) = Workspace::for_window(window, cx) {
                                     workspace.update(cx, |workspace, cx| {

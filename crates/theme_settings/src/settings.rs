@@ -296,12 +296,13 @@ impl ThemeSettings {
             .unwrap_or(&self.buffer_font.family)
     }
 
-    /// Returns the font family to use for Mermaid diagrams,
-    /// falling back to the UI font family when unset.
+    /// Returns the font family to use for Mermaid diagrams, falling back to
+    /// the buffer font family when unset: diagrams are laid out for a
+    /// monospace font.
     pub fn mermaid_font_family(&self) -> &SharedString {
         self.mermaid_font_family
             .as_ref()
-            .unwrap_or(&self.ui_font.family)
+            .unwrap_or(&self.buffer_font.family)
     }
 
     /// Returns the font weight to use for headings in the markdown preview.

@@ -20,10 +20,7 @@ use gpui::{
     WeakEntity, Window, point, px,
 };
 use language::{Buffer, LanguageRegistry};
-use markdown::{
-    CodeBlockRenderer, CopyButtonVisibility, Markdown, MarkdownElement, MarkdownFont,
-    MarkdownOptions, MarkdownStyle,
-};
+use markdown::{Markdown, MarkdownElement, MarkdownOptions};
 use project::search::SearchQuery;
 use project::{Project, ProjectPath, image_store};
 use settings::{SeedQuerySetting, Settings, update_settings_file};
@@ -53,6 +50,8 @@ use workspace::{
 use zed_actions::{DecreaseBufferFontSize, IncreaseBufferFontSize, ResetBufferFontSize};
 
 use crate::markdown_preview_settings::MarkdownPreviewSettings;
+use crate::markdown_preview_style::preview_markdown_style;
+use crate::mermaid_diagrams::MermaidDiagrams;
 use crate::{
     CloseAndReturnToEditor, OpenFollowingPreview, OpenPreview, OpenPreviewToTheSide, ScrollDown,
     ScrollDownByItem,
@@ -73,6 +72,7 @@ pub struct MarkdownPreviewView {
     active_editor: Option<EditorState>,
     focus_handle: FocusHandle,
     markdown: Entity<Markdown>,
+    mermaid_diagrams: Entity<MermaidDiagrams>,
     _markdown_subscription: Subscription,
     active_source_index: Option<usize>,
     scroll_handle: ScrollHandle,
@@ -394,10 +394,8 @@ impl MarkdownPreviewView {
                     None,
                     MarkdownOptions {
                         parse_html: true,
-                        render_mermaid_diagrams: true,
                         parse_heading_slugs: true,
                         render_metadata_blocks: true,
-                        ..Default::default()
                     },
                     cx,
                 )
@@ -410,6 +408,8 @@ impl MarkdownPreviewView {
                 _markdown_subscription: cx.observe(
                     &markdown,
                     |this: &mut Self, markdown: Entity<Markdown>, cx| {
+                        this.mermaid_diagrams
+                            .update(cx, |diagrams, cx| diagrams.sync(&markdown, cx));
                         this.sync_active_root_block(cx);
                         let is_parsing = markdown.read(cx).is_parsing();
                         if this.markdown_parse_pending && !is_parsing {
@@ -419,6 +419,7 @@ impl MarkdownPreviewView {
                     },
                 ),
                 markdown,
+                mermaid_diagrams: cx.new(MermaidDiagrams::new),
                 active_source_index: None,
                 scroll_handle: ScrollHandle::new(),
                 image_cache: RetainAllImageCache::new(cx),
@@ -1095,25 +1096,21 @@ impl MarkdownPreviewView {
         }
 
         let mut markdown_style = if let Some(theme) = preview_theme {
-            MarkdownStyle::themed_with_overrides(
-                MarkdownFont::Preview,
-                theme.colors(),
-                theme.syntax(),
-                window,
-                cx,
-            )
+            preview_markdown_style(theme.colors(), theme.syntax(), window, cx)
         } else {
-            MarkdownStyle::themed(MarkdownFont::Preview, window, cx)
+            preview_markdown_style(cx.theme().colors(), cx.theme().syntax(), window, cx)
         };
         markdown_style.minimum_highlight_contrast =
             EditorSettings::get_global(cx).minimum_contrast_for_highlights;
 
         let mut markdown_element = MarkdownElement::new(self.markdown.clone(), markdown_style)
             .input_focus_handle(self.focus_handle.clone())
-            .code_block_renderer(CodeBlockRenderer::Default {
-                copy_button_visibility: CopyButtonVisibility::VisibleOnHover,
-                wrap_button_visibility: markdown::WrapButtonVisibility::Hidden,
-                border: false,
+            .render_code_block_with({
+                let mermaid_diagrams = self.mermaid_diagrams.clone();
+                move |block, style, window, cx| {
+                    mermaid_diagrams
+                        .update(cx, |diagrams, cx| diagrams.render(block, style, window, cx))
+                }
             })
             .scroll_handle(self.scroll_handle.clone())
             .show_root_block_markers()
