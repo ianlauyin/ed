@@ -70,7 +70,6 @@ use crate::FocusHandle;
 use crate::FocusMap;
 use crate::ForegroundExecutor;
 use crate::Global;
-use crate::HttpClient;
 use crate::KeyBinding;
 use crate::KeyContext;
 use crate::Keymap;
@@ -239,14 +238,6 @@ impl Application {
     /// Configures arguments to pass when restarting the application.
     pub fn with_restart_arguments(self, arguments: Vec<OsString>) -> Self {
         self.0.borrow_mut().restart_arguments = arguments;
-        self
-    }
-
-    /// Sets the HTTP client for the application.
-    pub fn with_http_client(self, http_client: HttpClient) -> Self {
-        let mut context_lock = self.0.borrow_mut();
-        context_lock.http_client = Some(http_client);
-        drop(context_lock);
         self
     }
 
@@ -556,17 +547,14 @@ pub struct App {
     /// Per-App event arena.
     pub(crate) event_arena: Arena,
 
-    // Drop globals last. We need to ensure all tasks owned by entities and
-    // callbacks are marked cancelled at this point as this will also shutdown
-    // the tokio runtime. As any task attempting to spawn a blocking tokio task,
-    // might panic.
+    // Drop globals last, after all tasks owned by entities and callbacks are
+    // marked cancelled.
     pub(crate) globals_by_type: TypeIdHashMap<Box<dyn Any>>,
 
     // assets
     pub(crate) loading_assets: FxHashMap<(TypeId, u64), Box<dyn Any>>,
     asset_source: Arc<dyn AssetSource>,
     pub(crate) svg_renderer: SvgRenderer,
-    http_client: Option<HttpClient>,
 
     // below is plain data, the drop order is insignificant here
     pub(crate) pending_notifications: FxHashSet<EntityId>,
@@ -623,7 +611,6 @@ impl App {
                 svg_renderer: SvgRenderer::new(asset_source.clone()),
                 loading_assets: HashMap::default(),
                 asset_source,
-                http_client: None,
                 globals_by_type: TypeIdHashMap::default(),
                 entities,
                 new_entity_observers: SubscriberSet::new(),
@@ -1410,16 +1397,6 @@ impl App {
     /// Sets the path to use when restarting the application.
     pub fn set_restart_path(&mut self, path: PathBuf) {
         self.restart_path = Some(path);
-    }
-
-    /// Returns the HTTP client for the application, if one was set.
-    pub fn http_client(&self) -> Option<HttpClient> {
-        self.http_client.clone()
-    }
-
-    /// Sets the HTTP client for the application.
-    pub fn set_http_client(&mut self, new_client: HttpClient) {
-        self.http_client = Some(new_client);
     }
 
     /// Configures when the application should automatically quit.

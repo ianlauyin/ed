@@ -20,7 +20,6 @@ use std::process;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::LazyLock;
-use std::time::Duration;
 
 use anyhow::Result;
 use assets::Assets;
@@ -42,7 +41,6 @@ use gpui::QuitMode;
 use gpui::Task;
 use gpui::TaskExt;
 use gpui::UpdateGlobal as _;
-use gpui_tokio::Tokio;
 use language::LanguageRegistry;
 use project::trusted_worktrees;
 use recent_projects::RemoteSettings;
@@ -255,20 +253,9 @@ fn main() {
         zed_actions::init();
 
         settings_content::app_metadata::init(app_version, cx);
-        gpui_tokio::init(cx);
         settings::init(cx);
         zlog_settings::init(cx);
         initialize_keymap(cx);
-
-        let user_agent =
-            format!("ed/{} ({}; {})", AppVersion::global(cx), std::env::consts::OS, std::env::consts::ARCH);
-        let http = gpui::reqwest::Client::builder()
-            .user_agent(user_agent)
-            .connect_timeout(Duration::from_secs(10))
-            .no_proxy()
-            .build()
-            .expect("could not start HTTP client");
-        cx.set_http_client(gpui::HttpClient::new(http, Tokio::handle(cx)));
 
         <dyn Fs>::set_global(fs.clone(), cx);
 

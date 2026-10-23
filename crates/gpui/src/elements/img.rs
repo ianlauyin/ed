@@ -5,7 +5,6 @@ use std::ops::Deref;
 use std::ops::DerefMut;
 use std::path::Path;
 use std::path::PathBuf;
-use std::str::FromStr;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -48,7 +47,6 @@ use crate::Pixels;
 use crate::RenderImage;
 use crate::Resource;
 use crate::SharedString;
-use crate::SharedUri;
 use crate::StyleRefinement;
 use crate::Styled;
 use crate::Task;
@@ -79,29 +77,15 @@ pub enum ImageSource {
     Custom(Arc<dyn Fn(&mut Window, &mut App) -> Option<Result<Arc<RenderImage>, ImageCacheError>>>),
 }
 
-fn is_uri(uri: &str) -> bool {
-    url::Url::from_str(uri).is_ok()
-}
-
-impl From<SharedUri> for ImageSource {
-    fn from(value: SharedUri) -> Self {
-        Self::Resource(Resource::Uri(value))
-    }
-}
-
 impl<'a> From<&'a str> for ImageSource {
     fn from(s: &'a str) -> Self {
-        if is_uri(s) {
-            Self::Resource(Resource::Uri(s.to_string().into()))
-        } else {
-            Self::Resource(Resource::Embedded(s.to_string().into()))
-        }
+        Self::Resource(Resource::Embedded(s.to_string().into()))
     }
 }
 
 impl From<String> for ImageSource {
     fn from(s: String) -> Self {
-        if is_uri(&s) { Self::Resource(Resource::Uri(s.into())) } else { Self::Resource(Resource::Embedded(s.into())) }
+        Self::Resource(Resource::Embedded(s.into()))
     }
 }
 
@@ -562,7 +546,6 @@ impl Asset for ImageAssetLoader {
     type Output = Result<Arc<RenderImage>, ImageCacheError>;
 
     fn load(source: Self::Source, cx: &mut App) -> impl Future<Output = Self::Output> + Send + 'static {
-        let client = cx.http_client();
         // TODO: Can we make SVGs always rescale?
         // let scale_factor = cx.scale_factor();
         let svg_renderer = cx.svg_renderer();
@@ -570,27 +553,6 @@ impl Asset for ImageAssetLoader {
         async move {
             let bytes = match source.clone() {
                 Resource::Path(uri) => fs::read(uri.as_ref())?,
-                Resource::Uri(uri) => {
-                    use anyhow::Context as _;
-
-                    let client = client.context("no HTTP client available")?;
-                    let request = client.client().get(uri.as_ref()).send();
-                    let (status, body) = client
-                        .spawn(async move {
-                            let response = request.await?;
-                            let status = response.status();
-                            anyhow::Ok((status, response.bytes().await?))
-                        })
-                        .await
-                        .with_context(|| format!("loading image asset from {uri:?}"))?;
-                    if !status.is_success() {
-                        let mut body = String::from_utf8_lossy(&body).into_owned();
-                        let first_line = body.lines().next().unwrap_or("").trim_end();
-                        body.truncate(first_line.len());
-                        return Err(ImageCacheError::BadStatus { uri, status, body });
-                    }
-                    body.to_vec()
-                }
                 Resource::Embedded(path) => {
                     let data = asset_source.load(&path).ok().flatten();
                     if let Some(data) = data {
@@ -683,16 +645,6 @@ pub enum ImageCacheError {
     /// An error that occurred while reading the image from disk.
     #[error("IO error: {0}")]
     Io(Arc<std::io::Error>),
-    /// An error that occurred while processing an image.
-    #[error("unexpected http status for {uri}: {status}, body: {body}")]
-    BadStatus {
-        /// The URI of the image.
-        uri: SharedUri,
-        /// The HTTP status code.
-        status: crate::reqwest::StatusCode,
-        /// The HTTP response body.
-        body: String,
-    },
     /// An error that occurred while processing an asset.
     #[error("asset error: {0}")]
     Asset(SharedString),

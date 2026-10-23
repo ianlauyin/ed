@@ -1,13 +1,19 @@
-use crate::{DevicePixels, Pixels, Result, SharedString, Size, size};
+use std::borrow::Cow;
+use std::fmt;
+use std::hash::Hash;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering::SeqCst;
+
+use image::Delay;
+use image::Frame;
 use smallvec::SmallVec;
 
-use image::{Delay, Frame};
-use std::{
-    borrow::Cow,
-    fmt,
-    hash::Hash,
-    sync::atomic::{AtomicUsize, Ordering::SeqCst},
-};
+use crate::DevicePixels;
+use crate::Pixels;
+use crate::Result;
+use crate::SharedString;
+use crate::Size;
+use crate::size;
 
 /// A source of assets for this app to use.
 pub trait AssetSource: 'static + Send + Sync {
@@ -61,18 +67,12 @@ impl RenderImage {
     pub fn new(data: impl Into<SmallVec<[Frame; 1]>>) -> Self {
         static NEXT_ID: AtomicUsize = AtomicUsize::new(0);
 
-        Self {
-            id: ImageId(NEXT_ID.fetch_add(1, SeqCst)),
-            scale_factor: 1.0,
-            data: data.into(),
-        }
+        Self { id: ImageId(NEXT_ID.fetch_add(1, SeqCst)), scale_factor: 1.0, data: data.into() }
     }
 
     /// Convert this image into a byte slice.
     pub fn as_bytes(&self, frame_index: usize) -> Option<&[u8]> {
-        self.data
-            .get(frame_index)
-            .map(|frame| frame.buffer().as_raw().as_slice())
+        self.data.get(frame_index).map(|frame| frame.buffer().as_raw().as_slice())
     }
 
     /// Get the size of this image, in pixels.
@@ -88,16 +88,12 @@ impl RenderImage {
 
     /// Get the size of this image, in pixels for display, adjusted for the scale factor.
     pub(crate) fn render_size(&self, frame_index: usize) -> Size<Pixels> {
-        self.size(frame_index)
-            .map(|v| (v.0 as f32 / self.scale_factor).into())
+        self.size(frame_index).map(|v| (v.0 as f32 / self.scale_factor).into())
     }
 
     /// Get the delay of this frame from the previous
     pub fn delay(&self, frame_index: usize) -> Delay {
-        self.data
-            .get(frame_index)
-            .map(|frame| frame.delay())
-            .unwrap_or(Delay::from_numer_denom_ms(100, 1))
+        self.data.get(frame_index).map(|frame| frame.delay()).unwrap_or(Delay::from_numer_denom_ms(100, 1))
     }
 
     /// Get the number of frames for this image.

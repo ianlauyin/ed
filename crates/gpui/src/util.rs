@@ -1,11 +1,12 @@
-use crate::{BackgroundExecutor, Task};
-use std::{
-    future::Future,
-    pin::Pin,
-    sync::atomic::{AtomicUsize, Ordering::SeqCst},
-    task,
-    time::Duration,
-};
+use std::future::Future;
+use std::pin::Pin;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering::SeqCst;
+use std::task;
+use std::time::Duration;
+
+use crate::BackgroundExecutor;
+use crate::Task;
 
 /// Blocks the current thread until the given future completes.
 pub fn block_on<T>(future: impl Future<Output = T>) -> T {
@@ -43,12 +44,7 @@ pub trait FluentBuilder {
     }
 
     /// Conditionally modify self with the given closure.
-    fn when_else(
-        self,
-        condition: bool,
-        then: impl FnOnce(Self) -> Self,
-        else_fn: impl FnOnce(Self) -> Self,
-    ) -> Self
+    fn when_else(self, condition: bool, then: impl FnOnce(Self) -> Self, else_fn: impl FnOnce(Self) -> Self) -> Self
     where
         Self: Sized,
     {
@@ -60,13 +56,7 @@ pub trait FluentBuilder {
     where
         Self: Sized,
     {
-        self.map(|this| {
-            if let Some(value) = option {
-                then(this, value)
-            } else {
-                this
-            }
-        })
+        self.map(|this| if let Some(value) = option { then(this, value) } else { this })
     }
     /// Conditionally unwrap and modify self with the given closure, if the given option is None.
     fn when_none<T>(self, option: &Option<T>, then: impl FnOnce(Self) -> Self) -> Self
@@ -91,10 +81,7 @@ impl<T: Future> FutureExt for T {
     where
         Self: Sized,
     {
-        WithTimeout {
-            future: self,
-            timer: executor.timer(timeout),
-        }
+        WithTimeout { future: self, timer: executor.timer(timeout) }
     }
 }
 
@@ -160,11 +147,7 @@ pub(crate) fn round_to_device_pixel(logical: f32, scale_factor: f32) -> f32 {
 
 #[inline]
 pub(crate) fn round_stroke_to_device_pixel(logical: f32, scale_factor: f32) -> f32 {
-    if logical == 0.0 {
-        0.0
-    } else {
-        round_to_device_pixel(logical.max(0.0), scale_factor).max(1.0)
-    }
+    if logical == 0.0 { 0.0 } else { round_to_device_pixel(logical.max(0.0), scale_factor).max(1.0) }
 }
 
 #[inline]

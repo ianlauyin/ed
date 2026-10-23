@@ -1,9 +1,16 @@
 use refineable::Refineable as _;
 
-use crate::{
-    App, Bounds, Element, ElementId, GlobalElementId, IntoElement, Pixels, Style, StyleRefinement,
-    Styled, Window,
-};
+use crate::App;
+use crate::Bounds;
+use crate::Element;
+use crate::ElementId;
+use crate::GlobalElementId;
+use crate::IntoElement;
+use crate::Pixels;
+use crate::Style;
+use crate::StyleRefinement;
+use crate::Styled;
+use crate::Window;
 
 /// Construct a canvas element with the given paint callback.
 /// Useful for adding short term custom drawing to a view.
@@ -11,11 +18,7 @@ pub fn canvas<T>(
     prepaint: impl 'static + FnOnce(Bounds<Pixels>, &mut Window, &mut App) -> T,
     paint: impl 'static + FnOnce(Bounds<Pixels>, T, &mut Window, &mut App),
 ) -> Canvas<T> {
-    Canvas {
-        prepaint: Some(Box::new(prepaint)),
-        paint: Some(Box::new(paint)),
-        style: StyleRefinement::default(),
-    }
+    Canvas { prepaint: Some(Box::new(prepaint)), paint: Some(Box::new(paint)), style: StyleRefinement::default() }
 }
 
 /// A canvas element, meant for accessing the low level paint API without defining a whole
@@ -79,9 +82,7 @@ impl<T: 'static> Element for Canvas<T> {
         cx: &mut App,
     ) {
         let prepaint = prepaint.take().unwrap();
-        style.paint(bounds, window, cx, |window, cx| {
-            (self.paint.take().unwrap())(bounds, prepaint, window, cx)
-        });
+        style.paint(bounds, window, cx, |window, cx| (self.paint.take().unwrap())(bounds, prepaint, window, cx));
     }
 }
 

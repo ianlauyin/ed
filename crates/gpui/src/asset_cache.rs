@@ -1,15 +1,22 @@
-use crate::{App, EntityId, SharedString, SharedUri, Task};
-use collections::FxHashSet;
-use futures::{Future, TryFutureExt};
-
 use std::cell::RefCell;
 use std::fmt::Debug;
-use std::hash::{BuildHasher, Hash};
+use std::hash::BuildHasher;
+use std::hash::Hash;
 use std::marker::PhantomData;
 use std::mem;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::rc::Rc;
 use std::sync::Arc;
+
+use collections::FxHashSet;
+use futures::Future;
+use futures::TryFutureExt;
+
+use crate::App;
+use crate::EntityId;
+use crate::SharedString;
+use crate::Task;
 
 pub(crate) struct CachedLoad<T> {
     state: Rc<RefCell<CachedLoadState<T>>>,
@@ -33,8 +40,7 @@ impl<T: Clone + Send + 'static> CachedLoad<T> {
                 let Some(state) = state.upgrade() else {
                     return;
                 };
-                let previous =
-                    mem::replace(&mut *state.borrow_mut(), CachedLoadState::Loaded(result));
+                let previous = mem::replace(&mut *state.borrow_mut(), CachedLoadState::Loaded(result));
                 let CachedLoadState::Loading(views) = previous else {
                     unreachable!("a cached load completes only once");
                 };
@@ -69,18 +75,10 @@ impl<T: Clone + Send + 'static> CachedLoad<T> {
 /// An enum representing
 #[derive(Debug, PartialEq, Eq, Hash, Clone)]
 pub enum Resource {
-    /// This resource is at a given URI
-    Uri(SharedUri),
     /// This resource is at a given path in the file system
     Path(Arc<Path>),
     /// This resource is embedded in the application binary
     Embedded(SharedString),
-}
-
-impl From<SharedUri> for Resource {
-    fn from(value: SharedUri) -> Self {
-        Self::Uri(value)
-    }
 }
 
 impl From<PathBuf> for Resource {
@@ -104,10 +102,7 @@ pub trait Asset: 'static {
     type Output: Clone + Send;
 
     /// Load the asset asynchronously
-    fn load(
-        source: Self::Source,
-        cx: &mut App,
-    ) -> impl Future<Output = Self::Output> + Send + 'static;
+    fn load(source: Self::Source, cx: &mut App) -> impl Future<Output = Self::Output> + Send + 'static;
 }
 
 /// An asset Loader which logs the [`Err`] variant of a [`Result`] during loading
@@ -126,10 +121,7 @@ where
 
     type Output = T::Output;
 
-    fn load(
-        source: Self::Source,
-        cx: &mut App,
-    ) -> impl Future<Output = Self::Output> + Send + 'static {
+    fn load(source: Self::Source, cx: &mut App) -> impl Future<Output = Self::Output> + Send + 'static {
         let load = T::load(source, cx);
         load.inspect_err(|e| log::error!("Failed to load asset: {:?}", e))
     }

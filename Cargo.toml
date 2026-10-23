@@ -31,7 +31,6 @@ members = [
     "crates/gpui_macros",
     "crates/gpui_platform",
     "crates/gpui_shared_string",
-    "crates/gpui_tokio",
     "crates/gpui_util",
     "crates/grammars",
     "crates/icons",
@@ -148,7 +147,6 @@ gpui_macos = { path = "crates/gpui_macos", default-features = false }
 gpui_macros = { path = "crates/gpui_macros" }
 gpui_platform = { path = "crates/gpui_platform", default-features = false }
 gpui_shared_string = { path = "crates/gpui_shared_string" }
-gpui_tokio = { path = "crates/gpui_tokio" }
 gpui_util = { path = "crates/gpui_util" }
 grammars = { path = "crates/grammars" }
 icons = { path = "crates/icons" }
@@ -372,10 +370,6 @@ rand = { version = "0.9", default-features = false, features = ["std", "std_rng"
 raw-window-handle = "0.6"
 rayon = "1.8"
 regex = { version = "1.5", default-features = false, features = ["std", "perf"] }
-reqwest = { version = "0.13.5", default-features = false, features = [
-    "http2",
-    "rustls",
-] }
 resvg = { version = "0.48.1", default-features = false, features = [
     "text",
     "system-fonts",
@@ -421,7 +415,6 @@ time = { version = "0.3", features = [
     "formatting",
     "local-offset",
 ] }
-tokio = "1"
 toml = { version = "0.9", default-features = false, features = ["std", "serde", "parse"] }
 tree-sitter = { git = "https://github.com/tree-sitter/tree-sitter", rev = "43623ec9bf0eaaf7113285c46e8a09018f181b18" }
 tree-sitter-bash = "0.25.1"

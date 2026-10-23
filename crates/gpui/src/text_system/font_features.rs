@@ -1,7 +1,8 @@
 use std::borrow::Cow;
 use std::sync::Arc;
 
-use schemars::{JsonSchema, json_schema};
+use schemars::JsonSchema;
+use schemars::json_schema;
 
 /// The OpenType features that can be configured for a given font.
 #[derive(Default, Clone, Eq, PartialEq, Hash)]
@@ -23,10 +24,7 @@ impl FontFeatures {
     ///
     /// Returns `None` if the feature is not present.
     pub fn is_calt_enabled(&self) -> Option<bool> {
-        self.0
-            .iter()
-            .find(|(feature, _)| feature == "calt")
-            .map(|(_, value)| *value == 1)
+        self.0.iter().find(|(feature, _)| feature == "calt").map(|(_, value)| *value == 1)
     }
 }
 
@@ -53,8 +51,10 @@ impl<'de> serde::Deserialize<'de> for FontFeatures {
     where
         D: serde::Deserializer<'de>,
     {
-        use serde::de::{MapAccess, Visitor};
         use std::fmt;
+
+        use serde::de::MapAccess;
+        use serde::de::Visitor;
 
         struct FontFeaturesVisitor;
 
@@ -71,9 +71,7 @@ impl<'de> serde::Deserialize<'de> for FontFeatures {
             {
                 let mut feature_list = Vec::new();
 
-                while let Some((key, value)) =
-                    access.next_entry::<String, Option<FeatureValue>>()?
-                {
+                while let Some((key, value)) = access.next_entry::<String, Option<FeatureValue>>()? {
                     if !is_valid_feature_tag(&key) {
                         log::error!("Incorrect font feature tag: {}", key);
                         continue;
@@ -91,11 +89,7 @@ impl<'de> serde::Deserialize<'de> for FontFeatures {
                                 if value.is_u64() {
                                     feature_list.push((key, value.as_u64().unwrap() as u32));
                                 } else {
-                                    log::error!(
-                                        "Incorrect font feature value {} for feature tag {}",
-                                        value,
-                                        key
-                                    );
+                                    log::error!("Incorrect font feature value {} for feature tag {}", value, key);
                                     continue;
                                 }
                             }

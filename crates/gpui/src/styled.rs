@@ -1,15 +1,45 @@
-use crate::{
-    self as gpui, AbsoluteLength, AlignContent, AlignItems, AlignSelf, BorderStyle, CursorStyle,
-    DefiniteLength, Display, Fill, FlexDirection, FlexWrap, Font, FontFeatures, FontStyle,
-    FontWeight, GridPlacement, GridTemplate, GridTemplateMinSize, Hsla, JustifyContent, Length,
-    SharedString, StrikethroughStyle, StyleRefinement, TextAlign, TextOverflow,
-    TextStyleRefinement, UnderlineStyle, WhiteSpace, px, relative, rems,
-};
-pub use gpui_macros::{
-    border_style_methods, box_shadow_style_methods, cursor_style_methods, margin_style_methods,
-    overflow_style_methods, padding_style_methods, position_style_methods,
-    visibility_style_methods,
-};
+pub use gpui_macros::border_style_methods;
+pub use gpui_macros::box_shadow_style_methods;
+pub use gpui_macros::cursor_style_methods;
+pub use gpui_macros::margin_style_methods;
+pub use gpui_macros::overflow_style_methods;
+pub use gpui_macros::padding_style_methods;
+pub use gpui_macros::position_style_methods;
+pub use gpui_macros::visibility_style_methods;
+
+use crate::AbsoluteLength;
+use crate::AlignContent;
+use crate::AlignItems;
+use crate::AlignSelf;
+use crate::BorderStyle;
+use crate::CursorStyle;
+use crate::DefiniteLength;
+use crate::Display;
+use crate::Fill;
+use crate::FlexDirection;
+use crate::FlexWrap;
+use crate::Font;
+use crate::FontFeatures;
+use crate::FontStyle;
+use crate::FontWeight;
+use crate::GridPlacement;
+use crate::GridTemplate;
+use crate::GridTemplateMinSize;
+use crate::Hsla;
+use crate::JustifyContent;
+use crate::Length;
+use crate::SharedString;
+use crate::StrikethroughStyle;
+use crate::StyleRefinement;
+use crate::TextAlign;
+use crate::TextOverflow;
+use crate::TextStyleRefinement;
+use crate::UnderlineStyle;
+use crate::WhiteSpace;
+use crate::px;
+use crate::relative;
+use crate::rems;
+use crate::{self as gpui};
 const ELLIPSIS: SharedString = SharedString::new_static("…");
 
 /// A trait for elements that can be styled.
@@ -602,10 +632,7 @@ pub trait Styled: Sized {
     /// [Docs](https://tailwindcss.com/docs/text-decoration-line#underling-text)
     fn underline(mut self) -> Self {
         let style = self.text_style();
-        style.underline = Some(UnderlineStyle {
-            thickness: px(1.),
-            ..Default::default()
-        });
+        style.underline = Some(UnderlineStyle { thickness: px(1.), ..Default::default() });
         self
     }
 
@@ -613,10 +640,7 @@ pub trait Styled: Sized {
     /// [Docs](https://tailwindcss.com/docs/text-decoration-line#adding-a-line-through-text)
     fn line_through(mut self) -> Self {
         let style = self.text_style();
-        style.strikethrough = Some(StrikethroughStyle {
-            thickness: px(1.),
-            ..Default::default()
-        });
+        style.strikethrough = Some(StrikethroughStyle { thickness: px(1.), ..Default::default() });
         self
     }
 
@@ -713,13 +737,7 @@ pub trait Styled: Sized {
 
     /// Sets the font of this element and its children.
     fn font(mut self, font: Font) -> Self {
-        let Font {
-            family,
-            features,
-            fallbacks,
-            weight,
-            style,
-        } = font;
+        let Font { family, features, fallbacks, weight, style } = font;
 
         let text_style = self.text_style();
         text_style.font_family = Some(family);
@@ -745,57 +763,39 @@ pub trait Styled: Sized {
 
     /// Sets the grid columns of this element.
     fn grid_cols(mut self, cols: u16) -> Self {
-        self.style().grid_cols = Some(GridTemplate {
-            repeat: cols,
-            min_size: GridTemplateMinSize::Zero,
-        });
+        self.style().grid_cols = Some(GridTemplate { repeat: cols, min_size: GridTemplateMinSize::Zero });
         self
     }
 
     /// Sets the grid columns with min-content minimum sizing.
     /// Unlike grid_cols, it won't shrink to width 0 in AvailableSpace::MinContent constraints.
     fn grid_cols_min_content(mut self, cols: u16) -> Self {
-        self.style().grid_cols = Some(GridTemplate {
-            repeat: cols,
-            min_size: GridTemplateMinSize::MinContent,
-        });
+        self.style().grid_cols = Some(GridTemplate { repeat: cols, min_size: GridTemplateMinSize::MinContent });
         self
     }
 
     /// Sets the grid columns with max-content maximum sizing for content-based column widths.
     fn grid_cols_max_content(mut self, cols: u16) -> Self {
-        self.style().grid_cols = Some(GridTemplate {
-            repeat: cols,
-            min_size: GridTemplateMinSize::MaxContent,
-        });
+        self.style().grid_cols = Some(GridTemplate { repeat: cols, min_size: GridTemplateMinSize::MaxContent });
         self
     }
 
     /// Sets the grid rows of this element.
     fn grid_rows(mut self, rows: u16) -> Self {
-        self.style().grid_rows = Some(GridTemplate {
-            repeat: rows,
-            min_size: GridTemplateMinSize::Zero,
-        });
+        self.style().grid_rows = Some(GridTemplate { repeat: rows, min_size: GridTemplateMinSize::Zero });
         self
     }
 
     /// Sets the grid rows with min-content minimum sizing.
     /// Unlike grid_rows, it won't shrink to height 0 in AvailableSpace::MinContent constraints.
     fn grid_rows_min_content(mut self, rows: u16) -> Self {
-        self.style().grid_rows = Some(GridTemplate {
-            repeat: rows,
-            min_size: GridTemplateMinSize::MinContent,
-        });
+        self.style().grid_rows = Some(GridTemplate { repeat: rows, min_size: GridTemplateMinSize::MinContent });
         self
     }
 
     /// Sets the grid rows with max-content maximum sizing for content-based row heights.
     fn grid_rows_max_content(mut self, rows: u16) -> Self {
-        self.style().grid_rows = Some(GridTemplate {
-            repeat: rows,
-            min_size: GridTemplateMinSize::MaxContent,
-        });
+        self.style().grid_rows = Some(GridTemplate { repeat: rows, min_size: GridTemplateMinSize::MaxContent });
         self
     }
 

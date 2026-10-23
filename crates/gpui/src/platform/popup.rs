@@ -1,7 +1,10 @@
 use bitflags::bitflags;
 use thiserror::Error;
 
-use crate::{AnyWindowHandle, Bounds, Pixels, Point};
+use crate::AnyWindowHandle;
+use crate::Bounds;
+use crate::Pixels;
+use crate::Point;
 
 /// Options for a parent-anchored popup window such as a menu, dropdown, context menu or tooltip.
 ///

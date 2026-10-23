@@ -37,11 +37,10 @@ Answer: both patches are still needed. Neither is legacy; tokio replaces neither
   `util::command::darwin`: wait on the pid with kqueue `EVFILT_PROC` /
   `NOTE_EXIT`, then `waitpid` (~100 lines).
 
-## Tokio today
+## Tokio
 
-Used only through `gpui_tokio`: a 2-worker runtime that backs the reqwest HTTP
-client (`gpui::HttpClient`) and anything else that needs tokio. That split is
-reasonable; nothing here needs to move to tokio.
+Removed. It only backed reqwest for remote images in `img()`; remote image
+loading was dropped along with `gpui_tokio`, so the app is smol-only.
 
 ## Next steps
 

@@ -55,10 +55,9 @@ remote detection, command execution, and proxy startup are removed.
 - Audio input and speech recognition are unsupported; the app requests no
   microphone or speech-recognition access. Background tasks use high, medium,
   or low priority, with no realtime audio scheduling.
-- HTTP uses the upstream `reqwest` crate directly (rustls with the platform
-  certificate verifier), run on the app's Tokio runtime. There is no HTTP client
-  abstraction crate; gpui holds an optional client used only to load remote images.
-  Low-level HTTP crates are transitive dependencies only.
+- No HTTP client and no Tokio: the app runs on gpui's executors and smol only.
+  Images load only from disk or embedded assets; gpui has no URI image source,
+  and markdown preview skips `http`/`https` images like `data:` ones.
 - No proxy support: there is no `proxy` setting, environment proxy variables are
   ignored, and JSON language server proxy settings are not forwarded.
 - Ship one macOS keymap constructed in Rust; alternate keymaps are removed.

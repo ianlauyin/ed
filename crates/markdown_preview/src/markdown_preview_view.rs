@@ -39,7 +39,6 @@ use gpui::Render;
 use gpui::Resource;
 use gpui::RetainAllImageCache;
 use gpui::SharedString;
-use gpui::SharedUri;
 use gpui::Subscription;
 use gpui::Task;
 use gpui::WeakEntity;
@@ -1320,12 +1319,9 @@ fn resolve_preview_image(
     client_path_style: PathStyle,
     cx: &App,
 ) -> Option<ImageSource> {
-    if dest_url.starts_with("data:") {
+    // Remote images are not loaded: there is no HTTP client.
+    if dest_url.starts_with("data:") || dest_url.starts_with("http://") || dest_url.starts_with("https://") {
         return None;
-    }
-
-    if dest_url.starts_with("http://") || dest_url.starts_with("https://") {
-        return Some(ImageSource::Resource(Resource::Uri(SharedUri::from(dest_url.to_string()))));
     }
 
     let decoded =

@@ -1,7 +1,7 @@
-use std::{
-    fs::{self, File, TryLockError},
-    sync::OnceLock,
-};
+use std::fs::File;
+use std::fs::TryLockError;
+use std::fs::{self};
+use std::sync::OnceLock;
 
 /// Held for the lifetime of the process; the OS releases the lock on exit,
 /// so a crash never leaves a stale lock behind.
@@ -18,13 +18,9 @@ pub enum IsOnlyInstance {
 /// with an upstream Zed instance.
 pub fn ensure_only_instance() -> IsOnlyInstance {
     let path = paths::state_dir().join(format!("{}.lock", paths::APP_NAME));
-    let file = match fs::create_dir_all(paths::state_dir()).and_then(|()| {
-        File::options()
-            .create(true)
-            .truncate(false)
-            .write(true)
-            .open(&path)
-    }) {
+    let file = match fs::create_dir_all(paths::state_dir())
+        .and_then(|()| File::options().create(true).truncate(false).write(true).open(&path))
+    {
         Ok(file) => file,
         Err(err) => {
             // Avoid failing to start when the lock file is unusable; a second

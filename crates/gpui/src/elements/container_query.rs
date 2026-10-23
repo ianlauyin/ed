@@ -4,10 +4,22 @@
 
 use refineable::Refineable as _;
 
-use crate::{
-    AnyElement, App, AvailableSpace, Bounds, Element, ElementId, GlobalElementId, IntoElement,
-    LayoutId, Pixels, Size, Style, StyleRefinement, Styled, Window, relative,
-};
+use crate::AnyElement;
+use crate::App;
+use crate::AvailableSpace;
+use crate::Bounds;
+use crate::Element;
+use crate::ElementId;
+use crate::GlobalElementId;
+use crate::IntoElement;
+use crate::LayoutId;
+use crate::Pixels;
+use crate::Size;
+use crate::Style;
+use crate::StyleRefinement;
+use crate::Styled;
+use crate::Window;
+use crate::relative;
 
 /// Construct a container query element with the given render callback.
 /// The callback receives the size the element was assigned during layout and
@@ -29,9 +41,7 @@ use crate::{
 ///     }
 /// });
 /// ```
-pub fn container_query<E>(
-    render: impl 'static + FnOnce(Size<Pixels>, &mut Window, &mut App) -> E,
-) -> ContainerQuery
+pub fn container_query<E>(render: impl 'static + FnOnce(Size<Pixels>, &mut Window, &mut App) -> E) -> ContainerQuery
 where
     E: IntoElement,
 {
@@ -40,9 +50,7 @@ where
     base_style.size.height = Some(relative(1.).into());
 
     ContainerQuery {
-        render: Some(Box::new(|size, window, cx| {
-            render(size, window, cx).into_any_element()
-        })),
+        render: Some(Box::new(|size, window, cx| render(size, window, cx).into_any_element())),
         style: base_style,
     }
 }

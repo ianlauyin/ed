@@ -425,7 +425,6 @@ pub fn execute_run(
         settings::init(cx);
         let app_version = AppVersion::load(env!("CARGO_PKG_VERSION"));
         settings_content::app_metadata::init(app_version, cx);
-        gpui_tokio::init(cx);
 
         HeadlessProject::init(cx);
 

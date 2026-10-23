@@ -34,8 +34,6 @@ etagere.workspace = true
 futures.workspace = true
 gpui_macros.workspace = true
 gpui_shared_string.workspace = true
-reqwest.workspace = true
-tokio = { workspace = true, features = ["rt"] }
 image.workspace = true
 inventory.workspace = true
 itertools.workspace = true
@@ -75,7 +73,6 @@ gpui_util.workspace = true
 waker-fn = "1.2.0"
 lyon = "1.0"
 pin-project = "1.1.10"
-url.workspace = true
 uuid = { workspace = true, features = ["v4"] }
 
 async-channel = { workspace = true, features = ["std"] }
