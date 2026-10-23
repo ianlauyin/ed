@@ -4,9 +4,14 @@
 //! Pele parses with `JSON.parse` and walks the text again for its key order. This reads the text
 //! once, as V8's JSON parser does, and reports V8's messages at V8's positions.
 
-use super::lexer::{push_usize, utf16};
-use crate::error::{Code, Error, push_u32};
-use crate::util::chars::{is_digit, is_hex, is_word};
+use super::lexer::push_usize;
+use super::lexer::utf16;
+use crate::error::Code;
+use crate::error::Error;
+use crate::error::push_u32;
+use crate::util::chars::is_digit;
+use crate::util::chars::is_hex;
+use crate::util::chars::is_word;
 
 /// A JSON value in a [`JsonDoc`]. Children are indices into the document's nodes, so deep
 /// nesting needs no recursion to build, read, or drop.
@@ -60,11 +65,7 @@ pub(crate) fn parse_ordered_json(text: &str, origin: (u32, u32)) -> Result<JsonD
         }
     };
     if !matches!(doc.get(0), Some(JsonValue::Object(_))) {
-        return Err(json_error(
-            String::from("JSON value must have an object root"),
-            line,
-            column,
-        ));
+        return Err(json_error(String::from("JSON value must have an object root"), line, column));
     }
     Ok(doc)
 }
@@ -76,14 +77,7 @@ fn json_error(mut message: String, line: u32, column: u32) -> Error {
     message.push_str(", column ");
     push_u32(&mut message, column);
     message.push(')');
-    Error {
-        code: Code::Syntax,
-        column,
-        line,
-        message,
-        snippet: String::new(),
-        r#type: Some("usecase"),
-    }
+    Error { code: Code::Syntax, column, line, message, snippet: String::new(), r#type: Some("usecase") }
 }
 
 /// The byte at `i`, or a value no test matches past the end.
@@ -114,16 +108,9 @@ struct V8<'a> {
 impl V8<'_> {
     /// Parses `text`, or returns V8's message for it.
     fn parse(text: &str) -> Result<JsonDoc, String> {
-        let mut parser = V8 {
-            at: 0,
-            b: text.as_bytes(),
-            nodes: Vec::new(),
-            text,
-        };
+        let mut parser = V8 { at: 0, b: text.as_bytes(), nodes: Vec::new(), text };
         parser.run()?;
-        Ok(JsonDoc {
-            nodes: parser.nodes,
-        })
+        Ok(JsonDoc { nodes: parser.nodes })
     }
 
     /// Skips JSON whitespace.
@@ -199,9 +186,7 @@ impl V8<'_> {
             out.push(ch);
         }
         out.push_str("', ");
-        let slice = |from: usize, to: usize| {
-            String::from_utf16_lossy(units.get(from..to.min(length)).unwrap_or(&[]))
-        };
+        let slice = |from: usize, to: usize| String::from_utf16_lossy(units.get(from..to.min(length)).unwrap_or(&[]));
         if length < CONTEXT * 2 + 1 {
             out.push('"');
             out.push_str(self.text);
@@ -297,10 +282,7 @@ impl V8<'_> {
                     None => {
                         self.skip();
                         if self.at < self.b.len() {
-                            return Err(self.positioned(
-                                "Unexpected non-whitespace character after JSON",
-                                self.at,
-                            ));
+                            return Err(self.positioned("Unexpected non-whitespace character after JSON", self.at));
                         }
                         return Ok(());
                     }
@@ -324,8 +306,7 @@ impl V8<'_> {
                             break;
                         }
                         if self.peek() != 125 {
-                            return Err(self
-                                .positioned("Expected ',' or '}' after property value", self.at));
+                            return Err(self.positioned("Expected ',' or '}' after property value", self.at));
                         }
                         self.at += 1;
                         stack.pop();
@@ -342,9 +323,7 @@ impl V8<'_> {
                             break;
                         }
                         if self.peek() != 93 {
-                            return Err(
-                                self.positioned("Expected ',' or ']' after array element", self.at)
-                            );
+                            return Err(self.positioned("Expected ',' or ']' after array element", self.at));
                         }
                         self.at += 1;
                         stack.pop();
@@ -371,11 +350,7 @@ impl V8<'_> {
                 return Err(self.positioned("Bad control character in string literal", self.at));
             }
             if c != 92 {
-                let Some(ch) = self
-                    .text
-                    .get(self.at..)
-                    .and_then(|rest| rest.chars().next())
-                else {
+                let Some(ch) = self.text.get(self.at..).and_then(|rest| rest.chars().next()) else {
                     return Err(self.positioned("Unterminated string", self.at));
                 };
                 let mut buffer = [0u16; 2];
@@ -401,12 +376,8 @@ impl V8<'_> {
                         if !is_hex(digit) {
                             return Err(self.positioned("Bad Unicode escape", self.at));
                         }
-                        let digit = char::from_u32(digit)
-                            .and_then(|d| d.to_digit(16))
-                            .unwrap_or(0);
-                        value = value
-                            .wrapping_mul(16)
-                            .wrapping_add(u16::try_from(digit).unwrap_or(0));
+                        let digit = char::from_u32(digit).and_then(|d| d.to_digit(16)).unwrap_or(0);
+                        value = value.wrapping_mul(16).wrapping_add(u16::try_from(digit).unwrap_or(0));
                     }
                     value
                 }
@@ -457,11 +428,7 @@ impl V8<'_> {
                 self.at += 1;
             }
         }
-        Ok(self
-            .text
-            .get(start..self.at)
-            .and_then(|digits| digits.parse().ok())
-            .unwrap_or(0.0))
+        Ok(self.text.get(start..self.at).and_then(|digits| digits.parse().ok()).unwrap_or(0.0))
     }
 
     #[cold]
@@ -550,8 +517,7 @@ fn find_line_column(b: &[u8]) -> Option<(u32, u32)> {
 
 /// Whether `b` contains `word`, ignoring ASCII case.
 fn contains_no_case(b: &[u8], word: &str) -> bool {
-    b.windows(word.len())
-        .any(|window| window.eq_ignore_ascii_case(word.as_bytes()))
+    b.windows(word.len()).any(|window| window.eq_ignore_ascii_case(word.as_bytes()))
 }
 
 /// Engines word `JSON.parse` errors differently: some give an offset, some a line and column.
@@ -564,11 +530,7 @@ fn location_from_message(message: &str, text: &str, line: u32, column: u32) -> O
     if let Some((local_line, local_column)) = find_line_column(b) {
         return Some((
             line.saturating_add(local_line).saturating_sub(1),
-            if local_line == 1 {
-                column.saturating_add(local_column).saturating_sub(1)
-            } else {
-                local_column
-            },
+            if local_line == 1 { column.saturating_add(local_column).saturating_sub(1) } else { local_column },
         ));
     }
     if contains_no_case(b, "unexpected end") || contains_no_case(b, "end of json input") {

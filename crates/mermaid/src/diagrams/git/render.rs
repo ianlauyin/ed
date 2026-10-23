@@ -4,16 +4,29 @@
 use std::collections::BTreeMap;
 use std::f64::consts::FRAC_1_SQRT_2;
 
-use super::db::{CHERRY_PICK, GitCommit, GitModel, HIGHLIGHT, MERGE, REVERSE};
+use super::db::CHERRY_PICK;
+use super::db::GitCommit;
+use super::db::GitModel;
+use super::db::HIGHLIGHT;
+use super::db::MERGE;
+use super::db::REVERSE;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit::plain_label;
 use crate::diagrams::common::fit_width::turn_to_fit;
-use crate::svg::builder::{esc_text, js_round, label_svg, push_num};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
-use crate::svg::theme::{RADIUS, series_color};
-use crate::text::label::{Label, layout_label};
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
+use crate::svg::theme::RADIUS;
+use crate::svg::theme::series_color;
+use crate::text::label::Label;
+use crate::text::label::layout_label;
 use crate::text::measure::BOLD;
-use crate::yaml::{Value, push_number};
+use crate::yaml::Value;
+use crate::yaml::push_number;
 
 /// Radius of a commit dot.
 const DOT: f64 = 7.0;
@@ -54,10 +67,7 @@ fn property<'v>(value: &'v Value, key: &str) -> Option<&'v Value> {
     let Value::Object(entries) = value else {
         return None;
     };
-    entries
-        .iter()
-        .find(|(own, _)| own == key)
-        .map(|(_, value)| value)
+    entries.iter().find(|(own, _)| own == key).map(|(_, value)| value)
 }
 
 fn flag(config: &Value, key: &str, fallback: bool) -> bool {
@@ -157,9 +167,7 @@ pub(crate) fn render(model: &GitModel, config: &Value, options: &RenderOptions) 
     if model.direction != "LR" {
         return draw(model, config, options, model.direction);
     }
-    turn_to_fit(options, |down| {
-        draw(model, config, options, if down { "TB" } else { "LR" })
-    })
+    turn_to_fit(options, |down| draw(model, config, options, if down { "TB" } else { "LR" }))
 }
 
 /// The extent of what is drawn.
@@ -231,12 +239,7 @@ fn room(views: &[View<'_>], lane_count: usize, vertical: bool, rotate: bool) -> 
         if let Some(slot) = tag_half.get_mut(k) {
             *slot = tags_main / 2.0;
         }
-        let tag_side = DOT
-            + if view.tags.is_empty() {
-                0.0
-            } else {
-                TAG_GAP + tags_cross
-            };
+        let tag_side = DOT + if view.tags.is_empty() { 0.0 } else { TAG_GAP + tags_cross };
         let label_side = DOT + label_cross;
         if let Some(slot) = lo.get_mut(view.lane) {
             *slot = slot.max(if vertical { label_side } else { tag_side });
@@ -245,25 +248,11 @@ fn room(views: &[View<'_>], lane_count: usize, vertical: bool, rotate: bool) -> 
             *slot = slot.max(if vertical { tag_side } else { label_side });
         }
     }
-    Room {
-        half,
-        hi,
-        lo,
-        tag_half,
-    }
+    Room { half, hi, lo, tag_half }
 }
 
-#[expect(
-    clippy::many_single_char_names,
-    clippy::too_many_lines,
-    reason = "mirrors Pele's draw"
-)]
-fn draw(
-    model: &GitModel,
-    config: &Value,
-    options: &RenderOptions,
-    direction: &'static str,
-) -> Rendered {
+#[expect(clippy::many_single_char_names, clippy::too_many_lines, reason = "mirrors Pele's draw")]
+fn draw(model: &GitModel, config: &Value, options: &RenderOptions, direction: &'static str) -> Rendered {
     let size = options.font_size.unwrap_or(16.0);
     let small = js_round(size * 0.75);
     let pad = options.padding.unwrap_or(8.0);
@@ -275,12 +264,8 @@ fn draw(
     let vertical = direction != "LR";
     let flip = direction == "BT";
 
-    let lane_of: BTreeMap<&str, usize> = model
-        .lanes
-        .iter()
-        .enumerate()
-        .map(|(index, name)| (name.as_str(), index))
-        .collect();
+    let lane_of: BTreeMap<&str, usize> =
+        model.lanes.iter().enumerate().map(|(index, name)| (name.as_str(), index)).collect();
     let lane_count = model.lanes.len();
     let medium = js_round(size * 0.875);
     // Mermaid writes branch names, tags, and commit ids as plain text, so tags in them show as
@@ -288,14 +273,7 @@ fn draw(
     let names: Vec<Label> = model
         .lanes
         .iter()
-        .map(|name| {
-            plain_label(
-                Some(if show_branches { name } else { "" }),
-                medium,
-                4000.0,
-                0,
-            )
-        })
+        .map(|name| plain_label(Some(if show_branches { name } else { "" }), medium, 4000.0, 0))
         .collect();
 
     let mut sorted: Vec<&GitCommit> = model.commits.iter().collect();
@@ -323,12 +301,7 @@ fn draw(
         });
     }
 
-    let Room {
-        half,
-        mut hi,
-        mut lo,
-        tag_half,
-    } = room(&views, lane_count, vertical, rotate);
+    let Room { half, mut hi, mut lo, tag_half } = room(&views, lane_count, vertical, rotate);
     let at = |list: &[f64], k: usize| list.get(k).copied().unwrap_or(0.0);
 
     // In a left-to-right graph the tags stand over their commit. A connector that comes down from
@@ -352,11 +325,7 @@ fn draw(
     }
     let space = |p: usize, k: usize| -> f64 {
         let lead_k = at(&lead, k);
-        let curve = if lead_k > 0.0 {
-            at(&half, p) + CURVE + lead_k
-        } else {
-            0.0
-        };
+        let curve = if lead_k > 0.0 { at(&half, p) + CURVE + lead_k } else { 0.0 };
         STEP.max(at(&half, p) + at(&half, k) + GAP).max(curve)
     };
 
@@ -416,20 +385,12 @@ fn draw(
 
     let px = |m: f64, c: f64| if vertical { c } else { m };
     let py = |m: f64, c: f64| {
-        if vertical {
-            if flip { -m } else { m }
-        } else {
-            c
-        }
+        if vertical { if flip { -m } else { m } } else { c }
     };
     let point = |out: &mut String, m: f64, c: f64| pair(out, px(m, c), py(m, c));
 
-    let mut bounds = Bounds {
-        max_x: f64::NEG_INFINITY,
-        max_y: f64::NEG_INFINITY,
-        min_x: f64::INFINITY,
-        min_y: f64::INFINITY,
-    };
+    let mut bounds =
+        Bounds { max_x: f64::NEG_INFINITY, max_y: f64::NEG_INFINITY, min_x: f64::INFINITY, min_y: f64::INFINITY };
 
     let mut branches = String::new();
     if show_branches {
@@ -439,11 +400,7 @@ fn draw(
             let w = name.width + 16.0;
             let h = name.height + 4.0;
             let long = if vertical { h } else { w };
-            let from = if name.lines.is_empty() {
-                -LABEL_GAP
-            } else {
-                -LABEL_GAP - long
-            };
+            let from = if name.lines.is_empty() { -LABEL_GAP } else { -LABEL_GAP - long };
             let cx = px(from + long / 2.0, c);
             let cy = py(from + long / 2.0, c);
             let (x, y) = (px(-LABEL_GAP, c), py(-LABEL_GAP, c));
@@ -471,13 +428,7 @@ fn draw(
                 branches.push_str("\" fill=\"");
                 branches.push_str(&color);
                 branches.push_str("\"/>");
-                branches.push_str(&label_svg(
-                    name,
-                    cx,
-                    cy,
-                    " class=\"ondine-label\" fill=\"var(--_bg)\"",
-                    None,
-                ));
+                branches.push_str(&label_svg(name, cx, cy, " class=\"ondine-label\" fill=\"var(--_bg)\"", None));
             }
             branches.push_str("</g>");
         }
@@ -555,22 +506,15 @@ fn draw(
                 // Turns in just before the child, or before its tags when it comes from their
                 // side.
                 let lead_k = at(&lead, view.index);
-                let to = if parent.lane < view.lane && m2 - lead_k > m1 {
-                    m2 - lead_k
-                } else {
-                    m2
-                };
+                let to = if parent.lane < view.lane && m2 - lead_k > m1 { m2 - lead_k } else { m2 };
                 let mut s = CURVE.min(to - m1);
                 let mut along = c1;
                 if !merged || busy(parent.lane, m1, m2) {
                     // Neither lane is free to run along. Between two lanes, past the ids of one
                     // and before the tags of the next, a strip stays empty, and the connector
                     // takes that.
-                    along = if c1 > c2 {
-                        c2 + at(&hi, view.lane) + GAP / 2.0
-                    } else {
-                        c2 - at(&lo, view.lane) - GAP / 2.0
-                    };
+                    along =
+                        if c1 > c2 { c2 + at(&hi, view.lane) + GAP / 2.0 } else { c2 - at(&lo, view.lane) - GAP / 2.0 };
                     s = CURVE.min((to - m1) / 2.0);
                     d.push('C');
                     point(&mut d, m1 + s / 2.0, c1);
@@ -674,11 +618,8 @@ fn draw(
 
         // Beside the lane the tags form a row; above it they stack, the first one furthest out.
         let mut offset = DOT + TAG_GAP;
-        let order: Box<dyn Iterator<Item = &Label>> = if vertical {
-            Box::new(view.tags.iter())
-        } else {
-            Box::new(view.tags.iter().rev())
-        };
+        let order: Box<dyn Iterator<Item = &Label>> =
+            if vertical { Box::new(view.tags.iter()) } else { Box::new(view.tags.iter().rev()) };
         for tag in order {
             let w = tag_width(tag);
             let h = tag.height;
@@ -696,29 +637,16 @@ fn draw(
             push_num(&mut body, cy + h / 2.0);
             body.push('H');
             push_num(&mut body, left + NOTCH);
-            body.push_str(
-                "Z\" fill=\"var(--_s)\" stroke=\"var(--_b)\" stroke-linejoin=\"round\"/><circle",
-            );
+            body.push_str("Z\" fill=\"var(--_s)\" stroke=\"var(--_b)\" stroke-linejoin=\"round\"/><circle");
             attr(&mut body, "cx", left + NOTCH);
             attr(&mut body, "cy", cy);
             body.push_str(" r=\"1.5\" fill=\"var(--_b)\"/>");
-            body.push_str(&label_svg(
-                tag,
-                left + NOTCH + 4.0 + tag.width / 2.0,
-                cy,
-                " fill=\"var(--_fg)\"",
-                None,
-            ));
+            body.push_str(&label_svg(tag, left + NOTCH + 4.0 + tag.width / 2.0, cy, " fill=\"var(--_fg)\"", None));
             body.push_str("</g>");
         }
 
         commits.push_str("<g class=\"ondine-commit ondine-commit-");
-        commits.push_str(
-            CLASSES
-                .get(usize::from(r#type))
-                .copied()
-                .unwrap_or(CLASSES[0]),
-        );
+        commits.push_str(CLASSES.get(usize::from(r#type)).copied().unwrap_or(CLASSES[0]));
         if commit.r#type == MERGE && r#type != MERGE {
             commits.push_str(" ondine-commit-merge");
         }
@@ -733,11 +661,7 @@ fn draw(
         bounds.grow(0.0, 0.0, 0.0, 0.0);
     }
     let title = layout_label(model.title.as_deref(), false, size, 4000.0, BOLD, None);
-    let title_height = if title.height > 0.0 {
-        title.height + 16.0
-    } else {
-        0.0
-    };
+    let title_height = if title.height > 0.0 { title.height + 16.0 } else { 0.0 };
     let inner = (bounds.max_x - bounds.min_x).max(title.width);
     let width = (inner + 2.0 * pad).ceil();
     let height = (bounds.max_y - bounds.min_y + title_height + 2.0 * pad).ceil();
@@ -762,9 +686,7 @@ fn draw(
         content.push_str("</g>");
     }
     if !curves.is_empty() || !lines.is_empty() {
-        content.push_str(
-            "<g class=\"ondine-edges\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\">",
-        );
+        content.push_str("<g class=\"ondine-edges\" fill=\"none\" stroke-width=\"2\" stroke-linecap=\"round\">");
         content.push_str(&curves);
         content.push_str(&lines);
         content.push_str("</g>");
@@ -778,10 +700,7 @@ fn draw(
     }
     content.push_str("</g>");
 
-    let acc = Accessible {
-        acc_descr: model.acc_descr.as_deref(),
-        acc_title: model.acc_title.as_deref(),
-    };
+    let acc = Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() };
     Rendered {
         height,
         links: Vec::new(),

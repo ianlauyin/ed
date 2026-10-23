@@ -4,8 +4,12 @@
 //! Offsets are UTF-8. Pele steps over one UTF-16 unit after a keyword's space, which is always
 //! one character, so this lexer steps over that character.
 
-use crate::diagrams::common::scan::{Tokens, accessibility, keyword_at, skip_trivia};
-use crate::util::chars::{is_space, is_word};
+use crate::diagrams::common::scan::Tokens;
+use crate::diagrams::common::scan::accessibility;
+use crate::diagrams::common::scan::keyword_at;
+use crate::diagrams::common::scan::skip_trivia;
+use crate::util::chars::is_space;
+use crate::util::chars::is_word;
 
 /// The end of the tokens.
 pub(crate) const END: u16 = 0;
@@ -61,9 +65,7 @@ fn code_at(src: &str, p: usize) -> Option<u32> {
 
 /// The length of the character at `p`, or 1 at the end.
 fn len_at(src: &str, p: usize) -> usize {
-    src.get(p..)
-        .and_then(|rest| rest.chars().next())
-        .map_or(1, char::len_utf8)
+    src.get(p..).and_then(|rest| rest.chars().next()).map_or(1, char::len_utf8)
 }
 
 /// `#`, a line break, and `;` end every kind of text; a colon also ends a task name or a section.
@@ -138,11 +140,7 @@ pub(crate) fn tokenize<'a>(src: &'a str) -> Tokens<'a> {
         p = match c {
             b':' => {
                 let e = text_end(src, p + 1, false);
-                if e > p + 1 {
-                    emit(&mut out, TASK_DATA, p, e)
-                } else {
-                    emit(&mut out, COLON, p, p + 1)
-                }
+                if e > p + 1 { emit(&mut out, TASK_DATA, p, e) } else { emit(&mut out, COLON, p, p + 1) }
             }
             b';' => emit(&mut out, INVALID, p, p + 1),
             _ => {

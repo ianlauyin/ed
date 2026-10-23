@@ -1,18 +1,38 @@
 //! Draws a kanban board: columns of cards, folded into rows when the host is narrow. Port of
 //! Pele's `src/diagrams/kanban/render.ts`.
 
-use super::db::{KanbanDb, KanbanNode};
+use super::db::KanbanDb;
+use super::db::KanbanNode;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::title_room;
 use crate::diagrams::common::icon::icon_svg;
-use crate::svg::builder::{esc, esc_text, js_round, label_svg, push_num, text_style};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
-use crate::svg::theme::{CRITICAL, ROUNDED, class_names};
-use crate::text::icons::{IconResolver, icon_markup};
-use crate::text::label::{Label, Span, layout_label, trim};
-use crate::text::measure::{self, BOLD};
-use crate::util::url::{LinkInfo, UrlOptions, link_url, rel_attr, safe_url};
-use crate::yaml::{Value, push_number};
+use crate::svg::builder::esc;
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::builder::text_style;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
+use crate::svg::theme::CRITICAL;
+use crate::svg::theme::ROUNDED;
+use crate::svg::theme::class_names;
+use crate::text::icons::IconResolver;
+use crate::text::icons::icon_markup;
+use crate::text::label::Label;
+use crate::text::label::Span;
+use crate::text::label::layout_label;
+use crate::text::label::trim;
+use crate::text::measure::BOLD;
+use crate::text::measure::{self};
+use crate::util::url::LinkInfo;
+use crate::util::url::UrlOptions;
+use crate::util::url::link_url;
+use crate::util::url::rel_attr;
+use crate::util::url::safe_url;
+use crate::yaml::Value;
+use crate::yaml::push_number;
 
 const COLUMN_GAP: f64 = 12.0;
 const COLUMN_PAD: f64 = 8.0;
@@ -39,10 +59,7 @@ fn property<'v>(value: &'v Value, key: &str) -> Option<&'v Value> {
     let Value::Object(entries) = value else {
         return None;
     };
-    entries
-        .iter()
-        .find(|(own, _)| own == key)
-        .map(|(_, value)| value)
+    entries.iter().find(|(own, _)| own == key).map(|(_, value)| value)
 }
 
 /// `text` lowercased as JavaScript's `toLowerCase` does it, outside the final-sigma rule.
@@ -106,37 +123,19 @@ fn fit_label(raw: Option<&str>, markdown: bool, size: f64, max: f64, base: u8) -
                 width += w;
             }
             if !text.is_empty() {
-                line.push(Span {
-                    icon: None,
-                    style: span.style,
-                    text,
-                    width: width - from,
-                });
+                line.push(Span { icon: None, style: span.style, text, width: width - from });
             }
         }
         commit(&mut line, &mut width);
     }
     #[expect(clippy::cast_precision_loss, reason = "line counts are far below 2^52")]
     let height = lines.len() as f64 * label.line_height;
-    Label {
-        height,
-        lines,
-        width: widest,
-        widths,
-        ..label
-    }
+    Label { height, lines, width: widest, widths, ..label }
 }
 
 /// Writes a label with every line starting at `x`, or ending there when `end`, and the first
 /// line's box starting at `y`.
-fn text_block(
-    label: &Label,
-    x: f64,
-    y: f64,
-    attrs: &str,
-    icons: Option<IconResolver<'_>>,
-    end: bool,
-) -> String {
+fn text_block(label: &Label, x: f64, y: f64, attrs: &str, icons: Option<IconResolver<'_>>, end: bool) -> String {
     let mut out = String::new();
     let mut cy = y + 0.5 * label.line_height;
     for (line, &width) in label.lines.iter().zip(&label.widths) {
@@ -185,10 +184,7 @@ struct Card<'m> {
 }
 
 /// Draws `model` with the `kanban` section of `config`.
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "counts and indexes are far below 2^52"
-)]
+#[expect(clippy::cast_precision_loss, reason = "counts and indexes are far below 2^52")]
 pub(crate) fn render(
     model: &KanbanDb,
     config: &Value,
@@ -196,9 +192,7 @@ pub(crate) fn render(
     url: &UrlOptions<'_>,
     icons: Option<IconResolver<'_>>,
 ) -> Rendered {
-    let has = |name: Option<&str>| {
-        name.is_some_and(|name| !name.is_empty() && !icon_markup(icons, name).is_empty())
-    };
+    let has = |name: Option<&str>| name.is_some_and(|name| !name.is_empty() && !icon_markup(icons, name).is_empty());
     let size = options.font_size.unwrap_or(16.0);
     let small = js_round(size * 0.875);
     let line = js_round(size * 1.5);
@@ -218,17 +212,12 @@ pub(crate) fn render(
     let sections = &model.sections;
     let count = sections.len() as f64;
     let fits = count * (own_width + COLUMN_GAP) - COLUMN_GAP <= room;
-    let per_row = if fits {
-        count.max(1.0)
-    } else {
-        1.0_f64.max(((room + COLUMN_GAP) / (own_width + COLUMN_GAP)).floor())
-    };
+    let per_row =
+        if fits { count.max(1.0) } else { 1.0_f64.max(((room + COLUMN_GAP) / (own_width + COLUMN_GAP)).floor()) };
     let column_width = if fits {
         own_width
     } else {
-        own_width
-            .min(room)
-            .max((((room + COLUMN_GAP) / per_row).floor() - COLUMN_GAP).min(own_width * 2.0))
+        own_width.min(room).max((((room + COLUMN_GAP) / per_row).floor() - COLUMN_GAP).min(own_width * 2.0))
     };
     let base_url = match conf.and_then(|conf| property(conf, "ticketBaseUrl")) {
         Some(Value::String(base)) => base.as_str(),
@@ -249,20 +238,8 @@ pub(crate) fn render(
         digits.clear();
         push_number(&mut digits, section.items.len() as f64);
         let count_width = measure::width(&digits, small, 0);
-        let reserved = count_width
-            + 12.0
-            + if has(section.node.icon.as_deref()) {
-                glyph + ICON_GAP
-            } else {
-                0.0
-            };
-        let title = fit_label(
-            Some(&section.node.label),
-            true,
-            size,
-            card_width - 8.0 - reserved,
-            BOLD,
-        );
+        let reserved = count_width + 12.0 + if has(section.node.icon.as_deref()) { glyph + ICON_GAP } else { 0.0 };
+        let title = fit_label(Some(&section.node.label), true, size, card_width - 8.0 - reserved, BOLD);
         head_height = head_height.max(title.height);
         count_widths.push(count_width);
         titles.push(title);
@@ -270,11 +247,7 @@ pub(crate) fn render(
         let mut list = Vec::with_capacity(section.items.len());
         let mut height = 0.0;
         for item in &section.items {
-            let icon_room = if has(item.icon.as_deref()) {
-                glyph + ICON_GAP
-            } else {
-                0.0
-            };
+            let icon_room = if has(item.icon.as_deref()) { glyph + ICON_GAP } else { 0.0 };
             let label = fit_label(Some(&item.label), true, small, text_width - icon_room, 0);
             let ticket = fit_label(item.ticket.as_deref(), false, small, text_width, 0);
             let assigned = fit_label(item.assigned.as_deref(), false, small, text_width, 0);
@@ -283,17 +256,9 @@ pub(crate) fn render(
             } else {
                 ticket.height.max(assigned.height)
             };
-            let card_height = 2.0 * CARD_PAD
-                + label.height.max(small_line)
-                + if meta == 0.0 { 0.0 } else { META_GAP + meta };
-            list.push(Card {
-                assigned,
-                height: card_height,
-                item,
-                label,
-                meta,
-                ticket,
-            });
+            let card_height =
+                2.0 * CARD_PAD + label.height.max(small_line) + if meta == 0.0 { 0.0 } else { META_GAP + meta };
+            list.push(Card { assigned, height: card_height, item, label, meta, ticket });
             height += card_height + CARD_GAP;
         }
         cards.push(list);
@@ -302,11 +267,7 @@ pub(crate) fn render(
     head_height += 2.0 * COLUMN_PAD;
 
     // `per_row` is a whole number of at least one.
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "a whole number of at least one"
-    )]
+    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "a whole number of at least one")]
     let per_row_count = (per_row as usize).max(1);
     let mut row_heights: Vec<f64> = Vec::new();
     let mut row_tops: Vec<f64> = Vec::new();
@@ -322,19 +283,8 @@ pub(crate) fn render(
         _ => 0.0,
     };
 
-    let title = layout_label(
-        model.title.as_deref(),
-        false,
-        size,
-        title_room(options),
-        BOLD,
-        None,
-    );
-    let title_height = if title.height > 0.0 {
-        title.height + 16.0
-    } else {
-        0.0
-    };
+    let title = layout_label(model.title.as_deref(), false, size, title_room(options), BOLD, None);
+    let title_height = if title.height > 0.0 { title.height + 16.0 } else { 0.0 };
     let board_width = (count.min(per_row) * (column_width + COLUMN_GAP) - COLUMN_GAP).max(0.0);
     let width = board_width.max(title.width);
     let left = pad + (width - board_width) / 2.0;
@@ -401,14 +351,7 @@ pub(crate) fn render(
                 inner.push_str(color);
                 inner.push_str(" stroke-width=\"3\" stroke-linecap=\"round\"/>");
             }
-            inner.push_str(&text_block(
-                &card.label,
-                CARD_PAD,
-                CARD_PAD,
-                " class=\"ondine-label\"",
-                icons,
-                false,
-            ));
+            inner.push_str(&text_block(&card.label, CARD_PAD, CARD_PAD, " class=\"ondine-label\"", icons, false));
             if let Some(icon) = item.icon.as_deref()
                 && has(Some(icon))
             {
@@ -426,25 +369,10 @@ pub(crate) fn render(
                 // `String.prototype.replace` with a string pattern replaces the first match only.
                 let target = base_url.find("#TICKET#").map_or_else(
                     || base_url.to_owned(),
-                    |at| {
-                        [
-                            base_url.get(..at).unwrap_or(""),
-                            ticket,
-                            base_url.get(at + 8..).unwrap_or(""),
-                        ]
-                        .concat()
-                    },
+                    |at| [base_url.get(..at).unwrap_or(""), ticket, base_url.get(at + 8..).unwrap_or("")].concat(),
                 );
-                let safe = if base_url.is_empty() {
-                    String::new()
-                } else {
-                    safe_url(&target)
-                };
-                let href = if base_url.is_empty() {
-                    None
-                } else {
-                    link_url(&safe, url)
-                };
+                let safe = if base_url.is_empty() { String::new() } else { safe_url(&target) };
+                let href = if base_url.is_empty() { None } else { link_url(&safe, url) };
                 if let Some(href) = href {
                     inner.push_str("<a href=\"");
                     inner.push_str(&esc(href));
@@ -460,11 +388,7 @@ pub(crate) fn render(
                         false,
                     ));
                     inner.push_str("</a>");
-                    links.push(LinkInfo {
-                        href: href.to_owned(),
-                        id: item.id.clone(),
-                        internal: false,
-                    });
+                    links.push(LinkInfo { href: href.to_owned(), id: item.id.clone(), internal: false });
                 } else {
                     inner.push_str(&text_block(
                         &card.ticket,
@@ -476,11 +400,7 @@ pub(crate) fn render(
                     ));
                 }
             }
-            if item
-                .assigned
-                .as_deref()
-                .is_some_and(|assigned| !assigned.is_empty())
-            {
+            if item.assigned.as_deref().is_some_and(|assigned| !assigned.is_empty()) {
                 inner.push_str(&text_block(
                     &card.assigned,
                     card_width - CARD_PAD,
@@ -512,21 +432,13 @@ pub(crate) fn render(
         }
 
         out.push_str("<g class=\"ondine-cluster ondine-column");
-        out.push_str(&class_names(
-            section.node.css_classes.as_deref().unwrap_or(""),
-        ));
+        out.push_str(&class_names(section.node.css_classes.as_deref().unwrap_or("")));
         out.push_str("\" data-id=\"");
         out.push_str(&esc_text(&section.node.id));
         out.push_str("\" transform=\"translate(");
-        push_num(
-            &mut out,
-            left + (index % per_row_count) as f64 * (column_width + COLUMN_GAP),
-        );
+        push_num(&mut out, left + (index % per_row_count) as f64 * (column_width + COLUMN_GAP));
         out.push(',');
-        push_num(
-            &mut out,
-            pad + title_height + row_tops.get(row).copied().unwrap_or(0.0),
-        );
+        push_num(&mut out, pad + title_height + row_tops.get(row).copied().unwrap_or(0.0));
         out.push_str(")\">");
         out.push_str(&body);
         out.push_str("</g>");
@@ -546,15 +458,7 @@ pub(crate) fn render(
     Rendered {
         height: total_height,
         links,
-        svg: svg_document(
-            "kanban",
-            total_width,
-            total_height,
-            size,
-            options,
-            Accessible::default(),
-            &content,
-        ),
+        svg: svg_document("kanban", total_width, total_height, size, options, Accessible::default(), &content),
         width: total_width,
     }
 }

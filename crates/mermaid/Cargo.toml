@@ -1,8 +1,7 @@
 # Started as a copy of https://github.com/wevm/ondine (crates/compiler, commit
 # 0b589ec), a Rust port of Obsidian's Pele (https://github.com/obsidianmd/pele).
 # It is owned and edited here; Ondine and Pele are references, not upstreams to
-# merge from. The `#[cfg(test)]` modules came from Ondine and read fixtures that
-# were not copied, so they are not built.
+# merge from. Ondine's parity tests (and their fixtures) were not kept.
 [package]
 name = "mermaid"
 description = "Pure Mermaid-to-SVG compiler: preprocessing, parsing, layout, and SVG emission."
@@ -13,81 +12,7 @@ publish = false
 
 [lib]
 path = "src/lib.rs"
-test = false
 doctest = false
-
-[features]
-default = ["all"]
-# Every diagram type.
-all = [
-  "agentflow",
-  "architecture",
-  "block",
-  "c4",
-  "class",
-  "cynefin",
-  "er",
-  "eventmodeling",
-  "flowchart",
-  "gantt",
-  "git",
-  "info",
-  "ishikawa",
-  "journey",
-  "kanban",
-  "mindmap",
-  "packet",
-  "pie",
-  "quadrant",
-  "radar",
-  "railroad",
-  "requirement",
-  "sankey",
-  "sequence",
-  "state",
-  "swimlane",
-  "timeline",
-  "treemap",
-  "treeview",
-  "usecase",
-  "venn",
-  "wardley",
-  "xychart",
-]
-agentflow = []
-architecture = []
-block = []
-c4 = []
-class = []
-cynefin = []
-er = []
-eventmodeling = []
-flowchart = []
-gantt = []
-git = []
-info = []
-ishikawa = []
-journey = []
-kanban = []
-mindmap = []
-packet = []
-pie = []
-quadrant = []
-radar = []
-railroad = []
-requirement = []
-sankey = []
-sequence = []
-state = []
-swimlane = []
-timeline = []
-treemap = []
-treeview = []
-usecase = []
-venn = []
-wardley = []
-xychart = []
-model = []
 
 # Upstream's lints, so its `#[expect(...)]` attributes stay fulfilled.
 [lints.rust]

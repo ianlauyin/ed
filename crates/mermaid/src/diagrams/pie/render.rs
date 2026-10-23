@@ -5,13 +5,22 @@ use std::f64::consts::PI;
 
 use super::model::PieModel;
 use crate::diagrams::Rendered;
-use crate::diagrams::common::fit_width::{fit_width, title_room};
-use crate::svg::builder::{esc_text, js_round, label_svg, push_num};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
+use crate::diagrams::common::fit_width::fit_width;
+use crate::diagrams::common::fit_width::title_room;
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
 use crate::svg::theme::series_color;
-use crate::text::label::{Label, layout_label};
-use crate::text::measure::{self, BOLD};
-use crate::yaml::{Value, push_number};
+use crate::text::label::Label;
+use crate::text::label::layout_label;
+use crate::text::measure::BOLD;
+use crate::text::measure::{self};
+use crate::yaml::Value;
+use crate::yaml::push_number;
 
 /// The pie radius before fitting.
 const RADIUS: f64 = 120.0;
@@ -27,10 +36,7 @@ const OUTSIDE: f64 = 28.0;
 /// The `pie` option `key` of `config`.
 fn option<'v>(config: &'v Value, key: &str) -> Option<&'v Value> {
     let property = |value: &'v Value, key: &str| match value {
-        Value::Object(entries) => entries
-            .iter()
-            .find(|(own, _)| own == key)
-            .map(|(_, value)| value),
+        Value::Object(entries) => entries.iter().find(|(own, _)| own == key).map(|(_, value)| value),
         _ => None,
     };
     property(property(config, "pie")?, key)
@@ -107,9 +113,7 @@ fn fixed0(value: f64) -> String {
 
 /// Draws `model` with the `pie` section of `config`, narrowed to fit the host's width.
 pub(crate) fn render(model: &PieModel, config: &Value, options: &RenderOptions) -> Rendered {
-    fit_width(options, RADIUS * 2.0, 140.0, |diameter, tight| {
-        draw(model, config, options, diameter / 2.0, tight)
-    })
+    fit_width(options, RADIUS * 2.0, 140.0, |diameter, tight| draw(model, config, options, diameter / 2.0, tight))
 }
 
 /// A percentage label placed outside the rim.
@@ -120,13 +124,7 @@ struct Outside {
 }
 
 /// `tight` is set when the chart does not fit the width it has with its legend beside it.
-fn draw(
-    model: &PieModel,
-    config: &Value,
-    options: &RenderOptions,
-    radius: f64,
-    tight: bool,
-) -> Rendered {
+fn draw(model: &PieModel, config: &Value, options: &RenderOptions, radius: f64, tight: bool) -> Rendered {
     let size = options.font_size.unwrap_or(16.0);
     let small = js_round(size * 0.875);
     let pad = options.padding.unwrap_or(8.0);
@@ -147,11 +145,7 @@ fn draw(
             out
         }
     };
-    let legend_position = if tight && (placed == "left" || placed == "right") {
-        "bottom"
-    } else {
-        placed.as_str()
-    };
+    let legend_position = if tight && (placed == "left" || placed == "right") { "bottom" } else { placed.as_str() };
 
     let entries = &model.sections;
     let mut sum = 0.0;
@@ -182,30 +176,15 @@ fn draw(
     #[expect(clippy::cast_precision_loss, reason = "slice counts are small")]
     let legend_height = legend.len() as f64 * ROW;
 
-    let title = layout_label(
-        model.title.as_deref(),
-        false,
-        size,
-        title_room(options),
-        BOLD,
-        None,
-    );
-    let title_height = if title.height > 0.0 {
-        title.height + 16.0
-    } else {
-        0.0
-    };
+    let title = layout_label(model.title.as_deref(), false, size, title_room(options), BOLD, None);
+    let title_height = if title.height > 0.0 { title.height + 16.0 } else { 0.0 };
 
     // A slice too thin for its percentage gets the label outside the rim, which needs a margin.
     let shares: Vec<f64> = entries
         .iter()
         .map(|(_, value)| {
             let share = if sum > 0.0 { value / sum } else { 0.0 };
-            if share * 100.0 >= 1.0 && fixed0(share * 100.0) != "0" {
-                share
-            } else {
-                0.0
-            }
+            if share * 100.0 >= 1.0 && fixed0(share * 100.0) != "0" { share } else { 0.0 }
         })
         .collect();
     let narrow: Vec<bool> = shares
@@ -231,19 +210,11 @@ fn draw(
     let mut width = diameter;
     let mut height = diameter;
     if side == "left" || side == "right" {
-        width += if legend_width > 0.0 {
-            GAP + legend_width
-        } else {
-            0.0
-        };
+        width += if legend_width > 0.0 { GAP + legend_width } else { 0.0 };
         height = height.max(legend_height);
     } else if stacked {
         width = width.max(legend_width);
-        height += if legend_height > 0.0 {
-            20.0 + legend_height
-        } else {
-            0.0
-        };
+        height += if legend_height > 0.0 { 20.0 + legend_height } else { 0.0 };
     }
     width = width.max(title.width);
 
@@ -271,8 +242,7 @@ fn draw(
     let mut placed_outside: Vec<Outside> = Vec::new();
     let clear = |placed: &[Outside], x: f64, y: f64, width: f64| {
         placed.iter().all(|other| {
-            (x - other.x).abs() >= f64::midpoint(width, other.width) + 2.0
-                || (y - other.y).abs() >= small + 2.0
+            (x - other.x).abs() >= f64::midpoint(width, other.width) + 2.0 || (y - other.y).abs() >= small + 2.0
         })
     };
     for (index, ((label, _), &share)) in entries.iter().zip(&shares).enumerate() {
@@ -328,19 +298,12 @@ fn draw(
     }
 
     let (lx, ly) = match side {
-        "right" => (
-            cx + diameter / 2.0 + GAP,
-            body_top + (height - legend_height) / 2.0,
-        ),
+        "right" => (cx + diameter / 2.0 + GAP, body_top + (height - legend_height) / 2.0),
         "left" => (pad, body_top + (height - legend_height) / 2.0),
         "center" => (cx - legend_width / 2.0, cy - legend_height / 2.0),
         _ => (
             pad + (width - legend_width) / 2.0,
-            if legend_position == "top" {
-                body_top
-            } else {
-                body_top + diameter + 20.0
-            },
+            if legend_position == "top" { body_top } else { body_top + diameter + 20.0 },
         ),
     };
     let mut legend_out = String::new();
@@ -356,13 +319,7 @@ fn draw(
         legend_out.push_str("\" width=\"12\" height=\"12\" rx=\"2\" fill=\"");
         legend_out.push_str(&series_color(i64::try_from(index).unwrap_or(0)));
         legend_out.push_str("\"/>");
-        legend_out.push_str(&label_svg(
-            label,
-            lx + SWATCH + 8.0 + label.width / 2.0,
-            y,
-            "",
-            None,
-        ));
+        legend_out.push_str(&label_svg(label, lx + SWATCH + 8.0 + label.width / 2.0, y, "", None));
         legend_out.push_str("</g>");
     }
 
@@ -418,16 +375,8 @@ fn draw(
         total_height,
         size,
         options,
-        Accessible {
-            acc_descr: model.acc_descr.as_deref(),
-            acc_title: model.acc_title.as_deref(),
-        },
+        Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
         &content,
     );
-    Rendered {
-        height: total_height,
-        links: Vec::new(),
-        svg,
-        width: total_width,
-    }
+    Rendered { height: total_height, links: Vec::new(), svg, width: total_width }
 }

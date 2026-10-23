@@ -3,13 +3,18 @@
 //! containment problems are recorded on the model as diagnostics. Port of Pele's
 //! `src/diagrams/agentflow/graph.ts`.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use super::color_slots::assign_color_slots;
-use super::db::{AgentflowDb, js_trim};
-use super::shapes::{normalise_node_shapes, resolve_shape_alias};
-use super::types::{LabelType, Metadata};
-use crate::yaml::{self, Value};
+use super::db::AgentflowDb;
+use super::db::js_trim;
+use super::shapes::normalise_node_shapes;
+use super::shapes::resolve_shape_alias;
+use super::types::LabelType;
+use super::types::Metadata;
+use crate::yaml::Value;
+use crate::yaml::{self};
 
 /// A node or flow to draw.
 #[derive(Clone, Debug, PartialEq)]
@@ -89,8 +94,7 @@ impl GraphEdge {
     /// Marker at the tail, which agentflow never draws.
     pub(crate) const ARROW_TYPE_START: &'static str = "none";
     /// The class names Mermaid gives every agentflow edge.
-    pub(crate) const CLASSES: &'static str =
-        "edge-thickness-normal edge-pattern-solid flowchart-link";
+    pub(crate) const CLASSES: &'static str = "edge-thickness-normal edge-pattern-solid flowchart-link";
 }
 
 /// The drawn graph.
@@ -104,23 +108,14 @@ pub(crate) struct AgentGraph {
 
 fn is_collapsed(metadata: Option<&Metadata>) -> bool {
     metadata.is_some_and(|entries| {
-        entries.iter().any(|(key, value)| {
-            key == "view" && matches!(value, Value::String(view) if view == "collapsed")
-        })
+        entries.iter().any(|(key, value)| key == "view" && matches!(value, Value::String(view) if view == "collapsed"))
     })
 }
 
 /// Builds the drawn graph with a palette of `palette_length` colors. `default_curve` comes from
 /// the `flowchart.curve` config.
-#[expect(
-    clippy::too_many_lines,
-    reason = "mirrors Pele's buildAgentGraph, one pass per stage"
-)]
-pub(crate) fn build_agent_graph(
-    db: &mut AgentflowDb,
-    palette_length: u32,
-    default_curve: Option<&str>,
-) -> AgentGraph {
+#[expect(clippy::too_many_lines, reason = "mirrors Pele's buildAgentGraph, one pass per stage")]
+pub(crate) fn build_agent_graph(db: &mut AgentflowDb, palette_length: u32, default_curve: Option<&str>) -> AgentGraph {
     let compiled = |db: &AgentflowDb, names: &[&str]| -> Vec<String> {
         let mut out: Vec<String> = Vec::new();
         for name in names {
@@ -198,12 +193,7 @@ pub(crate) fn build_agent_graph(
     }
 
     let count = db.subgraphs.len();
-    let position: BTreeMap<&str, usize> = db
-        .subgraphs
-        .iter()
-        .enumerate()
-        .map(|(i, sg)| (sg.id.as_str(), i))
-        .collect();
+    let position: BTreeMap<&str, usize> = db.subgraphs.iter().enumerate().map(|(i, sg)| (sg.id.as_str(), i)).collect();
 
     // Two flows can each name the other. The nesting that would close the loop is dropped.
     let mut parent_of: BTreeMap<String, String> = BTreeMap::new();
@@ -244,8 +234,7 @@ pub(crate) fn build_agent_graph(
         message.push_str(&id);
         message.push_str("\" because \"");
         message.push_str(&id);
-        message
-            .push_str("\" already contains it. The nesting that would close the loop is dropped.");
+        message.push_str("\" already contains it. The nesting that would close the loop is dropped.");
         db.emit("CONTAINMENT_VIOLATION", "warning", message, &id);
     }
 
@@ -259,11 +248,7 @@ pub(crate) fn build_agent_graph(
         let classes: Vec<&str> = sg.classes.iter().map(String::as_str).collect();
         let metadata = if collapsed {
             let mut metadata = sg.metadata.clone().unwrap_or_default();
-            yaml::set(
-                &mut metadata,
-                "containerType".to_owned(),
-                Value::String("flow".to_owned()),
-            );
+            yaml::set(&mut metadata, "containerType".to_owned(), Value::String("flow".to_owned()));
             Some(metadata)
         } else {
             sg.metadata.clone()
@@ -284,11 +269,7 @@ pub(crate) fn build_agent_graph(
             link_target: None,
             metadata,
             parent_id: parent_of.get(&sg.id).cloned(),
-            shape: String::from(if collapsed {
-                "collapsedGroup"
-            } else {
-                "flowGroup"
-            }),
+            shape: String::from(if collapsed { "collapsedGroup" } else { "flowGroup" }),
             tooltip: None,
         });
     }

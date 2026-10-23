@@ -1,15 +1,22 @@
 //! The class model and the operations the parser applies to it. Port of Pele's
 //! `src/diagrams/class/db.ts`.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
-use super::members::{ClassMember, MemberType};
-use super::types::{
-    ClassInterface, ClassNode, ClassNote, ClassRelation, LOLLIPOP, NamespaceNode, RelationEnd,
-    StyleClass,
-};
+use super::members::ClassMember;
+use super::members::MemberType;
+use super::types::ClassInterface;
+use super::types::ClassNode;
+use super::types::ClassNote;
+use super::types::ClassRelation;
+use super::types::LOLLIPOP;
+use super::types::NamespaceNode;
+use super::types::RelationEnd;
+use super::types::StyleClass;
 use crate::text::entities;
-use crate::text::label::{trim, trim_start};
+use crate::text::label::trim;
+use crate::text::label::trim_start;
 use crate::util::chars::is_space;
 use crate::util::url::sanitize_url;
 
@@ -24,10 +31,7 @@ pub(crate) struct Ordered<V> {
 
 impl<V> Default for Ordered<V> {
     fn default() -> Self {
-        Self {
-            index: BTreeMap::new(),
-            values: Vec::new(),
-        }
+        Self { index: BTreeMap::new(), values: Vec::new() }
     }
 }
 
@@ -69,9 +73,7 @@ pub(crate) fn split_name(id: &str) -> (&str, &str) {
     match id.find('~') {
         Some(at) if at > 0 => {
             let rest = id.get(at + 1..).unwrap_or("");
-            let r#type = rest
-                .find('~')
-                .map_or(rest, |end| rest.get(..end).unwrap_or(""));
+            let r#type = rest.find('~').map_or(rest, |end| rest.get(..end).unwrap_or(""));
             (id.get(..at).unwrap_or(""), r#type)
         }
         _ => (id, ""),
@@ -171,10 +173,7 @@ impl ClassDb {
     /// Records that a class carries `css_class`, once.
     fn tag(&mut self, node: usize, css_class: &str) {
         if self.tagged.insert((css_class.to_owned(), node)) {
-            self.with_css_class
-                .entry(css_class.to_owned())
-                .or_default()
-                .push(node);
+            self.with_css_class.entry(css_class.to_owned()).or_default().push(node);
         }
     }
 
@@ -215,15 +214,8 @@ impl ClassDb {
     /// Adds the interface a lone lollipop end stands for and returns its id.
     fn add_interface(&mut self, label: &str, class_id: &str) -> String {
         let mut id = String::from("interface");
-        crate::error::push_u32(
-            &mut id,
-            u32::try_from(self.interfaces.len()).unwrap_or(u32::MAX),
-        );
-        self.interfaces.push(ClassInterface {
-            class_id: class_id.to_owned(),
-            id: id.clone(),
-            label: label.to_owned(),
-        });
+        crate::error::push_u32(&mut id, u32::try_from(self.interfaces.len()).unwrap_or(u32::MAX));
+        self.interfaces.push(ClassInterface { class_id: class_id.to_owned(), id: id.clone(), label: label.to_owned() });
         id
     }
 
@@ -243,8 +235,7 @@ impl ClassDb {
         };
         let text = trim(member);
         if text.starts_with("<<") && text.ends_with(">>") {
-            node.annotations
-                .push(text.get(2..text.len() - 2).unwrap_or("").to_owned());
+            node.annotations.push(text.get(2..text.len() - 2).unwrap_or("").to_owned());
         } else if text.find(')').is_some_and(|at| at > 0) {
             let parsed = ClassMember::new(text, MemberType::Method);
             if parsed.member_type == MemberType::Method {
@@ -253,8 +244,7 @@ impl ClassDb {
                 node.members.push(parsed);
             }
         } else if !text.is_empty() {
-            node.members
-                .push(ClassMember::new(text, MemberType::Attribute));
+            node.members.push(ClassMember::new(text, MemberType::Attribute));
         }
     }
 
@@ -309,13 +299,9 @@ impl ClassDb {
         for &id in ids {
             let at = match self.style_classes.position(id) {
                 Some(at) => at,
-                None => self.style_classes.insert(
-                    id.to_owned(),
-                    StyleClass {
-                        id: id.to_owned(),
-                        ..StyleClass::default()
-                    },
-                ),
+                None => {
+                    self.style_classes.insert(id.to_owned(), StyleClass { id: id.to_owned(), ..StyleClass::default() })
+                }
             };
             if let Some(def) = self.style_classes.values.get_mut(at) {
                 for s in style {
@@ -430,16 +416,9 @@ impl ClassDb {
         // The enclosing namespace and its ancestors exist already, so only the parts of `id` are
         // walked.
         let mut parent_id = (!prefix.is_empty()).then(|| prefix.clone());
-        let mut from = if prefix.is_empty() {
-            0
-        } else {
-            prefix.len() + 1
-        };
+        let mut from = if prefix.is_empty() { 0 } else { prefix.len() + 1 };
         loop {
-            let dot = qualified
-                .get(from..)
-                .and_then(|rest| rest.find('.'))
-                .map(|at| from + at);
+            let dot = qualified.get(from..).and_then(|rest| rest.find('.')).map(|at| from + at);
             let leaf = dot.is_none();
             let end = dot.unwrap_or(qualified.len());
             let current = qualified.get(..end).unwrap_or("").to_owned();
@@ -492,12 +471,7 @@ impl ClassDb {
     }
 
     /// Puts classes and notes in the namespace `id`.
-    pub(crate) fn add_classes_to_namespace(
-        &mut self,
-        id: &str,
-        class_names: &[String],
-        note_names: &[String],
-    ) {
+    pub(crate) fn add_classes_to_namespace(&mut self, id: &str, class_names: &[String], note_names: &[String]) {
         let Some(at) = self.namespaces.position(id) else {
             return;
         };

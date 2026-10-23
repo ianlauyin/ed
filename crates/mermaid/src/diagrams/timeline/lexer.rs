@@ -4,8 +4,13 @@
 //! Offsets are UTF-8. Pele steps over one UTF-16 unit after a keyword's space, which is always
 //! one character, so this lexer steps over that character.
 
-use crate::diagrams::common::scan::{Tokens, accessibility, keyword_at, line_end, skip_trivia};
-use crate::util::chars::{is_space, is_word};
+use crate::diagrams::common::scan::Tokens;
+use crate::diagrams::common::scan::accessibility;
+use crate::diagrams::common::scan::keyword_at;
+use crate::diagrams::common::scan::line_end;
+use crate::diagrams::common::scan::skip_trivia;
+use crate::util::chars::is_space;
+use crate::util::chars::is_word;
 
 /// The end of the tokens.
 pub(crate) const END: u16 = 0;
@@ -64,9 +69,7 @@ fn code_at(src: &str, p: usize) -> Option<u32> {
 
 /// The length of the character at `p`, or 1 at the end.
 fn len_at(src: &str, p: usize) -> usize {
-    src.get(p..)
-        .and_then(|rest| rest.chars().next())
-        .map_or(1, char::len_utf8)
+    src.get(p..).and_then(|rest| rest.chars().next()).map_or(1, char::len_utf8)
 }
 
 /// Splits preprocessed timeline source into tokens.
@@ -103,16 +106,8 @@ pub(crate) fn tokenize<'a>(src: &'a str) -> Tokens<'a> {
                 e += 1;
             }
             let lr = keyword_at(src, e, "lr");
-            if e > p + 8
-                && (lr || keyword_at(src, e, "td"))
-                && !code_at(src, e + 2).is_some_and(is_word)
-            {
-                p = emit(
-                    &mut out,
-                    if lr { TIMELINE_LR } else { TIMELINE_TD },
-                    p,
-                    e + 2,
-                );
+            if e > p + 8 && (lr || keyword_at(src, e, "td")) && !code_at(src, e + 2).is_some_and(is_word) {
+                p = emit(&mut out, if lr { TIMELINE_LR } else { TIMELINE_TD }, p, e + 2);
                 continue;
             }
             if !code_at(src, p + 8).is_some_and(is_word) {

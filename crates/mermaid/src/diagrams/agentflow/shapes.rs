@@ -68,10 +68,7 @@ pub(crate) const DEFAULT_SHAPE: &str = "roundedRect";
 
 /// The shape an alias stands for, or `shape` itself.
 pub(crate) fn resolve_shape_alias(shape: &str) -> &str {
-    SHAPE_ALIASES
-        .iter()
-        .find(|(alias, _)| *alias == shape)
-        .map_or(shape, |(_, resolved)| resolved)
+    SHAPE_ALIASES.iter().find(|(alias, _)| *alias == shape).map_or(shape, |(_, resolved)| resolved)
 }
 
 /// Whether `name` is a shape. Mermaid looks a shape name up with `in` on a plain object, so

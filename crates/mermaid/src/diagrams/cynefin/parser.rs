@@ -1,11 +1,26 @@
 //! The Cynefin parser: Mermaid's Langium Cynefin grammar over the shared tokenizer. Port of
 //! Pele's `src/diagrams/cynefin/parser.ts`.
 
-use crate::diagrams::common::tokens::{
-    ACC_DESCR, ACC_TITLE, DIRECTIVE, EOF, NEWLINE, Pattern, Reader, SINGLE_LINE_COMMENT, STRING,
-    TITLE, TokenType, WHITESPACE, YAML, acc_descr_value, acc_title_value, keyword, literal,
-    string_value, title_value, tokenize,
-};
+use crate::diagrams::common::tokens::ACC_DESCR;
+use crate::diagrams::common::tokens::ACC_TITLE;
+use crate::diagrams::common::tokens::DIRECTIVE;
+use crate::diagrams::common::tokens::EOF;
+use crate::diagrams::common::tokens::NEWLINE;
+use crate::diagrams::common::tokens::Pattern;
+use crate::diagrams::common::tokens::Reader;
+use crate::diagrams::common::tokens::SINGLE_LINE_COMMENT;
+use crate::diagrams::common::tokens::STRING;
+use crate::diagrams::common::tokens::TITLE;
+use crate::diagrams::common::tokens::TokenType;
+use crate::diagrams::common::tokens::WHITESPACE;
+use crate::diagrams::common::tokens::YAML;
+use crate::diagrams::common::tokens::acc_descr_value;
+use crate::diagrams::common::tokens::acc_title_value;
+use crate::diagrams::common::tokens::keyword;
+use crate::diagrams::common::tokens::literal;
+use crate::diagrams::common::tokens::string_value;
+use crate::diagrams::common::tokens::title_value;
+use crate::diagrams::common::tokens::tokenize;
 use crate::error::Error;
 
 /// Token kinds, as indices into [`CYNEFIN_TOKENS`].
@@ -28,19 +43,12 @@ pub(crate) const DOMAINS: [&str; 5] = ["complex", "complicated", "clear", "chaot
 /// `complex|complicated|clear|chaotic|confusion`.
 fn domain(src: &str, p: usize) -> Option<usize> {
     let rest = src.get(p..)?;
-    DOMAINS
-        .iter()
-        .find(|name| rest.starts_with(*name))
-        .map(|name| p + name.len())
+    DOMAINS.iter().find(|name| rest.starts_with(*name)).map(|name| p + name.len())
 }
 
 /// The domain name `text` as a static string.
 fn domain_name(text: &str) -> &'static str {
-    DOMAINS
-        .iter()
-        .find(|name| **name == text)
-        .copied()
-        .unwrap_or("confusion")
+    DOMAINS.iter().find(|name| **name == text).copied().unwrap_or("confusion")
 }
 
 /// Pele's `CYNEFIN_TOKENS`, in matching order.
@@ -49,12 +57,7 @@ pub(crate) const CYNEFIN_TOKENS: &[TokenType] = &[
     keyword("cynefin-beta"),
     literal("-->"),
     literal(":"),
-    TokenType {
-        first: Some("c"),
-        name: "DOMAIN_NAME",
-        pattern: Pattern::Match(domain),
-        ..literal("")
-    },
+    TokenType { first: Some("c"), name: "DOMAIN_NAME", pattern: Pattern::Match(domain), ..literal("") },
     ACC_DESCR,
     ACC_TITLE,
     TITLE,
@@ -119,11 +122,7 @@ fn end_of_line(r: &mut Reader<'_>) -> Result<(), Error> {
 ///
 /// Returns a syntax error where the source leaves the grammar.
 pub(crate) fn parse_cynefin(src: &str) -> Result<CynefinAst, Error> {
-    let mut r = Reader::new(
-        tokenize(src, CYNEFIN_TOKENS, "cynefin")?,
-        CYNEFIN_TOKENS,
-        "cynefin",
-    );
+    let mut r = Reader::new(tokenize(src, CYNEFIN_TOKENS, "cynefin")?, CYNEFIN_TOKENS, "cynefin");
     let mut ast = CynefinAst::default();
 
     while r.accept(t::NEWLINE) {}
@@ -150,23 +149,13 @@ pub(crate) fn parse_cynefin(src: &str) -> Result<CynefinAst, Error> {
                 let name = domain_name(r.take());
                 if r.accept(t::ARROW) {
                     let to = domain_name(r.expect(t::DOMAIN)?);
-                    let label = if r.accept(t::COLON) {
-                        Some(string_value(r.expect(t::STRING)?).into_owned())
-                    } else {
-                        None
-                    };
+                    let label =
+                        if r.accept(t::COLON) { Some(string_value(r.expect(t::STRING)?).into_owned()) } else { None };
                     end_of_line(&mut r)?;
-                    ast.transitions.push(TransitionAst {
-                        from: name,
-                        label,
-                        to,
-                    });
+                    ast.transitions.push(TransitionAst { from: name, label, to });
                     continue;
                 }
-                let mut block = DomainBlockAst {
-                    domain: name,
-                    items: Vec::new(),
-                };
+                let mut block = DomainBlockAst { domain: name, items: Vec::new() };
                 while r.accept(t::NEWLINE) {}
                 while r.kind() == t::STRING {
                     block.items.push(string_value(r.take()).into_owned());

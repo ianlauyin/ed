@@ -1,16 +1,30 @@
 //! Draws an XY chart. Port of Pele's `src/diagrams/xychart/render.ts`.
 
-use super::db::{XAxis, XyChartDb};
-use super::ticks::{tick_index, tick_step, tick_value, ticks_between};
+use super::db::XAxis;
+use super::db::XyChartDb;
+use super::ticks::tick_index;
+use super::ticks::tick_step;
+use super::ticks::tick_value;
+use super::ticks::ticks_between;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::cap_width;
-use crate::error::{Code, Error};
-use crate::svg::builder::{esc, esc_text, js_round, label_svg, push_num};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
+use crate::error::Code;
+use crate::error::Error;
+use crate::svg::builder::esc;
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
 use crate::svg::theme::series_color;
-use crate::text::label::{Label, layout_label};
-use crate::text::measure::{self, BOLD};
-use crate::yaml::{Value, push_number};
+use crate::text::label::Label;
+use crate::text::label::layout_label;
+use crate::text::measure::BOLD;
+use crate::text::measure::{self};
+use crate::yaml::Value;
+use crate::yaml::push_number;
 
 const TICK: f64 = 4.0;
 const SWATCH: f64 = 12.0;
@@ -26,20 +40,12 @@ struct Mark {
 
 /// JavaScript's `Math.min`, which is `NaN` when either value is.
 fn min(a: f64, b: f64) -> f64 {
-    if a.is_nan() || b.is_nan() {
-        f64::NAN
-    } else {
-        a.min(b)
-    }
+    if a.is_nan() || b.is_nan() { f64::NAN } else { a.min(b) }
 }
 
 /// JavaScript's `Math.max`, which is `NaN` when either value is.
 fn max(a: f64, b: f64) -> f64 {
-    if a.is_nan() || b.is_nan() {
-        f64::NAN
-    } else {
-        a.max(b)
-    }
+    if a.is_nan() || b.is_nan() { f64::NAN } else { a.max(b) }
 }
 
 /// A property of a YAML mapping, as JavaScript's `value.key` reads it.
@@ -47,10 +53,7 @@ fn property<'v>(value: &'v Value, key: &str) -> Option<&'v Value> {
     let Value::Object(entries) = value else {
         return None;
     };
-    entries
-        .iter()
-        .find(|(own, _)| own == key)
-        .map(|(_, value)| value)
+    entries.iter().find(|(own, _)| own == key).map(|(_, value)| value)
 }
 
 /// A mapping, or nothing for any other value.
@@ -74,15 +77,11 @@ fn dimension(value: Option<&Value>, fallback: f64) -> f64 {
 }
 
 fn finite(value: Option<f64>) -> Option<f64> {
-    value
-        .filter(|value| value.is_finite())
-        .map(|value| value.clamp(-LIMIT, LIMIT))
+    value.filter(|value| value.is_finite()).map(|value| value.clamp(-LIMIT, LIMIT))
 }
 
 fn widest(marks: &[Mark]) -> f64 {
-    marks
-        .iter()
-        .fold(0.0, |width, mark| max(width, mark.label.width))
+    marks.iter().fold(0.0, |width, mark| max(width, mark.label.width))
 }
 
 fn number_text(value: f64) -> String {
@@ -158,10 +157,7 @@ impl Values {
         let (lo, hi) = (self.lo, self.hi);
         ticks_between(min(lo, hi), max(lo, hi), step)
             .into_iter()
-            .map(|value| Mark {
-                at: (value - lo) / (hi - lo),
-                label: text(Some(&number_text(value)), small, 4000.0),
-            })
+            .map(|value| Mark { at: (value - lo) / (hi - lo), label: text(Some(&number_text(value)), small, 4000.0) })
             .collect()
     }
 }
@@ -171,21 +167,10 @@ impl Values {
 /// # Errors
 ///
 /// Returns a semantic error for a chart without a series.
-#[expect(
-    clippy::too_many_lines,
-    clippy::many_single_char_names,
-    reason = "mirrors Pele's renderXyChart"
-)]
-pub(crate) fn render(
-    model: &XyChartDb,
-    config: &Value,
-    options: &RenderOptions,
-) -> Result<Rendered, Error> {
+#[expect(clippy::too_many_lines, clippy::many_single_char_names, reason = "mirrors Pele's renderXyChart")]
+pub(crate) fn render(model: &XyChartDb, config: &Value, options: &RenderOptions) -> Result<Rendered, Error> {
     if model.plots.is_empty() {
-        let mut error = Error::new(
-            Code::Semantic,
-            "No Plot to render, please provide a plot with some data",
-        );
+        let mut error = Error::new(Code::Semantic, "No Plot to render, please provide a plot with some data");
         error.r#type = Some("xychart");
         return Err(error);
     }
@@ -213,22 +198,14 @@ pub(crate) fn render(
     let tiny_height = text(Some("0"), tiny, 4000.0).height;
 
     let title = layout_label(
-        if on(chart, "showTitle", true) {
-            model.title.as_deref()
-        } else {
-            None
-        },
+        if on(chart, "showTitle", true) { model.title.as_deref() } else { None },
         false,
         size,
         width - 2.0 * pad,
         BOLD,
         None,
     );
-    let title_space = if title.height > 0.0 {
-        title.height + 12.0
-    } else {
-        0.0
-    };
+    let title_space = if title.height > 0.0 { title.height + 12.0 } else { 0.0 };
 
     let mut legend: Vec<(usize, Label)> = Vec::new();
     let mut legend_width = 0.0;
@@ -242,19 +219,12 @@ pub(crate) fn render(
             legend.push((index, label));
         }
     }
-    let legend_space = if legend.is_empty() {
-        0.0
-    } else {
-        legend_width + LEGEND_GAP
-    };
+    let legend_space = if legend.is_empty() { 0.0 } else { legend_width + LEGEND_GAP };
 
     // The value range: as written, or taken from the data, where bars stand on zero and the
     // range grows to whole steps.
     let bars = plots.iter().filter(|plot| plot.bar).count();
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "series counts stay far below 2^52"
-    )]
+    #[expect(clippy::cast_precision_loss, reason = "series counts stay far below 2^52")]
     let bars_f = bars as f64;
     let mut lo = model.y_axis.min;
     let mut hi = model.y_axis.max;
@@ -344,18 +314,10 @@ pub(crate) fn render(
 
     let category_conf = record(chart.and_then(|chart| property(chart, "xAxis")));
     let value_conf = record(chart.and_then(|chart| property(chart, "yAxis")));
-    let (left_conf, bottom_conf) = if horizontal {
-        (category_conf, value_conf)
-    } else {
-        (value_conf, category_conf)
-    };
+    let (left_conf, bottom_conf) = if horizontal { (category_conf, value_conf) } else { (value_conf, category_conf) };
     let left_title = text(
         if on(left_conf, "showTitle", true) {
-            Some(if horizontal {
-                x.title()
-            } else {
-                model.y_axis.title.as_str()
-            })
+            Some(if horizontal { x.title() } else { model.y_axis.title.as_str() })
         } else {
             None
         },
@@ -364,40 +326,24 @@ pub(crate) fn render(
     );
     let bottom_title = text(
         if on(bottom_conf, "showTitle", true) {
-            Some(if horizontal {
-                model.y_axis.title.as_str()
-            } else {
-                x.title()
-            })
+            Some(if horizontal { model.y_axis.title.as_str() } else { x.title() })
         } else {
             None
         },
         small,
         width * 0.8,
     );
-    let left_tick = if on(left_conf, "showTick", true) {
-        TICK
-    } else {
-        0.0
-    };
-    let bottom_tick = if on(bottom_conf, "showTick", true) {
-        TICK
-    } else {
-        0.0
-    };
+    let left_tick = if on(left_conf, "showTick", true) { TICK } else { 0.0 };
+    let bottom_tick = if on(bottom_conf, "showTick", true) { TICK } else { 0.0 };
     let left_labels = on(left_conf, "showLabel", true);
     let bottom_labels = on(bottom_conf, "showLabel", true);
 
-    let wrap_at = if horizontal {
-        width * 0.3
-    } else {
-        max(48.0, (width - 2.0 * pad - 64.0 - legend_space) * slot - 8.0)
-    };
+    let wrap_at =
+        if horizontal { width * 0.3 } else { max(48.0, (width - 2.0 * pad - 64.0 - legend_space) * slot - 8.0) };
     let categories: Vec<Label> = match x {
-        XAxis::Band { categories, .. } if on(category_conf, "showLabel", true) => categories
-            .iter()
-            .map(|category| text(Some(category), small, wrap_at))
-            .collect(),
+        XAxis::Band { categories, .. } if on(category_conf, "showLabel", true) => {
+            categories.iter().map(|category| text(Some(category), small, wrap_at)).collect()
+        }
         _ => Vec::new(),
     };
     let mut category_width = 0.0;
@@ -412,9 +358,7 @@ pub(crate) fn render(
     let category_marks = |length: f64| -> Vec<Mark> {
         let mut marks = Vec::new();
         match x {
-            XAxis::Band {
-                categories: names, ..
-            } => {
+            XAxis::Band { categories: names, .. } => {
                 let need = if categories.is_empty() {
                     8.0
                 } else if horizontal {
@@ -434,20 +378,14 @@ pub(crate) fn render(
                 while i < names.len() {
                     #[expect(clippy::cast_precision_loss, reason = "counts stay far below 2^52")]
                     let at = (i as f64 + 0.5) * slot;
-                    marks.push(Mark {
-                        at,
-                        label: categories
-                            .get(i)
-                            .cloned()
-                            .unwrap_or_else(|| text(None, small, 0.0)),
-                    });
+                    marks
+                        .push(Mark { at, label: categories.get(i).cloned().unwrap_or_else(|| text(None, small, 0.0)) });
                     i = i.saturating_add(every);
                 }
             }
             XAxis::Linear(_) => {
                 if let (true, Some(x0), Some(x1)) = (ranged, x0, x1) {
-                    let count = 2.0_f64
-                        .max(10.0_f64.min((length / if horizontal { 32.0 } else { 80.0 }).floor()));
+                    let count = 2.0_f64.max(10.0_f64.min((length / if horizontal { 32.0 } else { 80.0 }).floor()));
                     let step = tick_step((x1 - x0).abs(), count);
                     for value in ticks_between(min(x0, x1), max(x0, x1), step) {
                         marks.push(Mark {
@@ -456,10 +394,7 @@ pub(crate) fn render(
                         });
                     }
                 } else if let Some(x0) = x0 {
-                    marks.push(Mark {
-                        at: 0.5,
-                        label: text(Some(&number_text(x0)), small, 4000.0),
-                    });
+                    marks.push(Mark { at: 0.5, label: text(Some(&number_text(x0)), small, 4000.0) });
                 }
             }
         }
@@ -489,16 +424,8 @@ pub(crate) fn render(
         category_height
     };
     let bottom_space = bottom_tick
-        + if bottom_label_height > 0.0 {
-            bottom_label_height + 4.0
-        } else {
-            0.0
-        }
-        + if bottom_title.height > 0.0 {
-            bottom_title.height + 4.0
-        } else {
-            0.0
-        };
+        + if bottom_label_height > 0.0 { bottom_label_height + 4.0 } else { 0.0 }
+        + if bottom_title.height > 0.0 { bottom_title.height + 4.0 } else { 0.0 };
     let headroom = if horizontal {
         0.0
     } else if point_label_width > 0.0 || show_values {
@@ -512,56 +439,23 @@ pub(crate) fn render(
     let plot_height = max(1.0, height - pad - bottom_space - top);
     let bottom = top + plot_height;
 
-    let left_marks = if horizontal {
-        category_marks(plot_height)
-    } else {
-        values.marks(plot_height, 56.0, small)
-    };
-    let left_label_width = if left_labels {
-        widest(&left_marks)
-    } else {
-        0.0
-    };
-    let left =
-        pad + if left_title.height > 0.0 {
-            left_title.height + 6.0
-        } else {
-            0.0
-        } + if left_label_width > 0.0 {
-            left_label_width + 6.0
-        } else {
-            0.0
-        } + left_tick;
+    let left_marks = if horizontal { category_marks(plot_height) } else { values.marks(plot_height, 56.0, small) };
+    let left_label_width = if left_labels { widest(&left_marks) } else { 0.0 };
+    let left = pad
+        + if left_title.height > 0.0 { left_title.height + 6.0 } else { 0.0 }
+        + if left_label_width > 0.0 { left_label_width + 6.0 } else { 0.0 }
+        + left_tick;
     let beside = max(
-        if point_label_width > 0.0 {
-            point_label_width + 12.0
-        } else {
-            0.0
-        },
-        if value_width > 0.0 {
-            value_width + 8.0
-        } else {
-            0.0
-        },
+        if point_label_width > 0.0 { point_label_width + 12.0 } else { 0.0 },
+        if value_width > 0.0 { value_width + 8.0 } else { 0.0 },
     );
-    let reach = if horizontal {
-        min(width * 0.25, beside)
-    } else {
-        0.0
-    };
+    let reach = if horizontal { min(width * 0.25, beside) } else { 0.0 };
     let mut plot_width = max(1.0, width - pad - left - legend_space - reach);
-    let bottom_marks = if horizontal {
-        values.marks(plot_width, 80.0, small)
-    } else {
-        category_marks(plot_width)
-    };
+    let bottom_marks = if horizontal { values.marks(plot_width, 80.0, small) } else { category_marks(plot_width) };
     if bottom_labels && legend_space + reach == 0.0 {
         let mut over = 0.0;
         for mark in &bottom_marks {
-            over = max(
-                over,
-                mark.at * plot_width + mark.label.width / 2.0 - plot_width,
-            );
+            over = max(over, mark.at * plot_width + mark.label.width / 2.0 - plot_width);
         }
         plot_width = max(1.0, plot_width - over);
     }
@@ -569,18 +463,10 @@ pub(crate) fn render(
     let (lo, hi) = (values.lo, values.hi);
 
     let px = |c: f64, v: f64| {
-        if horizontal {
-            left + v * plot_width
-        } else {
-            left + c * plot_width
-        }
+        if horizontal { left + v * plot_width } else { left + c * plot_width }
     };
     let py = |c: f64, v: f64| {
-        if horizontal {
-            top + c * plot_height
-        } else {
-            bottom - v * plot_height
-        }
+        if horizontal { top + c * plot_height } else { bottom - v * plot_height }
     };
     let scale = |value: f64| (value - lo) / (hi - lo);
     let clamp = |v: f64| min(max(v, 0.0), 1.0);
@@ -604,11 +490,7 @@ pub(crate) fn render(
     };
 
     let mut grid = String::new();
-    for mark in if horizontal {
-        &bottom_marks
-    } else {
-        &left_marks
-    } {
+    for mark in if horizontal { &bottom_marks } else { &left_marks } {
         rule(&mut grid, mark.at);
     }
 
@@ -631,11 +513,7 @@ pub(crate) fn render(
         push_num(&mut axis, right);
     }
     for mark in &left_marks {
-        let y = if horizontal {
-            top + mark.at * plot_height
-        } else {
-            bottom - mark.at * plot_height
-        };
+        let y = if horizontal { top + mark.at * plot_height } else { bottom - mark.at * plot_height };
         if left_tick != 0.0 {
             axis.push('M');
             push_num(&mut axis, left);
@@ -645,12 +523,7 @@ pub(crate) fn render(
             push_number(&mut axis, -left_tick);
         }
         if left_labels {
-            labels.push_str(&aligned(
-                &mark.label,
-                left - left_tick - 6.0,
-                y,
-                Anchor::End,
-            ));
+            labels.push_str(&aligned(&mark.label, left - left_tick - 6.0, y, Anchor::End));
         }
     }
     for mark in &bottom_marks {
@@ -676,11 +549,7 @@ pub(crate) fn render(
     let span = (if horizontal { plot_height } else { plot_width }) * slot;
     let group = span * 0.7;
     let thickness = group / max(bars_f, 1.0);
-    let gap = if bars > 1 {
-        min(2.0, thickness * 0.2)
-    } else {
-        0.0
-    };
+    let gap = if bars > 1 { min(2.0, thickness * 0.2) } else { 0.0 };
     let base = clamp(scale(0.0));
     // Bars that go both ways get a line to stand on.
     if bars > 0 && base > 0.0 && base < 1.0 {
@@ -719,26 +588,10 @@ pub(crate) fn render(
                 let v = clamp(scale(value));
                 let from = min(base, v);
                 let to = max(base, v);
-                let bx = if horizontal {
-                    px(c, from)
-                } else {
-                    px(c, 0.0) + offset
-                };
-                let by = if horizontal {
-                    py(c, 0.0) + offset
-                } else {
-                    py(c, to)
-                };
-                let bw = if horizontal {
-                    (to - from) * plot_width
-                } else {
-                    thickness - gap
-                };
-                let bh = if horizontal {
-                    thickness - gap
-                } else {
-                    (to - from) * plot_height
-                };
+                let bx = if horizontal { px(c, from) } else { px(c, 0.0) + offset };
+                let by = if horizontal { py(c, 0.0) + offset } else { py(c, to) };
+                let bw = if horizontal { (to - from) * plot_width } else { thickness - gap };
+                let bh = if horizontal { thickness - gap } else { (to - from) * plot_height };
                 rects.push_str("<rect x=\"");
                 push_num(&mut rects, bx);
                 rects.push_str("\" y=\"");
@@ -854,14 +707,8 @@ pub(crate) fn render(
                 push_num(&mut dots, cy);
                 dots.push_str("\" r=\"3\"/>");
             }
-            let label = text(
-                plot.point_labels
-                    .as_ref()
-                    .and_then(|labels| labels.get(i))
-                    .map(String::as_str),
-                tiny,
-                4000.0,
-            );
+            let label =
+                text(plot.point_labels.as_ref().and_then(|labels| labels.get(i)).map(String::as_str), tiny, 4000.0);
             if label.height > 0.0 {
                 let half = label.width / 2.0;
                 point_labels.push_str(&if horizontal {
@@ -886,9 +733,7 @@ pub(crate) fn render(
             lines.push_str(&d);
             lines.push_str("\" fill=\"none\" stroke=\"");
             lines.push_str(&color);
-            lines.push_str(
-                "\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>",
-            );
+            lines.push_str("\" stroke-width=\"2\" stroke-linecap=\"round\" stroke-linejoin=\"round\"/>");
         }
         lines.push_str(&dots);
         lines.push_str("</g>");
@@ -949,13 +794,7 @@ pub(crate) fn render(
             legend_out.push_str(&color);
             legend_out.push_str("\" stroke-width=\"2\" stroke-linecap=\"round\"/>");
         }
-        legend_out.push_str(&label_svg(
-            label,
-            lx + SWATCH + 8.0 + label.width / 2.0,
-            y,
-            "",
-            None,
-        ));
+        legend_out.push_str(&label_svg(label, lx + SWATCH + 8.0 + label.width / 2.0, y, "", None));
         legend_out.push_str("</g>");
         ly += row;
     }
@@ -995,13 +834,7 @@ pub(crate) fn render(
         content.push_str(body);
         content.push_str("</g>");
     };
-    group(
-        &mut content,
-        "ondine-axis-labels",
-        small,
-        " fill=\"var(--_m)\"",
-        &labels,
-    );
+    group(&mut content, "ondine-axis-labels", small, " fill=\"var(--_m)\"", &labels);
     group(&mut content, "ondine-axis-titles", small, "", &titles);
     group(&mut content, "ondine-data-labels", tiny, "", &outside);
     group(&mut content, "ondine-point-labels", tiny, "", &point_labels);
@@ -1016,10 +849,7 @@ pub(crate) fn render(
             height,
             size,
             options,
-            Accessible {
-                acc_descr: model.acc_descr.as_deref(),
-                acc_title: model.acc_title.as_deref(),
-            },
+            Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
             &content,
         ),
         width,

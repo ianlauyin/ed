@@ -1,13 +1,19 @@
 //! Picks the notation from the keyword and loads the parsed rules into the model. Port of Pele's
 //! `src/diagrams/railroad/db.ts`.
 
-use super::abnf::{abnf_rules, parse_abnf};
+use super::abnf::abnf_rules;
+use super::abnf::parse_abnf;
 use super::common::Grammar;
-use super::ebnf::{ebnf_rules, parse_ebnf};
+use super::ebnf::ebnf_rules;
+use super::ebnf::parse_ebnf;
 use super::ir::parse_ir;
-use super::peg::{parse_peg, peg_rules};
-use super::types::{Notation, RailroadModel, RailroadRule};
-use crate::error::{Code, Error};
+use super::peg::parse_peg;
+use super::peg::peg_rules;
+use super::types::Notation;
+use super::types::RailroadModel;
+use super::types::RailroadRule;
+use crate::error::Code;
+use crate::error::Error;
 use crate::text::label::trim_start;
 use crate::util::chars::is_space;
 
@@ -16,24 +22,14 @@ use crate::util::chars::is_space;
 pub(crate) fn notation_of(source: &str) -> Option<Notation> {
     let rest = trim_start(source);
     let starts = |text: &str, word: &str| {
-        text.as_bytes()
-            .get(..word.len())
-            .is_some_and(|head| head.eq_ignore_ascii_case(word.as_bytes()))
+        text.as_bytes().get(..word.len()).is_some_and(|head| head.eq_ignore_ascii_case(word.as_bytes()))
     };
     if !starts(rest, "railroad-") {
         return None;
     }
     let rest = rest.get(9..)?;
-    for (infix, notation) in [
-        ("ebnf-", Notation::Ebnf),
-        ("abnf-", Notation::Abnf),
-        ("peg-", Notation::Peg),
-    ] {
-        if starts(rest, infix)
-            && rest
-                .get(infix.len()..)
-                .is_some_and(|tail| starts(tail, "beta"))
-        {
+    for (infix, notation) in [("ebnf-", Notation::Ebnf), ("abnf-", Notation::Abnf), ("peg-", Notation::Peg)] {
+        if starts(rest, infix) && rest.get(infix.len()..).is_some_and(|tail| starts(tail, "beta")) {
             return Some(notation);
         }
     }
@@ -90,12 +86,7 @@ fn grammar(
 
 /// The statements of `grammar`, without its rules.
 fn strip<R>(grammar: Grammar<R>) -> Grammar<()> {
-    Grammar {
-        acc_descr: grammar.acc_descr,
-        acc_title: grammar.acc_title,
-        rules: Vec::new(),
-        title: grammar.title,
-    }
+    Grammar { acc_descr: grammar.acc_descr, acc_title: grammar.acc_title, rules: Vec::new(), title: grammar.title }
 }
 
 /// Parses `source`, as Pele's `parseRailroad` does. `title` comes from front matter.

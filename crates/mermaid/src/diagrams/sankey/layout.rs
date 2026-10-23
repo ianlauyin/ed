@@ -4,7 +4,8 @@
 use std::cmp::Ordering;
 
 use super::db::SankeyDb;
-use crate::error::{Code, Error};
+use crate::error::Code;
+use crate::error::Error;
 
 /// Which column a node goes in.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -137,11 +138,7 @@ pub(crate) fn layout_sankey(
             target: link.target as usize,
             target_y: 0.0,
             thickness: 0.0,
-            value: if link.value.is_finite() && link.value > 0.0 {
-                link.value
-            } else {
-                0.0
-            },
+            value: if link.value.is_finite() && link.value > 0.0 { link.value } else { 0.0 },
         })
         .collect();
     let mut outgoing: Vec<Vec<usize>> = vec![Vec::new(); n];
@@ -218,23 +215,13 @@ pub(crate) fn layout_sankey(
     }
 
     // Flows are scaled to the largest one, so that sums of huge values stay finite.
-    let largest = links.iter().fold(0.0_f64, |largest, link| {
-        if link.value > largest {
-            link.value
-        } else {
-            largest
-        }
-    });
+    let largest = links.iter().fold(0.0_f64, |largest, link| if link.value > largest { link.value } else { largest });
     let unit = if largest > 0.0 { 1.0 / largest } else { 0.0 };
 
     let mut nodes: Vec<PlacedNode> = Vec::with_capacity(n);
     let mut flow = vec![0.0_f64; n];
     let mut columns: Vec<Vec<usize>> = vec![Vec::new(); layers];
-    let step = if layers > 1 {
-        (options.width - options.node_width) / (layers - 1) as f64
-    } else {
-        0.0
-    };
+    let step = if layers > 1 { (options.width - options.node_width) / (layers - 1) as f64 } else { 0.0 };
     let empty: &[usize] = &[];
     for i in 0..n {
         let ins = incoming.get(i).map_or(empty, Vec::as_slice);
@@ -305,10 +292,7 @@ pub(crate) fn layout_sankey(
     for column in &columns {
         let sum: f64 = column.iter().map(|&i| flow_of(i)).sum();
         if sum > 0.0 {
-            scale = f64::min(
-                scale,
-                (options.height - (column.len() as f64 - 1.0) * gap) / sum,
-            );
+            scale = f64::min(scale, (options.height - (column.len() as f64 - 1.0) * gap) / sum);
         }
     }
     if !scale.is_finite() || scale < 0.0 {
@@ -331,10 +315,7 @@ pub(crate) fn layout_sankey(
         if fits(0.0, claim) {
             let mut low = 0.0;
             for _ in 0..40 {
-                #[expect(
-                    clippy::manual_midpoint,
-                    reason = "JavaScript rounds the sum, then halves it"
-                )]
+                #[expect(clippy::manual_midpoint, reason = "JavaScript rounds the sum, then halves it")]
                 let mid = (low + scale) / 2.0;
                 if fits(mid, claim) {
                     low = mid;
@@ -401,18 +382,13 @@ pub(crate) fn layout_sankey(
         state.stack_all();
     }
 
-    let Settle {
-        nodes,
-        source_offset,
-        target_offset,
-        ..
-    } = state;
+    let Settle { nodes, source_offset, target_offset, .. } = state;
     let mut placed = links.clone();
     for (k, link) in placed.iter_mut().enumerate() {
-        link.source_y = nodes.get(link.source).map_or(0.0, |node| node.y)
-            + source_offset.get(k).copied().unwrap_or(0.0);
-        link.target_y = nodes.get(link.target).map_or(0.0, |node| node.y)
-            + target_offset.get(k).copied().unwrap_or(0.0);
+        link.source_y =
+            nodes.get(link.source).map_or(0.0, |node| node.y) + source_offset.get(k).copied().unwrap_or(0.0);
+        link.target_y =
+            nodes.get(link.target).map_or(0.0, |node| node.y) + target_offset.get(k).copied().unwrap_or(0.0);
     }
 
     Ok((nodes, placed))
@@ -456,12 +432,7 @@ impl Settle<'_> {
         let nodes = &self.nodes;
         let links = self.links;
         let target = |k: usize| links.get(k).map_or(0, |link| link.target);
-        sort(&mut list, |a, b| {
-            or(
-                Self::center(nodes, target(a)) - Self::center(nodes, target(b)),
-                index_diff(a, b),
-            )
-        });
+        sort(&mut list, |a, b| or(Self::center(nodes, target(a)) - Self::center(nodes, target(b)), index_diff(a, b)));
         let mut y = 0.0;
         for &k in &list {
             let t = self.thick(k);
@@ -481,12 +452,7 @@ impl Settle<'_> {
         let nodes = &self.nodes;
         let links = self.links;
         let source = |k: usize| links.get(k).map_or(0, |link| link.source);
-        sort(&mut list, |a, b| {
-            or(
-                Self::center(nodes, source(a)) - Self::center(nodes, source(b)),
-                index_diff(a, b),
-            )
-        });
+        sort(&mut list, |a, b| or(Self::center(nodes, source(a)) - Self::center(nodes, source(b)), index_diff(a, b)));
         let mut y = 0.0;
         for &k in &list {
             let t = self.thick(k);
@@ -525,12 +491,7 @@ impl Settle<'_> {
             } else {
                 self.stack_out(i);
             }
-            let list = if forward {
-                self.incoming.get(i)
-            } else {
-                self.outgoing.get(i)
-            }
-            .map_or(&[][..], Vec::as_slice);
+            let list = if forward { self.incoming.get(i) } else { self.outgoing.get(i) }.map_or(&[][..], Vec::as_slice);
             let height = self.nodes.get(i).map_or(0.0, |node| node.height);
             let mut weighted = 0.0;
             let mut weight = 0.0;
@@ -539,38 +500,21 @@ impl Settle<'_> {
                 let y_of = |j: usize| self.nodes.get(j).map_or(0.0, |node| node.y);
                 let so = self.source_offset.get(k).copied().unwrap_or(0.0);
                 let to = self.target_offset.get(k).copied().unwrap_or(0.0);
-                let level = if forward {
-                    y_of(self.source(k)) + so - to
-                } else {
-                    y_of(self.target(k)) + to - so
-                };
+                let level = if forward { y_of(self.source(k)) + so - to } else { y_of(self.target(k)) + to - so };
                 let t = self.thick(k);
                 weighted += level * t;
                 weight += t;
-                let other = if forward {
-                    self.source(k)
-                } else {
-                    self.target(k)
-                };
+                let other = if forward { self.source(k) } else { self.target(k) };
                 plain += Self::center(&self.nodes, other) - height / 2.0;
             }
-            let wanted = if weight > 0.0 {
-                weighted / weight
-            } else {
-                plain / list.len() as f64
-            };
+            let wanted = if weight > 0.0 { weighted / weight } else { plain / list.len() as f64 };
             if let Some(node) = self.nodes.get_mut(i) {
                 node.y += (wanted - node.y) * pull;
             }
         }
 
         let nodes = &self.nodes;
-        sort(column, |a, b| {
-            or(
-                Self::center(nodes, a) - Self::center(nodes, b),
-                index_diff(a, b),
-            )
-        });
+        sort(column, |a, b| or(Self::center(nodes, a) - Self::center(nodes, b), index_diff(a, b)));
         let mut y = 0.0;
         for &i in column.iter() {
             let m = self.margin.get(i).copied().unwrap_or(0.0);

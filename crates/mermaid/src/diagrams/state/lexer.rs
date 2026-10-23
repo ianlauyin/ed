@@ -6,7 +6,8 @@
 
 use super::tokens::T;
 use crate::text::label::trim;
-use crate::util::chars::{is_space, is_word};
+use crate::util::chars::is_space;
+use crate::util::chars::is_word;
 
 /// A token: its kind, its start as a UTF-8 offset, and its text.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -57,12 +58,7 @@ enum S {
 const NONE: u32 = u32::MAX;
 
 /// The direction tokens, in the grammar's rule order.
-const DIRECTIONS: [T; 4] = [
-    T::DirectionTb,
-    T::DirectionBt,
-    T::DirectionRl,
-    T::DirectionLr,
-];
+const DIRECTIONS: [T; 4] = [T::DirectionTb, T::DirectionBt, T::DirectionRl, T::DirectionLr];
 
 /// Pele's `finder`: the next match of a pattern at or after a position, remembered so that asking
 /// at each token costs one scan of the text in total.
@@ -135,19 +131,12 @@ pub(crate) fn tokenize(src: &str) -> Tokens<'_> {
         tokens: Vec::new(),
     };
     lexer.run();
-    Tokens {
-        error: lexer.error,
-        tokens: lexer.tokens,
-    }
+    Tokens { error: lexer.error, tokens: lexer.tokens }
 }
 
 /// The first `direction` at or after `q`, ignoring case.
 fn find_direction(bytes: &[u8], q: usize) -> Option<usize> {
-    (q..bytes.len()).find(|&i| {
-        bytes
-            .get(i..i + 9)
-            .is_some_and(|w| w.eq_ignore_ascii_case(b"direction"))
-    })
+    (q..bytes.len()).find(|&i| bytes.get(i..i + 9).is_some_and(|w| w.eq_ignore_ascii_case(b"direction")))
 }
 
 /// The kind of stereotype at `i`, as an index into the lexer's `stereo_at`: `<<fork>>`,
@@ -164,11 +153,7 @@ fn stereotype_at(bytes: &[u8], i: usize) -> Option<usize> {
     for (kind, word) in [&b"fork"[..], b"join", b"choice"].into_iter().enumerate() {
         let from = i + 2;
         let to = from + word.len();
-        if bytes
-            .get(from..to)
-            .is_some_and(|w| w.eq_ignore_ascii_case(word))
-            && bytes.get(to..to + 2) == Some(close)
-        {
+        if bytes.get(from..to).is_some_and(|w| w.eq_ignore_ascii_case(word)) && bytes.get(to..to + 2) == Some(close) {
             return Some(base + kind);
         }
     }
@@ -179,9 +164,7 @@ fn stereotype_at(bytes: &[u8], i: usize) -> Option<usize> {
 fn find_line_end(bytes: &[u8], q: usize) -> Option<usize> {
     (q..bytes.len()).find(|&i| match bytes.get(i) {
         Some(b'\n' | b'\r') => true,
-        Some(0xe2) => {
-            bytes.get(i + 1) == Some(&0x80) && matches!(bytes.get(i + 2), Some(0xa8 | 0xa9))
-        }
+        Some(0xe2) => bytes.get(i + 1) == Some(&0x80) && matches!(bytes.get(i + 2), Some(0xa8 | 0xa9)),
         _ => false,
     })
 }
@@ -197,21 +180,13 @@ impl<'a> Lexer<'a> {
         match self.bytes.get(i) {
             None => NONE,
             Some(&b) if b < 0x80 => u32::from(b),
-            Some(_) => self
-                .src
-                .get(i..)
-                .and_then(|rest| rest.chars().next())
-                .map_or(NONE, u32::from),
+            Some(_) => self.src.get(i..).and_then(|rest| rest.chars().next()).map_or(NONE, u32::from),
         }
     }
 
     /// The offset after the character at `i`.
     fn next(&self, i: usize) -> usize {
-        i + self
-            .src
-            .get(i..)
-            .and_then(|rest| rest.chars().next())
-            .map_or(1, char::len_utf8)
+        i + self.src.get(i..).and_then(|rest| rest.chars().next()).map_or(1, char::len_utf8)
     }
 
     fn emit(&mut self, kind: T, s: usize, e: usize) {
@@ -220,11 +195,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn emit_text(&mut self, kind: T, text: &'a str, s: usize, e: usize) {
-        self.tokens.push(Token {
-            kind,
-            start: s,
-            text,
-        });
+        self.tokens.push(Token { kind, start: s, text });
         self.p = e;
     }
 
@@ -265,24 +236,16 @@ impl<'a> Lexer<'a> {
 
     /// The next `\n` at or after `q`, or the end.
     fn eol(&self, q: usize) -> usize {
-        self.src
-            .get(q..)
-            .and_then(|rest| rest.find('\n'))
-            .map_or(self.bytes.len(), |k| q + k)
+        self.src.get(q..).and_then(|rest| rest.find('\n')).map_or(self.bytes.len(), |k| q + k)
     }
 
     fn find_char(&self, q: usize, c: char) -> Option<usize> {
-        self.src
-            .get(q..)
-            .and_then(|rest| rest.find(c))
-            .map(|k| q + k)
+        self.src.get(q..).and_then(|rest| rest.find(c)).map(|k| q + k)
     }
 
     fn line_end(&mut self, q: usize) -> usize {
         let bytes = self.bytes;
-        self.line_end
-            .get(q, |q| find_line_end(bytes, q))
-            .unwrap_or(bytes.len())
+        self.line_end.get(q, |q| find_line_end(bytes, q)).unwrap_or(bytes.len())
     }
 
     /// Rules `.*direction\s+TB[^\n]*` and its three siblings: the first kind, in grammar order,
@@ -291,11 +254,7 @@ impl<'a> Lexer<'a> {
         if self.dir_from.is_none_or(|from| q < from) || q > self.dir_to {
             let bytes = self.bytes;
             let first = self.direction.get(q, |q| find_direction(bytes, q));
-            let end = if first.is_none() {
-                bytes.len()
-            } else {
-                self.line_end(q)
-            };
+            let end = if first.is_none() { bytes.len() } else { self.line_end(q) };
             self.dir_from = Some(q);
             self.dir_to = end;
             self.dir_at = [None; 4];
@@ -303,12 +262,9 @@ impl<'a> Lexer<'a> {
             while let Some(at) = d.filter(|&at| at < end) {
                 let w = self.ws_end(at + 9);
                 if w != at + 9 {
-                    let kind = ["tb", "bt", "rl", "lr"]
-                        .iter()
-                        .position(|dir| self.word(dir, w));
+                    let kind = ["tb", "bt", "rl", "lr"].iter().position(|dir| self.word(dir, w));
                     if let Some(kind) = kind
-                        && let (Some(slot), Some(slot_end)) =
-                            (self.dir_at.get_mut(kind), self.dir_end.get_mut(kind))
+                        && let (Some(slot), Some(slot_end)) = (self.dir_at.get_mut(kind), self.dir_end.get_mut(kind))
                     {
                         *slot = Some(at);
                         *slot_end = w + 2;
@@ -317,9 +273,7 @@ impl<'a> Lexer<'a> {
                 d = self.direction.get(at + 1, |q| find_direction(bytes, q));
             }
         }
-        self.dir_at
-            .iter()
-            .position(|at| at.is_some_and(|at| at >= q))
+        self.dir_at.iter().position(|at| at.is_some_and(|at| at >= q))
     }
 
     fn stereotype(&mut self, q: usize) -> Option<usize> {
@@ -327,36 +281,26 @@ impl<'a> Lexer<'a> {
             let bytes = self.bytes;
             let find = |q: usize| (q..bytes.len()).find(|&i| stereotype_at(bytes, i).is_some());
             let first = self.stereotype.get(q, find);
-            let end = if first.is_none() {
-                bytes.len()
-            } else {
-                self.line_end(q)
-            };
+            let end = if first.is_none() { bytes.len() } else { self.line_end(q) };
             self.stereo_from = Some(q);
             self.stereo_to = end;
             self.stereo_at = [None; 6];
             let mut d = first;
             while let Some(at) = d.filter(|&at| at < end) {
-                if let Some(slot) =
-                    stereotype_at(bytes, at).and_then(|kind| self.stereo_at.get_mut(kind))
-                {
+                if let Some(slot) = stereotype_at(bytes, at).and_then(|kind| self.stereo_at.get_mut(kind)) {
                     *slot = Some(at);
                 }
                 d = self.stereotype.get(at + 1, find);
             }
         }
-        self.stereo_at
-            .iter()
-            .position(|at| at.is_some_and(|at| at >= q))
+        self.stereo_at.iter().position(|at| at.is_some_and(|at| at >= q))
     }
 
     /// The grammar's `processId()`: an id ends at an inline `%%`, and a text that starts with one
     /// is dropped.
     fn emit_id(&mut self, s: usize, e: usize) -> bool {
         let src = self.src;
-        let at = self.percent.get(s, |q| {
-            src.get(q..).and_then(|rest| rest.find("%%")).map(|k| q + k)
-        });
+        let at = self.percent.get(s, |q| src.get(q..).and_then(|rest| rest.find("%%")).map(|k| q + k));
         match at {
             Some(at) if at + 2 <= e => {
                 if at == s {
@@ -375,11 +319,7 @@ impl<'a> Lexer<'a> {
 
     fn finish(&mut self, kind: T) {
         let start = self.p;
-        self.tokens.push(Token {
-            kind,
-            start,
-            text: "",
-        });
+        self.tokens.push(Token { kind, start, text: "" });
     }
 
     fn run(&mut self) {
@@ -493,15 +433,7 @@ impl<'a> Lexer<'a> {
                     self.finish(T::Error);
                     return false;
                 }
-                self.emit(
-                    if is_default {
-                        T::DefaultClassDefId
-                    } else {
-                        T::ClassDefId
-                    },
-                    p,
-                    e,
-                );
+                self.emit(if is_default { T::DefaultClassDefId } else { T::ClassDefId }, p, e);
                 self.pop();
                 self.push(S::ClassDefId);
                 true
@@ -713,11 +645,7 @@ impl<'a> Lexer<'a> {
                     return true;
                 }
                 if root && self.word("diagram", p + 5) {
-                    let from = if self.word("-v2", p + 12) {
-                        p + 15
-                    } else {
-                        p + 12
-                    };
+                    let from = if self.word("-v2", p + 12) { p + 15 } else { p + 12 };
                     let e = self.ws_end(from);
                     if e > from {
                         self.emit(T::Sd, p, e);
@@ -782,11 +710,7 @@ impl<'a> Lexer<'a> {
                 return true;
             }
         }
-        if root
-            && lc == 104
-            && self.word("hide empty description", p)
-            && !is_word(self.byte(p + 22))
-        {
+        if root && lc == 104 && self.word("hide empty description", p) && !is_word(self.byte(p + 22)) {
             self.emit(T::HideEmpty, p, p + 22);
             return true;
         }
@@ -931,14 +855,11 @@ impl<'a> Lexer<'a> {
             let second = self.ws_end(first);
             if second > first && is_word(self.byte(second)) {
                 let src = self.src;
-                let brace = self.brace.get(second + 1, |q| {
-                    src.get(q..).and_then(|rest| rest.find('{')).map(|k| q + k)
-                });
+                let brace = self.brace.get(second + 1, |q| src.get(q..).and_then(|rest| rest.find('{')).map(|k| q + k));
                 if let Some(brace) = brace
                     && brace < self.line_end(second)
                 {
-                    let mut error =
-                        String::from("Error: State name must be a single word. Found: \"");
+                    let mut error = String::from("Error: State name must be a single word. Found: \"");
                     error.push_str(trim(self.src.get(p..=brace).unwrap_or("")));
                     error.push('"');
                     self.error = Some(error);

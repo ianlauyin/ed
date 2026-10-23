@@ -3,15 +3,25 @@
 
 use super::db::TimelineDb;
 use crate::diagrams::Rendered;
-use crate::diagrams::common::fit::{fit_label, plain_label};
+use crate::diagrams::common::fit::fit_label;
+use crate::diagrams::common::fit::plain_label;
 use crate::diagrams::common::fit_width::turn_to_fit;
-use crate::svg::builder::{esc_text, js_round, label_svg, push_num};
-use crate::svg::edges::{ARROW, marker};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
-use crate::svg::theme::{ROUNDED, series_color};
-use crate::text::label::{Label, trim};
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::edges::ARROW;
+use crate::svg::edges::marker;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
+use crate::svg::theme::ROUNDED;
+use crate::svg::theme::series_color;
+use crate::text::label::Label;
+use crate::text::label::trim;
 use crate::text::measure::BOLD;
-use crate::yaml::{Value, push_number};
+use crate::yaml::Value;
+use crate::yaml::push_number;
 
 const PAD_X: f64 = 12.0;
 const PAD_Y: f64 = 8.0;
@@ -39,10 +49,7 @@ fn property<'v>(value: &'v Value, key: &str) -> Option<&'v Value> {
     let Value::Object(entries) = value else {
         return None;
     };
-    entries
-        .iter()
-        .find(|(own, _)| own == key)
-        .map(|(_, value)| value)
+    entries.iter().find(|(own, _)| own == key).map(|(_, value)| value)
 }
 
 /// The series color of a section or period index.
@@ -75,10 +82,7 @@ pub(crate) fn render(model: &TimelineDb, config: &Value, options: &RenderOptions
     turn_to_fit(options, |down| draw(model, config, options, down))
 }
 
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "counts and indexes are far below 2^52"
-)]
+#[expect(clippy::cast_precision_loss, reason = "counts and indexes are far below 2^52")]
 fn draw(model: &TimelineDb, config: &Value, options: &RenderOptions, vertical: bool) -> Rendered {
     let size = options.font_size.unwrap_or(16.0);
     let small = js_round(size * 0.875);
@@ -92,21 +96,12 @@ fn draw(model: &TimelineDb, config: &Value, options: &RenderOptions, vertical: b
 
     // Mermaid draws nothing for periods that come before the first section; here they lead, in a
     // neutral color.
-    let mut groups: Vec<Group> = (0..model.sections.len())
-        .map(|section| Group {
-            periods: Vec::new(),
-            section: Some(section),
-        })
-        .collect();
-    let mut leading = Group {
-        periods: Vec::new(),
-        section: None,
-    };
+    let mut groups: Vec<Group> =
+        (0..model.sections.len()).map(|section| Group { periods: Vec::new(), section: Some(section) }).collect();
+    let mut leading = Group { periods: Vec::new(), section: None };
     for (i, period) in periods.iter().enumerate() {
-        let group = usize::try_from(period.section_index)
-            .ok()
-            .and_then(|at| groups.get_mut(at))
-            .unwrap_or(&mut leading);
+        let group =
+            usize::try_from(period.section_index).ok().and_then(|at| groups.get_mut(at)).unwrap_or(&mut leading);
         group.periods.push(i);
     }
     if !leading.periods.is_empty() {
@@ -126,52 +121,26 @@ fn draw(model: &TimelineDb, config: &Value, options: &RenderOptions, vertical: b
     let event_text_w = |text_w: f64| if vertical { event_text } else { text_w };
     let layout = |fit: bool, text_w: f64| -> (Vec<Label>, Vec<Vec<Label>>) {
         let label = |raw: &str, size: f64, max: f64| {
-            if fit {
-                fit_label(Some(raw), size, max, 0)
-            } else {
-                plain_label(Some(raw), size, max, 0)
-            }
+            if fit { fit_label(Some(raw), size, max, 0) } else { plain_label(Some(raw), size, max, 0) }
         };
-        let period_labels = periods
-            .iter()
-            .map(|period| label(&period.text, size, text_w))
-            .collect();
+        let period_labels = periods.iter().map(|period| label(&period.text, size, text_w)).collect();
         let event_labels = periods
             .iter()
-            .map(|period| {
-                period
-                    .events
-                    .iter()
-                    .map(|event| label(event, small, event_text_w(text_w)))
-                    .collect()
-            })
+            .map(|period| period.events.iter().map(|event| label(event, small, event_text_w(text_w))).collect())
             .collect();
         (period_labels, event_labels)
     };
     let (mut period_labels, mut event_labels) = layout(false, text_w);
-    let mut widest: f64 = period_labels
-        .iter()
-        .fold(0.0, |w, label| w.max(label.width));
+    let mut widest: f64 = period_labels.iter().fold(0.0, |w, label| w.max(label.width));
     if !vertical {
-        widest = event_labels
-            .iter()
-            .flatten()
-            .fold(widest, |w, label| w.max(label.width));
+        widest = event_labels.iter().flatten().fold(widest, |w, label| w.max(label.width));
     }
     let mut overflow = widest > text_w;
     if vertical {
-        overflow = overflow
-            || event_labels
-                .iter()
-                .flatten()
-                .any(|label| label.width > event_text);
+        overflow = overflow || event_labels.iter().flatten().any(|label| label.width > event_text);
     }
     if overflow {
-        let cap = if room == f64::INFINITY {
-            MAX_TEXT
-        } else {
-            period_text
-        };
+        let cap = if room == f64::INFINITY { MAX_TEXT } else { period_text };
         text_w = widest.ceil().max(period_text).min(cap);
         (period_labels, event_labels) = layout(true, text_w);
     }
@@ -207,51 +176,28 @@ fn draw(model: &TimelineDb, config: &Value, options: &RenderOptions, vertical: b
         0.0
     };
     let title = fit_label(model.title.as_deref(), size, body_w.max(320.0), BOLD);
-    let title_h = if title.height > 0.0 {
-        title.height + 16.0
-    } else {
-        0.0
-    };
+    let title_h = if title.height > 0.0 { title.height + 16.0 } else { 0.0 };
     let width = body_w.max(title.width);
     let left = pad + (width - body_w) / 2.0;
     let top = pad + title_h;
 
-    let section_name = |group: &Group| {
-        group
-            .section
-            .and_then(|section| model.sections.get(section))
-            .map(String::as_str)
+    let section_name =
+        |group: &Group| group.section.and_then(|section| model.sections.get(section)).map(String::as_str);
+    let section_label = |group: &Group, w: f64| fit_label(section_name(group), size, w - 2.0 * PAD_X, BOLD);
+    let header = |out: &mut String, section: usize, label: &Label, x: f64, y: f64, w: f64, h: f64| {
+        push_box(out, x, y, w, h, &[" fill=\"", &series(section), "\""].concat());
+        out.push_str(&label_svg(
+            label,
+            x + w / 2.0,
+            y + h / 2.0,
+            &[" font-weight=\"var(--_hw)\"", ON_COLOR].concat(),
+            None,
+        ));
     };
-    let section_label =
-        |group: &Group, w: f64| fit_label(section_name(group), size, w - 2.0 * PAD_X, BOLD);
-    let header =
-        |out: &mut String, section: usize, label: &Label, x: f64, y: f64, w: f64, h: f64| {
-            push_box(
-                out,
-                x,
-                y,
-                w,
-                h,
-                &[" fill=\"", &series(section), "\""].concat(),
-            );
-            out.push_str(&label_svg(
-                label,
-                x + w / 2.0,
-                y + h / 2.0,
-                &[" font-weight=\"var(--_hw)\"", ON_COLOR].concat(),
-                None,
-            ));
-        };
     let period_svg = |out: &mut String, i: usize, color: &str, x: f64, y: f64, h: f64| {
         push_box(out, x, y, col_w, h, &[" fill=\"", color, "\""].concat());
         if let Some(label) = period_labels.get(i) {
-            out.push_str(&label_svg(
-                label,
-                x + col_w / 2.0,
-                y + h / 2.0,
-                ON_COLOR,
-                None,
-            ));
+            out.push_str(&label_svg(label, x + col_w / 2.0, y + h / 2.0, ON_COLOR, None));
         }
     };
     let mut font_size = String::from(" font-size=\"");
@@ -259,21 +205,8 @@ fn draw(model: &TimelineDb, config: &Value, options: &RenderOptions, vertical: b
     font_size.push('"');
     let event = |out: &mut String, label: &Label, color: &str, x: f64, y: f64, h: f64| {
         out.push_str("<g class=\"ondine-node ondine-event\">");
-        push_box(
-            out,
-            x,
-            y,
-            event_w,
-            h,
-            &[" fill=\"", color, "\" fill-opacity=\"0.16\""].concat(),
-        );
-        out.push_str(&label_svg(
-            label,
-            x + event_w / 2.0,
-            y + h / 2.0,
-            &font_size,
-            None,
-        ));
+        push_box(out, x, y, event_w, h, &[" fill=\"", color, "\" fill-opacity=\"0.16\""].concat());
+        out.push_str(&label_svg(label, x + event_w / 2.0, y + h / 2.0, &font_size, None));
         out.push_str("</g>");
     };
     let dot = |out: &mut String, x: f64, y: f64, color: &str| {
@@ -294,9 +227,7 @@ fn draw(model: &TimelineDb, config: &Value, options: &RenderOptions, vertical: b
     };
     let open_period = |out: &mut String, i: usize| {
         out.push_str("<g class=\"ondine-node ondine-period\" data-id=\"");
-        out.push_str(&esc_text(trim(
-            periods.get(i).map_or("", |p| p.text.as_str()),
-        )));
+        out.push_str(&esc_text(trim(periods.get(i).map_or("", |p| p.text.as_str()))));
         out.push_str("\">");
     };
     let no_labels: &[Label] = &[];
@@ -402,15 +333,8 @@ fn draw(model: &TimelineDb, config: &Value, options: &RenderOptions, vertical: b
                 Some(label)
             })
             .collect();
-        let chip_h = period_labels
-            .iter()
-            .fold(0.0, |h: f64, label| h.max(chip_height(label)));
-        let periods_y = top
-            + if has_sections {
-                header_h + SECTION_GAP
-            } else {
-                0.0
-            };
+        let chip_h = period_labels.iter().fold(0.0, |h: f64, label| h.max(chip_height(label)));
+        let periods_y = top + if has_sections { header_h + SECTION_GAP } else { 0.0 };
         let axis_y = periods_y + chip_h + if chip_h > 0.0 { AXIS } else { 0.0 };
         let events_y = axis_y + AXIS;
         let mut bottom = if drawn { axis_y + TAIL } else { top + header_h };
@@ -420,15 +344,7 @@ fn draw(model: &TimelineDb, config: &Value, options: &RenderOptions, vertical: b
             let gx = left + slot as f64 * pitch;
             open(&mut body, group);
             if let (Some(label), Some(section)) = (label, group.section) {
-                header(
-                    &mut body,
-                    section,
-                    label,
-                    gx,
-                    top,
-                    span as f64 * pitch - GAP,
-                    header_h,
-                );
+                header(&mut body, section, label, gx, top, span as f64 * pitch - GAP, header_h);
             }
             for (k, &i) in group.periods.iter().enumerate() {
                 let color = color_of(group, i);
@@ -508,10 +424,7 @@ fn draw(model: &TimelineDb, config: &Value, options: &RenderOptions, vertical: b
             total_height,
             size,
             options,
-            Accessible {
-                acc_descr: model.acc_descr.as_deref(),
-                acc_title: model.acc_title.as_deref(),
-            },
+            Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
             &content,
         ),
         width: total_width,

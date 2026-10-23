@@ -5,7 +5,8 @@
 //! non-ASCII character is decoded whole wherever `\s` looks at it, so token boundaries match.
 
 use super::tokens::T;
-use crate::util::chars::{is_space, is_word};
+use crate::util::chars::is_space;
+use crate::util::chars::is_word;
 
 /// A token: its kind, its start as a UTF-8 offset, and its text.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -47,10 +48,7 @@ const DIRECTIONS: [&str; 6] = ["right", "left", "x", "y", "up", "down"];
 
 /// Whether an ASCII character ends a node id: `( ) [ { } < > - : =` and whitespace.
 fn id_stop(c: u32) -> bool {
-    matches!(
-        c,
-        9 | 10 | 11 | 12 | 13 | 32 | 40 | 41 | 45 | 58 | 60 | 61 | 62 | 91 | 123 | 125
-    )
+    matches!(c, 9 | 10 | 11 | 12 | 13 | 32 | 40 | 41 | 45 | 58 | 60 | 61 | 62 | 91 | 123 | 125)
 }
 
 /// Lexer state. Pele keeps these as closure variables of `tokenize`.
@@ -71,27 +69,17 @@ impl<'a> Lexer<'a> {
         if b < 0x80 {
             return u32::from(b);
         }
-        self.src
-            .get(at..)
-            .and_then(|rest| rest.chars().next())
-            .map_or(u32::from(b), u32::from)
+        self.src.get(at..).and_then(|rest| rest.chars().next()).map_or(u32::from(b), u32::from)
     }
 
     /// The offset after the character at `at`.
     fn after(&self, at: usize) -> usize {
-        let len = self
-            .src
-            .get(at..)
-            .and_then(|rest| rest.chars().next())
-            .map_or(1, char::len_utf8);
+        let len = self.src.get(at..).and_then(|rest| rest.chars().next()).map_or(1, char::len_utf8);
         at + len
     }
 
     fn starts_with(&self, text: &str, at: usize) -> bool {
-        self.src
-            .as_bytes()
-            .get(at..)
-            .is_some_and(|rest| rest.starts_with(text.as_bytes()))
+        self.src.as_bytes().get(at..).is_some_and(|rest| rest.starts_with(text.as_bytes()))
     }
 
     fn slice(&self, from: usize, to: usize) -> &'a str {
@@ -99,11 +87,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn put(&mut self, kind: T, text: &'a str, end: usize) -> bool {
-        self.tokens.push(Token {
-            kind,
-            start: self.p,
-            text,
-        });
+        self.tokens.push(Token { kind, start: self.p, text });
         self.p = end;
         true
     }
@@ -172,11 +156,7 @@ impl<'a> Lexer<'a> {
         if self.code(q) != 45 {
             return None;
         }
-        Some(if matches!(self.code(q + 1), 120 | 111 | 62) {
-            q + 2
-        } else {
-            q + 1
-        })
+        Some(if matches!(self.code(q + 1), 120 | 111 | 62) { q + 2 } else { q + 1 })
     }
 
     /// The end of a complete link at `q`, before its trailing whitespace, if there is one.
@@ -209,11 +189,7 @@ impl<'a> Lexer<'a> {
             let end = self.ws(e);
             return self.emit(T::Link, end);
         }
-        let q = if self.code(self.p) == 60 {
-            self.p + 1
-        } else {
-            self.p
-        };
+        let q = if self.code(self.p) == 60 { self.p + 1 } else { self.p };
         let a = self.code(q);
         let b = self.code(q + 1);
         if (a == 45 && (b == 45 || b == 46)) || (a == 61 && b == 61) {
@@ -225,11 +201,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn line_state(&mut self, kind: T) -> bool {
-        let e = self
-            .src
-            .get(self.p..)
-            .and_then(|rest| rest.find('\n'))
-            .map_or(self.src.len(), |at| self.p + at);
+        let e = self.src.get(self.p..).and_then(|rest| rest.find('\n')).map_or(self.src.len(), |at| self.p + at);
         self.pop();
         self.emit(kind, e)
     }
@@ -398,11 +370,7 @@ impl<'a> Lexer<'a> {
             91 => {
                 let d = self.code(p + 1);
                 self.push(S::Node);
-                let end = if matches!(d, 91 | 124 | 40 | 92 | 47) {
-                    p + 2
-                } else {
-                    p + 1
-                };
+                let end = if matches!(d, 91 | 124 | 40 | 92 | 47) { p + 2 } else { p + 1 };
                 return self.emit(T::NodeDStart, end);
             }
             58 => {
@@ -503,10 +471,7 @@ impl<'a> Lexer<'a> {
 
     /// The end of text up to the next `needle` from the current position, or the end of input.
     fn until(&self, needle: char) -> usize {
-        self.src
-            .get(self.p..)
-            .and_then(|rest| rest.find(needle))
-            .map_or(self.src.len(), |at| self.p + at)
+        self.src.get(self.p..).and_then(|rest| rest.find(needle)).map_or(self.src.len(), |at| self.p + at)
     }
 
     #[expect(clippy::too_many_lines, reason = "mirrors Pele's tokenize loop")]
@@ -586,11 +551,7 @@ impl<'a> Lexer<'a> {
             }
             S::ClassDef => {
                 let mut kind = T::DefaultClassDefId;
-                let mut k = if self.starts_with("DEFAULT", p) {
-                    p + 7
-                } else {
-                    p
-                };
+                let mut k = if self.starts_with("DEFAULT", p) { p + 7 } else { p };
                 let mut q = self.ws(k);
                 if k == p || q == k {
                     kind = T::ClassDefId;
@@ -628,13 +589,7 @@ impl<'a> Lexer<'a> {
 /// Splits `src` into tokens. The list ends with [`T::End`], or with [`T::Error`] at unrecognized
 /// text.
 pub(crate) fn tokenize(src: &str) -> Vec<Token<'_>> {
-    let mut lexer = Lexer {
-        p: 0,
-        src,
-        stack: Vec::new(),
-        state: S::Initial,
-        tokens: Vec::new(),
-    };
+    let mut lexer = Lexer { p: 0, src, stack: Vec::new(), state: S::Initial, tokens: Vec::new() };
     let n = src.len();
 
     loop {
@@ -648,19 +603,11 @@ pub(crate) fn tokenize(src: &str) -> Vec<Token<'_>> {
 
         let c = lexer.code(lexer.p);
         if !lexer.step(c) {
-            lexer.tokens.push(Token {
-                kind: T::Error,
-                start: lexer.p,
-                text: "",
-            });
+            lexer.tokens.push(Token { kind: T::Error, start: lexer.p, text: "" });
             return lexer.tokens;
         }
     }
 
-    lexer.tokens.push(Token {
-        kind: T::End,
-        start: n,
-        text: "",
-    });
+    lexer.tokens.push(Token { kind: T::End, start: n, text: "" });
     lexer.tokens
 }

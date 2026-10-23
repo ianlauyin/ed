@@ -1,7 +1,9 @@
 //! The XY chart parser. Port of Pele's `src/diagrams/xychart/parser.ts`.
 
-use super::db::{DataPoint, XyChartDb};
-use super::lexer::{Token, tokenize};
+use super::db::DataPoint;
+use super::db::XyChartDb;
+use super::lexer::Token;
+use super::lexer::tokenize;
 use super::tokens::T;
 use crate::error::Error;
 use crate::text::label::trim;
@@ -10,16 +12,7 @@ use crate::text::label::trim;
 fn is_word(t: T) -> bool {
     matches!(
         t,
-        T::Amp
-            | T::Num
-            | T::Alpha
-            | T::Plus
-            | T::Equals
-            | T::Mult
-            | T::Dot
-            | T::Brkt
-            | T::Minus
-            | T::Underscore
+        T::Amp | T::Num | T::Alpha | T::Plus | T::Equals | T::Mult | T::Dot | T::Brkt | T::Minus | T::Underscore
     )
 }
 
@@ -46,10 +39,7 @@ impl<'a> Parser<'a> {
     }
 
     fn text_at(&self, at: usize) -> &'a str {
-        self.tokens
-            .get(at)
-            .and_then(|token| self.src.get(token.start..token.end))
-            .unwrap_or("")
+        self.tokens.get(at).and_then(|token| self.src.get(token.start..token.end)).unwrap_or("")
     }
 
     fn take(&mut self) -> &'a str {
@@ -60,10 +50,7 @@ impl<'a> Parser<'a> {
 
     #[cold]
     fn fail(&self, expected: &str) -> Error {
-        let start = self
-            .tokens
-            .get(self.i)
-            .map_or(self.src.len(), |token| token.start);
+        let start = self.tokens.get(self.i).map_or(self.src.len(), |token| token.start);
         let t = self.t();
         if t == T::Error {
             return Error::syntax("xychart", self.src, start, "", true);
@@ -101,10 +88,7 @@ impl<'a> Parser<'a> {
     }
 
     fn number(&mut self) -> Result<f64, Error> {
-        Ok(self
-            .expect(T::NumberWithDecimal)?
-            .parse()
-            .unwrap_or(f64::NAN))
+        Ok(self.expect(T::NumberWithDecimal)?.parse().unwrap_or(f64::NAN))
     }
 
     fn range(&mut self) -> Result<(f64, f64), Error> {
@@ -118,11 +102,7 @@ impl<'a> Parser<'a> {
         self.expect(T::SquareBracesStart)?;
         loop {
             let value = self.number()?;
-            let label = if self.t() == T::Str {
-                self.take().to_owned()
-            } else {
-                String::new()
-            };
+            let label = if self.t() == T::Str { self.take().to_owned() } else { String::new() };
             out.push(DataPoint { label, value });
             if self.t() != T::Comma {
                 break;
@@ -140,11 +120,7 @@ impl<'a> Parser<'a> {
 ///
 /// Returns a syntax error for input Mermaid rejects.
 pub(crate) fn parse_xychart(src: &str, db: &mut XyChartDb) -> Result<(), Error> {
-    let mut p = Parser {
-        i: 0,
-        src,
-        tokens: tokenize(src),
-    };
+    let mut p = Parser { i: 0, src, tokens: tokenize(src) };
 
     loop {
         if is_eol(p.t()) {
@@ -169,11 +145,7 @@ pub(crate) fn parse_xychart(src: &str, db: &mut XyChartDb) -> Result<(), Error> 
                 db.set_diagram_title(trim(&text));
             }
             T::XAxis | T::YAxis => {
-                let title = if is_text(p.t()) {
-                    Some(p.text()?)
-                } else {
-                    None
-                };
+                let title = if is_text(p.t()) { Some(p.text()?) } else { None };
                 if t == T::XAxis && p.t() == T::SquareBracesStart {
                     let mut categories = Vec::new();
                     loop {
@@ -201,11 +173,7 @@ pub(crate) fn parse_xychart(src: &str, db: &mut XyChartDb) -> Result<(), Error> 
                 }
             }
             T::Line | T::Bar => {
-                let title = if p.t() == T::SquareBracesStart {
-                    String::new()
-                } else {
-                    p.text()?
-                };
+                let title = if p.t() == T::SquareBracesStart { String::new() } else { p.text()? };
                 let data = p.points()?;
                 if t == T::Line {
                     db.set_line_data(&title, &data);

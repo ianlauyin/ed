@@ -1,6 +1,7 @@
 //! Participant shapes. Port of Pele's `src/diagrams/sequence/actors.ts`.
 
-use crate::svg::builder::{label_svg, push_num};
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
 use crate::svg::theme::RADIUS;
 use crate::text::label::Label;
 
@@ -13,16 +14,7 @@ const CAP: f64 = 6.0;
 const SHAPE: &str = " fill=\"var(--_s)\" stroke=\"var(--_b)\"";
 const LINE: &str = " fill=\"none\" stroke=\"var(--_b)\"";
 
-const KINDS: [&str; 8] = [
-    "participant",
-    "actor",
-    "boundary",
-    "control",
-    "entity",
-    "database",
-    "collections",
-    "queue",
-];
+const KINDS: [&str; 8] = ["participant", "actor", "boundary", "control", "entity", "database", "collections", "queue"];
 
 /// A participant's size.
 #[derive(Clone, Copy, Debug, Default, PartialEq)]
@@ -36,38 +28,21 @@ pub(crate) struct ActorSize {
 /// The drawn kind of a participant type: the type when Pele draws it, and `participant`
 /// otherwise.
 pub(crate) fn actor_kind(r#type: &str) -> &'static str {
-    KINDS
-        .into_iter()
-        .find(|kind| *kind == r#type)
-        .unwrap_or("participant")
+    KINDS.into_iter().find(|kind| *kind == r#type).unwrap_or("participant")
 }
 
 /// Whether `kind` is a figure, which stands above its label. The other kinds hold the label
 /// inside.
 pub(crate) fn is_figure(kind: &str) -> bool {
-    matches!(
-        kind,
-        "actor" | "boundary" | "control" | "entity" | "database"
-    )
+    matches!(kind, "actor" | "boundary" | "control" | "entity" | "database")
 }
 
 /// The size of a participant of `kind` with `label`, at least `min_w` by `min_h` for the kinds
 /// that hold their label.
-pub(crate) fn actor_size(
-    kind: &str,
-    label: &Label,
-    min_w: f64,
-    min_h: f64,
-    padding_x: Option<f64>,
-) -> ActorSize {
+pub(crate) fn actor_size(kind: &str, label: &Label, min_w: f64, min_h: f64, padding_x: Option<f64>) -> ActorSize {
     if is_figure(kind) {
         return ActorSize {
-            h: GLYPH
-                + if label.height > 0.0 {
-                    GLYPH_GAP + label.height
-                } else {
-                    0.0
-                },
+            h: GLYPH + if label.height > 0.0 { GLYPH_GAP + label.height } else { 0.0 },
             w: 40.0_f64.max(label.width + 8.0),
         };
     }
@@ -205,25 +180,12 @@ fn rect(out: &mut String, x: f64, y: f64, w: f64, h: f64) {
 }
 
 /// Draws a participant whose bounding box has its top center at (`cx`, `top`).
-pub(crate) fn draw_actor(
-    out: &mut String,
-    kind: &str,
-    cx: f64,
-    top: f64,
-    size: ActorSize,
-    label: &Label,
-) {
+pub(crate) fn draw_actor(out: &mut String, kind: &str, cx: f64, top: f64, size: ActorSize, label: &Label) {
     let ActorSize { h, w } = size;
     let text = " class=\"ondine-label\"";
     if is_figure(kind) {
         figure(out, kind, cx, top);
-        out.push_str(&label_svg(
-            label,
-            cx,
-            top + GLYPH + GLYPH_GAP + label.height / 2.0,
-            text,
-            None,
-        ));
+        out.push_str(&label_svg(label, cx, top + GLYPH + GLYPH_GAP + label.height / 2.0, text, None));
         return;
     }
     let left = cx - w / 2.0;
@@ -232,13 +194,7 @@ pub(crate) fn draw_actor(
         let bh = h - STACK;
         rect(out, left + STACK, top, bw, bh);
         rect(out, left, top + STACK, bw, bh);
-        out.push_str(&label_svg(
-            label,
-            left + bw / 2.0,
-            top + STACK + bh / 2.0,
-            text,
-            None,
-        ));
+        out.push_str(&label_svg(label, left + bw / 2.0, top + STACK + bh / 2.0, text, None));
         return;
     }
     if kind == "queue" {

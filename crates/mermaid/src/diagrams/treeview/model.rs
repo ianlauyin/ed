@@ -1,8 +1,10 @@
 //! The tree view model: entries nested by indentation under a root folder. Port of Pele's
 //! `src/diagrams/treeview/model.ts`.
 
-use super::box_drawing::{preprocess_box_drawing, remap_error_lines};
-use super::parser::{TreeViewAst, parse_tree_view};
+use super::box_drawing::preprocess_box_drawing;
+use super::box_drawing::remap_error_lines;
+use super::parser::TreeViewAst;
+use super::parser::parse_tree_view;
 use crate::error::Error;
 use crate::text::label::trim_start;
 use crate::util::chars::is_space;
@@ -103,10 +105,7 @@ impl TreeViewDb {
     /// Adds `node` under the nearest open entry indented less than it.
     fn add_node(&mut self, mut node: TreeNode) {
         while let Some(&top) = self.stack.last()
-            && self
-                .nodes
-                .get(top)
-                .is_some_and(|open| node.level <= open.level)
+            && self.nodes.get(top).is_some_and(|open| node.level <= open.level)
         {
             self.stack.pop();
         }
@@ -171,39 +170,20 @@ pub(crate) fn build_tree_view(ast: TreeViewAst, title: Option<&str>) -> TreeView
             children: Vec::new(),
             css_class: node.class_annotation.filter(|class| !class.is_empty()),
             description: node.desc_annotation.filter(|text| !text.is_empty()),
-            icon: node.icon_annotation.map(|icon| {
-                if icon.is_empty() {
-                    String::from("none")
-                } else {
-                    icon
-                }
-            }),
+            icon: node.icon_annotation.map(|icon| if icon.is_empty() { String::from("none") } else { icon }),
             id: 0,
             level: node.indent.map_or(0, i64::from),
             name,
-            node_type: if directory {
-                NodeType::Directory
-            } else {
-                NodeType::File
-            },
+            node_type: if directory { NodeType::Directory } else { NodeType::File },
         });
     }
 
     let count = u32::try_from(db.nodes.len()).unwrap_or(u32::MAX);
     TreeViewModel {
-        acc_descr: ast
-            .acc_descr
-            .filter(|text| !text.is_empty())
-            .map(|text| dedent_lines(&text)),
-        acc_title: ast
-            .acc_title
-            .filter(|text| !text.is_empty())
-            .map(|text| trim_start(&text).to_owned()),
+        acc_descr: ast.acc_descr.filter(|text| !text.is_empty()).map(|text| dedent_lines(&text)),
+        acc_title: ast.acc_title.filter(|text| !text.is_empty()).map(|text| trim_start(&text).to_owned()),
         count,
         nodes: db.nodes,
-        title: ast
-            .title
-            .filter(|text| !text.is_empty())
-            .or_else(|| title.map(str::to_owned)),
+        title: ast.title.filter(|text| !text.is_empty()).or_else(|| title.map(str::to_owned)),
     }
 }

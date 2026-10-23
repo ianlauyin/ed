@@ -1154,8 +1154,8 @@ impl ProjectPanel {
 
             let is_local = project.is_local();
             let file_name = Path::new(entry_file_name(entry, worktree.root_name()));
-            let is_markdown =
-                !is_dir && MarkdownPreviewView::is_markdown_path(file_name, project.languages());
+            let is_previewable =
+                !is_dir && MarkdownPreviewView::is_previewable_path(file_name, project.languages());
             let is_svg = !is_dir && SvgPreviewView::is_svg_path(file_name);
 
             let settings = ProjectPanelSettings::get_global(cx);
@@ -1184,8 +1184,8 @@ impl ProjectPanel {
             let context_menu = ContextMenu::build(window, cx, |menu, _, _| {
                 menu.context(self.focus_handle.clone()).map(|menu| {
                     if is_read_only {
-                        menu.when(is_markdown, |menu| {
-                            menu.action("Open Markdown Preview", Box::new(OpenMarkdownPreview))
+                        menu.when(is_previewable, |menu| {
+                            menu.action("Open Preview", Box::new(OpenMarkdownPreview))
                         })
                         .when(is_svg, |menu| {
                             menu.action("Open SVG Preview", Box::new(OpenSvgPreview))
@@ -1207,8 +1207,8 @@ impl ProjectPanel {
                                 menu.action("Open in Default App", Box::new(OpenWithSystem))
                             })
                             .action("Open in Terminal", Box::new(OpenInTerminal))
-                            .when(is_markdown, |menu| {
-                                menu.action("Open Markdown Preview", Box::new(OpenMarkdownPreview))
+                            .when(is_previewable, |menu| {
+                                menu.action("Open Preview", Box::new(OpenMarkdownPreview))
                             })
                             .when(is_svg, |menu| {
                                 menu.action("Open SVG Preview", Box::new(OpenSvgPreview))
@@ -1998,7 +1998,7 @@ impl ProjectPanel {
         let Some((project_path, file_name)) = self.selected_file(cx) else {
             return;
         };
-        if !MarkdownPreviewView::is_markdown_path(
+        if !MarkdownPreviewView::is_previewable_path(
             Path::new(file_name),
             self.project.read(cx).languages(),
         ) {

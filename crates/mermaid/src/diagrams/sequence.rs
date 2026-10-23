@@ -10,31 +10,18 @@ pub(crate) mod render;
 pub(crate) mod tokens;
 pub(crate) mod types;
 
-/// The JSON reader of the parity fixtures, loaded once per build.
-#[cfg(all(test, not(feature = "sankey")))]
-#[path = "../../tests/fixtures/json.rs"]
-mod fixture;
-#[cfg(all(test, feature = "sankey"))]
-use super::sankey::fixture;
-
-use super::{Diagram, Input, Rendered};
+use super::Diagram;
+use super::Input;
+use super::Rendered;
 use crate::error::Error;
 use crate::svg::root::RenderOptions;
 use crate::util::url::UrlOptions;
 use crate::yaml::Value;
 
 /// The `sequence` diagram type.
-pub(crate) const DIAGRAM: Diagram = Diagram {
-    keep_comments: false,
-    render: render_input,
-    section: None,
-};
+pub(crate) const DIAGRAM: Diagram = Diagram { keep_comments: false, render: render_input, section: None };
 
-fn render_input(
-    input: &Input<'_>,
-    options: &RenderOptions,
-    _url: &UrlOptions<'_>,
-) -> Result<Rendered, Error> {
+fn render_input(input: &Input<'_>, options: &RenderOptions, _url: &UrlOptions<'_>) -> Result<Rendered, Error> {
     let db = parse(input.source, input.config, input.title)?;
     Ok(render::render(&db, input.config, options))
 }
@@ -98,9 +85,9 @@ fn member<'v>(value: &'v Value, key: &str) -> Option<&'v Value> {
 ///   title: v(db.title), accTitle: v(db.accTitle), accDescr: v(db.accDescr),
 /// });
 /// ```
-#[cfg(feature = "model")]
 pub(crate) fn to_json(model: &Model) -> String {
-    use types::{MessageText, NoteActor};
+    use types::MessageText;
+    use types::NoteActor;
 
     let mut out = String::from("{\"type\":\"sequence\",\"actors\":[");
     for (i, a) in model.actors.iter().enumerate() {
@@ -129,10 +116,7 @@ pub(crate) fn to_json(model: &Model) -> String {
         string(&mut out, &a.r#type);
         out.push('}');
     }
-    for (key, list) in [
-        ("createdActors", &model.created_actors),
-        ("destroyedActors", &model.destroyed_actors),
-    ] {
+    for (key, list) in [("createdActors", &model.created_actors), ("destroyedActors", &model.destroyed_actors)] {
         out.push_str("],\"");
         out.push_str(key);
         out.push_str("\":[");
@@ -221,11 +205,7 @@ pub(crate) fn to_json(model: &Model) -> String {
         out.push('}');
     }
     out.push(']');
-    for (key, value) in [
-        ("title", &model.title),
-        ("accTitle", &model.acc_title),
-        ("accDescr", &model.acc_descr),
-    ] {
+    for (key, value) in [("title", &model.title), ("accTitle", &model.acc_title), ("accDescr", &model.acc_descr)] {
         out.push_str(",\"");
         out.push_str(key);
         out.push_str("\":");
@@ -235,25 +215,21 @@ pub(crate) fn to_json(model: &Model) -> String {
     out
 }
 
-#[cfg(feature = "model")]
 fn comma(out: &mut String, i: usize) {
     if i > 0 {
         out.push(',');
     }
 }
 
-#[cfg(feature = "model")]
 #[expect(clippy::cast_precision_loss, reason = "counts of a parsed document")]
 fn usize_f64(value: usize) -> f64 {
     value as f64
 }
 
-#[cfg(feature = "model")]
 fn boolean(out: &mut String, value: bool) {
     out.push_str(if value { "true" } else { "false" });
 }
 
-#[cfg(feature = "model")]
 fn option_number(out: &mut String, value: Option<f64>) {
     match value.filter(|value| value.is_finite()) {
         Some(value) => crate::yaml::push_number(out, value),
@@ -261,7 +237,6 @@ fn option_number(out: &mut String, value: Option<f64>) {
     }
 }
 
-#[cfg(feature = "model")]
 fn option_string(out: &mut String, value: Option<&str>) {
     match value {
         Some(value) => string(out, value),
@@ -270,7 +245,6 @@ fn option_string(out: &mut String, value: Option<&str>) {
 }
 
 /// Appends map entries as `[key, value]` pairs.
-#[cfg(feature = "model")]
 fn entries(out: &mut String, entries: &[(String, Value)]) {
     out.push('[');
     for (i, (key, value)) in entries.iter().enumerate() {
@@ -285,7 +259,6 @@ fn entries(out: &mut String, entries: &[(String, Value)]) {
 }
 
 /// Appends `value` as `JSON.stringify` writes it.
-#[cfg(feature = "model")]
 fn json_value(out: &mut String, value: &Value) {
     match value {
         Value::Array(items) => {
@@ -314,7 +287,6 @@ fn json_value(out: &mut String, value: &Value) {
 }
 
 /// Appends `text` as `JSON.stringify` quotes it.
-#[cfg(feature = "model")]
 fn string(out: &mut String, text: &str) {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     out.push('"');
@@ -337,68 +309,4 @@ fn string(out: &mut String, text: &str) {
         }
     }
     out.push('"');
-}
-
-#[cfg(test)]
-mod tests {
-    //! Parity with Pele's `sequence.parse` over every string literal of Pele's sequence compat
-    //! specs and every document those specs build at run time, as recorded by running Pele's
-    //! TypeScript. Each is parsed once as the public `parse()` sees it (preprocessed, with its
-    //! config) and once as written.
-
-    use super::fixture::{Json, cases};
-    use super::parse;
-    use crate::yaml::Value;
-
-    /// The parity fixture: Pele's parser input, config, and its model JSON or error.
-    const FIXTURE: &str = include_str!("../../tests/fixtures/sequence-parse.json");
-
-    #[test]
-    fn matches_pele() {
-        let mut differing = Vec::new();
-        let cases = cases(FIXTURE);
-        for case in &cases {
-            let input = case.str("input").unwrap_or_default();
-            let mut config = Vec::new();
-            if let Some(Json::Bool(wrap)) = case.get("wrap") {
-                config.push(("wrap".to_owned(), Value::Bool(*wrap)));
-            }
-            if let Some(Json::Bool(true)) = case.get("sequenceWrap") {
-                config.push((
-                    "sequence".to_owned(),
-                    Value::Object(vec![("wrap".to_owned(), Value::Bool(true))]),
-                ));
-            }
-            let actual = parse(input, &Value::Object(config), case.str("title"));
-            let same = match (&actual, case.get("error")) {
-                (Ok(_), None) => {
-                    #[cfg(feature = "model")]
-                    {
-                        actual.as_ref().map(super::to_json).ok().as_deref() == case.str("model")
-                    }
-                    #[cfg(not(feature = "model"))]
-                    {
-                        true
-                    }
-                }
-                (Err(error), Some(expected)) => {
-                    Some(error.code.as_str()) == expected.str("code")
-                        && Some(error.message.as_str()) == expected.str("message")
-                        && Some(f64::from(error.line)) == expected.num("line")
-                        && Some(f64::from(error.column)) == expected.num("column")
-                }
-                _ => false,
-            };
-            if !same {
-                differing.push((case.str("origin").unwrap_or("?"), input, actual));
-            }
-        }
-        assert!(
-            differing.is_empty(),
-            "{} of {} cases differ from Pele: {:#?}",
-            differing.len(),
-            cases.len(),
-            differing.iter().take(10).collect::<Vec<_>>()
-        );
-    }
 }

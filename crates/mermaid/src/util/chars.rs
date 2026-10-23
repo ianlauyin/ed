@@ -24,12 +24,10 @@ pub(crate) fn has(text: &str, needle: &str) -> bool {
     let Some(&first) = needle.as_bytes().first() else {
         return true;
     };
-    bytes.iter().enumerate().any(|(at, &byte)| {
-        byte == first
-            && bytes
-                .get(at..)
-                .is_some_and(|rest| rest.starts_with(needle.as_bytes()))
-    })
+    bytes
+        .iter()
+        .enumerate()
+        .any(|(at, &byte)| byte == first && bytes.get(at..).is_some_and(|rest| rest.starts_with(needle.as_bytes())))
 }
 
 /// A space or a tab.

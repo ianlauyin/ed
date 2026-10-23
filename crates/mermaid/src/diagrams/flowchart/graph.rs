@@ -2,10 +2,12 @@
 //! collapsed subgraphs, class styles, and edge defaults. Port of Pele's
 //! `src/diagrams/flowchart/graph.ts`.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use super::db::FlowDb;
-use super::types::{FlowNode, LabelType};
+use super::types::FlowNode;
+use super::types::LabelType;
 use crate::yaml::Value;
 
 /// A node or group to draw. Mirrors Pele's `GraphNode`; fields only variants read are omitted.
@@ -124,9 +126,7 @@ fn arrows(r#type: Option<&str>) -> (&'static str, &'static str) {
 
 fn is_collapsed(metadata: Option<&Vec<(String, Value)>>) -> bool {
     metadata.is_some_and(|entries| {
-        entries
-            .iter()
-            .any(|(key, value)| key == "view" && *value == Value::String(String::from("collapsed")))
+        entries.iter().any(|(key, value)| key == "view" && *value == Value::String(String::from("collapsed")))
     })
 }
 
@@ -165,18 +165,14 @@ pub(crate) fn build(model: &FlowDb, default_curve: Option<&str>) -> FlowGraph {
     // A subgraph's color index follows declaration order through the nesting. Ondine's
     // monochrome theme does not read it, so only the traversal Pele performs is skipped.
 
-    let any_collapsed = subgraphs
-        .iter()
-        .any(|sg| is_collapsed(sg.metadata.as_ref()));
+    let any_collapsed = subgraphs.iter().any(|sg| is_collapsed(sg.metadata.as_ref()));
     let mut outermost: BTreeMap<String, Option<String>> = BTreeMap::new();
     let mut hidden: BTreeSet<String> = BTreeSet::new();
     let mut collapsed_into: BTreeMap<String, String> = BTreeMap::new();
 
     if any_collapsed {
         for sg in subgraphs {
-            let Some(ancestor) =
-                outermost_collapsed(model, &subgraph_parent, &mut outermost, &sg.id)
-            else {
+            let Some(ancestor) = outermost_collapsed(model, &subgraph_parent, &mut outermost, &sg.id) else {
                 continue;
             };
 
@@ -208,11 +204,7 @@ pub(crate) fn build(model: &FlowDb, default_curve: Option<&str>) -> FlowGraph {
             parent_of.insert(id, &sg.id);
         }
     }
-    let tooltips: BTreeMap<&str, &str> = model
-        .tooltips
-        .iter()
-        .map(|(id, text)| (id.as_str(), text.as_str()))
-        .collect();
+    let tooltips: BTreeMap<&str, &str> = model.tooltips.iter().map(|(id, text)| (id.as_str(), text.as_str())).collect();
 
     let mut nodes: Vec<GraphNode> = Vec::new();
     let mut by_id: BTreeMap<&str, usize> = BTreeMap::new();
@@ -268,9 +260,7 @@ pub(crate) fn build(model: &FlowDb, default_curve: Option<&str>) -> FlowGraph {
             asset_width: vertex.asset_width,
             css_classes,
             css_compiled_styles: compiled(
-                &mut ["default", "node"]
-                    .into_iter()
-                    .chain(vertex.classes.iter().map(String::as_str)),
+                &mut ["default", "node"].into_iter().chain(vertex.classes.iter().map(String::as_str)),
             ),
             css_styles: vertex.styles.clone(),
             constraint: vertex.constraint.clone(),
@@ -283,18 +273,10 @@ pub(crate) fn build(model: &FlowDb, default_curve: Option<&str>) -> FlowGraph {
             label_type: vertex.label_type,
             link: vertex.link.clone(),
             link_target: vertex.link_target.clone(),
-            parent_id: parent_of
-                .get(vertex.id.as_str())
-                .map(|id| String::from(*id)),
+            parent_id: parent_of.get(vertex.id.as_str()).map(|id| String::from(*id)),
             pos: vertex.pos.clone(),
-            shape: if is_group {
-                String::from("rect")
-            } else {
-                shape_of(vertex)
-            },
-            tooltip: tooltips
-                .get(vertex.id.as_str())
-                .map(|text| String::from(*text)),
+            shape: if is_group { String::from("rect") } else { shape_of(vertex) },
+            tooltip: tooltips.get(vertex.id.as_str()).map(|text| String::from(*text)),
         };
         by_id.insert(&vertex.id, nodes.len());
         nodes.push(node);
@@ -342,21 +324,13 @@ pub(crate) fn build(model: &FlowDb, default_curve: Option<&str>) -> FlowGraph {
                 .default_interpolate
                 .clone()
                 .filter(|text| !text.is_empty())
-                .or_else(|| {
-                    default_curve
-                        .filter(|text| !text.is_empty())
-                        .map(String::from)
-                }),
+                .or_else(|| default_curve.filter(|text| !text.is_empty()).map(String::from)),
         };
 
         edges.push(GraphEdge {
             arrow_type_end: if plain { "none" } else { arrow_end },
             arrow_type_start: if plain { "none" } else { arrow_start },
-            classes: if invisible {
-                ""
-            } else {
-                "edge-thickness-normal edge-pattern-solid flowchart-link"
-            },
+            classes: if invisible { "" } else { "edge-thickness-normal edge-pattern-solid flowchart-link" },
             css_compiled_styles: compiled(&mut raw.classes.iter().map(String::as_str)),
             curve,
             end: String::from(end),
@@ -393,8 +367,7 @@ fn outermost_collapsed(
 
     let mut result = current.and_then(|key| cache.get(key).cloned()).flatten();
     for key in chain.iter().rev() {
-        if result.is_none() && is_collapsed(model.subgraph(key).and_then(|sg| sg.metadata.as_ref()))
-        {
+        if result.is_none() && is_collapsed(model.subgraph(key).and_then(|sg| sg.metadata.as_ref())) {
             result = Some(String::from(*key));
         }
         cache.insert(String::from(*key), result.clone());

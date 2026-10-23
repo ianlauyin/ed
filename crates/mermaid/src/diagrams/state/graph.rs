@@ -4,8 +4,12 @@
 use std::collections::BTreeMap;
 
 use super::db::StateDb;
-use super::types::{Description, StateStmt, Stmt};
-use crate::error::{Code, Error, push_u32};
+use super::types::Description;
+use super::types::StateStmt;
+use super::types::Stmt;
+use crate::error::Code;
+use crate::error::Error;
+use crate::error::push_u32;
 
 /// Pele's `StateNode`.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -163,8 +167,7 @@ impl Builder<'_> {
             self.deferred.push(!aside);
             return;
         };
-        let (Some(existing), Some(deferred)) = (self.nodes.get_mut(at), self.deferred.get_mut(at))
-        else {
+        let (Some(existing), Some(deferred)) = (self.nodes.get_mut(at), self.deferred.get_mut(at)) else {
             return;
         };
         *deferred = !aside;
@@ -191,15 +194,9 @@ impl Builder<'_> {
             return;
         }
         let known = self.db.state(id);
-        let class_str = || {
-            known
-                .and_then(|known| known.classes.as_ref())
-                .map(|classes| classes.join(" "))
-                .unwrap_or_default()
-        };
-        let styles = known
-            .and_then(|known| known.styles.as_deref())
-            .unwrap_or_default();
+        let class_str =
+            || known.and_then(|known| known.classes.as_ref()).map(|classes| classes.join(" ")).unwrap_or_default();
+        let styles = known.and_then(|known| known.styles.as_deref()).unwrap_or_default();
 
         if !self.drafts.contains_key(id) {
             let mut shape = Some("rect");
@@ -238,11 +235,7 @@ impl Builder<'_> {
                 }
                 Description::One(text) if !text.is_empty() => {
                     draft.shape = Some("rectWithTitle");
-                    let mut texts = if text == id {
-                        Vec::new()
-                    } else {
-                        vec![std::mem::take(text)]
-                    };
+                    let mut texts = if text == id { Vec::new() } else { vec![std::mem::take(text)] };
                     texts.extend(description.texts().iter().cloned());
                     draft.description = Description::Many(texts);
                 }
@@ -253,11 +246,7 @@ impl Builder<'_> {
             }
         }
         if draft.shape == Some("rectWithTitle") && description_length(&draft.description) == 1 {
-            draft.shape = Some(if draft.group {
-                "roundedWithTitle"
-            } else {
-                "rect"
-            });
+            draft.shape = Some(if draft.group { "roundedWithTitle" } else { "rect" });
         }
 
         if !draft.group
@@ -265,27 +254,21 @@ impl Builder<'_> {
         {
             draft.group = true;
             draft.dir = Some(direction(&doc.0));
-            draft.shape = Some(if item.r#type == Some("divider") {
-                "divider"
-            } else {
-                "roundedWithTitle"
-            });
+            draft.shape = Some(if item.r#type == Some("divider") { "divider" } else { "roundedWithTitle" });
             // A container takes the next palette slot unless it is a region, which shares its
             // composite's.
-            let shared = parent
-                .filter(|_| draft.shape == Some("divider"))
-                .and_then(|parent| self.slots.get(&parent.id));
+            let shared =
+                parent.filter(|_| draft.shape == Some("divider")).and_then(|parent| self.slots.get(&parent.id));
             if let Some(&slot) = shared {
                 draft.color_index = slot;
             } else {
                 let slot = self.next_slot;
                 self.next_slot += 1;
-                draft.color_index =
-                    if crate::text::label::trim(&class_str()).is_empty() && styles.is_empty() {
-                        Some(slot)
-                    } else {
-                        None
-                    };
+                draft.color_index = if crate::text::label::trim(&class_str()).is_empty() && styles.is_empty() {
+                    Some(slot)
+                } else {
+                    None
+                };
             }
             self.slots.insert(id.to_owned(), draft.color_index);
             draft.css_classes.push_str(" statediagram-cluster ");
@@ -303,11 +286,7 @@ impl Builder<'_> {
             r#type: draft.group.then_some("group"),
             ..StateNode::default()
         };
-        let group_classes = if item.note.is_some() {
-            draft.css_classes.clone()
-        } else {
-            String::new()
-        };
+        let group_classes = if item.note.is_some() { draft.css_classes.clone() } else { String::new() };
         if let Some(parent) = parent.filter(|parent| parent.id != "root") {
             node.parent_id = Some(parent.id.clone());
         }
@@ -318,23 +297,22 @@ impl Builder<'_> {
         };
         // Mermaid puts each note in a group of its own, named after the state. Pele keeps that
         // group in the model and lays the note out beside its state instead.
-        let aside =
-            |aside_id: String, shape: &'static str, css_classes: String, group: bool| StateNode {
-                color_index: None,
-                css_classes,
-                css_compiled_styles: Vec::new(),
-                css_styles: Vec::new(),
-                description: Vec::new(),
-                dir: None,
-                id: aside_id,
-                is_group: group,
-                label: Some(note.text.clone()),
-                note_for: None,
-                parent_id: None,
-                position: note.position.clone(),
-                shape: Some(shape),
-                r#type: Some(if group { "group" } else { "node" }),
-            };
+        let aside = |aside_id: String, shape: &'static str, css_classes: String, group: bool| StateNode {
+            color_index: None,
+            css_classes,
+            css_compiled_styles: Vec::new(),
+            css_styles: Vec::new(),
+            description: Vec::new(),
+            dir: None,
+            id: aside_id,
+            is_group: group,
+            label: Some(note.text.clone()),
+            note_for: None,
+            parent_id: None,
+            position: note.position.clone(),
+            shape: Some(shape),
+            r#type: Some(if group { "group" } else { "node" }),
+        };
         let mut note_id = String::from(id);
         note_id.push_str("----note-");
         push_u32(&mut note_id, self.next_counter());
@@ -349,11 +327,7 @@ impl Builder<'_> {
         self.insert(node, false);
 
         let left = note.position.as_deref() == Some("left of");
-        let (from, to) = if left {
-            (note_node_id, id.to_owned())
-        } else {
-            (id.to_owned(), note_node_id)
-        };
+        let (from, to) = if left { (note_node_id, id.to_owned()) } else { (id.to_owned(), note_node_id) };
         let mut edge_id = from.clone();
         edge_id.push('-');
         edge_id.push_str(&to);
@@ -387,12 +361,7 @@ pub(crate) fn build_state_graph(root_doc: &[Stmt], db: &StateDb) -> Result<State
         slots: BTreeMap::new(),
     };
 
-    let mut stack = vec![Frame {
-        alt: true,
-        at: 0,
-        doc: root_doc,
-        item: None,
-    }];
+    let mut stack = vec![Frame { alt: true, at: 0, doc: root_doc, item: None }];
     while let Some(frame) = stack.last_mut() {
         let Some(item) = frame.doc.get(frame.at) else {
             stack.pop();
@@ -404,12 +373,7 @@ pub(crate) fn build_state_graph(root_doc: &[Stmt], db: &StateDb) -> Result<State
             Stmt::State(state) => {
                 builder.visit(parent, state, alt);
                 if let Some(doc) = &state.doc {
-                    stack.push(Frame {
-                        alt: !alt,
-                        at: 0,
-                        doc: &doc.0,
-                        item: Some(state),
-                    });
+                    stack.push(Frame { alt: !alt, at: 0, doc: &doc.0, item: Some(state) });
                 }
             }
             Stmt::Relation(relation) => {
@@ -451,22 +415,13 @@ pub(crate) fn build_state_graph(root_doc: &[Stmt], db: &StateDb) -> Result<State
         node.css_compiled_styles = compiled_styles(db, &node.css_classes);
     }
 
-    if let Some(node) = builder
-        .nodes
-        .iter()
-        .find(|node| node.is_group && !node.description.is_empty())
-    {
-        let mut message = String::from(
-            "Group nodes can only have label. Remove the additional description for node [",
-        );
+    if let Some(node) = builder.nodes.iter().find(|node| node.is_group && !node.description.is_empty()) {
+        let mut message = String::from("Group nodes can only have label. Remove the additional description for node [");
         message.push_str(&node.id);
         message.push(']');
         let mut error = Error::new(Code::Semantic, message);
         error.r#type = Some("state");
         return Err(error);
     }
-    Ok(StateGraph {
-        edges: builder.edges,
-        nodes: builder.nodes,
-    })
+    Ok(StateGraph { edges: builder.edges, nodes: builder.nodes })
 }

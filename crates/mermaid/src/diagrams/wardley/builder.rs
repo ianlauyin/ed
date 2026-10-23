@@ -56,10 +56,7 @@ pub(crate) struct WardleyNode {
 /// What [`WardleyBuilder::add_node`] sets. `None` in the doubled options keeps the existing
 /// value, as a key missing from Pele's object does.
 #[derive(Clone, Debug)]
-#[expect(
-    clippy::option_option,
-    reason = "Pele tells a missing key from an `undefined` one"
-)]
+#[expect(clippy::option_option, reason = "Pele tells a missing key from an `undefined` one")]
 pub(crate) struct NodeInput {
     /// The class name.
     pub(crate) class_name: &'static str,
@@ -245,24 +242,19 @@ impl WardleyBuilder {
             *slot = trend;
             return;
         }
-        self.trend_ids
-            .insert(trend.node_id.clone(), self.result.trends.len());
+        self.trend_ids.insert(trend.node_id.clone(), self.result.trends.len());
         self.result.trends.push(trend);
     }
 
     /// Starts an empty pipeline owned by a node, replacing an earlier one in its place.
     pub(crate) fn start_pipeline(&mut self, node_id: &str) {
-        let pipeline = WardleyPipeline {
-            component_ids: Vec::new(),
-            node_id: node_id.to_owned(),
-        };
+        let pipeline = WardleyPipeline { component_ids: Vec::new(), node_id: node_id.to_owned() };
         if let Some(&at) = self.pipeline_ids.get(node_id)
             && let Some(slot) = self.result.pipelines.get_mut(at)
         {
             *slot = pipeline;
         } else {
-            self.pipeline_ids
-                .insert(node_id.to_owned(), self.result.pipelines.len());
+            self.pipeline_ids.insert(node_id.to_owned(), self.result.pipelines.len());
             self.result.pipelines.push(pipeline);
         }
         if let Some(node) = self.node_mut(node_id) {
@@ -336,9 +328,7 @@ impl WardleyBuilder {
         let labels = self.labels.get_or_insert_with(|| {
             let mut labels = BTreeMap::new();
             for node in nodes {
-                labels
-                    .entry(node.label.clone())
-                    .or_insert_with(|| node.id.clone());
+                labels.entry(node.label.clone()).or_insert_with(|| node.id.clone());
             }
             labels
         });

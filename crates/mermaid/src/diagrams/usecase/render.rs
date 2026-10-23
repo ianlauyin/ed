@@ -2,21 +2,49 @@
 //! and system boundaries, joined by relationship edges. Port of Pele's
 //! `src/diagrams/usecase/render.ts`.
 
-use super::graph::{GraphEdge, GraphNode, NodeShape, build_usecase_graph};
-use super::types::{ActorType, UsecaseModel};
+use super::graph::GraphEdge;
+use super::graph::GraphNode;
+use super::graph::NodeShape;
+use super::graph::build_usecase_graph;
+use super::types::ActorType;
+use super::types::UsecaseModel;
 use crate::diagrams::Rendered;
-use crate::diagrams::common::fit_width::{runs_across, turn_to_fit};
-use crate::layout::compound::{CEdge, CNode, Dir, cnode, compound_layout, direction, shift_layout};
+use crate::diagrams::common::fit_width::runs_across;
+use crate::diagrams::common::fit_width::turn_to_fit;
+use crate::layout::compound::CEdge;
+use crate::layout::compound::CNode;
+use crate::layout::compound::Dir;
+use crate::layout::compound::cnode;
+use crate::layout::compound::compound_layout;
+use crate::layout::compound::direction;
+use crate::layout::compound::shift_layout;
 use crate::layout::layered::LayeredOptions;
-use crate::svg::builder::{esc, esc_text, js_round, label_svg, push_num};
-use crate::svg::cluster::{Crossings, mark_crossings};
-use crate::svg::edges::{EdgePath, edge_label_svg, marker, marker_trim, route_path};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
-use crate::svg::theme::{ROUNDED, ResolvedStyle, class_names, resolve_style};
-use crate::text::label::{Label, layout_label};
-use crate::text::measure::{BOLD, ITALIC};
+use crate::svg::builder::esc;
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::cluster::Crossings;
+use crate::svg::cluster::mark_crossings;
+use crate::svg::edges::EdgePath;
+use crate::svg::edges::edge_label_svg;
+use crate::svg::edges::marker;
+use crate::svg::edges::marker_trim;
+use crate::svg::edges::route_path;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
+use crate::svg::theme::ROUNDED;
+use crate::svg::theme::ResolvedStyle;
+use crate::svg::theme::class_names;
+use crate::svg::theme::resolve_style;
+use crate::text::label::Label;
+use crate::text::label::layout_label;
+use crate::text::measure::BOLD;
+use crate::text::measure::ITALIC;
 use crate::util::chars::is_space;
-use crate::yaml::{Value, push_number};
+use crate::yaml::Value;
+use crate::yaml::push_number;
 
 /// Room between nodes in a rank.
 const NODE_SEP: f64 = 32.0;
@@ -123,9 +151,7 @@ fn literal(text: &str) -> String {
 /// Lays out a label, plain text shown as written.
 fn text(raw: Option<&str>, markdown: bool, size: f64, wrap: f64, base: u8) -> Label {
     match raw {
-        Some(raw) if !raw.is_empty() && !markdown => {
-            layout_label(Some(&literal(raw)), false, size, wrap, base, None)
-        }
+        Some(raw) if !raw.is_empty() && !markdown => layout_label(Some(&literal(raw)), false, size, wrap, base, None),
         _ => layout_label(raw, markdown, size, wrap, base, None),
     }
 }
@@ -158,29 +184,17 @@ fn anchor(view: &View, c: &CNode, side: usize, along: f64) -> (f64, f64) {
         let span = (if upright { view.h } else { view.w }) / 2.0;
         reach *= f64::max(1.0 - (along / span).powi(2), 0.0).sqrt();
     }
-    if upright {
-        (c.x + sign * reach, c.y + middle + along)
-    } else {
-        (c.x + along, c.y + sign * reach)
-    }
+    if upright { (c.x + sign * reach, c.y + middle + along) } else { (c.x + along, c.y + sign * reach) }
 }
 
 /// How much of a side edges may spread over.
 fn side_length(view: &View, side: usize) -> f64 {
     let upright = side == 1 || side == 3;
     if view.kind == Kind::Actor {
-        return if upright {
-            FIGURE_H * 0.5
-        } else {
-            FIGURE_W * 0.6
-        };
+        return if upright { FIGURE_H * 0.5 } else { FIGURE_W * 0.6 };
     }
     let length = if upright { view.h } else { view.w };
-    if view.kind == Kind::Ellipse {
-        length * 0.6
-    } else {
-        length - 16.0
-    }
+    if view.kind == Kind::Ellipse { length * 0.6 } else { length - 16.0 }
 }
 
 /// One end of an edge on a side of a node.
@@ -223,11 +237,7 @@ fn attach_ends(cedges: &mut [CEdge], cnodes: &[CNode], views: &[View]) {
                 continue;
             };
             let key = index * 4 + side;
-            let end = End {
-                at,
-                edge: e,
-                toward: point(next + (side & 1)),
-            };
+            let end = End { at, edge: e, toward: point(next + (side & 1)) };
             match sides.iter_mut().find(|(own, _)| *own == key) {
                 Some((_, list)) => list.push(end),
                 None => sides.push((key, vec![end])),
@@ -241,16 +251,8 @@ fn attach_ends(cedges: &mut [CEdge], cnodes: &[CNode], views: &[View]) {
             continue;
         };
         let count = ends.len() as f64;
-        let step = if ends.len() > 1 {
-            PORT_GAP.min(side_length(view, side) / (count - 1.0))
-        } else {
-            0.0
-        };
-        ends.sort_by(|a, b| {
-            (a.toward - b.toward)
-                .partial_cmp(&0.0)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        let step = if ends.len() > 1 { PORT_GAP.min(side_length(view, side) / (count - 1.0)) } else { 0.0 };
+        ends.sort_by(|a, b| (a.toward - b.toward).partial_cmp(&0.0).unwrap_or(std::cmp::Ordering::Equal));
         for (i, end) in ends.iter().enumerate() {
             let (x, y) = anchor(view, c, side, (i as f64 - (count - 1.0) / 2.0) * step);
             if let Some(route) = cedges.get_mut(end.edge).map(|edge| &mut edge.route) {
@@ -291,20 +293,12 @@ fn extension(x: f64, y: f64, dx: f64, dy: f64, color: &str) -> String {
 
 /// How far a marker of `type` trims the end of its edge.
 fn trim(r#type: &str) -> f64 {
-    if r#type == "extension" {
-        EXTENSION
-    } else {
-        marker_trim(r#type)
-    }
+    if r#type == "extension" { EXTENSION } else { marker_trim(r#type) }
 }
 
 /// Draws a marker of `type` with its tip at (x, y).
 fn mark(r#type: &str, x: f64, y: f64, dx: f64, dy: f64, color: &str) -> String {
-    if r#type == "extension" {
-        extension(x, y, dx, dy, color)
-    } else {
-        marker(r#type, x, y, dx, dy, color)
-    }
+    if r#type == "extension" { extension(x, y, dx, dy, color) } else { marker(r#type, x, y, dx, dy, color) }
 }
 
 /// An actor's figure, centered on the origin.
@@ -389,10 +383,7 @@ fn edge_classes(classes: &str) -> &str {
     let Some(rest) = classes.strip_prefix("default relationship relationship-") else {
         return classes;
     };
-    let kind = rest
-        .char_indices()
-        .find(|(_, c)| is_space(u32::from(*c)))
-        .map_or(rest.len(), |(at, _)| at);
+    let kind = rest.char_indices().find(|(_, c)| is_space(u32::from(*c))).map_or(rest.len(), |(at, _)| at);
     if kind == 0 {
         return classes;
     }
@@ -415,13 +406,7 @@ fn measure(node: &GraphNode<'_>, size: f64, small: f64, tiny: f64) -> View {
     let base = (if style.bold { BOLD } else { 0 }) | (if style.italic { ITALIC } else { 0 });
     let font_size = style.font_size.unwrap_or(size);
     let markdown = node.markdown;
-    let stereotype = text(
-        node.stereotype.map(guillemets).as_deref(),
-        false,
-        tiny,
-        200.0,
-        base,
-    );
+    let stereotype = text(node.stereotype.map(guillemets).as_deref(), false, tiny, 200.0, base);
     let mut view = View {
         head_h: 0.0,
         h: 0.0,
@@ -456,11 +441,7 @@ fn measure(node: &GraphNode<'_>, size: f64, small: f64, tiny: f64) -> View {
         }
         view.head_h = view.label.height.max(js_round(font_size * 1.5)) + ROW_PAD;
         view.w = (view.label.width + 2.0 * CELL_PAD)
-            .max(if view.rows.is_empty() {
-                0.0
-            } else {
-                view.key_w + value_w + 2.0 * CELL_PAD
-            })
+            .max(if view.rows.is_empty() { 0.0 } else { view.key_w + value_w + 2.0 * CELL_PAD })
             .max(72.0);
         view.h += view.head_h;
         return view;
@@ -473,13 +454,7 @@ fn measure(node: &GraphNode<'_>, size: f64, small: f64, tiny: f64) -> View {
         return view;
     }
     let note = node.shape == NodeShape::Note;
-    view.label = text(
-        Some(node.label),
-        markdown,
-        if note { small } else { font_size },
-        180.0,
-        base,
-    );
+    view.label = text(Some(node.label), markdown, if note { small } else { font_size }, 180.0, base);
     let tw = view.label.width.max(view.stereotype.width);
     let th = view.label.height + view.stereotype.height;
     match node.shape {
@@ -510,11 +485,7 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
     let small = js_round(size * 0.875);
     let tiny = js_round(size * 0.8125);
     let pad = options.padding.unwrap_or(8.0);
-    let root_dir = if turned {
-        Dir::Tb
-    } else {
-        direction(Some(model.direction))
-    };
+    let root_dir = if turned { Dir::Tb } else { direction(Some(model.direction)) };
     let sideways = matches!(root_dir, Dir::Lr | Dir::Rl);
 
     // Ids by node, the last node of an id winning, as a `Map` set in order keeps it.
@@ -553,11 +524,8 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
         cnodes.push(c);
     }
     for (node, c) in graph.nodes.iter().zip(cnodes.iter_mut()) {
-        c.parent = node
-            .parent_id
-            .and_then(|parent| index.get(parent))
-            .and_then(|&at| i32::try_from(at).ok())
-            .unwrap_or(-1);
+        c.parent =
+            node.parent_id.and_then(|parent| index.get(parent)).and_then(|&at| i32::try_from(at).ok()).unwrap_or(-1);
     }
 
     let mut cedges: Vec<CEdge> = Vec::new();
@@ -569,9 +537,7 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
         };
         let semantic = matches!(edge.relationship_type, "include" | "extend");
         let label = match edge.label {
-            Some((raw, markdown)) if semantic => {
-                text(Some(&guillemets(raw)), markdown, small, 200.0, 0)
-            }
+            Some((raw, markdown)) if semantic => text(Some(&guillemets(raw)), markdown, small, 200.0, 0),
             Some((raw, markdown)) => text(Some(raw), markdown, small, 200.0, 0),
             None => text(None, false, small, 200.0, 0),
         };
@@ -580,36 +546,16 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
             // it.
             if let Some(c) = cnodes.get_mut(src) {
                 if sideways {
-                    c.h += 2.0
-                        * (LOOP
-                            + if label.height > 0.0 {
-                                label.height + 8.0
-                            } else {
-                                0.0
-                            });
+                    c.h += 2.0 * (LOOP + if label.height > 0.0 { label.height + 8.0 } else { 0.0 });
                 } else {
-                    c.w += 2.0
-                        * (LOOP
-                            + if label.width > 0.0 {
-                                label.width + 12.0
-                            } else {
-                                0.0
-                            });
+                    c.w += 2.0 * (LOOP + if label.width > 0.0 { label.width + 12.0 } else { 0.0 });
                 }
             }
         }
         cedges.push(CEdge {
             dst,
-            label_h: if label.height > 0.0 {
-                label.height + 4.0
-            } else {
-                0.0
-            },
-            label_w: if label.width > 0.0 {
-                label.width + 12.0
-            } else {
-                0.0
-            },
+            label_h: if label.height > 0.0 { label.height + 4.0 } else { 0.0 },
+            label_w: if label.width > 0.0 { label.width + 12.0 } else { 0.0 },
             label_x: 0.0,
             label_y: 0.0,
             minlen: edge.minlen,
@@ -637,11 +583,7 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
     );
 
     let title = layout_label(model.title.as_deref(), false, size, 4000.0, BOLD, None);
-    let title_height = if title.height > 0.0 {
-        title.height + 12.0
-    } else {
-        0.0
-    };
+    let title_height = if title.height > 0.0 { title.height + 12.0 } else { 0.0 };
     let inner = layout.width.max(title.width);
     let ox = pad + (inner - layout.width) / 2.0;
     let oy = pad + title_height;
@@ -669,11 +611,9 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
         if view.kind == Kind::Boundary {
             let x = c.x - c.w / 2.0;
             let y = c.y - c.h / 2.0;
-            let mut boxed =
-                String::from(" fill=\"var(--_a)\" fill-opacity=\"0.5\" stroke=\"var(--_b)\"");
+            let mut boxed = String::from(" fill=\"var(--_a)\" fill-opacity=\"0.5\" stroke=\"var(--_b)\"");
             boxed.push_str(shape);
-            let mut title_attrs =
-                String::from(" class=\"ondine-cluster-label\" fill=\"var(--_m)\"");
+            let mut title_attrs = String::from(" class=\"ondine-cluster-label\" fill=\"var(--_m)\"");
             title_attrs.push_str(text_attrs);
             let mut body = String::new();
             if node.package {
@@ -700,13 +640,7 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
                 body.push('"');
                 body.push_str(&boxed);
                 body.push_str("/>");
-                body.push_str(&label_svg(
-                    &view.label,
-                    x + tab_w / 2.0,
-                    y + tab_h / 2.0,
-                    &title_attrs,
-                    None,
-                ));
+                body.push_str(&label_svg(&view.label, x + tab_w / 2.0, y + tab_h / 2.0, &title_attrs, None));
             } else {
                 body.push_str("<rect x=\"");
                 push_num(&mut body, x);
@@ -751,22 +685,10 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
                 body.push_str(")\">");
                 body.push_str(&figure(view, node));
                 body.push_str("</g>");
-                body.push_str(&label_svg(
-                    &view.stereotype,
-                    0.0,
-                    stereotype_y,
-                    &stereotype_attrs,
-                    None,
-                ));
+                body.push_str(&label_svg(&view.stereotype, 0.0, stereotype_y, &stereotype_attrs, None));
                 let mut attrs = String::from(" class=\"ondine-label\"");
                 attrs.push_str(text_attrs);
-                body.push_str(&label_svg(
-                    &view.label,
-                    0.0,
-                    h / 2.0 - view.label.height / 2.0,
-                    &attrs,
-                    None,
-                ));
+                body.push_str(&label_svg(&view.label, 0.0, h / 2.0 - view.label.height / 2.0, &attrs, None));
                 "ondine-actor"
             }
             Kind::Json => {
@@ -794,12 +716,7 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
                         " class=\"ondine-json-key\" fill=\"var(--_m)\"",
                         None,
                     ));
-                    cells.push_str(&left_label(
-                        value,
-                        x0 + view.key_w + CELL_PAD,
-                        y + row_h / 2.0,
-                        &value_attrs,
-                    ));
+                    cells.push_str(&left_label(value, x0 + view.key_w + CELL_PAD, y + row_h / 2.0, &value_attrs));
                     y += row_h;
                 }
                 body.push_str("<rect x=\"");
@@ -821,13 +738,7 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
                 body.push_str("/>");
                 let mut attrs = String::from(" class=\"ondine-label\" font-weight=\"var(--_hw)\"");
                 attrs.push_str(text_attrs);
-                body.push_str(&label_svg(
-                    &view.label,
-                    0.0,
-                    -h / 2.0 + view.head_h / 2.0,
-                    &attrs,
-                    None,
-                ));
+                body.push_str(&label_svg(&view.label, 0.0, -h / 2.0 + view.head_h / 2.0, &attrs, None));
                 body.push_str("<g font-size=\"");
                 push_number(&mut body, small);
                 body.push_str("\">");
@@ -875,9 +786,7 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
                     push_num(&mut body, b);
                     body.push('H');
                     push_num(&mut body, -r);
-                    body.push_str(
-                        "Z\" fill=\"var(--_a)\" stroke=\"var(--_b)\" stroke-linejoin=\"round\"",
-                    );
+                    body.push_str("Z\" fill=\"var(--_a)\" stroke=\"var(--_b)\" stroke-linejoin=\"round\"");
                     body.push_str(shape);
                     body.push_str("/><path d=\"M");
                     push_point(&mut body, r - FOLD, -b);
@@ -885,9 +794,7 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
                     push_num(&mut body, FOLD - b);
                     body.push('H');
                     push_num(&mut body, r);
-                    body.push_str(
-                        "\" fill=\"none\" stroke=\"var(--_b)\" stroke-linejoin=\"round\"",
-                    );
+                    body.push_str("\" fill=\"none\" stroke=\"var(--_b)\" stroke-linejoin=\"round\"");
                     body.push_str(&view.style.line);
                     body.push_str("/>");
                     "ondine-note"
@@ -907,13 +814,7 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
                     body.push_str("/>");
                     "ondine-usecase"
                 };
-                body.push_str(&label_svg(
-                    &view.stereotype,
-                    0.0,
-                    -view.label.height / 2.0,
-                    &stereotype_attrs,
-                    None,
-                ));
+                body.push_str(&label_svg(&view.stereotype, 0.0, -view.label.height / 2.0, &stereotype_attrs, None));
                 let mut attrs = String::from(" class=\"ondine-label\"");
                 if note {
                     attrs.push_str(" font-size=\"");
@@ -954,8 +855,7 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
             let (Some(c), Some(view)) = (cnodes.get(ce.src), views.get(ce.src)) else {
                 continue;
             };
-            let k = if let Some((_, seen)) = loop_seen.iter_mut().find(|(node, _)| *node == ce.src)
-            {
+            let k = if let Some((_, seen)) = loop_seen.iter_mut().find(|(node, _)| *node == ce.src) {
                 *seen += 1;
                 *seen - 1
             } else {
@@ -969,11 +869,7 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
             let (ax, ay) = anchor(view, c, side, -spread);
             let (bx, by) = anchor(view, c, side, spread);
             let hypot = reach.hypot(spread);
-            let len = if hypot == 0.0 || hypot.is_nan() {
-                1.0
-            } else {
-                hypot
-            };
+            let len = if hypot == 0.0 || hypot.is_nan() { 1.0 } else { hypot };
             let ux = if sideways { spread / len } else { reach / len };
             let uy = if sideways { reach / len } else { spread / len };
             let st = trim(start_type);
@@ -1022,14 +918,7 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
             if ce.route.len() < 6 {
                 continue;
             }
-            route_path(
-                &ce.route,
-                None,
-                trim(start_type),
-                trim(end_type),
-                None,
-                None,
-            )
+            route_path(&ce.route, None, trim(start_type), trim(end_type), None, None)
         };
         let color = style
             .as_ref()
@@ -1064,12 +953,8 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
             edges_out.push('"');
         }
         edges_out.push_str("/>");
-        edges_out.push_str(&mark(
-            start_type, path.sx, path.sy, path.sdx, path.sdy, &color,
-        ));
-        edges_out.push_str(&mark(
-            end_type, path.ex, path.ey, path.edx, path.edy, &color,
-        ));
+        edges_out.push_str(&mark(start_type, path.sx, path.sy, path.sdx, path.sdy, &color));
+        edges_out.push_str(&mark(end_type, path.ex, path.ey, path.edx, path.edy, &color));
         edges_out.push_str("</g>");
         if label.width > 0.0 {
             let semantic = matches!(edge.relationship_type, "include" | "extend");
@@ -1080,9 +965,7 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
             if let Some(style) = &style {
                 attrs.push_str(&style.text);
             }
-            labels_out.push_str(&edge_label_svg(
-                &edge.id, label, ce.label_x, ce.label_y, &attrs, None,
-            ));
+            labels_out.push_str(&edge_label_svg(&edge.id, label, ce.label_x, ce.label_y, &attrs, None));
         }
     }
 
@@ -1099,9 +982,7 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
         content.push_str("</g>");
     }
     if !edges_out.is_empty() {
-        content.push_str(
-            "<g class=\"ondine-edges\" fill=\"none\" stroke=\"var(--_l)\" stroke-linecap=\"round\">",
-        );
+        content.push_str("<g class=\"ondine-edges\" fill=\"none\" stroke=\"var(--_l)\" stroke-linecap=\"round\">");
         content.push_str(&edges_out);
         content.push_str("</g>");
     }
@@ -1116,19 +997,9 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
     content.push_str(&nodes_out);
     content.push_str("</g>");
 
-    let accessible = Accessible {
-        acc_descr: Some(&model.acc_descr),
-        acc_title: Some(&model.acc_title),
-    };
-    let svg = svg_document(
-        "usecase", width, height, size, options, accessible, &content,
-    );
-    Rendered {
-        height,
-        links: Vec::new(),
-        svg,
-        width,
-    }
+    let accessible = Accessible { acc_descr: Some(&model.acc_descr), acc_title: Some(&model.acc_title) };
+    let svg = svg_document("usecase", width, height, size, options, accessible, &content);
+    Rendered { height, links: Vec::new(), svg, width }
 }
 
 /// A boundary's title sits in the middle of its top edge. Where edges enter through that edge it
@@ -1142,11 +1013,7 @@ fn title_x(c: &CNode, width: f64, crossings: &Crossings) -> f64 {
     };
     let left = c.x - c.w / 2.0 + 6.0;
     let right = c.x + c.w / 2.0 - 6.0;
-    let mut cuts: Vec<f64> = xs
-        .iter()
-        .copied()
-        .filter(|&x| x > left && x < right)
-        .collect();
+    let mut cuts: Vec<f64> = xs.iter().copied().filter(|&x| x > left && x < right).collect();
     cuts.sort_by(|a, b| a.partial_cmp(b).unwrap_or(std::cmp::Ordering::Equal));
     cuts.push(right);
     let need = width / 2.0 + 6.0;

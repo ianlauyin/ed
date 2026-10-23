@@ -1,59 +1,120 @@
 mod builder;
 mod element;
-pub mod html;
+mod html;
 pub mod parser;
 mod path_range;
 mod rendered_text;
 mod selection;
 mod style;
 
-use base64::Engine as _;
-use gpui::HitboxBehavior;
-use language::LanguageName;
-
-use log::Level;
-use smallvec::SmallVec;
-use util::maybe;
-
 use std::borrow::Cow;
 use std::cell::Cell;
 use std::collections::BTreeMap;
+use std::hash::Hash as _;
+use std::hash::Hasher as _;
 use std::mem;
 use std::ops::Range;
 use std::path::Path;
 use std::rc::Rc;
 use std::sync::Arc;
 
-use collections::{HashMap, HashSet};
-use gpui::{
-    AnyElement, App, BorderStyle, Bounds, ClipboardItem, CursorStyle, DispatchPhase, Edges, Entity,
-    EntityId, FocusHandle, Focusable, FontStyle, FontWeight, GlobalElementId, Hitbox, Hsla, Image,
-    ImageFormat, ImageSource, InputHandler, KeyContext, Length, MouseButton, MouseDownEvent,
-    MouseEvent, MouseMoveEvent, MouseUpEvent, Pixels, Point, ScrollHandle, Stateful,
-    StrikethroughStyle, StyleRefinement, StyledImage, StyledText, Task, TextAlign, TextLayout,
-    TextRun, TextStyle, TextStyleRefinement, UTF16Selection, WrappedLineLayout, actions, canvas,
-    img, point, quad, size,
-};
-use language::{
-    Bias, CharClassifier, Language, LanguageRegistry, OffsetUtf16, ResolvedHighlights, Rope,
-};
-use parser::{
-    MarkdownEvent, MarkdownTag, MarkdownTagEnd, ParsedMetadataBlock, parse_markdown_with_options,
-};
-use pulldown_cmark::{Alignment, BlockQuoteKind};
+use base64::Engine as _;
+use builder::*;
+use collections::HashMap;
+use collections::HashSet;
+pub use element::AnyDiv;
+pub use element::AutoscrollBehavior;
+pub use element::MarkdownElement;
+pub use element::MarkdownListState;
+use element::*;
+use gpui::AnyElement;
+use gpui::App;
+use gpui::BorderStyle;
+use gpui::Bounds;
+use gpui::ClipboardItem;
+use gpui::CursorStyle;
+use gpui::DispatchPhase;
+use gpui::Edges;
+use gpui::Entity;
+use gpui::EntityId;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::FontStyle;
+use gpui::FontWeight;
+use gpui::GlobalElementId;
+use gpui::Hitbox;
+use gpui::HitboxBehavior;
+use gpui::Hsla;
+use gpui::Image;
+use gpui::ImageFormat;
+use gpui::ImageSource;
+use gpui::InputHandler;
+use gpui::KeyContext;
+use gpui::Length;
+use gpui::MouseButton;
+use gpui::MouseDownEvent;
+use gpui::MouseEvent;
+use gpui::MouseMoveEvent;
+use gpui::MouseUpEvent;
+use gpui::Pixels;
+use gpui::Point;
+use gpui::ScrollHandle;
+use gpui::Stateful;
+use gpui::StrikethroughStyle;
+use gpui::StyleRefinement;
+use gpui::StyledImage;
+use gpui::StyledText;
+use gpui::Task;
+use gpui::TextAlign;
+use gpui::TextLayout;
+use gpui::TextRun;
+use gpui::TextStyle;
+use gpui::TextStyleRefinement;
+use gpui::UTF16Selection;
+use gpui::WrappedLineLayout;
+use gpui::actions;
+use gpui::canvas;
+use gpui::img;
+use gpui::point;
+use gpui::quad;
+use gpui::size;
+use language::Bias;
+use language::CharClassifier;
+use language::Language;
+use language::LanguageName;
+use language::LanguageRegistry;
+use language::OffsetUtf16;
+use language::ResolvedHighlights;
+use language::Rope;
+use log::Level;
+use parser::MarkdownEvent;
+use parser::MarkdownTag;
+use parser::MarkdownTagEnd;
+use parser::ParsedMetadataBlock;
+use parser::parse_markdown_with_options;
+use pulldown_cmark::Alignment;
+use pulldown_cmark::BlockQuoteKind;
+use rendered_text::*;
+use smallvec::SmallVec;
+pub use style::BlockQuoteKindColors;
+pub use style::HeadingLevelStyles;
+pub use style::MarkdownStyle;
 use sum_tree::TreeMap;
 use theme::SyntaxTheme;
-use ui::utils::{ensure_highlight_contrast, merge_highlight_backgrounds};
-use ui::{Checkbox, CopyButton, ScrollAxes, Scrollbars, Tooltip, WithScrollbar, prelude::*};
+use ui::Checkbox;
+use ui::CopyButton;
+use ui::ScrollAxes;
+use ui::Scrollbars;
+use ui::Tooltip;
+use ui::WithScrollbar;
+use ui::prelude::*;
+use ui::utils::ensure_highlight_contrast;
+use ui::utils::merge_highlight_backgrounds;
 use util::ResultExt;
+use util::maybe;
 
-use crate::parser::{CodeBlockKind, CodeBlockMetadata};
-use builder::*;
-use element::*;
-pub use element::{AnyDiv, AutoscrollBehavior, MarkdownElement};
-pub use rendered_text::RenderedMarkdown;
-use rendered_text::*;
-pub use style::{BlockQuoteKindColors, HeadingLevelStyles, MarkdownStyle};
+use crate::parser::CodeBlockKind;
+use crate::parser::CodeBlockMetadata;
 
 pub struct Markdown {
     source: SharedString,
@@ -64,7 +125,7 @@ pub struct Markdown {
     pending_heading_scroll: Option<SharedString>,
     pending_autoscroll: Option<usize>,
     active_root_block: Option<usize>,
-    parsed_markdown: ParsedMarkdown,
+    parsed_markdown: Arc<ParsedMarkdown>,
     images_by_source_offset: HashMap<usize, Arc<Image>>,
     should_reparse: bool,
     pending_parse: Option<Task<()>>,
@@ -83,6 +144,9 @@ pub struct Markdown {
 #[derive(Clone, Copy, Default)]
 pub struct MarkdownOptions {
     pub parse_html: bool,
+    /// The source is an HTML document rather than markdown: it is converted
+    /// as one HTML block, with the same tags as `parse_html`.
+    pub html_document: bool,
     pub parse_heading_slugs: bool,
     pub render_metadata_blocks: bool,
 }
@@ -170,9 +234,7 @@ impl MarkdownEscaper {
     const TAB_SIZE: usize = 4;
 
     fn new() -> Self {
-        Self {
-            in_leading_whitespace: true,
-        }
+        Self { in_leading_whitespace: true }
     }
 
     fn next(&mut self, c: char) -> EscapeAction {
@@ -188,8 +250,7 @@ impl MarkdownEscaper {
             EscapeAction::PassThrough
         };
 
-        self.in_leading_whitespace =
-            c == '\n' || (self.in_leading_whitespace && (c == ' ' || c == '\t'));
+        self.in_leading_whitespace = c == '\n' || (self.in_leading_whitespace && (c == ' ' || c == '\t'));
         action
     }
 }
@@ -201,13 +262,7 @@ impl Markdown {
         fallback_code_block_language: Option<LanguageName>,
         cx: &mut Context<Self>,
     ) -> Self {
-        Self::new_with_options(
-            source,
-            language_registry,
-            fallback_code_block_language,
-            MarkdownOptions::default(),
-            cx,
-        )
+        Self::new_with_options(source, language_registry, fallback_code_block_language, MarkdownOptions::default(), cx)
     }
 
     pub fn new_with_options(
@@ -229,7 +284,7 @@ impl Markdown {
             active_root_block: None,
             should_reparse: false,
             images_by_source_offset: Default::default(),
-            parsed_markdown: ParsedMarkdown::default(),
+            parsed_markdown: Arc::default(),
             pending_parse: None,
             focus_handle,
             language_registry,
@@ -247,27 +302,11 @@ impl Markdown {
     }
 
     fn code_block_scroll_handle(&mut self, id: usize) -> ScrollHandle {
-        self.code_block_scroll_handles
-            .entry(id)
-            .or_insert_with(ScrollHandle::new)
-            .clone()
-    }
-
-    fn retain_code_block_scroll_handles(&mut self, ids: &HashSet<usize>) {
-        self.code_block_scroll_handles
-            .retain(|id, _| ids.contains(id));
-    }
-
-    fn clear_code_block_scroll_handles(&mut self) {
-        self.code_block_scroll_handles.clear();
+        self.code_block_scroll_handles.entry(id).or_insert_with(ScrollHandle::new).clone()
     }
 
     fn autoscroll_code_block(&self, source_index: usize, cursor_position: Point<Pixels>) {
-        let Some((_, scroll_handle)) = self
-            .code_block_scroll_handles
-            .range(..=source_index)
-            .next_back()
-        else {
+        let Some((_, scroll_handle)) = self.code_block_scroll_handles.range(..=source_index).next_back() else {
             return;
         };
 
@@ -331,11 +370,7 @@ impl Markdown {
         self.parse(cx);
     }
 
-    pub fn request_autoscroll_to_source_index(
-        &mut self,
-        source_index: usize,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn request_autoscroll_to_source_index(&mut self, source_index: usize, cx: &mut Context<Self>) {
         if self.pending_parse.is_some() {
             self.pending_autoscroll = Some(source_index);
         } else {
@@ -345,25 +380,23 @@ impl Markdown {
     }
 
     fn footnote_definition_content_start(&self, label: &SharedString) -> Option<usize> {
-        self.parsed_markdown
-            .footnote_definitions
-            .get(label)
-            .copied()
+        self.parsed_markdown.footnote_definitions.get(label).copied()
     }
 
-    pub fn set_active_root_for_source_index(
-        &mut self,
-        source_index: Option<usize>,
-        cx: &mut Context<Self>,
-    ) {
-        let active_root_block =
-            source_index.and_then(|index| self.parsed_markdown.root_block_for_source_index(index));
+    pub fn set_active_root_for_source_index(&mut self, source_index: Option<usize>, cx: &mut Context<Self>) {
+        let active_root_block = source_index.and_then(|index| self.parsed_markdown.root_block_for_source_index(index));
         if self.active_root_block == active_root_block {
             return;
         }
 
         self.active_root_block = active_root_block;
         cx.notify();
+    }
+
+    /// Sets whether the source is an HTML document; takes effect on the next
+    /// [`Self::reset`] or [`Self::replace`].
+    pub fn set_html_document(&mut self, html_document: bool) {
+        self.options.html_document = html_document;
     }
 
     pub fn reset(&mut self, source: SharedString, cx: &mut Context<Self>) {
@@ -430,13 +463,10 @@ impl Markdown {
         cx: &mut Context<Self>,
     ) {
         debug_assert!(
-            highlights
-                .windows(2)
-                .all(|ranges| (ranges[0].start, ranges[0].end) <= (ranges[1].start, ranges[1].end))
+            highlights.windows(2).all(|ranges| (ranges[0].start, ranges[0].end) <= (ranges[1].start, ranges[1].end))
         );
         self.search_highlights = highlights.into();
-        self.active_search_highlight =
-            active.filter(|active| *active < self.search_highlights.len());
+        self.active_search_highlight = active.filter(|active| *active < self.search_highlights.len());
         cx.notify();
     }
 
@@ -464,11 +494,20 @@ impl Markdown {
         self.active_search_highlight
     }
 
-    fn copy(&self, text: &RenderedText, _: &mut Window, cx: &mut Context<Self>) {
+    /// The text shown for `range`: taken from `rendered_text` when it covers
+    /// the whole document, otherwise derived from the parse.
+    fn text_for_range(&self, range: Range<usize>, rendered_text: Option<&RenderedText>) -> String {
+        match rendered_text {
+            Some(rendered_text) => rendered_text.text_for_range(range),
+            None => self.parsed_markdown.text_for_range(range),
+        }
+    }
+
+    fn copy(&self, rendered_text: Option<&RenderedText>, _: &mut Window, cx: &mut Context<Self>) {
         if self.selection.end <= self.selection.start {
             return;
         }
-        let text = text.text_for_range(self.selection.start..self.selection.end);
+        let text = self.text_for_range(self.selection.start..self.selection.end, rendered_text);
         cx.write_to_clipboard(ClipboardItem::new_string(text));
     }
 
@@ -480,27 +519,16 @@ impl Markdown {
         if self.selection.end <= self.selection.start {
             return;
         }
-        let text = self
-            .parsed_markdown
-            .rebalanced_markdown_for_selection(self.selection.start..self.selection.end);
+        let text = self.parsed_markdown.rebalanced_markdown_for_selection(self.selection.start..self.selection.end);
         cx.write_to_clipboard(ClipboardItem::new_string(text));
     }
 
-    fn capture_for_context_menu(
-        &mut self,
-        link: Option<SharedString>,
-        rendered_text: Option<&RenderedText>,
-    ) {
+    fn capture_for_context_menu(&mut self, link: Option<SharedString>, rendered_text: Option<&RenderedText>) {
         let range = self.selection.start..self.selection.end;
         if range.end > range.start {
-            self.context_menu_selected_markdown = Some(SharedString::new(
-                self.parsed_markdown
-                    .rebalanced_markdown_for_selection(range.clone()),
-            ));
-            self.context_menu_selected_text = rendered_text
-                .map(|text| text.text_for_range(range))
-                .map(SharedString::new)
-                .or_else(|| self.context_menu_selected_markdown.clone());
+            self.context_menu_selected_markdown =
+                Some(SharedString::new(self.parsed_markdown.rebalanced_markdown_for_selection(range.clone())));
+            self.context_menu_selected_text = Some(SharedString::new(self.text_for_range(range, rendered_text)));
         } else {
             self.context_menu_selected_markdown = None;
             self.context_menu_selected_text = None;
@@ -534,10 +562,7 @@ impl Markdown {
             self.pending_parse.take();
             self.pending_heading_scroll = None;
             self.pending_autoscroll = None;
-            self.parsed_markdown = ParsedMarkdown {
-                source: self.source.clone(),
-                ..Default::default()
-            };
+            self.parsed_markdown = Arc::new(ParsedMarkdown { source: self.source.clone(), ..Default::default() });
             self.active_root_block = None;
             self.images_by_source_offset.clear();
             cx.notify();
@@ -555,24 +580,16 @@ impl Markdown {
 
     fn start_background_parse(&self, cx: &Context<Self>) -> Task<()> {
         let source = self.source.clone();
-        let should_parse_html = self.options.parse_html;
-        let should_parse_heading_slugs = self.options.parse_heading_slugs;
-        let should_parse_metadata_blocks = self.options.render_metadata_blocks;
+        let options = self.options;
         let language_registry = self.language_registry.clone();
         let fallback = self.fallback_code_block_language.clone();
 
         let parsed = cx.background_spawn(async move {
-            let parsed = parse_markdown_with_options(
-                &source,
-                should_parse_html,
-                should_parse_heading_slugs,
-                should_parse_metadata_blocks,
-            );
+            let parsed = parse_markdown_with_options(&source, options);
             let events = parsed.events;
             let language_names = parsed.language_names;
             let paths = parsed.language_paths;
             let root_block_starts = parsed.root_block_starts;
-            let html_blocks = parsed.html_blocks;
             let metadata_blocks = parsed.metadata_blocks;
             let heading_slugs = parsed.heading_slugs;
             let footnote_definitions = parsed.footnote_definitions;
@@ -596,17 +613,13 @@ impl Markdown {
                 }
 
                 for path in paths {
-                    if let Ok(language) = registry
-                        .load_language_for_file_path(Path::new(path.as_ref()))
-                        .await
-                    {
+                    if let Ok(language) = registry.load_language_for_file_path(Path::new(path.as_ref())).await {
                         languages_by_path.insert(path, language);
                     }
                 }
 
                 if has_untagged_code_block && let Some(fallback) = &fallback {
-                    fallback_code_block_language =
-                        registry.language_for_name(fallback.as_ref()).await.ok();
+                    fallback_code_block_language = registry.language_for_name(fallback.as_ref()).await.ok();
                 }
             }
 
@@ -625,9 +638,7 @@ impl Markdown {
                     };
                     let is_base64 = encoding == "base64";
                     if is_base64
-                        && let Some(bytes) = base64::prelude::BASE64_STANDARD
-                            .decode(data)
-                            .log_with_level(Level::Debug)
+                        && let Some(bytes) = base64::prelude::BASE64_STANDARD.decode(data).log_with_level(Level::Debug)
                     {
                         let image = Arc::new(Image::from_bytes(format, bytes));
                         images_by_source_offset.insert(range.start, image);
@@ -635,13 +646,14 @@ impl Markdown {
                 }
             }
 
+            let blocks = render_blocks(&source, &events);
             let mut parsed = ParsedMarkdown {
                 source,
                 events: Arc::from(events),
+                blocks: Arc::from(blocks),
                 languages_by_name,
                 languages_by_path,
                 root_block_starts: Arc::from(root_block_starts),
-                html_blocks,
                 metadata_blocks,
                 heading_slugs,
                 footnote_definitions,
@@ -657,19 +669,21 @@ impl Markdown {
             let (parsed, images_by_source_offset) = parsed.await;
 
             this.update(cx, |this, cx| {
-                this.parsed_markdown = parsed;
+                let code_block_starts = parsed.code_blocks().map(|block| block.source_offset).collect::<HashSet<_>>();
+                this.code_block_scroll_handles.retain(|start, _| code_block_starts.contains(start));
+                this.parsed_markdown = Arc::new(parsed);
                 this.images_by_source_offset = images_by_source_offset;
-                if this.active_root_block.is_some_and(|block_index| {
-                    block_index >= this.parsed_markdown.root_block_starts.len()
-                }) {
+                if this
+                    .active_root_block
+                    .is_some_and(|block_index| block_index >= this.parsed_markdown.root_block_starts.len())
+                {
                     this.active_root_block = None;
                 }
                 this.pending_parse.take();
                 if this.should_reparse {
                     this.parse(cx);
                 } else if let Some(slug) = this.pending_heading_scroll.take()
-                    && let Some(source_index) =
-                        this.parsed_markdown.heading_slugs.get(&slug).copied()
+                    && let Some(source_index) = this.parsed_markdown.heading_slugs.get(&slug).copied()
                 {
                     this.pending_autoscroll = None;
                     this.autoscroll_request = Some(source_index);
@@ -749,11 +763,7 @@ impl Selection {
             }
             SelectMode::All => {
                 self.start = 0;
-                self.end = rendered_text
-                    .lines
-                    .last()
-                    .map(|line| line.source_end)
-                    .unwrap_or(0);
+                self.end = rendered_text.select_all_end();
                 self.reversed = false;
             }
         }
@@ -768,16 +778,70 @@ impl Selection {
 pub struct ParsedMarkdown {
     pub source: SharedString,
     pub events: Arc<[(Range<usize>, MarkdownEvent)]>,
+    pub(crate) blocks: Arc<[RenderBlock]>,
     pub languages_by_name: TreeMap<SharedString, Arc<Language>>,
     pub languages_by_path: TreeMap<Arc<str>, Arc<Language>>,
     pub root_block_starts: Arc<[usize]>,
-    pub(crate) html_blocks: BTreeMap<usize, html::html_parser::ParsedHtmlBlock>,
     pub(crate) metadata_blocks: BTreeMap<usize, ParsedMetadataBlock>,
     pub heading_slugs: HashMap<SharedString, usize>,
     pub footnote_definitions: HashMap<SharedString, usize>,
     pub(crate) link_definition_spans: Arc<[Range<usize>]>,
     pub(crate) fallback_code_block_language: Option<Arc<Language>>,
     pub(crate) code_block_highlights: Arc<CodeBlockHighlights>,
+}
+
+/// A top-level block of the parse: the unit that virtualized rendering lays
+/// out, measures and caches.
+#[derive(Clone, Debug, PartialEq)]
+pub(crate) struct RenderBlock {
+    pub(crate) events: Range<usize>,
+    pub(crate) source_range: Range<usize>,
+    /// Hash of everything the block's rendering depends on besides its source
+    /// offsets, so a reparse can tell which blocks changed.
+    pub(crate) hash: u64,
+    /// Whether a footnote definition precedes the block, so the footnote
+    /// separator was already drawn.
+    pub(crate) after_footnote_definition: bool,
+}
+
+/// Splits the events at each root block start. Events outside root blocks join
+/// the block before them (or the first one), so block `i` is root block `i`.
+fn render_blocks(source: &str, events: &[(Range<usize>, MarkdownEvent)]) -> Vec<RenderBlock> {
+    if events.is_empty() {
+        return Vec::new();
+    }
+    let mut starts = events
+        .iter()
+        .enumerate()
+        .filter(|(_, (_, event))| matches!(event, MarkdownEvent::RootStart))
+        .map(|(ix, _)| ix)
+        .collect::<Vec<_>>();
+    match starts.first_mut() {
+        Some(first) => *first = 0,
+        None => starts.push(0),
+    }
+
+    let mut after_footnote_definition = false;
+    starts
+        .iter()
+        .enumerate()
+        .map(|(ix, &start)| {
+            let end = starts.get(ix + 1).copied().unwrap_or(events.len());
+            let block_events = &events[start..end];
+            let source_start = block_events.iter().map(|(range, _)| range.start).min();
+            let source_end = block_events.iter().map(|(range, _)| range.end).max();
+            let source_range = source_start.unwrap_or(0)..source_end.unwrap_or(0);
+            let mut hasher = std::hash::DefaultHasher::new();
+            source[source_range.clone()].hash(&mut hasher);
+            after_footnote_definition.hash(&mut hasher);
+            let block =
+                RenderBlock { events: start..end, source_range, hash: hasher.finish(), after_footnote_definition };
+            after_footnote_definition |= block_events
+                .iter()
+                .any(|(_, event)| matches!(event, MarkdownEvent::Start(MarkdownTag::FootnoteDefinition(_))));
+            block
+        })
+        .collect()
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
@@ -819,9 +883,7 @@ impl ParsedMarkdown {
             // keeps the alt text from advancing the enclosing link's cursor, which would
             // otherwise carve it out of the link's non-rendered span.
             if let Some(image_range) = &active_image {
-                if matches!(event, MarkdownEvent::End(MarkdownTagEnd::Image))
-                    && event_range.end >= image_range.end
-                {
+                if matches!(event, MarkdownEvent::End(MarkdownTagEnd::Image)) && event_range.end >= image_range.end {
                     active_image = None;
                 }
                 continue;
@@ -876,14 +938,86 @@ impl ParsedMarkdown {
         ranges
     }
 
+    /// The text rendered for `range`, derived from the events alone (no
+    /// layout): text and code, with a newline between blocks. Images render as
+    /// images, so their alt text is left out.
+    pub(crate) fn text_for_range(&self, range: Range<usize>) -> String {
+        let mut text = String::new();
+        let mut pending_newline = false;
+        let mut image_depth = 0usize;
+        for (event_range, event) in self.events.iter() {
+            let intersects = event_range.start < range.end && event_range.end > range.start;
+            let fragment = match event {
+                MarkdownEvent::Start(MarkdownTag::Image { .. }) => {
+                    image_depth += 1;
+                    None
+                }
+                MarkdownEvent::End(MarkdownTagEnd::Image) => {
+                    image_depth = image_depth.saturating_sub(1);
+                    None
+                }
+                _ if image_depth > 0 => None,
+                MarkdownEvent::Text | MarkdownEvent::Code if intersects => {
+                    let start = event_range.start.max(range.start);
+                    let end = event_range.end.min(range.end);
+                    Some(Cow::Borrowed(&self.source[start..end]))
+                }
+                MarkdownEvent::SubstitutedText(substituted) | MarkdownEvent::SubstitutedCode(substituted)
+                    if intersects =>
+                {
+                    Some(Cow::Borrowed(substituted.as_str()))
+                }
+                MarkdownEvent::FootnoteReference(label) if intersects => Some(Cow::Owned(format!("[{label}]"))),
+                MarkdownEvent::SoftBreak if intersects => Some(Cow::Borrowed(" ")),
+                MarkdownEvent::Start(
+                    MarkdownTag::Emphasis
+                    | MarkdownTag::Strong
+                    | MarkdownTag::Strikethrough
+                    | MarkdownTag::Superscript
+                    | MarkdownTag::Subscript
+                    | MarkdownTag::Link { .. },
+                )
+                | MarkdownEvent::End(
+                    MarkdownTagEnd::Emphasis
+                    | MarkdownTagEnd::Strong
+                    | MarkdownTagEnd::Strikethrough
+                    | MarkdownTagEnd::Superscript
+                    | MarkdownTagEnd::Subscript
+                    | MarkdownTagEnd::Link,
+                ) => None,
+                MarkdownEvent::HardBreak | MarkdownEvent::Rule | MarkdownEvent::Start(_) | MarkdownEvent::End(_) => {
+                    pending_newline = true;
+                    None
+                }
+                _ => None,
+            };
+            if let Some(fragment) = fragment {
+                if pending_newline && !text.is_empty() && !text.ends_with('\n') {
+                    text.push('\n');
+                }
+                pending_newline = false;
+                text.push_str(&fragment);
+            }
+        }
+        text.truncate(text.trim_end_matches('\n').len());
+        text
+    }
+
+    /// The index into [`Self::blocks`] of the block containing `source_index`.
+    pub(crate) fn block_for_source_index(&self, source_index: usize) -> Option<usize> {
+        if self.blocks.is_empty() {
+            return None;
+        }
+        let partition = self.blocks.partition_point(|block| block.source_range.start <= source_index);
+        Some(partition.saturating_sub(1))
+    }
+
     pub fn root_block_for_source_index(&self, source_index: usize) -> Option<usize> {
         if self.root_block_starts.is_empty() {
             return None;
         }
 
-        let partition = self
-            .root_block_starts
-            .partition_point(|block_start| *block_start <= source_index);
+        let partition = self.root_block_starts.partition_point(|block_start| *block_start <= source_index);
 
         Some(partition.saturating_sub(1))
     }
@@ -895,20 +1029,13 @@ impl ParsedMarkdown {
     /// With an exception of a single inline code span, which is returned as plain
     /// text, since copying a command or identifier is the dominant use case there.
     pub fn rebalanced_markdown_for_selection(&self, selection: Range<usize>) -> String {
-        selection::rebalanced_markdown_for_selection(
-            &self.source,
-            &self.events,
-            &self.root_block_starts,
-            selection,
-        )
+        selection::rebalanced_markdown_for_selection(&self.source, &self.events, &self.root_block_starts, selection)
     }
 
     pub(crate) fn code_block_language(&self, kind: &CodeBlockKind) -> Option<Arc<Language>> {
         match kind {
             CodeBlockKind::FencedLang(name) => self.languages_by_name.get(name).cloned(),
-            CodeBlockKind::FencedSrc(path_range) => {
-                self.languages_by_path.get(&path_range.path).cloned()
-            }
+            CodeBlockKind::FencedSrc(path_range) => self.languages_by_path.get(&path_range.path).cloned(),
             CodeBlockKind::Fenced => self.fallback_code_block_language.clone(),
             CodeBlockKind::Indented => None,
         }
@@ -927,12 +1054,8 @@ fn compute_code_block_highlights(parsed: &ParsedMarkdown) -> CodeBlockHighlights
         let event_index = MarkdownEventIndex(event_index);
         match event {
             MarkdownEvent::Start(MarkdownTag::CodeBlock { kind, .. }) => {
-                pending_block = parsed
-                    .code_block_language(kind)
-                    .map(|language| PendingCodeBlock {
-                        language,
-                        texts: Vec::new(),
-                    });
+                pending_block =
+                    parsed.code_block_language(kind).map(|language| PendingCodeBlock { language, texts: Vec::new() });
             }
             MarkdownEvent::End(MarkdownTagEnd::CodeBlock) => {
                 if let Some(block) = pending_block.take() {
@@ -941,9 +1064,7 @@ fn compute_code_block_highlights(parsed: &ParsedMarkdown) -> CodeBlockHighlights
             }
             MarkdownEvent::Text => {
                 if let Some(block) = &mut pending_block {
-                    block
-                        .texts
-                        .push((event_index, &parsed.source[range.clone()]));
+                    block.texts.push((event_index, &parsed.source[range.clone()]));
                 }
             }
             MarkdownEvent::SubstitutedText(text) => {
@@ -971,9 +1092,7 @@ fn highlight_code_block(block: PendingCodeBlock, code_block_highlights: &mut Cod
         text_offsets.push(combined.len());
         combined.push_str(text);
     }
-    let resolved = block
-        .language
-        .highlight_text_resolved(combined.as_str(), 0..combined.len());
+    let resolved = block.language.highlight_text_resolved(combined.as_str(), 0..combined.len());
     if resolved.runs.is_empty() {
         return;
     }
@@ -996,13 +1115,62 @@ fn highlight_code_block(block: PendingCodeBlock, code_block_highlights: &mut Cod
             runs.next();
         }
         if !text_runs.is_empty() {
-            code_block_highlights.insert(
-                *event_index,
-                ResolvedHighlights {
-                    sources: resolved.sources.clone(),
-                    runs: text_runs.into(),
-                },
-            );
+            code_block_highlights
+                .insert(*event_index, ResolvedHighlights { sources: resolved.sources.clone(), runs: text_runs.into() });
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn parse(source: &str) -> ParsedMarkdown {
+        let parsed = parse_markdown_with_options(source, MarkdownOptions::default());
+        let blocks = render_blocks(source, &parsed.events);
+        ParsedMarkdown {
+            source: source.to_string().into(),
+            events: parsed.events.into(),
+            blocks: blocks.into(),
+            ..Default::default()
+        }
+    }
+
+    #[test]
+    fn blocks_follow_root_blocks() {
+        let parsed = parse("# Title\n\nSome *text*.\n\n- a\n- b\n");
+        assert_eq!(parsed.blocks.len(), 3);
+        let sources = parsed.blocks.iter().map(|block| &parsed.source[block.source_range.clone()]).collect::<Vec<_>>();
+        assert_eq!(sources, ["# Title\n", "Some *text*.\n", "- a\n- b\n"]);
+        assert_eq!(parsed.block_for_source_index(0), Some(0));
+        assert_eq!(parsed.block_for_source_index(12), Some(1));
+        assert_eq!(parsed.block_for_source_index(100), Some(2));
+    }
+
+    #[test]
+    fn unchanged_blocks_keep_their_hash() {
+        let before = parse("one\n\ntwo\n\nthree\n");
+        let after = parse("one\n\ntwo, edited\n\nthree\n");
+        let hashes = |parsed: &ParsedMarkdown| parsed.blocks.iter().map(|block| block.hash).collect::<Vec<_>>();
+        let (before, after) = (hashes(&before), hashes(&after));
+        assert_eq!(before[0], after[0]);
+        assert_ne!(before[1], after[1]);
+        assert_eq!(before[2], after[2]);
+    }
+
+    #[test]
+    fn footnote_separator_is_drawn_once() {
+        let parsed = parse("text[^a]\n\n[^a]: one\n\n[^b]: two\n");
+        let after_footnote = parsed.blocks.iter().map(|block| block.after_footnote_definition).collect::<Vec<_>>();
+        assert_eq!(after_footnote, [false, false, true]);
+    }
+
+    #[test]
+    fn text_for_range_joins_blocks() {
+        let source = "# Title\n\nSome **bold** `code`\nwrapped.\n\n![alt](img.png)\n\n- item\n";
+        let parsed = parse(source);
+        assert_eq!(parsed.text_for_range(0..source.len()), "Title\nSome bold code wrapped.\nitem");
+        let bold = source.find("bold").unwrap();
+        assert_eq!(parsed.text_for_range(bold + 1..bold + 3), "ol");
     }
 }

@@ -188,11 +188,7 @@ const CLOSE: &str = "\u{b6}\u{df}";
 /// Turns Mermaid's `#35;` and `#quot;` codes, as hidden by preprocessing, and HTML entities into
 /// characters. Unknown or invalid references stay as written.
 pub(crate) fn decode(text: &str) -> std::borrow::Cow<'_, str> {
-    let placeholders = if text.contains(CLOSE) {
-        decode_placeholders(text)
-    } else {
-        std::borrow::Cow::Borrowed(text)
-    };
+    let placeholders = if text.contains(CLOSE) { decode_placeholders(text) } else { std::borrow::Cow::Borrowed(text) };
 
     if !placeholders.contains('&') {
         return placeholders;
@@ -230,11 +226,7 @@ fn decode_placeholders(text: &str) -> std::borrow::Cow<'_, str> {
         if text[after..].starts_with('\u{df}') {
             let end = after + '\u{df}'.len_utf8();
             let numeric = text[body_start..].starts_with('\u{b0}');
-            let body = &text[if numeric {
-                body_start + '\u{b0}'.len_utf8()
-            } else {
-                body_start
-            }..stop];
+            let body = &text[if numeric { body_start + '\u{b0}'.len_utf8() } else { body_start }..stop];
 
             out.push_str(&text[last..start]);
             if numeric {
@@ -291,10 +283,7 @@ fn decode_html(text: &str) -> String {
             .map(|value| value.and_then(code_point))
         } else {
             let name = end;
-            while bytes
-                .get(end)
-                .is_some_and(|&b| b.is_ascii_alphanumeric() || b == b'_')
-            {
+            while bytes.get(end).is_some_and(|&b| b.is_ascii_alphanumeric() || b == b'_') {
                 end += 1;
             }
             (end > name).then(|| lookup(&text[name..end]))
@@ -322,9 +311,7 @@ fn parse_decimal(digits: &str) -> Option<u64> {
     if digits.is_empty() || !digits.bytes().all(|b| b.is_ascii_digit()) {
         return None;
     }
-    Some(digits.bytes().fold(0u64, |n, b| {
-        n.saturating_mul(10).saturating_add(u64::from(b - b'0'))
-    }))
+    Some(digits.bytes().fold(0u64, |n, b| n.saturating_mul(10).saturating_add(u64::from(b - b'0'))))
 }
 
 fn parse_hex(digits: &str) -> u64 {

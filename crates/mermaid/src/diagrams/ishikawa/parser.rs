@@ -1,7 +1,9 @@
 //! The Ishikawa parser. Port of Pele's `src/diagrams/ishikawa/parser.ts`.
 
 use super::db::IshikawaDb;
-use super::lexer::{T, Token, tokenize};
+use super::lexer::T;
+use super::lexer::Token;
+use super::lexer::tokenize;
 use crate::error::Error;
 use crate::text::label::trim;
 
@@ -18,13 +20,7 @@ const STOP: &str = "'SPACELINE', 'NL', 'EOF'";
 /// Returns a syntax error for input Mermaid rejects.
 pub(crate) fn parse_ishikawa(src: &str, db: &mut IshikawaDb) -> Result<(), Error> {
     let tokens = tokenize(src);
-    let token = |at: usize| {
-        tokens.get(at).copied().unwrap_or(Token {
-            end: src.len(),
-            start: src.len(),
-            t: T::End,
-        })
-    };
+    let token = |at: usize| tokens.get(at).copied().unwrap_or(Token { end: src.len(), start: src.len(), t: T::End });
     let fail = |at: usize, expected: &str| {
         let token = token(at);
         let mut detail = String::from("Expecting ");
@@ -65,14 +61,10 @@ pub(crate) fn parse_ishikawa(src: &str, db: &mut IshikawaDb) -> Result<(), Error
                 0
             } else {
                 let indent = token(text - 1);
-                src.get(indent.start..indent.end)
-                    .map_or(0, |run| run.encode_utf16().count())
+                src.get(indent.start..indent.end).map_or(0, |run| run.encode_utf16().count())
             };
             let body = token(text);
-            db.add_node(
-                level,
-                trim(src.get(body.start..body.end).unwrap_or("")).to_owned(),
-            );
+            db.add_node(level, trim(src.get(body.start..body.end).unwrap_or("")).to_owned());
         } else if t == T::Spaceline || t == T::Spacelist {
             i += 1;
             if !ends(token(i).t) {

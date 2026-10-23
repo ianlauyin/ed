@@ -6,11 +6,18 @@
 
 use std::collections::BTreeMap;
 
-use super::graph::{StateGraph, build_state_graph};
-use super::types::{
-    Description, Doc, StateClassDef, StateLink, StateNote, StateRelation, StateStmt, Stmt,
-};
-use crate::error::{Error, push_u32};
+use super::graph::StateGraph;
+use super::graph::build_state_graph;
+use super::types::Description;
+use super::types::Doc;
+use super::types::StateClassDef;
+use super::types::StateLink;
+use super::types::StateNote;
+use super::types::StateRelation;
+use super::types::StateStmt;
+use super::types::Stmt;
+use crate::error::Error;
+use crate::error::push_u32;
 use crate::text::label::trim;
 
 /// The parsed state diagram: Pele's `StateDb`.
@@ -115,17 +122,12 @@ impl StateDb {
 
     /// The class definition named `id`.
     pub(crate) fn class(&self, id: &str) -> Option<&StateClassDef> {
-        self.class_index
-            .get(id)
-            .and_then(|&at| self.classes.get(at))
+        self.class_index.get(id).and_then(|&at| self.classes.get(at))
     }
 
     /// The link on the state named `id`.
     pub(crate) fn link(&self, id: &str) -> Option<&StateLink> {
-        self.link_index
-            .get(id)
-            .and_then(|&at| self.links.get(at))
-            .map(|(_, link)| link)
+        self.link_index.get(id).and_then(|&at| self.links.get(at)).map(|(_, link)| link)
     }
 
     /// Only the root document's statements become states, relations, and classes here. The
@@ -163,9 +165,7 @@ impl StateDb {
                 Stmt::Style { id, style_class } => {
                     let styles: Vec<String> = style_class
                         .split(',')
-                        .map(|s| {
-                            trim(&s.chars().filter(|&c| c != ';').collect::<String>()).to_owned()
-                        })
+                        .map(|s| trim(&s.chars().filter(|&c| c != ';').collect::<String>()).to_owned())
                         .collect();
                     for at in self.named(trim(id)) {
                         if let Some(state) = self.states.get_mut(at) {
@@ -187,12 +187,8 @@ impl StateDb {
     fn translate(&mut self) {
         // Pele also regroups the root document, but into a copy it then drops. Dividers only lex
         // inside a body, so the root document never has one.
-        let mut stack = vec![Frame {
-            at: 0,
-            doc: std::mem::take(&mut self.root_doc),
-            parent_id: String::from("root"),
-            slot: None,
-        }];
+        let mut stack =
+            vec![Frame { at: 0, doc: std::mem::take(&mut self.root_doc), parent_id: String::from("root"), slot: None }];
         while let Some(top) = stack.last_mut() {
             let at = top.at;
             if at >= top.doc.len() {
@@ -218,21 +214,13 @@ impl StateDb {
                 }
                 Some(Stmt::State(state)) => {
                     name(state, &parent_id, true);
-                    state
-                        .doc
-                        .take()
-                        .map(|mut doc| (state.id.clone(), std::mem::take(&mut doc.0)))
+                    state.doc.take().map(|mut doc| (state.id.clone(), std::mem::take(&mut doc.0)))
                 }
                 _ => None,
             };
             if let Some((id, doc)) = body {
                 let doc = self.regions(doc);
-                stack.push(Frame {
-                    at: 0,
-                    doc,
-                    parent_id: id,
-                    slot: Some(at),
-                });
+                stack.push(Frame { at: 0, doc, parent_id: id, slot: Some(at) });
             }
         }
     }
@@ -244,9 +232,7 @@ impl StateDb {
         let mut current: Vec<Stmt> = Vec::new();
         for item in doc {
             match item {
-                Stmt::State(mut state)
-                    if state.r#type == Some("divider") && state.doc.is_none() =>
-                {
+                Stmt::State(mut state) if state.r#type == Some("divider") && state.doc.is_none() => {
                     state.doc = Some(Doc(std::mem::take(&mut current)));
                     regions.push(Stmt::State(state));
                 }
@@ -295,8 +281,7 @@ impl StateDb {
             }
             at
         } else {
-            self.state_index
-                .insert(trimmed.to_owned(), self.states.len());
+            self.state_index.insert(trimmed.to_owned(), self.states.len());
             self.state_docs.push(doc);
             self.states.push(StateStmt {
                 classes: Some(Vec::new()),
@@ -328,18 +313,14 @@ impl StateDb {
     }
 
     fn add_link(&mut self, state_id: &str, url: &str, tooltip: &str) {
-        let link = StateLink {
-            tooltip: tooltip.to_owned(),
-            url: url.to_owned(),
-        };
+        let link = StateLink { tooltip: tooltip.to_owned(), url: url.to_owned() };
         if let Some(&at) = self.link_index.get(state_id)
             && let Some(entry) = self.links.get_mut(at)
         {
             entry.1 = link;
             return;
         }
-        self.link_index
-            .insert(state_id.to_owned(), self.links.len());
+        self.link_index.insert(state_id.to_owned(), self.links.len());
         self.links.push((state_id.to_owned(), link));
     }
 
@@ -367,11 +348,7 @@ impl StateDb {
             Some(rest) => trim(rest).to_owned(),
             None => descr.to_owned(),
         };
-        if let Some(descriptions) = self
-            .states
-            .get_mut(at)
-            .and_then(|state| state.descriptions.as_mut())
-        {
+        if let Some(descriptions) = self.states.get_mut(at).and_then(|state| state.descriptions.as_mut()) {
             descriptions.push(text);
         }
     }
@@ -389,11 +366,7 @@ impl StateDb {
             at
         } else {
             self.class_index.insert(id.to_owned(), self.classes.len());
-            self.classes.push(StateClassDef {
-                id: id.to_owned(),
-                styles: Vec::new(),
-                text_styles: Vec::new(),
-            });
+            self.classes.push(StateClassDef { id: id.to_owned(), styles: Vec::new(), text_styles: Vec::new() });
             self.classes.len() - 1
         };
         if style_attributes.is_empty() {
@@ -405,11 +378,7 @@ impl StateDb {
         for attrib in style_attributes.split(',') {
             let fixed = trim(&replace_first(attrib, ";", "")).to_owned();
             if attrib.contains("color") {
-                found.text_styles.push(replace_first(
-                    &replace_first(&fixed, "fill", "bgFill"),
-                    "color",
-                    "fill",
-                ));
+                found.text_styles.push(replace_first(&replace_first(&fixed, "fill", "bgFill"), "color", "fill"));
             }
             found.styles.push(fixed);
         }
@@ -417,11 +386,7 @@ impl StateDb {
 
     fn set_css_class(&mut self, item_ids: &str, css_class_name: &str) {
         for at in self.named(item_ids) {
-            if let Some(classes) = self
-                .states
-                .get_mut(at)
-                .and_then(|state| state.classes.as_mut())
-            {
+            if let Some(classes) = self.states.get_mut(at).and_then(|state| state.classes.as_mut()) {
                 classes.push(css_class_name.to_owned());
             }
         }

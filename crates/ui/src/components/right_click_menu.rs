@@ -3,7 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use gpui::{
     Anchor, AnyElement, App, Bounds, DismissEvent, DispatchPhase, Element, ElementId, Entity,
     Focusable as _, GlobalElementId, Hitbox, HitboxBehavior, InteractiveElement, IntoElement,
-    LayoutId, ManagedView, MouseButton, MouseDownEvent, ParentElement, Pixels, Point, Window,
+    LayoutId, ManagedView, MouseButton, MouseDownEvent, ParentElement, Pixels, Point, Size, Window,
     anchored, deferred, div, px,
 };
 
@@ -13,9 +13,16 @@ pub struct RightClickMenu<M: ManagedView> {
     menu_builder: Option<Rc<dyn Fn(&mut Window, &mut App) -> Option<Entity<M>> + 'static>>,
     anchor: Option<Anchor>,
     attach: Option<Anchor>,
+    size_full: bool,
 }
 
 impl<M: ManagedView> RightClickMenu<M> {
+    /// Makes the handle fill its parent, e.g. to wrap a scroll container.
+    pub fn size_full(mut self) -> Self {
+        self.size_full = true;
+        self
+    }
+
     pub fn menu(mut self, f: impl Fn(&mut Window, &mut App) -> Entity<M> + 'static) -> Self {
         self.menu_builder = Some(Rc::new(move |window, cx| Some(f(window, cx))));
         self
@@ -79,6 +86,7 @@ pub fn right_click_menu<M: ManagedView>(id: impl Into<ElementId>) -> RightClickM
         menu_builder: None,
         anchor: None,
         attach: None,
+        size_full: false,
     }
 }
 
@@ -164,8 +172,12 @@ impl<M: ManagedView> Element for RightClickMenu<M> {
                     .as_mut()
                     .map(|child_element| child_element.request_layout(window, cx));
 
+                let mut style = gpui::Style::default();
+                if this.size_full {
+                    style.size = Size::full();
+                }
                 let layout_id = window.request_layout(
-                    gpui::Style::default(),
+                    style,
                     menu_layout_id.into_iter().chain(child_layout_id),
                     cx,
                 );

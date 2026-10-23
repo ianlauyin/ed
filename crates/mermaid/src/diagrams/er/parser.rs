@@ -2,9 +2,13 @@
 //! `src/diagrams/er/parser.ts`.
 
 use super::db::ErDb;
-use super::lexer::{Token, tokenize};
+use super::lexer::Token;
+use super::lexer::tokenize;
 use super::tokens::T;
-use super::types::{Cardinality, DocItem, ErAttribute, RelSpec};
+use super::types::Cardinality;
+use super::types::DocItem;
+use super::types::ErAttribute;
+use super::types::RelSpec;
 use crate::error::Error;
 use crate::text::label::trim;
 
@@ -22,10 +26,7 @@ fn cardinality(t: T) -> Option<Cardinality> {
 
 /// Whether a token can be an entity name.
 fn is_name(t: T) -> bool {
-    matches!(
-        t,
-        T::UnicodeText | T::EntityName | T::Num | T::DecimalNum | T::EntityOne
-    )
+    matches!(t, T::UnicodeText | T::EntityName | T::Num | T::DecimalNum | T::EntityOne)
 }
 
 /// Whether a token can be part of a style declaration.
@@ -85,10 +86,7 @@ impl<'s> Parser<'s, '_> {
     /// Fails with Jison's wording, naming `expected`.
     #[cold]
     fn fail(&self, expected: &str) -> Error {
-        let offset = self
-            .tokens
-            .get(self.i)
-            .map_or(self.src.len(), |token| token.start);
+        let offset = self.tokens.get(self.i).map_or(self.src.len(), |token| token.start);
         let t = self.kind();
         if t == T::Error {
             return Error::syntax("er", self.src, offset, "", true);
@@ -128,11 +126,7 @@ impl<'s> Parser<'s, '_> {
             return Err(self.fail(NAME));
         }
         let text = self.take();
-        Ok(if t == T::EntityName {
-            unquote(text)
-        } else {
-            text
-        })
+        Ok(if t == T::EntityName { unquote(text) } else { text })
     }
 
     /// Comma-separated names.
@@ -182,11 +176,7 @@ impl<'s> Parser<'s, '_> {
             return Err(self.fail(CARDS));
         };
         self.i += 1;
-        Ok(RelSpec {
-            card_a,
-            card_b,
-            identifying: r == T::Identifying,
-        })
+        Ok(RelSpec { card_a, card_b, identifying: r == T::Identifying })
     }
 
     /// A relationship's label, without its quotes.
@@ -196,11 +186,7 @@ impl<'s> Parser<'s, '_> {
             return Err(self.fail("'UNICODE_TEXT', 'ENTITY_NAME', 'WORD'"));
         }
         let text = self.take();
-        Ok(if t == T::UnicodeText {
-            text
-        } else {
-            unquote(text)
-        })
+        Ok(if t == T::UnicodeText { text } else { unquote(text) })
     }
 
     /// Whether the current token is the unnamed character `ch`.
@@ -232,17 +218,8 @@ impl<'s> Parser<'s, '_> {
                     keys.push(self.expect(T::AttributeKey)?.to_owned());
                 }
             }
-            let comment = if self.kind() == T::Comment {
-                unquote(self.take()).to_owned()
-            } else {
-                String::new()
-            };
-            list.push(ErAttribute {
-                comment,
-                keys,
-                name,
-                r#type,
-            });
+            let comment = if self.kind() == T::Comment { unquote(self.take()).to_owned() } else { String::new() };
+            list.push(ErAttribute { comment, keys, name, r#type });
             if self.kind() == T::BlockStop {
                 return Ok(list);
             }
@@ -336,20 +313,12 @@ impl<'s> Parser<'s, '_> {
 #[expect(clippy::too_many_lines, reason = "mirrors Pele's parseEr")]
 pub(crate) fn parse_er(src: &str, db: &mut ErDb) -> Result<(), Error> {
     let tokens = tokenize(src);
-    let mut p = Parser {
-        i: 0,
-        src,
-        tokens: &tokens,
-    };
+    let mut p = Parser { i: 0, src, tokens: &tokens };
 
     p.expect(T::ErDiagram)?;
     // Subgraphs nest on this stack rather than on the call stack. The diagram itself is the
     // first frame.
-    let mut frames: Vec<Frame> = vec![Frame {
-        id: String::new(),
-        list: Vec::new(),
-        title: String::new(),
-    }];
+    let mut frames: Vec<Frame> = vec![Frame { id: String::new(), list: Vec::new(), title: String::new() }];
 
     loop {
         let nested = frames.len() > 1;
@@ -394,11 +363,7 @@ pub(crate) fn parse_er(src: &str, db: &mut ErDb) -> Result<(), Error> {
                     p.expect(T::Sqe)?;
                 }
                 p.separator()?;
-                frames.push(Frame {
-                    id,
-                    list: Vec::new(),
-                    title,
-                });
+                frames.push(Frame { id, list: Vec::new(), title });
             }
             T::AccTitle | T::AccDescr | T::AccDescrMultilineValue => {
                 let value = match t {

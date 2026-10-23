@@ -5,7 +5,8 @@
 //! and `hsl()` notations. Other functions, such as `calc()` and `var()`, are not recognized.
 
 use crate::text::label::trim;
-use crate::util::chars::{is_digit, is_space};
+use crate::util::chars::is_digit;
+use crate::util::chars::is_space;
 
 const KEYWORDS: &[&str] = &[
     "aliceblue",
@@ -262,10 +263,7 @@ fn kind(term: &str) -> K {
     if unit == b"%" {
         return K::Percent;
     }
-    if ["deg", "grad", "rad", "turn"]
-        .iter()
-        .any(|u| unit.eq_ignore_ascii_case(u.as_bytes()))
-    {
+    if ["deg", "grad", "rad", "turn"].iter().any(|u| unit.eq_ignore_ascii_case(u.as_bytes())) {
         return K::Angle;
     }
     K::Bad
@@ -320,15 +318,10 @@ fn is_function(color: &str) -> bool {
         }
         return (k0 == K::Number || k0 == K::Percent) && k1 == k0 && k2 == k0;
     }
-    kinds.iter().enumerate().all(|(i, &k)| {
-        k == K::Number
-            || k == K::None
-            || if hsl && i == 0 {
-                k == K::Angle
-            } else {
-                k == K::Percent
-            }
-    })
+    kinds
+        .iter()
+        .enumerate()
+        .all(|(i, &k)| k == K::Number || k == K::None || if hsl && i == 0 { k == K::Angle } else { k == K::Percent })
 }
 
 /// JavaScript's `text.split(/\s+/)`.
@@ -359,7 +352,5 @@ pub(crate) fn is_css_color(color: &str) -> bool {
     if color.contains('(') {
         return is_function(color);
     }
-    KEYWORDS
-        .iter()
-        .any(|keyword| keyword.eq_ignore_ascii_case(color))
+    KEYWORDS.iter().any(|keyword| keyword.eq_ignore_ascii_case(color))
 }

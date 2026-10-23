@@ -31,17 +31,8 @@ fn dedent_lines(text: &str) -> String {
 /// Builds the model from `ast`, as Pele's `buildInfo` does. `title` comes from front matter.
 pub(crate) fn build_info(ast: InfoAst, title: Option<&str>) -> InfoModel {
     InfoModel {
-        acc_descr: ast
-            .acc_descr
-            .filter(|text| !text.is_empty())
-            .map(|text| dedent_lines(&text)),
-        acc_title: ast
-            .acc_title
-            .filter(|text| !text.is_empty())
-            .map(|text| trim_start(&text).to_owned()),
-        title: ast
-            .title
-            .filter(|text| !text.is_empty())
-            .or_else(|| title.map(str::to_owned)),
+        acc_descr: ast.acc_descr.filter(|text| !text.is_empty()).map(|text| dedent_lines(&text)),
+        acc_title: ast.acc_title.filter(|text| !text.is_empty()).map(|text| trim_start(&text).to_owned()),
+        title: ast.title.filter(|text| !text.is_empty()).or_else(|| title.map(str::to_owned)),
     }
 }

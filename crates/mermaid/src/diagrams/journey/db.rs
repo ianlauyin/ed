@@ -1,6 +1,7 @@
 //! The user journey database. Port of Pele's `src/diagrams/journey/db.ts`.
 
-use crate::text::label::{trim, trim_start};
+use crate::text::label::trim;
+use crate::text::label::trim_start;
 use crate::util::chars::is_space;
 
 /// A task: its score and the people taking part.
@@ -75,16 +76,9 @@ fn string_to_number(text: &str) -> f64 {
         }
     }
 
-    let unsigned = text
-        .strip_prefix('+')
-        .or_else(|| text.strip_prefix('-'))
-        .unwrap_or(text);
+    let unsigned = text.strip_prefix('+').or_else(|| text.strip_prefix('-')).unwrap_or(text);
     if unsigned == "Infinity" {
-        return if text.starts_with('-') {
-            f64::NEG_INFINITY
-        } else {
-            f64::INFINITY
-        };
+        return if text.starts_with('-') { f64::NEG_INFINITY } else { f64::INFINITY };
     }
 
     // StrDecimalLiteral: digits with an optional fraction, then an optional exponent.
@@ -167,18 +161,8 @@ impl JourneyDb {
         let score = string_to_number(pieces.next().unwrap_or(""));
         let people = pieces
             .next()
-            .map(|actors| {
-                actors
-                    .split(',')
-                    .map(|name| trim(name).to_owned())
-                    .collect()
-            })
+            .map(|actors| actors.split(',').map(|name| trim(name).to_owned()).collect())
             .unwrap_or_default();
-        self.tasks.push(JourneyTask {
-            people,
-            score,
-            section: self.current_section.clone(),
-            task: task.to_owned(),
-        });
+        self.tasks.push(JourneyTask { people, score, section: self.current_section.clone(), task: task.to_owned() });
     }
 }

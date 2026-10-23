@@ -31,17 +31,8 @@ pub(crate) enum T {
 }
 
 /// The names Mermaid's parser reports for each token kind, indexed by [`T`].
-pub(crate) const NAMES: [&str; 9] = [
-    "$end",
-    "STUCK",
-    "SANKEY",
-    "NEWLINE",
-    "COMMA",
-    "DQUOTE",
-    "NON_ESCAPED_TEXT",
-    "ESCAPED_TEXT",
-    "EOF",
-];
+pub(crate) const NAMES: [&str; 9] =
+    ["$end", "STUCK", "SANKEY", "NEWLINE", "COMMA", "DQUOTE", "NON_ESCAPED_TEXT", "ESCAPED_TEXT", "EOF"];
 
 impl T {
     /// The name Mermaid's parser reports for this kind.
@@ -81,11 +72,7 @@ fn keyword(src: &str, p: usize, word: &str) -> Option<usize> {
     let mut chars = src.get(p..)?.char_indices();
     for expected in word.bytes() {
         let (_, c) = chars.next()?;
-        let lower = if c == '\u{212a}' {
-            'k'
-        } else {
-            c.to_ascii_lowercase()
-        };
+        let lower = if c == '\u{212a}' { 'k' } else { c.to_ascii_lowercase() };
         if u32::from(lower) != u32::from(expected) {
             return None;
         }
@@ -109,11 +96,7 @@ pub(crate) fn tokenize<'a>(src: &'a str) -> Vec<Token<'a>> {
     let mut p = 0;
 
     let emit = |tokens: &mut Vec<Token<'a>>, kind: T, s: usize, e: usize| -> usize {
-        tokens.push(Token {
-            kind,
-            start: s,
-            text: src.get(s..e).unwrap_or(""),
-        });
+        tokens.push(Token { kind, start: s, text: src.get(s..e).unwrap_or("") });
         e
     };
     let at = |i: usize| bytes.get(i).copied();
@@ -179,11 +162,7 @@ pub(crate) fn tokenize<'a>(src: &'a str) -> Vec<Token<'a>> {
         }
     }
 
-    let last = if state == S::EscapedText {
-        T::EscapedText
-    } else {
-        T::Eof
-    };
+    let last = if state == S::EscapedText { T::EscapedText } else { T::Eof };
     emit(&mut tokens, last, n, n);
     emit(&mut tokens, T::End, n, n);
     tokens

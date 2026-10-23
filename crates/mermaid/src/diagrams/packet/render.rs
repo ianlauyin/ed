@@ -1,18 +1,30 @@
 //! Draws a packet diagram: rows of fields with their bit numbers. Port of Pele's
 //! `src/diagrams/packet/render.ts`.
 
-use super::model::{PacketBlock, PacketModel, packet_option, property};
+use super::model::PacketBlock;
+use super::model::PacketModel;
+use super::model::packet_option;
+use super::model::property;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_text::fit_text;
-use crate::diagrams::common::fit_width::{title_room, turn_to_fit};
+use crate::diagrams::common::fit_width::title_room;
+use crate::diagrams::common::fit_width::turn_to_fit;
 use crate::diagrams::common::literal_label::literal_label;
-use crate::svg::builder::{esc, js_round, label_svg, push_num};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
+use crate::svg::builder::esc;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
 use crate::svg::theme::RADIUS;
 use crate::text::entities::decode;
-use crate::text::label::{Label, layout_label, trim};
+use crate::text::label::Label;
+use crate::text::label::layout_label;
+use crate::text::label::trim;
 use crate::text::measure::BOLD;
-use crate::yaml::{Value, push_number};
+use crate::yaml::Value;
+use crate::yaml::push_number;
 
 /// Draws `model` with the `packet` section of `config`, running down when it does not fit the
 /// host's width.
@@ -46,9 +58,7 @@ fn regroup(model: &PacketModel, bits_per_row: f64) -> Vec<Vec<PacketBlock>> {
     for block in &whole {
         let mut start = block.start;
         while start <= block.end {
-            let end = block
-                .end
-                .min(((start / bits_per_row).floor() + 1.0) * bits_per_row - 1.0);
+            let end = block.end.min(((start / bits_per_row).floor() + 1.0) * bits_per_row - 1.0);
             #[expect(
                 clippy::cast_possible_truncation,
                 clippy::cast_sign_loss,
@@ -60,11 +70,7 @@ fn regroup(model: &PacketModel, bits_per_row: f64) -> Vec<Vec<PacketBlock>> {
                 rows.resize_with(index + 1, Vec::new);
             }
             if let Some(row) = rows.get_mut(index) {
-                row.push(PacketBlock {
-                    end,
-                    start,
-                    ..block.clone()
-                });
+                row.push(PacketBlock { end, start, ..block.clone() });
             }
             start = end + 1.0;
         }
@@ -85,10 +91,7 @@ fn draw(model: &PacketModel, config: &Value, options: &RenderOptions, down: bool
     let mut bit_width = packet_option(config, "bitWidth", 32.0, 1.0, 400.0);
     let padding_x = packet_option(config, "paddingX", 5.0, 0.0, 400.0);
     let padding_y = packet_option(config, "paddingY", 5.0, 0.0, 400.0);
-    let show_bits = !matches!(
-        packet.and_then(|packet| property(packet, "showBits")),
-        Some(Value::Bool(false))
-    );
+    let show_bits = !matches!(packet.and_then(|packet| property(packet, "showBits")), Some(Value::Bool(false)));
     let descending = matches!(
         packet.and_then(|packet| property(packet, "bitOrder")),
         Some(Value::String(order)) if order == "descending"
@@ -102,11 +105,7 @@ fn draw(model: &PacketModel, config: &Value, options: &RenderOptions, down: bool
         #[expect(clippy::cast_possible_truncation, reason = "a small exponent")]
         let power = 2.0_f64.powi(count.log2().floor() as i32);
         bits_per_row = bits_per_row.min(8.0_f64.max(power));
-        let last = model
-            .rows
-            .last()
-            .and_then(|row| row.last())
-            .map_or(0.0, |block| block.end);
+        let last = model.rows.last().and_then(|row| row.last()).map_or(0.0, |block| block.end);
         if ((last + 1.0) / bits_per_row).ceil() > 10000.0 {
             bits_per_row = model.bits_per_row;
         }
@@ -121,11 +120,8 @@ fn draw(model: &PacketModel, config: &Value, options: &RenderOptions, down: bool
             .map(|row| {
                 row.iter()
                     .map(|block| {
-                        let room = 1.0_f64.max(
-                            (block.end - block.start + 1.0) * bit_width
-                                - padding_x.min(bit_width - 1.0)
-                                - 6.0,
-                        );
+                        let room = 1.0_f64
+                            .max((block.end - block.start + 1.0) * bit_width - padding_x.min(bit_width - 1.0) - 6.0);
                         literal_label(trim(&decode(&block.label)), label_size, room, 0)
                     })
                     .collect()
@@ -156,24 +152,10 @@ fn draw(model: &PacketModel, config: &Value, options: &RenderOptions, down: bool
     }
 
     let gap = padding_x.min(bit_width - 1.0);
-    let width = if rows.is_empty() {
-        0.0
-    } else {
-        bits_per_row * bit_width - gap
-    };
-    let title = layout_label(
-        model.title.as_deref(),
-        false,
-        size,
-        if down { title_room(options) } else { 4000.0 },
-        BOLD,
-        None,
-    );
-    let title_height = if title.height > 0.0 {
-        title.height + if rows_height > 0.0 { 12.0 } else { 0.0 }
-    } else {
-        0.0
-    };
+    let width = if rows.is_empty() { 0.0 } else { bits_per_row * bit_width - gap };
+    let title =
+        layout_label(model.title.as_deref(), false, size, if down { title_room(options) } else { 4000.0 }, BOLD, None);
+    let title_height = if title.height > 0.0 { title.height + if rows_height > 0.0 { 12.0 } else { 0.0 } } else { 0.0 };
 
     let left = pad + 0.0_f64.max((title.width - width) / 2.0);
     let mut fields = String::new();
@@ -184,12 +166,7 @@ fn draw(model: &PacketModel, config: &Value, options: &RenderOptions, down: bool
         for (at, block) in row.iter().enumerate() {
             let count = block.end - block.start + 1.0;
             let first = block.start % bits_per_row;
-            let x = left
-                + if descending {
-                    bits_per_row - first - count
-                } else {
-                    first
-                } * bit_width;
+            let x = left + if descending { bits_per_row - first - count } else { first } * bit_width;
             let w = count * bit_width - gap;
 
             fields.push_str("<g class=\"ondine-node\" data-id=\"");
@@ -209,21 +186,11 @@ fn draw(model: &PacketModel, config: &Value, options: &RenderOptions, down: bool
             fields.push_str("\" fill=\"var(--_s)\" stroke=\"var(--_b)\"/>");
             if down {
                 if let Some(label) = labels.get(index).and_then(|row| row.get(at)) {
-                    fields.push_str(&label_svg(
-                        label,
-                        x + w / 2.0,
-                        y + row_height / 2.0,
-                        "",
-                        None,
-                    ));
+                    fields.push_str(&label_svg(label, x + w / 2.0, y + row_height / 2.0, "", None));
                 }
-            } else if let Some(text) = fit_text(
-                trim(&decode(&block.label)),
-                w - 6.0,
-                label_size,
-                js_round(size * 0.5),
-                0,
-            ) && text.size <= row_height
+            } else if let Some(text) =
+                fit_text(trim(&decode(&block.label)), w - 6.0, label_size, js_round(size * 0.5), 0)
+                && text.size <= row_height
             {
                 fields.push_str("<text x=\"");
                 push_num(&mut fields, x + w / 2.0);
@@ -244,11 +211,7 @@ fn draw(model: &PacketModel, config: &Value, options: &RenderOptions, down: bool
             if !show_bits {
                 continue;
             }
-            let (leading, trailing) = if descending {
-                (block.end, block.start)
-            } else {
-                (block.start, block.end)
-            };
+            let (leading, trailing) = if descending { (block.end, block.start) } else { (block.start, block.end) };
             if count == 1.0 {
                 bits.push_str("<text x=\"");
                 push_num(&mut bits, x + w / 2.0);
@@ -307,16 +270,8 @@ fn draw(model: &PacketModel, config: &Value, options: &RenderOptions, down: bool
         total_height,
         size,
         options,
-        Accessible {
-            acc_descr: model.acc_descr.as_deref(),
-            acc_title: model.acc_title.as_deref(),
-        },
+        Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
         &content,
     );
-    Rendered {
-        height: total_height,
-        links: Vec::new(),
-        svg,
-        width: total_width,
-    }
+    Rendered { height: total_height, links: Vec::new(), svg, width: total_width }
 }

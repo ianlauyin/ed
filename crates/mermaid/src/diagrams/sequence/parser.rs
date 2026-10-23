@@ -5,10 +5,19 @@
 //! The walk visits statements in document order, and the texts Pele reads at the end of a block
 //! are pure functions of the source, so this port lists the statements flat as it reads them.
 
-use super::db::{Declare, Menu, SeqDb, Statement, extract_wrap};
-use super::lexer::{Token, tokenize};
+use super::db::Declare;
+use super::db::Menu;
+use super::db::SeqDb;
+use super::db::Statement;
+use super::db::extract_wrap;
+use super::lexer::Token;
+use super::lexer::tokenize;
 use super::tokens::T;
-use super::types::{NoteActor, SeqNumbering, SeqText, line, placement};
+use super::types::NoteActor;
+use super::types::SeqNumbering;
+use super::types::SeqText;
+use super::types::line;
+use super::types::placement;
 use crate::error::Error;
 use crate::text::label::trim;
 
@@ -70,15 +79,11 @@ struct Parser<'a> {
 
 impl<'a> Parser<'a> {
     fn token(&self, i: usize) -> Token<'a> {
-        self.tokens
-            .get(i)
-            .or_else(|| self.tokens.last())
-            .copied()
-            .unwrap_or(Token {
-                kind: T::Eof,
-                start: self.src.len(),
-                text: "",
-            })
+        self.tokens.get(i).or_else(|| self.tokens.last()).copied().unwrap_or(Token {
+            kind: T::Eof,
+            start: self.src.len(),
+            text: "",
+        })
     }
 
     fn kind(&self) -> T {
@@ -140,11 +145,7 @@ impl<'a> Parser<'a> {
                 config: None,
                 description: None,
                 draw: None,
-                how: if how == Declare::Create {
-                    Declare::Create
-                } else {
-                    Declare::Destroy
-                },
+                how: if how == Declare::Create { Declare::Create } else { Declare::Destroy },
             });
             return Ok(());
         }
@@ -156,11 +157,7 @@ impl<'a> Parser<'a> {
             self.expect(T::ConfigEnd)?;
             config = Some(trim(content).to_owned());
         }
-        let draw = if t == T::Participant {
-            "participant"
-        } else {
-            "actor"
-        };
+        let draw = if t == T::Participant { "participant" } else { "actor" };
         let mut description = None;
         if self.kind() == T::As {
             self.i += 1;
@@ -172,13 +169,7 @@ impl<'a> Parser<'a> {
         } else {
             return Err(self.fail("'AS', 'NEWLINE'"));
         }
-        self.out.push(Statement::Participant {
-            actor: actor.to_owned(),
-            config,
-            description,
-            draw: Some(draw),
-            how,
-        });
+        self.out.push(Statement::Participant { actor: actor.to_owned(), config, description, draw: Some(draw), how });
         Ok(())
     }
 
@@ -200,21 +191,15 @@ impl<'a> Parser<'a> {
         let msg = self.text2()?;
         self.mention(from);
         self.mention(to);
-        let marker = |actor: &str, signal_type: u8| Statement::Marker {
-            actor: actor.to_owned(),
-            signal_type,
-        };
+        let marker = |actor: &str, signal_type: u8| Statement::Marker { actor: actor.to_owned(), signal_type };
         let mut activate = false;
         let mut central_connection = None;
         let mut extra = Vec::new();
         if central_from {
             let dual = mark == T::Central;
             activate = dual;
-            central_connection = Some(if dual {
-                line::CENTRAL_CONNECTION_DUAL
-            } else {
-                line::CENTRAL_CONNECTION_REVERSE
-            });
+            central_connection =
+                Some(if dual { line::CENTRAL_CONNECTION_DUAL } else { line::CENTRAL_CONNECTION_REVERSE });
             if dual {
                 extra.push(marker(to, line::CENTRAL_CONNECTION));
             }
@@ -246,11 +231,7 @@ impl<'a> Parser<'a> {
         let actor = self.actor()?;
         self.mention(actor);
         let text = self.text2()?;
-        self.out.push(Statement::Menu {
-            actor: actor.to_owned(),
-            kind,
-            text,
-        });
+        self.out.push(Statement::Menu { actor: actor.to_owned(), kind, text });
         Ok(())
     }
 
@@ -284,11 +265,7 @@ impl<'a> Parser<'a> {
         let text = self.text2()?;
         self.out.push(Statement::Note {
             actor: NoteActor::Single(who.to_owned()),
-            placement: if t == T::LeftOf {
-                placement::LEFT_OF
-            } else {
-                placement::RIGHT_OF
-            },
+            placement: if t == T::LeftOf { placement::LEFT_OF } else { placement::RIGHT_OF },
             text,
         });
         Ok(())
@@ -296,11 +273,7 @@ impl<'a> Parser<'a> {
 
     fn autonumber(&mut self) -> Result<(), Error> {
         self.i += 1;
-        let mut numbering = SeqNumbering {
-            start: None,
-            step: None,
-            visible: true,
-        };
+        let mut numbering = SeqNumbering { start: None, step: None, visible: true };
         if self.kind() == T::Num {
             numbering.start = Some(js_number(self.token(self.i).text));
             self.i += 1;
@@ -324,31 +297,19 @@ impl<'a> Parser<'a> {
     }
 
     fn block(&mut self, signal_type: u8, text: &str) {
-        self.out.push(Statement::Block {
-            signal_type,
-            text: Some(extract_wrap(text)),
-        });
+        self.out.push(Statement::Block { signal_type, text: Some(extract_wrap(text)) });
     }
 
     /// Adds the statement that opens a block of `kind`.
     fn open(&mut self, kind: K, t: T, text: &str) {
         match kind {
-            K::Box => self
-                .out
-                .push(Statement::BoxStart(SeqDb::parse_box_data(text))),
+            K::Box => self.out.push(Statement::BoxStart(SeqDb::parse_box_data(text))),
             K::Loop => self.block(line::LOOP_START, text),
             K::Rect => self.block(line::RECT_START, text),
             K::Opt => self.block(line::OPT_START, text),
             K::Break => self.block(line::BREAK_START, text),
             K::Alt => self.block(line::ALT_START, text),
-            K::Par => self.block(
-                if t == T::ParOver {
-                    line::PAR_OVER_START
-                } else {
-                    line::PAR_START
-                },
-                text,
-            ),
+            K::Par => self.block(if t == T::ParOver { line::PAR_OVER_START } else { line::PAR_START }, text),
             K::Critical => self.block(line::CRITICAL_START, text),
         }
     }
@@ -368,10 +329,7 @@ impl<'a> Parser<'a> {
             K::Par => line::PAR_END,
             K::Critical => line::CRITICAL_END,
         };
-        self.out.push(Statement::Block {
-            signal_type,
-            text: None,
-        });
+        self.out.push(Statement::Block { signal_type, text: None });
     }
 }
 
@@ -386,12 +344,7 @@ fn js_number(text: &str) -> f64 {
 ///
 /// Returns a syntax error for input Mermaid rejects, and the errors of [`SeqDb::apply`].
 pub(crate) fn parse_sequence(src: &str, db: &mut SeqDb) -> Result<(), Error> {
-    let mut p = Parser {
-        i: 0,
-        out: Vec::new(),
-        src,
-        tokens: tokenize(src),
-    };
+    let mut p = Parser { i: 0, out: Vec::new(), src, tokens: tokenize(src) };
 
     while p.kind() == T::Newline {
         p.i += 1;
@@ -414,9 +367,7 @@ pub(crate) fn parse_sequence(src: &str, db: &mut SeqDb) -> Result<(), Error> {
                     p.close(K::Box);
                 }
                 _ => {
-                    return Err(
-                        p.fail("'end', 'NEWLINE', 'participant', 'participant_actor', 'destroy'")
-                    );
+                    return Err(p.fail("'end', 'NEWLINE', 'participant', 'participant_actor', 'destroy'"));
                 }
             }
             continue;
@@ -465,11 +416,7 @@ pub(crate) fn parse_sequence(src: &str, db: &mut SeqDb) -> Result<(), Error> {
                 p.expect(T::Newline)?;
                 p.out.push(Statement::Marker {
                     actor: who.to_owned(),
-                    signal_type: if t == T::Activate {
-                        line::ACTIVE_START
-                    } else {
-                        line::ACTIVE_END
-                    },
+                    signal_type: if t == T::Activate { line::ACTIVE_START } else { line::ACTIVE_END },
                 });
             }
             T::Title | T::LegacyTitle => {
@@ -496,15 +443,7 @@ pub(crate) fn parse_sequence(src: &str, db: &mut SeqDb) -> Result<(), Error> {
                 p.i += 1;
                 db.set_acc_description(value);
             }
-            T::Loop
-            | T::Rect
-            | T::Opt
-            | T::Break
-            | T::Alt
-            | T::Par
-            | T::ParOver
-            | T::Critical
-            | T::Box => {
+            T::Loop | T::Rect | T::Opt | T::Break | T::Alt | T::Par | T::ParOver | T::Critical | T::Box => {
                 p.i += 1;
                 let text = p.expect(T::RestOfLine)?;
                 let kind = match t {

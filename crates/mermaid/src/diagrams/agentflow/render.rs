@@ -2,25 +2,59 @@
 
 use std::collections::BTreeMap;
 
-use super::color_slots::{KIND_COUNT, kind_slot};
+use super::color_slots::KIND_COUNT;
+use super::color_slots::kind_slot;
 use super::db::AgentflowDb;
-use super::graph::{AgentGraph, GraphEdge, GraphNode};
+use super::graph::AgentGraph;
+use super::graph::GraphEdge;
+use super::graph::GraphNode;
 use super::types::LabelType;
 use crate::diagrams::Rendered;
-use crate::diagrams::common::fit_width::{runs_across, turn_to_fit};
+use crate::diagrams::common::fit_width::runs_across;
+use crate::diagrams::common::fit_width::turn_to_fit;
 use crate::diagrams::flowchart::shapes::canonical_shape;
-use crate::layout::compound::{CEdge, CNode, Dir, cnode, compound_layout, direction, shift_layout};
+use crate::layout::compound::CEdge;
+use crate::layout::compound::CNode;
+use crate::layout::compound::Dir;
+use crate::layout::compound::cnode;
+use crate::layout::compound::compound_layout;
+use crate::layout::compound::direction;
+use crate::layout::compound::shift_layout;
 use crate::layout::layered::LayeredOptions;
-use crate::svg::builder::{esc, esc_text, label_svg, push_num};
-use crate::svg::cluster::{Crossings, cluster_title_x, mark_crossings};
-use crate::svg::edges::{EdgePath, edge_label_svg, loop_path, marker, marker_trim, route_path};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
-use crate::svg::shapes::{PAD_X, PAD_Y, draw_shape, inset_route, shape_size};
-use crate::svg::theme::{RADIUS, ResolvedStyle, class_names, resolve_style, series_color};
+use crate::svg::builder::esc;
+use crate::svg::builder::esc_text;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::cluster::Crossings;
+use crate::svg::cluster::cluster_title_x;
+use crate::svg::cluster::mark_crossings;
+use crate::svg::edges::EdgePath;
+use crate::svg::edges::edge_label_svg;
+use crate::svg::edges::loop_path;
+use crate::svg::edges::marker;
+use crate::svg::edges::marker_trim;
+use crate::svg::edges::route_path;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
+use crate::svg::shapes::PAD_X;
+use crate::svg::shapes::PAD_Y;
+use crate::svg::shapes::draw_shape;
+use crate::svg::shapes::inset_route;
+use crate::svg::shapes::shape_size;
+use crate::svg::theme::RADIUS;
+use crate::svg::theme::ResolvedStyle;
+use crate::svg::theme::class_names;
+use crate::svg::theme::resolve_style;
+use crate::svg::theme::series_color;
 use crate::text::entities;
-use crate::text::label::{Label, layout_label};
-use crate::text::measure::{BOLD, ITALIC};
-use crate::util::url::{self, LinkInfo, UrlOptions};
+use crate::text::label::Label;
+use crate::text::label::layout_label;
+use crate::text::measure::BOLD;
+use crate::text::measure::ITALIC;
+use crate::util::url::LinkInfo;
+use crate::util::url::UrlOptions;
+use crate::util::url::{self};
 use crate::yaml::Value;
 
 /// The number of series colors, which is the palette Mermaid's slot rules are applied to.
@@ -132,11 +166,7 @@ fn strip_default(classes: &str) -> &str {
 /// Removes Mermaid's default edge classes, as Pele's global replace does.
 fn strip_edge_classes(classes: &str) -> String {
     let mut out = String::from(classes);
-    for name in [
-        "edge-thickness-normal",
-        "edge-pattern-solid",
-        "flowchart-link",
-    ] {
+    for name in ["edge-thickness-normal", "edge-pattern-solid", "flowchart-link"] {
         while let Some(at) = out.find(name) {
             out.replace_range(at..at + name.len(), "");
         }
@@ -179,81 +209,35 @@ fn draw(
             all.extend(node.css_styles.iter().cloned());
             resolve_style(&all)
         };
-        let text_style =
-            (if style.bold { BOLD } else { 0 }) | (if style.italic { ITALIC } else { 0 });
+        let text_style = (if style.bold { BOLD } else { 0 }) | (if style.italic { ITALIC } else { 0 });
         let markdown = node.label_type == LabelType::Markdown;
         let font_size = style.font_size.unwrap_or(size);
-        let label_of = |width: f64| {
-            layout_label(
-                node.label.as_deref(),
-                markdown,
-                font_size,
-                width,
-                text_style,
-                None,
-            )
-        };
+        let label_of = |width: f64| layout_label(node.label.as_deref(), markdown, font_size, width, text_style, None);
 
         let (view, mut c) = if node.is_group {
             let label = label_of(4000.0);
             let mut c = cnode(0.0, 0.0, -1);
             c.is_group = true;
-            c.dir = node
-                .dir
-                .as_deref()
-                .filter(|dir| !dir.is_empty())
-                .map(|dir| direction(Some(dir)));
+            c.dir = node.dir.as_deref().filter(|dir| !dir.is_empty()).map(|dir| direction(Some(dir)));
             c.pad_x = GROUP_PAD;
-            c.pad_top = if label.height > 0.0 {
-                label.height + 16.0
-            } else {
-                GROUP_PAD
-            };
+            c.pad_top = if label.height > 0.0 { label.height + 16.0 } else { GROUP_PAD };
             c.pad_bottom = GROUP_PAD;
             c.min_w = label.width + 2.0 * GROUP_PAD - 12.0;
-            let view = NodeView {
-                dy: 0.0,
-                h: 0.0,
-                label,
-                node,
-                shape: "group",
-                style,
-                w: 0.0,
-            };
+            let view = NodeView { dy: 0.0, h: 0.0, label, node, shape: "group", style, w: 0.0 };
             (view, c)
         } else if node.shape == "collapsedGroup" {
             let label = label_of(wrap_width);
             let w = label.width.max(min_width) + 2.0 * PAD_X;
             let h = label.height + 2.0 * PAD_Y + DOTS;
-            let view = NodeView {
-                dy: -DOTS / 2.0,
-                h,
-                label,
-                node,
-                shape: COLLAPSED,
-                style,
-                w,
-            };
+            let view = NodeView { dy: -DOTS / 2.0, h, label, node, shape: COLLAPSED, style, w };
             (view, cnode(w, h, -1))
         } else {
             let shape = canonical_shape(Some(&node.shape));
             let label = label_of(wrap_width);
             // A diamond grows twice as fast as its label, so it keeps the label's own width.
-            let width = if shape == "diam" {
-                label.width
-            } else {
-                label.width.max(min_width)
-            };
+            let width = if shape == "diam" { label.width } else { label.width.max(min_width) };
             let s = shape_size(shape, width, label.height);
-            let view = NodeView {
-                dy: s.dy,
-                h: s.h,
-                label,
-                node,
-                shape,
-                style,
-                w: s.w,
-            };
+            let view = NodeView { dy: s.dy, h: s.h, label, node, shape, style, w: s.w };
             (view, cnode(s.w, s.h, -1))
         };
         c.seq = to_f64(views.len());
@@ -262,24 +246,16 @@ fn draw(
     }
 
     for (i, node) in graph.nodes.iter().enumerate() {
-        let parent = node
-            .parent_id
-            .as_deref()
-            .and_then(|id| index.get(id))
-            .map_or(-1, |&p| i32::try_from(p).unwrap_or(-1));
+        let parent =
+            node.parent_id.as_deref().and_then(|id| index.get(id)).map_or(-1, |&p| i32::try_from(p).unwrap_or(-1));
         if let Some(c) = cnodes.get_mut(i) {
             c.parent = parent;
         }
     }
 
-    let root_dir = if turned {
-        Dir::Tb
-    } else {
-        direction(db.direction.as_deref())
-    };
-    let parent_of = |cnodes: &[CNode], i: usize| -> Option<usize> {
-        cnodes.get(i).and_then(|c| usize::try_from(c.parent).ok())
-    };
+    let root_dir = if turned { Dir::Tb } else { direction(db.direction.as_deref()) };
+    let parent_of =
+        |cnodes: &[CNode], i: usize| -> Option<usize> { cnodes.get(i).and_then(|c| usize::try_from(c.parent).ok()) };
     // The direction of the level a node sits in.
     let flow_of = |cnodes: &[CNode], i: usize| -> Dir {
         let mut dir: Option<Dir> = None;
@@ -296,8 +272,7 @@ fn draw(
         }
         dir.unwrap_or(root_dir)
     };
-    let flows_sideways =
-        |cnodes: &[CNode], i: usize| matches!(flow_of(cnodes, i), Dir::Lr | Dir::Rl);
+    let flows_sideways = |cnodes: &[CNode], i: usize| matches!(flow_of(cnodes, i), Dir::Lr | Dir::Rl);
 
     let n = cnodes.len();
     let mut depth: Vec<i64> = vec![-1; n];
@@ -338,20 +313,13 @@ fn draw(
     // drawn afterwards, between the node and the flow's border.
     let mut held: Vec<Held<'_>> = Vec::new();
     for edge in &graph.edges {
-        let (Some(&src), Some(&dst)) =
-            (index.get(edge.start.as_str()), index.get(edge.end.as_str()))
-        else {
+        let (Some(&src), Some(&dst)) = (index.get(edge.start.as_str()), index.get(edge.end.as_str())) else {
             continue;
         };
         let markdown = edge.label_type == LabelType::Markdown;
         let label = layout_label(Some(&edge.label), markdown, edge_size, wrap_width, 0, None);
         if contains(&cnodes, src, dst) || contains(&cnodes, dst, src) {
-            held.push(Held {
-                dst,
-                edge,
-                label,
-                src,
-            });
+            held.push(Held { dst, edge, label, src });
             continue;
         }
 
@@ -361,37 +329,17 @@ fn draw(
             let sideways = flows_sideways(&cnodes, src);
             if let Some(c) = cnodes.get_mut(src) {
                 if sideways {
-                    c.h += 2.0
-                        * (LOOP
-                            + if label.height > 0.0 {
-                                label.height + 8.0
-                            } else {
-                                0.0
-                            });
+                    c.h += 2.0 * (LOOP + if label.height > 0.0 { label.height + 8.0 } else { 0.0 });
                 } else {
-                    c.w += 2.0
-                        * (LOOP
-                            + if label.width > 0.0 {
-                                label.width + 12.0
-                            } else {
-                                0.0
-                            });
+                    c.w += 2.0 * (LOOP + if label.width > 0.0 { label.width + 12.0 } else { 0.0 });
                 }
             }
         }
 
         cedges.push(CEdge {
             dst,
-            label_h: if label.height > 0.0 {
-                label.height + 4.0
-            } else {
-                0.0
-            },
-            label_w: if label.width > 0.0 {
-                label.width + 12.0
-            } else {
-                0.0
-            },
+            label_h: if label.height > 0.0 { label.height + 4.0 } else { 0.0 },
+            label_w: if label.width > 0.0 { label.width + 12.0 } else { 0.0 },
             label_x: 0.0,
             label_y: 0.0,
             minlen: edge.minlen.and_then(|n| u32::try_from(n).ok()).unwrap_or(1),
@@ -419,11 +367,7 @@ fn draw(
     );
 
     let title = layout_label(db.title.as_deref(), false, size, 4000.0, BOLD, None);
-    let title_height = if title.height > 0.0 {
-        title.height + 12.0
-    } else {
-        0.0
-    };
+    let title_height = if title.height > 0.0 { title.height + 12.0 } else { 0.0 };
     let inner = layout.width.max(title.width);
     let ox = pad + (inner - layout.width) / 2.0;
     let oy = pad + title_height;
@@ -443,8 +387,7 @@ fn draw(
         let out = contains(&cnodes, h.dst, h.src);
         let outer = if out { h.dst } else { h.src };
         let i = if out { h.src } else { h.dst };
-        let (Some(g), Some(nd), Some(view)) = (cnodes.get(outer), cnodes.get(i), views.get(i))
-        else {
+        let (Some(g), Some(nd), Some(view)) = (cnodes.get(outer), cnodes.get(i), views.get(i)) else {
             continue;
         };
         let end = flow_end(g.dir.unwrap_or_else(|| flow_of(&cnodes, outer)));
@@ -452,32 +395,12 @@ fn draw(
         let toward = |side: u8| -> [f64; 6] {
             let upright = side & 1 == 0;
             let sign = if side == 0 || side == 3 { -1.0 } else { 1.0 };
-            let nx = if upright {
-                nd.x
-            } else {
-                nd.x + sign * nd.w / 2.0
-            };
-            let ny = if upright {
-                nd.y + sign * nd.h / 2.0
-            } else {
-                nd.y
-            };
-            let bx = if upright {
-                nd.x
-            } else {
-                g.x + sign * g.w / 2.0
-            };
-            let by = if upright {
-                g.y + sign * g.h / 2.0
-            } else {
-                nd.y
-            };
+            let nx = if upright { nd.x } else { nd.x + sign * nd.w / 2.0 };
+            let ny = if upright { nd.y + sign * nd.h / 2.0 } else { nd.y };
+            let bx = if upright { nd.x } else { g.x + sign * g.w / 2.0 };
+            let by = if upright { g.y + sign * g.h / 2.0 } else { nd.y };
             let axis = if upright { 0.0 } else { 1.0 };
-            if out {
-                [nx, ny, axis, bx, by, axis]
-            } else {
-                [bx, by, axis, nx, ny, axis]
-            }
+            if out { [nx, ny, axis, bx, by, axis] } else { [bx, by, axis, nx, ny, axis] }
         };
         let blocked = |r: &[f64; 6]| -> bool {
             cnodes.iter().enumerate().any(|(k, c)| {
@@ -500,27 +423,10 @@ fn draw(
             }
         }
         held_routes.push(route);
-        held_labels.push((
-            f64::midpoint(route[0], route[3]),
-            f64::midpoint(route[1], route[4]),
-        ));
+        held_labels.push((f64::midpoint(route[0], route[3]), f64::midpoint(route[1], route[4])));
         let mut drawn_route = route.to_vec();
-        inset_route(
-            &mut drawn_route,
-            if out { 0 } else { 3 },
-            view.shape,
-            view.w,
-            view.h,
-            nd,
-        );
-        held_paths.push(route_path(
-            &drawn_route,
-            Some("linear"),
-            0.0,
-            marker_trim(h.edge.arrow_type_end),
-            None,
-            None,
-        ));
+        inset_route(&mut drawn_route, if out { 0 } else { 3 }, view.shape, view.w, view.h, nd);
+        held_paths.push(route_path(&drawn_route, Some("linear"), 0.0, marker_trim(h.edge.arrow_type_end), None, None));
     }
 
     let mut crossings = Crossings::new();
@@ -544,8 +450,7 @@ fn draw(
 
         if c.is_group {
             let title_x = cluster_title_x(c, view.label.width, &crossings, GROUP_PAD);
-            let mut title_attrs =
-                String::from(" class=\"ondine-cluster-label\" fill=\"var(--_m)\"");
+            let mut title_attrs = String::from(" class=\"ondine-cluster-label\" fill=\"var(--_m)\"");
             title_attrs.push_str(&view.style.text);
             clusters.push_str("<g class=\"ondine-cluster ondine-flow");
             clusters.push_str(&classes);
@@ -601,10 +506,7 @@ fn draw(
         let mut spaced = classes.clone();
         spaced.push(' ');
         let internal = spaced.contains(" internal-link ");
-        if let Some(label) = node
-            .label
-            .as_deref()
-            .filter(|label| internal && !label.is_empty())
+        if let Some(label) = node.label.as_deref().filter(|label| internal && !label.is_empty())
             && url.links != Some(false)
         {
             // The label is a note name, but it still ends up in an href, so it gets the same
@@ -625,19 +527,11 @@ fn draw(
             anchor.push_str(&text);
             anchor.push_str("</a>");
             text = anchor;
-            links.push(LinkInfo {
-                href: name,
-                id: node.id.clone(),
-                internal: true,
-            });
+            links.push(LinkInfo { href: name, id: node.id.clone(), internal: true });
         }
 
         let mut body = String::new();
-        if let Some(tooltip) = node
-            .tooltip
-            .as_deref()
-            .filter(|tooltip| !tooltip.is_empty())
-        {
+        if let Some(tooltip) = node.tooltip.as_deref().filter(|tooltip| !tooltip.is_empty()) {
             body.push_str("<title>");
             body.push_str(&esc_text(tooltip));
             body.push_str("</title>");
@@ -646,11 +540,7 @@ fn draw(
         body.push_str(&text);
         if let Some(link) = node.link.as_deref().filter(|link| !link.is_empty()) {
             let mut attrs = String::new();
-            if let Some(target) = node
-                .link_target
-                .as_deref()
-                .filter(|target| !target.is_empty())
-            {
+            if let Some(target) = node.link_target.as_deref().filter(|target| !target.is_empty()) {
                 attrs.push_str(" target=\"");
                 attrs.push_str(&esc(target));
                 attrs.push('"');
@@ -714,9 +604,7 @@ fn draw(
             edges_out.push_str(" stroke-dasharray=\"3 4\"");
         }
         edges_out.push_str("/>");
-        edges_out.push_str(&marker(
-            end_type, path.ex, path.ey, path.edx, path.edy, &color,
-        ));
+        edges_out.push_str(&marker(end_type, path.ex, path.ey, path.edx, path.edy, &color));
         edges_out.push_str("</g>");
 
         if label.width > 0.0 {
@@ -740,50 +628,21 @@ fn draw(
             }
             let sideways = flows_sideways(&cnodes, src);
             let (w, h) = views.get(src).map_or((0.0, 0.0), |view| (view.w, view.h));
-            let c = cnodes
-                .get(src)
-                .cloned()
-                .unwrap_or_else(|| cnode(0.0, 0.0, -1));
+            let c = cnodes.get(src).cloned().unwrap_or_else(|| cnode(0.0, 0.0, -1));
             let Some(ce) = cedges.get_mut(i) else {
                 continue;
             };
-            loop_path(
-                &c,
-                w,
-                h,
-                to_f64(k),
-                sideways,
-                LOOP,
-                marker_trim(end_type),
-                ce,
-            )
+            loop_path(&c, w, h, to_f64(k), sideways, LOOP, marker_trim(end_type), ce)
         } else {
-            let (Some(src_node), Some(dst_node), Some(src_view), Some(dst_view)) = (
-                cnodes.get(src),
-                cnodes.get(dst),
-                views.get(src),
-                views.get(dst),
-            ) else {
+            let (Some(src_node), Some(dst_node), Some(src_view), Some(dst_view)) =
+                (cnodes.get(src), cnodes.get(dst), views.get(src), views.get(dst))
+            else {
                 continue;
             };
             let mut route = ce.route.clone();
             let last = route.len().saturating_sub(3);
-            inset_route(
-                &mut route,
-                0,
-                src_view.shape,
-                src_view.w,
-                src_view.h,
-                src_node,
-            );
-            inset_route(
-                &mut route,
-                last,
-                dst_view.shape,
-                dst_view.w,
-                dst_view.h,
-                dst_node,
-            );
+            inset_route(&mut route, 0, src_view.shape, src_view.w, src_view.h, src_node);
+            inset_route(&mut route, last, dst_view.shape, dst_view.w, dst_view.h, dst_node);
             let curve = match &edge.curve {
                 Some(Value::String(curve)) => Some(curve.as_str()),
                 _ => None,
@@ -812,9 +671,7 @@ fn draw(
         content.push_str("</g>");
     }
     if !edges_out.is_empty() {
-        content.push_str(
-            "<g class=\"ondine-edges\" fill=\"none\" stroke=\"var(--_l)\" stroke-linecap=\"round\">",
-        );
+        content.push_str("<g class=\"ondine-edges\" fill=\"none\" stroke=\"var(--_l)\" stroke-linecap=\"round\">");
         content.push_str(&edges_out);
         content.push_str("</g>");
     }
@@ -829,26 +686,10 @@ fn draw(
     content.push_str(&nodes_out);
     content.push_str("</g>");
 
-    let accessible = Accessible {
-        acc_descr: db.acc_descr.as_deref(),
-        acc_title: db.acc_title.as_deref(),
-    };
-    let svg = svg_document(
-        "agentflow",
-        width,
-        height,
-        size,
-        options,
-        accessible,
-        &content,
-    );
+    let accessible = Accessible { acc_descr: db.acc_descr.as_deref(), acc_title: db.acc_title.as_deref() };
+    let svg = svg_document("agentflow", width, height, size, options, accessible, &content);
 
-    Rendered {
-        height,
-        links,
-        svg,
-        width,
-    }
+    Rendered { height, links, svg, width }
 }
 
 /// A collapsed flow: its box, a dashed rule, and three dots below the title.

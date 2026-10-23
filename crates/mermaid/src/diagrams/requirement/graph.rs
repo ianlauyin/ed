@@ -1,8 +1,10 @@
 //! The nodes and edges of a requirement diagram to lay out. Port of Pele's
 //! `src/diagrams/requirement/graph.ts`.
 
-use super::db::{CONTAINS, RequirementDb};
-use super::types::{Requirement, RequirementElement};
+use super::db::CONTAINS;
+use super::db::RequirementDb;
+use super::types::Requirement;
+use super::types::RequirementElement;
 
 /// A node: a requirement or an element.
 pub(crate) struct GraphNode<'a> {
@@ -44,8 +46,7 @@ pub(crate) struct RequirementGraph<'a> {
 
 /// Builds the nodes and edges to lay out: requirements first, then elements.
 pub(crate) fn build_requirement_graph(model: &RequirementDb) -> RequirementGraph<'_> {
-    let mut nodes =
-        Vec::with_capacity(model.requirements.values.len() + model.elements.values.len());
+    let mut nodes = Vec::with_capacity(model.requirements.values.len() + model.elements.values.len());
     for requirement in &model.requirements.values {
         nodes.push(GraphNode {
             css_classes: requirement.classes.join(" "),
@@ -87,9 +88,5 @@ pub(crate) fn build_requirement_graph(model: &RequirementDb) -> RequirementGraph
         })
         .collect();
 
-    RequirementGraph {
-        direction: model.direction,
-        edges,
-        nodes,
-    }
+    RequirementGraph { direction: model.direction, edges, nodes }
 }

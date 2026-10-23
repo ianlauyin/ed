@@ -4,16 +4,25 @@
 //! Pele's `FlowDb` keeps nodes, classes, and tooltips in `Map`s. Here each is a `Vec` in insertion
 //! order with a `BTreeMap` index for lookups, so iteration order never depends on hashing.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use super::shapes::is_valid_shape;
-use super::types::{
-    DocItem, FlowClassDef, FlowEdge, FlowNode, FlowSubgraph, FlowText, LabelType, LinkInfo,
-};
-use crate::error::{Code, Error, push_u32};
+use super::types::DocItem;
+use super::types::FlowClassDef;
+use super::types::FlowEdge;
+use super::types::FlowNode;
+use super::types::FlowSubgraph;
+use super::types::FlowText;
+use super::types::LabelType;
+use super::types::LinkInfo;
+use crate::error::Code;
+use crate::error::Error;
+use crate::error::push_u32;
 use crate::util::chars::is_space;
 use crate::util::url;
-use crate::yaml::{self, Value};
+use crate::yaml::Value;
+use crate::yaml::{self};
 
 /// Options Pele's flowchart entry passes to `FlowDb`. Pele's `direction` and `warn` options are
 /// never set by it, so they are left out.
@@ -73,9 +82,7 @@ fn label_type(r#type: Option<&str>) -> LabelType {
 
 /// Strips one pair of surrounding double quotes.
 fn unquote(text: &str) -> &str {
-    text.strip_prefix('"')
-        .and_then(|rest| rest.strip_suffix('"'))
-        .unwrap_or(text)
+    text.strip_prefix('"').and_then(|rest| rest.strip_suffix('"')).unwrap_or(text)
 }
 
 /// Pele's `destructStartLink`.
@@ -137,22 +144,13 @@ fn destruct_end_link(raw: &str) -> LinkInfo {
         length = i32::try_from(dots).unwrap_or(i32::MAX);
     }
 
-    LinkInfo {
-        id: None,
-        length: Some(length),
-        stroke,
-        text: None,
-        r#type,
-    }
+    LinkInfo { id: None, length: Some(length), stroke, text: None, r#type }
 }
 
 impl FlowDb {
     /// Creates an empty model.
     pub(crate) fn new(options: Options) -> Self {
-        Self {
-            options,
-            ..Self::default()
-        }
+        Self { options, ..Self::default() }
     }
 
     fn node_mut(&mut self, id: &str) -> Option<&mut FlowNode> {
@@ -343,13 +341,7 @@ impl FlowDb {
     }
 
     /// Adds one edge. `id` is the user-defined id, without its `@`.
-    fn add_single_link(
-        &mut self,
-        start: &str,
-        end: &str,
-        info: &LinkInfo,
-        id: Option<&str>,
-    ) -> Result<(), Error> {
+    fn add_single_link(&mut self, start: &str, end: &str, info: &LinkInfo, id: Option<&str>) -> Result<(), Error> {
         let mut edge = FlowEdge {
             animate: None,
             animation: None,
@@ -395,10 +387,7 @@ impl FlowDb {
             && self.edges.len() >= max
         {
             let mut text = String::from("Edge limit exceeded. ");
-            push_u32(
-                &mut text,
-                u32::try_from(self.edges.len()).unwrap_or(u32::MAX),
-            );
+            push_u32(&mut text, u32::try_from(self.edges.len()).unwrap_or(u32::MAX));
             text.push_str(" edges found, but the limit is ");
             push_u32(&mut text, u32::try_from(max).unwrap_or(u32::MAX));
             text.push('.');
@@ -416,12 +405,7 @@ impl FlowDb {
 
     /// Adds an edge from every start to every end. Only the edge from the last start to the
     /// first end takes the user-defined id.
-    pub(crate) fn add_link(
-        &mut self,
-        starts: &[String],
-        ends: &[String],
-        info: &LinkInfo,
-    ) -> Result<(), Error> {
+    pub(crate) fn add_link(&mut self, starts: &[String], ends: &[String], info: &LinkInfo) -> Result<(), Error> {
         let id = info.id.as_deref().map(|id| id.replacen('@', "", 1));
         let last_start = starts.last();
         let first_end = ends.first();
@@ -435,11 +419,7 @@ impl FlowDb {
     }
 
     /// Sets the curve of the edges at `positions`, or the default curve.
-    pub(crate) fn update_link_interpolate(
-        &mut self,
-        positions: &[String],
-        interpolate: &str,
-    ) -> Result<(), Error> {
+    pub(crate) fn update_link_interpolate(&mut self, positions: &[String], interpolate: &str) -> Result<(), Error> {
         for pos in positions {
             if pos == "default" {
                 self.default_interpolate = Some(interpolate.to_owned());
@@ -451,11 +431,7 @@ impl FlowDb {
     }
 
     /// Sets the styles of the edges at `positions`, or the default styles.
-    pub(crate) fn update_link(
-        &mut self,
-        positions: &[String],
-        mut style: Vec<String>,
-    ) -> Result<(), Error> {
+    pub(crate) fn update_link(&mut self, positions: &[String], mut style: Vec<String>) -> Result<(), Error> {
         // Pele assigns one array to every edge and appends `fill:none` to it at the first edge,
         // so every edge of the statement sees the appended value.
         if positions.iter().any(|pos| pos != "default")
@@ -483,9 +459,7 @@ impl FlowDb {
 
         let mut text = String::from("The index ");
         text.push_str(pos);
-        text.push_str(
-            " for linkStyle is out of bounds. Valid indices for linkStyle are between 0 and ",
-        );
+        text.push_str(" for linkStyle is out of bounds. Valid indices for linkStyle are between 0 and ");
         if count == 0 {
             text.push_str("-1");
         } else {
@@ -507,11 +481,7 @@ impl FlowDb {
                 index
             } else {
                 self.class_index.insert(id.to_owned(), self.classes.len());
-                self.classes.push(FlowClassDef {
-                    id: id.to_owned(),
-                    styles: Vec::new(),
-                    text_styles: Vec::new(),
-                });
+                self.classes.push(FlowClassDef { id: id.to_owned(), styles: Vec::new(), text_styles: Vec::new() });
                 self.classes.len() - 1
             };
             let Some(class) = self.classes.get_mut(index) else {
@@ -556,11 +526,7 @@ impl FlowDb {
             if let Some(edge) = self.edge_by_id.get(id).and_then(|&i| self.edges.get_mut(i)) {
                 edge.classes.push(class_name.to_owned());
             }
-            if let Some(subgraph) = self
-                .subgraph_lookup
-                .get(id)
-                .and_then(|&i| self.subgraphs.get_mut(i))
-            {
+            if let Some(subgraph) = self.subgraph_lookup.get(id).and_then(|&i| self.subgraphs.get_mut(i)) {
                 subgraph.classes.push(class_name.to_owned());
             }
         }
@@ -574,8 +540,7 @@ impl FlowDb {
                     tooltip.clone_into(&mut entry.1);
                 }
             } else {
-                self.tooltip_index
-                    .insert(id.to_owned(), self.tooltips.len());
+                self.tooltip_index.insert(id.to_owned(), self.tooltips.len());
                 self.tooltips.push((id.to_owned(), tooltip.to_owned()));
             }
         }
@@ -600,10 +565,7 @@ impl FlowDb {
 
     /// Sets the accessible title without leading whitespace.
     pub(crate) fn set_acc_title(&mut self, text: &str) {
-        self.acc_title = Some(
-            text.trim_start_matches(|c| is_space(u32::from(c)))
-                .to_owned(),
-        );
+        self.acc_title = Some(text.trim_start_matches(|c| is_space(u32::from(c))).to_owned());
     }
 
     /// Sets the accessible description, removing indentation after line breaks.
@@ -656,10 +618,7 @@ impl FlowDb {
 
         let id = id.unwrap_or_else(|| {
             let mut generated = String::from("subGraph");
-            push_u32(
-                &mut generated,
-                u32::try_from(self.sub_count).unwrap_or(u32::MAX),
-            );
+            push_u32(&mut generated, u32::try_from(self.sub_count).unwrap_or(u32::MAX));
             generated
         });
         if title.is_empty() {
@@ -668,10 +627,8 @@ impl FlowDb {
         self.sub_count += 1;
 
         // A node belongs to the first subgraph that lists it, and a subgraph never contains itself.
-        let nodes: Vec<String> = node_list
-            .into_iter()
-            .filter(|node| !self.members.contains(node) && *node != id)
-            .collect();
+        let nodes: Vec<String> =
+            node_list.into_iter().filter(|node| !self.members.contains(node) && *node != id).collect();
         for node in &nodes {
             self.members.insert(node.clone());
         }
@@ -681,8 +638,7 @@ impl FlowDb {
                 existing.nodes.extend(nodes);
             }
         } else {
-            self.subgraph_lookup
-                .insert(id.clone(), self.subgraphs.len());
+            self.subgraph_lookup.insert(id.clone(), self.subgraphs.len());
             self.subgraphs.push(FlowSubgraph {
                 classes: Vec::new(),
                 dir,
@@ -703,13 +659,7 @@ impl FlowDb {
             return info;
         };
 
-        let invalid = LinkInfo {
-            id: None,
-            length: None,
-            stroke: "INVALID",
-            text: None,
-            r#type: "INVALID",
-        };
+        let invalid = LinkInfo { id: None, length: None, stroke: "INVALID", text: None, r#type: "INVALID" };
         let (start_type, stroke) = destruct_start_link(start);
         if stroke != info.stroke {
             return invalid;
@@ -726,20 +676,12 @@ impl FlowDb {
             }
         };
 
-        LinkInfo {
-            id: None,
-            length: info.length,
-            stroke,
-            text: None,
-            r#type,
-        }
+        LinkInfo { id: None, length: info.length, stroke, text: None, r#type }
     }
 
     /// The subgraph with `id`.
     pub(crate) fn subgraph(&self, id: &str) -> Option<&FlowSubgraph> {
-        self.subgraph_lookup
-            .get(id)
-            .and_then(|&index| self.subgraphs.get(index))
+        self.subgraph_lookup.get(id).and_then(|&index| self.subgraphs.get(index))
     }
 }
 
@@ -779,9 +721,7 @@ pub(crate) fn js_trim(text: &str) -> &str {
 
 /// A property of a YAML mapping.
 fn get<'v>(doc: &'v [(String, Value)], key: &str) -> Option<&'v Value> {
-    doc.iter()
-        .find(|(own, _)| own == key)
-        .map(|(_, value)| value)
+    doc.iter().find(|(own, _)| own == key).map(|(_, value)| value)
 }
 
 /// JavaScript's `String(value)` for a YAML value.
@@ -834,16 +774,9 @@ fn string_to_number(text: &str) -> f64 {
         }
     }
 
-    let unsigned = text
-        .strip_prefix('+')
-        .or_else(|| text.strip_prefix('-'))
-        .unwrap_or(text);
+    let unsigned = text.strip_prefix('+').or_else(|| text.strip_prefix('-')).unwrap_or(text);
     if unsigned == "Infinity" {
-        return if text.starts_with('-') {
-            f64::NEG_INFINITY
-        } else {
-            f64::INFINITY
-        };
+        return if text.starts_with('-') { f64::NEG_INFINITY } else { f64::INFINITY };
     }
 
     // StrDecimalLiteral: digits with an optional fraction, then an optional exponent.

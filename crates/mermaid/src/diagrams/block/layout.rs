@@ -1,7 +1,8 @@
 //! The block grid: places each block in its container's columns and sizes the containers. Port of
 //! Pele's `src/diagrams/block/layout.ts`.
 
-use crate::error::{Code, Error};
+use crate::error::Code;
+use crate::error::Error;
 
 /// A block in the grid. Cells live in one list and name their children by index.
 #[derive(Clone, Debug, Default)]
@@ -89,11 +90,7 @@ fn measure(cells: &mut [Cell], at: usize, gap: f64, inset: f64) {
         let (px, py) = block_position(columns, position);
         // Mermaid lets a block wider than the rest of its row stick out of the grid. Here it
         // stops at the last column.
-        let mut span = if child.span >= 1.0 {
-            child.span.min(MAX_SPAN)
-        } else {
-            1.0
-        };
+        let mut span = if child.span >= 1.0 { child.span.min(MAX_SPAN) } else { 1.0 };
         if columns > 0.0 && span > columns - px {
             span = columns - px;
         }

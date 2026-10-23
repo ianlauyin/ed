@@ -6,7 +6,10 @@
 
 use super::tokens::T;
 use crate::diagrams::common::caseless::word_at;
-use crate::util::chars::{is_digit, is_letter, is_space, is_word};
+use crate::util::chars::is_digit;
+use crate::util::chars::is_letter;
+use crate::util::chars::is_space;
+use crate::util::chars::is_word;
 
 /// A token: its kind and its UTF-8 span.
 #[derive(Clone, Copy, Debug)]
@@ -103,18 +106,13 @@ fn digits(src: &str, mut q: usize) -> usize {
 
 /// Where the next `needle` is from `from`, or the end.
 fn up_to(src: &str, from: usize, needle: char) -> usize {
-    src.get(from..)
-        .and_then(|rest| rest.find(needle))
-        .map_or(src.len(), |at| from + at)
+    src.get(from..).and_then(|rest| rest.find(needle)).map_or(src.len(), |at| from + at)
 }
 
 /// Produces the tokens of Mermaid's Jison lexer for XY charts. An unrecognized character ends the
 /// list with an `Error` token. Otherwise the list ends with what the last state gives for the
 /// empty rest of the input, then `End`.
-#[expect(
-    clippy::many_single_char_names,
-    reason = "mirrors the names of Pele's lexer"
-)]
+#[expect(clippy::many_single_char_names, reason = "mirrors the names of Pele's lexer")]
 pub(crate) fn tokenize(src: &str) -> Vec<Token> {
     let n = src.len();
     let mut tokens: Vec<Token> = Vec::new();
@@ -131,9 +129,7 @@ pub(crate) fn tokenize(src: &str) -> Vec<Token> {
             *state = previous;
         }
     };
-    let keyword = |p: usize, word: &str| {
-        word_at(src, p, word) && !is_word(u32::from(byte(src, p + word.len())))
-    };
+    let keyword = |p: usize, word: &str| word_at(src, p, word) && !is_word(u32::from(byte(src, p + word.len())));
 
     while p < n {
         let Some(ch) = char_at(src, p) else {
@@ -161,23 +157,14 @@ pub(crate) fn tokenize(src: &str) -> Vec<Token> {
                 p += 1;
                 pop(&mut stack, &mut state);
             } else {
-                p = emit(
-                    &mut tokens,
-                    T::AccDescrMultilineValue,
-                    p,
-                    up_to(src, p, '}'),
-                );
+                p = emit(&mut tokens, T::AccDescrMultilineValue, p, up_to(src, p, '}'));
             }
             continue;
         }
 
         // The code unit after the first one at `p`: a low surrogate for a character outside the
         // Basic Multilingual Plane.
-        let next = if ch.len_utf16() == 2 {
-            0xdc00
-        } else {
-            u32::from(byte(src, p + width))
-        };
+        let next = if ch.len_utf16() == 2 { 0xdc00 } else { u32::from(byte(src, p + width)) };
         if c == 37 && next == 37 {
             p = up_to(src, p + 2, '\n');
             continue;
@@ -191,12 +178,7 @@ pub(crate) fn tokenize(src: &str) -> Vec<Token> {
             // Only a line break that directly follows an axis or a series ends it. One after
             // spaces is skipped with them, and the state carries on to the next line.
             if (state == S::AxisData || state == S::Data) && (c == 10 || next == 10) {
-                p = emit(
-                    &mut tokens,
-                    T::Newline,
-                    p,
-                    if c == 10 { p + 1 } else { p + 2 },
-                );
+                p = emit(&mut tokens, T::Newline, p, if c == 10 { p + 1 } else { p + 2 });
                 pop(&mut stack, &mut state);
                 continue;
             }
@@ -354,23 +336,11 @@ pub(crate) fn tokenize(src: &str) -> Vec<Token> {
     }
 
     if p < n {
-        tokens.push(Token {
-            end: p,
-            start: p,
-            t: T::Error,
-        });
+        tokens.push(Token { end: p, start: p, t: T::Error });
         return tokens;
     }
     // Jison tries the rules of the current state once more against the empty rest of the input.
-    tokens.push(Token {
-        end: n,
-        start: n,
-        t: state.at_end(),
-    });
-    tokens.push(Token {
-        end: n,
-        start: n,
-        t: T::End,
-    });
+    tokens.push(Token { end: n, start: n, t: state.at_end() });
+    tokens.push(Token { end: n, start: n, t: T::End });
     tokens
 }

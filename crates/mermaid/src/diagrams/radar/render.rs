@@ -5,13 +5,21 @@ use std::f64::consts::PI;
 
 use super::model::RadarModel;
 use crate::diagrams::Rendered;
-use crate::diagrams::common::fit_width::{fit_width, title_room};
-use crate::svg::builder::{esc_text, js_round, label_svg, push_num};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
+use crate::diagrams::common::fit_width::fit_width;
+use crate::diagrams::common::fit_width::title_room;
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
 use crate::svg::theme::series_color;
-use crate::text::label::{Label, layout_label};
+use crate::text::label::Label;
+use crate::text::label::layout_label;
 use crate::text::measure::BOLD;
-use crate::yaml::{Value, push_number};
+use crate::yaml::Value;
+use crate::yaml::push_number;
 
 /// The side of a legend swatch.
 const SWATCH: f64 = 12.0;
@@ -41,10 +49,7 @@ fn property<'v>(value: &'v Value, key: &str) -> Option<&'v Value> {
     let Value::Object(entries) = value else {
         return None;
     };
-    entries
-        .iter()
-        .find(|(own, _)| own == key)
-        .map(|(_, value)| value)
+    entries.iter().find(|(own, _)| own == key).map(|(_, value)| value)
 }
 
 /// The distance from the center of `value` between `min` at the center and `max` at `radius`.
@@ -75,17 +80,9 @@ fn closed_round_curve(points: &[Point], tension: f64) -> String {
         let p2 = at(i + 1);
         let p3 = at(i + 2);
         d.push_str(" C");
-        push_point(
-            &mut d,
-            p1.x + (p2.x - p0.x) * tension,
-            p1.y + (p2.y - p0.y) * tension,
-        );
+        push_point(&mut d, p1.x + (p2.x - p0.x) * tension, p1.y + (p2.y - p0.y) * tension);
         d.push(' ');
-        push_point(
-            &mut d,
-            p2.x - (p3.x - p1.x) * tension,
-            p2.y - (p3.y - p1.y) * tension,
-        );
+        push_point(&mut d, p2.x - (p3.x - p1.x) * tension, p2.y - (p3.y - p1.y) * tension);
         d.push(' ');
         push_point(&mut d, p2.x, p2.y);
     }
@@ -115,14 +112,7 @@ pub(crate) fn render(model: &RadarModel, config: &Value, options: &RenderOptions
 }
 
 /// `tight` is set when the chart does not fit the width it has with its legend beside it.
-fn draw(
-    model: &RadarModel,
-    config: &Value,
-    options: &RenderOptions,
-    width: f64,
-    height: f64,
-    tight: bool,
-) -> Rendered {
+fn draw(model: &RadarModel, config: &Value, options: &RenderOptions, width: f64, height: f64, tight: bool) -> Rendered {
     let size = options.font_size.unwrap_or(16.0);
     let small = js_round(size * 0.875);
     let pad = options.padding.unwrap_or(8.0);
@@ -143,10 +133,7 @@ fn draw(
         .map(|i| {
             #[expect(clippy::cast_precision_loss, reason = "axis counts are small")]
             let angle = (2.0 * PI * i as f64) / count - PI / 2.0;
-            Point {
-                x: angle.cos(),
-                y: angle.sin(),
-            }
+            Point { x: angle.cos(), y: angle.sin() }
         })
         .collect();
 
@@ -175,13 +162,7 @@ fn draw(
             push_num(&mut grid, r);
             grid.push_str("\"/>");
         } else {
-            let points: Vec<Point> = unit
-                .iter()
-                .map(|u| Point {
-                    x: u.x * r,
-                    y: u.y * r,
-                })
-                .collect();
+            let points: Vec<Point> = unit.iter().map(|u| Point { x: u.x * r, y: u.y * r }).collect();
             grid.push_str("<polygon points=\"");
             grid.push_str(&polygon(&points));
             grid.push_str("\"/>");
@@ -233,10 +214,7 @@ fn draw(
             .map(|(&value, u)| {
                 let r = relative_radius(value, min, max, radius);
                 let safe = if r.is_finite() { r } else { 0.0 };
-                Point {
-                    x: u.x * safe,
-                    y: u.y * safe,
-                }
+                Point { x: u.x * safe, y: u.y * safe }
             })
             .collect();
         let color = series_color(i64::try_from(index).unwrap_or(0));
@@ -262,10 +240,7 @@ fn draw(
     }
 
     let legend: Vec<Label> = if model.options.show_legend {
-        curves
-            .iter()
-            .map(|curve| layout_label(Some(&curve.label), false, small, 4000.0, 0, None))
-            .collect()
+        curves.iter().map(|curve| layout_label(Some(&curve.label), false, small, 4000.0, 0, None)).collect()
     } else {
         Vec::new()
     };
@@ -275,16 +250,8 @@ fn draw(
     }
     #[expect(clippy::cast_precision_loss, reason = "curve counts are small")]
     let legend_height = legend.len() as f64 * ROW;
-    let legend_x = if tight {
-        -(SWATCH + 8.0 + legend_width) / 2.0
-    } else {
-        x1 + GAP
-    };
-    let legend_top = if tight {
-        y1 + GAP / 2.0
-    } else {
-        -legend_height / 2.0
-    };
+    let legend_x = if tight { -(SWATCH + 8.0 + legend_width) / 2.0 } else { x1 + GAP };
+    let legend_top = if tight { y1 + GAP / 2.0 } else { -legend_height / 2.0 };
     if !legend.is_empty() && tight {
         x0 = x0.min(legend_x);
         x1 = x1.max(-legend_x);
@@ -310,29 +277,12 @@ fn draw(
         legend_out.push_str("\" fill-opacity=\"0.4\" stroke=\"");
         legend_out.push_str(&color);
         legend_out.push_str("\"/>");
-        legend_out.push_str(&label_svg(
-            label,
-            legend_x + SWATCH + 8.0 + label.width / 2.0,
-            y,
-            "",
-            None,
-        ));
+        legend_out.push_str(&label_svg(label, legend_x + SWATCH + 8.0 + label.width / 2.0, y, "", None));
         legend_out.push_str("</g>");
     }
 
-    let title = layout_label(
-        model.title.as_deref(),
-        false,
-        size,
-        title_room(options),
-        BOLD,
-        None,
-    );
-    let title_height = if title.height > 0.0 {
-        title.height + 8.0
-    } else {
-        0.0
-    };
+    let title = layout_label(model.title.as_deref(), false, size, title_room(options), BOLD, None);
+    let title_height = if title.height > 0.0 { title.height + 8.0 } else { 0.0 };
     let body_width = (x1 - x0).max(title.width);
     let total_width = (body_width + 2.0 * pad).ceil();
     let total_height = (y1 - y0 + title_height + 2.0 * pad).ceil();
@@ -345,11 +295,7 @@ fn draw(
         None,
     );
     content.push_str("<g transform=\"translate(");
-    push_point(
-        &mut content,
-        pad + (body_width - (x1 - x0)) / 2.0 - x0,
-        pad + title_height - y0,
-    );
+    push_point(&mut content, pad + (body_width - (x1 - x0)) / 2.0 - x0, pad + title_height - y0);
     content.push_str(")\">");
     if !grid.is_empty() {
         content.push_str("<g class=\"ondine-graticule\" fill=\"none\" stroke=\"var(--_a)\">");
@@ -390,16 +336,8 @@ fn draw(
         total_height,
         size,
         options,
-        Accessible {
-            acc_descr: model.acc_descr.as_deref(),
-            acc_title: model.acc_title.as_deref(),
-        },
+        Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
         &content,
     );
-    Rendered {
-        height: total_height,
-        links: Vec::new(),
-        svg,
-        width: total_width,
-    }
+    Rendered { height: total_height, links: Vec::new(), svg, width: total_width }
 }

@@ -2,10 +2,13 @@
 //! `src/diagrams/block/db.ts`.
 
 use std::cmp::Ordering;
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
-use super::types::{Block, BlockClassDef};
-use crate::error::{Code, Error};
+use super::types::Block;
+use super::types::BlockClassDef;
+use crate::error::Code;
+use crate::error::Error;
 use crate::text::label::trim;
 
 /// The most space blocks a diagram may hold.
@@ -58,20 +61,12 @@ pub(crate) fn edge_str_to_edge_start_data(type_str: &str) -> &'static str {
 
 /// The line weight of a link.
 pub(crate) fn edge_str_to_thickness(type_str: &str) -> &'static str {
-    if type_str.contains("==") {
-        "thick"
-    } else {
-        "normal"
-    }
+    if type_str.contains("==") { "thick" } else { "normal" }
 }
 
 /// The line pattern of a link.
 pub(crate) fn edge_str_to_pattern(type_str: &str) -> &'static str {
-    if type_str.contains(".-") {
-        "dotted"
-    } else {
-        "solid"
-    }
+    if type_str.contains(".-") { "dotted" } else { "solid" }
 }
 
 /// A statement list being placed under its parent.
@@ -138,18 +133,12 @@ impl BlockDb {
 
     /// The block with `id`, by arena index.
     pub(crate) fn get(&self, id: &str) -> Option<usize> {
-        self.by_id_index
-            .get(id)
-            .and_then(|&at| self.by_id.get(at))
-            .map(|&(_, index)| index)
+        self.by_id_index.get(id).and_then(|&at| self.by_id.get(at)).map(|&(_, index)| index)
     }
 
     /// The children of a block, by arena index.
     pub(crate) fn children(&self, index: usize) -> &[usize] {
-        self.arena
-            .get(index)
-            .and_then(|block| block.children.as_deref())
-            .unwrap_or(&[])
+        self.arena.get(index).and_then(|block| block.children.as_deref()).unwrap_or(&[])
     }
 
     /// The class definition named `id`.
@@ -181,10 +170,7 @@ impl BlockDb {
         let at = if let Some(at) = self.classes.iter().position(|class| class.id == id) {
             at
         } else {
-            self.classes.push(BlockClassDef {
-                id: id.to_owned(),
-                ..BlockClassDef::default()
-            });
+            self.classes.push(BlockClassDef { id: id.to_owned(), ..BlockClassDef::default() });
             self.classes.len() - 1
         };
         let Some(found) = self.classes.get_mut(at) else {
@@ -200,11 +186,7 @@ impl BlockDb {
                 None => trim(attribute).to_owned(),
             };
             if attribute.contains("color") {
-                found.text_styles.push(
-                    fixed
-                        .replacen("fill", "bgFill", 1)
-                        .replacen("color", "fill", 1),
-                );
+                found.text_styles.push(fixed.replacen("fill", "bgFill", 1).replacen("color", "fill", 1));
             }
             found.styles.push(fixed);
         }
@@ -223,10 +205,7 @@ impl BlockDb {
         for id in item_ids.split(',') {
             let index = self.named(trim(id));
             if let Some(block) = self.arena.get_mut(index) {
-                block
-                    .classes
-                    .get_or_insert_with(Vec::new)
-                    .push(css_class_name.to_owned());
+                block.classes.get_or_insert_with(Vec::new).push(css_class_name.to_owned());
             }
         }
     }
@@ -237,12 +216,8 @@ impl BlockDb {
         if let Some(index) = self.get(id) {
             return index;
         }
-        let index = self.add(Block {
-            children: Some(Vec::new()),
-            id: Some(id.to_owned()),
-            r#type: "na",
-            ..Block::default()
-        });
+        let index =
+            self.add(Block { children: Some(Vec::new()), id: Some(id.to_owned()), r#type: "na", ..Block::default() });
         self.set(id.to_owned(), index);
         self.pending.insert(id.to_owned());
         index
@@ -254,12 +229,7 @@ impl BlockDb {
     ///
     /// Returns a limit error past [`MAX_SPACES`] space blocks.
     pub(crate) fn set_hierarchy(&mut self, statements: Vec<usize>) -> Result<(), Error> {
-        let mut stack = vec![Frame {
-            at: 0,
-            children: Vec::new(),
-            list: statements,
-            parent: ROOT,
-        }];
+        let mut stack = vec![Frame { at: 0, children: Vec::new(), list: statements, parent: ROOT }];
         while let Some(f) = stack.last_mut() {
             let Some(&b) = f.list.get(f.at) else {
                 let children = std::mem::take(&mut f.children);
@@ -323,11 +293,7 @@ impl BlockDb {
                 None => self.generate_id(),
             };
             if block.label.as_deref().is_none_or(str::is_empty) {
-                block.label = Some(if block.r#type == "composite" {
-                    String::new()
-                } else {
-                    id.clone()
-                });
+                block.label = Some(if block.r#type == "composite" { String::new() } else { id.clone() });
             }
             block.id = Some(id.clone());
             let known = self.get(&id);
@@ -362,14 +328,8 @@ impl BlockDb {
 
             let mut placed = Vec::new();
             if is_space {
-                if !matches!(
-                    width.partial_cmp(&(MAX_SPACES - self.spaces)),
-                    Some(Ordering::Less | Ordering::Equal)
-                ) {
-                    let mut error = Error::new(
-                        Code::Limit,
-                        "A block diagram can hold at most 100000 space blocks.",
-                    );
+                if !matches!(width.partial_cmp(&(MAX_SPACES - self.spaces)), Some(Ordering::Less | Ordering::Equal)) {
+                    let mut error = Error::new(Code::Limit, "A block diagram can hold at most 100000 space blocks.");
                     error.r#type = Some("block");
                     return Err(error);
                 }
@@ -394,12 +354,7 @@ impl BlockDb {
                 f.children.extend(placed);
             }
             if !inner.is_empty() {
-                stack.push(Frame {
-                    at: 0,
-                    children: Vec::new(),
-                    list: inner,
-                    parent: b,
-                });
+                stack.push(Frame { at: 0, children: Vec::new(), list: inner, parent: b });
             }
         }
         Ok(())

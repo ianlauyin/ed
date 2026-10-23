@@ -1,8 +1,11 @@
 //! The kanban database. Port of Pele's `src/diagrams/kanban/db.ts`.
 
-use crate::diagrams::common::outline::{Decoration, OutlineDb};
-use crate::error::{Code, Error};
-use crate::yaml::{self, Value};
+use crate::diagrams::common::outline::Decoration;
+use crate::diagrams::common::outline::OutlineDb;
+use crate::error::Code;
+use crate::error::Error;
+use crate::yaml::Value;
+use crate::yaml::{self};
 
 /// A card, or the head of a column.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -71,10 +74,7 @@ fn property<'v>(value: &'v Value, key: &str) -> Option<&'v Value> {
     let Value::Object(entries) = value else {
         return None;
     };
-    entries
-        .iter()
-        .find(|(own, _)| own == key)
-        .map(|(_, value)| value)
+    entries.iter().find(|(own, _)| own == key).map(|(_, value)| value)
 }
 
 /// `String(value)` of a truthy property, as `if (doc.key) node.key = String(doc.key)` sets it.
@@ -94,37 +94,13 @@ fn has_upper(text: &str) -> bool {
 }
 
 impl KanbanDb {
-    fn add(
-        &mut self,
-        level: usize,
-        id: &str,
-        descr: &str,
-        shape_data: Option<&str>,
-    ) -> Result<(), Error> {
-        let mut node = KanbanNode {
-            id: id.to_owned(),
-            label: descr.to_owned(),
-            level,
-            ..KanbanNode::default()
-        };
+    fn add(&mut self, level: usize, id: &str, descr: &str, shape_data: Option<&str>) -> Result<(), Error> {
+        let mut node = KanbanNode { id: id.to_owned(), label: descr.to_owned(), level, ..KanbanNode::default() };
 
         if let Some(data) = shape_data {
-            let yaml = if data.contains('\n') {
-                [data, "\n"].concat()
-            } else {
-                ["{\n", data, "\n}"].concat()
-            };
+            let yaml = if data.contains('\n') { [data, "\n"].concat() } else { ["{\n", data, "\n}"].concat() };
             let doc = yaml::parse(&yaml).map_err(|message| {
-                failure(
-                    Code::Syntax,
-                    [
-                        "Metadata of \"",
-                        &node.id,
-                        "\" is not valid YAML. ",
-                        &message,
-                    ]
-                    .concat(),
-                )
+                failure(Code::Syntax, ["Metadata of \"", &node.id, "\" is not valid YAML. ", &message].concat())
             })?;
             // Mermaid throws a TypeError on metadata that is empty or not a mapping. Here it is
             // ignored.
@@ -133,12 +109,7 @@ impl KanbanDb {
                 if has_upper(&shape) || shape.contains('_') {
                     return Err(failure(
                         Code::Semantic,
-                        [
-                            "No such shape: ",
-                            &shape,
-                            ". Shape names should be lowercase.",
-                        ]
-                        .concat(),
+                        ["No such shape: ", &shape, ". Shape names should be lowercase."].concat(),
                     ));
                 }
                 if let Some(label) = truthy_string(&doc, "label") {
@@ -162,12 +133,7 @@ impl KanbanDb {
         if let Some(misplaced) = &self.misplaced {
             return Err(failure(
                 Code::Semantic,
-                [
-                    "Items without section detected, found section (\"",
-                    misplaced,
-                    "\")",
-                ]
-                .concat(),
+                ["Items without section detected, found section (\"", misplaced, "\")"].concat(),
             ));
         }
         if self.sections.is_empty() {
@@ -175,10 +141,7 @@ impl KanbanDb {
         }
         if level == self.section_level {
             self.last = Some(Last::Section);
-            self.sections.push(KanbanSection {
-                items: Vec::new(),
-                node,
-            });
+            self.sections.push(KanbanSection { items: Vec::new(), node });
         } else if let Some(section) = self.sections.last_mut() {
             self.last = Some(Last::Item);
             if level < self.section_level {

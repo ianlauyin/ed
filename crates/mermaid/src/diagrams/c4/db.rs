@@ -2,7 +2,10 @@
 
 use std::collections::BTreeMap;
 
-use super::types::{C4Attr, C4Element, C4Named, C4Rel};
+use super::types::C4Attr;
+use super::types::C4Element;
+use super::types::C4Named;
+use super::types::C4Rel;
 use crate::text::label::trim_start;
 use crate::util::chars::is_space;
 
@@ -15,16 +18,11 @@ pub(crate) fn parse_int(text: &str) -> f64 {
         Some(b'+') => (false, text.get(1..).unwrap_or("")),
         _ => (false, text),
     };
-    let hex = text
-        .get(..2)
-        .is_some_and(|head| head.eq_ignore_ascii_case("0x"));
+    let hex = text.get(..2).is_some_and(|head| head.eq_ignore_ascii_case("0x"));
     let value = if hex {
         let digits: &str = {
             let body = text.get(2..).unwrap_or("");
-            let end = body
-                .bytes()
-                .position(|c| !c.is_ascii_hexdigit())
-                .unwrap_or(body.len());
+            let end = body.bytes().position(|c| !c.is_ascii_hexdigit()).unwrap_or(body.len());
             body.get(..end).unwrap_or("")
         };
         if digits.is_empty() {
@@ -32,14 +30,9 @@ pub(crate) fn parse_int(text: &str) -> f64 {
         }
         // ponytail: past 32 hex digits the value is summed in floating point, which may round
         // differently from V8 in the last place.
-        digits.chars().fold(0.0, |value: f64, c| {
-            value * 16.0 + f64::from(c.to_digit(16).unwrap_or(0))
-        })
+        digits.chars().fold(0.0, |value: f64, c| value * 16.0 + f64::from(c.to_digit(16).unwrap_or(0)))
     } else {
-        let end = text
-            .bytes()
-            .position(|c| !c.is_ascii_digit())
-            .unwrap_or(text.len());
+        let end = text.bytes().position(|c| !c.is_ascii_digit()).unwrap_or(text.len());
         match text.get(..end).filter(|digits| !digits.is_empty()) {
             Some(digits) => digits.parse().unwrap_or(f64::NAN),
             None => return f64::NAN,
@@ -374,12 +367,7 @@ impl C4Db {
 
     /// Adds a person or a system: alias, label, ?descr, ?sprite, ?tags, $link.
     pub(crate) fn add_person_or_system(&mut self, kind: &str, attrs: &[C4Attr]) {
-        let at = element(
-            &mut self.shapes,
-            &mut self.shape_index,
-            attrs.first(),
-            attrs.get(1),
-        );
+        let at = element(&mut self.shapes, &mut self.shape_index, attrs.first(), attrs.get(1));
         let current = self.current;
         if let Some(shape) = self.shapes.get_mut(at) {
             shape.text(ElementField::Descr, attrs.get(2));
@@ -389,12 +377,7 @@ impl C4Db {
 
     /// Adds a container or a component: alias, label, ?techn, ?descr, ?sprite, ?tags, $link.
     pub(crate) fn add_container(&mut self, kind: &str, attrs: &[C4Attr]) {
-        let at = element(
-            &mut self.shapes,
-            &mut self.shape_index,
-            attrs.first(),
-            attrs.get(1),
-        );
+        let at = element(&mut self.shapes, &mut self.shape_index, attrs.first(), attrs.get(1));
         let current = self.current;
         if let Some(shape) = self.shapes.get_mut(at) {
             shape.text(ElementField::Techn, attrs.get(2));
@@ -404,12 +387,7 @@ impl C4Db {
     }
 
     fn boundary(&mut self, attrs: &[C4Attr], fallback: &str) -> usize {
-        let at = element(
-            &mut self.boundaries,
-            &mut self.boundary_index,
-            attrs.first(),
-            attrs.get(1),
-        );
+        let at = element(&mut self.boundaries, &mut self.boundary_index, attrs.first(), attrs.get(1));
         if let Some(boundary) = self.boundaries.get_mut(at) {
             match attrs.get(2) {
                 None => boundary.r#type = Some(fallback.to_owned()),
@@ -470,15 +448,10 @@ impl C4Db {
             (C4Attr::Text(from), C4Attr::Text(to)) => Some((from.clone(), to.clone())),
             _ => None,
         };
-        let found = key
-            .as_ref()
-            .and_then(|key| self.rel_index.get(key).copied());
+        let found = key.as_ref().and_then(|key| self.rel_index.get(key).copied());
         let at = found.unwrap_or_else(|| {
             let at = self.rels.len();
-            let mut rel = C4Rel {
-                r#type: r#type.to_owned(),
-                ..C4Rel::default()
-            };
+            let mut rel = C4Rel { r#type: r#type.to_owned(), ..C4Rel::default() };
             match from {
                 C4Attr::Text(from) => rel.from.clone_from(from),
                 C4Attr::Named(named) => rel.from_attr = Some(named.clone()),
@@ -509,11 +482,7 @@ impl C4Db {
         self.shape_index
             .get(alias)
             .map(|&at| ElementRef::Shape(at))
-            .or_else(|| {
-                self.boundary_index
-                    .get(alias)
-                    .map(|&at| ElementRef::Boundary(at))
-            })
+            .or_else(|| self.boundary_index.get(alias).map(|&at| ElementRef::Boundary(at)))
     }
 
     fn element_mut(&mut self, at: ElementRef) -> Option<&mut C4Element> {
@@ -552,8 +521,7 @@ impl C4Db {
 
     /// Restyles a relation: from, to, ?textColor, ?lineColor, ?offsetX, ?offsetY.
     pub(crate) fn update_rel_style(&mut self, attrs: &[C4Attr]) {
-        let (Some(C4Attr::Text(from)), Some(C4Attr::Text(to))) = (attrs.first(), attrs.get(1))
-        else {
+        let (Some(C4Attr::Text(from)), Some(C4Attr::Text(to))) = (attrs.first(), attrs.get(1)) else {
             return;
         };
         let Some(&at) = self.rel_index.get(&(from.clone(), to.clone())) else {

@@ -1,7 +1,8 @@
 //! The treemap model: rows nested into sections by indentation, with class styles. Port of
 //! Pele's `src/diagrams/treemap/model.ts`.
 
-use super::parser::{RowAst, TreemapAst};
+use super::parser::RowAst;
+use super::parser::TreemapAst;
 use crate::text::label::trim_start;
 use crate::util::chars::is_space;
 
@@ -116,12 +117,7 @@ fn build_hierarchy(items: Vec<TreemapItem>) -> Vec<TreemapNode> {
 pub(crate) fn build_treemap(ast: TreemapAst, title: Option<&str>) -> TreemapModel {
     let mut classes: Vec<(String, Vec<String>)> = Vec::new();
     for row in &ast.rows {
-        let RowAst::ClassDef {
-            class_name,
-            style_text,
-            ..
-        } = row
-        else {
+        let RowAst::ClassDef { class_name, style_text, .. } = row else {
             continue;
         };
         let at = if let Some(at) = classes.iter().position(|(name, _)| name == class_name) {
@@ -144,12 +140,10 @@ pub(crate) fn build_treemap(ast: TreemapAst, title: Option<&str>) -> TreemapMode
         let RowAst::Item { indent, item } = row else {
             continue;
         };
-        let styles = item.class_selector.as_ref().and_then(|selector| {
-            classes
-                .iter()
-                .find(|(name, _)| name == selector)
-                .map(|(_, styles)| styles)
-        });
+        let styles = item
+            .class_selector
+            .as_ref()
+            .and_then(|selector| classes.iter().find(|(name, _)| name == selector).map(|(_, styles)| styles));
         items.push(TreemapItem {
             class_selector: item.class_selector.clone(),
             css_compiled_styles: styles.filter(|styles| !styles.is_empty()).cloned(),
@@ -161,19 +155,10 @@ pub(crate) fn build_treemap(ast: TreemapAst, title: Option<&str>) -> TreemapMode
     }
 
     TreemapModel {
-        acc_descr: ast
-            .acc_descr
-            .filter(|text| !text.is_empty())
-            .map(|text| dedent_lines(&text)),
-        acc_title: ast
-            .acc_title
-            .filter(|text| !text.is_empty())
-            .map(|text| trim_start(&text).to_owned()),
+        acc_descr: ast.acc_descr.filter(|text| !text.is_empty()).map(|text| dedent_lines(&text)),
+        acc_title: ast.acc_title.filter(|text| !text.is_empty()).map(|text| trim_start(&text).to_owned()),
         classes,
         roots: build_hierarchy(items),
-        title: ast
-            .title
-            .filter(|text| !text.is_empty())
-            .or_else(|| title.map(str::to_owned)),
+        title: ast.title.filter(|text| !text.is_empty()).or_else(|| title.map(str::to_owned)),
     }
 }

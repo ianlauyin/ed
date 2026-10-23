@@ -2,10 +2,12 @@
 //! `src/diagrams/packet/model.ts`.
 
 use super::parser::PacketAst;
-use crate::error::{Code, Error};
+use crate::error::Code;
+use crate::error::Error;
 use crate::text::label::trim_start;
 use crate::util::chars::is_space;
-use crate::yaml::{Value, push_number};
+use crate::yaml::Value;
+use crate::yaml::push_number;
 
 /// A field, or the piece of one in a row.
 #[derive(Clone, Debug, PartialEq)]
@@ -52,10 +54,7 @@ pub(crate) fn property<'v>(value: &'v Value, key: &str) -> Option<&'v Value> {
     let Value::Object(entries) = value else {
         return None;
     };
-    entries
-        .iter()
-        .find(|(own, _)| own == key)
-        .map(|(_, value)| value)
+    entries.iter().find(|(own, _)| own == key).map(|(_, value)| value)
 }
 
 /// `text.replace(/\n\s+/g, '\n')`.
@@ -93,11 +92,7 @@ fn invalid(parts: &[&str], numbers: &[f64]) -> Error {
 /// Returns a semantic error for a field that ends before it starts, does not follow the one
 /// before it, or has no bits.
 #[expect(clippy::float_cmp, reason = "bit numbers compare exactly, as in Pele")]
-pub(crate) fn build_packet(
-    ast: PacketAst,
-    config: &Value,
-    title: Option<&str>,
-) -> Result<PacketModel, Error> {
+pub(crate) fn build_packet(ast: PacketAst, config: &Value, title: Option<&str>) -> Result<PacketModel, Error> {
     let bits_per_row = packet_option(config, "bitsPerRow", 32.0, 1.0, 4096.0).floor();
     let mut rows: Vec<Vec<PacketBlock>> = Vec::new();
     let mut last_bit = -1.0;
@@ -109,34 +104,19 @@ pub(crate) fn build_packet(
             && end < start
         {
             return Err(invalid(
-                &[
-                    "Packet block ",
-                    " - ",
-                    " is invalid. End must be greater than start.",
-                ],
+                &["Packet block ", " - ", " is invalid. End must be greater than start."],
                 &[start, end],
             ));
         }
         let mut start = block.start.unwrap_or(last_bit + 1.0);
         if start != last_bit + 1.0 {
             return Err(invalid(
-                &[
-                    "Packet block ",
-                    " - ",
-                    " is not contiguous. It should start from ",
-                    ".",
-                ],
+                &["Packet block ", " - ", " is not contiguous. It should start from ", "."],
                 &[start, block.end.unwrap_or(start), last_bit + 1.0],
             ));
         }
         if block.bits == Some(0.0) {
-            return Err(invalid(
-                &[
-                    "Packet block ",
-                    " is invalid. Cannot have a zero bit field.",
-                ],
-                &[start],
-            ));
+            return Err(invalid(&["Packet block ", " is invalid. Cannot have a zero bit field."], &[start]));
         }
         let end = block.end.unwrap_or(start + block.bits.unwrap_or(1.0) - 1.0);
         let mut bits = block.bits.unwrap_or(end - start + 1.0);
@@ -146,24 +126,14 @@ pub(crate) fn build_packet(
         while (word.len() as f64) <= bits_per_row + 1.0 && rows.len() < MAX_ROWS {
             let row_end = row * bits_per_row - 1.0;
             if end <= row_end {
-                word.push(PacketBlock {
-                    bits,
-                    end,
-                    label: block.label.clone(),
-                    start,
-                });
+                word.push(PacketBlock { bits, end, label: block.label.clone(), start });
                 if end == row_end {
                     rows.push(std::mem::take(&mut word));
                     row += 1.0;
                 }
                 break;
             }
-            word.push(PacketBlock {
-                bits: row_end - start,
-                end: row_end,
-                label: block.label.clone(),
-                start,
-            });
+            word.push(PacketBlock { bits: row_end - start, end: row_end, label: block.label.clone(), start });
             rows.push(std::mem::take(&mut word));
             row += 1.0;
             start = row_end + 1.0;
@@ -175,19 +145,10 @@ pub(crate) fn build_packet(
     }
 
     Ok(PacketModel {
-        acc_descr: ast
-            .acc_descr
-            .filter(|text| !text.is_empty())
-            .map(|text| dedent_lines(&text)),
-        acc_title: ast
-            .acc_title
-            .filter(|text| !text.is_empty())
-            .map(|text| trim_start(&text).to_owned()),
+        acc_descr: ast.acc_descr.filter(|text| !text.is_empty()).map(|text| dedent_lines(&text)),
+        acc_title: ast.acc_title.filter(|text| !text.is_empty()).map(|text| trim_start(&text).to_owned()),
         bits_per_row,
         rows,
-        title: ast
-            .title
-            .filter(|text| !text.is_empty())
-            .or_else(|| title.map(str::to_owned)),
+        title: ast.title.filter(|text| !text.is_empty()).or_else(|| title.map(str::to_owned)),
     })
 }

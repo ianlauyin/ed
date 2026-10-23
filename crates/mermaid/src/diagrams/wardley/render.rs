@@ -1,21 +1,33 @@
 //! Draws a Wardley map: the evolution axis with its stages, components, links, pipelines, trends,
 //! annotations, notes, and forces. Port of Pele's `src/diagrams/wardley/render.ts`.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
-use super::builder::{Flow, WardleyNode};
+use super::builder::Flow;
+use super::builder::WardleyNode;
 use super::model::WardleyModel;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::fit_width;
-use crate::svg::builder::{
-    esc, esc_text, js_round, label_svg, push_num, shared_style, span_style, text_style,
-};
-use crate::svg::edges::{marker, marker_trim};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
+use crate::svg::builder::esc;
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::builder::shared_style;
+use crate::svg::builder::span_style;
+use crate::svg::builder::text_style;
+use crate::svg::edges::marker;
+use crate::svg::edges::marker_trim;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
 use crate::svg::theme::RADIUS;
-use crate::text::label::{Label, layout_label};
+use crate::text::label::Label;
+use crate::text::label::layout_label;
 use crate::text::measure::BOLD;
-use crate::yaml::{Value, push_number};
+use crate::yaml::Value;
+use crate::yaml::push_number;
 
 /// The stages when the map names none.
 const DEFAULT_STAGES: [&str; 4] = ["Genesis", "Custom Built", "Product", "Commodity"];
@@ -45,10 +57,7 @@ fn property<'v>(value: &'v Value, key: &str) -> Option<&'v Value> {
     let Value::Object(entries) = value else {
         return None;
     };
-    entries
-        .iter()
-        .find(|(own, _)| own == key)
-        .map(|(_, value)| value)
+    entries.iter().find(|(own, _)| own == key).map(|(_, value)| value)
 }
 
 /// A number setting of the `wardley-beta` section within `min` and `max`, or `fallback`.
@@ -119,9 +128,7 @@ fn start_label(label: &Label, x: f64, y: f64, attrs: &str) -> String {
 /// Draws `model` with the `wardley-beta` section of `config`, narrowed to fit the host's width.
 pub(crate) fn render(model: &WardleyModel, config: &Value, options: &RenderOptions) -> Rendered {
     let natural = dimension(config, model.build.size.map(|size| size.0), "width", 900.0);
-    fit_width(options, natural, 160.0, |plot_w, tight| {
-        draw(model, config, options, plot_w, natural, tight)
-    })
+    fit_width(options, natural, 160.0, |plot_w, tight| draw(model, config, options, plot_w, natural, tight))
 }
 
 /// The extent of what is drawn.
@@ -150,23 +157,13 @@ impl Bounds {
 
     /// A label centered on (`cx`, `cy`).
     fn centered(&mut self, label: &Label, cx: f64, cy: f64, attrs: &str) -> String {
-        self.grow(
-            cx - label.width / 2.0,
-            cy - label.height / 2.0,
-            cx + label.width / 2.0,
-            cy + label.height / 2.0,
-        );
+        self.grow(cx - label.width / 2.0, cy - label.height / 2.0, cx + label.width / 2.0, cy + label.height / 2.0);
         label_svg(label, cx, cy, attrs, None)
     }
 
     /// A label starting at `x` with its first baseline at `y`.
     fn starting(&mut self, label: &Label, x: f64, y: f64, attrs: &str) -> String {
-        self.grow(
-            x,
-            y - label.size,
-            x + label.width,
-            y - label.size + label.height + 4.0,
-        );
+        self.grow(x, y - label.size, x + label.width, y - label.size + label.height + 4.0);
         start_label(label, x, y, attrs)
     }
 }
@@ -190,15 +187,7 @@ fn reach(node: &WardleyNode, anchor_label: Option<&Label>, small: f64, ux: f64, 
     if node.is_pipeline_parent {
         return SQUARE / std::f64::consts::SQRT_2;
     }
-    if node
-        .source_strategy
-        .as_deref()
-        .is_some_and(|s| !s.is_empty())
-    {
-        2.0 * R
-    } else {
-        R
-    }
+    if node.source_strategy.as_deref().is_some_and(|s| !s.is_empty()) { 2.0 * R } else { R }
 }
 
 /// The quadrant bit a link along (`ux`, `uy`) takes: 1 up and right, 2 down and right, 4 up and
@@ -231,24 +220,14 @@ fn draw(
     let pad = options.padding.unwrap_or(8.0);
 
     // A narrower map is not as much shorter, so that components keep some room between them.
-    let plot_h = dimension(config, build.size.map(|size| size.1), "height", 600.0)
-        * 0.75_f64.max(plot_w / natural_w);
+    let plot_h = dimension(config, build.size.map(|size| size.1), "height", 600.0) * 0.75_f64.max(plot_w / natural_w);
     let show_grid = matches!(
         property(config, "wardley-beta").and_then(|section| property(section, "showGrid")),
         Some(Value::Bool(true))
     );
 
-    let mut bounds = Bounds {
-        max_x: plot_w,
-        max_y: plot_h,
-        min_x: 0.0,
-        min_y: 0.0,
-    };
-    let wrap = if tight {
-        64.0_f64.max(120.0_f64.min(plot_w / 2.0))
-    } else {
-        4000.0
-    };
+    let mut bounds = Bounds { max_x: plot_w, max_y: plot_h, min_x: 0.0, min_y: 0.0 };
+    let wrap = if tight { 64.0_f64.max(120.0_f64.min(plot_w / 2.0)) } else { 4000.0 };
     let text = |raw: &str, font_size: f64, max_width: f64, style: u8| {
         layout_label(Some(raw), false, font_size, max_width, style, None)
     };
@@ -259,11 +238,7 @@ fn draw(
         Some(stages) if !stages.is_empty() => stages.iter().map(String::as_str).collect(),
         _ => DEFAULT_STAGES.to_vec(),
     };
-    let boundaries = build
-        .axes
-        .stage_boundaries
-        .as_ref()
-        .filter(|boundaries| boundaries.len() == stages.len());
+    let boundaries = build.axes.stage_boundaries.as_ref().filter(|boundaries| boundaries.len() == stages.len());
     #[expect(clippy::cast_precision_loss, reason = "stage counts are small")]
     let count = stages.len() as f64;
     let mut frame = String::new();
@@ -274,10 +249,7 @@ fn draw(
         #[expect(clippy::cast_precision_loss, reason = "stage counts are small")]
         let i = index as f64;
         let (start, end) = match boundaries {
-            Some(boundaries) => (
-                previous,
-                clamp(boundaries.get(index).copied().unwrap_or(f64::NAN), 0.0, 1.0),
-            ),
+            Some(boundaries) => (previous, clamp(boundaries.get(index).copied().unwrap_or(f64::NAN), 0.0, 1.0)),
             None => (i / count, (i + 1.0) / count),
         };
         previous = end;
@@ -288,21 +260,12 @@ fn draw(
             push_num(&mut frame, plot_h);
             frame.push_str("\" stroke=\"var(--_b)\" stroke-dasharray=\"4 4\"/>");
         }
-        let label = text(
-            stage,
-            small,
-            48.0_f64.max((end - start).abs() * plot_w - 12.0),
-            0,
-        );
+        let label = text(stage, small, 48.0_f64.max((end - start).abs() * plot_w - 12.0), 0);
         stage_labels.push_str(&bounds.centered(
             &label,
             f64::midpoint(start, end) * plot_w,
             plot_h + 8.0 + label.height / 2.0,
-            &sized(
-                " class=\"ondine-wardley-stage-label\"",
-                small,
-                " fill=\"var(--_m)\"",
-            ),
+            &sized(" class=\"ondine-wardley-stage-label\"", small, " fill=\"var(--_m)\""),
         ));
         stage_bottom = stage_bottom.max(plot_h + 8.0 + label.height);
     }
@@ -329,17 +292,9 @@ fn draw(
     frame.push_str("\"/>");
     let x_title = text("Evolution", small, wrap, 0);
     let y_title = text("Visibility", small, wrap, 0);
-    let axis_attrs = sized(
-        " class=\"ondine-wardley-axis-label\"",
-        small,
-        " font-weight=\"var(--_hw)\"",
-    );
-    let mut axis_labels = bounds.centered(
-        &x_title,
-        plot_w / 2.0,
-        stage_bottom + 6.0 + x_title.height / 2.0,
-        &axis_attrs,
-    );
+    let axis_attrs = sized(" class=\"ondine-wardley-axis-label\"", small, " font-weight=\"var(--_hw)\"");
+    let mut axis_labels =
+        bounds.centered(&x_title, plot_w / 2.0, stage_bottom + 6.0 + x_title.height / 2.0, &axis_attrs);
     let mut rotated = axis_attrs.clone();
     rotated.push_str(" transform=\"rotate(-90 -16 ");
     push_num(&mut rotated, plot_h / 2.0);
@@ -360,15 +315,9 @@ fn draw(
     let mut pipelines = String::new();
     let mut members: BTreeMap<&str, BTreeSet<&str>> = BTreeMap::new();
     for pipeline in &build.pipelines {
-        members.insert(
-            &pipeline.node_id,
-            pipeline.component_ids.iter().map(String::as_str).collect(),
-        );
-        let mut parts: Vec<(f64, f64)> = pipeline
-            .component_ids
-            .iter()
-            .filter_map(|id| positions.get(*ids.get(id.as_str())?).copied())
-            .collect();
+        members.insert(&pipeline.node_id, pipeline.component_ids.iter().map(String::as_str).collect());
+        let mut parts: Vec<(f64, f64)> =
+            pipeline.component_ids.iter().filter_map(|id| positions.get(*ids.get(id.as_str())?).copied()).collect();
         parts.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
         let (Some(&(left, y)), Some(&(right, _))) = (parts.first(), parts.last()) else {
             continue;
@@ -379,12 +328,7 @@ fn draw(
         {
             *parent = (f64::midpoint(left, right), top - SQUARE / 6.0);
         }
-        bounds.grow(
-            left - PIPELINE_PAD,
-            top,
-            right + PIPELINE_PAD,
-            top + 4.0 * R,
-        );
+        bounds.grow(left - PIPELINE_PAD, top, right + PIPELINE_PAD, top + 4.0 * R);
         pipelines.push_str("<g class=\"ondine-wardley-pipeline\" data-id=\"");
         pipelines.push_str(&esc_text(&pipeline.node_id));
         pipelines.push_str("\"><rect x=\"");
@@ -413,11 +357,7 @@ fn draw(
     }
 
     // Anchor labels, measured once when a line first reaches the anchor.
-    let anchor_wrap = if tight {
-        64.0_f64.max(plot_w / 2.0)
-    } else {
-        4000.0
-    };
+    let anchor_wrap = if tight { 64.0_f64.max(plot_w / 2.0) } else { 4000.0 };
     let mut anchor_labels: Vec<Option<Label>> = vec![None; nodes.len()];
     let mut reach_of = |at: usize, ux: f64, uy: f64| -> f64 {
         let Some(node) = nodes.get(at) else {
@@ -436,19 +376,14 @@ fn draw(
     let mut taken: Vec<u8> = vec![0; nodes.len()];
     let mut links = String::new();
     for link in &build.links {
-        let (Some(&from), Some(&to)) =
-            (ids.get(link.source.as_str()), ids.get(link.target.as_str()))
-        else {
+        let (Some(&from), Some(&to)) = (ids.get(link.source.as_str()), ids.get(link.target.as_str())) else {
             continue;
         };
         if from == to {
             continue;
         }
         // A pipeline component belongs to its parent already.
-        if members
-            .get(link.target.as_str())
-            .is_some_and(|set| set.contains(link.source.as_str()))
-        {
+        if members.get(link.target.as_str()).is_some_and(|set| set.contains(link.source.as_str())) {
             continue;
         }
         let (Some(&(fx, fy)), Some(&(tx, ty))) = (positions.get(from), positions.get(to)) else {
@@ -501,11 +436,7 @@ fn draw(
                 &label,
                 f64::midpoint(fx, tx) + px * away,
                 f64::midpoint(fy, ty) + py * away,
-                &sized(
-                    " class=\"ondine-edge-label\"",
-                    tiny + 1.0,
-                    " fill=\"var(--_m)\"",
-                ),
+                &sized(" class=\"ondine-edge-label\"", tiny + 1.0, " fill=\"var(--_m)\""),
             );
         }
         links.push_str("<g class=\"ondine-edge");
@@ -551,11 +482,7 @@ fn draw(
         let dy = ty - oy;
         let distance = dx.hypot(dy);
         let mut arrow = String::new();
-        let start = if distance > 0.0 {
-            reach_of(at, dx / distance, dy / distance)
-        } else {
-            0.0
-        };
+        let start = if distance > 0.0 { reach_of(at, dx / distance, dy / distance) } else { 0.0 };
         if distance > start + R + 4.0 {
             let ux = dx / distance;
             let uy = dy / distance;
@@ -597,10 +524,7 @@ fn draw(
             continue;
         };
         let anchor = node.class_name == Some("anchor");
-        let strategy = node
-            .source_strategy
-            .as_deref()
-            .filter(|strategy| !strategy.is_empty());
+        let strategy = node.source_strategy.as_deref().filter(|strategy| !strategy.is_empty());
         let mut shape = String::new();
         if let Some(strategy) = strategy {
             let fill = match strategy {
@@ -666,11 +590,8 @@ fn draw(
             shape.push_str("\"/>");
         }
         if node.inertia == Some(true) {
-            let offset = (if node.is_pipeline_parent {
-                SQUARE / 2.0
-            } else {
-                R
-            }) + 10.0
+            let offset = (if node.is_pipeline_parent { SQUARE / 2.0 } else { R })
+                + 10.0
                 + if strategy.is_some() { R + 4.0 } else { 0.0 };
             shape.push_str("<rect class=\"ondine-wardley-inertia\" x=\"");
             push_num(&mut shape, x + offset);
@@ -680,12 +601,8 @@ fn draw(
             shape.push_str(LINE);
             shape.push_str("\"/>");
         }
-        let ox = node
-            .label_offset_x
-            .map(|offset| clamp(offset, -5000.0, 5000.0));
-        let oy = node
-            .label_offset_y
-            .map(|offset| clamp(offset, -5000.0, 5000.0));
+        let ox = node.label_offset_x.map(|offset| clamp(offset, -5000.0, 5000.0));
+        let oy = node.label_offset_y.map(|offset| clamp(offset, -5000.0, 5000.0));
         let caption = if anchor {
             let label = match anchor_labels.get(at).and_then(Option::as_ref) {
                 Some(label) => label.clone(),
@@ -695,47 +612,27 @@ fn draw(
                 &label,
                 x + ox.unwrap_or(0.0),
                 y + oy.unwrap_or(-3.0),
-                &sized(
-                    " class=\"ondine-label\"",
-                    small,
-                    " font-weight=\"var(--_hw)\"",
-                ),
+                &sized(" class=\"ondine-label\"", small, " font-weight=\"var(--_hw)\""),
             )
         } else {
             let label = text(&node.label, small, wrap, 0);
             let attrs = sized(" class=\"ondine-label\"", small, "");
             let lift = LABEL_OFFSET + if strategy.is_some() { 10.0 } else { 0.0 };
             if ox.is_some() || oy.is_some() {
-                bounds.starting(
-                    &label,
-                    x + ox.unwrap_or(lift),
-                    y + oy.unwrap_or(-lift),
-                    &attrs,
-                )
+                bounds.starting(&label, x + ox.unwrap_or(lift), y + oy.unwrap_or(-lift), &attrs)
             } else if node.in_pipeline {
                 bounds.centered(&label, x, y + 2.0 * R + 4.0 + label.height / 2.0, &attrs)
             } else {
                 // The label goes up and to the right unless a link leaves that way; then the next
                 // free corner.
                 let busy = taken.get(at).copied().unwrap_or(0);
-                let corner = [1, 2, 4, 8]
-                    .into_iter()
-                    .find(|bit| busy & bit == 0)
-                    .unwrap_or(1);
+                let corner = [1, 2, 4, 8].into_iter().find(|bit| busy & bit == 0).unwrap_or(1);
                 let right = corner == 1 || corner == 2;
                 let up = corner == 1 || corner == 4;
                 bounds.starting(
                     &label,
-                    if right {
-                        x + lift
-                    } else {
-                        x - lift - label.width
-                    },
-                    if up {
-                        y - lift
-                    } else {
-                        y + lift + small * 0.75
-                    },
+                    if right { x + lift } else { x - lift - label.width },
+                    if up { y - lift } else { y + lift + small * 0.75 },
                     &attrs,
                 )
             }
@@ -779,13 +676,7 @@ fn draw(
             marks.push_str("\" fill=\"var(--_bg)\" stroke=\"");
             marks.push_str(LINE);
             marks.push_str("\"/>");
-            marks.push_str(&label_svg(
-                &label,
-                x,
-                y,
-                &sized("", tiny, " font-weight=\"var(--_hw)\""),
-                None,
-            ));
+            marks.push_str(&label_svg(&label, x, y, &sized("", tiny, " font-weight=\"var(--_hw)\""), None));
         }
         annotations.push_str("<g class=\"ondine-wardley-annotation\" data-id=\"");
         annotations.push_str(&esc_text(&number));
@@ -801,17 +692,9 @@ fn draw(
             Some((annotation.number, text))
         })
         .collect();
-    listed.sort_by(|a, b| {
-        (a.0 - b.0)
-            .partial_cmp(&0.0)
-            .unwrap_or(std::cmp::Ordering::Equal)
-    });
+    listed.sort_by(|a, b| (a.0 - b.0).partial_cmp(&0.0).unwrap_or(std::cmp::Ordering::Equal));
     if !listed.is_empty() {
-        let list_wrap = if tight {
-            80.0_f64.max(plot_w - 20.0)
-        } else {
-            320.0
-        };
+        let list_wrap = if tight { 80.0_f64.max(plot_w - 20.0) } else { 320.0 };
         let lines: Vec<Label> = listed
             .iter()
             .map(|&(number, body)| {
@@ -843,12 +726,7 @@ fn draw(
         let mut y = by + 7.0;
         let attrs = sized("", small, "");
         for line in &lines {
-            rows.push_str(&start_label(
-                line,
-                bx + 10.0,
-                y + line.line_height / 2.0 + small * 0.35,
-                &attrs,
-            ));
+            rows.push_str(&start_label(line, bx + 10.0, y + line.line_height / 2.0 + small * 0.35, &attrs));
             y += line.height;
         }
         annotations.push_str("<g class=\"ondine-wardley-annotations\"><rect x=\"");
@@ -867,11 +745,7 @@ fn draw(
     }
 
     let mut notes = String::new();
-    let note_attrs = sized(
-        " class=\"ondine-wardley-note\"",
-        small,
-        " font-weight=\"var(--_hw)\"",
-    );
+    let note_attrs = sized(" class=\"ondine-wardley-note\"", small, " font-weight=\"var(--_hw)\"");
     for note in &build.notes {
         let label = text(&note.text, small, 360.0_f64.min(plot_w * 0.6), BOLD);
         notes.push_str(&bounds.starting(&label, project_x(note.x), project_y(note.y), &note_attrs));
@@ -893,11 +767,7 @@ fn draw(
         };
         bounds.grow(x, y - half - 8.0, x + FORCE_WIDTH, y + half + 8.0);
         forces.push_str("<g class=\"ondine-wardley-");
-        forces.push_str(if forward {
-            "accelerator"
-        } else {
-            "deaccelerator"
-        });
+        forces.push_str(if forward { "accelerator" } else { "deaccelerator" });
         forces.push_str("\" data-id=\"");
         forces.push_str(&esc_text(&force.name));
         forces.push_str("\"><path d=\"M");
@@ -924,12 +794,7 @@ fn draw(
         forces.push_str(LINE);
         forces.push_str("\"/>");
         let label = text(&force.name, tiny + 1.0, 160.0, BOLD);
-        forces.push_str(&bounds.centered(
-            &label,
-            x + FORCE_WIDTH / 2.0,
-            y + half + 8.0 + 12.0,
-            &force_attrs,
-        ));
+        forces.push_str(&bounds.centered(&label, x + FORCE_WIDTH / 2.0, y + half + 8.0 + 12.0, &force_attrs));
         forces.push_str("</g>");
     }
 
@@ -941,11 +806,7 @@ fn draw(
         BOLD,
         None,
     );
-    let title_height = if title.height > 0.0 {
-        title.height + 12.0
-    } else {
-        0.0
-    };
+    let title_height = if title.height > 0.0 { title.height + 12.0 } else { 0.0 };
     let left = bounds.min_x.min(plot_w / 2.0 - title.width / 2.0);
     let right = bounds.max_x.max(plot_w / 2.0 + title.width / 2.0);
     let tx = pad - left;
@@ -995,10 +856,7 @@ fn draw(
             total_height,
             size,
             options,
-            Accessible {
-                acc_descr: model.acc_descr.as_deref(),
-                acc_title: model.acc_title.as_deref(),
-            },
+            Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
             &content,
         ),
         width: total_width,

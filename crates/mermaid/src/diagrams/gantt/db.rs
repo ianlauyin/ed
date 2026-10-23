@@ -4,16 +4,29 @@
 //! Pele's database reports unknown task references through an optional `warn` callback. Its
 //! renderer never sets one, so the messages are not ported.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
-use super::dates::{
-    Unit, WEEKDAYS, add, add_days, format, index, is_valid, iso_date, parse_strict,
-};
-use super::js_date::{self, Date};
-use super::types::{GanttTask, Raw};
-use crate::error::{Code, Error};
-use crate::text::label::{trim, trim_start};
-use crate::util::chars::{is_digit, is_space, is_word};
+use super::dates::Unit;
+use super::dates::WEEKDAYS;
+use super::dates::add;
+use super::dates::add_days;
+use super::dates::format;
+use super::dates::index;
+use super::dates::is_valid;
+use super::dates::iso_date;
+use super::dates::parse_strict;
+use super::js_date::Date;
+use super::js_date::{self};
+use super::types::GanttTask;
+use super::types::Raw;
+use crate::error::Code;
+use crate::error::Error;
+use crate::text::label::trim;
+use crate::text::label::trim_start;
+use crate::util::chars::is_digit;
+use crate::util::chars::is_space;
+use crate::util::chars::is_word;
 use crate::util::url::safe_url;
 
 /// Scheduling walks tasks day by day and parses dates with a format the diagram supplies. This
@@ -44,11 +57,7 @@ pub(crate) fn parse_duration(text: &str) -> (f64, Unit) {
     }
     let mut end = digits;
     if text.as_bytes().get(end) == Some(&b'.') {
-        let fraction = text
-            .bytes()
-            .skip(end + 1)
-            .take_while(u8::is_ascii_digit)
-            .count();
+        let fraction = text.bytes().skip(end + 1).take_while(u8::is_ascii_digit).count();
         if fraction > 0 {
             end += 1 + fraction;
         }
@@ -64,10 +73,7 @@ pub(crate) fn parse_duration(text: &str) -> (f64, Unit) {
         Some("ms") => Unit::Millisecond,
         _ => return none,
     };
-    let value = text
-        .get(..end)
-        .and_then(|n| n.parse().ok())
-        .unwrap_or(f64::NAN);
+    let value = text.get(..end).and_then(|n| n.parse().ok()).unwrap_or(f64::NAN);
     (value, unit)
 }
 
@@ -124,20 +130,11 @@ fn numeric_format(template: &str) -> bool {
 /// The id list of `after` or `until` at the start of `text`: `^word\s+([\d\w- ]+)`.
 fn reference<'t>(text: &'t str, word: &str) -> Option<&'t str> {
     let rest = text.strip_prefix(word)?;
-    let spaces: Vec<(usize, char)> = rest
-        .char_indices()
-        .take_while(|&(_, c)| is_space(u32::from(c)))
-        .collect();
+    let spaces: Vec<(usize, char)> = rest.char_indices().take_while(|&(_, c)| is_space(u32::from(c))).collect();
     let &(last_at, last) = spaces.last()?;
     let id_char = |b: &u8| is_word(u32::from(*b)) || *b == b'-' || *b == b' ';
     let run = |from: usize| {
-        let length = rest
-            .as_bytes()
-            .get(from..)
-            .unwrap_or(&[])
-            .iter()
-            .take_while(|b| id_char(b))
-            .count();
+        let length = rest.as_bytes().get(from..).unwrap_or(&[]).iter().take_while(|b| id_char(b)).count();
         rest.get(from..from + length).unwrap_or("")
     };
     let ids = run(last_at + last.len_utf8());
@@ -145,12 +142,7 @@ fn reference<'t>(text: &'t str, word: &str) -> Option<&'t str> {
         return Some(ids);
     }
     // `\s+` gives characters back until the group can start on a space it took.
-    spaces
-        .iter()
-        .skip(1)
-        .rev()
-        .find(|&&(_, c)| c == ' ')
-        .map(|&(at, _)| run(at))
+    spaces.iter().skip(1).rev().find(|&&(_, c)| c == ' ').map(|&(at, _)| run(at))
 }
 
 /// `+date` for a date that may be unset, as JavaScript compares `undefined`.
@@ -223,10 +215,7 @@ pub(crate) struct GanttDb {
 impl GanttDb {
     /// An empty model.
     pub(crate) fn new() -> Self {
-        Self {
-            weekend: "saturday".to_owned(),
-            ..Self::default()
-        }
+        Self { weekend: "saturday".to_owned(), ..Self::default() }
     }
 
     /// Sets the `dateFormat`.
@@ -280,10 +269,7 @@ impl GanttDb {
         let mut task = GanttTask {
             order: -1,
             prev_task_id: self.last_task_id.clone(),
-            raw: Raw {
-                data: data_text.to_owned(),
-                ..Raw::default()
-            },
+            raw: Raw { data: data_text.to_owned(), ..Raw::default() },
             section: self.current_section.clone(),
             task: descr.to_owned(),
             ..GanttTask::default()
@@ -309,9 +295,7 @@ impl GanttDb {
         if data.len() > 3 {
             let mut message = String::from("Task \"");
             message.push_str(trim(descr));
-            message.push_str(
-                "\" has too many fields. A task takes an id, a start, and an end or duration.",
-            );
+            message.push_str("\" has too many fields. A task takes an id, a start, and an end or duration.");
             return Err(semantic(message));
         }
         let data: Vec<&str> = data.into_iter().map(trim).collect();
@@ -430,9 +414,7 @@ impl GanttDb {
     ///
     /// Returns a limit error when scheduling takes too much work.
     pub(crate) fn is_invalid_date(&mut self, date: Date) -> Result<bool, Error> {
-        let weekday = index(date.weekday())
-            .and_then(|day| self.excluded_days.get(day).copied())
-            .unwrap_or(false);
+        let weekday = index(date.weekday()).and_then(|day| self.excluded_days.get(day).copied()).unwrap_or(false);
         if !self.dated_tokens {
             return Ok(weekday);
         }
@@ -444,9 +426,8 @@ impl GanttDb {
             self.spend(FORMAT_STEP + units(&template) * 8.0)?;
             formatted = format(date, &template);
         }
-        let listed = |set: &BTreeSet<String>| {
-            set.contains(&date_only) || formatted.as_ref().is_some_and(|f| set.contains(f))
-        };
+        let listed =
+            |set: &BTreeSet<String>| set.contains(&date_only) || formatted.as_ref().is_some_and(|f| set.contains(f));
         if listed(&self.include_set) {
             return Ok(false);
         }
@@ -457,10 +438,7 @@ impl GanttDb {
     fn spend(&mut self, work: f64) -> Result<(), Error> {
         self.work += work;
         if self.work > WORK_LIMIT {
-            let mut error = Error::new(
-                Code::Limit,
-                "The gantt chart takes too much work to schedule.",
-            );
+            let mut error = Error::new(Code::Limit, "The gantt chart takes too much work to schedule.");
             error.r#type = Some("gantt");
             return Err(error);
         }
@@ -534,10 +512,7 @@ impl GanttDb {
 
     /// The tasks `list` names, skipping ids that do not exist.
     fn references(&self, list: &str) -> Vec<usize> {
-        list.split(' ')
-            .filter(|id| !id.is_empty())
-            .filter_map(|id| self.by_id.get(id).copied())
-            .collect()
+        list.split(' ').filter(|id| !id.is_empty()).filter_map(|id| self.by_id.get(id).copied()).collect()
     }
 
     /// The start a task's start field gives, or `None` while what it refers to is unresolved.
@@ -545,10 +520,7 @@ impl GanttDb {
         let text = trim(raw);
         let template = trim(&self.date_format).to_owned();
 
-        if (template == "x" || template == "X")
-            && !text.is_empty()
-            && text.bytes().all(|b| is_digit(u32::from(b)))
-        {
+        if (template == "x" || template == "X") && !text.is_empty() && text.bytes().all(|b| is_digit(u32::from(b))) {
             let date = Date(js_date::time_clip(text.parse().unwrap_or(f64::NAN)));
             if !is_valid(date) {
                 return Err(invalid_date(text));
@@ -607,11 +579,7 @@ impl GanttDb {
 
         let template = trim(&self.date_format).to_owned();
         if let Some(parsed) = self.parse(text, &template)? {
-            return Ok(Some(if self.inclusive_end_dates {
-                add_days(parsed, 1.0)
-            } else {
-                parsed
-            }));
+            return Ok(Some(if self.inclusive_end_dates { add_days(parsed, 1.0) } else { parsed }));
         }
 
         let (value, unit) = parse_duration(text);

@@ -3,8 +3,12 @@
 
 use std::collections::BTreeMap;
 
-use super::types::{Relation, Requirement, RequirementClass, RequirementElement};
-use crate::error::{Code, Error};
+use super::types::Relation;
+use super::types::Requirement;
+use super::types::RequirementClass;
+use super::types::RequirementElement;
+use crate::error::Code;
+use crate::error::Error;
 use crate::text::label::trim_start;
 use crate::util::chars::is_space;
 
@@ -26,10 +30,7 @@ pub(crate) struct Ordered<V> {
 
 impl<V> Default for Ordered<V> {
     fn default() -> Self {
-        Self {
-            index: BTreeMap::new(),
-            values: Vec::new(),
-        }
+        Self { index: BTreeMap::new(), values: Vec::new() }
     }
 }
 
@@ -116,10 +117,7 @@ impl Default for RequirementDb {
 
 #[cold]
 fn too_many_copies() -> Error {
-    let mut error = Error::new(
-        Code::Limit,
-        "Requirement diagram applies too many style declarations.",
-    );
+    let mut error = Error::new(Code::Limit, "Requirement diagram applies too many style declarations.");
     error.r#type = Some("requirement");
     error
 }
@@ -208,11 +206,7 @@ impl RequirementDb {
 
     /// Adds a relationship.
     pub(crate) fn add_relationship(&mut self, r#type: &str, src: &str, dst: &str) {
-        self.relations.push(Relation {
-            r#type: r#type.to_owned(),
-            src: src.to_owned(),
-            dst: dst.to_owned(),
-        });
+        self.relations.push(Relation { r#type: r#type.to_owned(), src: src.to_owned(), dst: dst.to_owned() });
     }
 
     fn node(&self, id: &str) -> Option<NodeRef> {
@@ -224,16 +218,10 @@ impl RequirementDb {
 
     fn node_mut(&mut self, node: NodeRef) -> Option<(&mut Vec<String>, &mut Vec<String>)> {
         match node {
-            NodeRef::Requirement(at) => self
-                .requirements
-                .values
-                .get_mut(at)
-                .map(|r| (&mut r.css_styles, &mut r.classes)),
-            NodeRef::Element(at) => self
-                .elements
-                .values
-                .get_mut(at)
-                .map(|e| (&mut e.css_styles, &mut e.classes)),
+            NodeRef::Requirement(at) => {
+                self.requirements.values.get_mut(at).map(|r| (&mut r.css_styles, &mut r.classes))
+            }
+            NodeRef::Element(at) => self.elements.values.get_mut(at).map(|e| (&mut e.css_styles, &mut e.classes)),
         }
     }
 
@@ -270,11 +258,7 @@ impl RequirementDb {
                 continue;
             };
             for name in class_names {
-                let styles = self
-                    .classes
-                    .get(name)
-                    .map(|class| class.styles.clone())
-                    .unwrap_or_default();
+                let styles = self.classes.get(name).map(|class| class.styles.clone()).unwrap_or_default();
                 if let Some((_, classes)) = self.node_mut(node) {
                     classes.push((*name).to_owned());
                 }
@@ -293,21 +277,13 @@ impl RequirementDb {
     ///
     /// Returns a limit error past the most copied declarations.
     pub(crate) fn define_class(&mut self, ids: &[&str], style: &[String]) -> Result<(), Error> {
-        let split: Vec<String> = style
-            .iter()
-            .flat_map(|s| s.split(','))
-            .map(str::to_owned)
-            .collect();
+        let split: Vec<String> = style.iter().flat_map(|s| s.split(',')).map(str::to_owned).collect();
         for &id in ids {
             let at = match self.classes.position(id) {
                 Some(at) => at,
-                None => self.classes.insert(
-                    id.to_owned(),
-                    RequirementClass {
-                        id: id.to_owned(),
-                        ..RequirementClass::default()
-                    },
-                ),
+                None => self
+                    .classes
+                    .insert(id.to_owned(), RequirementClass { id: id.to_owned(), ..RequirementClass::default() }),
             };
             if let Some(class) = self.classes.values.get_mut(at) {
                 for s in style {

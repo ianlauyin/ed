@@ -34,9 +34,7 @@ impl RailroadNode {
     pub(crate) fn parts(&self) -> &[usize] {
         match self {
             Self::Choice(list) | Self::Sequence(list) => list,
-            Self::Optional(element) | Self::Repetition { element, .. } => {
-                std::slice::from_ref(element)
-            }
+            Self::Optional(element) | Self::Repetition { element, .. } => std::slice::from_ref(element),
             Self::NonTerminal(_) | Self::Special(_) | Self::Terminal(_) => &[],
         }
     }

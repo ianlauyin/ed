@@ -4,21 +4,41 @@
 
 use std::cmp::Ordering;
 
-use super::axis::{auto_ticks, interval_ticks, time_format};
-use super::dates::{Unit, add, add_days, int_string, js_max, js_min};
-use super::db::{GanttDb, clock};
+use super::axis::auto_ticks;
+use super::axis::interval_ticks;
+use super::axis::time_format;
+use super::dates::Unit;
+use super::dates::add;
+use super::dates::add_days;
+use super::dates::int_string;
+use super::dates::js_max;
+use super::dates::js_min;
+use super::db::GanttDb;
+use super::db::clock;
 use super::js_date::Date;
 use super::types::GanttTask;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::cap_width;
 use crate::error::Error;
-use crate::svg::builder::{esc, esc_text, js_round, label_svg, push_num};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
-use crate::svg::theme::{CRITICAL, RADIUS, resolve_style};
-use crate::text::label::{Label, layout_label};
-use crate::text::measure::{self, BOLD};
+use crate::svg::builder::esc;
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
+use crate::svg::theme::CRITICAL;
+use crate::svg::theme::RADIUS;
+use crate::svg::theme::resolve_style;
+use crate::text::label::Label;
+use crate::text::label::layout_label;
+use crate::text::measure::BOLD;
+use crate::text::measure::{self};
 use crate::util::chars::is_space;
-use crate::util::url::{LinkInfo, UrlOptions, linked};
+use crate::util::url::LinkInfo;
+use crate::util::url::UrlOptions;
+use crate::util::url::linked;
 use crate::yaml::Value;
 
 /// The default width of a chart.
@@ -33,10 +53,7 @@ fn section(config: &Value) -> Option<&Value> {
     let Value::Object(entries) = config else {
         return None;
     };
-    entries
-        .iter()
-        .find(|(key, _)| key == "gantt")
-        .map(|(_, value)| value)
+    entries.iter().find(|(key, _)| key == "gantt").map(|(_, value)| value)
 }
 
 /// A setting of the `gantt` section.
@@ -44,10 +61,7 @@ fn get<'v>(config: &'v Value, key: &str) -> Option<&'v Value> {
     let Some(Value::Object(entries)) = section(config) else {
         return None;
     };
-    entries
-        .iter()
-        .find(|(own, _)| own == key)
-        .map(|(_, value)| value)
+    entries.iter().find(|(own, _)| own == key).map(|(_, value)| value)
 }
 
 /// A finite number setting, clamped to `min` and `max`.
@@ -79,12 +93,8 @@ fn no_breaks(raw: &str) -> String {
     let mut at = 0;
     while at < bytes.len() {
         let end = (bytes.get(at) == Some(&b'<')
-            && bytes
-                .get(at + 1)
-                .is_some_and(|b| b.eq_ignore_ascii_case(&b'b'))
-            && bytes
-                .get(at + 2)
-                .is_some_and(|b| b.eq_ignore_ascii_case(&b'r')))
+            && bytes.get(at + 1).is_some_and(|b| b.eq_ignore_ascii_case(&b'b'))
+            && bytes.get(at + 2).is_some_and(|b| b.eq_ignore_ascii_case(&b'r')))
         .then(|| {
             let mut end = at + 3;
             while let Some(c) = raw.get(end..).and_then(|rest| rest.chars().next()) {
@@ -143,29 +153,13 @@ fn scheduled(task: &GanttTask) -> bool {
 
 /// Mermaid's compact mode: within a section, a task goes on the first row that is free when it
 /// starts. Returns the number of rows the section takes.
-fn pack_rows(
-    tasks: &[GanttTask],
-    group: &[usize],
-    offset: usize,
-    row_of: &mut [Option<usize>],
-) -> usize {
-    let mut sorted: Vec<usize> = group
-        .iter()
-        .copied()
-        .filter(|&i| tasks.get(i).is_some_and(scheduled))
-        .collect();
-    let key = |i: usize| {
-        tasks
-            .get(i)
-            .map_or((f64::NAN, 0), |t| (start_of(t), t.order))
-    };
+fn pack_rows(tasks: &[GanttTask], group: &[usize], offset: usize, row_of: &mut [Option<usize>]) -> usize {
+    let mut sorted: Vec<usize> = group.iter().copied().filter(|&i| tasks.get(i).is_some_and(scheduled)).collect();
+    let key = |i: usize| tasks.get(i).map_or((f64::NAN, 0), |t| (start_of(t), t.order));
     sorted.sort_by(|&a, &b| {
         let (a_start, a_order) = key(a);
         let (b_start, b_order) = key(b);
-        a_start
-            .partial_cmp(&b_start)
-            .unwrap_or(Ordering::Equal)
-            .then(a_order.cmp(&b_order))
+        a_start.partial_cmp(&b_start).unwrap_or(Ordering::Equal).then(a_order.cmp(&b_order))
     });
 
     let mut free: Vec<f64> = Vec::new();
@@ -229,10 +223,7 @@ fn push_xy(out: &mut String, x: f64, y: f64) {
 /// # Errors
 ///
 /// Returns the scheduler's errors: a start that is not a date, or too much work.
-#[expect(
-    clippy::too_many_lines,
-    reason = "mirrors Pele's single render function"
-)]
+#[expect(clippy::too_many_lines, reason = "mirrors Pele's single render function")]
 pub(crate) fn render(
     model: &mut GanttDb,
     config: &Value,
@@ -243,27 +234,20 @@ pub(crate) fn render(
     let pad = options.padding.unwrap_or(8.0);
     let now = clock(options.now);
 
-    let label_size =
-        setting(config, "fontSize", 4.0, 72.0).unwrap_or_else(|| js_round(size * 0.8125));
+    let label_size = setting(config, "fontSize", 4.0, 72.0).unwrap_or_else(|| js_round(size * 0.8125));
     let section_size = setting(config, "sectionFontSize", 4.0, 72.0).unwrap_or(label_size);
     let tick_size = js_round(size * 0.75);
-    let bar_height =
-        setting(config, "barHeight", 4.0, 400.0).unwrap_or_else(|| js_round(label_size * 1.85));
-    let bar_gap =
-        setting(config, "barGap", 0.0, 400.0).unwrap_or_else(|| js_round(bar_height / 4.0));
+    let bar_height = setting(config, "barHeight", 4.0, 400.0).unwrap_or_else(|| js_round(label_size * 1.85));
+    let bar_gap = setting(config, "barGap", 0.0, 400.0).unwrap_or_else(|| js_round(bar_height / 4.0));
     let row_height = bar_height + bar_gap;
-    let section_styles =
-        js_round(setting(config, "numberSectionStyles", 1.0, 1000.0).unwrap_or(4.0));
+    let section_styles = js_round(setting(config, "numberSectionStyles", 1.0, 1000.0).unwrap_or(4.0));
     let compact = model.display_mode == "compact";
     let top_axis = model.top_axis || flag(config, "topAxis");
 
     let tasks: Vec<GanttTask> = model.get_tasks(now)?.to_vec();
-    let row_tasks: Vec<usize> = (0..tasks.len())
-        .filter(|&i| tasks.get(i).is_some_and(|t| !t.vert))
-        .collect();
-    let mut verts: Vec<usize> = (0..tasks.len())
-        .filter(|&i| tasks.get(i).is_some_and(|t| t.vert && scheduled(t)))
-        .collect();
+    let row_tasks: Vec<usize> = (0..tasks.len()).filter(|&i| tasks.get(i).is_some_and(|t| !t.vert)).collect();
+    let mut verts: Vec<usize> =
+        (0..tasks.len()).filter(|&i| tasks.get(i).is_some_and(|t| t.vert && scheduled(t))).collect();
 
     let mut categories: Vec<&str> = Vec::new();
     for &i in &row_tasks {
@@ -273,12 +257,7 @@ pub(crate) fn render(
             categories.push(&task.section);
         }
     }
-    let category = |section: &str| {
-        categories
-            .iter()
-            .position(|own| *own == section)
-            .unwrap_or(0)
-    };
+    let category = |section: &str| categories.iter().position(|own| *own == section).unwrap_or(0);
 
     let mut row_of: Vec<Option<usize>> = vec![None; tasks.len()];
     let mut row_section: Vec<&str> = Vec::new();
@@ -319,16 +298,9 @@ pub(crate) fn render(
     let has_plot = start <= stop;
 
     let title = layout_label(model.title.as_deref(), false, size, 4000.0, BOLD, None);
-    let title_height = if title.height > 0.0 {
-        title.height + 16.0
-    } else {
-        0.0
-    };
+    let title_height = if title.height > 0.0 { title.height + 16.0 } else { 0.0 };
     let (acc_descr, acc_title) = (model.acc_descr.clone(), model.acc_title.clone());
-    let acc = Accessible {
-        acc_descr: acc_descr.as_deref(),
-        acc_title: acc_title.as_deref(),
-    };
+    let acc = Accessible { acc_descr: acc_descr.as_deref(), acc_title: acc_title.as_deref() };
 
     if !has_plot {
         let width = (title.width.max(1.0) + 2.0 * pad).ceil();
@@ -364,43 +336,21 @@ pub(crate) fn render(
         text(config, "axisFormat").unwrap_or("%Y-%m-%d")
     };
     let tick_label = |t: f64| time_format(axis_format, Date(t));
-    let sample_width = js_max(
-        measure::width(&tick_label(start), tick_size, 0),
-        measure::width(&tick_label(stop), tick_size, 0),
-    );
+    let sample_width =
+        js_max(measure::width(&tick_label(start), tick_size, 0), measure::width(&tick_label(stop), tick_size, 0));
 
     let left = pad
         + setting(config, "leftPadding", 0.0, 2000.0).unwrap_or_else(|| {
-            js_max(
-                if section_width > 0.0 {
-                    section_width + 24.0
-                } else {
-                    0.0
-                },
-                sample_width / 2.0,
-            )
+            js_max(if section_width > 0.0 { section_width + 24.0 } else { 0.0 }, sample_width / 2.0)
         });
-    let right_padding = setting(config, "rightPadding", 0.0, 2000.0)
-        .unwrap_or_else(|| js_max(16.0, sample_width / 2.0));
-    let target = cap_width(
-        options,
-        setting(config, "useWidth", 100.0, 20000.0).unwrap_or(WIDTH),
-        280.0,
-        0.0,
-    );
+    let right_padding =
+        setting(config, "rightPadding", 0.0, 2000.0).unwrap_or_else(|| js_max(16.0, sample_width / 2.0));
+    let target = cap_width(options, setting(config, "useWidth", 100.0, 20000.0).unwrap_or(WIDTH), 280.0, 0.0);
     let plot_width = js_max(MIN_PLOT, target - left - right_padding - pad);
     let right = left + plot_width;
-    let scale = if stop > start {
-        plot_width / (stop - start)
-    } else {
-        0.0
-    };
+    let scale = if stop > start { plot_width / (stop - start) } else { 0.0 };
     let x = |t: f64| {
-        if scale == 0.0 {
-            left + plot_width / 2.0
-        } else {
-            left + (t - start) * scale
-        }
+        if scale == 0.0 { left + plot_width / 2.0 } else { left + (t - start) * scale }
     };
 
     let tick_height = js_round(tick_size * 1.75);
@@ -431,21 +381,11 @@ pub(crate) fn render(
         if !scheduled(task) {
             let label_x = left + LABEL_GAP + label.width / 2.0;
             extent = js_max(extent, label_x + label.width / 2.0);
-            bars.push(Bar {
-                inside: false,
-                label,
-                label_x,
-                row,
-                task: i,
-                x0: f64::NAN,
-                x1: f64::NAN,
-            });
+            bars.push(Bar { inside: false, label, label_x, row, task: i, x0: f64::NAN, x1: f64::NAN });
             continue;
         }
         let mut x0 = x(start_of(task));
-        let render_end = task
-            .render_end_time
-            .map_or_else(|| end_of(task), Date::time);
+        let render_end = task.render_end_time.map_or_else(|| end_of(task), Date::time);
         let mut x1 = js_max(x(render_end), x0 + if task.milestone { 0.0 } else { 2.0 });
         if task.milestone {
             let mid = x0 + (x(end_of(task)) - x0) / 2.0;
@@ -464,15 +404,7 @@ pub(crate) fn render(
             };
             extent = js_max(extent, label_x + label.width / 2.0);
         }
-        bars.push(Bar {
-            inside,
-            label,
-            label_x,
-            row,
-            task: i,
-            x0,
-            x1,
-        });
+        bars.push(Bar { inside, label, label_x, row, task: i, x0, x1 });
     }
 
     let interval = model
@@ -481,15 +413,8 @@ pub(crate) fn render(
         .filter(|interval| !interval.is_empty())
         .or_else(|| text(config, "tickInterval").filter(|interval| !interval.is_empty()))
         .unwrap_or("");
-    let weekday = model
-        .weekday
-        .as_deref()
-        .or_else(|| text(config, "weekday"))
-        .unwrap_or("sunday");
-    let count = js_max(
-        2.0,
-        js_min(10.0, (plot_width / (sample_width + 24.0)).floor()),
-    );
+    let weekday = model.weekday.as_deref().or_else(|| text(config, "weekday")).unwrap_or("sunday");
+    let count = js_max(2.0, js_min(10.0, (plot_width / (sample_width + 24.0)).floor()));
     let ticks = interval_ticks(interval, weekday, start, stop, (plot_width / 3.0).ceil())
         .unwrap_or_else(|| auto_ticks(start, stop, count));
 
@@ -548,10 +473,7 @@ pub(crate) fn render(
         let label = one_line(&task.task, label_size);
         let cx = js_max(pad + label.width / 2.0, vx);
         let mut line = 0;
-        while vert_ends
-            .get(line)
-            .is_some_and(|&end| cx - label.width / 2.0 < end + 8.0)
-        {
+        while vert_ends.get(line).is_some_and(|&end| cx - label.width / 2.0 < end + 8.0) {
             line += 1;
         }
         let end = cx + label.width / 2.0;
@@ -576,22 +498,12 @@ pub(crate) fn render(
         attrs.push('"');
         #[expect(clippy::cast_precision_loss, reason = "line counts stay small")]
         let line = line as f64;
-        vert_labels.push_str(&label_svg(
-            &label,
-            cx,
-            vert_top + line * vert_line + vert_line / 2.0,
-            &attrs,
-            None,
-        ));
+        vert_labels.push_str(&label_svg(&label, cx, vert_top + line * vert_line + vert_line / 2.0, &attrs, None));
     }
 
     let width = (js_max(extent, pad + title.width) + pad).ceil();
     #[expect(clippy::cast_precision_loss, reason = "line counts stay small")]
-    let vert_height = if vert_ends.is_empty() {
-        0.0
-    } else {
-        4.0 + vert_ends.len() as f64 * vert_line
-    };
+    let vert_height = if vert_ends.is_empty() { 0.0 } else { 4.0 + vert_ends.len() as f64 * vert_line };
     let height = (plot_bottom + tick_height + vert_height + pad).ceil();
 
     // Section bands, one per run of rows that share a section, shaded on alternate sections.
@@ -607,10 +519,7 @@ pub(crate) fn render(
         #[expect(clippy::cast_precision_loss, reason = "section counts stay small")]
         let style = category_index as f64 % section_styles;
         #[expect(clippy::cast_precision_loss, reason = "row counts stay small")]
-        let (y, h) = (
-            plot_top + row as f64 * row_height,
-            (end - row) as f64 * row_height,
-        );
+        let (y, h) = (plot_top + row as f64 * row_height, (end - row) as f64 * row_height);
         if categories.len() > 1 || !section.is_empty() {
             bands.push_str("<rect class=\"ondine-section ondine-section-");
             bands.push_str(&int_string(style));
@@ -621,24 +530,14 @@ pub(crate) fn render(
             bands.push_str("\" height=\"");
             push_num(&mut bands, h);
             bands.push_str("\" fill=\"");
-            bands.push_str(if style % 2.0 == 0.0 {
-                "var(--_s)"
-            } else {
-                "none"
-            });
+            bands.push_str(if style % 2.0 == 0.0 { "var(--_s)" } else { "none" });
             bands.push_str("\"/>");
         }
         if let Some(label) = section_labels.get(category_index) {
             let mut attrs = String::from(" class=\"ondine-section-label\" data-id=\"");
             attrs.push_str(&esc_text(section));
             attrs.push('"');
-            section_out.push_str(&label_svg(
-                label,
-                pad + 8.0 + label.width / 2.0,
-                y + h / 2.0,
-                &attrs,
-                None,
-            ));
+            section_out.push_str(&label_svg(label, pad + 8.0 + label.width / 2.0, y + h / 2.0, &attrs, None));
         }
         row = end;
     }
@@ -646,9 +545,7 @@ pub(crate) fn render(
     // Excluded days, as Mermaid marks them: a day at a time from the first task's start, and not
     // at all when the chart spans more than five years.
     let mut excluded = String::new();
-    if (!model.excludes.is_empty() || !model.includes.is_empty())
-        && add(Date(start), 6.0, Unit::Year).time() > stop
-    {
+    if (!model.excludes.is_empty() || !model.includes.is_empty()) && add(Date(start), 6.0, Unit::Year).time() > stop {
         let mut run: Option<(Date, Date)> = None;
         let flush = |run: &mut Option<(Date, Date)>, excluded: &mut String| {
             let Some((from, to)) = run.take() else {
@@ -738,20 +635,13 @@ pub(crate) fn render(
                 }
             }
             let mut stroke = String::from("stroke=\"");
-            stroke.push_str(if state == "done" && !task.crit {
-                "var(--_b)"
-            } else {
-                color
-            });
+            stroke.push_str(if state == "done" && !task.crit { "var(--_b)" } else { color });
             stroke.push('"');
             if task.milestone {
                 let cx = f64::midpoint(bar.x0, bar.x1);
                 let r = bar_height / 2.0;
                 shape.push_str("<path d=\"M");
-                for (i, (px, py)) in [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)]
-                    .into_iter()
-                    .enumerate()
-                {
+                for (i, (px, py)) in [(cx, cy - r), (cx + r, cy), (cx, cy + r), (cx - r, cy)].into_iter().enumerate() {
                     if i > 0 {
                         shape.push('L');
                     }
@@ -906,10 +796,5 @@ pub(crate) fn render(
         content.push_str("</g>");
     }
 
-    Ok(Rendered {
-        height,
-        links,
-        svg: svg_document("gantt", width, height, size, options, acc, &content),
-        width,
-    })
+    Ok(Rendered { height, links, svg: svg_document("gantt", width, height, size, options, acc, &content), width })
 }

@@ -4,7 +4,9 @@
 //! whole wherever `\s` looks at it, so token boundaries match.
 
 use crate::diagrams::common::caseless::word_at;
-use crate::util::chars::{is_line_end, is_space, is_word};
+use crate::util::chars::is_line_end;
+use crate::util::chars::is_space;
+use crate::util::chars::is_word;
 
 /// A token kind. The order mirrors Pele's `T` enum.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -58,9 +60,7 @@ fn char_at(src: &str, at: usize) -> Option<char> {
 
 /// Whether the character at `at` is a word character. False at the end.
 fn word_char_at(src: &str, at: usize) -> bool {
-    src.as_bytes()
-        .get(at)
-        .is_some_and(|&c| is_word(u32::from(c)))
+    src.as_bytes().get(at).is_some_and(|&c| is_word(u32::from(c)))
 }
 
 /// The length of `ishikawa-beta`, or failing that `ishikawa`, at `at`, either one ending at a word
@@ -102,12 +102,7 @@ pub(crate) fn tokenize(src: &str) -> Vec<Token> {
             (T::Spaceline, end)
         } else if j == i {
             match keyword(src, i) {
-                0 => (
-                    T::Text,
-                    src.get(i..)
-                        .and_then(|rest| rest.find('\n'))
-                        .map_or(n, |at| i + at),
-                ),
+                0 => (T::Text, src.get(i..).and_then(|rest| rest.find('\n')).map_or(n, |at| i + at)),
                 length => (T::Ishikawa, i + length),
             }
         } else {
@@ -121,15 +116,7 @@ pub(crate) fn tokenize(src: &str) -> Vec<Token> {
         i = end;
     }
 
-    tokens.push(Token {
-        end: n,
-        start: n,
-        t: T::Eof,
-    });
-    tokens.push(Token {
-        end: n,
-        start: n,
-        t: T::End,
-    });
+    tokens.push(Token { end: n, start: n, t: T::Eof });
+    tokens.push(Token { end: n, start: n, t: T::End });
     tokens
 }

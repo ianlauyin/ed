@@ -6,7 +6,11 @@
 
 use super::tokens::T;
 use crate::diagrams::common::caseless::word_at;
-use crate::util::chars::{is_digit, is_letter, is_line_end, is_space, is_word};
+use crate::util::chars::is_digit;
+use crate::util::chars::is_letter;
+use crate::util::chars::is_line_end;
+use crate::util::chars::is_space;
+use crate::util::chars::is_word;
 
 /// A token: its kind and its UTF-8 span.
 #[derive(Clone, Copy, Debug)]
@@ -111,10 +115,7 @@ impl Lexer<'_> {
     }
 
     fn line_end(&self, q: usize) -> usize {
-        self.src
-            .get(q..)
-            .and_then(|rest| rest.find('\n'))
-            .map_or(self.src.len(), |at| q + at)
+        self.src.get(q..).and_then(|rest| rest.find('\n')).map_or(self.src.len(), |at| q + at)
     }
 
     /// The end of the run of spaces at `q`.
@@ -176,10 +177,7 @@ impl Lexer<'_> {
                     self.p += 1;
                     self.pop();
                 } else {
-                    let end = src
-                        .get(p..)
-                        .and_then(|rest| rest.find('}'))
-                        .map_or(n, |at| p + at);
+                    let end = src.get(p..).and_then(|rest| rest.find('}')).map_or(n, |at| p + at);
                     self.emit(T::AccDescrMultilineValue, p, end);
                 }
                 Some(true)
@@ -189,10 +187,7 @@ impl Lexer<'_> {
                     self.p += 1;
                     self.pop();
                 } else {
-                    let end = src
-                        .get(p..)
-                        .and_then(|rest| rest.find('"'))
-                        .map_or(n, |at| p + at);
+                    let end = src.get(p..).and_then(|rest| rest.find('"')).map_or(n, |at| p + at);
                     self.emit(T::Str, p, end);
                 }
                 Some(true)
@@ -260,10 +255,7 @@ impl Lexer<'_> {
     }
 
     /// Runs the initial rules at `p`. Returns false when none matches.
-    #[expect(
-        clippy::many_single_char_names,
-        reason = "mirrors the names of Pele's lexer"
-    )]
+    #[expect(clippy::many_single_char_names, reason = "mirrors the names of Pele's lexer")]
     fn initial_rule(&mut self) -> bool {
         let p = self.p;
         let src = self.src;
@@ -274,11 +266,7 @@ impl Lexer<'_> {
         let width = ch.len_utf8();
         // The code unit after the first one at `p`: a low surrogate for a character outside the
         // Basic Multilingual Plane.
-        let next = if ch.len_utf16() == 2 {
-            0xdc00
-        } else {
-            u32::from(byte(src, p + width))
-        };
+        let next = if ch.len_utf16() == 2 { 0xdc00 } else { u32::from(byte(src, p + width)) };
 
         if c == 37 && next == 37 {
             self.p = self.line_end(p + 2);
@@ -471,25 +459,13 @@ pub(crate) fn tokenize(src: &str) -> Vec<Token> {
 
     let mut tokens = lexer.tokens;
     if lexer.p < n {
-        tokens.push(Token {
-            end: lexer.p,
-            start: lexer.p,
-            t: T::Error,
-        });
+        tokens.push(Token { end: lexer.p, start: lexer.p, t: T::Error });
         return tokens;
     }
     // Jison tries the rules of the current state once more against the empty rest of the input.
     if let Some(t) = lexer.state.at_end() {
-        tokens.push(Token {
-            end: n,
-            start: n,
-            t,
-        });
+        tokens.push(Token { end: n, start: n, t });
     }
-    tokens.push(Token {
-        end: n,
-        start: n,
-        t: T::End,
-    });
+    tokens.push(Token { end: n, start: n, t: T::End });
     tokens
 }

@@ -2,11 +2,26 @@
 //! `src/diagrams/wardley/parser.ts`.
 
 use crate::diagrams::common::acc_descr::acc_descr;
-use crate::diagrams::common::tokens::{
-    ACC_TITLE, DIRECTIVE, EOF, Memo, NEWLINE, Pattern, Reader, SINGLE_LINE_COMMENT, STRING, TITLE,
-    TokenType, WHITESPACE, YAML, acc_descr_value, acc_title_value, literal, skip_blanks,
-    string_value, title_value, tokenize,
-};
+use crate::diagrams::common::tokens::ACC_TITLE;
+use crate::diagrams::common::tokens::DIRECTIVE;
+use crate::diagrams::common::tokens::EOF;
+use crate::diagrams::common::tokens::Memo;
+use crate::diagrams::common::tokens::NEWLINE;
+use crate::diagrams::common::tokens::Pattern;
+use crate::diagrams::common::tokens::Reader;
+use crate::diagrams::common::tokens::SINGLE_LINE_COMMENT;
+use crate::diagrams::common::tokens::STRING;
+use crate::diagrams::common::tokens::TITLE;
+use crate::diagrams::common::tokens::TokenType;
+use crate::diagrams::common::tokens::WHITESPACE;
+use crate::diagrams::common::tokens::YAML;
+use crate::diagrams::common::tokens::acc_descr_value;
+use crate::diagrams::common::tokens::acc_title_value;
+use crate::diagrams::common::tokens::literal;
+use crate::diagrams::common::tokens::skip_blanks;
+use crate::diagrams::common::tokens::string_value;
+use crate::diagrams::common::tokens::title_value;
+use crate::diagrams::common::tokens::tokenize;
 use crate::error::Error;
 use crate::text::label::trim;
 use crate::util::chars::is_space;
@@ -120,10 +135,7 @@ fn link_label(src: &str, p: usize) -> Option<usize> {
 /// `build|buy|outsource|market`.
 fn strategy(src: &str, p: usize) -> Option<usize> {
     let rest = src.get(p..)?;
-    ["build", "buy", "outsource", "market"]
-        .iter()
-        .find(|word| rest.starts_with(*word))
-        .map(|word| p + word.len())
+    ["build", "buy", "outsource", "market"].iter().find(|word| rest.starts_with(*word)).map(|word| p + word.len())
 }
 
 /// `(?:[A-Za-z0-9_()&]|-(?!>))*` from `at`.
@@ -181,11 +193,7 @@ fn int(src: &str, p: usize) -> Option<usize> {
         Some(b'0') => Some(p + 1),
         Some(b'1'..=b'9') => {
             let end = digits(src, p + 1);
-            if bytes.get(end) == Some(&b'.') {
-                (end >= p + 2).then(|| end - 1)
-            } else {
-                Some(end)
-            }
+            if bytes.get(end) == Some(&b'.') { (end >= p + 2).then(|| end - 1) } else { Some(end) }
         }
         _ => None,
     }
@@ -211,24 +219,12 @@ fn id(src: &str, p: usize) -> Option<usize> {
 /// A token type that matches `text`, named `name`. Pele writes these as sticky expressions of
 /// the text, which match it as a prefix of a longer word too.
 const fn word(name: &'static str, text: &'static str) -> TokenType {
-    TokenType {
-        name,
-        ..literal(text)
-    }
+    TokenType { name, ..literal(text) }
 }
 
 /// A token type with a hand-written matcher.
-const fn matcher(
-    name: &'static str,
-    first: &'static str,
-    pattern: fn(&str, usize) -> Option<usize>,
-) -> TokenType {
-    TokenType {
-        first: Some(first),
-        name,
-        pattern: Pattern::Match(pattern),
-        ..literal("")
-    }
+const fn matcher(name: &'static str, first: &'static str, pattern: fn(&str, usize) -> Option<usize>) -> TokenType {
+    TokenType { first: Some(first), name, pattern: Pattern::Match(pattern), ..literal("") }
 }
 
 /// The token types, in matching order.
@@ -240,18 +236,10 @@ pub(crate) const WARDLEY_TOKENS: &[TokenType] = &[
     literal("/"),
     literal("("),
     literal(")"),
-    TokenType {
-        longer: &[ARROW, LINK_ARROW, YAML_KIND],
-        ..literal("-")
-    },
+    TokenType { longer: &[ARROW, LINK_ARROW, YAML_KIND], ..literal("-") },
     literal("{"),
     literal("}"),
-    TokenType {
-        first: Some("0123456789"),
-        name: "WARDLEY_NUMBER",
-        pattern: Pattern::Scan(number),
-        ..literal("")
-    },
+    TokenType { first: Some("0123456789"), name: "WARDLEY_NUMBER", pattern: Pattern::Scan(number), ..literal("") },
     word("ARROW", "->"),
     matcher("LINK_PORT", "+", link_port),
     matcher("LINK_ARROW", "->+", link_arrow),
@@ -271,25 +259,14 @@ pub(crate) const WARDLEY_TOKENS: &[TokenType] = &[
     word("KW_ANNOTATION", "annotation"),
     word("KW_ACCELERATOR", "accelerator"),
     word("KW_DEACCELERATOR", "deaccelerator"),
-    matcher(
-        "NAME_WITH_SPACES",
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
-        name_with_spaces,
-    ),
-    TokenType {
-        hidden: true,
-        ..matcher("WS", "\t ", ws)
-    },
+    matcher("NAME_WITH_SPACES", "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", name_with_spaces),
+    TokenType { hidden: true, ..matcher("WS", "\t ", ws) },
     acc_descr("ACC_DESCR"),
     ACC_TITLE,
     TITLE,
     matcher("INT", "0123456789", int),
     STRING,
-    matcher(
-        "ID",
-        "_0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz",
-        id,
-    ),
+    matcher("ID", "_0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz", id),
     NEWLINE,
     WHITESPACE,
     YAML,
@@ -539,31 +516,14 @@ impl Parser<'_> {
         let neg_y = self.r.accept(MINUS);
         let offset_y = self.int()?;
         self.r.expect(RBRACKET)?;
-        Ok(LabelAst {
-            neg_x,
-            neg_y,
-            offset_x,
-            offset_y,
-        })
+        Ok(LabelAst { neg_x, neg_y, offset_x, offset_y })
     }
 
     fn stage(&mut self) -> Result<StageAst, Error> {
         let name = self.name()?;
-        let boundary = if self.r.accept(AT) {
-            Some(self.number()?)
-        } else {
-            None
-        };
-        let second_name = if self.r.accept(SLASH) {
-            Some(self.name()?)
-        } else {
-            None
-        };
-        Ok(StageAst {
-            boundary,
-            name,
-            second_name,
-        })
+        let boundary = if self.r.accept(AT) { Some(self.number()?) } else { None };
+        let second_name = if self.r.accept(SLASH) { Some(self.name()?) } else { None };
+        Ok(StageAst { boundary, name, second_name })
     }
 
     fn label_if_any(&mut self) -> Result<Option<LabelAst>, Error> {
@@ -578,12 +538,7 @@ impl Parser<'_> {
         let name = self.name()?;
         let (visibility, evolution) = self.pair(Self::number)?;
         let label = self.label_if_any()?;
-        let next = self
-            .r
-            .tokens
-            .tokens
-            .get(self.r.i + 1)
-            .map(|token| token.kind);
+        let next = self.r.tokens.tokens.get(self.r.i + 1).map(|token| token.kind);
         let decorator = if self.at(LPAREN) && next == Some(STRATEGY) {
             self.r.i += 1;
             let strategy = self.r.take().to_owned();
@@ -602,14 +557,7 @@ impl Parser<'_> {
             false
         };
         self.end_of_line()?;
-        Ok(ComponentAst {
-            decorator,
-            evolution,
-            inertia,
-            label,
-            name,
-            visibility,
-        })
+        Ok(ComponentAst { decorator, evolution, inertia, label, name, visibility })
     }
 
     fn pipeline(&mut self) -> Result<PipelineAst, Error> {
@@ -629,11 +577,7 @@ impl Parser<'_> {
             self.r.expect(RBRACKET)?;
             let label = self.label_if_any()?;
             self.end_of_line()?;
-            components.push(PipelineComponentAst {
-                evolution,
-                label,
-                name,
-            });
+            components.push(PipelineComponentAst { evolution, label, name });
             if !self.at(COMPONENT) {
                 break;
             }
@@ -657,14 +601,7 @@ impl Parser<'_> {
             trim(text.get(1..).unwrap_or("")).to_owned()
         });
         self.end_of_line()?;
-        Ok(LinkAst {
-            arrow,
-            from,
-            from_port,
-            link_label,
-            to,
-            to_port,
-        })
+        Ok(LinkAst { arrow, from, from_port, link_label, to, to_port })
     }
 
     fn statement(&mut self, ast: &mut WardleyAst) -> Result<(), Error> {
@@ -704,11 +641,7 @@ impl Parser<'_> {
                 let name = self.name()?;
                 let (visibility, evolution) = self.pair(Self::number)?;
                 self.end_of_line()?;
-                ast.anchors.push(AnchorAst {
-                    evolution,
-                    name,
-                    visibility,
-                });
+                ast.anchors.push(AnchorAst { evolution, name, visibility });
             }
             COMPONENT => {
                 let component = self.component()?;
@@ -730,11 +663,7 @@ impl Parser<'_> {
                 let text = string_value(self.r.expect(STRING_KIND)?).into_owned();
                 let (visibility, evolution) = self.pair(Self::number)?;
                 self.end_of_line()?;
-                ast.notes.push(NoteAst {
-                    evolution,
-                    text,
-                    visibility,
-                });
+                ast.notes.push(NoteAst { evolution, text, visibility });
             }
             ANNOTATIONS => {
                 self.r.i += 1;
@@ -779,9 +708,7 @@ impl Parser<'_> {
 /// Returns a syntax error where the source leaves the grammar.
 pub(crate) fn parse_wardley(src: &str) -> Result<WardleyAst, Error> {
     let tokens = tokenize(src, WARDLEY_TOKENS, "wardley")?;
-    let mut p = Parser {
-        r: Reader::new(tokens, WARDLEY_TOKENS, "wardley"),
-    };
+    let mut p = Parser { r: Reader::new(tokens, WARDLEY_TOKENS, "wardley") };
     let mut ast = WardleyAst::default();
 
     while p.at(NEWLINE_KIND) {

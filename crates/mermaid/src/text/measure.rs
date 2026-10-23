@@ -41,8 +41,5 @@ fn is_wide(c: u32) -> bool {
 }
 
 fn is_zero_width(c: u32) -> bool {
-    (0x300..=0x36f).contains(&c)
-        || (0x200b..=0x200f).contains(&c)
-        || (0xfe00..=0xfe0f).contains(&c)
-        || c == 0xfeff
+    (0x300..=0x36f).contains(&c) || (0x200b..=0x200f).contains(&c) || (0xfe00..=0xfe0f).contains(&c) || c == 0xfeff
 }

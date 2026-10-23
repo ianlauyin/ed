@@ -2,19 +2,40 @@
 //! relationship edges. Port of Pele's `src/diagrams/requirement/render.ts`.
 
 use super::db::RequirementDb;
-use super::graph::{GraphEdge, build_requirement_graph};
+use super::graph::GraphEdge;
+use super::graph::build_requirement_graph;
 use crate::diagrams::Rendered;
-use crate::diagrams::common::fit_width::{runs_across, turn_to_fit};
-use crate::layout::compound::{CEdge, CNode, Dir, cnode, compound_layout, direction};
+use crate::diagrams::common::fit_width::runs_across;
+use crate::diagrams::common::fit_width::turn_to_fit;
+use crate::layout::compound::CEdge;
+use crate::layout::compound::CNode;
+use crate::layout::compound::Dir;
+use crate::layout::compound::cnode;
+use crate::layout::compound::compound_layout;
+use crate::layout::compound::direction;
 use crate::layout::layered::LayeredOptions;
-use crate::svg::builder::{
-    esc, esc_text, label_svg, push_num, shared_style, span_style, text_style,
-};
-use crate::svg::edges::{EdgePath, edge_label_svg, route_path};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
-use crate::svg::theme::{ROUNDED, ResolvedStyle, class_names, resolve_style};
-use crate::text::label::{Label, layout_label};
-use crate::text::measure::{self, BOLD, ITALIC};
+use crate::svg::builder::esc;
+use crate::svg::builder::esc_text;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::builder::shared_style;
+use crate::svg::builder::span_style;
+use crate::svg::builder::text_style;
+use crate::svg::edges::EdgePath;
+use crate::svg::edges::edge_label_svg;
+use crate::svg::edges::route_path;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
+use crate::svg::theme::ROUNDED;
+use crate::svg::theme::ResolvedStyle;
+use crate::svg::theme::class_names;
+use crate::svg::theme::resolve_style;
+use crate::text::label::Label;
+use crate::text::label::layout_label;
+use crate::text::measure::BOLD;
+use crate::text::measure::ITALIC;
+use crate::text::measure::{self};
 use crate::util::chars::is_space;
 use crate::yaml::push_number;
 
@@ -200,11 +221,7 @@ fn spread_ends(cnodes: &[CNode], cedges: &mut [CEdge], views: &[NodeView]) {
                 continue;
             };
             let key = node * 4 + side;
-            let end = End {
-                at,
-                edge: e,
-                toward: point(if side % 2 == 0 { next } else { next + 1 }),
-            };
+            let end = End { at, edge: e, toward: point(if side % 2 == 0 { next } else { next + 1 }) };
             match sides.iter_mut().find(|(k, _)| *k == key) {
                 Some((_, list)) => list.push(end),
                 None => sides.push((key, vec![end])),
@@ -223,11 +240,7 @@ fn spread_ends(cnodes: &[CNode], cedges: &mut [CEdge], views: &[NodeView]) {
         };
         let span = (if vertical { view.h } else { view.w }) - 2.0 * END_MARGIN;
         let step = (span / (list.len() - 1) as f64).clamp(0.0, END_STEP);
-        list.sort_by(|a, b| {
-            (a.toward - b.toward)
-                .partial_cmp(&0.0)
-                .unwrap_or(std::cmp::Ordering::Equal)
-        });
+        list.sort_by(|a, b| (a.toward - b.toward).partial_cmp(&0.0).unwrap_or(std::cmp::Ordering::Equal));
         let count = list.len();
         let Some(c) = cnodes.get(node) else {
             continue;
@@ -294,14 +307,8 @@ fn draw(model: &RequirementDb, options: &RenderOptions, turned: bool) -> Rendere
         let name_size = style.font_size.unwrap_or(size);
         let body_size = style.font_size.unwrap_or(small);
         let kind_text = stereotype(node.requirement.map_or("Element", |r| r.r#type.as_str()));
-        let kind = restyle(
-            layout_label(Some(&kind_text), false, body_size, 4000.0, 0, None),
-            base,
-        );
-        let name = restyle(
-            layout_label(Some(node.id), true, name_size, NAME_WRAP, 0, None),
-            base | BOLD,
-        );
+        let kind = restyle(layout_label(Some(&kind_text), false, body_size, 4000.0, 0, None), base);
+        let name = restyle(layout_label(Some(node.id), true, name_size, NAME_WRAP, 0, None), base | BOLD);
         let fields: Vec<(&str, &str)> = match (node.requirement, node.element) {
             (Some(r), _) => vec![
                 ("ID", r.requirement_id.as_str()),
@@ -320,14 +327,8 @@ fn draw(model: &RequirementDb, options: &RenderOptions, turned: bool) -> Rendere
             if text.is_empty() {
                 continue;
             }
-            let key = restyle(
-                layout_label(Some(label), false, body_size, 4000.0, 0, None),
-                base,
-            );
-            let value = restyle(
-                layout_label(Some(text), true, body_size, VALUE_WRAP, 0, None),
-                base,
-            );
+            let key = restyle(layout_label(Some(label), false, body_size, 4000.0, 0, None), base);
+            let value = restyle(layout_label(Some(text), true, body_size, VALUE_WRAP, 0, None), base);
             let height = f64::max(key.height, value.height);
             key_width = key_width.max(key.width);
             value_width = value_width.max(value.width);
@@ -338,13 +339,11 @@ fn draw(model: &RequirementDb, options: &RenderOptions, turned: bool) -> Rendere
             body_height += 2.0 * PAD_Y - ROW_GAP;
         }
         let head_height = 2.0 * PAD_Y + kind.height + name.height;
-        let w = MIN_WIDTH
-            .max(kind.width.max(name.width) + 2.0 * PAD_X)
-            .max(if rows.is_empty() {
-                0.0
-            } else {
-                key_width + COLUMN_GAP + value_width + 2.0 * PAD_X
-            });
+        let w = MIN_WIDTH.max(kind.width.max(name.width) + 2.0 * PAD_X).max(if rows.is_empty() {
+            0.0
+        } else {
+            key_width + COLUMN_GAP + value_width + 2.0 * PAD_X
+        });
         // A requirement and an element may share a name; relationships then go to the requirement.
         if !index.iter().any(|(id, _)| *id == node.id) {
             index.push((node.id, views.len()));
@@ -354,27 +353,12 @@ fn draw(model: &RequirementDb, options: &RenderOptions, turned: bool) -> Rendere
         {
             c.seq = views.len() as f64;
         }
-        views.push(NodeView {
-            h: head_height + body_height,
-            head_height,
-            key_width,
-            kind,
-            name,
-            rows,
-            style,
-            w,
-        });
+        views.push(NodeView { h: head_height + body_height, head_height, key_width, kind, name, rows, style, w });
         cnodes.push(c);
     }
-    let find = |id: Option<&str>| {
-        id.and_then(|id| index.iter().find(|(own, _)| *own == id).map(|&(_, at)| at))
-    };
+    let find = |id: Option<&str>| id.and_then(|id| index.iter().find(|(own, _)| *own == id).map(|&(_, at)| at));
 
-    let root_dir = if turned {
-        Dir::Tb
-    } else {
-        direction(Some(graph.direction))
-    };
+    let root_dir = if turned { Dir::Tb } else { direction(Some(graph.direction)) };
     let sideways = matches!(root_dir, Dir::Lr | Dir::Rl);
     let mut cedges: Vec<CEdge> = Vec::new();
     let mut edge_labels: Vec<Label> = Vec::new();
@@ -383,14 +367,7 @@ fn draw(model: &RequirementDb, options: &RenderOptions, turned: bool) -> Rendere
         let (Some(src), Some(dst)) = (find(edge.start), find(edge.end)) else {
             continue;
         };
-        let label = layout_label(
-            Some(&stereotype(edge.r#type)),
-            false,
-            small,
-            4000.0,
-            0,
-            None,
-        );
+        let label = layout_label(Some(&stereotype(edge.r#type)), false, small, 4000.0, 0, None);
         if src == dst
             && let Some(c) = cnodes.get_mut(src)
         {
@@ -435,11 +412,7 @@ fn draw(model: &RequirementDb, options: &RenderOptions, turned: bool) -> Rendere
     spread_ends(&cnodes, &mut cedges, &views);
 
     let title = layout_label(model.title.as_deref(), false, size, 4000.0, BOLD, None);
-    let title_height = if title.height > 0.0 {
-        title.height + 12.0
-    } else {
-        0.0
-    };
+    let title_height = if title.height > 0.0 { title.height + 12.0 } else { 0.0 };
     let inner = layout.width.max(title.width);
     let ox = pad + (inner - layout.width) / 2.0;
     let oy = pad + title_height;
@@ -475,13 +448,7 @@ fn draw(model: &RequirementDb, options: &RenderOptions, turned: bool) -> Rendere
         push_number(&mut attrs, view.kind.size);
         attrs.push_str("\" fill=\"var(--_m)\"");
         attrs.push_str(&style.text);
-        body.push_str(&label_svg(
-            &view.kind,
-            0.0,
-            top + PAD_Y + view.kind.height / 2.0,
-            &attrs,
-            None,
-        ));
+        body.push_str(&label_svg(&view.kind, 0.0, top + PAD_Y + view.kind.height / 2.0, &attrs, None));
         let mut attrs = String::from(" class=\"ondine-label\" font-size=\"");
         push_number(&mut attrs, view.name.size);
         attrs.push_str("\" font-weight=\"var(--_hw)\"");
@@ -512,12 +479,7 @@ fn draw(model: &RequirementDb, options: &RenderOptions, turned: bool) -> Rendere
             let mut rows = String::new();
             for row in &view.rows {
                 rows.push_str(&start_text(&row.key, left + PAD_X, y, &key_attrs));
-                rows.push_str(&start_text(
-                    &row.value,
-                    left + PAD_X + view.key_width + COLUMN_GAP,
-                    y,
-                    &value_attrs,
-                ));
+                rows.push_str(&start_text(&row.value, left + PAD_X + view.key_width + COLUMN_GAP, y, &value_attrs));
                 y += row.height + ROW_GAP;
             }
             body.push_str("<g class=\"ondine-fields\" font-size=\"");
@@ -528,11 +490,7 @@ fn draw(model: &RequirementDb, options: &RenderOptions, turned: bool) -> Rendere
         }
 
         nodes_out.push_str("<g class=\"ondine-node ");
-        nodes_out.push_str(if node.requirement.is_some() {
-            "ondine-requirement"
-        } else {
-            "ondine-element"
-        });
+        nodes_out.push_str(if node.requirement.is_some() { "ondine-requirement" } else { "ondine-element" });
         nodes_out.push_str(&class_names(without_default(&node.css_classes)));
         nodes_out.push_str("\" data-id=\"");
         nodes_out.push_str(&esc_text(node.id));
@@ -547,11 +505,7 @@ fn draw(model: &RequirementDb, options: &RenderOptions, turned: bool) -> Rendere
     let mut labels_out = String::new();
     let mut loop_seen: Vec<(usize, u32)> = Vec::new();
     for ((ce, edge), label) in cedges.iter().zip(&drawn).zip(&edge_labels) {
-        let start_trim = if edge.contains {
-            2.0 * CONTAINS_RADIUS
-        } else {
-            0.0
-        };
+        let start_trim = if edge.contains { 2.0 * CONTAINS_RADIUS } else { 0.0 };
         let mut label_x = ce.label_x + ox;
         let mut label_y = ce.label_y + oy;
         let path = if ce.src == ce.dst {
@@ -560,8 +514,7 @@ fn draw(model: &RequirementDb, options: &RenderOptions, turned: bool) -> Rendere
             };
             let cx = c.x + ox;
             let cy = c.y + oy;
-            let k = if let Some((_, seen)) = loop_seen.iter_mut().find(|(node, _)| *node == ce.src)
-            {
+            let k = if let Some((_, seen)) = loop_seen.iter_mut().find(|(node, _)| *node == ce.src) {
                 *seen += 1;
                 *seen - 1
             } else {
@@ -601,28 +554,12 @@ fn draw(model: &RequirementDb, options: &RenderOptions, turned: bool) -> Rendere
                 d,
                 edx: if sideways { 0.0 } else { -1.0 },
                 edy: if sideways { -1.0 } else { 0.0 },
-                ex: if sideways {
-                    cx + spread
-                } else {
-                    cx + view.w / 2.0
-                },
-                ey: if sideways {
-                    cy + view.h / 2.0
-                } else {
-                    cy + spread
-                },
+                ex: if sideways { cx + spread } else { cx + view.w / 2.0 },
+                ey: if sideways { cy + view.h / 2.0 } else { cy + spread },
                 sdx: if sideways { 0.0 } else { -1.0 },
                 sdy: if sideways { -1.0 } else { 0.0 },
-                sx: if sideways {
-                    cx - spread
-                } else {
-                    cx + view.w / 2.0
-                },
-                sy: if sideways {
-                    cy + view.h / 2.0
-                } else {
-                    cy - spread
-                },
+                sx: if sideways { cx - spread } else { cx + view.w / 2.0 },
+                sy: if sideways { cy + view.h / 2.0 } else { cy - spread },
             }
         } else {
             let mut route = ce.route.clone();
@@ -663,9 +600,7 @@ fn draw(model: &RequirementDb, options: &RenderOptions, turned: bool) -> Rendere
         None,
     );
     if !edges_out.is_empty() {
-        content.push_str(
-            "<g class=\"ondine-edges\" fill=\"none\" stroke=\"var(--_l)\" stroke-linecap=\"round\">",
-        );
+        content.push_str("<g class=\"ondine-edges\" fill=\"none\" stroke=\"var(--_l)\" stroke-linecap=\"round\">");
         content.push_str(&edges_out);
         content.push_str("</g>");
     }
@@ -680,24 +615,8 @@ fn draw(model: &RequirementDb, options: &RenderOptions, turned: bool) -> Rendere
     content.push_str(&nodes_out);
     content.push_str("</g>");
 
-    let accessible = Accessible {
-        acc_descr: model.acc_descr.as_deref(),
-        acc_title: model.acc_title.as_deref(),
-    };
-    let svg = svg_document(
-        "requirement",
-        width,
-        height,
-        size,
-        options,
-        accessible,
-        &content,
-    );
+    let accessible = Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() };
+    let svg = svg_document("requirement", width, height, size, options, accessible, &content);
 
-    Rendered {
-        height,
-        links: Vec::new(),
-        svg,
-        width,
-    }
+    Rendered { height, links: Vec::new(), svg, width }
 }

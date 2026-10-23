@@ -3,8 +3,10 @@
 
 use std::collections::BTreeMap;
 
-use super::parser::{OptionValue, RadarAst};
-use crate::error::{Code, Error};
+use super::parser::OptionValue;
+use super::parser::RadarAst;
+use crate::error::Code;
+use crate::error::Error;
 use crate::text::label::trim_start;
 use crate::util::chars::is_space;
 
@@ -93,23 +95,15 @@ pub(crate) fn build_radar(ast: RadarAst, title: Option<&str>) -> Result<RadarMod
     let axes: Vec<RadarAxis> = ast
         .axes
         .into_iter()
-        .map(|axis| RadarAxis {
-            label: axis.label.unwrap_or_else(|| axis.name.clone()),
-            name: axis.name,
-        })
+        .map(|axis| RadarAxis { label: axis.label.unwrap_or_else(|| axis.name.clone()), name: axis.name })
         .collect();
 
     let mut curves = Vec::with_capacity(ast.curves.len());
     for curve in ast.curves {
-        let detailed = curve
-            .entries
-            .first()
-            .is_some_and(|entry| entry.axis.is_some());
+        let detailed = curve.entries.first().is_some_and(|entry| entry.axis.is_some());
         let entries = if detailed {
             if axes.is_empty() {
-                return Err(invalid(String::from(
-                    "Axes must be populated before curves for reference entries",
-                )));
+                return Err(invalid(String::from("Axes must be populated before curves for reference entries")));
             }
             // The first value for each axis counts.
             let mut by_axis = BTreeMap::new();
@@ -131,20 +125,11 @@ pub(crate) fn build_radar(ast: RadarAst, title: Option<&str>) -> Result<RadarMod
         } else {
             curve.entries.iter().map(|entry| entry.value).collect()
         };
-        curves.push(RadarCurve {
-            entries,
-            label: curve.label.unwrap_or_else(|| curve.name.clone()),
-            name: curve.name,
-        });
+        curves.push(RadarCurve { entries, label: curve.label.unwrap_or_else(|| curve.name.clone()), name: curve.name });
     }
 
-    let mut options = RadarOptions {
-        graticule: String::from("circle"),
-        max: None,
-        min: 0.0,
-        show_legend: true,
-        ticks: 5.0,
-    };
+    let mut options =
+        RadarOptions { graticule: String::from("circle"), max: None, min: 0.0, show_legend: true, ticks: 5.0 };
     for option in ast.options {
         match (option.name.as_str(), option.value) {
             ("showLegend", OptionValue::Bool(value)) => options.show_legend = value,
@@ -160,20 +145,11 @@ pub(crate) fn build_radar(ast: RadarAst, title: Option<&str>) -> Result<RadarMod
     }
 
     Ok(RadarModel {
-        acc_descr: ast
-            .acc_descr
-            .filter(|text| !text.is_empty())
-            .map(|text| dedent_lines(&text)),
-        acc_title: ast
-            .acc_title
-            .filter(|text| !text.is_empty())
-            .map(|text| trim_start(&text).to_owned()),
+        acc_descr: ast.acc_descr.filter(|text| !text.is_empty()).map(|text| dedent_lines(&text)),
+        acc_title: ast.acc_title.filter(|text| !text.is_empty()).map(|text| trim_start(&text).to_owned()),
         axes,
         curves,
         options,
-        title: ast
-            .title
-            .filter(|text| !text.is_empty())
-            .or_else(|| title.map(str::to_owned)),
+        title: ast.title.filter(|text| !text.is_empty()).or_else(|| title.map(str::to_owned)),
     })
 }

@@ -1,17 +1,33 @@
 //! Draws a tree view: one row per entry, indented under its folder, with guide lines. Port of
 //! Pele's `src/diagrams/treeview/render.ts`.
 
-use super::icons::{BUILTIN_PACK, get_node_icon, glyph, icon_config};
-use super::model::{NodeType, TreeViewModel};
+use super::icons::BUILTIN_PACK;
+use super::icons::get_node_icon;
+use super::icons::glyph;
+use super::icons::icon_config;
+use super::model::NodeType;
+use super::model::TreeViewModel;
 use crate::diagrams::Rendered;
-use crate::diagrams::common::fit_width::{tighten, title_room};
-use crate::diagrams::common::literal_label::{left_label_svg, literal_label};
-use crate::svg::builder::{esc, esc_text, js_round, label_svg, push_num};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
-use crate::svg::theme::{RADIUS, class_names};
+use crate::diagrams::common::fit_width::tighten;
+use crate::diagrams::common::fit_width::title_room;
+use crate::diagrams::common::literal_label::left_label_svg;
+use crate::diagrams::common::literal_label::literal_label;
+use crate::svg::builder::esc;
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
+use crate::svg::theme::RADIUS;
+use crate::svg::theme::class_names;
 use crate::text::entities::decode;
-use crate::text::label::{Label, layout_label};
-use crate::text::measure::{self, BOLD, ITALIC};
+use crate::text::label::Label;
+use crate::text::label::layout_label;
+use crate::text::measure::BOLD;
+use crate::text::measure::ITALIC;
+use crate::text::measure::{self};
 use crate::util::chars::is_space;
 use crate::yaml::Value;
 
@@ -32,16 +48,10 @@ fn setting(config: &Value, key: &str, fallback: f64, min: f64, max: f64) -> f64 
     let Value::Object(entries) = config else {
         return fallback;
     };
-    let value = entries
-        .iter()
-        .find(|(own, _)| own == "treeView")
-        .and_then(|(_, section)| match section {
-            Value::Object(entries) => entries
-                .iter()
-                .find(|(own, _)| own == key)
-                .map(|(_, value)| value),
-            _ => None,
-        });
+    let value = entries.iter().find(|(own, _)| own == "treeView").and_then(|(_, section)| match section {
+        Value::Object(entries) => entries.iter().find(|(own, _)| own == key).map(|(_, value)| value),
+        _ => None,
+    });
     match value {
         Some(Value::Number(value)) if *value >= min && *value <= max => *value,
         _ => fallback,
@@ -108,12 +118,7 @@ fn draw(model: &TreeViewModel, config: &Value, options: &RenderOptions, tight: b
     let max_width = options.max_width.unwrap_or(320.0);
     let icons = icon_config(config);
 
-    let Settings {
-        line_thickness,
-        padding_x,
-        padding_y,
-        row_indent,
-    } = tree_settings(config);
+    let Settings { line_thickness, padding_x, padding_y, row_indent } = tree_settings(config);
     let mut max_depth = 0usize;
     if tight {
         let mut depths: Vec<(usize, usize)> = model.roots().iter().map(|&node| (node, 0)).collect();
@@ -135,27 +140,13 @@ fn draw(model: &TreeViewModel, config: &Value, options: &RenderOptions, tight: b
     let row_height = js_round(size * 1.5) + 2.0 * padding_y;
     let icon_size = size;
 
-    let title = layout_label(
-        model.title.as_deref(),
-        false,
-        size,
-        if tight { title_room(options) } else { 4000.0 },
-        BOLD,
-        None,
-    );
-    let title_height = if title.height > 0.0 {
-        title.height + 12.0
-    } else {
-        0.0
-    };
+    let title =
+        layout_label(model.title.as_deref(), false, size, if tight { title_room(options) } else { 4000.0 }, BOLD, None);
+    let title_height = if title.height > 0.0 { title.height + 12.0 } else { 0.0 };
 
     // Siblings line up: when one entry of a folder has an icon, the others leave room for one.
     let has_icon = |list: &[usize]| {
-        list.iter().any(|&child| {
-            model
-                .node(child)
-                .is_some_and(|child| get_node_icon(child, &icons).is_some())
-        })
+        list.iter().any(|&child| model.node(child).is_some_and(|child| get_node_icon(child, &icons).is_some()))
     };
     let mut rows: Vec<Row> = Vec::new();
     let mut row_of = vec![usize::MAX; model.nodes.len()];
@@ -187,36 +178,24 @@ fn draw(model: &TreeViewModel, config: &Value, options: &RenderOptions, tight: b
             .as_deref()
             .filter(|_| tight)
             .map(|description| literal_label(&decode(description), size, room, ITALIC));
-        let width = label
-            .as_ref()
-            .map_or_else(|| measure::width(&text, size, style), |label| label.width);
+        let width = label.as_ref().map_or_else(|| measure::width(&text, size, style), |label| label.width);
         if label_x + width > label_right {
             label_right = label_x + width;
         }
-        let highlighted = node.css_class.as_deref().is_some_and(|class| {
-            class
-                .split(|c: char| is_space(u32::from(c)))
-                .any(|word| word == "highlight")
-        });
+        let highlighted = node
+            .css_class
+            .as_deref()
+            .is_some_and(|class| class.split(|c: char| is_space(u32::from(c))).any(|word| word == "highlight"));
         any_highlight |= highlighted;
         let label_height = label.as_ref().map_or(0.0, |label| label.height);
         let height = if tight {
             row_height.max(
-                label_height
-                    + description
-                        .as_ref()
-                        .map_or(0.0, |description| description.height)
-                    + 2.0 * padding_y,
+                label_height + description.as_ref().map_or(0.0, |description| description.height) + 2.0 * padding_y,
             )
         } else {
             row_height
         };
-        let cy = rows_height
-            + if tight {
-                padding_y + icon_size.max(label_height) / 2.0
-            } else {
-                height / 2.0
-            };
+        let cy = rows_height + if tight { padding_y + icon_size.max(label_height) / 2.0 } else { height / 2.0 };
         if let Some(slot) = row_of.get_mut(index) {
             *slot = rows.len();
         }
@@ -240,35 +219,22 @@ fn draw(model: &TreeViewModel, config: &Value, options: &RenderOptions, tight: b
     let desc_x = label_right + DESC_GAP;
     let mut width = label_right;
     for row in &rows {
-        let Some(description) = model
-            .node(row.node)
-            .and_then(|node| node.description.as_deref())
-        else {
+        let Some(description) = model.node(row.node).and_then(|node| node.description.as_deref()) else {
             continue;
         };
-        let w = row.description.as_ref().map_or_else(
-            || measure::width(&decode(description), size, ITALIC),
-            |label| label.width,
-        );
+        let w = row
+            .description
+            .as_ref()
+            .map_or_else(|| measure::width(&decode(description), size, ITALIC), |label| label.width);
         width = width.max(if tight { row.label_x } else { desc_x } + w);
     }
     width = width.max(title.width);
-    let inset = pad
-        + if any_highlight {
-            HIGHLIGHT_OVERHANG
-        } else {
-            0.0
-        };
+    let inset = pad + if any_highlight { HIGHLIGHT_OVERHANG } else { 0.0 };
     let top = pad + title_height;
     let total_width = (width + 2.0 * inset).ceil();
     let total_height = (top + rows_height + pad).ceil();
 
-    let cy_of = |node: usize| {
-        row_of
-            .get(node)
-            .and_then(|&row| rows.get(row))
-            .map_or(f64::NAN, |row| row.cy)
-    };
+    let cy_of = |node: usize| row_of.get(node).and_then(|&row| rows.get(row)).map_or(f64::NAN, |row| row.cy);
     let mut guides = String::new();
     for row in &rows {
         let Some(node) = model.node(row.node) else {
@@ -336,13 +302,8 @@ fn draw(model: &TreeViewModel, config: &Value, options: &RenderOptions, tight: b
             inner.push_str("\" fill=\"var(--_c)\" fill-opacity=\"0.14\"/>");
         }
         if let Some(icon) = &row.icon {
-            let name = icon
-                .strip_prefix(BUILTIN_PACK)
-                .and_then(|rest| rest.strip_prefix(':'))
-                .unwrap_or("");
-            let path = glyph(name)
-                .or_else(|| glyph(if directory { "folder" } else { "file" }))
-                .unwrap_or("");
+            let name = icon.strip_prefix(BUILTIN_PACK).and_then(|rest| rest.strip_prefix(':')).unwrap_or("");
+            let path = glyph(name).or_else(|| glyph(if directory { "folder" } else { "file" })).unwrap_or("");
             inner.push_str("<svg class=\"ondine-icon\" data-icon=\"");
             inner.push_str(&esc_text(icon));
             inner.push_str("\" x=\"");
@@ -357,20 +318,11 @@ fn draw(model: &TreeViewModel, config: &Value, options: &RenderOptions, tight: b
             inner.push_str(path);
             inner.push_str("\" stroke=\"var(--_m)\" stroke-width=\"1.5\"/></svg>");
         }
-        let weight = if directory {
-            " font-weight=\"var(--_hw)\""
-        } else {
-            ""
-        };
+        let weight = if directory { " font-weight=\"var(--_hw)\"" } else { "" };
         if let Some(label) = &row.label {
             let mut attrs = String::from(" class=\"ondine-label\"");
             attrs.push_str(weight);
-            inner.push_str(&left_label_svg(
-                label,
-                inset + row.label_x,
-                top + row.top + padding_y,
-                &attrs,
-            ));
+            inner.push_str(&left_label_svg(label, inset + row.label_x, top + row.top + padding_y, &attrs));
         } else if !row.text.is_empty() {
             inner.push_str("<text class=\"ondine-label\" x=\"");
             push_num(&mut inner, inset + row.label_x);
@@ -416,9 +368,7 @@ fn draw(model: &TreeViewModel, config: &Value, options: &RenderOptions, tight: b
         None,
     );
     if !guides.is_empty() {
-        content.push_str(
-            "<g class=\"ondine-tree-guides\" fill=\"none\" stroke=\"var(--_b)\" stroke-width=\"",
-        );
+        content.push_str("<g class=\"ondine-tree-guides\" fill=\"none\" stroke=\"var(--_b)\" stroke-width=\"");
         push_num(&mut content, line_thickness);
         content.push_str("\">");
         content.push_str(&guides);
@@ -435,10 +385,7 @@ fn draw(model: &TreeViewModel, config: &Value, options: &RenderOptions, tight: b
             total_height,
             size,
             options,
-            Accessible {
-                acc_descr: model.acc_descr.as_deref(),
-                acc_title: model.acc_title.as_deref(),
-            },
+            Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
             &content,
         ),
         width: total_width,

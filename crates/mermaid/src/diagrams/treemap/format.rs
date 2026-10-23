@@ -9,10 +9,7 @@ use crate::util::chars::is_line_end;
 use crate::yaml::push_number;
 
 /// A parsed specifier: the groups of Pele's `RE_SPEC` that change the output.
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "the flags of a format specifier"
-)]
+#[expect(clippy::struct_excessive_bools, reason = "the flags of a format specifier")]
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub(crate) struct Format {
     /// Whether thousands are separated by commas.
@@ -65,11 +62,7 @@ fn tail(rest: &str) -> Option<Format> {
         // `Math.min(Number(digits), 20)`: past its leading zeros, a run of three digits is
         // above 20.
         let digits = rest.get(from..end).unwrap_or("").trim_start_matches('0');
-        format.precision = Some(if digits.len() > 2 {
-            20
-        } else {
-            digits.parse::<u32>().unwrap_or(0).min(20)
-        });
+        format.precision = Some(if digits.len() > 2 { 20 } else { digits.parse::<u32>().unwrap_or(0).min(20) });
         at = end;
     }
     if bytes.get(at) == Some(&b'~') {
@@ -144,22 +137,11 @@ fn exact(value: f64) -> (Vec<u8>, i32) {
     let bits = value.to_bits();
     let biased = i32::try_from((bits >> 52) & 0x7ff).unwrap_or(0);
     let fraction = bits & ((1 << 52) - 1);
-    let (mantissa, exponent) = if biased == 0 {
-        (fraction, -1074)
-    } else {
-        (fraction | (1 << 52), biased - 1075)
-    };
+    let (mantissa, exponent) = if biased == 0 { (fraction, -1074) } else { (fraction | (1 << 52), biased - 1075) };
 
-    let mut limbs = vec![
-        mantissa % BASE,
-        (mantissa / BASE) % BASE,
-        mantissa / BASE / BASE,
-    ];
-    let (mut count, base, chunk) = if exponent >= 0 {
-        (exponent.unsigned_abs(), 2u64, 29)
-    } else {
-        (exponent.unsigned_abs(), 5u64, 13)
-    };
+    let mut limbs = vec![mantissa % BASE, (mantissa / BASE) % BASE, mantissa / BASE / BASE];
+    let (mut count, base, chunk) =
+        if exponent >= 0 { (exponent.unsigned_abs(), 2u64, 29) } else { (exponent.unsigned_abs(), 5u64, 13) };
     while count > 0 {
         let step = count.min(chunk);
         multiply(&mut limbs, base.pow(step));
@@ -179,11 +161,7 @@ fn exact(value: f64) -> (Vec<u8>, i32) {
     let lead = digits.iter().take_while(|&&d| d == b'0').count();
     digits.drain(..lead);
     let length = i32::try_from(digits.len()).unwrap_or(i32::MAX);
-    let n = if exponent >= 0 {
-        length
-    } else {
-        length + exponent
-    };
+    let n = if exponent >= 0 { length } else { length + exponent };
     (digits, n)
 }
 

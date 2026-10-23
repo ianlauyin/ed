@@ -11,11 +11,7 @@ fn to_int32(value: f64) -> u32 {
         return 0;
     }
     let truncated = value.trunc().rem_euclid(4_294_967_296.0);
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "the value is in [0, 2^32)"
-    )]
+    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "the value is in [0, 2^32)")]
     let bits = truncated as u32;
     bits
 }
@@ -88,14 +84,7 @@ pub(crate) const HORIZON: WaveOptions = WaveOptions {
 
 /// A wavy line along one axis from `from` to `to`, centered on `center` in the other axis.
 /// Points jitter by up to the amplitude; a pinned end stays on the center line.
-pub(crate) fn wave(
-    from: f64,
-    to: f64,
-    center: f64,
-    seed: f64,
-    amplitude: f64,
-    o: WaveOptions,
-) -> Vec<f64> {
+pub(crate) fn wave(from: f64, to: f64, center: f64, seed: f64, amplitude: f64, o: WaveOptions) -> Vec<f64> {
     let segments = f64::from(o.segments);
     let step = (to - from) / segments;
     let mut along = Vec::new();
@@ -112,18 +101,13 @@ pub(crate) fn wave(
     }
 
     let at = |list: &[f64], i: usize| list.get(i).copied().unwrap_or(0.0);
-    let mut out = if o.vertical {
-        vec![at(&across, 0), at(&along, 0)]
-    } else {
-        vec![at(&along, 0), at(&across, 0)]
-    };
+    let mut out = if o.vertical { vec![at(&across, 0), at(&along, 0)] } else { vec![at(&along, 0), at(&across, 0)] };
     for i in 0..o.segments {
         let k = f64::from(i);
         let j = usize::try_from(i).unwrap_or(0);
         let mid = f64::midpoint(at(&along, j), at(&along, j + 1));
         let sign = if i % 2 == 0 { 1.0 } else { -1.0 };
-        let offset =
-            amplitude * 1.5 * sign * seeded_random(seed + k * o.control_step + o.control_shift);
+        let offset = amplitude * 1.5 * sign * seeded_random(seed + k * o.control_step + o.control_shift);
         if o.vertical {
             out.extend([
                 at(&across, j) + offset,
@@ -192,12 +176,7 @@ pub(crate) fn forward(out: &mut String, curve: &[f64]) {
 /// Appends path commands that continue from the curve's end point back to its start.
 pub(crate) fn backward(out: &mut String, curve: &[f64]) {
     let points = curve.len() / 2;
-    let point = |k: usize| {
-        (
-            curve.get(2 * k).copied().unwrap_or(0.0),
-            curve.get(2 * k + 1).copied().unwrap_or(0.0),
-        )
-    };
+    let point = |k: usize| (curve.get(2 * k).copied().unwrap_or(0.0), curve.get(2 * k + 1).copied().unwrap_or(0.0));
     let mut k = points.saturating_sub(1);
     while k >= 3 {
         let (bx, by) = point(k - 1);
@@ -216,11 +195,7 @@ pub(crate) fn backward(out: &mut String, curve: &[f64]) {
 /// The path of a curve.
 pub(crate) fn curve_path(curve: &[f64]) -> String {
     let mut out = String::from("M");
-    push_pair(
-        &mut out,
-        curve.first().copied().unwrap_or(0.0),
-        curve.get(1).copied().unwrap_or(0.0),
-    );
+    push_pair(&mut out, curve.first().copied().unwrap_or(0.0), curve.get(1).copied().unwrap_or(0.0));
     forward(&mut out, curve);
     out
 }

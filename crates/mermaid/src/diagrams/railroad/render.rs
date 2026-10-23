@@ -2,16 +2,30 @@
 //! Pele's `src/diagrams/railroad/render.ts`.
 
 use super::common::fold;
-use super::types::{RailroadModel, RailroadNode};
+use super::types::RailroadModel;
+use super::types::RailroadNode;
 use crate::diagrams::Rendered;
-use crate::diagrams::common::fit_width::{tighten, title_room};
-use crate::svg::builder::{esc, esc_text, js_round, label_svg, num, push_num};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
-use crate::svg::theme::{FONT_MONO, RADIUS};
+use crate::diagrams::common::fit_width::tighten;
+use crate::diagrams::common::fit_width::title_room;
+use crate::svg::builder::esc;
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::num;
+use crate::svg::builder::push_num;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
+use crate::svg::theme::FONT_MONO;
+use crate::svg::theme::RADIUS;
 use crate::text::entities::decode;
 use crate::text::label::layout_label;
-use crate::text::measure::{self, BOLD, ITALIC, MONO};
-use crate::yaml::{Value, push_number};
+use crate::text::measure::BOLD;
+use crate::text::measure::ITALIC;
+use crate::text::measure::MONO;
+use crate::text::measure::{self};
+use crate::yaml::Value;
+use crate::yaml::push_number;
 
 /// What a laid-out element draws.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -165,19 +179,7 @@ fn get(boxes: &Boxes, index: usize) -> LaidOut {
 fn leaf(boxes: &mut Boxes, kind: Kind, text: String, id: String, style: u8, m: &Metrics) -> usize {
     let half = m.height / 2.0;
     let width = even(measure::width(&text, m.size, style) + 2.0 * m.padding).max(m.height);
-    add(
-        boxes,
-        LaidOut {
-            down: half,
-            id,
-            kids: Vec::new(),
-            kind,
-            reach: 0.0,
-            text,
-            up: half,
-            width,
-        },
-    )
+    add(boxes, LaidOut { down: half, id, kids: Vec::new(), kind, reach: 0.0, text, up: half, width })
 }
 
 /// The count under a loop, or empty for one or more.
@@ -250,16 +252,7 @@ fn row(boxes: &Boxes, kids: Vec<usize>, width: f64) -> LaidOut {
             down = down.max(kid.down);
         }
     }
-    LaidOut {
-        down,
-        id: String::new(),
-        kids,
-        kind: Kind::Sequence,
-        reach: 0.0,
-        text: String::new(),
-        up,
-        width,
-    }
+    LaidOut { down, id: String::new(), kids, kind: Kind::Sequence, reach: 0.0, text: String::new(), up, width }
 }
 
 /// Lays out the definition `root` of `model` no wider than `room`, when it is finite.
@@ -276,9 +269,7 @@ fn measure(model: &RailroadModel, root: usize, m: &Metrics, room: f64, boxes: &m
         // rows.
         let around = match model.nodes.get(node) {
             Some(RailroadNode::Choice(_) | RailroadNode::Optional(_)) => 4.0 * m.arc,
-            Some(RailroadNode::Repetition { min, .. }) => {
-                (if *min == 0.0 { 6.0 } else { 2.0 }) * m.arc
-            }
+            Some(RailroadNode::Repetition { min, .. }) => (if *min == 0.0 { 6.0 } else { 2.0 }) * m.arc,
             Some(RailroadNode::Sequence(_)) => 6.0 * m.arc,
             _ => 0.0,
         };
@@ -299,16 +290,11 @@ fn measure(model: &RailroadModel, root: usize, m: &Metrics, room: f64, boxes: &m
         match model.nodes.get(node) {
             Some(RailroadNode::Terminal(value)) => {
                 let text = shown(value);
-                let text = if !text.is_empty() && text.bytes().all(|b| b == b' ') {
-                    "␣".repeat(text.len())
-                } else {
-                    text
-                };
+                let text =
+                    if !text.is_empty() && text.bytes().all(|b| b == b' ') { "␣".repeat(text.len()) } else { text };
                 leaf(boxes, Kind::Terminal, text, String::new(), MONO, m)
             }
-            Some(RailroadNode::NonTerminal(name)) => {
-                leaf(boxes, Kind::NonTerminal, shown(name), name.clone(), 0, m)
-            }
+            Some(RailroadNode::NonTerminal(name)) => leaf(boxes, Kind::NonTerminal, shown(name), name.clone(), 0, m),
             Some(RailroadNode::Special(text)) => {
                 let mut shown_text = String::from("? ");
                 shown_text.push_str(&shown(text));
@@ -328,9 +314,7 @@ fn measure(model: &RailroadModel, root: usize, m: &Metrics, room: f64, boxes: &m
                     }
                 }
                 let up = kids.first().map_or(0.0, |&kid| get(boxes, kid).up);
-                let down = kids
-                    .last()
-                    .map_or(0.0, |&kid| offset + get(boxes, kid).down);
+                let down = kids.last().map_or(0.0, |&kid| offset + get(boxes, kid).down);
                 add(
                     boxes,
                     LaidOut {
@@ -345,9 +329,7 @@ fn measure(model: &RailroadModel, root: usize, m: &Metrics, room: f64, boxes: &m
                     },
                 )
             }
-            Some(RailroadNode::Optional(_)) => {
-                bypass(boxes, kids.first().copied().unwrap_or(usize::MAX), m)
-            }
+            Some(RailroadNode::Optional(_)) => bypass(boxes, kids.first().copied().unwrap_or(usize::MAX), m),
             Some(&RailroadNode::Repetition { min, max, .. }) => {
                 let kid = kids.first().copied().unwrap_or(usize::MAX);
                 #[expect(clippy::float_cmp, reason = "Pele compares the counts exactly")]
@@ -357,17 +339,8 @@ fn measure(model: &RailroadModel, root: usize, m: &Metrics, room: f64, boxes: &m
                 let inner = get(boxes, kid);
                 let text = count(min, max);
                 let reach = (inner.down + m.sep).max(2.0 * m.arc);
-                let label = if text.is_empty() {
-                    0.0
-                } else {
-                    even(measure::width(&text, COUNT_SIZE, 0))
-                };
-                let down = reach
-                    + if text.is_empty() {
-                        ARROW / 2.0 + 1.0
-                    } else {
-                        COUNT_SIZE + 6.0
-                    };
+                let label = if text.is_empty() { 0.0 } else { even(measure::width(&text, COUNT_SIZE, 0)) };
+                let down = reach + if text.is_empty() { ARROW / 2.0 + 1.0 } else { COUNT_SIZE + 6.0 };
                 let repeated = add(
                     boxes,
                     LaidOut {
@@ -381,11 +354,7 @@ fn measure(model: &RailroadModel, root: usize, m: &Metrics, room: f64, boxes: &m
                         width: inner.width.max(label) + 2.0 * m.arc,
                     },
                 );
-                if min == 0.0 {
-                    bypass(boxes, repeated, m)
-                } else {
-                    repeated
-                }
+                if min == 0.0 { bypass(boxes, repeated, m) } else { repeated }
             }
             None => usize::MAX,
         }
@@ -394,10 +363,7 @@ fn measure(model: &RailroadModel, root: usize, m: &Metrics, room: f64, boxes: &m
 
 /// A sequence of `kids`, folded into rows when it is wider than `room`.
 fn sequence(boxes: &mut Boxes, kids: Vec<usize>, room: f64, m: &Metrics) -> usize {
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "part counts stay far below 2^52"
-    )]
+    #[expect(clippy::cast_precision_loss, reason = "part counts stay far below 2^52")]
     let mut width = kids.len().saturating_sub(1) as f64 * m.gap;
     for &kid in &kids {
         width += get(boxes, kid).width;
@@ -622,11 +588,7 @@ fn place(
                         push_step(&mut drawing.track, 'H', x + arc);
                         push_step(&mut drawing.track, 'V', y + next_offset);
                         push_step(&mut drawing.track, 'H', start);
-                        push_move(
-                            &mut drawing.arrows,
-                            start - ARROW,
-                            y + next_offset - ARROW / 2.0,
-                        );
+                        push_move(&mut drawing.arrows, start - ARROW, y + next_offset - ARROW / 2.0);
                         drawing.arrows.push_str("l7,3.5l-7,3.5z");
                         offset = next_offset;
                     } else {
@@ -727,15 +689,11 @@ fn place(
                 push_move(&mut drawing.arrows, middle - ARROW / 2.0, loop_y);
                 drawing.arrows.push_str("l7,-3.5v7z");
                 if !item.text.is_empty() {
-                    drawing
-                        .nodes
-                        .push_str("<text class=\"ondine-edge-label ondine-count\" x=\"");
+                    drawing.nodes.push_str("<text class=\"ondine-edge-label ondine-count\" x=\"");
                     push_num(&mut drawing.nodes, middle);
                     drawing.nodes.push_str("\" y=\"");
                     push_num(&mut drawing.nodes, loop_y + COUNT_SIZE + 3.0);
-                    drawing
-                        .nodes
-                        .push_str("\" font-size=\"12\" fill=\"var(--_m)\">");
+                    drawing.nodes.push_str("\" font-size=\"12\" fill=\"var(--_m)\">");
                     drawing.nodes.push_str(&esc(&item.text));
                     drawing.nodes.push_str("</text>");
                 }
@@ -827,36 +785,21 @@ fn push_leaf(out: &mut String, item: &LaidOut, x: f64, y: f64, leaves: &Leaves<'
 fn draw(model: &RailroadModel, config: &Value, options: &RenderOptions, tight: bool) -> Rendered {
     let base = options.font_size.unwrap_or(16.0);
     let font_size = option(config, "fontSize", 0.0, 200.0);
-    let size = if font_size == 0.0 {
-        js_round(base * 0.875)
-    } else {
-        font_size
-    };
+    let size = if font_size == 0.0 { js_round(base * 0.875) } else { font_size };
     let head_size = if font_size == 0.0 { base } else { font_size };
     let padding = option(config, "padding", -1.0, 200.0);
     let line_height = js_round(size * 1.5);
     let m = Metrics {
         arc: option(config, "arcRadius", 10.0, 200.0).min(if tight { 6.0 } else { f64::INFINITY }),
-        gap: option(config, "horizontalSeparation", 16.0, 500.0).min(if tight {
-            12.0
-        } else {
-            f64::INFINITY
-        }),
+        gap: option(config, "horizontalSeparation", 16.0, 500.0).min(if tight { 12.0 } else { f64::INFINITY }),
         height: even(line_height + if padding < 0.0 { 9.0 } else { 2.0 * padding }),
         padding: if padding < 0.0 { 12.0 } else { padding },
         sep: option(config, "verticalSeparation", 10.0, 500.0),
         size,
     };
-    let hidden = section(config).is_some_and(|entries| {
-        entries
-            .iter()
-            .any(|(key, value)| key == "showMarkers" && *value == Value::Bool(false))
-    });
-    let radius = if hidden {
-        0.0
-    } else {
-        option(config, "markerRadius", 4.0, 50.0)
-    };
+    let hidden = section(config)
+        .is_some_and(|entries| entries.iter().any(|(key, value)| key == "showMarkers" && *value == Value::Bool(false)));
+    let radius = if hidden { 0.0 } else { option(config, "markerRadius", 4.0, 50.0) };
     let stroke_width = option(config, "strokeWidth", 0.0, 20.0);
     let stroke = if stroke_width > 0.0 {
         let mut out = String::from(" stroke-width=\"");
@@ -869,26 +812,11 @@ fn draw(model: &RailroadModel, config: &Value, options: &RenderOptions, tight: b
     let pad = options.padding.unwrap_or(8.0);
     let turns = Turns::new(m.arc);
 
-    let title = layout_label(
-        model.title.as_deref(),
-        false,
-        base,
-        if tight { title_room(options) } else { 4000.0 },
-        BOLD,
-        None,
-    );
-    let title_height = if title.height > 0.0 {
-        title.height + 16.0
-    } else {
-        0.0
-    };
+    let title =
+        layout_label(model.title.as_deref(), false, base, if tight { title_room(options) } else { 4000.0 }, BOLD, None);
+    let title_height = if title.height > 0.0 { title.height + 16.0 } else { 0.0 };
     let head_height = js_round(head_size * 1.5);
-    let leaves = Leaves {
-        box_top: m.height / 2.0,
-        height: m.height,
-        stroke: &stroke,
-        text_shift: size * 0.35,
-    };
+    let leaves = Leaves { box_top: m.height / 2.0, height: m.height, stroke: &stroke, text_shift: size * 0.35 };
 
     let mut rules = String::new();
     let mut width = title.width;
@@ -896,9 +824,7 @@ fn draw(model: &RailroadModel, config: &Value, options: &RenderOptions, tight: b
     let mut bottom = pad + title.height;
     for rule in &model.rules {
         let room = if tight {
-            80.0_f64.max(
-                options.max_width.unwrap_or(320.0) - 2.0 * pad - 4.0 * radius - 2.0 * LEAD - 1.0,
-            )
+            80.0_f64.max(options.max_width.unwrap_or(320.0) - 2.0 * pad - 4.0 * radius - 2.0 * LEAD - 1.0)
         } else {
             f64::INFINITY
         };
@@ -910,12 +836,7 @@ fn draw(model: &RailroadModel, config: &Value, options: &RenderOptions, tight: b
         let start = pad + 2.0 * radius;
         let left = start + LEAD;
         let end = left + laid.width + LEAD;
-        let mut drawing = Drawing {
-            arrows: String::new(),
-            boxes: &boxes,
-            nodes: String::new(),
-            track: String::new(),
-        };
+        let mut drawing = Drawing { arrows: String::new(), boxes: &boxes, nodes: String::new(), track: String::new() };
         drawing.line(start, baseline, left);
         drawing.line(left + laid.width, baseline, end);
         place(&mut drawing, root, left, baseline, &m, &turns, &leaves);
@@ -947,9 +868,7 @@ fn draw(model: &RailroadModel, config: &Value, options: &RenderOptions, tight: b
             push_num(&mut rules, baseline);
             rules.push_str("\" r=\"");
             push_num(&mut rules, radius);
-            rules.push_str(
-                "\" fill=\"var(--_l)\"/><circle class=\"ondine-marker ondine-end\" cx=\"",
-            );
+            rules.push_str("\" fill=\"var(--_l)\"/><circle class=\"ondine-marker ondine-end\" cx=\"");
             push_num(&mut rules, end + radius);
             rules.push_str("\" cy=\"");
             push_num(&mut rules, baseline);
@@ -959,9 +878,7 @@ fn draw(model: &RailroadModel, config: &Value, options: &RenderOptions, tight: b
         }
         rules.push_str(&drawing.nodes);
         rules.push_str("</g>");
-        width = width
-            .max(end + 2.0 * radius - pad)
-            .max(measure::width(&name, head_size, BOLD));
+        width = width.max(end + 2.0 * radius - pad).max(measure::width(&name, head_size, BOLD));
         bottom = baseline + laid.down;
         top = bottom + m.sep + RULE_GAP;
     }
@@ -992,10 +909,7 @@ fn draw(model: &RailroadModel, config: &Value, options: &RenderOptions, tight: b
             total_height,
             base,
             options,
-            Accessible {
-                acc_descr: model.acc_descr.as_deref(),
-                acc_title: model.acc_title.as_deref(),
-            },
+            Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
             &content,
         ),
         width: total_width,

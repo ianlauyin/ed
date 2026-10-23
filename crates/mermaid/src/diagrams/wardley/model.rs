@@ -1,12 +1,20 @@
 //! Turns the syntax tree into the model the renderer draws, in Mermaid's order. Port of Pele's
 //! `src/diagrams/wardley/model.ts`.
 
-use super::builder::{
-    Flow, NodeInput, WardleyAnnotation, WardleyAxes, WardleyBuildResult, WardleyBuilder,
-    WardleyForce, WardleyLink, WardleyNote, WardleyTrend,
-};
-use super::parser::{LabelAst, WardleyAst};
-use crate::error::{Code, Error};
+use super::builder::Flow;
+use super::builder::NodeInput;
+use super::builder::WardleyAnnotation;
+use super::builder::WardleyAxes;
+use super::builder::WardleyBuildResult;
+use super::builder::WardleyBuilder;
+use super::builder::WardleyForce;
+use super::builder::WardleyLink;
+use super::builder::WardleyNote;
+use super::builder::WardleyTrend;
+use super::parser::LabelAst;
+use super::parser::WardleyAst;
+use crate::error::Code;
+use crate::error::Error;
 use crate::text::label::trim;
 use crate::util::chars::is_space;
 use crate::yaml::push_number;
@@ -104,10 +112,7 @@ fn offsets(label: Option<&LabelAst>) -> (Option<f64>, Option<f64>) {
         return (None, None);
     };
     let sign = |neg: bool| if neg { -1.0 } else { 1.0 };
-    (
-        Some(sign(label.neg_x) * label.offset_x),
-        Some(sign(label.neg_y) * label.offset_y),
-    )
+    (Some(sign(label.neg_x) * label.offset_x), Some(sign(label.neg_y) * label.offset_y))
 }
 
 /// Mermaid's `populateDb`: fills the builder from the syntax tree, in Mermaid's order.
@@ -141,11 +146,7 @@ pub(crate) fn populate(ast: &WardleyAst, db: &mut WardleyBuilder) -> Result<(), 
     }
 
     for anchor in &ast.anchors {
-        let (x, y) = to_coordinates(
-            anchor.visibility,
-            anchor.evolution,
-            &quoted("Anchor ", &anchor.name),
-        )?;
+        let (x, y) = to_coordinates(anchor.visibility, anchor.evolution, &quoted("Anchor ", &anchor.name))?;
         db.add_node(NodeInput {
             class_name: "anchor",
             id: anchor.name.clone(),
@@ -160,11 +161,7 @@ pub(crate) fn populate(ast: &WardleyAst, db: &mut WardleyBuilder) -> Result<(), 
     }
 
     for component in &ast.components {
-        let (x, y) = to_coordinates(
-            component.visibility,
-            component.evolution,
-            &quoted("Component ", &component.name),
-        )?;
+        let (x, y) = to_coordinates(component.visibility, component.evolution, &quoted("Component ", &component.name))?;
         let (label_offset_x, label_offset_y) = offsets(component.label.as_ref());
         db.add_node(NodeInput {
             class_name: "component",
@@ -180,16 +177,8 @@ pub(crate) fn populate(ast: &WardleyAst, db: &mut WardleyBuilder) -> Result<(), 
     }
 
     for note in &ast.notes {
-        let (x, y) = to_coordinates(
-            note.visibility,
-            note.evolution,
-            &quoted("Note ", &note.text),
-        )?;
-        db.add_note(WardleyNote {
-            text: note.text.clone(),
-            x,
-            y,
-        });
+        let (x, y) = to_coordinates(note.visibility, note.evolution, &quoted("Note ", &note.text))?;
+        db.add_note(WardleyNote { text: note.text.clone(), x, y });
     }
 
     for pipeline in &ast.pipelines {
@@ -204,13 +193,8 @@ pub(crate) fn populate(ast: &WardleyAst, db: &mut WardleyBuilder) -> Result<(), 
             id.push('_');
             id.push_str(&component.name);
             let (label_offset_x, label_offset_y) = offsets(component.label.as_ref());
-            let x = to_percent(
-                component.evolution,
-                &join(
-                    &quoted("Pipeline component ", &component.name),
-                    " evolution",
-                ),
-            )?;
+            let x =
+                to_percent(component.evolution, &join(&quoted("Pipeline component ", &component.name), " evolution"))?;
             db.add_node(NodeInput {
                 class_name: "pipeline-component",
                 id: id.clone(),
@@ -246,15 +230,8 @@ pub(crate) fn populate(ast: &WardleyAst, db: &mut WardleyBuilder) -> Result<(), 
 
     for evolve in &ast.evolves {
         if let Some(y) = db.get_node(&evolve.component).map(|node| node.y) {
-            let target_x = to_percent(
-                evolve.target,
-                &quoted("Evolve target for ", &evolve.component),
-            )?;
-            db.add_trend(WardleyTrend {
-                node_id: evolve.component.clone(),
-                target_x,
-                target_y: y,
-            });
+            let target_x = to_percent(evolve.target, &quoted("Evolve target for ", &evolve.component))?;
+            db.add_trend(WardleyTrend { node_id: evolve.component.clone(), target_x, target_y: y });
         }
     }
 
@@ -275,29 +252,13 @@ pub(crate) fn populate(ast: &WardleyAst, db: &mut WardleyBuilder) -> Result<(), 
     }
 
     for accelerator in &ast.accelerators {
-        let (x, y) = to_coordinates(
-            accelerator.x,
-            accelerator.y,
-            &quoted("Accelerator ", &accelerator.name),
-        )?;
-        db.add_accelerator(WardleyForce {
-            name: accelerator.name.clone(),
-            x,
-            y,
-        });
+        let (x, y) = to_coordinates(accelerator.x, accelerator.y, &quoted("Accelerator ", &accelerator.name))?;
+        db.add_accelerator(WardleyForce { name: accelerator.name.clone(), x, y });
     }
 
     for deaccelerator in &ast.deaccelerators {
-        let (x, y) = to_coordinates(
-            deaccelerator.x,
-            deaccelerator.y,
-            &quoted("Deaccelerator ", &deaccelerator.name),
-        )?;
-        db.add_deaccelerator(WardleyForce {
-            name: deaccelerator.name.clone(),
-            x,
-            y,
-        });
+        let (x, y) = to_coordinates(deaccelerator.x, deaccelerator.y, &quoted("Deaccelerator ", &deaccelerator.name))?;
+        db.add_deaccelerator(WardleyForce { name: deaccelerator.name.clone(), x, y });
     }
     Ok(())
 }
@@ -325,18 +286,12 @@ pub(crate) fn build_wardley(ast: WardleyAst, title: Option<&str>) -> Result<Ward
     let mut db = WardleyBuilder::default();
     populate(&ast, &mut db)?;
     Ok(WardleyModel {
-        acc_descr: ast
-            .acc_descr
-            .filter(|text| !text.is_empty())
-            .map(|text| collapse_indents(&text)),
+        acc_descr: ast.acc_descr.filter(|text| !text.is_empty()).map(|text| collapse_indents(&text)),
         acc_title: ast
             .acc_title
             .filter(|text| !text.is_empty())
             .map(|text| crate::text::label::trim_start(&text).to_owned()),
         build: db.build(),
-        title: ast
-            .title
-            .filter(|text| !text.is_empty())
-            .or_else(|| title.map(str::to_owned)),
+        title: ast.title.filter(|text| !text.is_empty()).or_else(|| title.map(str::to_owned)),
     })
 }

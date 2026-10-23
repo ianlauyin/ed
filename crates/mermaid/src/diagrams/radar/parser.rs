@@ -2,11 +2,26 @@
 //! `src/diagrams/radar/parser.ts`.
 
 use crate::diagrams::common::acc_descr::acc_descr;
-use crate::diagrams::common::tokens::{
-    ACC_TITLE, DIRECTIVE, EOF, Memo, NEWLINE, Pattern, Reader, SINGLE_LINE_COMMENT, STRING, TITLE,
-    TokenType, WHITESPACE, YAML, acc_descr_value, acc_title_value, keyword, literal, string_value,
-    title_value, tokenize,
-};
+use crate::diagrams::common::tokens::ACC_TITLE;
+use crate::diagrams::common::tokens::DIRECTIVE;
+use crate::diagrams::common::tokens::EOF;
+use crate::diagrams::common::tokens::Memo;
+use crate::diagrams::common::tokens::NEWLINE;
+use crate::diagrams::common::tokens::Pattern;
+use crate::diagrams::common::tokens::Reader;
+use crate::diagrams::common::tokens::SINGLE_LINE_COMMENT;
+use crate::diagrams::common::tokens::STRING;
+use crate::diagrams::common::tokens::TITLE;
+use crate::diagrams::common::tokens::TokenType;
+use crate::diagrams::common::tokens::WHITESPACE;
+use crate::diagrams::common::tokens::YAML;
+use crate::diagrams::common::tokens::acc_descr_value;
+use crate::diagrams::common::tokens::acc_title_value;
+use crate::diagrams::common::tokens::keyword;
+use crate::diagrams::common::tokens::literal;
+use crate::diagrams::common::tokens::string_value;
+use crate::diagrams::common::tokens::title_value;
+use crate::diagrams::common::tokens::tokenize;
 use crate::error::Error;
 
 /// Token kinds, as indices into [`RADAR_TOKENS`].
@@ -108,10 +123,7 @@ fn id(src: &str, p: usize) -> Option<usize> {
 /// The first of `words` at `p`.
 fn one_of(src: &str, p: usize, words: &[&str]) -> Option<usize> {
     let rest = src.get(p..)?;
-    words
-        .iter()
-        .find(|word| rest.starts_with(*word))
-        .map(|word| p + word.len())
+    words.iter().find(|word| rest.starts_with(*word)).map(|word| p + word.len())
 }
 
 /// `circle|polygon`.
@@ -126,19 +138,13 @@ fn boolean(src: &str, p: usize) -> Option<usize> {
 
 /// A word that gives way to a longer `ID`.
 const fn word(text: &'static str) -> TokenType {
-    TokenType {
-        longer: &[t::ID],
-        ..literal(text)
-    }
+    TokenType { longer: &[t::ID], ..literal(text) }
 }
 
 /// Pele's `RADAR_TOKENS`, in matching order.
 pub(crate) const RADAR_TOKENS: &[TokenType] = &[
     literal("radar-beta:"),
-    TokenType {
-        longer: &[t::ID],
-        ..keyword("radar-beta")
-    },
+    TokenType { longer: &[t::ID], ..keyword("radar-beta") },
     word("showLegend"),
     word("graticule"),
     word("curve"),
@@ -152,29 +158,14 @@ pub(crate) const RADAR_TOKENS: &[TokenType] = &[
     literal("]"),
     literal("{"),
     literal("}"),
-    TokenType {
-        first: Some("cp"),
-        name: "GRATICULE",
-        pattern: Pattern::Match(graticule),
-        ..literal("")
-    },
-    TokenType {
-        first: Some("ft"),
-        name: "BOOLEAN",
-        pattern: Pattern::Match(boolean),
-        ..literal("")
-    },
+    TokenType { first: Some("cp"), name: "GRATICULE", pattern: Pattern::Match(graticule), ..literal("") },
+    TokenType { first: Some("ft"), name: "BOOLEAN", pattern: Pattern::Match(boolean), ..literal("") },
     // In the other grammars an `accDescr {` that never closes ends the lexing. Here `accDescr` is
     // also a name and `{` a token, so each unclosed one would read to the end of the text again.
     acc_descr("ACC_DESCR"),
     ACC_TITLE,
     TITLE,
-    TokenType {
-        first: Some("0123456789"),
-        name: "NUMBER",
-        pattern: Pattern::Scan(number),
-        ..literal("")
-    },
+    TokenType { first: Some("0123456789"), name: "NUMBER", pattern: Pattern::Scan(number), ..literal("") },
     STRING,
     TokenType {
         first: Some("0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz"),
@@ -290,28 +281,18 @@ fn label(r: &mut Reader<'_>) -> Result<Option<String>, Error> {
 /// A curve value, after its axis name in the detailed form.
 fn entry(r: &mut Reader<'_>, detailed: bool) -> Result<EntryAst, Error> {
     if !detailed {
-        return Ok(EntryAst {
-            axis: None,
-            value: number_value(r.expect(t::NUMBER)?),
-        });
+        return Ok(EntryAst { axis: None, value: number_value(r.expect(t::NUMBER)?) });
     }
     let axis = r.expect(t::ID)?.to_owned();
     r.accept(t::COLON);
-    Ok(EntryAst {
-        axis: Some(axis),
-        value: number_value(r.expect(t::NUMBER)?),
-    })
+    Ok(EntryAst { axis: Some(axis), value: number_value(r.expect(t::NUMBER)?) })
 }
 
 /// A curve: its name, label, and braced values.
 fn curve(r: &mut Reader<'_>) -> Result<CurveAst, Error> {
     let name = r.expect(t::ID)?.to_owned();
     let label = label(r)?;
-    let mut node = CurveAst {
-        entries: Vec::new(),
-        label,
-        name,
-    };
+    let mut node = CurveAst { entries: Vec::new(), label, name };
     r.expect(t::OPEN_BRACE)?;
     newlines(r);
     if r.kind() != t::NUMBER && r.kind() != t::ID {
@@ -331,10 +312,7 @@ fn curve(r: &mut Reader<'_>) -> Result<CurveAst, Error> {
 /// An axis: its name and label.
 fn axis(r: &mut Reader<'_>) -> Result<AxisAst, Error> {
     let name = r.expect(t::ID)?.to_owned();
-    Ok(AxisAst {
-        label: label(r)?,
-        name,
-    })
+    Ok(AxisAst { label: label(r)?, name })
 }
 
 /// An option and its value.
@@ -351,10 +329,7 @@ fn option(r: &mut Reader<'_>) -> Result<OptionAst, Error> {
 
 /// Whether the current token starts an option.
 fn is_option(r: &Reader<'_>) -> bool {
-    matches!(
-        r.kind(),
-        t::SHOW_LEGEND | t::TICKS | t::MAX | t::MIN | t::GRATICULE
-    )
+    matches!(r.kind(), t::SHOW_LEGEND | t::TICKS | t::MAX | t::MIN | t::GRATICULE)
 }
 
 /// Parses radar `src` as Pele's `parseRadar` does.

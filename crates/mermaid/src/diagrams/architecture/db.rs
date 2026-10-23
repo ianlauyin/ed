@@ -1,10 +1,14 @@
 //! The architecture model and Mermaid's checks as it is built. Port of Pele's
 //! `src/diagrams/architecture/db.ts`.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
-use super::parser::{ArchitectureAst, Direction, Side};
-use crate::error::{Code, Error};
+use super::parser::ArchitectureAst;
+use super::parser::Direction;
+use super::parser::Side;
+use crate::error::Code;
+use crate::error::Error;
 use crate::util::chars::is_space;
 
 /// What a node is.
@@ -48,10 +52,7 @@ pub(crate) struct ArchGroup {
 
 /// An edge between two sides of two nodes.
 #[derive(Clone, Debug)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "mirrors Mermaid's edge fields"
-)]
+#[expect(clippy::struct_excessive_bools, reason = "mirrors Mermaid's edge fields")]
 pub(crate) struct ArchEdge {
     /// Side of the left-hand node.
     pub(crate) lhs_dir: Side,
@@ -142,24 +143,11 @@ impl ArchitectureDb {
 
     fn register(&mut self, kind: &str, id: &str, parent: Option<&str>) -> Result<(), Error> {
         if let Some(other) = self.registered.get(id) {
-            return Err(fail(&[
-                "The ",
-                kind,
-                " id [",
-                id,
-                "] is already in use by another ",
-                other.as_str(),
-            ]));
+            return Err(fail(&["The ", kind, " id [", id, "] is already in use by another ", other.as_str()]));
         }
         if let Some(parent) = parent {
             if id == parent {
-                return Err(fail(&[
-                    "The ",
-                    kind,
-                    " [",
-                    id,
-                    "] cannot be placed within itself",
-                ]));
+                return Err(fail(&["The ", kind, " [", id, "] cannot be placed within itself"]));
             }
             match self.registered.get(parent) {
                 None => {
@@ -178,11 +166,7 @@ impl ArchitectureDb {
                 Some(Registered::Group) => {}
             }
         }
-        let registered = if kind == "group" {
-            Registered::Group
-        } else {
-            Registered::Node
-        };
+        let registered = if kind == "group" { Registered::Group } else { Registered::Node };
         self.registered.insert(id.to_owned(), registered);
         Ok(())
     }
@@ -202,14 +186,7 @@ impl ArchitectureDb {
         parent: Option<String>,
     ) -> Result<(), Error> {
         self.register("service", &id, parent.as_deref())?;
-        self.add_node(ArchNode {
-            icon,
-            icon_text,
-            id,
-            r#in: parent,
-            kind: NodeKind::Service,
-            title,
-        });
+        self.add_node(ArchNode { icon, icon_text, id, r#in: parent, kind: NodeKind::Service, title });
         Ok(())
     }
 
@@ -236,10 +213,7 @@ impl ArchitectureDb {
 
     /// Adds an edge.
     pub(crate) fn add_edge(&mut self, edge: ArchEdge) -> Result<(), Error> {
-        let ends = [
-            ("left", edge.lhs_id.as_str(), edge.lhs_group),
-            ("right", edge.rhs_id.as_str(), edge.rhs_group),
-        ];
+        let ends = [("left", edge.lhs_id.as_str(), edge.lhs_group), ("right", edge.rhs_id.as_str(), edge.rhs_group)];
         for (side, id, _) in ends {
             if !self.registered.contains_key(id) {
                 return Err(fail(&[
@@ -263,15 +237,8 @@ impl ArchitectureDb {
                 ]));
             }
         }
-        let parent = self
-            .node(&edge.lhs_id)
-            .and_then(|node| node.r#in.as_deref());
-        if parent.is_some()
-            && parent
-                == self
-                    .node(&edge.rhs_id)
-                    .and_then(|node| node.r#in.as_deref())
-        {
+        let parent = self.node(&edge.lhs_id).and_then(|node| node.r#in.as_deref());
+        if parent.is_some() && parent == self.node(&edge.rhs_id).and_then(|node| node.r#in.as_deref()) {
             for (side, id, crosses) in ends {
                 if crosses {
                     return Err(fail(&[
@@ -291,12 +258,8 @@ impl ArchitectureDb {
     /// Adds an alignment.
     pub(crate) fn add_layout_hint(&mut self, hint: ArchLayoutHint) -> Result<(), Error> {
         if hint.members.len() < 2 {
-            let mut message =
-                String::from("An align directive requires at least two members; got ");
-            crate::error::push_u32(
-                &mut message,
-                u32::try_from(hint.members.len()).unwrap_or(u32::MAX),
-            );
+            let mut message = String::from("An align directive requires at least two members; got ");
+            crate::error::push_u32(&mut message, u32::try_from(hint.members.len()).unwrap_or(u32::MAX));
             return Err(fail(&[&message]));
         }
         let mut seen = BTreeSet::new();
@@ -311,13 +274,7 @@ impl ArchitectureDb {
                 ]));
             }
             if !seen.insert(id.as_str()) {
-                return Err(fail(&[
-                    "align ",
-                    hint.direction.as_str(),
-                    " lists [",
-                    id,
-                    "] more than once",
-                ]));
+                return Err(fail(&["align ", hint.direction.as_str(), " lists [", id, "] more than once"]));
             }
         }
         self.layout_hints.push(hint);
@@ -357,21 +314,10 @@ pub(crate) fn populate(ast: ArchitectureAst, db: &mut ArchitectureDb) -> Result<
         db.title = Some(title);
     }
     for group in ast.groups {
-        db.add_group(ArchGroup {
-            icon: group.icon,
-            id: group.id,
-            r#in: group.r#in,
-            title: group.title,
-        })?;
+        db.add_group(ArchGroup { icon: group.icon, id: group.id, r#in: group.r#in, title: group.title })?;
     }
     for service in ast.services {
-        db.add_service(
-            service.id,
-            service.icon,
-            service.icon_text,
-            service.title,
-            service.r#in,
-        )?;
+        db.add_service(service.id, service.icon, service.icon_text, service.title, service.r#in)?;
     }
     for junction in ast.junctions {
         db.add_junction(junction.id, junction.r#in)?;
@@ -390,10 +336,7 @@ pub(crate) fn populate(ast: ArchitectureAst, db: &mut ArchitectureDb) -> Result<
         })?;
     }
     for alignment in ast.alignments {
-        db.add_layout_hint(ArchLayoutHint {
-            direction: alignment.direction,
-            members: alignment.members,
-        })?;
+        db.add_layout_hint(ArchLayoutHint { direction: alignment.direction, members: alignment.members })?;
     }
     Ok(())
 }

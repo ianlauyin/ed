@@ -6,17 +6,27 @@
 //! only re-tokenizes from the closest checkpoint above it until the parser
 //! state matches the one previously recorded below the edit.
 
-use std::{ops::Range, sync::LazyLock};
+use std::ops::Range;
+use std::sync::LazyLock;
 
 use clock::Global;
-use language_core::{HighlightId, HighlightMap};
-use parking_lot::{Mutex, RwLock};
+use language_core::HighlightId;
+use language_core::HighlightMap;
+use parking_lot::Mutex;
+use parking_lot::RwLock;
 use smallvec::SmallVec;
-use syntect::parsing::{ParseState, Scope, ScopeStack, SyntaxReference, SyntaxSet};
-use text::{BufferSnapshot as TextBufferSnapshot, Point, ToPoint as _};
+use syntect::parsing::ParseState;
+use syntect::parsing::Scope;
+use syntect::parsing::ScopeStack;
+use syntect::parsing::SyntaxReference;
+use syntect::parsing::SyntaxSet;
+use text::BufferSnapshot as TextBufferSnapshot;
+use text::Point;
+use text::ToPoint as _;
 use theme::SyntaxTheme;
 
-use crate::{Language, build_highlight_map};
+use crate::Language;
+use crate::build_highlight_map;
 
 /// Buffers larger than this are left unhighlighted: tokenizing runs at roughly
 /// 75k lines per second, and jumping to the end of a buffer tokenizes it all.
@@ -116,10 +126,7 @@ struct ScopeRules {
 
 static SCOPE_CLASSES: LazyLock<ScopeRules> = LazyLock::new(|| {
     let class = |name: &str| {
-        CAPTURE_NAMES
-            .iter()
-            .position(|capture| *capture == name)
-            .expect("scope rule maps to an unknown capture") as u8
+        CAPTURE_NAMES.iter().position(|capture| *capture == name).expect("scope rule maps to an unknown capture") as u8
     };
     ScopeRules {
         rules: SCOPE_RULES
@@ -143,11 +150,7 @@ fn classify(stack: &[Scope]) -> Option<u8> {
     let classes = &*SCOPE_CLASSES;
     let mut punctuation = false;
     for scope in stack.iter().rev() {
-        let Some(class) = classes
-            .rules
-            .iter()
-            .find(|(prefix, _)| prefix.is_prefix_of(*scope))
-            .map(|(_, class)| *class)
+        let Some(class) = classes.rules.iter().find(|(prefix, _)| prefix.is_prefix_of(*scope)).map(|(_, class)| *class)
         else {
             continue;
         };
@@ -224,9 +227,7 @@ impl FallbackHighlighter {
             })
             .or_else(|| {
                 let first_line_end = text.line_len(0).min(256);
-                let first_line = text
-                    .text_for_range(Point::zero()..Point::new(0, first_line_end))
-                    .collect::<String>();
+                let first_line = text.text_for_range(Point::zero()..Point::new(0, first_line_end)).collect::<String>();
                 syntax_set.find_syntax_by_first_line(&first_line)
             })?;
         if syntax.name == syntax_set.find_syntax_plain_text().name {
@@ -287,19 +288,16 @@ impl FallbackHighlighter {
             };
             let line_start = text.point_to_offset(Point::new(row, 0));
             for &(run_start, run_end, class) in &line.runs {
-                let run_range = (line_start + run_start as usize).max(range.start)
-                    ..(line_start + run_end as usize).min(range.end);
+                let run_range =
+                    (line_start + run_start as usize).max(range.start)..(line_start + run_end as usize).min(range.end);
                 if run_range.is_empty() {
                     continue;
                 }
-                let Some(highlight_id) = highlight_map.get(language_core::CaptureId(class as u32))
-                else {
+                let Some(highlight_id) = highlight_map.get(language_core::CaptureId(class as u32)) else {
                     continue;
                 };
                 match runs.last_mut() {
-                    Some((last_range, last_id))
-                        if *last_id == highlight_id && last_range.end == run_range.start =>
-                    {
+                    Some((last_range, last_id)) if *last_id == highlight_id && last_range.end == run_range.start => {
                         last_range.end = run_range.end;
                     }
                     _ => runs.push((run_range, highlight_id)),
@@ -336,10 +334,7 @@ impl Cache {
                 let new_lines = (edit.new.end.row - edit.new.start.row + 1) as usize;
                 self.lines.splice(
                     old_start_row..=old_end_row,
-                    (0..new_lines).map(|_| Line {
-                        dirty: true,
-                        ..Line::default()
-                    }),
+                    (0..new_lines).map(|_| Line { dirty: true, ..Line::default() }),
                 );
             }
         }
@@ -349,12 +344,7 @@ impl Cache {
     }
 
     /// Tokenizes lines until every row up to `target_row` is up to date.
-    fn tokenize_through(
-        &mut self,
-        syntax: &'static SyntaxReference,
-        text: &TextBufferSnapshot,
-        target_row: u32,
-    ) {
+    fn tokenize_through(&mut self, syntax: &'static SyntaxReference, text: &TextBufferSnapshot, target_row: u32) {
         let row_count = text.max_point().row + 1;
         while self.frontier <= target_row && self.frontier < row_count {
             let first_stale_row = self.frontier;
@@ -365,15 +355,7 @@ impl Cache {
                 .enumerate()
                 .rev()
                 .find_map(|(row, line)| Some((row as u32, line.checkpoint.as_deref()?.clone())))
-                .unwrap_or_else(|| {
-                    (
-                        0,
-                        Checkpoint {
-                            parse: ParseState::new(syntax),
-                            scopes: ScopeStack::new(),
-                        },
-                    )
-                });
+                .unwrap_or_else(|| (0, Checkpoint { parse: ParseState::new(syntax), scopes: ScopeStack::new() }));
 
             self.frontier = loop {
                 if row >= row_count {
@@ -398,11 +380,7 @@ impl Cache {
 
                 let checkpoint = (row % CHECKPOINT_INTERVAL == 0).then(|| Box::new(state.clone()));
                 let runs = tokenize_line(&mut self.line_text, text, row, &mut state);
-                let line = Line {
-                    runs,
-                    checkpoint,
-                    dirty: false,
-                };
+                let line = Line { runs, checkpoint, dirty: false };
                 if let Some(existing) = self.lines.get_mut(row as usize) {
                     *existing = line;
                 } else {
@@ -441,9 +419,7 @@ fn tokenize_line(
             return;
         };
         match runs.last_mut() {
-            Some((_, last_end, last_class))
-                if *last_class == class && *last_end == start as u32 =>
-            {
+            Some((_, last_end, last_class)) if *last_class == class && *last_end == start as u32 => {
                 *last_end = end as u32;
             }
             _ => runs.push((start as u32, end as u32, class)),
@@ -488,10 +464,7 @@ pub(crate) fn highlight_injection(
 
     let start_row = content_range.start.to_point(text).row;
     let end_row = range.end.to_point(text).row;
-    let mut state = Checkpoint {
-        parse: ParseState::new(syntax),
-        scopes: ScopeStack::new(),
-    };
+    let mut state = Checkpoint { parse: ParseState::new(syntax), scopes: ScopeStack::new() };
     let mut line_text = String::new();
     let highlight_map = HIGHLIGHT_MAP.read();
     for row in start_row..=end_row {
@@ -501,8 +474,8 @@ pub(crate) fn highlight_injection(
             continue;
         }
         for (run_start, run_end, class) in line_runs {
-            let run_range = (line_start + run_start as usize).max(range.start)
-                ..(line_start + run_end as usize).min(range.end);
+            let run_range =
+                (line_start + run_start as usize).max(range.start)..(line_start + run_end as usize).min(range.end);
             if run_range.is_empty() {
                 continue;
             }
@@ -516,16 +489,15 @@ pub(crate) fn highlight_injection(
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use gpui::HighlightStyle;
-    use text::{Buffer as TextBuffer, BufferId, ReplicaId};
+    use text::Buffer as TextBuffer;
+    use text::BufferId;
+    use text::ReplicaId;
+
+    use super::*;
 
     fn theme() -> SyntaxTheme {
-        SyntaxTheme::new(
-            CAPTURE_NAMES
-                .iter()
-                .map(|name| (name.to_string(), HighlightStyle::default())),
-        )
+        SyntaxTheme::new(CAPTURE_NAMES.iter().map(|name| (name.to_string(), HighlightStyle::default())))
     }
 
     fn highlighted(
@@ -537,12 +509,7 @@ mod tests {
             .highlight_runs(text, 0..text.len())
             .unwrap()
             .into_iter()
-            .map(|(range, id)| {
-                (
-                    text.text_for_range(range).collect(),
-                    theme.get_capture_name(id).unwrap().to_string(),
-                )
-            })
+            .map(|(range, id)| (text.text_for_range(range).collect(), theme.get_capture_name(id).unwrap().to_string()))
             .collect()
     }
 
@@ -550,56 +517,33 @@ mod tests {
     fn test_highlights_c_and_tracks_edits() {
         let theme = theme();
         set_theme(&theme);
-        let mut buffer = TextBuffer::new(
-            ReplicaId::LOCAL,
-            BufferId::new(1).unwrap(),
-            "int main() {\n    return 0; // done\n}\n",
-        );
-        let highlighter =
-            FallbackHighlighter::for_buffer(None, Some("main.c"), &buffer.snapshot()).unwrap();
+        let mut buffer =
+            TextBuffer::new(ReplicaId::LOCAL, BufferId::new(1).unwrap(), "int main() {\n    return 0; // done\n}\n");
+        let highlighter = FallbackHighlighter::for_buffer(None, Some("main.c"), &buffer.snapshot()).unwrap();
         assert_eq!(highlighter.syntax_name(), "C");
 
         let runs = highlighted(&highlighter, &buffer.snapshot(), &theme);
         assert!(runs.contains(&("int".into(), "keyword".into())), "{runs:?}");
-        assert!(
-            runs.contains(&("return".into(), "keyword".into())),
-            "{runs:?}"
-        );
+        assert!(runs.contains(&("return".into(), "keyword".into())), "{runs:?}");
         assert!(runs.contains(&("0".into(), "number".into())), "{runs:?}");
-        assert!(
-            runs.contains(&("// done".into(), "comment".into())),
-            "{runs:?}"
-        );
+        assert!(runs.contains(&("// done".into(), "comment".into())), "{runs:?}");
 
         // Opening a block comment turns the following lines into a comment.
         buffer.edit([(0..0, "/*\n")]);
         let runs = highlighted(&highlighter, &buffer.snapshot(), &theme);
-        assert!(
-            runs.iter()
-                .all(|(text, capture)| capture == "comment" || text.trim().is_empty()),
-            "{runs:?}"
-        );
+        assert!(runs.iter().all(|(text, capture)| capture == "comment" || text.trim().is_empty()), "{runs:?}");
 
         buffer.undo();
         let runs = highlighted(&highlighter, &buffer.snapshot(), &theme);
-        assert!(
-            runs.contains(&("return".into(), "keyword".into())),
-            "{runs:?}"
-        );
+        assert!(runs.contains(&("return".into(), "keyword".into())), "{runs:?}");
     }
 
     #[test]
     fn test_highlights_regex_query() {
         let theme = theme();
         set_theme(&theme);
-        let buffer = TextBuffer::new(
-            ReplicaId::LOCAL,
-            BufferId::new(1).unwrap(),
-            r"^fn\s+(\w+)\(.*$",
-        );
-        let highlighter =
-            FallbackHighlighter::for_syntax_name("Regular Expression", &buffer.snapshot())
-                .unwrap();
+        let buffer = TextBuffer::new(ReplicaId::LOCAL, BufferId::new(1).unwrap(), r"^fn\s+(\w+)\(.*$");
+        let highlighter = FallbackHighlighter::for_syntax_name("Regular Expression", &buffer.snapshot()).unwrap();
         let runs = highlighted(&highlighter, &buffer.snapshot(), &theme);
         assert!(runs.iter().any(|(text, _)| text == "^"), "{runs:?}");
         assert!(runs.iter().any(|(text, _)| text == r"\s"), "{runs:?}");
@@ -618,70 +562,40 @@ mod tests {
         let runs = |range: Range<usize>| {
             highlight_injection("sql", &text, content_range.clone(), range)
                 .into_iter()
-                .map(|(range, id)| {
-                    (
-                        source[range].to_string(),
-                        theme.get_capture_name(id).unwrap().to_string(),
-                    )
-                })
+                .map(|(range, id)| (source[range].to_string(), theme.get_capture_name(id).unwrap().to_string()))
                 .collect::<Vec<_>>()
         };
 
         let all = runs(0..source.len());
-        assert!(
-            all.contains(&("SELECT".into(), "keyword".into())),
-            "{all:?}"
-        );
+        assert!(all.contains(&("SELECT".into(), "keyword".into())), "{all:?}");
         assert!(all.contains(&("FROM".into(), "keyword".into())), "{all:?}");
         // Only the requested range is returned, even though tokenizing
         // starts at the beginning of the injection.
         let tail = runs(from_row..source.len());
         assert!(tail.iter().all(|(text, _)| text != "SELECT"), "{tail:?}");
-        assert!(
-            tail.contains(&("FROM".into(), "keyword".into())),
-            "{tail:?}"
-        );
-        assert!(
-            highlight_injection("no-such-language", &text, content_range, 0..source.len())
-                .is_empty()
-        );
+        assert!(tail.contains(&("FROM".into(), "keyword".into())), "{tail:?}");
+        assert!(highlight_injection("no-such-language", &text, content_range, 0..source.len()).is_empty());
     }
 
     #[test]
     fn test_syntax_selection() {
-        let text = |text: &str| {
-            TextBuffer::new(ReplicaId::LOCAL, BufferId::new(1).unwrap(), text)
-                .snapshot()
-                .clone()
-        };
+        let text = |text: &str| TextBuffer::new(ReplicaId::LOCAL, BufferId::new(1).unwrap(), text).snapshot().clone();
         let syntax = |file_name: Option<&str>, language: Option<&str>, first_line: &str| {
             let language = language.map(|name| {
                 Language::new(
-                    crate::LanguageConfig {
-                        name: crate::LanguageName::new(name),
-                        ..Default::default()
-                    },
+                    crate::LanguageConfig { name: crate::LanguageName::new(name), ..Default::default() },
                     None,
                 )
             });
             FallbackHighlighter::for_buffer(language.as_ref(), file_name, &text(first_line))
                 .map(|highlighter| highlighter.syntax_name().to_string())
         };
-        assert_eq!(
-            syntax(Some("Cargo.toml"), None, "").as_deref(),
-            Some("TOML")
-        );
-        assert_eq!(
-            syntax(Some("Dockerfile"), None, "").as_deref(),
-            Some("Dockerfile")
-        );
+        assert_eq!(syntax(Some("Cargo.toml"), None, "").as_deref(), Some("TOML"));
+        assert_eq!(syntax(Some("Dockerfile"), None, "").as_deref(), Some("Dockerfile"));
         assert_eq!(syntax(Some("app.lua"), None, "").as_deref(), Some("Lua"));
         assert_eq!(syntax(None, Some("C++"), "").as_deref(), Some("C++"));
         assert_eq!(syntax(None, Some("SQL"), "").as_deref(), Some("SQL"));
-        assert_eq!(
-            syntax(Some("run"), None, "#!/usr/bin/env ruby").as_deref(),
-            Some("Ruby")
-        );
+        assert_eq!(syntax(Some("run"), None, "#!/usr/bin/env ruby").as_deref(), Some("Ruby"));
         assert_eq!(syntax(Some("notes.txt"), None, "hello"), None);
     }
 
@@ -690,20 +604,13 @@ mod tests {
         let theme = theme();
         set_theme(&theme);
         let line = "fn main() { let s = \"a /* b\"; } // c\n";
-        let mut buffer = TextBuffer::new(
-            ReplicaId::LOCAL,
-            BufferId::new(1).unwrap(),
-            line.repeat(200),
-        );
-        let highlighter =
-            FallbackHighlighter::for_buffer(None, Some("main.rs"), &buffer.snapshot()).unwrap();
+        let mut buffer = TextBuffer::new(ReplicaId::LOCAL, BufferId::new(1).unwrap(), line.repeat(200));
+        let highlighter = FallbackHighlighter::for_buffer(None, Some("main.rs"), &buffer.snapshot()).unwrap();
         highlighted(&highlighter, &buffer.snapshot(), &theme);
 
         let mut rng = 7u64;
         let mut next = |bound: usize| {
-            rng = rng
-                .wrapping_mul(6364136223846793005)
-                .wrapping_add(1442695040888963407);
+            rng = rng.wrapping_mul(6364136223846793005).wrapping_add(1442695040888963407);
             (rng >> 33) as usize % bound.max(1)
         };
         let inserts = ["/*", "*/", "\"", "\n", "x", "// ", "\n\n"];
@@ -727,10 +634,7 @@ mod tests {
                 continue;
             }
             let fresh = FallbackHighlighter::for_buffer(None, Some("main.rs"), &snapshot).unwrap();
-            assert_eq!(
-                highlighted(&highlighter, &snapshot, &theme),
-                highlighted(&fresh, &snapshot, &theme)
-            );
+            assert_eq!(highlighted(&highlighter, &snapshot, &theme), highlighted(&fresh, &snapshot, &theme));
         }
     }
 
@@ -739,11 +643,7 @@ mod tests {
     fn bench_large_file() {
         set_theme(&theme());
         let source = "static int add(int a, int b) {\n    /* sum */ return a + b; // ok\n}\n";
-        let buffer = TextBuffer::new(
-            ReplicaId::LOCAL,
-            BufferId::new(1).unwrap(),
-            source.repeat(10_000),
-        );
+        let buffer = TextBuffer::new(ReplicaId::LOCAL, BufferId::new(1).unwrap(), source.repeat(10_000));
         let snapshot = buffer.snapshot();
         let start = std::time::Instant::now();
         LazyLock::force(&SYNTAX_SET);
@@ -751,10 +651,6 @@ mod tests {
         let highlighter = FallbackHighlighter::for_buffer(None, Some("main.c"), &snapshot).unwrap();
         let start = std::time::Instant::now();
         highlighter.highlight_runs(&snapshot, 0..snapshot.len());
-        eprintln!(
-            "highlight {} lines: {:?}",
-            snapshot.max_point().row,
-            start.elapsed()
-        );
+        eprintln!("highlight {} lines: {:?}", snapshot.max_point().row, start.elapsed());
     }
 }

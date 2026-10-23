@@ -2,7 +2,8 @@
 //! their class styles, and relationships as edges with a marker type at each end. Port of Pele's
 //! `src/diagrams/er/graph.ts`.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
 use super::db::ErDb;
 use super::types::ErAttribute;
@@ -72,16 +73,8 @@ pub(crate) fn build(model: &ErDb) -> ErGraph<'_> {
             let Some(def) = model.classes.get(name) else {
                 continue;
             };
-            out.extend(
-                def.styles
-                    .iter()
-                    .map(|style| crate::text::label::trim(style).to_owned()),
-            );
-            out.extend(
-                def.text_styles
-                    .iter()
-                    .map(|style| crate::text::label::trim(style).to_owned()),
-            );
+            out.extend(def.styles.iter().map(|style| crate::text::label::trim(style).to_owned()));
+            out.extend(def.text_styles.iter().map(|style| crate::text::label::trim(style).to_owned()));
         }
         out
     };

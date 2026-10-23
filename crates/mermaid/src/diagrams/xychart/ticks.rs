@@ -19,11 +19,7 @@ fn pow10(power: f64) -> f64 {
         text.push('-');
     }
     // The bounds above keep the magnitude a small whole number.
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "a whole number of at most 400"
-    )]
+    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "a whole number of at most 400")]
     let magnitude = power.abs() as u32;
     push_u32(&mut text, magnitude);
     text.parse().unwrap_or(f64::NAN)
@@ -45,29 +41,17 @@ pub(crate) fn tick_step(span: f64, count: f64) -> f64 {
     } else {
         1.0
     };
-    if power < 0.0 {
-        -pow10(-power) / factor
-    } else {
-        factor * pow10(power)
-    }
+    if power < 0.0 { -pow10(-power) / factor } else { factor * pow10(power) }
 }
 
 /// The index of `value` among the multiples of `step`.
 pub(crate) fn tick_index(step: f64, value: f64) -> f64 {
-    if step > 0.0 {
-        value / step
-    } else {
-        value * -step
-    }
+    if step > 0.0 { value / step } else { value * -step }
 }
 
 /// The multiple `index` of `step`.
 pub(crate) fn tick_value(step: f64, index: f64) -> f64 {
-    if step > 0.0 {
-        index * step
-    } else {
-        index / -step
-    }
+    if step > 0.0 { index * step } else { index / -step }
 }
 
 /// The multiples of a step from `lo` to `hi`, both included, at most 100 of them.

@@ -2,8 +2,15 @@
 //! Mermaid uses: the `axisFormat` specifiers, tick intervals with d3's `every` rule, and its choice
 //! of automatic ticks. Port of Pele's `src/diagrams/gantt/axis.ts`.
 
-use super::dates::{MONTHS, WEEKDAYS, index, int_string, js_max, js_min};
-use super::js_date::{DAY, Date, time_clip};
+use super::dates::MONTHS;
+use super::dates::WEEKDAYS;
+use super::dates::index;
+use super::dates::int_string;
+use super::dates::js_max;
+use super::dates::js_min;
+use super::js_date::DAY;
+use super::js_date::Date;
+use super::js_date::time_clip;
 
 /// Milliseconds in a second.
 const SECOND: f64 = 1000.0;
@@ -279,25 +286,12 @@ const AUTO: [(Unit, f64, f64); 18] = [
 /// About `count` ticks at round times, chosen the way d3's time scale chooses them.
 pub(crate) fn auto_ticks(start: f64, stop: f64, count: f64) -> Vec<f64> {
     let target = (stop - start) / count;
-    let i = AUTO
-        .iter()
-        .position(|&(_, _, ms)| ms > target || target.is_nan())
-        .unwrap_or(AUTO.len());
+    let i = AUTO.iter().position(|&(_, _, ms)| ms > target || target.is_nan()).unwrap_or(AUTO.len());
     let calendar = match (i.checked_sub(1).and_then(|p| AUTO.get(p)), AUTO.get(i)) {
-        (_, None) => every(
-            Unit::Year,
-            js_max(1.0, tick_step(start / YEAR, stop / YEAR, count)),
-        ),
-        (None, _) => every(
-            Unit::Millisecond,
-            js_max(tick_step(start, stop, count), 1.0),
-        ),
+        (_, None) => every(Unit::Year, js_max(1.0, tick_step(start / YEAR, stop / YEAR, count))),
+        (None, _) => every(Unit::Millisecond, js_max(tick_step(start, stop, count), 1.0)),
         (Some(&before), Some(&after)) => {
-            let (unit, step, _) = if target / before.2 < after.2 / target {
-                before
-            } else {
-                after
-            };
+            let (unit, step, _) = if target / before.2 < after.2 / target { before } else { after };
             every(unit, step)
         }
     };
@@ -316,25 +310,11 @@ const INTERVALS: [(&str, Unit); 7] = [
 ];
 
 /// The days a week can start on, from Sunday.
-const WEEK_STARTS: [&str; 7] = [
-    "sunday",
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-];
+const WEEK_STARTS: [&str; 7] = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"];
 
 /// Ticks for a `tickInterval` such as `1week`, or `None` when it is not one or asks for more
 /// than `limit`.
-pub(crate) fn interval_ticks(
-    interval: &str,
-    weekday: &str,
-    start: f64,
-    stop: f64,
-    limit: f64,
-) -> Option<Vec<f64>> {
+pub(crate) fn interval_ticks(interval: &str, weekday: &str, start: f64, stop: f64, limit: f64) -> Option<Vec<f64>> {
     // `^([1-9]\d*)(millisecond|second|...|month)$`.
     let digits = interval.bytes().take_while(u8::is_ascii_digit).count();
     if digits == 0 || interval.starts_with('0') {
@@ -345,10 +325,7 @@ pub(crate) fn interval_ticks(
     let step: f64 = interval.get(..digits)?.parse().ok()?;
     let unit = match unit {
         Unit::Week(_) => {
-            let start = WEEK_STARTS
-                .iter()
-                .position(|day| *day == weekday)
-                .unwrap_or(0);
+            let start = WEEK_STARTS.iter().position(|day| *day == weekday).unwrap_or(0);
             #[expect(clippy::cast_precision_loss, reason = "0 to 6")]
             Unit::Week(start as f64)
         }
@@ -386,11 +363,7 @@ fn floored(date: Date, unit: Unit) -> Date {
 fn week_of_year(date: Date, week_start: f64) -> f64 {
     let week = Unit::Week(week_start);
     let year_start = floored(date, Unit::Year);
-    span(
-        floored(Date(time_clip(year_start.time() - 1.0)), week),
-        floored(date, week),
-        WEEK,
-    )
+    span(floored(Date(time_clip(year_start.time() - 1.0)), week), floored(date, week), WEEK)
 }
 
 /// The Thursday that decides which ISO week and ISO year a date belongs to.
@@ -398,14 +371,7 @@ fn iso_thursday(date: Date) -> Date {
     let thursday = Unit::Week(4.0);
     let day = date.weekday();
     let late = day >= 4.0 || day == 0.0;
-    let mut d = floored(
-        if late {
-            date
-        } else {
-            Date(time_clip(date.time() - 1.0))
-        },
-        thursday,
-    );
+    let mut d = floored(if late { date } else { Date(time_clip(date.time() - 1.0)) }, thursday);
     if !late {
         thursday.offset(&mut d, 1.0);
         thursday.floor(&mut d);
@@ -446,19 +412,13 @@ pub(crate) fn time_format(specifier: &str, date: Date) -> String {
 
 /// The name at `value` in `names`, or an empty string.
 fn name(names: &[&'static str], value: f64) -> &'static str {
-    index(value)
-        .and_then(|i| names.get(i))
-        .copied()
-        .unwrap_or("")
+    index(value).and_then(|i| names.get(i)).copied().unwrap_or("")
 }
 
 /// Appends the d3 directive `c` for `d`, padded with `p`.
 fn directive(out: &mut String, c: char, d: Date, p: &str) {
     let text = match c {
-        'a' => name(&WEEKDAYS, d.weekday())
-            .get(..3)
-            .unwrap_or("")
-            .to_owned(),
+        'a' => name(&WEEKDAYS, d.weekday()).get(..3).unwrap_or("").to_owned(),
         'A' => name(&WEEKDAYS, d.weekday()).to_owned(),
         'b' => name(&MONTHS, d.month()).get(..3).unwrap_or("").to_owned(),
         'B' => name(&MONTHS, d.month()).to_owned(),
@@ -473,11 +433,7 @@ fn directive(out: &mut String, c: char, d: Date, p: &str) {
         'G' => pad(iso_thursday(d).year() % 10000.0, p, 4),
         'H' => pad(d.hours(), p, 2),
         'I' => pad(twelve(d.hours()), p, 2),
-        'j' => pad(
-            1.0 + span(floored(d, Unit::Year), floored(d, Unit::Day), DAY),
-            p,
-            3,
-        ),
+        'j' => pad(1.0 + span(floored(d, Unit::Year), floored(d, Unit::Day), DAY), p, 3),
         'L' => pad(d.ms(), p, 3),
         'm' => pad(d.month() + 1.0, p, 2),
         'M' => pad(d.minutes(), p, 2),
@@ -492,11 +448,7 @@ fn directive(out: &mut String, c: char, d: Date, p: &str) {
             let thursday = iso_thursday(d);
             let year_start = floored(thursday, Unit::Year);
             let first = floored(year_start, Unit::Week(4.0));
-            let extra = if index(year_start.weekday()) == Some(4) {
-                1.0
-            } else {
-                0.0
-            };
+            let extra = if index(year_start.weekday()) == Some(4) { 1.0 } else { 0.0 };
             pad(span(first, thursday, WEEK) + extra, p, 2)
         }
         'w' => int_string(d.weekday()),

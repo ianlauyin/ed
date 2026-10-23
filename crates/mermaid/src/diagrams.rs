@@ -1,6 +1,4 @@
 //! Diagram types and the contract each one implements.
-//!
-//! Every type is a Cargo feature, so each WebAssembly module contains only the types it renders.
 
 pub(crate) mod common {
     pub(crate) mod acc_descr;
@@ -16,77 +14,45 @@ pub(crate) mod common {
     pub(crate) mod tokens;
 }
 
-#[cfg(feature = "agentflow")]
 pub(crate) mod agentflow;
-#[cfg(feature = "architecture")]
 pub(crate) mod architecture;
-#[cfg(feature = "block")]
 pub(crate) mod block;
-#[cfg(feature = "c4")]
 pub(crate) mod c4;
-#[cfg(feature = "class")]
 pub(crate) mod class;
-#[cfg(feature = "cynefin")]
 pub(crate) mod cynefin;
-#[cfg(feature = "er")]
 pub(crate) mod er;
-#[cfg(feature = "eventmodeling")]
 pub(crate) mod eventmodeling;
 /// Swimlane diagrams draw through the flowchart, and agentflow reads its shapes.
-#[cfg(any(feature = "agentflow", feature = "flowchart", feature = "swimlane"))]
 pub(crate) mod flowchart;
-#[cfg(feature = "gantt")]
 pub(crate) mod gantt;
-#[cfg(feature = "git")]
 pub(crate) mod git;
-#[cfg(feature = "info")]
 pub(crate) mod info;
-#[cfg(feature = "ishikawa")]
 pub(crate) mod ishikawa;
-#[cfg(feature = "journey")]
 pub(crate) mod journey;
-#[cfg(feature = "kanban")]
 pub(crate) mod kanban;
-#[cfg(feature = "mindmap")]
 pub(crate) mod mindmap;
-#[cfg(feature = "packet")]
 pub(crate) mod packet;
-#[cfg(feature = "pie")]
 pub(crate) mod pie;
-#[cfg(feature = "quadrant")]
 pub(crate) mod quadrant;
-#[cfg(feature = "radar")]
 pub(crate) mod radar;
-#[cfg(feature = "railroad")]
 pub(crate) mod railroad;
-#[cfg(feature = "requirement")]
 pub(crate) mod requirement;
-#[cfg(feature = "sankey")]
 pub(crate) mod sankey;
-#[cfg(feature = "sequence")]
 pub(crate) mod sequence;
-#[cfg(feature = "state")]
 pub(crate) mod state;
-#[cfg(feature = "swimlane")]
 pub(crate) mod swimlane;
-#[cfg(feature = "timeline")]
 pub(crate) mod timeline;
-#[cfg(feature = "treemap")]
 pub(crate) mod treemap;
-#[cfg(feature = "treeview")]
 pub(crate) mod treeview;
-#[cfg(feature = "usecase")]
 pub(crate) mod usecase;
-#[cfg(feature = "venn")]
 pub(crate) mod venn;
-#[cfg(feature = "wardley")]
 pub(crate) mod wardley;
-#[cfg(feature = "xychart")]
 pub(crate) mod xychart;
 
 use crate::error::Error;
 use crate::svg::root::RenderOptions;
-use crate::util::url::{LinkInfo, UrlOptions};
+use crate::util::url::LinkInfo;
+use crate::util::url::UrlOptions;
 use crate::yaml::Value;
 
 /// What a diagram type receives, as Pele's `Diagram.parse` does.
@@ -137,71 +103,38 @@ pub(crate) struct Diagram {
 /// The diagram type named `type` (Pele's names), when this build includes it.
 pub(crate) fn find(r#type: &str) -> Option<Diagram> {
     match r#type {
-        #[cfg(feature = "agentflow")]
         "agentflow" => Some(agentflow::DIAGRAM),
-        #[cfg(feature = "architecture")]
         "architecture" => Some(architecture::DIAGRAM),
-        #[cfg(feature = "block")]
         "block" => Some(block::DIAGRAM),
-        #[cfg(feature = "c4")]
         "c4" => Some(c4::DIAGRAM),
-        #[cfg(feature = "class")]
         "class" => Some(class::DIAGRAM),
-        #[cfg(feature = "cynefin")]
         "cynefin" => Some(cynefin::DIAGRAM),
-        #[cfg(feature = "er")]
         "er" => Some(er::DIAGRAM),
-        #[cfg(feature = "eventmodeling")]
         "eventmodeling" => Some(eventmodeling::DIAGRAM),
-        #[cfg(feature = "flowchart")]
         "flowchart" => Some(flowchart::DIAGRAM),
-        #[cfg(feature = "gantt")]
         "gantt" => Some(gantt::DIAGRAM),
-        #[cfg(feature = "git")]
         "gitGraph" => Some(git::DIAGRAM),
-        #[cfg(feature = "info")]
         "info" => Some(info::DIAGRAM),
-        #[cfg(feature = "ishikawa")]
         "ishikawa" => Some(ishikawa::DIAGRAM),
-        #[cfg(feature = "journey")]
         "journey" => Some(journey::DIAGRAM),
-        #[cfg(feature = "kanban")]
         "kanban" => Some(kanban::DIAGRAM),
-        #[cfg(feature = "mindmap")]
         "mindmap" => Some(mindmap::DIAGRAM),
-        #[cfg(feature = "packet")]
         "packet" => Some(packet::DIAGRAM),
-        #[cfg(feature = "pie")]
         "pie" => Some(pie::DIAGRAM),
-        #[cfg(feature = "quadrant")]
         "quadrantChart" => Some(quadrant::DIAGRAM),
-        #[cfg(feature = "radar")]
         "radar" => Some(radar::DIAGRAM),
-        #[cfg(feature = "railroad")]
         "railroad" => Some(railroad::DIAGRAM),
-        #[cfg(feature = "requirement")]
         "requirement" => Some(requirement::DIAGRAM),
-        #[cfg(feature = "sankey")]
         "sankey" => Some(sankey::DIAGRAM),
-        #[cfg(feature = "sequence")]
         "sequence" => Some(sequence::DIAGRAM),
-        #[cfg(feature = "state")]
         "state" => Some(state::DIAGRAM),
-        #[cfg(feature = "swimlane")]
         "swimlane" => Some(swimlane::DIAGRAM),
-        #[cfg(feature = "timeline")]
         "timeline" => Some(timeline::DIAGRAM),
-        #[cfg(feature = "treemap")]
         "treemap" => Some(treemap::DIAGRAM),
-        #[cfg(feature = "treeview")]
         "treeView" => Some(treeview::DIAGRAM),
-        #[cfg(feature = "usecase")]
         "usecase" => Some(usecase::DIAGRAM),
-        #[cfg(feature = "venn")]
         "venn" => Some(venn::DIAGRAM),
-        #[cfg(feature = "wardley")]
         "wardley" => Some(wardley::DIAGRAM),
-        #[cfg(feature = "xychart")]
         "xychart" => Some(xychart::DIAGRAM),
         _ => None,
     }

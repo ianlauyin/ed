@@ -2,7 +2,8 @@
 //! `src/diagrams/requirement/parser.ts`.
 
 use super::db::RequirementDb;
-use super::lexer::{Token, tokenize};
+use super::lexer::Token;
+use super::lexer::tokenize;
 use super::tokens::T;
 use crate::error::Error;
 use crate::text::label::trim;
@@ -55,10 +56,7 @@ impl<'s> Parser<'s, '_> {
     /// Fails with Jison's wording, naming the token kinds `from` to `to` and `others` as expected.
     #[cold]
     fn fail(&self, from: T, to: T, others: &[T]) -> Error {
-        let offset = self
-            .tokens
-            .get(self.i)
-            .map_or(self.src.len(), |token| token.start);
+        let offset = self.tokens.get(self.i).map_or(self.src.len(), |token| token.start);
         let t = self.kind();
         if t == T::Error {
             return Error::syntax("requirement", self.src, offset, "", true);
@@ -94,10 +92,7 @@ impl<'s> Parser<'s, '_> {
             return Err(self.fail(from, to, &[]));
         }
         self.i += 1;
-        Ok(VALUES
-            .get((t as usize).wrapping_sub(T::Requirement as usize))
-            .copied()
-            .unwrap_or(""))
+        Ok(VALUES.get((t as usize).wrapping_sub(T::Requirement as usize)).copied().unwrap_or(""))
     }
 
     fn string(&mut self) -> Result<&'s str, Error> {
@@ -194,11 +189,7 @@ impl<'s> Parser<'s, '_> {
                 self.i += 1;
                 continue;
             }
-            let field = if requirement {
-                (T::Id..=T::Verifymthd).contains(&t)
-            } else {
-                t == T::Type || t == T::Docref
-            };
+            let field = if requirement { (T::Id..=T::Verifymthd).contains(&t) } else { t == T::Type || t == T::Docref };
             if !field {
                 if requirement {
                     return Err(self.fail(T::Id, T::Verifymthd, &[T::Newline, T::StructStop]));
@@ -237,11 +228,7 @@ impl<'s> Parser<'s, '_> {
 /// limit error when classes copy too many declarations.
 pub(crate) fn parse_requirement(src: &str, db: &mut RequirementDb) -> Result<(), Error> {
     let tokens = tokenize(src);
-    let mut p = Parser {
-        i: 0,
-        src,
-        tokens: &tokens,
-    };
+    let mut p = Parser { i: 0, src, tokens: &tokens };
 
     while p.directive(db)? {
         if p.kind() == T::Newline {
@@ -249,11 +236,7 @@ pub(crate) fn parse_requirement(src: &str, db: &mut RequirementDb) -> Result<(),
         }
     }
     if p.kind() != T::Rd {
-        return Err(p.fail(
-            T::Rd,
-            T::Rd,
-            &[T::AccTitle, T::AccDescr, T::AccDescrMultilineValue],
-        ));
+        return Err(p.fail(T::Rd, T::Rd, &[T::AccTitle, T::AccDescr, T::AccDescrMultilineValue]));
     }
     p.i += 1;
     p.expect(T::Newline)?;
@@ -318,11 +301,7 @@ pub(crate) fn parse_requirement(src: &str, db: &mut RequirementDb) -> Result<(),
             } else if next == T::EndArrowL || next == T::Line {
                 p.i += 1;
                 let relationship = p.keyword(T::Contains, T::Traces)?;
-                p.expect(if next == T::Line {
-                    T::EndArrowR
-                } else {
-                    T::Line
-                })?;
+                p.expect(if next == T::Line { T::EndArrowR } else { T::Line })?;
                 let other = p.string()?;
                 if next == T::Line {
                     db.add_relationship(relationship, id, other);
@@ -330,11 +309,7 @@ pub(crate) fn parse_requirement(src: &str, db: &mut RequirementDb) -> Result<(),
                     db.add_relationship(relationship, other, id);
                 }
             } else {
-                return Err(p.fail(
-                    T::StyleSeparator,
-                    T::StyleSeparator,
-                    &[T::EndArrowL, T::Line],
-                ));
+                return Err(p.fail(T::StyleSeparator, T::StyleSeparator, &[T::EndArrowL, T::Line]));
             }
         } else {
             return Err(p.fail(

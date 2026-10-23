@@ -2,27 +2,39 @@
 //! the boundaries between them, and transitions. Port of Pele's
 //! `src/diagrams/cynefin/render.ts`.
 
-use super::boundaries::{
-    FOLD, HORIZON, WaveOptions, backward, cliff, curve_path, ellipse_path, forward, resolve_seed,
-    wave,
-};
+use super::boundaries::FOLD;
+use super::boundaries::HORIZON;
+use super::boundaries::WaveOptions;
+use super::boundaries::backward;
+use super::boundaries::cliff;
+use super::boundaries::curve_path;
+use super::boundaries::ellipse_path;
+use super::boundaries::forward;
+use super::boundaries::resolve_seed;
+use super::boundaries::wave;
 use super::model::CynefinModel;
 use crate::diagrams::Rendered;
-use crate::svg::builder::{esc_text, js_round, label_svg, push_num};
-use crate::svg::edges::{marker, marker_trim};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
-use crate::svg::theme::{RADIUS, series_color};
-use crate::text::label::{Label, layout_label};
-use crate::text::measure::{BOLD, ITALIC};
-use crate::yaml::{Value, push_number};
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::edges::marker;
+use crate::svg::edges::marker_trim;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
+use crate::svg::theme::RADIUS;
+use crate::svg::theme::series_color;
+use crate::text::label::Label;
+use crate::text::label::layout_label;
+use crate::text::measure::BOLD;
+use crate::text::measure::ITALIC;
+use crate::yaml::Value;
+use crate::yaml::push_number;
 
 /// `[domain, column, row, series color]`, in drawing order.
-const QUADRANTS: [(&str, f64, f64, i64); 4] = [
-    ("complex", 0.0, 0.0, 0),
-    ("complicated", 1.0, 0.0, 1),
-    ("chaotic", 0.0, 1.0, 3),
-    ("clear", 1.0, 1.0, 2),
-];
+const QUADRANTS: [(&str, f64, f64, i64); 4] =
+    [("complex", 0.0, 0.0, 0), ("complicated", 1.0, 0.0, 1), ("chaotic", 0.0, 1.0, 3), ("clear", 1.0, 1.0, 2)];
 /// The series color of the confusion ellipse.
 const CONFUSION_COLOR: i64 = 4;
 
@@ -82,10 +94,7 @@ fn property<'v>(value: &'v Value, key: &str) -> Option<&'v Value> {
     let Value::Object(entries) = value else {
         return None;
     };
-    entries
-        .iter()
-        .find(|(own, _)| own == key)
-        .map(|(_, value)| value)
+    entries.iter().find(|(own, _)| own == key).map(|(_, value)| value)
 }
 
 /// The `cynefin` option `key` of `config` when it is a number from `min` to `max`, or
@@ -127,11 +136,7 @@ fn hypot(x: f64, y: f64) -> f64 {
 
 /// `value || 1`.
 fn or_one(value: f64) -> f64 {
-    if value == 0.0 || value.is_nan() {
-        1.0
-    } else {
-        value
-    }
+    if value == 0.0 || value.is_nan() { 1.0 } else { value }
 }
 
 /// Appends `x,y`.
@@ -153,10 +158,7 @@ pub(crate) fn render(model: &CynefinModel, config: &Value, options: &RenderOptio
     );
     let amplitude = setting(config, "boundaryAmplitude", 8.0, 0.0, 50.0);
     // Pele seeds from its default prefix. Ondine keeps that seed, so the default boundaries match.
-    let seed = resolve_seed(
-        setting(config, "seed", 0.0, -1e15, 1e15),
-        options.id_prefix.as_deref().unwrap_or("pele"),
-    );
+    let seed = resolve_seed(setting(config, "seed", 0.0, -1e15, 1e15), options.id_prefix.as_deref().unwrap_or("pele"));
     let item_line = js_round(item_size * 1.5);
 
     let badge = |text: String, overflow: bool| {
@@ -182,16 +184,9 @@ pub(crate) fn render(model: &CynefinModel, config: &Value, options: &RenderOptio
             }
         }
         let items = model.items(name);
-        let shown = if name == "confusion" && items.len() > MAX_CONFUSION_ITEMS {
-            MAX_CONFUSION_ITEMS
-        } else {
-            items.len()
-        };
-        let mut badges: Vec<Badge> = items
-            .iter()
-            .take(shown)
-            .map(|item| badge(item.clone(), false))
-            .collect();
+        let shown =
+            if name == "confusion" && items.len() > MAX_CONFUSION_ITEMS { MAX_CONFUSION_ITEMS } else { items.len() };
+        let mut badges: Vec<Badge> = items.iter().take(shown).map(|item| badge(item.clone(), false)).collect();
         if shown < items.len() {
             let mut text = String::from("+");
             #[expect(clippy::cast_precision_loss, reason = "item counts are small")]
@@ -212,16 +207,7 @@ pub(crate) fn render(model: &CynefinModel, config: &Value, options: &RenderOptio
             w = w.max(b.w);
             h += ITEM_GAP + b.h;
         }
-        Block {
-            badges,
-            cx: 0.0,
-            cy: 0.0,
-            h,
-            name,
-            subtitles,
-            title,
-            w,
-        }
+        Block { badges, cx: 0.0, cy: 0.0, h, name, subtitles, title, w }
     };
 
     let mut quadrants: Vec<Block> = QUADRANTS.iter().map(|&(name, ..)| block(name)).collect();
@@ -255,11 +241,7 @@ pub(crate) fn render(model: &CynefinModel, config: &Value, options: &RenderOptio
     }
 
     let title = layout_label(model.title.as_deref(), false, size, 4000.0, BOLD, None);
-    let title_height = if title.height > 0.0 {
-        title.height + 12.0
-    } else {
-        0.0
-    };
+    let title_height = if title.height > 0.0 { title.height + 12.0 } else { 0.0 };
     let width = 2.0 * quad_w;
     let height = 2.0 * quad_h;
     let x0 = pad;
@@ -269,54 +251,13 @@ pub(crate) fn render(model: &CynefinModel, config: &Value, options: &RenderOptio
     let right = x0 + width;
     let bottom = y0 + height;
 
-    let fold = wave(
-        y0,
-        cy,
-        cx,
-        seed,
-        amplitude,
-        WaveOptions {
-            pin_end: true,
-            segments: 4,
-            ..FOLD
-        },
-    );
-    let west = wave(
-        x0,
-        cx,
-        cy,
-        seed + 100.0,
-        amplitude,
-        WaveOptions {
-            pin_end: true,
-            segments: 4,
-            ..HORIZON
-        },
-    );
-    let east = wave(
-        cx,
-        right,
-        cy,
-        seed + 200.0,
-        amplitude,
-        WaveOptions {
-            pin_start: true,
-            segments: 4,
-            ..HORIZON
-        },
-    );
+    let fold = wave(y0, cy, cx, seed, amplitude, WaveOptions { pin_end: true, segments: 4, ..FOLD });
+    let west = wave(x0, cx, cy, seed + 100.0, amplitude, WaveOptions { pin_end: true, segments: 4, ..HORIZON });
+    let east = wave(cx, right, cy, seed + 200.0, amplitude, WaveOptions { pin_start: true, segments: 4, ..HORIZON });
     let drop = cliff(cx, cy, bottom, width * 0.03);
     let at = |out: &mut String, curve: &[f64], end: bool| {
-        let k = if end {
-            curve.len().saturating_sub(2)
-        } else {
-            0
-        };
-        push_pair(
-            out,
-            curve.get(k).copied().unwrap_or(0.0),
-            curve.get(k + 1).copied().unwrap_or(0.0),
-        );
+        let k = if end { curve.len().saturating_sub(2) } else { 0 };
+        push_pair(out, curve.get(k).copied().unwrap_or(0.0), curve.get(k + 1).copied().unwrap_or(0.0));
     };
 
     let region = |name: &str| {
@@ -385,9 +326,7 @@ pub(crate) fn render(model: &CynefinModel, config: &Value, options: &RenderOptio
     let oval = ellipse_path(cx, cy, rx, ry);
     let mut ellipse = String::from("<path d=\"");
     ellipse.push_str(&oval);
-    ellipse.push_str(
-        "\" fill=\"var(--_bg)\"/><path class=\"ondine-cynefin-region\" data-id=\"confusion\" d=\"",
-    );
+    ellipse.push_str("\" fill=\"var(--_bg)\"/><path class=\"ondine-cynefin-region\" data-id=\"confusion\" d=\"");
     ellipse.push_str(&oval);
     ellipse.push_str("\" fill=\"");
     ellipse.push_str(&series_color(CONFUSION_COLOR));
@@ -442,13 +381,7 @@ pub(crate) fn render(model: &CynefinModel, config: &Value, options: &RenderOptio
             if item.overflow {
                 attrs.push_str(" fill=\"var(--_m)\"");
             }
-            out.push_str(&label_svg(
-                &item.label,
-                b.cx,
-                y + item.h / 2.0,
-                &attrs,
-                None,
-            ));
+            out.push_str(&label_svg(&item.label, b.cx, y + item.h / 2.0, &attrs, None));
             out.push_str("</g>");
             y += item.h;
         }
@@ -513,29 +446,17 @@ pub(crate) fn render(model: &CynefinModel, config: &Value, options: &RenderOptio
         let mx = f64::midpoint(from.cx, to.cx);
         let my = f64::midpoint(from.cy, to.cy);
         // Curves bow away from the middle of the diagram, which keeps them off the ellipse.
-        let outward = if -dy * (mx - cx) + dx * (my - cy) >= 0.0 {
-            1.0
-        } else {
-            -1.0
-        };
+        let outward = if -dy * (mx - cx) + dx * (my - cy) >= 0.0 { 1.0 } else { -1.0 };
         let nx = (-dy / len) * outward;
         let ny = (dx / len) * outward;
         // A diagonal runs through the middle, so it bows far enough to pass the ellipse.
-        let diagonal =
-            from.name != "confusion" && to.name != "confusion" && dx.abs() > 1.0 && dy.abs() > 1.0;
-        let bow = if diagonal {
-            2.0 * (hypot(rx * nx, ry * ny) + 16.0)
-        } else {
-            len * 0.15
-        } + repeat * 56.0;
+        let diagonal = from.name != "confusion" && to.name != "confusion" && dx.abs() > 1.0 && dy.abs() > 1.0;
+        let bow = if diagonal { 2.0 * (hypot(rx * nx, ry * ny) + 16.0) } else { len * 0.15 } + repeat * 56.0;
         let px = mx + nx * bow;
         let py = my + ny * bow;
         let point = |t: f64| {
             let u = 1.0 - t;
-            (
-                u * u * from.cx + 2.0 * u * t * px + t * t * to.cx,
-                u * u * from.cy + 2.0 * u * t * py + t * t * to.cy,
-            )
+            (u * u * from.cx + 2.0 * u * t * px + t * t * to.cx, u * u * from.cy + 2.0 * u * t * py + t * t * to.cy)
         };
         let crossing = |b: &Block, mut lo: f64, mut hi: f64, leaving: bool| {
             for _ in 0..16 {
@@ -567,11 +488,7 @@ pub(crate) fn render(model: &CynefinModel, config: &Value, options: &RenderOptio
         } {
             i += 1;
         }
-        let t1 = if i > STEPS {
-            1.0
-        } else {
-            crossing(to, step(i - 1), step(i), false)
-        };
+        let t1 = if i > STEPS { 1.0 } else { crossing(to, step(i - 1), step(i), false) };
 
         let (sx, sy) = point(t0);
         let (mut ex, mut ey) = point(t1);
@@ -593,9 +510,7 @@ pub(crate) fn render(model: &CynefinModel, config: &Value, options: &RenderOptio
             let (lx, ly) = point(f64::midpoint(t0, t1));
             let away = (nx.abs() * label.width) / 2.0 + (ny.abs() * label.height) / 2.0 + 6.0;
             let half = label.width / 2.0 + 4.0;
-            let tx = (lx + nx * away)
-                .max(x0 + half)
-                .min((right - half).max(x0 + half));
+            let tx = (lx + nx * away).max(x0 + half).min((right - half).max(x0 + half));
             let mut attrs = String::from(" class=\"ondine-edge-label\" font-size=\"");
             push_number(&mut attrs, small);
             attrs.push('"');
@@ -644,16 +559,8 @@ pub(crate) fn render(model: &CynefinModel, config: &Value, options: &RenderOptio
         total_height,
         size,
         options,
-        Accessible {
-            acc_descr: model.acc_descr.as_deref(),
-            acc_title: model.acc_title.as_deref(),
-        },
+        Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
         &content,
     );
-    Rendered {
-        height: total_height,
-        links: Vec::new(),
-        svg,
-        width: total_width,
-    }
+    Rendered { height: total_height, links: Vec::new(), svg, width: total_width }
 }

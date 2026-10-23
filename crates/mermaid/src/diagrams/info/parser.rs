@@ -1,10 +1,22 @@
 //! The info parser: Mermaid's Langium info grammar over the shared tokenizer. Port of Pele's
 //! `src/diagrams/info/parser.ts`.
 
-use crate::diagrams::common::tokens::{
-    ACC_DESCR, ACC_TITLE, DIRECTIVE, EOF, NEWLINE, Reader, SINGLE_LINE_COMMENT, TITLE, TokenType,
-    WHITESPACE, YAML, acc_descr_value, acc_title_value, keyword, title_value, tokenize,
-};
+use crate::diagrams::common::tokens::ACC_DESCR;
+use crate::diagrams::common::tokens::ACC_TITLE;
+use crate::diagrams::common::tokens::DIRECTIVE;
+use crate::diagrams::common::tokens::EOF;
+use crate::diagrams::common::tokens::NEWLINE;
+use crate::diagrams::common::tokens::Reader;
+use crate::diagrams::common::tokens::SINGLE_LINE_COMMENT;
+use crate::diagrams::common::tokens::TITLE;
+use crate::diagrams::common::tokens::TokenType;
+use crate::diagrams::common::tokens::WHITESPACE;
+use crate::diagrams::common::tokens::YAML;
+use crate::diagrams::common::tokens::acc_descr_value;
+use crate::diagrams::common::tokens::acc_title_value;
+use crate::diagrams::common::tokens::keyword;
+use crate::diagrams::common::tokens::title_value;
+use crate::diagrams::common::tokens::tokenize;
 use crate::error::Error;
 
 /// Token kinds, as indices into [`INFO_TOKENS`].

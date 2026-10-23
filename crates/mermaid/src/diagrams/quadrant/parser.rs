@@ -1,7 +1,9 @@
 //! The quadrant chart parser. Port of Pele's `src/diagrams/quadrant/parser.ts`.
 
-use super::db::{QuadrantDb, QuadrantText};
-use super::lexer::{Token, tokenize};
+use super::db::QuadrantDb;
+use super::db::QuadrantText;
+use super::lexer::Token;
+use super::lexer::tokenize;
 use super::tokens::T;
 use crate::error::Error;
 use crate::text::label::trim;
@@ -27,26 +29,12 @@ fn is_word(t: T) -> bool {
 
 /// Tokens of a class name.
 fn is_id(t: T) -> bool {
-    matches!(
-        t,
-        T::Alpha
-            | T::Num
-            | T::Minus
-            | T::Comma
-            | T::Colon
-            | T::Amp
-            | T::Brkt
-            | T::Mult
-            | T::UnicodeText
-    )
+    matches!(t, T::Alpha | T::Num | T::Minus | T::Comma | T::Colon | T::Amp | T::Brkt | T::Mult | T::UnicodeText)
 }
 
 /// Tokens of a style.
 fn is_style(t: T) -> bool {
-    matches!(
-        t,
-        T::Alpha | T::Num | T::Colon | T::Space | T::Brkt | T::Minus
-    )
+    matches!(t, T::Alpha | T::Num | T::Colon | T::Space | T::Brkt | T::Minus)
 }
 
 /// Tokens that end a statement.
@@ -74,10 +62,7 @@ impl<'a> Parser<'a> {
     }
 
     fn text(&self) -> &'a str {
-        self.tokens
-            .get(self.i)
-            .and_then(|token| self.src.get(token.start..token.end))
-            .unwrap_or("")
+        self.tokens.get(self.i).and_then(|token| self.src.get(token.start..token.end)).unwrap_or("")
     }
 
     fn take(&mut self) -> &'a str {
@@ -88,10 +73,7 @@ impl<'a> Parser<'a> {
 
     #[cold]
     fn fail(&self, expected: &str) -> Error {
-        let start = self
-            .tokens
-            .get(self.i)
-            .map_or(self.src.len(), |token| token.start);
+        let start = self.tokens.get(self.i).map_or(self.src.len(), |token| token.start);
         let t = self.t();
         if t == T::Error {
             return Error::syntax("quadrantChart", self.src, start, "", true);
@@ -123,10 +105,7 @@ impl<'a> Parser<'a> {
         while is_word(self.t()) || self.t() == T::Space || self.t() == T::Minus {
             text.push_str(self.take());
         }
-        Ok(QuadrantText {
-            markdown: first == T::MdStr,
-            text,
-        })
+        Ok(QuadrantText { markdown: first == T::MdStr, text })
     }
 
     fn styles(&mut self) -> Result<Vec<String>, Error> {
@@ -155,11 +134,7 @@ impl<'a> Parser<'a> {
 /// Returns a syntax error for input Mermaid rejects, and a semantic error for an invalid point
 /// style.
 pub(crate) fn parse_quadrant(src: &str, db: &mut QuadrantDb) -> Result<(), Error> {
-    let mut p = Parser {
-        i: 0,
-        src,
-        tokens: tokenize(src),
-    };
+    let mut p = Parser { i: 0, src, tokens: tokenize(src) };
 
     while is_eol(p.t()) || p.t() == T::Space {
         p.i += 1;
@@ -243,19 +218,11 @@ pub(crate) fn parse_quadrant(src: &str, db: &mut QuadrantDb) -> Result<(), Error
             _ => {
                 if is_text(t) {
                     let label = p.label()?;
-                    let class_name = if p.t() == T::ClassName {
-                        p.take().to_owned()
-                    } else {
-                        String::new()
-                    };
+                    let class_name = if p.t() == T::ClassName { p.take().to_owned() } else { String::new() };
                     p.expect(T::PointStart)?;
                     let x = p.expect(T::PointX)?;
                     let y = p.expect(T::PointY)?;
-                    let styles = if is_style(p.t()) {
-                        p.styles()?
-                    } else {
-                        Vec::new()
-                    };
+                    let styles = if is_style(p.t()) { p.styles()? } else { Vec::new() };
                     db.add_point(label, class_name, x, y, &styles)?;
                 }
             }

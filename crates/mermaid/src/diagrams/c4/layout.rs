@@ -2,9 +2,14 @@
 //! `src/diagrams/c4/layout.ts`.
 
 use super::db::C4Db;
-use super::route::{Box, Form, HEAD, LANE};
+use super::route::Box;
+use super::route::Form;
+use super::route::HEAD;
+use super::route::LANE;
 use super::types::C4Element;
-use crate::text::label::{Label, layout_label, trim};
+use crate::text::label::Label;
+use crate::text::label::layout_label;
+use crate::text::label::trim;
 use crate::text::measure::BOLD;
 
 const SHAPE_W: f64 = 216.0;
@@ -81,15 +86,12 @@ fn form_named(name: &str) -> Option<Form> {
         ("pipe", Form::HCyl),
     ];
     // Every keyword is ASCII, and no other character lowercases to an ASCII one of theirs.
-    FORMS
-        .iter()
-        .find(|(own, _)| own.eq_ignore_ascii_case(name))
-        .map(|&(_, form)| form)
+    FORMS.iter().find(|(own, _)| own.eq_ignore_ascii_case(name)).map(|&(_, form)| form)
 }
 
 fn form_of(shape: &C4Element) -> Form {
-    let explicit = form_named(shape.shape.as_deref().unwrap_or(""))
-        .or_else(|| form_named(shape.sprite.as_deref().unwrap_or("")));
+    let explicit =
+        form_named(shape.shape.as_deref().unwrap_or("")).or_else(|| form_named(shape.sprite.as_deref().unwrap_or("")));
     if let Some(form) = explicit {
         return form;
     }
@@ -126,11 +128,7 @@ fn measure(shape: &C4Element, size: f64, small: f64, width: f64) -> (Box, [Label
         kind.push(if c == '_' { ' ' } else { c });
     }
     kind.push('»');
-    let techn = shape
-        .techn
-        .as_deref()
-        .filter(|techn| !techn.is_empty())
-        .map(|techn| ["[", techn, "]"].concat());
+    let techn = shape.techn.as_deref().filter(|techn| !techn.is_empty()).map(|techn| ["[", techn, "]"].concat());
     let labels = [
         layout_label(Some(&kind), false, small - 1.0, inner, 0, None),
         layout_label(Some(&shape.label), false, size, inner, BOLD, None),
@@ -156,29 +154,15 @@ fn measure(shape: &C4Element, size: f64, small: f64, width: f64) -> (Box, [Label
 /// Places boxes left to right in rows of `per_row`, from (0, 0), and returns the width and
 /// height the rows take. Shapes are stretched to the height of their row. Boundaries keep their
 /// own.
-fn rows(
-    boxes: &mut [Box],
-    ids: &[usize],
-    per_row: f64,
-    gap_x: f64,
-    gap_y: f64,
-    stretch: bool,
-) -> (f64, f64) {
+fn rows(boxes: &mut [Box], ids: &[usize], per_row: f64, gap_x: f64, gap_y: f64, stretch: bool) -> (f64, f64) {
     // A row size too large to count in is as good as all of them.
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "a positive whole number, saturated"
-    )]
+    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "a positive whole number, saturated")]
     let per_row = (per_row as usize).max(1);
     let mut width = 0.0_f64;
     let mut y = 0.0;
     for row in ids.chunks(per_row) {
         let mut x = 0.0;
-        let row_h = row
-            .iter()
-            .filter_map(|&id| boxes.get(id))
-            .fold(0.0_f64, |h, b| h.max(b.h));
+        let row_h = row.iter().filter_map(|&id| boxes.get(id)).fold(0.0_f64, |h, b| h.max(b.h));
         for &id in row {
             if let Some(b) = boxes.get_mut(id) {
                 b.x = x;
@@ -196,21 +180,11 @@ fn rows(
 }
 
 /// How many boxes go in a row: `limit`, or fewer when the diagram must fit `room`.
-fn count(
-    boxes: &[Box],
-    ids: &[usize],
-    room: Option<f64>,
-    limit: f64,
-    gap: f64,
-    group_pad: f64,
-) -> f64 {
+fn count(boxes: &[Box], ids: &[usize], room: Option<f64>, limit: f64, gap: f64, group_pad: f64) -> f64 {
     let Some(room) = room else {
         return limit;
     };
-    let widest = ids
-        .iter()
-        .filter_map(|&id| boxes.get(id))
-        .fold(1.0_f64, |w, b| w.max(b.w));
+    let widest = ids.iter().filter_map(|&id| boxes.get(id)).fold(1.0_f64, |w, b| w.max(b.w));
     1.0_f64.max(limit.min(((room + gap - 2.0 * group_pad) / (widest + gap)).floor()))
 }
 
@@ -222,15 +196,9 @@ pub(crate) fn layout_c4(db: &C4Db, size: f64, small: f64, room: Option<f64>, gap
     let mut boxes: Vec<Box> = Vec::new();
     let mut groups: Vec<Group> = Vec::with_capacity(db.boundaries.len());
     for (index, boundary) in db.boundaries.iter().enumerate() {
-        let label_room = room.map_or(4000.0, |room| {
-            80.0_f64.max(room - 2.0 * HEAD_LEFT - 2.0 * GROUP_PAD * 2.0)
-        });
+        let label_room = room.map_or(4000.0, |room| 80.0_f64.max(room - 2.0 * HEAD_LEFT - 2.0 * GROUP_PAD * 2.0));
         let labels = if boundary.parent.is_some() {
-            let r#type = boundary
-                .r#type
-                .as_deref()
-                .filter(|t| !t.is_empty())
-                .map(|t| ["[", t, "]"].concat());
+            let r#type = boundary.r#type.as_deref().filter(|t| !t.is_empty()).map(|t| ["[", t, "]"].concat());
             vec![
                 layout_label(Some(&boundary.label), false, size, label_room, BOLD, None),
                 layout_label(r#type.as_deref(), false, small, label_room, 0, None),
@@ -249,11 +217,7 @@ pub(crate) fn layout_c4(db: &C4Db, size: f64, small: f64, room: Option<f64>, gap
         boxes.push(Box::default());
         groups.push(Group {
             boundary: index,
-            head: if head > 0.0 {
-                head + HEAD_TOP + 6.0 + LANE
-            } else {
-                group_pad
-            },
+            head: if head > 0.0 { head + HEAD_TOP + 6.0 + LANE } else { group_pad },
             head_w,
             head_x: HEAD_LEFT,
             id,
@@ -293,21 +257,14 @@ pub(crate) fn layout_c4(db: &C4Db, size: f64, small: f64, room: Option<f64>, gap
         let depth = depths.get(parent).copied().flatten().unwrap_or(0);
         #[expect(clippy::cast_precision_loss, reason = "depths stay far below 2^52")]
         let depth = depth as f64;
-        let node_width = room.map_or(SHAPE_W, |room| {
-            100.0_f64.max(SHAPE_W.min(room - 2.0 * depth * group_pad - 32.0))
-        });
+        let node_width = room.map_or(SHAPE_W, |room| 100.0_f64.max(SHAPE_W.min(room - 2.0 * depth * group_pad - 32.0)));
         let Some(group) = groups.get_mut(parent) else {
             continue;
         };
         let (shape_box, labels, text_h) = measure(shape, size, small, node_width);
         let id = boxes.len();
         boxes.push(shape_box);
-        group.nodes.push(Node {
-            id,
-            labels,
-            shape: index,
-            text_h,
-        });
+        group.nodes.push(Node { id, labels, shape: index, text_h });
     }
 
     let per_row = db.shape_in_row.max(1.0);
@@ -319,30 +276,19 @@ pub(crate) fn layout_c4(db: &C4Db, size: f64, small: f64, room: Option<f64>, gap
         };
         let gap_x = if room.is_none() { GAP_X } else { gap };
         let node_ids: Vec<usize> = group.nodes.iter().map(|node| node.id).collect();
-        let kid_ids: Vec<usize> = group
-            .kids
-            .iter()
-            .filter_map(|&kid| groups.get(kid).map(|g| g.id))
-            .collect();
+        let kid_ids: Vec<usize> = group.kids.iter().filter_map(|&kid| groups.get(kid).map(|g| g.id)).collect();
         let node_count = count(&boxes, &node_ids, room, per_row, gap_x, group_pad);
         let (grid_w, grid_h) = rows(&mut boxes, &node_ids, node_count, gap_x, GAP_Y, true);
         let kid_count = count(&boxes, &kid_ids, room, groups_per_row, GROUP_GAP, group_pad);
         let (kids_w, kids_h) = rows(&mut boxes, &kid_ids, kid_count, GROUP_GAP, GROUP_GAP, false);
-        let between = if grid_h > 0.0 && kids_h > 0.0 {
-            GROUP_GAP
-        } else {
-            0.0
-        };
+        let between = if grid_h > 0.0 && kids_h > 0.0 { GROUP_GAP } else { 0.0 };
         let frame = if at == 0 { 0.0 } else { group_pad };
         if let Some(top) = kids_top.get_mut(at) {
             *top = grid_h + between;
         }
         let (head, head_w, id) = (group.head, group.head_w, group.id);
         if let Some(b) = boxes.get_mut(id) {
-            b.w = grid_w
-                .max(kids_w)
-                .max(head_w + 2.0 * HEAD_LEFT - 2.0 * frame)
-                + 2.0 * frame;
+            b.w = grid_w.max(kids_w).max(head_w + 2.0 * HEAD_LEFT - 2.0 * frame) + 2.0 * frame;
             let head = if frame == 0.0 { 0.0 } else { head };
             b.h = head + grid_h + between + kids_h + frame;
         }
@@ -381,11 +327,5 @@ pub(crate) fn layout_c4(db: &C4Db, size: f64, small: f64, room: Option<f64>, gap
             *slot = Some(group.id);
         }
     }
-    Layout {
-        boxes,
-        boundary_boxes,
-        groups,
-        order,
-        shape_boxes,
-    }
+    Layout { boxes, boundary_boxes, groups, order, shape_boxes }
 }

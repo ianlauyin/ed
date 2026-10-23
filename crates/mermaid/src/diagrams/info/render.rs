@@ -4,7 +4,9 @@
 use super::model::InfoModel;
 use crate::diagrams::Rendered;
 use crate::svg::builder::label_svg;
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
 use crate::text::label::layout_label;
 use crate::text::measure::BOLD;
 
@@ -17,11 +19,7 @@ pub(crate) fn render(model: &InfoModel, options: &RenderOptions) -> Rendered {
     let pad = options.padding.unwrap_or(8.0);
 
     let title = layout_label(model.title.as_deref(), false, size, 4000.0, BOLD, None);
-    let title_height = if title.height > 0.0 {
-        title.height + 8.0
-    } else {
-        0.0
-    };
+    let title_height = if title.height > 0.0 { title.height + 8.0 } else { 0.0 };
     let text = layout_label(Some(VERSION), false, size, 4000.0, 0, None);
 
     let width = (title.width.max(text.width) + 2.0 * pad).ceil();
@@ -47,16 +45,8 @@ pub(crate) fn render(model: &InfoModel, options: &RenderOptions) -> Rendered {
         height,
         size,
         options,
-        Accessible {
-            acc_descr: model.acc_descr.as_deref(),
-            acc_title: model.acc_title.as_deref(),
-        },
+        Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
         &content,
     );
-    Rendered {
-        height,
-        links: Vec::new(),
-        svg,
-        width,
-    }
+    Rendered { height, links: Vec::new(), svg, width }
 }

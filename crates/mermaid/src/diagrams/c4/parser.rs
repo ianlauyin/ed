@@ -1,9 +1,11 @@
 //! The C4 parser. Port of Pele's `src/diagrams/c4/parser.ts`.
 
 use super::db::C4Db;
-use super::lexer::{Token, tokenize};
+use super::lexer::Token;
+use super::lexer::tokenize;
 use super::tokens::T;
-use super::types::{C4Attr, C4Named};
+use super::types::C4Attr;
+use super::types::C4Named;
 use crate::error::Error;
 use crate::text::label::trim;
 
@@ -48,10 +50,7 @@ enum P {
 }
 
 fn is_other(t: T) -> bool {
-    matches!(
-        t,
-        T::Title | T::AccDescription | T::AccTitle | T::AccDescr | T::AccDescrMultilineValue
-    )
+    matches!(t, T::Title | T::AccDescription | T::AccTitle | T::AccDescr | T::AccDescrMultilineValue)
 }
 
 fn is_diagram(t: T) -> bool {
@@ -98,18 +97,12 @@ impl<'a> Parser<'a> {
     }
 
     fn text(&self, at: usize) -> &'a str {
-        self.tokens
-            .get(at)
-            .and_then(|token| self.src.get(token.start..token.end))
-            .unwrap_or("")
+        self.tokens.get(at).and_then(|token| self.src.get(token.start..token.end)).unwrap_or("")
     }
 
     #[cold]
     fn fail(&self, expected: &str) -> Error {
-        let start = self
-            .tokens
-            .get(self.i)
-            .map_or(self.src.len(), |token| token.start);
+        let start = self.tokens.get(self.i).map_or(self.src.len(), |token| token.start);
         let t = self.t();
         if t == T::Error {
             return Error::syntax("c4", self.src, start, "", true);
@@ -267,10 +260,7 @@ impl<'a> Parser<'a> {
 /// `text.substring(skip + 1)` in UTF-16: the text after an ASCII keyword of `skip` bytes and the
 /// one whitespace character after it.
 fn after(text: &str, skip: usize) -> &str {
-    let space = text
-        .get(skip..)
-        .and_then(|rest| rest.chars().next())
-        .map_or(0, char::len_utf8);
+    let space = text.get(skip..).and_then(|rest| rest.chars().next()).map_or(0, char::len_utf8);
     text.get(skip + space..).unwrap_or("")
 }
 
@@ -282,11 +272,7 @@ fn after(text: &str, skip: usize) -> &str {
 ///
 /// Returns a syntax error for input Mermaid rejects.
 pub(crate) fn parse_c4(src: &str, db: &mut C4Db) -> Result<(), Error> {
-    let mut p = Parser {
-        i: 0,
-        src,
-        tokens: tokenize(src),
-    };
+    let mut p = Parser { i: 0, src, tokens: tokenize(src) };
 
     let header = p.t();
     if header < T::C4Context || header > T::C4Deployment {

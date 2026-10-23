@@ -2,13 +2,21 @@
 
 use super::db::IshikawaDb;
 use crate::diagrams::Rendered;
-use crate::diagrams::common::fit_width::{title_room, turn_to_fit};
+use crate::diagrams::common::fit_width::title_room;
+use crate::diagrams::common::fit_width::turn_to_fit;
 use crate::diagrams::common::literal_label::break_label;
-use crate::svg::builder::{esc_text, js_round, label_svg, push_num};
-use crate::svg::edges::{ARROW, marker};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::edges::ARROW;
+use crate::svg::edges::marker;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
 use crate::svg::theme::RADIUS;
-use crate::text::label::{Label, layout_label};
+use crate::text::label::Label;
+use crate::text::label::layout_label;
 use crate::text::measure::BOLD;
 use crate::yaml::push_number;
 
@@ -93,13 +101,7 @@ fn arrange(model: &IshikawaDb, node: usize, up: bool, size: f64, small: f64) -> 
         for slot in (0..n).rev() {
             let child = if up { n - 1 - slot } else { slot };
             if let Some(&child) = children.get(child) {
-                stack.push(Frame {
-                    bone: None,
-                    depth,
-                    node: child,
-                    parent,
-                    slot,
-                });
+                stack.push(Frame { bone: None, depth, node: child, parent, slot });
             }
         }
     };
@@ -152,13 +154,8 @@ fn arrange(model: &IshikawaDb, node: usize, up: bool, size: f64, small: f64) -> 
         };
         if bone.depth % 2 == 0 {
             bone.at = parent.map_or(0.0, |(at, _)| at);
-            bone.text_end = bone.at
-                - if bone.kids > 0 {
-                    usize_f64(bone.kids + 1) * TWIG_STEP
-                } else {
-                    STUB
-                }
-                - TEXT_GAP;
+            bone.text_end =
+                bone.at - if bone.kids > 0 { usize_f64(bone.kids + 1) * TWIG_STEP } else { STUB } - TEXT_GAP;
         } else {
             // Twigs stand along their level bone, the one nearest the spine nearest the tail.
             let (at, kids) = parent.unwrap_or((0.0, 0));
@@ -167,15 +164,7 @@ fn arrange(model: &IshikawaDb, node: usize, up: bool, size: f64, small: f64) -> 
         }
         reach = reach.max(bone.label.width - bone.text_end);
     }
-    Category {
-        bones,
-        box_h: label.height + 2.0 * BOX_PAD_Y,
-        box_w,
-        label,
-        reach,
-        rise: rise + BONE_END,
-        text,
-    }
+    Category { bones, box_h: label.height + 2.0 * BOX_PAD_Y, box_w, label, reach, rise: rise + BONE_END, text }
 }
 
 /// Draws an Ishikawa diagram, turned to run down when it does not fit the host's width.
@@ -191,11 +180,7 @@ fn draw(model: &IshikawaDb, options: &RenderOptions, down: bool) -> Rendered {
         return vertical_causes(model, options);
     }
     let title = layout_label(model.title.as_deref(), false, size, 4000.0, BOLD, None);
-    let title_height = if title.height > 0.0 {
-        title.height + 12.0
-    } else {
-        0.0
-    };
+    let title_height = if title.height > 0.0 { title.height + 12.0 } else { 0.0 };
 
     let mut body = String::new();
     let mut min_x = 0.0_f64;
@@ -206,12 +191,8 @@ fn draw(model: &IshikawaDb, options: &RenderOptions, down: bool) -> Rendered {
         let head = layout_label(Some(&root.text), false, size, 200.0, BOLD, None);
         let head_h = (head.height + 24.0).max(48.0);
         let head_w = head.width + 24.0 + head_h / 2.0;
-        let mut categories: Vec<Category<'_>> = root
-            .children
-            .iter()
-            .enumerate()
-            .map(|(i, &node)| arrange(model, node, i % 2 == 0, size, small))
-            .collect();
+        let mut categories: Vec<Category<'_>> =
+            root.children.iter().enumerate().map(|(i, &node)| arrange(model, node, i % 2 == 0, size, small)).collect();
         // Even a category without causes has a bone long enough to carry its name clear of the head.
         for category in &mut categories {
             category.rise = category.rise.max(head_h / 2.0 + 14.0);
@@ -238,11 +219,7 @@ fn draw(model: &IshikawaDb, options: &RenderOptions, down: bool) -> Rendered {
             xs.push(x);
             i += 2;
         }
-        let tail = if categories.is_empty() {
-            -HEAD_GAP
-        } else {
-            x - TAIL
-        };
+        let tail = if categories.is_empty() { -HEAD_GAP } else { x - TAIL };
 
         max_x = head_w;
         min_x = tail;
@@ -295,11 +272,7 @@ fn draw(model: &IshikawaDb, options: &RenderOptions, down: bool) -> Rendered {
                     &bone.label,
                     right - bone.label.width / 2.0,
                     y,
-                    if bone.depth > 2 {
-                        " fill=\"var(--_m)\""
-                    } else {
-                        ""
-                    },
+                    if bone.depth > 2 { " fill=\"var(--_m)\"" } else { "" },
                     None,
                 ));
                 min_x = min_x.min(right - bone.label.width);
@@ -315,14 +288,7 @@ fn draw(model: &IshikawaDb, options: &RenderOptions, down: bool) -> Rendered {
             groups.push_str("\"><path class=\"ondine-ishikawa-bones\" d=\"");
             groups.push_str(&d);
             groups.push_str("\" fill=\"none\" stroke=\"var(--_l)\"/>");
-            groups.push_str(&marker(
-                "arrow_point",
-                ax,
-                0.0,
-                SLANT / length,
-                -sign / length,
-                "var(--_l)",
-            ));
+            groups.push_str(&marker("arrow_point", ax, 0.0, SLANT / length, -sign / length, "var(--_l)"));
             groups.push_str("<rect x=\"");
             push_num(&mut groups, end_x - category.box_w / 2.0);
             groups.push_str("\" y=\"");
@@ -334,13 +300,7 @@ fn draw(model: &IshikawaDb, options: &RenderOptions, down: bool) -> Rendered {
             groups.push_str("\" rx=\"");
             groups.push_str(RADIUS);
             groups.push_str("\" fill=\"var(--_s)\" stroke=\"var(--_b)\"/>");
-            groups.push_str(&label_svg(
-                &category.label,
-                end_x,
-                box_y,
-                " class=\"ondine-label\"",
-                None,
-            ));
+            groups.push_str(&label_svg(&category.label, end_x, box_y, " class=\"ondine-label\"", None));
             if !texts.is_empty() {
                 groups.push_str("<g class=\"ondine-ishikawa-causes\" font-size=\"");
                 push_number(&mut groups, small);
@@ -405,21 +365,8 @@ fn draw(model: &IshikawaDb, options: &RenderOptions, down: bool) -> Rendered {
         content.push_str(&body);
         content.push_str("</g>");
     }
-    let svg = svg_document(
-        "ishikawa",
-        width,
-        height,
-        size,
-        options,
-        Accessible::default(),
-        &content,
-    );
-    Rendered {
-        height,
-        links: Vec::new(),
-        svg,
-        width,
-    }
+    let svg = svg_document("ishikawa", width, height, size, options, Accessible::default(), &content);
+    Rendered { height, links: Vec::new(), svg, width }
 }
 
 /// A line of the outline drawn running down.
@@ -439,34 +386,15 @@ fn vertical_causes(model: &IshikawaDb, options: &RenderOptions) -> Rendered {
     let small = js_round(size * 0.875);
     let pad = options.padding.unwrap_or(8.0);
     let room = 140.0_f64.max(options.max_width.unwrap_or(320.0) - 2.0 * pad);
-    let title = layout_label(
-        model.title.as_deref(),
-        false,
-        size,
-        title_room(options),
-        BOLD,
-        None,
-    );
+    let title = layout_label(model.title.as_deref(), false, size, title_room(options), BOLD, None);
 
     let mut order: Vec<Entry> = Vec::new();
-    let mut pending: Vec<(usize, usize, Option<usize>)> = if model.root().is_some() {
-        vec![(0, 0, None)]
-    } else {
-        Vec::new()
-    };
+    let mut pending: Vec<(usize, usize, Option<usize>)> =
+        if model.root().is_some() { vec![(0, 0, None)] } else { Vec::new() };
     let mut depth = 0;
     while let Some((node, own, parent)) = pending.pop() {
         let index = order.len();
-        order.push(Entry {
-            depth: own,
-            h: 0.0,
-            label: Label::default(),
-            node,
-            parent,
-            w: 0.0,
-            x: 0.0,
-            y: 0.0,
-        });
+        order.push(Entry { depth: own, h: 0.0, label: Label::default(), node, parent, w: 0.0, x: 0.0, y: 0.0 });
         depth = depth.max(own);
         if let Some(entry) = model.nodes.get(node) {
             for &child in entry.children.iter().rev() {
@@ -476,12 +404,7 @@ fn vertical_causes(model: &IshikawaDb, options: &RenderOptions) -> Rendered {
     }
 
     let indent = 20.0_f64.min(2.0_f64.max((room - 120.0) / usize_f64(depth.max(1))));
-    let mut y = pad
-        + if title.height > 0.0 {
-            title.height + 12.0
-        } else {
-            0.0
-        };
+    let mut y = pad + if title.height > 0.0 { title.height + 12.0 } else { 0.0 };
     let mut width = title.width;
     let mut nodes = String::new();
     let mut edges = String::new();
@@ -493,15 +416,8 @@ fn vertical_causes(model: &IshikawaDb, options: &RenderOptions) -> Rendered {
         let depth = usize_f64(entry.depth);
         entry.x = pad + depth * indent;
         let label_room = 60.0_f64.max(room - depth * indent - 20.0);
-        let (font, style) = if entry.depth < 2 {
-            (size, BOLD)
-        } else {
-            (small, 0)
-        };
-        entry.label = break_label(
-            &layout_label(Some(text), false, font, label_room, style, None),
-            label_room,
-        );
+        let (font, style) = if entry.depth < 2 { (size, BOLD) } else { (small, 0) };
+        entry.label = break_label(&layout_label(Some(text), false, font, label_room, style, None), label_room);
         entry.w = entry.label.width + 20.0;
         entry.h = entry.label.height + 12.0;
         entry.y = y;
@@ -527,11 +443,7 @@ fn vertical_causes(model: &IshikawaDb, options: &RenderOptions) -> Rendered {
             push_num(&mut nodes, entry.w);
             nodes.push_str("\" height=\"");
             push_num(&mut nodes, entry.h);
-            nodes.push_str(if entry.depth == 0 {
-                "\" rx=\"12\""
-            } else {
-                "\" rx=\"4\""
-            });
+            nodes.push_str(if entry.depth == 0 { "\" rx=\"12\"" } else { "\" rx=\"4\"" });
             nodes.push_str(" fill=\"var(--_s)\" stroke=\"var(--_b)\"/>");
         }
         let mut attrs = String::from(" class=\"ondine-label\"");
@@ -543,13 +455,7 @@ fn vertical_causes(model: &IshikawaDb, options: &RenderOptions) -> Rendered {
             push_number(&mut attrs, small);
             attrs.push('"');
         }
-        nodes.push_str(&label_svg(
-            &entry.label,
-            entry.x + entry.w / 2.0,
-            entry.y + entry.h / 2.0,
-            &attrs,
-            None,
-        ));
+        nodes.push_str(&label_svg(&entry.label, entry.x + entry.w / 2.0, entry.y + entry.h / 2.0, &attrs, None));
         nodes.push_str("</g>");
 
         let (x, top, h) = (entry.x, entry.y, entry.h);
@@ -581,15 +487,7 @@ fn vertical_causes(model: &IshikawaDb, options: &RenderOptions) -> Rendered {
     Rendered {
         height,
         links: Vec::new(),
-        svg: svg_document(
-            "ishikawa",
-            total_width,
-            height,
-            size,
-            options,
-            Accessible::default(),
-            &content,
-        ),
+        svg: svg_document("ishikawa", total_width, height, size, options, Accessible::default(), &content),
         width: total_width,
     }
 }

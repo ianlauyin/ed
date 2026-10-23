@@ -1,20 +1,43 @@
 //! Lays out and draws a sequence diagram. Port of Pele's `src/diagrams/sequence/render.ts`.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
-use super::actors::{ActorSize, actor_kind, actor_size, draw_actor, is_figure};
+use super::actors::ActorSize;
+use super::actors::actor_kind;
+use super::actors::actor_size;
+use super::actors::draw_actor;
+use super::actors::is_figure;
 use super::db::SeqDb;
-use super::types::{MessageText, SeqActor, SeqMessage, line, placement};
+use super::types::MessageText;
+use super::types::SeqActor;
+use super::types::SeqMessage;
+use super::types::line;
+use super::types::placement;
 use crate::diagrams::Rendered;
-use crate::diagrams::common::fit_width::{tighten, title_room};
+use crate::diagrams::common::fit_width::tighten;
+use crate::diagrams::common::fit_width::title_room;
 use crate::diagrams::common::literal_label::break_label;
-use crate::svg::builder::{esc, esc_text, js_round, label_svg, num, push_num};
-use crate::svg::edges::{ARROW, marker};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
-use crate::svg::theme::{RADIUS, class_names, resolve_style};
-use crate::text::label::{Label, layout_label};
-use crate::text::measure::{BOLD, width as measure};
-use crate::yaml::{Value, push_number};
+use crate::svg::builder::esc;
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::num;
+use crate::svg::builder::push_num;
+use crate::svg::edges::ARROW;
+use crate::svg::edges::marker;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
+use crate::svg::theme::RADIUS;
+use crate::svg::theme::class_names;
+use crate::svg::theme::resolve_style;
+use crate::text::label::Label;
+use crate::text::label::layout_label;
+use crate::text::measure::BOLD;
+use crate::text::measure::width as measure;
+use crate::yaml::Value;
+use crate::yaml::push_number;
 
 /// The head drawn at a message's end.
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -151,11 +174,7 @@ pub(crate) fn number_messages(messages: &[SeqMessage], always: bool) -> Numberin
             current = js_round((current + step) * 100.0) / 100.0;
         }
     }
-    Numbering {
-        index,
-        shown,
-        visible,
-    }
+    Numbering { index, shown, visible }
 }
 
 /// A participant's column.
@@ -314,10 +333,7 @@ pub(crate) fn render(db: &SeqDb, config: &Value, options: &RenderOptions) -> Ren
     tighten(options, |tight| draw(db, config, options, tight))
 }
 
-#[expect(
-    clippy::many_single_char_names,
-    reason = "mirrors the names of Pele's draw"
-)]
+#[expect(clippy::many_single_char_names, reason = "mirrors the names of Pele's draw")]
 fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Rendered {
     let conf = get(Some(config), "sequence");
     let size = options.font_size.unwrap_or(16.0);
@@ -334,11 +350,7 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
     let actor_count = db.actors.len() as f64;
     let wrap_w = loose(
         option(conf, "width", 160.0),
-        32.0_f64.max(
-            (options.max_width.unwrap_or(320.0) - 2.0 * pad) / actor_count.max(1.0)
-                - actor_margin
-                - 24.0,
-        ),
+        32.0_f64.max((options.max_width.unwrap_or(320.0) - 2.0 * pad) / actor_count.max(1.0) - actor_margin - 24.0),
     );
     // Mermaid's default of 35 corresponds to Pele's default gap. Other values move it by the
     // difference.
@@ -357,44 +369,20 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
     let frame_nest = if tight { 6.0 } else { FRAME_NEST };
     let messages = &db.messages;
     let count = messages.len();
-    let numbering = number_messages(
-        messages,
-        get(conf, "showSequenceNumbers") == Some(&Value::Bool(true)),
-    );
+    let numbering = number_messages(messages, get(conf, "showSequenceNumbers") == Some(&Value::Bool(true)));
     let text = |raw: Option<&str>, font_size: f64, wrap: bool, width: f64, base: u8| -> Label {
-        let label = layout_label(
-            raw,
-            false,
-            font_size,
-            if tight || wrap { width } else { f64::INFINITY },
-            base,
-            None,
-        );
-        if tight {
-            break_label(&label, width.max(120.0))
-        } else {
-            label
-        }
+        let label = layout_label(raw, false, font_size, if tight || wrap { width } else { f64::INFINITY }, base, None);
+        if tight { break_label(&label, width.max(120.0)) } else { label }
     };
 
-    let used: Option<BTreeSet<&str>> =
-        (get(conf, "hideUnusedParticipants") == Some(&Value::Bool(true))).then(|| {
-            messages
-                .iter()
-                .flat_map(|m| [m.from.as_deref(), m.to.as_deref()])
-                .flatten()
-                .collect()
-        });
+    let used: Option<BTreeSet<&str>> = (get(conf, "hideUnusedParticipants") == Some(&Value::Bool(true)))
+        .then(|| messages.iter().flat_map(|m| [m.from.as_deref(), m.to.as_deref()]).flatten().collect());
 
     let mut next_line: Vec<Option<usize>> = vec![None; count + 1];
     for i in (0..count).rev() {
         let next = next_line.get(i + 1).copied().flatten();
         if let Some(slot) = next_line.get_mut(i) {
-            *slot = if messages.get(i).is_some_and(|m| is_line_message(m.r#type)) {
-                Some(i)
-            } else {
-                next
-            };
+            *slot = if messages.get(i).is_some_and(|m| is_line_message(m.r#type)) { Some(i) } else { next };
         }
     }
     let line_after = |at: usize| next_line.get(at.min(count)).copied().flatten();
@@ -408,25 +396,12 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
         }
         let kind = actor_kind(&actor.r#type);
         let label = text(Some(&actor.description), size, actor.wrap, wrap_w, 0);
-        let created = db
-            .created_actors
-            .iter()
-            .find(|(own, _)| own == id)
-            .map(|&(_, at)| at);
-        let destroyed = db
-            .destroyed_actors
-            .iter()
-            .find(|(own, _)| own == id)
-            .map(|&(_, at)| at);
-        let create_at = created.and_then(line_after).filter(|&at| {
-            messages
-                .get(at)
-                .is_some_and(|m| m.to.as_deref() == Some(id))
-        });
+        let created = db.created_actors.iter().find(|(own, _)| own == id).map(|&(_, at)| at);
+        let destroyed = db.destroyed_actors.iter().find(|(own, _)| own == id).map(|&(_, at)| at);
+        let create_at =
+            created.and_then(line_after).filter(|&at| messages.get(at).is_some_and(|m| m.to.as_deref() == Some(id)));
         let destroy_at = destroyed.and_then(line_after).filter(|&at| {
-            messages
-                .get(at)
-                .is_some_and(|m| m.to.as_deref() == Some(id) || m.from.as_deref() == Some(id))
+            messages.get(at).is_some_and(|m| m.to.as_deref() == Some(id) || m.from.as_deref() == Some(id))
         });
         col_of.insert(id, cols.len());
         let size = actor_size(kind, &label, min_w, min_h, tight.then_some(8.0));
@@ -465,10 +440,7 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
     let badge_width = |i: usize| {
         if numbering.shown.get(i).copied().unwrap_or(false) {
             let mut label = String::new();
-            push_number(
-                &mut label,
-                numbering.index.get(i).copied().unwrap_or(f64::NAN),
-            );
+            push_number(&mut label, numbering.index.get(i).copied().unwrap_or(f64::NAN));
             BADGE_H.max(measure(&label, tiny, 0) + 8.0)
         } else {
             0.0
@@ -496,59 +468,19 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
             } else {
                 need(Some(a.min(b)), a.max(b), w - 2.0 * note_over);
             }
-            views.push(Some(View {
-                a,
-                b,
-                kind: V::Note,
-                label,
-                w,
-                x: 0.0,
-            }));
+            views.push(Some(View { a, b, kind: V::Note, label, w, x: 0.0 }));
         } else if is_line_message(m.r#type) {
             let label = text(Some(raw), small, m.wrap, wrap_w, 0);
             let badge = badge_width(i);
             if a == b {
-                need(
-                    Some(a),
-                    a + 1,
-                    SELF_W + 8.0 + label.width + 16.0 + ACT_W + badge,
-                );
-                views.push(Some(View {
-                    a,
-                    b,
-                    kind: V::SelfLoop,
-                    label,
-                    w: 0.0,
-                    x: 0.0,
-                }));
+                need(Some(a), a + 1, SELF_W + 8.0 + label.width + 16.0 + ACT_W + badge);
+                views.push(Some(View { a, b, kind: V::SelfLoop, label, w: 0.0, x: 0.0 }));
             } else {
-                let created = cols
-                    .get(b)
-                    .filter(|col| col.create_at == Some(i))
-                    .map_or(0.0, |col| col.size.w / 2.0);
-                let central = if m.central_connection.is_some_and(|c| c != 0) {
-                    4.0 * CENTRAL_R
-                } else {
-                    0.0
-                };
-                let width = if tight {
-                    label.width.min(16.0_f64.max(wrap_w - 16.0))
-                } else {
-                    label.width
-                };
-                need(
-                    Some(a.min(b)),
-                    a.max(b),
-                    width + 2.0 * msg_pad + ACT_W + badge + created + central,
-                );
-                views.push(Some(View {
-                    a,
-                    b,
-                    kind: V::Line,
-                    label,
-                    w: 0.0,
-                    x: 0.0,
-                }));
+                let created = cols.get(b).filter(|col| col.create_at == Some(i)).map_or(0.0, |col| col.size.w / 2.0);
+                let central = if m.central_connection.is_some_and(|c| c != 0) { 4.0 * CENTRAL_R } else { 0.0 };
+                let width = if tight { label.width.min(16.0_f64.max(wrap_w - 16.0)) } else { label.width };
+                need(Some(a.min(b)), a.max(b), width + 2.0 * msg_pad + ACT_W + badge + created + central);
+                views.push(Some(View { a, b, kind: V::Line, label, w: 0.0, x: 0.0 }));
             }
         } else {
             views.push(None);
@@ -573,13 +505,7 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
             first: i,
             grow: 0.0,
             last: i,
-            title: text(
-                r#box.and_then(|b| b.name.as_deref()),
-                small,
-                r#box.is_some_and(|b| b.wrap),
-                wrap_w,
-                0,
-            ),
+            title: text(r#box.and_then(|b| b.name.as_deref()), small, r#box.is_some_and(|b| b.wrap), wrap_w, 0),
         });
     }
 
@@ -601,11 +527,8 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
     }
     // A message across several lifelines widens each gap it crosses by an equal share of what is
     // missing.
-    let mut spans: Vec<(usize, usize, f64)> = needs
-        .iter()
-        .filter(|&(&(lo, hi), _)| hi - lo > 1)
-        .map(|(&(lo, hi), &width)| (lo, hi, width))
-        .collect();
+    let mut spans: Vec<(usize, usize, f64)> =
+        needs.iter().filter(|&(&(lo, hi), _)| hi - lo > 1).map(|(&(lo, hi), &width)| (lo, hi, width)).collect();
     spans.sort_by_key(|p| (p.1 - p.0, p.0));
     for (lo, hi, width) in spans {
         let total: f64 = gaps.get(lo..hi).map_or(0.0, |g| g.iter().sum());
@@ -649,10 +572,7 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
     }
     place(&mut cols, &gaps);
 
-    let mut bounds = Bounds {
-        max_x: f64::NEG_INFINITY,
-        min_x: f64::INFINITY,
-    };
+    let mut bounds = Bounds { max_x: f64::NEG_INFINITY, min_x: f64::INFINITY };
     for col in &cols {
         bounds.extend(col.x - col.size.w / 2.0, col.x + col.size.w / 2.0);
     }
@@ -668,11 +588,7 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
     let mut frame_at: Vec<Option<usize>> = vec![None; count];
     let mut open: Vec<usize> = Vec::new();
     let span_all = |cols: &[Column]| {
-        if n == 0 {
-            (0.0, 120.0)
-        } else {
-            (col_x(cols, 0) - frame_pad, col_x(cols, n - 1) + frame_pad)
-        }
+        if n == 0 { (0.0, 120.0) } else { (col_x(cols, 0) - frame_pad, col_x(cols, n - 1) + frame_pad) }
     };
     for (i, m) in messages.iter().enumerate() {
         let r#type = m.r#type;
@@ -697,10 +613,7 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
                 x0: f64::INFINITY,
                 x1: f64::NEG_INFINITY,
             });
-        } else if matches!(
-            r#type,
-            Some(line::ALT_ELSE | line::PAR_AND | line::CRITICAL_OPTION)
-        ) {
+        } else if matches!(r#type, Some(line::ALT_ELSE | line::PAR_AND | line::CRITICAL_OPTION)) {
             if let Some(frame) = open.last().and_then(|&at| frames.get_mut(at)) {
                 frame.dividers.push(i);
             }
@@ -733,29 +646,14 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
                 // A block grows to the right to give its texts up to FRAME_TEXT of width before
                 // they wrap.
                 for k in 0..frame.dividers.len() {
-                    let raw = frame
-                        .dividers
-                        .get(k)
-                        .and_then(|&d| messages.get(d))
-                        .and_then(message_text)
-                        .unwrap_or("");
+                    let raw = frame.dividers.get(k).and_then(|&d| messages.get(d)).and_then(message_text).unwrap_or("");
                     let tab = if k == 0 { frame.tab_w + 8.0 } else { 0.0 };
                     let room = frame.x1 - frame.x0 - 16.0 - tab;
                     let label = if raw.is_empty() {
                         Label::default()
                     } else {
-                        let least = if tight {
-                            FRAME_TEXT.min(wrap_w)
-                        } else {
-                            FRAME_TEXT
-                        };
-                        text(
-                            Some(&["[", raw, "]"].concat()),
-                            small,
-                            true,
-                            room.max(least),
-                            0,
-                        )
+                        let least = if tight { FRAME_TEXT.min(wrap_w) } else { FRAME_TEXT };
+                        text(Some(&["[", raw, "]"].concat()), small, true, room.max(least), 0)
                     };
                     if label.width > room {
                         frame.x1 += label.width - room;
@@ -789,34 +687,19 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
                         let lo = a.x.min(b.x) - note_over;
                         let hi = a.x.max(b.x) + note_over;
                         if tight || m.wrap {
-                            view.label = text(
-                                message_text(m),
-                                small,
-                                true,
-                                wrap_w.max(hi - lo - 2.0 * note_pad),
-                                0,
-                            );
+                            view.label = text(message_text(m), small, true, wrap_w.max(hi - lo - 2.0 * note_pad), 0);
                         }
                         view.w = (hi - lo).max(view.label.width + 2.0 * note_pad);
                         view.x = (lo + hi - view.w) / 2.0;
                     }
                     (view.x, view.x + view.w)
                 }
-                V::SelfLoop => (
-                    a.x,
-                    a.x + ACT_W + SELF_W + 8.0 + view.label.width + badge_width(i),
-                ),
+                V::SelfLoop => (a.x, a.x + ACT_W + SELF_W + 8.0 + view.label.width + badge_width(i)),
                 V::Line => {
                     let mut x0 = a.x.min(b.x);
                     let mut x1 = a.x.max(b.x);
                     if tight || m.wrap {
-                        view.label = text(
-                            message_text(m),
-                            small,
-                            true,
-                            wrap_w.max(x1 - x0 - 2.0 * msg_pad - ACT_W),
-                            0,
-                        );
+                        view.label = text(message_text(m), small, true, wrap_w.max(x1 - x0 - 2.0 * msg_pad - ACT_W), 0);
                     }
                     if b.create_at == Some(i) {
                         if b.x > a.x {
@@ -841,16 +724,7 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
     for run in &runs {
         box_title_h = box_title_h.max(run.title.height);
     }
-    let box_top = if runs.is_empty() {
-        0.0
-    } else {
-        box_pad
-            + if box_title_h > 0.0 {
-                box_title_h + 4.0
-            } else {
-                0.0
-            }
-    };
+    let box_top = if runs.is_empty() { 0.0 } else { box_pad + if box_title_h > 0.0 { box_title_h + 4.0 } else { 0.0 } };
     let mut row_h: f64 = 0.0;
     for col in &cols {
         if col.create_at.is_none() {
@@ -890,11 +764,7 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
         out
     };
     let left_edge = |col: &Column, extra: usize| {
-        if col.activations.len() + extra > 0 {
-            col.x - ACT_W / 2.0
-        } else {
-            col.x
-        }
+        if col.activations.len() + extra > 0 { col.x - ACT_W / 2.0 } else { col.x }
     };
     let right_edge = |col: &Column, extra: usize| {
         let depth = col.activations.len() + extra;
@@ -917,11 +787,7 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
     let mut notes_out = String::new();
     let mut actors_out = String::new();
     let mut crosses_out = String::new();
-    let end_activation = |col: &mut Column,
-                          end: f64,
-                          bounds: &mut Bounds,
-                          activations_out: &mut Vec<String>|
-     -> f64 {
+    let end_activation = |col: &mut Column, end: f64, bounds: &mut Bounds, activations_out: &mut Vec<String>| -> f64 {
         let Some(start) = col.activations.pop() else {
             return end;
         };
@@ -953,14 +819,9 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
         crosses_out.push_str("<path class=\"ondine-destroy\" data-id=\"");
         crosses_out.push_str(&esc_text(col.id));
         crosses_out.push_str("\" d=\"M");
-        for (k, (x, y)) in [
-            (cx - 6.0, cy - 6.0),
-            (cx + 6.0, cy + 6.0),
-            (cx + 6.0, cy - 6.0),
-            (cx - 6.0, cy + 6.0),
-        ]
-        .into_iter()
-        .enumerate()
+        for (k, (x, y)) in [(cx - 6.0, cy - 6.0), (cx + 6.0, cy + 6.0), (cx + 6.0, cy - 6.0), (cx - 6.0, cy + 6.0)]
+            .into_iter()
+            .enumerate()
         {
             if k > 0 {
                 crosses_out.push(if k == 2 { 'M' } else { 'L' });
@@ -978,9 +839,7 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
         if footer {
             out.push_str(" ondine-actor-footer");
         }
-        if let Some((_, Value::String(cls))) =
-            col.actor.properties.iter().find(|(key, _)| key == "class")
-        {
+        if let Some((_, Value::String(cls))) = col.actor.properties.iter().find(|(key, _)| key == "class") {
             out.push_str(&class_names(cls));
         }
         out.push_str("\" data-id=\"");
@@ -1009,10 +868,7 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
         push_number(&mut out, tiny);
         out.push_str("\" fill=\"var(--_bg)\" stroke=\"none\">");
         let mut number = String::new();
-        push_number(
-            &mut number,
-            numbering.index.get(i).copied().unwrap_or(f64::NAN),
-        );
+        push_number(&mut number, numbering.index.get(i).copied().unwrap_or(f64::NAN));
         out.push_str(&esc(&number));
         out.push_str("</text></g>");
         out
@@ -1037,9 +893,7 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
                 y = y.max(end_activation(col, y, &mut bounds, &mut activations_out));
             }
         } else if let Some(at) = frame
-            && frames
-                .get(at)
-                .is_some_and(|f| f.dividers.first() == Some(&i))
+            && frames.get(at).is_some_and(|f| f.dividers.first() == Some(&i))
         {
             stack.push(at);
             if let Some(frame) = frames.get_mut(at) {
@@ -1080,11 +934,7 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
                         "\" rx=\"",
                         RADIUS,
                         "\"",
-                        if fill.is_empty() {
-                            " fill-opacity=\"0.5\""
-                        } else {
-                            ""
-                        },
+                        if fill.is_empty() { " fill-opacity=\"0.5\"" } else { "" },
                         &fill,
                         "/>",
                     ]
@@ -1156,15 +1006,9 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
                 frames_out.push_str("</g>");
             }
             y = bottom;
-        } else if matches!(
-            r#type,
-            Some(line::ALT_ELSE | line::PAR_AND | line::CRITICAL_OPTION)
-        ) {
+        } else if matches!(r#type, Some(line::ALT_ELSE | line::PAR_AND | line::CRITICAL_OPTION)) {
             if let Some(current) = stack.last().and_then(|&at| frames.get_mut(at)) {
-                let height = current
-                    .divider_labels
-                    .get(current.divider_y.len())
-                    .map_or(0.0, |label| label.height);
+                let height = current.divider_labels.get(current.divider_y.len()).map_or(0.0, |label| label.height);
                 current.divider_y.push(y + 12.0);
                 y += 12.0 + if height > 0.0 { height } else { 0.0 };
             }
@@ -1222,11 +1066,7 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
                     }
                 } else if !matches!(
                     t,
-                    Some(
-                        line::ACTIVE_END
-                            | line::CENTRAL_CONNECTION
-                            | line::CENTRAL_CONNECTION_REVERSE
-                    )
+                    Some(line::ACTIVE_END | line::CENTRAL_CONNECTION | line::CENTRAL_CONNECTION_REVERSE)
                 ) {
                     break;
                 }
@@ -1234,14 +1074,8 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
             let up = if st.bottom { 1.0 } else { -1.0 };
             let attrs = if st.dotted { DASH } else { "" };
             let cc = m.central_connection;
-            let circle_to = matches!(
-                cc,
-                Some(line::CENTRAL_CONNECTION | line::CENTRAL_CONNECTION_DUAL)
-            );
-            let circle_from = matches!(
-                cc,
-                Some(line::CENTRAL_CONNECTION_REVERSE | line::CENTRAL_CONNECTION_DUAL)
-            );
+            let circle_to = matches!(cc, Some(line::CENTRAL_CONNECTION | line::CENTRAL_CONNECTION_DUAL));
+            let circle_from = matches!(cc, Some(line::CENTRAL_CONNECTION_REVERSE | line::CENTRAL_CONNECTION_DUAL));
             let circle = |out: &mut String, cx: f64, cy: f64| {
                 out.push_str("<circle class=\"ondine-central\" cx=\"");
                 push_num(out, cx);
@@ -1265,16 +1099,8 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
                 };
                 let top = y + msg_gap + 0.0_f64.max((label.height - SELF_H) / 2.0);
                 let bottom = top + SELF_H;
-                let mut x0 = if circle_from {
-                    a.x + CENTRAL_R
-                } else {
-                    right_edge(a, 0)
-                };
-                let mut x1 = if circle_to {
-                    a.x + CENTRAL_R
-                } else {
-                    right_edge(a, starting)
-                };
+                let mut x0 = if circle_from { a.x + CENTRAL_R } else { right_edge(a, 0) };
+                let mut x1 = if circle_to { a.x + CENTRAL_R } else { right_edge(a, starting) };
                 let out = x0.max(x1) + SELF_W + bw / 2.0;
                 if circle_from {
                     circle(&mut extra, a.x, top);
@@ -1352,26 +1178,13 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
                 let creating = b.create_at == Some(i);
                 line_y = y
                     + msg_gap
-                    + (if label.height > 0.0 {
-                        label.height + 2.0
-                    } else {
-                        6.0
-                    })
-                    .max(if creating {
+                    + (if label.height > 0.0 { label.height + 2.0 } else { 6.0 }).max(if creating {
                         b.size.h / 2.0 - msg_gap + 6.0
                     } else {
                         0.0
                     });
-                let mut x0 = if dir > 0.0 {
-                    right_edge(a, 0)
-                } else {
-                    left_edge(a, 0)
-                };
-                let mut x1 = if dir > 0.0 {
-                    left_edge(b, starting)
-                } else {
-                    right_edge(b, starting)
-                };
+                let mut x0 = if dir > 0.0 { right_edge(a, 0) } else { left_edge(a, 0) };
+                let mut x1 = if dir > 0.0 { left_edge(b, starting) } else { right_edge(b, starting) };
                 let (b_x, b_size, b_kind) = (b.x, b.size, b.kind);
                 let a_x = a.x;
                 if creating {
@@ -1379,13 +1192,7 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
                         b.top = line_y - b_size.h / 2.0;
                         b.life_start = b.top + b_size.h;
                     }
-                    x1 = b_x
-                        - dir
-                            * if is_figure(b_kind) {
-                                18.0
-                            } else {
-                                b_size.w / 2.0 + 1.0
-                            };
+                    x1 = b_x - dir * if is_figure(b_kind) { 18.0 } else { b_size.w / 2.0 + 1.0 };
                 }
                 if circle_from {
                     circle(&mut extra, a_x, line_y);
@@ -1399,19 +1206,11 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
                     // The number sits on the lifeline at the tail of the arrow, past a connection
                     // circle if there is one.
                     if tail_at_end {
-                        let cx = if circle_to {
-                            x1 - dir * (bw / 2.0 + 2.0)
-                        } else {
-                            x1
-                        };
+                        let cx = if circle_to { x1 - dir * (bw / 2.0 + 2.0) } else { x1 };
                         extra.push_str(&badge(i, cx, line_y, bw));
                         x1 = cx - (dir * bw) / 2.0;
                     } else {
-                        let cx = if circle_from {
-                            x0 + dir * (bw / 2.0 + 2.0)
-                        } else {
-                            x0
-                        };
+                        let cx = if circle_from { x0 + dir * (bw / 2.0 + 2.0) } else { x0 };
                         extra.push_str(&badge(i, cx, line_y, bw));
                         x0 = cx + (dir * bw) / 2.0;
                     }
@@ -1515,16 +1314,11 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
         let x1 = col_x(&cols, run.last) + col_w(&cols, run.last) / 2.0 + box_pad + run.grow;
         let r#box = db.boxes.get(run.r#box);
         let fill = match r#box {
-            Some(b) if b.fill != "transparent" => {
-                resolve_style(&[["fill:", &b.fill].concat()]).shape
-            }
+            Some(b) if b.fill != "transparent" => resolve_style(&[["fill:", &b.fill].concat()]).shape,
             _ => String::new(),
         };
         boxes_out.push_str("<g class=\"ondine-cluster ondine-box\"");
-        if let Some(name) = r#box
-            .and_then(|b| b.name.as_deref())
-            .filter(|name| !name.is_empty())
-        {
+        if let Some(name) = r#box.and_then(|b| b.name.as_deref()).filter(|name| !name.is_empty()) {
             boxes_out.push_str(" data-id=\"");
             boxes_out.push_str(&esc_text(name));
             boxes_out.push('"');
@@ -1558,13 +1352,7 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
 
     let mut min_y = 0.0;
     let mut title_out = String::new();
-    let title = text(
-        db.title.as_deref(),
-        size,
-        false,
-        if tight { title_room(options) } else { wrap_w },
-        BOLD,
-    );
+    let title = text(db.title.as_deref(), size, false, if tight { title_room(options) } else { wrap_w }, BOLD);
     if bounds.min_x > bounds.max_x {
         bounds.extend(0.0, title.width.max(40.0));
     }
@@ -1598,22 +1386,10 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
     };
     let mut small_attr = String::new();
     push_number(&mut small_attr, small);
-    group(
-        &mut content,
-        &["<g class=\"ondine-boxes\" font-size=\"", &small_attr, "\">"].concat(),
-        &boxes_out,
-    );
+    group(&mut content, &["<g class=\"ondine-boxes\" font-size=\"", &small_attr, "\">"].concat(), &boxes_out);
     rects_out.reverse();
-    group(
-        &mut content,
-        "<g class=\"ondine-rects\" fill=\"var(--_a)\">",
-        &rects_out.concat(),
-    );
-    group(
-        &mut content,
-        "<g class=\"ondine-lifelines\" fill=\"none\" stroke=\"var(--_b)\">",
-        &lifelines,
-    );
+    group(&mut content, "<g class=\"ondine-rects\" fill=\"var(--_a)\">", &rects_out.concat());
+    group(&mut content, "<g class=\"ondine-lifelines\" fill=\"none\" stroke=\"var(--_b)\">", &lifelines);
     activations_out.reverse();
     group(
         &mut content,
@@ -1622,12 +1398,7 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
     );
     group(
         &mut content,
-        &[
-            "<g class=\"ondine-frames\" font-size=\"",
-            &small_attr,
-            "\" stroke=\"var(--_b)\">",
-        ]
-        .concat(),
+        &["<g class=\"ondine-frames\" font-size=\"", &small_attr, "\" stroke=\"var(--_b)\">"].concat(),
         &frames_out,
     );
     group(
@@ -1640,40 +1411,17 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
         "<g class=\"ondine-destroys\" fill=\"none\" stroke=\"var(--_l)\" stroke-width=\"1.5\" stroke-linecap=\"round\">",
         &crosses_out,
     );
+    group(&mut content, &["<g class=\"ondine-edge-labels\" font-size=\"", &small_attr, "\">"].concat(), &labels_out);
     group(
         &mut content,
-        &[
-            "<g class=\"ondine-edge-labels\" font-size=\"",
-            &small_attr,
-            "\">",
-        ]
-        .concat(),
-        &labels_out,
-    );
-    group(
-        &mut content,
-        &[
-            "<g class=\"ondine-notes\" font-size=\"",
-            &small_attr,
-            "\" fill=\"var(--_a)\" stroke=\"var(--_b)\">",
-        ]
-        .concat(),
+        &["<g class=\"ondine-notes\" font-size=\"", &small_attr, "\" fill=\"var(--_a)\" stroke=\"var(--_b)\">"]
+            .concat(),
         &notes_out,
     );
     group(&mut content, "<g class=\"ondine-nodes\">", &actors_out);
     content.push_str("</g>");
 
-    let accessible = Accessible {
-        acc_descr: db.acc_descr.as_deref(),
-        acc_title: db.acc_title.as_deref(),
-    };
-    let svg = svg_document(
-        "sequence", width, height, size, options, accessible, &content,
-    );
-    Rendered {
-        height,
-        links: Vec::new(),
-        svg,
-        width,
-    }
+    let accessible = Accessible { acc_descr: db.acc_descr.as_deref(), acc_title: db.acc_title.as_deref() };
+    let svg = svg_document("sequence", width, height, size, options, accessible, &content);
+    Rendered { height, links: Vec::new(), svg, width }
 }

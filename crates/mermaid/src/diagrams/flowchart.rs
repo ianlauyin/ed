@@ -10,30 +10,19 @@ pub(crate) mod shapes;
 pub(crate) mod tokens;
 pub(crate) mod types;
 
-use super::{Diagram, Input, Rendered};
+use super::Diagram;
+use super::Input;
+use super::Rendered;
 use crate::error::Error;
 use crate::svg::root::RenderOptions;
 use crate::util::url::UrlOptions;
 use crate::yaml::Value;
 
 /// The `flowchart` diagram type.
-pub(crate) const DIAGRAM: Diagram = Diagram {
-    keep_comments: false,
-    render: render_input,
-    section: None,
-};
+pub(crate) const DIAGRAM: Diagram = Diagram { keep_comments: false, render: render_input, section: None };
 
-fn render_input(
-    input: &Input<'_>,
-    options: &RenderOptions,
-    url: &UrlOptions<'_>,
-) -> Result<Rendered, Error> {
-    let db = parse(
-        input.source,
-        input.config,
-        input.title,
-        Some(input.max_edges),
-    )?;
+fn render_input(input: &Input<'_>, options: &RenderOptions, url: &UrlOptions<'_>) -> Result<Rendered, Error> {
+    let db = parse(input.source, input.config, input.title, Some(input.max_edges))?;
     Ok(render::render(&db, input.config, options, url, None))
 }
 
@@ -54,14 +43,9 @@ pub(crate) fn parse(
     title: Option<&str>,
     max_edges: Option<usize>,
 ) -> Result<Model, Error> {
-    let inherit_dir = matches!(
-        property(config, "flowchart").and_then(|flow| property(flow, "inheritDir")),
-        Some(Value::Bool(true))
-    );
-    let mut db = Model::new(db::Options {
-        inherit_dir,
-        max_edges,
-    });
+    let inherit_dir =
+        matches!(property(config, "flowchart").and_then(|flow| property(flow, "inheritDir")), Some(Value::Bool(true)));
+    let mut db = Model::new(db::Options { inherit_dir, max_edges });
     if let Some(title) = title.filter(|title| !title.is_empty()) {
         db.title = Some(title.to_owned());
     }
@@ -74,10 +58,7 @@ fn property<'v>(value: &'v Value, key: &str) -> Option<&'v Value> {
     let Value::Object(entries) = value else {
         return None;
     };
-    entries
-        .iter()
-        .find(|(own, _)| own == key)
-        .map(|(_, value)| value)
+    entries.iter().find(|(own, _)| own == key).map(|(_, value)| value)
 }
 
 /// Serializes `model` as `JSON.stringify` serializes Pele's parsed `FlowDb` after this
@@ -116,7 +97,6 @@ fn property<'v>(value: &'v Value, key: &str) -> Option<&'v Value> {
 ///   title: db.title, accTitle: db.accTitle, accDescr: db.accDescr,
 /// });
 /// ```
-#[cfg(feature = "model")]
 pub(crate) fn to_json(model: &Model) -> String {
     let mut json = json::Writer::default();
     json.open('{');
@@ -195,11 +175,7 @@ pub(crate) fn to_json(model: &Model) -> String {
         json.strings(&edge.classes);
         json.optional_string("id", edge.id.as_deref());
         json.key("isUserDefinedId");
-        json.raw(if edge.is_user_defined_id {
-            "true"
-        } else {
-            "false"
-        });
+        json.raw(if edge.is_user_defined_id { "true" } else { "false" });
         json.optional_value("interpolate", edge.interpolate.as_ref());
         json.optional_value("animate", edge.animate.as_ref());
         json.optional_value("animation", edge.animation.as_ref());
@@ -267,7 +243,6 @@ pub(crate) fn to_json(model: &Model) -> String {
 }
 
 /// A JSON writer that matches `JSON.stringify` output.
-#[cfg(feature = "model")]
 mod json {
     use crate::yaml::Value;
     use crate::yaml::push_number;
@@ -415,293 +390,12 @@ mod json {
 
     /// Entries in JavaScript property order: array-index keys ascending, then the rest in order.
     pub(super) fn property_order<E>(entries: &[E], key: impl Fn(&E) -> &String) -> Vec<&E> {
-        let mut indexed: Vec<(u32, &E)> = entries
-            .iter()
-            .filter_map(|entry| array_index(key(entry)).map(|index| (index, entry)))
-            .collect();
+        let mut indexed: Vec<(u32, &E)> =
+            entries.iter().filter_map(|entry| array_index(key(entry)).map(|index| (index, entry))).collect();
         indexed.sort_by_key(|&(index, _)| index);
 
         let mut ordered: Vec<&E> = indexed.into_iter().map(|(_, entry)| entry).collect();
-        ordered.extend(
-            entries
-                .iter()
-                .filter(|entry| array_index(key(entry)).is_none()),
-        );
+        ordered.extend(entries.iter().filter(|entry| array_index(key(entry)).is_none()));
         ordered
-    }
-}
-
-#[cfg(all(test, feature = "model"))]
-mod tests {
-    use std::fmt::Write;
-
-    use super::{parse, to_json};
-    use crate::yaml::Value;
-
-    /// The parity fixture: Pele's parser input and its normalized model JSON or error, generated
-    /// by running Pele's TypeScript.
-    const FIXTURE: &str = include_str!("../../tests/fixtures/flowchart-parse.json");
-
-    #[derive(Debug)]
-    enum Json {
-        Arr(Vec<Json>),
-        Bool(bool),
-        Null,
-        Num(f64),
-        Obj(Vec<(String, Json)>),
-        Str(String),
-    }
-
-    impl Json {
-        fn get(&self, key: &str) -> Option<&Json> {
-            let Json::Obj(entries) = self else {
-                return None;
-            };
-            entries.iter().find(|(k, _)| k == key).map(|(_, v)| v)
-        }
-
-        fn str(&self, key: &str) -> Option<&str> {
-            match self.get(key) {
-                Some(Json::Str(s)) => Some(s),
-                _ => None,
-            }
-        }
-
-        fn num(&self, key: &str) -> Option<f64> {
-            match self.get(key) {
-                Some(Json::Num(n)) => Some(*n),
-                _ => None,
-            }
-        }
-    }
-
-    /// A model's JSON, or an error's code, message, line, and column.
-    type Outcome = (Option<String>, Option<(String, String, u32, u32)>);
-
-    struct Reader<'a> {
-        bytes: &'a [u8],
-        at: usize,
-    }
-
-    impl Reader<'_> {
-        fn ws(&mut self) {
-            while self.bytes.get(self.at).is_some_and(u8::is_ascii_whitespace) {
-                self.at += 1;
-            }
-        }
-
-        fn value(&mut self) -> Json {
-            self.ws();
-            let c = self.bytes[self.at];
-            match c {
-                b'{' => {
-                    self.at += 1;
-                    let mut entries = Vec::new();
-                    loop {
-                        self.ws();
-                        if self.bytes[self.at] == b'}' {
-                            self.at += 1;
-                            return Json::Obj(entries);
-                        }
-                        if self.bytes[self.at] == b',' {
-                            self.at += 1;
-                            continue;
-                        }
-                        let Json::Str(key) = self.value() else {
-                            panic!("key")
-                        };
-                        self.ws();
-                        assert_eq!(self.bytes[self.at], b':');
-                        self.at += 1;
-                        entries.push((key, self.value()));
-                    }
-                }
-                b'[' => {
-                    self.at += 1;
-                    let mut items = Vec::new();
-                    loop {
-                        self.ws();
-                        if self.bytes[self.at] == b']' {
-                            self.at += 1;
-                            return Json::Arr(items);
-                        }
-                        if self.bytes[self.at] == b',' {
-                            self.at += 1;
-                            continue;
-                        }
-                        items.push(self.value());
-                    }
-                }
-                b'"' => {
-                    self.at += 1;
-                    let mut units: Vec<u16> = Vec::new();
-                    loop {
-                        let c = self.bytes[self.at];
-                        self.at += 1;
-                        match c {
-                            b'"' => break,
-                            b'\\' => {
-                                let e = self.bytes[self.at];
-                                self.at += 1;
-                                let unit = match e {
-                                    b'n' => 10,
-                                    b'r' => 13,
-                                    b't' => 9,
-                                    b'b' => 8,
-                                    b'f' => 12,
-                                    b'u' => {
-                                        let hex =
-                                            std::str::from_utf8(&self.bytes[self.at..self.at + 4])
-                                                .unwrap();
-                                        self.at += 4;
-                                        u16::from_str_radix(hex, 16).unwrap()
-                                    }
-                                    other => u16::from(other),
-                                };
-                                units.push(unit);
-                            }
-                            _ => {
-                                let start = self.at - 1;
-                                let len = match c {
-                                    0..0x80 => 1,
-                                    0xc0..0xe0 => 2,
-                                    0xe0..0xf0 => 3,
-                                    _ => 4,
-                                };
-                                let s =
-                                    std::str::from_utf8(&self.bytes[start..start + len]).unwrap();
-                                units.extend(s.encode_utf16());
-                                self.at = start + len;
-                            }
-                        }
-                    }
-                    Json::Str(String::from_utf16(&units).unwrap())
-                }
-                b't' => {
-                    self.at += 4;
-                    Json::Bool(true)
-                }
-                b'f' => {
-                    self.at += 5;
-                    Json::Bool(false)
-                }
-                b'n' => {
-                    self.at += 4;
-                    Json::Null
-                }
-                _ => {
-                    let start = self.at;
-                    while self
-                        .bytes
-                        .get(self.at)
-                        .is_some_and(|b| b"+-.eE0123456789".contains(b))
-                    {
-                        self.at += 1;
-                    }
-                    let text = std::str::from_utf8(&self.bytes[start..self.at]).unwrap();
-                    Json::Num(text.parse().unwrap())
-                }
-            }
-        }
-    }
-
-    fn actual(case: &Json) -> Outcome {
-        let input = case.str("input").unwrap();
-        let inherit = matches!(case.get("inheritDir"), Some(Json::Bool(true)));
-        let config = Value::Object(vec![(
-            "flowchart".to_owned(),
-            Value::Object(vec![("inheritDir".to_owned(), Value::Bool(inherit))]),
-        )]);
-        #[expect(
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            reason = "test data"
-        )]
-        let max_edges = case.num("maxEdges").map(|n| n as usize);
-        match parse(input, &config, case.str("title"), max_edges) {
-            Ok(model) => {
-                for subgraph in &model.subgraphs {
-                    assert_eq!(model.subgraph(&subgraph.id), Some(subgraph));
-                }
-                (Some(to_json(&model)), None)
-            }
-            Err(error) => (
-                None,
-                Some((
-                    error.code.as_str().to_owned(),
-                    error.message,
-                    error.line,
-                    error.column,
-                )),
-            ),
-        }
-    }
-
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "test data"
-    )]
-    fn expected(case: &Json) -> Outcome {
-        if let Some(model) = case.str("model") {
-            return (Some(model.to_owned()), None);
-        }
-        let error = case.get("error").unwrap();
-        (
-            None,
-            Some((
-                error.str("code").unwrap().to_owned(),
-                error.str("message").unwrap().to_owned(),
-                error.num("line").unwrap() as u32,
-                error.num("column").unwrap() as u32,
-            )),
-        )
-    }
-
-    #[test]
-    fn matches_pele() {
-        let Json::Arr(cases) = (Reader {
-            bytes: FIXTURE.as_bytes(),
-            at: 0,
-        })
-        .value() else {
-            panic!("fixture is not an array");
-        };
-
-        let mut differing = Vec::new();
-        for case in &cases {
-            if actual(case) != expected(case) {
-                differing.push(case.str("origin").unwrap_or("?").to_owned());
-            }
-        }
-        let mut report = String::new();
-        for origin in differing.iter().take(20) {
-            let case = cases
-                .iter()
-                .find(|case| case.str("origin") == Some(origin))
-                .unwrap();
-            write!(
-                report,
-                "\n{origin}\n  input: {:?}\n  pele:  {:?}\n  ondine: {:?}",
-                case.str("input").unwrap(),
-                expected(case),
-                actual(case)
-            )
-            .unwrap();
-        }
-        assert!(
-            differing.is_empty(),
-            "{} of {} cases differ from Pele:{report}",
-            differing.len(),
-            cases.len()
-        );
-    }
-
-    #[test]
-    fn canonical_shapes() {
-        assert_eq!(super::shapes::canonical_shape(None), "rect");
-        assert_eq!(super::shapes::canonical_shape(Some("round")), "rounded");
-        assert_eq!(super::shapes::canonical_shape(Some("database")), "cyl");
-        assert_eq!(super::shapes::canonical_shape(Some("nope")), "rect");
     }
 }

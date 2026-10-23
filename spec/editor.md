@@ -99,33 +99,9 @@
   Logs and error messages are not scrubbed for secret-looking environment
   variables; logs stay local.
 
-## Markdown rendering
+## Markdown
 
-- `markdown` is the shared renderer (pulldown-cmark, selection, code
-  highlighting via the language registry, optional raw HTML) used by hover
-  popovers, completions docs, diagnostics, notifications, git and the preview.
-  It knows nothing about diagrams: callers can take over closed fenced code
-  blocks with `MarkdownElement::render_code_block_with`.
-- Code blocks show a copy-on-hover button unless the caller hides it; there is
-  no wrap button and no custom code-block renderer beyond that hook.
-- Preview-only behaviour lives in `markdown_preview`: its style, and Mermaid
-  diagrams (cache, zoom, Preview/Code tabs), plugged in through that hook.
-
-## Markdown diagrams
-
-- Mermaid is compiled to SVG by `crates/mermaid`, which has no dependencies.
-  It started as a copy of Ondine (a Rust port of Obsidian's Pele) and is owned
-  here: Ondine and Pele are references for porting fixes, not upstreams to
-  merge. Every diagram type it supports renders; a diagram that fails to
-  compile shows its source.
-- `mermaid::render` takes a `mermaid::Theme` (opaque colors, chart series,
-  font, stroke width, corner radius) and emits concrete values, so the SVG has
-  no CSS variables or `color-mix()` and rasterizes with usvg as is. The preview
-  fills the theme from the editor theme (colors flattened onto the editor
-  background, accents as chart series).
-- Layout measures text as monospace (0.6 em per glyph), so diagrams use
-  `mermaid_font_family`, defaulting to the buffer font, with common system
-  monospace fonts as fallbacks.
+- Markdown rendering, the preview and Mermaid diagrams: see `markdown/`.
 
 ## Spell checking
 

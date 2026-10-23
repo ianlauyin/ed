@@ -110,16 +110,9 @@ fn nearest(digits: &[u8], exponent: i64, truncated: bool) -> f64 {
         for _ in 0..exponent.abs() {
             power *= 10.0;
         }
-        #[expect(
-            clippy::cast_precision_loss,
-            reason = "fewer than 16 digits fit in 53 bits"
-        )]
+        #[expect(clippy::cast_precision_loss, reason = "fewer than 16 digits fit in 53 bits")]
         let value = value as f64;
-        return if exponent < 0 {
-            value / power
-        } else {
-            value * power
-        };
+        return if exponent < 0 { value / power } else { value * power };
     }
 
     let mut number = Vec::new();
@@ -183,10 +176,7 @@ fn round(value: u64, exponent: i64, sticky: bool) -> f64 {
     }
 
     // At most 2^53, so exact. Scaling by a power of two is exact until it overflows to infinity.
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "the mantissa has at most 54 bits"
-    )]
+    #[expect(clippy::cast_precision_loss, reason = "the mantissa has at most 54 bits")]
     let mantissa = mantissa as f64;
     let last = exponent + drop;
     let power = if last > 1023 {
@@ -213,9 +203,7 @@ fn mul_add(number: &mut Vec<u32>, factor: u32, add: u32) {
 }
 
 fn bits(number: &[u32]) -> i64 {
-    let top = number
-        .last()
-        .map_or(0, |limb| 32 - i64::from(limb.leading_zeros()));
+    let top = number.last().map_or(0, |limb| 32 - i64::from(limb.leading_zeros()));
     i64::try_from(number.len().saturating_sub(1)).unwrap_or(0) * 32 + top
 }
 
@@ -246,9 +234,7 @@ fn shr(number: &mut Vec<u32>, count: i64) -> bool {
     number.drain(..limbs.min(number.len()));
 
     if offset > 0 {
-        dropped |= number
-            .first()
-            .is_some_and(|limb| limb & ((1 << offset) - 1) != 0);
+        dropped |= number.first().is_some_and(|limb| limb & ((1 << offset) - 1) != 0);
         let mut carry = 0;
         for limb in number.iter_mut().rev() {
             let wide = (u64::from(*limb) << 32) >> offset;
@@ -286,11 +272,7 @@ fn trim(number: &mut Vec<u32>) {
 }
 
 fn low64(number: &[u32]) -> u64 {
-    number
-        .iter()
-        .take(2)
-        .rev()
-        .fold(0, |value, &limb| (value << 32) | u64::from(limb))
+    number.iter().take(2).rev().fold(0, |value, &limb| (value << 32) | u64::from(limb))
 }
 
 fn low32(value: u64) -> u32 {

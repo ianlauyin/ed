@@ -2,16 +2,28 @@
 //! Pele's `src/diagrams/sankey/render.ts`.
 
 use super::db::SankeyDb;
-use super::layout::{Alignment, LayoutOptions, layout_sankey};
+use super::layout::Alignment;
+use super::layout::LayoutOptions;
+use super::layout::layout_sankey;
 use crate::diagrams::Rendered;
-use crate::diagrams::common::fit_width::{fit_width, title_room};
+use crate::diagrams::common::fit_width::fit_width;
+use crate::diagrams::common::fit_width::title_room;
 use crate::error::Error;
-use crate::svg::builder::{esc, esc_text, js_round, label_svg, push_num};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
-use crate::svg::theme::{resolve_style, series_color};
+use crate::svg::builder::esc;
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
+use crate::svg::theme::resolve_style;
+use crate::svg::theme::series_color;
 use crate::text::label::layout_label;
-use crate::text::measure::{self, BOLD};
-use crate::yaml::{Value, push_number};
+use crate::text::measure::BOLD;
+use crate::text::measure::{self};
+use crate::yaml::Value;
+use crate::yaml::push_number;
 
 /// Space between a bar and its label.
 const LABEL_GAP: f64 = 6.0;
@@ -24,10 +36,7 @@ fn property<'v>(value: &'v Value, key: &str) -> Option<&'v Value> {
     let Value::Object(entries) = value else {
         return None;
     };
-    entries
-        .iter()
-        .find(|(own, _)| own == key)
-        .map(|(_, value)| value)
+    entries.iter().find(|(own, _)| own == key).map(|(_, value)| value)
 }
 
 /// A number option at least `min`, capped at `max`, or `fallback`.
@@ -53,11 +62,7 @@ fn text_option(conf: &Value, key: &str) -> String {
 
 /// Two decimals, as Mermaid shows values; numbers too large for that are left as they are.
 fn rounded(value: f64) -> f64 {
-    if value.abs() < 1e15 {
-        js_round(value * 100.0) / 100.0
-    } else {
-        value
-    }
+    if value.abs() < 1e15 { js_round(value * 100.0) / 100.0 } else { value }
 }
 
 /// A colour from the configuration, as an inline style that overrides the series colour.
@@ -75,20 +80,14 @@ fn fill_style(color: Option<&Value>) -> String {
 /// # Errors
 ///
 /// Returns a semantic error when the links form a cycle.
-pub(crate) fn render(
-    model: &SankeyDb,
-    config: &Value,
-    options: &RenderOptions,
-) -> Result<Rendered, Error> {
+pub(crate) fn render(model: &SankeyDb, config: &Value, options: &RenderOptions) -> Result<Rendered, Error> {
     let empty = Value::Object(Vec::new());
     let conf = match property(config, "sankey") {
         Some(value @ Value::Object(_)) => value,
         _ => &empty,
     };
     let width = number_option(conf, "width", 600.0, 1.0, 10000.0);
-    let result = fit_width(options, width, 160.0, |chart_width, _| {
-        draw(model, conf, options, chart_width)
-    });
+    let result = fit_width(options, width, 160.0, |chart_width, _| draw(model, conf, options, chart_width));
     match result {
         Drawn(Ok(rendered)) => Ok(rendered),
         Drawn(Err(error)) => Err(error),
@@ -115,8 +114,7 @@ fn draw(model: &SankeyDb, conf: &Value, options: &RenderOptions, chart_width: f6
     let show_values = !matches!(property(conf, "showValues"), Some(Value::Bool(false)));
     let prefix = text_option(conf, "prefix");
     let suffix = text_option(conf, "suffix");
-    let outlined =
-        matches!(property(conf, "labelStyle"), Some(Value::String(s)) if s == "outlined");
+    let outlined = matches!(property(conf, "labelStyle"), Some(Value::String(s)) if s == "outlined");
     let alignment = match property(conf, "nodeAlignment") {
         Some(Value::String(s)) if s == "left" => Alignment::Left,
         Some(Value::String(s)) if s == "right" => Alignment::Right,
@@ -160,10 +158,7 @@ fn draw(model: &SankeyDb, conf: &Value, options: &RenderOptions, chart_width: f6
         let Some(node) = model.nodes.get(i) else {
             return "";
         };
-        custom
-            .iter()
-            .find(|(id, _)| *id == node.id)
-            .map_or("", |(_, style)| style.as_str())
+        custom.iter().find(|(id, _)| *id == node.id).map_or("", |(_, style)| style.as_str())
     };
 
     // Labels sit beside the bars, on the side that faces the middle of the chart.
@@ -210,11 +205,7 @@ fn draw(model: &SankeyDb, conf: &Value, options: &RenderOptions, chart_width: f6
         } else {
             String::new()
         };
-        let after = if outlined {
-            node.layer >= central
-        } else {
-            node.x < chart_width / 2.0
-        };
+        let after = if outlined { node.layer >= central } else { node.x < chart_width / 2.0 };
         let text_width = if value.is_empty() {
             measure::width(id, small, 0)
         } else {
@@ -223,11 +214,7 @@ fn draw(model: &SankeyDb, conf: &Value, options: &RenderOptions, chart_width: f6
             both.push_str(&value);
             measure::width(&both, small, 0)
         };
-        let x = if after {
-            node.x + node_width + LABEL_GAP
-        } else {
-            node.x - LABEL_GAP
-        };
+        let x = if after { node.x + node_width + LABEL_GAP } else { node.x - LABEL_GAP };
         let y = node.y + node.height / 2.0;
         min_x = min_x.min(if after { x } else { x - text_width });
         max_x = max_x.max(if after { x + text_width } else { x });
@@ -248,9 +235,7 @@ fn draw(model: &SankeyDb, conf: &Value, options: &RenderOptions, chart_width: f6
         if outlined {
             labels_out.push_str("<text");
             labels_out.push_str(&position);
-            labels_out.push_str(
-                " fill=\"none\" stroke=\"var(--_bg)\" stroke-width=\"3\" stroke-linejoin=\"round\">",
-            );
+            labels_out.push_str(" fill=\"none\" stroke=\"var(--_bg)\" stroke-width=\"3\" stroke-linejoin=\"round\">");
             labels_out.push_str(&esc(id));
             if !value.is_empty() {
                 labels_out.push(' ');
@@ -278,33 +263,16 @@ fn draw(model: &SankeyDb, conf: &Value, options: &RenderOptions, chart_width: f6
     let mut links_out = String::new();
     for link in &links {
         // Without definitions there are no gradients, so a gradient link takes its source's colour.
-        let end = if link_color == "target" {
-            link.target
-        } else {
-            link.source
-        };
+        let end = if link_color == "target" { link.target } else { link.source };
         let half = link.thickness.max(1.0) / 2.0;
         let x0 = nodes.get(link.source).map_or(0.0, |node| node.x) + node_width;
         let x1 = nodes.get(link.target).map_or(0.0, |node| node.x);
         let mut mid = String::new();
-        #[expect(
-            clippy::manual_midpoint,
-            reason = "JavaScript rounds the sum, then halves it"
-        )]
+        #[expect(clippy::manual_midpoint, reason = "JavaScript rounds the sum, then halves it")]
         let center = (x0 + x1) / 2.0;
         push_num(&mut mid, center);
-        let from = esc_text(
-            model
-                .nodes
-                .get(link.source)
-                .map_or("", |node| node.id.as_str()),
-        );
-        let to = esc_text(
-            model
-                .nodes
-                .get(link.target)
-                .map_or("", |node| node.id.as_str()),
-        );
+        let from = esc_text(model.nodes.get(link.source).map_or("", |node| node.id.as_str()));
+        let to = esc_text(model.nodes.get(link.target).map_or("", |node| node.id.as_str()));
 
         let out = &mut links_out;
         out.push_str("<path class=\"ondine-sankey-link\" data-id=\"");
@@ -362,19 +330,8 @@ fn draw(model: &SankeyDb, conf: &Value, options: &RenderOptions, chart_width: f6
         out.push_str("</title></path>");
     }
 
-    let title = layout_label(
-        model.title.as_deref(),
-        false,
-        size,
-        title_room(options),
-        BOLD,
-        None,
-    );
-    let title_height = if title.height > 0.0 {
-        title.height + 12.0
-    } else {
-        0.0
-    };
+    let title = layout_label(model.title.as_deref(), false, size, title_room(options), BOLD, None);
+    let title_height = if title.height > 0.0 { title.height + 12.0 } else { 0.0 };
     let inner = f64::max(max_x - min_x, title.width);
     let ox = pad - min_x + (inner - (max_x - min_x)) / 2.0;
     let oy = pad + title_height - min_y;
@@ -402,16 +359,8 @@ fn draw(model: &SankeyDb, conf: &Value, options: &RenderOptions, chart_width: f6
     content.push_str(&labels_out);
     content.push_str("</g></g>");
 
-    let accessible = Accessible {
-        acc_descr: model.acc_descr.as_deref(),
-        acc_title: model.acc_title.as_deref(),
-    };
+    let accessible = Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() };
     let svg = svg_document("sankey", width, height, size, options, accessible, &content);
 
-    Drawn(Ok(Rendered {
-        height,
-        links: Vec::new(),
-        svg,
-        width,
-    }))
+    Drawn(Ok(Rendered { height, links: Vec::new(), svg, width }))
 }

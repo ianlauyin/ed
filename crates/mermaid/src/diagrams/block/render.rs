@@ -1,23 +1,52 @@
 //! Lays out and draws a block diagram. Port of Pele's `src/diagrams/block/render.ts`.
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::f64::consts::{FRAC_1_SQRT_2, FRAC_PI_2, FRAC_PI_4, PI};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::f64::consts::FRAC_1_SQRT_2;
+use std::f64::consts::FRAC_PI_2;
+use std::f64::consts::FRAC_PI_4;
+use std::f64::consts::PI;
 
-use super::arrows::{OVERHANG, arrow_axis, arrow_mask, arrow_size, draw_arrow};
-use super::db::{BlockDb, ROOT};
-use super::layout::{Cell, check_columns, layout};
+use super::arrows::OVERHANG;
+use super::arrows::arrow_axis;
+use super::arrows::arrow_mask;
+use super::arrows::arrow_size;
+use super::arrows::draw_arrow;
+use super::db::BlockDb;
+use super::db::ROOT;
+use super::layout::Cell;
+use super::layout::check_columns;
+use super::layout::layout;
 use super::types::Block;
 use crate::diagrams::Rendered;
-use crate::diagrams::common::fit_width::{tighten, title_room};
+use crate::diagrams::common::fit_width::tighten;
+use crate::diagrams::common::fit_width::title_room;
 use crate::error::Error;
-use crate::svg::builder::{esc_text, js_round, label_svg, push_num};
-use crate::svg::edges::{EdgePath, edge_label_svg, marker, marker_trim};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
-use crate::svg::shapes::{draw_shape, shape_inset, shape_size};
-use crate::svg::theme::{RADIUS, ResolvedStyle, class_names, resolve_style};
-use crate::text::label::{Label, layout_label, trim};
-use crate::text::measure::{BOLD, ITALIC};
-use crate::yaml::{Value, push_number};
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::edges::EdgePath;
+use crate::svg::edges::edge_label_svg;
+use crate::svg::edges::marker;
+use crate::svg::edges::marker_trim;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
+use crate::svg::shapes::draw_shape;
+use crate::svg::shapes::shape_inset;
+use crate::svg::shapes::shape_size;
+use crate::svg::theme::RADIUS;
+use crate::svg::theme::ResolvedStyle;
+use crate::svg::theme::class_names;
+use crate::svg::theme::resolve_style;
+use crate::text::label::Label;
+use crate::text::label::layout_label;
+use crate::text::label::trim;
+use crate::text::measure::BOLD;
+use crate::text::measure::ITALIC;
+use crate::yaml::Value;
+use crate::yaml::push_number;
 
 const GAP: f64 = 12.0;
 const WRAP: f64 = 200.0;
@@ -54,10 +83,7 @@ fn fixed(shape: &str) -> bool {
 
 /// Shapes that only widen, because their slants and curves are set by their height.
 fn wide(shape: &str) -> bool {
-    matches!(
-        shape,
-        "stadium" | "hex" | "odd" | "lean-r" | "lean-l" | "trap-b" | "trap-t"
-    )
+    matches!(shape, "stadium" | "hex" | "odd" | "lean-r" | "lean-l" | "trap-b" | "trap-t")
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -122,15 +148,7 @@ fn shape(cells: &[Cell], views: &[View], at: usize) -> Shape {
     let (Some(c), Some(v)) = (cells.get(at), views.get(at)) else {
         return Shape::default();
     };
-    Shape {
-        bh: v.bh,
-        bw: v.bw,
-        kind: v.kind,
-        mask: v.mask,
-        name: v.shape,
-        x: c.x,
-        y: c.y,
-    }
+    Shape { bh: v.bh, bw: v.bw, kind: v.kind, mask: v.mask, name: v.shape, x: c.x, y: c.y }
 }
 
 /// V8's `Math.hypot` for two values, copied from `crate::layout::layered`: a compensated sum of
@@ -163,11 +181,7 @@ pub(crate) fn hypot(x: f64, y: f64) -> f64 {
 
 /// `value || 1`.
 fn or_one(value: f64) -> f64 {
-    if value == 0.0 || value.is_nan() {
-        1.0
-    } else {
-        value
-    }
+    if value == 0.0 || value.is_nan() { 1.0 } else { value }
 }
 
 /// JavaScript's `Math.sign`.
@@ -231,16 +245,8 @@ fn border(v: Shape, tx: f64, ty: f64, out: &mut Vec<f64>) {
     } else if v.is_diamond() {
         1.0 / or_one(dx.abs() / hw + dy.abs() / hh)
     } else {
-        let kx = if dx == 0.0 {
-            f64::INFINITY
-        } else {
-            hw / dx.abs()
-        };
-        let ky = if dy == 0.0 {
-            f64::INFINITY
-        } else {
-            hh / dy.abs()
-        };
+        let kx = if dx == 0.0 { f64::INFINITY } else { hw / dx.abs() };
+        let ky = if dy == 0.0 { f64::INFINITY } else { hh / dy.abs() };
         kx.min(ky)
     };
     if k == f64::INFINITY {
@@ -298,16 +304,8 @@ fn hits(points: &[f64], s: usize, t: usize, obstacles: &Obstacles) -> usize {
 
 /// A straight line where the two blocks share a row or a column, otherwise one bend between
 /// facing sides.
-#[expect(
-    clippy::float_cmp,
-    reason = "mirrors Pele's routeEdge, which compares exactly"
-)]
-fn route_edge(
-    (si, s): (usize, Shape),
-    (ti, t): (usize, Shape),
-    shift: f64,
-    obstacles: Option<&Obstacles>,
-) -> Vec<f64> {
+#[expect(clippy::float_cmp, reason = "mirrors Pele's routeEdge, which compares exactly")]
+fn route_edge((si, s): (usize, Shape), (ti, t): (usize, Shape), shift: f64, obstacles: Option<&Obstacles>) -> Vec<f64> {
     let (sx, sy, sw, sh) = (s.x, s.y, s.bw, s.bh);
     let (tx, ty, tw, th) = (t.x, t.y, t.bw, t.bh);
     let sl = sx - sw / 2.0;
@@ -345,25 +343,17 @@ fn route_edge(
         } else {
             [edge_x(inner, iy, -1.0), iy, ox - ow / 2.0, iy]
         };
-        return if inner_is_s {
-            points.to_vec()
-        } else {
-            vec![points[2], points[3], points[0], points[1]]
-        };
+        return if inner_is_s { points.to_vec() } else { vec![points[2], points[3], points[0], points[1]] };
     }
     if over_x {
         let margin = ((x2 - x1) / 2.0).min(6.0);
-        let x = (f64::midpoint(x1, x2) + shift)
-            .max(x1 + margin)
-            .min(x2 - margin);
+        let x = (f64::midpoint(x1, x2) + shift).max(x1 + margin).min(x2 - margin);
         let down = if ty > sy { 1.0 } else { -1.0 };
         return vec![x, edge_y(s, x, down), x, edge_y(t, x, -down)];
     }
     if over_y {
         let margin = ((y2 - y1) / 2.0).min(6.0);
-        let y = (f64::midpoint(y1, y2) + shift)
-            .max(y1 + margin)
-            .min(y2 - margin);
+        let y = (f64::midpoint(y1, y2) + shift).max(y1 + margin).min(y2 - margin);
         let right = if tx > sx { 1.0 } else { -1.0 };
         return vec![edge_x(s, y, right), y, edge_x(t, y, -right), y];
     }
@@ -373,11 +363,7 @@ fn route_edge(
     let across = vec![edge_x(s, sy, right), sy, tx, sy, tx, edge_y(t, tx, -down)];
     let along = vec![sx, edge_y(s, sx, down), sx, ty, edge_x(t, ty, -right), ty];
     let wide = (tx - sx).abs() >= (ty - sy).abs();
-    let (mut best, other) = if wide {
-        (across, along)
-    } else {
-        (along, across)
-    };
+    let (mut best, other) = if wide { (across, along) } else { (along, across) };
     let Some(obstacles) = obstacles else {
         return best;
     };
@@ -396,11 +382,7 @@ fn route_edge(
     let mut direct = Vec::with_capacity(4);
     border(s, tx, ty, &mut direct);
     border(t, sx, sy, &mut direct);
-    if hits(&direct, si, ti, obstacles) < least {
-        direct
-    } else {
-        best
-    }
+    if hits(&direct, si, ti, obstacles) < least { direct } else { best }
 }
 
 /// Appends `x,y`.
@@ -448,17 +430,7 @@ fn trace(p: &[f64], mut start_trim: f64, mut end_trim: f64) -> EdgePath {
     }
     d.push('L');
     push_point(&mut d, ex - bx * end_trim, ey - by * end_trim);
-    EdgePath {
-        d,
-        edx: bx,
-        edy: by,
-        ex,
-        ey,
-        sdx: -ax,
-        sdy: -ay,
-        sx,
-        sy,
-    }
+    EdgePath { d, edx: bx, edy: by, ex, ey, sdx: -ax, sdy: -ay, sx, sy }
 }
 
 /// A self-loop is an arc around the top right corner of the block, or around the matching point
@@ -528,14 +500,7 @@ const SPOTS: [f64; 5] = [0.5, 0.3, 0.7, 0.15, 0.85];
 /// Picks the point on a leg where a label of the given size covers no block other than the two it
 /// joins.
 #[expect(clippy::many_single_char_names, reason = "mirrors Pele's labelSpot")]
-fn label_spot(
-    p: &[f64],
-    at: usize,
-    (w, h): (f64, f64),
-    s: usize,
-    t: usize,
-    obstacles: Option<&Obstacles>,
-) -> f64 {
+fn label_spot(p: &[f64], at: usize, (w, h): (f64, f64), s: usize, t: usize, obstacles: Option<&Obstacles>) -> f64 {
     let Some(obstacles) = obstacles else {
         return 0.5;
     };
@@ -544,10 +509,7 @@ fn label_spot(
         let x = get(at) + (get(at + 2) - get(at)) * spot;
         let y = get(at + 1) + (get(at + 3) - get(at + 1)) * spot;
         let clear = !obstacles.iter().any(|&(i, v)| {
-            i != s
-                && i != t
-                && (x - v.x).abs() < f64::midpoint(w, v.bw)
-                && (y - v.y).abs() < f64::midpoint(h, v.bh)
+            i != s && i != t && (x - v.x).abs() < f64::midpoint(w, v.bw) && (y - v.y).abs() < f64::midpoint(h, v.bh)
         });
         if clear {
             return spot;
@@ -590,15 +552,9 @@ fn check(model: &BlockDb) -> Result<(), Error> {
 /// # Errors
 ///
 /// Returns a semantic error for a container whose grid has 0 columns.
-pub(crate) fn render(
-    model: &BlockDb,
-    config: &Value,
-    options: &RenderOptions,
-) -> Result<Rendered, Error> {
+pub(crate) fn render(model: &BlockDb, config: &Value, options: &RenderOptions) -> Result<Rendered, Error> {
     check(model)?;
-    Ok(tighten(options, |tight| {
-        draw(model, config, options, tight)
-    }))
+    Ok(tighten(options, |tight| draw(model, config, options, tight)))
 }
 
 #[expect(clippy::too_many_lines, reason = "mirrors Pele's draw")]
@@ -610,11 +566,7 @@ fn draw(model: &BlockDb, config: &Value, options: &RenderOptions, tight: bool) -
         Some(Value::Number(value)) if *value >= 0.0 => value.min(200.0),
         _ => GAP,
     };
-    let gap = if tight {
-        configured.min(6.0)
-    } else {
-        configured
-    };
+    let gap = if tight { configured.min(6.0) } else { configured };
     let wrap = if tight { 80.0 } else { WRAP };
 
     let style_of = |block: &Block| {
@@ -625,11 +577,7 @@ fn draw(model: &BlockDb, config: &Value, options: &RenderOptions, tight: bool) -
                 declarations.extend(style.split(';').map(str::to_owned));
             }
         };
-        match block
-            .classes
-            .as_deref()
-            .filter(|classes| !classes.is_empty())
-        {
+        match block.classes.as_deref().filter(|classes| !classes.is_empty()) {
             Some(classes) => {
                 for name in classes {
                     if let Some(def) = model.class(name) {
@@ -652,13 +600,8 @@ fn draw(model: &BlockDb, config: &Value, options: &RenderOptions, tight: bool) -
     let view = |index: usize| -> (Cell, View) {
         let block = model.arena.get(index).cloned().unwrap_or_default();
         let r#type = block.r#type;
-        let style = if r#type == "space" {
-            ResolvedStyle::default()
-        } else {
-            style_of(&block)
-        };
-        let text_style =
-            (if style.bold { BOLD } else { 0 }) | (if style.italic { ITALIC } else { 0 });
+        let style = if r#type == "space" { ResolvedStyle::default() } else { style_of(&block) };
+        let text_style = (if style.bold { BOLD } else { 0 }) | (if style.italic { ITALIC } else { 0 });
         let font_size = style.font_size.unwrap_or(size);
         let mut kind = Kind::Leaf;
         let mut shape = "";
@@ -674,43 +617,17 @@ fn draw(model: &BlockDb, config: &Value, options: &RenderOptions, tight: bool) -
         } else if r#type == "composite" {
             kind = Kind::Composite;
             let room = if tight { title_room(options) } else { 4000.0 };
-            let label = layout_label(
-                block.label.as_deref(),
-                false,
-                font_size,
-                room,
-                text_style,
-                None,
-            );
-            head = if label.height > 0.0 {
-                label.height + 4.0
-            } else {
-                0.0
-            };
+            let label = layout_label(block.label.as_deref(), false, font_size, room, text_style, None);
+            head = if label.height > 0.0 { label.height + 4.0 } else { 0.0 };
             nw = label.width + 2.0 * gap;
             nh = head + 2.0 * gap;
             label
         } else if r#type == "block_arrow" {
             kind = Kind::Arrow;
-            let label = layout_label(
-                block.label.as_deref(),
-                false,
-                font_size,
-                wrap,
-                text_style,
-                None,
-            );
-            let blank = label
-                .lines
-                .iter()
-                .flatten()
-                .all(|part| part.icon.is_none() && trim(&part.text).is_empty());
+            let label = layout_label(block.label.as_deref(), false, font_size, wrap, text_style, None);
+            let blank = label.lines.iter().flatten().all(|part| part.icon.is_none() && trim(&part.text).is_empty());
             mask = arrow_mask(block.directions.as_deref());
-            let s = if blank {
-                arrow_size(mask, 0.0, 0.0)
-            } else {
-                arrow_size(mask, label.width, label.height)
-            };
+            let s = if blank { arrow_size(mask, 0.0, 0.0) } else { arrow_size(mask, label.width, label.height) };
             nw = s.w;
             nh = s.h;
             dx = s.dx;
@@ -718,54 +635,24 @@ fn draw(model: &BlockDb, config: &Value, options: &RenderOptions, tight: bool) -
             label
         } else {
             shape = shape_of(r#type);
-            let label = layout_label(
-                block.label.as_deref(),
-                false,
-                font_size,
-                wrap,
-                text_style,
-                None,
-            );
+            let label = layout_label(block.label.as_deref(), false, font_size, wrap, text_style, None);
             let s = shape_size(shape, label.width, label.height);
             nw = s.w;
             // A cylinder's caps deepen as it widens, so it is sized for the deepest ones.
-            nh = if shape == "cyl" {
-                s.h.max(label.height + 40.0)
-            } else {
-                s.h
-            };
+            nh = if shape == "cyl" { s.h.max(label.height + 40.0) } else { s.h };
             dy = s.dy;
             label
         };
         let cell = Cell {
-            columns: if kind == Kind::Composite {
-                block.columns.unwrap_or(-1.0)
-            } else {
-                -1.0
-            },
+            columns: if kind == Kind::Composite { block.columns.unwrap_or(-1.0) } else { -1.0 },
             head,
             nh,
             nw,
             space: kind == Kind::Space,
-            span: if kind == Kind::Space {
-                1.0
-            } else {
-                block.width_in_columns.unwrap_or(1.0)
-            },
+            span: if kind == Kind::Space { 1.0 } else { block.width_in_columns.unwrap_or(1.0) },
             ..Cell::default()
         };
-        let view = View {
-            bh: 0.0,
-            block: index,
-            bw: 0.0,
-            dx,
-            dy,
-            kind,
-            label,
-            mask,
-            shape,
-            style,
-        };
+        let view = View { bh: 0.0, block: index, bw: 0.0, dx, dy, kind, label, mask, shape, style };
         (cell, view)
     };
 
@@ -809,11 +696,7 @@ fn draw(model: &BlockDb, config: &Value, options: &RenderOptions, tight: bool) -
             v.bh = c.nh;
         } else {
             v.bw = c.w;
-            v.bh = if v.kind == Kind::Leaf && wide(v.shape) {
-                c.nh
-            } else {
-                c.h
-            };
+            v.bh = if v.kind == Kind::Leaf && wide(v.shape) { c.nh } else { c.h };
         }
         if v.kind == Kind::Leaf && v.shape == "cyl" {
             v.dy = (v.bw / 14.0).clamp(6.0, 12.0) / 2.0;
@@ -833,29 +716,21 @@ fn draw(model: &BlockDb, config: &Value, options: &RenderOptions, tight: bool) -
         let Some(block) = model.arena.get(edge) else {
             continue;
         };
-        let (Some(&s), Some(&t)) = (
-            by_id.get(block.start.as_deref().unwrap_or("")),
-            by_id.get(block.end.as_deref().unwrap_or("")),
-        ) else {
+        let (Some(&s), Some(&t)) =
+            (by_id.get(block.start.as_deref().unwrap_or("")), by_id.get(block.end.as_deref().unwrap_or("")))
+        else {
             continue;
         };
         let key = s.min(t) * count + s.max(t);
         *pairs.entry(key).or_insert(0.0) += 1.0;
-        if block
-            .label
-            .as_deref()
-            .is_some_and(|label| !label.is_empty())
-        {
+        if block.label.as_deref().is_some_and(|label| !label.is_empty()) {
             labelled.insert(key);
         }
         ends.push((s, t));
         drawn.push(edge);
     }
 
-    let obstacles: Vec<(usize, Shape)> = obstacle_list
-        .iter()
-        .map(|&at| (at, shape(&cells, &views, at)))
-        .collect();
+    let obstacles: Vec<(usize, Shape)> = obstacle_list.iter().map(|&at| (at, shape(&cells, &views, at))).collect();
     let check = (drawn.len() * obstacles.len() <= OBSTACLE_BUDGET).then_some(obstacles.as_slice());
     let mut seen: BTreeMap<usize, f64> = BTreeMap::new();
     let mut routes: Vec<Route> = Vec::new();
@@ -883,31 +758,15 @@ fn draw(model: &BlockDb, config: &Value, options: &RenderOptions, tight: bool) -
         let k = seen.get(&key).copied().unwrap_or(0.0);
         seen.insert(key, k + 1.0);
         let block = model.arena.get(edge);
-        let label = layout_label(
-            block.and_then(|b| b.label.as_deref()),
-            false,
-            edge_size,
-            WRAP,
-            0,
-            None,
-        );
+        let label = layout_label(block.and_then(|b| b.label.as_deref()), false, edge_size, WRAP, 0, None);
         let (points, lx, ly) = if s == t {
             let [px, py, r, _, _] = loop_arc(shape(&cells, &views, s), k + 1.0);
             grow(px, py, 2.0 * r + 2.0, 2.0 * r + 2.0);
             (Vec::new(), px + r + 6.0 + label.width / 2.0, py - r / 2.0)
         } else {
-            let step = if labelled.contains(&key) {
-                js_round(edge_size * 1.5) + 2.0
-            } else {
-                14.0
-            };
+            let step = if labelled.contains(&key) { js_round(edge_size * 1.5) + 2.0 } else { 14.0 };
             let shift = (k - (total - 1.0) / 2.0) * step;
-            let points = route_edge(
-                (s, shape(&cells, &views, s)),
-                (t, shape(&cells, &views, t)),
-                shift,
-                check,
-            );
+            let points = route_edge((s, shape(&cells, &views, s)), (t, shape(&cells, &views, t)), shift, check);
             let n = points.len();
             let p = |i: usize| points.get(i).copied().unwrap_or(0.0);
             // The label goes on the longer leg.
@@ -926,23 +785,12 @@ fn draw(model: &BlockDb, config: &Value, options: &RenderOptions, tight: bool) -
         if label.width > 0.0 {
             grow(lx, ly, label.width + 8.0, label.height);
         }
-        routes.push(Route {
-            edge,
-            label,
-            loop_: if s == t { k + 1.0 } else { 0.0 },
-            lx,
-            ly,
-            points,
-        });
+        routes.push(Route { edge, label, loop_: if s == t { k + 1.0 } else { 0.0 }, lx, ly, points });
     }
 
     let title_width = if tight { title_room(options) } else { 4000.0 };
     let title = layout_label(model.title.as_deref(), false, size, title_width, BOLD, None);
-    let title_height = if title.height > 0.0 {
-        title.height + 12.0
-    } else {
-        0.0
-    };
+    let title_height = if title.height > 0.0 { title.height + 12.0 } else { 0.0 };
     let inner = (max_x - min_x).max(title.width);
     let ox = pad - min_x + (inner - (max_x - min_x)) / 2.0;
     let oy = pad + title_height - min_y;
@@ -984,18 +832,8 @@ fn draw(model: &BlockDb, config: &Value, options: &RenderOptions, tight: bool) -
             clusters.push_str("\" fill=\"var(--_a)\" fill-opacity=\"0.5\" stroke=\"var(--_b)\"");
             clusters.push_str(&v.style.shape);
             clusters.push_str("/>");
-            let attrs = [
-                " class=\"ondine-cluster-label\" fill=\"var(--_m)\"",
-                &v.style.text,
-            ]
-            .concat();
-            clusters.push_str(&label_svg(
-                &v.label,
-                c.x,
-                top + f64::midpoint(c.head, gap) + 2.0,
-                &attrs,
-                None,
-            ));
+            let attrs = [" class=\"ondine-cluster-label\" fill=\"var(--_m)\"", &v.style.text].concat();
+            clusters.push_str(&label_svg(&v.label, c.x, top + f64::midpoint(c.head, gap) + 2.0, &attrs, None));
             clusters.push_str("</g>");
             continue;
         }
@@ -1027,12 +865,7 @@ fn draw(model: &BlockDb, config: &Value, options: &RenderOptions, tight: bool) -
         let start_type = block.arrow_type_start.unwrap_or("");
         let end_type = block.arrow_type_end.unwrap_or("");
         let path = if route.loop_ > 0.0 {
-            loop_path(
-                shape(&cells, &views, s),
-                route.loop_,
-                marker_trim(start_type),
-                marker_trim(end_type),
-            )
+            loop_path(shape(&cells, &views, s), route.loop_, marker_trim(start_type), marker_trim(end_type))
         } else {
             for pair in route.points.chunks_exact_mut(2) {
                 if let [x, y] = pair {
@@ -1040,11 +873,7 @@ fn draw(model: &BlockDb, config: &Value, options: &RenderOptions, tight: bool) -
                     *y += oy;
                 }
             }
-            trace(
-                &route.points,
-                marker_trim(start_type),
-                marker_trim(end_type),
-            )
+            trace(&route.points, marker_trim(start_type), marker_trim(end_type))
         };
         let id = block.id.as_deref().unwrap_or("");
         edges.push_str("<g class=\"ondine-edge\" data-id=\"");
@@ -1059,32 +888,11 @@ fn draw(model: &BlockDb, config: &Value, options: &RenderOptions, tight: bool) -
             edges.push_str(" stroke-dasharray=\"3 4\"");
         }
         edges.push_str("/>");
-        edges.push_str(&marker(
-            start_type,
-            path.sx,
-            path.sy,
-            path.sdx,
-            path.sdy,
-            "var(--_l)",
-        ));
-        edges.push_str(&marker(
-            end_type,
-            path.ex,
-            path.ey,
-            path.edx,
-            path.edy,
-            "var(--_l)",
-        ));
+        edges.push_str(&marker(start_type, path.sx, path.sy, path.sdx, path.sdy, "var(--_l)"));
+        edges.push_str(&marker(end_type, path.ex, path.ey, path.edx, path.edy, "var(--_l)"));
         edges.push_str("</g>");
         if route.label.width > 0.0 {
-            labels.push_str(&edge_label_svg(
-                id,
-                &route.label,
-                route.lx + ox,
-                route.ly + oy,
-                "",
-                None,
-            ));
+            labels.push_str(&edge_label_svg(id, &route.label, route.lx + ox, route.ly + oy, "", None));
         }
     }
 
@@ -1101,9 +909,7 @@ fn draw(model: &BlockDb, config: &Value, options: &RenderOptions, tight: bool) -
         content.push_str("</g>");
     }
     if !edges.is_empty() {
-        content.push_str(
-            "<g class=\"ondine-edges\" fill=\"none\" stroke=\"var(--_l)\" stroke-linecap=\"round\">",
-        );
+        content.push_str("<g class=\"ondine-edges\" fill=\"none\" stroke=\"var(--_l)\" stroke-linecap=\"round\">");
         content.push_str(&edges);
         content.push_str("</g>");
     }
@@ -1118,19 +924,6 @@ fn draw(model: &BlockDb, config: &Value, options: &RenderOptions, tight: bool) -
         content.push_str("</g>");
     }
 
-    let svg = svg_document(
-        "block",
-        width,
-        height,
-        size,
-        options,
-        Accessible::default(),
-        &content,
-    );
-    Rendered {
-        height,
-        links: Vec::new(),
-        svg,
-        width,
-    }
+    let svg = svg_document("block", width, height, size, options, Accessible::default(), &content);
+    Rendered { height, links: Vec::new(), svg, width }
 }

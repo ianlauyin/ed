@@ -2,11 +2,20 @@
 //! errors at the same tokens. Port of Pele's `src/diagrams/state/parser.ts`.
 
 use super::db::StateDb;
-use super::lexer::{Token, tokenize};
+use super::lexer::Token;
+use super::lexer::tokenize;
 use super::tokens::T;
-use super::types::{Description, Doc, RelationStmt, StateNote, StateStmt, Stmt};
-use crate::error::{Code, Error, locate};
-use crate::text::label::{trim, trim_start};
+use super::types::Description;
+use super::types::Doc;
+use super::types::RelationStmt;
+use super::types::StateNote;
+use super::types::StateStmt;
+use super::types::Stmt;
+use crate::error::Code;
+use crate::error::Error;
+use crate::error::locate;
+use crate::text::label::trim;
+use crate::text::label::trim_start;
 
 /// The statement tokens the grammar expects, as its errors list them.
 const STATEMENT: &str = "'NL', 'ID', 'HIDE_EMPTY', 'scale', 'COMPOSIT_STATE', 'STATE_DESCR', \
@@ -45,9 +54,7 @@ impl<'a> Parser<'a> {
     #[cold]
     fn fail(&self, expected: &str) -> Error {
         let t = self.kind();
-        let start = self
-            .token(self.i)
-            .map_or(self.src.len(), |token| token.start);
+        let start = self.token(self.i).map_or(self.src.len(), |token| token.start);
         if t == T::Error {
             if let Some(message) = &self.error {
                 let location = locate(self.src, start);
@@ -113,26 +120,14 @@ fn composite(id: &str, description: &str) -> Stmt {
 
 /// A state of `type` named by a stereotype.
 fn typed(id: &str, r#type: &'static str) -> Stmt {
-    Stmt::State(StateStmt {
-        id: id.to_owned(),
-        r#type: Some(r#type),
-        ..StateStmt::default()
-    })
+    Stmt::State(StateStmt { id: id.to_owned(), r#type: Some(r#type), ..StateStmt::default() })
 }
 
 /// Parses preprocessed state diagram source into `db`, as Pele's `parseState` does.
-#[expect(
-    clippy::too_many_lines,
-    reason = "mirrors Pele's parser loop, one arm per statement"
-)]
+#[expect(clippy::too_many_lines, reason = "mirrors Pele's parser loop, one arm per statement")]
 pub(crate) fn parse_state(src: &str, db: &mut StateDb) -> Result<(), Error> {
     let lexed = tokenize(src);
-    let mut p = Parser {
-        error: lexed.error,
-        i: 0,
-        src,
-        tokens: lexed.tokens,
-    };
+    let mut p = Parser { error: lexed.error, i: 0, src, tokens: lexed.tokens };
 
     while p.kind() == T::Nl {
         p.i += 1;
@@ -174,18 +169,10 @@ pub(crate) fn parse_state(src: &str, db: &mut StateDb) -> Result<(), Error> {
                 } else if p.kind() == T::Arrow {
                     p.i += 1;
                     let second = p.id_statement()?;
-                    let description = if p.kind() == T::Descr {
-                        Some(trim_colon(p.take()))
-                    } else {
-                        None
-                    };
+                    let description = if p.kind() == T::Descr { Some(trim_colon(p.take())) } else { None };
                     add(
                         &mut docs,
-                        Stmt::Relation(Box::new(RelationStmt {
-                            description,
-                            state1: first,
-                            state2: second,
-                        })),
+                        Stmt::Relation(Box::new(RelationStmt { description, state1: first, state2: second })),
                     );
                 } else {
                     add(&mut docs, Stmt::State(first));
@@ -224,10 +211,7 @@ pub(crate) fn parse_state(src: &str, db: &mut StateDb) -> Result<(), Error> {
                     add(
                         &mut docs,
                         Stmt::State(StateStmt {
-                            description: Some(Description::Many(vec![
-                                trim(description).to_owned(),
-                                second.to_owned(),
-                            ])),
+                            description: Some(Description::Many(vec![trim(description).to_owned(), second.to_owned()])),
                             id: head.to_owned(),
                             r#type: Some("default"),
                             ..StateStmt::default()
@@ -260,14 +244,7 @@ pub(crate) fn parse_state(src: &str, db: &mut StateDb) -> Result<(), Error> {
             T::Concurrent => {
                 p.i += 1;
                 let id = db.divider_id();
-                add(
-                    &mut docs,
-                    Stmt::State(StateStmt {
-                        id,
-                        r#type: Some("divider"),
-                        ..StateStmt::default()
-                    }),
-                );
+                add(&mut docs, Stmt::State(StateStmt { id, r#type: Some("divider"), ..StateStmt::default() }));
             }
             T::Note => {
                 let keyword = p.take();
@@ -279,10 +256,7 @@ pub(crate) fn parse_state(src: &str, db: &mut StateDb) -> Result<(), Error> {
                         &mut docs,
                         Stmt::State(StateStmt {
                             id,
-                            note: Some(StateNote {
-                                position: Some(position),
-                                text,
-                            }),
+                            note: Some(StateNote { position: Some(position), text }),
                             ..StateStmt::default()
                         }),
                     );
@@ -339,14 +313,7 @@ pub(crate) fn parse_state(src: &str, db: &mut StateDb) -> Result<(), Error> {
                     (url, p.expect(T::String)?)
                 };
                 p.expect(T::Nl)?;
-                add(
-                    &mut docs,
-                    Stmt::Click {
-                        id,
-                        tooltip: tooltip.to_owned(),
-                        url: url.to_owned(),
-                    },
-                );
+                add(&mut docs, Stmt::Click { id, tooltip: tooltip.to_owned(), url: url.to_owned() });
             }
             T::ClassDef => {
                 p.i += 1;
@@ -381,11 +348,7 @@ pub(crate) fn parse_state(src: &str, db: &mut StateDb) -> Result<(), Error> {
                 return db.set_root_doc(doc);
             }
             _ => {
-                let first = if docs.len() > 1 {
-                    "'STRUCT_STOP'"
-                } else {
-                    "'$end'"
-                };
+                let first = if docs.len() > 1 { "'STRUCT_STOP'" } else { "'$end'" };
                 return Err(p.fail(&expected(first)));
             }
         }
@@ -423,10 +386,7 @@ fn acc_description(text: &str) -> String {
     while let Some(c) = chars.next() {
         out.push(c);
         if c == '\n' {
-            while chars
-                .peek()
-                .is_some_and(|&c| crate::util::chars::is_space(u32::from(c)))
-            {
+            while chars.peek().is_some_and(|&c| crate::util::chars::is_space(u32::from(c))) {
                 chars.next();
             }
         }

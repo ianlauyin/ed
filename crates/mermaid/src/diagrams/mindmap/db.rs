@@ -1,7 +1,9 @@
 //! The mindmap database. Port of Pele's `src/diagrams/mindmap/db.ts`.
 
-use crate::diagrams::common::outline::{Decoration, OutlineDb};
-use crate::error::{Code, Error};
+use crate::diagrams::common::outline::Decoration;
+use crate::diagrams::common::outline::OutlineDb;
+use crate::error::Code;
+use crate::error::Error;
 
 /// A mindmap node.
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -50,12 +52,7 @@ const SECTIONS: usize = 11;
 fn no_parent(descr: &str) -> Error {
     let mut error = Error::new(
         Code::Semantic,
-        [
-            "There can be only one root. No parent could be found for (\"",
-            descr,
-            "\")",
-        ]
-        .concat(),
+        ["There can be only one root. No parent could be found for (\"", descr, "\")"].concat(),
     );
     error.r#type = Some("mindmap");
     error
@@ -77,18 +74,11 @@ impl OutlineDb for MindmapDb {
         // Mermaid's parent is the last node with a smaller indentation, wherever it is in the tree.
         let mut depth = self.open.len();
         while depth > 0
-            && self
-                .open
-                .get(depth - 1)
-                .and_then(|&at| self.nodes.get(at))
-                .is_some_and(|node| node.level >= level)
+            && self.open.get(depth - 1).and_then(|&at| self.nodes.get(at)).is_some_and(|node| node.level >= level)
         {
             depth -= 1;
         }
-        let parent = depth
-            .checked_sub(1)
-            .and_then(|at| self.open.get(at))
-            .copied();
+        let parent = depth.checked_sub(1).and_then(|at| self.open.get(at)).copied();
         if parent.is_none() && !is_root {
             self.error = Some(no_parent(descr));
             return;
@@ -105,11 +95,7 @@ impl OutlineDb for MindmapDb {
             ..MindmapNode::default()
         };
         if let Some(parent) = parent.and_then(|at| self.nodes.get_mut(at)) {
-            node.section = if parent.is_root {
-                Some(parent.children.len() % SECTIONS)
-            } else {
-                parent.section
-            };
+            node.section = if parent.is_root { Some(parent.children.len() % SECTIONS) } else { parent.section };
             parent.children.push(id_at);
         }
         self.open.truncate(depth);

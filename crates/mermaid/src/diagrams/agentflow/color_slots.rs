@@ -9,25 +9,15 @@ use std::collections::BTreeMap;
 use super::graph::GraphNode;
 
 /// Each kind's slot. Slot order is observable, so the list keeps Pele's order.
-pub(crate) const KIND_SLOT: [(&str, u32); 7] = [
-    ("tool", 0),
-    ("task", 1),
-    ("decision", 2),
-    ("input", 3),
-    ("refdoc", 4),
-    ("connector", 5),
-    ("action", 6),
-];
+pub(crate) const KIND_SLOT: [(&str, u32); 7] =
+    [("tool", 0), ("task", 1), ("decision", 2), ("input", 3), ("refdoc", 4), ("connector", 5), ("action", 6)];
 
 /// The number of kinds.
 pub(crate) const KIND_COUNT: u32 = 7;
 
 /// The slot of `kind`.
 pub(crate) fn kind_slot(kind: &str) -> Option<u32> {
-    KIND_SLOT
-        .iter()
-        .find(|(name, _)| *name == kind)
-        .map(|&(_, slot)| slot)
+    KIND_SLOT.iter().find(|(name, _)| *name == kind).map(|&(_, slot)| slot)
 }
 
 /// The slot of the `n`th container. At least one slot is kept for containers, so that a palette
@@ -35,11 +25,7 @@ pub(crate) fn kind_slot(kind: &str) -> Option<u32> {
 fn container_slot(n: u32, palette_length: u32) -> u32 {
     let count = palette_length.saturating_sub(KIND_COUNT).max(1);
     let slot = KIND_COUNT + n % count;
-    if palette_length > 0 {
-        slot % palette_length
-    } else {
-        slot
-    }
+    if palette_length > 0 { slot % palette_length } else { slot }
 }
 
 /// Gives every container its slot and every node its kind. `kind_of` names a node's kind, and

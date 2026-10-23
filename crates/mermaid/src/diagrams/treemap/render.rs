@@ -1,19 +1,34 @@
 //! Draws a treemap: sections with headers and leaves with names and values. Port of Pele's
 //! `src/diagrams/treemap/render.ts`.
 
-use super::format::{format, formatter};
-use super::layout::{Insets, layout_treemap};
+use super::format::format;
+use super::format::formatter;
+use super::layout::Insets;
+use super::layout::layout_treemap;
 use super::model::TreemapModel;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_text::fit_text;
-use crate::diagrams::common::fit_width::{cap_width, title_room};
-use crate::svg::builder::{esc, esc_text, js_round, label_svg, push_num};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
-use crate::svg::theme::{RADIUS, class_names, resolve_style, series_color};
+use crate::diagrams::common::fit_width::cap_width;
+use crate::diagrams::common::fit_width::title_room;
+use crate::svg::builder::esc;
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
+use crate::svg::theme::RADIUS;
+use crate::svg::theme::class_names;
+use crate::svg::theme::resolve_style;
+use crate::svg::theme::series_color;
 use crate::text::entities::decode;
-use crate::text::label::{layout_label, trim};
-use crate::text::measure::{self, BOLD};
-use crate::yaml::{Value, push_number};
+use crate::text::label::layout_label;
+use crate::text::label::trim;
+use crate::text::measure::BOLD;
+use crate::text::measure::{self};
+use crate::yaml::Value;
+use crate::yaml::push_number;
 
 /// The height of a section header.
 const HEADER: f64 = 28.0;
@@ -27,10 +42,7 @@ fn property<'v>(value: &'v Value, key: &str) -> Option<&'v Value> {
     let Value::Object(entries) = value else {
         return None;
     };
-    entries
-        .iter()
-        .find(|(own, _)| own == key)
-        .map(|(_, value)| value)
+    entries.iter().find(|(own, _)| own == key).map(|(_, value)| value)
 }
 
 /// The `treemap` option `key` of `config` when it is a number at least `min`, capped at `max`, or
@@ -49,22 +61,12 @@ pub(crate) fn render(model: &TreemapModel, config: &Value, options: &RenderOptio
     let tiny = js_round(size * 0.75);
     let least = js_round(size * 0.5625);
     let treemap = property(config, "treemap");
-    let pad = options
-        .padding
-        .unwrap_or_else(|| option(config, "diagramPadding", 8.0, 0.0, 2000.0));
+    let pad = options.padding.unwrap_or_else(|| option(config, "diagramPadding", 8.0, 0.0, 2000.0));
 
     // Mermaid sizes the diagram as ten times `nodeWidth` by ten times `nodeHeight`.
-    let width = js_round(cap_width(
-        options,
-        option(config, "nodeWidth", 64.0, 1.0, 400.0) * 10.0,
-        200.0,
-        2.0 * pad,
-    ));
+    let width = js_round(cap_width(options, option(config, "nodeWidth", 64.0, 1.0, 400.0) * 10.0, 200.0, 2.0 * pad));
     let height = js_round(option(config, "nodeHeight", 40.0, 1.0, 400.0) * 10.0);
-    let show_values = !matches!(
-        treemap.and_then(|treemap| property(treemap, "showValues")),
-        Some(Value::Bool(false))
-    );
+    let show_values = !matches!(treemap.and_then(|treemap| property(treemap, "showValues")), Some(Value::Bool(false)));
     let spec = match treemap.and_then(|treemap| property(treemap, "valueFormat")) {
         Some(Value::String(spec)) => formatter(spec),
         _ => formatter(","),
@@ -73,26 +75,11 @@ pub(crate) fn render(model: &TreemapModel, config: &Value, options: &RenderOptio
         &model.roots,
         width,
         height,
-        Insets {
-            gap: option(config, "padding", 4.0, 0.0, 200.0),
-            header: HEADER,
-            side: SIDE,
-        },
+        Insets { gap: option(config, "padding", 4.0, 0.0, 200.0), header: HEADER, side: SIDE },
     );
 
-    let title = layout_label(
-        model.title.as_deref(),
-        false,
-        size,
-        title_room(options),
-        BOLD,
-        None,
-    );
-    let title_height = if title.height > 0.0 {
-        title.height + 8.0
-    } else {
-        0.0
-    };
+    let title = layout_label(model.title.as_deref(), false, size, title_room(options), BOLD, None);
+    let title_height = if title.height > 0.0 { title.height + 8.0 } else { 0.0 };
     let left = pad + 0.0_f64.max((title.width - width) / 2.0);
     let top = pad + title_height;
 
@@ -106,11 +93,7 @@ pub(crate) fn render(model: &TreemapModel, config: &Value, options: &RenderOptio
         let y = top + b.y;
         let decoded = decode(&node.name);
         let name = trim(&decoded);
-        let value = if show_values {
-            format(&spec, b.value)
-        } else {
-            String::new()
-        };
+        let value = if show_values { format(&spec, b.value) } else { String::new() };
         let classes = class_names(node.class_selector.as_deref().unwrap_or(""));
 
         let mut rect = String::from("data-id=\"");
@@ -133,23 +116,10 @@ pub(crate) fn render(model: &TreemapModel, config: &Value, options: &RenderOptio
             let mut text = String::new();
             if b.h >= HEADER {
                 let room = b.w - 2.0 * SIDE - 4.0;
-                let value_width = if value.is_empty() {
-                    0.0
-                } else {
-                    measure::width(&value, tiny, 0)
-                };
+                let value_width = if value.is_empty() { 0.0 } else { measure::width(&value, tiny, 0) };
                 let with_value = value_width > 0.0 && room - value_width - 12.0 >= 3.0 * small;
-                let label = fit_text(
-                    name,
-                    if with_value {
-                        room - value_width - 12.0
-                    } else {
-                        room
-                    },
-                    small,
-                    small,
-                    BOLD,
-                );
+                let label =
+                    fit_text(name, if with_value { room - value_width - 12.0 } else { room }, small, small, BOLD);
                 let baseline = y + HEADER / 2.0 + 1.0;
                 if let Some(label) = label {
                     text.push_str("<text x=\"");
@@ -198,11 +168,7 @@ pub(crate) fn render(model: &TreemapModel, config: &Value, options: &RenderOptio
         let mut text = String::new();
         let room = b.w - 8.0;
         let tallest = size.min(((b.h - 4.0) / LINE).floor());
-        let label = if tallest >= least {
-            fit_text(name, room, tallest, least, 0)
-        } else {
-            None
-        };
+        let label = if tallest >= least { fit_text(name, room, tallest, least, 0) } else { None };
         if let Some(label) = label {
             let mut cx = String::new();
             push_num(&mut cx, x + b.w / 2.0);
@@ -224,20 +190,11 @@ pub(crate) fn render(model: &TreemapModel, config: &Value, options: &RenderOptio
                 text.push_str(&esc(body));
                 text.push_str("</text>");
             };
-            if !value.is_empty()
-                && lines <= b.h - 4.0
-                && measure::width(&value, value_size, 0) <= room
-            {
+            if !value.is_empty() && lines <= b.h - 4.0 && measure::width(&value, value_size, 0) <= room {
                 let first = cy - lines / 2.0 + (label.size * LINE) / 2.0;
                 let second = cy + lines / 2.0 - (value_size * LINE) / 2.0;
                 push_text(&mut text, "", first, label.size, &label.text);
-                push_text(
-                    &mut text,
-                    " class=\"ondine-value\"",
-                    second,
-                    value_size,
-                    &value,
-                );
+                push_text(&mut text, " class=\"ondine-value\"", second, value_size, &value);
             } else {
                 push_text(&mut text, "", cy, label.size, &label.text);
             }
@@ -280,16 +237,8 @@ pub(crate) fn render(model: &TreemapModel, config: &Value, options: &RenderOptio
         total_height,
         size,
         options,
-        Accessible {
-            acc_descr: model.acc_descr.as_deref(),
-            acc_title: model.acc_title.as_deref(),
-        },
+        Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
         &content,
     );
-    Rendered {
-        height: total_height,
-        links: Vec::new(),
-        svg,
-        width: total_width,
-    }
+    Rendered { height: total_height, links: Vec::new(), svg, width: total_width }
 }

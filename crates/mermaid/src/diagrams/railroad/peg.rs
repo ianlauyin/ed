@@ -1,14 +1,35 @@
 //! `railroad-peg-beta`: parsing expression grammars. Port of Pele's
 //! `src/diagrams/railroad/peg.ts`.
 
-use super::common::{
-    ACC_DESCR, ACC_TITLE, AstNode, Grammar, TITLE, add, attach, choice, first, identifier, opening,
-    optional, parse_grammar, push, quoted, repetition, sequence, to_rules, unescape, whitespace,
-};
-use super::types::{RailroadNode, RailroadRule};
-use crate::diagrams::common::tokens::{
-    DIRECTIVE, Pattern, Reader, SINGLE_LINE_COMMENT, TokenType, YAML, literal,
-};
+use super::common::ACC_DESCR;
+use super::common::ACC_TITLE;
+use super::common::AstNode;
+use super::common::Grammar;
+use super::common::TITLE;
+use super::common::add;
+use super::common::attach;
+use super::common::choice;
+use super::common::first;
+use super::common::identifier;
+use super::common::opening;
+use super::common::optional;
+use super::common::parse_grammar;
+use super::common::push;
+use super::common::quoted;
+use super::common::repetition;
+use super::common::sequence;
+use super::common::to_rules;
+use super::common::unescape;
+use super::common::whitespace;
+use super::types::RailroadNode;
+use super::types::RailroadRule;
+use crate::diagrams::common::tokens::DIRECTIVE;
+use crate::diagrams::common::tokens::Pattern;
+use crate::diagrams::common::tokens::Reader;
+use crate::diagrams::common::tokens::SINGLE_LINE_COMMENT;
+use crate::diagrams::common::tokens::TokenType;
+use crate::diagrams::common::tokens::YAML;
+use crate::diagrams::common::tokens::literal;
 use crate::error::Error;
 
 /// Token kinds, as indices into [`PEG_TOKENS`].
@@ -34,11 +55,7 @@ fn line_comment(src: &str, at: usize) -> Option<usize> {
     if src.as_bytes().get(at) != Some(&b'#') {
         return None;
     }
-    Some(
-        src.get(at + 1..)
-            .and_then(|rest| rest.find(['\n', '\r']))
-            .map_or(src.len(), |found| at + 1 + found),
-    )
+    Some(src.get(at + 1..).and_then(|rest| rest.find(['\n', '\r'])).map_or(src.len(), |found| at + 1 + found))
 }
 
 /// Pele's `PEG_TOKENS`, in matching order.
@@ -61,21 +78,9 @@ pub(crate) const PEG_TOKENS: &[TokenType] = &[
     identifier("PEG_ID"),
     quoted("PEG_STRING"),
     whitespace("PEG_WHITESPACE"),
-    TokenType {
-        first: Some("-"),
-        name: "PEG_YAML",
-        ..YAML
-    },
-    TokenType {
-        first: Some("\t %"),
-        name: "PEG_DIRECTIVE",
-        ..DIRECTIVE
-    },
-    TokenType {
-        first: Some("\t %"),
-        name: "PEG_SINGLE_LINE_COMMENT",
-        ..SINGLE_LINE_COMMENT
-    },
+    TokenType { first: Some("-"), name: "PEG_YAML", ..YAML },
+    TokenType { first: Some("\t %"), name: "PEG_DIRECTIVE", ..DIRECTIVE },
+    TokenType { first: Some("\t %"), name: "PEG_SINGLE_LINE_COMMENT", ..SINGLE_LINE_COMMENT },
     TokenType {
         first: Some("#"),
         hidden: true,
@@ -120,20 +125,10 @@ struct Frame {
 }
 
 /// A frame for the choice `choice`, with its first sequence.
-fn frame(
-    ast: &mut Vec<AstNode<Peg>>,
-    node: Option<usize>,
-    choice: usize,
-    operator: Option<String>,
-) -> Frame {
+fn frame(ast: &mut Vec<AstNode<Peg>>, node: Option<usize>, choice: usize, operator: Option<String>) -> Frame {
     let sequence = add(ast, Peg::Sequence);
     attach(ast, choice, sequence);
-    Frame {
-        choice,
-        node,
-        operator,
-        sequence,
-    }
+    Frame { choice, node, operator, sequence }
 }
 
 /// Reads a rule's definition into `ast`, returning its choice.
@@ -142,11 +137,7 @@ fn definition(r: &mut Reader<'_>, ast: &mut Vec<AstNode<Peg>>) -> Result<usize, 
     let root = add(ast, Peg::OrderedChoice);
     let mut top = frame(ast, None, root, None);
     loop {
-        let mut operator = if r.kind() == t::AND || r.kind() == t::NOT {
-            Some(r.take().to_owned())
-        } else {
-            None
-        };
+        let mut operator = if r.kind() == t::AND || r.kind() == t::NOT { Some(r.take().to_owned()) } else { None };
         let mut primary = match r.kind() {
             t::STRING => add(ast, Peg::Literal(unescape(r.take()))),
             t::ID => add(ast, Peg::Identifier(r.take().to_owned())),
@@ -165,11 +156,8 @@ fn definition(r: &mut Reader<'_>, ast: &mut Vec<AstNode<Peg>>) -> Result<usize, 
             }
         };
         loop {
-            let suffix_operator = if matches!(r.kind(), t::QUESTION | t::STAR | t::PLUS) {
-                Some(r.take().to_owned())
-            } else {
-                None
-            };
+            let suffix_operator =
+                if matches!(r.kind(), t::QUESTION | t::STAR | t::PLUS) { Some(r.take().to_owned()) } else { None };
             let suffix = add(ast, Peg::Suffix(suffix_operator));
             attach(ast, suffix, primary);
             let prefix = add(ast, Peg::Prefix(operator.take()));
@@ -212,10 +200,7 @@ fn definition(r: &mut Reader<'_>, ast: &mut Vec<AstNode<Peg>>) -> Result<usize, 
 /// # Errors
 ///
 /// Returns a syntax error where the source leaves the grammar.
-pub(crate) fn parse_peg(
-    src: &str,
-    ast: &mut Vec<AstNode<Peg>>,
-) -> Result<Grammar<(String, usize)>, Error> {
+pub(crate) fn parse_peg(src: &str, ast: &mut Vec<AstNode<Peg>>) -> Result<Grammar<(String, usize)>, Error> {
     parse_grammar(src, PEG_TOKENS, t::TITLE, unescape, |r| {
         let name = r.expect(t::ID)?.to_owned();
         r.expect(t::ARROW)?;

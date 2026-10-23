@@ -4,11 +4,14 @@
 //! Pele keeps a statement that links blocks as a list, and flattens lists when it places them.
 //! Lists here are flattened as they are built, which keeps the same order.
 
-use super::db::{
-    BlockDb, edge_str_to_edge_data, edge_str_to_edge_start_data, edge_str_to_pattern,
-    edge_str_to_thickness, type_str_to_type,
-};
-use super::lexer::{Token, tokenize};
+use super::db::BlockDb;
+use super::db::edge_str_to_edge_data;
+use super::db::edge_str_to_edge_start_data;
+use super::db::edge_str_to_pattern;
+use super::db::edge_str_to_thickness;
+use super::db::type_str_to_type;
+use super::lexer::Token;
+use super::lexer::tokenize;
 use super::tokens::T;
 use super::types::Block;
 use crate::error::Error;
@@ -35,7 +38,8 @@ struct Frame {
 }
 
 /// The tokens a statement may start with.
-const STATEMENT_START: &str = "'NODE_ID', 'COLUMNS', 'SPACE_BLOCK', 'BLOCK_DIAGRAM_KEY', 'id-block', 'classDef', 'class', 'style'";
+const STATEMENT_START: &str =
+    "'NODE_ID', 'COLUMNS', 'SPACE_BLOCK', 'BLOCK_DIAGRAM_KEY', 'id-block', 'classDef', 'class', 'style'";
 
 /// Parses JavaScript `parseInt` of a run of decimal digits, or of `-1`.
 fn parse_int(text: &str) -> f64 {
@@ -98,12 +102,7 @@ impl<'a> Parser<'a, '_> {
             let mut type_str = self.take().to_owned();
             let label = self.expect(T::Str)?;
             type_str.push_str(self.expect(T::NodeDEnd)?);
-            return Ok(NodeInfo {
-                directions: None,
-                id,
-                label: Some(label),
-                type_str: Some(type_str),
-            });
+            return Ok(NodeInfo { directions: None, id, label: Some(label), type_str: Some(type_str) });
         }
         if self.kind() == T::BlockArrowStart {
             let mut type_str = self.take().to_owned();
@@ -113,28 +112,14 @@ impl<'a> Parser<'a, '_> {
                 directions.push(self.take().to_owned());
             }
             type_str.push_str(self.expect(T::BlockArrowEnd)?);
-            return Ok(NodeInfo {
-                directions: Some(directions),
-                id,
-                label: Some(label),
-                type_str: Some(type_str),
-            });
+            return Ok(NodeInfo { directions: Some(directions), id, label: Some(label), type_str: Some(type_str) });
         }
-        Ok(NodeInfo {
-            directions: None,
-            id,
-            label: None,
-            type_str: None,
-        })
+        Ok(NodeInfo { directions: None, id, label: None, type_str: None })
     }
 
     fn node_statement(&mut self) -> Result<Statement, Error> {
         let first = self.node()?;
-        let size = if self.kind() == T::Size {
-            parse_int(self.take())
-        } else {
-            1.0
-        };
+        let size = if self.kind() == T::Size { parse_int(self.take()) } else { 1.0 };
         let from = Block {
             directions: first.directions.clone(),
             id: Some(first.id.to_owned()),
@@ -217,12 +202,7 @@ fn push(list: &mut Vec<usize>, statement: Statement) {
 ///
 /// Returns a syntax error for input Mermaid rejects, and a limit error for too many spaces.
 pub(crate) fn parse_block(src: &str, db: &mut BlockDb) -> Result<(), Error> {
-    let mut p = Parser {
-        db,
-        i: 0,
-        src,
-        tokens: tokenize(src),
-    };
+    let mut p = Parser { db, i: 0, src, tokens: tokenize(src) };
 
     p.expect(T::Key)?;
     // Composites nest without recursion: each open one keeps the statement list of its parent.
@@ -236,11 +216,7 @@ pub(crate) fn parse_block(src: &str, db: &mut BlockDb) -> Result<(), Error> {
             }
             T::Columns => {
                 let columns = parse_int(p.take());
-                list.push(p.db.add(Block {
-                    columns: Some(columns),
-                    r#type: "column-setting",
-                    ..Block::default()
-                }));
+                list.push(p.db.add(Block { columns: Some(columns), r#type: "column-setting", ..Block::default() }));
             }
             T::SpaceBlock => {
                 let width = parse_int(p.take());
@@ -256,10 +232,7 @@ pub(crate) fn parse_block(src: &str, db: &mut BlockDb) -> Result<(), Error> {
             }
             T::Key => {
                 p.i += 1;
-                open.push(Frame {
-                    header: None,
-                    list: std::mem::take(&mut list),
-                });
+                open.push(Frame { header: None, list: std::mem::take(&mut list) });
             }
             T::IdBlock => {
                 p.i += 1;
@@ -267,10 +240,7 @@ pub(crate) fn parse_block(src: &str, db: &mut BlockDb) -> Result<(), Error> {
                     return Err(p.fail("'NODE_ID'"));
                 }
                 let header = p.node_statement()?;
-                open.push(Frame {
-                    header: Some(header),
-                    list: std::mem::take(&mut list),
-                });
+                open.push(Frame { header: Some(header), list: std::mem::take(&mut list) });
             }
             T::EndKeyword => {
                 let Some(frame) = open.pop().filter(|_| !list.is_empty()) else {
@@ -295,11 +265,9 @@ pub(crate) fn parse_block(src: &str, db: &mut BlockDb) -> Result<(), Error> {
                         header
                     }
                     // Spreading a list into an object keeps none of the block fields.
-                    Some(Statement::Chain(_)) => p.db.add(Block {
-                        children: Some(children),
-                        r#type: "composite",
-                        ..Block::default()
-                    }),
+                    Some(Statement::Chain(_)) => {
+                        p.db.add(Block { children: Some(children), r#type: "composite", ..Block::default() })
+                    }
                 };
                 list.push(composite);
             }
@@ -307,12 +275,7 @@ pub(crate) fn parse_block(src: &str, db: &mut BlockDb) -> Result<(), Error> {
                 p.i += 1;
                 let id = trim(p.expect(T::ClassDefId)?).to_owned();
                 let css = trim(p.expect(T::ClassDefStyleOpts)?).to_owned();
-                list.push(p.db.add(Block {
-                    css: Some(css),
-                    id: Some(id),
-                    r#type: "classDef",
-                    ..Block::default()
-                }));
+                list.push(p.db.add(Block { css: Some(css), id: Some(id), r#type: "classDef", ..Block::default() }));
             }
             T::Class => {
                 p.i += 1;

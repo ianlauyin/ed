@@ -1,12 +1,18 @@
 //! The ER model and the operations the parser applies to it. Port of Pele's
 //! `src/diagrams/er/db.ts`.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
-use super::types::{
-    DocItem, ErAttribute, ErClassDef, ErEntity, ErRelationship, ErSubgraph, RelSpec,
-};
-use crate::text::label::{trim, trim_start};
+use super::types::DocItem;
+use super::types::ErAttribute;
+use super::types::ErClassDef;
+use super::types::ErEntity;
+use super::types::ErRelationship;
+use super::types::ErSubgraph;
+use super::types::RelSpec;
+use crate::text::label::trim;
+use crate::text::label::trim_start;
 use crate::util::chars::is_space;
 
 /// Records in insertion order with an index by key, as Pele's `Map` keeps them.
@@ -20,10 +26,7 @@ pub(crate) struct Ordered<V> {
 
 impl<V> Default for Ordered<V> {
     fn default() -> Self {
-        Self {
-            index: BTreeMap::new(),
-            values: Vec::new(),
-        }
+        Self { index: BTreeMap::new(), values: Vec::new() }
     }
 }
 
@@ -105,10 +108,7 @@ impl ErDb {
         let mut id = String::from("entity-");
         id.push_str(name);
         id.push('-');
-        crate::error::push_u32(
-            &mut id,
-            u32::try_from(self.entities.values.len()).unwrap_or(u32::MAX),
-        );
+        crate::error::push_u32(&mut id, u32::try_from(self.entities.values.len()).unwrap_or(u32::MAX));
         self.entities.insert(
             name.to_owned(),
             ErEntity {
@@ -137,29 +137,14 @@ impl ErDb {
             return name.to_owned();
         }
         let at = self.add_entity(name, "");
-        self.entities
-            .values
-            .get(at)
-            .map(|entity| entity.id.clone())
-            .unwrap_or_default()
+        self.entities.values.get(at).map(|entity| entity.id.clone()).unwrap_or_default()
     }
 
     /// Adds a relationship.
-    pub(crate) fn add_relationship(
-        &mut self,
-        ent_a: &str,
-        role_a: &str,
-        ent_b: &str,
-        rel_spec: RelSpec,
-    ) {
+    pub(crate) fn add_relationship(&mut self, ent_a: &str, role_a: &str, ent_b: &str, rel_spec: RelSpec) {
         let entity_a = self.end_id(ent_a);
         let entity_b = self.end_id(ent_b);
-        self.relationships.push(ErRelationship {
-            entity_a,
-            entity_b,
-            rel_spec,
-            role_a: role_a.to_owned(),
-        });
+        self.relationships.push(ErRelationship { entity_a, entity_b, rel_spec, role_a: role_a.to_owned() });
     }
 
     /// Sets the flow direction.
@@ -173,11 +158,7 @@ impl ErDb {
             if let Some(entity) = self.entities.get_mut(id) {
                 entity.css_styles.extend(styles.iter().cloned());
             }
-            if let Some(subgraph) = self
-                .subgraph_lookup
-                .get(id)
-                .and_then(|&at| self.subgraphs.get_mut(at))
-            {
+            if let Some(subgraph) = self.subgraph_lookup.get(id).and_then(|&at| self.subgraphs.get_mut(at)) {
                 subgraph.css_styles.extend(styles.iter().cloned());
             }
         }
@@ -188,13 +169,7 @@ impl ErDb {
         for &id in ids {
             let at = match self.classes.index.get(id) {
                 Some(&at) => at,
-                None => self.classes.insert(
-                    id.to_owned(),
-                    ErClassDef {
-                        id: id.to_owned(),
-                        ..ErClassDef::default()
-                    },
-                ),
+                None => self.classes.insert(id.to_owned(), ErClassDef { id: id.to_owned(), ..ErClassDef::default() }),
             };
             let Some(def) = self.classes.values.get_mut(at) else {
                 continue;
@@ -217,14 +192,8 @@ impl ErDb {
                     entity.css_classes.push_str(name);
                 }
             }
-            if let Some(subgraph) = self
-                .subgraph_lookup
-                .get(id)
-                .and_then(|&at| self.subgraphs.get_mut(at))
-            {
-                subgraph
-                    .classes
-                    .extend(class_names.iter().map(|&name| name.to_owned()));
+            if let Some(subgraph) = self.subgraph_lookup.get(id).and_then(|&at| self.subgraphs.get_mut(at)) {
+                subgraph.classes.extend(class_names.iter().map(|&name| name.to_owned()));
             }
         }
     }
@@ -253,8 +222,7 @@ impl ErDb {
         for node in &nodes {
             self.claimed.insert(node.clone());
         }
-        self.subgraph_lookup
-            .insert(id.clone(), self.subgraphs.len());
+        self.subgraph_lookup.insert(id.clone(), self.subgraphs.len());
         self.subgraphs.push(ErSubgraph {
             classes: Vec::new(),
             css_styles: Vec::new(),

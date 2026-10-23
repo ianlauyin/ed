@@ -3,8 +3,11 @@
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
-use super::types::{VennStyle, VennSubset, VennText};
-use crate::error::{Code, Error};
+use super::types::VennStyle;
+use super::types::VennSubset;
+use super::types::VennText;
+use crate::error::Code;
+use crate::error::Error;
 use crate::text::label::trim;
 
 /// Mermaid takes one pair of quotes off an id, label or style value.
@@ -67,9 +70,7 @@ impl VennDb {
         }
         let count = ids.iter().fold(0.0, |count, _| count + 1.0);
         self.subsets.push(VennSubset {
-            label: label
-                .filter(|label| !label.is_empty())
-                .map(|label| normalize_text(label).to_owned()),
+            label: label.filter(|label| !label.is_empty()).map(|label| normalize_text(label).to_owned()),
             sets,
             size: size.unwrap_or(10.0 / (count * count)),
         });
@@ -79,9 +80,7 @@ impl VennDb {
     pub(crate) fn add_text_data(&mut self, ids: &[&str], id: &str, label: Option<&str>) {
         self.text_nodes.push(VennText {
             id: normalize_text(id).to_owned(),
-            label: label
-                .filter(|label| !label.is_empty())
-                .map(|label| normalize_text(label).to_owned()),
+            label: label.filter(|label| !label.is_empty()).map(|label| normalize_text(label).to_owned()),
             sets: normalize_ids(ids),
         });
     }
@@ -90,20 +89,13 @@ impl VennDb {
     pub(crate) fn add_style_data(&mut self, ids: &[&str], data: &[(&str, String)]) {
         let mut styles: Vec<(String, String)> = Vec::new();
         for (key, value) in data {
-            let value = if value.is_empty() {
-                String::new()
-            } else {
-                normalize_text(value).to_owned()
-            };
+            let value = if value.is_empty() { String::new() } else { normalize_text(value).to_owned() };
             match styles.iter_mut().find(|(own, _)| own == key) {
                 Some(entry) => entry.1 = value,
                 None => styles.push(((*key).to_owned(), value)),
             }
         }
-        self.styles.push(VennStyle {
-            styles,
-            targets: normalize_ids(ids),
-        });
+        self.styles.push(VennStyle { styles, targets: normalize_ids(ids) });
     }
 
     /// Checks that every id of a union names a set.
@@ -112,17 +104,12 @@ impl VennDb {
     ///
     /// Returns a semantic error naming the unknown ids.
     pub(crate) fn validate_union_identifiers(&self, ids: &[&str]) -> Result<(), Error> {
-        let unknown: Vec<&str> = ids
-            .iter()
-            .map(|id| normalize_text(id))
-            .filter(|id| !self.known.contains(*id))
-            .collect();
+        let unknown: Vec<&str> =
+            ids.iter().map(|id| normalize_text(id)).filter(|id| !self.known.contains(*id)).collect();
         if unknown.is_empty() {
             return Ok(());
         }
-        Err(semantic(
-            ["unknown set identifier: ", &unknown.join(", ")].concat(),
-        ))
+        Err(semantic(["unknown set identifier: ", &unknown.join(", ")].concat()))
     }
 
     /// The sets of the last set or union.

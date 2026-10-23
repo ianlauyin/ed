@@ -2,10 +2,19 @@
 //! Pele's `src/diagrams/treeview/parser.ts`.
 
 use crate::diagrams::common::acc_descr::acc_descr;
-use crate::diagrams::common::tokens::{
-    ACC_TITLE, EOF, Pattern, Reader, TITLE, TokenType, acc_descr_value, acc_title_value, keyword,
-    literal, skip_blanks, title_value, tokenize,
-};
+use crate::diagrams::common::tokens::ACC_TITLE;
+use crate::diagrams::common::tokens::EOF;
+use crate::diagrams::common::tokens::Pattern;
+use crate::diagrams::common::tokens::Reader;
+use crate::diagrams::common::tokens::TITLE;
+use crate::diagrams::common::tokens::TokenType;
+use crate::diagrams::common::tokens::acc_descr_value;
+use crate::diagrams::common::tokens::acc_title_value;
+use crate::diagrams::common::tokens::keyword;
+use crate::diagrams::common::tokens::literal;
+use crate::diagrams::common::tokens::skip_blanks;
+use crate::diagrams::common::tokens::title_value;
+use crate::diagrams::common::tokens::tokenize;
 use crate::error::Error;
 use crate::text::label::trim;
 use crate::util::chars::is_blank;
@@ -26,9 +35,7 @@ mod t {
 
 /// Whether an ASCII letter or `_` is at `at`.
 fn letter_at(src: &str, at: usize) -> bool {
-    src.as_bytes()
-        .get(at)
-        .is_some_and(|&b| b.is_ascii_alphabetic() || b == b'_')
+    src.as_bytes().get(at).is_some_and(|&b| b.is_ascii_alphabetic() || b == b'_')
 }
 
 /// Whether `[\w-]` is the byte `b`.
@@ -131,9 +138,7 @@ fn desc_annotation(src: &str, at: usize) -> Option<usize> {
 
 /// Where the line from `at` ends: at the first `\n` or `\r`, or the end of `src`.
 fn line_end(src: &str, at: usize) -> usize {
-    src.get(at..)
-        .and_then(|rest| rest.find(['\n', '\r']))
-        .map_or(src.len(), |found| at + found)
+    src.get(at..).and_then(|rest| rest.find(['\n', '\r'])).map_or(src.len(), |found| at + found)
 }
 
 /// `[ \t]{1,}`, and `[ \t]+`.
@@ -157,20 +162,12 @@ fn comment(src: &str, at: usize) -> Option<usize> {
     if !src.get(at..)?.starts_with("%%") {
         return None;
     }
-    Some(
-        src.get(at + 2..)
-            .and_then(|rest| rest.find('\n'))
-            .map_or(src.len(), |found| at + 2 + found),
-    )
+    Some(src.get(at + 2..).and_then(|rest| rest.find('\n')).map_or(src.len(), |found| at + 2 + found))
 }
 
 /// `\r?\n`.
 fn newline(src: &str, at: usize) -> Option<usize> {
-    let p = if src.as_bytes().get(at) == Some(&b'\r') {
-        at + 1
-    } else {
-        at
-    };
+    let p = if src.as_bytes().get(at) == Some(&b'\r') { at + 1 } else { at };
     (src.as_bytes().get(p) == Some(&b'\n')).then_some(p + 1)
 }
 
@@ -180,20 +177,12 @@ const fn matched(
     first: Option<&'static str>,
     matcher: fn(&str, usize) -> Option<usize>,
 ) -> TokenType {
-    TokenType {
-        first,
-        name,
-        pattern: Pattern::Match(matcher),
-        ..literal("")
-    }
+    TokenType { first, name, pattern: Pattern::Match(matcher), ..literal("") }
 }
 
 /// Pele's `TREEVIEW_TOKENS`, in matching order.
 pub(crate) const TREEVIEW_TOKENS: &[TokenType] = &[
-    TokenType {
-        longer: &[t::BARE_NAME],
-        ..keyword("treeView-beta")
-    },
+    TokenType { longer: &[t::BARE_NAME], ..keyword("treeView-beta") },
     acc_descr("ACC_DESCR"),
     ACC_TITLE,
     TITLE,
@@ -202,18 +191,9 @@ pub(crate) const TREEVIEW_TOKENS: &[TokenType] = &[
     matched("DESC_ANNOTATION", Some("\t "), desc_annotation),
     matched("INDENTATION", Some("\t "), blanks),
     matched("QUOTED_NAME", Some("\"'"), quoted_name),
-    TokenType {
-        hidden: true,
-        ..matched("WS", Some("\t "), blanks)
-    },
-    TokenType {
-        hidden: true,
-        ..matched("ML_COMMENT", Some("%"), comment)
-    },
-    TokenType {
-        hidden: true,
-        ..matched("NL", Some("\r\n"), newline)
-    },
+    TokenType { hidden: true, ..matched("WS", Some("\t "), blanks) },
+    TokenType { hidden: true, ..matched("ML_COMMENT", Some("%"), comment) },
+    TokenType { hidden: true, ..matched("NL", Some("\r\n"), newline) },
     matched("BARE_NAME", None, bare_name),
 ];
 
@@ -258,10 +238,7 @@ fn class_value(text: &str) -> String {
 /// The icon name of an `ICON_ANNOTATION` token.
 fn icon_value(text: &str) -> String {
     let trimmed = trim(text);
-    trimmed
-        .get(5..trimmed.len().saturating_sub(1))
-        .unwrap_or("")
-        .to_owned()
+    trimmed.get(5..trimmed.len().saturating_sub(1)).unwrap_or("").to_owned()
 }
 
 /// The description of a `DESC_ANNOTATION` token.
@@ -275,11 +252,7 @@ fn desc_value(text: &str) -> String {
 ///
 /// Returns a syntax error where the source leaves the grammar.
 pub(crate) fn parse_tree_view(src: &str) -> Result<TreeViewAst, Error> {
-    let mut r = Reader::new(
-        tokenize(src, TREEVIEW_TOKENS, "treeView")?,
-        TREEVIEW_TOKENS,
-        "treeView",
-    );
+    let mut r = Reader::new(tokenize(src, TREEVIEW_TOKENS, "treeView")?, TREEVIEW_TOKENS, "treeView");
     let mut ast = TreeViewAst::default();
     r.expect(t::KEYWORD)?;
     loop {
@@ -299,9 +272,7 @@ pub(crate) fn parse_tree_view(src: &str) -> Result<TreeViewAst, Error> {
         match r.kind() {
             t::QUOTED_NAME => {
                 let text = r.take();
-                text.get(1..text.len().saturating_sub(1))
-                    .unwrap_or("")
-                    .clone_into(&mut node.name);
+                text.get(1..text.len().saturating_sub(1)).unwrap_or("").clone_into(&mut node.name);
             }
             t::BARE_NAME => trim_blanks_end(r.take()).clone_into(&mut node.name),
             _ => return Err(r.fail("a name")),

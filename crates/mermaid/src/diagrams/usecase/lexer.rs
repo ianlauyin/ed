@@ -5,9 +5,15 @@
 //! fails each test as a non-ASCII UTF-16 unit would. Positions in messages are UTF-16.
 
 use super::tokens::T;
-use crate::error::{Code, Error, push_u32};
+use crate::error::Code;
+use crate::error::Error;
+use crate::error::push_u32;
 use crate::text::label::trim;
-use crate::util::chars::{is_blank, is_digit, is_hex, is_letter, is_word};
+use crate::util::chars::is_blank;
+use crate::util::chars::is_digit;
+use crate::util::chars::is_hex;
+use crate::util::chars::is_letter;
+use crate::util::chars::is_word;
 
 /// A token: its type and its byte range in the source.
 #[derive(Clone, Copy, Debug)]
@@ -32,9 +38,7 @@ fn starts(b: &[u8], i: usize, word: &[u8]) -> bool {
 
 /// Mermaid's INCLUDE and EXTEND are the only keywords matched without regard to case.
 fn starts_no_case(b: &[u8], i: usize, word: &[u8]) -> bool {
-    word.iter()
-        .enumerate()
-        .all(|(k, &c)| at(b, i + k) | 32 == u32::from(c))
+    word.iter().enumerate().all(|(k, &c)| at(b, i + k) | 32 == u32::from(c))
 }
 
 /// The length of each keyword.
@@ -59,9 +63,7 @@ fn keyword_at(b: &[u8], i: usize, c: u8) -> Option<T> {
     match c {
         b'a' => found(b"actor", T::Actor),
         b's' => found(b"systemBoundary", T::SystemBoundary).or_else(|| found(b"style", T::Style)),
-        b'e' => {
-            found(b"end", T::End).or_else(|| starts_no_case(b, i, b"extend").then_some(T::Extend))
-        }
+        b'e' => found(b"end", T::End).or_else(|| starts_no_case(b, i, b"extend").then_some(T::Extend)),
         b'E' => starts_no_case(b, i, b"extend").then_some(T::Extend),
         b'd' => found(b"direction", T::Direction),
         b'T' => found(b"TD", T::Td).or_else(|| found(b"TB", T::Tb)),
@@ -81,10 +83,7 @@ fn keyword_at(b: &[u8], i: usize, c: u8) -> Option<T> {
 
 /// The number of UTF-16 units before byte `offset` of `src`.
 pub(crate) fn utf16(src: &str, offset: usize) -> usize {
-    src.get(..offset).map_or_else(
-        || src.encode_utf16().count(),
-        |head| head.encode_utf16().count(),
-    )
+    src.get(..offset).map_or_else(|| src.encode_utf16().count(), |head| head.encode_utf16().count())
 }
 
 /// Appends a count in decimal.
@@ -109,9 +108,7 @@ pub(crate) fn line_column(src: &str, offset: usize) -> (u32, u32) {
         }
         i += 1;
     }
-    let column = src
-        .get(line_start..offset)
-        .map_or(0, |text| text.encode_utf16().count());
+    let column = src.get(line_start..offset).map_or(0, |text| text.encode_utf16().count());
     (line, u32::try_from(column + 1).unwrap_or(u32::MAX))
 }
 
@@ -134,14 +131,7 @@ pub(crate) fn location_text(src: &str, start: usize, end: usize) -> String {
 #[cold]
 pub(crate) fn error(src: &str, code: Code, message: String, offset: usize) -> Error {
     let (line, column) = line_column(src, offset);
-    Error {
-        code,
-        column,
-        line,
-        message,
-        snippet: String::new(),
-        r#type: Some("usecase"),
-    }
+    Error { code, column, line, message, snippet: String::new(), r#type: Some("usecase") }
 }
 
 /// The end of a quoted string that opens at `i`, or `None` when the line ends first.
@@ -202,11 +192,7 @@ fn lex_error(src: &str, offset: usize, length: usize) -> Error {
 /// # Errors
 ///
 /// Returns Mermaid's lexing error for an unclosed quoted string or an empty stereotype.
-#[expect(
-    clippy::too_many_lines,
-    clippy::many_single_char_names,
-    reason = "mirrors Pele's tokenize"
-)]
+#[expect(clippy::too_many_lines, clippy::many_single_char_names, reason = "mirrors Pele's tokenize")]
 pub(crate) fn tokenize(src: &str) -> Result<Vec<Tok>, Error> {
     let b = src.as_bytes();
     let n = b.len();
@@ -240,11 +226,7 @@ pub(crate) fn tokenize(src: &str) -> Result<Vec<Tok>, Error> {
                     }
                     let next = at(b, j);
                     if next == 58 {
-                        kind = Some(if descr {
-                            T::AccDescrLine
-                        } else {
-                            T::AccTitleLine
-                        });
+                        kind = Some(if descr { T::AccDescrLine } else { T::AccTitleLine });
                         end = j + 1;
                         while end < n && at(b, end) != 10 && at(b, end) != 13 {
                             end += 1;
@@ -309,11 +291,7 @@ pub(crate) fn tokenize(src: &str) -> Result<Vec<Tok>, Error> {
                             i = if closed { k + 1 } else { n };
                             push(
                                 &mut out,
-                                if closed {
-                                    T::JsonObjectLiteral
-                                } else {
-                                    T::UnclosedJsonObjectLiteral
-                                },
+                                if closed { T::JsonObjectLiteral } else { T::UnclosedJsonObjectLiteral },
                                 j,
                                 i,
                             );
@@ -336,15 +314,8 @@ pub(crate) fn tokenize(src: &str) -> Result<Vec<Tok>, Error> {
                     } else {
                         kind = Some(T::Identifier);
                     }
-                } else if (c == u32::from(b'o') || c == u32::from(b'x'))
-                    && at(b, i + 1) == 45
-                    && at(b, i + 2) == 45
-                {
-                    kind = Some(if c == u32::from(b'o') {
-                        T::BackwardCircle
-                    } else {
-                        T::BackwardCross
-                    });
+                } else if (c == u32::from(b'o') || c == u32::from(b'x')) && at(b, i + 1) == 45 && at(b, i + 2) == 45 {
+                    kind = Some(if c == u32::from(b'o') { T::BackwardCircle } else { T::BackwardCross });
                     end = i + 3;
                 } else if is_digit(c) {
                     // `1mg` is an identifier, and `1.5px` is a number because the identifier
@@ -429,11 +400,7 @@ pub(crate) fn tokenize(src: &str) -> Result<Vec<Tok>, Error> {
                     kind = Some(T::ForwardSolid);
                     end += 1;
                 } else if two && (next == u32::from(b'o') || next == u32::from(b'x')) {
-                    kind = Some(if next == u32::from(b'o') {
-                        T::ForwardCircle
-                    } else {
-                        T::ForwardCross
-                    });
+                    kind = Some(if next == u32::from(b'o') { T::ForwardCircle } else { T::ForwardCross });
                     end += 1;
                 } else {
                     kind = Some(T::MarkerlessSolid);
@@ -541,11 +508,7 @@ pub(crate) fn tokenize(src: &str) -> Result<Vec<Tok>, Error> {
             while is_hex(at(b, end)) {
                 end += 1;
             }
-            kind = Some(if end > i + 1 {
-                T::HashColor
-            } else {
-                T::CssPunctuation
-            });
+            kind = Some(if end > i + 1 { T::HashColor } else { T::CssPunctuation });
         } else if c == 92 {
             if at(b, end) == 44 {
                 kind = Some(T::CssEscapedComma);
@@ -554,13 +517,11 @@ pub(crate) fn tokenize(src: &str) -> Result<Vec<Tok>, Error> {
                 kind = Some(T::LabelPunctuation);
             }
         } else if c < 127 && c > 32 {
-            kind = Some(
-                if b"!#$&*+/=?^|~".contains(&b.get(i).copied().unwrap_or(0)) {
-                    T::CssPunctuation
-                } else {
-                    T::LabelPunctuation
-                },
-            );
+            kind = Some(if b"!#$&*+/=?^|~".contains(&b.get(i).copied().unwrap_or(0)) {
+                T::CssPunctuation
+            } else {
+                T::LabelPunctuation
+            });
         } else {
             kind = Some(T::LabelSymbol);
             while end < n {

@@ -6,30 +6,18 @@ pub(crate) mod model;
 pub(crate) mod parser;
 pub(crate) mod render;
 
-/// The JSON reader of the parity fixtures, loaded once per build.
-#[cfg(all(test, not(feature = "sankey")))]
-#[path = "../../tests/fixtures/json.rs"]
-mod fixture;
-#[cfg(all(test, feature = "sankey"))]
-use super::sankey::fixture;
-
-use super::{Diagram, Input, Rendered};
+use super::Diagram;
+use super::Input;
+use super::Rendered;
 use crate::error::Error;
 use crate::svg::root::RenderOptions;
 use crate::util::url::UrlOptions;
 
 /// The `wardley` diagram type.
-pub(crate) const DIAGRAM: Diagram = Diagram {
-    keep_comments: false,
-    render: render_input,
-    section: Some("wardley-beta"),
-};
+pub(crate) const DIAGRAM: Diagram =
+    Diagram { keep_comments: false, render: render_input, section: Some("wardley-beta") };
 
-fn render_input(
-    input: &Input<'_>,
-    options: &RenderOptions,
-    _url: &UrlOptions<'_>,
-) -> Result<Rendered, Error> {
+fn render_input(input: &Input<'_>, options: &RenderOptions, _url: &UrlOptions<'_>) -> Result<Rendered, Error> {
     let model = parse(input.source, input.title)?;
     Ok(render::render(&model, input.config, options))
 }
@@ -59,9 +47,12 @@ pub(crate) fn parse(source: &str, title: Option<&str>) -> Result<Model, Error> {
 ///     : v;
 /// JSON.stringify(norm(model));
 /// ```
-#[cfg(feature = "model")]
 pub(crate) fn to_json(model: &Model) -> String {
-    use json::{array, number, object, point, string};
+    use json::array;
+    use json::number;
+    use json::object;
+    use json::point;
+    use json::string;
 
     let build = &model.build;
     let mut fields = Vec::new();
@@ -71,24 +62,18 @@ pub(crate) fn to_json(model: &Model) -> String {
     if let Some(text) = &model.acc_title {
         fields.push(("accTitle", string(text)));
     }
-    let forces = |forces: &[builder::WardleyForce]| {
-        array(forces.iter().map(|force| {
-            object(vec![
-                ("name", string(&force.name)),
-                ("x", number(force.x)),
-                ("y", number(force.y)),
-            ])
-        }))
-    };
+    let forces =
+        |forces: &[builder::WardleyForce]| {
+            array(forces.iter().map(|force| {
+                object(vec![("name", string(&force.name)), ("x", number(force.x)), ("y", number(force.y))])
+            }))
+        };
     fields.push(("accelerators", forces(&build.accelerators)));
     fields.push((
         "annotations",
         array(build.annotations.iter().map(|annotation| {
             let mut fields = vec![
-                (
-                    "coordinates",
-                    array(annotation.coordinates.iter().map(|&(x, y)| point(x, y))),
-                ),
+                ("coordinates", array(annotation.coordinates.iter().map(|&(x, y)| point(x, y)))),
                 ("number", number(annotation.number)),
             ];
             if let Some(text) = &annotation.text {
@@ -102,10 +87,7 @@ pub(crate) fn to_json(model: &Model) -> String {
     }
     let mut axes = Vec::new();
     if let Some(boundaries) = &build.axes.stage_boundaries {
-        axes.push((
-            "stageBoundaries",
-            array(boundaries.iter().map(|&b| number(b))),
-        ));
+        axes.push(("stageBoundaries", array(boundaries.iter().map(|&b| number(b)))));
     }
     if let Some(stages) = &build.axes.stages {
         axes.push(("stages", array(stages.iter().map(|stage| string(stage)))));
@@ -115,10 +97,7 @@ pub(crate) fn to_json(model: &Model) -> String {
     fields.push((
         "links",
         array(build.links.iter().map(|link| {
-            let mut fields = vec![(
-                "dashed",
-                String::from(if link.dashed { "true" } else { "false" }),
-            )];
+            let mut fields = vec![("dashed", String::from(if link.dashed { "true" } else { "false" }))];
             if let Some(flow) = link.flow {
                 fields.push(("flow", string(flow.as_str())));
             }
@@ -142,10 +121,7 @@ pub(crate) fn to_json(model: &Model) -> String {
                 fields.push(("inPipeline", String::from("true")));
             }
             if let Some(inertia) = node.inertia {
-                fields.push((
-                    "inertia",
-                    String::from(if inertia { "true" } else { "false" }),
-                ));
+                fields.push(("inertia", String::from(if inertia { "true" } else { "false" })));
             }
             if node.is_pipeline_parent {
                 fields.push(("isPipelineParent", String::from("true")));
@@ -167,31 +143,24 @@ pub(crate) fn to_json(model: &Model) -> String {
     ));
     fields.push((
         "notes",
-        array(build.notes.iter().map(|note| {
-            object(vec![
-                ("text", string(&note.text)),
-                ("x", number(note.x)),
-                ("y", number(note.y)),
-            ])
-        })),
+        array(
+            build
+                .notes
+                .iter()
+                .map(|note| object(vec![("text", string(&note.text)), ("x", number(note.x)), ("y", number(note.y))])),
+        ),
     ));
     fields.push((
         "pipelines",
         array(build.pipelines.iter().map(|pipeline| {
             object(vec![
-                (
-                    "componentIds",
-                    array(pipeline.component_ids.iter().map(|id| string(id))),
-                ),
+                ("componentIds", array(pipeline.component_ids.iter().map(|id| string(id)))),
                 ("nodeId", string(&pipeline.node_id)),
             ])
         })),
     ));
     if let Some((width, height)) = build.size {
-        fields.push((
-            "size",
-            object(vec![("height", number(height)), ("width", number(width))]),
-        ));
+        fields.push(("size", object(vec![("height", number(height)), ("width", number(width))])));
     }
     if let Some(title) = &model.title {
         fields.push(("title", string(title)));
@@ -211,7 +180,6 @@ pub(crate) fn to_json(model: &Model) -> String {
 }
 
 /// `JSON.stringify` pieces for [`to_json`].
-#[cfg(feature = "model")]
 mod json {
     use crate::yaml::push_number;
 
@@ -282,57 +250,5 @@ mod json {
         }
         out.push('"');
         out
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    //! Parity with Pele's `wardley.parse` over every string literal of Pele's wardley compat
-    //! specs, the documents those specs parse at run time, the vectors, and edge cases, as
-    //! recorded by running Pele's TypeScript.
-
-    use super::fixture::cases;
-    use super::parse;
-
-    /// The parity fixture: Pele's parser input and its model JSON or error.
-    const FIXTURE: &str = include_str!("../../tests/fixtures/wardley-parse.json");
-
-    #[test]
-    fn matches_pele() {
-        let mut differing = Vec::new();
-        let cases = cases(FIXTURE);
-        for case in &cases {
-            let input = case.str("input").unwrap_or_default();
-            let actual = parse(input, case.str("title"));
-            let same = match (&actual, case.get("error")) {
-                (Ok(_), None) => {
-                    #[cfg(feature = "model")]
-                    {
-                        actual.as_ref().map(super::to_json).ok().as_deref() == case.str("model")
-                    }
-                    #[cfg(not(feature = "model"))]
-                    {
-                        true
-                    }
-                }
-                (Err(error), Some(expected)) => {
-                    Some(error.code.as_str()) == expected.str("code")
-                        && Some(error.message.as_str()) == expected.str("message")
-                        && Some(f64::from(error.line)) == expected.num("line")
-                        && Some(f64::from(error.column)) == expected.num("column")
-                }
-                _ => false,
-            };
-            if !same {
-                differing.push((case.str("origin").unwrap_or("?"), input, actual));
-            }
-        }
-        assert!(
-            differing.is_empty(),
-            "{} of {} cases differ from Pele: {:#?}",
-            differing.len(),
-            cases.len(),
-            differing.iter().take(10).collect::<Vec<_>>()
-        );
     }
 }

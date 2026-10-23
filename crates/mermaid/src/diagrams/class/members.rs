@@ -3,7 +3,8 @@
 
 use crate::diagrams::common::generics::parse_generic_types;
 use crate::text::label::trim;
-use crate::util::chars::{is_line_end, is_space};
+use crate::util::chars::is_line_end;
+use crate::util::chars::is_space;
 
 /// Whether a member is a method or an attribute.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -100,18 +101,11 @@ impl ClassMember {
                     .map(|at| start + 1 + at)
             });
             if let (Some(close), Some(open)) = (close, open) {
-                let visible =
-                    bytes.get(start).copied().is_some_and(is_visibility) && open > start + 1;
+                let visible = bytes.get(start).copied().is_some_and(is_visibility) && open > start + 1;
                 if visible {
-                    input
-                        .get(start..=start)
-                        .unwrap_or("")
-                        .clone_into(&mut self.visibility);
+                    input.get(start..=start).unwrap_or("").clone_into(&mut self.visibility);
                 }
-                input
-                    .get(if visible { start + 1 } else { start }..open)
-                    .unwrap_or("")
-                    .clone_into(&mut self.id);
+                input.get(if visible { start + 1 } else { start }..open).unwrap_or("").clone_into(&mut self.id);
                 trim(input.get(open + 1..close).unwrap_or("")).clone_into(&mut self.parameters);
 
                 let mut rest = close + 1;
@@ -135,11 +129,7 @@ impl ClassMember {
                 self.classifier = classifier;
                 return true;
             }
-            start = end
-                + input
-                    .get(end..)
-                    .and_then(|t| t.chars().next())
-                    .map_or(1, char::len_utf8);
+            start = end + input.get(end..).and_then(|t| t.chars().next()).map_or(1, char::len_utf8);
         }
         self.member_type = MemberType::Attribute;
         false
@@ -151,24 +141,14 @@ impl ClassMember {
         if let Some(&first) = bytes.first()
             && is_visibility(first)
         {
-            input
-                .get(..1)
-                .unwrap_or("")
-                .clone_into(&mut self.visibility);
+            input.get(..1).unwrap_or("").clone_into(&mut self.visibility);
         }
         if let Some(&last @ (b'$' | b'*')) = bytes.last() {
             self.classifier = String::from(char::from(last));
         }
         let from = usize::from(!self.visibility.is_empty());
-        let to = if self.classifier.is_empty() {
-            input.len()
-        } else {
-            input.len() - 1
-        };
-        input
-            .get(from.min(to)..to.max(from))
-            .unwrap_or("")
-            .clone_into(&mut self.id);
+        let to = if self.classifier.is_empty() { input.len() } else { input.len() - 1 };
+        input.get(from.min(to)..to.max(from)).unwrap_or("").clone_into(&mut self.id);
     }
 
     /// The text shown for the member, as Pele's `getDisplayDetails().displayText`.

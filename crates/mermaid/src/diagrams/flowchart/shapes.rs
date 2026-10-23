@@ -6,13 +6,7 @@ const SHAPES: [&[&str]; 53] = [
     &["rect", "proc", "process", "rectangle", "squareRect"],
     &["rounded", "event", "roundedRect"],
     &["stadium", "terminal", "pill"],
-    &[
-        "fr-rect",
-        "subprocess",
-        "subproc",
-        "framed-rectangle",
-        "subroutine",
-    ],
+    &["fr-rect", "subprocess", "subproc", "framed-rectangle", "subroutine"],
     &["cyl", "db", "database", "cylinder"],
     &["datastore", "data-store"],
     &["folder", "directory"],
@@ -28,23 +22,11 @@ const SHAPES: [&[&str]; 53] = [
     &["lean-r", "lean-right", "in-out", "lean_right"],
     &["lean-l", "lean-left", "out-in", "lean_left"],
     &["trap-b", "priority", "trapezoid-bottom", "trapezoid"],
-    &[
-        "trap-t",
-        "manual",
-        "trapezoid-top",
-        "inv-trapezoid",
-        "inv_trapezoid",
-    ],
+    &["trap-t", "manual", "trapezoid-top", "inv-trapezoid", "inv_trapezoid"],
     &["dbl-circ", "double-circle", "doublecircle"],
     &["text"],
     &["notch-rect", "card", "notched-rectangle"],
-    &[
-        "lin-rect",
-        "lined-rectangle",
-        "lined-process",
-        "lin-proc",
-        "shaded-process",
-    ],
+    &["lin-rect", "lined-rectangle", "lined-process", "lin-proc", "shaded-process"],
     &["sm-circ", "start", "small-circle", "stateStart"],
     &["fr-circ", "stop", "framed-circle", "stateEnd"],
     &["fork", "join", "forkJoin"],
@@ -58,12 +40,7 @@ const SHAPES: [&[&str]; 53] = [
     &["h-cyl", "das", "horizontal-cylinder"],
     &["lin-cyl", "disk", "lined-cylinder"],
     &["curv-trap", "curved-trapezoid", "display"],
-    &[
-        "div-rect",
-        "div-proc",
-        "divided-rectangle",
-        "divided-process",
-    ],
+    &["div-rect", "div-proc", "divided-rectangle", "divided-process"],
     &["tri", "extract", "triangle"],
     &["win-pane", "internal-storage", "window-pane"],
     &["f-circ", "junction", "filled-circle"],
@@ -113,13 +90,8 @@ const INTERNAL: [&str; 27] = [
 ];
 
 /// Shapes produced by the bracket syntax, mapped to their documented names.
-const SYNTAX: [(&str, &str); 5] = [
-    ("square", "rect"),
-    ("round", "rounded"),
-    ("ellipse", "ellipse"),
-    ("hexagon", "hex"),
-    ("diamond", "diam"),
-];
+const SYNTAX: [(&str, &str); 5] =
+    [("square", "rect"), ("round", "rounded"), ("ellipse", "ellipse"), ("hexagon", "hex"), ("diamond", "diam")];
 
 /// The documented name of a shape name or alias, or the name itself for an internal shape.
 fn canonical(name: &str) -> Option<&'static str> {
@@ -127,10 +99,7 @@ fn canonical(name: &str) -> Option<&'static str> {
         return Some(own);
     }
 
-    SHAPES
-        .iter()
-        .find(|names| names.contains(&name))
-        .and_then(|names| names.first().copied())
+    SHAPES.iter().find(|names| names.contains(&name)).and_then(|names| names.first().copied())
 }
 
 /// Whether Mermaid accepts `name` in shape data.

@@ -1,8 +1,11 @@
 //! Splits gantt source into tokens with Mermaid's lexer rules. Port of Pele's
 //! `src/diagrams/gantt/lexer.ts`.
 
-use super::tokens::{T, WEEKDAYS};
-use crate::util::chars::{is_digit, is_space, is_word};
+use super::tokens::T;
+use super::tokens::WEEKDAYS;
+use crate::util::chars::is_digit;
+use crate::util::chars::is_space;
+use crate::util::chars::is_word;
 
 /// A token: its kind, text, and UTF-8 offset in the source.
 #[derive(Clone, Copy, Debug)]
@@ -37,15 +40,7 @@ enum S {
 }
 
 /// The weekday names, from Monday.
-const DAYS: [&str; 7] = [
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-    "sunday",
-];
+const DAYS: [&str; 7] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
 /// What follows a keyword: `\b`, or one `\s` and then text up to one of the stop characters.
 #[derive(Clone, Copy)]
@@ -59,12 +54,7 @@ enum Tail {
 /// Keyword statements by their first letter, in the grammar's rule order.
 const KEYWORDS: [(u8, &str, Tail, T); 12] = [
     (b'a', "axisFormat", Tail::Text(b"#\n;"), T::AxisFormat),
-    (
-        b'a',
-        "accDescription",
-        Tail::Text(b"#\n;"),
-        T::AccDescription,
-    ),
+    (b'a', "accDescription", Tail::Text(b"#\n;"), T::AccDescription),
     (b'g', "gantt", Tail::Bound, T::Gantt),
     (b'd', "dateFormat", Tail::Text(b"#\n;"), T::DateFormat),
     (b'i', "inclusiveEndDates", Tail::Bound, T::InclusiveEndDates),
@@ -102,11 +92,7 @@ impl Lexer<'_> {
 
     /// Adds a token from `start` to `end` and moves past it.
     fn emit(&mut self, r#type: T, start: usize, end: usize) {
-        self.tokens.push(Token {
-            start,
-            text: self.src.get(start..end).unwrap_or(""),
-            r#type,
-        });
+        self.tokens.push(Token { start, text: self.src.get(start..end).unwrap_or(""), r#type });
         self.p = end;
     }
 
@@ -130,10 +116,7 @@ impl Lexer<'_> {
     /// Whether `word` is at `at`, ignoring ASCII case: the end of it.
     fn word(&self, at: usize, word: &str) -> Option<usize> {
         let end = at + word.len();
-        self.src
-            .get(at..end)
-            .filter(|found| found.eq_ignore_ascii_case(word))
-            .map(|_| end)
+        self.src.get(at..end).filter(|found| found.eq_ignore_ascii_case(word)).map(|_| end)
     }
 
     /// Whether `at` is a word boundary after a word character: the next one is not `\w`.
@@ -221,11 +204,7 @@ impl Lexer<'_> {
                     return true;
                 }
                 if let Some((e, index)) = self.word_choice("weekend", &["friday", "saturday"]) {
-                    let kind = if index == 0 {
-                        T::WeekendFriday
-                    } else {
-                        T::WeekendSaturday
-                    };
+                    let kind = if index == 0 { T::WeekendFriday } else { T::WeekendSaturday };
                     self.emit(kind, self.p, e);
                     return true;
                 }
@@ -244,16 +223,12 @@ impl Lexer<'_> {
                 Tail::Bound => self.bound(after).then_some(after),
                 Tail::Text(stops) => {
                     // One `\s`, then one or more characters other than `stops`.
-                    let Some(space) = self.char_at(after).filter(|&c| is_space(u32::from(c)))
-                    else {
+                    let Some(space) = self.char_at(after).filter(|&c| is_space(u32::from(c))) else {
                         continue;
                     };
                     let from = after + space.len_utf8();
                     let rest = self.src.as_bytes().get(from..).unwrap_or(&[]);
-                    let length = rest
-                        .iter()
-                        .position(|b| stops.contains(b))
-                        .unwrap_or(rest.len());
+                    let length = rest.iter().position(|b| stops.contains(b)).unwrap_or(rest.len());
                     (length > 0).then_some(from + length)
                 }
             };
@@ -287,11 +262,7 @@ impl Lexer<'_> {
         };
         let code = u32::from(c);
         // The UTF-16 unit after `c`: the second half of a surrogate pair is never `%`.
-        let d = if c.len_utf16() == 2 {
-            None
-        } else {
-            self.byte(p + c.len_utf8())
-        };
+        let d = if c.len_utf16() == 2 { None } else { self.byte(p + c.len_utf8()) };
 
         if c == '%' {
             if d != Some(b'%') {
@@ -334,10 +305,8 @@ impl Lexer<'_> {
             self.emit(T::TaskTxt, p, e);
         } else {
             let rest = self.src.as_bytes().get(p + 1..).unwrap_or(&[]);
-            let e = rest
-                .iter()
-                .position(|&b| b == b'#' || b == b'\n' || b == b';')
-                .map_or(self.src.len(), |at| p + 1 + at);
+            let e =
+                rest.iter().position(|&b| b == b'#' || b == b'\n' || b == b';').map_or(self.src.len(), |at| p + 1 + at);
             self.emit(if e > p + 1 { T::TaskData } else { T::Colon }, p, e);
         }
         false
@@ -347,12 +316,7 @@ impl Lexer<'_> {
 /// Splits `src` into tokens, ending with an `End` token.
 pub(crate) fn tokenize(src: &str) -> Vec<Token<'_>> {
     let n = src.len();
-    let mut lx = Lexer {
-        p: 0,
-        src,
-        state: S::Initial,
-        tokens: Vec::new(),
-    };
+    let mut lx = Lexer { p: 0, src, state: S::Initial, tokens: Vec::new() };
 
     loop {
         if lx.p >= n {
@@ -379,11 +343,7 @@ pub(crate) fn tokenize(src: &str) -> Vec<Token<'_>> {
                 }
             }
             S::AccTitle | S::AccDescr => {
-                let r#type = if lx.state == S::AccTitle {
-                    T::AccTitleValue
-                } else {
-                    T::AccDescrValue
-                };
+                let r#type = if lx.state == S::AccTitle { T::AccTitleValue } else { T::AccDescrValue };
                 lx.state = S::Initial;
                 let e = lx.until(b'\n', p);
                 lx.emit(r#type, p, e);
@@ -445,10 +405,6 @@ pub(crate) fn tokenize(src: &str) -> Vec<Token<'_>> {
         }
     }
 
-    lx.tokens.push(Token {
-        start: n,
-        text: "",
-        r#type: T::End,
-    });
+    lx.tokens.push(Token { start: n, text: "", r#type: T::End });
     lx.tokens
 }

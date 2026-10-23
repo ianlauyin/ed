@@ -4,10 +4,17 @@
 //! model. Port of Pele's `src/diagrams/railroad/common.ts`.
 
 use super::types::RailroadNode;
-use crate::diagrams::common::tokens::{
-    Memo, Pattern, Reader, STRING, TokenType, acc_descr_value, acc_title_value, keyword, literal,
-    title_value, tokenize,
-};
+use crate::diagrams::common::tokens::Memo;
+use crate::diagrams::common::tokens::Pattern;
+use crate::diagrams::common::tokens::Reader;
+use crate::diagrams::common::tokens::STRING;
+use crate::diagrams::common::tokens::TokenType;
+use crate::diagrams::common::tokens::acc_descr_value;
+use crate::diagrams::common::tokens::acc_title_value;
+use crate::diagrams::common::tokens::keyword;
+use crate::diagrams::common::tokens::literal;
+use crate::diagrams::common::tokens::title_value;
+use crate::diagrams::common::tokens::tokenize;
 use crate::error::Error;
 use crate::util::chars::is_space;
 
@@ -84,43 +91,25 @@ fn acc_descr(src: &str, at: usize, memo: &mut Memo) -> Option<usize> {
 }
 
 /// The railroad `title` token type.
-pub(crate) const TITLE: TokenType = TokenType {
-    first: Some("t"),
-    name: "TITLE",
-    pattern: Pattern::Match(title),
-    ..literal("")
-};
+pub(crate) const TITLE: TokenType =
+    TokenType { first: Some("t"), name: "TITLE", pattern: Pattern::Match(title), ..literal("") };
 
 /// The railroad `accTitle` token type.
-pub(crate) const ACC_TITLE: TokenType = TokenType {
-    first: Some("a"),
-    name: "ACC_TITLE",
-    pattern: Pattern::Match(acc_title),
-    ..literal("")
-};
+pub(crate) const ACC_TITLE: TokenType =
+    TokenType { first: Some("a"), name: "ACC_TITLE", pattern: Pattern::Match(acc_title), ..literal("") };
 
 /// The railroad `accDescr` token type.
-pub(crate) const ACC_DESCR: TokenType = TokenType {
-    first: Some("a"),
-    name: "ACC_DESCR",
-    pattern: Pattern::Scan(acc_descr),
-    ..literal("")
-};
+pub(crate) const ACC_DESCR: TokenType =
+    TokenType { first: Some("a"), name: "ACC_DESCR", pattern: Pattern::Scan(acc_descr), ..literal("") };
 
 /// A literal token type with longer alternatives.
 pub(crate) const fn word(name: &'static str, longer: &'static [u16]) -> TokenType {
-    TokenType {
-        longer,
-        ..literal(name)
-    }
+    TokenType { longer, ..literal(name) }
 }
 
 /// The diagram's keyword. A name that starts with it and goes on is a name.
 pub(crate) const fn opening(word: &'static str, name: &'static [u16]) -> TokenType {
-    TokenType {
-        longer: name,
-        ..keyword(word)
-    }
+    TokenType { longer: name, ..keyword(word) }
 }
 
 /// `[A-Z_a-z][\w-]*`.
@@ -131,10 +120,7 @@ fn identifier_end(src: &str, at: usize) -> Option<usize> {
         return None;
     }
     let mut i = at + 1;
-    while bytes
-        .get(i)
-        .is_some_and(|&b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-')
-    {
+    while bytes.get(i).is_some_and(|&b| b.is_ascii_alphanumeric() || b == b'_' || b == b'-') {
         i += 1;
     }
     Some(i)
@@ -142,12 +128,7 @@ fn identifier_end(src: &str, at: usize) -> Option<usize> {
 
 /// An identifier token type: `[A-Z_a-z][\w-]*`.
 pub(crate) const fn identifier(name: &'static str) -> TokenType {
-    TokenType {
-        first: Some(LETTERS_),
-        name,
-        pattern: Pattern::Match(identifier_end),
-        ..literal("")
-    }
+    TokenType { first: Some(LETTERS_), name, pattern: Pattern::Match(identifier_end), ..literal("") }
 }
 
 /// A quoted string token type: `"([^"\\]|\\.)*"|'([^'\\]|\\.)*'`.
@@ -166,13 +147,7 @@ fn whitespace_end(src: &str, at: usize) -> Option<usize> {
 
 /// The hidden whitespace token type every railroad grammar lists first among its hidden tokens.
 pub(crate) const fn whitespace(name: &'static str) -> TokenType {
-    TokenType {
-        first: Some("\t \r\n"),
-        hidden: true,
-        name,
-        pattern: Pattern::Match(whitespace_end),
-        ..literal("")
-    }
+    TokenType { first: Some("\t \r\n"), hidden: true, name, pattern: Pattern::Match(whitespace_end), ..literal("") }
 }
 
 /// `\/\*`.
@@ -253,12 +228,7 @@ pub(crate) fn parse_grammar<'a, R>(
     mut rule: impl FnMut(&mut Reader<'a>) -> Result<R, Error>,
 ) -> Result<Grammar<R>, Error> {
     let mut r = Reader::new(tokenize(src, types, "railroad")?, types, "railroad");
-    let mut ast = Grammar {
-        acc_descr: None,
-        acc_title: None,
-        rules: Vec::new(),
-        title: None,
-    };
+    let mut ast = Grammar { acc_descr: None, acc_title: None, rules: Vec::new(), title: None };
     r.expect(0)?;
     loop {
         let kind = r.kind();
@@ -294,10 +264,7 @@ pub(crate) struct AstNode<K> {
 
 /// Adds a node of `kind` without parts to `ast`, returning its index.
 pub(crate) fn add<K>(ast: &mut Vec<AstNode<K>>, kind: K) -> usize {
-    ast.push(AstNode {
-        kind,
-        parts: Vec::new(),
-    });
+    ast.push(AstNode { kind, parts: Vec::new() });
     ast.len() - 1
 }
 
@@ -370,14 +337,7 @@ pub(crate) fn optional(nodes: &mut Vec<RailroadNode>, element: usize) -> usize {
 
 /// `element` repeated at least `min` times, without bound.
 pub(crate) fn repetition(nodes: &mut Vec<RailroadNode>, element: usize, min: f64) -> usize {
-    push(
-        nodes,
-        RailroadNode::Repetition {
-            element,
-            max: f64::INFINITY,
-            min,
-        },
-    )
+    push(nodes, RailroadNode::Repetition { element, max: f64::INFINITY, min })
 }
 
 /// The first part's result, which every node with parts has.

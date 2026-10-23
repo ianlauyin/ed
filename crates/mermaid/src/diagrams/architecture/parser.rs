@@ -1,14 +1,29 @@
 //! Tokens and parser of Mermaid's `architecture-beta` Langium grammar. Port of Pele's
 //! `src/diagrams/architecture/parser.ts`.
 
-use crate::diagrams::common::tokens::{
-    ACC_DESCR, ACC_TITLE, DIRECTIVE, EOF, NEWLINE, Pattern, Reader, SINGLE_LINE_COMMENT, STRING,
-    TITLE, TokenType, WHITESPACE, YAML, acc_descr_value, acc_title_value, literal, string_value,
-    title_value, tokenize,
-};
+use crate::diagrams::common::tokens::ACC_DESCR;
+use crate::diagrams::common::tokens::ACC_TITLE;
+use crate::diagrams::common::tokens::DIRECTIVE;
+use crate::diagrams::common::tokens::EOF;
+use crate::diagrams::common::tokens::NEWLINE;
+use crate::diagrams::common::tokens::Pattern;
+use crate::diagrams::common::tokens::Reader;
+use crate::diagrams::common::tokens::SINGLE_LINE_COMMENT;
+use crate::diagrams::common::tokens::STRING;
+use crate::diagrams::common::tokens::TITLE;
+use crate::diagrams::common::tokens::TokenType;
+use crate::diagrams::common::tokens::WHITESPACE;
+use crate::diagrams::common::tokens::YAML;
+use crate::diagrams::common::tokens::acc_descr_value;
+use crate::diagrams::common::tokens::acc_title_value;
+use crate::diagrams::common::tokens::literal;
+use crate::diagrams::common::tokens::string_value;
+use crate::diagrams::common::tokens::title_value;
+use crate::diagrams::common::tokens::tokenize;
 use crate::error::Error;
 use crate::text::label::trim;
-use crate::util::chars::{is_line_end, is_word};
+use crate::util::chars::is_line_end;
+use crate::util::chars::is_word;
 
 /// Token kinds: indices into [`ARCHITECTURE_TOKENS`], whose order is the matching order.
 mod t {
@@ -38,18 +53,11 @@ mod t {
 }
 
 /// `[\w]([-\w]*\w)?`.
-const ID: TokenType = TokenType {
-    name: "ID",
-    pattern: Pattern::Match(id),
-    ..literal("")
-};
+const ID: TokenType = TokenType { name: "ID", pattern: Pattern::Match(id), ..literal("") };
 
 /// A word of the grammar, which an identifier that goes on longer takes over.
 const fn word(text: &'static str) -> TokenType {
-    TokenType {
-        longer: &[t::ID],
-        ..literal(text)
-    }
+    TokenType { longer: &[t::ID], ..literal(text) }
 }
 
 /// Mermaid's architecture tokens, in matching order.
@@ -64,30 +72,13 @@ pub(crate) const ARCHITECTURE_TOKENS: &[TokenType] = &[
     word("group"),
     word("align"),
     word("row"),
-    TokenType {
-        longer: &[t::YAML],
-        ..literal("--")
-    },
+    TokenType { longer: &[t::YAML], ..literal("--") },
     word("in"),
     literal(":"),
-    TokenType {
-        longer: &[t::YAML],
-        ..literal("-")
-    },
-    TokenType {
-        name: "ARROW_DIRECTION",
-        pattern: Pattern::Match(direction),
-        ..literal("")
-    },
-    TokenType {
-        name: "ARROW_GROUP",
-        ..literal("{group}")
-    },
-    TokenType {
-        name: "ARROW_INTO",
-        pattern: Pattern::Match(into),
-        ..literal("")
-    },
+    TokenType { longer: &[t::YAML], ..literal("-") },
+    TokenType { name: "ARROW_DIRECTION", pattern: Pattern::Match(direction), ..literal("") },
+    TokenType { name: "ARROW_GROUP", ..literal("{group}") },
+    TokenType { name: "ARROW_INTO", pattern: Pattern::Match(into), ..literal("") },
     ACC_DESCR,
     ACC_TITLE,
     TITLE,
@@ -98,16 +89,8 @@ pub(crate) const ARCHITECTURE_TOKENS: &[TokenType] = &[
     YAML,
     DIRECTIVE,
     SINGLE_LINE_COMMENT,
-    TokenType {
-        name: "ARCH_ICON",
-        pattern: Pattern::Match(icon),
-        ..literal("")
-    },
-    TokenType {
-        name: "ARCH_TITLE",
-        pattern: Pattern::Match(label),
-        ..literal("")
-    },
+    TokenType { name: "ARCH_ICON", pattern: Pattern::Match(icon), ..literal("") },
+    TokenType { name: "ARCH_TITLE", pattern: Pattern::Match(label), ..literal("") },
 ];
 
 /// The byte at `p`, or 0 past the end.
@@ -290,10 +273,7 @@ pub(crate) struct JunctionAst {
 
 /// An edge statement.
 #[derive(Clone, Debug)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "mirrors Mermaid's edge fields"
-)]
+#[expect(clippy::struct_excessive_bools, reason = "mirrors Mermaid's edge fields")]
 pub(crate) struct EdgeAst {
     /// Side of the left-hand node.
     pub(crate) lhs_dir: Side,
@@ -350,8 +330,7 @@ fn label_value(text: &str) -> String {
     let inner = text.get(1..text.len().saturating_sub(1)).unwrap_or("");
     let result = trim(inner);
     let quoted = result.len() >= 2
-        && ((result.starts_with('"') && result.ends_with('"'))
-            || (result.starts_with('\'') && result.ends_with('\'')));
+        && ((result.starts_with('"') && result.ends_with('"')) || (result.starts_with('\'') && result.ends_with('\'')));
     // `"` alone starts and ends with a quote too, and JavaScript's `slice(1, -1)` makes it empty.
     let single = result.len() == 1 && (result == "\"" || result == "'");
     if single {
@@ -384,11 +363,7 @@ fn unescape(text: &str, quote: char) -> String {
 ///
 /// Returns a syntax error for text Mermaid's grammar rejects.
 pub(crate) fn parse_architecture(src: &str) -> Result<ArchitectureAst, Error> {
-    let mut r = Reader::new(
-        tokenize(src, ARCHITECTURE_TOKENS, "architecture")?,
-        ARCHITECTURE_TOKENS,
-        "architecture",
-    );
+    let mut r = Reader::new(tokenize(src, ARCHITECTURE_TOKENS, "architecture")?, ARCHITECTURE_TOKENS, "architecture");
     let mut ast = ArchitectureAst::default();
 
     while r.kind() == t::NEWLINE {
@@ -406,10 +381,7 @@ pub(crate) fn parse_architecture(src: &str) -> Result<ArchitectureAst, Error> {
             t::TITLE => ast.title = Some(title_value(r.take())),
             t::GROUP => {
                 r.i += 1;
-                let mut group = GroupAst {
-                    id: r.expect(t::ID)?.to_owned(),
-                    ..GroupAst::default()
-                };
+                let mut group = GroupAst { id: r.expect(t::ID)?.to_owned(), ..GroupAst::default() };
                 if r.kind() == t::ICON {
                     group.icon = Some(inner(r.take()));
                 }
@@ -423,10 +395,7 @@ pub(crate) fn parse_architecture(src: &str) -> Result<ArchitectureAst, Error> {
             }
             t::SERVICE => {
                 r.i += 1;
-                let mut service = ServiceAst {
-                    id: r.expect(t::ID)?.to_owned(),
-                    ..ServiceAst::default()
-                };
+                let mut service = ServiceAst { id: r.expect(t::ID)?.to_owned(), ..ServiceAst::default() };
                 if r.kind() == t::STRING {
                     service.icon_text = Some(string_value(r.take()).into_owned());
                 } else if r.kind() == t::ICON {
@@ -442,10 +411,7 @@ pub(crate) fn parse_architecture(src: &str) -> Result<ArchitectureAst, Error> {
             }
             t::JUNCTION => {
                 r.i += 1;
-                let mut junction = JunctionAst {
-                    id: r.expect(t::ID)?.to_owned(),
-                    r#in: None,
-                };
+                let mut junction = JunctionAst { id: r.expect(t::ID)?.to_owned(), r#in: None };
                 if r.accept(t::IN) {
                     junction.r#in = Some(r.expect(t::ID)?.to_owned());
                 }
@@ -457,11 +423,7 @@ pub(crate) fn parse_architecture(src: &str) -> Result<ArchitectureAst, Error> {
                 if r.kind() != t::ROW && r.kind() != t::COLUMN {
                     return Err(r.fail("'row' or 'column'"));
                 }
-                let direction = if r.take() == "row" {
-                    Direction::Row
-                } else {
-                    Direction::Column
-                };
+                let direction = if r.take() == "row" { Direction::Row } else { Direction::Column };
                 let mut members = vec![r.expect(t::ID)?.to_owned(), r.expect(t::ID)?.to_owned()];
                 while r.kind() == t::ID {
                     members.push(r.take().to_owned());
@@ -469,9 +431,7 @@ pub(crate) fn parse_architecture(src: &str) -> Result<ArchitectureAst, Error> {
                 ast.alignments.push(AlignmentAst { direction, members });
             }
             _ => {
-                return Err(r.fail(
-                    "a group, a service, a junction, an edge, an alignment, a title, or a line break",
-                ));
+                return Err(r.fail("a group, a service, a junction, an edge, an alignment, a title, or a line break"));
             }
         }
         end_of_line(&mut r)?;
@@ -481,9 +441,7 @@ pub(crate) fn parse_architecture(src: &str) -> Result<ArchitectureAst, Error> {
 
 /// The text between the first and last characters of a token whose ends are ASCII.
 fn inner(text: &str) -> String {
-    text.get(1..text.len().saturating_sub(1))
-        .unwrap_or("")
-        .to_owned()
+    text.get(1..text.len().saturating_sub(1)).unwrap_or("").to_owned()
 }
 
 /// An edge, from its left-hand id.
@@ -507,17 +465,7 @@ fn edge(r: &mut Reader<'_>) -> Result<EdgeAst, Error> {
     r.expect(t::COLON)?;
     let rhs_id = r.expect(t::ID)?.to_owned();
     let rhs_group = r.accept(t::ARROW_GROUP);
-    Ok(EdgeAst {
-        lhs_dir,
-        lhs_group,
-        lhs_id,
-        lhs_into,
-        rhs_dir,
-        rhs_group,
-        rhs_id,
-        rhs_into,
-        title,
-    })
+    Ok(EdgeAst { lhs_dir, lhs_group, lhs_id, lhs_into, rhs_dir, rhs_group, rhs_id, rhs_into, title })
 }
 
 /// A line break or the end of input, then any further line breaks.

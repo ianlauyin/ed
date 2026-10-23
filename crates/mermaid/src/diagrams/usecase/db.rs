@@ -4,12 +4,21 @@
 use std::collections::BTreeMap;
 
 use super::json::JsonDoc;
-use super::lexer::{error, location_text};
-use super::types::{
-    Actor, ActorType, ClassDef, JsonNode, Note, Relationship, RelationshipType, Shape,
-    SystemBoundary, UseCase, UsecaseModel,
-};
-use crate::error::{Code, Error};
+use super::lexer::error;
+use super::lexer::location_text;
+use super::types::Actor;
+use super::types::ActorType;
+use super::types::ClassDef;
+use super::types::JsonNode;
+use super::types::Note;
+use super::types::Relationship;
+use super::types::RelationshipType;
+use super::types::Shape;
+use super::types::SystemBoundary;
+use super::types::UseCase;
+use super::types::UsecaseModel;
+use crate::error::Code;
+use crate::error::Error;
 use crate::util::chars::is_space;
 
 /// Start and end byte offsets in the source, end exclusive.
@@ -312,10 +321,7 @@ struct Ordered<V> {
 impl<V> Ordered<V> {
     /// An empty collection.
     fn new() -> Self {
-        Self {
-            index: BTreeMap::new(),
-            values: Vec::new(),
-        }
+        Self { index: BTreeMap::new(), values: Vec::new() }
     }
 
     /// The position of `id`.
@@ -454,11 +460,7 @@ fn text(parts: &[&str]) -> String {
 ///
 /// Returns Mermaid's semantic error for the first statement that disagrees with another.
 #[expect(clippy::too_many_lines, reason = "mirrors Pele's resolveUsecase")]
-pub(crate) fn resolve_usecase(
-    src: &str,
-    drafts: Drafts,
-    title: Option<&str>,
-) -> Result<UsecaseModel, Error> {
+pub(crate) fn resolve_usecase(src: &str, drafts: Drafts, title: Option<&str>) -> Result<UsecaseModel, Error> {
     let mut symbols: BTreeMap<String, Origin> = BTreeMap::new();
     let mut elements: Ordered<ElementState> = Ordered::new();
     let mut boundaries: Ordered<BoundaryState> = Ordered::new();
@@ -474,41 +476,22 @@ pub(crate) fn resolve_usecase(
     let register = |symbols: &mut BTreeMap<String, Origin>, named: &Named, kind: SymbolKind| {
         symbols.insert(
             named.id.clone(),
-            Origin {
-                generated: named.generated,
-                kind,
-                label: Some(named.label.text.clone()),
-                span: named.span,
-            },
+            Origin { generated: named.generated, kind, label: Some(named.label.text.clone()), span: named.span },
         );
     };
 
     // An id means one thing in the whole diagram, and an id made from a label may be declared
     // once.
-    let claim = |symbols: &BTreeMap<String, Origin>,
-                 draft: &Named,
-                 kind: SymbolKind|
-     -> Result<(), Error> {
+    let claim = |symbols: &BTreeMap<String, Origin>, draft: &Named, kind: SymbolKind| -> Result<(), Error> {
         let Some(origin) = symbols.get(&draft.id) else {
             return Ok(());
         };
         let label = draft.generated.then_some(draft.label.text.as_str());
-        let origin_label = if origin.generated {
-            origin.label.as_deref()
-        } else {
-            None
-        };
+        let origin_label = if origin.generated { origin.label.as_deref() } else { None };
         if origin.kind != kind {
             return Err(conflict(
                 src,
-                &text(&[
-                    "ID '",
-                    &draft.id,
-                    "' is declared as both ",
-                    origin.kind.as_str(),
-                    " and ",
-                    kind.as_str(),
-                ]),
+                &text(&["ID '", &draft.id, "' is declared as both ", origin.kind.as_str(), " and ", kind.as_str()]),
                 draft.span,
                 origin.span,
                 label,
@@ -518,11 +501,7 @@ pub(crate) fn resolve_usecase(
         if origin.generated || draft.generated {
             return Err(conflict(
                 src,
-                &text(&[
-                    "Generated ID '",
-                    &draft.id,
-                    "' collides with another declaration",
-                ]),
+                &text(&["Generated ID '", &draft.id, "' collides with another declaration"]),
                 draft.span,
                 origin.span,
                 label,
@@ -532,44 +511,29 @@ pub(crate) fn resolve_usecase(
         Ok(())
     };
 
-    let unique = |symbols: &mut BTreeMap<String, Origin>,
-                  id: &str,
-                  kind: SymbolKind,
-                  span: Span|
-     -> Result<(), Error> {
-        if let Some(previous) = symbols.get(id) {
-            return Err(conflict(
-                src,
-                &text(&[
-                    "ID '",
-                    id,
-                    "' is declared more than once (",
-                    previous.kind.as_str(),
-                    " and ",
-                    kind.as_str(),
-                    ")",
-                ]),
-                span,
-                previous.span,
-                None,
-                if previous.generated {
-                    previous.label.as_deref()
-                } else {
-                    None
-                },
-            ));
-        }
-        symbols.insert(
-            id.to_owned(),
-            Origin {
-                generated: false,
-                kind,
-                label: None,
-                span,
-            },
-        );
-        Ok(())
-    };
+    let unique =
+        |symbols: &mut BTreeMap<String, Origin>, id: &str, kind: SymbolKind, span: Span| -> Result<(), Error> {
+            if let Some(previous) = symbols.get(id) {
+                return Err(conflict(
+                    src,
+                    &text(&[
+                        "ID '",
+                        id,
+                        "' is declared more than once (",
+                        previous.kind.as_str(),
+                        " and ",
+                        kind.as_str(),
+                        ")",
+                    ]),
+                    span,
+                    previous.span,
+                    None,
+                    if previous.generated { previous.label.as_deref() } else { None },
+                ));
+            }
+            symbols.insert(id.to_owned(), Origin { generated: false, kind, label: None, span });
+            Ok(())
+        };
 
     // A metadata statement replaces what a declaration said; two declarations have to agree.
     let element_metadata = |state: &mut ElementState,
@@ -595,9 +559,7 @@ pub(crate) fn resolve_usecase(
                     }
                 };
                 match (key, &property.value) {
-                    ("type", PropValue::Str(value))
-                        if matches!(value.as_str(), "normal" | "hollow" | "awesome") =>
-                    {
+                    ("type", PropValue::Str(value)) if matches!(value.as_str(), "normal" | "hollow" | "awesome") => {
                         let value = match value.as_str() {
                             "hollow" => ActorType::Hollow,
                             "awesome" => ActorType::Awesome,
@@ -637,16 +599,8 @@ pub(crate) fn resolve_usecase(
 
     let mut declarations: Vec<(usize, Declaration)> = Vec::new();
     for relationship in &drafts.relationships {
-        mention(
-            &mut first,
-            &relationship.source.named.id,
-            relationship.source.named.span.0,
-        );
-        mention(
-            &mut first,
-            &relationship.target.named.id,
-            relationship.target.named.span.0,
-        );
+        mention(&mut first, &relationship.source.named.id, relationship.source.named.span.0);
+        mention(&mut first, &relationship.target.named.id, relationship.target.named.span.0);
     }
     for (i, draft) in drafts.elements.iter().enumerate() {
         mention(&mut first, &draft.named.id, draft.named.span.0);
@@ -667,11 +621,8 @@ pub(crate) fn resolve_usecase(
     }
     declarations.sort_by_key(|(offset, _)| *offset);
 
-    let boundary_named = |index: Option<usize>| {
-        index
-            .and_then(|at| drafts.boundaries.get(at))
-            .map(|boundary| &boundary.named)
-    };
+    let boundary_named =
+        |index: Option<usize>| index.and_then(|at| drafts.boundaries.get(at)).map(|boundary| &boundary.named);
 
     for (_, declaration) in &declarations {
         match *declaration {
@@ -679,15 +630,9 @@ pub(crate) fn resolve_usecase(
                 let Some(draft) = drafts.elements.get(i) else {
                     continue;
                 };
-                let kind = if draft.actor {
-                    SymbolKind::Actor
-                } else {
-                    SymbolKind::Usecase
-                };
+                let kind = if draft.actor { SymbolKind::Actor } else { SymbolKind::Usecase };
                 claim(&symbols, &draft.named, kind)?;
-                let parent = draft
-                    .parent
-                    .filter(|_| boundary_named(draft.parent).is_some_and(|b| !b.id.is_empty()));
+                let parent = draft.parent.filter(|_| boundary_named(draft.parent).is_some_and(|b| !b.id.is_empty()));
                 let Some(existing) = elements.get_mut(&draft.named.id) else {
                     let mut state = ElementState {
                         actor: draft.actor,
@@ -733,18 +678,13 @@ pub(crate) fn resolve_usecase(
                 }
                 // A boundary whose title makes an empty id is no parent, but it still takes the
                 // place of one.
-                if let (Some(parent), Some(own)) =
-                    (boundary_named(parent), boundary_named(existing.parent))
+                if let (Some(parent), Some(own)) = (boundary_named(parent), boundary_named(existing.parent))
                     && !own.id.is_empty()
                     && parent.id != own.id
                 {
                     return Err(conflict(
                         src,
-                        &text(&[
-                            "Element '",
-                            id,
-                            "' belongs to more than one system boundary",
-                        ]),
+                        &text(&["Element '", id, "' belongs to more than one system boundary"]),
                         parent.span,
                         own.span,
                         None,
@@ -828,11 +768,7 @@ pub(crate) fn resolve_usecase(
             if end.classed && !end.declares {
                 return Err(fail(
                     src,
-                    &text(&[
-                        "Relationship endpoint '",
-                        &end.named.id,
-                        "' uses ::: without declaring the node",
-                    ]),
+                    &text(&["Relationship endpoint '", &end.named.id, "' uses ::: without declaring the node"]),
                     end.named.span,
                 ));
             }
@@ -860,28 +796,13 @@ pub(crate) fn resolve_usecase(
         };
         let source_kind = endpoint(&draft.source)?;
         let target_kind = endpoint(&draft.target)?;
-        let related = |kind: SymbolKind| {
-            matches!(
-                kind,
-                SymbolKind::Actor | SymbolKind::Usecase | SymbolKind::Json
-            )
-        };
+        let related = |kind: SymbolKind| matches!(kind, SymbolKind::Actor | SymbolKind::Usecase | SymbolKind::Json);
         let origin_span = |id: &str| symbols.get(id).map_or((0, 0), |origin| origin.span);
-        for (end, kind, role) in [
-            (&draft.source, source_kind, "source"),
-            (&draft.target, target_kind, "target"),
-        ] {
+        for (end, kind, role) in [(&draft.source, source_kind, "source"), (&draft.target, target_kind, "target")] {
             if !related(kind) {
                 return Err(conflict(
                     src,
-                    &text(&[
-                        "Relationship ",
-                        role,
-                        " '",
-                        &end.named.id,
-                        "' cannot be ",
-                        kind.as_str(),
-                    ]),
+                    &text(&["Relationship ", role, " '", &end.named.id, "' cannot be ", kind.as_str()]),
                     end.named.span,
                     origin_span(&end.named.id),
                     None,
@@ -893,14 +814,9 @@ pub(crate) fn resolve_usecase(
         if matches!(r#type, RelationshipType::Include | RelationshipType::Extend)
             && (source_kind != SymbolKind::Usecase || target_kind != SymbolKind::Usecase)
         {
-            return Err(fail(
-                src,
-                &text(&[r#type.as_str(), " relationship requires use-case endpoints"]),
-                draft.span,
-            ));
+            return Err(fail(src, &text(&[r#type.as_str(), " relationship requires use-case endpoints"]), draft.span));
         }
-        if r#type == RelationshipType::Generalization
-            && (source_kind == SymbolKind::Json || source_kind != target_kind)
+        if r#type == RelationshipType::Generalization && (source_kind == SymbolKind::Json || source_kind != target_kind)
         {
             return Err(fail(
                 src,
@@ -940,10 +856,7 @@ pub(crate) fn resolve_usecase(
             classes: Vec::new(),
             explicit_id: draft.id.is_some(),
             id,
-            label: draft
-                .label
-                .as_ref()
-                .map(|label| (label.text.clone(), label.markdown)),
+            label: draft.label.as_ref().map(|label| (label.text.clone(), label.markdown)),
             minlen: draft.minlen,
             source: draft.source.named.id.clone(),
             styles: Vec::new(),
@@ -975,8 +888,7 @@ pub(crate) fn resolve_usecase(
             let key = property.key.as_str();
             match (kind, key, &property.value) {
                 (SymbolKind::Boundary, "type", PropValue::Str(value))
-                    if matches!(value.as_str(), "rect" | "package")
-                        && boundaries.position(target).is_some() =>
+                    if matches!(value.as_str(), "rect" | "package") && boundaries.position(target).is_some() =>
                 {
                     if let Some(boundary) = boundaries.get_mut(target) {
                         boundary.package = Some(value == "package");
@@ -1015,37 +927,21 @@ pub(crate) fn resolve_usecase(
             {
                 return Err(fail(
                     src,
-                    &text(&[
-                        "Actor '",
-                        id,
-                        "' cannot combine icon with type '",
-                        actor_type.as_str(),
-                        "'",
-                    ]),
+                    &text(&["Actor '", id, "' cannot combine icon with type '", actor_type.as_str(), "'"]),
                     state.named.span,
                 ));
             }
-            if state.business == Some(true)
-                && (icon || state.actor_type == Some(ActorType::Awesome))
-            {
+            if state.business == Some(true) && (icon || state.actor_type == Some(ActorType::Awesome)) {
                 return Err(fail(
                     src,
-                    &text(&[
-                        "Business actor '",
-                        id,
-                        "' must use normal or hollow geometry",
-                    ]),
+                    &text(&["Business actor '", id, "' must use normal or hollow geometry"]),
                     state.named.span,
                 ));
             }
         } else if state.shape == Some(Shape::Rect) && state.business == Some(true) {
             return Err(fail(
                 src,
-                &text(&[
-                    "Rectangular use case '",
-                    id,
-                    "' cannot be a business use case",
-                ]),
+                &text(&["Rectangular use case '", id, "' cannot be a business use case"]),
                 state.named.span,
             ));
         }
@@ -1054,8 +950,7 @@ pub(crate) fn resolve_usecase(
     let mut by_offset: Vec<&DraftElement> = drafts.elements.iter().collect();
     by_offset.sort_by_key(|draft| draft.named.span.0);
     for draft in by_offset {
-        let Some(parent) = boundary_named(draft.parent).filter(|parent| !parent.id.is_empty())
-        else {
+        let Some(parent) = boundary_named(draft.parent).filter(|parent| !parent.id.is_empty()) else {
             continue;
         };
         if let Some(boundary) = boundaries.get_mut(&parent.id)
@@ -1077,23 +972,15 @@ pub(crate) fn resolve_usecase(
     states.sort_by_key(|state| order(&state.named.id));
     for state in states {
         let named = &state.named;
-        let parent_id = boundary_named(state.parent)
-            .filter(|parent| !parent.id.is_empty())
-            .map(|parent| parent.id.clone());
-        let stereotype = state
-            .stereotype
-            .clone()
-            .filter(|stereotype| !stereotype.is_empty());
+        let parent_id =
+            boundary_named(state.parent).filter(|parent| !parent.id.is_empty()).map(|parent| parent.id.clone());
+        let stereotype = state.stereotype.clone().filter(|stereotype| !stereotype.is_empty());
         if state.actor {
             let icon = state.icon.clone().filter(|icon| !icon.is_empty());
             model.actors.push(Actor {
                 business: state.business.unwrap_or(false),
                 classes: state.classes.clone(),
-                r#type: if icon.is_some() {
-                    ActorType::Icon
-                } else {
-                    state.actor_type.unwrap_or(ActorType::Normal)
-                },
+                r#type: if icon.is_some() { ActorType::Icon } else { state.actor_type.unwrap_or(ActorType::Normal) },
                 icon,
                 id: named.id.clone(),
                 label: named.label.text.clone(),
@@ -1144,21 +1031,12 @@ pub(crate) fn resolve_usecase(
 
     for (count, draft) in drafts.notes.iter().enumerate() {
         let Some(origin) = symbols.get(&draft.target) else {
-            return Err(fail(
-                src,
-                &text(&["Note target '", &draft.target, "' is unresolved"]),
-                draft.span,
-            ));
+            return Err(fail(src, &text(&["Note target '", &draft.target, "' is unresolved"]), draft.span));
         };
         if !matches!(origin.kind, SymbolKind::Actor | SymbolKind::Usecase) {
             return Err(conflict(
                 src,
-                &text(&[
-                    "Note target '",
-                    &draft.target,
-                    "' must be an actor or use case, not ",
-                    origin.kind.as_str(),
-                ]),
+                &text(&["Note target '", &draft.target, "' must be an actor or use case, not ", origin.kind.as_str()]),
                 draft.span,
                 origin.span,
                 None,
@@ -1193,14 +1071,7 @@ pub(crate) fn resolve_usecase(
         }
     }
     for assignment in &drafts.styles {
-        let (_, styles) = target(
-            &mut model,
-            &symbols,
-            &edges,
-            src,
-            &assignment.target,
-            assignment.span,
-        )?;
+        let (_, styles) = target(&mut model, &symbols, &edges, src, &assignment.target, assignment.span)?;
         styles.extend(assignment.styles.iter().cloned());
     }
 
@@ -1220,11 +1091,9 @@ fn target<'m>(
     span: Span,
 ) -> Result<(&'m mut Vec<String>, &'m mut Vec<String>), Error> {
     let found = match symbols.get(id).map(|origin| origin.kind) {
-        Some(SymbolKind::Actor) => model
-            .actors
-            .iter_mut()
-            .find(|actor| actor.id == id)
-            .map(|actor| (&mut actor.classes, &mut actor.styles)),
+        Some(SymbolKind::Actor) => {
+            model.actors.iter_mut().find(|actor| actor.id == id).map(|actor| (&mut actor.classes, &mut actor.styles))
+        }
         Some(SymbolKind::Usecase) => model
             .use_cases
             .iter_mut()
@@ -1235,21 +1104,13 @@ fn target<'m>(
             .iter_mut()
             .find(|boundary| boundary.id == id)
             .map(|boundary| (&mut boundary.classes, &mut boundary.styles)),
-        Some(SymbolKind::Json) => model
-            .json_nodes
-            .iter_mut()
-            .find(|json| json.id == id)
-            .map(|json| (&mut json.classes, &mut json.styles)),
+        Some(SymbolKind::Json) => {
+            model.json_nodes.iter_mut().find(|json| json.id == id).map(|json| (&mut json.classes, &mut json.styles))
+        }
         Some(SymbolKind::Edge) | None => edges
             .get(id)
             .and_then(|&at| model.relationships.get_mut(at))
             .map(|edge| (&mut edge.classes, &mut edge.styles)),
     };
-    found.ok_or_else(|| {
-        fail(
-            src,
-            &text(&["Class/style target '", id, "' is unresolved or anonymous"]),
-            span,
-        )
-    })
+    found.ok_or_else(|| fail(src, &text(&["Class/style target '", id, "' is unresolved or anonymous"]), span))
 }

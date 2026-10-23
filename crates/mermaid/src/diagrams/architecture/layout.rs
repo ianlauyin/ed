@@ -9,8 +9,12 @@
 
 use std::collections::BTreeMap;
 
-use super::db::{ArchEdge, ArchGroup, ArchLayoutHint, ArchNode};
-use super::parser::{Direction, Side};
+use super::db::ArchEdge;
+use super::db::ArchGroup;
+use super::db::ArchLayoutHint;
+use super::db::ArchNode;
+use super::parser::Direction;
+use super::parser::Side;
 
 /// Cells of the nodes and groups.
 #[derive(Clone, Debug, Default)]
@@ -152,10 +156,7 @@ impl Placer {
                 }
             }
         }
-        self.large
-            .iter()
-            .copied()
-            .find(|&item| self.overlaps(item, rx, ry, rw, rh))
+        self.large.iter().copied().find(|&item| self.overlaps(item, rx, ry, rw, rh))
     }
 
     /// How far a block must slide along (`sx`, `sy`) to be clear. Each step jumps past what it
@@ -165,12 +166,7 @@ impl Placer {
         let key = [rx, ry, rw, rh, sx, sy];
         let mut k = self.reach.get(&key).copied().unwrap_or(0);
         while let Some(hit) = self.collide(rx + k * sx, ry + k * sy, rw, rh) {
-            let (hx, hy, hw, hh) = (
-                at(&self.x, hit),
-                at(&self.y, hit),
-                at(&self.w, hit),
-                at(&self.h, hit),
-            );
+            let (hx, hy, hw, hh) = (at(&self.x, hit), at(&self.y, hit), at(&self.w, hit), at(&self.h, hit));
             k = if sx > 0 {
                 hx + hw - rx
             } else if sx < 0 {
@@ -188,24 +184,14 @@ impl Placer {
     fn follow(&mut self, from: usize, k: usize) {
         let l = &self.links;
         let forward = at(&l.item_a, k) == from;
-        let to = if forward {
-            at(&l.item_b, k)
-        } else {
-            at(&l.item_a, k)
-        };
+        let to = if forward { at(&l.item_b, k) } else { at(&l.item_a, k) };
         if at(&self.placed, to) {
             return;
         }
-        let (sp, sq) = if forward {
-            (at(&l.side_a, k), at(&l.side_b, k))
-        } else {
-            (at(&l.side_b, k), at(&l.side_a, k))
-        };
-        let (near_link, far_link) = if forward {
-            (at(&l.link_a, k), at(&l.link_b, k))
-        } else {
-            (at(&l.link_b, k), at(&l.link_a, k))
-        };
+        let (sp, sq) =
+            if forward { (at(&l.side_a, k), at(&l.side_b, k)) } else { (at(&l.side_b, k), at(&l.side_a, k)) };
+        let (near_link, far_link) =
+            if forward { (at(&l.link_a, k), at(&l.link_b, k)) } else { (at(&l.link_b, k), at(&l.link_a, k)) };
         let (pax, pay) = self.anchor(near_link, from);
         let (ax, ay) = self.anchor(far_link, to);
         let mut dx = at(&DX, sp);
@@ -225,12 +211,7 @@ impl Placer {
             shift_y = -at(&DY, sq);
         }
 
-        let (xf, yf, wf, hf) = (
-            at(&self.x, from),
-            at(&self.y, from),
-            at(&self.w, from),
-            at(&self.h, from),
-        );
+        let (xf, yf, wf, hf) = (at(&self.x, from), at(&self.y, from), at(&self.w, from), at(&self.h, from));
         let (wt, ht) = (at(&self.w, to), at(&self.h, to));
         let (mut bx, mut by);
         if dx == 0 {
@@ -251,11 +232,7 @@ impl Placer {
                 for &j in list {
                     let l = &self.links;
                     let to_is_b = at(&l.item_b, j) == to;
-                    let other = if to_is_b {
-                        at(&l.item_a, j)
-                    } else {
-                        at(&l.item_b, j)
-                    };
+                    let other = if to_is_b { at(&l.item_a, j) } else { at(&l.item_b, j) };
                     let (other_side, own_side) = if to_is_b {
                         (at(&l.side_a, j), at(&l.side_b, j))
                     } else {
@@ -270,11 +247,7 @@ impl Placer {
                         (at(&l.link_b, j), at(&l.link_a, j))
                     };
                     let (oax, oay) = self.anchor(other_link, other);
-                    let spot = if dx == 0 {
-                        at(&self.x, other) + oax
-                    } else {
-                        at(&self.y, other) + oay
-                    };
+                    let spot = if dx == 0 { at(&self.x, other) + oax } else { at(&self.y, other) + oay };
                     let (tax, tay) = self.anchor(own_link, to);
                     wanted.push(spot - if dx == 0 { tax } else { tay });
                 }
@@ -293,11 +266,7 @@ impl Placer {
             let px = i64::from(dx == 0);
             let py = 1 - px;
             let forth = self.slide(bx, by, wt, ht, px, py);
-            let back = if forth == 0 {
-                0
-            } else {
-                self.slide(bx, by, wt, ht, -px, -py)
-            };
+            let back = if forth == 0 { 0 } else { self.slide(bx, by, wt, ht, -px, -py) };
             let near = if forth <= back { forth } else { -back };
             bx += px * near;
             by += py * near;
@@ -345,11 +314,7 @@ impl Placer {
                     break;
                 }
                 let from = at(&self.order, edge_at);
-                let next = self
-                    .edge_links
-                    .get(from)
-                    .and_then(|list| list.get(link_at))
-                    .copied();
+                let next = self.edge_links.get(from).and_then(|list| list.get(link_at)).copied();
                 let Some(k) = next else {
                     edge_at += 1;
                     link_at = 0;
@@ -437,10 +402,7 @@ pub(crate) fn place_on_grid(
     let mut kids: Vec<Vec<usize>> = vec![Vec::new(); g_count + 1];
     for (g, group) in groups.iter().enumerate() {
         group_index.insert(&group.id, g);
-        let p = group
-            .r#in
-            .as_deref()
-            .and_then(|id| group_index.get(id).copied());
+        let p = group.r#in.as_deref().and_then(|id| group_index.get(id).copied());
         if let Some(p) = p.filter(|&p| p != g) {
             set(&mut parent, n + g, p);
             let d = at(&depth, p) + 1;
@@ -451,11 +413,7 @@ pub(crate) fn place_on_grid(
     }
     for (i, node) in nodes.iter().enumerate() {
         node_index.insert(&node.id, i);
-        if let Some(p) = node
-            .r#in
-            .as_deref()
-            .and_then(|id| group_index.get(id).copied())
-        {
+        if let Some(p) = node.r#in.as_deref().and_then(|id| group_index.get(id).copied()) {
             set(&mut parent, i, p);
         }
         if let Some(list) = kids.get_mut(at(&parent, i)) {
@@ -524,13 +482,7 @@ pub(crate) fn place_on_grid(
             let a = node_index.get(edge.lhs_id.as_str()).copied();
             let b = node_index.get(edge.rhs_id.as_str()).copied();
             if let (Some(a), Some(b)) = (a, b) {
-                add_link(
-                    a,
-                    b,
-                    side_index(edge.lhs_dir),
-                    side_index(edge.rhs_dir),
-                    &mut edge_links,
-                );
+                add_link(a, b, side_index(edge.lhs_dir), side_index(edge.rhs_dir), &mut edge_links);
             }
         }
     }
@@ -574,16 +526,8 @@ pub(crate) fn place_on_grid(
     let signed = |p: usize| i64::try_from(p).unwrap_or(-1);
     for g in 0..g_count {
         let p = at(&placer.parent, n + g);
-        let (base_col, base_row) = if p == root {
-            (0, 0)
-        } else {
-            (at(&grid.group_col, p), at(&grid.group_row, p))
-        };
-        set(
-            &mut grid.group_parent,
-            g,
-            if p == root { -1 } else { signed(p) },
-        );
+        let (base_col, base_row) = if p == root { (0, 0) } else { (at(&grid.group_col, p), at(&grid.group_row, p)) };
+        set(&mut grid.group_parent, g, if p == root { -1 } else { signed(p) });
         set(&mut grid.group_col, g, at(&placer.x, n + g) + base_col);
         set(&mut grid.group_row, g, at(&placer.y, n + g) + base_row);
         if kids.get(g).is_none_or(Vec::is_empty) {
@@ -592,16 +536,8 @@ pub(crate) fn place_on_grid(
     }
     for i in 0..n {
         let p = at(&placer.parent, i);
-        let (base_col, base_row) = if p == root {
-            (0, 0)
-        } else {
-            (at(&grid.group_col, p), at(&grid.group_row, p))
-        };
-        set(
-            &mut grid.node_parent,
-            i,
-            if p == root { -1 } else { signed(p) },
-        );
+        let (base_col, base_row) = if p == root { (0, 0) } else { (at(&grid.group_col, p), at(&grid.group_row, p)) };
+        set(&mut grid.node_parent, i, if p == root { -1 } else { signed(p) });
         set(&mut grid.col, i, at(&placer.x, i) + base_col);
         set(&mut grid.row, i, at(&placer.y, i) + base_row);
     }

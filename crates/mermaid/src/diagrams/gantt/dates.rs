@@ -4,8 +4,11 @@
 //! because a date is accepted only when formatting the parsed result gives back the input. Port of
 //! Pele's `src/diagrams/gantt/dates.ts`.
 
-use super::js_date::{self, DAY, Date};
-use crate::util::chars::{is_digit, is_space};
+use super::js_date::DAY;
+use super::js_date::Date;
+use super::js_date::{self};
+use crate::util::chars::is_digit;
+use crate::util::chars::is_space;
 use crate::yaml::push_number;
 
 /// English month names.
@@ -24,15 +27,7 @@ pub(crate) const MONTHS: [&str; 12] = [
     "December",
 ];
 /// English weekday names, from Sunday.
-pub(crate) const WEEKDAYS: [&str; 7] = [
-    "Sunday",
-    "Monday",
-    "Tuesday",
-    "Wednesday",
-    "Thursday",
-    "Friday",
-    "Saturday",
-];
+pub(crate) const WEEKDAYS: [&str; 7] = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
 /// A milliseconds-per-week constant.
 const WEEK: f64 = 7.0 * DAY;
@@ -89,11 +84,7 @@ fn ordinal(n: f64) -> String {
     let v = n % 100.0;
     let pick = |index: f64| -> Option<&str> {
         if (0.0..4.0).contains(&index) && index.fract() == 0.0 {
-            #[expect(
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss,
-                reason = "0 to 3"
-            )]
+            #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "0 to 3")]
             SUFFIX.get(index as usize).copied()
         } else {
             None
@@ -161,20 +152,12 @@ pub(crate) fn add(date: Date, amount: f64, unit: Unit) -> Date {
 
 /// `Math.min` of two numbers: NaN when either is.
 pub(crate) fn js_min(a: f64, b: f64) -> f64 {
-    if a.is_nan() || b.is_nan() {
-        f64::NAN
-    } else {
-        a.min(b)
-    }
+    if a.is_nan() || b.is_nan() { f64::NAN } else { a.min(b) }
 }
 
 /// `Math.max` of two numbers: NaN when either is.
 pub(crate) fn js_max(a: f64, b: f64) -> f64 {
-    if a.is_nan() || b.is_nan() {
-        f64::NAN
-    } else {
-        a.max(b)
-    }
+    if a.is_nan() || b.is_nan() { f64::NAN } else { a.max(b) }
 }
 
 /// `Math.round`, with NaN kept.
@@ -197,19 +180,13 @@ fn iso_week(date: Date) -> f64 {
     let weekday = iso_weekday(jan1);
     let first = add_days(jan1, 4.0 - weekday + if weekday > 4.0 { 7.0 } else { 0.0 });
     let weeks = (thursday.time() - first.time()) / WEEK;
-    let whole = if weeks < 0.0 {
-        weeks.ceil() + 0.0
-    } else {
-        weeks.floor()
-    };
+    let whole = if weeks < 0.0 { weeks.ceil() + 0.0 } else { weeks.floor() };
     whole + 1.0
 }
 
 /// Code units of `text` from `at` that equal `word`.
 fn starts(units: &[u16], at: usize, word: &str) -> bool {
-    word.bytes()
-        .enumerate()
-        .all(|(i, b)| units.get(at + i) == Some(&u16::from(b)))
+    word.bytes().enumerate().all(|(i, b)| units.get(at + i) == Some(&u16::from(b)))
 }
 
 /// A `[...]` literal at `at`, as `\[([^\]]+)]` matches it: its end, after the `]`.
@@ -217,10 +194,7 @@ fn bracket(units: &[u16], at: usize) -> Option<usize> {
     if units.get(at) != Some(&u16::from(b'[')) {
         return None;
     }
-    let close = units
-        .get(at + 1..)?
-        .iter()
-        .position(|&u| u == u16::from(b']'))?;
+    let close = units.get(at + 1..)?.iter().position(|&u| u == u16::from(b']'))?;
     (close > 0).then_some(at + 1 + close + 1)
 }
 
@@ -230,15 +204,14 @@ fn first_of<'w>(units: &[u16], at: usize, words: &[&'w str]) -> Option<&'w str> 
 }
 
 /// The advanced-format tokens, in `RE_ADVANCED` alternation order after the bracket literal.
-const ADVANCED: [&str; 16] = [
-    "Q", "wo", "ww", "w", "WW", "W", "zzz", "z", "gggg", "GGGG", "Do", "X", "x", "kk", "k", "S",
-];
+const ADVANCED: [&str; 16] =
+    ["Q", "wo", "ww", "w", "WW", "W", "zzz", "z", "gggg", "GGGG", "Do", "X", "x", "kk", "k", "S"];
 
 /// The format tokens, in `RE_FORMAT` alternation order after the bracket literal, with each
 /// `{1,n}` repetition written longest first.
 const FORMAT: [&str; 23] = [
-    "YYYY", "YY", "MMMM", "MMM", "MM", "M", "DD", "D", "dddd", "ddd", "dd", "d", "HH", "H", "hh",
-    "h", "a", "A", "mm", "m", "ss", "s", "ZZ",
+    "YYYY", "YY", "MMMM", "MMM", "MM", "M", "DD", "D", "dddd", "ddd", "dd", "d", "HH", "H", "hh", "h", "a", "A", "mm",
+    "m", "ss", "s", "ZZ",
 ];
 
 /// `date` formatted with a dayjs `template`. `None` for the week-of-year and time zone name
@@ -247,11 +220,7 @@ pub(crate) fn format(date: Date, template: &str) -> Option<String> {
     if !date.is_valid() {
         return Some("Invalid Date".to_owned());
     }
-    let template = if template.is_empty() {
-        "YYYY-MM-DDTHH:mm:ssZ"
-    } else {
-        template
-    };
+    let template = if template.is_empty() { "YYYY-MM-DDTHH:mm:ssZ" } else { template };
     if template == "YYYY-MM-DD" {
         return Some(iso_date(date));
     }
@@ -282,19 +251,8 @@ pub(crate) fn format(date: Date, template: &str) -> Option<String> {
             "GGGG" => int_string(week_thursday(date).year()),
             "W" => int_string(iso_week(date)),
             "WW" => pad(iso_week(date), 2),
-            "k" => int_string(if date.hours() == 0.0 {
-                24.0
-            } else {
-                date.hours()
-            }),
-            "kk" => pad(
-                if date.hours() == 0.0 {
-                    24.0
-                } else {
-                    date.hours()
-                },
-                2,
-            ),
+            "k" => int_string(if date.hours() == 0.0 { 24.0 } else { date.hours() }),
+            "kk" => pad(if date.hours() == 0.0 { 24.0 } else { date.hours() }, 2),
             "X" => int_string((date.time() / 1000.0).floor()),
             "x" => int_string(date.time()),
             "gggg" | "wo" | "w" | "ww" | "z" | "zzz" => return None,
@@ -367,28 +325,18 @@ fn twelve(hours: f64) -> f64 {
 
 /// The English name of the month of `date`.
 fn month_name(date: Date) -> &'static str {
-    index(date.month())
-        .and_then(|m| MONTHS.get(m))
-        .copied()
-        .unwrap_or("")
+    index(date.month()).and_then(|m| MONTHS.get(m)).copied().unwrap_or("")
 }
 
 /// The English name of the weekday of `date`.
 fn weekday_name(date: Date) -> &'static str {
-    index(date.weekday())
-        .and_then(|d| WEEKDAYS.get(d))
-        .copied()
-        .unwrap_or("")
+    index(date.weekday()).and_then(|d| WEEKDAYS.get(d)).copied().unwrap_or("")
 }
 
 /// A small non-negative whole number as an index.
 pub(crate) fn index(value: f64) -> Option<usize> {
     if (0.0..1e6).contains(&value) && value.fract() == 0.0 {
-        #[expect(
-            clippy::cast_possible_truncation,
-            clippy::cast_sign_loss,
-            reason = "bounded"
-        )]
+        #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "bounded")]
         Some(value as usize)
     } else {
         None
@@ -400,11 +348,7 @@ pub(crate) fn iso_date(date: Date) -> String {
     let year = date.year();
     let month = date.month() + 1.0;
     let day = date.date();
-    let mut out = if (1000.0..=9999.0).contains(&year) {
-        int_string(year)
-    } else {
-        pad(year, 4)
-    };
+    let mut out = if (1000.0..=9999.0).contains(&year) { int_string(year) } else { pad(year, 4) };
     out.push_str(if month < 10.0 { "-0" } else { "-" });
     push_int(&mut out, month);
     out.push_str(if day < 10.0 { "-0" } else { "-" });
@@ -513,8 +457,8 @@ fn is_separator(c: u32) -> bool {
 fn tokens(units: &[u16]) -> Vec<&[u16]> {
     /// The format tokens of `RE_TOKENS`, in alternation order.
     const WORDS: [&str; 26] = [
-        "A", "a", "Q", "YYYY", "YY", "Y", "ww", "w", "MMMM", "MMM", "MM", "M", "Do", "DD", "D",
-        "hh", "h", "HH", "H", "mm", "m", "ss", "s", "SSS", "SS", "S",
+        "A", "a", "Q", "YYYY", "YY", "Y", "ww", "w", "MMMM", "MMM", "MM", "M", "Do", "DD", "D", "hh", "h", "HH", "H",
+        "mm", "m", "ss", "s", "SSS", "SS", "S",
     ];
     let mut out = Vec::new();
     let mut at = 0;
@@ -522,14 +466,8 @@ fn tokens(units: &[u16]) -> Vec<&[u16]> {
         // `\[[^[]*\]`: up to the last `]` before the next `[`.
         if units.get(at) == Some(&u16::from(b'[')) {
             let rest = units.get(at + 1..).unwrap_or(&[]);
-            let span = rest
-                .iter()
-                .position(|&u| u == u16::from(b'['))
-                .unwrap_or(rest.len());
-            if let Some(close) = rest
-                .get(..span)
-                .and_then(|r| r.iter().rposition(|&u| u == u16::from(b']')))
-            {
+            let span = rest.iter().position(|&u| u == u16::from(b'[')).unwrap_or(rest.len());
+            if let Some(close) = rest.get(..span).and_then(|r| r.iter().rposition(|&u| u == u16::from(b']'))) {
                 let end = at + 1 + close + 1;
                 out.push(units.get(at..end).unwrap_or(&[]));
                 at = end;
@@ -623,27 +561,14 @@ fn find(text: &[u16], pattern: Pattern) -> Option<(usize, usize)> {
     for start in 0..text.len() {
         let end = match pattern {
             Pattern::One => digit(start).then_some(start + 1),
-            Pattern::OneToTwo => digit(start).then(|| {
-                if digit(start + 1) {
-                    start + 2
-                } else {
-                    start + 1
-                }
-            }),
+            Pattern::OneToTwo => digit(start).then(|| if digit(start + 1) { start + 2 } else { start + 1 }),
             Pattern::Exact(n) => (0..n).all(|i| digit(start + i)).then_some(start + n),
             Pattern::Signed => {
                 let signed = unit_is(text.get(start), |c| c == 43 || c == 45) && digit(start + 1);
-                if signed {
-                    Some(digits_from(start + 1))
-                } else {
-                    digit(start).then(|| digits_from(start))
-                }
+                if signed { Some(digits_from(start + 1)) } else { digit(start).then(|| digits_from(start)) }
             }
             Pattern::Offset => {
-                if unit_is(text.get(start), |c| c == 43 || c == 45)
-                    && digit(start + 1)
-                    && digit(start + 2)
-                {
+                if unit_is(text.get(start), |c| c == 43 || c == 45) && digit(start + 1) && digit(start + 2) {
                     let mut end = start + 3;
                     if text.get(end) == Some(&u16::from(b':')) {
                         end += 1;
@@ -658,8 +583,7 @@ fn find(text: &[u16], pattern: Pattern) -> Option<(usize, usize)> {
             }
             Pattern::Word => {
                 let word = |at: usize| {
-                    unit_is(text.get(at), |c| !is_separator(c) || c == 46)
-                        && !unit_is(text.get(at), is_digit)
+                    unit_is(text.get(at), |c| !is_separator(c) || c == 46) && !unit_is(text.get(at), is_digit)
                 };
                 let after = digits_from(start);
                 word(after).then(|| {
@@ -703,10 +627,7 @@ fn read(fields: &mut Fields, name: &str, input: &[u16]) -> bool {
                 return false;
             };
             let rest = input.get(start..).unwrap_or(&[]);
-            let end = rest
-                .iter()
-                .position(|&u| !is_digit(u32::from(u)))
-                .unwrap_or(rest.len());
+            let end = rest.iter().position(|&u| !is_digit(u32::from(u))).unwrap_or(rest.len());
             // dayjs keeps the digits as a string here, so even "0" counts as a day being given.
             fields.day = Some(to_number(rest.get(..end).unwrap_or(&[])));
             fields.day_given = true;
@@ -721,13 +642,9 @@ fn read(fields: &mut Fields, name: &str, input: &[u16]) -> bool {
         "M" | "MM" => fields.month = Some(number()),
         "MMM" | "MMMM" => {
             let text = text();
-            let found = MONTHS.iter().position(|month| {
-                if name == "MMM" {
-                    month.get(..3) == Some(text.as_str())
-                } else {
-                    *month == text
-                }
-            });
+            let found = MONTHS
+                .iter()
+                .position(|month| if name == "MMM" { month.get(..3) == Some(text.as_str()) } else { *month == text });
             let Some(found) = found else {
                 return false;
             };
@@ -786,11 +703,7 @@ fn loose(input: &str, template: &str, now: Date) -> Option<Date> {
             let digits = input.strip_prefix('-').unwrap_or(input);
             !digits.is_empty() && digits.bytes().all(|b| b.is_ascii_digit())
         };
-        let n = if plain {
-            input.parse::<f64>().unwrap_or(f64::NAN)
-        } else {
-            f64::NAN
-        };
+        let n = if plain { input.parse::<f64>().unwrap_or(f64::NAN) } else { f64::NAN };
         let scale = if template == "X" { 1000.0 } else { 1.0 };
         return Some(Date(js_date::time_clip(scale * n)));
     }
@@ -815,12 +728,8 @@ fn loose(input: &str, template: &str, now: Date) -> Option<Date> {
         }
         // dayjs drops the first occurrence of the matched text, wherever it is, and does not
         // move `start`.
-        if let Some(at) = (!matched.is_empty())
-            .then(|| {
-                rest.windows(matched.len())
-                    .position(|w| w == matched.as_slice())
-            })
-            .flatten()
+        if let Some(at) =
+            (!matched.is_empty()).then(|| rest.windows(matched.len()).position(|w| w == matched.as_slice())).flatten()
         {
             rest.drain(at..at + matched.len());
         }

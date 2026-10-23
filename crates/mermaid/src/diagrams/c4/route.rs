@@ -212,10 +212,7 @@ fn hit_ellipse(cx: f64, cy: f64, rx: f64, ry: f64, px: f64, py: f64, dx: f64, dy
 }
 
 /// Where a segment from outside first meets the outline of a shape, as a fraction of the segment.
-#[expect(
-    clippy::many_single_char_names,
-    reason = "mirrors Pele's geometry names"
-)]
+#[expect(clippy::many_single_char_names, reason = "mirrors Pele's geometry names")]
 fn hit(b: &Box, px: f64, py: f64, qx: f64, qy: f64) -> f64 {
     let (x, y, w, h) = (b.x, b.y, b.w, b.h);
     let dx = qx - px;
@@ -234,50 +231,14 @@ fn hit(b: &Box, px: f64, py: f64, qx: f64, qy: f64) -> f64 {
         Form::Cyl => {
             let ry = cyl_ry(w);
             hit_rect(x, y + ry, x + w, y + h - ry, px, py, dx, dy)
-                .min(hit_ellipse(
-                    x + w / 2.0,
-                    y + ry,
-                    w / 2.0,
-                    ry,
-                    px,
-                    py,
-                    dx,
-                    dy,
-                ))
-                .min(hit_ellipse(
-                    x + w / 2.0,
-                    y + h - ry,
-                    w / 2.0,
-                    ry,
-                    px,
-                    py,
-                    dx,
-                    dy,
-                ))
+                .min(hit_ellipse(x + w / 2.0, y + ry, w / 2.0, ry, px, py, dx, dy))
+                .min(hit_ellipse(x + w / 2.0, y + h - ry, w / 2.0, ry, px, py, dx, dy))
         }
         Form::HCyl => {
             let rx = queue_rx(h);
             hit_rect(x + rx, y, x + w - rx, y + h, px, py, dx, dy)
-                .min(hit_ellipse(
-                    x + rx,
-                    y + h / 2.0,
-                    rx,
-                    h / 2.0,
-                    px,
-                    py,
-                    dx,
-                    dy,
-                ))
-                .min(hit_ellipse(
-                    x + w - rx,
-                    y + h / 2.0,
-                    rx,
-                    h / 2.0,
-                    px,
-                    py,
-                    dx,
-                    dy,
-                ))
+                .min(hit_ellipse(x + rx, y + h / 2.0, rx, h / 2.0, px, py, dx, dy))
+                .min(hit_ellipse(x + w - rx, y + h / 2.0, rx, h / 2.0, px, py, dx, dy))
         }
         Form::Rect => hit_rect(x, y, x + w, y + h, px, py, dx, dy),
     }
@@ -285,16 +246,12 @@ fn hit(b: &Box, px: f64, py: f64, qx: f64, qy: f64) -> f64 {
 
 /// The stretches of the line through `points`, each as its start and end x, y.
 fn segments(points: &[f64]) -> impl Iterator<Item = [f64; 4]> + '_ {
-    points
-        .windows(4)
-        .step_by(2)
-        .filter_map(|seg| <[f64; 4]>::try_from(seg).ok())
+    points.windows(4).step_by(2).filter_map(|seg| <[f64; 4]>::try_from(seg).ok())
 }
 
 /// Whether the line through `points` crosses the rectangle.
 pub(crate) fn crosses(points: &[f64], x0: f64, y0: f64, x1: f64, y1: f64) -> bool {
-    segments(points)
-        .any(|[px, py, qx, qy]| hit_rect(x0, y0, x1, y1, px, py, qx - px, qy - py) <= 1.0)
+    segments(points).any(|[px, py, qx, qy]| hit_rect(x0, y0, x1, y1, px, py, qx - px, qy - py) <= 1.0)
 }
 
 fn contains(outer: &Box, inner: &Box) -> bool {
@@ -340,11 +297,7 @@ fn connect(a: &Box, b: &Box, shift: f64) -> [f64; 4] {
         let t = hit(inner, ox, oy, ix, iy).min(1.0);
         let mx = ox + (ix - ox) * t;
         let my = oy + (iy - oy) * t;
-        return if down {
-            [ox, oy, mx, my]
-        } else {
-            [mx, my, ox, oy]
-        };
+        return if down { [ox, oy, mx, my] } else { [mx, my, ox, oy] };
     }
 
     let mut px = ax;
@@ -386,12 +339,7 @@ fn connect(a: &Box, b: &Box, shift: f64) -> [f64; 4] {
         ta = hit(a, qx, qy, px, py).min(1.0);
         tb = hit(b, px, py, qx, qy).min(1.0);
     }
-    [
-        qx + (px - qx) * ta,
-        qy + (py - qy) * ta,
-        px + (qx - px) * tb,
-        py + (qy - py) * tb,
-    ]
+    [qx + (px - qx) * ta, qy + (py - qy) * ta, px + (qx - px) * tb, py + (qy - py) * tb]
 }
 
 /// What the routes drawn so far take up, so that the next keeps apart from them: upright
@@ -413,16 +361,9 @@ impl Lanes {
         let lo = a0.min(a1);
         let hi = a0.max(a1);
         let near = |list: &[f64], gap: f64| {
-            list.as_chunks::<3>()
-                .0
-                .iter()
-                .any(|&[x, from, to]| (x - at).abs() < gap && from < hi && to > lo)
+            list.as_chunks::<3>().0.iter().any(|&[x, from, to]| (x - at).abs() < gap && from < hi && to > lo)
         };
-        let (own, frames) = if upright {
-            (&self.upright, &self.frames[0])
-        } else {
-            (&self.level, &self.frames[1])
-        };
+        let (own, frames) = if upright { (&self.upright, &self.frames[0]) } else { (&self.level, &self.frames[1]) };
         !near(own, NEAR) && !near(frames, FRAME_NEAR)
     }
 
@@ -479,11 +420,8 @@ impl Lanes {
                 continue;
             }
             #[expect(clippy::float_cmp, reason = "sides are small whole numbers")]
-            let clear = !used
-                .as_chunks::<2>()
-                .0
-                .iter()
-                .any(|&[own, place]| own == side && (place - at).abs() < PORT_STEP);
+            let clear =
+                !used.as_chunks::<2>().0.iter().any(|&[own, place]| own == side && (place - at).abs() < PORT_STEP);
             if clear {
                 out.push(at);
             }
@@ -496,10 +434,7 @@ impl Lanes {
     }
 }
 
-#[expect(
-    clippy::many_single_char_names,
-    reason = "mirrors Pele's geometry names"
-)]
+#[expect(clippy::many_single_char_names, reason = "mirrors Pele's geometry names")]
 fn path(points: &[f64], start_trim: f64, end_trim: f64) -> String {
     let n = points.len();
     let at = |i: usize| points.get(i).copied().unwrap_or(f64::NAN);
@@ -517,9 +452,8 @@ fn path(points: &[f64], start_trim: f64, end_trim: f64) -> String {
         let iy = sign(y - at(i - 1));
         let ox = sign(at(i + 2) - x);
         let oy = sign(at(i + 3) - y);
-        let r = CORNER
-            .min((x - at(i - 2) + y - at(i - 1)).abs() / 2.0)
-            .min((at(i + 2) - x + at(i + 3) - y).abs() / 2.0);
+        let r =
+            CORNER.min((x - at(i - 2) + y - at(i - 1)).abs() / 2.0).min((at(i + 2) - x + at(i + 3) - y).abs() / 2.0);
         if ix == 0.0 {
             d.push('V');
             push_num(&mut d, y - iy * r);
@@ -552,11 +486,7 @@ fn path(points: &[f64], start_trim: f64, end_trim: f64) -> String {
 /// Whether the line through `points` keeps clear of every box but `a` and `b`.
 fn clear_of(points: &[f64], boxes: &[Box], others: &[usize], a: usize, b: usize) -> bool {
     others.iter().all(|&other| {
-        other == a
-            || other == b
-            || boxes
-                .get(other)
-                .is_none_or(|o| !crosses(points, o.x, o.y, o.x + o.w, o.y + o.h))
+        other == a || other == b || boxes.get(other).is_none_or(|o| !crosses(points, o.x, o.y, o.x + o.w, o.y + o.h))
     })
 }
 
@@ -619,10 +549,7 @@ struct Best {
 
 /// Considers `points` as an elbow from `a` to `b`, keeping it when it is clear and cheaper.
 /// Returns whether it was kept.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "the state of Pele's elbow closure"
-)]
+#[expect(clippy::too_many_arguments, reason = "the state of Pele's elbow closure")]
 fn consider(
     best: &mut Option<Best>,
     points: Vec<f64>,
@@ -639,11 +566,7 @@ fn consider(
     for [px, py, qx, qy] in segments(&points) {
         #[expect(clippy::float_cmp, reason = "mirrors Pele's exact comparison")]
         let up = qx == px;
-        let free = if up {
-            lanes.free(up, qx, py, qy)
-        } else {
-            lanes.free(up, qy, px, qx)
-        };
+        let free = if up { lanes.free(up, qx, py, qy) } else { lanes.free(up, qy, px, qx) };
         if !free {
             return false;
         }
@@ -654,12 +577,7 @@ fn consider(
         cost += (qx - px).abs() + (qy - py).abs();
     }
     if best.as_ref().is_none_or(|best| cost < best.cost) {
-        *best = Some(Best {
-            cost,
-            points,
-            sides,
-            upright,
-        });
+        *best = Some(Best { cost, points, sides, upright });
         return true;
     }
     false
@@ -684,25 +602,9 @@ fn elbow(
         let right = bx > ax;
         let down = sign(by - ay);
         let sides = if right { [1.0, 0.0] } else { [0.0, 1.0] };
-        let lanes_across = if right {
-            across(a.x + a.w, b.x)
-        } else {
-            across(b.x + b.w, a.x)
-        };
-        'search: for y0 in lanes.ports(
-            ids.0,
-            sides[0],
-            ay + (down * a.h) / 4.0,
-            a.y + 8.0,
-            a.y + a.h - 8.0,
-        ) {
-            for y1 in lanes.ports(
-                ids.1,
-                sides[1],
-                by - (down * b.h) / 4.0,
-                b.y + 8.0,
-                b.y + b.h - 8.0,
-            ) {
+        let lanes_across = if right { across(a.x + a.w, b.x) } else { across(b.x + b.w, a.x) };
+        'search: for y0 in lanes.ports(ids.0, sides[0], ay + (down * a.h) / 4.0, a.y + 8.0, a.y + a.h - 8.0) {
+            for y1 in lanes.ports(ids.1, sides[1], by - (down * b.h) / 4.0, b.y + 8.0, b.y + b.h - 8.0) {
                 for &lane in &lanes_across {
                     let x0 = lane + (ax - lane) * hit(&a, lane, y0, ax, y0).min(1.0);
                     let x1 = lane + (bx - lane) * hit(&b, lane, y1, bx, y1).min(1.0);
@@ -726,25 +628,9 @@ fn elbow(
         let below = by > ay;
         let sideways = sign(bx - ax);
         let sides = if below { [3.0, 2.0] } else { [2.0, 3.0] };
-        let lanes_across = if below {
-            across(a.y + a.h, b.y)
-        } else {
-            across(b.y + b.h, a.y)
-        };
-        'search: for x0 in lanes.ports(
-            ids.0,
-            sides[0],
-            ax + (sideways * a.w) / 4.0,
-            a.x + 8.0,
-            a.x + a.w - 8.0,
-        ) {
-            for x1 in lanes.ports(
-                ids.1,
-                sides[1],
-                bx - (sideways * b.w) / 4.0,
-                b.x + 8.0,
-                b.x + b.w - 8.0,
-            ) {
+        let lanes_across = if below { across(a.y + a.h, b.y) } else { across(b.y + b.h, a.y) };
+        'search: for x0 in lanes.ports(ids.0, sides[0], ax + (sideways * a.w) / 4.0, a.x + 8.0, a.x + a.w - 8.0) {
+            for x1 in lanes.ports(ids.1, sides[1], bx - (sideways * b.w) / 4.0, b.x + 8.0, b.x + b.w - 8.0) {
                 for &lane in &lanes_across {
                     let y0 = lane + (ay - lane) * hit(&a, x0, lane, x0, ay).min(1.0);
                     let y1 = lane + (by - lane) * hit(&b, x1, lane, x1, by).min(1.0);
@@ -767,28 +653,11 @@ fn elbow(
     let best = best?;
     let at = |i: usize| best.points.get(i).copied().unwrap_or(f64::NAN);
     lanes.take(&best.points);
-    lanes.claim(
-        ids.0,
-        best.sides[0],
-        if best.upright { at(1) } else { at(0) },
-    );
-    lanes.claim(
-        ids.1,
-        best.sides[1],
-        if best.upright { at(7) } else { at(6) },
-    );
+    lanes.claim(ids.0, best.sides[0], if best.upright { at(1) } else { at(0) });
+    lanes.claim(ids.1, best.sides[1], if best.upright { at(7) } else { at(6) });
     // The label sits on the middle stretch, across the gap.
     let room = if best.upright { NARROW } else { WIDE };
-    Some(bent(
-        best.points,
-        2,
-        start_trim,
-        end_trim,
-        Bend {
-            room,
-            ..Bend::default()
-        },
-    ))
+    Some(bent(best.points, 2, start_trim, end_trim, Bend { room, ..Bend::default() }))
 }
 
 /// One side's detour around the shapes between a and b.
@@ -867,18 +736,8 @@ pub(crate) fn route(
     #[expect(clippy::float_cmp, reason = "mirrors Pele's exact comparison")]
     let level = sy == ey;
     let is_end = |other: usize| other == ids.0 || other == ids.1;
-    let in_way = |other: &Box| {
-        hit_rect(
-            other.x,
-            other.y,
-            other.x + other.w,
-            other.y + other.h,
-            sx,
-            sy,
-            ex - sx,
-            ey - sy,
-        ) <= 1.0
-    };
+    let in_way =
+        |other: &Box| hit_rect(other.x, other.y, other.x + other.w, other.y + other.h, sx, sy, ex - sx, ey - sy) <= 1.0;
     let mut blocked = false;
     if let Some(others) = others
         && !contains(&a, &b)
@@ -905,18 +764,10 @@ pub(crate) fn route(
         && (upright || level)
     {
         let lane_on = |forward: bool| {
-            let mut lane = if forward {
-                f64::NEG_INFINITY
-            } else {
-                f64::INFINITY
-            };
+            let mut lane = if forward { f64::NEG_INFINITY } else { f64::INFINITY };
             let mut widen = |o: &Box| {
                 let edge = if upright { o.x } else { o.y };
-                lane = if forward {
-                    lane.max(edge + if upright { o.w } else { o.h })
-                } else {
-                    lane.min(edge)
-                };
+                lane = if forward { lane.max(edge + if upright { o.w } else { o.h }) } else { lane.min(edge) };
             };
             widen(&a);
             widen(&b);
@@ -931,21 +782,13 @@ pub(crate) fn route(
             lane
         };
         let lo = if upright { a.y.min(b.y) } else { a.x.min(b.x) };
-        let hi = if upright {
-            (a.y + a.h).max(b.y + b.h)
-        } else {
-            (a.x + a.w).max(b.x + b.w)
-        };
+        let hi = if upright { (a.y + a.h).max(b.y + b.h) } else { (a.x + a.w).max(b.x + b.w) };
         let outside = |forward: bool, lane: f64| {
             others.iter().all(|&other| {
                 let Some(o) = boxes.get(other).filter(|_| !is_end(other)) else {
                     return true;
                 };
-                let near = if upright {
-                    o.y < hi && o.y + o.h > lo
-                } else {
-                    o.x < hi && o.x + o.w > lo
-                };
+                let near = if upright { o.y < hi && o.y + o.h > lo } else { o.x < hi && o.x + o.w > lo };
                 let start = if upright { o.x } else { o.y };
                 let end = start + if upright { o.w } else { o.h };
                 !(near && if forward { end > lane } else { start < lane })
@@ -955,11 +798,7 @@ pub(crate) fn route(
         let ay = a.y + a.h / 2.0;
         let bx = b.x + b.w / 2.0;
         let by = b.y + b.h / 2.0;
-        let towards = if upright {
-            sign(by - ay)
-        } else {
-            sign(bx - ax)
-        };
+        let towards = if upright { sign(by - ay) } else { sign(bx - ax) };
         // The route on one side: each end leaves its shape a quarter of the way from the middle
         // towards the other, clear of the straight lines that meet the middle of that side and
         // of other routes there. The lane runs a little further out for each route already
@@ -977,29 +816,17 @@ pub(crate) fn route(
             let first = |list: Vec<f64>, want: f64| list.first().copied().unwrap_or(want);
             let p0 = if upright {
                 let want = ay + (towards * a.h) / 4.0;
-                first(
-                    lanes.ports(ids.0, side, want, a.y + 8.0, a.y + a.h - 8.0),
-                    want,
-                )
+                first(lanes.ports(ids.0, side, want, a.y + 8.0, a.y + a.h - 8.0), want)
             } else {
                 let want = ax + (towards * a.w) / 4.0;
-                first(
-                    lanes.ports(ids.0, side, want, a.x + 8.0, a.x + a.w - 8.0),
-                    want,
-                )
+                first(lanes.ports(ids.0, side, want, a.x + 8.0, a.x + a.w - 8.0), want)
             };
             let p1 = if upright {
                 let want = by - (towards * b.h) / 4.0;
-                first(
-                    lanes.ports(ids.1, side, want, b.y + 8.0, b.y + b.h - 8.0),
-                    want,
-                )
+                first(lanes.ports(ids.1, side, want, b.y + 8.0, b.y + b.h - 8.0), want)
             } else {
                 let want = bx - (towards * b.w) / 4.0;
-                first(
-                    lanes.ports(ids.1, side, want, b.x + 8.0, b.x + b.w - 8.0),
-                    want,
-                )
+                first(lanes.ports(ids.1, side, want, b.x + 8.0, b.x + b.w - 8.0), want)
             };
             let points_at = |at: f64| -> Vec<f64> {
                 if upright {
@@ -1020,22 +847,10 @@ pub(crate) fn route(
                 }
                 points = tried;
                 if lanes.free(upright, at, p0, p1) {
-                    return Detour {
-                        p0,
-                        p1,
-                        points,
-                        side,
-                        step: f64::from(k),
-                    };
+                    return Detour { p0, p1, points, side, step: f64::from(k) };
                 }
             }
-            Detour {
-                p0,
-                p1,
-                points,
-                side,
-                step: 5.0,
-            }
+            Detour { p0, p1, points, side, step: 5.0 }
         };
         // A detour takes the outside of the drawing when only one side is outside, leaving the
         // gaps between columns and rows to the relations that cross them. Otherwise it takes the
@@ -1048,11 +863,7 @@ pub(crate) fn route(
         let other = (out == back).then(|| along(lanes, !natural));
         #[expect(clippy::cast_precision_loss, reason = "counts stay far below 2^52")]
         let cost = |way: &Detour| lanes.crossings(&way.points) as f64 * 8.0 + way.step;
-        let forward = if (back && !out)
-            || other
-                .as_ref()
-                .is_some_and(|other| cost(other) < cost(&first))
-        {
+        let forward = if (back && !out) || other.as_ref().is_some_and(|other| cost(other) < cost(&first)) {
             !natural
         } else {
             natural
@@ -1072,18 +883,8 @@ pub(crate) fn route(
         lanes.take(&chosen.points);
         lanes.claim(ids.0, chosen.side, chosen.p0);
         lanes.claim(ids.1, chosen.side, chosen.p1);
-        let label = if upright {
-            Bend {
-                lean: LEAN,
-                nx: way,
-                room: NARROW,
-            }
-        } else {
-            Bend {
-                room: WIDE,
-                ..Bend::default()
-            }
-        };
+        let label =
+            if upright { Bend { lean: LEAN, nx: way, room: NARROW } } else { Bend { room: WIDE, ..Bend::default() } };
         return bent(chosen.points, 2, start_trim, end_trim, label);
     }
 

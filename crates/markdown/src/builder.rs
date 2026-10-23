@@ -625,6 +625,7 @@ impl MarkdownElementBuilder {
                 links: self.rendered_links.into(),
                 image_links: self.rendered_image_links.into(),
                 footnote_refs: self.rendered_footnote_refs.into(),
+                document_end: None,
             },
         }
     }

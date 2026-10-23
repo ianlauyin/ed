@@ -2,14 +2,10 @@
 //!
 //! The pipeline follows Pele (MIT): preprocessing removes front matter, directives, and comments,
 //! detection picks a diagram type, and each type parses into a model, lays it out, and emits SVG.
-#![expect(
-    dead_code,
-    reason = "Shared helpers are ported ahead of the diagram types that use them."
-)]
+#![expect(dead_code, reason = "Shared helpers are ported ahead of the diagram types that use them.")]
 
 mod detect;
 mod error;
-#[cfg(feature = "model")]
 mod model;
 mod preprocess;
 mod yaml;
@@ -46,10 +42,12 @@ mod util {
 
 mod diagrams;
 
-pub use error::{Code, Error};
-#[cfg(feature = "model")]
-pub use model::{Model, model};
-pub use svg::theme::{Color, Theme};
+pub use error::Code;
+pub use error::Error;
+pub use model::Model;
+pub use model::model;
+pub use svg::theme::Color;
+pub use svg::theme::Theme;
 
 /// A link drawn in a diagram, as Pele's `LinkInfo` reports it.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -108,10 +106,7 @@ pub fn render(source: &str, options: &str, now: f64, theme: &Theme) -> Result<Re
 
     let pre = preprocess::preprocess(source)?;
     let Some(r#type) = detect::detect(&pre.text) else {
-        return Err(Error::new(
-            Code::UnsupportedDiagram,
-            "No diagram type detected for the given text.",
-        ));
+        return Err(Error::new(Code::UnsupportedDiagram, "No diagram type detected for the given text."));
     };
     let config = yaml::Value::Object(pre.config);
 
@@ -126,10 +121,9 @@ pub fn render(source: &str, options: &str, now: f64, theme: &Theme) -> Result<Re
 
     // A diagram whose config section sets `useMaxWidth: false` keeps its natural size.
     let section = match &config {
-        yaml::Value::Object(entries) => entries
-            .iter()
-            .find(|(key, _)| key == diagram.section.unwrap_or(r#type))
-            .map(|(_, value)| value),
+        yaml::Value::Object(entries) => {
+            entries.iter().find(|(key, _)| key == diagram.section.unwrap_or(r#type)).map(|(_, value)| value)
+        }
         _ => None,
     };
     let fixed = matches!(
@@ -139,12 +133,8 @@ pub fn render(source: &str, options: &str, now: f64, theme: &Theme) -> Result<Re
     );
     options.responsive = Some(options.responsive.unwrap_or(!fixed));
 
-    let mut source = preprocess::encode_entities(if diagram.keep_comments {
-        &pre.with_comments
-    } else {
-        &pre.text
-    })
-    .into_owned();
+    let mut source =
+        preprocess::encode_entities(if diagram.keep_comments { &pre.with_comments } else { &pre.text }).into_owned();
     source.push('\n');
 
     let max_edges = options.max_edges.unwrap_or(DEFAULT_MAX_EDGES);
@@ -178,11 +168,7 @@ pub fn render(source: &str, options: &str, now: f64, theme: &Theme) -> Result<Re
         links: drawn
             .links
             .into_iter()
-            .map(|link| Link {
-                href: link.href,
-                id: link.id,
-                internal: link.internal,
-            })
+            .map(|link| Link { href: link.href, id: link.id, internal: link.internal })
             .collect(),
         svg: svg::theme::resolve(&drawn.svg, theme),
         r#type,
@@ -214,10 +200,7 @@ fn schemes(list: Option<&Vec<String>>) -> Option<Vec<&str>> {
 }
 
 /// Whether `text` is longer than `limit` UTF-16 units.
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "source lengths stay far below 2^52"
-)]
+#[expect(clippy::cast_precision_loss, reason = "source lengths stay far below 2^52")]
 fn exceeds(text: &str, limit: f64) -> bool {
     // No scalar takes more UTF-16 units than UTF-8 bytes, so text within the limit in bytes is
     // within it in units without a count.
@@ -227,10 +210,7 @@ fn exceeds(text: &str, limit: f64) -> bool {
 
     // Each scalar starts with one non-continuation byte, and only four-byte scalars need a second
     // UTF-16 unit. Counting bytes avoids decoding the whole SVG.
-    let units = text
-        .bytes()
-        .map(|byte| usize::from(byte & 0xc0 != 0x80) + usize::from(byte >= 0xf0))
-        .sum::<usize>();
+    let units = text.bytes().map(|byte| usize::from(byte & 0xc0 != 0x80) + usize::from(byte >= 0xf0)).sum::<usize>();
     units as f64 > limit
 }
 

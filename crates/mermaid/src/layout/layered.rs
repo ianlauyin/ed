@@ -19,10 +19,7 @@
 //! check the caller's edge endpoints once on entry, so indexing inside the passes stays in
 //! bounds. Floating-point expressions keep Pele's operation order, since output depends on it.
 
-#![expect(
-    clippy::needless_range_loop,
-    reason = "index loops mirror Pele's typed-array loops for side-by-side review"
-)]
+#![expect(clippy::needless_range_loop, reason = "index loops mirror Pele's typed-array loops for side-by-side review")]
 
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
@@ -130,24 +127,12 @@ pub(crate) struct LayeredResult {
 
 /// A node of the given size and kind, as Pele's `lnode` creates it.
 pub(crate) fn lnode(w: f64, h: f64, kind: Kind) -> LNode {
-    LNode {
-        h,
-        kind,
-        w,
-        ..LNode::default()
-    }
+    LNode { h, kind, w, ..LNode::default() }
 }
 
 /// An edge from `tail` to `head`, as Pele's `ledge` creates it.
 pub(crate) fn ledge(tail: usize, head: usize, minlen: u32, label_w: f64, label_h: f64) -> LEdge {
-    LEdge {
-        head,
-        label_h,
-        label_w,
-        minlen,
-        tail,
-        ..LEdge::default()
-    }
+    LEdge { head, label_h, label_w, minlen, tail, ..LEdge::default() }
 }
 
 /// The most crossing-reduction sweeps per attempt.
@@ -238,19 +223,13 @@ fn cmp(a: f64, b: f64) -> Ordering {
 }
 
 /// An index or count as a float.
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "indices and counts stay far below 2^52"
-)]
+#[expect(clippy::cast_precision_loss, reason = "indices and counts stay far below 2^52")]
 fn float(i: usize) -> f64 {
     i as f64
 }
 
 /// An index as a signed number, for arithmetic that may go below zero.
-#[expect(
-    clippy::cast_possible_wrap,
-    reason = "indices stay below isize::MAX, since they index allocations"
-)]
+#[expect(clippy::cast_possible_wrap, reason = "indices stay below isize::MAX, since they index allocations")]
 fn signed(i: usize) -> isize {
     i as isize
 }
@@ -313,15 +292,8 @@ fn sort_range(list: &mut [usize], from: usize, to: usize, key: &[usize]) {
 /// where edges spread along their nodes. Returns the size of the drawing.
 ///
 /// An edge whose endpoint names no node makes the whole layout empty, where Pele throws.
-#[expect(
-    clippy::many_single_char_names,
-    reason = "names mirror Pele's layered.ts for side-by-side review"
-)]
-pub(crate) fn layered(
-    nodes: &mut [LNode],
-    edges: &mut [LEdge],
-    opt: &LayeredOptions,
-) -> LayeredResult {
+#[expect(clippy::many_single_char_names, reason = "names mirror Pele's layered.ts for side-by-side review")]
+pub(crate) fn layered(nodes: &mut [LNode], edges: &mut [LEdge], opt: &LayeredOptions) -> LayeredResult {
     let real = nodes.len();
     if real == 0 || !valid(real, edges) {
         return LayeredResult::default();
@@ -344,10 +316,7 @@ pub(crate) fn layered(
     orient(nodes, edges);
     rank(nodes, edges, step);
 
-    let span: Vec<usize> = edges
-        .iter()
-        .map(|e| nodes[e.head].rank.abs_diff(nodes[e.tail].rank))
-        .collect();
+    let span: Vec<usize> = edges.iter().map(|e| nodes[e.head].rank.abs_diff(nodes[e.tail].rank)).collect();
     let mut dummies: usize = span.iter().filter(|&&s| s > 1).map(|&s| s - 1).sum();
     let mut direct = vec![false; m];
     if dummies > MAX_DUMMIES {
@@ -432,18 +401,8 @@ pub(crate) fn layered(
                 first_dummy[ei] = Some(next);
             }
             first_seg[ei] = ce;
-            if spans
-                && !(if e.reversed {
-                    e.head_fixed
-                } else {
-                    e.tail_fixed
-                })
-            {
-                efk[ce] = if e.reversed {
-                    End::Arrives
-                } else {
-                    End::Leaves
-                };
+            if spans && !(if e.reversed { e.head_fixed } else { e.tail_fixed }) {
+                efk[ce] = if e.reversed { End::Arrives } else { End::Leaves };
             }
             for r in ra + 1..rb {
                 let d = next;
@@ -468,18 +427,8 @@ pub(crate) fn layered(
             et[ce] = b;
             efd[ce] = if prev == a { a_dx } else { 0.0 };
             etd[ce] = b_dx;
-            if spans
-                && !(if e.reversed {
-                    e.tail_fixed
-                } else {
-                    e.head_fixed
-                })
-            {
-                etk[ce] = if e.reversed {
-                    End::Leaves
-                } else {
-                    End::Arrives
-                };
+            if spans && !(if e.reversed { e.tail_fixed } else { e.head_fixed }) {
+                etk[ce] = if e.reversed { End::Leaves } else { End::Arrives };
             }
             last_seg[ei] = ce;
             ce += 1;
@@ -678,16 +627,8 @@ pub(crate) fn layered(
         }
         found
     };
-    let start_ranks = if port_only(0, Kind::StartPort) {
-        step
-    } else {
-        0
-    };
-    let end_ranks = if port_only(max_rank, Kind::EndPort) {
-        step
-    } else {
-        0
-    };
+    let start_ranks = if port_only(0, Kind::StartPort) { step } else { 0 };
+    let end_ranks = if port_only(max_rank, Kind::EndPort) { step } else { 0 };
     // The longest way across that any edge travels in the gap below each rank.
     let mut run = vec![0.0; max_rank + 1];
     for e in 0..segments {
@@ -699,11 +640,7 @@ pub(crate) fn layered(
     }
     let step_f = float(step);
     let usual = |r: usize| {
-        let sep = if r < start_ranks || r + end_ranks >= max_rank {
-            opt.port_sep
-        } else {
-            opt.rank_sep
-        };
+        let sep = if r < start_ranks || r + end_ranks >= max_rank { opt.port_sep } else { opt.rank_sep };
         sep / step_f
     };
     // The room under each rank. Edges that are not cut into pieces need more where they run
@@ -732,17 +669,9 @@ pub(crate) fn layered(
     }
     // The rank that the pieces leaving each rank arrive at, past any that hold only bends, and
     // the room between the two, which grows to hold the gap's tracks or levels.
-    let margin = if opt.tracks {
-        TRACK_MARGIN
-    } else {
-        LEVEL_MARGIN
-    };
+    let margin = if opt.tracks { TRACK_MARGIN } else { LEVEL_MARGIN };
     let least_pitch = if opt.tracks { TRACK_PITCH } else { LEVEL_PITCH };
-    let most_pitch = if opt.tracks {
-        TRACK_SPREAD
-    } else {
-        LEVEL_PITCH
-    };
+    let most_pitch = if opt.tracks { TRACK_SPREAD } else { LEVEL_PITCH };
     let mut below = vec![0usize; max_rank + 1];
     if let Some(pieces) = pieces.as_mut() {
         let mut room = vec![0.0; max_rank + 1];
@@ -792,11 +721,7 @@ pub(crate) fn layered(
     // beside labels keeps to the middle half.
     let inset = |d: usize| {
         let r = g.rank[d];
-        if g.kind[d] == Kind::Dummy && between[r] && !opt.tracks {
-            (band_bottom[r] - band_top[r]) / 4.0
-        } else {
-            0.0
-        }
+        if g.kind[d] == Kind::Dummy && between[r] && !opt.tracks { (band_bottom[r] - band_top[r]) / 4.0 } else { 0.0 }
     };
     // Where a piece runs across its gap on a track of its group: its tracks sit in the middle
     // of the gap, the first at the top.
@@ -804,16 +729,8 @@ pub(crate) fn layered(
         let r = pieces.rank[piece];
         let top = band_bottom[r];
         let bottom = band_top[below[r]];
-        let count = if opt.tracks {
-            track_count[r]
-        } else {
-            pieces.levels[piece]
-        };
-        let pitch = if count > 1 {
-            most_pitch.min((bottom - top - 2.0 * margin) / float(count - 1))
-        } else {
-            0.0
-        };
+        let count = if opt.tracks { track_count[r] } else { pieces.levels[piece] };
+        let pitch = if count > 1 { most_pitch.min((bottom - top - 2.0 * margin) / float(count - 1)) } else { 0.0 };
         let on_track = float(usize::try_from(on_track).unwrap_or(0));
         f64::midpoint(top, bottom) + (on_track - float(count.saturating_sub(1)) / 2.0) * pitch
     };
@@ -920,10 +837,7 @@ pub(crate) fn layered(
         e.points = pts;
     }
 
-    LayeredResult {
-        height,
-        width: max_x - min_x,
-    }
+    LayeredResult { height, width: max_x - min_x }
 }
 
 /// The pieces of edges that each cross one gap. Where only some pieces get a level to turn
@@ -1057,10 +971,7 @@ pub(crate) fn orient(nodes: &[LNode], edges: &mut [LEdge]) {
 /// Ranks the nodes by longest path along the oriented edges, each edge spanning at least
 /// `minlen * step` ranks, then pulls loosely attached nodes toward the side with more edges.
 /// Start ports go one step above every other node and end ports one step below.
-#[expect(
-    clippy::many_single_char_names,
-    reason = "names mirror Pele's layered.ts for side-by-side review"
-)]
+#[expect(clippy::many_single_char_names, reason = "names mirror Pele's layered.ts for side-by-side review")]
 pub(crate) fn rank(nodes: &mut [LNode], edges: &[LEdge], step: usize) {
     let n = nodes.len();
     if !valid(n, edges) {
@@ -1074,11 +985,7 @@ pub(crate) fn rank(nodes: &mut [LNode], edges: &[LEdge], step: usize) {
     let mut out_start = vec![0usize; n + 1];
     let mut in_start = vec![0usize; n + 1];
     for (i, e) in edges.iter().enumerate() {
-        let (a, b) = if e.reversed {
-            (e.head, e.tail)
-        } else {
-            (e.tail, e.head)
-        };
+        let (a, b) = if e.reversed { (e.head, e.tail) } else { (e.tail, e.head) };
         from[i] = a;
         to[i] = b;
         len[i] = i64::from(e.minlen.max(1)) * step;
@@ -1132,14 +1039,8 @@ pub(crate) fn rank(nodes: &mut [LNode], edges: &[LEdge], step: usize) {
             if ins == 0 && outs == 0 {
                 continue;
             }
-            let lo = in_e[in_start[v]..in_start[v + 1]]
-                .iter()
-                .map(|&ei| r[from[ei]] + len[ei])
-                .max();
-            let hi = out_e[out_start[v]..out_start[v + 1]]
-                .iter()
-                .map(|&ei| r[to[ei]] - len[ei])
-                .min();
+            let lo = in_e[in_start[v]..in_start[v + 1]].iter().map(|&ei| r[from[ei]] + len[ei]).max();
+            let hi = out_e[out_start[v]..out_start[v + 1]].iter().map(|&ei| r[to[ei]] - len[ei]).min();
             let next = match (lo, hi) {
                 (_, Some(hi)) if outs > ins => hi,
                 (Some(lo), _) if ins > outs => lo,
@@ -1199,18 +1100,10 @@ fn side_ends(
     ids: &mut Vec<usize>,
     room: &mut Vec<f64>,
 ) -> f64 {
-    let (start, list, other) = if side == 0 {
-        (&g.pred_start, &g.pred_e, &g.ef)
-    } else {
-        (&g.succ_start, &g.succ_e, &g.et)
-    };
+    let (start, list, other) =
+        if side == 0 { (&g.pred_start, &g.pred_e, &g.ef) } else { (&g.succ_start, &g.succ_e, &g.et) };
     ids.clear();
-    ids.extend(
-        list[start[v]..start[v + 1]]
-            .iter()
-            .copied()
-            .filter(|&k| kinds[k] != End::Held),
-    );
+    ids.extend(list[start[v]..start[v + 1]].iter().copied().filter(|&k| kinds[k] != End::Held));
     if ids.len() < 2 {
         return 0.0;
     }
@@ -1285,11 +1178,7 @@ fn follow(g: &Graph, empty: Option<&[bool]>, mut e: usize, side: usize) -> usize
         if g.kind[u] != Kind::Dummy || !empty[g.rank[u]] {
             break;
         }
-        e = if side == 0 {
-            g.pred_e[g.pred_start[u]]
-        } else {
-            g.succ_e[g.succ_start[u]]
-        };
+        e = if side == 0 { g.pred_e[g.pred_start[u]] } else { g.succ_e[g.succ_start[u]] };
     }
     e
 }
@@ -1314,34 +1203,15 @@ fn free_ends(g: &Graph, efk: &[End], etk: &[End]) -> [Vec<u32>; 2] {
 /// layout uses this to tell how near two curves will pass, and the drawing to draw them.
 pub(crate) fn ease(across: f64, along: f64) -> f64 {
     // `Math.abs(across) || 1` also replaces NaN.
-    let across = if across == 0.0 || across.is_nan() {
-        1.0
-    } else {
-        across.abs()
-    };
+    let across = if across == 0.0 || across.is_nan() { 1.0 } else { across.abs() };
     (4.0 * along.abs() / across).clamp(0.25, 0.5)
 }
 
 /// Where segment `e` ends on the way up (side 0) or down, and how many ends share that side
 /// of the node there: none for a point that is not on a node.
-fn segment_end(
-    g: &Graph,
-    nodes: &[LNode],
-    xs: &[f64],
-    free: &[Vec<u32>; 2],
-    e: usize,
-    side: usize,
-) -> (f64, u32) {
-    let (u, x) = if side == 0 {
-        (g.ef[e], xs[g.ef[e]] + g.efd[e])
-    } else {
-        (g.et[e], xs[g.et[e]] + g.etd[e])
-    };
-    let shared = if u < g.real && nodes[u].kind == Kind::Node {
-        free[1 - side][u]
-    } else {
-        0
-    };
+fn segment_end(g: &Graph, nodes: &[LNode], xs: &[f64], free: &[Vec<u32>; 2], e: usize, side: usize) -> (f64, u32) {
+    let (u, x) = if side == 0 { (g.ef[e], xs[g.ef[e]] + g.efd[e]) } else { (g.et[e], xs[g.et[e]] + g.etd[e]) };
+    let shared = if u < g.real && nodes[u].kind == Kind::Node { free[1 - side][u] } else { 0 };
     (x, shared)
 }
 
@@ -1361,36 +1231,18 @@ fn label_room(g: &Graph, xs: &[f64], opt: &LayeredOptions, v: usize) -> (f64, f6
         };
         g.w[other] / 2.0 + g.w[v] / 2.0 + extra
     };
-    let lo = if i > s {
-        xs[g.order[i - 1]] + clear(g.order[i - 1])
-    } else {
-        f64::NEG_INFINITY
-    };
-    let hi = if i + 1 < g.layer_start[g.rank[v] + 1] {
-        xs[g.order[i + 1]] - clear(g.order[i + 1])
-    } else {
-        f64::INFINITY
-    };
+    let lo = if i > s { xs[g.order[i - 1]] + clear(g.order[i - 1]) } else { f64::NEG_INFINITY };
+    let hi =
+        if i + 1 < g.layer_start[g.rank[v] + 1] { xs[g.order[i + 1]] - clear(g.order[i + 1]) } else { f64::INFINITY };
     (lo, hi)
 }
 
 /// The place between `lo` and `hi` that is in line with one of two ends, or else nearest the
 /// first choice.
 fn choose(x: f64, up: (f64, u32), down: (f64, u32), lo: f64, hi: f64) -> f64 {
-    let up_first = if up.1 == down.1 {
-        (up.0 - x).abs() <= (down.0 - x).abs()
-    } else {
-        up.1 < down.1
-    };
-    let choices = if up_first {
-        [up.0, down.0]
-    } else {
-        [down.0, up.0]
-    };
-    choices
-        .into_iter()
-        .find(|&choice| choice >= lo && choice <= hi)
-        .unwrap_or_else(|| clamp(choices[0], lo, hi))
+    let up_first = if up.1 == down.1 { (up.0 - x).abs() <= (down.0 - x).abs() } else { up.1 < down.1 };
+    let choices = if up_first { [up.0, down.0] } else { [down.0, up.0] };
+    choices.into_iter().find(|&choice| choice >= lo && choice <= hi).unwrap_or_else(|| clamp(choices[0], lo, hi))
 }
 
 /// Brings the labels and bends of each edge into line with an end of the edge, so that it runs
@@ -1407,8 +1259,7 @@ fn align_labels(
     empty: Option<&[bool]>,
 ) {
     let placed = |v: usize| {
-        g.kind[v] == Kind::Label
-            || (g.kind[v] == Kind::Dummy && !empty.is_some_and(|empty| empty[g.rank[v]]))
+        g.kind[v] == Kind::Label || (g.kind[v] == Kind::Dummy && !empty.is_some_and(|empty| empty[g.rank[v]]))
     };
     let first_pred = |v: usize| g.pred_e[g.pred_start[v]];
     let first_succ = |v: usize| g.succ_e[g.succ_start[v]];
@@ -1471,10 +1322,7 @@ fn align_labels(
 /// Where the end of segment `e` on node `v` should be, from the middle of its side. The edge
 /// is followed up (side 0) or down past bends in ranks that hold nothing else, to where it next
 /// comes to a held point or another node's side.
-#[expect(
-    clippy::too_many_arguments,
-    reason = "mirrors Pele's closure, which reads these from its scope"
-)]
+#[expect(clippy::too_many_arguments, reason = "mirrors Pele's closure, which reads these from its scope")]
 fn wanted(
     g: &Graph,
     nodes: &[LNode],
@@ -1492,11 +1340,7 @@ fn wanted(
         return 0.0;
     }
     let e = follow(g, empty, e, side);
-    let (u, point) = if side == 0 {
-        (g.ef[e], xs[g.ef[e]] + g.efd[e])
-    } else {
-        (g.et[e], xs[g.et[e]] + g.etd[e])
-    };
+    let (u, point) = if side == 0 { (g.ef[e], xs[g.ef[e]] + g.efd[e]) } else { (g.et[e], xs[g.et[e]] + g.etd[e]) };
     // Once the other end has its place, this one comes into line with it if it can.
     if again && (point - xs[v]).abs() <= span / 2.0 + IN_LINE {
         return (-span / 2.0).max((span / 2.0).min(point - xs[v]));
@@ -1505,8 +1349,7 @@ fn wanted(
     let mut middle = point;
     let mut width = 0.0;
     let other = if side == 0 { kinds.0 } else { kinds.1 };
-    if u < g.real && nodes[u].kind == Kind::Node && other[e] != End::Held && free[1 - side][u] >= 2
-    {
+    if u < g.real && nodes[u].kind == Kind::Node && other[e] != End::Held && free[1 - side][u] >= 2 {
         width = nodes[u].span.min(g.w[u]).max(0.0);
         if width > 0.0 {
             middle = xs[u];
@@ -1568,15 +1411,10 @@ fn settle(
                 // Every end on the side in order; the held ones divide the rest into runs.
                 all.clear();
                 {
-                    let (start, list, other) = if side == 0 {
-                        (&g.pred_start, &g.pred_e, &g.ef)
-                    } else {
-                        (&g.succ_start, &g.succ_e, &g.et)
-                    };
+                    let (start, list, other) =
+                        if side == 0 { (&g.pred_start, &g.pred_e, &g.ef) } else { (&g.succ_start, &g.succ_e, &g.et) };
                     all.extend_from_slice(&list[start[v]..start[v + 1]]);
-                    all.sort_by(|&a: &usize, &b: &usize| {
-                        g.pos[other[a]].cmp(&g.pos[other[b]]).then(a.cmp(&b))
-                    });
+                    all.sort_by(|&a: &usize, &b: &usize| g.pos[other[a]].cmp(&g.pos[other[b]]).then(a.cmp(&b)));
                 }
                 let dx = |g: &Graph, k: usize| if side == 0 { g.etd[k] } else { g.efd[k] };
                 let mut k = 0;
@@ -1588,16 +1426,8 @@ fn settle(
                     }
                     // The run of free ends before this point is ids[k..], as many as were passed
                     // since the last held end.
-                    let size = all[..i]
-                        .iter()
-                        .rev()
-                        .take_while(|&&a| kinds[a] != End::Held)
-                        .count();
-                    let hi = if held {
-                        dx(g, all[i]) - PORT_PITCH
-                    } else {
-                        span / 2.0
-                    };
+                    let size = all[..i].iter().rev().take_while(|&&a| kinds[a] != End::Held).count();
+                    let hi = if held { dx(g, all[i]) - PORT_PITCH } else { span / 2.0 };
                     if size > 0 {
                         // The places nearest the wanted ones that keep the order and the room
                         // between neighbours: an isotonic fit, pooling neighbours that would
@@ -1609,19 +1439,8 @@ fn settle(
                             if j > 0 {
                                 before += room[k + j];
                             }
-                            let want = wanted(
-                                g,
-                                nodes,
-                                xs,
-                                (efk, etk),
-                                free,
-                                empty,
-                                ids[k + j],
-                                side,
-                                v,
-                                span,
-                                pass > 0,
-                            );
+                            let want =
+                                wanted(g, nodes, xs, (efk, etk), free, empty, ids[k + j], side, v, span, pass > 0);
                             sum.push(want - before);
                             count.push(1);
                             // Ends that share a place for want of room stay together.
@@ -1680,10 +1499,7 @@ fn settle(
 
 /// Brings edges that are nearly straight into line, by moving a node a little across the flow
 /// along with everything already in line with it, where the nodes beside them leave room.
-#[expect(
-    clippy::many_single_char_names,
-    reason = "names mirror Pele's layered.ts for side-by-side review"
-)]
+#[expect(clippy::many_single_char_names, reason = "names mirror Pele's layered.ts for side-by-side review")]
 fn snap(g: &Graph, xs: &mut [f64], empty: Option<&[bool]>, opt: &LayeredOptions) {
     let passed = |u: usize| g.kind[u] == Kind::Dummy && empty.is_some_and(|empty| empty[g.rank[u]]);
     // Each edge from one held point to the next, past the bends in ranks that hold nothing
@@ -1768,11 +1584,7 @@ fn snap(g: &Graph, xs: &mut [f64], empty: Option<&[bool]>, opt: &LayeredOptions)
         // The smaller of the two blocks moves, if it can; else the other.
         let upper = block[a[k]];
         let lower = block[b[k]];
-        let first = if members[upper].len() <= members[lower].len() {
-            upper
-        } else {
-            lower
-        };
+        let first = if members[upper].len() <= members[lower].len() { upper } else { lower };
         let second = if first == upper { lower } else { upper };
         for id in [first, second] {
             let shift = if id == upper { d } else { -d };
@@ -1852,10 +1664,7 @@ impl Bounds<'_> {
     }
 
     /// Points along piece `k` as a plain curve across a gap of height `h`, into `out`.
-    #[expect(
-        clippy::many_single_char_names,
-        reason = "names mirror Pele's layered.ts for side-by-side review"
-    )]
+    #[expect(clippy::many_single_char_names, reason = "names mirror Pele's layered.ts for side-by-side review")]
     fn sample(&self, k: usize, h: f64, out: &mut [f64; 2 * SAMPLES + 2]) {
         let c = ease(self.to[k] - self.from[k], h);
         for i in 0..=SAMPLES {
@@ -1880,11 +1689,7 @@ fn reach(points: &[f64; 2 * SAMPLES + 2], line: &[f64; 2 * SAMPLES + 2]) -> f64 
             if den == 0.0 || den.is_nan() {
                 den = 1.0;
             }
-            let t = clamp(
-                ((px - line[2 * j]) * dx + (py - line[2 * j + 1]) * dy) / den,
-                0.0,
-                1.0,
-            );
+            let t = clamp(((px - line[2 * j]) * dx + (py - line[2 * j + 1]) * dy) / den, 0.0, 1.0);
             let d = hypot(px - line[2 * j] - t * dx, py - line[2 * j + 1] - t * dy);
             if d < least {
                 least = d;
@@ -1897,21 +1702,11 @@ fn reach(points: &[f64; 2 * SAMPLES + 2], line: &[f64; 2 * SAMPLES + 2]) -> f64 
 /// Gives the pieces of one gap in `list` their tracks, and each the number of tracks that the
 /// pieces it has to do with take between them, counting its own from the first of those when
 /// `curved`. Returns the number of tracks. The pieces come without tracks.
-fn lay(
-    bounds: &Bounds<'_>,
-    track: &mut [isize],
-    levels: &mut [usize],
-    list: &mut [usize],
-    curved: bool,
-) -> usize {
+fn lay(bounds: &Bounds<'_>, track: &mut [isize], levels: &mut [usize], list: &mut [usize], curved: bool) -> usize {
     let (lo, hi) = (&bounds.lo, &bounds.hi);
     // A plain order to start from: the pieces that reach furthest go first, so that those of one
     // fan nest.
-    list.sort_by(|&a, &b| {
-        cmp(hi[b] - lo[b], hi[a] - lo[a])
-            .then(cmp(lo[a], lo[b]))
-            .then(a.cmp(&b))
-    });
+    list.sort_by(|&a, &b| cmp(hi[b] - lo[b], hi[a] - lo[a]).then(cmp(lo[a], lo[b])).then(a.cmp(&b)));
     let count = list.len();
     let mut above: Vec<Vec<usize>> = Vec::new();
     let mut group: Vec<usize> = (0..count).collect();
@@ -2023,22 +1818,8 @@ fn lay(
 /// tracks are levels for curves to turn onto, given only to pieces that would run along or too
 /// near another. `room` is the height of the gap under each rank, and `tall` receives the
 /// height that a gap whose curves mostly cross should have instead of levels.
-fn assign_tracks(
-    pieces: &mut Pieces,
-    track_count: &mut [usize],
-    curved: bool,
-    room: &[f64],
-    tall: &mut [f64],
-) {
-    let Pieces {
-        from,
-        levels,
-        rank,
-        to,
-        track,
-        wide,
-        ..
-    } = pieces;
+fn assign_tracks(pieces: &mut Pieces, track_count: &mut [usize], curved: bool, room: &[f64], tall: &mut [f64]) {
+    let Pieces { from, levels, rank, to, track, wide, .. } = pieces;
     let total = from.len();
     // Pieces by rank, ranks in order of their first piece.
     let mut slot: Vec<Option<usize>> = vec![None; track_count.len()];
@@ -2099,17 +1880,10 @@ fn assign_tracks(
             for j in i + 1..all.len() {
                 let a = all[i];
                 let b = all[j];
-                if (in_level[a] && in_level[b])
-                    || !bounds.clash(a, b)
-                    || (from[a] < to[a]) != (from[b] < to[b])
-                {
+                if (in_level[a] && in_level[b]) || !bounds.clash(a, b) || (from[a] < to[a]) != (from[b] < to[b]) {
                     continue;
                 }
-                let limit = if wide[a] || wide[b] {
-                    LEVEL_CLEAR
-                } else {
-                    LEVEL_TOUCH
-                };
+                let limit = if wide[a] || wide[b] { LEVEL_CLEAR } else { LEVEL_TOUCH };
                 if nearest(a, b, room[r]) < limit {
                     for k in [a, b] {
                         if !in_level[k] {
@@ -2156,9 +1930,7 @@ fn assign_tracks(
             let mut members: Vec<usize> = all
                 .iter()
                 .copied()
-                .filter(|&k| {
-                    in_level[k] || (!wide[k] && turning.iter().any(|&j| bounds.meet(k, j)))
-                })
+                .filter(|&k| in_level[k] || (!wide[k] && turning.iter().any(|&j| bounds.meet(k, j))))
                 .collect();
             lay(&bounds, track, levels, &mut members, curved);
             track_count[r] = members.iter().map(|&k| levels[k]).max().unwrap_or(0);
@@ -2227,19 +1999,12 @@ fn straighten(
         }
         row.clear();
         row.extend_from_slice(&g.order[g.layer_start[r]..g.layer_start[r + 1]]);
-        row.sort_by(|&a, &b| {
-            cmp(from[a], from[b])
-                .then(cmp(to[a], to[b]))
-                .then(a.cmp(&b))
-        });
+        row.sort_by(|&a, &b| cmp(from[a], from[b]).then(cmp(to[a], to[b])).then(a.cmp(&b)));
         let mut i = 0;
         while i < row.len() {
             twins.clear();
             let mut j = i;
-            while j < row.len()
-                && (from[row[j]] - from[row[i]]).abs() < 1.0
-                && (to[row[j]] - to[row[i]]).abs() < 1.0
-            {
+            while j < row.len() && (from[row[j]] - from[row[i]]).abs() < 1.0 && (to[row[j]] - to[row[i]]).abs() < 1.0 {
                 twins.push(row[j]);
                 j += 1;
             }
@@ -2313,13 +2078,9 @@ fn past_labels(
             let lo = from.min(to) - clear;
             let hi = from.max(to) + clear;
             let r = g.rank[d];
-            let free = g.order[g.layer_start[r]..g.layer_start[r + 1]]
-                .iter()
-                .all(|&label| {
-                    g.kind[label] != Kind::Label
-                        || xs[label] + g.w[label] / 2.0 <= lo
-                        || xs[label] - g.w[label] / 2.0 >= hi
-                });
+            let free = g.order[g.layer_start[r]..g.layer_start[r + 1]].iter().all(|&label| {
+                g.kind[label] != Kind::Label || xs[label] + g.w[label] / 2.0 <= lo || xs[label] - g.w[label] / 2.0 >= hi
+            });
             if !free {
                 continue;
             }
@@ -2348,12 +2109,7 @@ struct Counter {
 /// Counts the crossings between every two neighbouring ranks.
 #[expect(clippy::float_cmp, reason = "Pele compares offsets exactly")]
 fn count_crossings(g: &Graph, c: &mut Counter) -> u64 {
-    let Counter {
-        ids,
-        place,
-        targets,
-        tree,
-    } = c;
+    let Counter { ids, place, targets, tree } = c;
     let ls = &g.layer_start;
     let mut total = 0u64;
     for r in 0..g.max_rank {
@@ -2398,8 +2154,7 @@ fn count_crossings(g: &Graph, c: &mut Counter) -> u64 {
             if t - t0 < 2 {
                 continue;
             }
-            let mixed = place.is_some()
-                && (from + 1..to).any(|k| g.efd[g.succ_e[k]] != g.efd[g.succ_e[from]]);
+            let mixed = place.is_some() && (from + 1..to).any(|k| g.efd[g.succ_e[k]] != g.efd[g.succ_e[from]]);
             if let Some(place) = place.as_ref()
                 && mixed
             {
@@ -2434,22 +2189,9 @@ fn count_crossings(g: &Graph, c: &mut Counter) -> u64 {
 }
 
 /// One barycenter sweep down (from the ranks above) or up, ties broken left or right.
-#[expect(
-    clippy::many_single_char_names,
-    reason = "names mirror Pele's layered.ts for side-by-side review"
-)]
-#[expect(
-    clippy::float_cmp,
-    reason = "Pele marks nodes without neighbours with exactly -1"
-)]
-fn sweep(
-    g: &mut Graph,
-    nodes: &[LNode],
-    bary: &mut [f64],
-    moving: &mut [usize],
-    down: bool,
-    bias_right: bool,
-) {
+#[expect(clippy::many_single_char_names, reason = "names mirror Pele's layered.ts for side-by-side review")]
+#[expect(clippy::float_cmp, reason = "Pele marks nodes without neighbours with exactly -1")]
+fn sweep(g: &mut Graph, nodes: &[LNode], bary: &mut [f64], moving: &mut [usize], down: bool, bias_right: bool) {
     for step in 1..=g.max_rank {
         let r = if down { step } else { g.max_rank - step };
         let s = g.layer_start[r];
@@ -2492,11 +2234,7 @@ fn sweep(
         }
         let pos = &g.pos;
         moving[..movable].sort_by(|&a, &b| {
-            let tie = if bias_right {
-                pos[b].cmp(&pos[a])
-            } else {
-                pos[a].cmp(&pos[b])
-            };
+            let tie = if bias_right { pos[b].cmp(&pos[a]) } else { pos[a].cmp(&pos[b]) };
             cmp(bary[a], bary[b]).then(tie)
         });
         let mut k = 0;
@@ -2521,10 +2259,7 @@ fn out_of_order(g: &Graph) -> usize {
             if g.order[i] >= g.real {
                 continue;
             }
-            total += g.order[i + 1..end]
-                .iter()
-                .filter(|&&o| o < g.order[i])
-                .count();
+            total += g.order[i + 1..end].iter().filter(|&&o| o < g.order[i]).count();
         }
     }
     total
@@ -2535,24 +2270,11 @@ fn out_of_order(g: &Graph) -> usize {
 /// the nodes were given among those with the fewest crossings.
 fn reduce_crossings(g: &mut Graph, nodes: &[LNode]) {
     let segments = g.ef.len();
-    let widest = (0..=g.max_rank)
-        .map(|r| g.layer_start[r + 1] - g.layer_start[r])
-        .max()
-        .unwrap_or(0);
+    let widest = (0..=g.max_rank).map(|r| g.layer_start[r + 1] - g.layer_start[r]).max().unwrap_or(0);
     // With offsets, edges that reach one node at different offsets take separate places.
     let place = g.offsets.then(|| vec![0usize; segments]);
-    let size = if place.is_some() {
-        widest + segments
-    } else {
-        widest
-    }
-    .next_power_of_two();
-    let mut counter = Counter {
-        ids: Vec::new(),
-        place,
-        targets: vec![0; segments],
-        tree: vec![0; 2 * size],
-    };
+    let size = if place.is_some() { widest + segments } else { widest }.next_power_of_two();
+    let mut counter = Counter { ids: Vec::new(), place, targets: vec![0; segments], tree: vec![0; 2 * size] };
 
     let mut best = count_crossings(g, &mut counter);
     if best == 0 {
@@ -2579,14 +2301,7 @@ fn reduce_crossings(g: &mut Graph, nodes: &[LNode]) {
         let mut stale = 0;
         let mut i = 0;
         while stale < 4 && i < MAX_SWEEPS {
-            sweep(
-                g,
-                nodes,
-                &mut bary,
-                &mut moving,
-                (i + attempt).is_multiple_of(2),
-                i % 4 >= 2,
-            );
+            sweep(g, nodes, &mut bary, &mut moving, (i + attempt).is_multiple_of(2), i % 4 >= 2);
             let c = count_crossings(g, &mut counter);
             if c < found {
                 found = c;
@@ -2627,20 +2342,13 @@ fn reduce_crossings(g: &mut Graph, nodes: &[LNode]) {
 /// Half the room a node, bend, or port takes across the flow, with its share of the gap beside
 /// it.
 fn half_room(g: &Graph, opt: &LayeredOptions, v: usize) -> f64 {
-    let sep = if g.kind[v] == Kind::Node {
-        opt.node_sep
-    } else {
-        opt.edge_sep
-    };
+    let sep = if g.kind[v] == Kind::Node { opt.node_sep } else { opt.edge_sep };
     g.w[v] / 2.0 + sep / 2.0
 }
 
 /// Brandes-Köpf horizontal coordinate assignment: four aligned layouts, balanced. Sorts each
 /// node's segments by the place of their other ends, which later passes rely on.
-#[expect(
-    clippy::many_single_char_names,
-    reason = "names mirror Pele's layered.ts for side-by-side review"
-)]
+#[expect(clippy::many_single_char_names, reason = "names mirror Pele's layered.ts for side-by-side review")]
 fn position(g: &mut Graph, opt: &LayeredOptions) -> Vec<f64> {
     let n = g.n;
     let max_rank = g.max_rank;
@@ -2735,13 +2443,8 @@ fn position(g: &mut Graph, opt: &LayeredOptions) -> Vec<f64> {
             let r = if up { step } else { max_rank - step };
             let s = g.layer_start[r];
             let end = g.layer_start[r + 1];
-            let adjacent = if up {
-                r.checked_sub(1)
-            } else {
-                Some(r + 1).filter(|&a| a <= max_rank)
-            };
-            let adjacent_last =
-                adjacent.map_or(0, |a| signed(g.layer_start[a + 1] - g.layer_start[a]) - 1);
+            let adjacent = if up { r.checked_sub(1) } else { Some(r + 1).filter(|&a| a <= max_rank) };
+            let adjacent_last = adjacent.map_or(0, |a| signed(g.layer_start[a + 1] - g.layer_start[a]) - 1);
             let mut prev_idx: isize = -1;
             for o in 0..end - s {
                 let i = if right { end - 1 - o } else { s + o };
@@ -2759,11 +2462,7 @@ fn position(g: &mut Graph, opt: &LayeredOptions) -> Vec<f64> {
                     }
                     let e = list[if (pass == 0) == right { hi } else { lo }];
                     let w = other[e];
-                    let idx = if right {
-                        adjacent_last - signed(g.pos[w])
-                    } else {
-                        signed(g.pos[w])
-                    };
+                    let idx = if right { adjacent_last - signed(g.pos[w]) } else { signed(g.pos[w]) };
                     if align[v] == v && prev_idx < idx && !conflict[e] {
                         align[w] = v;
                         root[v] = root[w];
@@ -2782,19 +2481,11 @@ fn position(g: &mut Graph, opt: &LayeredOptions) -> Vec<f64> {
             let s = g.layer_start[r];
             let end = g.layer_start[r + 1];
             for i in s + 1..end {
-                let (a, b) = if right {
-                    (g.order[i], g.order[i - 1])
-                } else {
-                    (g.order[i - 1], g.order[i])
-                };
+                let (a, b) = if right { (g.order[i], g.order[i - 1]) } else { (g.order[i - 1], g.order[i]) };
                 let sep = gap[a] + gap[b];
                 e_from[block_edges] = root[a];
                 e_to[block_edges] = root[b];
-                e_w[block_edges] = if right {
-                    sep - shift[a] + shift[b]
-                } else {
-                    sep + shift[a] - shift[b]
-                };
+                e_w[block_edges] = if right { sep - shift[a] + shift[b] } else { sep + shift[a] - shift[b] };
                 indeg[root[b]] += 1;
                 out_start[root[a] + 1] += 1;
                 block_edges += 1;
@@ -2845,11 +2536,7 @@ fn position(g: &mut Graph, opt: &LayeredOptions) -> Vec<f64> {
                 x[v] = min;
             }
         }
-        results.push(
-            (0..n)
-                .map(|i| (if right { -x[root[i]] } else { x[root[i]] }) + shift[i])
-                .collect(),
-        );
+        results.push((0..n).map(|i| (if right { -x[root[i]] } else { x[root[i]] }) + shift[i]).collect());
     }
 
     let mut narrowest = 0;
@@ -2876,11 +2563,7 @@ fn position(g: &mut Graph, opt: &LayeredOptions) -> Vec<f64> {
         }
     }
     for (k, xs) in results.iter_mut().enumerate() {
-        let delta = if k & 1 == 0 {
-            mins[narrowest] - mins[k]
-        } else {
-            maxs[narrowest] - maxs[k]
-        };
+        let delta = if k & 1 == 0 { mins[narrowest] - mins[k] } else { maxs[narrowest] - maxs[k] };
         if delta != 0.0 {
             for x in xs.iter_mut() {
                 *x += delta;
@@ -2912,2591 +2595,4 @@ fn position(g: &mut Graph, opt: &LayeredOptions) -> Vec<f64> {
             f64::midpoint(b, c)
         })
         .collect()
-}
-
-#[cfg(test)]
-#[expect(
-    clippy::many_single_char_names,
-    clippy::unreadable_literal,
-    reason = "fixtures print Pele's numbers exactly and name ends as Pele does"
-)]
-mod tests {
-    //! End-to-end checks against Pele. Every expected number comes from running Pele's TypeScript
-    //! (`obsidianmd/pele` at `458322a`) on the same input with `npx tsx`, never from this port.
-    //! Large graphs compare checksums that both sides compute in the same order.
-
-    use super::*;
-
-    /// `w, h, kind, span, pin`, with kinds numbered as in Pele.
-    type N = (f64, f64, u8, f64, f64);
-    /// `tail, head, minlen, label_w, label_h, tail_dx, head_dx, tail_fixed, head_fixed`.
-    type E = (usize, usize, u32, f64, f64, f64, f64, bool, bool);
-
-    /// An edge as Pele lays it out.
-    struct Want {
-        head_dx: f64,
-        label: (f64, f64),
-        points: &'static [f64],
-        reversed: bool,
-        tail_dx: f64,
-    }
-
-    const OPT: LayeredOptions = LayeredOptions {
-        apart: false,
-        edge_sep: 16.0,
-        head_room: 6.0,
-        node_sep: 40.0,
-        port_sep: 20.0,
-        rank_sep: 48.0,
-        straight: false,
-        tracks: false,
-    };
-
-    fn close(actual: f64, expected: f64, what: &str) {
-        assert!(
-            (actual - expected).abs() <= 1e-6 * expected.abs().max(1.0),
-            "{what}: {actual} != {expected}"
-        );
-    }
-
-    fn run(
-        nodes: &[N],
-        edges: &[E],
-        opt: &LayeredOptions,
-    ) -> (Vec<LNode>, Vec<LEdge>, LayeredResult) {
-        let kinds = [
-            Kind::Node,
-            Kind::Dummy,
-            Kind::Label,
-            Kind::StartPort,
-            Kind::EndPort,
-        ];
-        let mut ln: Vec<LNode> = nodes
-            .iter()
-            .map(|&(w, h, kind, span, pin)| LNode {
-                pin,
-                span,
-                ..lnode(w, h, kinds[usize::from(kind)])
-            })
-            .collect();
-        let mut le: Vec<LEdge> = edges
-            .iter()
-            .map(|&(t, h, minlen, lw, lh, tdx, hdx, tf, hf)| LEdge {
-                head_dx: hdx,
-                head_fixed: hf,
-                tail_dx: tdx,
-                tail_fixed: tf,
-                ..ledge(t, h, minlen, lw, lh)
-            })
-            .collect();
-        let size = layered(&mut ln, &mut le, opt);
-        (ln, le, size)
-    }
-
-    fn check(
-        nodes: &[N],
-        edges: &[E],
-        opt: &LayeredOptions,
-        size: (f64, f64),
-        want_nodes: &[(usize, f64, f64)],
-        want_edges: &[Want],
-    ) {
-        let (ln, le, got) = run(nodes, edges, opt);
-        close(got.width, size.0, "width");
-        close(got.height, size.1, "height");
-        for (i, (node, want)) in ln.iter().zip(want_nodes).enumerate() {
-            assert_eq!(node.rank, want.0, "node {i} rank");
-            close(node.x, want.1, &format!("node {i} x"));
-            close(node.y, want.2, &format!("node {i} y"));
-        }
-        for (i, (edge, want)) in le.iter().zip(want_edges).enumerate() {
-            assert_eq!(edge.reversed, want.reversed, "edge {i} reversed");
-            close(edge.tail_dx, want.tail_dx, &format!("edge {i} tail_dx"));
-            close(edge.head_dx, want.head_dx, &format!("edge {i} head_dx"));
-            assert_eq!(
-                edge.points.len(),
-                want.points.len(),
-                "edge {i} points {:?}",
-                edge.points
-            );
-            for (k, (&p, &q)) in edge.points.iter().zip(want.points).enumerate() {
-                close(p, q, &format!("edge {i} point {k}"));
-            }
-            close(edge.label_x, want.label.0, &format!("edge {i} label x"));
-            close(edge.label_y, want.label.1, &format!("edge {i} label y"));
-        }
-    }
-
-    /// Pele's oracle graph generator: a Lehmer sequence picks sizes, ends, and labels.
-    fn random(seed: u64, n: usize, m: usize, span: f64, labels: u64) -> (Vec<N>, Vec<E>) {
-        let mut s = seed;
-        let mut rnd = || {
-            s = s * 48271 % 2_147_483_647;
-            s
-        };
-        let size = |v: u64| f64::from(u32::try_from(v).unwrap());
-        let nodes = (0..n)
-            .map(|_| {
-                (
-                    20.0 + size(rnd() % 60),
-                    20.0 + size(rnd() % 30),
-                    0,
-                    span,
-                    0.0,
-                )
-            })
-            .collect();
-        let mut edges = Vec::new();
-        let count = n as u64;
-        while edges.len() < m {
-            let t = usize::try_from(rnd() % count).unwrap();
-            let h = usize::try_from(rnd() % count).unwrap();
-            let l = rnd() % 100 < labels;
-            if t == h {
-                continue;
-            }
-            let (lw, lh) = if l { (30.0, 14.0) } else { (0.0, 0.0) };
-            edges.push((t, h, 1, lw, lh, 0.0, 0.0, false, false));
-        }
-        (nodes, edges)
-    }
-
-    fn check_sum(
-        nodes: &[N],
-        edges: &[E],
-        opt: &LayeredOptions,
-        size: (f64, f64),
-        sum: (f64, f64, usize),
-    ) {
-        let (ln, le, got) = run(nodes, edges, opt);
-        close(got.width, size.0, "width");
-        close(got.height, size.1, "height");
-        let mut node_sum = 0.0;
-        for v in &ln {
-            node_sum += v.x + 2.0 * v.y;
-        }
-        let mut points = 0.0;
-        let mut count = 0;
-        for e in &le {
-            for (i, p) in e.points.iter().enumerate() {
-                points += p * f64::from(u8::try_from(i % 7).unwrap() + 1);
-            }
-            count += e.points.len();
-            points += e.label_x + e.label_y;
-        }
-        close(node_sum, sum.0, "node checksum");
-        close(points, sum.1, "point checksum");
-        assert_eq!(count, sum.2, "point count");
-    }
-
-    fn square(count: usize, w: f64, h: f64, span: f64) -> Vec<N> {
-        vec![(w, h, 0, span, 0.0); count]
-    }
-
-    #[test]
-    fn empty() {
-        check(&[], &[], &OPT, (0.0, 0.0), &[], &[]);
-    }
-
-    #[test]
-    fn single() {
-        check(
-            &[(40.0, 30.0, 0, 0.0, 0.0)],
-            &[],
-            &OPT,
-            (40.0, 30.0),
-            &[(0, 20.0, 15.0)],
-            &[],
-        );
-    }
-
-    #[test]
-    fn chain() {
-        check(
-            &[
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-            ],
-            &[
-                (0, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (40.0, 186.0),
-            &[(0, 20.0, 15.0), (1, 20.0, 93.0), (2, 20.0, 171.0)],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 30.0, 20.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 108.0, 20.0, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn diamond() {
-        check(
-            &[
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (120.0, 30.0, 0, 0.0, 0.0),
-                (30.0, 60.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-            ],
-            &[
-                (0, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (190.0, 216.0),
-            &[
-                (0, 117.5, 15.0),
-                (1, 60.0, 108.0),
-                (1, 175.0, 108.0),
-                (2, 117.5, 201.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[117.5, 30.0, 60.0, 93.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[117.5, 30.0, 175.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[60.0, 123.0, 117.5, 186.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[175.0, 138.0, 117.5, 186.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn cycle() {
-        check(
-            &[
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-            ],
-            &[
-                (0, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 0, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (68.0, 264.0),
-            &[
-                (0, 44.0, 15.0),
-                (1, 20.0, 93.0),
-                (2, 44.0, 171.0),
-                (3, 44.0, 249.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[44.0, 30.0, 20.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 108.0, 44.0, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[44.0, 156.0, 68.0, 108.0, 68.0, 78.0, 44.0, 30.0],
-                    reversed: true,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[44.0, 186.0, 44.0, 234.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn twins() {
-        check(
-            &[
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-            ],
-            &[
-                (0, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (88.0, 186.0),
-            &[(0, 20.0, 15.0), (4, 20.0, 171.0), (2, 68.0, 93.0)],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 30.0, 4.0, 78.0, 4.0, 108.0, 20.0, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 30.0, 20.0, 78.0, 20.0, 108.0, 20.0, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 30.0, 68.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[68.0, 108.0, 20.0, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn twins_apart() {
-        check(
-            &[
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-            ],
-            &[
-                (0, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &LayeredOptions { apart: true, ..OPT },
-            (88.0, 186.0),
-            &[(0, 20.0, 15.0), (4, 20.0, 171.0), (2, 68.0, 93.0)],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 30.0, 4.0, 78.0, 4.0, 108.0, 20.0, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 30.0, 20.0, 78.0, 20.0, 108.0, 20.0, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 30.0, 68.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[68.0, 108.0, 20.0, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn labels() {
-        check(
-            &[
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-            ],
-            &[
-                (0, 1, 1, 50.0, 14.0, 0.0, 0.0, false, false),
-                (0, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 3, 1, 20.0, 14.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (153.0, 214.0),
-            &[
-                (0, 105.0, 15.0),
-                (2, 25.0, 107.0),
-                (2, 105.0, 107.0),
-                (4, 105.0, 199.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (25.0, 58.0),
-                    points: &[105.0, 30.0, 25.0, 51.0, 25.0, 65.0, 25.0, 92.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[105.0, 30.0, 105.0, 92.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[25.0, 122.0, 25.0, 146.5, 25.0, 153.5, 105.0, 184.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[
-                        105.0, 30.0, 153.0, 92.0, 153.0, 122.0, 153.0, 146.5, 153.0, 153.5, 105.0,
-                        184.0,
-                    ],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (105.0, 150.0),
-                    points: &[105.0, 122.0, 105.0, 143.0, 105.0, 157.0, 105.0, 184.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn long_edges() {
-        check(
-            &[
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-            ],
-            &[
-                (0, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (3, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 3, 1, 40.0, 14.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (148.0, 342.0),
-            &[
-                (0, 106.0, 15.0),
-                (2, 24.0, 93.0),
-                (4, 48.0, 171.0),
-                (6, 82.0, 249.0),
-                (8, 82.0, 327.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[106.0, 30.0, 24.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[24.0, 108.0, 48.0, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[48.0, 186.0, 82.0, 234.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[82.0, 264.0, 82.0, 312.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[
-                        106.0, 30.0, 148.0, 78.0, 148.0, 108.0, 148.0, 156.0, 148.0, 186.0, 148.0,
-                        234.0, 148.0, 264.0, 82.0, 312.0,
-                    ],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[
-                        24.0, 108.0, 0.0, 156.0, 0.0, 186.0, 0.0, 234.0, 0.0, 264.0, 82.0, 312.0,
-                    ],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (106.0, 93.0),
-                    points: &[
-                        106.0, 30.0, 106.0, 78.0, 106.0, 108.0, 106.0, 156.0, 106.0, 186.0, 82.0,
-                        234.0,
-                    ],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn wide_and_tall() {
-        check(
-            &[
-                (300.0, 20.0, 0, 0.0, 0.0),
-                (20.0, 200.0, 0, 0.0, 0.0),
-                (80.0, 80.0, 0, 0.0, 0.0),
-                (10.0, 10.0, 0, 0.0, 0.0),
-            ],
-            &[
-                (0, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (300.0, 326.0),
-            &[
-                (0, 150.0, 10.0),
-                (1, 60.0, 168.0),
-                (1, 150.0, 168.0),
-                (2, 150.0, 321.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[150.0, 20.0, 60.0, 68.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[150.0, 20.0, 150.0, 128.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[150.0, 20.0, 218.0, 68.0, 218.0, 268.0, 150.0, 316.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[60.0, 268.0, 150.0, 316.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn crossings() {
-        check(
-            &[
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-            ],
-            &[
-                (0, 5, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 5, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (200.0, 108.0),
-            &[
-                (0, 20.0, 15.0),
-                (0, 180.0, 15.0),
-                (0, 100.0, 15.0),
-                (1, 100.0, 93.0),
-                (1, 180.0, 93.0),
-                (1, 20.0, 93.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 30.0, 20.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[180.0, 30.0, 180.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[100.0, 30.0, 100.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 30.0, 100.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[100.0, 30.0, 20.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn pins() {
-        check(
-            &[
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 1.0),
-                (40.0, 30.0, 0, 0.0, -1.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-            ],
-            &[
-                (0, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (200.0, 108.0),
-            &[
-                (0, 100.0, 15.0),
-                (1, 180.0, 93.0),
-                (1, 20.0, 93.0),
-                (1, 100.0, 93.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[100.0, 30.0, 180.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[100.0, 30.0, 20.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[100.0, 30.0, 100.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn offsets() {
-        check(
-            &[
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-            ],
-            &[
-                (0, 1, 1, 0.0, 0.0, -10.0, 5.0, true, false),
-                (0, 2, 1, 0.0, 0.0, 10.0, 0.0, false, false),
-                (1, 3, 1, 0.0, 0.0, 0.0, -8.0, false, true),
-                (2, 3, 1, 0.0, 0.0, 0.0, 8.0, false, false),
-            ],
-            &OPT,
-            (120.0, 186.0),
-            &[
-                (0, 62.5, 15.0),
-                (1, 20.0, 93.0),
-                (1, 100.0, 93.0),
-                (2, 60.0, 171.0),
-            ],
-            &[
-                Want {
-                    head_dx: 5.0,
-                    label: (0.0, 0.0),
-                    points: &[52.5, 30.0, 25.0, 78.0],
-                    reversed: false,
-                    tail_dx: -10.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[72.5, 30.0, 100.0, 78.0],
-                    reversed: false,
-                    tail_dx: 10.0,
-                },
-                Want {
-                    head_dx: -8.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 108.0, 52.0, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 8.0,
-                    label: (0.0, 0.0),
-                    points: &[100.0, 108.0, 68.0, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn minlen() {
-        check(
-            &[
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-            ],
-            &[
-                (0, 1, 3, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 3, 0, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (68.0, 312.0),
-            &[
-                (0, 24.0, 15.0),
-                (3, 24.0, 219.0),
-                (1, 48.0, 93.0),
-                (4, 24.0, 297.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[24.0, 30.0, 0.0, 78.0, 0.0, 108.0, 24.0, 204.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[24.0, 30.0, 48.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[48.0, 108.0, 24.0, 204.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[24.0, 234.0, 24.0, 282.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn disconnected() {
-        check(
-            &[
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-            ],
-            &[
-                (0, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (3, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (200.0, 108.0),
-            &[
-                (0, 20.0, 15.0),
-                (1, 20.0, 93.0),
-                (0, 100.0, 15.0),
-                (0, 180.0, 15.0),
-                (1, 180.0, 93.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 30.0, 20.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[180.0, 30.0, 180.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn spans_fan() {
-        check(
-            &[
-                (120.0, 30.0, 0, 100.0, 0.0),
-                (120.0, 30.0, 0, 100.0, 0.0),
-                (120.0, 30.0, 0, 100.0, 0.0),
-                (120.0, 30.0, 0, 100.0, 0.0),
-                (120.0, 30.0, 0, 100.0, 0.0),
-            ],
-            &[
-                (0, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (3, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (440.0, 186.0),
-            &[
-                (0, 220.0, 15.0),
-                (1, 60.0, 93.0),
-                (1, 220.0, 93.0),
-                (1, 380.0, 93.0),
-                (2, 220.0, 171.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[204.0, 30.0, 60.0, 78.0],
-                    reversed: false,
-                    tail_dx: -16.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[220.0, 30.0, 220.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[236.0, 30.0, 380.0, 78.0],
-                    reversed: false,
-                    tail_dx: 16.0,
-                },
-                Want {
-                    head_dx: -16.0,
-                    label: (0.0, 0.0),
-                    points: &[60.0, 108.0, 204.0, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[220.0, 108.0, 220.0, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 16.0,
-                    label: (0.0, 0.0),
-                    points: &[380.0, 108.0, 236.0, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn spans_labels() {
-        check(
-            &[
-                (100.0, 30.0, 0, 80.0, 0.0),
-                (100.0, 30.0, 0, 80.0, 0.0),
-                (100.0, 30.0, 0, 80.0, 0.0),
-                (100.0, 30.0, 0, 80.0, 0.0),
-                (100.0, 30.0, 0, 80.0, 0.0),
-                (100.0, 30.0, 0, 80.0, 0.0),
-            ],
-            &[
-                (0, 1, 1, 40.0, 14.0, 0.0, 0.0, false, false),
-                (0, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 3, 1, 30.0, 14.0, 0.0, 0.0, false, false),
-                (0, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (3, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 5, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (5, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (4, 0, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (424.0, 292.0),
-            &[
-                (0, 266.4, 15.0),
-                (2, 50.0, 107.0),
-                (2, 190.0, 107.0),
-                (4, 190.0, 199.0),
-                (6, 346.0, 277.0),
-                (2, 346.0, 107.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (50.0, 58.0),
-                    points: &[235.99999999999997, 30.0, 50.0, 51.0, 50.0, 65.0, 50.0, 92.0],
-                    reversed: false,
-                    tail_dx: -30.4,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[251.99999999999997, 30.0, 190.0, 92.0],
-                    reversed: false,
-                    tail_dx: -14.399999999999999,
-                },
-                Want {
-                    head_dx: -16.0,
-                    label: (0.0, 0.0),
-                    points: &[50.0, 122.0, 50.0, 146.5, 50.0, 153.5, 174.0, 184.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (190.0, 150.0),
-                    points: &[190.0, 122.0, 190.0, 143.0, 190.0, 157.0, 190.0, 184.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 16.0,
-                    label: (0.0, 0.0),
-                    points: &[
-                        268.0, 30.0, 268.0, 92.0, 268.0, 122.0, 268.0, 146.5, 268.0, 153.5, 206.0,
-                        184.0,
-                    ],
-                    reversed: false,
-                    tail_dx: 1.6000000000000014,
-                },
-                Want {
-                    head_dx: -16.0,
-                    label: (0.0, 0.0),
-                    points: &[190.0, 214.0, 330.0, 262.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[284.0, 30.0, 346.0, 92.0],
-                    reversed: false,
-                    tail_dx: 17.6,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[346.0, 122.0, 346.0, 184.0, 346.0, 214.0, 346.0, 262.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 33.6,
-                    label: (0.0, 0.0),
-                    points: &[
-                        362.0, 262.0, 424.0, 214.0, 424.0, 184.0, 424.0, 122.0, 424.0, 92.0, 300.0,
-                        30.0,
-                    ],
-                    reversed: true,
-                    tail_dx: 16.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn spans_twins() {
-        check(
-            &[
-                (100.0, 30.0, 0, 80.0, 0.0),
-                (100.0, 30.0, 0, 80.0, 0.0),
-                (100.0, 30.0, 0, 80.0, 0.0),
-                (100.0, 30.0, 0, 80.0, 0.0),
-            ],
-            &[
-                (0, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (268.0, 206.0),
-            &[
-                (0, 179.0, 15.0),
-                (2, 50.0, 113.0),
-                (2, 190.0, 113.0),
-                (4, 190.0, 191.0),
-            ],
-            &[
-                Want {
-                    head_dx: -8.0,
-                    label: (0.0, 0.0),
-                    points: &[158.0, 30.0, 158.0, 58.0, 42.0, 58.0, 42.0, 98.0],
-                    reversed: false,
-                    tail_dx: -21.0,
-                },
-                Want {
-                    head_dx: 8.0,
-                    label: (0.0, 0.0),
-                    points: &[174.0, 30.0, 174.0, 70.0, 58.0, 70.0, 58.0, 98.0],
-                    reversed: false,
-                    tail_dx: -5.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[190.0, 30.0, 190.0, 98.0],
-                    reversed: false,
-                    tail_dx: 11.0,
-                },
-                Want {
-                    head_dx: -16.0,
-                    label: (0.0, 0.0),
-                    points: &[50.0, 128.0, 174.0, 176.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[190.0, 128.0, 190.0, 176.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 16.0,
-                    label: (0.0, 0.0),
-                    points: &[206.0, 30.0, 268.0, 98.0, 268.0, 128.0, 206.0, 176.0],
-                    reversed: false,
-                    tail_dx: 27.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn spans_narrow() {
-        check(
-            &[
-                (30.0, 30.0, 0, 20.0, 0.0),
-                (30.0, 30.0, 0, 20.0, 0.0),
-                (30.0, 30.0, 0, 20.0, 0.0),
-                (30.0, 30.0, 0, 20.0, 0.0),
-            ],
-            &[
-                (0, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (3, 0, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (144.0, 186.0),
-            &[
-                (0, 109.0, 15.0),
-                (2, 15.0, 93.0),
-                (2, 85.0, 93.0),
-                (4, 114.5, 171.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[99.0, 30.0, 15.0, 78.0],
-                    reversed: false,
-                    tail_dx: -10.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[104.0, 30.0, 85.0, 78.0],
-                    reversed: false,
-                    tail_dx: -5.0,
-                },
-                Want {
-                    head_dx: -6.0,
-                    label: (0.0, 0.0),
-                    points: &[109.0, 30.0, 128.0, 78.0, 128.0, 108.0, 108.5, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: -6.0,
-                    label: (0.0, 0.0),
-                    points: &[15.0, 108.0, 108.5, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: -6.0,
-                    label: (0.0, 0.0),
-                    points: &[85.0, 108.0, 108.5, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 10.0,
-                    label: (0.0, 0.0),
-                    points: &[124.5, 156.0, 144.0, 108.0, 144.0, 78.0, 119.0, 30.0],
-                    reversed: true,
-                    tail_dx: 10.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn spans_fixed() {
-        check(
-            &[
-                (120.0, 30.0, 0, 100.0, 0.0),
-                (120.0, 30.0, 0, 100.0, 0.0),
-                (120.0, 30.0, 0, 100.0, 0.0),
-                (120.0, 30.0, 0, 100.0, 0.0),
-            ],
-            &[
-                (0, 1, 1, 0.0, 0.0, -30.0, 0.0, true, false),
-                (0, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 3, 1, 0.0, 0.0, 30.0, 0.0, true, false),
-                (0, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 3, 1, 0.0, 0.0, 0.0, 0.0, false, true),
-            ],
-            &OPT,
-            (324.0, 186.0),
-            &[
-                (0, 261.0, 15.0),
-                (2, 60.0, 93.0),
-                (2, 220.0, 93.0),
-                (4, 264.0, 171.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[231.0, 30.0, 60.0, 78.0],
-                    reversed: false,
-                    tail_dx: -30.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[247.0, 30.0, 220.0, 78.0],
-                    reversed: false,
-                    tail_dx: -14.0,
-                },
-                Want {
-                    head_dx: 35.0,
-                    label: (0.0, 0.0),
-                    points: &[291.0, 30.0, 324.0, 78.0, 324.0, 108.0, 299.0, 156.0],
-                    reversed: false,
-                    tail_dx: 30.0,
-                },
-                Want {
-                    head_dx: 19.0,
-                    label: (0.0, 0.0),
-                    points: &[275.0, 30.0, 308.0, 78.0, 308.0, 108.0, 283.0, 156.0],
-                    reversed: false,
-                    tail_dx: 14.0,
-                },
-                Want {
-                    head_dx: -16.0,
-                    label: (0.0, 0.0),
-                    points: &[60.0, 108.0, 248.0, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[220.0, 108.0, 264.0, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn levels_wide() {
-        check(
-            &[
-                (40.0, 30.0, 0, 30.0, 0.0),
-                (40.0, 30.0, 0, 30.0, 0.0),
-                (40.0, 30.0, 0, 30.0, 0.0),
-                (400.0, 30.0, 0, 380.0, 0.0),
-                (40.0, 30.0, 0, 30.0, 0.0),
-                (40.0, 30.0, 0, 30.0, 0.0),
-                (40.0, 30.0, 0, 30.0, 0.0),
-            ],
-            &[
-                (0, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 5, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 6, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 6, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 6, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (3, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (3, 6, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (655.0, 140.0),
-            &[
-                (0, 35.0, 15.0),
-                (0, 115.0, 15.0),
-                (0, 635.0, 15.0),
-                (0, 375.0, 15.0),
-                (1, 111.0, 125.0),
-                (1, 20.0, 125.0),
-                (1, 378.0, 125.0),
-            ],
-            &[
-                Want {
-                    head_dx: -15.0,
-                    label: (0.0, 0.0),
-                    points: &[35.0, 30.0, 35.0, 70.0, 96.0, 110.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 30.0, 20.0, 110.0],
-                    reversed: false,
-                    tail_dx: -15.0,
-                },
-                Want {
-                    head_dx: -15.0,
-                    label: (0.0, 0.0),
-                    points: &[50.0, 30.0, 50.0, 70.0, 363.0, 70.0, 363.0, 110.0],
-                    reversed: false,
-                    tail_dx: 15.0,
-                },
-                Want {
-                    head_dx: -5.0,
-                    label: (0.0, 0.0),
-                    points: &[121.0, 30.0, 121.0, 58.0, 373.0, 58.0, 373.0, 110.0],
-                    reversed: false,
-                    tail_dx: 6.0,
-                },
-                Want {
-                    head_dx: 15.0,
-                    label: (0.0, 0.0),
-                    points: &[635.0, 30.0, 393.0, 110.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 15.0,
-                    label: (0.0, 0.0),
-                    points: &[225.0, 30.0, 225.0, 82.0, 126.0, 82.0, 126.0, 110.0],
-                    reversed: false,
-                    tail_dx: -150.0,
-                },
-                Want {
-                    head_dx: 5.0,
-                    label: (0.0, 0.0),
-                    points: &[383.0, 30.0, 383.0, 110.0],
-                    reversed: false,
-                    tail_dx: 8.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[105.0, 30.0, 111.0, 110.0],
-                    reversed: false,
-                    tail_dx: -10.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn levels_crossed() {
-        check(
-            &[
-                (40.0, 30.0, 0, 30.0, 0.0),
-                (40.0, 30.0, 0, 30.0, 0.0),
-                (40.0, 30.0, 0, 30.0, 0.0),
-                (40.0, 30.0, 0, 30.0, 0.0),
-                (40.0, 30.0, 0, 30.0, 0.0),
-                (40.0, 30.0, 0, 30.0, 0.0),
-                (40.0, 30.0, 0, 30.0, 0.0),
-                (40.0, 30.0, 0, 30.0, 0.0),
-            ],
-            &[
-                (0, 7, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 6, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 5, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (3, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (3, 7, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (280.0, 108.0),
-            &[
-                (0, 100.0, 15.0),
-                (0, 20.0, 15.0),
-                (0, 260.0, 15.0),
-                (0, 180.0, 15.0),
-                (1, 180.0, 93.0),
-                (1, 260.0, 93.0),
-                (1, 20.0, 93.0),
-                (1, 100.0, 93.0),
-            ],
-            &[
-                Want {
-                    head_dx: -8.0,
-                    label: (0.0, 0.0),
-                    points: &[92.0, 30.0, 92.0, 78.0],
-                    reversed: false,
-                    tail_dx: -8.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 30.0, 20.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[260.0, 30.0, 260.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 8.0,
-                    label: (0.0, 0.0),
-                    points: &[188.0, 30.0, 188.0, 78.0],
-                    reversed: false,
-                    tail_dx: 8.0,
-                },
-                Want {
-                    head_dx: -8.0,
-                    label: (0.0, 0.0),
-                    points: &[108.0, 30.0, 172.0, 78.0],
-                    reversed: false,
-                    tail_dx: 8.0,
-                },
-                Want {
-                    head_dx: 8.0,
-                    label: (0.0, 0.0),
-                    points: &[172.0, 30.0, 108.0, 78.0],
-                    reversed: false,
-                    tail_dx: -8.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn tracks() {
-        check(
-            &[
-                (60.0, 30.0, 0, 50.0, 0.0),
-                (60.0, 30.0, 0, 50.0, 0.0),
-                (60.0, 30.0, 0, 50.0, 0.0),
-                (60.0, 30.0, 0, 50.0, 0.0),
-                (60.0, 30.0, 0, 50.0, 0.0),
-                (60.0, 30.0, 0, 50.0, 0.0),
-            ],
-            &[
-                (0, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 5, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 5, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 5, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (3, 5, 1, 30.0, 14.0, 0.0, 0.0, false, false),
-            ],
-            &LayeredOptions {
-                tracks: true,
-                ..OPT
-            },
-            (317.0, 222.0),
-            &[
-                (0, 229.0, 15.0),
-                (0, 84.0, 15.0),
-                (2, 130.0, 93.0),
-                (2, 30.0, 93.0),
-                (2, 287.0, 93.0),
-                (4, 159.0, 207.0),
-            ],
-            &[
-                Want {
-                    head_dx: 8.0,
-                    label: (0.0, 0.0),
-                    points: &[213.0, 30.0, 213.0, 60.0, 38.0, 60.0, 38.0, 78.0],
-                    reversed: false,
-                    tail_dx: -16.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[245.0, 30.0, 245.0, 48.0, 287.0, 48.0, 287.0, 78.0],
-                    reversed: false,
-                    tail_dx: 16.0,
-                },
-                Want {
-                    head_dx: 24.0,
-                    label: (0.0, 0.0),
-                    points: &[
-                        229.0, 30.0, 229.0, 78.0, 229.0, 108.0, 229.0, 132.0, 229.0, 146.0, 229.0,
-                        174.0, 183.0, 174.0, 183.0, 192.0,
-                    ],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: -8.0,
-                    label: (0.0, 0.0),
-                    points: &[76.0, 30.0, 76.0, 48.0, 22.0, 48.0, 22.0, 78.0],
-                    reversed: false,
-                    tail_dx: -8.0,
-                },
-                Want {
-                    head_dx: -8.0,
-                    label: (0.0, 0.0),
-                    points: &[
-                        130.0, 108.0, 130.0, 132.0, 130.0, 146.0, 130.0, 164.0, 151.0, 164.0,
-                        151.0, 192.0,
-                    ],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 8.0,
-                    label: (0.0, 0.0),
-                    points: &[
-                        92.0, 30.0, 92.0, 48.0, 188.0, 48.0, 188.0, 78.0, 188.0, 108.0, 188.0,
-                        132.0, 188.0, 146.0, 188.0, 164.0, 167.0, 164.0, 167.0, 192.0,
-                    ],
-                    reversed: false,
-                    tail_dx: 8.0,
-                },
-                Want {
-                    head_dx: -24.0,
-                    label: (30.0, 139.0),
-                    points: &[
-                        30.0, 108.0, 30.0, 132.0, 30.0, 146.0, 30.0, 174.0, 135.0, 174.0, 135.0,
-                        192.0,
-                    ],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn tracks_plain() {
-        check(
-            &[
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-            ],
-            &[
-                (0, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &LayeredOptions {
-                tracks: true,
-                ..OPT
-            },
-            (200.0, 108.0),
-            &[
-                (0, 100.0, 15.0),
-                (0, 180.0, 15.0),
-                (1, 100.0, 93.0),
-                (1, 20.0, 93.0),
-                (1, 180.0, 93.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[100.0, 30.0, 100.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[100.0, 30.0, 100.0, 48.0, 20.0, 48.0, 20.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[180.0, 30.0, 180.0, 60.0, 100.0, 60.0, 100.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[180.0, 30.0, 180.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[100.0, 30.0, 100.0, 48.0, 180.0, 48.0, 180.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn straight() {
-        check(
-            &[
-                (100.0, 30.0, 0, 80.0, 0.0),
-                (100.0, 30.0, 0, 80.0, 0.0),
-                (100.0, 30.0, 0, 80.0, 0.0),
-                (100.0, 30.0, 0, 80.0, 0.0),
-                (100.0, 30.0, 0, 80.0, 0.0),
-            ],
-            &[
-                (0, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 4, 1, 30.0, 14.0, 0.0, 0.0, false, false),
-                (4, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &LayeredOptions {
-                straight: true,
-                ..OPT
-            },
-            (380.0, 200.0),
-            &[
-                (0, 190.0, 15.0),
-                (2, 50.0, 107.0),
-                (2, 190.0, 107.0),
-                (4, 190.0, 185.0),
-                (2, 330.0, 107.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[174.0, 30.0, 50.0, 92.0],
-                    reversed: false,
-                    tail_dx: -16.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[190.0, 30.0, 190.0, 92.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: -16.0,
-                    label: (0.0, 0.0),
-                    points: &[50.0, 122.0, 174.0, 170.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[190.0, 122.0, 190.0, 170.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (330.0, 58.0),
-                    points: &[206.0, 30.0, 330.0, 51.0, 330.0, 65.0, 330.0, 92.0],
-                    reversed: false,
-                    tail_dx: 16.0,
-                },
-                Want {
-                    head_dx: 16.0,
-                    label: (0.0, 0.0),
-                    points: &[330.0, 122.0, 206.0, 170.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn head_room() {
-        check(
-            &[
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-            ],
-            &[
-                (0, 1, 1, 30.0, 14.0, 0.0, 0.0, false, false),
-                (0, 2, 1, 30.0, 14.0, 0.0, 0.0, false, false),
-                (1, 3, 1, 30.0, 14.0, 0.0, 0.0, false, false),
-                (2, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (3, 4, 1, 30.0, 14.0, 0.0, 0.0, false, false),
-                (4, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &LayeredOptions {
-                head_room: 10.0,
-                ..OPT
-            },
-            (118.5, 384.0),
-            &[
-                (0, 55.5, 15.0),
-                (2, 24.0, 107.0),
-                (8, 48.0, 369.0),
-                (4, 24.0, 199.0),
-                (6, 48.0, 291.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (24.0, 56.0),
-                    points: &[55.5, 30.0, 24.0, 49.0, 24.0, 63.0, 24.0, 92.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (103.5, 199.0),
-                    points: &[
-                        55.5, 30.0, 103.5, 92.0, 103.5, 122.0, 103.5, 184.0, 103.5, 214.0, 103.5,
-                        276.0, 103.5, 306.0, 48.0, 354.0,
-                    ],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (24.0, 148.0),
-                    points: &[24.0, 122.0, 24.0, 141.0, 24.0, 155.0, 24.0, 184.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[
-                        48.0, 354.0, 0.0, 306.0, 0.0, 276.0, 0.0, 243.5, 0.0, 236.5, 24.0, 214.0,
-                    ],
-                    reversed: true,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (48.0, 240.0),
-                    points: &[24.0, 214.0, 48.0, 233.0, 48.0, 247.0, 48.0, 276.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[48.0, 306.0, 48.0, 354.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn ports() {
-        check(
-            &[
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (0.0, 0.0, 3, 0.0, 0.0),
-                (0.0, 0.0, 4, 0.0, 0.0),
-                (0.0, 0.0, 3, 0.0, 0.0),
-            ],
-            &[
-                (2, 0, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (4, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &LayeredOptions {
-                port_sep: 10.0,
-                ..OPT
-            },
-            (68.0, 128.0),
-            &[
-                (2, 20.0, 25.0),
-                (4, 44.0, 103.0),
-                (0, 20.0, 0.0),
-                (6, 44.0, 128.0),
-                (0, 68.0, 0.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 0.0, 12.0, 5.0, 20.0, 10.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 40.0, 44.0, 88.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[44.0, 118.0, 44.0, 128.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[68.0, 0.0, 68.0, 10.0, 68.0, 40.0, 44.0, 88.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 10.0, 28.0, 5.0, 20.0, 0.0],
-                    reversed: true,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn mirror_a() {
-        check(
-            &[
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-            ],
-            &[
-                (0, 5, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (200.0, 108.0),
-            &[
-                (0, 20.0, 15.0),
-                (0, 100.0, 15.0),
-                (0, 180.0, 15.0),
-                (1, 180.0, 93.0),
-                (1, 100.0, 93.0),
-                (1, 20.0, 93.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 30.0, 20.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[100.0, 30.0, 100.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[180.0, 30.0, 180.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 30.0, 100.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn mirror_b() {
-        check(
-            &[
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-            ],
-            &[
-                (0, 6, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 5, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (3, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 5, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (3, 6, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (280.0, 108.0),
-            &[
-                (0, 100.0, 15.0),
-                (0, 20.0, 15.0),
-                (0, 260.0, 15.0),
-                (0, 180.0, 15.0),
-                (1, 220.0, 93.0),
-                (1, 60.0, 93.0),
-                (1, 140.0, 93.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[100.0, 30.0, 140.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 30.0, 60.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[260.0, 30.0, 220.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[180.0, 30.0, 220.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[100.0, 30.0, 60.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[180.0, 30.0, 140.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn mirror_c() {
-        check(
-            &[
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-                (40.0, 30.0, 0, 0.0, 0.0),
-            ],
-            &[
-                (0, 7, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 6, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 5, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (3, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 6, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (7, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (280.0, 186.0),
-            &[
-                (0, 20.0, 15.0),
-                (0, 100.0, 15.0),
-                (0, 180.0, 15.0),
-                (1, 260.0, 93.0),
-                (2, 140.0, 171.0),
-                (1, 180.0, 93.0),
-                (1, 100.0, 93.0),
-                (1, 20.0, 93.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 30.0, 20.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[100.0, 30.0, 100.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[180.0, 30.0, 180.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[260.0, 108.0, 140.0, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 30.0, 100.0, 78.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[20.0, 108.0, 140.0, 156.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn crossed_wide() {
-        check(
-            &[
-                (200.0, 30.0, 0, 180.0, 0.0),
-                (200.0, 30.0, 0, 180.0, 0.0),
-                (200.0, 30.0, 0, 180.0, 0.0),
-                (200.0, 30.0, 0, 180.0, 0.0),
-            ],
-            &[
-                (0, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 2, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (440.0, 130.0),
-            &[
-                (0, 100.0, 15.0),
-                (0, 340.0, 15.0),
-                (1, 100.0, 115.0),
-                (1, 340.0, 115.0),
-            ],
-            &[
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[100.0, 30.0, 100.0, 100.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: -50.0,
-                    label: (0.0, 0.0),
-                    points: &[150.0, 30.0, 290.0, 100.0],
-                    reversed: false,
-                    tail_dx: 50.0,
-                },
-                Want {
-                    head_dx: 50.0,
-                    label: (0.0, 0.0),
-                    points: &[290.0, 30.0, 150.0, 100.0],
-                    reversed: false,
-                    tail_dx: -50.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[340.0, 30.0, 340.0, 100.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn crossed_wide_three() {
-        check(
-            &[
-                (160.0, 30.0, 0, 140.0, 0.0),
-                (160.0, 30.0, 0, 140.0, 0.0),
-                (160.0, 30.0, 0, 140.0, 0.0),
-                (160.0, 30.0, 0, 140.0, 0.0),
-                (160.0, 30.0, 0, 140.0, 0.0),
-                (160.0, 30.0, 0, 140.0, 0.0),
-            ],
-            &[
-                (0, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 5, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 5, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &OPT,
-            (744.0, 176.0),
-            &[
-                (0, 80.0, 15.0),
-                (0, 372.0, 15.0),
-                (0, 664.0, 15.0),
-                (1, 372.0, 161.0),
-                (1, 664.0, 161.0),
-                (1, 80.0, 161.0),
-            ],
-            &[
-                Want {
-                    head_dx: -30.0,
-                    label: (0.0, 0.0),
-                    points: &[110.0, 30.0, 342.0, 146.0],
-                    reversed: false,
-                    tail_dx: 30.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[80.0, 30.0, 80.0, 146.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: -30.0,
-                    label: (0.0, 0.0),
-                    points: &[402.0, 30.0, 634.0, 146.0],
-                    reversed: false,
-                    tail_dx: 30.0,
-                },
-                Want {
-                    head_dx: 30.0,
-                    label: (0.0, 0.0),
-                    points: &[634.0, 30.0, 402.0, 146.0],
-                    reversed: false,
-                    tail_dx: -30.0,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[664.0, 30.0, 664.0, 146.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 30.0,
-                    label: (0.0, 0.0),
-                    points: &[342.0, 30.0, 110.0, 146.0],
-                    reversed: false,
-                    tail_dx: -30.0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn tracks_roomy() {
-        check(
-            &[
-                (60.0, 30.0, 0, 50.0, 0.0),
-                (60.0, 30.0, 0, 50.0, 0.0),
-                (60.0, 30.0, 0, 50.0, 0.0),
-                (60.0, 30.0, 0, 50.0, 0.0),
-                (60.0, 30.0, 0, 50.0, 0.0),
-                (60.0, 30.0, 0, 50.0, 0.0),
-            ],
-            &[
-                (0, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 4, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (0, 5, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 3, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (2, 5, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-                (1, 5, 1, 0.0, 0.0, 0.0, 0.0, false, false),
-            ],
-            &LayeredOptions {
-                rank_sep: 120.0,
-                tracks: true,
-                ..OPT
-            },
-            (286.6666666666667, 180.0),
-            &[
-                (0, 51.33333333333333, 15.0),
-                (0, 151.33333333333331, 15.0),
-                (0, 256.6666666666667, 15.0),
-                (1, 135.33333333333331, 165.0),
-                (1, 29.999999999999996, 165.0),
-                (1, 235.33333333333331, 165.0),
-            ],
-            &[
-                Want {
-                    head_dx: -5.33203125,
-                    label: (0.0, 0.0),
-                    points: &[
-                        46.0,
-                        30.0,
-                        46.0,
-                        104.0,
-                        130.00130208333331,
-                        104.0,
-                        130.00130208333331,
-                        150.0,
-                    ],
-                    reversed: false,
-                    tail_dx: -5.333333333333332,
-                },
-                Want {
-                    head_dx: 0.0,
-                    label: (0.0, 0.0),
-                    points: &[29.999999999999996, 30.0, 29.999999999999996, 150.0],
-                    reversed: false,
-                    tail_dx: -21.333333333333332,
-                },
-                Want {
-                    head_dx: -10.666666666666666,
-                    label: (0.0, 0.0),
-                    points: &[
-                        62.0,
-                        30.0,
-                        62.0,
-                        90.0,
-                        224.66666666666669,
-                        90.0,
-                        224.66666666666666,
-                        150.0,
-                    ],
-                    reversed: false,
-                    tail_dx: 10.666666666666668,
-                },
-                Want {
-                    head_dx: 10.66796875,
-                    label: (0.0, 0.0),
-                    points: &[
-                        140.66927083333331,
-                        30.0,
-                        140.66927083333331,
-                        76.0,
-                        146.00130208333331,
-                        76.0,
-                        146.00130208333331,
-                        150.0,
-                    ],
-                    reversed: false,
-                    tail_dx: -10.6640625,
-                },
-                Want {
-                    head_dx: 21.333333333333336,
-                    label: (0.0, 0.0),
-                    points: &[256.6666666666667, 30.0, 256.66666666666663, 150.0],
-                    reversed: false,
-                    tail_dx: 0.0,
-                },
-                Want {
-                    head_dx: 5.333333333333334,
-                    label: (0.0, 0.0),
-                    points: &[
-                        156.66927083333331,
-                        30.0,
-                        156.66927083333331,
-                        76.0,
-                        240.66666666666669,
-                        76.0,
-                        240.66666666666666,
-                        150.0,
-                    ],
-                    reversed: false,
-                    tail_dx: 5.3359375,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn ports_only() {
-        check(
-            &[(0.0, 0.0, 3, 0.0, 0.0), (0.0, 0.0, 4, 0.0, 0.0)],
-            &[(0, 1, 1, 0.0, 0.0, 0.0, 0.0, false, false)],
-            &OPT,
-            (0.0, 40.0),
-            &[(0, 0.0, 0.0), (2, 0.0, 40.0)],
-            &[Want {
-                head_dx: 0.0,
-                label: (0.0, 0.0),
-                points: &[0.0, 0.0, 0.0, 40.0],
-                reversed: false,
-                tail_dx: 0.0,
-            }],
-        );
-    }
-
-    #[test]
-    fn random_spans() {
-        let (nodes, edges) = random(7, 120, 200, 60.0, 10);
-        check_sum(
-            &nodes,
-            &edges,
-            &OPT,
-            (4387.5, 3737.0),
-            (704389.25, 32464139.51282051, 4416),
-        );
-    }
-
-    #[test]
-    fn random_plain() {
-        let (nodes, edges) = random(11, 80, 160, 0.0, 15);
-        check_sum(
-            &nodes,
-            &edges,
-            &OPT,
-            (3245.0, 5389.609375),
-            (532974.3125, 41447693.234375, 5060),
-        );
-    }
-
-    #[test]
-    fn random_large() {
-        let (nodes, edges) = random(13, 650, 700, 0.0, 0);
-        check_sum(
-            &nodes,
-            &edges,
-            &OPT,
-            (23533.25, 6135.0),
-            (9319369.75, 256514427.5, 10320),
-        );
-    }
-
-    #[test]
-    fn random_tracks() {
-        let (nodes, edges) = random(17, 60, 110, 50.0, 10);
-        check_sum(
-            &nodes,
-            &edges,
-            &LayeredOptions {
-                tracks: true,
-                ..OPT
-            },
-            (2387.5, 2372.0),
-            (218697.1660839161, 15679987.962826645, 3460),
-        );
-    }
-
-    #[test]
-    fn small_curved_23() {
-        let (nodes, edges) = random(23, 24, 40, 100.0, 20);
-        check_sum(
-            &nodes,
-            &edges,
-            &OPT,
-            (907.5, 922.0),
-            (33684.0, 648061.5833333334, 384),
-        );
-    }
-
-    #[test]
-    fn small_curved_29() {
-        let (nodes, edges) = random(29, 24, 40, 100.0, 20);
-        check_sum(
-            &nodes,
-            &edges,
-            &OPT,
-            (894.75, 803.0),
-            (29479.5, 548352.6666666667, 356),
-        );
-    }
-
-    #[test]
-    fn small_curved_31() {
-        let (nodes, edges) = random(31, 24, 40, 100.0, 20);
-        check_sum(
-            &nodes,
-            &edges,
-            &OPT,
-            (755.6666666666666, 1229.3333333333333),
-            (39182.883333333324, 807365.3166666664, 434),
-        );
-    }
-
-    #[test]
-    fn small_curved_37() {
-        let (nodes, edges) = random(37, 24, 40, 100.0, 20);
-        check_sum(
-            &nodes,
-            &edges,
-            &OPT,
-            (626.8333333333333, 1348.2916666666665),
-            (38013.03140096618, 880943.7737922706, 480),
-        );
-    }
-
-    #[test]
-    fn small_curved_41() {
-        let (nodes, edges) = random(41, 24, 40, 100.0, 20);
-        check_sum(
-            &nodes,
-            &edges,
-            &OPT,
-            (592.9166666666666, 1215.0),
-            (36689.22222222222, 669711.9800187114, 424),
-        );
-    }
-
-    #[test]
-    fn small_curved_43() {
-        let (nodes, edges) = random(43, 24, 40, 100.0, 20);
-        check_sum(
-            &nodes,
-            &edges,
-            &OPT,
-            (765.5, 1237.0),
-            (31899.666666666668, 1013979.3128156568, 550),
-        );
-    }
-
-    #[test]
-    fn small_curved_47() {
-        let (nodes, edges) = random(47, 24, 40, 100.0, 20);
-        check_sum(
-            &nodes,
-            &edges,
-            &OPT,
-            (857.25, 980.0),
-            (32779.66666666667, 801337.2664473683, 470),
-        );
-    }
-
-    #[test]
-    fn small_curved_53() {
-        let (nodes, edges) = random(53, 24, 40, 100.0, 20);
-        check_sum(
-            &nodes,
-            &edges,
-            &OPT,
-            (853.0833333333333, 1254.4305555555557),
-            (38944.32222222223, 1037218.5499999996, 538),
-        );
-    }
-
-    #[test]
-    fn random_straight() {
-        let (nodes, edges) = random(19, 60, 110, 50.0, 10);
-        check_sum(
-            &nodes,
-            &edges,
-            &LayeredOptions {
-                straight: true,
-                ..OPT
-            },
-            (2421.5, 3159.838541666667),
-            (253828.10763888896, 10360698.010416664, 2148),
-        );
-    }
-
-    #[test]
-    fn max_dummies() {
-        let nodes = square(60, 40.0, 30.0, 0.0);
-        let mut edges: Vec<E> = (0..59)
-            .map(|i| (i, i + 1, 1, 0.0, 0.0, 0.0, 0.0, false, false))
-            .collect();
-        edges.extend((0..200).map(|k| (k % 5, 55 + k % 5, 1, 0.0, 0.0, 0.0, 0.0, false, false)));
-        check_sum(
-            &nodes,
-            &edges,
-            &OPT,
-            (2976.0, 4954.0),
-            (435258.0, 318716981.0, 40348),
-        );
-    }
-
-    #[test]
-    fn weighed_tracks() {
-        let nodes = square(42, 40.0, 30.0, 0.0);
-        let edges: Vec<E> = (0..21)
-            .flat_map(|a| (21..42).map(move |b| (a, b, 1, 0.0, 0.0, 0.0, 0.0, false, false)))
-            .collect();
-        check_sum(
-            &nodes,
-            &edges,
-            &LayeredOptions {
-                tracks: true,
-                ..OPT
-            },
-            (1640.0, 466.0),
-            (54012.0, 6572484.0, 3444),
-        );
-    }
-
-    #[test]
-    fn weighed_levels() {
-        let nodes = square(42, 40.0, 30.0, 30.0);
-        let edges: Vec<E> = (0..21)
-            .flat_map(|a| (21..42).map(move |b| (a, b, 1, 0.0, 0.0, 0.0, 0.0, false, false)))
-            .collect();
-        check_sum(
-            &nodes,
-            &edges,
-            &OPT,
-            (1640.0, 108.0),
-            (38976.0, 1610532.0, 1764),
-        );
-    }
 }

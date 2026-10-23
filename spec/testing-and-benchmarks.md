@@ -7,8 +7,6 @@ building (`cargo check` / `cargo clippy`) and running the app.
 
 ## Behaviour
 
-- No `#[test]`, `#[gpui::test]`, property tests, `tests/` integration targets,
-  `benches/` targets, or benchmark crates. `cargo test` has nothing to run.
 - No `test-support`, `bench-support`, `bench`, or `visual-tests` Cargo
   features, and no `cfg(test)`-gated code. Test doubles and harnesses (fake
   filesystem, fake language servers, test platform/scheduler/clock,

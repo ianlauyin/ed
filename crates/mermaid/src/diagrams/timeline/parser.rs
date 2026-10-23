@@ -2,10 +2,21 @@
 //! `src/diagrams/timeline/parser.ts`.
 
 use super::db::TimelineDb;
-use super::lexer::{
-    ACC_DESCR, ACC_DESCR_MULTILINE_VALUE, ACC_TITLE, END, EOF, EVENT, NEWLINE, PERIOD, SECTION,
-    TIMELINE, TIMELINE_LR, TIMELINE_TD, TITLE, TOKEN_NAMES, tokenize,
-};
+use super::lexer::ACC_DESCR;
+use super::lexer::ACC_DESCR_MULTILINE_VALUE;
+use super::lexer::ACC_TITLE;
+use super::lexer::END;
+use super::lexer::EOF;
+use super::lexer::EVENT;
+use super::lexer::NEWLINE;
+use super::lexer::PERIOD;
+use super::lexer::SECTION;
+use super::lexer::TIMELINE;
+use super::lexer::TIMELINE_LR;
+use super::lexer::TIMELINE_TD;
+use super::lexer::TITLE;
+use super::lexer::TOKEN_NAMES;
+use super::lexer::tokenize;
 use crate::error::Error;
 use crate::text::label::trim;
 
@@ -14,10 +25,7 @@ const STATEMENT: &str = "'EOF', 'SPACE', 'NEWLINE', 'title', 'acc_title', 'acc_d
 /// `text` without the ASCII `keyword` bytes at its start and the one whitespace character after
 /// them, as Pele's `substring` leaves it.
 fn after(text: &str, keyword: usize) -> &str {
-    let space = text
-        .get(keyword..)
-        .and_then(|rest| rest.chars().next())
-        .map_or(0, char::len_utf8);
+    let space = text.get(keyword..).and_then(|rest| rest.chars().next()).map_or(0, char::len_utf8);
     text.get(keyword + space..).unwrap_or("")
 }
 

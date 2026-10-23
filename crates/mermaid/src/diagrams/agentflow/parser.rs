@@ -4,10 +4,16 @@
 
 use std::borrow::Cow;
 
-use super::db::{AgentflowDb, js_trim};
-use super::lexer::{Token, tokenize};
+use super::db::AgentflowDb;
+use super::db::js_trim;
+use super::lexer::Token;
+use super::lexer::tokenize;
 use super::tokens::T;
-use super::types::{DocItem, FlowText, LabelType, LinkInfo, Loc};
+use super::types::DocItem;
+use super::types::FlowText;
+use super::types::LabelType;
+use super::types::LinkInfo;
+use super::types::Loc;
 use crate::error::Error;
 use crate::util::chars::is_space;
 
@@ -79,10 +85,7 @@ fn is_no_tags(t: T) -> bool {
 
 /// Tokens of one style declaration.
 fn is_style_part(t: T) -> bool {
-    matches!(
-        t,
-        T::Num | T::NodeString | T::Colon | T::Space | T::Brkt | T::Style
-    )
+    matches!(t, T::Num | T::NodeString | T::Colon | T::Space | T::Brkt | T::Style)
 }
 
 /// Tokens that end a statement.
@@ -137,10 +140,8 @@ fn trim_brace_lines(source: &str) -> Cow<'_, str> {
     while let Some(at) = rest.find('}') {
         out.push_str(rest.get(..=at).unwrap_or(""));
         let tail = rest.get(at + 1..).unwrap_or("");
-        let run = tail
-            .char_indices()
-            .find(|&(_, c)| c == '\n' || !is_space(u32::from(c)))
-            .map_or(tail.len(), |(end, _)| end);
+        let run =
+            tail.char_indices().find(|&(_, c)| c == '\n' || !is_space(u32::from(c))).map_or(tail.len(), |(end, _)| end);
         if tail.get(run..).is_some_and(|after| after.starts_with('\n')) {
             out.push('\n');
             rest = tail.get(run + 1..).unwrap_or("");
@@ -155,14 +156,7 @@ fn trim_brace_lines(source: &str) -> Cow<'_, str> {
 /// Parses agentflow `source` into `db`.
 pub(crate) fn parse_agentflow(source: &str, db: &mut AgentflowDb) -> Result<(), Error> {
     let src = trim_brace_lines(source);
-    let mut parser = Parser {
-        data_from: 0,
-        data_to: 0,
-        db,
-        i: 0,
-        src: &src,
-        tokens: tokenize(&src),
-    };
+    let mut parser = Parser { data_from: 0, data_to: 0, db, i: 0, src: &src, tokens: tokenize(&src) };
     parser.run()
 }
 
@@ -188,16 +182,8 @@ impl Parser<'_, '_> {
 
     /// The span from the start of token `a` to the end of token `b`.
     fn span(&self, a: usize, b: usize) -> Loc {
-        let first = self
-            .tokens
-            .get(a)
-            .map(|token| token.loc)
-            .unwrap_or_default();
-        let last = self
-            .tokens
-            .get(b)
-            .map(|token| token.loc)
-            .unwrap_or_default();
+        let first = self.tokens.get(a).map(|token| token.loc).unwrap_or_default();
+        let last = self.tokens.get(b).map(|token| token.loc).unwrap_or_default();
         Loc {
             first_column: first.first_column,
             first_line: first.first_line,
@@ -209,10 +195,7 @@ impl Parser<'_, '_> {
     #[cold]
     fn fail(&self, expected: &str) -> Error {
         let t = self.kind();
-        let start = self
-            .tokens
-            .get(self.i)
-            .map_or(self.src.len(), |token| token.start);
+        let start = self.tokens.get(self.i).map_or(self.src.len(), |token| token.start);
         if t == T::Error {
             return Error::syntax("agentflow", self.src, start, "", true);
         }
@@ -336,8 +319,7 @@ impl Parser<'_, '_> {
     /// Adds metadata to `id` and widens its span over the block.
     fn attach(&mut self, id: &str, data: &str, from: usize, to: usize) -> Result<(), Error> {
         let loc = self.span(from, to);
-        self.db
-            .add_vertex(id, None, None, None, None, Some((data, Some(loc))))?;
+        self.db.add_vertex(id, None, None, None, None, Some((data, Some(loc))))?;
         self.db.extend_vertex_mapping(id, loc);
         Ok(())
     }
@@ -348,8 +330,7 @@ impl Parser<'_, '_> {
             return Ok(());
         };
         let loc = self.span(frame.data_from, frame.data_to);
-        self.db
-            .add_vertex(id, None, None, None, None, Some((data, Some(loc))))
+        self.db.add_vertex(id, None, None, None, None, Some((data, Some(loc))))
     }
 
     fn vertex(&mut self) -> Result<String, Error> {
@@ -707,10 +688,7 @@ impl Parser<'_, '_> {
     fn header(&mut self, at: usize) -> Result<Frame, Error> {
         self.expect(T::Space, SEPARATORS)?;
         let id = self.text_no_tags()?;
-        let mut title = FlowText {
-            text: String::new(),
-            r#type: LabelType::Text,
-        };
+        let mut title = FlowText { text: String::new(), r#type: LabelType::Text };
         if self.kind() == T::Sqs {
             self.i += 1;
             title = self.text()?;
@@ -745,8 +723,7 @@ impl Parser<'_, '_> {
                 let id = self.id_string()?;
                 self.expect(T::Space, "")?;
                 let styles = self.styles_opt()?;
-                self.db
-                    .add_vertex(&id, None, None, Some(styles), None, None)?;
+                self.db.add_vertex(&id, None, None, Some(styles), None, None)?;
                 self.separator()?;
                 Ok(None)
             }
@@ -786,9 +763,7 @@ impl Parser<'_, '_> {
                 let frame = self.header(at)?;
                 let sep = self.i;
                 self.i += 1;
-                let id = self
-                    .db
-                    .add_connector(frame.id.as_ref(), frame.title.as_ref());
+                let id = self.db.add_connector(frame.id.as_ref(), frame.title.as_ref());
                 self.attach_data(&id, &frame)?;
                 let (start, end) = (self.span(frame.at, frame.at), self.span(sep, sep));
                 self.db.add_connector_mapping(frame.id.as_ref(), start, end);
@@ -857,9 +832,7 @@ impl Parser<'_, '_> {
                     collect = frame.collect;
                     continue;
                 }
-                let id = self
-                    .db
-                    .add_subgraph(frame.id.as_ref(), &list, frame.title.as_ref());
+                let id = self.db.add_subgraph(frame.id.as_ref(), &list, frame.title.as_ref());
                 self.attach_data(&id, &frame)?;
                 let (start, end) = (self.span(frame.at, frame.at), self.span(at, at));
                 self.db.add_subgraph_mapping(frame.id.as_ref(), start, end);

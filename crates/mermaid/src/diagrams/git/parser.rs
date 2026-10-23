@@ -1,10 +1,26 @@
 //! Reads git graph source into its syntax tree. Port of Pele's `src/diagrams/git/parser.ts`.
 
-use crate::diagrams::common::tokens::{
-    ACC_DESCR, ACC_TITLE, DIRECTIVE, EOF, NEWLINE, Pattern, Reader, SINGLE_LINE_COMMENT, STRING,
-    TITLE, TokenType, WHITESPACE, YAML, acc_descr_head, acc_descr_value, acc_title_value, keyword,
-    literal, string_value, title_value, tokenize,
-};
+use crate::diagrams::common::tokens::ACC_DESCR;
+use crate::diagrams::common::tokens::ACC_TITLE;
+use crate::diagrams::common::tokens::DIRECTIVE;
+use crate::diagrams::common::tokens::EOF;
+use crate::diagrams::common::tokens::NEWLINE;
+use crate::diagrams::common::tokens::Pattern;
+use crate::diagrams::common::tokens::Reader;
+use crate::diagrams::common::tokens::SINGLE_LINE_COMMENT;
+use crate::diagrams::common::tokens::STRING;
+use crate::diagrams::common::tokens::TITLE;
+use crate::diagrams::common::tokens::TokenType;
+use crate::diagrams::common::tokens::WHITESPACE;
+use crate::diagrams::common::tokens::YAML;
+use crate::diagrams::common::tokens::acc_descr_head;
+use crate::diagrams::common::tokens::acc_descr_value;
+use crate::diagrams::common::tokens::acc_title_value;
+use crate::diagrams::common::tokens::keyword;
+use crate::diagrams::common::tokens::literal;
+use crate::diagrams::common::tokens::string_value;
+use crate::diagrams::common::tokens::title_value;
+use crate::diagrams::common::tokens::tokenize;
 use crate::error::Error;
 
 /// Token kinds, as indices into [`GIT_TOKENS`]. The order is the matching order.
@@ -94,10 +110,7 @@ fn acc_descr_opener(src: &str, p: usize) -> bool {
 
 /// A keyword that is the start of a longer name is part of that name: `commits` is a branch.
 const fn word(name: &'static str) -> TokenType {
-    TokenType {
-        longer: &[t::REFERENCE],
-        ..literal(name)
-    }
+    TokenType { longer: &[t::REFERENCE], ..literal(name) }
 }
 
 /// The token types, in matching order.
@@ -105,10 +118,7 @@ pub(crate) const GIT_TOKENS: &[TokenType] = &[
     word("cherry-pick"),
     literal("gitGraph:"),
     word("HIGHLIGHT"),
-    TokenType {
-        longer: &[t::REFERENCE],
-        ..keyword("gitGraph")
-    },
+    TokenType { longer: &[t::REFERENCE], ..keyword("gitGraph") },
     word("checkout"),
     word("REVERSE"),
     literal("parent:"),
@@ -128,18 +138,10 @@ pub(crate) const GIT_TOKENS: &[TokenType] = &[
     literal(":"),
     // Without a closing brace the block form scans to the end of the text, and a brace is not a
     // token on its own, so the first failure is final.
-    TokenType {
-        opener: Some(acc_descr_opener),
-        ..ACC_DESCR
-    },
+    TokenType { opener: Some(acc_descr_opener), ..ACC_DESCR },
     ACC_TITLE,
     TITLE,
-    TokenType {
-        first: Some("0123456789"),
-        name: "INT",
-        pattern: Pattern::Match(int),
-        ..literal("")
-    },
+    TokenType { first: Some("0123456789"), name: "INT", pattern: Pattern::Match(int), ..literal("") },
     STRING,
     NEWLINE,
     WHITESPACE,
@@ -295,21 +297,12 @@ pub(crate) fn parse_git(src: &str) -> Result<GitGraphAst, Error> {
                     }
                 }
                 end_of_line(&mut r)?;
-                ast.statements.push(StatementAst::Commit {
-                    id,
-                    message,
-                    tags,
-                    r#type,
-                });
+                ast.statements.push(StatementAst::Commit { id, message, tags, r#type });
             }
             t::BRANCH => {
                 r.i += 1;
                 let name = name(&mut r)?;
-                let order = if r.accept(t::ORDER) {
-                    Some(parse_int(r.expect(t::INT)?))
-                } else {
-                    None
-                };
+                let order = if r.accept(t::ORDER) { Some(parse_int(r.expect(t::INT)?)) } else { None };
                 end_of_line(&mut r)?;
                 ast.statements.push(StatementAst::Branch { name, order });
             }
@@ -331,12 +324,7 @@ pub(crate) fn parse_git(src: &str) -> Result<GitGraphAst, Error> {
                     }
                 }
                 end_of_line(&mut r)?;
-                ast.statements.push(StatementAst::Merge {
-                    branch,
-                    id,
-                    tags,
-                    r#type,
-                });
+                ast.statements.push(StatementAst::Merge { branch, id, tags, r#type });
             }
             t::CHECKOUT | t::SWITCH => {
                 r.i += 1;
@@ -361,8 +349,7 @@ pub(crate) fn parse_git(src: &str) -> Result<GitGraphAst, Error> {
                     }
                 }
                 end_of_line(&mut r)?;
-                ast.statements
-                    .push(StatementAst::CherryPicking { id, parent, tags });
+                ast.statements.push(StatementAst::CherryPicking { id, parent, tags });
             }
             _ => return Err(r.fail("a statement, a title, or a line break")),
         }

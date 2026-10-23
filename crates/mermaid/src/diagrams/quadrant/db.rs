@@ -1,8 +1,12 @@
 //! The quadrant chart database. Port of Pele's `src/diagrams/quadrant/db.ts`.
 
-use crate::error::{Code, Error};
-use crate::text::label::{trim, trim_end, trim_start};
-use crate::util::chars::{is_hex, is_space};
+use crate::error::Code;
+use crate::error::Error;
+use crate::text::label::trim;
+use crate::text::label::trim_end;
+use crate::text::label::trim_start;
+use crate::util::chars::is_hex;
+use crate::util::chars::is_space;
 
 /// A label: its text, and whether it is markdown.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -51,17 +55,7 @@ fn semantic(message: String) -> Error {
 
 #[cold]
 fn invalid(style: &str, value: &str, kind: &str) -> Error {
-    semantic(
-        [
-            "value for ",
-            style,
-            " ",
-            value,
-            " is invalid, please use a valid ",
-            kind,
-        ]
-        .concat(),
-    )
+    semantic(["value for ", style, " ", value, " is invalid, please use a valid ", kind].concat())
 }
 
 /// The first two parts of Mermaid's `style.trim().split(/\s*:\s*/)`, found in one pass.
@@ -125,9 +119,7 @@ pub(crate) fn parse_styles<S: AsRef<str>>(styles: &[S]) -> Result<PointStyle, Er
                 out.stroke_width = Some(value.to_owned());
             }
             _ => {
-                return Err(semantic(
-                    ["style named ", key, " is not supported."].concat(),
-                ));
+                return Err(semantic(["style named ", key, " is not supported."].concat()));
             }
         }
     }
@@ -148,10 +140,7 @@ fn radix_value(digits: &str, radix: u32) -> f64 {
         };
         // ponytail: past 128 bits the value is summed in floating point, which may round
         // differently from V8 in the last place.
-        match exact
-            .checked_mul(u128::from(radix))
-            .and_then(|value| value.checked_add(u128::from(digit)))
-        {
+        match exact.checked_mul(u128::from(radix)).and_then(|value| value.checked_add(u128::from(digit))) {
             Some(value) if !overflow => exact = value,
             _ => {
                 if !overflow {
@@ -282,13 +271,7 @@ impl QuadrantDb {
         styles: &[String],
     ) -> Result<(), Error> {
         let style = parse_styles(styles)?;
-        self.points.push(QuadrantPoint {
-            class_name,
-            style,
-            text: trimmed(label),
-            x: coordinate(x),
-            y: coordinate(y),
-        });
+        self.points.push(QuadrantPoint { class_name, style, text: trimmed(label), x: coordinate(x), y: coordinate(y) });
         Ok(())
     }
 
@@ -299,11 +282,7 @@ impl QuadrantDb {
     /// Returns a semantic error for an invalid style.
     pub(crate) fn add_class(&mut self, class_name: String, styles: &[String]) -> Result<(), Error> {
         let style = parse_styles(styles)?;
-        match self
-            .classes
-            .iter_mut()
-            .find(|(name, _)| *name == class_name)
-        {
+        match self.classes.iter_mut().find(|(name, _)| *name == class_name) {
             Some(entry) => entry.1 = style,
             None => self.classes.push((class_name, style)),
         }
@@ -312,10 +291,7 @@ impl QuadrantDb {
 
     /// The class named `name`.
     pub(crate) fn class(&self, name: &str) -> Option<&PointStyle> {
-        self.classes
-            .iter()
-            .find(|(own, _)| own == name)
-            .map(|(_, style)| style)
+        self.classes.iter().find(|(own, _)| own == name).map(|(_, style)| style)
     }
 
     /// Sets the title from a `title` statement.

@@ -1,10 +1,14 @@
 //! Mermaid's box-drawing preprocessor: turns `├──`, `└──`, `│` (and the heavy variants) into the
 //! indentation the grammar reads. Port of Pele's `src/diagrams/treeview/boxDrawing.ts`.
 
-use crate::error::{Code, Error, push_u32};
+use crate::error::Code;
+use crate::error::Error;
+use crate::error::push_u32;
 use crate::svg::builder::js_round;
-use crate::text::label::{trim, trim_end};
-use crate::util::chars::{is_blank, is_space};
+use crate::text::label::trim;
+use crate::text::label::trim_end;
+use crate::util::chars::is_blank;
+use crate::util::chars::is_space;
 
 /// `[─━│┃└┗├┣]`.
 fn is_box(c: char) -> bool {
@@ -23,10 +27,7 @@ fn is_dash(c: char) -> bool {
 
 /// `^[\s│┃]+$`.
 fn decoration_only(line: &str) -> bool {
-    !line.is_empty()
-        && line
-            .chars()
-            .all(|c| is_space(u32::from(c)) || matches!(c, '│' | '┃'))
+    !line.is_empty() && line.chars().all(|c| is_space(u32::from(c)) || matches!(c, '│' | '┃'))
 }
 
 /// `^[\s─━│┃└┗├┣]+$`.
@@ -43,18 +44,14 @@ fn metadata_line(line: &str) -> bool {
             tail.as_bytes().first().is_some_and(|b| then.contains(b))
         })
     };
-    rest.strip_prefix("title").is_some_and(|tail| {
-        tail.as_bytes()
-            .first()
-            .is_some_and(|&b| is_blank(u32::from(b)))
-    }) || after_blanks("accTitle", b":")
+    rest.strip_prefix("title").is_some_and(|tail| tail.as_bytes().first().is_some_and(|&b| is_blank(u32::from(b))))
+        || after_blanks("accTitle", b":")
         || after_blanks("accDescr", b":{")
 }
 
 /// `^\s*%%`.
 fn comment_line(line: &str) -> bool {
-    line.trim_start_matches(|c: char| is_space(u32::from(c)))
-        .starts_with("%%")
+    line.trim_start_matches(|c: char| is_space(u32::from(c))).starts_with("%%")
 }
 
 /// A line that goes through unchanged: blank, a comment, or a title or accessibility statement.
@@ -89,14 +86,7 @@ fn branch_at(line: &str) -> Option<(usize, usize)> {
 
 /// Pele's `inferSegmentWidth`: where the first branch not at a line's start is, or 4.
 fn infer_segment_width(content: &[String]) -> usize {
-    content
-        .iter()
-        .find_map(|line| {
-            branch_at(line)
-                .map(|(index, _)| index)
-                .filter(|&index| index > 0)
-        })
-        .unwrap_or(4)
+    content.iter().find_map(|line| branch_at(line).map(|(index, _)| index).filter(|&index| index > 0)).unwrap_or(4)
 }
 
 /// The text after preprocessing, and each output line's original line, both from 1. The map is
@@ -112,10 +102,7 @@ pub(crate) struct Preprocessed<'a> {
 impl Preprocessed<'_> {
     /// The original line of output line `line`.
     pub(crate) fn original(&self, line: u32) -> Option<u32> {
-        self.line_map
-            .iter()
-            .find(|(out, _)| *out == line)
-            .map(|&(_, original)| original)
+        self.line_map.iter().find(|(out, _)| *out == line).map(|&(_, original)| original)
     }
 }
 
@@ -123,19 +110,12 @@ impl Preprocessed<'_> {
 /// original line instead.
 pub(crate) fn remap_error_lines(message: &str, pre: &Preprocessed<'_>) -> String {
     let bytes = message.as_bytes();
-    let word = |at: usize| {
-        bytes
-            .get(at)
-            .is_some_and(|&b| b.is_ascii_alphanumeric() || b == b'_')
-    };
+    let word = |at: usize| bytes.get(at).is_some_and(|&b| b.is_ascii_alphanumeric() || b == b'_');
     let mut out = String::with_capacity(message.len());
     let mut copied = 0;
     let mut at = 0;
     while at < bytes.len() {
-        let hit = bytes
-            .get(at..at + 4)
-            .is_some_and(|w| w.eq_ignore_ascii_case(b"line"))
-            && (at == 0 || !word(at - 1));
+        let hit = bytes.get(at..at + 4).is_some_and(|w| w.eq_ignore_ascii_case(b"line")) && (at == 0 || !word(at - 1));
         if !hit {
             at += 1;
             continue;
@@ -156,10 +136,8 @@ pub(crate) fn remap_error_lines(message: &str, pre: &Preprocessed<'_>) -> String
             continue;
         }
 
-        let original = message
-            .get(digits..end)
-            .and_then(|text| text.parse::<u32>().ok())
-            .and_then(|line| pre.original(line));
+        let original =
+            message.get(digits..end).and_then(|text| text.parse::<u32>().ok()).and_then(|line| pre.original(line));
         if let Some(original) = original {
             out.push_str(message.get(copied..at).unwrap_or(""));
             out.push_str("line ");
@@ -193,10 +171,7 @@ fn fail(line: usize, message: &str) -> Error {
 /// Returns a syntax error for a branch with no name after it, or an indented line without
 /// box-drawing characters.
 pub(crate) fn preprocess_box_drawing(input: &str) -> Result<Preprocessed<'_>, Error> {
-    let unchanged = || Preprocessed {
-        line_map: Vec::new(),
-        text: std::borrow::Cow::Borrowed(input),
-    };
+    let unchanged = || Preprocessed { line_map: Vec::new(), text: std::borrow::Cow::Borrowed(input) };
     if !input.contains(is_box) {
         return Ok(unchanged());
     }
@@ -207,11 +182,8 @@ pub(crate) fn preprocess_box_drawing(input: &str) -> Result<Preprocessed<'_>, Er
     };
     let rest = lines.get(keyword + 1..).unwrap_or(&[]);
 
-    let content: Vec<String> = rest
-        .iter()
-        .filter(|line| !passes(line) && !decoration_only(line))
-        .map(|line| untab(line))
-        .collect();
+    let content: Vec<String> =
+        rest.iter().filter(|line| !passes(line) && !decoration_only(line)).map(|line| untab(line)).collect();
     if !content.iter().any(|line| line.contains(is_box)) {
         return Ok(unchanged());
     }
@@ -221,10 +193,7 @@ pub(crate) fn preprocess_box_drawing(input: &str) -> Result<Preprocessed<'_>, Er
     let mut line_map = Vec::new();
     let mut keep = |out: &mut Vec<String>, text: String, index: usize| {
         out.push(text);
-        line_map.push((
-            u32::try_from(out.len()).unwrap_or(u32::MAX),
-            u32::try_from(index + 1).unwrap_or(u32::MAX),
-        ));
+        line_map.push((u32::try_from(out.len()).unwrap_or(u32::MAX), u32::try_from(index + 1).unwrap_or(u32::MAX)));
     };
 
     for (i, line) in lines.iter().enumerate().take(keyword + 1) {
@@ -267,11 +236,7 @@ pub(crate) fn preprocess_box_drawing(input: &str) -> Result<Preprocessed<'_>, Er
             // A name that happens to contain a box character, such as "Section ─ A.txt", is a
             // root item.
             keep(&mut out, line.to_owned(), i);
-        } else if normalized
-            .chars()
-            .next()
-            .is_some_and(|c| is_space(u32::from(c)))
-        {
+        } else if normalized.chars().next().is_some_and(|c| is_space(u32::from(c))) {
             return Err(fail(
                 i + 1,
                 "Unexpected indentation without box-drawing characters. In box-drawing format, use ├── or └── prefixes for indented nodes.",
@@ -280,8 +245,5 @@ pub(crate) fn preprocess_box_drawing(input: &str) -> Result<Preprocessed<'_>, Er
             keep(&mut out, line.to_owned(), i);
         }
     }
-    Ok(Preprocessed {
-        line_map,
-        text: std::borrow::Cow::Owned(out.join("\n")),
-    })
+    Ok(Preprocessed { line_map, text: std::borrow::Cow::Owned(out.join("\n")) })
 }

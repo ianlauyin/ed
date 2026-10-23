@@ -5,17 +5,31 @@
 //! insertion order with a `BTreeMap` index for lookups, so iteration order never depends on
 //! hashing. A connector is a node, so the connector list holds node ids.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
-use super::shapes::{is_valid_shape, resolve_shape_alias};
-use super::types::{
-    AgentEdge, AgentNode, AgentSubgraph, Diagnostic, DocItem, ElementMapping, ElementPosition,
-    FlowClassDef, FlowText, LabelType, LinkInfo, Loc, Metadata,
-};
-use crate::error::{Code, Error, push_u32};
+use super::shapes::is_valid_shape;
+use super::shapes::resolve_shape_alias;
+use super::types::AgentEdge;
+use super::types::AgentNode;
+use super::types::AgentSubgraph;
+use super::types::Diagnostic;
+use super::types::DocItem;
+use super::types::ElementMapping;
+use super::types::ElementPosition;
+use super::types::FlowClassDef;
+use super::types::FlowText;
+use super::types::LabelType;
+use super::types::LinkInfo;
+use super::types::Loc;
+use super::types::Metadata;
+use crate::error::Code;
+use crate::error::Error;
+use crate::error::push_u32;
 use crate::util::chars::is_space;
 use crate::util::url;
-use crate::yaml::{self, Value};
+use crate::yaml::Value;
+use crate::yaml::{self};
 
 /// Options Pele's agentflow entry passes to `AgentflowDb`.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -80,36 +94,15 @@ pub(crate) struct AgentflowDb {
 }
 
 /// Metadata keys that only change how an element looks, left out of the semantic model.
-#[cfg(feature = "model")]
-pub(crate) const PRESENTATION_KEYS: [&str; 11] = [
-    "shape",
-    "view",
-    "icon",
-    "img",
-    "form",
-    "pos",
-    "w",
-    "h",
-    "class",
-    "style",
-    "labelType",
-];
+pub(crate) const PRESENTATION_KEYS: [&str; 11] =
+    ["shape", "view", "icon", "img", "form", "pos", "w", "h", "class", "style", "labelType"];
 
 /// Shapes that define a tool.
-const TOOL_SHAPES: [&str; 5] = [
-    "subroutine",
-    "subprocess",
-    "subproc",
-    "framed-rectangle",
-    "tool",
-];
+const TOOL_SHAPES: [&str; 5] = ["subroutine", "subprocess", "subproc", "framed-rectangle", "tool"];
 
 /// Whether `vertex` defines a tool.
 pub(crate) fn is_tool_definition(vertex: &AgentNode) -> bool {
-    vertex
-        .r#type
-        .as_deref()
-        .is_some_and(|r#type| TOOL_SHAPES.contains(&r#type))
+    vertex.r#type.as_deref().is_some_and(|r#type| TOOL_SHAPES.contains(&r#type))
 }
 
 /// Pele's `labelType`: a known label type name, or Markdown.
@@ -144,9 +137,7 @@ fn strip_prototype_keys(value: Value) -> Value {
         Value::Object(entries) => Value::Object(
             entries
                 .into_iter()
-                .filter(|(key, _)| {
-                    !matches!(key.as_str(), "__proto__" | "constructor" | "prototype")
-                })
+                .filter(|(key, _)| !matches!(key.as_str(), "__proto__" | "constructor" | "prototype"))
                 .map(|(key, value)| (key, strip_prototype_keys(value)))
                 .collect(),
         ),
@@ -257,8 +248,7 @@ fn opens_block_scalar(code: &str) -> bool {
     let Some(rest) = body.strip_suffix('>').or_else(|| body.strip_suffix('|')) else {
         return false;
     };
-    rest.trim_end_matches(|c| is_space(u32::from(c)))
-        .ends_with(':')
+    rest.trim_end_matches(|c| is_space(u32::from(c))).ends_with(':')
 }
 
 /// Removes the comma that ends a line of a multi-line metadata body, which block YAML does not
@@ -272,11 +262,8 @@ fn strip_line_trailing_commas(body: &str) -> String {
     let mut out: Vec<String> = Vec::new();
 
     for line in body.split('\n') {
-        let indent = line.encode_utf16().count()
-            - line
-                .trim_start_matches(|c| is_space(u32::from(c)))
-                .encode_utf16()
-                .count();
+        let indent =
+            line.encode_utf16().count() - line.trim_start_matches(|c| is_space(u32::from(c))).encode_utf16().count();
         if let Some(scalar) = block_scalar_indent {
             if js_trim(line).is_empty() || indent > scalar {
                 out.push(line.to_owned());
@@ -379,9 +366,7 @@ fn destruct_end_link(raw: &str) -> (&'static str, &'static str, i32) {
 
 /// A property of a YAML mapping.
 fn get<'v>(doc: &'v [(String, Value)], key: &str) -> Option<&'v Value> {
-    doc.iter()
-        .find(|(own, _)| own == key)
-        .map(|(_, value)| value)
+    doc.iter().find(|(own, _)| own == key).map(|(_, value)| value)
 }
 
 /// Whether lowercasing `text` would change it, as `text !== text.toLowerCase()` tests.
@@ -410,10 +395,7 @@ fn agentflow_error(code: Code, message: String) -> Error {
 impl AgentflowDb {
     /// Creates an empty model.
     pub(crate) fn new(options: Options) -> Self {
-        Self {
-            options,
-            ..Self::default()
-        }
+        Self { options, ..Self::default() }
     }
 
     fn node_mut(&mut self, id: &str) -> Option<&mut AgentNode> {
@@ -423,9 +405,7 @@ impl AgentflowDb {
 
     /// The node with `id`.
     pub(crate) fn node(&self, id: &str) -> Option<&AgentNode> {
-        self.node_index
-            .get(id)
-            .and_then(|&index| self.nodes.get(index))
+        self.node_index.get(id).and_then(|&index| self.nodes.get(index))
     }
 
     /// Whether a `connector` statement made the node `id`.
@@ -435,24 +415,17 @@ impl AgentflowDb {
 
     /// The tooltip of node `id`.
     pub(crate) fn tooltip(&self, id: &str) -> Option<&str> {
-        self.tooltip_index
-            .get(id)
-            .and_then(|&index| self.tooltips.get(index))
-            .map(|(_, text)| text.as_str())
+        self.tooltip_index.get(id).and_then(|&index| self.tooltips.get(index)).map(|(_, text)| text.as_str())
     }
 
     /// The class definition named `id`.
     pub(crate) fn class(&self, id: &str) -> Option<&FlowClassDef> {
-        self.class_index
-            .get(id)
-            .and_then(|&index| self.classes.get(index))
+        self.class_index.get(id).and_then(|&index| self.classes.get(index))
     }
 
     /// The flow with `id`.
     pub(crate) fn subgraph(&self, id: &str) -> Option<&AgentSubgraph> {
-        self.subgraph_lookup
-            .get(id)
-            .and_then(|&index| self.subgraphs.get(index))
+        self.subgraph_lookup.get(id).and_then(|&index| self.subgraphs.get(index))
     }
 
     /// The line a span starts on, with the front matter offset.
@@ -477,11 +450,7 @@ impl AgentflowDb {
         let parsed = match yaml::parse(&text) {
             Ok(value) => value,
             Err(message) => {
-                let stripped = if multiline {
-                    strip_line_trailing_commas(source)
-                } else {
-                    source.to_owned()
-                };
+                let stripped = if multiline { strip_line_trailing_commas(source) } else { source.to_owned() };
                 let retried = (stripped != source)
                     .then(|| {
                         let mut text = stripped;
@@ -509,11 +478,7 @@ impl AgentflowDb {
                 retried
             }
         };
-        let parsed = if parsed == Value::Null {
-            Value::Object(Vec::new())
-        } else {
-            parsed
-        };
+        let parsed = if parsed == Value::Null { Value::Object(Vec::new()) } else { parsed };
         Ok(strip_prototype_keys(parsed))
     }
 
@@ -548,8 +513,7 @@ impl AgentflowDb {
             loc = at;
             let mut value = self.metadata(id, source, at)?;
             if let Value::Object(entries) = &mut value
-                && let Some((_, Value::String(shape))) =
-                    entries.iter_mut().find(|(key, _)| key == "shape")
+                && let Some((_, Value::String(shape))) = entries.iter_mut().find(|(key, _)| key == "shape")
             {
                 authored_shape = Some(shape.clone());
                 let resolved = resolve_shape_alias(shape).to_owned();
@@ -695,13 +659,7 @@ impl AgentflowDb {
     }
 
     /// Adds one edge. `id` is the user-defined id, without its `@`.
-    fn add_single_link(
-        &mut self,
-        start: &str,
-        end: &str,
-        info: &LinkInfo,
-        id: Option<&str>,
-    ) -> Result<(), Error> {
+    fn add_single_link(&mut self, start: &str, end: &str, info: &LinkInfo, id: Option<&str>) -> Result<(), Error> {
         let mut edge = AgentEdge {
             animate: None,
             animation: None,
@@ -748,10 +706,7 @@ impl AgentflowDb {
             && self.edges.len() >= max
         {
             let mut text = String::from("Edge limit exceeded. ");
-            push_u32(
-                &mut text,
-                u32::try_from(self.edges.len()).unwrap_or(u32::MAX),
-            );
+            push_u32(&mut text, u32::try_from(self.edges.len()).unwrap_or(u32::MAX));
             text.push_str(" edges found, but the limit is ");
             push_u32(&mut text, u32::try_from(max).unwrap_or(u32::MAX));
             text.push('.');
@@ -768,12 +723,7 @@ impl AgentflowDb {
 
     /// Adds an edge from every start to every end. Only the edge from the last start to the
     /// first end takes the user-defined id.
-    pub(crate) fn add_link(
-        &mut self,
-        starts: &[String],
-        ends: &[String],
-        info: &LinkInfo,
-    ) -> Result<(), Error> {
+    pub(crate) fn add_link(&mut self, starts: &[String], ends: &[String], info: &LinkInfo) -> Result<(), Error> {
         let id = info.id.as_deref().map(|id| id.replacen('@', "", 1));
         let last_start = starts.last();
         let first_end = ends.first();
@@ -787,11 +737,7 @@ impl AgentflowDb {
     }
 
     /// Sets the curve of the edges at `positions`, or the default curve.
-    pub(crate) fn update_link_interpolate(
-        &mut self,
-        positions: &[String],
-        interpolate: &str,
-    ) -> Result<(), Error> {
+    pub(crate) fn update_link_interpolate(&mut self, positions: &[String], interpolate: &str) -> Result<(), Error> {
         for pos in positions {
             if pos == "default" {
                 self.default_interpolate = Some(interpolate.to_owned());
@@ -803,11 +749,7 @@ impl AgentflowDb {
     }
 
     /// Sets the styles of the edges at `positions`, or the default styles.
-    pub(crate) fn update_link(
-        &mut self,
-        positions: &[String],
-        mut style: Vec<String>,
-    ) -> Result<(), Error> {
+    pub(crate) fn update_link(&mut self, positions: &[String], mut style: Vec<String>) -> Result<(), Error> {
         // Pele assigns one array to every position and appends `fill:none` to it at the first
         // edge, so every position of the statement sees the appended value.
         if positions.iter().any(|pos| pos != "default")
@@ -837,9 +779,7 @@ impl AgentflowDb {
 
         let mut text = String::from("The index ");
         text.push_str(pos);
-        text.push_str(
-            " for linkStyle is out of bounds. Valid indices for linkStyle are between 0 and ",
-        );
+        text.push_str(" for linkStyle is out of bounds. Valid indices for linkStyle are between 0 and ");
         if count == 0 {
             text.push_str("-1");
         } else {
@@ -861,11 +801,7 @@ impl AgentflowDb {
                 index
             } else {
                 self.class_index.insert(id.to_owned(), self.classes.len());
-                self.classes.push(FlowClassDef {
-                    id: id.to_owned(),
-                    styles: Vec::new(),
-                    text_styles: Vec::new(),
-                });
+                self.classes.push(FlowClassDef { id: id.to_owned(), styles: Vec::new(), text_styles: Vec::new() });
                 self.classes.len() - 1
             };
             let Some(class) = self.classes.get_mut(index) else {
@@ -910,11 +846,7 @@ impl AgentflowDb {
             if let Some(edge) = self.edge_by_id.get(id).and_then(|&i| self.edges.get_mut(i)) {
                 edge.classes.push(class_name.to_owned());
             }
-            if let Some(subgraph) = self
-                .subgraph_lookup
-                .get(id)
-                .and_then(|&i| self.subgraphs.get_mut(i))
-            {
+            if let Some(subgraph) = self.subgraph_lookup.get(id).and_then(|&i| self.subgraphs.get_mut(i)) {
                 subgraph.classes.push(class_name.to_owned());
             }
         }
@@ -928,8 +860,7 @@ impl AgentflowDb {
                     tooltip.clone_into(&mut entry.1);
                 }
             } else {
-                self.tooltip_index
-                    .insert(id.to_owned(), self.tooltips.len());
+                self.tooltip_index.insert(id.to_owned(), self.tooltips.len());
                 self.tooltips.push((id.to_owned(), tooltip.to_owned()));
             }
         }
@@ -954,10 +885,7 @@ impl AgentflowDb {
 
     /// Sets the accessible title without leading whitespace.
     pub(crate) fn set_acc_title(&mut self, text: &str) {
-        self.acc_title = Some(
-            text.trim_start_matches(|c| is_space(u32::from(c)))
-                .to_owned(),
-        );
+        self.acc_title = Some(text.trim_start_matches(|c| is_space(u32::from(c))).to_owned());
     }
 
     /// Sets the accessible description, removing indentation after line breaks.
@@ -1000,18 +928,12 @@ impl AgentflowDb {
             }
         }
         if dir.is_none() && self.options.inherit_dir {
-            dir = self
-                .direction
-                .clone()
-                .or_else(|| self.options.direction.clone());
+            dir = self.direction.clone().or_else(|| self.options.direction.clone());
         }
 
         let id = id.unwrap_or_else(|| {
             let mut generated = String::from("subGraph");
-            push_u32(
-                &mut generated,
-                u32::try_from(self.sub_count).unwrap_or(u32::MAX),
-            );
+            push_u32(&mut generated, u32::try_from(self.sub_count).unwrap_or(u32::MAX));
             generated
         });
         self.sub_count += 1;
@@ -1020,9 +942,7 @@ impl AgentflowDb {
         // holds.
         let nodes: Vec<String> = node_list
             .into_iter()
-            .filter(|node| {
-                *node != id && !self.global_nodes.contains(node) && !self.members.contains(node)
-            })
+            .filter(|node| *node != id && !self.global_nodes.contains(node) && !self.members.contains(node))
             .collect();
         for node in &nodes {
             self.members.insert(node.clone());
@@ -1043,8 +963,7 @@ impl AgentflowDb {
             return id;
         }
 
-        self.subgraph_lookup
-            .insert(id.clone(), self.subgraphs.len());
+        self.subgraph_lookup.insert(id.clone(), self.subgraphs.len());
         self.subgraphs.push(AgentSubgraph {
             classes: Vec::new(),
             dir,
@@ -1088,15 +1007,8 @@ impl AgentflowDb {
     }
 
     /// Adds a connector, or retitles one, and returns its id, or an empty id for none.
-    pub(crate) fn add_connector(
-        &mut self,
-        text: Option<&FlowText>,
-        title: Option<&FlowText>,
-    ) -> String {
-        let Some(id) = text
-            .map(|text| js_trim(&text.text))
-            .filter(|id| !id.is_empty())
-        else {
+    pub(crate) fn add_connector(&mut self, text: Option<&FlowText>, title: Option<&FlowText>) -> String {
+        let Some(id) = text.map(|text| js_trim(&text.text)).filter(|id| !id.is_empty()) else {
             return String::new();
         };
         let title = title.map_or("", |title| js_trim(&title.text));
@@ -1140,11 +1052,7 @@ impl AgentflowDb {
         let (r#type, stroke, length) = destruct_end_link(end);
         if let Some(start) = start.filter(|start| !start.is_empty()) {
             // The first half of a split arrow only says whether the line is dotted.
-            let opening = if start.contains('.') {
-                "dotted"
-            } else {
-                "normal"
-            };
+            let opening = if start.contains('.') { "dotted" } else { "normal" };
             if opening != stroke {
                 return LinkInfo {
                     edge_semantic: None,
@@ -1193,11 +1101,7 @@ impl AgentflowDb {
 
     fn push_mapping(&mut self, id: &str, r#type: &'static str, position: ElementPosition) -> usize {
         let index = self.mappings.len();
-        self.mappings.push(ElementMapping {
-            id: id.to_owned(),
-            position,
-            r#type,
-        });
+        self.mappings.push(ElementMapping { id: id.to_owned(), position, r#type });
         if !self.first_mapping.contains_key(id) {
             self.first_mapping.insert(id.to_owned(), index);
         }
@@ -1234,9 +1138,7 @@ impl AgentflowDb {
                 mapping.r#type = "attachment";
             }
             let p = &mut mapping.position;
-            if end.end_line > p.end_line
-                || (end.end_line == p.end_line && end.end_column > p.end_column)
-            {
+            if end.end_line > p.end_line || (end.end_line == p.end_line && end.end_column > p.end_column) {
                 p.end_line = end.end_line;
                 p.end_column = end.end_column;
             }
@@ -1247,16 +1149,8 @@ impl AgentflowDb {
 
     /// Records where an edge statement sits, named by the nodes it ends at.
     pub(crate) fn add_edge_mapping(&mut self, to_nodes: &[String], loc: Loc) {
-        let ids: Vec<&str> = to_nodes
-            .iter()
-            .map(String::as_str)
-            .filter(|id| !id.is_empty())
-            .collect();
-        let id = if ids.is_empty() {
-            "edge".to_owned()
-        } else {
-            ids.join(">")
-        };
+        let ids: Vec<&str> = to_nodes.iter().map(String::as_str).filter(|id| !id.is_empty()).collect();
+        let id = if ids.is_empty() { "edge".to_owned() } else { ids.join(">") };
         let position = self.position(Some(loc));
         self.push_mapping(&id, "edge", position);
     }
@@ -1292,13 +1186,7 @@ impl AgentflowDb {
     }
 
     /// Records a finding about node `node_id` once. The graph may be built more than once.
-    pub(crate) fn emit(
-        &mut self,
-        id: &'static str,
-        severity: &'static str,
-        message: String,
-        node_id: &str,
-    ) {
+    pub(crate) fn emit(&mut self, id: &'static str, severity: &'static str, message: String, node_id: &str) {
         let diagnostic = Diagnostic {
             id,
             message,

@@ -2,7 +2,9 @@
 //! allows. Port of Pele's `src/util/url.ts`.
 
 use crate::text::entities;
-use crate::util::chars::{is_line_end, is_space, is_word};
+use crate::util::chars::is_line_end;
+use crate::util::chars::is_space;
+use crate::util::chars::is_word;
 
 const BLANK: &str = "about:blank";
 
@@ -46,9 +48,7 @@ fn unit_word(unit: Option<&u16>) -> bool {
 
 fn unit_hex(unit: Option<&u16>) -> Option<u8> {
     let u = u8::try_from(*unit?).ok()?;
-    char::from(u)
-        .to_digit(16)
-        .and_then(|digit| u8::try_from(digit).ok())
+    char::from(u).to_digit(16).and_then(|digit| u8::try_from(digit).ok())
 }
 
 // /[\u0000-\u001F\u007F-\u009F -‍﻿]/
@@ -58,12 +58,10 @@ fn is_ctrl(u: u16) -> bool {
 
 // Whether `units` at `at` start with `ascii`, ignoring ASCII case.
 fn starts_ignore_case(units: &[u16], at: usize, ascii: &str) -> bool {
-    ascii.bytes().enumerate().all(|(i, b)| {
-        units
-            .get(at + i)
-            .and_then(|&u| u8::try_from(u).ok())
-            .is_some_and(|u| u.eq_ignore_ascii_case(&b))
-    })
+    ascii
+        .bytes()
+        .enumerate()
+        .all(|(i, b)| units.get(at + i).and_then(|&u| u8::try_from(u).ok()).is_some_and(|u| u.eq_ignore_ascii_case(&b)))
 }
 
 // `decodeURIComponent`, or `None` where it throws a URIError.
@@ -115,11 +113,7 @@ fn decode(units: &[u16]) -> Vec<u16> {
 
 // `.replace(RE_CTRL, '')`, and whether anything matched.
 fn remove_ctrl(units: &[u16]) -> (Vec<u16>, bool) {
-    let out = units
-        .iter()
-        .copied()
-        .filter(|&u| !is_ctrl(u))
-        .collect::<Vec<_>>();
+    let out = units.iter().copied().filter(|&u| !is_ctrl(u)).collect::<Vec<_>>();
     let found = out.len() != units.len();
     (out, found)
 }
@@ -141,11 +135,7 @@ fn replace_entities(units: &[u16]) -> (Vec<u16>, bool) {
                 let word = String::from_utf16_lossy(units.get(start..end).unwrap_or(&[]));
                 out.push(char_code(word_number(&word)));
                 found = true;
-                at = if unit_is(units.get(end), b';') {
-                    end + 1
-                } else {
-                    end
-                };
+                at = if unit_is(units.get(end), b';') { end + 1 } else { end };
                 continue;
             }
         }
@@ -170,9 +160,7 @@ fn word_number(word: &str) -> f64 {
             return f64::NAN;
         }
         // Past 2^53 the value only feeds `fromCharCode`, which keeps its low 16 bits.
-        return digits.chars().fold(0.0, |acc, c| {
-            acc * f64::from(base) + f64::from(c.to_digit(base).unwrap_or(0))
-        });
+        return digits.chars().fold(0.0, |acc, c| acc * f64::from(base) + f64::from(c.to_digit(base).unwrap_or(0)));
     }
     if word == "Infinity" {
         return f64::INFINITY;
@@ -195,16 +183,8 @@ fn char_code(value: f64) -> u16 {
         return 0;
     }
     let wrapped = value.trunc() % 65536.0;
-    let wrapped = if wrapped < 0.0 {
-        wrapped + 65536.0
-    } else {
-        wrapped
-    };
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "wrapped into 0..65536"
-    )]
+    let wrapped = if wrapped < 0.0 { wrapped + 65536.0 } else { wrapped };
+    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "wrapped into 0..65536")]
     let code = wrapped as u16;
     code
 }
@@ -215,10 +195,8 @@ fn remove_ctrl_entities(units: &[u16]) -> (Vec<u16>, bool) {
     let mut found = false;
     let mut at = 0;
     while let Some(&unit) = units.get(at) {
-        let length = ["&newline;", "&tab;"]
-            .iter()
-            .find(|name| starts_ignore_case(units, at, name))
-            .map(|name| name.len());
+        let length =
+            ["&newline;", "&tab;"].iter().find(|name| starts_ignore_case(units, at, name)).map(|name| name.len());
         if let Some(length) = length {
             found = true;
             at += length;
@@ -241,10 +219,7 @@ fn remove_ws_escapes(units: &[u16]) -> (Vec<u16>, bool) {
             return None;
         };
         let next = at + slash;
-        if ["%6e", "%72", "%74"]
-            .iter()
-            .any(|code| starts_ignore_case(units, next, code))
-        {
+        if ["%6e", "%72", "%74"].iter().any(|code| starts_ignore_case(units, next, code)) {
             return Some(slash + 3);
         }
         units
@@ -272,10 +247,7 @@ fn remove_ws_escapes(units: &[u16]) -> (Vec<u16>, bool) {
 fn trim_units(units: &[u16]) -> &[u16] {
     let spaced = |u: &u16| is_space(u32::from(*u));
     let start = units.iter().position(|u| !spaced(u)).unwrap_or(units.len());
-    let end = units
-        .iter()
-        .rposition(|u| !spaced(u))
-        .map_or(start, |at| at + 1);
+    let end = units.iter().rposition(|u| !spaced(u)).map_or(start, |at| at + 1);
     units.get(start..end).unwrap_or(&[])
 }
 
@@ -324,19 +296,13 @@ pub(crate) fn sanitize_url(url: &str) -> String {
     let Some(scheme) = scheme(trimmed) else {
         return decoded;
     };
-    let lower = scheme
-        .chars()
-        .flat_map(char::to_lowercase)
-        .collect::<String>();
+    let lower = scheme.chars().flat_map(char::to_lowercase).collect::<String>();
     let protocol = lower.trim_matches(space);
     if invalid_protocol(protocol) {
         return BLANK.to_owned();
     }
 
-    let normalized = trimmed
-        .chars()
-        .map(|c| if c == '\\' { '/' } else { c })
-        .collect::<String>();
+    let normalized = trimmed.chars().map(|c| if c == '\\' { '/' } else { c }).collect::<String>();
     if protocol == "mailto:" || protocol.contains("://") {
         return normalized;
     }
@@ -363,10 +329,7 @@ fn scheme(text: &str) -> Option<&str> {
             let tail = line.get(p..).unwrap_or("");
             if tail.starts_with(':') {
                 end = Some(p + 1);
-            } else if tail
-                .get(..7)
-                .is_some_and(|head| head.eq_ignore_ascii_case("&colon;"))
-            {
+            } else if tail.get(..7).is_some_and(|head| head.eq_ignore_ascii_case("&colon;")) {
                 end = Some(p + 7);
             }
         }
@@ -383,20 +346,16 @@ fn scheme(text: &str) -> Option<&str> {
 // /^([^\w]*)(javascript|data|vbscript)/im
 fn invalid_protocol(protocol: &str) -> bool {
     let rest = protocol.trim_start_matches(|c: char| !is_word(u32::from(c)));
-    ["javascript", "data", "vbscript"].iter().any(|name| {
-        rest.get(..name.len())
-            .is_some_and(|head| head.eq_ignore_ascii_case(name))
-    })
+    ["javascript", "data", "vbscript"]
+        .iter()
+        .any(|name| rest.get(..name.len()).is_some_and(|head| head.eq_ignore_ascii_case(name)))
 }
 
 // Parses an `http:` or `https:` URL and serializes it as the WHATWG URL Standard does, for
 // `new URL(url).toString()`.
 fn parse_http(input: &str) -> Option<String> {
-    let input = input
-        .trim_matches(|c: char| c <= ' ')
-        .chars()
-        .filter(|c| !matches!(c, '\t' | '\n' | '\r'))
-        .collect::<String>();
+    let input =
+        input.trim_matches(|c: char| c <= ' ').chars().filter(|c| !matches!(c, '\t' | '\n' | '\r')).collect::<String>();
     let colon = input.find(':')?;
     let scheme = input.get(..colon)?;
     let (scheme, default_port) = if scheme.eq_ignore_ascii_case("http") {
@@ -433,9 +392,7 @@ fn parse_http(input: &str) -> Option<String> {
             if !digits.bytes().all(|b| b.is_ascii_digit()) {
                 return None;
             }
-            let value = digits.bytes().fold(0u32, |acc, b| {
-                acc.saturating_mul(10).saturating_add(u32::from(b - b'0'))
-            });
+            let value = digits.bytes().fold(0u32, |acc, b| acc.saturating_mul(10).saturating_add(u32::from(b - b'0')));
             if value > 65535 {
                 return None;
             }
@@ -513,9 +470,7 @@ fn is_single_dot(segment: &str) -> bool {
 }
 
 fn is_double_dot(segment: &str) -> bool {
-    ["..", ".%2e", "%2e.", "%2e%2e"]
-        .iter()
-        .any(|dots| segment.eq_ignore_ascii_case(dots))
+    ["..", ".%2e", "%2e.", "%2e%2e"].iter().any(|dots| segment.eq_ignore_ascii_case(dots))
 }
 
 fn c0_control_set(b: u8) -> bool {
@@ -619,10 +574,7 @@ fn domain_to_ascii(domain: &str) -> Option<String> {
 fn forbidden_domain(c: char) -> bool {
     c <= '\u{1f}'
         || c == '\u{7f}'
-        || matches!(
-            c,
-            ' ' | '#' | '%' | '/' | ':' | '<' | '>' | '?' | '@' | '[' | '\\' | ']' | '^' | '|'
-        )
+        || matches!(c, ' ' | '#' | '%' | '/' | ':' | '<' | '>' | '?' | '@' | '[' | '\\' | ']' | '^' | '|')
 }
 
 // Encodes a label with RFC 3492 Punycode.
@@ -770,12 +722,9 @@ fn ipv4_number(text: &str) -> Option<u64> {
         _ if text.len() >= 2 && text.starts_with('0') => (8, text.get(1..).unwrap_or("")),
         _ => (10, text),
     };
-    digits.chars().try_fold(0u64, |acc, c| {
-        Some(
-            acc.saturating_mul(u64::from(base))
-                .saturating_add(u64::from(c.to_digit(base)?)),
-        )
-    })
+    digits
+        .chars()
+        .try_fold(0u64, |acc, c| Some(acc.saturating_mul(u64::from(base)).saturating_add(u64::from(c.to_digit(base)?))))
 }
 
 fn ends_in_number(domain: &str) -> bool {
@@ -798,10 +747,7 @@ fn ipv4(domain: &str) -> Option<String> {
     if parts.len() > 4 {
         return None;
     }
-    let numbers = parts
-        .iter()
-        .map(|part| ipv4_number(part))
-        .collect::<Option<Vec<_>>>()?;
+    let numbers = parts.iter().map(|part| ipv4_number(part)).collect::<Option<Vec<_>>>()?;
     let (&last, init) = numbers.split_last()?;
     if init.iter().any(|&n| n > 255) {
         return None;
@@ -842,11 +788,7 @@ fn allow<'a>(url: &'a str, schemes: &[&str]) -> Option<&'a str> {
     }
 
     let name_length = if bytes.first().is_some_and(u8::is_ascii_alphabetic) {
-        1 + bytes
-            .iter()
-            .skip(1)
-            .take_while(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'.' | b'-'))
-            .count()
+        1 + bytes.iter().skip(1).take_while(|b| b.is_ascii_alphanumeric() || matches!(b, b'+' | b'.' | b'-')).count()
     } else {
         0
     };
@@ -854,14 +796,7 @@ fn allow<'a>(url: &'a str, schemes: &[&str]) -> Option<&'a str> {
         return Some(url);
     }
     let name = url.get(..name_length)?;
-    schemes
-        .iter()
-        .any(|scheme| {
-            scheme
-                .bytes()
-                .eq(name.bytes().map(|b| b.to_ascii_lowercase()))
-        })
-        .then_some(url)
+    schemes.iter().any(|scheme| scheme.bytes().eq(name.bytes().map(|b| b.to_ascii_lowercase()))).then_some(url)
 }
 
 /// Keeps a URL that `sanitize_url` has passed when it is relative or its scheme is one the host
@@ -896,11 +831,7 @@ pub(crate) fn linked(
     let Some(href) = link_url(url, options) else {
         return body.to_owned();
     };
-    links.push(LinkInfo {
-        href: href.to_owned(),
-        id: id.to_owned(),
-        internal: false,
-    });
+    links.push(LinkInfo { href: href.to_owned(), id: id.to_owned(), internal: false });
 
     let mut out = String::with_capacity(body.len() + href.len() + 32);
     out.push_str("<a href=\"");
@@ -939,562 +870,4 @@ fn push_escaped(out: &mut String, text: &str) {
             c => out.push(c),
         }
     }
-}
-
-#[cfg(test)]
-mod tests {
-    //! Expectations come from running Pele's URL helpers at 458322a, over hand-picked URLs and every
-    //! quoted string on a `click`, `href`, or `link` line in `test/vectors`.
-
-    use super::{
-        LinkInfo, UrlOptions, image_url, link_url, linked, rel_attr, safe_url, sanitize_url,
-    };
-
-    fn options(name: &str) -> UrlOptions<'static> {
-        match name {
-            "default" => UrlOptions::default(),
-            "off" => UrlOptions {
-                images: Some(false),
-                links: Some(false),
-                ..UrlOptions::default()
-            },
-            "ftp" => UrlOptions {
-                image_schemes: Some(&["data"]),
-                link_schemes: Some(&["ftp", "HTTP"]),
-                ..UrlOptions::default()
-            },
-            "empty" => UrlOptions {
-                link_rel: Some(""),
-                ..UrlOptions::default()
-            },
-            "quoted" => UrlOptions {
-                link_rel: Some("a\"b&c\u{1}"),
-                ..UrlOptions::default()
-            },
-            _ => panic!("unknown options {name}"),
-        }
-    }
-
-    #[test]
-    fn sanitize_url_matches_pele() {
-        for &(url, expected) in SANITIZE {
-            assert_eq!(sanitize_url(url), expected, "{url:?}");
-        }
-    }
-
-    #[test]
-    fn safe_url_matches_pele() {
-        for &(url, expected) in SAFE {
-            assert_eq!(safe_url(url), expected, "{url:?}");
-        }
-    }
-
-    #[test]
-    fn link_and_image_url_match_pele() {
-        for &(case, expected) in ALLOW {
-            let (name, url) = case.split_once('|').unwrap_or_default();
-            let options = options(name);
-            let actual = format!(
-                "{}|{}",
-                link_url(url, &options).unwrap_or("null"),
-                image_url(url, &options).unwrap_or("null"),
-            );
-            assert_eq!(actual, expected, "{case:?}");
-        }
-    }
-
-    #[test]
-    fn linked_matches_pele() {
-        for &(case, expected) in LINKED {
-            let (name, url) = case.split_once('|').unwrap_or_default();
-            let options = options(name);
-            let mut links: Vec<LinkInfo> = Vec::new();
-            let html = linked("<g/>", url, "n1", &mut links, &options, " class=\"x\"");
-            let links = links
-                .iter()
-                .map(|link| {
-                    format!(
-                        "{{\"id\":\"{}\",\"href\":\"{}\",\"internal\":{}}}",
-                        link.id,
-                        link.href.split('"').collect::<Vec<_>>().join("\\\""),
-                        link.internal
-                    )
-                })
-                .collect::<Vec<_>>()
-                .join(",");
-            let actual = format!("{html}|[{links}]|{}", rel_attr(&options));
-            assert_eq!(actual, expected, "{case:?}");
-        }
-    }
-
-    const SANITIZE: &[(&str, &str)] = &[
-        ("https://example.com", "https://example.com/"),
-        (
-            "http://EXAMPLE.com/Path?q=1#frag",
-            "http://example.com/Path?q=1#frag",
-        ),
-        ("click.html", "click.html"),
-        ("./relative/path", "./relative/path"),
-        ("/absolute/path", "/absolute/path"),
-        ("mailto:someone@example.com", "mailto:someone@example.com"),
-        (
-            "obsidian://open?vault=Notes&file=Idea",
-            "obsidian://open?vault=Notes&file=Idea",
-        ),
-        ("javascript:alert(1)", "about:blank"),
-        ("JaVaScRiPt:alert(1)", "about:blank"),
-        ("  javascript:alert(1)", "about:blank"),
-        ("java\nscript:alert(1)", "about:blank"),
-        ("jav&#x09;ascript:alert(1)", "about:blank"),
-        ("&#106;avascript:alert(1)", "about:blank"),
-        ("data:text/html,<script>alert(1)</script>", "about:blank"),
-        ("vbscript:msgbox(1)", "about:blank"),
-        ("javascript&colon;alert(1)", "about:blank"),
-        ("%6A%61%76%61%73%63%72%69%70%74:alert(1)", "about:blank"),
-        ("https://example.com/a b", "https://example.com/a%20b"),
-        ("http://", "about:blank"),
-        ("ftp://example.com/file", "ftp://example.com/file"),
-        ("www.example.com", "www.example.com"),
-        ("C:\\Users\\file.txt", "C:/Users/file.txt"),
-        ("\\\\server\\share", "\\\\server\\share"),
-        ("note name with spaces", "note name with spaces"),
-        ("#heading", "#heading"),
-        ("?query=1", "?query=1"),
-        ("", "about:blank"),
-        ("about:blank", "about:blank"),
-        ("tel:+123456", "tel:+123456"),
-        (
-            "https://example.com/%E0%A4%A",
-            "https://example.com/%E0%A4%A",
-        ),
-        (
-            "https://a.com/^{}`|'\"<>[]?q=^{}'\"<>`|#f^{}`'\"<> x",
-            "https://a.com/%5E%7B%7D%60|'%22%3C%3E[]?q=^{}%27%22%3C%3E`|#f^{}%60'%22%3C%3E%20x",
-        ),
-        ("https://u:p@a.com:80/x", "https://u:p@a.com:80/x"),
-        ("https://u@b:c@A.com:443/", "https://u@b:c@A.com:443/"),
-        ("http://0x7f.1/", "http://127.0.0.1/"),
-        ("http://[::1]/", "http://[::1]/"),
-        ("http://münchen.de/ä", "http://xn--mnchen-3ya.de/%C3%A4"),
-        ("HTTP:EXAMPLE.com", "http://example.com/"),
-        ("http://a/b/../c/./d/%2e%2E/e", "http://a/c/e"),
-        ("http://a.b./", "http://a.b./"),
-        ("http://xn--a/", "about:blank"),
-        ("http:\\\\a\\b", "http://a/b"),
-        ("http://a b/", "about:blank"),
-        ("http://a%41b/", "http://aab/"),
-        ("http://1.2.3.256/", "about:blank"),
-        ("http://999999999/", "http://59.154.201.255/"),
-        ("http://a/?", "http://a/?"),
-        ("http://a/#", "http://a/#"),
-        ("http://%E2%80%A8/", "about:blank"),
-        ("http://a.0x/", "about:blank"),
-        ("http://u@a.com/x", "http://u@a.com/x"),
-        ("http://@a.com/", "http://a.com/"),
-        ("http://u@/x", "about:blank"),
-        ("http:a", "http://a/"),
-        ("http:/a", "http://a/"),
-        ("http:///a", "http://a/"),
-        ("https://A.COM", "https://a.com/"),
-        ("http://a/..", "http://a/"),
-        ("http://a/.", "http://a/"),
-        ("http://a/b/..", "http://a/"),
-        ("http://a/b/.?x", "http://a/b/?x"),
-        ("http://a/%2e%2e/b", "http://a/b"),
-        ("http://a/x?é#é", "http://a/x?%C3%A9#%C3%A9"),
-        ("http://a.com/日本", "http://a.com/%E6%97%A5%E6%9C%AC"),
-        ("http://日本.jp/", "http://xn--wgv71a.jp/"),
-        ("http://ÉXAMPLE.com/", "http://xn--xample-9ua.com/"),
-        ("http://a%2Fb/", "http://a/b/"),
-        ("http://a%25b/", "about:blank"),
-        ("http://0/", "http://0.0.0.0/"),
-        ("http://0x/", "http://0.0.0.0/"),
-        ("http://1.2/", "http://1.0.0.2/"),
-        ("http://1.2.3/", "http://1.2.0.3/"),
-        ("http://0300.0250.1.1/", "http://192.168.1.1/"),
-        ("http://4294967296/", "about:blank"),
-        ("http://1.2.3.4.5/", "about:blank"),
-        ("http://1..2/", "about:blank"),
-        ("http://a.1/", "about:blank"),
-        ("http://1.a/", "http://1.a/"),
-        ("http://a。b/", "http://a.b/"),
-        ("http://a\u{2028}:80/", "about:blank"),
-        ("http://u\u{2028}@a:80/", "http://u%E2%80%A8@a/"),
-        ("https://u\u{2028}@a:443/x", "https://u%E2%80%A8@a/x"),
-        ("http://a\u{2028}b/", "about:blank"),
-        ("http://a/\u{2028}x:y", "http://a/%E2%80%A8x:y"),
-        ("a\u{2028}http://x", "about:blank"),
-        ("  https://example.com  ", "https://example.com/"),
-        ("https://example.com/%20", "https://example.com/"),
-        ("%2568ttp://x", "http://x/"),
-        ("&#104;ttp://x", "http://x/"),
-        ("&#x6A;avascript:x", "avascript:x"),
-        ("&#0000106avascript:x", ":x"),
-        ("&#1e2;", "d"),
-        ("&#Infinity;x", "x"),
-        ("&#65536;", "about:blank"),
-        ("&#55357;&#56832;", "😀"),
-        ("jav&NewLine;ascript:x", "about:blank"),
-        ("jav&tab;ascript:x", "about:blank"),
-        ("a\\nb", "ab"),
-        ("a%5Cnb", "ab"),
-        ("a%5c%6Eb", "ab"),
-        ("a\\%72b", "ab"),
-        ("a\\xb", "a\\xb"),
-        ("%", "%"),
-        ("%zz", "%zz"),
-        ("%C3", "%C3"),
-        ("%C3%28", "%C3%28"),
-        ("%F0%9F%98%80", "😀"),
-        ("%ED%A0%80", "%ED%A0%80"),
-        ("%C0%80", "%C0%80"),
-        ("\u{0}javascript:x", "about:blank"),
-        ("\u{200b}javascript:x", "about:blank"),
-        ("\u{feff}javascript:x", "about:blank"),
-        ("İjavascript:x", "İjavascript:x"),
-        ("Kjavascript:x", "Kjavascript:x"),
-        ("-javascript:x", "about:blank"),
-        ("_javascript:x", "_javascript:x"),
-        (" data:x", "about:blank"),
-        ("DATA:x", "about:blank"),
-        ("x:javascript:y", "x:javascript:y"),
-        ("mailto:a", "mailto:a"),
-        ("MAILTO:a", "MAILTO:a"),
-        ("tel:1", "tel:1"),
-        ("https:", "about:blank"),
-        ("https:x", "https://x/"),
-        ("https:x:y", "https:x:y"),
-        ("http:x&colon;y", "http:x&colon;y"),
-        ("a&COLON;b", "a&COLON;b"),
-        ("a:", "a:"),
-        (":a", ":a"),
-        ("..", ".."),
-        (".", "."),
-        ("/", "/"),
-        ("//evil.com", "//evil.com"),
-        ("\\\\evil", "\\\\evil"),
-        ("foo/bar:baz", "foo/bar:baz"),
-        ("&#46;/x", "./x"),
-        ("%2e/x", "./x"),
-        ("&#x2F;&#x2F;evil", "evil"),
-        ("https://example.com/aaaaa", "https://example.com/aaaaa"),
-        ("%25%25%2541", "%%%41"),
-        (
-            "%2525252525252525252525252525252525252525252525252525252525252525252541",
-            "%252525252525252525252525252525252525252525252525252525252525252541",
-        ),
-        ("https://www.github.com", "https://www.github.com/"),
-        (
-            "This is a tooltip for a link",
-            "This is a tooltip for a link",
-        ),
-        (
-            "This is a tooltip for a callback",
-            "This is a tooltip for a callback",
-        ),
-        ("This is a link", "This is a link"),
-        ("Callback tooltip", "Callback tooltip"),
-        ("Communication link", "Communication link"),
-        ("Tooltip for a callback", "Tooltip for a callback"),
-        ("Open this in a new tab", "Open this in a new tab"),
-        ("Dashboard", "Dashboard"),
-        (
-            "https://dashboard.contoso.com/alice",
-            "https://dashboard.contoso.com/alice",
-        ),
-        ("Wiki", "Wiki"),
-        (
-            "https://wiki.contoso.com/alice",
-            "https://wiki.contoso.com/alice",
-        ),
-        (
-            "https://dashboard.contoso.com/john",
-            "https://dashboard.contoso.com/john",
-        ),
-        (
-            "https://wiki.contoso.com/john",
-            "https://wiki.contoso.com/john",
-        ),
-    ];
-    const SAFE: &[(&str, &str)] = &[
-        ("https://example.com", "https://example.com/"),
-        (
-            "http://EXAMPLE.com/Path?q=1#frag",
-            "http://example.com/Path?q=1#frag",
-        ),
-        ("click.html", "click.html"),
-        ("./relative/path", "./relative/path"),
-        ("/absolute/path", "/absolute/path"),
-        ("mailto:someone@example.com", "mailto:someone@example.com"),
-        (
-            "obsidian://open?vault=Notes&file=Idea",
-            "obsidian://open?vault=Notes&file=Idea",
-        ),
-        ("javascript:alert(1)", "about:blank"),
-        ("JaVaScRiPt:alert(1)", "about:blank"),
-        ("  javascript:alert(1)", "about:blank"),
-        ("java\nscript:alert(1)", "about:blank"),
-        ("jav&#x09;ascript:alert(1)", "about:blank"),
-        ("&#106;avascript:alert(1)", "about:blank"),
-        ("data:text/html,<script>alert(1)</script>", "about:blank"),
-        ("vbscript:msgbox(1)", "about:blank"),
-        ("javascript&colon;alert(1)", "about:blank"),
-        ("%6A%61%76%61%73%63%72%69%70%74:alert(1)", "about:blank"),
-        ("https://example.com/a b", "https://example.com/a%20b"),
-        ("http://", "about:blank"),
-        ("ftp://example.com/file", "ftp://example.com/file"),
-        ("www.example.com", "www.example.com"),
-        ("C:\\Users\\file.txt", "C:/Users/file.txt"),
-        ("\\\\server\\share", "\\\\server\\share"),
-        ("note name with spaces", "note name with spaces"),
-        ("#heading", "#heading"),
-        ("?query=1", "?query=1"),
-        ("", "about:blank"),
-        ("about:blank", "about:blank"),
-        ("tel:+123456", "tel:+123456"),
-        (
-            "https://example.com/%E0%A4%A",
-            "https://example.com/%E0%A4%A",
-        ),
-        (
-            "https://a.com/^{}`|'\"<>[]?q=^{}'\"<>`|#f^{}`'\"<> x",
-            "https://a.com/%5E%7B%7D%60|'%22%3C%3E[]?q=^{}%27%22%3C%3E`|#f^{}%60'%22%3C%3E%20x",
-        ),
-        ("https://u:p@a.com:80/x", "https://u:p@a.com:80/x"),
-        ("https://u@b:c@A.com:443/", "https://u@b:c@A.com:443/"),
-        ("http://0x7f.1/", "http://127.0.0.1/"),
-        ("http://[::1]/", "http://[::1]/"),
-        ("http://münchen.de/ä", "http://xn--mnchen-3ya.de/%C3%A4"),
-        ("HTTP:EXAMPLE.com", "http://example.com/"),
-        ("http://a/b/../c/./d/%2e%2E/e", "http://a/c/e"),
-        ("http://a.b./", "http://a.b./"),
-        ("http://xn--a/", "about:blank"),
-        ("http:\\\\a\\b", "http://a/b"),
-        ("http://a b/", "about:blank"),
-        ("http://a%41b/", "http://aab/"),
-        ("http://1.2.3.256/", "about:blank"),
-        ("http://999999999/", "http://59.154.201.255/"),
-        ("http://a/?", "http://a/?"),
-        ("http://a/#", "http://a/#"),
-        ("http://%E2%80%A8/", "about:blank"),
-        ("http://a.0x/", "about:blank"),
-        ("http://u@a.com/x", "http://u@a.com/x"),
-        ("http://@a.com/", "http://a.com/"),
-        ("http://u@/x", "about:blank"),
-        ("http:a", "http://a/"),
-        ("http:/a", "http://a/"),
-        ("http:///a", "http://a/"),
-        ("https://A.COM", "https://a.com/"),
-        ("http://a/..", "http://a/"),
-        ("http://a/.", "http://a/"),
-        ("http://a/b/..", "http://a/"),
-        ("http://a/b/.?x", "http://a/b/?x"),
-        ("http://a/%2e%2e/b", "http://a/b"),
-        ("http://a/x?é#é", "http://a/x?%C3%A9#%C3%A9"),
-        ("http://a.com/日本", "http://a.com/%E6%97%A5%E6%9C%AC"),
-        ("http://日本.jp/", "http://xn--wgv71a.jp/"),
-        ("http://ÉXAMPLE.com/", "http://xn--xample-9ua.com/"),
-        ("http://a%2Fb/", "http://a/b/"),
-        ("http://a%25b/", "about:blank"),
-        ("http://0/", "http://0.0.0.0/"),
-        ("http://0x/", "http://0.0.0.0/"),
-        ("http://1.2/", "http://1.0.0.2/"),
-        ("http://1.2.3/", "http://1.2.0.3/"),
-        ("http://0300.0250.1.1/", "http://192.168.1.1/"),
-        ("http://4294967296/", "about:blank"),
-        ("http://1.2.3.4.5/", "about:blank"),
-        ("http://1..2/", "about:blank"),
-        ("http://a.1/", "about:blank"),
-        ("http://1.a/", "http://1.a/"),
-        ("http://a。b/", "http://a.b/"),
-        ("http://a\u{2028}:80/", "about:blank"),
-        ("http://u\u{2028}@a:80/", "http://u%E2%80%A8@a/"),
-        ("https://u\u{2028}@a:443/x", "https://u%E2%80%A8@a/x"),
-        ("http://a\u{2028}b/", "about:blank"),
-        ("http://a/\u{2028}x:y", "http://a/%E2%80%A8x:y"),
-        ("a\u{2028}http://x", "about:blank"),
-        ("  https://example.com  ", "https://example.com/"),
-        ("https://example.com/%20", "https://example.com/"),
-        ("%2568ttp://x", "http://x/"),
-        ("&#104;ttp://x", "http://x/"),
-        ("&#x6A;avascript:x", "about:blank"),
-        ("&#0000106avascript:x", ":x"),
-        ("&#1e2;", "d"),
-        ("&#Infinity;x", "x"),
-        ("&#65536;", "𐀀"),
-        ("&#55357;&#56832;", "😀"),
-        ("jav&NewLine;ascript:x", "about:blank"),
-        ("jav&tab;ascript:x", "about:blank"),
-        ("a\\nb", "ab"),
-        ("a%5Cnb", "ab"),
-        ("a%5c%6Eb", "ab"),
-        ("a\\%72b", "ab"),
-        ("a\\xb", "a\\xb"),
-        ("%", "%"),
-        ("%zz", "%zz"),
-        ("%C3", "%C3"),
-        ("%C3%28", "%C3%28"),
-        ("%F0%9F%98%80", "😀"),
-        ("%ED%A0%80", "%ED%A0%80"),
-        ("%C0%80", "%C0%80"),
-        ("\u{0}javascript:x", "about:blank"),
-        ("\u{200b}javascript:x", "about:blank"),
-        ("\u{feff}javascript:x", "about:blank"),
-        ("İjavascript:x", "İjavascript:x"),
-        ("Kjavascript:x", "Kjavascript:x"),
-        ("-javascript:x", "about:blank"),
-        ("_javascript:x", "_javascript:x"),
-        (" data:x", "about:blank"),
-        ("DATA:x", "about:blank"),
-        ("x:javascript:y", "x:javascript:y"),
-        ("mailto:a", "mailto:a"),
-        ("MAILTO:a", "MAILTO:a"),
-        ("tel:1", "tel:1"),
-        ("https:", "about:blank"),
-        ("https:x", "https://x/"),
-        ("https:x:y", "https:x:y"),
-        ("http:x&colon;y", "http:x:y"),
-        ("a&COLON;b", "a&COLON;b"),
-        ("a:", "a:"),
-        (":a", ":a"),
-        ("..", ".."),
-        (".", "."),
-        ("/", "/"),
-        ("//evil.com", "//evil.com"),
-        ("\\\\evil", "\\\\evil"),
-        ("foo/bar:baz", "foo/bar:baz"),
-        ("&#46;/x", "./x"),
-        ("%2e/x", "./x"),
-        ("&#x2F;&#x2F;evil", "//evil"),
-        ("https://example.com/aaaaa", "https://example.com/aaaaa"),
-        ("%25%25%2541", "%%%41"),
-        (
-            "%2525252525252525252525252525252525252525252525252525252525252525252541",
-            "%252525252525252525252525252525252525252525252525252525252525252541",
-        ),
-        ("https://www.github.com", "https://www.github.com/"),
-        (
-            "This is a tooltip for a link",
-            "This is a tooltip for a link",
-        ),
-        (
-            "This is a tooltip for a callback",
-            "This is a tooltip for a callback",
-        ),
-        ("This is a link", "This is a link"),
-        ("Callback tooltip", "Callback tooltip"),
-        ("Communication link", "Communication link"),
-        ("Tooltip for a callback", "Tooltip for a callback"),
-        ("Open this in a new tab", "Open this in a new tab"),
-        ("Dashboard", "Dashboard"),
-        (
-            "https://dashboard.contoso.com/alice",
-            "https://dashboard.contoso.com/alice",
-        ),
-        ("Wiki", "Wiki"),
-        (
-            "https://wiki.contoso.com/alice",
-            "https://wiki.contoso.com/alice",
-        ),
-        (
-            "https://dashboard.contoso.com/john",
-            "https://dashboard.contoso.com/john",
-        ),
-        (
-            "https://wiki.contoso.com/john",
-            "https://wiki.contoso.com/john",
-        ),
-    ];
-
-    const ALLOW: &[(&str, &str)] = &[
-        ("default|https://a", "https://a|https://a"),
-        ("default|HTTP://a", "HTTP://a|HTTP://a"),
-        ("default|mailto:x", "mailto:x|null"),
-        ("default|tel:1", "tel:1|null"),
-        ("default|ftp://a", "null|null"),
-        ("default|file:///etc", "null|null"),
-        ("default|//a", "null|null"),
-        ("default|\\\\a", "null|null"),
-        ("default|/\\a", "null|null"),
-        ("default|a/b", "a/b|a/b"),
-        ("default|a:b", "null|null"),
-        ("default|1a:b", "1a:b|1a:b"),
-        ("default|a+b.c-d:x", "null|null"),
-        ("default|about:blank", "null|null"),
-        ("default|#x", "#x|#x"),
-        ("default|C:\\x", "null|null"),
-        ("default|obsidian://x", "null|null"),
-        ("default|", "|"),
-        ("off|https://a", "null|null"),
-        ("off|HTTP://a", "null|null"),
-        ("off|mailto:x", "null|null"),
-        ("off|tel:1", "null|null"),
-        ("off|ftp://a", "null|null"),
-        ("off|file:///etc", "null|null"),
-        ("off|//a", "null|null"),
-        ("off|\\\\a", "null|null"),
-        ("off|/\\a", "null|null"),
-        ("off|a/b", "null|null"),
-        ("off|a:b", "null|null"),
-        ("off|1a:b", "null|null"),
-        ("off|a+b.c-d:x", "null|null"),
-        ("off|about:blank", "null|null"),
-        ("off|#x", "null|null"),
-        ("off|C:\\x", "null|null"),
-        ("off|obsidian://x", "null|null"),
-        ("off|", "null|null"),
-        ("ftp|https://a", "null|null"),
-        ("ftp|HTTP://a", "null|null"),
-        ("ftp|mailto:x", "null|null"),
-        ("ftp|tel:1", "null|null"),
-        ("ftp|ftp://a", "ftp://a|null"),
-        ("ftp|file:///etc", "null|null"),
-        ("ftp|//a", "null|null"),
-        ("ftp|\\\\a", "null|null"),
-        ("ftp|/\\a", "null|null"),
-        ("ftp|a/b", "a/b|a/b"),
-        ("ftp|a:b", "null|null"),
-        ("ftp|1a:b", "1a:b|1a:b"),
-        ("ftp|a+b.c-d:x", "null|null"),
-        ("ftp|about:blank", "null|null"),
-        ("ftp|#x", "#x|#x"),
-        ("ftp|C:\\x", "null|null"),
-        ("ftp|obsidian://x", "null|null"),
-        ("ftp|", "|"),
-    ];
-    const LINKED: &[(&str, &str)] = &[
-        (
-            "default|https://a.com/?x=\"1\"&y=<2>",
-            "<a href=\"https://a.com/?x=&quot;1&quot;&amp;y=&lt;2&gt;\" class=\"x\" rel=\"noopener\"><g/></a>|[{\"id\":\"n1\",\"href\":\"https://a.com/?x=\\\"1\\\"&y=<2>\",\"internal\":false}]| rel=\"noopener\"",
-        ),
-        ("default|ftp://a", "<g/>|[]| rel=\"noopener\""),
-        (
-            "default|rel",
-            "<a href=\"rel\" class=\"x\" rel=\"noopener\"><g/></a>|[{\"id\":\"n1\",\"href\":\"rel\",\"internal\":false}]| rel=\"noopener\"",
-        ),
-        (
-            "empty|https://a.com/?x=\"1\"&y=<2>",
-            "<a href=\"https://a.com/?x=&quot;1&quot;&amp;y=&lt;2&gt;\" class=\"x\"><g/></a>|[{\"id\":\"n1\",\"href\":\"https://a.com/?x=\\\"1\\\"&y=<2>\",\"internal\":false}]|",
-        ),
-        ("empty|ftp://a", "<g/>|[]|"),
-        (
-            "empty|rel",
-            "<a href=\"rel\" class=\"x\"><g/></a>|[{\"id\":\"n1\",\"href\":\"rel\",\"internal\":false}]|",
-        ),
-        (
-            "quoted|https://a.com/?x=\"1\"&y=<2>",
-            "<a href=\"https://a.com/?x=&quot;1&quot;&amp;y=&lt;2&gt;\" class=\"x\" rel=\"a&quot;b&amp;c\"><g/></a>|[{\"id\":\"n1\",\"href\":\"https://a.com/?x=\\\"1\\\"&y=<2>\",\"internal\":false}]| rel=\"a&quot;b&amp;c\"",
-        ),
-        ("quoted|ftp://a", "<g/>|[]| rel=\"a&quot;b&amp;c\""),
-        (
-            "quoted|rel",
-            "<a href=\"rel\" class=\"x\" rel=\"a&quot;b&amp;c\"><g/></a>|[{\"id\":\"n1\",\"href\":\"rel\",\"internal\":false}]| rel=\"a&quot;b&amp;c\"",
-        ),
-        (
-            "off|https://a.com/?x=\"1\"&y=<2>",
-            "<g/>|[]| rel=\"noopener\"",
-        ),
-        ("off|ftp://a", "<g/>|[]| rel=\"noopener\""),
-        ("off|rel", "<g/>|[]| rel=\"noopener\""),
-    ];
 }

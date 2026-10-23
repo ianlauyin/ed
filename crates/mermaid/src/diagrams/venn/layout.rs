@@ -4,8 +4,11 @@
 //! Output depends on the last bit of these computations, so `hypot` is V8's, and the
 //! trigonometric functions are the fdlibm ones that both V8 and Rust's WebAssembly math use.
 
-use std::collections::{BTreeMap, BTreeSet};
-use std::f64::consts::{FRAC_PI_2, PI, TAU};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
+use std::f64::consts::FRAC_PI_2;
+use std::f64::consts::PI;
+use std::f64::consts::TAU;
 
 use super::db::utf16_cmp;
 use super::types::VennSubset;
@@ -116,11 +119,7 @@ pub(crate) fn ensure_pairwise_subsets(subsets: &[VennSubset]) -> Vec<VennSubset>
                     (Some(&a), Some(&b)) => js_min(a, b) / 4.0,
                     _ => 2.5,
                 };
-                out.push(VennSubset {
-                    label: Some(String::new()),
-                    sets: pair,
-                    size,
-                });
+                out.push(VennSubset { label: Some(String::new()), sets: pair, size });
             }
         }
     }
@@ -138,21 +137,13 @@ pub(crate) fn lens_area(r1: f64, r2: f64, d: f64) -> f64 {
     }
     let a1 = r1 * r1 * ((d * d + r1 * r1 - r2 * r2) / (2.0 * d * r1)).acos();
     let a2 = r2 * r2 * ((d * d + r2 * r2 - r1 * r1) / (2.0 * d * r2)).acos();
-    let a3 = 0.5
-        * js_max(
-            (-d + r1 + r2) * (d + r1 - r2) * (d - r1 + r2) * (d + r1 + r2),
-            0.0,
-        )
-        .sqrt();
+    let a3 = 0.5 * js_max((-d + r1 + r2) * (d + r1 - r2) * (d - r1 + r2) * (d + r1 + r2), 0.0).sqrt();
     a1 + a2 - a3
 }
 
 /// How far apart two circles sit for their overlap to have the given area. The area falls as the
 /// distance grows, so bisection finds it.
-#[expect(
-    clippy::neg_cmp_op_on_partial_ord,
-    reason = "NaN fails the test, as in Pele"
-)]
+#[expect(clippy::neg_cmp_op_on_partial_ord, reason = "NaN fails the test, as in Pele")]
 pub(crate) fn distance_for_overlap(r1: f64, r2: f64, area: f64) -> f64 {
     let mut low = (r1 - r2).abs();
     let mut high = r1 + r2;
@@ -176,14 +167,7 @@ pub(crate) fn distance_for_overlap(r1: f64, r2: f64, area: f64) -> f64 {
 
 /// How far a point is from the nearest outline it must stay within or without. Gives up, with
 /// some value below `floor`, as soon as the point cannot reach `floor`.
-fn margin(
-    circles: &[Circle],
-    inside: &[usize],
-    outside: &[usize],
-    x: f64,
-    y: f64,
-    floor: f64,
-) -> f64 {
+fn margin(circles: &[Circle], inside: &[usize], outside: &[usize], x: f64, y: f64, floor: f64) -> f64 {
     let mut best = f64::INFINITY;
     for c in inside.iter().filter_map(|&i| circles.get(i)) {
         let dx = x - c.x;
@@ -213,10 +197,7 @@ fn margin(
 /// Finds the roomiest point of a region by sampling the smallest of its circles on a grid and then
 /// walking uphill from the best sample. Ties go to the point nearest the middle of the region, so
 /// a symmetric arrangement gets symmetric labels.
-#[expect(
-    clippy::neg_cmp_op_on_partial_ord,
-    reason = "NaN fails the test, as in Pele"
-)]
+#[expect(clippy::neg_cmp_op_on_partial_ord, reason = "NaN fails the test, as in Pele")]
 pub(crate) fn find_spot(circles: &[Circle], inside: &[usize], outside: &[usize]) -> Spot {
     const GRID: i32 = 10;
 
@@ -307,9 +288,7 @@ pub(crate) fn layout_circles(subsets: &[VennSubset]) -> Vec<Circle> {
     }
     for subset in subsets {
         if let [only] = subset.sets.as_slice()
-            && let Some(entry) = size_index
-                .get(only.as_str())
-                .and_then(|&at| sizes.get_mut(at))
+            && let Some(entry) = size_index.get(only.as_str()).and_then(|&at| sizes.get_mut(at))
         {
             entry.1 = subset.size;
         }
@@ -330,17 +309,8 @@ pub(crate) fn layout_circles(subsets: &[VennSubset]) -> Vec<Circle> {
         .map(|&(id, size)| {
             // A set too small to hold its name, or with no size at all, still gets a circle that
             // shows.
-            let r = if size.is_finite() && size > 0.0 {
-                (size / PI).sqrt()
-            } else {
-                0.0
-            };
-            Circle {
-                id: id.to_owned(),
-                r: js_max(r, widest * 0.3),
-                x: 0.0,
-                y: 0.0,
-            }
+            let r = if size.is_finite() && size > 0.0 { (size / PI).sqrt() } else { 0.0 };
+            Circle { id: id.to_owned(), r: js_max(r, widest * 0.3), x: 0.0, y: 0.0 }
         })
         .collect();
     let n = circles.len();
@@ -371,10 +341,7 @@ pub(crate) fn layout_circles(subsets: &[VennSubset]) -> Vec<Circle> {
     }
     let gap = widest * 0.15;
     let distance = |circles: &[Circle], a: usize, b: usize| {
-        wanted
-            .get(&(a * n + b))
-            .copied()
-            .unwrap_or_else(|| radius(circles, a) + radius(circles, b) + gap)
+        wanted.get(&(a * n + b)).copied().unwrap_or_else(|| radius(circles, a) + radius(circles, b) + gap)
     };
 
     if n == 2 {
@@ -397,11 +364,7 @@ pub(crate) fn layout_circles(subsets: &[VennSubset]) -> Vec<Circle> {
             distinct.len() == 3
         });
         for _ in 0..40 {
-            let x = if ab > 0.0 {
-                (ab * ab + ac * ac - bc * bc) / (2.0 * ab)
-            } else {
-                0.0
-            };
+            let x = if ab > 0.0 { (ab * ab + ac * ac - bc * bc) / (2.0 * ab) } else { 0.0 };
             if let Some(c) = circles.get_mut(1) {
                 c.x = ab;
             }
@@ -526,18 +489,16 @@ fn whole(c: &Circle) -> String {
 
 /// The outline of the region all the given circles share, as an SVG path, or empty if they share
 /// none.
-#[expect(
-    clippy::neg_cmp_op_on_partial_ord,
-    reason = "NaN passes the test, as in Pele"
-)]
+#[expect(clippy::neg_cmp_op_on_partial_ord, reason = "NaN passes the test, as in Pele")]
 pub(crate) fn region_path(circles: &[Circle]) -> String {
     if let [only] = circles {
         return whole(only);
     }
     let within = |x: f64, y: f64, skip: usize, other: usize| {
-        circles.iter().enumerate().all(|(i, c)| {
-            i == skip || i == other || !(hypot(x - c.x, y - c.y) > c.r * (1.0 + 1e-9))
-        })
+        circles
+            .iter()
+            .enumerate()
+            .all(|(i, c)| i == skip || i == other || !(hypot(x - c.x, y - c.y) > c.r * (1.0 + 1e-9)))
     };
     // The corners of the region: where two outlines cross inside all the other circles.
     let mut corners: Vec<Corner> = Vec::new();
@@ -571,8 +532,7 @@ pub(crate) fn region_path(circles: &[Circle]) -> String {
             }
         }
         for c in circles {
-            if !std::ptr::eq(c, smallest)
-                && hypot(c.x - smallest.x, c.y - smallest.y) + smallest.r > c.r * (1.0 + 1e-9)
+            if !std::ptr::eq(c, smallest) && hypot(c.x - smallest.x, c.y - smallest.y) + smallest.r > c.r * (1.0 + 1e-9)
             {
                 return String::new();
             }
@@ -618,10 +578,7 @@ pub(crate) fn region_path(circles: &[Circle]) -> String {
             }
             let mx = c.x + c.r * (start + sweep / 2.0).cos();
             let my = c.y + c.r * (start + sweep / 2.0).sin();
-            let width = hypot(
-                mx - f64::midpoint(from.x, to.x),
-                my - f64::midpoint(from.y, to.y),
-            );
+            let width = hypot(mx - f64::midpoint(from.x, to.x), my - f64::midpoint(from.y, to.y));
             if width < narrowest {
                 narrowest = width;
                 arc = Some(c);

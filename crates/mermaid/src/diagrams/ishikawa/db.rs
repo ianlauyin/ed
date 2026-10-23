@@ -26,10 +26,7 @@ impl IshikawaDb {
     /// the causes.
     pub(crate) fn add_node(&mut self, raw_level: usize, text: String) {
         let index = self.nodes.len();
-        self.nodes.push(IshikawaNode {
-            children: Vec::new(),
-            text,
-        });
+        self.nodes.push(IshikawaNode { children: Vec::new(), text });
         if index == 0 {
             self.stack = vec![(0, 0)];
             return;

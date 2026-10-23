@@ -43,10 +43,7 @@ pub(crate) struct CynefinModel {
 impl CynefinModel {
     /// The items declared for domain `name`.
     pub(crate) fn items(&self, name: &str) -> &[String] {
-        self.domains
-            .iter()
-            .find(|domain| domain.name == name)
-            .map_or(&[], |domain| &domain.items)
+        self.domains.iter().find(|domain| domain.name == name).map_or(&[], |domain| &domain.items)
     }
 }
 
@@ -68,10 +65,7 @@ pub(crate) fn build_cynefin(ast: CynefinAst, title: Option<&str>) -> CynefinMode
     // A later block for a domain replaces an earlier one, which keeps its place.
     let mut domains: Vec<CynefinDomain> = Vec::new();
     for block in ast.domains {
-        let domain = CynefinDomain {
-            items: block.items,
-            name: block.domain,
-        };
+        let domain = CynefinDomain { items: block.items, name: block.domain };
         match domains.iter_mut().find(|known| known.name == domain.name) {
             Some(known) => *known = domain,
             None => domains.push(domain),
@@ -89,19 +83,10 @@ pub(crate) fn build_cynefin(ast: CynefinAst, title: Option<&str>) -> CynefinMode
         .collect();
 
     CynefinModel {
-        acc_descr: ast
-            .acc_descr
-            .filter(|text| !text.is_empty())
-            .map(|text| dedent_lines(&text)),
-        acc_title: ast
-            .acc_title
-            .filter(|text| !text.is_empty())
-            .map(|text| trim_start(&text).to_owned()),
+        acc_descr: ast.acc_descr.filter(|text| !text.is_empty()).map(|text| dedent_lines(&text)),
+        acc_title: ast.acc_title.filter(|text| !text.is_empty()).map(|text| trim_start(&text).to_owned()),
         domains,
-        title: ast
-            .title
-            .filter(|text| !text.is_empty())
-            .or_else(|| title.map(str::to_owned)),
+        title: ast.title.filter(|text| !text.is_empty()).or_else(|| title.map(str::to_owned)),
         transitions,
     }
 }

@@ -1,6 +1,7 @@
 //! The timeline database. Port of Pele's `src/diagrams/timeline/db.ts`.
 
-use crate::error::{Code, Error};
+use crate::error::Code;
+use crate::error::Error;
 use crate::text::label::trim_start;
 use crate::util::chars::is_space;
 
@@ -94,11 +95,7 @@ impl TimelineDb {
     pub(crate) fn add_task(&mut self, period: &str, event: &str) {
         let section_index = i64::try_from(self.sections.len()).unwrap_or(i64::MAX) - 1;
         self.periods.push(TimelinePeriod {
-            events: if event.is_empty() {
-                Vec::new()
-            } else {
-                vec![event.to_owned()]
-            },
+            events: if event.is_empty() { Vec::new() } else { vec![event.to_owned()] },
             section: self.current_section.clone(),
             section_index,
             text: period.to_owned(),

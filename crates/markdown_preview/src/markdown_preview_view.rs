@@ -15,12 +15,12 @@ use editor::{
 };
 use gpui::{
     Action, AnyElement, App, ClipboardItem, Context, Entity, EntityId, EventEmitter, FocusHandle,
-    Focusable, Global, ImageSource, InteractiveElement, IntoElement, IsZero, Pixels, Render,
-    Resource, RetainAllImageCache, ScrollHandle, SharedString, SharedUri, Subscription, Task,
-    WeakEntity, Window, point, px,
+    Focusable, Global, ImageSource, InteractiveElement, IntoElement, IsZero, ListOffset, Pixels,
+    Render, Resource, RetainAllImageCache, SharedString, SharedUri, Subscription, Task, WeakEntity,
+    Window, px,
 };
 use language::{Buffer, LanguageRegistry};
-use markdown::{Markdown, MarkdownElement, MarkdownOptions};
+use markdown::{Markdown, MarkdownElement, MarkdownListState, MarkdownOptions};
 use project::search::SearchQuery;
 use project::{Project, ProjectPath, image_store};
 use settings::{SeedQuerySetting, Settings, update_settings_file};
@@ -58,6 +58,8 @@ use crate::{
 };
 use crate::{ScrollPageDown, ScrollPageUp, ScrollToBottom, ScrollToTop, ScrollUp, ScrollUpByItem};
 
+/// Languages the preview renders.
+const PREVIEW_LANGUAGES: [&str; 2] = ["Markdown", "HTML"];
 const REPARSE_DEBOUNCE: Duration = Duration::from_millis(200);
 
 fn reset_persisted_font_size(settings: &mut settings::SettingsContent) {
@@ -75,7 +77,7 @@ pub struct MarkdownPreviewView {
     mermaid_diagrams: Entity<MermaidDiagrams>,
     _markdown_subscription: Subscription,
     active_source_index: Option<usize>,
-    scroll_handle: ScrollHandle,
+    list_state: MarkdownListState,
     image_cache: Entity<RetainAllImageCache>,
     base_directory: Option<PathBuf>,
     pending_update_task: Option<Task<Result<()>>>,
@@ -199,7 +201,7 @@ impl MarkdownPreviewView {
         workspace.register_action(move |workspace, _: &OpenPreview, window, cx| {
             if let Some(item) = workspace.item_for_action(window, cx)
                 && let Some(editor) = item.act_as::<Editor>(cx)
-                && Self::is_markdown_file(&editor, cx)
+                && Self::is_previewable_file(&editor, cx)
                 && let Some(pane) = workspace.pane_for_item_id(item.item_id())
             {
                 Self::open_preview_in_pane(workspace, editor, pane, window, cx);
@@ -335,7 +337,7 @@ impl MarkdownPreviewView {
         if let Some(editor) = workspace
             .active_item(cx)
             .and_then(|item| item.act_as::<Editor>(cx))
-            && Self::is_markdown_file(&editor, cx)
+            && Self::is_previewable_file(&editor, cx)
         {
             return Some(editor);
         }
@@ -396,6 +398,7 @@ impl MarkdownPreviewView {
                         parse_html: true,
                         parse_heading_slugs: true,
                         render_metadata_blocks: true,
+                        ..Default::default()
                     },
                     cx,
                 )
@@ -421,7 +424,7 @@ impl MarkdownPreviewView {
                 markdown,
                 mermaid_diagrams: cx.new(MermaidDiagrams::new),
                 active_source_index: None,
-                scroll_handle: ScrollHandle::new(),
+                list_state: MarkdownListState::new(),
                 image_cache: RetainAllImageCache::new(cx),
                 base_directory: None,
                 pending_update_task: None,
@@ -475,19 +478,30 @@ impl MarkdownPreviewView {
         if let Some(item) = active_item
             && item.item_id() != cx.entity_id()
             && let Some(editor) = item.act_as::<Editor>(cx)
-            && Self::is_markdown_file(&editor, cx)
+            && Self::is_previewable_file(&editor, cx)
         {
             self.set_editor(editor, window, cx);
         }
     }
 
     pub fn is_markdown_path(path: impl AsRef<Path>, languages: &Arc<LanguageRegistry>) -> bool {
+        Self::path_has_language(path.as_ref(), &["Markdown"], languages)
+    }
+
+    /// Whether the preview can render the file at `path`: markdown or HTML.
+    pub fn is_previewable_path(path: impl AsRef<Path>, languages: &Arc<LanguageRegistry>) -> bool {
+        Self::path_has_language(path.as_ref(), &PREVIEW_LANGUAGES, languages)
+    }
+
+    fn path_has_language(path: &Path, names: &[&str], languages: &Arc<LanguageRegistry>) -> bool {
         languages
-            .language_for_file_path(path.as_ref())
+            .language_for_file_path(path)
             .is_some_and(|language_id| {
-                languages
-                    .available_language_for_name("Markdown")
-                    .is_some_and(|markdown| markdown.id() == language_id)
+                names.iter().any(|name| {
+                    languages
+                        .available_language_for_name(name)
+                        .is_some_and(|language| language.id() == language_id)
+                })
             })
     }
 
@@ -522,14 +536,21 @@ impl MarkdownPreviewView {
         .detach();
     }
 
-    pub fn is_markdown_file(editor: &Entity<Editor>, cx: &App) -> bool {
+    /// Whether the preview can render the editor's buffer: markdown or HTML.
+    pub fn is_previewable_file(editor: &Entity<Editor>, cx: &App) -> bool {
+        Self::editor_language_is(editor, &PREVIEW_LANGUAGES, cx)
+    }
+
+    pub fn is_html_file(editor: &Entity<Editor>, cx: &App) -> bool {
+        Self::editor_language_is(editor, &["HTML"], cx)
+    }
+
+    fn editor_language_is(editor: &Entity<Editor>, names: &[&str], cx: &App) -> bool {
         let buffer = editor.read(cx).buffer().read(cx);
-        if let Some(buffer) = buffer.as_singleton()
-            && let Some(language) = buffer.read(cx).language()
-        {
-            return language.name() == "Markdown";
-        }
-        false
+        buffer
+            .as_singleton()
+            .and_then(|buffer| buffer.read(cx).language().map(|language| language.name()))
+            .is_some_and(|language| names.iter().any(|name| language == *name))
     }
 
     fn is_markdown_editor(workspace: &Workspace, editor: &Entity<Editor>, cx: &App) -> bool {
@@ -690,6 +711,7 @@ impl MarkdownPreviewView {
                     return None;
                 }
 
+                let is_html = Self::is_html_file(&editor, cx);
                 editor.update(cx, |editor, cx| {
                     let contents = editor
                         .buffer()
@@ -700,14 +722,15 @@ impl MarkdownPreviewView {
                         .to_string()
                         .into();
                     let selection_start = Self::selected_source_index(editor, cx)?;
-                    Some((contents, selection_start))
+                    Some((contents, selection_start, is_html))
                 })
             })?;
 
             view.update(cx, move |view, cx| {
-                if let Some((contents, selection_start)) = update {
+                if let Some((contents, selection_start, is_html)) = update {
                     view.hovered_url = None;
                     view.markdown.update(cx, |markdown, cx| {
+                        markdown.set_html_document(is_html);
                         markdown.reset(contents, cx);
                     });
                     view.markdown_parse_pending = view.markdown.read(cx).is_parsing();
@@ -902,13 +925,11 @@ impl MarkdownPreviewView {
     }
 
     fn scroll_by_amount(&self, distance: Pixels) {
-        let offset = self.scroll_handle.offset();
-        self.scroll_handle
-            .set_offset(point(offset.x, offset.y - distance));
+        self.list_state.list().scroll_by(distance);
     }
 
     fn scroll_page_up(&mut self, _: &ScrollPageUp, _window: &mut Window, cx: &mut Context<Self>) {
-        let viewport_height = self.scroll_handle.bounds().size.height;
+        let viewport_height = self.list_state.list().viewport_bounds().size.height;
         if viewport_height.is_zero() {
             return;
         }
@@ -923,7 +944,7 @@ impl MarkdownPreviewView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        let viewport_height = self.scroll_handle.bounds().size.height;
+        let viewport_height = self.list_state.list().viewport_bounds().size.height;
         if viewport_height.is_zero() {
             return;
         }
@@ -932,41 +953,23 @@ impl MarkdownPreviewView {
         cx.notify();
     }
 
-    fn scroll_up(&mut self, _: &ScrollUp, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(bounds) = self
-            .scroll_handle
-            .bounds_for_item(self.scroll_handle.top_item())
-        {
-            let item_height = bounds.size.height;
-            // Scroll no more than the rough equivalent of a large headline
-            let max_height = window.rem_size() * 2;
-            let scroll_height = min(item_height, max_height);
-            self.scroll_by_amount(-scroll_height);
-        } else {
-            let scroll_height = self.line_scroll_amount(cx);
-            if !scroll_height.is_zero() {
-                self.scroll_by_amount(-scroll_height);
-            }
+    /// Scrolls by the height of the top block, but no more than the rough
+    /// equivalent of a large headline.
+    fn line_scroll_height(&self, window: &Window, cx: &App) -> Pixels {
+        let list = self.list_state.list();
+        match list.bounds_for_item(list.logical_scroll_top().item_ix) {
+            Some(bounds) => min(bounds.size.height, window.rem_size() * 2),
+            None => self.line_scroll_amount(cx),
         }
+    }
+
+    fn scroll_up(&mut self, _: &ScrollUp, window: &mut Window, cx: &mut Context<Self>) {
+        self.scroll_by_amount(-self.line_scroll_height(window, cx));
         cx.notify();
     }
 
     fn scroll_down(&mut self, _: &ScrollDown, window: &mut Window, cx: &mut Context<Self>) {
-        if let Some(bounds) = self
-            .scroll_handle
-            .bounds_for_item(self.scroll_handle.top_item())
-        {
-            let item_height = bounds.size.height;
-            // Scroll no more than the rough equivalent of a large headline
-            let max_height = window.rem_size() * 2;
-            let scroll_height = min(item_height, max_height);
-            self.scroll_by_amount(scroll_height);
-        } else {
-            let scroll_height = self.line_scroll_amount(cx);
-            if !scroll_height.is_zero() {
-                self.scroll_by_amount(scroll_height);
-            }
-        }
+        self.scroll_by_amount(self.line_scroll_height(window, cx));
         cx.notify();
     }
 
@@ -976,12 +979,17 @@ impl MarkdownPreviewView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(bounds) = self
-            .scroll_handle
-            .bounds_for_item(self.scroll_handle.top_item())
-        {
-            self.scroll_by_amount(-bounds.size.height);
-        }
+        let list = self.list_state.list();
+        let top = list.logical_scroll_top();
+        let item_ix = if top.offset_in_item > px(0.) {
+            top.item_ix
+        } else {
+            top.item_ix.saturating_sub(1)
+        };
+        list.scroll_to(ListOffset {
+            item_ix,
+            offset_in_item: px(0.),
+        });
         cx.notify();
     }
 
@@ -991,17 +999,16 @@ impl MarkdownPreviewView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if let Some(bounds) = self
-            .scroll_handle
-            .bounds_for_item(self.scroll_handle.top_item())
-        {
-            self.scroll_by_amount(bounds.size.height);
-        }
+        let list = self.list_state.list();
+        list.scroll_to(ListOffset {
+            item_ix: list.logical_scroll_top().item_ix + 1,
+            offset_in_item: px(0.),
+        });
         cx.notify();
     }
 
     fn scroll_to_top(&mut self, _: &ScrollToTop, _window: &mut Window, cx: &mut Context<Self>) {
-        self.scroll_handle.scroll_to_item(0);
+        self.list_state.list().scroll_to(ListOffset::default());
         cx.notify();
     }
 
@@ -1011,7 +1018,7 @@ impl MarkdownPreviewView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        self.scroll_handle.scroll_to_bottom();
+        self.list_state.list().scroll_to_end();
         cx.notify();
     }
 
@@ -1112,7 +1119,7 @@ impl MarkdownPreviewView {
                         .update(cx, |diagrams, cx| diagrams.render(block, style, window, cx))
                 }
             })
-            .scroll_handle(self.scroll_handle.clone())
+            .virtualized(self.list_state.clone())
             .show_root_block_markers()
             .image_resolver({
                 let base_directory = self.base_directory.clone();
@@ -1926,83 +1933,73 @@ impl Render for MarkdownPreviewView {
             .relative()
             .bg(bg_color)
             .child(
-                WithRemSize::new(preview_font_size).size_full().child(
-                    div()
-                        .id("markdown-preview-scroll-container")
-                        .size_full()
-                        .overflow_y_scroll()
-                        .track_scroll(&self.scroll_handle)
-                        .restrict_scroll_to_axis()
-                        .p_4()
-                        .child({
-                            let markdown_element =
-                                self.render_markdown_element(&preview_theme, window, cx);
-                            let markdown = self.markdown.clone();
-                            let max_width = MarkdownPreviewSettings::get_global(cx).max_width;
-                            let content = right_click_menu("markdown-preview-context-menu")
-                                .trigger(move |_, _, _| markdown_element)
-                                .maybe_menu(move |window, cx| {
-                                    let focus = window.focused(cx);
-                                    let markdown = markdown.read(cx);
-                                    let context_menu_link = markdown.context_menu_link().cloned();
-                                    let selected_text =
-                                        markdown.context_menu_selected_text().cloned();
-                                    let selected_markdown =
-                                        markdown.context_menu_selected_markdown().cloned();
-                                    if context_menu_link.is_none()
-                                        && selected_text.is_none()
-                                        && selected_markdown.is_none()
-                                    {
-                                        return None;
-                                    }
-                                    Some(ContextMenu::build(window, cx, move |menu, _, _cx| {
-                                        menu.when_some(focus, |menu, focus| menu.context(focus))
-                                            .when_some(selected_text, |menu, text| {
-                                                menu.entry(
-                                                    "Copy",
-                                                    Some(Box::new(markdown::Copy)),
-                                                    move |_, cx| {
-                                                        cx.write_to_clipboard(
-                                                            ClipboardItem::new_string(
-                                                                text.to_string(),
-                                                            ),
-                                                        );
-                                                    },
-                                                )
-                                            })
-                                            .when_some(selected_markdown, |menu, text| {
-                                                menu.entry(
-                                                    "Copy as Markdown",
-                                                    Some(Box::new(markdown::CopyAsMarkdown)),
-                                                    move |_, cx| {
-                                                        cx.write_to_clipboard(
-                                                            ClipboardItem::new_string(
-                                                                text.to_string(),
-                                                            ),
-                                                        );
-                                                    },
-                                                )
-                                            })
-                                            .when_some(context_menu_link, |menu, url| {
-                                                menu.entry("Copy Link", None, move |_, cx| {
+                WithRemSize::new(preview_font_size)
+                    .size_full()
+                    .child(div().size_full().child({
+                        let max_width = MarkdownPreviewSettings::get_global(cx).max_width;
+                        // Styles each block; the vertical padding pads the list.
+                        let markdown_element = self
+                            .render_markdown_element(&preview_theme, window, cx)
+                            .w_full()
+                            .p_4()
+                            .when_some(max_width, |this, max_width| {
+                                this.max_w(max_width).mx_auto()
+                            });
+                        let markdown = self.markdown.clone();
+                        right_click_menu("markdown-preview-context-menu")
+                            .size_full()
+                            .trigger(move |_, _, _| markdown_element)
+                            .maybe_menu(move |window, cx| {
+                                let focus = window.focused(cx);
+                                let markdown = markdown.read(cx);
+                                let context_menu_link = markdown.context_menu_link().cloned();
+                                let selected_text = markdown.context_menu_selected_text().cloned();
+                                let selected_markdown =
+                                    markdown.context_menu_selected_markdown().cloned();
+                                if context_menu_link.is_none()
+                                    && selected_text.is_none()
+                                    && selected_markdown.is_none()
+                                {
+                                    return None;
+                                }
+                                Some(ContextMenu::build(window, cx, move |menu, _, _cx| {
+                                    menu.when_some(focus, |menu, focus| menu.context(focus))
+                                        .when_some(selected_text, |menu, text| {
+                                            menu.entry(
+                                                "Copy",
+                                                Some(Box::new(markdown::Copy)),
+                                                move |_, cx| {
                                                     cx.write_to_clipboard(
-                                                        ClipboardItem::new_string(url.to_string()),
+                                                        ClipboardItem::new_string(text.to_string()),
                                                     );
-                                                })
+                                                },
+                                            )
+                                        })
+                                        .when_some(selected_markdown, |menu, text| {
+                                            menu.entry(
+                                                "Copy as Markdown",
+                                                Some(Box::new(markdown::CopyAsMarkdown)),
+                                                move |_, cx| {
+                                                    cx.write_to_clipboard(
+                                                        ClipboardItem::new_string(text.to_string()),
+                                                    );
+                                                },
+                                            )
+                                        })
+                                        .when_some(context_menu_link, |menu, url| {
+                                            menu.entry("Copy Link", None, move |_, cx| {
+                                                cx.write_to_clipboard(ClipboardItem::new_string(
+                                                    url.to_string(),
+                                                ));
                                             })
-                                    }))
-                                });
-                            div()
-                                .w_full()
-                                .when_some(max_width, |this, max_width| {
-                                    this.max_w(max_width).mx_auto()
-                                })
-                                .child(content)
-                        }),
-                ),
+                                        })
+                                }))
+                            })
+                    })),
             )
             .custom_scrollbars(
-                Scrollbars::new(ScrollAxes::Vertical).tracked_scroll_handle(&self.scroll_handle),
+                Scrollbars::new(ScrollAxes::Vertical)
+                    .tracked_scroll_handle(&self.list_state.list()),
                 window,
                 cx,
             )

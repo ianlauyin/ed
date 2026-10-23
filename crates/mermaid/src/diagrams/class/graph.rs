@@ -4,7 +4,9 @@
 use std::collections::BTreeMap;
 
 use super::db::ClassDb;
-use super::types::{ClassNode, LOLLIPOP, RelationEnd};
+use super::types::ClassNode;
+use super::types::LOLLIPOP;
+use super::types::RelationEnd;
 
 /// What a node is drawn as.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -120,23 +122,14 @@ pub(crate) fn build(model: &ClassDb, hierarchical: bool) -> ClassGraph<'_> {
             class_node: None,
             id: ns.id.clone(),
             is_group: true,
-            label: if hierarchical {
-                ns.label.clone()
-            } else {
-                ns.id.clone()
-            },
+            label: if hierarchical { ns.label.clone() } else { ns.id.clone() },
             parent: -1,
-            parent_id: if hierarchical {
-                ns.parent.clone()
-            } else {
-                None
-            },
+            parent_id: if hierarchical { ns.parent.clone() } else { None },
             shape: NodeShape::Rect,
         });
     }
     let group = |namespace_at: &BTreeMap<&str, usize>, id: Option<&str>| -> i32 {
-        id.and_then(|id| namespace_at.get(id))
-            .map_or(-1, |&at| i32::try_from(at).unwrap_or(-1))
+        id.and_then(|id| namespace_at.get(id)).map_or(-1, |&at| i32::try_from(at).unwrap_or(-1))
     };
     for node in &mut nodes {
         node.parent = group(&namespace_at, node.parent_id.as_deref());
@@ -189,10 +182,8 @@ pub(crate) fn build(model: &ClassDb, hierarchical: bool) -> ClassGraph<'_> {
     // Mermaid leaves every lollipop interface outside the namespaces. Here it stays beside its
     // class.
     for item in &model.interfaces {
-        let parent = class_at
-            .get(item.class_id.as_str())
-            .and_then(|&owner| nodes.get(owner))
-            .map_or(-1, |owner| owner.parent);
+        let parent =
+            class_at.get(item.class_id.as_str()).and_then(|&owner| nodes.get(owner)).map_or(-1, |owner| owner.parent);
         interface_at.insert(&item.id, nodes.len());
         nodes.push(GraphNode {
             class_node: None,
@@ -211,16 +202,8 @@ pub(crate) fn build(model: &ClassDb, hierarchical: bool) -> ClassGraph<'_> {
         // marker.
         let start_interface = type1 == LOLLIPOP && type2 == RelationEnd::None;
         let end_interface = !start_interface && type2 == LOLLIPOP && type1 == RelationEnd::None;
-        let start_at = if start_interface {
-            &interface_at
-        } else {
-            &class_at
-        };
-        let end_at = if end_interface {
-            &interface_at
-        } else {
-            &class_at
-        };
+        let start_at = if start_interface { &interface_at } else { &class_at };
+        let end_at = if end_interface { &interface_at } else { &class_at };
         let mut id = String::from("id_");
         id.push_str(&relation.id1);
         id.push('_');

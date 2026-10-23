@@ -3,29 +3,59 @@
 use std::collections::BTreeMap;
 
 use super::db::ClassDb;
-use super::graph::{self, GraphEdge, GraphNode, NodeShape};
-use super::markers::{class_marker, class_marker_trim};
+use super::graph::GraphEdge;
+use super::graph::GraphNode;
+use super::graph::NodeShape;
+use super::graph::{self};
+use super::markers::class_marker;
+use super::markers::class_marker_trim;
 use super::members::ClassMember;
 use super::types::ClassNode;
 use crate::diagrams::Rendered;
-use crate::diagrams::common::fit_width::{runs_across, tighten, turn_to_fit};
+use crate::diagrams::common::fit_width::runs_across;
+use crate::diagrams::common::fit_width::tighten;
+use crate::diagrams::common::fit_width::turn_to_fit;
 use crate::diagrams::common::generics::parse_generic_types;
-use crate::layout::compound::{CEdge, CNode, Dir, cnode, compound_layout, direction};
+use crate::layout::compound::CEdge;
+use crate::layout::compound::CNode;
+use crate::layout::compound::Dir;
+use crate::layout::compound::cnode;
+use crate::layout::compound::compound_layout;
+use crate::layout::compound::direction;
 use crate::layout::layered::LayeredOptions;
-use crate::svg::builder::{esc, esc_text, js_round, label_svg, push_num};
-use crate::svg::cluster::{
-    Crossings, cluster_title_x, mark_crossings, struck_title, title_crossed,
-};
-use crate::svg::edges::{EdgePath, edge_label_svg, route_path};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
+use crate::svg::builder::esc;
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::cluster::Crossings;
+use crate::svg::cluster::cluster_title_x;
+use crate::svg::cluster::mark_crossings;
+use crate::svg::cluster::struck_title;
+use crate::svg::cluster::title_crossed;
+use crate::svg::edges::EdgePath;
+use crate::svg::edges::edge_label_svg;
+use crate::svg::edges::route_path;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
 use crate::svg::shapes::end_side;
-use crate::svg::theme::{RADIUS, ResolvedStyle, class_names, resolve_style};
+use crate::svg::theme::RADIUS;
+use crate::svg::theme::ResolvedStyle;
+use crate::svg::theme::class_names;
+use crate::svg::theme::resolve_style;
 use crate::svg::title::with_title;
 use crate::text::entities;
-use crate::text::label::{Label, layout_label, trim};
-use crate::text::measure::{BOLD, ITALIC, width};
+use crate::text::label::Label;
+use crate::text::label::layout_label;
+use crate::text::label::trim;
+use crate::text::measure::BOLD;
+use crate::text::measure::ITALIC;
+use crate::text::measure::width;
 use crate::util::chars::is_space;
-use crate::util::url::{LinkInfo, UrlOptions, linked};
+use crate::util::url::LinkInfo;
+use crate::util::url::UrlOptions;
+use crate::util::url::linked;
 use crate::yaml::Value;
 
 /// Room between nodes in a rank.
@@ -119,11 +149,7 @@ fn member_line(member: &ClassMember, size: f64) -> Line {
     let decoded = entities::decode(&member.display_text()).into_owned();
     let text = trim(&decoded).to_owned();
     let style = if member.classifier == "*" { ITALIC } else { 0 };
-    Line {
-        classifier: member.classifier.clone(),
-        width: width(&text, size, style),
-        text,
-    }
+    Line { classifier: member.classifier.clone(), width: width(&text, size, style), text }
 }
 
 /// A count as a coordinate.
@@ -146,18 +172,9 @@ fn strip_default(classes: &str) -> &str {
 
 /// Draws a class diagram, turning one that runs across to run down, and tightening it, when it
 /// does not fit the host's width.
-pub(crate) fn render(
-    db: &ClassDb,
-    config: &Value,
-    options: &RenderOptions,
-    url: &UrlOptions<'_>,
-) -> Rendered {
+pub(crate) fn render(db: &ClassDb, config: &Value, options: &RenderOptions, url: &UrlOptions<'_>) -> Rendered {
     let fitted = |down: bool| tighten(options, |tight| draw(db, config, options, url, down, tight));
-    if runs_across(Some(db.direction)) {
-        turn_to_fit(options, fitted)
-    } else {
-        fitted(false)
-    }
+    if runs_across(Some(db.direction)) { turn_to_fit(options, fitted) } else { fitted(false) }
 }
 
 /// The style of a class: the effective declarations of its class definitions and its own, the
@@ -183,9 +200,7 @@ impl Styler<'_> {
             let prop = if one.shape.is_empty() && one.text.is_empty() {
                 String::new()
             } else {
-                let end = decl
-                    .find(':')
-                    .unwrap_or_else(|| decl.char_indices().last().map_or(0, |(at, _)| at));
+                let end = decl.find(':').unwrap_or_else(|| decl.char_indices().last().map_or(0, |(at, _)| at));
                 trim(decl.get(..end).unwrap_or("")).to_ascii_lowercase()
             };
             self.effect.insert(decl.to_owned(), prop.clone());
@@ -216,8 +231,7 @@ impl Styler<'_> {
                     }
                 }
             }
-            self.from_defs
-                .insert(cls.css_classes.clone(), self.kept.clone());
+            self.from_defs.insert(cls.css_classes.clone(), self.kept.clone());
         }
         for s in &cls.styles {
             self.keep(s);
@@ -244,33 +258,18 @@ fn draw(
     tight: bool,
 ) -> Rendered {
     let conf = get(config, "class").filter(|value| matches!(value, Value::Object(_)));
-    let hierarchical = !matches!(
-        conf.and_then(|conf| get(conf, "hierarchicalNamespaces")),
-        Some(Value::Bool(false))
-    );
+    let hierarchical = !matches!(conf.and_then(|conf| get(conf, "hierarchicalNamespaces")), Some(Value::Bool(false)));
     let graph = graph::build(db, hierarchical);
-    let hide_empty = matches!(
-        conf.and_then(|conf| get(conf, "hideEmptyMembersBox")),
-        Some(Value::Bool(true))
-    );
+    let hide_empty = matches!(conf.and_then(|conf| get(conf, "hideEmptyMembersBox")), Some(Value::Bool(true)));
     let size = options.font_size.unwrap_or(16.0);
     let small = js_round(size * 0.875);
     let tiny = js_round(size * 0.8);
     let tiny_height = js_round(tiny * 1.4);
     let pad = options.padding.unwrap_or(8.0);
-    let root_dir = if turned {
-        Dir::Tb
-    } else {
-        direction(Some(db.direction))
-    };
+    let root_dir = if turned { Dir::Tb } else { direction(Some(db.direction)) };
     let n = graph.nodes.len();
 
-    let mut styler = Styler {
-        db,
-        effect: BTreeMap::new(),
-        from_defs: BTreeMap::new(),
-        kept: Vec::new(),
-    };
+    let mut styler = Styler { db, effect: BTreeMap::new(), from_defs: BTreeMap::new(), kept: Vec::new() };
 
     let parent_of = |node: &GraphNode<'_>| usize::try_from(node.parent).ok();
     let mut children = vec![0usize; n];
@@ -325,11 +324,7 @@ fn draw(
                 let mut c = cnode(0.0, 0.0, -1);
                 c.is_group = true;
                 c.pad_x = GROUP_PAD;
-                c.pad_top = if label.height > 0.0 {
-                    label.height + 16.0
-                } else {
-                    GROUP_PAD
-                };
+                c.pad_top = if label.height > 0.0 { label.height + 16.0 } else { GROUP_PAD };
                 c.pad_bottom = GROUP_PAD;
                 c.min_w = label.width + 2.0 * GROUP_PAD - 12.0
                     + if crossed.get(i).copied().unwrap_or(false) && !tight {
@@ -392,20 +387,11 @@ fn draw(
         } else {
             width(&entities::decode(&edge.start_label_right), tiny, 0)
         };
-        let end_w = if edge.end_label_left.is_empty() {
-            0.0
-        } else {
-            width(&entities::decode(&edge.end_label_left), tiny, 0)
-        };
+        let end_w =
+            if edge.end_label_left.is_empty() { 0.0 } else { width(&entities::decode(&edge.end_label_left), tiny, 0) };
         if source == target {
             if let Some(c) = cnodes.get_mut(source) {
-                c.w += 2.0
-                    * (LOOP
-                        + if label.width > 0.0 {
-                            label.width + 12.0
-                        } else {
-                            0.0
-                        });
+                c.w += 2.0 * (LOOP + if label.width > 0.0 { label.width + 12.0 } else { 0.0 });
             }
         } else {
             meet(source, 0, start_w);
@@ -416,16 +402,8 @@ fn draw(
         drawn.push(edge);
         cedges.push(CEdge {
             dst: target,
-            label_h: if label.height > 0.0 {
-                label.height + 4.0
-            } else {
-                0.0
-            },
-            label_w: if label.width > 0.0 {
-                label.width + 12.0
-            } else {
-                0.0
-            },
+            label_h: if label.height > 0.0 { label.height + 4.0 } else { 0.0 },
+            label_w: if label.width > 0.0 { label.width + 12.0 } else { 0.0 },
             label_x: 0.0,
             label_y: 0.0,
             minlen: 1,
@@ -445,8 +423,7 @@ fn draw(
                 let count = crowd.get(i * 4 + slot).copied().unwrap_or(0.0);
                 let room = crowd.get(i * 4 + slot + 1).copied().unwrap_or(0.0);
                 if count > 1.0 {
-                    need = need
-                        .max((count - 1.0) * if room > 0.0 { room + 24.0 } else { 14.0 } + 24.0);
+                    need = need.max((count - 1.0) * if room > 0.0 { room + 24.0 } else { 14.0 } + 24.0);
                 }
             }
             need = need.min(480.0);
@@ -459,10 +436,7 @@ fn draw(
         }
     }
 
-    let lettered = start_room
-        .iter()
-        .zip(&end_room)
-        .any(|(&s, &e)| s > 0.0 || e > 0.0);
+    let lettered = start_room.iter().zip(&end_room).any(|(&s, &e)| s > 0.0 || e > 0.0);
     let layout = compound_layout(
         &mut cnodes,
         &mut cedges,
@@ -473,11 +447,7 @@ fn draw(
             head_room: 0.0,
             node_sep: number_option(conf, "nodeSpacing", NODE_SEP),
             port_sep: 20.0,
-            rank_sep: number_option(
-                conf,
-                "rankSpacing",
-                if lettered { RANK_SEP + 16.0 } else { RANK_SEP },
-            ),
+            rank_sep: number_option(conf, "rankSpacing", if lettered { RANK_SEP + 16.0 } else { RANK_SEP }),
             straight: false,
             tracks: false,
         },
@@ -491,9 +461,7 @@ fn draw(
     let mut side_keys: BTreeMap<usize, usize> = BTreeMap::new();
     let mut sides: Vec<(usize, Vec<End>)> = Vec::new();
     let mut attach = |cedges: &mut [CEdge], edge: usize, at: usize, item: usize, room: f64| {
-        let (Some(c), Some(view), Some(ce)) =
-            (cnodes.get(item), views.get(item), cedges.get_mut(edge))
-        else {
+        let (Some(c), Some(view), Some(ce)) = (cnodes.get(item), views.get(item), cedges.get_mut(edge)) else {
             return None;
         };
         let route = &mut ce.route;
@@ -537,29 +505,11 @@ fn draw(
         let Some(ce) = cedges.get(i) else { continue };
         let (src, dst, len) = (ce.src, ce.dst, ce.route.len());
         let routed = src != dst && len >= 6;
-        let start = if routed {
-            attach(
-                &mut cedges,
-                i,
-                0,
-                src,
-                start_room.get(i).copied().unwrap_or(0.0),
-            )
-        } else {
-            None
-        };
+        let start =
+            if routed { attach(&mut cedges, i, 0, src, start_room.get(i).copied().unwrap_or(0.0)) } else { None };
         starts.push(start);
-        let end = if routed {
-            attach(
-                &mut cedges,
-                i,
-                len - 3,
-                dst,
-                end_room.get(i).copied().unwrap_or(0.0),
-            )
-        } else {
-            None
-        };
+        let end =
+            if routed { attach(&mut cedges, i, len - 3, dst, end_room.get(i).copied().unwrap_or(0.0)) } else { None };
         ends.push(end);
     }
 
@@ -597,31 +547,17 @@ fn draw(
         let length = if across == 1 { view.h } else { view.w };
         // Equal values, both zeros included, fall back to authored order, as `a - b || ...`
         // does in JavaScript.
-        list.sort_by(|a, b| {
-            if a.toward == b.toward {
-                a.order.cmp(&b.order)
-            } else {
-                a.toward.total_cmp(&b.toward)
-            }
-        });
+        list.sort_by(|a, b| if a.toward == b.toward { a.order.cmp(&b.order) } else { a.toward.total_cmp(&b.toward) });
         let mut total = 0.0;
         gaps.clear();
         for pair in list.windows(2) {
             let [a, b] = pair else { continue };
             let mut gap = if across == 1 { 20.0 } else { 24.0 };
             if a.room > 0.0 && a.after {
-                gap += if across == 1 {
-                    tiny_height + 6.0
-                } else {
-                    a.room
-                };
+                gap += if across == 1 { tiny_height + 6.0 } else { a.room };
             }
             if b.room > 0.0 && !b.after {
-                gap += if across == 1 {
-                    tiny_height + 6.0
-                } else {
-                    b.room
-                };
+                gap += if across == 1 { tiny_height + 6.0 } else { b.room };
             }
             gaps.push(gap);
             total += gap;
@@ -639,17 +575,11 @@ fn draw(
             // An edge that crosses the border of the class's namespace close by runs straight to
             // it: the point where it crosses moves into line with its end.
             let forward = end.at == 0;
-            let first = if forward {
-                end.at + 3
-            } else {
-                end.at.wrapping_sub(3)
-            };
+            let first = if forward { end.at + 3 } else { end.at.wrapping_sub(3) };
             let level = route.get(first + across).copied().unwrap_or(f64::NAN);
             let mut border = None;
             let mut k = first;
-            while let (Some(&x), Some(&y), Some(&v)) =
-                (route.get(k), route.get(k + 1), route.get(k + across))
-            {
+            while let (Some(&x), Some(&y), Some(&v)) = (route.get(k), route.get(k + 1), route.get(k + across)) {
                 if (v - level).abs().partial_cmp(&0.5) != Some(std::cmp::Ordering::Less) {
                     break;
                 }
@@ -695,15 +625,9 @@ fn draw(
         let at = if first { 0 } else { route.len() - 3 };
         let along = at + 1 - across;
         let next = if first { 3 } else { at - 3 } + 1 - across;
-        let reach = (route.get(next).copied().unwrap_or(f64::NAN)
-            - route.get(along).copied().unwrap_or(f64::NAN))
-        .abs();
-        let length = (if across == 1 {
-            room + 10.0
-        } else {
-            tiny_height + 6.0
-        })
-        .min(reach * 0.35);
+        let reach =
+            (route.get(next).copied().unwrap_or(f64::NAN) - route.get(along).copied().unwrap_or(f64::NAN)).abs();
+        let length = (if across == 1 { room + 10.0 } else { tiny_height + 6.0 }).min(reach * 0.35);
         if length < 4.0 {
             return;
         }
@@ -713,11 +637,7 @@ fn draw(
             route.get(at + 2).copied().unwrap_or(0.0),
         ];
         if let Some(v) = point.get_mut(1 - across) {
-            *v += if end.side == 0 || end.side == 3 {
-                -1.0
-            } else {
-                1.0
-            } * length;
+            *v += if end.side == 0 || end.side == 3 { -1.0 } else { 1.0 } * length;
         }
         let insert = if first { 3 } else { at };
         route.splice(insert..insert, point);
@@ -728,18 +648,8 @@ fn draw(
         };
         let start = starts.get(i).copied().flatten();
         let end = ends.get(i).copied().flatten();
-        straighten(
-            &mut ce.route,
-            start,
-            start_room.get(i).copied().unwrap_or(0.0),
-            true,
-        );
-        straighten(
-            &mut ce.route,
-            end,
-            end_room.get(i).copied().unwrap_or(0.0),
-            false,
-        );
+        straighten(&mut ce.route, start, start_room.get(i).copied().unwrap_or(0.0), true);
+        straighten(&mut ce.route, end, end_room.get(i).copied().unwrap_or(0.0), false);
     }
 
     let mut min_x: f64 = 0.0;
@@ -760,11 +670,7 @@ fn draw(
             cx += if after { 1.0 } else { -1.0 } * (9.0 + width / 2.0);
             cy += if side == 0 { -1.0 } else { 1.0 } * (3.0 + tiny_height / 2.0);
         }
-        cards.push(Card {
-            text: entities::decode(raw).into_owned(),
-            x: cx,
-            y: cy,
-        });
+        cards.push(Card { text: entities::decode(raw).into_owned(), x: cx, y: cy });
         min_x = min_x.min(cx - width / 2.0);
         max_x = max_x.max(cx + width / 2.0);
         min_y = min_y.min(cy - tiny_height / 2.0);
@@ -839,11 +745,7 @@ fn draw(
         let w = if c.is_group { c.w } else { view.w };
         let h = if c.is_group { c.h } else { view.h };
         if node.is_group {
-            let title_x = if c.is_group {
-                cluster_title_x(c, view.label.width, &crossings, GROUP_PAD)
-            } else {
-                c.x
-            };
+            let title_x = if c.is_group { cluster_title_x(c, view.label.width, &crossings, GROUP_PAD) } else { c.x };
             let title_y = y - h / 2.0 + 8.0 + view.label.height / 2.0;
             let title_attrs = " class=\"ondine-cluster-label\" fill=\"var(--_m)\"";
             let struck = c.is_group && title_crossed(c, view.label.width, title_x, &crossings);
@@ -873,13 +775,7 @@ fn draw(
             clusters.push_str(RADIUS);
             clusters.push_str("\" fill=\"var(--_a)\" fill-opacity=\"0.5\" stroke=\"var(--_b)\"/>");
             if !struck {
-                clusters.push_str(&label_svg(
-                    &view.label,
-                    title_x + ox,
-                    title_y,
-                    title_attrs,
-                    None,
-                ));
+                clusters.push_str(&label_svg(&view.label, title_x + ox, title_y, title_attrs, None));
             }
             clusters.push_str("</g>");
             continue;
@@ -891,11 +787,7 @@ fn draw(
         push_num(&mut at, y);
         at.push_str(")\"");
         if let Some(cls) = node.class_node {
-            let sizes = Sizes {
-                size,
-                tiny,
-                tiny_height,
-            };
+            let sizes = Sizes { size, tiny, tiny_height };
             nodes_out.push_str(&class_svg(view, cls, &id, &at, &sizes, url, &mut links));
         } else if node.shape == NodeShape::Note {
             let r = w / 2.0;
@@ -918,9 +810,7 @@ fn draw(
             push_num(&mut nodes_out, -t);
             nodes_out.push('H');
             push_num(&mut nodes_out, -r);
-            nodes_out.push_str(
-                "Z\" fill=\"var(--_a)\" stroke=\"var(--_b)\" stroke-linejoin=\"round\"/><path d=\"M",
-            );
+            nodes_out.push_str("Z\" fill=\"var(--_a)\" stroke=\"var(--_b)\" stroke-linejoin=\"round\"/><path d=\"M");
             push_num(&mut nodes_out, r - FOLD);
             nodes_out.push(',');
             push_num(&mut nodes_out, t);
@@ -982,17 +872,7 @@ fn draw(
             push_num(&mut d, y + spread);
             ce.label_x = c.x + view.w / 2.0 + reach + 4.0 + ce.label_w / 2.0;
             ce.label_y = c.y;
-            EdgePath {
-                d,
-                edx: -1.0,
-                edy: 0.0,
-                ex: x,
-                ey: y + spread,
-                sdx: -1.0,
-                sdy: 0.0,
-                sx: x,
-                sy: y - spread,
-            }
+            EdgePath { d, edx: -1.0, edy: 0.0, ex: x, ey: y + spread, sdx: -1.0, sdy: 0.0, sx: x, sy: y - spread }
         } else {
             for point in ce.route.chunks_mut(3) {
                 if let [x, y, ..] = point {
@@ -1010,11 +890,7 @@ fn draw(
             ""
         };
         edges_out.push_str("<g class=\"ondine-edge");
-        edges_out.push_str(if edge.dotted {
-            " ondine-note-edge"
-        } else {
-            " ondine-relation"
-        });
+        edges_out.push_str(if edge.dotted { " ondine-note-edge" } else { " ondine-relation" });
         edges_out.push_str("\" data-id=\"");
         edges_out.push_str(&esc_text(&edge.id));
         edges_out.push_str("\"><path d=\"");
@@ -1022,22 +898,11 @@ fn draw(
         edges_out.push('"');
         edges_out.push_str(attrs);
         edges_out.push_str("/>");
-        edges_out.push_str(&class_marker(
-            start_type, path.sx, path.sy, path.sdx, path.sdy, LINE,
-        ));
-        edges_out.push_str(&class_marker(
-            end_type, path.ex, path.ey, path.edx, path.edy, LINE,
-        ));
+        edges_out.push_str(&class_marker(start_type, path.sx, path.sy, path.sdx, path.sdy, LINE));
+        edges_out.push_str(&class_marker(end_type, path.ex, path.ey, path.edx, path.edy, LINE));
         edges_out.push_str("</g>");
         if label.width > 0.0 {
-            labels_out.push_str(&edge_label_svg(
-                &edge.id,
-                label,
-                ce.label_x + ox,
-                ce.label_y + oy,
-                "",
-                None,
-            ));
+            labels_out.push_str(&edge_label_svg(&edge.id, label, ce.label_x + ox, ce.label_y + oy, "", None));
         }
     }
 
@@ -1089,26 +954,10 @@ fn draw(
     content.push_str("</g>");
 
     let titled = with_title(db.title.as_deref(), size, pad, width, height, content);
-    let accessible = Accessible {
-        acc_descr: db.acc_descr.as_deref(),
-        acc_title: db.acc_title.as_deref(),
-    };
-    let svg = svg_document(
-        "class",
-        titled.width,
-        titled.height,
-        size,
-        options,
-        accessible,
-        &titled.content,
-    );
+    let accessible = Accessible { acc_descr: db.acc_descr.as_deref(), acc_title: db.acc_title.as_deref() };
+    let svg = svg_document("class", titled.width, titled.height, size, options, accessible, &titled.content);
 
-    Rendered {
-        height: titled.height,
-        links,
-        svg,
-        width: titled.width,
-    }
+    Rendered { height: titled.height, links, svg, width: titled.width }
 }
 
 /// The attributes of a note's or an interface's label.
@@ -1152,14 +1001,7 @@ fn class_view(
         }
         text.push_str("&gt;");
     }
-    let label = layout_label(
-        Some(&text),
-        false,
-        font_size,
-        4000.0,
-        BOLD | if style.italic { ITALIC } else { 0 },
-        None,
-    );
+    let label = layout_label(Some(&text), false, font_size, 4000.0, BOLD | if style.italic { ITALIC } else { 0 }, None);
     let annotations: Vec<String> = cls
         .annotations
         .iter()
@@ -1171,16 +1013,8 @@ fn class_view(
             out
         })
         .collect();
-    let attributes: Vec<Line> = cls
-        .members
-        .iter()
-        .map(|m| member_line(m, member_size))
-        .collect();
-    let methods: Vec<Line> = cls
-        .methods
-        .iter()
-        .map(|m| member_line(m, member_size))
-        .collect();
+    let attributes: Vec<Line> = cls.members.iter().map(|m| member_line(m, member_size)).collect();
+    let methods: Vec<Line> = cls.methods.iter().map(|m| member_line(m, member_size)).collect();
     let mut inner = label.width;
     for a in &annotations {
         inner = inner.max(width(a, tiny, 0));
@@ -1198,9 +1032,8 @@ fn class_view(
             EMPTY_SECTION
         }
     };
-    let title_h = 2.0 * TITLE_PAD
-        + to_f64(annotations.len()) * tiny_height
-        + label.height.max(js_round(font_size * 1.5));
+    let title_h =
+        2.0 * TITLE_PAD + to_f64(annotations.len()) * tiny_height + label.height.max(js_round(font_size * 1.5));
     let attributes_h = section(attributes.len());
     let h = title_h + attributes_h + section(methods.len());
     View {
@@ -1292,13 +1125,7 @@ fn class_svg(
     }
     title_attrs.push_str(" font-weight=\"var(--_hw)\"");
     title_attrs.push_str(&style.text);
-    body.push_str(&label_svg(
-        &view.label,
-        0.0,
-        (y + first - TITLE_PAD) / 2.0,
-        &title_attrs,
-        None,
-    ));
+    body.push_str(&label_svg(&view.label, 0.0, (y + first - TITLE_PAD) / 2.0, &title_attrs, None));
 
     let lines = |list: &[Line], kind: &str, from: f64| -> String {
         let mut out = String::new();
@@ -1356,11 +1183,7 @@ fn class_svg(
     }
     if let Some(link) = cls.link.as_deref().filter(|l| !l.is_empty()) {
         let mut attrs = String::new();
-        if let Some(target) = cls
-            .link_target
-            .as_deref()
-            .filter(|target| TARGETS.contains(target))
-        {
+        if let Some(target) = cls.link_target.as_deref().filter(|target| TARGETS.contains(target)) {
             attrs.push_str(" target=\"");
             attrs.push_str(target);
             attrs.push('"');

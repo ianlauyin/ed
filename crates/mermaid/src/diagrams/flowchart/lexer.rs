@@ -8,7 +8,8 @@
 use std::borrow::Cow;
 
 use super::tokens::T;
-use crate::util::chars::{is_space, is_word};
+use crate::util::chars::is_space;
+use crate::util::chars::is_word;
 use crate::util::unicode::is_unicode_letter;
 
 /// A token: its kind, its start as a UTF-8 offset, and its text.
@@ -124,21 +125,13 @@ impl Lexer<'_> {
         match self.bytes.get(i) {
             None => NONE,
             Some(&b) if b < 0x80 => u32::from(b),
-            Some(_) => self
-                .src
-                .get(i..)
-                .and_then(|rest| rest.chars().next())
-                .map_or(NONE, u32::from),
+            Some(_) => self.src.get(i..).and_then(|rest| rest.chars().next()).map_or(NONE, u32::from),
         }
     }
 
     /// The offset after the character at `i`.
     fn next(&self, i: usize) -> usize {
-        i + self
-            .src
-            .get(i..)
-            .and_then(|rest| rest.chars().next())
-            .map_or(1, char::len_utf8)
+        i + self.src.get(i..).and_then(|rest| rest.chars().next()).map_or(1, char::len_utf8)
     }
 
     /// The end of a run of `\s` starting at `i`.
@@ -151,10 +144,7 @@ impl Lexer<'_> {
 
     /// The first offset of `needle` at or after `from`.
     fn find(&self, needle: &str, from: usize) -> Option<usize> {
-        self.src
-            .get(from..)
-            .and_then(|rest| rest.find(needle))
-            .map(|at| from + at)
+        self.src.get(from..).and_then(|rest| rest.find(needle)).map(|at| from + at)
     }
 
     /// The first offset of byte `needle` at or after `from`, or the end of the source.
@@ -166,17 +156,11 @@ impl Lexer<'_> {
     }
 
     fn starts_with(&self, word: &str, at: usize) -> bool {
-        self.bytes
-            .get(at..)
-            .is_some_and(|rest| rest.starts_with(word.as_bytes()))
+        self.bytes.get(at..).is_some_and(|rest| rest.starts_with(word.as_bytes()))
     }
 
     fn emit(&mut self, kind: T, start: usize, end: usize) {
-        self.tokens.push(Token {
-            kind,
-            start,
-            text: Cow::Borrowed(self.src.get(start..end).unwrap_or("")),
-        });
+        self.tokens.push(Token { kind, start, text: Cow::Borrowed(self.src.get(start..end).unwrap_or("")) });
         self.p = end;
     }
 
@@ -342,10 +326,7 @@ impl Lexer<'_> {
     /// `/(?:\r?\n)*\s*\n/y` (`RE_NODIR`): the whitespace run at `q`, up to its last newline.
     fn re_nodir(&self, q: usize) -> Option<usize> {
         let end = self.skip_space(q);
-        self.bytes
-            .get(q..end)
-            .and_then(|run| run.iter().rposition(|&b| b == b'\n'))
-            .map(|at| q + at + 1)
+        self.bytes.get(q..end).and_then(|run| run.iter().rposition(|&b| b == b'\n')).map(|at| q + at + 1)
     }
 
     /// `/\s*(?:LR|RL|TB|BT|TD|BR)\b/y` (`RE_DIR`).
@@ -375,10 +356,7 @@ impl Lexer<'_> {
             if b == b'\n' || b == b'\r' {
                 return i;
             }
-            if b == 0xe2
-                && self.bytes.get(i + 1) == Some(&0x80)
-                && matches!(self.bytes.get(i + 2), Some(0xa8 | 0xa9))
-            {
+            if b == 0xe2 && self.bytes.get(i + 1) == Some(&0x80) && matches!(self.bytes.get(i + 2), Some(0xa8 | 0xa9)) {
                 return i;
             }
             i += 1;
@@ -614,11 +592,7 @@ impl Lexer<'_> {
             Ok(b'@') => {
                 if self.byte(p + 1) == u32::from(b'{') {
                     self.push(S::ShapeData);
-                    self.tokens.push(Token {
-                        kind: T::ShapeData,
-                        start: p,
-                        text: Cow::Borrowed(""),
-                    });
+                    self.tokens.push(Token { kind: T::ShapeData, start: p, text: Cow::Borrowed("") });
                     self.p += 2;
                     return true;
                 }
@@ -945,11 +919,7 @@ impl Lexer<'_> {
                 if a != b'-' || self.byte(q + 1) == u32::from(b'-') {
                     break;
                 }
-            } else if ch == u32::from(b'x')
-                || ch == u32::from(b'o')
-                || ch == u32::from(b'<')
-                || ch == b
-                || is_space(ch)
+            } else if ch == u32::from(b'x') || ch == u32::from(b'o') || ch == u32::from(b'<') || ch == b || is_space(ch)
             {
                 let dd = self.link_char(q);
                 if (dd == a32 || dd == b) && self.re_edge(edge, q).is_some() {
@@ -1035,21 +1005,13 @@ impl Lexer<'_> {
             let mut q = p + 1;
             while q < n {
                 let ch = self.code(q);
-                if matches!(
-                    u8::try_from(ch),
-                    Ok(b'"' | b'(' | b')' | b'[' | b']' | b'{' | b'}')
-                ) {
+                if matches!(u8::try_from(ch), Ok(b'"' | b'(' | b')' | b'[' | b']' | b'{' | b'}')) {
                     break;
                 }
-                if matches!(u8::try_from(ch), Ok(b'-' | b'/'))
-                    && self.byte(q + 1) == u32::from(b')')
-                {
+                if matches!(u8::try_from(ch), Ok(b'-' | b'/')) && self.byte(q + 1) == u32::from(b')') {
                     break;
                 }
-                if (ch == u32::from(b'~') || is_space(ch))
-                    && self.invis_ahead(q)
-                    && self.re_invis_link(q).is_some()
-                {
+                if (ch == u32::from(b'~') || is_space(ch)) && self.invis_ahead(q) && self.re_invis_link(q).is_some() {
                     break;
                 }
                 q += 1;
@@ -1184,11 +1146,7 @@ impl Lexer<'_> {
                         true
                     } else {
                         let mut q = p + 1;
-                        while self
-                            .bytes
-                            .get(q)
-                            .is_some_and(|&ch| ch != b'`' && ch != b'"')
-                        {
+                        while self.bytes.get(q).is_some_and(|&ch| ch != b'`' && ch != b'"') {
                             q += 1;
                         }
                         self.emit(T::MdStr, p, q);
@@ -1197,11 +1155,7 @@ impl Lexer<'_> {
                 }
                 S::AccTitle | S::AccDescr => {
                     let e = self.find_byte(b'\n', p);
-                    let kind = if self.state == S::AccTitle {
-                        T::AccTitleValue
-                    } else {
-                        T::AccDescrValue
-                    };
+                    let kind = if self.state == S::AccTitle { T::AccTitleValue } else { T::AccDescrValue };
                     self.pop();
                     self.emit(kind, p, e);
                     true
@@ -1224,11 +1178,7 @@ impl Lexer<'_> {
                         self.pop();
                         self.emit(T::NoDir, p, e);
                         true
-                    } else if let Some(e) = self
-                        .re_dir(p)
-                        .or_else(|| self.re_dir_sym(p))
-                        .or_else(|| self.re_dir_v(p))
-                    {
+                    } else if let Some(e) = self.re_dir(p).or_else(|| self.re_dir_sym(p)).or_else(|| self.re_dir_v(p)) {
                         self.pop();
                         self.emit(T::Dir, p, e);
                         true
@@ -1296,11 +1246,7 @@ impl Lexer<'_> {
                         false
                     } else {
                         let mut q = p + 1;
-                        while self
-                            .bytes
-                            .get(q)
-                            .is_some_and(|&ch| ch != b'}' && ch != b'^' && ch != b'"')
-                        {
+                        while self.bytes.get(q).is_some_and(|&ch| ch != b'}' && ch != b'^' && ch != b'"') {
                             q += 1;
                         }
                         self.emit(T::ShapeData, p, q);
@@ -1314,11 +1260,7 @@ impl Lexer<'_> {
                     } else {
                         let e = self.find_byte(b'"', p);
                         let text = self.src.get(p..e).unwrap_or("");
-                        self.tokens.push(Token {
-                            kind: T::ShapeData,
-                            start: p,
-                            text: Cow::Owned(break_lines(text)),
-                        });
+                        self.tokens.push(Token { kind: T::ShapeData, start: p, text: Cow::Owned(break_lines(text)) });
                         self.p = e;
                     }
                     true
@@ -1326,20 +1268,12 @@ impl Lexer<'_> {
             };
 
             if !ok {
-                self.tokens.push(Token {
-                    kind: T::Error,
-                    start: self.p,
-                    text: Cow::Borrowed(""),
-                });
+                self.tokens.push(Token { kind: T::Error, start: self.p, text: Cow::Borrowed("") });
                 return;
             }
         }
 
-        self.tokens.push(Token {
-            kind: T::End,
-            start: n,
-            text: Cow::Borrowed(""),
-        });
+        self.tokens.push(Token { kind: T::End, start: n, text: Cow::Borrowed("") });
     }
 }
 

@@ -1,11 +1,26 @@
 //! The packet parser: Mermaid's Langium packet grammar over the shared tokenizer. Port of Pele's
 //! `src/diagrams/packet/parser.ts`.
 
-use crate::diagrams::common::tokens::{
-    ACC_DESCR, ACC_TITLE, DIRECTIVE, EOF, NEWLINE, Pattern, Reader, SINGLE_LINE_COMMENT, STRING,
-    TITLE, TokenType, WHITESPACE, YAML, acc_descr_value, acc_title_value, keyword, literal,
-    string_value, title_value, tokenize,
-};
+use crate::diagrams::common::tokens::ACC_DESCR;
+use crate::diagrams::common::tokens::ACC_TITLE;
+use crate::diagrams::common::tokens::DIRECTIVE;
+use crate::diagrams::common::tokens::EOF;
+use crate::diagrams::common::tokens::NEWLINE;
+use crate::diagrams::common::tokens::Pattern;
+use crate::diagrams::common::tokens::Reader;
+use crate::diagrams::common::tokens::SINGLE_LINE_COMMENT;
+use crate::diagrams::common::tokens::STRING;
+use crate::diagrams::common::tokens::TITLE;
+use crate::diagrams::common::tokens::TokenType;
+use crate::diagrams::common::tokens::WHITESPACE;
+use crate::diagrams::common::tokens::YAML;
+use crate::diagrams::common::tokens::acc_descr_value;
+use crate::diagrams::common::tokens::acc_title_value;
+use crate::diagrams::common::tokens::keyword;
+use crate::diagrams::common::tokens::literal;
+use crate::diagrams::common::tokens::string_value;
+use crate::diagrams::common::tokens::title_value;
+use crate::diagrams::common::tokens::tokenize;
 use crate::error::Error;
 
 /// Token kinds, as indices into [`PACKET_TOKENS`].
@@ -48,21 +63,13 @@ pub(crate) const PACKET_TOKENS: &[TokenType] = &[
     literal("packet-beta"),
     keyword("packet"),
     // A front matter block also starts with dashes, so Langium lets it win over a dash.
-    TokenType {
-        longer: &[t::YAML],
-        ..literal("-")
-    },
+    TokenType { longer: &[t::YAML], ..literal("-") },
     literal("+"),
     literal(":"),
     ACC_DESCR,
     ACC_TITLE,
     TITLE,
-    TokenType {
-        first: Some("0123456789"),
-        name: "INT",
-        pattern: Pattern::Match(int),
-        ..literal("")
-    },
+    TokenType { first: Some("0123456789"), name: "INT", pattern: Pattern::Match(int), ..literal("") },
     STRING,
     NEWLINE,
     WHITESPACE,
@@ -120,11 +127,7 @@ fn number(text: &str) -> f64 {
 ///
 /// Returns a syntax error where the source leaves the grammar.
 pub(crate) fn parse_packet(src: &str) -> Result<PacketAst, Error> {
-    let mut r = Reader::new(
-        tokenize(src, PACKET_TOKENS, "packet")?,
-        PACKET_TOKENS,
-        "packet",
-    );
+    let mut r = Reader::new(tokenize(src, PACKET_TOKENS, "packet")?, PACKET_TOKENS, "packet");
     let mut ast = PacketAst::default();
 
     while r.accept(t::NEWLINE) {}

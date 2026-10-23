@@ -6,7 +6,9 @@
 
 use super::tokens::T;
 use crate::text::label::trim;
-use crate::util::chars::{is_digit, is_space, is_word};
+use crate::util::chars::is_digit;
+use crate::util::chars::is_space;
+use crate::util::chars::is_word;
 
 /// A token: its kind, its byte offset, and its text.
 #[derive(Clone, Copy, Debug)]
@@ -98,22 +100,14 @@ impl<'a> Lexer<'a> {
         match self.bytes.get(q) {
             None => NONE,
             Some(&b) if b < 0x80 => u32::from(b),
-            Some(&b) => self
-                .src
-                .get(q..)
-                .and_then(|rest| rest.chars().next())
-                .map_or(u32::from(b), u32::from),
+            Some(&b) => self.src.get(q..).and_then(|rest| rest.chars().next()).map_or(u32::from(b), u32::from),
         }
     }
 
     /// The byte length of the character at `q`.
     fn len(&self, q: usize) -> usize {
         match self.bytes.get(q) {
-            Some(&b) if b >= 0x80 => self
-                .src
-                .get(q..)
-                .and_then(|rest| rest.chars().next())
-                .map_or(1, char::len_utf8),
+            Some(&b) if b >= 0x80 => self.src.get(q..).and_then(|rest| rest.chars().next()).map_or(1, char::len_utf8),
             _ => 1,
         }
     }
@@ -128,11 +122,7 @@ impl<'a> Lexer<'a> {
     }
 
     fn emit_text(&mut self, kind: T, s: usize, e: usize, text: &'a str) {
-        self.tokens.push(Token {
-            kind,
-            start: s,
-            text,
-        });
+        self.tokens.push(Token { kind, start: s, text });
         self.p = e;
     }
 
@@ -149,10 +139,7 @@ impl<'a> Lexer<'a> {
 
     fn eol(&mut self, q: usize) -> usize {
         if self.next_nl.is_none_or(|nl| nl < q) {
-            let found = self
-                .bytes
-                .get(q..)
-                .and_then(|rest| rest.iter().position(|&b| b == b'\n'));
+            let found = self.bytes.get(q..).and_then(|rest| rest.iter().position(|&b| b == b'\n'));
             self.next_nl = Some(found.map_or(self.n, |at| q + at));
         }
         self.next_nl.unwrap_or(self.n)
@@ -163,11 +150,7 @@ impl<'a> Lexer<'a> {
         if let Some(&class) = usize::try_from(c).ok().and_then(|c| CLASS.get(c)) {
             return class & bit != 0;
         }
-        if bit == ID || bit == MENU {
-            !is_space(c)
-        } else {
-            true
-        }
+        if bit == ID || bit == MENU { !is_space(c) } else { true }
     }
 
     /// Matches a lowercase literal without regard to the case of the source.
@@ -176,11 +159,7 @@ impl<'a> Lexer<'a> {
             let Some(&c) = self.bytes.get(q + k) else {
                 return false;
             };
-            if w.is_ascii_lowercase() {
-                c | 32 == w
-            } else {
-                c == w
-            }
+            if w.is_ascii_lowercase() { c | 32 == w } else { c == w }
         })
     }
 
@@ -303,11 +282,7 @@ impl<'a> Lexer<'a> {
         }
         let whole = q > p;
         if self.at(q) == 46 && is_digit(self.at(q + 1)) {
-            let r = if is_digit(self.at(q + 2)) {
-                q + 3
-            } else {
-                q + 2
-            };
+            let r = if is_digit(self.at(q + 2)) { q + 3 } else { q + 2 };
             let after = self.at(r);
             if after == 32 || after == 10 {
                 self.emit(T::Num, p, r);
@@ -427,22 +402,14 @@ impl<'a> Lexer<'a> {
                     || self.acc()
                     || self.keyword("autonumber", T::Autonumber, None)
             }
-            98 => {
-                self.keyword("box", T::Box, Some(S::Line))
-                    || self.keyword("break", T::Break, Some(S::Line))
-            }
-            99 => {
-                self.keyword("create", T::Create, None)
-                    || self.keyword("critical", T::Critical, Some(S::Line))
-            }
+            98 => self.keyword("box", T::Box, Some(S::Line)) || self.keyword("break", T::Break, Some(S::Line)),
+            99 => self.keyword("create", T::Create, None) || self.keyword("critical", T::Critical, Some(S::Line)),
             100 => {
                 self.keyword("destroy", T::Destroy, Some(S::Id))
                     || self.menu("details", T::Details)
                     || self.keyword("deactivate", T::Deactivate, Some(S::Id))
             }
-            101 => {
-                self.keyword("else", T::Else, Some(S::Line)) || self.keyword("end", T::End, None)
-            }
+            101 => self.keyword("else", T::Else, Some(S::Line)) || self.keyword("end", T::End, None),
             108 => {
                 self.keyword("loop", T::Loop, Some(S::Line))
                     || self.keyword("left of", T::LeftOf, None)
@@ -462,10 +429,7 @@ impl<'a> Lexer<'a> {
                     || self.keyword("par_over", T::ParOver, Some(S::Line))
                     || self.menu("properties", T::Properties)
             }
-            114 => {
-                self.keyword("rect", T::Rect, Some(S::Line))
-                    || self.keyword("right of", T::RightOf, None)
-            }
+            114 => self.keyword("rect", T::Rect, Some(S::Line)) || self.keyword("right of", T::RightOf, None),
             115 => self.keyword("sequencediagram", T::Sd, None),
             116 => self.title(),
             _ => false,
@@ -513,12 +477,7 @@ impl<'a> Lexer<'a> {
             self.dash();
         } else if c == 60 && self.bytes.get(p..).is_some_and(|r| r.starts_with(b"<<->>")) {
             self.emit(T::BidirectionalSolidArrow, p, p + 5);
-        } else if c == 60
-            && self
-                .bytes
-                .get(p..)
-                .is_some_and(|r| r.starts_with(b"<<-->>"))
-        {
+        } else if c == 60 && self.bytes.get(p..).is_some_and(|r| r.starts_with(b"<<-->>")) {
             self.emit(T::BidirectionalDottedArrow, p, p + 6);
         } else if (c == 47 || c == 92) && self.reverse(c) {
         } else if c == 58 {
@@ -534,10 +493,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// A participant name, up to an alias, a config object, or the end of the statement.
-    #[expect(
-        clippy::many_single_char_names,
-        reason = "mirrors the names of Pele's id"
-    )]
+    #[expect(clippy::many_single_char_names, reason = "mirrors the names of Pele's id")]
     fn id(&mut self) -> bool {
         if self.skip_same_line() {
             return true;
@@ -662,11 +618,7 @@ impl<'a> Lexer<'a> {
                 true
             }
             S::AccTitle | S::AccDescr => {
-                let kind = if self.state == S::AccTitle {
-                    T::AccTitleValue
-                } else {
-                    T::AccDescrValue
-                };
+                let kind = if self.state == S::AccTitle { T::AccTitleValue } else { T::AccDescrValue };
                 let e = self.eol(self.p);
                 self.emit(kind, self.p, e);
                 self.pop();
@@ -688,10 +640,7 @@ impl<'a> Lexer<'a> {
 
     /// The offset of the next `}` from `q`, or the end.
     fn close_brace(&self, q: usize) -> usize {
-        self.bytes
-            .get(q..)
-            .and_then(|rest| rest.iter().position(|&b| b == b'}'))
-            .map_or(self.n, |at| q + at)
+        self.bytes.get(q..).and_then(|rest| rest.iter().position(|&b| b == b'}')).map_or(self.n, |at| q + at)
     }
 }
 
@@ -712,11 +661,7 @@ pub(crate) fn tokenize(src: &str) -> Vec<Token<'_>> {
     while lexer.p < lexer.n {
         if !lexer.step() {
             let p = lexer.p;
-            lexer.tokens.push(Token {
-                kind: T::Error,
-                start: p,
-                text: "",
-            });
+            lexer.tokens.push(Token { kind: T::Error, start: p, text: "" });
             return lexer.tokens;
         }
     }
@@ -734,10 +679,6 @@ pub(crate) fn tokenize(src: &str) -> Vec<Token<'_>> {
     if let Some(kind) = last {
         lexer.emit(kind, n, n);
     }
-    lexer.tokens.push(Token {
-        kind: T::Eof,
-        start: n,
-        text: "",
-    });
+    lexer.tokens.push(Token { kind: T::Eof, start: n, text: "" });
     lexer.tokens
 }

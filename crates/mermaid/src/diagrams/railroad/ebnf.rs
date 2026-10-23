@@ -1,15 +1,39 @@
 //! `railroad-ebnf-beta`: EBNF in the W3C and ISO 14977 styles. Port of Pele's
 //! `src/diagrams/railroad/ebnf.ts`.
 
-use super::common::{
-    ACC_DESCR, ACC_TITLE, AstNode, Grammar, TITLE, add, attach, block_comment,
-    block_comment_opener, choice, first, identifier, opening, optional, parse_grammar, push,
-    quoted, repetition, sequence, to_rules, unescape, whitespace, word,
-};
-use super::types::{RailroadNode, RailroadRule};
-use crate::diagrams::common::tokens::{
-    DIRECTIVE, EOF, Pattern, Reader, SINGLE_LINE_COMMENT, TokenType, YAML, literal,
-};
+use super::common::ACC_DESCR;
+use super::common::ACC_TITLE;
+use super::common::AstNode;
+use super::common::Grammar;
+use super::common::TITLE;
+use super::common::add;
+use super::common::attach;
+use super::common::block_comment;
+use super::common::block_comment_opener;
+use super::common::choice;
+use super::common::first;
+use super::common::identifier;
+use super::common::opening;
+use super::common::optional;
+use super::common::parse_grammar;
+use super::common::push;
+use super::common::quoted;
+use super::common::repetition;
+use super::common::sequence;
+use super::common::to_rules;
+use super::common::unescape;
+use super::common::whitespace;
+use super::common::word;
+use super::types::RailroadNode;
+use super::types::RailroadRule;
+use crate::diagrams::common::tokens::DIRECTIVE;
+use crate::diagrams::common::tokens::EOF;
+use crate::diagrams::common::tokens::Pattern;
+use crate::diagrams::common::tokens::Reader;
+use crate::diagrams::common::tokens::SINGLE_LINE_COMMENT;
+use crate::diagrams::common::tokens::TokenType;
+use crate::diagrams::common::tokens::YAML;
+use crate::diagrams::common::tokens::literal;
 use crate::error::Error;
 use crate::text::label::trim;
 use crate::util::chars::is_space;
@@ -99,21 +123,9 @@ pub(crate) const EBNF_TOKENS: &[TokenType] = &[
         ..literal("")
     },
     whitespace("EBNF_WHITESPACE"),
-    TokenType {
-        first: Some("-"),
-        name: "EBNF_YAML",
-        ..YAML
-    },
-    TokenType {
-        first: Some("\t %"),
-        name: "EBNF_DIRECTIVE",
-        ..DIRECTIVE
-    },
-    TokenType {
-        first: Some("\t %"),
-        name: "EBNF_SINGLE_LINE_COMMENT",
-        ..SINGLE_LINE_COMMENT
-    },
+    TokenType { first: Some("-"), name: "EBNF_YAML", ..YAML },
+    TokenType { first: Some("\t %"), name: "EBNF_DIRECTIVE", ..DIRECTIVE },
+    TokenType { first: Some("\t %"), name: "EBNF_SINGLE_LINE_COMMENT", ..SINGLE_LINE_COMMENT },
     TokenType {
         first: Some("/"),
         hidden: true,
@@ -186,23 +198,10 @@ struct Frame {
 }
 
 /// A frame for the choice `choice`, with its first sequence.
-fn frame(
-    ast: &mut Vec<AstNode<Ebnf>>,
-    node: Option<usize>,
-    choice: usize,
-    close: Option<u16>,
-    except: bool,
-) -> Frame {
+fn frame(ast: &mut Vec<AstNode<Ebnf>>, node: Option<usize>, choice: usize, close: Option<u16>, except: bool) -> Frame {
     let sequence = add(ast, Ebnf::Sequence);
     attach(ast, choice, sequence);
-    Frame {
-        choice,
-        close,
-        except,
-        node,
-        sequence,
-        term: None,
-    }
+    Frame { choice, close, except, node, sequence, term: None }
 }
 
 /// Reads a rule's definition into `ast`, returning its choice.
@@ -243,11 +242,7 @@ fn definition(r: &mut Reader<'_>, ast: &mut Vec<AstNode<Ebnf>>) -> Result<usize,
         loop {
             let term = match top.term {
                 Some(term) if except => {
-                    if let Some(AstNode {
-                        kind: Ebnf::Term(postfixes),
-                        ..
-                    }) = ast.get_mut(term)
-                    {
+                    if let Some(AstNode { kind: Ebnf::Term(postfixes), .. }) = ast.get_mut(term) {
                         postfixes.push(Postfix::Exception);
                     }
                     attach(ast, term, primary);
@@ -270,11 +265,7 @@ fn definition(r: &mut Reader<'_>, ast: &mut Vec<AstNode<Ebnf>>) -> Result<usize,
                     _ => break,
                 };
                 r.i += 1;
-                if let Some(AstNode {
-                    kind: Ebnf::Term(postfixes),
-                    ..
-                }) = ast.get_mut(term)
-                {
+                if let Some(AstNode { kind: Ebnf::Term(postfixes), .. }) = ast.get_mut(term) {
                     postfixes.push(postfix);
                 }
             }
@@ -324,10 +315,7 @@ fn definition(r: &mut Reader<'_>, ast: &mut Vec<AstNode<Ebnf>>) -> Result<usize,
 /// # Errors
 ///
 /// Returns a syntax error where the source leaves the grammar.
-pub(crate) fn parse_ebnf(
-    src: &str,
-    ast: &mut Vec<AstNode<Ebnf>>,
-) -> Result<Grammar<(String, usize)>, Error> {
+pub(crate) fn parse_ebnf(src: &str, ast: &mut Vec<AstNode<Ebnf>>) -> Result<Grammar<(String, usize)>, Error> {
     parse_grammar(src, EBNF_TOKENS, t::TITLE, unescape, |r| {
         let name = r.expect(t::ID)?.to_owned();
         if !r.accept(t::EQUALS) {

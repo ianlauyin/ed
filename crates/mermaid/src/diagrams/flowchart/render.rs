@@ -2,30 +2,62 @@
 //! `src/diagrams/flowchart/render.ts`.
 
 use super::db::FlowDb;
-use super::graph::{self, FlowGraph, GraphEdge, GraphNode};
+use super::graph::FlowGraph;
+use super::graph::GraphEdge;
+use super::graph::GraphNode;
+use super::graph::{self};
 use super::shapes::canonical_shape;
 use crate::diagrams::Rendered;
-use crate::diagrams::common::fit_width::{runs_across, tighten, title_room, turn_to_fit};
-use crate::layout::compound::{
-    CEdge, CNode, CompoundResult, Dir, cnode, compound_layout, direction, shift_layout,
-};
+use crate::diagrams::common::fit_width::runs_across;
+use crate::diagrams::common::fit_width::tighten;
+use crate::diagrams::common::fit_width::title_room;
+use crate::diagrams::common::fit_width::turn_to_fit;
+use crate::layout::compound::CEdge;
+use crate::layout::compound::CNode;
+use crate::layout::compound::CompoundResult;
+use crate::layout::compound::Dir;
+use crate::layout::compound::cnode;
+use crate::layout::compound::compound_layout;
+use crate::layout::compound::direction;
+use crate::layout::compound::shift_layout;
 use crate::layout::layered::LayeredOptions;
-use crate::svg::builder::{esc, esc_text, label_svg, push_num};
-use crate::svg::cluster::{
-    Crossings, cluster_title_x, mark_crossings, struck_title, title_crossed,
-};
-use crate::svg::edges::{
-    EdgePath, SideReach, edge_label_svg, loop_path, marker, marker_trim, route_path,
-};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
-use crate::svg::shapes::{
-    draw_shape, end_side, inset_route, shape_has_label, shape_size, shape_span,
-};
-use crate::svg::theme::{RADIUS, ResolvedStyle, class_names, resolve_style};
+use crate::svg::builder::esc;
+use crate::svg::builder::esc_text;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::cluster::Crossings;
+use crate::svg::cluster::cluster_title_x;
+use crate::svg::cluster::mark_crossings;
+use crate::svg::cluster::struck_title;
+use crate::svg::cluster::title_crossed;
+use crate::svg::edges::EdgePath;
+use crate::svg::edges::SideReach;
+use crate::svg::edges::edge_label_svg;
+use crate::svg::edges::loop_path;
+use crate::svg::edges::marker;
+use crate::svg::edges::marker_trim;
+use crate::svg::edges::route_path;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
+use crate::svg::shapes::draw_shape;
+use crate::svg::shapes::end_side;
+use crate::svg::shapes::inset_route;
+use crate::svg::shapes::shape_has_label;
+use crate::svg::shapes::shape_size;
+use crate::svg::shapes::shape_span;
+use crate::svg::theme::RADIUS;
+use crate::svg::theme::ResolvedStyle;
+use crate::svg::theme::class_names;
+use crate::svg::theme::resolve_style;
 use crate::text::entities;
-use crate::text::label::{Label, layout_label};
-use crate::text::measure::{BOLD, ITALIC};
-use crate::util::url::{self, LinkInfo, UrlOptions};
+use crate::text::label::Label;
+use crate::text::label::layout_label;
+use crate::text::measure::BOLD;
+use crate::text::measure::ITALIC;
+use crate::util::url::LinkInfo;
+use crate::util::url::UrlOptions;
+use crate::util::url::{self};
 use crate::yaml::Value;
 
 const NODE_SEP: f64 = 40.0;
@@ -95,24 +127,13 @@ pub(crate) fn render(
     url: &UrlOptions<'_>,
     variant: Option<&Variant>,
 ) -> Rendered {
-    let fitted = |down: bool| {
-        tighten(options, |tight| {
-            draw(db, config, options, url, variant, down, tight)
-        })
-    };
+    let fitted = |down: bool| tighten(options, |tight| draw(db, config, options, url, variant, down, tight));
 
-    if runs_across(db.direction.as_deref()) {
-        turn_to_fit(options, fitted)
-    } else {
-        fitted(false)
-    }
+    if runs_across(db.direction.as_deref()) { turn_to_fit(options, fitted) } else { fitted(false) }
 }
 
 /// `turned` draws a flowchart that runs across as one that runs down. `tight` sets nodes closer.
-#[expect(
-    clippy::too_many_lines,
-    reason = "mirrors Pele's draw, one pass per drawing stage"
-)]
+#[expect(clippy::too_many_lines, reason = "mirrors Pele's draw, one pass per drawing stage")]
 fn draw(
     db: &FlowDb,
     config: &Value,
@@ -123,11 +144,8 @@ fn draw(
     tight: bool,
 ) -> Rendered {
     let group_pad = if tight { 12.0 } else { GROUP_PAD };
-    let own = variant
-        .and_then(|variant| get(config, variant.r#type))
-        .filter(|value| matches!(value, Value::Object(_)));
-    let flow =
-        own.or_else(|| get(config, "flowchart").filter(|value| matches!(value, Value::Object(_))));
+    let own = variant.and_then(|variant| get(config, variant.r#type)).filter(|value| matches!(value, Value::Object(_)));
+    let flow = own.or_else(|| get(config, "flowchart").filter(|value| matches!(value, Value::Object(_))));
     let curve = match flow.and_then(|flow| get(flow, "curve")) {
         Some(Value::String(curve)) => Some(curve.as_str()),
         _ => None,
@@ -139,16 +157,8 @@ fn draw(
     let size = options.font_size.unwrap_or(16.0);
     let edge_size = crate::svg::builder::js_round(size * 0.875);
     let squeezed = variant.is_some() && tight;
-    let wrap_width = number_option(flow, "wrappingWidth", 200.0).min(if squeezed {
-        100.0
-    } else {
-        f64::INFINITY
-    });
-    let group_title_width = if squeezed {
-        80.0_f64.max(title_room(options) / 2.0)
-    } else {
-        4000.0
-    };
+    let wrap_width = number_option(flow, "wrappingWidth", 200.0).min(if squeezed { 100.0 } else { f64::INFINITY });
+    let group_title_width = if squeezed { 80.0_f64.max(title_room(options) / 2.0) } else { 4000.0 };
     let pad = options.padding.unwrap_or(8.0);
 
     let mut index: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
@@ -167,66 +177,33 @@ fn draw(
             all.extend(node.css_styles.iter().cloned());
             resolve_style(&all)
         };
-        let text_style =
-            (if style.bold { BOLD } else { 0 }) | (if style.italic { ITALIC } else { 0 });
+        let text_style = (if style.bold { BOLD } else { 0 }) | (if style.italic { ITALIC } else { 0 });
         let markdown = node.label_type == super::types::LabelType::Markdown;
         let font_size = style.font_size.unwrap_or(size);
 
         let (view, mut c) = if node.is_group {
-            let label = layout_label(
-                node.label.as_deref(),
-                markdown,
-                font_size,
-                group_title_width,
-                text_style,
-                None,
-            );
+            let label = layout_label(node.label.as_deref(), markdown, font_size, group_title_width, text_style, None);
             let mut c = cnode(0.0, 0.0, -1);
             c.is_group = true;
             c.dir = node.dir.as_deref().map(|dir| direction(Some(dir)));
             c.pad_x = group_pad;
-            c.pad_top = if label.height > 0.0 {
-                label.height + 16.0
-            } else {
-                GROUP_PAD
-            };
+            c.pad_top = if label.height > 0.0 { label.height + 16.0 } else { GROUP_PAD };
             c.pad_bottom = group_pad;
             c.min_w = label.width + 2.0 * group_pad - 12.0;
-            let view = NodeView {
-                dy: 0.0,
-                h: 0.0,
-                label,
-                node,
-                shape: "group",
-                style,
-                w: 0.0,
-            };
+            let view = NodeView { dy: 0.0, h: 0.0, label, node, shape: "group", style, w: 0.0 };
             (view, c)
         } else {
             let shape = canonical_shape(Some(&node.shape));
             let has_asset = present(node.img.as_deref()) || present(node.icon.as_deref());
-            let text = if has_asset || shape_has_label(shape) {
-                node.label.as_deref()
-            } else {
-                None
-            };
+            let text = if has_asset || shape_has_label(shape) { node.label.as_deref() } else { None };
             let label = layout_label(text, markdown, font_size, wrap_width, text_style, None);
 
             let (w, h, dy) = if has_asset {
-                let boxed = if present(node.img.as_deref()) {
-                    80.0
-                } else {
-                    48.0
-                };
+                let boxed = if present(node.img.as_deref()) { 80.0 } else { 48.0 };
                 let aw = asset_size(node.asset_width, boxed);
                 let ah = asset_size(node.asset_height, boxed);
                 let w = aw.max(label.width + 8.0);
-                let h = ah
-                    + if label.height > 0.0 {
-                        label.height + 6.0
-                    } else {
-                        0.0
-                    };
+                let h = ah + if label.height > 0.0 { label.height + 6.0 } else { 0.0 };
                 let dy = if label.height == 0.0 {
                     0.0
                 } else if node.pos.as_deref() == Some("t") {
@@ -240,15 +217,7 @@ fn draw(
                 (s.w, s.h, s.dy)
             };
 
-            let view = NodeView {
-                dy,
-                h,
-                label,
-                node,
-                shape,
-                style,
-                w,
-            };
+            let view = NodeView { dy, h, label, node, shape, style, w };
             (view, cnode(w, h, -1))
         };
 
@@ -258,21 +227,14 @@ fn draw(
     }
 
     for (i, node) in graph.nodes.iter().enumerate() {
-        let parent = node
-            .parent_id
-            .as_deref()
-            .and_then(|id| index.get(id))
-            .map_or(-1, |&p| i32::try_from(p).unwrap_or(-1));
+        let parent =
+            node.parent_id.as_deref().and_then(|id| index.get(id)).map_or(-1, |&p| i32::try_from(p).unwrap_or(-1));
         if let Some(c) = cnodes.get_mut(i) {
             c.parent = parent;
         }
     }
 
-    let root_dir = if turned {
-        Dir::Tb
-    } else {
-        direction(db.direction.as_deref())
-    };
+    let root_dir = if turned { Dir::Tb } else { direction(db.direction.as_deref()) };
     let flows_sideways = |cnodes: &[CNode], i: usize| -> bool {
         let mut dir: Option<Dir> = None;
         let mut p = cnodes.get(i).map_or(-1, |c| c.parent);
@@ -295,12 +257,7 @@ fn draw(
         let span = if view.node.is_group {
             Some(f64::INFINITY)
         } else if !present(view.node.img.as_deref()) && !present(view.node.icon.as_deref()) {
-            Some(shape_span(
-                view.shape,
-                view.w,
-                view.h,
-                flows_sideways(&cnodes, i),
-            ))
+            Some(shape_span(view.shape, view.w, view.h, flows_sideways(&cnodes, i)))
         } else {
             None
         };
@@ -315,9 +272,7 @@ fn draw(
     let mut loops = vec![0usize; views.len()];
 
     for edge in &graph.edges {
-        let (Some(&src), Some(&dst)) =
-            (index.get(edge.start.as_str()), index.get(edge.end.as_str()))
-        else {
+        let (Some(&src), Some(&dst)) = (index.get(edge.start.as_str()), index.get(edge.end.as_str())) else {
             continue;
         };
         let markdown = edge.label_type == super::types::LabelType::Markdown;
@@ -331,37 +286,17 @@ fn draw(
             let sideways = flows_sideways(&cnodes, src);
             if let Some(c) = cnodes.get_mut(src) {
                 if sideways {
-                    c.h += 2.0
-                        * (LOOP
-                            + if label.height > 0.0 {
-                                label.height + 8.0
-                            } else {
-                                0.0
-                            });
+                    c.h += 2.0 * (LOOP + if label.height > 0.0 { label.height + 8.0 } else { 0.0 });
                 } else {
-                    c.w += 2.0
-                        * (LOOP
-                            + if label.width > 0.0 {
-                                label.width + 12.0
-                            } else {
-                                0.0
-                            });
+                    c.w += 2.0 * (LOOP + if label.width > 0.0 { label.width + 12.0 } else { 0.0 });
                 }
             }
         }
 
         cedges.push(CEdge {
             dst,
-            label_h: if label.height > 0.0 {
-                label.height + 4.0
-            } else {
-                0.0
-            },
-            label_w: if label.width > 0.0 {
-                label.width + 12.0
-            } else {
-                0.0
-            },
+            label_h: if label.height > 0.0 { label.height + 4.0 } else { 0.0 },
+            label_w: if label.width > 0.0 { label.width + 12.0 } else { 0.0 },
             label_x: 0.0,
             label_y: 0.0,
             minlen: edge.minlen.and_then(|n| u32::try_from(n).ok()).unwrap_or(1),
@@ -383,19 +318,13 @@ fn draw(
         tracks: curve.is_some_and(|curve| curve.starts_with("step")),
     };
     let layout = match variant {
-        Some(variant) => {
-            (variant.layout)(&mut cnodes, &mut cedges, root_dir, &layout_options, tight)
-        }
+        Some(variant) => (variant.layout)(&mut cnodes, &mut cedges, root_dir, &layout_options, tight),
         None => compound_layout(&mut cnodes, &mut cedges, root_dir, &layout_options),
     };
 
     let title_width = if tight { title_room(options) } else { 4000.0 };
     let title = layout_label(db.title.as_deref(), false, size, title_width, BOLD, None);
-    let title_height = if title.height > 0.0 {
-        title.height + 12.0
-    } else {
-        0.0
-    };
+    let title_height = if title.height > 0.0 { title.height + 12.0 } else { 0.0 };
     let inner = layout.width.max(title.width);
     let ox = pad + (inner - layout.width) / 2.0;
     let oy = pad + title_height;
@@ -425,22 +354,14 @@ fn draw(
             && c.parent < 0
             && let Some(draw_group) = variant.and_then(|variant| variant.draw_group)
         {
-            clusters.push_str(&draw_group(
-                c,
-                &view.label,
-                &view.style,
-                &classes,
-                &id,
-                root_dir,
-            ));
+            clusters.push_str(&draw_group(c, &view.label, &view.style, &classes, &id, root_dir));
             continue;
         }
 
         if c.is_group {
             let title_x = cluster_title_x(c, view.label.width, &crossings, group_pad);
             let title_y = c.y - c.h / 2.0 + 8.0 + view.label.height / 2.0;
-            let mut title_attrs =
-                String::from(" class=\"ondine-cluster-label\" fill=\"var(--_m)\"");
+            let mut title_attrs = String::from(" class=\"ondine-cluster-label\" fill=\"var(--_m)\"");
             title_attrs.push_str(&view.style.text);
             let struck = title_crossed(c, view.label.width, title_x, &crossings);
             if struck {
@@ -474,13 +395,7 @@ fn draw(
             clusters.push_str(&view.style.shape);
             clusters.push_str("/>");
             if !struck {
-                clusters.push_str(&label_svg(
-                    &view.label,
-                    title_x,
-                    title_y,
-                    &title_attrs,
-                    None,
-                ));
+                clusters.push_str(&label_svg(&view.label, title_x, title_y, &title_attrs, None));
             }
             clusters.push_str("</g>");
             continue;
@@ -506,10 +421,7 @@ fn draw(
         let mut spaced = classes.clone();
         spaced.push(' ');
         let internal = spaced.contains(" internal-link ");
-        if let Some(label) = node
-            .label
-            .as_deref()
-            .filter(|label| internal && !label.is_empty())
+        if let Some(label) = node.label.as_deref().filter(|label| internal && !label.is_empty())
             && url.links != Some(false)
         {
             // The label is a note name, but it still ends up in an href, so it gets the same check
@@ -530,19 +442,11 @@ fn draw(
             anchor.push_str(&text);
             anchor.push_str("</a>");
             text = anchor;
-            links.push(LinkInfo {
-                href: name,
-                id: node.id.clone(),
-                internal: true,
-            });
+            links.push(LinkInfo { href: name, id: node.id.clone(), internal: true });
         }
 
         let mut body = String::new();
-        if let Some(tooltip) = node
-            .tooltip
-            .as_deref()
-            .filter(|tooltip| !tooltip.is_empty())
-        {
+        if let Some(tooltip) = node.tooltip.as_deref().filter(|tooltip| !tooltip.is_empty()) {
             body.push_str("<title>");
             body.push_str(&esc_text(tooltip));
             body.push_str("</title>");
@@ -551,11 +455,7 @@ fn draw(
         body.push_str(&text);
         if let Some(link) = node.link.as_deref().filter(|link| !link.is_empty()) {
             let mut attrs = String::new();
-            if let Some(target) = node
-                .link_target
-                .as_deref()
-                .filter(|target| !target.is_empty())
-            {
+            if let Some(target) = node.link_target.as_deref().filter(|target| !target.is_empty()) {
                 attrs.push_str(" target=\"");
                 attrs.push_str(&esc(target));
                 attrs.push('"');
@@ -579,17 +479,12 @@ fn draw(
 
     let mut reach = SideReach::default();
     for (ce, edge) in cedges.iter().zip(&drawn) {
-        if ce.src == ce.dst || edge.thickness.as_deref() == Some("invisible") || ce.route.len() < 6
-        {
+        if ce.src == ce.dst || edge.thickness.as_deref() == Some("invisible") || ce.route.len() < 6 {
             continue;
         }
         if let (Some(src), Some(dst)) = (cnodes.get(ce.src), cnodes.get(ce.dst)) {
             reach.add(ce.src, end_side(&ce.route, 0, src), edge.arrow_type_start);
-            reach.add(
-                ce.dst,
-                end_side(&ce.route, ce.route.len() - 3, dst),
-                edge.arrow_type_end,
-            );
+            reach.add(ce.dst, end_side(&ce.route, ce.route.len() - 3, dst), edge.arrow_type_end);
         }
     }
 
@@ -623,52 +518,23 @@ fn draw(
                 }
                 let sideways = flows_sideways(&cnodes, src);
                 let (w, h) = views.get(src).map_or((0.0, 0.0), |view| (view.w, view.h));
-                let c = cnodes
-                    .get(src)
-                    .cloned()
-                    .unwrap_or_else(|| cnode(0.0, 0.0, -1));
+                let c = cnodes.get(src).cloned().unwrap_or_else(|| cnode(0.0, 0.0, -1));
                 let Some(ce) = cedges.get_mut(i) else {
                     continue;
                 };
-                loop_path(
-                    &c,
-                    w,
-                    h,
-                    to_f64(k),
-                    sideways,
-                    LOOP,
-                    marker_trim(end_type),
-                    ce,
-                )
+                loop_path(&c, w, h, to_f64(k), sideways, LOOP, marker_trim(end_type), ce)
             } else {
-                let (Some(src_node), Some(dst_node), Some(src_view), Some(dst_view)) = (
-                    cnodes.get(src),
-                    cnodes.get(dst),
-                    views.get(src),
-                    views.get(dst),
-                ) else {
+                let (Some(src_node), Some(dst_node), Some(src_view), Some(dst_view)) =
+                    (cnodes.get(src), cnodes.get(dst), views.get(src), views.get(dst))
+                else {
                     continue;
                 };
                 let mut route = ce.route.clone();
                 let last = route.len().saturating_sub(3);
                 let leaves = reach.of(src, end_side(&route, 0, src_node));
                 let arrives = reach.of(dst, end_side(&route, last, dst_node));
-                inset_route(
-                    &mut route,
-                    0,
-                    src_view.shape,
-                    src_view.w,
-                    src_view.h,
-                    src_node,
-                );
-                inset_route(
-                    &mut route,
-                    last,
-                    dst_view.shape,
-                    dst_view.w,
-                    dst_view.h,
-                    dst_node,
-                );
+                inset_route(&mut route, 0, src_view.shape, src_view.w, src_view.h, src_node);
+                inset_route(&mut route, last, dst_view.shape, dst_view.w, dst_view.h, dst_node);
                 route_path(
                     &route,
                     edge.curve.as_deref(),
@@ -703,12 +569,8 @@ fn draw(
             edges_out.push('"');
             edges_out.push_str(attrs);
             edges_out.push_str("/>");
-            edges_out.push_str(&marker(
-                start_type, path.sx, path.sy, path.sdx, path.sdy, &color,
-            ));
-            edges_out.push_str(&marker(
-                end_type, path.ex, path.ey, path.edx, path.edy, &color,
-            ));
+            edges_out.push_str(&marker(start_type, path.sx, path.sy, path.sdx, path.sdy, &color));
+            edges_out.push_str(&marker(end_type, path.ex, path.ey, path.edx, path.edy, &color));
             edges_out.push_str("</g>");
         }
 
@@ -716,9 +578,7 @@ fn draw(
             && let Some(ce) = cedges.get(i)
         {
             let attrs = style.as_ref().map_or("", |style| style.text.as_str());
-            labels_out.push_str(&edge_label_svg(
-                &edge.id, label, ce.label_x, ce.label_y, attrs, None,
-            ));
+            labels_out.push_str(&edge_label_svg(&edge.id, label, ce.label_x, ce.label_y, attrs, None));
         }
     }
 
@@ -735,9 +595,7 @@ fn draw(
         content.push_str("</g>");
     }
     if !edges_out.is_empty() {
-        content.push_str(
-            "<g class=\"ondine-edges\" fill=\"none\" stroke=\"var(--_l)\" stroke-linecap=\"round\">",
-        );
+        content.push_str("<g class=\"ondine-edges\" fill=\"none\" stroke=\"var(--_l)\" stroke-linecap=\"round\">");
         content.push_str(&edges_out);
         content.push_str("</g>");
     }
@@ -757,10 +615,7 @@ fn draw(
     content.push_str(&nodes_out);
     content.push_str("</g>");
 
-    let accessible = Accessible {
-        acc_descr: db.acc_descr.as_deref(),
-        acc_title: db.acc_title.as_deref(),
-    };
+    let accessible = Accessible { acc_descr: db.acc_descr.as_deref(), acc_title: db.acc_title.as_deref() };
     let svg = svg_document(
         variant.map_or("flowchart", |variant| variant.r#type),
         width,
@@ -771,12 +626,7 @@ fn draw(
         &content,
     );
 
-    Rendered {
-        height,
-        links,
-        svg,
-        width,
-    }
+    Rendered { height, links, svg, width }
 }
 
 fn present(value: Option<&str>) -> bool {
@@ -803,11 +653,7 @@ fn strip_default(classes: &str) -> &str {
 /// Removes Mermaid's default edge classes, as Pele's global replace does.
 fn strip_edge_classes(classes: &str) -> String {
     let mut out = String::from(classes);
-    for name in [
-        "edge-thickness-normal",
-        "edge-pattern-solid",
-        "flowchart-link",
-    ] {
+    for name in ["edge-thickness-normal", "edge-pattern-solid", "flowchart-link"] {
         while let Some(at) = out.find(name) {
             out.replace_range(at..at + name.len(), "");
         }
@@ -819,11 +665,7 @@ fn image(node: &GraphNode, view: &NodeView<'_>, img: &str, url: &UrlOptions<'_>)
     let aw = asset_size(node.asset_width, 80.0);
     let ah = asset_size(node.asset_height, 80.0);
     let top = if view.label.height > 0.0 {
-        if node.pos.as_deref() == Some("t") {
-            view.h / 2.0 - ah
-        } else {
-            -view.h / 2.0
-        }
+        if node.pos.as_deref() == Some("t") { view.h / 2.0 - ah } else { -view.h / 2.0 }
     } else {
         -ah / 2.0
     };
@@ -843,11 +685,7 @@ fn image(node: &GraphNode, view: &NodeView<'_>, img: &str, url: &UrlOptions<'_>)
     out.push_str("\" height=\"");
     push_num(&mut out, ah);
     out.push_str("\" preserveAspectRatio=\"");
-    out.push_str(if node.constraint.as_deref() == Some("on") {
-        "xMidYMid meet"
-    } else {
-        "none"
-    });
+    out.push_str(if node.constraint.as_deref() == Some("on") { "xMidYMid meet" } else { "none" });
     out.push_str("\"/>");
     out
 }
@@ -857,11 +695,7 @@ fn image(node: &GraphNode, view: &NodeView<'_>, img: &str, url: &UrlOptions<'_>)
 fn icon_svg(node: &GraphNode, view: &NodeView<'_>, icon: &str) -> String {
     let side = asset_size(node.asset_height, 48.0);
     let top = if view.label.height > 0.0 {
-        if node.pos.as_deref() == Some("t") {
-            view.h / 2.0 - side
-        } else {
-            -view.h / 2.0
-        }
+        if node.pos.as_deref() == Some("t") { view.h / 2.0 - side } else { -view.h / 2.0 }
     } else {
         -side / 2.0
     };
@@ -889,11 +723,7 @@ fn icon_svg(node: &GraphNode, view: &NodeView<'_>, icon: &str) -> String {
             out.push_str("\" height=\"");
             push_num(&mut out, side);
             out.push_str("\" rx=\"");
-            out.push_str(if node.shape == "iconRounded" {
-                "8"
-            } else {
-                "0"
-            });
+            out.push_str(if node.shape == "iconRounded" { "8" } else { "0" });
             out.push('"');
             out.push_str(SHAPE_ATTRS);
             out.push_str(&view.style.shape);

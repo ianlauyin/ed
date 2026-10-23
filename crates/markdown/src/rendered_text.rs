@@ -460,17 +460,19 @@ pub(crate) fn source_index_for_rendered(
     last.map(|m| m.source_index + (rendered_index - m.rendered_index))
 }
 
-pub struct RenderedMarkdown {
+pub(crate) struct RenderedMarkdown {
     pub(crate) element: AnyElement,
     pub(crate) text: RenderedText,
 }
 
-#[derive(Clone)]
+#[derive(Clone, Default)]
 pub(crate) struct RenderedText {
     pub(crate) lines: Rc<[Rc<RenderedLine>]>,
     pub(crate) links: Rc<[RenderedLink]>,
     pub(crate) image_links: Rc<[RenderedImageLink]>,
     pub(crate) footnote_refs: Rc<[RenderedFootnoteRef]>,
+    /// Where selecting all ends, when the lines don't cover the whole document.
+    pub(crate) document_end: Option<usize>,
 }
 
 pub(crate) struct WrappedLineSegment {
@@ -501,6 +503,36 @@ pub(crate) struct RenderedFootnoteRef {
 }
 
 impl RenderedText {
+    /// Joins the texts of consecutive blocks, which cover only part of a
+    /// document ending at `document_end`.
+    pub(crate) fn concat(texts: Vec<RenderedText>, document_end: usize) -> Self {
+        Self {
+            lines: texts
+                .iter()
+                .flat_map(|text| text.lines.iter().cloned())
+                .collect(),
+            links: texts
+                .iter()
+                .flat_map(|text| text.links.iter().cloned())
+                .collect(),
+            image_links: texts
+                .iter()
+                .flat_map(|text| text.image_links.iter().cloned())
+                .collect(),
+            footnote_refs: texts
+                .iter()
+                .flat_map(|text| text.footnote_refs.iter().cloned())
+                .collect(),
+            document_end: Some(document_end),
+        }
+    }
+
+    pub(crate) fn select_all_end(&self) -> usize {
+        self.document_end
+            .or_else(|| self.lines.last().map(|line| line.source_end))
+            .unwrap_or(0)
+    }
+
     pub(crate) fn bounds_for_source_range(&self, range: Range<usize>) -> Vec<Bounds<Pixels>> {
         let mut all_bounds = Vec::new();
         for line in self.lines.iter() {

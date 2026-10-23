@@ -4,7 +4,9 @@
 //! non-ASCII character is decoded whole wherever `\s` looks at it, so token boundaries match.
 
 use super::tokens::T;
-use crate::util::chars::{is_line_end, is_space, is_word};
+use crate::util::chars::is_line_end;
+use crate::util::chars::is_space;
+use crate::util::chars::is_word;
 
 /// A token: its kind and its UTF-8 span. Its text is the source between them.
 #[derive(Clone, Copy, Debug)]
@@ -32,12 +34,8 @@ enum S {
 }
 
 /// The `direction` statements, in the order Mermaid's rules try them.
-const DIRECTIONS: [(&str, T); 4] = [
-    ("TB", T::DirectionTb),
-    ("BT", T::DirectionBt),
-    ("RL", T::DirectionRl),
-    ("LR", T::DirectionLr),
-];
+const DIRECTIONS: [(&str, T); 4] =
+    [("TB", T::DirectionTb), ("BT", T::DirectionBt), ("RL", T::DirectionRl), ("LR", T::DirectionLr)];
 
 /// The character at `at`, or `None` at the end.
 fn char_at(src: &str, at: usize) -> Option<char> {
@@ -59,9 +57,7 @@ fn skip_ws(src: &str, mut q: usize) -> usize {
 
 /// Where the next `needle` is from `from`, or the end.
 fn up_to(src: &str, from: usize, needle: char) -> usize {
-    src.get(from..)
-        .and_then(|rest| rest.find(needle))
-        .map_or(src.len(), |at| from + at)
+    src.get(from..).and_then(|rest| rest.find(needle)).map_or(src.len(), |at| from + at)
 }
 
 /// Mermaid's `/.*direction\s+XX[^\n]*/y` at `p`, where `line_end` is the first line terminator
@@ -69,10 +65,7 @@ fn up_to(src: &str, from: usize, needle: char) -> usize {
 /// the line ends that matches.
 fn direction(src: &str, p: usize, line_end: usize, word: &str) -> Option<usize> {
     let line = src.get(p..line_end)?;
-    let mut starts: Vec<usize> = line
-        .match_indices("direction")
-        .map(|(at, _)| p + at)
-        .collect();
+    let mut starts: Vec<usize> = line.match_indices("direction").map(|(at, _)| p + at).collect();
     while let Some(start) = starts.pop() {
         let gap = start + 9;
         let after = skip_ws(src, gap);
@@ -104,10 +97,7 @@ impl Directions {
             return None;
         }
         if self.next.is_none_or(|next| next < p) {
-            self.next = src
-                .get(p..)
-                .and_then(|rest| rest.find("direction"))
-                .map(|at| p + at);
+            self.next = src.get(p..).and_then(|rest| rest.find("direction")).map(|at| p + at);
             if self.next.is_none() {
                 self.done = true;
                 return None;
@@ -125,9 +115,7 @@ impl Directions {
         if next >= end {
             return None;
         }
-        let found = DIRECTIONS
-            .iter()
-            .find_map(|&(word, t)| direction(src, p, end, word).map(|stop| (t, stop)));
+        let found = DIRECTIONS.iter().find_map(|&(word, t)| direction(src, p, end, word).map(|stop| (t, stop)));
         if found.is_none() {
             // No direction statement starts anywhere in the rest of this line either.
             self.failed = end;
@@ -138,10 +126,7 @@ impl Directions {
 
 /// Follows the lexer Jison compiles from `c4Diagram.jison`: its rule order, its start
 /// conditions, and what it returns once the input runs out in each of them.
-#[expect(
-    clippy::many_single_char_names,
-    reason = "mirrors the names of Pele's lexer"
-)]
+#[expect(clippy::many_single_char_names, reason = "mirrors the names of Pele's lexer")]
 pub(crate) fn tokenize(src: &str) -> Vec<Token> {
     let n = src.len();
     let mut tokens: Vec<Token> = Vec::new();
@@ -211,11 +196,7 @@ pub(crate) fn tokenize(src: &str) -> Vec<Token> {
                         if d == b':' {
                             let t = if title { T::AccTitle } else { T::AccDescr };
                             p = emit(&mut tokens, t, p, skip_ws(src, q + 1));
-                            acc_value = if title {
-                                T::AccTitleValue
-                            } else {
-                                T::AccDescrValue
-                            };
+                            acc_value = if title { T::AccTitleValue } else { T::AccDescrValue };
                             state = S::Acc;
                             continue;
                         }
@@ -263,11 +244,7 @@ pub(crate) fn tokenize(src: &str) -> Vec<Token> {
                     while q < n && is_word(u32::from(byte(src, q))) {
                         q += 1;
                     }
-                    let found = if q - p <= 19 {
-                        src.get(p..q).and_then(T::keyword)
-                    } else {
-                        None
-                    };
+                    let found = if q - p <= 19 { src.get(p..q).and_then(T::keyword) } else { None };
                     if let Some(t) = found {
                         if t > T::C4Deployment {
                             state = S::Struct;
@@ -386,12 +363,7 @@ pub(crate) fn tokenize(src: &str) -> Vec<Token> {
                     p += 1;
                     state = S::Initial;
                 } else {
-                    p = emit(
-                        &mut tokens,
-                        T::AccDescrMultilineValue,
-                        p,
-                        up_to(src, p, '}'),
-                    );
+                    p = emit(&mut tokens, T::AccDescrMultilineValue, p, up_to(src, p, '}'));
                 }
             }
         }

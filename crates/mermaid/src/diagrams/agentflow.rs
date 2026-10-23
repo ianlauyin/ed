@@ -14,25 +14,16 @@ pub(crate) mod shapes;
 pub(crate) mod tokens;
 pub(crate) mod types;
 
-/// The JSON reader of the parity fixtures, loaded once per build.
-#[cfg(all(test, not(feature = "sankey")))]
-#[path = "../../tests/fixtures/json.rs"]
-mod fixture;
-#[cfg(all(test, feature = "sankey"))]
-use super::sankey::fixture;
-
-use super::{Diagram, Input, Rendered};
+use super::Diagram;
+use super::Input;
+use super::Rendered;
 use crate::error::Error;
 use crate::svg::root::RenderOptions;
 use crate::util::url::UrlOptions;
 use crate::yaml::Value;
 
 /// The `agentflow` diagram type.
-pub(crate) const DIAGRAM: Diagram = Diagram {
-    keep_comments: true,
-    render: render_input,
-    section: None,
-};
+pub(crate) const DIAGRAM: Diagram = Diagram { keep_comments: true, render: render_input, section: None };
 
 /// The parsed agentflow: Pele's `AgentflowDb`, with the graph Pele's `agentGraph` builds once per
 /// model while parsing.
@@ -44,25 +35,9 @@ pub(crate) struct Model {
     pub(crate) graph: graph::AgentGraph,
 }
 
-fn render_input(
-    input: &Input<'_>,
-    options: &RenderOptions,
-    url: &UrlOptions<'_>,
-) -> Result<Rendered, Error> {
-    let model = parse(
-        input.source,
-        input.config,
-        input.title,
-        input.line_offset,
-        Some(input.max_edges),
-    )?;
-    Ok(render::render(
-        &model.db,
-        &model.graph,
-        input.config,
-        options,
-        url,
-    ))
+fn render_input(input: &Input<'_>, options: &RenderOptions, url: &UrlOptions<'_>) -> Result<Rendered, Error> {
+    let model = parse(input.source, input.config, input.title, input.line_offset, Some(input.max_edges))?;
+    Ok(render::render(&model.db, &model.graph, input.config, options, url))
 }
 
 /// A property of a YAML mapping, as JavaScript's `value.key` reads it.
@@ -70,10 +45,7 @@ fn property<'v>(value: &'v Value, key: &str) -> Option<&'v Value> {
     let Value::Object(entries) = value else {
         return None;
     };
-    entries
-        .iter()
-        .find(|(own, _)| own == key)
-        .map(|(_, value)| value)
+    entries.iter().find(|(own, _)| own == key).map(|(_, value)| value)
 }
 
 /// Parses preprocessed agentflow `source`, which keeps its `%%` comment lines, as Pele's
@@ -96,20 +68,12 @@ pub(crate) fn parse(
 ) -> Result<Model, Error> {
     // Mermaid reads these settings from the flowchart section for agentflow too.
     let flow = property(config, "flowchart");
-    let inherit_dir = matches!(
-        flow.and_then(|flow| property(flow, "inheritDir")),
-        Some(Value::Bool(true))
-    );
+    let inherit_dir = matches!(flow.and_then(|flow| property(flow, "inheritDir")), Some(Value::Bool(true)));
     let direction = match property(config, "direction") {
         Some(Value::String(direction)) => Some(direction.clone()),
         _ => None,
     };
-    let mut db = db::AgentflowDb::new(db::Options {
-        direction,
-        inherit_dir,
-        line_offset,
-        max_edges,
-    });
+    let mut db = db::AgentflowDb::new(db::Options { direction, inherit_dir, line_offset, max_edges });
     if let Some(title) = title.filter(|title| !title.is_empty()) {
         db.title = Some(title.to_owned());
     }
@@ -161,7 +125,6 @@ pub(crate) fn parse(
 ///   semantic,
 /// });
 /// ```
-#[cfg(feature = "model")]
 pub(crate) fn to_json(model: &Model) -> String {
     let db = &model.db;
     let mut json = json::Writer::default();
@@ -441,20 +404,17 @@ pub(crate) fn to_json(model: &Model) -> String {
 
 /// Pele's `semanticModel`: the diagram with presentation-only controls left out, for tools that
 /// read what it means. Ondine exposes no model API, so only the parity tests read it.
-#[cfg(feature = "model")]
 mod semantic {
-    use super::db::{AgentflowDb, PRESENTATION_KEYS};
+    use super::db::AgentflowDb;
+    use super::db::PRESENTATION_KEYS;
     use super::json::Writer;
     use super::shapes::resolve_shape_alias;
     use super::types::Metadata;
 
     /// Metadata without presentation keys, or `None` when nothing is left.
     fn metadata(metadata: Option<&Metadata>) -> Option<Metadata> {
-        let kept: Metadata = metadata?
-            .iter()
-            .filter(|(key, _)| !PRESENTATION_KEYS.contains(&key.as_str()))
-            .cloned()
-            .collect();
+        let kept: Metadata =
+            metadata?.iter().filter(|(key, _)| !PRESENTATION_KEYS.contains(&key.as_str())).cloned().collect();
         (!kept.is_empty()).then_some(kept)
     }
 
@@ -463,11 +423,7 @@ mod semantic {
         json.open('{');
         json.key("vertices");
         json.open('[');
-        for v in db
-            .nodes
-            .iter()
-            .filter(|v| !v.is_connector && db.subgraph(&v.id).is_none())
-        {
+        for v in db.nodes.iter().filter(|v| !v.is_connector && db.subgraph(&v.id).is_none()) {
             json.item();
             json.open('{');
             json.key("id");
@@ -505,12 +461,7 @@ mod semantic {
                 json.key("length");
                 json.number(f64::from(length));
             }
-            json.optional_object(
-                "metadata",
-                e.metadata
-                    .as_deref()
-                    .filter(|metadata| !metadata.is_empty()),
-            );
+            json.optional_object("metadata", e.metadata.as_deref().filter(|metadata| !metadata.is_empty()));
             json.close('}');
         }
         json.close(']');
@@ -536,11 +487,7 @@ mod semantic {
 
         json.key("connectors");
         json.open('[');
-        for v in db
-            .nodes
-            .iter()
-            .filter(|v| v.is_connector && db.subgraph(&v.id).is_none())
-        {
+        for v in db.nodes.iter().filter(|v| v.is_connector && db.subgraph(&v.id).is_none()) {
             json.item();
             json.open('{');
             json.key("id");
@@ -559,9 +506,9 @@ mod semantic {
 }
 
 /// A JSON writer that matches `JSON.stringify` output.
-#[cfg(feature = "model")]
 mod json {
-    use super::db::{push_json, push_json_string};
+    use super::db::push_json;
+    use super::db::push_json_string;
     use super::types::ElementPosition;
     use crate::yaml::Value;
 
@@ -627,12 +574,7 @@ mod json {
 
         /// Writes a position's start and end as array items.
         pub(super) fn position_items(&mut self, position: ElementPosition) {
-            for value in [
-                position.start_line,
-                position.start_column,
-                position.end_line,
-                position.end_column,
-            ] {
+            for value in [position.start_line, position.start_column, position.end_line, position.end_column] {
                 self.item();
                 self.number(f64::from(value));
             }
@@ -663,397 +605,5 @@ mod json {
                 self.close('}');
             }
         }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    //! Parity with Pele's `agentflow.parse` over every string literal of Pele's agentflow compat
-    //! specs and upstream fixtures, the documents the specs build at runtime, Mermaid's reference
-    //! inputs, hand-written cases, and fuzzed variants, as recorded by running Pele's TypeScript.
-
-    use super::fixture::{Json, cases};
-    use super::parse;
-    use crate::yaml::Value;
-
-    /// The parity fixture: Pele's parser input and options, and its model JSON or error.
-    const FIXTURE: &str = include_str!("../../tests/fixtures/agentflow-parse.json");
-
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "test data"
-    )]
-    fn run(case: &Json) -> Result<super::Model, crate::error::Error> {
-        let mut flow = vec![(
-            "inheritDir".to_owned(),
-            Value::Bool(matches!(case.get("inheritDir"), Some(Json::Bool(true)))),
-        )];
-        if let Some(curve) = case.str("curve") {
-            flow.push(("curve".to_owned(), Value::String(curve.to_owned())));
-        }
-        let mut config = vec![("flowchart".to_owned(), Value::Object(flow))];
-        if let Some(direction) = case.str("direction") {
-            config.push(("direction".to_owned(), Value::String(direction.to_owned())));
-        }
-        parse(
-            case.str("input").unwrap_or_default(),
-            &Value::Object(config),
-            case.str("title"),
-            case.num("lineOffset").map_or(0, |n| n as u32),
-            case.num("maxEdges").map(|n| n as usize),
-        )
-    }
-
-    #[test]
-    fn matches_pele() {
-        let mut differing = Vec::new();
-        let cases = cases(FIXTURE);
-        for case in &cases {
-            let actual = run(case);
-            let same = match (&actual, case.get("error")) {
-                (Ok(_), None) => {
-                    #[cfg(feature = "model")]
-                    {
-                        actual.as_ref().map(super::to_json).ok().as_deref() == case.str("model")
-                    }
-                    #[cfg(not(feature = "model"))]
-                    {
-                        true
-                    }
-                }
-                (Err(error), Some(expected)) => {
-                    Some(error.code.as_str()) == expected.str("code")
-                        && Some(error.message.as_str()) == expected.str("message")
-                        && Some(f64::from(error.line)) == expected.num("line")
-                        && Some(f64::from(error.column)) == expected.num("column")
-                }
-                _ => false,
-            };
-            if !same {
-                #[cfg(feature = "model")]
-                let actual = actual.as_ref().map(super::to_json);
-                differing.push((
-                    case.str("origin").unwrap_or("?"),
-                    case.str("input").unwrap_or_default(),
-                    case.str("model")
-                        .map_or_else(|| format!("{:?}", case.get("error")), str::to_owned),
-                    format!("{actual:?}"),
-                ));
-            }
-        }
-        assert!(
-            differing.is_empty(),
-            "{} of {} cases differ from Pele: {:#?}",
-            differing.len(),
-            cases.len(),
-            differing.iter().take(5).collect::<Vec<_>>()
-        );
-    }
-    /// Mermaid's own models for 239 inputs, captured from its browser build by Pele's
-    /// `tests/support/agentflow-reference.ts`.
-    #[cfg(feature = "model")]
-    const REFERENCE: &str = include_str!("../../../../test/vectors/agentflow-reference.json");
-
-    /// The member `key` of an object.
-    #[cfg(feature = "model")]
-    fn member<'j>(value: &'j Json, key: &str) -> Option<&'j Json> {
-        value.get(key)
-    }
-
-    /// The listed members of `value`, as Pele's `pick` keeps the defined ones.
-    #[cfg(feature = "model")]
-    fn pick(value: &Json, keys: &[&str]) -> Json {
-        Json::Obj(
-            keys.iter()
-                .filter_map(|&key| member(value, key).map(|v| (key.to_owned(), clone(v))))
-                .collect(),
-        )
-    }
-
-    #[cfg(feature = "model")]
-    fn clone(value: &Json) -> Json {
-        match value {
-            Json::Arr(items) => Json::Arr(items.iter().map(clone).collect()),
-            Json::Bool(b) => Json::Bool(*b),
-            Json::Null => Json::Null,
-            Json::Num(n) => Json::Num(*n),
-            Json::Obj(entries) => {
-                Json::Obj(entries.iter().map(|(k, v)| (k.clone(), clone(v))).collect())
-            }
-            Json::Str(s) => Json::Str(s.clone()),
-        }
-    }
-
-    #[cfg(feature = "model")]
-    fn items(value: Option<&Json>) -> &[Json] {
-        match value {
-            Some(Json::Arr(items)) => items,
-            _ => &[],
-        }
-    }
-
-    /// Pele's `comparable`: markup becomes a placeholder, keys are sorted, and Mermaid's DOM
-    /// bookkeeping is dropped.
-    #[cfg(feature = "model")]
-    fn comparable(value: &Json) -> Json {
-        match value {
-            Json::Str(s) if s.contains(['<', '>', '&']) => Json::Str("(markup)".to_owned()),
-            Json::Arr(items) => Json::Arr(items.iter().map(comparable).collect()),
-            Json::Obj(entries) => {
-                let mut out: Vec<(String, Json)> = entries
-                    .iter()
-                    .filter(|(k, _)| k != "domId" && k != "haveCallback")
-                    .map(|(k, v)| (k.clone(), comparable(v)))
-                    .collect();
-                out.sort_by(|a, b| a.0.encode_utf16().cmp(b.0.encode_utf16()));
-                Json::Obj(out)
-            }
-            other => clone(other),
-        }
-    }
-
-    #[cfg(feature = "model")]
-    #[expect(clippy::float_cmp, reason = "JSON numbers compare exactly")]
-    fn same(a: &Json, b: &Json) -> bool {
-        match (a, b) {
-            (Json::Arr(x), Json::Arr(y)) => {
-                x.len() == y.len() && x.iter().zip(y).all(|(a, b)| same(a, b))
-            }
-            (Json::Bool(x), Json::Bool(y)) => x == y,
-            (Json::Null, Json::Null) => true,
-            (Json::Num(x), Json::Num(y)) => x == y,
-            (Json::Obj(x), Json::Obj(y)) => {
-                x.len() == y.len() && x.iter().zip(y).all(|(a, b)| a.0 == b.0 && same(&a.1, &b.1))
-            }
-            (Json::Str(x), Json::Str(y)) => x == y,
-            _ => false,
-        }
-    }
-
-    /// Ondine's model through the accessors Pele's reference projection reads.
-    #[cfg(feature = "model")]
-    fn project(model: &Json) -> Json {
-        let text = |key: &str| member(model, key).map_or_else(|| Json::Str(String::new()), clone);
-        let diagnostics: Vec<Json> = items(member(model, "diagnostics"))
-            .iter()
-            .map(|d| {
-                let mut out = pick(d, &["id", "severity", "message", "nodeId"]);
-                if let (Json::Obj(entries), [a, b, c, e]) = (&mut out, items(member(d, "position")))
-                {
-                    entries.push((
-                        "position".to_owned(),
-                        Json::Obj(vec![
-                            ("startLine".to_owned(), clone(a)),
-                            ("startColumn".to_owned(), clone(b)),
-                            ("endLine".to_owned(), clone(c)),
-                            ("endColumn".to_owned(), clone(e)),
-                            ("startIndex".to_owned(), Json::Num(0.0)),
-                            ("endIndex".to_owned(), Json::Num(0.0)),
-                        ]),
-                    ));
-                }
-                out
-            })
-            .collect();
-        let graph = member(model, "graph");
-        let nodes = items(graph.and_then(|g| member(g, "nodes")))
-            .iter()
-            .map(|n| {
-                let mut out = pick(
-                    n,
-                    &[
-                        "id",
-                        "label",
-                        "labelType",
-                        "shape",
-                        "isGroup",
-                        "parentId",
-                        "cssCompiledStyles",
-                        "cssClasses",
-                        "dir",
-                        "link",
-                        "linkTarget",
-                        "tooltip",
-                        "colorIndex",
-                        "metadata",
-                    ],
-                );
-                // Mermaid marks a node's kind with a class; Pele keeps the kind on the node.
-                let mut classes = n.str("cssClasses").unwrap_or_default().to_owned();
-                if let Some(kind) = n.str("kind") {
-                    classes.push_str(" af-kind-");
-                    classes.push_str(kind);
-                }
-                let classes = classes.split_whitespace().collect::<Vec<_>>().join(" ");
-                if let Json::Obj(entries) = &mut out
-                    && let Some(entry) = entries.iter_mut().find(|(k, _)| k == "cssClasses")
-                {
-                    entry.1 = Json::Str(classes);
-                }
-                out
-            })
-            .collect();
-        let layout_edges = items(graph.and_then(|g| member(g, "edges")))
-            .iter()
-            .map(|e| {
-                pick(
-                    e,
-                    &[
-                        "id",
-                        "start",
-                        "end",
-                        "type",
-                        "label",
-                        "labelType",
-                        "thickness",
-                        "minlen",
-                        "arrowTypeStart",
-                        "arrowTypeEnd",
-                        "cssCompiledStyles",
-                        "style",
-                        "curve",
-                        "metadata",
-                        "isUserDefinedId",
-                    ],
-                )
-            })
-            .collect();
-        let mappings = items(member(model, "mappings"))
-            .iter()
-            .map(|m| {
-                let mut row: Vec<Json> = items(Some(m)).iter().map(clone).collect();
-                row.push(Json::Num(0.0));
-                row.push(Json::Num(0.0));
-                Json::Arr(row)
-            })
-            .collect();
-        let mut semantic = member(model, "semantic").map_or(Json::Null, clone);
-        if let Json::Obj(entries) = &mut semantic {
-            entries.push((
-                "diagnostics".to_owned(),
-                Json::Arr(diagnostics.iter().map(clone).collect()),
-            ));
-        }
-
-        let mut out = vec![];
-        if let Some(direction) = member(model, "direction") {
-            out.push(("direction".to_owned(), clone(direction)));
-        }
-        out.push(("accTitle".to_owned(), text("accTitle")));
-        out.push(("accDescr".to_owned(), text("accDescr")));
-        out.push((
-            "vertices".to_owned(),
-            Json::Arr(
-                items(member(model, "nodes"))
-                    .iter()
-                    .filter_map(|entry| items(Some(entry)).get(1))
-                    .map(|v| {
-                        pick(
-                            v,
-                            &[
-                                "id",
-                                "text",
-                                "labelType",
-                                "type",
-                                "styles",
-                                "classes",
-                                "link",
-                                "linkTarget",
-                                "metadata",
-                                "isConnector",
-                                "props",
-                            ],
-                        )
-                    })
-                    .collect(),
-            ),
-        ));
-        for (to, from) in [
-            ("edges", "edges"),
-            ("defaultStyle", "defaultEdgeStyle"),
-            ("defaultInterpolate", "defaultInterpolate"),
-            ("subGraphs", "subgraphs"),
-            ("classes", "classes"),
-        ] {
-            if let Some(value) = member(model, from) {
-                out.push((to.to_owned(), clone(value)));
-            }
-        }
-        out.push(("nodes".to_owned(), Json::Arr(nodes)));
-        out.push(("layoutEdges".to_owned(), Json::Arr(layout_edges)));
-        out.push(("mappings".to_owned(), Json::Arr(mappings)));
-        out.push(("diagnostics".to_owned(), Json::Arr(diagnostics)));
-        out.push(("semantic".to_owned(), semantic));
-        Json::Obj(out)
-    }
-
-    /// Ondine's projected model for `src` through the whole pipeline, or the first line of its
-    /// error, as Pele's `peleReference` builds it with Mermaid's palette of 12 and `basis` curve.
-    #[cfg(feature = "model")]
-    fn reference_of(src: &str) -> Result<Json, String> {
-        let first_line = |error: crate::error::Error| {
-            error
-                .message
-                .split('\n')
-                .next()
-                .unwrap_or_default()
-                .to_owned()
-        };
-        let pre = crate::preprocess::preprocess(src).map_err(first_line)?;
-        let mut source = crate::preprocess::encode_entities(&pre.with_comments).into_owned();
-        source.push('\n');
-        let config = Value::Object(pre.config);
-        let mut model = parse(
-            &source,
-            &config,
-            pre.title.as_deref(),
-            pre.line_offset,
-            Some(5000),
-        )
-        .map_err(first_line)?;
-        model.graph = super::graph::build_agent_graph(&mut model.db, 12, Some("basis"));
-        let json = super::to_json(&model);
-        let mut wrapped = String::from("[");
-        wrapped.push_str(&json);
-        wrapped.push(']');
-        let parsed = cases(&wrapped).into_iter().next().unwrap_or(Json::Null);
-        Ok(project(&parsed))
-    }
-
-    #[cfg(feature = "model")]
-    #[test]
-    fn matches_mermaid_reference() {
-        let reference = cases(REFERENCE);
-        let mut differing = Vec::new();
-        let mut matched = 0;
-        for entry in &reference {
-            let src = entry.str("src").unwrap_or_default();
-            let mine = reference_of(src);
-            let ok = match (&mine, entry.get("model"), entry.str("error")) {
-                // Pele's YAML reader has no aliases and reads a lone colon as text, so it
-                // accepts these where Mermaid's js-yaml does not.
-                (Ok(_), None, Some(error))
-                    if error.contains("alias") || error.contains("explicit mapping pair") =>
-                {
-                    true
-                }
-                (Ok(mine), Some(theirs), _) => same(&comparable(mine), &comparable(theirs)),
-                (Err(_), None, Some(_)) => true,
-                _ => false,
-            };
-            if ok {
-                matched += 1;
-            } else {
-                differing.push((src, format!("{:?}", mine.map(|m| comparable(&m)))));
-            }
-        }
-        assert!(
-            differing.is_empty(),
-            "{matched} of {} match Mermaid; differing: {:#?}",
-            reference.len(),
-            differing.iter().take(3).collect::<Vec<_>>()
-        );
-        assert_eq!(matched, 239);
     }
 }

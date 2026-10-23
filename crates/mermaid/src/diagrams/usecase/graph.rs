@@ -3,8 +3,14 @@
 //! Port of Pele's `src/diagrams/usecase/graph.ts`, which ports `getData` from Mermaid's use case
 //! DB.
 
-use super::json::{JsonDoc, JsonValue};
-use super::types::{ActorType, Relationship, RelationshipType, Shape, UsecaseModel, arrow};
+use super::json::JsonDoc;
+use super::json::JsonValue;
+use super::types::ActorType;
+use super::types::Relationship;
+use super::types::RelationshipType;
+use super::types::Shape;
+use super::types::UsecaseModel;
+use super::types::arrow;
 use crate::text::label::trim;
 use crate::yaml::push_number;
 
@@ -132,27 +138,16 @@ pub(crate) fn flatten_json_rows(json: &JsonDoc) -> Vec<JsonRow> {
         children.clear();
         match json.get(node) {
             Some(JsonValue::Array(items)) => {
-                let leaf = |&item: &usize| {
-                    !matches!(
-                        json.get(item),
-                        Some(JsonValue::Array(_) | JsonValue::Object(_))
-                    )
-                };
+                let leaf = |&item: &usize| !matches!(json.get(item), Some(JsonValue::Array(_) | JsonValue::Object(_)));
                 if items.is_empty() {
-                    rows.push(JsonRow {
-                        key: path,
-                        value: String::from("[]"),
-                    });
+                    rows.push(JsonRow { key: path, value: String::from("[]") });
                 } else if items.iter().all(leaf) {
                     for (i, &item) in items.iter().enumerate() {
                         let mut value = String::new();
                         if let Some(item) = json.get(item) {
                             scalar(&mut value, item);
                         }
-                        rows.push(JsonRow {
-                            key: if i == 0 { path.clone() } else { String::new() },
-                            value,
-                        });
+                        rows.push(JsonRow { key: if i == 0 { path.clone() } else { String::new() }, value });
                     }
                 } else {
                     for (i, &item) in items.iter().enumerate() {
@@ -166,10 +161,7 @@ pub(crate) fn flatten_json_rows(json: &JsonDoc) -> Vec<JsonRow> {
             }
             Some(JsonValue::Object(entries)) => {
                 if entries.is_empty() {
-                    rows.push(JsonRow {
-                        key: path.clone(),
-                        value: String::from("{}"),
-                    });
+                    rows.push(JsonRow { key: path.clone(), value: String::from("{}") });
                 }
                 for (key, item) in entries {
                     let mut child = path.clone();
@@ -183,10 +175,7 @@ pub(crate) fn flatten_json_rows(json: &JsonDoc) -> Vec<JsonRow> {
             Some(value) => {
                 let mut text = String::new();
                 scalar(&mut text, value);
-                rows.push(JsonRow {
-                    key: path,
-                    value: text,
-                });
+                rows.push(JsonRow { key: path, value: text });
             }
             None => {}
         }
@@ -238,11 +227,7 @@ pub(crate) fn build_usecase_graph(model: &UsecaseModel) -> UsecaseGraph<'_> {
             };
             for raw in &definition.styles {
                 let style = trim(raw);
-                let property = trim(
-                    style
-                        .find(':')
-                        .map_or(style, |at| style.get(..at).unwrap_or("")),
-                );
+                let property = trim(style.find(':').map_or(style, |at| style.get(..at).unwrap_or("")));
                 if property.is_empty() {
                     continue;
                 }
@@ -343,9 +328,7 @@ pub(crate) fn build_usecase_graph(model: &UsecaseModel) -> UsecaseGraph<'_> {
         nodes.push(GraphNode {
             business: false,
             css_classes: class_list(
-                ["default", "usecase-json-table"]
-                    .into_iter()
-                    .chain(json.classes.iter().map(String::as_str)),
+                ["default", "usecase-json-table"].into_iter().chain(json.classes.iter().map(String::as_str)),
             ),
             css_compiled_styles: compiled(&json.classes),
             css_styles: &json.styles,
@@ -368,11 +351,7 @@ pub(crate) fn build_usecase_graph(model: &UsecaseModel) -> UsecaseGraph<'_> {
                 [
                     "default",
                     "system-boundary",
-                    if boundary.package {
-                        "system-boundary-package"
-                    } else {
-                        "system-boundary-rect"
-                    },
+                    if boundary.package { "system-boundary-package" } else { "system-boundary-rect" },
                 ]
                 .into_iter()
                 .chain(boundary.classes.iter().map(String::as_str)),
@@ -393,10 +372,7 @@ pub(crate) fn build_usecase_graph(model: &UsecaseModel) -> UsecaseGraph<'_> {
     }
 
     for relationship in &model.relationships {
-        let semantic = matches!(
-            relationship.r#type,
-            RelationshipType::Include | RelationshipType::Extend
-        );
+        let semantic = matches!(relationship.r#type, RelationshipType::Include | RelationshipType::Extend);
         let (arrow_start, arrow_end) = markers(relationship);
         let animated = relationship.animate || relationship.animation.is_some();
         let mut kind = String::from("relationship-");

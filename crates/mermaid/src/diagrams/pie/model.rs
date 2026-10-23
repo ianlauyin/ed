@@ -3,7 +3,8 @@
 use std::collections::BTreeSet;
 
 use super::parser::PieAst;
-use crate::error::{Code, Error};
+use crate::error::Code;
+use crate::error::Error;
 use crate::text::label::trim_start;
 use crate::util::chars::is_space;
 use crate::yaml::push_number;
@@ -43,9 +44,7 @@ fn negative(label: &str, value: f64) -> Error {
     message.push_str(label);
     message.push_str("\" has invalid value: ");
     push_number(&mut message, value);
-    message.push_str(
-        ". Negative values are not allowed in pie charts. All slice values must be >= 0.",
-    );
+    message.push_str(". Negative values are not allowed in pie charts. All slice values must be >= 0.");
     let mut error = Error::new(Code::Semantic, message);
     error.r#type = Some("pie");
     error
@@ -69,19 +68,10 @@ pub(crate) fn build_pie(ast: PieAst, title: Option<&str>) -> Result<PieModel, Er
     }
 
     Ok(PieModel {
-        acc_descr: ast
-            .acc_descr
-            .filter(|text| !text.is_empty())
-            .map(|text| dedent_lines(&text)),
-        acc_title: ast
-            .acc_title
-            .filter(|text| !text.is_empty())
-            .map(|text| trim_start(&text).to_owned()),
+        acc_descr: ast.acc_descr.filter(|text| !text.is_empty()).map(|text| dedent_lines(&text)),
+        acc_title: ast.acc_title.filter(|text| !text.is_empty()).map(|text| trim_start(&text).to_owned()),
         sections,
         show_data: ast.show_data,
-        title: ast
-            .title
-            .filter(|text| !text.is_empty())
-            .or_else(|| title.map(str::to_owned)),
+        title: ast.title.filter(|text| !text.is_empty()).or_else(|| title.map(str::to_owned)),
     })
 }

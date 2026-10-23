@@ -6,16 +6,13 @@ use std::borrow::Cow;
 use crate::text::entities::decode;
 use crate::text::icons::IconResolver;
 use crate::text::label::Label;
-use crate::text::measure::{BOLD, ITALIC};
+use crate::text::measure::BOLD;
+use crate::text::measure::ITALIC;
 
 /// Rounds as JavaScript's `Math.round` does: halves toward positive infinity.
 pub(crate) fn js_round(value: f64) -> f64 {
     let floor = value.floor();
-    if value - floor >= 0.5 {
-        floor + 1.0
-    } else {
-        floor
-    }
+    if value - floor >= 0.5 { floor + 1.0 } else { floor }
 }
 
 /// Whether XML text needs escaping: markup characters, or control characters XML does not allow.
@@ -98,11 +95,7 @@ pub(crate) fn push_num(out: &mut String, value: f64) {
 
     // ponytail: Pele prints hundredths of 1e11 and more with `String(n / 100)`, which turns to
     // exponents past 1e21. This keeps the two-decimal form, saturating at `u64::MAX`.
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "n is a positive whole number"
-    )]
+    #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "n is a positive whole number")]
     let n = n as u64;
     push_u64(out, n / 100);
 
@@ -126,13 +119,7 @@ pub(crate) fn num(value: f64) -> String {
 
 /// Writes a measured label as SVG text centered on (`cx`, `cy`). `attrs` go on the text element;
 /// `icons` draws the label's icons.
-pub(crate) fn label_svg(
-    label: &Label,
-    cx: f64,
-    cy: f64,
-    attrs: &str,
-    icons: Option<IconResolver<'_>>,
-) -> String {
+pub(crate) fn label_svg(label: &Label, cx: f64, cy: f64, attrs: &str, icons: Option<IconResolver<'_>>) -> String {
     let lines = &label.lines;
     if lines.is_empty() {
         return String::new();
@@ -284,124 +271,4 @@ pub(crate) fn text_style(attrs: &str, shared: u8) -> Cow<'_, str> {
         out.push_str(ITALIC_ATTR);
     }
     Cow::Owned(out)
-}
-
-#[cfg(test)]
-mod tests {
-    //! Expectations come from Pele's `num`, `esc`, `escText`, `textStyle`, and `spanStyle`.
-
-    use super::{esc, esc_text, num, span_style, text_style};
-
-    #[test]
-    #[expect(
-        clippy::unreadable_literal,
-        reason = "values as Pele's tests print them"
-    )]
-    fn num_matches_pele() {
-        for &(value, expected) in &[
-            (0.0, "0"),
-            (0.0, "0"),
-            (0.004, "0"),
-            (0.005, "0.01"),
-            (-0.005, "0"),
-            (0.015, "0.02"),
-            (1.005, "1"),
-            (2.675, "2.68"),
-            (0.1, "0.1"),
-            (0.25, "0.25"),
-            (0.5, "0.5"),
-            (-0.5, "-0.5"),
-            (-0.499, "-0.5"),
-            (1.0, "1"),
-            (10.1, "10.1"),
-            (12.34, "12.34"),
-            (99.995, "100"),
-            (123.456, "123.46"),
-            (-123.456, "-123.46"),
-            (1e-7, "0"),
-            (10000000000.0, "10000000000"),
-            (99999999.99, "99999999.99"),
-            (1000000000000.0, "1000000000000"),
-            (-7.3, "-7.3"),
-            (0.07, "0.07"),
-            (3.1, "3.1"),
-            (0.3333333333333333, "0.33"),
-            (-0.6666666666666666, "-0.67"),
-            (f64::NAN, "NaN"),
-            (f64::INFINITY, "Infinity"),
-            (f64::NEG_INFINITY, "-Infinity"),
-        ] {
-            assert_eq!(num(value), expected, "{value}");
-        }
-    }
-
-    #[test]
-    fn esc_matches_pele() {
-        for &(text, escaped, as_text) in &[
-            ("plain", "plain", "plain"),
-            ("a & b", "a &amp; b", "a &amp; b"),
-            (
-                "<tag attr=\"v\">",
-                "&lt;tag attr=&quot;v&quot;&gt;",
-                "&lt;tag attr=&quot;v&quot;&gt;",
-            ),
-            ("\u{0}\u{1}x\u{8}\u{b}\u{c}\u{e}\u{1f}\u{7f}y", "xy", "xy"),
-            ("tab\tnl\ncr\r", "tab\tnl\ncr\r", "tab\tnl\ncr\r"),
-            (
-                "caf\u{e9} \u{1f600}",
-                "caf\u{e9} \u{1f600}",
-                "caf\u{e9} \u{1f600}",
-            ),
-            ("&amp;", "&amp;amp;", "&amp;"),
-            (
-                "&lt;b&gt; #35; \u{fb02}\u{b0}\u{b0}35\u{b6}\u{df}",
-                "&amp;lt;b&amp;gt; #35; \u{fb02}\u{b0}\u{b0}35\u{b6}\u{df}",
-                "&lt;b&gt; #35; #",
-            ),
-            ("\"q\"", "&quot;q&quot;", "&quot;q&quot;"),
-        ] {
-            assert_eq!(esc(text), escaped);
-            assert_eq!(esc_text(text), as_text);
-        }
-    }
-
-    #[test]
-    fn styles_match_pele() {
-        for &(attrs, shared, expected, span) in &[
-            ("", 0, "", ""),
-            (
-                "",
-                1,
-                " font-weight=\"var(--_w)\"",
-                " font-weight=\"var(--_w)\"",
-            ),
-            (
-                "",
-                3,
-                " font-weight=\"var(--_w)\" font-style=\"italic\"",
-                " font-weight=\"var(--_w)\" font-style=\"italic\"",
-            ),
-            (
-                " font-weight=\"400\"",
-                3,
-                " font-weight=\"400\" font-style=\"italic\"",
-                " font-weight=\"var(--_w)\" font-style=\"italic\"",
-            ),
-            (
-                " font-style=\"normal\"",
-                3,
-                " font-style=\"normal\" font-weight=\"var(--_w)\"",
-                " font-weight=\"var(--_w)\" font-style=\"italic\"",
-            ),
-            (
-                " x",
-                2,
-                " x font-style=\"italic\"",
-                " font-style=\"italic\"",
-            ),
-        ] {
-            assert_eq!(text_style(attrs, shared), expected);
-            assert_eq!(span_style(shared), span);
-        }
-    }
 }

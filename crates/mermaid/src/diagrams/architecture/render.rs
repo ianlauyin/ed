@@ -1,18 +1,33 @@
 //! Draws an architecture diagram: services and junctions on a grid, groups around them, and
 //! orthogonal edges between their sides. Port of Pele's `src/diagrams/architecture/render.ts`.
 
-use super::db::{ArchitectureDb, NodeKind};
+use super::db::ArchitectureDb;
+use super::db::NodeKind;
 use super::icons::builtin_icon;
-use super::layout::{place_on_grid, side_index};
+use super::layout::place_on_grid;
+use super::layout::side_index;
 use crate::diagrams::Rendered;
-use crate::diagrams::common::fit_width::{tighten, title_room};
-use crate::svg::builder::{esc_text, js_round, label_svg, push_num};
-use crate::svg::edges::{edge_label_svg, marker, marker_trim};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
+use crate::diagrams::common::fit_width::tighten;
+use crate::diagrams::common::fit_width::title_room;
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::edges::edge_label_svg;
+use crate::svg::edges::marker;
+use crate::svg::edges::marker_trim;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
 use crate::svg::theme::RADIUS;
-use crate::text::label::{Label, Span, layout_label, trim_end};
-use crate::text::measure::{self, BOLD};
-use crate::yaml::{Value, push_number};
+use crate::text::label::Label;
+use crate::text::label::Span;
+use crate::text::label::layout_label;
+use crate::text::label::trim_end;
+use crate::text::measure::BOLD;
+use crate::text::measure::{self};
+use crate::yaml::Value;
+use crate::yaml::push_number;
 
 const STUB: f64 = 12.0;
 const CORNER: f64 = 6.0;
@@ -44,8 +59,7 @@ fn setting(config: &Value, key: &str, fallback: f64, min: f64, max: f64) -> f64 
     let Value::Object(entries) = config else {
         return fallback;
     };
-    let Some((_, Value::Object(section))) = entries.iter().find(|(own, _)| own == "architecture")
-    else {
+    let Some((_, Value::Object(section))) = entries.iter().find(|(own, _)| own == "architecture") else {
         return fallback;
     };
     match section.iter().find(|(own, _)| own == key) {
@@ -89,17 +103,10 @@ fn icon_slot(out: &mut String, name: &str, x: f64, y: f64, side: f64) {
 /// measures as the whole pair, as Pele's measurer counts the high surrogate as the wide half.
 fn prefix_width(units: &[u16], count: usize, size: f64, style: u8) -> f64 {
     let mut end = count.min(units.len());
-    if end > 0
-        && (0xd800..=0xdbff).contains(&at(units, end - 1))
-        && (0xdc00..=0xdfff).contains(&at(units, end))
-    {
+    if end > 0 && (0xd800..=0xdbff).contains(&at(units, end - 1)) && (0xdc00..=0xdfff).contains(&at(units, end)) {
         end += 1;
     }
-    measure::width(
-        &String::from_utf16_lossy(units.get(..end).unwrap_or(&[])),
-        size,
-        style,
-    )
+    measure::width(&String::from_utf16_lossy(units.get(..end).unwrap_or(&[])), size, style)
 }
 
 /// Cuts a label down to a box, ending what is left with an ellipsis.
@@ -118,12 +125,7 @@ fn fit(label: Label, max_width: f64, max_lines: usize) -> Label {
         if width > max_width || (cut && i + 1 == max_lines) {
             loop {
                 let Some(span) = line.last_mut() else {
-                    line.push(Span {
-                        icon: None,
-                        style: 0,
-                        text: String::from("…"),
-                        width: dots,
-                    });
+                    line.push(Span { icon: None, style: 0, text: String::from("…"), width: dots });
                     width = dots;
                     break;
                 };
@@ -134,9 +136,7 @@ fn fit(label: Label, max_width: f64, max_lines: usize) -> Label {
                     let mut hi = units.len();
                     while lo < hi {
                         let mid = (lo + hi + 1) >> 1;
-                        if rest + prefix_width(&units, mid, label.size, span.style) + dots
-                            <= max_width
-                        {
+                        if rest + prefix_width(&units, mid, label.size, span.style) + dots <= max_width {
                             lo = mid;
                         } else {
                             hi = mid - 1;
@@ -163,13 +163,7 @@ fn fit(label: Label, max_width: f64, max_lines: usize) -> Label {
     }
     #[expect(clippy::cast_precision_loss, reason = "line counts are small")]
     let height = lines.len() as f64 * label.line_height;
-    Label {
-        height,
-        lines,
-        width: widest,
-        widths,
-        ..label
-    }
+    Label { height, lines, width: widest, widths, ..label }
 }
 
 /// Where an edge leaves or enters a node.
@@ -225,36 +219,20 @@ fn route(s: &Port, e: &Port) -> Vec<f64> {
             if sideways {
                 let lo = if sdx > 0.0 { s.x1 } else { e.x1 };
                 let hi = if sdx > 0.0 { e.x0 } else { s.x0 };
-                let mx = if lo < hi {
-                    f64::midpoint(lo, hi)
-                } else {
-                    f64::midpoint(sx, ex)
-                };
+                let mx = if lo < hi { f64::midpoint(lo, hi) } else { f64::midpoint(sx, ex) };
                 return vec![sx, sy, mx, sy, mx, ey, ex, ey];
             }
             let lo = if sdy > 0.0 { s.y1 } else { e.y1 };
             let hi = if sdy > 0.0 { e.y0 } else { s.y0 };
-            let my = if lo < hi {
-                f64::midpoint(lo, hi)
-            } else {
-                f64::midpoint(sy, ey)
-            };
+            let my = if lo < hi { f64::midpoint(lo, hi) } else { f64::midpoint(sy, ey) };
             return vec![sx, sy, sx, my, ex, my, ex, ey];
         }
     } else if offset.abs() >= 1.0 {
         if sideways {
-            let x = if sdx > 0.0 {
-                sx.max(ex) + STUB
-            } else {
-                sx.min(ex) - STUB
-            };
+            let x = if sdx > 0.0 { sx.max(ex) + STUB } else { sx.min(ex) - STUB };
             return vec![sx, sy, x, sy, x, ey, ex, ey];
         }
-        let y = if sdy > 0.0 {
-            sy.max(ey) + STUB
-        } else {
-            sy.min(ey) - STUB
-        };
+        let y = if sdy > 0.0 { sy.max(ey) + STUB } else { sy.min(ey) - STUB };
         return vec![sx, sy, sx, y, ex, y, ex, ey];
     }
     // The straight way is blocked by one of the two nodes: go between them, or around both.
@@ -312,10 +290,7 @@ fn push_point(out: &mut String, x: f64, y: f64) {
 
 /// Appends the path through points `p`, with rounded corners and its ends trimmed for markers.
 /// `p` holds at least two points.
-#[expect(
-    clippy::many_single_char_names,
-    reason = "names mirror Pele's pathData"
-)]
+#[expect(clippy::many_single_char_names, reason = "names mirror Pele's pathData")]
 fn path_data(out: &mut String, p: &[f64], start_trim: f64, end_trim: f64) {
     let n = p.len() / 2;
     let mut xs: Vec<f64> = p.iter().step_by(2).copied().collect();
@@ -361,11 +336,7 @@ fn path_data(out: &mut String, p: &[f64], start_trim: f64, end_trim: f64) {
 }
 
 /// Draws `model` with the `architecture` section of `config`, tightened to fit the host's width.
-pub(crate) fn render_architecture(
-    model: &ArchitectureDb,
-    config: &Value,
-    options: &RenderOptions,
-) -> Rendered {
+pub(crate) fn render_architecture(model: &ArchitectureDb, config: &Value, options: &RenderOptions) -> Rendered {
     tighten(options, |tight| draw(model, config, options, tight))
 }
 
@@ -373,15 +344,8 @@ pub(crate) fn render_architecture(
 #[expect(clippy::many_single_char_names, reason = "names mirror Pele's draw")]
 fn draw(model: &ArchitectureDb, config: &Value, options: &RenderOptions, tight: bool) -> Rendered {
     let icon_size = setting(config, "iconSize", 48.0, 8.0, 512.0);
-    let size = setting(
-        config,
-        "fontSize",
-        options.font_size.unwrap_or(16.0),
-        4.0,
-        128.0,
-    );
-    let group_pad =
-        setting(config, "padding", 20.0, 0.0, 256.0).min(if tight { 12.0 } else { f64::INFINITY });
+    let size = setting(config, "fontSize", options.font_size.unwrap_or(16.0), 4.0, 128.0);
+    let group_pad = setting(config, "padding", 20.0, 0.0, 256.0).min(if tight { 12.0 } else { f64::INFINITY });
     let small = js_round(size * 0.875);
     let pad = options.padding.unwrap_or(8.0);
     let half = icon_size / 2.0;
@@ -395,36 +359,15 @@ fn draw(model: &ArchitectureDb, config: &Value, options: &RenderOptions, tight: 
     let grid = place_on_grid(&node_refs, &group_refs, &model.edges, &model.layout_hints);
 
     // A service is its icon square with the title beneath; a junction takes the same room.
-    let wrap = if tight {
-        icon_size.max(64.0)
-    } else {
-        (icon_size * 2.25).max(96.0)
-    };
+    let wrap = if tight { icon_size.max(64.0) } else { (icon_size * 2.25).max(96.0) };
     let mut labels: Vec<Label> = Vec::with_capacity(n);
     let mut box_w = vec![0.0_f64; n];
     let mut box_h = vec![0.0_f64; n];
     for (i, node) in nodes.iter().enumerate() {
-        let title = if node.kind == NodeKind::Service {
-            node.title.as_deref()
-        } else {
-            None
-        };
+        let title = if node.kind == NodeKind::Service { node.title.as_deref() } else { None };
         let label = layout_label(title, true, size, wrap, 0, None);
-        set(
-            &mut box_w,
-            i,
-            icon_size.max(2.0 * (label.width / 2.0).ceil()),
-        );
-        set(
-            &mut box_h,
-            i,
-            icon_size
-                + if label.height > 0.0 {
-                    LABEL_GAP + label.height
-                } else {
-                    0.0
-                },
-        );
+        set(&mut box_w, i, icon_size.max(2.0 * (label.width / 2.0).ceil()));
+        set(&mut box_h, i, icon_size + if label.height > 0.0 { LABEL_GAP + label.height } else { 0.0 });
         labels.push(label);
     }
 
@@ -443,11 +386,7 @@ fn draw(model: &ArchitectureDb, config: &Value, options: &RenderOptions, tight: 
     let r_count = row_of.len();
     let mut col_w = vec![0.0_f64; c_count];
     let mut row_h = vec![0.0_f64; r_count];
-    let gap = if tight {
-        24.0_f64.max(2.0 * STUB)
-    } else {
-        40.0_f64.max(js_round(icon_size * 0.75))
-    };
+    let gap = if tight { 24.0_f64.max(2.0 * STUB) } else { 40.0_f64.max(js_round(icon_size * 0.75)) };
     let mut gap_x = vec![gap; c_count];
     let mut gap_y = vec![gap; r_count];
     let mut node_col = vec![0; n];
@@ -520,33 +459,13 @@ fn draw(model: &ArchitectureDb, config: &Value, options: &RenderOptions, tight: 
     for (g, group) in groups.iter().enumerate() {
         let (gc, gr) = (at(&grid.group_col, g), at(&grid.group_row, g));
         set(&mut c0, g, rank_of(&col_of, gc).unwrap_or(0));
-        set(
-            &mut c1,
-            g,
-            rank_of(&col_of, gc + at(&grid.group_cols, g) - 1).unwrap_or(0),
-        );
+        set(&mut c1, g, rank_of(&col_of, gc + at(&grid.group_cols, g) - 1).unwrap_or(0));
         set(&mut r0, g, rank_of(&row_of, gr).unwrap_or(0));
-        set(
-            &mut r1,
-            g,
-            rank_of(&row_of, gr + at(&grid.group_rows, g) - 1).unwrap_or(0),
-        );
-        let room = if tight {
-            80.0_f64.max(title_room(options) / 2.0)
-        } else {
-            320.0
-        };
+        set(&mut r1, g, rank_of(&row_of, gr + at(&grid.group_rows, g) - 1).unwrap_or(0));
+        let room = if tight { 80.0_f64.max(title_room(options) / 2.0) } else { 320.0 };
         let label = layout_label(group.title.as_deref(), true, size, room, 0, None);
-        let icon = if group.icon.as_deref().is_some_and(|icon| !icon.is_empty()) {
-            badge
-        } else {
-            0.0
-        };
-        let joint = if label.width > 0.0 && icon > 0.0 {
-            6.0
-        } else {
-            0.0
-        };
+        let icon = if group.icon.as_deref().is_some_and(|icon| !icon.is_empty()) { badge } else { 0.0 };
+        let joint = if label.width > 0.0 && icon > 0.0 { 6.0 } else { 0.0 };
         set(&mut head_w, g, label.width + icon + joint);
         set(&mut head_h, g, label.height.max(icon));
         group_labels.push(label);
@@ -554,22 +473,13 @@ fn draw(model: &ArchitectureDb, config: &Value, options: &RenderOptions, tight: 
     for g in (0..g_count).rev() {
         let left = group_pad + at(&ins_l, g);
         let mut right = group_pad + at(&ins_r, g);
-        let top = if at(&head_h, g) > 0.0 {
-            group_pad.max(at(&head_h, g) + 12.0)
-        } else {
-            group_pad
-        } + at(&ins_t, g);
+        let top = if at(&head_h, g) > 0.0 { group_pad.max(at(&head_h, g) + 12.0) } else { group_pad } + at(&ins_t, g);
         let bottom = group_pad + at(&ins_b, g);
         let (gc0, gc1, gr0, gr1) = (at(&c0, g), at(&c1, g), at(&r0, g), at(&r1, g));
         if at(&head_w, g) > 0.0 {
             let mut inner = left + right;
             for c in gc0..=gc1 {
-                inner += at(&col_w, c)
-                    + if c < gc1 {
-                        at(&col_r, c) + at(&gap_x, c) + at(&col_l, c + 1)
-                    } else {
-                        0.0
-                    };
+                inner += at(&col_w, c) + if c < gc1 { at(&col_r, c) + at(&gap_x, c) + at(&col_l, c + 1) } else { 0.0 };
             }
             if at(&head_w, g) + 20.0 > inner {
                 right += (at(&head_w, g) + 20.0 - inner).ceil();
@@ -606,15 +516,13 @@ fn draw(model: &ArchitectureDb, config: &Value, options: &RenderOptions, tight: 
     for c in 0..c_count {
         let x = inner_w + at(&col_l, c);
         set(&mut xs, c, x);
-        inner_w =
-            x + at(&col_w, c) + at(&col_r, c) + if c + 1 < c_count { at(&gap_x, c) } else { 0.0 };
+        inner_w = x + at(&col_w, c) + at(&col_r, c) + if c + 1 < c_count { at(&gap_x, c) } else { 0.0 };
     }
     let mut inner_h = 0.0;
     for r in 0..r_count {
         let y = inner_h + at(&row_t, r);
         set(&mut ys, r, y);
-        inner_h =
-            y + at(&row_h, r) + at(&row_b, r) + if r + 1 < r_count { at(&gap_y, r) } else { 0.0 };
+        inner_h = y + at(&row_h, r) + at(&row_b, r) + if r + 1 < r_count { at(&gap_y, r) } else { 0.0 };
     }
     // What is drawn, which an edge that has to go around a node can push past the grid.
     let mut min_x: f64 = 0.0;
@@ -628,11 +536,7 @@ fn draw(model: &ArchitectureDb, config: &Value, options: &RenderOptions, tight: 
     let bottom = |g: usize| at(&ys, at(&r1, g)) + at(&row_h, at(&r1, g)) + at(&ins_b, g);
     let center_x = |i: usize| at(&xs, at(&node_col, i)) + at(&col_w, at(&node_col, i)) / 2.0;
     let row_y = |i: usize| at(&ys, at(&node_row, i));
-    let is_junction = |i: usize| {
-        nodes
-            .get(i)
-            .is_some_and(|node| node.kind == NodeKind::Junction)
-    };
+    let is_junction = |i: usize| nodes.get(i).is_some_and(|node| node.kind == NodeKind::Junction);
 
     let port = |i: usize, side: usize, via_group: bool| -> Port {
         let dx = at(&DX, side);
@@ -660,22 +564,10 @@ fn draw(model: &ArchitectureDb, config: &Value, options: &RenderOptions, tight: 
         } else if dx != 0.0 {
             p.x = cx + dx * half;
         } else {
-            let below = if labels.get(i).is_some_and(|label| label.height > 0.0) {
-                2.0
-            } else {
-                0.0
-            };
-            p.y = if dy < 0.0 {
-                y
-            } else {
-                y + at(&box_h, i) + below
-            };
+            let below = if labels.get(i).is_some_and(|label| label.height > 0.0) { 2.0 } else { 0.0 };
+            p.y = if dy < 0.0 { y } else { y + at(&box_h, i) + below };
         }
-        let g = if via_group {
-            at(&grid.node_parent, i)
-        } else {
-            -1
-        };
+        let g = if via_group { at(&grid.node_parent, i) } else { -1 };
         if let Ok(g) = usize::try_from(g) {
             p.x0 = left(g);
             p.x1 = right(g);
@@ -730,16 +622,8 @@ fn draw(model: &ArchitectureDb, config: &Value, options: &RenderOptions, tight: 
         edges_out.push_str("<g class=\"ondine-edge\" data-id=\"");
         edges_out.push_str(&esc_text(&id));
         edges_out.push_str("\"><path d=\"");
-        let start_trim = if edge.lhs_into && !s.wire {
-            trim_length + s.gap
-        } else {
-            0.0
-        };
-        let end_trim = if edge.rhs_into && !e.wire {
-            trim_length + e.gap
-        } else {
-            0.0
-        };
+        let start_trim = if edge.lhs_into && !s.wire { trim_length + s.gap } else { 0.0 };
+        let end_trim = if edge.rhs_into && !e.wire { trim_length + e.gap } else { 0.0 };
         path_data(&mut edges_out, &points, start_trim, end_trim);
         edges_out.push_str("\"/>");
         for (into, p) in [(edge.lhs_into, &s), (edge.rhs_into, &e)] {
@@ -770,12 +654,7 @@ fn draw(model: &ArchitectureDb, config: &Value, options: &RenderOptions, tight: 
         }
         let mut i = 0;
         while i + 3 < points.len() {
-            let (x0, y0, x1, y1) = (
-                at(&points, i),
-                at(&points, i + 1),
-                at(&points, i + 2),
-                at(&points, i + 3),
-            );
+            let (x0, y0, x1, y1) = (at(&points, i), at(&points, i + 1), at(&points, i + 2), at(&points, i + 3));
             let horizontal = (y0 - y1).abs() < 0.01;
             let length = (x0 - x1).abs() + (y0 - y1).abs();
             if !horizontal {
@@ -794,20 +673,12 @@ fn draw(model: &ArchitectureDb, config: &Value, options: &RenderOptions, tight: 
             i += 2;
         }
         if label.width > 0.0 {
-            let chosen = if flat_length >= label.width + 8.0 {
-                flat
-            } else {
-                best
-            };
+            let chosen = if flat_length >= label.width + 8.0 { flat } else { best };
             let Some(chosen) = chosen else {
                 continue;
             };
-            let (x0, y0, x1, y1) = (
-                at(&points, chosen),
-                at(&points, chosen + 1),
-                at(&points, chosen + 2),
-                at(&points, chosen + 3),
-            );
+            let (x0, y0, x1, y1) =
+                (at(&points, chosen), at(&points, chosen + 1), at(&points, chosen + 2), at(&points, chosen + 3));
             let mut x = f64::midpoint(x0, x1);
             let mut y = f64::midpoint(y0, y1);
             let w = label.width + 8.0;
@@ -823,11 +694,7 @@ fn draw(model: &ArchitectureDb, config: &Value, options: &RenderOptions, tight: 
                     continue;
                 }
                 if upright {
-                    x = if x >= f64::midpoint(p.x0, p.x1) {
-                        p.x1 + w / 2.0 + 4.0
-                    } else {
-                        p.x0 - w / 2.0 - 4.0
-                    };
+                    x = if x >= f64::midpoint(p.x0, p.x1) { p.x1 + w / 2.0 + 4.0 } else { p.x0 - w / 2.0 - 4.0 };
                 } else {
                     y = if y >= f64::midpoint(p.y0, p.y1) {
                         p.y1 + label.height / 2.0 + 4.0
@@ -929,25 +796,11 @@ fn draw(model: &ArchitectureDb, config: &Value, options: &RenderOptions, tight: 
         }
         let mut inner = String::new();
         if let Some(icon) = node.icon.as_deref().filter(|icon| !icon.is_empty()) {
-            icon_slot(
-                &mut inner,
-                icon,
-                -glyph / 2.0,
-                (icon_size - glyph) / 2.0,
-                glyph,
-            );
+            icon_slot(&mut inner, icon, -glyph / 2.0, (icon_size - glyph) / 2.0, glyph);
         } else if let Some(text) = node.icon_text.as_deref().filter(|text| !text.is_empty()) {
             let text = layout_label(Some(text), false, text_size, icon_size - 8.0, 0, None);
-            let line_height = if text.line_height == 0.0 {
-                1.0
-            } else {
-                text.line_height
-            };
-            #[expect(
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss,
-                reason = "a small positive line count"
-            )]
+            let line_height = if text.line_height == 0.0 { 1.0 } else { text.line_height };
+            #[expect(clippy::cast_possible_truncation, clippy::cast_sign_loss, reason = "a small positive line count")]
             let lines = 1.max(((icon_size - 4.0) / line_height).floor() as usize);
             let mut attrs = String::from(" class=\"ondine-icon-text\" font-size=\"");
             push_number(&mut attrs, text_size);
@@ -979,11 +832,7 @@ fn draw(model: &ArchitectureDb, config: &Value, options: &RenderOptions, tight: 
 
     let title_width = if tight { title_room(options) } else { 4000.0 };
     let title = layout_label(model.title.as_deref(), false, size, title_width, BOLD, None);
-    let title_height = if title.height > 0.0 {
-        title.height + 12.0
-    } else {
-        0.0
-    };
+    let title_height = if title.height > 0.0 { title.height + 12.0 } else { 0.0 };
     let width = ((max_x - min_x).max(title.width) + 2.0 * pad).ceil();
     let height = (max_y - min_y + title_height + 2.0 * pad).ceil();
     let ox = js_round((width - (max_x - min_x)) / 2.0 - min_x);
@@ -1029,23 +878,7 @@ fn draw(model: &ArchitectureDb, config: &Value, options: &RenderOptions, tight: 
         content.push_str(&body);
         content.push_str("</g>");
     }
-    let accessible = Accessible {
-        acc_descr: model.acc_descr.as_deref(),
-        acc_title: model.acc_title.as_deref(),
-    };
-    let svg = svg_document(
-        "architecture",
-        width,
-        height,
-        size,
-        options,
-        accessible,
-        &content,
-    );
-    Rendered {
-        height,
-        links: Vec::new(),
-        svg,
-        width,
-    }
+    let accessible = Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() };
+    let svg = svg_document("architecture", width, height, size, options, accessible, &content);
+    Rendered { height, links: Vec::new(), svg, width }
 }

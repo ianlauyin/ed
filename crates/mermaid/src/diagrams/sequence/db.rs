@@ -3,15 +3,27 @@
 use std::collections::BTreeMap;
 
 use super::colors::is_css_color;
-use super::types::{
-    MenuValue, MessageText, NoteActor, SeqActor, SeqBox, SeqBoxData, SeqMessage, SeqNote,
-    SeqNumbering, SeqText, line,
-};
-use crate::error::{Code, Error, push_u32};
+use super::types::MenuValue;
+use super::types::MessageText;
+use super::types::NoteActor;
+use super::types::SeqActor;
+use super::types::SeqBox;
+use super::types::SeqBoxData;
+use super::types::SeqMessage;
+use super::types::SeqNote;
+use super::types::SeqNumbering;
+use super::types::SeqText;
+use super::types::line;
+use crate::error::Code;
+use crate::error::Error;
+use crate::error::push_u32;
 use crate::preprocess::json;
-use crate::text::label::{trim, trim_start};
-use crate::util::chars::{is_space, is_word};
-use crate::yaml::{self, Value};
+use crate::text::label::trim;
+use crate::text::label::trim_start;
+use crate::util::chars::is_space;
+use crate::util::chars::is_word;
+use crate::yaml::Value;
+use crate::yaml::{self};
 
 /// A semantic error of a sequence diagram.
 #[cold]
@@ -38,23 +50,15 @@ pub(crate) fn extract_wrap(raw: &str) -> SeqText {
         (None, Some(len)) => (Some(false), len),
         (None, None) => (None, 0),
     };
-    SeqText {
-        text: trim(text.get(cut..).unwrap_or("")).to_owned(),
-        wrap,
-    }
+    SeqText { text: trim(text.get(cut..).unwrap_or("")).to_owned(), wrap }
 }
 
 /// Splits a box line into a leading color and the rest, as Mermaid's
 /// `/^((?:rgba?|hsla?)\s*\(.*\)|\w*)(.*)$/` does. `.` stops at a line terminator, so a line that
 /// holds one outside the gap before the parenthesis does not match at all.
 fn split_box(text: &str) -> Option<(&str, &str)> {
-    let has_terminator = |s: &str| {
-        s.chars()
-            .any(|c| c == '\r' || c == '\u{2028}' || c == '\u{2029}')
-    };
-    let name = ["rgba", "rgb", "hsla", "hsl"]
-        .into_iter()
-        .find(|name| text.starts_with(name));
+    let has_terminator = |s: &str| s.chars().any(|c| c == '\r' || c == '\u{2028}' || c == '\u{2029}');
+    let name = ["rgba", "rgb", "hsla", "hsl"].into_iter().find(|name| text.starts_with(name));
     if let Some(name) = name {
         let rest = text.get(name.len()..).unwrap_or("");
         let gap = rest.len() - trim_start(rest).len();
@@ -65,24 +69,15 @@ fn split_box(text: &str) -> Option<(&str, &str)> {
                 if has_terminator(text.get(head..).unwrap_or("")) {
                     return None;
                 }
-                return Some((
-                    text.get(..=close).unwrap_or(""),
-                    text.get(close + 1..).unwrap_or(""),
-                ));
+                return Some((text.get(..=close).unwrap_or(""), text.get(close + 1..).unwrap_or("")));
             }
         }
     }
     if has_terminator(text) {
         return None;
     }
-    let word = text
-        .char_indices()
-        .find(|&(_, c)| !is_word(u32::from(c)))
-        .map_or(text.len(), |(at, _)| at);
-    Some((
-        text.get(..word).unwrap_or(""),
-        text.get(word..).unwrap_or(""),
-    ))
+    let word = text.char_indices().find(|&(_, c)| !is_word(u32::from(c))).map_or(text.len(), |(at, _)| at);
+    Some((text.get(..word).unwrap_or(""), text.get(word..).unwrap_or("")))
 }
 
 /// The key and value pairs of a parsed `links` or `properties` text, as Pele's `entries` lists
@@ -94,17 +89,11 @@ fn entries(value: Value) -> Vec<(String, MenuValue)> {
         key
     };
     match value {
-        Value::String(text) => text
-            .chars()
-            .enumerate()
-            .map(|(i, c)| (key(i), Value::String(String::from(c))))
-            .collect(),
+        Value::String(text) => {
+            text.chars().enumerate().map(|(i, c)| (key(i), Value::String(String::from(c)))).collect()
+        }
         Value::Object(members) => members,
-        Value::Array(items) => items
-            .into_iter()
-            .enumerate()
-            .map(|(i, item)| (key(i), item))
-            .collect(),
+        Value::Array(items) => items.into_iter().enumerate().map(|(i, item)| (key(i), item)).collect(),
         Value::Bool(_) | Value::Null | Value::Number(_) => Vec::new(),
     }
 }
@@ -122,11 +111,7 @@ fn js_slice(text: &str, start: i64, end: Option<i64>) -> String {
     let units: Vec<u16> = text.encode_utf16().collect();
     let len = i64::try_from(units.len()).unwrap_or(i64::MAX);
     let clamp = |at: i64| {
-        let at = if at < 0 {
-            (len + at).max(0)
-        } else {
-            at.min(len)
-        };
+        let at = if at < 0 { (len + at).max(0) } else { at.min(len) };
         usize::try_from(at).unwrap_or(0)
     };
     let from = clamp(start);
@@ -266,11 +251,7 @@ pub(crate) struct SeqDb {
 impl SeqDb {
     /// A database for the top-level `wrap` setting and `sequence.wrap`.
     pub(crate) fn new(wrap: Option<bool>, sequence_wrap: bool) -> Self {
-        Self {
-            sequence_wrap,
-            wrap_enabled: wrap,
-            ..Self::default()
-        }
+        Self { sequence_wrap, wrap_enabled: wrap, ..Self::default() }
     }
 
     fn auto_wrap(&self) -> bool {
@@ -283,10 +264,7 @@ impl SeqDb {
     }
 
     fn actor_mut(&mut self, id: &str) -> Option<&mut SeqActor> {
-        self.actor_at
-            .get(id)
-            .copied()
-            .and_then(|at| self.actors.get_mut(at))
+        self.actor_at.get(id).copied().and_then(|at| self.actors.get_mut(at))
     }
 
     /// Sets the accessible title, without leading whitespace.
@@ -329,18 +307,10 @@ impl SeqDb {
             title = Some(trim(text));
         }
         let Some(title) = title else {
-            return SeqBoxData {
-                color,
-                text: None,
-                wrap: None,
-            };
+            return SeqBoxData { color, text: None, wrap: None };
         };
         let SeqText { text, wrap } = extract_wrap(title);
-        SeqBoxData {
-            color,
-            text: (!text.is_empty()).then_some(text),
-            wrap,
-        }
+        SeqBoxData { color, text: (!text.is_empty()).then_some(text), wrap }
     }
 
     fn add_box(&mut self, data: SeqBoxData) {
@@ -354,10 +324,7 @@ impl SeqDb {
     }
 
     fn box_name(&self, at: usize) -> &str {
-        self.boxes
-            .get(at)
-            .and_then(|b| b.name.as_deref())
-            .unwrap_or("undefined")
+        self.boxes.get(at).and_then(|b| b.name.as_deref()).unwrap_or("undefined")
     }
 
     fn add_actor(
@@ -373,34 +340,22 @@ impl SeqDb {
         let mut assigned_box = self.current_box;
         let mut doc = None;
         if let Some(metadata) = metadata {
-            let src = if metadata.contains('\n') {
-                [metadata, "\n"].concat()
-            } else {
-                ["{\n", metadata, "\n}"].concat()
-            };
+            let src =
+                if metadata.contains('\n') { [metadata, "\n"].concat() } else { ["{\n", metadata, "\n}"].concat() };
             match yaml::parse(&src) {
                 Ok(Value::Object(members)) => doc = Some(members),
                 Ok(_) => {}
                 Err(message) => {
                     let mut error = Error::new(
                         Code::Syntax,
-                        [
-                            "Config of participant \"",
-                            id,
-                            "\" is not valid YAML. ",
-                            &message,
-                        ]
-                        .concat(),
+                        ["Config of participant \"", id, "\" is not valid YAML. ", &message].concat(),
                     );
                     error.r#type = Some("sequence");
                     return Err(error);
                 }
             }
         }
-        let member = |key: &str| {
-            doc.as_ref()
-                .and_then(|doc| doc.iter().find(|(own, _)| own == key).map(|(_, v)| v))
-        };
+        let member = |key: &str| doc.as_ref().and_then(|doc| doc.iter().find(|(own, _)| own == key).map(|(_, v)| v));
         if let Some(doc_type) = member("type").filter(|v| !matches!(v, Value::Null)) {
             let mut text = String::new();
             doc_type.push_js_string(&mut text);
@@ -411,10 +366,7 @@ impl SeqDb {
         {
             let mut text = String::new();
             alias.push_js_string(&mut text);
-            description = Some(SeqText {
-                text,
-                wrap: description.as_ref().and_then(|d| d.wrap),
-            });
+            description = Some(SeqText { text, wrap: description.as_ref().and_then(|d| d.wrap) });
         }
 
         if let Some(&at) = self.actor_at.get(id) {
@@ -447,10 +399,7 @@ impl SeqDb {
         // label.
         let description = match (description, &r#type) {
             (Some(description), Some(_)) => description,
-            _ => SeqText {
-                text: name.to_owned(),
-                wrap: None,
-            },
+            _ => SeqText { text: name.to_owned(), wrap: None },
         };
 
         let actor = SeqActor {
@@ -466,12 +415,7 @@ impl SeqDb {
             wrap: description.wrap.unwrap_or(self.auto_wrap()),
         };
         // A redeclared participant keeps its place, as `Map.prototype.set` keeps a key's.
-        if let Some(slot) = self
-            .actor_at
-            .get(id)
-            .copied()
-            .and_then(|at| self.actors.get_mut(at))
-        {
+        if let Some(slot) = self.actor_at.get(id).copied().and_then(|at| self.actors.get_mut(at)) {
             *slot = actor;
         } else {
             self.actor_at.insert(id.to_owned(), self.actors.len());
@@ -501,17 +445,11 @@ impl SeqDb {
         // Mermaid recounts every earlier message here. A running count per participant says the
         // same.
         if r#type == line::ACTIVE_END {
-            let count = from
-                .filter(|from| !from.is_empty())
-                .map_or(0, |from| self.active.get(from).copied().unwrap_or(0));
+            let count =
+                from.filter(|from| !from.is_empty()).map_or(0, |from| self.active.get(from).copied().unwrap_or(0));
             if count < 1 {
                 return Err(fail(
-                    [
-                        "Trying to inactivate an inactive participant (",
-                        from.unwrap_or("undefined"),
-                        ")",
-                    ]
-                    .concat(),
+                    ["Trying to inactivate an inactive participant (", from.unwrap_or("undefined"), ")"].concat(),
                 ));
             }
             if let Some(from) = from {
@@ -542,10 +480,7 @@ impl SeqDb {
 
     fn next_id(&self) -> String {
         let mut id = String::new();
-        push_u32(
-            &mut id,
-            u32::try_from(self.messages.len()).unwrap_or(u32::MAX),
-        );
+        push_u32(&mut id, u32::try_from(self.messages.len()).unwrap_or(u32::MAX));
         id
     }
 
@@ -555,12 +490,7 @@ impl SeqDb {
             NoteActor::Single(id) => (id.clone(), id.clone()),
             NoteActor::Over(a, b) => (a.clone(), b.clone()),
         };
-        self.notes.push(SeqNote {
-            actor,
-            message: message.text.clone(),
-            placement,
-            wrap,
-        });
+        self.notes.push(SeqNote { actor, message: message.text.clone(), placement, wrap });
         self.messages.push(SeqMessage {
             activate: None,
             central_connection: None,
@@ -585,27 +515,18 @@ impl SeqDb {
                 let Some(parsed) = json(text) else {
                     return;
                 };
-                let map = if kind == Menu::Links {
-                    &mut actor.links
-                } else {
-                    &mut actor.properties
-                };
+                let map = if kind == Menu::Links { &mut actor.links } else { &mut actor.properties };
                 for (key, value) in entries(parsed) {
                     map_set(map, key, value);
                 }
             }
             Menu::ALink => {
                 let sep = text.find('@').map_or(-1, |at| {
-                    i64::try_from(text.get(..at).unwrap_or("").encode_utf16().count())
-                        .unwrap_or(i64::MAX)
+                    i64::try_from(text.get(..at).unwrap_or("").encode_utf16().count()).unwrap_or(i64::MAX)
                 });
                 let key = js_slice(text, 0, Some(sep - 1));
                 let value = js_slice(text, sep + 1, None);
-                map_set(
-                    &mut actor.links,
-                    trim(&key).to_owned(),
-                    Value::String(trim(&value).to_owned()),
-                );
+                map_set(&mut actor.links, trim(&key).to_owned(), Value::String(trim(&value).to_owned()));
             }
             Menu::Details => actor.details = Some(text.to_owned()),
         }
@@ -642,13 +563,7 @@ impl SeqDb {
                     wrap: false,
                 });
             }
-            Statement::Participant {
-                actor,
-                config,
-                description,
-                draw,
-                how,
-            } => match how {
+            Statement::Participant { actor, config, description, draw, how } => match how {
                 Declare::Add => self.add_actor(&actor, description, draw, config.as_deref())?,
                 Declare::Create => {
                     if self.actor_at.contains_key(&actor) {
@@ -668,20 +583,9 @@ impl SeqDb {
             Statement::Marker { actor, signal_type } => {
                 self.add_signal(Some(&actor), None, None, signal_type, false, None)?;
             }
-            Statement::Note {
-                actor,
-                placement,
-                text,
-            } => self.add_note(actor, placement, text),
+            Statement::Note { actor, placement, text } => self.add_note(actor, placement, text),
             Statement::Menu { actor, kind, text } => self.add_menu(&actor, kind, &text.text),
-            Statement::Message {
-                activate,
-                central_connection,
-                from,
-                msg,
-                signal_type,
-                to,
-            } => {
+            Statement::Message { activate, central_connection, from, msg, signal_type, to } => {
                 if let Some(created) = self.last_created.take() {
                     if to != created {
                         return Err(fail(["The created participant ", &created, " does not have an associated creating message after its declaration. Please check the sequence diagram."].concat()));
@@ -692,14 +596,7 @@ impl SeqDb {
                 {
                     return Err(fail(["The destroyed participant ", &destroyed, " does not have an associated destroying message after its declaration. Please check the sequence diagram."].concat()));
                 }
-                self.add_signal(
-                    Some(&from),
-                    Some(&to),
-                    Some(msg),
-                    signal_type,
-                    activate,
-                    central_connection,
-                )?;
+                self.add_signal(Some(&from), Some(&to), Some(msg), signal_type, activate, central_connection)?;
             }
             Statement::BoxStart(data) => self.add_box(data),
             Statement::BoxEnd => self.current_box = None,

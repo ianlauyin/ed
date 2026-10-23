@@ -1,7 +1,9 @@
 //! The root SVG document around a diagram's content. Port of Pele's `src/svg/root.ts`.
 
-use crate::svg::builder::{esc, esc_text};
-use crate::svg::theme::{ROOT_STYLE, font_style};
+use crate::svg::builder::esc;
+use crate::svg::builder::esc_text;
+use crate::svg::theme::ROOT_STYLE;
+use crate::svg::theme::font_style;
 use crate::yaml::push_number;
 
 /// The host's options that the shared SVG modules read. A subset of Pele's `RenderOptions`;
@@ -107,9 +109,7 @@ pub(crate) fn svg_document(
     }
     out.push_str(ROOT_STYLE);
     out.push_str(&font_style(font_size));
-    out.push_str(
-        "\" fill=\"var(--_fg)\" role=\"graphics-document document\" aria-roledescription=\"",
-    );
+    out.push_str("\" fill=\"var(--_fg)\" role=\"graphics-document document\" aria-roledescription=\"");
     out.push_str(r#type);
     out.push('"');
     out.push_str(&aria);

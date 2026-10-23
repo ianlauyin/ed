@@ -4,8 +4,10 @@
 //! A token is read only when the grammar has to look at one to decide, because the lexer asks the
 //! model whether an indented `text` continues a set, and the statements are what tell the model so.
 
-use super::db::{VennDb, semantic};
-use super::lexer::{T, VennLexer};
+use super::db::VennDb;
+use super::db::semantic;
+use super::lexer::T;
+use super::lexer::VennLexer;
 use crate::error::Error;
 
 const STATEMENT: &str = "'EOF', 'NEWLINE', 'TITLE', 'SET', 'UNION', 'TEXT', 'INDENT_TEXT', 'STYLE'";
@@ -68,11 +70,7 @@ impl<'a> Parser<'a, '_> {
     }
 
     fn subset(&mut self, ids: &[&str], union: bool) -> Result<(), Error> {
-        let label = if self.peek() == T::BracketLabel {
-            Some(self.take())
-        } else {
-            None
-        };
+        let label = if self.peek() == T::BracketLabel { Some(self.take()) } else { None };
         let mut size = None;
         if self.peek() == T::Colon {
             self.take();
@@ -97,11 +95,7 @@ impl<'a> Parser<'a, '_> {
             return Err(self.fail("'NUMERIC', 'IDENTIFIER', 'STRING'"));
         }
         let id = self.take();
-        let label = if kind != T::Numeric && self.peek() == T::BracketLabel {
-            Some(self.take())
-        } else {
-            None
-        };
+        let label = if kind != T::Numeric && self.peek() == T::BracketLabel { Some(self.take()) } else { None };
         if let Some(ids) = ids {
             self.db.add_text_data(ids, id, label);
             return Ok(());
@@ -124,10 +118,7 @@ impl<'a> Parser<'a, '_> {
                 self.take().to_owned()
             } else {
                 let mut parts: Vec<&str> = Vec::new();
-                while matches!(
-                    self.peek(),
-                    T::Identifier | T::Numeric | T::HexColor | T::RgbColor | T::RgbaColor
-                ) {
+                while matches!(self.peek(), T::Identifier | T::Numeric | T::HexColor | T::RgbColor | T::RgbaColor) {
                     parts.push(self.take());
                 }
                 if parts.is_empty() {
@@ -158,12 +149,7 @@ fn parse_float(text: &str) -> f64 {
 /// Returns a syntax error for input Mermaid rejects, and a semantic error for a union of one set
 /// or of unknown sets, and for an indented text before any set.
 pub(crate) fn parse_venn(src: &str, db: &mut VennDb) -> Result<(), Error> {
-    let mut p = Parser {
-        db,
-        kind: None,
-        lexer: VennLexer::new(src),
-        src,
-    };
+    let mut p = Parser { db, kind: None, lexer: VennLexer::new(src), src };
 
     while p.peek() == T::Newline {
         p.take();

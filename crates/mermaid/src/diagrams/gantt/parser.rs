@@ -2,21 +2,15 @@
 //! `src/diagrams/gantt/parser.ts`.
 
 use super::db::GanttDb;
-use super::lexer::{Token, tokenize};
-use super::tokens::{T, WEEKDAYS};
+use super::lexer::Token;
+use super::lexer::tokenize;
+use super::tokens::T;
+use super::tokens::WEEKDAYS;
 use crate::error::Error;
 use crate::text::label::trim;
 
 /// The weekday names, from Monday.
-const DAYS: [&str; 7] = [
-    "monday",
-    "tuesday",
-    "wednesday",
-    "thursday",
-    "friday",
-    "saturday",
-    "sunday",
-];
+const DAYS: [&str; 7] = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"];
 
 /// The tokens a line can start with, as parse errors list them.
 const LINE: &str = "'EOF', 'SPACE', 'NL', 'weekday_monday', 'weekday_tuesday', 'weekday_wednesday', \
@@ -122,11 +116,7 @@ impl<'s> Parser<'s, '_> {
 /// end or too many fields.
 pub(crate) fn parse_gantt(src: &str, db: &mut GanttDb) -> Result<(), Error> {
     let tokens = tokenize(src);
-    let mut p = Parser {
-        i: 0,
-        src,
-        tokens: &tokens,
-    };
+    let mut p = Parser { i: 0, src, tokens: &tokens };
 
     if p.kind() != T::Gantt {
         return Err(p.fail("'gantt'"));
@@ -254,11 +244,7 @@ fn click(p: &mut Parser<'_, '_>, db: &mut GanttDb, ids: &str) -> Result<(), Erro
             p.i += 1;
             p.end("")?;
         } else {
-            p.end(if args {
-                ", 'href'"
-            } else {
-                ", 'callbackargs', 'href'"
-            })?;
+            p.end(if args { ", 'href'" } else { ", 'callbackargs', 'href'" })?;
         }
     } else if p.kind() == T::Href {
         href = Some(p.text());

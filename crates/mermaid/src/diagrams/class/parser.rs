@@ -2,9 +2,11 @@
 //! `src/diagrams/class/parser.ts`.
 
 use super::db::ClassDb;
-use super::lexer::{Token, tokenize};
+use super::lexer::Token;
+use super::lexer::tokenize;
 use super::tokens::T;
-use super::types::{ClassRelation, RelationEnd};
+use super::types::ClassRelation;
+use super::types::RelationEnd;
 use crate::error::Error;
 use crate::text::label::trim;
 
@@ -15,10 +17,7 @@ fn is_alpha_num(t: T) -> bool {
 
 /// The kinds that make up a style declaration.
 fn is_style_part(t: T) -> bool {
-    matches!(
-        t,
-        T::Alpha | T::Colon | T::Brkt | T::Style | T::Pct | T::Label
-    )
+    matches!(t, T::Alpha | T::Colon | T::Brkt | T::Style | T::Pct | T::Label)
 }
 
 /// Mermaid's relation type of an end marker token.
@@ -76,10 +75,7 @@ impl<'s> Parser<'s, '_> {
     /// Fails with Jison's wording, naming `expected`.
     #[cold]
     fn fail(&self, expected: &str) -> Error {
-        let offset = self
-            .tokens
-            .get(self.i)
-            .map_or(self.src.len(), |token| token.start);
+        let offset = self.tokens.get(self.i).map_or(self.src.len(), |token| token.start);
         let t = self.kind();
         if t == T::Error {
             return Error::syntax("class", self.src, offset, "", true);
@@ -240,11 +236,7 @@ impl<'s> Parser<'s, '_> {
             if self.kind() == T::Newline {
                 self.i += 1;
             }
-            open.push(Frame {
-                classes: Vec::new(),
-                id,
-                notes: Vec::new(),
-            });
+            open.push(Frame { classes: Vec::new(), id, notes: Vec::new() });
 
             let mut item = true;
             while item {
@@ -321,23 +313,15 @@ impl<'s> Parser<'s, '_> {
         let type1 = self.relation_end();
         t = self.kind();
         if t != T::Line && t != T::DottedLine {
-            return Err(self.fail(
-                "'AGGREGATION', 'EXTENSION', 'COMPOSITION', 'DEPENDENCY', 'LOLLIPOP', 'LINE', 'DOTTED_LINE'",
-            ));
+            return Err(
+                self.fail("'AGGREGATION', 'EXTENSION', 'COMPOSITION', 'DEPENDENCY', 'LOLLIPOP', 'LINE', 'DOTTED_LINE'")
+            );
         }
         self.i += 1;
         let type2 = self.relation_end();
-        let title2 = if self.kind() == T::Str {
-            self.take()
-        } else {
-            "none"
-        };
+        let title2 = if self.kind() == T::Str { self.take() } else { "none" };
         let id2 = self.name(true)?;
-        let title = if self.kind() == T::Label {
-            Some(ClassDb::cleanup_label(self.take()).to_owned())
-        } else {
-            None
-        };
+        let title = if self.kind() == T::Label { Some(ClassDb::cleanup_label(self.take()).to_owned()) } else { None };
         db.add_relation(ClassRelation {
             id1,
             id2,
@@ -356,9 +340,7 @@ impl<'s> Parser<'s, '_> {
         let mut out = Vec::new();
         loop {
             if !is_style_part(self.kind()) {
-                return Err(self.fail(
-                    "'ALPHA', 'NUM', 'COLON', 'UNIT', 'SPACE', 'BRKT', 'STYLE', 'PCT', 'LABEL'",
-                ));
+                return Err(self.fail("'ALPHA', 'NUM', 'COLON', 'UNIT', 'SPACE', 'BRKT', 'STYLE', 'PCT', 'LABEL'"));
             }
             let mut s = String::from(self.take());
             while is_style_part(self.kind()) {
@@ -383,11 +365,7 @@ impl<'s> Parser<'s, '_> {
     /// The address, tooltip, and target of a link.
     fn link_statement(&mut self, db: &mut ClassDb, id: &str) -> Result<(), Error> {
         let href = self.expect(T::Str)?;
-        let tip = if self.kind() == T::Str {
-            Some(self.take())
-        } else {
-            None
-        };
+        let tip = if self.kind() == T::Str { Some(self.take()) } else { None };
         if self.kind() == T::LinkTarget {
             let target = self.take();
             db.set_link(id, href, Some(target));
@@ -512,11 +490,7 @@ impl<'s> Parser<'s, '_> {
 /// Returns a syntax error for input Mermaid rejects.
 pub(crate) fn parse_class_diagram(src: &str, db: &mut ClassDb) -> Result<(), Error> {
     let tokens = tokenize(src);
-    let mut p = Parser {
-        i: 0,
-        src,
-        tokens: &tokens,
-    };
+    let mut p = Parser { i: 0, src, tokens: &tokens };
 
     // Mermaid's grammar also accepts statements with no `classDiagram` line before them.
     let header = p.kind() == T::ClassDiagram;

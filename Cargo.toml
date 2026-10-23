@@ -275,7 +275,6 @@ futures-lite = "2"
 globset = "0.4"
 heapless = "0.9.2"
 hex = "0.4.3"
-html5ever = "0.39"
 ignore = "0.4.22"
 # image's default features minus "avif", which only adds an encoder (rav1e);
 # decoding AVIF would additionally need the non-default "avif-native" feature.
@@ -307,7 +306,6 @@ linkify = "0.10.0"
 log = { version = "0.4", default-features = false, features = ["std"] }
 lru = "0.16"
 mach2 = "0.6"
-markup5ever_rcdom = "0.39"
 nix = "0.30"
 nucleo = { package = "nucleo-matcher", version = "0.3" }
 objc2 = "0.6.5"
@@ -546,7 +544,6 @@ style = { level = "allow", priority = -1 }
 
 # Individual rules that have violations in the codebase:
 type_complexity = "allow"
-let_underscore_future = "allow"
 
 # Motivation: We use `vec![a..b]` a lot when dealing with ranges in text, so
 # warning on this rule produces a lot of noise.
@@ -558,6 +555,3 @@ too_many_arguments = "allow"
 
 # We often have large enum variants yet we rarely actually bother with splitting them up.
 large_enum_variant = "allow"
-
-# Boolean expressions can be hard to read, requiring only the minimal form gets in the way
-nonminimal_bool = "allow"

@@ -11,31 +11,18 @@ pub(crate) mod render;
 pub(crate) mod tokens;
 pub(crate) mod types;
 
-/// The JSON reader of the parity fixtures, loaded once per build.
-#[cfg(all(test, not(feature = "sankey")))]
-#[path = "../../tests/fixtures/json.rs"]
-mod fixture;
-#[cfg(all(test, feature = "sankey"))]
-use super::sankey::fixture;
-
-use super::{Diagram, Input, Rendered};
+use super::Diagram;
+use super::Input;
+use super::Rendered;
 use crate::error::Error;
 use crate::svg::root::RenderOptions;
 use crate::util::url::UrlOptions;
 
 /// The `class` diagram type.
-pub(crate) const DIAGRAM: Diagram = Diagram {
-    keep_comments: false,
-    render: render_input,
-    section: None,
-};
+pub(crate) const DIAGRAM: Diagram = Diagram { keep_comments: false, render: render_input, section: None };
 
 /// Parses and draws a class diagram.
-fn render_input(
-    input: &Input<'_>,
-    options: &RenderOptions,
-    url: &UrlOptions<'_>,
-) -> Result<Rendered, Error> {
+fn render_input(input: &Input<'_>, options: &RenderOptions, url: &UrlOptions<'_>) -> Result<Rendered, Error> {
     let db = parse(input.source, input.title)?;
     Ok(render::render(&db, input.config, options, url))
 }
@@ -85,9 +72,9 @@ pub(crate) fn parse(source: &str, title: Option<&str>) -> Result<Model, Error> {
 ///   title: db.title, accTitle: db.accTitle, accDescr: db.accDescr,
 /// });
 /// ```
-#[cfg(feature = "model")]
 pub(crate) fn to_json(model: &Model) -> String {
-    use json::{Obj, push_json_string};
+    use json::Obj;
+    use json::push_json_string;
     use members::ClassMember;
     use types::RelationEnd;
 
@@ -254,7 +241,6 @@ pub(crate) fn to_json(model: &Model) -> String {
 }
 
 /// A minimal writer of the JSON that `JSON.stringify` produces, for [`to_json`].
-#[cfg(feature = "model")]
 mod json {
     /// An object being written: its output and whether a member was written yet.
     pub(super) struct Obj<'a> {
@@ -341,57 +327,5 @@ mod json {
             }
         }
         out.push('"');
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    //! Parity with Pele's `classDiagram.parse` over the Ondine vectors, every string literal of
-    //! Pele's class compat specs, the documents those specs build at runtime, and edge cases, as
-    //! recorded by running Pele's TypeScript.
-
-    use super::fixture::cases;
-    use super::parse;
-
-    /// The parity fixture: Pele's parser input and its model JSON or error.
-    const FIXTURE: &str = include_str!("../../tests/fixtures/class-parse.json");
-
-    #[test]
-    fn matches_pele() {
-        let mut differing = Vec::new();
-        let cases = cases(FIXTURE);
-        for case in &cases {
-            let input = case.str("input").unwrap_or_default();
-            let actual = parse(input, case.str("title"));
-            let same = match (&actual, case.get("error")) {
-                (Ok(_), None) => {
-                    #[cfg(feature = "model")]
-                    {
-                        actual.as_ref().map(super::to_json).ok().as_deref() == case.str("model")
-                    }
-                    #[cfg(not(feature = "model"))]
-                    {
-                        true
-                    }
-                }
-                (Err(error), Some(expected)) => {
-                    Some(error.code.as_str()) == expected.str("code")
-                        && Some(error.message.as_str()) == expected.str("message")
-                        && Some(f64::from(error.line)) == expected.num("line")
-                        && Some(f64::from(error.column)) == expected.num("column")
-                }
-                _ => false,
-            };
-            if !same {
-                differing.push((case.str("origin").unwrap_or("?"), input, actual));
-            }
-        }
-        assert!(
-            differing.is_empty(),
-            "{} of {} cases differ from Pele: {:#?}",
-            differing.len(),
-            cases.len(),
-            differing.iter().take(10).collect::<Vec<_>>()
-        );
     }
 }

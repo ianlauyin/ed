@@ -1,15 +1,31 @@
 //! Draws a venn diagram. Port of Pele's `src/diagrams/venn/render.ts`.
 
-use std::collections::{BTreeMap, BTreeSet};
+use std::collections::BTreeMap;
+use std::collections::BTreeSet;
 
-use super::db::{VennDb, normalize_text};
-use super::layout::{Circle, Spot, find_spot, hypot, layout_circles, region_path};
+use super::db::VennDb;
+use super::db::normalize_text;
+use super::layout::Circle;
+use super::layout::Spot;
+use super::layout::find_spot;
+use super::layout::hypot;
+use super::layout::layout_circles;
+use super::layout::region_path;
 use crate::diagrams::Rendered;
-use crate::svg::builder::{esc_text, js_round, label_svg, push_num};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
-use crate::svg::theme::{ResolvedStyle, resolve_style, series_color};
-use crate::text::label::{Label, layout_label};
-use crate::text::measure::{BOLD, ITALIC};
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
+use crate::svg::theme::ResolvedStyle;
+use crate::svg::theme::resolve_style;
+use crate::svg::theme::series_color;
+use crate::text::label::Label;
+use crate::text::label::layout_label;
+use crate::text::measure::BOLD;
+use crate::text::measure::ITALIC;
 use crate::yaml::push_number;
 
 const RADIUS: f64 = 100.0;
@@ -41,19 +57,12 @@ fn style_of(styles: &Styles, key: &[String]) -> ResolvedStyle {
     let Some(declared) = styles.get(key) else {
         return ResolvedStyle::default();
     };
-    let list: Vec<String> = declared
-        .iter()
-        .map(|(property, value)| [property.as_str(), ":", value].concat())
-        .collect();
+    let list: Vec<String> = declared.iter().map(|(property, value)| [property.as_str(), ":", value].concat()).collect();
     resolve_style(&list)
 }
 
 /// Draws a venn diagram.
-#[expect(
-    clippy::float_cmp,
-    clippy::too_many_lines,
-    reason = "mirrors Pele's renderVenn, which compares sizes exactly"
-)]
+#[expect(clippy::float_cmp, clippy::too_many_lines, reason = "mirrors Pele's renderVenn, which compares sizes exactly")]
 pub(crate) fn render(model: &VennDb, options: &RenderOptions) -> Rendered {
     let size = options.font_size.unwrap_or(16.0);
     let small = js_round(size * 0.875);
@@ -115,16 +124,8 @@ pub(crate) fn render(model: &VennDb, options: &RenderOptions) -> Rendered {
             continue;
         };
         let mut seen: BTreeSet<&str> = BTreeSet::new();
-        let sets: Vec<String> = subset
-            .sets
-            .iter()
-            .filter(|id| seen.insert(id.as_str()))
-            .cloned()
-            .collect();
-        let inside: Vec<usize> = sets
-            .iter()
-            .map(|id| index.get(id.as_str()).copied().unwrap_or(0))
-            .collect();
+        let sets: Vec<String> = subset.sets.iter().filter(|id| seen.insert(id.as_str())).cloned().collect();
+        let inside: Vec<usize> = sets.iter().map(|id| index.get(id.as_str()).copied().unwrap_or(0)).collect();
         let mut smallest = inside.first().copied().unwrap_or(0);
         for &i in &inside {
             if radius(i) < radius(smallest) {
@@ -140,12 +141,7 @@ pub(crate) fn render(model: &VennDb, options: &RenderOptions) -> Rendered {
         let base = (if style.bold { BOLD } else { 0 }) | (if style.italic { ITALIC } else { 0 });
         let outside: Vec<usize> = neighbors
             .get(smallest)
-            .map(|list| {
-                list.iter()
-                    .copied()
-                    .filter(|i| !inside.contains(i))
-                    .collect()
-            })
+            .map(|list| list.iter().copied().filter(|i| !inside.contains(i)).collect())
             .unwrap_or_default();
         let mut spot = find_spot(&circles, &inside, &outside);
         // A region that other circles cover, or all but cover, is written across them instead.
@@ -164,20 +160,11 @@ pub(crate) fn render(model: &VennDb, options: &RenderOptions) -> Rendered {
             });
         }
         region_at.insert(&subset.sets, regions.len());
-        regions.push(Region {
-            inside,
-            lines,
-            sets,
-            spot,
-            style,
-        });
+        regions.push(Region { inside, lines, sets, spot, style });
     }
     for node in &model.text_nodes {
         let raw = node.label.as_deref().unwrap_or(&node.id);
-        if let Some(region) = region_at
-            .get(node.sets.as_slice())
-            .and_then(|&at| regions.get_mut(at))
-        {
+        if let Some(region) = region_at.get(node.sets.as_slice()).and_then(|&at| regions.get_mut(at)) {
             region.lines.push(Line {
                 base: 0,
                 id: Some(node.id.clone()),
@@ -252,19 +239,8 @@ pub(crate) fn render(model: &VennDb, options: &RenderOptions) -> Rendered {
         max_y = 0.0;
     }
 
-    let title = layout_label(
-        model.title.as_deref().map(normalize_text),
-        false,
-        size,
-        4000.0,
-        BOLD,
-        None,
-    );
-    let title_height = if title.height > 0.0 {
-        title.height + 12.0
-    } else {
-        0.0
-    };
+    let title = layout_label(model.title.as_deref().map(normalize_text), false, size, 4000.0, BOLD, None);
+    let title_height = if title.height > 0.0 { title.height + 12.0 } else { 0.0 };
     let inner = (max_x - min_x).max(title.width);
     let ox = pad + (inner - (max_x - min_x)) / 2.0 - min_x;
     let oy = pad + title_height - min_y;
@@ -272,12 +248,7 @@ pub(crate) fn render(model: &VennDb, options: &RenderOptions) -> Rendered {
     let height = (max_y - min_y + title_height + 2.0 * pad).ceil();
     let placed: Vec<Circle> = circles
         .iter()
-        .map(|c| Circle {
-            id: c.id.clone(),
-            r: c.r * scale,
-            x: c.x * scale + ox,
-            y: c.y * scale + oy,
-        })
+        .map(|c| Circle { id: c.id.clone(), r: c.r * scale, x: c.x * scale + ox, y: c.y * scale + oy })
         .collect();
 
     let mut sets = String::new();
@@ -311,11 +282,7 @@ pub(crate) fn render(model: &VennDb, options: &RenderOptions) -> Rendered {
         // An overlap is only drawn when a style gives it a look of its own. Otherwise the circles
         // show it.
         if region.sets.len() > 1 && !region.style.shape.is_empty() {
-            let shared: Vec<Circle> = region
-                .inside
-                .iter()
-                .filter_map(|&i| placed.get(i).cloned())
-                .collect();
+            let shared: Vec<Circle> = region.inside.iter().filter_map(|&i| placed.get(i).cloned()).collect();
             let d = region_path(&shared);
             if !d.is_empty() {
                 overlaps.push_str("<path class=\"ondine-venn-overlap\" data-id=\"");
@@ -327,10 +294,7 @@ pub(crate) fn render(model: &VennDb, options: &RenderOptions) -> Rendered {
                 overlaps.push_str("/>");
             }
         }
-        let total = region
-            .lines
-            .iter()
-            .fold(0.0, |total, line| total + line.label.height);
+        let total = region.lines.iter().fold(0.0, |total, line| total + line.label.height);
         if total == 0.0 {
             continue;
         }
@@ -358,13 +322,7 @@ pub(crate) fn render(model: &VennDb, options: &RenderOptions) -> Rendered {
                     attrs.push_str(&style_of(&styles, std::slice::from_ref(id)).text);
                 }
             }
-            content.push_str(&label_svg(
-                &line.label,
-                x,
-                y + line.label.height / 2.0,
-                &attrs,
-                None,
-            ));
+            content.push_str(&label_svg(&line.label, x, y + line.label.height / 2.0, &attrs, None));
             y += line.label.height;
         }
         labels.push_str("<g class=\"ondine-venn-region\" data-id=\"");
@@ -395,19 +353,6 @@ pub(crate) fn render(model: &VennDb, options: &RenderOptions) -> Rendered {
         content.push_str("</g>");
     }
 
-    let svg = svg_document(
-        "venn",
-        width,
-        height,
-        size,
-        options,
-        Accessible::default(),
-        &content,
-    );
-    Rendered {
-        height,
-        links: Vec::new(),
-        svg,
-        width,
-    }
+    let svg = svg_document("venn", width, height, size, options, Accessible::default(), &content);
+    Rendered { height, links: Vec::new(), svg, width }
 }

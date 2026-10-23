@@ -6,7 +6,9 @@
 //! so token boundaries match. Each regular expression in Pele is a hand-written matcher below.
 
 use super::tokens::T;
-use crate::util::chars::{is_line_end, is_space, is_word};
+use crate::util::chars::is_line_end;
+use crate::util::chars::is_space;
+use crate::util::chars::is_word;
 use crate::util::unicode::is_unicode_letter;
 
 /// A token: its kind, its start as a UTF-8 offset, and its text.
@@ -55,9 +57,7 @@ fn at_end(state: S) -> T {
 
 /// The character at byte `at`, as a code point, or `None` past the end.
 fn char_at(src: &str, at: usize) -> Option<u32> {
-    src.get(at..)
-        .and_then(|rest| rest.chars().next())
-        .map(u32::from)
+    src.get(at..).and_then(|rest| rest.chars().next()).map(u32::from)
 }
 
 /// Whether the character at `at` is JavaScript `\s`.
@@ -68,18 +68,12 @@ fn space_at(src: &str, at: usize) -> bool {
 /// The end of a run of JavaScript `\s` characters from `at`.
 fn skip_spaces(src: &str, at: usize) -> usize {
     let rest = src.get(at..).unwrap_or("");
-    at + rest
-        .char_indices()
-        .find(|&(_, c)| !is_space(u32::from(c)))
-        .map_or(rest.len(), |(i, _)| i)
+    at + rest.char_indices().find(|&(_, c)| !is_space(u32::from(c))).map_or(rest.len(), |(i, _)| i)
 }
 
 /// The first `byte` at or after `from`, or the end of `src`.
 fn until(src: &str, from: usize, byte: u8) -> usize {
-    src.as_bytes()
-        .get(from..)
-        .and_then(|rest| rest.iter().position(|&b| b == byte))
-        .map_or(src.len(), |at| from + at)
+    src.as_bytes().get(from..).and_then(|rest| rest.iter().position(|&b| b == byte)).map_or(src.len(), |at| from + at)
 }
 
 /// Where a direction statement that the lexer could take at `p` ends, as
@@ -89,17 +83,13 @@ fn direction_end(src: &str, p: usize, line_end: usize, pair: &str) -> Option<usi
     let bytes = src.as_bytes();
     let mut candidates = Vec::new();
     let mut at = p;
-    while let Some(found) = src
-        .get(at..line_end)
-        .and_then(|rest| rest.find("direction"))
-    {
+    while let Some(found) = src.get(at..line_end).and_then(|rest| rest.find("direction")) {
         candidates.push(at + found);
         at += found + 1;
     }
     candidates.into_iter().rev().find_map(|start| {
         let q = skip_spaces(src, start + 9);
-        (q > start + 9 && bytes.get(q..q + 2) == Some(pair.as_bytes()))
-            .then(|| until(src, q + 2, b'\n'))
+        (q > start + 9 && bytes.get(q..q + 2) == Some(pair.as_bytes())).then(|| until(src, q + 2, b'\n'))
     })
 }
 
@@ -141,11 +131,7 @@ impl<'a> Lexer<'a> {
 
     /// Emits a token from `s` to `e` and moves to `e`. Always true, as Pele's `emit` is.
     fn emit(&mut self, kind: T, s: usize, e: usize) -> bool {
-        self.tokens.push(Token {
-            kind,
-            start: s,
-            text: self.src.get(s..e).unwrap_or(""),
-        });
+        self.tokens.push(Token { kind, start: s, text: self.src.get(s..e).unwrap_or("") });
         self.p = e;
         true
     }
@@ -165,19 +151,13 @@ impl<'a> Lexer<'a> {
 
     /// Whether the ASCII `word` starts at the position, not followed by a word character.
     fn kw(&self, word: &str) -> bool {
-        self.src
-            .get(self.p..)
-            .is_some_and(|rest| rest.starts_with(word))
-            && !self
-                .at(self.p + word.len())
-                .is_some_and(|c| is_word(u32::from(c)))
+        self.src.get(self.p..).is_some_and(|rest| rest.starts_with(word))
+            && !self.at(self.p + word.len()).is_some_and(|c| is_word(u32::from(c)))
     }
 
     /// Whether the ASCII `word` starts at `at`.
     fn starts(&self, at: usize, word: &str) -> bool {
-        self.src
-            .get(at..)
-            .is_some_and(|rest| rest.starts_with(word))
+        self.src.get(at..).is_some_and(|rest| rest.starts_with(word))
     }
 
     /// A run of whitespace is a NEWLINE up to its last line feed; the rest is skipped.
@@ -279,18 +259,10 @@ impl<'a> Lexer<'a> {
             }
             b'(' => return d == Some(b')') && self.emit(T::Lollipop, p, p + 2),
             b'-' => {
-                return if d == Some(b'-') {
-                    self.emit(T::Line, p, p + 2)
-                } else {
-                    self.emit(T::Minus, p, p + 1)
-                };
+                return if d == Some(b'-') { self.emit(T::Line, p, p + 2) } else { self.emit(T::Minus, p, p + 1) };
             }
             b'.' => {
-                return if d == Some(b'.') {
-                    self.emit(T::DottedLine, p, p + 2)
-                } else {
-                    self.emit(T::Dot, p, p + 1)
-                };
+                return if d == Some(b'.') { self.emit(T::DottedLine, p, p + 2) } else { self.emit(T::Dot, p, p + 1) };
             }
             b':' => {
                 let mut q = p + 1;
@@ -303,9 +275,7 @@ impl<'a> Lexer<'a> {
                 if q > p + 1 {
                     return self.emit(T::Label, p, q);
                 }
-                return d == Some(b':')
-                    && self.at(p + 2) == Some(b':')
-                    && self.emit(T::StyleSeparator, p, p + 3);
+                return d == Some(b':') && self.at(p + 2) == Some(b':') && self.emit(T::StyleSeparator, p, p + 3);
             }
             b'+' => return self.emit(T::Plus, p, p + 1),
             b'%' => return self.emit(T::Pct, p, p + 1),
@@ -325,9 +295,7 @@ impl<'a> Lexer<'a> {
             return self.emit(T::Alpha, p, q);
         }
         match char::from_u32(char_at(self.src, p).unwrap_or(0)) {
-            Some(ch) if is_unicode_letter(u32::from(ch)) => {
-                self.emit(T::UnicodeText, p, p + ch.len_utf8())
-            }
+            Some(ch) if is_unicode_letter(u32::from(ch)) => self.emit(T::UnicodeText, p, p + ch.len_utf8()),
             _ => false,
         }
     }
@@ -366,15 +334,10 @@ impl<'a> Lexer<'a> {
         }
         for (k, pair) in ["TB", "BT", "RL", "LR"].into_iter().enumerate() {
             if let Some(end) = direction_end(self.src, p, line_end, pair) {
-                let kind = [
-                    T::DirectionTb,
-                    T::DirectionBt,
-                    T::DirectionRl,
-                    T::DirectionLr,
-                ]
-                .get(k)
-                .copied()
-                .unwrap_or(T::DirectionTb);
+                let kind = [T::DirectionTb, T::DirectionBt, T::DirectionRl, T::DirectionLr]
+                    .get(k)
+                    .copied()
+                    .unwrap_or(T::DirectionTb);
                 return self.emit(kind, p, end);
             }
         }
@@ -614,11 +577,7 @@ impl<'a> Lexer<'a> {
                     true
                 }
                 S::AccTitle | S::AccDescr => {
-                    let kind = if self.state == S::AccTitle {
-                        T::AccTitleValue
-                    } else {
-                        T::AccDescrValue
-                    };
+                    let kind = if self.state == S::AccTitle { T::AccTitleValue } else { T::AccDescrValue };
                     let e = until(self.src, p, b'\n');
                     self.emit(kind, p, e);
                     self.pop();
@@ -637,30 +596,18 @@ impl<'a> Lexer<'a> {
             };
 
             if !ok {
-                self.tokens.push(Token {
-                    kind: T::Error,
-                    start: self.p,
-                    text: "",
-                });
+                self.tokens.push(Token { kind: T::Error, start: self.p, text: "" });
                 return self.tokens;
             }
             // Every step reads input or changes state. A namespace closing with nothing below it
             // would do neither, and is reported as unrecognized text rather than looping.
             if (self.p, self.state, self.stack.len()) == before {
-                self.tokens.push(Token {
-                    kind: T::Error,
-                    start: self.p,
-                    text: "",
-                });
+                self.tokens.push(Token { kind: T::Error, start: self.p, text: "" });
                 return self.tokens;
             }
         }
 
-        self.tokens.push(Token {
-            kind: T::End,
-            start: n,
-            text: "",
-        });
+        self.tokens.push(Token { kind: T::End, start: n, text: "" });
         self.tokens
     }
 }

@@ -1,6 +1,7 @@
 //! The XY chart database. Port of Pele's `src/diagrams/xychart/db.ts`.
 
-use crate::text::label::{trim, trim_start};
+use crate::text::label::trim;
+use crate::text::label::trim_start;
 use crate::util::chars::is_space;
 use crate::yaml::push_number;
 
@@ -99,15 +100,8 @@ impl Default for XyChartDb {
             horizontal: None,
             plots: Vec::new(),
             title: None,
-            x_axis: XAxis::Band {
-                categories: Vec::new(),
-                title: String::new(),
-            },
-            y_axis: LinearAxis {
-                max: f64::NEG_INFINITY,
-                min: f64::INFINITY,
-                title: String::new(),
-            },
+            x_axis: XAxis::Band { categories: Vec::new(), title: String::new() },
+            y_axis: LinearAxis { max: f64::NEG_INFINITY, min: f64::INFINITY, title: String::new() },
         }
     }
 }
@@ -154,10 +148,7 @@ impl XyChartDb {
     /// Makes the x axis categories.
     pub(crate) fn set_x_axis_band(&mut self, categories: &[String]) {
         let title = std::mem::take(self.x_axis.title_mut());
-        self.x_axis = XAxis::Band {
-            categories: categories.iter().map(|c| trim(c).to_owned()).collect(),
-            title,
-        };
+        self.x_axis = XAxis::Band { categories: categories.iter().map(|c| trim(c).to_owned()).collect(), title };
         self.has_set_x_axis = true;
     }
 
@@ -179,10 +170,7 @@ impl XyChartDb {
         }
         // The first series fixes the x range when no x-axis statement did.
         if !self.has_set_x_axis {
-            #[expect(
-                clippy::cast_precision_loss,
-                reason = "series lengths stay far below 2^52"
-            )]
+            #[expect(clippy::cast_precision_loss, reason = "series lengths stay far below 2^52")]
             let count = values.len() as f64;
             self.set_x_axis_range_data(1.0, count);
         }
@@ -203,28 +191,20 @@ impl XyChartDb {
             }
         }
         match &self.x_axis {
-            XAxis::Band { categories, .. } => categories
-                .iter()
-                .enumerate()
-                .map(|(i, category)| (category.clone(), values.get(i).copied()))
-                .collect(),
+            XAxis::Band { categories, .. } => {
+                categories.iter().enumerate().map(|(i, category)| (category.clone(), values.get(i).copied())).collect()
+            }
             XAxis::Linear(axis) => {
                 if let [value] = values {
                     return vec![(number_text(axis.min), Some(*value))];
                 }
-                #[expect(
-                    clippy::cast_precision_loss,
-                    reason = "series lengths stay far below 2^52"
-                )]
+                #[expect(clippy::cast_precision_loss, reason = "series lengths stay far below 2^52")]
                 let step = (axis.max - axis.min) / (values.len() - 1) as f64;
                 values
                     .iter()
                     .enumerate()
                     .map(|(i, &value)| {
-                        #[expect(
-                            clippy::cast_precision_loss,
-                            reason = "series lengths stay far below 2^52"
-                        )]
+                        #[expect(clippy::cast_precision_loss, reason = "series lengths stay far below 2^52")]
                         let at = axis.min + i as f64 * step;
                         (number_text(at), Some(value))
                     })

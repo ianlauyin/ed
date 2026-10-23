@@ -1,11 +1,27 @@
 //! The pie parser: Mermaid's Langium pie grammar over the shared tokenizer. Port of Pele's
 //! `src/diagrams/pie/parser.ts`.
 
-use crate::diagrams::common::tokens::{
-    ACC_DESCR, ACC_TITLE, DIRECTIVE, EOF, Memo, NEWLINE, Pattern, Reader, SINGLE_LINE_COMMENT,
-    STRING, TITLE, TokenType, WHITESPACE, YAML, acc_descr_value, acc_title_value, keyword, literal,
-    string_value, title_value, tokenize,
-};
+use crate::diagrams::common::tokens::ACC_DESCR;
+use crate::diagrams::common::tokens::ACC_TITLE;
+use crate::diagrams::common::tokens::DIRECTIVE;
+use crate::diagrams::common::tokens::EOF;
+use crate::diagrams::common::tokens::Memo;
+use crate::diagrams::common::tokens::NEWLINE;
+use crate::diagrams::common::tokens::Pattern;
+use crate::diagrams::common::tokens::Reader;
+use crate::diagrams::common::tokens::SINGLE_LINE_COMMENT;
+use crate::diagrams::common::tokens::STRING;
+use crate::diagrams::common::tokens::TITLE;
+use crate::diagrams::common::tokens::TokenType;
+use crate::diagrams::common::tokens::WHITESPACE;
+use crate::diagrams::common::tokens::YAML;
+use crate::diagrams::common::tokens::acc_descr_value;
+use crate::diagrams::common::tokens::acc_title_value;
+use crate::diagrams::common::tokens::keyword;
+use crate::diagrams::common::tokens::literal;
+use crate::diagrams::common::tokens::string_value;
+use crate::diagrams::common::tokens::title_value;
+use crate::diagrams::common::tokens::tokenize;
 use crate::error::Error;
 
 /// Token kinds, as indices into [`PIE_TOKENS`].
@@ -36,11 +52,7 @@ fn digits(src: &[u8], from: usize) -> usize {
 /// `memo[1]` are its start and end, and `memo[2]` is one past the fraction's end, or 0.
 fn number(src: &str, p: usize, memo: &mut Memo) -> Option<usize> {
     let bytes = src.as_bytes();
-    let at = if bytes.get(p) == Some(&b'-') {
-        p + 1
-    } else {
-        p
-    };
+    let at = if bytes.get(p) == Some(&b'-') { p + 1 } else { p };
     if at < memo[0] || at >= memo[1] {
         let end = digits(bytes, at);
         memo[0] = at;
@@ -78,12 +90,7 @@ pub(crate) const PIE_TOKENS: &[TokenType] = &[
     keyword("showData"),
     keyword("pie"),
     literal(":"),
-    TokenType {
-        first: Some("-0123456789"),
-        name: "NUMBER_PIE",
-        pattern: Pattern::Scan(number),
-        ..literal("")
-    },
+    TokenType { first: Some("-0123456789"), name: "NUMBER_PIE", pattern: Pattern::Scan(number), ..literal("") },
     ACC_DESCR,
     ACC_TITLE,
     TITLE,

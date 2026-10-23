@@ -44,33 +44,15 @@ fn new_box(node: &TreemapNode, parent: Option<usize>, series: usize) -> Layout<'
         (None, Some(value)) if value.is_finite() && value > 0.0 => value,
         _ => 0.0,
     };
-    Layout {
-        children: Vec::new(),
-        h: 0.0,
-        node,
-        parent,
-        series,
-        value,
-        w: 0.0,
-        x: 0.0,
-        y: 0.0,
-    }
+    Layout { children: Vec::new(), h: 0.0, node, parent, series, value, w: 0.0, x: 0.0, y: 0.0 }
 }
 
 /// Lays out the boxes `shown` in the rectangle as one squarified treemap: rows are added along the
 /// shorter side, and a row stops growing when another box would make its boxes less square.
-#[expect(
-    clippy::many_single_char_names,
-    reason = "the rectangle's coordinates, as in Pele"
-)]
+#[expect(clippy::many_single_char_names, reason = "the rectangle's coordinates, as in Pele")]
 fn squarify(boxes: &mut [Layout<'_>], shown: &[usize], total: f64, rect: [f64; 4], gap: f64) {
     let [mut x, mut y, mut w, mut h] = rect;
-    let value = |boxes: &[Layout<'_>], i: usize| {
-        shown
-            .get(i)
-            .and_then(|&k| boxes.get(k))
-            .map_or(0.0, |b| b.value)
-    };
+    let value = |boxes: &[Layout<'_>], i: usize| shown.get(i).and_then(|&k| boxes.get(k)).map_or(0.0, |b| b.value);
     let mut rest = total;
     let mut from = 0;
     while from < shown.len() {
@@ -78,14 +60,12 @@ fn squarify(boxes: &mut [Layout<'_>], shown: &[usize], total: f64, rect: [f64; 4
         let side = w.min(h);
         let mut sum = value(boxes, from) * scale;
         let largest = sum;
-        let mut worst =
-            ((side * side * largest) / (sum * sum)).max((sum * sum) / (side * side * largest));
+        let mut worst = ((side * side * largest) / (sum * sum)).max((sum * sum) / (side * side * largest));
         let mut to = from + 1;
         while to < shown.len() {
             let smallest = value(boxes, to) * scale;
             let next = sum + smallest;
-            let ratio = ((side * side * largest) / (next * next))
-                .max((next * next) / (side * side * smallest));
+            let ratio = ((side * side * largest) / (next * next)).max((next * next) / (side * side * smallest));
             if ratio > worst {
                 break;
             }
@@ -100,11 +80,7 @@ fn squarify(boxes: &mut [Layout<'_>], shown: &[usize], total: f64, rect: [f64; 4
             let Some(b) = shown.get(i).and_then(|&k| boxes.get_mut(k)) else {
                 continue;
             };
-            let length = if i == to - 1 {
-                side - offset
-            } else {
-                (b.value * scale) / thickness
-            };
+            let length = if i == to - 1 { side - offset } else { (b.value * scale) / thickness };
             let bx = if w >= h { x } else { x + offset };
             let by = if w >= h { y + offset } else { y };
             let x0 = js_round(bx + gap / 2.0);
@@ -129,22 +105,13 @@ fn squarify(boxes: &mut [Layout<'_>], shown: &[usize], total: f64, rect: [f64; 4
 
 /// Lays out the children `children` of a box in the rectangle, adding the boxes that get a size
 /// to `placed`.
-fn place(
-    boxes: &mut [Layout<'_>],
-    placed: &mut Vec<usize>,
-    children: &[usize],
-    rect: [f64; 4],
-    gap: f64,
-) {
+fn place(boxes: &mut [Layout<'_>], placed: &mut Vec<usize>, children: &[usize], rect: [f64; 4], gap: f64) {
     let [x, y, w, h] = rect;
     if w <= 0.0 || h <= 0.0 {
         return;
     }
-    let mut shown: Vec<usize> = children
-        .iter()
-        .copied()
-        .filter(|&k| boxes.get(k).is_some_and(|b| b.value > 0.0))
-        .collect();
+    let mut shown: Vec<usize> =
+        children.iter().copied().filter(|&k| boxes.get(k).is_some_and(|b| b.value > 0.0)).collect();
     let value = |k: usize| boxes.get(k).map_or(0.0, |b| b.value);
     shown.sort_by(|&a, &b| value(b).total_cmp(&value(a)));
     let mut total = 0.0;
@@ -155,13 +122,7 @@ fn place(
         return;
     }
 
-    squarify(
-        boxes,
-        &shown,
-        total,
-        [x - gap / 2.0, y - gap / 2.0, w + gap, h + gap],
-        gap,
-    );
+    squarify(boxes, &shown, total, [x - gap / 2.0, y - gap / 2.0, w + gap, h + gap], gap);
     for k in shown {
         if boxes.get(k).is_some_and(|b| b.w > 0.0 && b.h > 0.0) {
             placed.push(k);
@@ -177,11 +138,7 @@ pub(crate) fn layout_treemap(
     height: f64,
     insets: Insets,
 ) -> (Vec<Layout<'_>>, Vec<usize>) {
-    let mut boxes: Vec<Layout<'_>> = roots
-        .iter()
-        .enumerate()
-        .map(|(index, node)| new_box(node, None, index))
-        .collect();
+    let mut boxes: Vec<Layout<'_>> = roots.iter().enumerate().map(|(index, node)| new_box(node, None, index)).collect();
     let top: Vec<usize> = (0..boxes.len()).collect();
     let mut i = 0;
     while let Some(parent) = boxes.get(i) {
@@ -208,25 +165,14 @@ pub(crate) fn layout_treemap(
 
     let Insets { gap, header, side } = insets;
     let mut placed = Vec::new();
-    place(
-        &mut boxes,
-        &mut placed,
-        &top,
-        [0.0, 0.0, width, height],
-        gap,
-    );
+    place(&mut boxes, &mut placed, &top, [0.0, 0.0, width, height], gap);
     let mut i = 0;
     while let Some(&k) = placed.get(i) {
         if let Some(b) = boxes.get(k)
             && !b.children.is_empty()
         {
             let children = b.children.clone();
-            let rect = [
-                b.x + side,
-                b.y + header,
-                b.w - 2.0 * side,
-                b.h - header - side,
-            ];
+            let rect = [b.x + side, b.y + header, b.w - 2.0 * side, b.h - header - side];
             place(&mut boxes, &mut placed, &children, rect, gap);
         }
         i += 1;

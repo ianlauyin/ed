@@ -73,23 +73,13 @@ pub(crate) fn arrow_size(mask: u32, tw: f64, th: f64) -> ArrowSize {
         let h = (th + 8.0).max(14.0) + 2.0 * OVERHANG;
         let depth = (h / 2.0).min(MAX_DEPTH);
         let heads = if mask == RIGHT | LEFT { 2.0 } else { 1.0 };
-        return ArrowSize {
-            dx: (across * depth) / 2.0,
-            dy: 0.0,
-            h,
-            w: (tw + 12.0).max(16.0) + depth * heads,
-        };
+        return ArrowSize { dx: (across * depth) / 2.0, dy: 0.0, h, w: (tw + 12.0).max(16.0) + depth * heads };
     }
     if axis == b'y' {
         let w = (tw + 16.0).max(14.0) + 2.0 * OVERHANG;
         let depth = (w / 2.0).min(MAX_DEPTH);
         let heads = if mask == UP | DOWN { 2.0 } else { 1.0 };
-        return ArrowSize {
-            dx: 0.0,
-            dy: (along * depth) / 2.0,
-            h: (th + 8.0).max(16.0) + depth * heads,
-            w,
-        };
+        return ArrowSize { dx: 0.0, dy: (along * depth) / 2.0, h: (th + 8.0).max(16.0) + depth * heads, w };
     }
     ArrowSize {
         dx: (across * NUB) / 2.0,

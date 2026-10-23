@@ -3,21 +3,46 @@
 use std::collections::BTreeMap;
 
 use super::db::StateDb;
-use super::graph::{StateEdge, StateNode};
+use super::graph::StateEdge;
+use super::graph::StateNode;
 use crate::diagrams::Rendered;
-use crate::diagrams::common::fit_width::{runs_across, turn_to_fit};
-use crate::layout::compound::{CEdge, CNode, Dir, cnode, compound_layout, direction};
+use crate::diagrams::common::fit_width::runs_across;
+use crate::diagrams::common::fit_width::turn_to_fit;
+use crate::layout::compound::CEdge;
+use crate::layout::compound::CNode;
+use crate::layout::compound::Dir;
+use crate::layout::compound::cnode;
+use crate::layout::compound::compound_layout;
+use crate::layout::compound::direction;
 use crate::layout::layered::LayeredOptions;
-use crate::svg::builder::{esc, esc_text, js_round, label_svg, num, push_num};
-use crate::svg::edges::{EdgePath, SideReach, edge_label_svg, marker, marker_trim, route_path};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
+use crate::svg::builder::esc;
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::num;
+use crate::svg::builder::push_num;
+use crate::svg::edges::EdgePath;
+use crate::svg::edges::SideReach;
+use crate::svg::edges::edge_label_svg;
+use crate::svg::edges::marker;
+use crate::svg::edges::marker_trim;
+use crate::svg::edges::route_path;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
 use crate::svg::shapes::end_side;
-use crate::svg::theme::{ResolvedStyle, class_names, resolve_style};
+use crate::svg::theme::ResolvedStyle;
+use crate::svg::theme::class_names;
+use crate::svg::theme::resolve_style;
 use crate::svg::title::with_title;
 use crate::text::entities;
-use crate::text::label::{Label, layout_label};
-use crate::text::measure::{BOLD, ITALIC};
-use crate::util::url::{self, LinkInfo, UrlOptions};
+use crate::text::label::Label;
+use crate::text::label::layout_label;
+use crate::text::measure::BOLD;
+use crate::text::measure::ITALIC;
+use crate::util::url::LinkInfo;
+use crate::util::url::UrlOptions;
+use crate::util::url::{self};
 use crate::yaml::Value;
 
 const NODE_SEP: f64 = 40.0;
@@ -124,16 +149,7 @@ struct View<'g> {
 }
 
 fn view(node: Option<&StateNode>, kind: K) -> View<'_> {
-    View {
-        h: 0.0,
-        kind,
-        label: Label::default(),
-        lines: Vec::new(),
-        node,
-        style: None,
-        title_h: 0.0,
-        w: 0.0,
-    }
+    View { h: 0.0, kind, label: Label::default(), lines: Vec::new(), node, style: None, title_h: 0.0, w: 0.0 }
 }
 
 fn node_of<'g>(views: &[View<'g>], i: usize) -> Option<&'g StateNode> {
@@ -181,20 +197,12 @@ fn clamp(value: f64, min: f64, max: f64) -> f64 {
 
 /// JavaScript's `Math.sign`.
 fn js_sign(value: f64) -> f64 {
-    if value == 0.0 || value.is_nan() {
-        value
-    } else {
-        value.signum()
-    }
+    if value == 0.0 || value.is_nan() { value } else { value.signum() }
 }
 
 /// `value || 1`.
 fn or_one(value: f64) -> f64 {
-    if value == 0.0 || value.is_nan() {
-        1.0
-    } else {
-        value
-    }
+    if value == 0.0 || value.is_nan() { 1.0 } else { value }
 }
 
 #[expect(clippy::cast_precision_loss, reason = "counts stay far below 2^52")]
@@ -242,10 +250,7 @@ fn strip_mermaid_classes(classes: &str) -> String {
         let name = if at == 0 && classes.starts_with(PREFIX) {
             Some(PREFIX.len())
         } else if classes.get(at..).is_some_and(|rest| rest.starts_with(' ')) {
-            classes
-                .get(at + 1..)
-                .filter(|rest| rest.starts_with(PREFIX))
-                .map(|_| 1 + PREFIX.len())
+            classes.get(at + 1..).filter(|rest| rest.starts_with(PREFIX)).map(|_| 1 + PREFIX.len())
         } else {
             None
         };
@@ -253,10 +258,7 @@ fn strip_mermaid_classes(classes: &str) -> String {
             let rest = classes.get(at + skip..)?;
             ["state", "cluster-alt", "cluster", "note"]
                 .iter()
-                .find(|word| {
-                    rest.strip_prefix(**word)
-                        .is_some_and(|after| after.is_empty() || after.starts_with(' '))
-                })
+                .find(|word| rest.strip_prefix(**word).is_some_and(|after| after.is_empty() || after.starts_with(' ')))
                 .map(|word| at + skip + word.len())
         });
         if let Some(end) = end {
@@ -264,10 +266,7 @@ fn strip_mermaid_classes(classes: &str) -> String {
             kept = end;
             at = end;
         } else {
-            at += classes
-                .get(at..)
-                .and_then(|rest| rest.chars().next())
-                .map_or(1, char::len_utf8);
+            at += classes.get(at..).and_then(|rest| rest.chars().next()).map_or(1, char::len_utf8);
         }
     }
     out.push_str(classes.get(kept..).unwrap_or(""));
@@ -276,12 +275,7 @@ fn strip_mermaid_classes(classes: &str) -> String {
 
 /// Draws a state diagram, turning one that runs across to run down when it does not fit the
 /// host's width.
-pub(crate) fn render(
-    db: &StateDb,
-    config: &Value,
-    options: &RenderOptions,
-    url: &UrlOptions<'_>,
-) -> Rendered {
+pub(crate) fn render(db: &StateDb, config: &Value, options: &RenderOptions, url: &UrlOptions<'_>) -> Rendered {
     if !runs_across(Some(db.direction())) {
         return draw(db, config, options, url, false);
     }
@@ -296,10 +290,7 @@ fn by_flow(views: &[View<'_>], appear: &[f64], a: usize, b: usize) -> std::cmp::
     if ia != ib {
         return ia.cmp(&ib);
     }
-    let (pa, pb) = (
-        appear.get(a).copied().unwrap_or(f64::INFINITY),
-        appear.get(b).copied().unwrap_or(f64::INFINITY),
-    );
+    let (pa, pb) = (appear.get(a).copied().unwrap_or(f64::INFINITY), appear.get(b).copied().unwrap_or(f64::INFINITY));
     if pa < pb {
         return std::cmp::Ordering::Less;
     }
@@ -315,26 +306,15 @@ fn by_flow(views: &[View<'_>], appear: &[f64], a: usize, b: usize) -> std::cmp::
     clippy::many_single_char_names,
     reason = "mirrors Pele's draw and its geometry names, one pass per drawing stage"
 )]
-fn draw(
-    db: &StateDb,
-    config: &Value,
-    options: &RenderOptions,
-    url: &UrlOptions<'_>,
-    turned: bool,
-) -> Rendered {
+fn draw(db: &StateDb, config: &Value, options: &RenderOptions, url: &UrlOptions<'_>, turned: bool) -> Rendered {
     let graph = &db.graph;
     let size = options.font_size.unwrap_or(16.0);
     let small = js_round(size * 0.875);
     let wrap_width = number_option(config, "wrappingWidth", 200.0);
     let pad = options.padding.unwrap_or(8.0);
-    let root_dir = if turned {
-        Dir::Tb
-    } else {
-        direction(Some(db.direction()))
-    };
-    let text = |raw: Option<&str>, font_size: f64, wrap: f64, style: u8| {
-        layout_label(raw, true, font_size, wrap, style, None)
-    };
+    let root_dir = if turned { Dir::Tb } else { direction(Some(db.direction())) };
+    let text =
+        |raw: Option<&str>, font_size: f64, wrap: f64, style: u8| layout_label(raw, true, font_size, wrap, style, None);
 
     let mut index: BTreeMap<&str, usize> = BTreeMap::new();
     let mut views: Vec<View<'_>> = Vec::new();
@@ -344,11 +324,7 @@ fn draw(
             continue;
         }
         let kind = if node.is_group {
-            if node.shape == Some("divider") {
-                K::Region
-            } else {
-                K::Composite
-            }
+            if node.shape == Some("divider") { K::Region } else { K::Composite }
         } else {
             K::of(node.shape)
         };
@@ -362,9 +338,7 @@ fn draw(
             node_of(&views, i)
                 .and_then(|node| node.parent_id.as_deref())
                 .and_then(|id| index.get(id).copied())
-                .filter(|&parent| {
-                    parent != i && node_of(&views, parent).is_some_and(|node| node.is_group)
-                })
+                .filter(|&parent| parent != i && node_of(&views, parent).is_some_and(|node| node.is_group))
         })
         .collect();
     // Composites that are redeclared inside each other form a ring with no way in from the root.
@@ -425,9 +399,7 @@ fn draw(
     }
     let mut stats = vec![Stats::default(); states];
     for (i, stat) in stats.iter_mut().enumerate() {
-        let owner = node_of(&views, i)
-            .and_then(|node| node.note_for.as_deref())
-            .and_then(|id| index.get(id).copied());
+        let owner = node_of(&views, i).and_then(|node| node.note_for.as_deref()).and_then(|id| index.get(id).copied());
         let Some(owner) = owner else { continue };
         stat.owner = Some(owner);
         let parent = logical.get(owner).copied().flatten();
@@ -438,15 +410,7 @@ fn draw(
 
     // Whether the flow around each state runs top to bottom or bottom to top.
     let across: Vec<bool> = (0..states)
-        .map(|i| {
-            vertical(Some(
-                logical
-                    .get(i)
-                    .copied()
-                    .flatten()
-                    .map_or(root_dir, |parent| inner_dir(&views, parent)),
-            ))
-        })
+        .map(|i| vertical(Some(logical.get(i).copied().flatten().map_or(root_dir, |parent| inner_dir(&views, parent)))))
         .collect();
     let across_of = |i: usize| across.get(i).copied().unwrap_or(false);
 
@@ -455,17 +419,11 @@ fn draw(
     let mut appear: Vec<f64> = vec![f64::INFINITY; states];
     let mut appeared = 0.0;
     for edge in &graph.edges {
-        let (Some(&src), Some(&dst)) =
-            (index.get(edge.start.as_str()), index.get(edge.end.as_str()))
-        else {
+        let (Some(&src), Some(&dst)) = (index.get(edge.start.as_str()), index.get(edge.end.as_str())) else {
             continue;
         };
         if edge.pattern == Some("dashed") {
-            let at = if views.get(src).is_some_and(|v| v.kind == K::Note) {
-                dst
-            } else {
-                src
-            };
+            let at = if views.get(src).is_some_and(|v| v.kind == K::Note) { dst } else { src };
             if let Some(stat) = stats.get_mut(at) {
                 stat.noted = true;
             }
@@ -502,19 +460,14 @@ fn draw(
             all.extend(node.css_styles.iter().cloned());
             resolve_style(&all)
         };
-        let text_style =
-            (if style.bold { BOLD } else { 0 }) | (if style.italic { ITALIC } else { 0 });
+        let text_style = (if style.bold { BOLD } else { 0 }) | (if style.italic { ITALIC } else { 0 });
         let font_size = style.font_size.unwrap_or(size);
         view.style = Some(style);
         let mut c: Option<CNode> = None;
         match view.kind {
             K::Composite => {
                 view.label = text(node.label.as_deref(), font_size, 4000.0, text_style);
-                view.title_h = if view.label.height > 0.0 {
-                    view.label.height + 12.0
-                } else {
-                    0.0
-                };
+                view.title_h = if view.label.height > 0.0 { view.label.height + 12.0 } else { 0.0 };
                 let mut g = group(dir, GROUP_PAD, view.title_h + GROUP_PAD, GROUP_PAD);
                 g.min_w = view.label.width + 2.0 * GROUP_PAD;
                 c = Some(g);
@@ -597,18 +550,12 @@ fn draw(
         false
     };
     for edge in &graph.edges {
-        let (Some(&src0), Some(&dst0)) =
-            (index.get(edge.start.as_str()), index.get(edge.end.as_str()))
-        else {
+        let (Some(&src0), Some(&dst0)) = (index.get(edge.start.as_str()), index.get(edge.end.as_str())) else {
             continue;
         };
         let (mut src, mut dst) = (src0, dst0);
         let label = text(Some(&edge.label), small, wrap_width, 0);
-        let label_w = if label.width > 0.0 {
-            label.width + 12.0
-        } else {
-            0.0
-        };
+        let label_w = if label.width > 0.0 { label.width + 12.0 } else { 0.0 };
         let enclosed_dst = src != dst && encloses(&cnodes, src, dst);
         let enclosed_src = src != dst && !enclosed_dst && encloses(&cnodes, dst, src);
         if src == dst {
@@ -620,11 +567,7 @@ fn draw(
                 stat.loop_height += label.height;
             }
         } else if enclosed_dst || enclosed_src {
-            let (composite, first) = if enclosed_dst {
-                (src, true)
-            } else {
-                (dst, false)
-            };
+            let (composite, first) = if enclosed_dst { (src, true) } else { (dst, false) };
             anchors.insert(cedges.len(), composite);
             appear.push(if first { -1.0 } else { f64::INFINITY });
             let anchor = views.len();
@@ -639,11 +582,7 @@ fn draw(
         drawn.push(edge);
         cedges.push(CEdge {
             dst,
-            label_h: if label.height > 0.0 {
-                label.height + 4.0
-            } else {
-                0.0
-            },
+            label_h: if label.height > 0.0 { label.height + 4.0 } else { 0.0 },
             label_w,
             label_x: 0.0,
             label_y: 0.0,
@@ -670,11 +609,7 @@ fn draw(
         let mut room = 0.0;
         if stat.loop_count > 0 {
             let reach = LOOP + f64::from(stat.loop_count - 1) * 8.0;
-            room = if across {
-                reach + stat.loop_width
-            } else {
-                reach * 0.75 + 4.0 + stat.loop_height
-            };
+            room = if across { reach + stat.loop_width } else { reach * 0.75 + 4.0 + stat.loop_height };
             if !item.is_group {
                 if across {
                     item.w += 2.0 * room;
@@ -690,11 +625,7 @@ fn draw(
             item.parent = parent;
             continue;
         }
-        let mut c = if across {
-            group(Dir::Lr, room, 0.0, 0.0)
-        } else {
-            group(Dir::Tb, 0.0, room, room)
-        };
+        let mut c = if across { group(Dir::Lr, room, 0.0, 0.0) } else { group(Dir::Tb, 0.0, room, room) };
         c.parent = parent;
         appear.push(appear.get(i).copied().unwrap_or(f64::INFINITY));
         let holder = views.len();
@@ -719,10 +650,7 @@ fn draw(
         let mut members: Vec<Vec<usize>> = vec![Vec::new(); cnodes.len()];
         let mut top: Vec<usize> = Vec::new();
         for (i, c) in cnodes.iter().enumerate() {
-            match usize::try_from(c.parent)
-                .ok()
-                .and_then(|p| members.get_mut(p))
-            {
+            match usize::try_from(c.parent).ok().and_then(|p| members.get_mut(p)) {
                 Some(list) => list.push(i),
                 None => top.push(i),
             }
@@ -778,10 +706,7 @@ fn draw(
     let mut children: Vec<Vec<usize>> = vec![Vec::new(); cnodes.len()];
     let mut order: Vec<usize> = Vec::new();
     for (i, c) in cnodes.iter().enumerate() {
-        match usize::try_from(c.parent)
-            .ok()
-            .and_then(|p| children.get_mut(p))
-        {
+        match usize::try_from(c.parent).ok().and_then(|p| children.get_mut(p)) {
             Some(list) => list.push(i),
             None => order.push(i),
         }
@@ -799,27 +724,14 @@ fn draw(
     let mut dividers = String::new();
     let mut nodes_out = String::new();
     let mut notes_out = String::new();
-    let frame = Frame {
-        cnodes: &cnodes,
-        pad,
-        views: &views,
-    };
-    frame.divide(
-        &mut dividers,
-        &roots,
-        pad / 2.0,
-        pad / 2.0,
-        width - pad / 2.0,
-        height - pad / 2.0,
-    );
+    let frame = Frame { cnodes: &cnodes, pad, views: &views };
+    frame.divide(&mut dividers, &roots, pad / 2.0, pad / 2.0, width - pad / 2.0, height - pad / 2.0);
 
     for &i in &order {
         let (Some(view), Some(c)) = (views.get(i), cnodes.get(i)) else {
             continue;
         };
-        let (Some(node), Some(style), Some(classes)) =
-            (view.node, &view.style, view.kind.classes())
-        else {
+        let (Some(node), Some(style), Some(classes)) = (view.node, &view.style, view.kind.classes()) else {
             continue;
         };
         let x = c.x + pad;
@@ -836,9 +748,7 @@ fn draw(
             K::Composite => {
                 let left = x - c.w / 2.0;
                 let top = y - c.h / 2.0;
-                let mut rest = String::from(
-                    " rx=\"10\" fill=\"var(--_a)\" fill-opacity=\"0.5\" stroke=\"var(--_b)\"",
-                );
+                let mut rest = String::from(" rx=\"10\" fill=\"var(--_a)\" fill-opacity=\"0.5\" stroke=\"var(--_b)\"");
                 rest.push_str(&style.shape);
                 body.push_str(&rect(left, top, c.w, c.h, &rest));
                 if view.title_h > 0.0 {
@@ -962,13 +872,7 @@ fn draw(
                     body.push_str(RULE);
                     body.push_str(&style.line);
                     body.push_str("/>");
-                    body.push_str(&label_svg(
-                        &view.label,
-                        0.0,
-                        at - view.label.height / 2.0,
-                        &label_attrs,
-                        None,
-                    ));
+                    body.push_str(&label_svg(&view.label, 0.0, at - view.label.height / 2.0, &label_attrs, None));
                     at += 14.0;
                     let mut attrs = String::from(" class=\"ondine-state-description\"");
                     attrs.push_str(&small_attrs);
@@ -992,14 +896,8 @@ fn draw(
                 titled.push_str(&body);
                 body = titled;
             }
-            body = url::linked(
-                &body,
-                &url::safe_url(unquote(&link.url)),
-                &node.id,
-                &mut links,
-                url,
-                " target=\"_blank\"",
-            );
+            body =
+                url::linked(&body, &url::safe_url(unquote(&link.url)), &node.id, &mut links, url, " target=\"_blank\"");
         }
 
         let mut open = String::from("<g class=\"");
@@ -1033,11 +931,7 @@ fn draw(
             continue;
         }
         if let Some(dst) = cnodes.get(ce.dst) {
-            reach.add(
-                ce.dst,
-                end_side(&ce.route, ce.route.len() - 3, dst),
-                "arrow_point",
-            );
+            reach.add(ce.dst, end_side(&ce.route, ce.route.len() - 3, dst), "arrow_point");
         }
     }
 
@@ -1052,9 +946,7 @@ fn draw(
         let Some(ce) = cedges.get(i) else { continue };
         let (src, dst) = (ce.src, ce.dst);
         let path: EdgePath = if src == dst {
-            let (Some(a), Some(view), Some(stat)) =
-                (cnodes.get(src), views.get(src), stats.get_mut(src))
-            else {
+            let (Some(a), Some(view), Some(stat)) = (cnodes.get(src), views.get(src), stats.get_mut(src)) else {
                 continue;
             };
             let k = f64::from(stat.loop_seen);
@@ -1065,9 +957,7 @@ fn draw(
             let w = if a.is_group { a.w } else { view.w };
             let h = if a.is_group { a.h } else { view.h };
             let out = (if side { w } else { h }) / 2.0;
-            let spread = ((if side { h } else { w }) / 2.0 - 4.0)
-                .min(8.0 + k * 6.0)
-                .max(2.0);
+            let spread = ((if side { h } else { w }) / 2.0 - 4.0).min(8.0 + k * 6.0).max(2.0);
             let loop_reach = LOOP + k * 8.0;
             let trim = marker_trim(end_type) / or_one(loop_reach.hypot(spread));
             // Offsets are given for a loop on the right and turned a quarter for one below.
@@ -1107,16 +997,9 @@ fn draw(
             let loop_height = stat.loop_height;
             let (ax, ay) = (a.x, a.y);
             if let Some(ce) = cedges.get_mut(i) {
-                ce.label_x = if side {
-                    ax + out + furthest + 4.0 + ce.label_w / 2.0
-                } else {
-                    ax
-                };
-                ce.label_y = if side {
-                    ay - loop_height / 2.0 + below
-                } else {
-                    ay + out + furthest * 0.75 + 4.0 + below
-                };
+                ce.label_x = if side { ax + out + furthest + 4.0 + ce.label_w / 2.0 } else { ax };
+                ce.label_y =
+                    if side { ay - loop_height / 2.0 + below } else { ay + out + furthest * 0.75 + 4.0 + below };
             }
             path
         } else {
@@ -1145,12 +1028,7 @@ fn draw(
                 let point = if vertical(g.dir) {
                     [
                         route.get(at).copied().unwrap_or(f64::NAN),
-                        g.y + pad
-                            + if near {
-                                owner.title_h - g.h / 2.0
-                            } else {
-                                g.h / 2.0
-                            },
+                        g.y + pad + if near { owner.title_h - g.h / 2.0 } else { g.h / 2.0 },
                         0.0,
                     ]
                 } else {
@@ -1166,14 +1044,7 @@ fn draw(
                     route.extend(point);
                 }
             }
-            route_path(
-                &route,
-                None,
-                0.0,
-                marker_trim(end_type),
-                Some(leaves),
-                Some(arrives),
-            )
+            route_path(&route, None, 0.0, marker_trim(end_type), Some(leaves), Some(arrives))
         };
 
         edges_out.push_str(if note {
@@ -1185,26 +1056,12 @@ fn draw(
         edges_out.push_str("\"><path d=\"");
         edges_out.push_str(&path.d);
         edges_out.push_str("\"/>");
-        edges_out.push_str(&marker(
-            end_type,
-            path.ex,
-            path.ey,
-            path.edx,
-            path.edy,
-            "var(--_l)",
-        ));
+        edges_out.push_str(&marker(end_type, path.ex, path.ey, path.edx, path.edy, "var(--_l)"));
         edges_out.push_str("</g>");
         if label.width > 0.0
             && let Some(ce) = cedges.get(i)
         {
-            labels_out.push_str(&edge_label_svg(
-                &edge.id,
-                label,
-                ce.label_x + pad,
-                ce.label_y + pad,
-                "",
-                None,
-            ));
+            labels_out.push_str(&edge_label_svg(&edge.id, label, ce.label_x + pad, ce.label_y + pad, "", None));
         }
     }
 
@@ -1222,9 +1079,7 @@ fn draw(
         content.push_str("</g>");
     }
     if !edges_out.is_empty() {
-        content.push_str(
-            "<g class=\"ondine-edges\" fill=\"none\" stroke=\"var(--_l)\" stroke-linecap=\"round\">",
-        );
+        content.push_str("<g class=\"ondine-edges\" fill=\"none\" stroke=\"var(--_l)\" stroke-linecap=\"round\">");
         content.push_str(&edges_out);
         content.push_str("</g>");
     }
@@ -1241,33 +1096,14 @@ fn draw(
     content.push_str("</g>");
 
     let titled = with_title(db.title.as_deref(), size, pad, width, height, content);
-    let accessible = Accessible {
-        acc_descr: db.acc_descr.as_deref(),
-        acc_title: db.acc_title.as_deref(),
-    };
-    let svg = svg_document(
-        "state",
-        titled.width,
-        titled.height,
-        size,
-        options,
-        accessible,
-        &titled.content,
-    );
+    let accessible = Accessible { acc_descr: db.acc_descr.as_deref(), acc_title: db.acc_title.as_deref() };
+    let svg = svg_document("state", titled.width, titled.height, size, options, accessible, &titled.content);
 
-    Rendered {
-        height: titled.height,
-        links,
-        svg,
-        width: titled.width,
-    }
+    Rendered { height: titled.height, links, svg, width: titled.width }
 }
 
 /// A rounded coordinate as a map key.
-#[expect(
-    clippy::cast_possible_truncation,
-    reason = "layout coordinates stay far inside i64"
-)]
+#[expect(clippy::cast_possible_truncation, reason = "layout coordinates stay far inside i64")]
 fn key(value: f64) -> i64 {
     js_round(value) as i64
 }
@@ -1281,34 +1117,17 @@ struct Frame<'a> {
 
 impl Frame<'_> {
     /// Draws the dashed lines between the regions among a composite's members.
-    fn divide(
-        &self,
-        out: &mut String,
-        items: &[usize],
-        left: f64,
-        top: f64,
-        right: f64,
-        bottom: f64,
-    ) {
-        let regions: Vec<usize> = items
-            .iter()
-            .copied()
-            .filter(|&i| self.views.get(i).is_some_and(|v| v.kind == K::Region))
-            .collect();
+    fn divide(&self, out: &mut String, items: &[usize], left: f64, top: f64, right: f64, bottom: f64) {
+        let regions: Vec<usize> =
+            items.iter().copied().filter(|&i| self.views.get(i).is_some_and(|v| v.kind == K::Region)).collect();
         if regions.len() < 2 {
             return;
         }
         let lo = |i: usize, x: bool| {
-            self.cnodes.get(i).map_or(
-                f64::NAN,
-                |c| if x { c.x - c.w / 2.0 } else { c.y - c.h / 2.0 },
-            )
+            self.cnodes.get(i).map_or(f64::NAN, |c| if x { c.x - c.w / 2.0 } else { c.y - c.h / 2.0 })
         };
         let hi = |i: usize, x: bool| {
-            self.cnodes.get(i).map_or(
-                f64::NAN,
-                |c| if x { c.x + c.w / 2.0 } else { c.y + c.h / 2.0 },
-            )
+            self.cnodes.get(i).map_or(f64::NAN, |c| if x { c.x + c.w / 2.0 } else { c.y + c.h / 2.0 })
         };
         for x in [true, false] {
             let mut sorted = regions.clone();
@@ -1324,9 +1143,8 @@ impl Frame<'_> {
             });
             let pairs = || sorted.iter().zip(sorted.iter().skip(1));
             // Pele asks whether any region reaches past the next, so `NaN` counts as apart.
-            let apart = pairs().all(|(&a, &b)| {
-                hi(a, x).partial_cmp(&(lo(b, x) + 0.5)) != Some(std::cmp::Ordering::Greater)
-            });
+            let apart =
+                pairs().all(|(&a, &b)| hi(a, x).partial_cmp(&(lo(b, x) + 0.5)) != Some(std::cmp::Ordering::Greater));
             if !apart {
                 continue;
             }
@@ -1396,11 +1214,7 @@ impl Frame<'_> {
             if bar && breadth > drawn_extent {
                 let from = route.get(other + 1 - axis).copied().unwrap_or(f64::NAN);
                 if let Some(slot) = route.get_mut(at + 1 - axis) {
-                    *slot = clamp(
-                        from,
-                        cross - breadth / 2.0 + 6.0,
-                        cross + breadth / 2.0 - 6.0,
-                    );
+                    *slot = clamp(from, cross - breadth / 2.0 + 6.0, cross + breadth / 2.0 - 6.0);
                 }
             }
             return;

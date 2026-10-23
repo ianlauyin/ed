@@ -1,10 +1,20 @@
 //! The treemap parser: Mermaid's Langium treemap grammar over the shared tokenizer. Port of
 //! Pele's `src/diagrams/treemap/parser.ts`.
 
-use crate::diagrams::common::tokens::{
-    ACC_DESCR, ACC_TITLE, EOF, NEWLINE, Pattern, Reader, TITLE, TokenType, WHITESPACE,
-    acc_descr_value, acc_title_value, literal, title_value, tokenize,
-};
+use crate::diagrams::common::tokens::ACC_DESCR;
+use crate::diagrams::common::tokens::ACC_TITLE;
+use crate::diagrams::common::tokens::EOF;
+use crate::diagrams::common::tokens::NEWLINE;
+use crate::diagrams::common::tokens::Pattern;
+use crate::diagrams::common::tokens::Reader;
+use crate::diagrams::common::tokens::TITLE;
+use crate::diagrams::common::tokens::TokenType;
+use crate::diagrams::common::tokens::WHITESPACE;
+use crate::diagrams::common::tokens::acc_descr_value;
+use crate::diagrams::common::tokens::acc_title_value;
+use crate::diagrams::common::tokens::literal;
+use crate::diagrams::common::tokens::title_value;
+use crate::diagrams::common::tokens::tokenize;
 use crate::error::Error;
 use crate::util::chars::is_space;
 
@@ -27,10 +37,7 @@ mod t {
 /// `treemap-beta|treemap`.
 fn keyword(src: &str, p: usize) -> Option<usize> {
     let rest = src.get(p..)?;
-    ["treemap-beta", "treemap"]
-        .iter()
-        .find(|word| rest.starts_with(*word))
-        .map(|word| p + word.len())
+    ["treemap-beta", "treemap"].iter().find(|word| rest.starts_with(*word)).map(|word| p + word.len())
 }
 
 /// Where a run of JavaScript `\s` from `p` ends.
@@ -59,35 +66,21 @@ fn class_def_at(src: &str, p: usize) -> Option<ClassDef> {
     }
     let bytes = src.as_bytes();
     let name = skip_space(src, p + 8);
-    if name == p + 8
-        || !bytes
-            .get(name)
-            .is_some_and(|c| c.is_ascii_alphabetic() || *c == b'_')
-    {
+    if name == p + 8 || !bytes.get(name).is_some_and(|c| c.is_ascii_alphabetic() || *c == b'_') {
         return None;
     }
     let mut end = name + 1;
-    while bytes
-        .get(end)
-        .is_some_and(|c| c.is_ascii_alphanumeric() || *c == b'_')
-    {
+    while bytes.get(end).is_some_and(|c| c.is_ascii_alphanumeric() || *c == b'_') {
         end += 1;
     }
     if end == name + 1 {
         return None;
     }
 
-    let mut def = ClassDef {
-        end,
-        name: (name, end),
-        styles: None,
-    };
+    let mut def = ClassDef { end, name: (name, end), styles: None };
     let from = skip_space(src, end);
     if from > end {
-        let to = src
-            .get(from..)
-            .and_then(|rest| rest.find([';', '\r', '\n']))
-            .map_or(src.len(), |at| from + at);
+        let to = src.get(from..).and_then(|rest| rest.find([';', '\r', '\n'])).map_or(src.len(), |at| from + at);
         def.styles = Some((from, to));
         def.end = to;
     }
@@ -114,17 +107,11 @@ fn comment(src: &str, p: usize) -> Option<usize> {
 /// `[a-zA-Z_][a-zA-Z0-9_]*`.
 fn id(src: &str, p: usize) -> Option<usize> {
     let bytes = src.as_bytes();
-    if !bytes
-        .get(p)
-        .is_some_and(|c| c.is_ascii_alphabetic() || *c == b'_')
-    {
+    if !bytes.get(p).is_some_and(|c| c.is_ascii_alphabetic() || *c == b'_') {
         return None;
     }
     let mut end = p + 1;
-    while bytes
-        .get(end)
-        .is_some_and(|c| c.is_ascii_alphanumeric() || *c == b'_')
-    {
+    while bytes.get(end).is_some_and(|c| c.is_ascii_alphanumeric() || *c == b'_') {
         end += 1;
     }
     Some(end)
@@ -134,10 +121,7 @@ fn id(src: &str, p: usize) -> Option<usize> {
 fn number(src: &str, p: usize) -> Option<usize> {
     let bytes = src.as_bytes();
     let mut end = p;
-    while bytes
-        .get(end)
-        .is_some_and(|c| c.is_ascii_digit() || matches!(c, b'_' | b'.' | b','))
-    {
+    while bytes.get(end).is_some_and(|c| c.is_ascii_digit() || matches!(c, b'_' | b'.' | b',')) {
         end += 1;
     }
     (end > p).then_some(end)
@@ -149,23 +133,12 @@ fn string(src: &str, p: usize) -> Option<usize> {
     if quote != b'"' && quote != b'\'' {
         return None;
     }
-    src.get(p + 1..)?
-        .find(char::from(quote))
-        .map(|at| p + 1 + at + 1)
+    src.get(p + 1..)?.find(char::from(quote)).map(|at| p + 1 + at + 1)
 }
 
 /// A token type named `name` that `f` matches, starting with a character of `first`.
-const fn matcher(
-    name: &'static str,
-    first: &'static str,
-    f: fn(&str, usize) -> Option<usize>,
-) -> TokenType {
-    TokenType {
-        first: Some(first),
-        name,
-        pattern: Pattern::Match(f),
-        ..literal("")
-    }
+const fn matcher(name: &'static str, first: &'static str, f: fn(&str, usize) -> Option<usize>) -> TokenType {
+    TokenType { first: Some(first), name, pattern: Pattern::Match(f), ..literal("") }
 }
 
 /// Pele's `TREEMAP_TOKENS`, in matching order. Mermaid's treemap grammar has its own terminals.
@@ -178,41 +151,14 @@ pub(crate) const TREEMAP_TOKENS: &[TokenType] = &[
     TITLE,
     matcher("TREEMAP_KEYWORD", "t", keyword),
     matcher("CLASS_DEF", "c", class_def),
-    TokenType {
-        name: "STYLE_SEPARATOR",
-        ..literal(":::")
-    },
-    TokenType {
-        name: "SEPARATOR",
-        ..literal(":")
-    },
-    TokenType {
-        name: "COMMA",
-        ..literal(",")
-    },
-    TokenType {
-        hidden: false,
-        name: "INDENTATION",
-        ..WHITESPACE
-    },
-    TokenType {
-        name: "WS",
-        ..WHITESPACE
-    },
-    TokenType {
-        hidden: true,
-        ..matcher("ML_COMMENT", "%", comment)
-    },
-    TokenType {
-        hidden: true,
-        name: "NL",
-        ..NEWLINE
-    },
-    matcher(
-        "ID2",
-        "ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz",
-        id,
-    ),
+    TokenType { name: "STYLE_SEPARATOR", ..literal(":::") },
+    TokenType { name: "SEPARATOR", ..literal(":") },
+    TokenType { name: "COMMA", ..literal(",") },
+    TokenType { hidden: false, name: "INDENTATION", ..WHITESPACE },
+    TokenType { name: "WS", ..WHITESPACE },
+    TokenType { hidden: true, ..matcher("ML_COMMENT", "%", comment) },
+    TokenType { hidden: true, name: "NL", ..NEWLINE },
+    matcher("ID2", "ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyz", id),
     matcher("NUMBER2", "0123456789_.,", number),
     matcher("STRING2", "\"'", string),
 ];
@@ -299,11 +245,7 @@ fn parse_float(text: &str) -> f64 {
 ///
 /// Returns a syntax error where the source leaves the grammar.
 pub(crate) fn parse_treemap(src: &str) -> Result<TreemapAst, Error> {
-    let mut r = Reader::new(
-        tokenize(src, TREEMAP_TOKENS, "treemap")?,
-        TREEMAP_TOKENS,
-        "treemap",
-    );
+    let mut r = Reader::new(tokenize(src, TREEMAP_TOKENS, "treemap")?, TREEMAP_TOKENS, "treemap");
     let mut ast = TreemapAst::default();
     let kind_at = |r: &Reader<'_>, i: usize| r.tokens.tokens.get(i).map_or(EOF, |token| token.kind);
 
@@ -348,16 +290,8 @@ pub(crate) fn parse_treemap(src: &str) -> Result<TreemapAst, Error> {
         let quoted = r.expect(t::STRING)?;
         let name = quoted.get(1..quoted.len() - 1).unwrap_or("").to_owned();
         // A leaf is a name followed by a colon or comma, with or without whitespace before it.
-        let after = if kind_at(&r, r.i) == t::INDENTATION {
-            r.i + 1
-        } else {
-            r.i
-        };
-        let mut item = ItemAst {
-            class_selector: None,
-            name,
-            value: None,
-        };
+        let after = if kind_at(&r, r.i) == t::INDENTATION { r.i + 1 } else { r.i };
+        let mut item = ItemAst { class_selector: None, name, value: None };
         if matches!(kind_at(&r, after), t::SEPARATOR | t::COMMA) {
             r.i = after + 1;
             r.accept(t::INDENTATION);

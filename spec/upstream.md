@@ -3,8 +3,9 @@
 ## Decision
 
 The fork is a squashed snapshot of Zed with no shared git history. Upstream
-changes are ported selectively by cherry-picking from the `upstream` remote
+changes are ported selectively by applied meaningful update from the `upstream` remote
 (`zed-industries/zed`, branch `main`); there are no merges or rebases.
+due to diverge of code impl, avoid blindly apply changes like cherrypick
 
 ## Behaviour
 

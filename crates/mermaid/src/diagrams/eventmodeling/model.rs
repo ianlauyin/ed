@@ -4,9 +4,16 @@
 use std::collections::BTreeSet;
 
 use super::parser::EventModelAst;
-use crate::diagrams::common::tokens::{acc_descr_value, acc_title_value, title_value};
-use crate::error::{Code, Error, locate, push_u32};
-use crate::text::label::{trim, trim_end, trim_start};
+use crate::diagrams::common::tokens::acc_descr_value;
+use crate::diagrams::common::tokens::acc_title_value;
+use crate::diagrams::common::tokens::title_value;
+use crate::error::Code;
+use crate::error::Error;
+use crate::error::locate;
+use crate::error::push_u32;
+use crate::text::label::trim;
+use crate::text::label::trim_end;
+use crate::text::label::trim_start;
 use crate::util::chars::is_space;
 
 /// What a frame draws.
@@ -205,12 +212,7 @@ pub(crate) fn block_text(raw: &str) -> String {
 
     // Leading whitespace is counted in characters, each one UTF-16 unit as JavaScript counts it.
     let lead = |line: &str| line.chars().take_while(|&c| is_space(u32::from(c))).count();
-    let indent = lines
-        .iter()
-        .filter(|line| !blank(line))
-        .map(|line| lead(line))
-        .min()
-        .unwrap_or(usize::MAX);
+    let indent = lines.iter().filter(|line| !blank(line)).map(|line| lead(line)).min().unwrap_or(usize::MAX);
     let mut out = String::new();
     for (i, line) in lines.iter().enumerate() {
         if i > 0 {
@@ -274,9 +276,7 @@ pub(crate) fn build_event_model(
     let mut next: Vec<(LaneGroup, u32)> = Vec::new();
     let mut lane = |kind: EntityKind, namespace: Option<&str>| -> usize {
         let group = group_of(kind);
-        if let Some(found) = lanes
-            .iter()
-            .position(|lane| lane.group == group && lane.namespace.as_deref() == namespace)
+        if let Some(found) = lanes.iter().position(|lane| lane.group == group && lane.namespace.as_deref() == namespace)
         {
             return found;
         }
@@ -285,9 +285,7 @@ pub(crate) fn build_event_model(
             first
         } else {
             let at = next.iter().position(|&(known, _)| known == group);
-            let index = at
-                .and_then(|at| next.get(at))
-                .map_or(first + 1, |&(_, index)| index);
+            let index = at.and_then(|at| next.get(at)).map_or(first + 1, |&(_, index)| index);
             match at.and_then(|at| next.get_mut(at)) {
                 Some(entry) => entry.1 = index + 1,
                 None => next.push((group, index + 1)),
@@ -322,10 +320,7 @@ pub(crate) fn build_event_model(
         let kind = kind_of(frame.model_entity_type);
         let mut text = frame.data_inline_value.map(block_text);
         if let Some(reference) = frame.data_reference
-            && let Some(block) = ast
-                .data_entities
-                .iter()
-                .find(|entity| entity.name == reference)
+            && let Some(block) = ast.data_entities.iter().find(|entity| entity.name == reference)
         {
             text = Some(block_text(block.data_block_value));
         }
@@ -338,10 +333,7 @@ pub(crate) fn build_event_model(
             id: frame.name.to_owned(),
             kind,
             lane,
-            name: pair.map_or_else(
-                || frame.entity_identifier.clone(),
-                |(_, name)| name.to_owned(),
-            ),
+            name: pair.map_or_else(|| frame.entity_identifier.clone(), |(_, name)| name.to_owned()),
             namespace: pair.map(|(namespace, _)| namespace.to_owned()),
             reset: frame.reset,
         });
@@ -355,10 +347,7 @@ pub(crate) fn build_event_model(
             }
         } else if index > 0 && !frame.reset {
             // Otherwise the nearest earlier frame in another lane feeds this one.
-            if let Some(source) = (0..target)
-                .rev()
-                .find(|&i| boxes.get(i).is_some_and(|other| other.lane != lane))
-            {
+            if let Some(source) = (0..target).rev().find(|&i| boxes.get(i).is_some_and(|other| other.lane != lane)) {
                 relations.push((source, target));
             }
         }
@@ -376,17 +365,11 @@ pub(crate) fn build_event_model(
     for item in &mut boxes {
         item.lane = position.get(item.lane).copied().unwrap_or(item.lane);
     }
-    let sorted: Vec<EmLane> = order
-        .iter()
-        .filter_map(|&i| lanes.get(i).cloned())
-        .collect();
+    let sorted: Vec<EmLane> = order.iter().filter_map(|&i| lanes.get(i).cloned()).collect();
 
     let names = |list: &[&str]| list.iter().map(|&name| name.to_owned()).collect();
     Ok(EventModelingModel {
-        acc_descr: ast
-            .acc_descr
-            .filter(|text| !text.is_empty())
-            .map(|text| dedent_lines(&acc_descr_value(text))),
+        acc_descr: ast.acc_descr.filter(|text| !text.is_empty()).map(|text| dedent_lines(&acc_descr_value(text))),
         acc_title: ast
             .acc_title
             .filter(|text| !text.is_empty())
@@ -414,10 +397,6 @@ pub(crate) fn build_event_model(
                 when: names(&gwt.when),
             })
             .collect(),
-        title: ast
-            .title
-            .map(title_value)
-            .filter(|text| !text.is_empty())
-            .or_else(|| title.map(str::to_owned)),
+        title: ast.title.map(title_value).filter(|text| !text.is_empty()).or_else(|| title.map(str::to_owned)),
     })
 }

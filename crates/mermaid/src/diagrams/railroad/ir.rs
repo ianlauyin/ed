@@ -1,15 +1,33 @@
 //! `railroad-beta`: Mermaid's own notation, one constructor call per node. Port of Pele's
 //! `src/diagrams/railroad/ir.ts`.
 
-use super::common::{
-    ACC_DESCR, ACC_TITLE, Grammar, TITLE, block_comment, block_comment_opener, choice, identifier,
-    opening, optional, parse_grammar, push, quoted, repetition, sequence, unescape, whitespace,
-    word,
-};
-use super::types::{RailroadNode, RailroadRule};
-use crate::diagrams::common::tokens::{
-    DIRECTIVE, Pattern, Reader, SINGLE_LINE_COMMENT, TokenType, YAML, literal,
-};
+use super::common::ACC_DESCR;
+use super::common::ACC_TITLE;
+use super::common::Grammar;
+use super::common::TITLE;
+use super::common::block_comment;
+use super::common::block_comment_opener;
+use super::common::choice;
+use super::common::identifier;
+use super::common::opening;
+use super::common::optional;
+use super::common::parse_grammar;
+use super::common::push;
+use super::common::quoted;
+use super::common::repetition;
+use super::common::sequence;
+use super::common::unescape;
+use super::common::whitespace;
+use super::common::word;
+use super::types::RailroadNode;
+use super::types::RailroadRule;
+use crate::diagrams::common::tokens::DIRECTIVE;
+use crate::diagrams::common::tokens::Pattern;
+use crate::diagrams::common::tokens::Reader;
+use crate::diagrams::common::tokens::SINGLE_LINE_COMMENT;
+use crate::diagrams::common::tokens::TokenType;
+use crate::diagrams::common::tokens::YAML;
+use crate::diagrams::common::tokens::literal;
 use crate::error::Error;
 
 /// Token kinds, as indices into [`IR_TOKENS`].
@@ -57,21 +75,9 @@ pub(crate) const IR_TOKENS: &[TokenType] = &[
     identifier("RR_ID"),
     quoted("RR_STRING"),
     whitespace("RR_WHITESPACE"),
-    TokenType {
-        first: Some("-"),
-        name: "RR_YAML",
-        ..YAML
-    },
-    TokenType {
-        first: Some("\t %"),
-        name: "RR_DIRECTIVE",
-        ..DIRECTIVE
-    },
-    TokenType {
-        first: Some("\t %"),
-        name: "RR_SINGLE_LINE_COMMENT",
-        ..SINGLE_LINE_COMMENT
-    },
+    TokenType { first: Some("-"), name: "RR_YAML", ..YAML },
+    TokenType { first: Some("\t %"), name: "RR_DIRECTIVE", ..DIRECTIVE },
+    TokenType { first: Some("\t %"), name: "RR_SINGLE_LINE_COMMENT", ..SINGLE_LINE_COMMENT },
     TokenType {
         first: Some("/"),
         hidden: true,
@@ -159,10 +165,7 @@ fn expression(r: &mut Reader<'_>, nodes: &mut Vec<RailroadNode>) -> Result<usize
 /// # Errors
 ///
 /// Returns a syntax error where the source leaves the grammar.
-pub(crate) fn parse_ir(
-    src: &str,
-    nodes: &mut Vec<RailroadNode>,
-) -> Result<Grammar<RailroadRule>, Error> {
+pub(crate) fn parse_ir(src: &str, nodes: &mut Vec<RailroadNode>) -> Result<Grammar<RailroadRule>, Error> {
     parse_grammar(src, IR_TOKENS, t::TITLE, unescape, |r| {
         let name = r.expect(t::ID)?.to_owned();
         r.expect(t::EQUALS)?;

@@ -10,7 +10,8 @@ use std::borrow::Cow;
 
 use super::tokens::T;
 use super::types::Loc;
-use crate::util::chars::{is_space, is_word};
+use crate::util::chars::is_space;
+use crate::util::chars::is_word;
 use crate::util::unicode::is_unicode_letter;
 
 /// A token: its kind, its start as a UTF-8 offset, its text, and its span.
@@ -130,21 +131,13 @@ impl Lexer<'_> {
         match self.bytes.get(i) {
             None => NONE,
             Some(&b) if b < 0x80 => u32::from(b),
-            Some(_) => self
-                .src
-                .get(i..)
-                .and_then(|rest| rest.chars().next())
-                .map_or(NONE, u32::from),
+            Some(_) => self.src.get(i..).and_then(|rest| rest.chars().next()).map_or(NONE, u32::from),
         }
     }
 
     /// The offset after the character at `i`.
     fn next(&self, i: usize) -> usize {
-        i + self
-            .src
-            .get(i..)
-            .and_then(|rest| rest.chars().next())
-            .map_or(1, char::len_utf8)
+        i + self.src.get(i..).and_then(|rest| rest.chars().next()).map_or(1, char::len_utf8)
     }
 
     /// The end of a run of `\s` starting at `i`.
@@ -157,10 +150,7 @@ impl Lexer<'_> {
 
     /// The first offset of `needle` at or after `from`.
     fn find(&self, needle: &str, from: usize) -> Option<usize> {
-        self.src
-            .get(from..)
-            .and_then(|rest| rest.find(needle))
-            .map(|at| from + at)
+        self.src.get(from..).and_then(|rest| rest.find(needle)).map(|at| from + at)
     }
 
     /// The first offset of byte `needle` at or after `from`, or the end of the source.
@@ -172,9 +162,7 @@ impl Lexer<'_> {
     }
 
     fn starts_with(&self, word: &str, at: usize) -> bool {
-        self.bytes
-            .get(at..)
-            .is_some_and(|rest| rest.starts_with(word.as_bytes()))
+        self.bytes.get(at..).is_some_and(|rest| rest.starts_with(word.as_bytes()))
     }
 
     fn slice(&self, from: usize, to: usize) -> &str {
@@ -216,12 +204,7 @@ impl Lexer<'_> {
     }
 
     fn start_loc(&self) -> Loc {
-        Loc {
-            first_column: self.col,
-            first_line: self.line,
-            last_column: self.col,
-            last_line: self.line,
-        }
+        Loc { first_column: self.col, first_line: self.line, last_column: self.col, last_line: self.line }
     }
 
     /// Emits the text up to `e`, which may hold line breaks.
@@ -266,24 +249,14 @@ impl Lexer<'_> {
         self.advance(e);
         loc.last_line = self.line;
         loc.last_column = self.col;
-        self.tokens.push(Token {
-            kind,
-            loc,
-            start,
-            text: Cow::Owned(text),
-        });
+        self.tokens.push(Token { kind, loc, start, text: Cow::Owned(text) });
     }
 
     fn finish(&mut self, kind: T, start: usize, end: usize, mut loc: Loc) {
         loc.last_line = self.line;
         loc.last_column = self.col;
         let src = self.src;
-        self.tokens.push(Token {
-            kind,
-            loc,
-            start,
-            text: Cow::Borrowed(src.get(start..end).unwrap_or("")),
-        });
+        self.tokens.push(Token { kind, loc, start, text: Cow::Borrowed(src.get(start..end).unwrap_or("")) });
     }
 
     fn push(&mut self, state: S) {
@@ -332,10 +305,7 @@ impl Lexer<'_> {
     /// The end of `\s*--+[x>]\s*` starting at `q`.
     fn arrow_end(&mut self, q: usize) -> Option<usize> {
         let j = self.ws_end(q);
-        if Some(j) == self.no_arrow
-            || self.bytes.get(j) != Some(&b'-')
-            || self.bytes.get(j + 1) != Some(&b'-')
-        {
+        if Some(j) == self.no_arrow || self.bytes.get(j) != Some(&b'-') || self.bytes.get(j + 1) != Some(&b'-') {
             return None;
         }
         let mut k = j + 2;
@@ -430,10 +400,7 @@ impl Lexer<'_> {
     /// `/(?:\r?\n)*\s*\n/y` (`RE_NODIR`): the whitespace run at `q`, up to its last newline.
     fn re_nodir(&self, q: usize) -> Option<usize> {
         let end = self.skip_space(q);
-        self.bytes
-            .get(q..end)
-            .and_then(|run| run.iter().rposition(|&b| b == b'\n'))
-            .map(|at| q + at + 1)
+        self.bytes.get(q..end).and_then(|run| run.iter().rposition(|&b| b == b'\n')).map(|at| q + at + 1)
     }
 
     /// `/\s*(?:LR|RL|TB|BT|TD|BR)\b/y` (`RE_DIR`).
@@ -463,10 +430,7 @@ impl Lexer<'_> {
             if b == b'\n' || b == b'\r' {
                 return i;
             }
-            if b == 0xe2
-                && self.bytes.get(i + 1) == Some(&0x80)
-                && matches!(self.bytes.get(i + 2), Some(0xa8 | 0xa9))
-            {
+            if b == 0xe2 && self.bytes.get(i + 1) == Some(&0x80) && matches!(self.bytes.get(i + 2), Some(0xa8 | 0xa9)) {
                 return i;
             }
             i += 1;
@@ -589,10 +553,7 @@ impl Lexer<'_> {
         true
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "mirrors Pele's initial, one branch per rule"
-    )]
+    #[expect(clippy::too_many_lines, reason = "mirrors Pele's initial, one branch per rule")]
     fn initial(&mut self, c: u32) -> bool {
         let p = self.p;
         match u8::try_from(c) {
@@ -969,10 +930,7 @@ impl Lexer<'_> {
             _ => {
                 let mut q = p + 1;
                 while let Some(&ch) = self.bytes.get(q) {
-                    if matches!(
-                        ch,
-                        b'[' | b']' | b'(' | b')' | b'{' | b'}' | b'|' | b'"' | b'%'
-                    ) {
+                    if matches!(ch, b'[' | b']' | b'(' | b')' | b'{' | b'}' | b'|' | b'"' | b'%') {
                         break;
                     }
                     q += 1;
@@ -989,10 +947,7 @@ impl Lexer<'_> {
         let d = self.byte(p + 1);
         if c == u32::from(b'"') {
             self.quote();
-        } else if let Some(e) = (c == u32::from(b'%'))
-            .then(|| self.comment_end(p))
-            .flatten()
-        {
+        } else if let Some(e) = (c == u32::from(b'%')).then(|| self.comment_end(p)).flatten() {
             self.advance(e);
         } else if matches!(u8::try_from(c), Ok(b'-' | b'/' | b')')) && d == u32::from(b')') {
             self.pop();
@@ -1012,10 +967,7 @@ impl Lexer<'_> {
                 if matches!(ch, b'-' | b'/') && self.bytes.get(q + 1) == Some(&b')') {
                     break;
                 }
-                if ch == b'%'
-                    && self.bytes.get(q + 1) == Some(&b'%')
-                    && self.bytes.get(q + 2) != Some(&b'{')
-                {
+                if ch == b'%' && self.bytes.get(q + 1) == Some(&b'%') && self.bytes.get(q + 2) != Some(&b'{') {
                     break;
                 }
                 q += 1;
@@ -1089,10 +1041,7 @@ impl Lexer<'_> {
                 }
                 let mut q = p + 1;
                 while let Some(&ch) = self.bytes.get(q) {
-                    if matches!(
-                        ch,
-                        b'\\' | b'[' | b']' | b'(' | b')' | b'{' | b'}' | b'/' | b'%'
-                    ) {
+                    if matches!(ch, b'\\' | b'[' | b']' | b'(' | b')' | b'{' | b'}' | b'/' | b'%') {
                         break;
                     }
                     q += 1;
@@ -1139,10 +1088,7 @@ impl Lexer<'_> {
         true
     }
 
-    #[expect(
-        clippy::too_many_lines,
-        reason = "mirrors Pele's lexing loop, one branch per start condition"
-    )]
+    #[expect(clippy::too_many_lines, reason = "mirrors Pele's lexing loop, one branch per start condition")]
     fn run(&mut self) {
         let n = self.bytes.len();
         loop {
@@ -1196,11 +1142,7 @@ impl Lexer<'_> {
                         true
                     } else {
                         let mut q = p + 1;
-                        while self
-                            .bytes
-                            .get(q)
-                            .is_some_and(|&ch| ch != b'`' && ch != b'"')
-                        {
+                        while self.bytes.get(q).is_some_and(|&ch| ch != b'`' && ch != b'"') {
                             q += 1;
                         }
                         self.emit(T::MdStr, q);
@@ -1209,11 +1151,7 @@ impl Lexer<'_> {
                 }
                 S::AccTitle | S::AccDescr => {
                     let e = self.find_byte(b'\n', p);
-                    let kind = if self.state == S::AccTitle {
-                        T::AccTitleValue
-                    } else {
-                        T::AccDescrValue
-                    };
+                    let kind = if self.state == S::AccTitle { T::AccTitleValue } else { T::AccDescrValue };
                     self.pop();
                     self.emit(kind, e);
                     true
@@ -1236,11 +1174,7 @@ impl Lexer<'_> {
                         self.pop();
                         self.emit(T::NoDir, e);
                         true
-                    } else if let Some(e) = self
-                        .re_dir(p)
-                        .or_else(|| self.re_dir_sym(p))
-                        .or_else(|| self.re_dir_v(p))
-                    {
+                    } else if let Some(e) = self.re_dir(p).or_else(|| self.re_dir_sym(p)).or_else(|| self.re_dir_v(p)) {
                         self.pop();
                         self.emit(T::Dir, e);
                         true
@@ -1307,11 +1241,7 @@ impl Lexer<'_> {
                         false
                     } else {
                         let mut q = p + 1;
-                        while self
-                            .bytes
-                            .get(q)
-                            .is_some_and(|&ch| ch != b'}' && ch != b'^' && ch != b'"')
-                        {
+                        while self.bytes.get(q).is_some_and(|&ch| ch != b'}' && ch != b'^' && ch != b'"') {
                             q += 1;
                         }
                         self.emit(T::ShapeData, q);
@@ -1333,23 +1263,13 @@ impl Lexer<'_> {
 
             if !ok {
                 let loc = self.start_loc();
-                self.tokens.push(Token {
-                    kind: T::Error,
-                    loc,
-                    start: self.p,
-                    text: Cow::Borrowed(""),
-                });
+                self.tokens.push(Token { kind: T::Error, loc, start: self.p, text: Cow::Borrowed("") });
                 return;
             }
         }
 
         let loc = self.start_loc();
-        self.tokens.push(Token {
-            kind: T::End,
-            loc,
-            start: n,
-            text: Cow::Borrowed(""),
-        });
+        self.tokens.push(Token { kind: T::End, loc, start: n, text: Cow::Borrowed("") });
     }
 }
 

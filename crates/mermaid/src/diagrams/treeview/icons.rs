@@ -1,6 +1,7 @@
 //! Which icon each tree view entry shows. Port of Pele's `src/diagrams/treeview/icons.ts`.
 
-use super::model::{NodeType, TreeNode};
+use super::model::NodeType;
+use super::model::TreeNode;
 use crate::yaml::Value;
 
 /// Mermaid's name for its built-in pack. Only `file` and `folder` are built in; every other icon
@@ -70,11 +71,7 @@ fn qualify_icon(icon: &str, default_icon_pack: &str) -> String {
     if icon.contains(':') {
         return icon.to_owned();
     }
-    let pack = if glyph(icon).is_some() || default_icon_pack.is_empty() {
-        BUILTIN_PACK
-    } else {
-        default_icon_pack
-    };
+    let pack = if glyph(icon).is_some() || default_icon_pack.is_empty() { BUILTIN_PACK } else { default_icon_pack };
     let mut out = String::from(pack);
     out.push(':');
     out.push_str(icon);
@@ -104,31 +101,18 @@ pub(crate) fn get_node_icon(node: &TreeNode, config: &IconConfig<'_>) -> Option<
         }
     }
     let mut out = String::from(BUILTIN_PACK);
-    out.push_str(if node.node_type == NodeType::Directory {
-        ":folder"
-    } else {
-        ":file"
-    });
+    out.push_str(if node.node_type == NodeType::Directory { ":folder" } else { ":file" });
     Some(out)
 }
 
 /// The icon options of `config`, as Pele's `iconConfig` reads them.
 pub(crate) fn icon_config(config: &Value) -> IconConfig<'_> {
     let section = match config {
-        Value::Object(entries) => map(entries
-            .iter()
-            .find(|(key, _)| key == "treeView")
-            .map(|(_, value)| value)),
+        Value::Object(entries) => map(entries.iter().find(|(key, _)| key == "treeView").map(|(_, value)| value)),
         _ => None,
     };
-    let get = |key: &str| {
-        section.and_then(|entries| {
-            entries
-                .iter()
-                .find(|(own, _)| own == key)
-                .map(|(_, value)| value)
-        })
-    };
+    let get =
+        |key: &str| section.and_then(|entries| entries.iter().find(|(own, _)| own == key).map(|(_, value)| value));
     IconConfig {
         default_icon_pack: match get("defaultIconPack") {
             Some(Value::String(pack)) => pack,

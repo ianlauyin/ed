@@ -54,10 +54,6 @@ impl SankeyDb {
 
     /// Adds a link between two node indexes.
     pub(crate) fn add_link(&mut self, source: u32, target: u32, value: f64) {
-        self.links.push(SankeyLink {
-            source,
-            target,
-            value,
-        });
+        self.links.push(SankeyLink { source, target, value });
     }
 }

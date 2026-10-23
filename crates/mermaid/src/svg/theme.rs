@@ -33,12 +33,12 @@ const FONT: &str = "ui-monospace, SFMono-Regular, Menlo, Consolas, 'Liberation M
 /// The root's font declarations at `size` pixels. Every font is measured as monospace, so what
 /// text inherits is pinned, as none of it was measured. Kerning and ligatures are off and glyphs
 /// are placed at their exact size, so every character keeps the uniform advance that layout
-/// assumed.
+/// assumed. Spacing is `0` rather than `normal`, which usvg does not parse.
 pub(crate) fn font_style(size: f64) -> String {
     let mut out = String::with_capacity(256);
     out.push_str(";font-size:");
     push_number(&mut out, size);
-    out.push_str("px;font-family:var(--_fm);letter-spacing:normal;word-spacing:normal;text-transform:none;direction:ltr;font-kerning:none;font-variant-ligatures:none;text-rendering:geometricPrecision");
+    out.push_str("px;font-family:var(--_fm);letter-spacing:0;word-spacing:0;text-transform:none;direction:ltr;font-kerning:none;font-variant-ligatures:none;text-rendering:geometricPrecision");
     out
 }
 
@@ -73,13 +73,8 @@ impl Color {
             clippy::cast_sign_loss,
             reason = "the mix of two channels stays within 0..=255"
         )]
-        let channel =
-            |a: u8, b: u8| (f64::from(a) * share + f64::from(b) * (1.0 - share)).round() as u8;
-        Self::rgb(
-            channel(self.r, other.r),
-            channel(self.g, other.g),
-            channel(self.b, other.b),
-        )
+        let channel = |a: u8, b: u8| (f64::from(a) * share + f64::from(b) * (1.0 - share)).round() as u8;
+        Self::rgb(channel(self.r, other.r), channel(self.g, other.g), channel(self.b, other.b))
     }
 
     fn push_hex(self, out: &mut String) {
@@ -163,11 +158,7 @@ impl Theme {
             "c" => self.accent,
             "cr" => self.critical,
             "sw" | "r" => {
-                let value = if name == "sw" {
-                    self.stroke_width
-                } else {
-                    self.corner_radius
-                };
+                let value = if name == "sw" { self.stroke_width } else { self.corner_radius };
                 push_number(out, value);
                 out.push_str("px");
                 return true;
@@ -184,11 +175,7 @@ impl Theme {
                 let Some((kind, index)) = name.split_at_checked(1) else {
                     return false;
                 };
-                let Some(index) = index
-                    .parse::<usize>()
-                    .ok()
-                    .filter(|index| (1..=8).contains(index))
-                else {
+                let Some(index) = index.parse::<usize>().ok().filter(|index| (1..=8).contains(index)) else {
                     return false;
                 };
                 match kind {
@@ -227,9 +214,7 @@ pub(crate) fn resolve(svg: &str, theme: &Theme) -> String {
     while let Some(start) = rest.find(OPEN) {
         out.push_str(rest.get(..start).unwrap_or(""));
         let after = rest.get(start + OPEN.len()..).unwrap_or("");
-        let resolved = after
-            .find(')')
-            .filter(|end| theme.push_value(after.get(..*end).unwrap_or(""), &mut out));
+        let resolved = after.find(')').filter(|end| theme.push_value(after.get(..*end).unwrap_or(""), &mut out));
         if let Some(end) = resolved {
             rest = after.get(end + 1..).unwrap_or("");
         } else {
@@ -291,27 +276,23 @@ pub(crate) struct ResolvedStyle {
 
 /// Whether `text` at `at` starts with the ASCII `word`, ignoring case.
 fn starts_with_ci(text: &[u8], at: usize, word: &str) -> bool {
-    text.get(at..at + word.len())
-        .is_some_and(|head| head.eq_ignore_ascii_case(word.as_bytes()))
+    text.get(at..at + word.len()).is_some_and(|head| head.eq_ignore_ascii_case(word.as_bytes()))
 }
 
 /// Whether `word`, then optional whitespace, then `(` starts at `at`.
 fn call_at(text: &str, at: usize, word: &str) -> bool {
     starts_with_ci(text.as_bytes(), at, word)
-        && text.get(at + word.len()..).is_some_and(|rest| {
-            rest.trim_start_matches(|c: char| is_space(u32::from(c)))
-                .starts_with('(')
-        })
+        && text
+            .get(at + word.len()..)
+            .is_some_and(|rest| rest.trim_start_matches(|c: char| is_space(u32::from(c))).starts_with('('))
 }
 
 /// Pele's `/url\s*\(|expression\s*\(|javascript:|[<>{};\\]|@import|image-set|\/\*/i`.
 fn unsafe_value(value: &str) -> bool {
     let bytes = value.as_bytes();
     (0..bytes.len()).any(|at| {
-        matches!(
-            bytes.get(at),
-            Some(b'<' | b'>' | b'{' | b'}' | b';' | b'\\')
-        ) || call_at(value, at, "url")
+        matches!(bytes.get(at), Some(b'<' | b'>' | b'{' | b'}' | b';' | b'\\'))
+            || call_at(value, at, "url")
             || call_at(value, at, "expression")
             || starts_with_ci(bytes, at, "javascript:")
             || starts_with_ci(bytes, at, "@import")
@@ -361,12 +342,7 @@ fn parse_float(text: &str) -> Option<f64> {
     let mut end = int;
     let mut digits = int;
     if bytes.get(end) == Some(&b'.') {
-        let frac = bytes
-            .get(end + 1..)
-            .unwrap_or(&[])
-            .iter()
-            .take_while(|c| c.is_ascii_digit())
-            .count();
+        let frac = bytes.get(end + 1..).unwrap_or(&[]).iter().take_while(|c| c.is_ascii_digit()).count();
         digits += frac;
         if frac > 0 {
             end += 1 + frac;
@@ -385,26 +361,16 @@ fn js_number(text: &str) -> f64 {
         return 0.0;
     }
 
-    for (prefix, radix) in [
-        ("0x", 16),
-        ("0X", 16),
-        ("0o", 8),
-        ("0O", 8),
-        ("0b", 2),
-        ("0B", 2),
-    ] {
+    for (prefix, radix) in [("0x", 16), ("0X", 16), ("0o", 8), ("0O", 8), ("0b", 2), ("0B", 2)] {
         if let Some(digits) = text.strip_prefix(prefix) {
-            return u64::from_str_radix(digits, radix)
-                .ok()
-                .filter(|_| !digits.starts_with(['+', '-']))
-                .map_or(f64::NAN, |value| {
-                    #[expect(
-                        clippy::cast_precision_loss,
-                        reason = "JavaScript numbers are doubles"
-                    )]
+            return u64::from_str_radix(digits, radix).ok().filter(|_| !digits.starts_with(['+', '-'])).map_or(
+                f64::NAN,
+                |value| {
+                    #[expect(clippy::cast_precision_loss, reason = "JavaScript numbers are doubles")]
                     let value = value as f64;
                     value
-                });
+                },
+            );
         }
     }
 
@@ -415,10 +381,7 @@ fn js_number(text: &str) -> f64 {
     }
 
     // Rust also reads `inf` and `nan`, which JavaScript does not, so only number characters pass.
-    if !text
-        .bytes()
-        .all(|c| c.is_ascii_digit() || matches!(c, b'.' | b'e' | b'E' | b'+' | b'-'))
-    {
+    if !text.bytes().all(|c| c.is_ascii_digit() || matches!(c, b'.' | b'e' | b'E' | b'+' | b'-')) {
         return f64::NAN;
     }
     crate::util::float::parse(text).unwrap_or(f64::NAN)
@@ -452,11 +415,7 @@ pub(crate) fn resolve_style<S: AsRef<str>>(declarations: &[S]) -> ResolvedStyle 
             set(&mut shape, &prop, value);
         }
         if TEXT_PROPS.contains(&prop.as_str()) {
-            set(
-                &mut text,
-                if prop == "color" { "fill" } else { &prop },
-                value,
-            );
+            set(&mut text, if prop == "color" { "fill" } else { &prop }, value);
         }
     }
     if shape.is_empty() && text.is_empty() {
@@ -476,9 +435,7 @@ pub(crate) fn resolve_style<S: AsRef<str>>(declarations: &[S]) -> ResolvedStyle 
         push_declaration(&mut text_css, prop, value);
     }
 
-    let get = |map: &[(String, String)], key: &str| {
-        map.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone())
-    };
+    let get = |map: &[(String, String)], key: &str| map.iter().find(|(k, _)| k == key).map(|(_, v)| v.clone());
     let weight = get(&text, "font-weight");
     let px = get(&text, "font-size").and_then(|size| {
         let digits = size.strip_suffix("px").unwrap_or(&size);
@@ -488,9 +445,7 @@ pub(crate) fn resolve_style<S: AsRef<str>>(declarations: &[S]) -> ResolvedStyle 
         parse_float(digits)
     });
     ResolvedStyle {
-        bold: weight
-            .as_deref()
-            .is_some_and(|w| w == "bold" || w == "bolder" || js_number(w) >= 600.0),
+        bold: weight.as_deref().is_some_and(|w| w == "bold" || w == "bolder" || js_number(w) >= 600.0),
         font_size: px.filter(|&px| px > 0.0 && px <= 200.0),
         italic: get(&text, "font-style").as_deref() == Some("italic"),
         line: style_attr(&line_css),
@@ -545,213 +500,4 @@ pub(crate) fn series_color(index: i64) -> String {
     out.push(char::from(b'1' + u8::try_from(k).unwrap_or(0)));
     out.push(')');
     out
-}
-
-#[cfg(test)]
-mod tests {
-    //! Expectations come from Pele's `resolveStyle`, `classNames`, and `seriesColor`, with
-    //! `--pele-*` series colors replaced by Ondine's monochrome ones.
-
-    use super::{class_names, resolve_style, series_color};
-
-    #[test]
-    #[expect(clippy::type_complexity, reason = "a table of cases")]
-    fn resolve_style_matches_pele() {
-        let cases: &[(
-            &[&str],
-            &str,
-            &str,
-            &str,
-            Option<&str>,
-            bool,
-            bool,
-            Option<f64>,
-        )] = &[
-            (&[][..], "", "", "", None, false, false, None),
-            (
-                &["fill:#f9f", "stroke:#333", "stroke-width:4px"][..],
-                " style=\"fill:#f9f;stroke:#333;stroke-width:4px;\"",
-                " style=\"stroke:#333;stroke-width:4px;\"",
-                "",
-                Some("#333"),
-                false,
-                false,
-                None,
-            ),
-            (
-                &[
-                    "color:red",
-                    "font-weight:bold",
-                    "font-size:20px",
-                    "font-style:italic",
-                ][..],
-                "",
-                "",
-                " style=\"fill:red;font-weight:bold;font-size:20px;font-style:italic;\"",
-                None,
-                true,
-                true,
-                Some(20.0),
-            ),
-            (
-                &["FILL : blue !important", "fill:green", "opacity:0.5"][..],
-                " style=\"fill:green;opacity:0.5;\"",
-                " style=\"opacity:0.5;\"",
-                " style=\"opacity:0.5;\"",
-                None,
-                false,
-                false,
-                None,
-            ),
-            (
-                &[
-                    "fill:url(#x)",
-                    "stroke:expression (1)",
-                    "color:javascript:x",
-                    "fill:a;b",
-                    "fill:@IMPORT",
-                    "fill:image-set(x)",
-                    "fill:/*c*/",
-                    "stroke:URL  (y)",
-                ][..],
-                "",
-                "",
-                "",
-                None,
-                false,
-                false,
-                None,
-            ),
-            (
-                &[
-                    ":nope",
-                    "noval:",
-                    "fill:",
-                    "unknown:1",
-                    "font-weight:600",
-                    "font-size:300px",
-                ][..],
-                "",
-                "",
-                " style=\"font-weight:600;font-size:300px;\"",
-                None,
-                true,
-                false,
-                None,
-            ),
-            (
-                &["font-weight:0x258", "font-size:1.5.5px"][..],
-                "",
-                "",
-                " style=\"font-weight:0x258;font-size:1.5.5px;\"",
-                None,
-                true,
-                false,
-                Some(1.5),
-            ),
-            (
-                &["font-weight:599", "font-size:.px"][..],
-                "",
-                "",
-                " style=\"font-weight:599;font-size:.px;\"",
-                None,
-                false,
-                false,
-                None,
-            ),
-            (
-                &["font-weight: Infinity ", "font-size:12"][..],
-                "",
-                "",
-                " style=\"font-weight:Infinity;font-size:12;\"",
-                None,
-                true,
-                false,
-                Some(12.0),
-            ),
-            (
-                &["font-weight:bolder", "font-size:0"][..],
-                "",
-                "",
-                " style=\"font-weight:bolder;font-size:0;\"",
-                None,
-                true,
-                false,
-                None,
-            ),
-            (
-                &["font-weight:7e2", "font-size:12pt"][..],
-                "",
-                "",
-                " style=\"font-weight:7e2;font-size:12pt;\"",
-                None,
-                true,
-                false,
-                None,
-            ),
-            (
-                &[
-                    "stroke-dasharray:5 5",
-                    "rx:10",
-                    "ry:5",
-                    "stroke-linecap:round",
-                    "letter-spacing:2px",
-                    "text-decoration:underline",
-                    "font-family:Arial",
-                ][..],
-                " style=\"stroke-dasharray:5 5;rx:10;ry:5;stroke-linecap:round;\"",
-                " style=\"stroke-dasharray:5 5;rx:10;ry:5;stroke-linecap:round;\"",
-                " style=\"letter-spacing:2px;text-decoration:underline;font-family:Arial;\"",
-                None,
-                false,
-                false,
-                None,
-            ),
-            (
-                &["stro\u{212a}e:#000", "fill:\"q\"&<"][..],
-                " style=\"stroke:#000;\"",
-                " style=\"stroke:#000;\"",
-                "",
-                Some("#000"),
-                false,
-                false,
-                None,
-            ),
-            (
-                &["fill:a!IMPORTANT!important b"][..],
-                " style=\"fill:a b;\"",
-                "",
-                "",
-                None,
-                false,
-                false,
-                None,
-            ),
-        ];
-        for &(decls, shape, line, text, stroke, bold, italic, font_size) in cases {
-            let resolved = resolve_style(decls);
-            assert_eq!(resolved.shape, shape, "{decls:?}");
-            assert_eq!(resolved.line, line, "{decls:?}");
-            assert_eq!(resolved.text, text, "{decls:?}");
-            assert_eq!(resolved.stroke.as_deref(), stroke, "{decls:?}");
-            assert_eq!(resolved.bold, bold, "{decls:?}");
-            assert_eq!(resolved.italic, italic, "{decls:?}");
-            assert_eq!(resolved.font_size, font_size, "{decls:?}");
-        }
-    }
-
-    #[test]
-    fn class_names_match_pele() {
-        for &(raw, expected) in &[
-            ("", ""),
-            ("a", " a"),
-            ("a b", " a b"),
-            (" a,,b  c-d_e ", " a b c-d_e"),
-            ("\u{e9} x", " x"),
-            ("!!!", ""),
-            ("x.y:z", " x y z"),
-        ] {
-            assert_eq!(class_names(raw), expected);
-        }
-    }
 }

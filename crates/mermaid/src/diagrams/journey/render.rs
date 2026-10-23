@@ -1,14 +1,23 @@
 //! Draws a user journey: task cards over a chart of their scores, with an actor legend, or a
 //! column of steps when that is narrower. Port of Pele's `src/diagrams/journey/render.ts`.
 
-use super::db::{JourneyDb, journey_actors};
+use super::db::JourneyDb;
+use super::db::journey_actors;
 use crate::diagrams::Rendered;
-use crate::diagrams::common::fit::{fit_label, plain_label};
+use crate::diagrams::common::fit::fit_label;
+use crate::diagrams::common::fit::plain_label;
 use crate::diagrams::common::fit_width::turn_to_fit;
-use crate::svg::builder::{esc_text, js_round, label_svg, push_num};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
-use crate::svg::theme::{ROUNDED, series_color};
-use crate::text::label::{Label, trim};
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
+use crate::svg::theme::ROUNDED;
+use crate::svg::theme::series_color;
+use crate::text::label::Label;
+use crate::text::label::trim;
 use crate::text::measure::BOLD;
 use crate::yaml::push_number;
 
@@ -25,8 +34,7 @@ const DOT: f64 = 5.0;
 const DOT_STEP: f64 = 13.0;
 const LEGEND_GAP: f64 = 20.0;
 
-const EYES: &str =
-    "<circle cx=\"-3.6\" cy=\"-2.8\" r=\"1.3\"/><circle cx=\"3.6\" cy=\"-2.8\" r=\"1.3\"/>";
+const EYES: &str = "<circle cx=\"-3.6\" cy=\"-2.8\" r=\"1.3\"/><circle cx=\"3.6\" cy=\"-2.8\" r=\"1.3\"/>";
 
 /// The mood a score shows: above 3 is happy, below is sad, and the rest (NaN too) neutral.
 fn mood(score: f64) -> (&'static str, &'static str) {
@@ -71,13 +79,7 @@ fn font_size(size: f64) -> String {
 
 /// Draws `model`, running down when across does not fit.
 pub(crate) fn render(model: &JourneyDb, options: &RenderOptions) -> Rendered {
-    turn_to_fit(options, |down| {
-        if down {
-            vertical(model, options)
-        } else {
-            draw(model, options)
-        }
-    })
+    turn_to_fit(options, |down| if down { vertical(model, options) } else { draw(model, options) })
 }
 
 /// A legend entry.
@@ -96,10 +98,7 @@ struct Run {
     start: usize,
 }
 
-#[expect(
-    clippy::cast_precision_loss,
-    reason = "counts and indexes are far below 2^52"
-)]
+#[expect(clippy::cast_precision_loss, reason = "counts and indexes are far below 2^52")]
 fn draw(model: &JourneyDb, options: &RenderOptions) -> Rendered {
     let size = options.font_size.unwrap_or(16.0);
     let small = js_round(size * 0.875);
@@ -109,25 +108,16 @@ fn draw(model: &JourneyDb, options: &RenderOptions) -> Rendered {
     let n = tasks.len();
 
     // `Task: 5:` names an actor with no name; Mermaid gives it a dot and an empty legend row.
-    let names: Vec<&str> = journey_actors(tasks)
-        .into_iter()
-        .filter(|name| !name.is_empty())
-        .collect();
+    let names: Vec<&str> = journey_actors(tasks).into_iter().filter(|name| !name.is_empty()).collect();
     let actor = |name: &str| names.iter().position(|own| *own == name).unwrap_or(0);
 
     // Cards widen, up to a point, for a word that would not fit; past that the word is cut.
     let mut text_w = MIN_TEXT;
-    let mut labels: Vec<Label> = tasks
-        .iter()
-        .map(|task| plain_label(Some(&task.task), small, text_w, 0))
-        .collect();
+    let mut labels: Vec<Label> = tasks.iter().map(|task| plain_label(Some(&task.task), small, text_w, 0)).collect();
     let widest = labels.iter().fold(0.0, |w: f64, label| w.max(label.width));
     if widest > text_w {
         text_w = widest.ceil().min(MAX_TEXT);
-        labels = tasks
-            .iter()
-            .map(|task| fit_label(Some(&task.task), small, text_w, 0))
-            .collect();
+        labels = tasks.iter().map(|task| fit_label(Some(&task.task), small, text_w, 0)).collect();
     }
 
     let card_w = text_w + 2.0 * PAD_X;
@@ -147,19 +137,9 @@ fn draw(model: &JourneyDb, options: &RenderOptions) -> Rendered {
             lx = 0.0;
             legend_h += 4.0;
         }
-        let y = if lx > 0.0 {
-            legend.last().map_or(0.0, |entry| entry.y)
-        } else {
-            legend_h
-        };
+        let y = if lx > 0.0 { legend.last().map_or(0.0, |entry| entry.y) } else { legend_h };
         let h = label.height.max(line_h);
-        legend.push(Entry {
-            h,
-            label,
-            name,
-            x: lx,
-            y,
-        });
+        legend.push(Entry { h, label, name, x: lx, y });
         lx += w;
         legend_w = legend_w.max(lx);
         legend_h = legend_h.max(y + h);
@@ -168,14 +148,8 @@ fn draw(model: &JourneyDb, options: &RenderOptions) -> Rendered {
 
     let body_w = if n > 0 { GUTTER + plot_w } else { 0.0 };
     let title = fit_label(model.title.as_deref(), size, body_w.max(320.0), BOLD);
-    let title_h = if title.height > 0.0 {
-        title.height + 16.0
-    } else {
-        0.0
-    };
-    let width = body_w
-        .max(title.width)
-        .max(if n > 0 { GUTTER + legend_w } else { 0.0 });
+    let title_h = if title.height > 0.0 { title.height + 16.0 } else { 0.0 };
+    let width = body_w.max(title.width).max(if n > 0 { GUTTER + legend_w } else { 0.0 });
     let left = pad + (width - body_w) / 2.0 + GUTTER;
     let top = pad + title_h;
 
@@ -186,37 +160,21 @@ fn draw(model: &JourneyDb, options: &RenderOptions) -> Rendered {
     let mut i = 0;
     while let Some(first) = tasks.get(i) {
         let mut end = i + 1;
-        while tasks
-            .get(end)
-            .is_some_and(|task| task.section == first.section)
-        {
+        while tasks.get(end).is_some_and(|task| task.section == first.section) {
             end += 1;
         }
         let mut label = None;
         if !first.section.is_empty() {
-            let own = fit_label(
-                Some(&first.section),
-                small,
-                (end - i) as f64 * pitch - GAP - 2.0 * PAD_X,
-                BOLD,
-            );
+            let own = fit_label(Some(&first.section), small, (end - i) as f64 * pitch - GAP - 2.0 * PAD_X, BOLD);
             band_h = band_h.max(own.height.max(line_h) + 2.0 * BAND_PAD);
             label = Some(own);
         }
-        runs.push(Run {
-            count: end - i,
-            label,
-            start: i,
-        });
+        runs.push(Run { count: end - i, label, start: i });
         i = end;
     }
 
     let text_h = labels.iter().fold(line_h, |h, label| h.max(label.height));
-    let dots_h = if names.is_empty() {
-        0.0
-    } else {
-        2.0 * DOT + 6.0
-    };
+    let dots_h = if names.is_empty() { 0.0 } else { 2.0 * DOT + 6.0 };
     let card_h = text_h + dots_h + 2.0 * PAD_Y;
     let cards_y = top + if band_h > 0.0 { band_h + BAND_PAD } else { 0.0 };
     let chart_top = cards_y + card_h + FACE + 16.0;
@@ -261,11 +219,7 @@ fn draw(model: &JourneyDb, options: &RenderOptions) -> Rendered {
             let x = left + i as f64 * pitch;
             let cx = x + card_w / 2.0;
             let score = task.score;
-            let level = if score.is_nan() {
-                3.0
-            } else {
-                score.clamp(1.0, 5.0)
-            };
+            let level = if score.is_nan() { 3.0 } else { score.clamp(1.0, 5.0) };
             let y = chart_top + (5.0 - level) * LEVEL;
             line.push(if i == 0 { 'M' } else { 'L' });
             push_num(&mut line, cx);
@@ -293,13 +247,7 @@ fn draw(model: &JourneyDb, options: &RenderOptions) -> Rendered {
             card.push_str(ROUNDED);
             card.push_str(" fill=\"var(--_s)\" stroke=\"var(--_b)\"/>");
             if let Some(label) = labels.get(i) {
-                card.push_str(&label_svg(
-                    label,
-                    cx,
-                    cards_y + PAD_Y + text_h / 2.0,
-                    &small_size,
-                    None,
-                ));
+                card.push_str(&label_svg(label, cx, cards_y + PAD_Y + text_h / 2.0, &small_size, None));
             }
             let people: Vec<&String> = task.people.iter().filter(|name| !name.is_empty()).collect();
             let spread = people.len() as f64 - 1.0;
@@ -331,10 +279,7 @@ fn draw(model: &JourneyDb, options: &RenderOptions) -> Rendered {
         body.push_str(&faces);
 
         for run in &runs {
-            let members = cards
-                .get(run.start..run.start + run.count)
-                .unwrap_or(&[])
-                .concat();
+            let members = cards.get(run.start..run.start + run.count).unwrap_or(&[]).concat();
             let Some(label) = &run.label else {
                 body.push_str(&members);
                 continue;
@@ -342,11 +287,7 @@ fn draw(model: &JourneyDb, options: &RenderOptions) -> Rendered {
             let x = left + run.start as f64 * pitch;
             let w = run.count as f64 * pitch - GAP;
             body.push_str("<g class=\"ondine-cluster ondine-section\" data-id=\"");
-            body.push_str(&esc_text(trim(
-                tasks
-                    .get(run.start)
-                    .map_or("", |task| task.section.as_str()),
-            )));
+            body.push_str(&esc_text(trim(tasks.get(run.start).map_or("", |task| task.section.as_str()))));
             body.push_str("\"><rect x=\"");
             push_num(&mut body, x);
             body.push_str("\" y=\"");
@@ -419,14 +360,7 @@ fn draw(model: &JourneyDb, options: &RenderOptions) -> Rendered {
 }
 
 /// Wraps `content` in the root document.
-fn document(
-    model: &JourneyDb,
-    options: &RenderOptions,
-    size: f64,
-    width: f64,
-    height: f64,
-    content: &str,
-) -> Rendered {
+fn document(model: &JourneyDb, options: &RenderOptions, size: f64, width: f64, height: f64, content: &str) -> Rendered {
     Rendered {
         height,
         links: Vec::new(),
@@ -436,10 +370,7 @@ fn document(
             height,
             size,
             options,
-            Accessible {
-                acc_descr: model.acc_descr.as_deref(),
-                acc_title: model.acc_title.as_deref(),
-            },
+            Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
             content,
         ),
         width,
@@ -454,16 +385,8 @@ fn vertical(model: &JourneyDb, options: &RenderOptions) -> Rendered {
     let pad = options.padding.unwrap_or(8.0);
     let room = 140.0_f64.max(options.max_width.unwrap_or(320.0) - 2.0 * pad);
     let title = fit_label(model.title.as_deref(), size, room, BOLD);
-    let names: Vec<&str> = journey_actors(&model.tasks)
-        .into_iter()
-        .filter(|name| !name.is_empty())
-        .collect();
-    let mut y = pad
-        + if title.height == 0.0 {
-            0.0
-        } else {
-            title.height + 16.0
-        };
+    let names: Vec<&str> = journey_actors(&model.tasks).into_iter().filter(|name| !name.is_empty()).collect();
+    let mut y = pad + if title.height == 0.0 { 0.0 } else { title.height + 16.0 };
     let mut section: Option<&str> = None;
     let mut body = String::new();
     let mut width = title.width;
@@ -541,9 +464,7 @@ fn vertical(model: &JourneyDb, options: &RenderOptions) -> Rendered {
             body.push_str("\" r=\"");
             push_number(&mut body, DOT);
             body.push_str("\" fill=\"");
-            body.push_str(&series(
-                names.iter().position(|own| own == name).unwrap_or(0),
-            ));
+            body.push_str(&series(names.iter().position(|own| own == name).unwrap_or(0)));
             body.push_str("\"/>");
             body.push_str(&label_svg(
                 person,

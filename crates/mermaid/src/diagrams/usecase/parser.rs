@@ -5,16 +5,40 @@
 //! makes the same decisions from the same lookahead, so it accepts the same text and names the
 //! same token in its errors.
 
-use super::db::{
-    DraftBoundary, DraftClassDef, DraftClasses, DraftElement, DraftEndpoint, DraftJson, DraftLabel,
-    DraftMetadata, DraftNote, DraftProperty, DraftRelationship, DraftStyle, Drafts, Named,
-    PropValue, Span, resolve_usecase,
-};
-use super::json::{JsonDoc, parse_ordered_json};
-use super::lexer::{Tok, error, line_column, push_usize, tokenize, utf16};
-use super::tokens::{T, name};
-use super::types::{RelationshipType, Shape, UsecaseModel, arrow};
-use crate::error::{Code, Error, push_u32};
+use super::db::DraftBoundary;
+use super::db::DraftClassDef;
+use super::db::DraftClasses;
+use super::db::DraftElement;
+use super::db::DraftEndpoint;
+use super::db::DraftJson;
+use super::db::DraftLabel;
+use super::db::DraftMetadata;
+use super::db::DraftNote;
+use super::db::DraftProperty;
+use super::db::DraftRelationship;
+use super::db::DraftStyle;
+use super::db::Drafts;
+use super::db::Named;
+use super::db::PropValue;
+use super::db::Span;
+use super::db::resolve_usecase;
+use super::json::JsonDoc;
+use super::json::parse_ordered_json;
+use super::lexer::Tok;
+use super::lexer::error;
+use super::lexer::line_column;
+use super::lexer::push_usize;
+use super::lexer::tokenize;
+use super::lexer::utf16;
+use super::tokens::T;
+use super::tokens::name;
+use super::types::RelationshipType;
+use super::types::Shape;
+use super::types::UsecaseModel;
+use super::types::arrow;
+use crate::error::Code;
+use crate::error::Error;
+use crate::error::push_u32;
 use crate::text::label::trim;
 use crate::util::chars::is_word;
 
@@ -53,13 +77,7 @@ const STATEMENTS: [T; 11] = [
 const STYLE_PARTS: &str = "WORD|PLAIN_STRING|NUMBER|HASH_COLOR|CSS_IDENTIFIER|CSS_ESCAPED_COMMA|DASH|DOT|PERCENT|CSS_PUNCTUATION|COLON|LPAREN|RPAREN|LBRACKET|RBRACKET|LBRACE|RBRACE|AT|MARKERLESS_SOLID";
 
 /// The statements `PlantUML` users are most likely to try, which Mermaid turns away.
-const FORBIDDEN: [&str; 5] = [
-    "allowmixing",
-    "newpage",
-    "package",
-    "rectangle",
-    "skinparam",
-];
+const FORBIDDEN: [&str; 5] = ["allowmixing", "newpage", "package", "rectangle", "skinparam"];
 
 /// Mermaid's WORD category: every keyword and identifier.
 fn is_word_token(t: T) -> bool {
@@ -114,10 +132,7 @@ fn is_style_part(t: T) -> bool {
 
 /// Whether `t` may follow the name of an element statement.
 fn follows_name(t: T) -> bool {
-    matches!(
-        t,
-        T::StereotypeStart | T::ClassSeparator | T::Identifier | T::Newline | T::Eof
-    ) || ARROWS.contains(&t)
+    matches!(t, T::StereotypeStart | T::ClassSeparator | T::Identifier | T::Newline | T::Eof) || ARROWS.contains(&t)
 }
 
 /// Whether `t` starts a line inside a system boundary.
@@ -127,10 +142,7 @@ fn is_boundary_line(t: T) -> bool {
 
 /// Whether `t` may close a label that `--` opened.
 fn closes_label(t: T) -> bool {
-    matches!(
-        t,
-        T::ForwardSolid | T::MarkerlessSolid | T::ForwardCircle | T::ForwardCross
-    )
+    matches!(t, T::ForwardSolid | T::MarkerlessSolid | T::ForwardCircle | T::ForwardCross)
 }
 
 /// Whether `t` may come first inside a metadata block.
@@ -365,11 +377,7 @@ impl Parser<'_> {
     /// The label a name or string token gives.
     fn token_label(&self, k: usize) -> DraftLabel {
         let span = self.content(k);
-        DraftLabel {
-            markdown: self.kind(k) == T::MarkdownString,
-            span,
-            text: self.slice(span).to_owned(),
-        }
+        DraftLabel { markdown: self.kind(k) == T::MarkdownString, span, text: self.slice(span).to_owned() }
     }
 
     /// An unquoted label runs to the next delimiter and is taken from the source as written.
@@ -387,11 +395,7 @@ impl Parser<'_> {
             self.p += 1;
         }
         let span = (self.start(first), self.end(self.p - 1));
-        Ok(DraftLabel {
-            markdown: false,
-            span,
-            text: self.slice(span).to_owned(),
-        })
+        Ok(DraftLabel { markdown: false, span, text: self.slice(span).to_owned() })
     }
 
     /// Reads one `key: value` metadata property.
@@ -433,9 +437,7 @@ impl Parser<'_> {
         if a != T::Newline {
             return false;
         }
-        b == T::Comma
-            || is_key(b)
-            || (b == T::Newline && (c == T::Newline || c == T::Comma || is_key(c)))
+        b == T::Comma || is_key(b) || (b == T::Newline && (c == T::Newline || c == T::Comma || is_key(c)))
     }
 
     /// Skips line breaks.
@@ -500,34 +502,16 @@ impl Parser<'_> {
                 let label = self.label()?;
                 let ellipse = open == T::LParen;
                 self.expect(if ellipse { T::RParen } else { T::RBracket })?;
-                let named = Named {
-                    generated: false,
-                    id,
-                    label,
-                    span,
-                };
-                return Ok((
-                    named,
-                    Some(if ellipse { Shape::Ellipse } else { Shape::Rect }),
-                ));
+                let named = Named { generated: false, id, label, span };
+                return Ok((named, Some(if ellipse { Shape::Ellipse } else { Shape::Rect })));
             }
-            let named = Named {
-                generated: false,
-                id,
-                label: self.token_label(k),
-                span,
-            };
+            let named = Named { generated: false, id, label: self.token_label(k), span };
             return Ok((named, None));
         }
         if t == T::PlainString || t == T::MarkdownString {
             self.p += 1;
             let label = self.token_label(k);
-            let named = Named {
-                generated: true,
-                id: generated_id(&label.text),
-                label,
-                span,
-            };
+            let named = Named { generated: true, id: generated_id(&label.text), label, span };
             return Ok((named, None));
         }
         Err(self.no_token(&NAMES))
@@ -537,11 +521,7 @@ impl Parser<'_> {
     fn element(&mut self, actor: bool) -> Result<Item, Error> {
         let (named, shape) = self.name(!actor)?;
         let shape = if actor { None } else { shape };
-        let metadata = if self.kind(self.p) == T::MetadataStart {
-            Some(self.metadata()?)
-        } else {
-            None
-        };
+        let metadata = if self.kind(self.p) == T::MetadataStart { Some(self.metadata()?) } else { None };
         let mut stereotype = None;
         if self.kind(self.p) == T::StereotypeStart {
             self.p += 1;
@@ -555,9 +535,7 @@ impl Parser<'_> {
         }
         Ok(Item {
             classes,
-            explicit: shape.is_some()
-                || metadata.is_some()
-                || stereotype.as_ref().is_some_and(|s| !s.is_empty()),
+            explicit: shape.is_some() || metadata.is_some() || stereotype.as_ref().is_some_and(|s| !s.is_empty()),
             metadata,
             named,
             shape,
@@ -600,11 +578,7 @@ impl Parser<'_> {
     /// Each dash beyond the second asks for one more rank between the two ends.
     fn minimum_length(&self, k: usize) -> u32 {
         let length = self.end(k) - self.start(k);
-        let dashes = if self.kind(k) == T::MarkerlessSolid {
-            length
-        } else {
-            length.saturating_sub(1)
-        };
+        let dashes = if self.kind(k) == T::MarkerlessSolid { length } else { length.saturating_sub(1) };
         u32::try_from(dashes.saturating_sub(1).max(1)).unwrap_or(u32::MAX)
     }
 
@@ -630,16 +604,8 @@ impl Parser<'_> {
                 if kind != T::Include && kind != T::Extend {
                     return Err(self.no_token(&[T::Include, T::Extend]));
                 }
-                r#type = if kind == T::Include {
-                    RelationshipType::Include
-                } else {
-                    RelationshipType::Extend
-                };
-                label = Some(DraftLabel {
-                    markdown: false,
-                    span: self.span(self.p),
-                    text: r#type.as_str().to_owned(),
-                });
+                r#type = if kind == T::Include { RelationshipType::Include } else { RelationshipType::Extend };
+                label = Some(DraftLabel { markdown: false, span: self.span(self.p), text: r#type.as_str().to_owned() });
                 self.p += 1;
             }
             T::Generalization => r#type = RelationshipType::Generalization,
@@ -684,11 +650,8 @@ impl Parser<'_> {
             T::ForwardCircle => arrow_type = arrow::CIRCLE_ARROW,
             T::ForwardCross => arrow_type = arrow::CROSS_ARROW,
             T::BackwardCircle | T::BackwardCross => {
-                arrow_type = if t == T::BackwardCircle {
-                    arrow::CIRCLE_ARROW_REVERSED
-                } else {
-                    arrow::CROSS_ARROW_REVERSED
-                };
+                arrow_type =
+                    if t == T::BackwardCircle { arrow::CIRCLE_ARROW_REVERSED } else { arrow::CROSS_ARROW_REVERSED };
                 if self.labeled_right(false) {
                     label = Some(self.label()?);
                     self.expect(T::MarkerlessSolid)?;
@@ -723,11 +686,7 @@ impl Parser<'_> {
             id: tail.explicit_id,
             label: tail.label,
             minlen: tail.minlen,
-            source: DraftEndpoint {
-                classed: !source.classes.is_empty(),
-                declares,
-                named: source.named.clone(),
-            },
+            source: DraftEndpoint { classed: !source.classes.is_empty(), declares, named: source.named.clone() },
             span: tail.span,
             target: DraftEndpoint {
                 classed: !target.classes.is_empty(),
@@ -766,11 +725,7 @@ impl Parser<'_> {
     /// Reads a use case statement, with a relationship at the top level.
     fn entity(&mut self, top: bool) -> Result<(), Error> {
         let mut source = self.element(false)?;
-        let tail = if top && is_relation(self.kind(self.p)) {
-            Some(self.relation_tail()?)
-        } else {
-            None
-        };
+        let tail = if top && is_relation(self.kind(self.p)) { Some(self.relation_tail()?) } else { None };
         self.line_end()?;
         if tail.is_none() {
             source.explicit = true;
@@ -791,11 +746,7 @@ impl Parser<'_> {
     fn boundary(&mut self) -> Result<(), Error> {
         self.p += 1;
         let (named, _) = self.name(true)?;
-        let inline = if self.kind(self.p) == T::MetadataStart {
-            Some(self.metadata()?)
-        } else {
-            None
-        };
+        let inline = if self.kind(self.p) == T::MetadataStart { Some(self.metadata()?) } else { None };
         let mut classes = Vec::new();
         if self.kind(self.p) == T::ClassSeparator {
             self.class_suffix(&mut classes)?;
@@ -803,9 +754,7 @@ impl Parser<'_> {
         self.line_end()?;
         let id = named.id.clone();
         let span = named.span;
-        self.drafts
-            .boundaries
-            .push(DraftBoundary { classes, named });
+        self.drafts.boundaries.push(DraftBoundary { classes, named });
         self.parent = Some(self.drafts.boundaries.len() - 1);
         while is_boundary_line(self.kind(self.p)) {
             self.line(false)?;
@@ -814,11 +763,7 @@ impl Parser<'_> {
         self.expect(T::End)?;
         self.line_end()?;
         if let Some(properties) = inline {
-            self.drafts.metadata.push(DraftMetadata {
-                properties,
-                span,
-                target: id,
-            });
+            self.drafts.metadata.push(DraftMetadata { properties, span, target: id });
         }
         Ok(())
     }
@@ -961,8 +906,7 @@ impl Parser<'_> {
                     span: (from, to),
                     value: JsonDoc::default(),
                 });
-                self.pending_json
-                    .push((self.drafts.jsons.len() - 1, literal));
+                self.pending_json.push((self.drafts.jsons.len() - 1, literal));
             }
             T::ClassDef => {
                 self.p += 1;
@@ -975,14 +919,8 @@ impl Parser<'_> {
                 self.p += 1;
                 let targets = self.identifiers()?;
                 let classes = self.identifiers()?;
-                let targets = targets
-                    .iter()
-                    .map(|&id| (self.image(id).to_owned(), self.span(id)))
-                    .collect();
-                let classes = classes
-                    .iter()
-                    .map(|&id| self.image(id).to_owned())
-                    .collect();
+                let targets = targets.iter().map(|&id| (self.image(id).to_owned(), self.span(id))).collect();
+                let classes = classes.iter().map(|&id| self.image(id).to_owned()).collect();
                 self.drafts.classes.push(DraftClasses { classes, targets });
             }
             T::Style => {
@@ -1003,25 +941,16 @@ impl Parser<'_> {
                     }
                     self.p += 1;
                     let span = self.content(k);
-                    let target = if t == T::Identifier {
-                        self.image(k).to_owned()
-                    } else {
-                        generated_id(self.slice(span))
-                    };
+                    let target =
+                        if t == T::Identifier { self.image(k).to_owned() } else { generated_id(self.slice(span)) };
                     let properties = self.metadata()?;
-                    self.drafts.metadata.push(DraftMetadata {
-                        properties,
-                        span,
-                        target,
-                    });
+                    self.drafts.metadata.push(DraftMetadata { properties, span, target });
                 } else {
-                    let follows = follows_name(next)
-                        || (t == T::Identifier && (next == T::LParen || next == T::LBracket));
+                    let follows =
+                        follows_name(next) || (t == T::Identifier && (next == T::LParen || next == T::LBracket));
                     // Mermaid turns away the PlantUML statements people are most likely to try.
-                    let forbidden = t == T::Identifier
-                        && FORBIDDEN
-                            .iter()
-                            .any(|word| word.eq_ignore_ascii_case(self.image(k)));
+                    let forbidden =
+                        t == T::Identifier && FORBIDDEN.iter().any(|word| word.eq_ignore_ascii_case(self.image(k)));
                     if !follows || forbidden {
                         return Err(self.no_alternative(&statement_sequences()));
                     }

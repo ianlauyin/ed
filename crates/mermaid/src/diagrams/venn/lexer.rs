@@ -6,7 +6,10 @@
 //! non-ASCII character is decoded whole wherever `\s` looks at it, so token boundaries match.
 
 use super::db::VennDb;
-use crate::util::chars::{is_digit, is_hex, is_space, is_word};
+use crate::util::chars::is_digit;
+use crate::util::chars::is_hex;
+use crate::util::chars::is_space;
+use crate::util::chars::is_word;
 
 /// A token kind. The order mirrors Pele's `T` enum, and the parser compares kinds by it.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
@@ -82,13 +85,8 @@ impl T {
 }
 
 /// Keywords, in the order Pele tries them.
-const KEYWORDS: [(&str, T); 5] = [
-    ("venn-beta", T::Venn),
-    ("set", T::Set),
-    ("union", T::Union),
-    ("text", T::Text),
-    ("style", T::Style),
-];
+const KEYWORDS: [(&str, T); 5] =
+    [("venn-beta", T::Venn), ("set", T::Set), ("union", T::Union), ("text", T::Text), ("style", T::Style)];
 
 /// The code past the end of the source, which no test matches. Pele's `charCodeAt` returns `NaN`.
 const NONE: u32 = u32::MAX;
@@ -108,14 +106,7 @@ pub(crate) struct VennLexer<'a> {
 impl<'a> VennLexer<'a> {
     /// A lexer at the start of `src`.
     pub(crate) fn new(src: &'a str) -> Self {
-        Self {
-            at: 0,
-            ended: false,
-            line_start: false,
-            src,
-            start: 0,
-            text: "",
-        }
+        Self { at: 0, ended: false, line_start: false, src, start: 0, text: "" }
     }
 
     /// The byte at `at`, or [`NONE`] past the end. Non-ASCII bytes match no ASCII test.
@@ -128,20 +119,13 @@ impl<'a> VennLexer<'a> {
         match self.src.as_bytes().get(at) {
             None => NONE,
             Some(&b) if b < 0x80 => u32::from(b),
-            Some(&b) => self
-                .src
-                .get(at..)
-                .and_then(|rest| rest.chars().next())
-                .map_or(u32::from(b), u32::from),
+            Some(&b) => self.src.get(at..).and_then(|rest| rest.chars().next()).map_or(u32::from(b), u32::from),
         }
     }
 
     /// The length in bytes of the character at `at`.
     fn len_at(&self, at: usize) -> usize {
-        self.src
-            .get(at..)
-            .and_then(|rest| rest.chars().next())
-            .map_or(1, char::len_utf8)
+        self.src.get(at..).and_then(|rest| rest.chars().next()).map_or(1, char::len_utf8)
     }
 
     fn slice(&self, from: usize, to: usize) -> &'a str {
@@ -150,10 +134,7 @@ impl<'a> VennLexer<'a> {
 
     /// Whether `word` (lowercase ASCII) starts at `at`, ignoring case.
     fn word(&self, at: usize, word: &str) -> bool {
-        self.src
-            .as_bytes()
-            .get(at..at + word.len())
-            .is_some_and(|head| head.eq_ignore_ascii_case(word.as_bytes()))
+        self.src.as_bytes().get(at..at + word.len()).is_some_and(|head| head.eq_ignore_ascii_case(word.as_bytes()))
     }
 
     fn keyword(&self, at: usize, word: &str) -> bool {
@@ -186,10 +167,7 @@ impl<'a> VennLexer<'a> {
     }
 
     fn line_end(&self, from: usize) -> usize {
-        self.src
-            .get(from..)
-            .and_then(|rest| rest.find('\n'))
-            .map_or(self.src.len(), |at| from + at)
+        self.src.get(from..).and_then(|rest| rest.find('\n')).map_or(self.src.len(), |at| from + at)
     }
 
     fn token(&mut self, kind: T, end: usize) -> T {
@@ -220,10 +198,7 @@ impl<'a> VennLexer<'a> {
             // so a character outside the Basic Multilingual Plane is never the one before.
             let next = i + self.len_at(i);
             if (c == 37 && self.byte(i + 1) == 37 && self.byte(i + 2) != 123)
-                || (c != 125
-                    && self.len_at(i) < 4
-                    && self.byte(next) == 37
-                    && self.byte(next + 1) == 37)
+                || (c != 125 && self.len_at(i) < 4 && self.byte(next) == 37 && self.byte(next + 1) == 37)
             {
                 let from = if c == 37 { i + 2 } else { next + 1 };
                 self.at = self.line_end(from);
@@ -290,11 +265,7 @@ impl<'a> VennLexer<'a> {
                 if self.word(i, "rgb") {
                     let alpha = (self.byte(i + 3) | 32) == 97;
                     let open = i + if alpha { 4 } else { 3 };
-                    let end = if self.byte(open) == 40 {
-                        self.color(open, if alpha { 4 } else { 3 })
-                    } else {
-                        None
-                    };
+                    let end = if self.byte(open) == 40 { self.color(open, if alpha { 4 } else { 3 }) } else { None };
                     if let Some(end) = end {
                         return self.token(if alpha { T::RgbaColor } else { T::RgbColor }, end);
                     }
@@ -307,11 +278,7 @@ impl<'a> VennLexer<'a> {
             }
             if c == 91 {
                 if self.byte(i + 1) == 34 {
-                    let quote = self
-                        .src
-                        .get(i + 2..)
-                        .and_then(|rest| rest.find('"'))
-                        .map(|at| i + 2 + at);
+                    let quote = self.src.get(i + 2..).and_then(|rest| rest.find('"')).map(|at| i + 2 + at);
                     let Some(quote) = quote.filter(|&quote| self.byte(quote + 1) == 93) else {
                         return T::Error;
                     };
@@ -355,11 +322,7 @@ impl<'a> VennLexer<'a> {
                 while end < i + 9 && is_hex(self.byte(end)) {
                     end += 1;
                 }
-                return if end >= i + 4 {
-                    self.token(T::HexColor, end)
-                } else {
-                    T::Error
-                };
+                return if end >= i + 4 { self.token(T::HexColor, end) } else { T::Error };
             }
             if c == 34 {
                 return match self.src.get(i + 1..).and_then(|rest| rest.find('"')) {

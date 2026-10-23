@@ -22,7 +22,7 @@ impl QuickActionBar {
         let editor = active_item.act_as::<Editor>(cx);
 
         let preview_target = if let Some(editor) = &editor
-            && MarkdownPreviewView::is_markdown_file(editor, cx)
+            && MarkdownPreviewView::is_previewable_file(editor, cx)
         {
             PreviewTarget::Markdown(editor.clone())
         } else if let Some(buffer) = active_item.act_as::<MultiBuffer>(cx)
@@ -38,9 +38,13 @@ impl QuickActionBar {
         };
 
         let (button_id, tooltip_text, open_action_for_tooltip) = match &preview_target {
-            PreviewTarget::Markdown(_) => (
+            PreviewTarget::Markdown(editor) => (
                 "toggle-markdown-preview",
-                "Preview Markdown",
+                if MarkdownPreviewView::is_html_file(editor, cx) {
+                    "Preview HTML"
+                } else {
+                    "Preview Markdown"
+                },
                 &markdown_preview::OpenPreview as &dyn gpui::Action,
             ),
             PreviewTarget::Svg(_) => (

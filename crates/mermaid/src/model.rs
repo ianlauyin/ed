@@ -1,8 +1,12 @@
-//! Parsed models as JSON, for the tests that compare Ondine's parsers with Pele's and Mermaid's.
-//! Release modules leave this out with the `model` feature.
+//! Parsed models as JSON.
 
-use crate::error::{Code, Error};
-use crate::{detect, diagrams, options_from_json, preprocess, yaml};
+use crate::detect;
+use crate::diagrams;
+use crate::error::Code;
+use crate::error::Error;
+use crate::options_from_json;
+use crate::preprocess;
+use crate::yaml;
 
 /// A parsed diagram.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -22,9 +26,7 @@ pub struct Model {
 /// raised while drawing, such as a gantt chart that cannot be scheduled, are not reported.
 pub fn model(source: &str, options: &str, now: f64) -> Result<Model, Error> {
     let options = options_from_json(options)?;
-    let now = options
-        .now
-        .unwrap_or(if now.is_finite() { now } else { 0.0 });
+    let now = options.now.unwrap_or(if now.is_finite() { now } else { 0.0 });
 
     let limit = options.limit.unwrap_or(crate::DEFAULT_LIMIT);
     if crate::exceeds(source, limit) {
@@ -36,10 +38,7 @@ pub fn model(source: &str, options: &str, now: f64) -> Result<Model, Error> {
 
     let pre = preprocess::preprocess(source)?;
     let Some(r#type) = detect::detect(&pre.text) else {
-        return Err(Error::new(
-            Code::UnsupportedDiagram,
-            "No diagram type detected for the given text.",
-        ));
+        return Err(Error::new(Code::UnsupportedDiagram, "No diagram type detected for the given text."));
     };
     let Some(diagram) = diagrams::find(r#type) else {
         let mut error = Error::new(Code::UnsupportedDiagram, "Diagram type is not supported.");
@@ -48,12 +47,8 @@ pub fn model(source: &str, options: &str, now: f64) -> Result<Model, Error> {
     };
 
     let config = yaml::Value::Object(pre.config);
-    let mut text = preprocess::encode_entities(if diagram.keep_comments {
-        &pre.with_comments
-    } else {
-        &pre.text
-    })
-    .into_owned();
+    let mut text =
+        preprocess::encode_entities(if diagram.keep_comments { &pre.with_comments } else { &pre.text }).into_owned();
     text.push('\n');
 
     #[expect(
@@ -79,16 +74,11 @@ pub fn model(source: &str, options: &str, now: f64) -> Result<Model, Error> {
 
 /// Parses `input` as the diagram type `type` and serializes the model, with the arguments each
 /// type's `render_input` passes to its parser.
-#[cfg_attr(
-    not(feature = "gantt"),
-    expect(unused_variables, reason = "only gantt charts read the time")
-)]
 fn to_json(r#type: &str, input: &diagrams::Input<'_>, now: f64) -> Result<String, Error> {
     let source = input.source;
     let title = input.title;
 
     Ok(match r#type {
-        #[cfg(feature = "agentflow")]
         "agentflow" => diagrams::agentflow::to_json(&diagrams::agentflow::parse(
             source,
             input.config,
@@ -96,91 +86,45 @@ fn to_json(r#type: &str, input: &diagrams::Input<'_>, now: f64) -> Result<String
             input.line_offset,
             Some(input.max_edges),
         )?),
-        #[cfg(feature = "architecture")]
-        "architecture" => {
-            diagrams::architecture::to_json(&diagrams::architecture::parse(source, title)?)
-        }
-        #[cfg(feature = "block")]
+        "architecture" => diagrams::architecture::to_json(&diagrams::architecture::parse(source, title)?),
         "block" => diagrams::block::to_json(&diagrams::block::parse(source, title)?),
-        #[cfg(feature = "c4")]
         "c4" => diagrams::c4::to_json(&diagrams::c4::parse(source, title)?),
-        #[cfg(feature = "class")]
         "class" => diagrams::class::to_json(&diagrams::class::parse(source, title)?),
-        #[cfg(feature = "cynefin")]
         "cynefin" => diagrams::cynefin::to_json(&diagrams::cynefin::parse(source, title)?),
-        #[cfg(feature = "er")]
         "er" => diagrams::er::to_json(&diagrams::er::parse(source, title)?),
-        #[cfg(feature = "eventmodeling")]
-        "eventmodeling" => {
-            diagrams::eventmodeling::to_json(&diagrams::eventmodeling::parse(source, title)?)
-        }
+        "eventmodeling" => diagrams::eventmodeling::to_json(&diagrams::eventmodeling::parse(source, title)?),
         // Swimlane diagrams parse as flowcharts.
-        #[cfg(any(feature = "flowchart", feature = "swimlane"))]
         "flowchart" | "swimlane" => diagrams::flowchart::to_json(&diagrams::flowchart::parse(
             source,
             input.config,
             title,
             Some(input.max_edges),
         )?),
-        #[cfg(feature = "gantt")]
-        "gantt" => {
-            diagrams::gantt::to_json(&diagrams::gantt::parse(source, input.config, title)?, now)
-        }
-        #[cfg(feature = "git")]
+        "gantt" => diagrams::gantt::to_json(&diagrams::gantt::parse(source, input.config, title)?, now),
         "gitGraph" => diagrams::git::to_json(&diagrams::git::parse(source, input.config, title)?),
-        #[cfg(feature = "info")]
         "info" => diagrams::info::to_json(&diagrams::info::parse(source, title)?),
-        #[cfg(feature = "ishikawa")]
         "ishikawa" => diagrams::ishikawa::to_json(&diagrams::ishikawa::parse(source, title)?),
-        #[cfg(feature = "journey")]
         "journey" => diagrams::journey::to_json(&diagrams::journey::parse(source, title)?),
-        #[cfg(feature = "kanban")]
         "kanban" => diagrams::kanban::to_json(&diagrams::kanban::parse(source, title)?),
-        #[cfg(feature = "mindmap")]
         "mindmap" => diagrams::mindmap::to_json(&diagrams::mindmap::parse(source, title)?),
-        #[cfg(feature = "packet")]
-        "packet" => {
-            diagrams::packet::to_json(&diagrams::packet::parse(source, input.config, title)?)
-        }
-        #[cfg(feature = "pie")]
+        "packet" => diagrams::packet::to_json(&diagrams::packet::parse(source, input.config, title)?),
         "pie" => diagrams::pie::to_json(&diagrams::pie::parse(source, title)?),
-        #[cfg(feature = "quadrant")]
         "quadrantChart" => diagrams::quadrant::to_json(&diagrams::quadrant::parse(source, title)?),
-        #[cfg(feature = "radar")]
         "radar" => diagrams::radar::to_json(&diagrams::radar::parse(source, title)?),
-        #[cfg(feature = "railroad")]
         "railroad" => diagrams::railroad::to_json(&diagrams::railroad::parse(source, title)?),
-        #[cfg(feature = "requirement")]
-        "requirement" => {
-            diagrams::requirement::to_json(&diagrams::requirement::parse(source, title)?)
-        }
-        #[cfg(feature = "sankey")]
+        "requirement" => diagrams::requirement::to_json(&diagrams::requirement::parse(source, title)?),
         "sankey" => diagrams::sankey::to_json(&diagrams::sankey::parse(source, title)?),
-        #[cfg(feature = "sequence")]
-        "sequence" => {
-            diagrams::sequence::to_json(&diagrams::sequence::parse(source, input.config, title)?)
-        }
-        #[cfg(feature = "state")]
+        "sequence" => diagrams::sequence::to_json(&diagrams::sequence::parse(source, input.config, title)?),
         "state" => diagrams::state::to_json(&diagrams::state::parse(source, title)?),
-        #[cfg(feature = "timeline")]
         "timeline" => diagrams::timeline::to_json(&diagrams::timeline::parse(source, title)?),
-        #[cfg(feature = "treemap")]
         "treemap" => diagrams::treemap::to_json(&diagrams::treemap::parse(source, title)?),
-        #[cfg(feature = "treeview")]
         "treeView" => diagrams::treeview::to_json(&diagrams::treeview::parse(source, title)?),
-        #[cfg(feature = "usecase")]
         "usecase" => diagrams::usecase::to_json(&diagrams::usecase::parse(source, title)?),
-        #[cfg(feature = "venn")]
         "venn" => diagrams::venn::to_json(&diagrams::venn::parse(source, title)?),
-        #[cfg(feature = "wardley")]
         "wardley" => diagrams::wardley::to_json(&diagrams::wardley::parse(source, title)?),
-        #[cfg(feature = "xychart")]
         "xychart" => diagrams::xychart::to_json(&diagrams::xychart::parse(source, title)?),
         _ => {
-            return Err(Error::new(
-                Code::UnsupportedDiagram,
-                "Diagram type is not supported.",
-            ));
+            return Err(Error::new(Code::UnsupportedDiagram, "Diagram type is not supported."));
         }
     })
 }

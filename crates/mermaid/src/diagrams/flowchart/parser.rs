@@ -3,10 +3,15 @@
 
 use std::borrow::Cow;
 
-use super::db::{FlowDb, js_trim};
-use super::lexer::{Token, tokenize};
+use super::db::FlowDb;
+use super::db::js_trim;
+use super::lexer::Token;
+use super::lexer::tokenize;
 use super::tokens::T;
-use super::types::{DocItem, FlowText, LabelType, LinkInfo};
+use super::types::DocItem;
+use super::types::FlowText;
+use super::types::LabelType;
+use super::types::LinkInfo;
 use crate::error::Error;
 use crate::util::chars::is_space;
 
@@ -76,10 +81,7 @@ fn is_no_tags(t: T) -> bool {
 
 /// Tokens of one style declaration.
 fn is_style_part(t: T) -> bool {
-    matches!(
-        t,
-        T::Num | T::NodeString | T::Colon | T::Space | T::Brkt | T::Style
-    )
+    matches!(t, T::Num | T::NodeString | T::Colon | T::Space | T::Brkt | T::Style)
 }
 
 /// Tokens that continue a node label.
@@ -120,10 +122,7 @@ fn trim_brace_lines(source: &str) -> Cow<'_, str> {
     while let Some(at) = rest.find('}') {
         out.push_str(rest.get(..=at).unwrap_or(""));
         let tail = rest.get(at + 1..).unwrap_or("");
-        let run = tail
-            .char_indices()
-            .find(|&(_, c)| !is_space(u32::from(c)))
-            .map_or(tail.len(), |(end, _)| end);
+        let run = tail.char_indices().find(|&(_, c)| !is_space(u32::from(c))).map_or(tail.len(), |(end, _)| end);
         match tail.get(..run).and_then(|space| space.rfind('\n')) {
             Some(newline) => {
                 out.push('\n');
@@ -139,12 +138,7 @@ fn trim_brace_lines(source: &str) -> Cow<'_, str> {
 /// Parses flowchart `source` into `db`.
 pub(crate) fn parse_flowchart(source: &str, db: &mut FlowDb) -> Result<(), Error> {
     let src = trim_brace_lines(source);
-    let mut parser = Parser {
-        db,
-        i: 0,
-        src: &src,
-        tokens: tokenize(&src),
-    };
+    let mut parser = Parser { db, i: 0, src: &src, tokens: tokenize(&src) };
     parser.run()
 }
 
@@ -171,10 +165,7 @@ impl Parser<'_, '_> {
     #[cold]
     fn fail(&self, expected: &str) -> Error {
         let t = self.kind();
-        let start = self
-            .tokens
-            .get(self.i)
-            .map_or(self.src.len(), |token| token.start);
+        let start = self.tokens.get(self.i).map_or(self.src.len(), |token| token.start);
         if t == T::Error {
             return Error::syntax("flowchart", self.src, start, "", true);
         }
@@ -296,8 +287,7 @@ impl Parser<'_, '_> {
     fn shaped(&mut self, id: &str, close: T, shape: &str) -> Result<(), Error> {
         let label = self.text()?;
         self.closed(close)?;
-        self.db
-            .add_vertex(id, Some(label), Some(shape), None, None, None)
+        self.db.add_vertex(id, Some(label), Some(shape), None, None, None)
     }
 
     fn vertex(&mut self) -> Result<String, Error> {
@@ -319,8 +309,7 @@ impl Parser<'_, '_> {
                     let label = self.text()?;
                     self.closed(T::Pe)?;
                     self.expect(T::Pe, "")?;
-                    self.db
-                        .add_vertex(&id, Some(label), Some("circle"), None, None, None)?;
+                    self.db.add_vertex(&id, Some(label), Some("circle"), None, None, None)?;
                 } else {
                     self.shaped(&id, T::Pe, "round")?;
                 }
@@ -345,14 +334,7 @@ impl Parser<'_, '_> {
                 self.expect(T::Pipe, "")?;
                 let label = self.text()?;
                 self.closed(T::Sqe)?;
-                self.db.add_vertex(
-                    &id,
-                    Some(label),
-                    Some("rect"),
-                    None,
-                    Some((field, value)),
-                    None,
-                )?;
+                self.db.add_vertex(&id, Some(label), Some("rect"), None, Some((field, value)), None)?;
             }
             T::CylinderStart => {
                 self.i += 1;
@@ -365,8 +347,7 @@ impl Parser<'_, '_> {
                     let label = self.text()?;
                     self.closed(T::DiamondStop)?;
                     self.expect(T::DiamondStop, "")?;
-                    self.db
-                        .add_vertex(&id, Some(label), Some("hexagon"), None, None, None)?;
+                    self.db.add_vertex(&id, Some(label), Some("hexagon"), None, None, None)?;
                 } else {
                     self.shaped(&id, T::DiamondStop, "diamond")?;
                 }
@@ -385,8 +366,7 @@ impl Parser<'_, '_> {
                     self.closed(T::TrapEnd)?;
                     "trapezoid"
                 };
-                self.db
-                    .add_vertex(&id, Some(label), Some(shape), None, None, None)?;
+                self.db.add_vertex(&id, Some(label), Some(shape), None, None, None)?;
             }
             T::InvTrapStart => {
                 self.i += 1;
@@ -398,8 +378,7 @@ impl Parser<'_, '_> {
                     self.closed(T::InvTrapEnd)?;
                     "inv_trapezoid"
                 };
-                self.db
-                    .add_vertex(&id, Some(label), Some(shape), None, None, None)?;
+                self.db.add_vertex(&id, Some(label), Some(shape), None, None, None)?;
             }
             _ => self.db.add_vertex(&id, None, None, None, None, None)?,
         }
@@ -441,8 +420,7 @@ impl Parser<'_, '_> {
             self.skip_spaces();
             let next = self.styled_vertex()?;
             if let (Some(data), Some(last)) = (&data, ids.last()) {
-                self.db
-                    .add_vertex(last, None, None, None, None, Some(data))?;
+                self.db.add_vertex(last, None, None, None, None, Some(data))?;
             }
             ids.push(next);
         }
@@ -490,8 +468,7 @@ impl Parser<'_, '_> {
     fn vertex_statement(&mut self) -> Result<Vec<String>, Error> {
         let (mut stmt, data) = self.node()?;
         if let (Some(data), Some(last)) = (&data, stmt.last()) {
-            self.db
-                .add_vertex(last, None, None, None, None, Some(data))?;
+            self.db.add_vertex(last, None, None, None, None, Some(data))?;
         }
 
         let mut nodes = stmt.clone();
@@ -502,8 +479,7 @@ impl Parser<'_, '_> {
             let info = self.link()?;
             let (next, data) = self.node()?;
             if let (Some(data), Some(last)) = (&data, next.last()) {
-                self.db
-                    .add_vertex(last, None, None, None, None, Some(data))?;
+                self.db.add_vertex(last, None, None, None, None, Some(data))?;
             }
             self.db.add_link(&stmt, &next, &info)?;
 
@@ -632,13 +608,7 @@ impl Parser<'_, '_> {
         self.i += 1;
         if matches!(self.kind(), T::Newline | T::Semi | T::Eof) {
             self.i += 1;
-            return Ok(Frame {
-                collect: false,
-                id: None,
-                list: Vec::new(),
-                same: false,
-                title: None,
-            });
+            return Ok(Frame { collect: false, id: None, list: Vec::new(), same: false, title: None });
         }
 
         self.expect(T::Space, "'SEMI', 'NEWLINE', 'EOF'")?;
@@ -656,13 +626,7 @@ impl Parser<'_, '_> {
 
         let same = title.is_none();
         let title = title.unwrap_or_else(|| id.clone());
-        Ok(Frame {
-            collect: false,
-            id: Some(id),
-            list: Vec::new(),
-            same,
-            title: Some(title),
-        })
+        Ok(Frame { collect: false, id: Some(id), list: Vec::new(), same, title: Some(title) })
     }
 
     /// One statement, or `None` for statements that add nothing to a subgraph body.
@@ -675,8 +639,7 @@ impl Parser<'_, '_> {
                 let id = self.id_string()?;
                 self.expect(T::Space, "")?;
                 let styles = self.styles_opt()?;
-                self.db
-                    .add_vertex(&id, None, None, Some(styles), None, None)?;
+                self.db.add_vertex(&id, None, None, Some(styles), None, None)?;
                 self.separator()?;
                 Ok(None)
             }
@@ -766,12 +729,7 @@ impl Parser<'_, '_> {
                     break;
                 };
                 self.i += 1;
-                let id = self.db.add_subgraph(
-                    frame.id.as_ref(),
-                    &list,
-                    frame.title.as_ref(),
-                    frame.same,
-                );
+                let id = self.db.add_subgraph(frame.id.as_ref(), &list, frame.title.as_ref(), frame.same);
                 list = frame.list;
                 collect = frame.collect;
                 if collect {

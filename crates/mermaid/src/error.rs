@@ -46,26 +46,13 @@ impl Error {
     /// Creates an error without a source position.
     #[cold]
     pub(crate) fn new(code: Code, message: impl Into<String>) -> Self {
-        Self {
-            code,
-            column: 0,
-            line: 0,
-            message: message.into(),
-            snippet: String::new(),
-            r#type: None,
-        }
+        Self { code, column: 0, line: 0, message: message.into(), snippet: String::new(), r#type: None }
     }
 
     /// Creates a syntax error at a UTF-8 byte `offset` of `src`, as Pele's `syntaxError` does.
     /// Lexical errors report unrecognized text and omit `detail`.
     #[cold]
-    pub(crate) fn syntax(
-        r#type: &'static str,
-        src: &str,
-        offset: usize,
-        detail: &str,
-        lexical: bool,
-    ) -> Self {
+    pub(crate) fn syntax(r#type: &'static str, src: &str, offset: usize, detail: &str, lexical: bool) -> Self {
         let location = locate(src, offset);
         let mut message = String::new();
 
@@ -117,11 +104,7 @@ pub(crate) fn locate(src: &str, offset: usize) -> Location {
     }
     snippet.push('^');
 
-    Location {
-        column: u32::try_from(width + 1).unwrap_or(u32::MAX),
-        line,
-        snippet,
-    }
+    Location { column: u32::try_from(width + 1).unwrap_or(u32::MAX), line, snippet }
 }
 
 fn floor_boundary(src: &str, mut offset: usize) -> usize {

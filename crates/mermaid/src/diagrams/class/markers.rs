@@ -2,7 +2,8 @@
 
 use super::types::RelationEnd;
 use crate::svg::builder::push_num;
-use crate::svg::edges::{marker, marker_trim};
+use crate::svg::edges::marker;
+use crate::svg::edges::marker_trim;
 
 /// Length of the extension triangle.
 const TRIANGLE: f64 = 12.0;
@@ -32,14 +33,7 @@ fn push_point(out: &mut String, x: f64, y: f64) {
 }
 
 /// Draws an end marker whose tip is at (`x`, `y`), pointing along (`dx`, `dy`).
-pub(crate) fn class_marker(
-    r#type: RelationEnd,
-    x: f64,
-    y: f64,
-    dx: f64,
-    dy: f64,
-    color: &str,
-) -> String {
+pub(crate) fn class_marker(r#type: RelationEnd, x: f64, y: f64, dx: f64, dy: f64, color: &str) -> String {
     let nx = -dy;
     let ny = dx;
     let mut out = String::new();

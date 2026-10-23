@@ -2,7 +2,8 @@
 //! collections, quoted and plain scalars, and block scalars. Port of Pele's `src/util/yaml.ts`.
 
 use crate::error::push_u32;
-use crate::util::chars::{is_line_end, is_space};
+use crate::util::chars::is_line_end;
+use crate::util::chars::is_space;
 
 /// A parsed YAML value, shaped like the JavaScript value Pele's reader returns.
 #[derive(Clone, Debug, PartialEq)]
@@ -84,9 +85,7 @@ fn array_index(key: &str) -> Option<u32> {
         return None;
     }
 
-    let value = bytes
-        .iter()
-        .fold(0u64, |acc, &b| acc * 10 + u64::from(b - b'0'));
+    let value = bytes.iter().fold(0u64, |acc, &b| acc * 10 + u64::from(b - b'0'));
     u32::try_from(value).ok().filter(|&index| index != u32::MAX)
 }
 
@@ -217,11 +216,7 @@ fn shortest_exact(value: f64) -> (Vec<u8>, i32) {
     let bits = value.to_bits();
     let biased = i32::try_from((bits >> 52) & 0x7ff).unwrap_or(0);
     let fraction = bits & ((1 << 52) - 1);
-    let (mantissa, exponent) = if biased == 0 {
-        (fraction, -1074)
-    } else {
-        (fraction | (1 << 52), biased - 1075)
-    };
+    let (mantissa, exponent) = if biased == 0 { (fraction, -1074) } else { (fraction | (1 << 52), biased - 1075) };
 
     let mut limbs = Vec::new();
     let mut rest = mantissa;
@@ -237,11 +232,7 @@ fn shortest_exact(value: f64) -> (Vec<u8>, i32) {
 
     let exact = decimal(&limbs);
     let length = i32::try_from(exact.len()).unwrap_or(i32::MAX);
-    let n = if exponent >= 0 {
-        length
-    } else {
-        length + exponent
-    };
+    let n = if exponent >= 0 { length } else { length + exponent };
 
     for precision in 1..=17 {
         let (mut digits, point) = round(&exact, n, precision);
@@ -283,11 +274,7 @@ fn decimal(limbs: &[u64]) -> Vec<u8> {
             *slot = b'0' + u8::try_from(rest % 10).unwrap_or(0);
             rest /= 10;
         }
-        let skip = if at == 0 {
-            chunk.iter().take_while(|&&b| b == b'0').count()
-        } else {
-            0
-        };
+        let skip = if at == 0 { chunk.iter().take_while(|&&b| b == b'0').count() } else { 0 };
         out.extend(chunk.iter().skip(skip));
     }
     out
@@ -398,10 +385,7 @@ impl Reader {
                 normalized.push(c);
             }
         }
-        Self {
-            i: 0,
-            lines: normalized.split('\n').map(str::to_owned).collect(),
-        }
+        Self { i: 0, lines: normalized.split('\n').map(str::to_owned).collect() }
     }
 
     fn line(&self) -> &str {
@@ -468,11 +452,7 @@ fn split_key(line: &str) -> Option<(usize, usize)> {
         if space(c) || "#:,[]{}&*!|>'\"%@`".contains(c) {
             return None;
         }
-        if first == b'-'
-            && (bytes.len() < 2
-                || is_blank(bytes.get(1))
-                || matches!(bytes.get(1), Some(b':' | b'#')))
-        {
+        if first == b'-' && (bytes.len() < 2 || is_blank(bytes.get(1)) || matches!(bytes.get(1), Some(b':' | b'#'))) {
             return None;
         }
         let mut at = 1;
@@ -532,11 +512,7 @@ fn scalar(raw: &str) -> Value {
     if let Some(name) = unsigned.strip_prefix('.')
         && matches!(name, "inf" | "Inf" | "INF")
     {
-        return Value::Number(if negative {
-            f64::NEG_INFINITY
-        } else {
-            f64::INFINITY
-        });
+        return Value::Number(if negative { f64::NEG_INFINITY } else { f64::INFINITY });
     }
     if matches!(s, ".nan" | ".NaN" | ".NAN") {
         return Value::Number(f64::NAN);
@@ -547,22 +523,13 @@ fn scalar(raw: &str) -> Value {
 // /^[-+]?(?:0|[1-9][0-9]*)$/
 fn is_int(s: &str) -> bool {
     let digits = s.strip_prefix(['-', '+']).unwrap_or(s);
-    digits == "0"
-        || (!digits.is_empty()
-            && !digits.starts_with('0')
-            && digits.bytes().all(|b| b.is_ascii_digit()))
+    digits == "0" || (!digits.is_empty() && !digits.starts_with('0') && digits.bytes().all(|b| b.is_ascii_digit()))
 }
 
 // /^[-+]?(?:[0-9][0-9]*(?:\.[0-9]*)?|\.[0-9]+)(?:[eE][-+]?[0-9]+)?$/
 fn is_float(s: &str) -> bool {
     let bytes = s.strip_prefix(['-', '+']).unwrap_or(s).as_bytes();
-    let digits = |from: usize| {
-        bytes
-            .iter()
-            .skip(from)
-            .take_while(|b| b.is_ascii_digit())
-            .count()
-    };
+    let digits = |from: usize| bytes.iter().skip(from).take_while(|b| b.is_ascii_digit()).count();
 
     let int = digits(0);
     let mut at = int;
@@ -602,10 +569,7 @@ fn radix_number(digits: &str, base: u32) -> f64 {
         approx = approx * f64::from(base) + f64::from(digit);
     }
     // ponytail: past 128 bits the value accumulates in doubles and may round twice.
-    #[expect(
-        clippy::cast_precision_loss,
-        reason = "u128 to f64 rounds to nearest, as JavaScript does"
-    )]
+    #[expect(clippy::cast_precision_loss, reason = "u128 to f64 rounds to nearest, as JavaScript does")]
     exact.map_or(approx, |value| value as f64)
 }
 
@@ -799,10 +763,7 @@ fn skip(s: &str, mut pos: usize, commas: bool) -> usize {
         if matches!(c, b' ' | b'\n' | b'\t' | b'\r') || (commas && c == b',') {
             pos += 1;
         } else if c == b'#' && (pos == 0 || previous_is_space(s, pos)) {
-            pos = s
-                .get(pos..)
-                .and_then(|rest| rest.find('\n'))
-                .map_or(s.len(), |at| pos + at);
+            pos = s.get(pos..).and_then(|rest| rest.find('\n')).map_or(s.len(), |at| pos + at);
         } else {
             break;
         }
@@ -811,15 +772,11 @@ fn skip(s: &str, mut pos: usize, commas: bool) -> usize {
 }
 
 fn previous_is_space(s: &str, pos: usize) -> bool {
-    s.get(..pos)
-        .and_then(|head| head.chars().next_back())
-        .is_some_and(space)
+    s.get(..pos).and_then(|head| head.chars().next_back()).is_some_and(space)
 }
 
 fn next_is(s: &str, pos: usize, test: impl Fn(char) -> bool) -> bool {
-    s.get(pos..)
-        .and_then(|tail| tail.chars().next())
-        .is_some_and(test)
+    s.get(pos..).and_then(|tail| tail.chars().next()).is_some_and(test)
 }
 
 // Entries of a flow collection are separated by exactly one comma, as js-yaml requires.
@@ -849,9 +806,7 @@ fn flow(s: &str, pos: usize, stops: &str, depth: usize) -> Result<(Value, usize)
             loop {
                 pos = skip(s, pos, false);
                 let Some(&c) = bytes.get(pos) else {
-                    return Err(Fail::Incomplete(
-                        "YAML: unexpected end of the stream within a flow collection",
-                    ));
+                    return Err(Fail::Incomplete("YAML: unexpected end of the stream within a flow collection"));
                 };
                 if c == b'}' {
                     return Ok((Value::Object(out), pos + 1));
@@ -880,9 +835,7 @@ fn flow(s: &str, pos: usize, stops: &str, depth: usize) -> Result<(Value, usize)
             loop {
                 pos = skip(s, pos, false);
                 let Some(&c) = bytes.get(pos) else {
-                    return Err(Fail::Incomplete(
-                        "YAML: unexpected end of the stream within a flow collection",
-                    ));
+                    return Err(Fail::Incomplete("YAML: unexpected end of the stream within a flow collection"));
                 };
                 if c == b']' {
                     return Ok((Value::Array(out), pos + 1));
@@ -905,9 +858,7 @@ fn flow(s: &str, pos: usize, stops: &str, depth: usize) -> Result<(Value, usize)
                 end += if c == b'\\' { 2 } else { 1 };
             }
             if end >= bytes.len() {
-                return Err(Fail::Incomplete(
-                    "YAML: unexpected end of the stream within a double quoted scalar",
-                ));
+                return Err(Fail::Incomplete("YAML: unexpected end of the stream within a double quoted scalar"));
             }
             let body = s.get(pos + 1..end).unwrap_or("");
             Ok((Value::String(unquote_double(body)?), end + 1))
@@ -924,9 +875,7 @@ fn flow(s: &str, pos: usize, stops: &str, depth: usize) -> Result<(Value, usize)
                 end += 1;
             }
             if end >= bytes.len() {
-                return Err(Fail::Incomplete(
-                    "YAML: unexpected end of the stream within a single quoted scalar",
-                ));
+                return Err(Fail::Incomplete("YAML: unexpected end of the stream within a single quoted scalar"));
             }
             let folded = fold(s.get(pos + 1..end).unwrap_or(""));
             let mut out = String::with_capacity(folded.len());
@@ -943,18 +892,13 @@ fn flow(s: &str, pos: usize, stops: &str, depth: usize) -> Result<(Value, usize)
             let mut end = pos;
             while let Some(&c) = bytes.get(end) {
                 if stops.as_bytes().contains(&c)
-                    && (c != b':'
-                        || end + 1 >= bytes.len()
-                        || next_is(s, end + 1, |n| space(n) || ",[]{}".contains(n)))
+                    && (c != b':' || end + 1 >= bytes.len() || next_is(s, end + 1, |n| space(n) || ",[]{}".contains(n)))
                 {
                     break;
                 }
                 if c == b'#' && end > pos && previous_is_space(s, end) {
                     let raw = trim(s.get(pos..end).unwrap_or(""));
-                    let after = s
-                        .get(end..)
-                        .and_then(|rest| rest.find('\n'))
-                        .map_or(s.len(), |at| end + at);
+                    let after = s.get(end..).and_then(|rest| rest.find('\n')).map_or(s.len(), |at| end + at);
                     return Ok((scalar(&fold(raw)), after));
                 }
                 end += 1;
@@ -1005,10 +949,7 @@ fn block_scalar(r: &mut Reader, header: &str, parent_indent: isize) -> String {
     } else {
         0
     };
-    let explicit = header
-        .chars()
-        .find(|c| ('1'..='9').contains(c))
-        .and_then(|c| c.to_digit(10));
+    let explicit = header.chars().find(|c| ('1'..='9').contains(c)).and_then(|c| c.to_digit(10));
     let mut indent = explicit.map_or(-1, |n| parent_indent + isize::try_from(n).unwrap_or(0));
 
     let mut out: Vec<String> = Vec::new();
@@ -1047,11 +988,7 @@ fn block_scalar(r: &mut Reader, header: &str, parent_indent: isize) -> String {
                     text.push('\n');
                 } else if !prev.is_empty() {
                     let indented = |s: &str| s.starts_with([' ', '\t']);
-                    text.push(if indented(prev) || indented(cur) {
-                        '\n'
-                    } else {
-                        ' '
-                    });
+                    text.push(if indented(prev) || indented(cur) { '\n' } else { ' ' });
                 }
             }
             text.push_str(cur);
@@ -1066,11 +1003,7 @@ fn block_scalar(r: &mut Reader, header: &str, parent_indent: isize) -> String {
     }
 
     if out.is_empty() {
-        return if chomp == b'+' {
-            "\n".repeat(trailing)
-        } else {
-            String::new()
-        };
+        return if chomp == b'+' { "\n".repeat(trailing) } else { String::new() };
     }
     match chomp {
         b'-' => {}
@@ -1097,9 +1030,7 @@ fn inline_value(r: &mut Reader, rest: &str, indent: isize) -> Result<Value, Fail
                     let head = text.get(..end).unwrap_or("");
                     let used = head.matches('\n').count();
                     let tail = text.get(end..).unwrap_or("");
-                    let line = tail
-                        .find('\n')
-                        .map_or(tail, |at| tail.get(..at).unwrap_or(""));
+                    let line = tail.find('\n').map_or(tail, |at| tail.get(..at).unwrap_or(""));
                     if !trim(strip_comment(line)).is_empty() {
                         return Err(error("YAML: unexpected content after a value"));
                     }
@@ -1227,9 +1158,7 @@ fn block(r: &mut Reader, min_indent: usize, depth: usize) -> Result<Value, Fail>
             return Err(error("YAML: can not read a block mapping entry"));
         };
         let mut key = String::new();
-        flow(cur.get(..end).unwrap_or(""), 0, "", 0)?
-            .0
-            .push_js_string(&mut key);
+        flow(cur.get(..end).unwrap_or(""), 0, "", 0)?.0.push_js_string(&mut key);
         let rest = cur.get(length..).unwrap_or("");
         r.i += 1;
 
@@ -1275,437 +1204,4 @@ pub(crate) fn parse(src: &str) -> Result<Value, String> {
         return Err("YAML: end of the stream or a document separator is expected".to_owned());
     }
     Ok(value)
-}
-
-#[cfg(test)]
-pub(crate) mod tests {
-    //! Expectations come from running Pele's `parseYaml` and `String(number)` at 458322a.
-
-    use super::{Value, parse, push_number};
-
-    /// Appends `value` as `JSON.stringify` writes it.
-    pub(crate) fn push_json(out: &mut String, value: &Value) {
-        match value {
-            Value::Array(items) => {
-                out.push('[');
-                for (i, item) in items.iter().enumerate() {
-                    if i > 0 {
-                        out.push(',');
-                    }
-                    push_json(out, item);
-                }
-                out.push(']');
-            }
-            Value::Bool(value) => out.push_str(if *value { "true" } else { "false" }),
-            Value::Null => out.push_str("null"),
-            Value::Number(value) if !value.is_finite() => out.push_str("null"),
-            Value::Number(value) => push_number(out, *value),
-            Value::Object(entries) => {
-                out.push('{');
-                for (i, (key, value)) in entries.iter().enumerate() {
-                    if i > 0 {
-                        out.push(',');
-                    }
-                    push_json_string(out, key);
-                    out.push(':');
-                    push_json(out, value);
-                }
-                out.push('}');
-            }
-            Value::String(text) => push_json_string(out, text),
-        }
-    }
-
-    /// Appends `text` as a JSON string literal, as `JSON.stringify` escapes it.
-    pub(crate) fn push_json_string(out: &mut String, text: &str) {
-        out.push('"');
-        for c in text.chars() {
-            match c {
-                '"' => out.push_str("\\\""),
-                '\\' => out.push_str("\\\\"),
-                '\u{8}' => out.push_str("\\b"),
-                '\u{c}' => out.push_str("\\f"),
-                '\n' => out.push_str("\\n"),
-                '\r' => out.push_str("\\r"),
-                '\t' => out.push_str("\\t"),
-                c if u32::from(c) < 0x20 => {
-                    out.push_str("\\u00");
-                    out.push(char::from(b"0123456789abcdef"[usize::from(c as u8 >> 4)]));
-                    out.push(char::from(b"0123456789abcdef"[usize::from(c as u8 & 15)]));
-                }
-                c => out.push(c),
-            }
-        }
-        out.push('"');
-    }
-
-    #[test]
-    fn parse_matches_pele() {
-        for &(src, expected) in CASES {
-            let actual = match parse(src) {
-                Ok(value) => {
-                    let mut out = String::new();
-                    push_json(&mut out, &value);
-                    out
-                }
-                Err(message) => format!("ERR:{message}"),
-            };
-            assert_eq!(actual, expected, "{src:?}");
-        }
-    }
-
-    #[test]
-    fn push_number_matches_javascript() {
-        for &(value, expected) in NUMBERS {
-            let mut out = String::new();
-            push_number(&mut out, value);
-            assert_eq!(out, expected, "{value:e}");
-        }
-    }
-
-    #[test]
-    fn refuses_absurd_nesting() {
-        let src = format!("{{ a: {} }}", "[".repeat(20000));
-        assert_eq!(parse(&src), Err("YAML: nesting is too deep".to_owned()));
-    }
-
-    const CASES: &[(&str, &str)] = &[
-        ("{\n shape: rounded \n}", "{\"shape\":\"rounded\"}"),
-        (
-            "{\nshape: rounded , label: \"DD\"\n}",
-            "{\"shape\":\"rounded\",\"label\":\"DD\"}",
-        ),
-        (
-            "{\n label: \"This is }\", other: \"clock\"\n}",
-            "{\"label\":\"This is }\",\"other\":\"clock\"}",
-        ),
-        (
-            "{\n animate: true, animation: fast, w: 100, h: 50.5, x: null, y: ~\n}",
-            "{\"animate\":true,\"animation\":\"fast\",\"w\":100,\"h\":50.5,\"x\":null,\"y\":null}",
-        ),
-        (
-            "{\n label: 'single quoted', icon: \"fa:fa-user\", form: circle, pos: t \n}",
-            "{\"label\":\"single quoted\",\"icon\":\"fa:fa-user\",\"form\":\"circle\",\"pos\":\"t\"}",
-        ),
-        (
-            "{\n a: [1, 2, three], b: {c: d, e: [f]}\n}",
-            "{\"a\":[1,2,\"three\"],\"b\":{\"c\":\"d\",\"e\":[\"f\"]}}",
-        ),
-        ("{\n}", "{}"),
-        (
-            "\n        shape: circle\n        other: \"clock\"\n     \n",
-            "{\"shape\":\"circle\",\"other\":\"clock\"}",
-        ),
-        (
-            "\n        label: |\n          This is a\n          multiline string\n        other: \"clock\"\n     \n",
-            "{\"label\":\"This is a\\nmultiline string\\n\",\"other\":\"clock\"}",
-        ),
-        (
-            "\n        label: >\n          folded\n          text\n\n          second paragraph\n        other: 1\n",
-            "{\"label\":\"folded text\\nsecond paragraph\\n\",\"other\":1}",
-        ),
-        (
-            "\n        label: \"This is a<br/>multiline string\"\n        other: \"clock\"\n",
-            "{\"label\":\"This is a<br/>multiline string\",\"other\":\"clock\"}",
-        ),
-        (
-            "title: Hello world\nconfig:\n  theme: dark\n  flowchart:\n    curve: linear\n    htmlLabels: false\n",
-            "{\"title\":\"Hello world\",\"config\":{\"theme\":\"dark\",\"flowchart\":{\"curve\":\"linear\",\"htmlLabels\":false}}}",
-        ),
-        (
-            "title: \"Quoted: title\"\ndisplayMode: compact\n",
-            "{\"title\":\"Quoted: title\",\"displayMode\":\"compact\"}",
-        ),
-        (
-            "config:\n  themeVariables:\n    primaryColor: \"#ff0000\"\n    fontSize: 16px\n  look: handDrawn # trailing comment\n",
-            "{\"config\":{\"themeVariables\":{\"primaryColor\":\"#ff0000\",\"fontSize\":\"16px\"},\"look\":\"handDrawn\"}}",
-        ),
-        (
-            "list:\n  - a\n  - b: 1\n    c: 2\n  - [x, y]\nempty:\n",
-            "{\"list\":[\"a\",{\"b\":1,\"c\":2},[\"x\",\"y\"]],\"empty\":null}",
-        ),
-        (
-            "a: 0x1f\nb: -12\nc: 1e3\nd: .5\ne: \"12\"\nf: True\ng: FALSE\nh: Null\n",
-            "{\"a\":31,\"b\":-12,\"c\":1000,\"d\":0.5,\"e\":\"12\",\"f\":true,\"g\":false,\"h\":null}",
-        ),
-        (
-            "key with spaces: plain value\nurl: http://example.com/a#b\n",
-            "{\"key with spaces\":\"plain value\",\"url\":\"http://example.com/a#b\"}",
-        ),
-        (
-            "multi: this is\n  continued on the next line\nnext: 1\n",
-            "{\"multi\":\"this is continued on the next line\",\"next\":1}",
-        ),
-        ("# only a comment\n", "null"),
-        ("", "null"),
-        ("just a scalar", "\"just a scalar\""),
-        ("- 1\n- 2\n", "[1,2]"),
-        (
-            "a: {\n  b: 1,\n  c: [2,\n    3]\n}\nd: \"two\n  lines\"\ne: 5\n",
-            "{\"a\":{\"b\":1,\"c\":[2,3]},\"d\":\"two lines\",\"e\":5}",
-        ),
-        ("{\n a: 1, # comment\n b: 2\n}", "{\"a\":1,\"b\":2}"),
-        (
-            "__proto__: 1\nb:\n  __proto__: {x: 1}\n",
-            "{\"__proto__\":1,\"b\":{\"__proto__\":{\"x\":1}}}",
-        ),
-        (
-            "{ __proto__: { polluted: true } }",
-            "{\"__proto__\":{\"polluted\":true}}",
-        ),
-        (
-            "{ a: [[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[[ }",
-            "ERR:YAML: nesting is too deep",
-        ),
-        (
-            "{ a: 1",
-            "ERR:YAML: unexpected end of the stream within a flow collection",
-        ),
-        (
-            "a: {\n b: 1,\n b: 1,\n b: 1,\n b: 1,\n b: 1,\n b: 1,\n b: 1,\n b: 1,\n b: 1,\n b: 1,\n b: 1,\n b: 1,\n b: 1,\n b: 1,\n b: 1,\n b: 1,\n b: 1,\n b: 1,\n b: 1,\n b: 1,\n",
-            "ERR:YAML: unexpected end of the stream within a flow collection",
-        ),
-        (
-            "{1.50: a, 1e21: b, 0.000001: c, 1e-7: d, 123456789012345678901234: e, 0x1F: f, -0: g, .inf: h, .nan: i, 5e-324: j, 1.7976931348623157e308: k, 0.1: l, 100: m, 1e20: n, 123.456: o}",
-            "{\"0\":\"g\",\"31\":\"f\",\"100\":\"m\",\"1.5\":\"a\",\"1e+21\":\"b\",\"0.000001\":\"c\",\"1e-7\":\"d\",\"1.2345678901234569e+23\":\"e\",\"Infinity\":\"h\",\"NaN\":\"i\",\"5e-324\":\"j\",\"1.7976931348623157e+308\":\"k\",\"0.1\":\"l\",\"100000000000000000000\":\"n\",\"123.456\":\"o\"}",
-        ),
-        (
-            "b: 1\n2: x\n1: y\na: z\n10: w\n01: v\n4294967295: big\n4294967294: max\n-1: neg",
-            "{\"1\":\"v\",\"2\":\"x\",\"10\":\"w\",\"4294967294\":\"max\",\"b\":1,\"a\":\"z\",\"4294967295\":\"big\",\"-1\":\"neg\"}",
-        ),
-        (
-            "a: \"\\x41\\u00e9\\U0001F600\\ud83d\\ude00\\t\\N\\_\\L\\P\\0\\a\\b\\v\\f\\r\\e\\ \\/\\\\\\\"\"",
-            "{\"a\":\"Aé😀😀\\t\u{85}\u{a0}\u{2028}\u{2029}\\u0000\\u0007\\b\\u000b\\f\\r\\u001b /\\\\\\\"\"}",
-        ),
-        ("a: \"\\q\"", "ERR:YAML: unknown escape sequence"),
-        ("a: \"\\xZZ\"", "ERR:Invalid code point NaN"),
-        ("a: \"\\U00110000\"", "ERR:Invalid code point 1114112"),
-        ("a: \"\\x\"", "ERR:Invalid code point NaN"),
-        ("a: \"\\u 12z\"", "{\"a\":\"\\u0012\"}"),
-        ("a: \"\\u-001\"", "ERR:Invalid code point -1"),
-        ("a: \"\\x0x\"", "ERR:Invalid code point NaN"),
-        ("a: \"line\\\n    joined\"", "{\"a\":\"linejoined\"}"),
-        (
-            "a: \"fold\n\n  keep   \n  two\"",
-            "{\"a\":\"fold\\nkeep two\"}",
-        ),
-        (
-            "a: 'it''s'\nb: '''x'''\nc: 'multi\n  line'",
-            "{\"a\":\"it's\",\"b\":\"'x'\",\"c\":\"multi line\"}",
-        ),
-        (
-            "a: |-\n  x\n  y\n\nb: |+\n  x\n\n\nc: >2\n    x\n   y\nd: |\n\ne: 1",
-            "{\"a\":\"x\\ny\",\"b\":\"x\\n\\n\\n\",\"c\":\"  x\\n y\\n\",\"d\":\"\",\"e\":1}",
-        ),
-        ("a: | # 3 items\n     x\n    y\n", "{\"a\":\"  x\\n y\\n\"}"),
-        (
-            "a: >\n  folded\n   indented\n  back\n\n  para\n",
-            "{\"a\":\"folded\\n indented\\nback\\npara\\n\"}",
-        ),
-        ("a: |\n", "{\"a\":\"\"}"),
-        ("a: |+\n\n\n", "{\"a\":\"\\n\\n\\n\"}"),
-        ("a: >-\n  x\n", "{\"a\":\"x\"}"),
-        ("a: >+\n  x\n\n", "{\"a\":\"x\\n\\n\\n\"}"),
-        ("a: |x\n  y\n", "{\"a\":\"|x y\"}"),
-        (
-            "a:\n\tb: 1",
-            "ERR:YAML: tabs are not allowed for indentation",
-        ),
-        ("\ta: 1", "ERR:YAML: tabs are not allowed for indentation"),
-        ("a: 1\n  b: 2", "{\"a\":\"1 b: 2\"}"),
-        ("a: 1\nb", "ERR:YAML: can not read a block mapping entry"),
-        ("a: 1\n b: 2\n", "{\"a\":\"1 b: 2\"}"),
-        (
-            "  a: 1\nb: 2",
-            "ERR:YAML: end of the stream or a document separator is expected",
-        ),
-        (
-            "- a\n- - b\n  - c\n-\n  x: 1\n- y: 2\n  z: 3",
-            "[\"a\",\"- b - c\",{\"x\":1},{\"y\":2,\"z\":3}]",
-        ),
-        (
-            "a: [1, 2",
-            "ERR:YAML: unexpected end of the stream within a flow collection",
-        ),
-        ("{a: 1}}", "ERR:YAML: unexpected content after a value"),
-        (
-            "[1,,2]",
-            "ERR:YAML: expected the node content, but found ','",
-        ),
-        ("[,1]", "ERR:YAML: expected the node content, but found ','"),
-        ("[1 2]", "[\"1 2\"]"),
-        ("{a: 1 b: 2}", "{\"a\":\"1 b: 2\"}"),
-        ("{a: 1 b}", "{\"a\":\"1 b\"}"),
-        ("[a, b c]", "[\"a\",\"b c\"]"),
-        (
-            "[1]\n[2]",
-            "ERR:YAML: end of the stream or a document separator is expected",
-        ),
-        ("[1] # c", "[1]"),
-        ("[1] x", "ERR:YAML: unexpected content after a value"),
-        ("a: [1] x", "ERR:YAML: unexpected content after a value"),
-        ("a: [1] # ok", "{\"a\":[1]}"),
-        ("a: \"x\" y", "ERR:YAML: unexpected content after a value"),
-        ("key: 'v' x", "ERR:YAML: unexpected content after a value"),
-        ("key: value # comment", "{\"key\":\"value\"}"),
-        ("key: \"value\" # c", "{\"key\":\"value\"}"),
-        ("a: &anchor 1", "{\"a\":\"&anchor 1\"}"),
-        (
-            "---\na: 1\n...\n",
-            "ERR:YAML: can not read a block mapping entry",
-        ),
-        ("a: 1\n---\nb: 2", "{\"a\":1,\"b\":2}"),
-        (
-            "a: 1\n...\nb: 2",
-            "ERR:YAML: can not read a block mapping entry",
-        ),
-        ("a: b: c", "{\"a\":\"b: c\"}"),
-        ("a:b", "\"a:b\""),
-        ("a :b", "\"a :b\""),
-        ("a : b", "{\"a\":\"b\"}"),
-        (
-            "\"quoted key\": 1\n'q''k': 2\n\"a\\\"b\": 3\n\"x\" : 4",
-            "{\"quoted key\":1,\"q'k\":2,\"a\\\"b\":3,\"x\":4}",
-        ),
-        (
-            "\"unterminated: 1",
-            "ERR:YAML: unexpected end of the stream within a double quoted scalar",
-        ),
-        (
-            "a: 0o17\nb: 0b101\nc: -0x10\nd: +12\ne: 012\nf: 1_000\ng: 1.5e+3\nh: -.inf\ni: .NaN\nj: 0x\nk: 1.\nl: +.5\nm: 9007199254740993\nn: 0xFFFFFFFFFFFFFFFFFFFF\no: -0\np: 0.1e-5\nq: 1E5\nr: +.inf\ns: .Inf\nt: 1e400\nu: 0O17\nv: 0X1",
-            "{\"a\":15,\"b\":5,\"c\":-16,\"d\":12,\"e\":12,\"f\":\"1_000\",\"g\":1500,\"h\":null,\"i\":null,\"j\":\"0x\",\"k\":1,\"l\":0.5,\"m\":9007199254740992,\"n\":1.2089258196146292e+24,\"o\":0,\"p\":0.000001,\"q\":100000,\"r\":null,\"s\":null,\"t\":null,\"u\":\"0O17\",\"v\":\"0X1\"}",
-        ),
-        ("list:\n- a\n- b", "{\"list\":[\"a\",\"b\"]}"),
-        (
-            "a:\n  - b\n  -\n    c: d\n  - e: f\n    g: h",
-            "{\"a\":[\"b\",{\"c\":\"d\"},{\"e\":\"f\",\"g\":\"h\"}]}",
-        ),
-        ("x: { a: [ { b: c } ] }", "{\"x\":{\"a\":[{\"b\":\"c\"}]}}"),
-        ("a: [\n  1,\n  2\n]\nb: 3", "{\"a\":[1,2],\"b\":3}"),
-        (
-            "a: {\n  \"k\": 'v',\n  n: [a,\n b]}\nc: 1",
-            "{\"a\":{\"k\":\"v\",\"n\":[\"a\",\"b\"]},\"c\":1}",
-        ),
-        (
-            "tïtle: ünïcode ✓ 😀\nb: c",
-            "{\"tïtle\":\"ünïcode ✓ 😀\",\"b\":\"c\"}",
-        ),
-        ("a: x\n\u{3000}b: c", "{\"a\":\"x b: c\"}"),
-        ("a: x\n\u{a0} b: c\nd: 1", "{\"a\":\"x b: c\",\"d\":1}"),
-        ("   ", "null"),
-        ("#c", "null"),
-        (
-            "a: \"unterminated",
-            "ERR:YAML: unexpected end of the stream within a double quoted scalar",
-        ),
-        (
-            "a: 'unterminated",
-            "ERR:YAML: unexpected end of the stream within a single quoted scalar",
-        ),
-        (
-            "__proto__: 1\nconstructor: 2\nprototype: 3\ntoString: 4",
-            "{\"__proto__\":1,\"constructor\":2,\"prototype\":3,\"toString\":4}",
-        ),
-        ("a: 1\na: 2\nb: 3", "{\"a\":2,\"b\":3}"),
-        ("{\"a\": 1, \"a\": 2}", "{\"a\":2}"),
-        ("- [a, b]\n- {c: d}", "[[\"a\",\"b\"],{\"c\":\"d\"}]"),
-        ("-a: 1", "{\"-a\":1}"),
-        ("- : x", "[\": x\"]"),
-        ("-#: 1", "\"-#: 1\""),
-        ("-", "[null]"),
-        ("- ", "[null]"),
-        ("-\n-", "[null,null]"),
-        ("a: -", "{\"a\":\"-\"}"),
-        ("a: - b", "{\"a\":\"- b\"}"),
-        (
-            "a: x #c\n  more # d\n\n\n  tail",
-            "{\"a\":\"x more\\n\\ntail\"}",
-        ),
-        ("a: x\n\n\nb: y", "{\"a\":\"x\",\"b\":\"y\"}"),
-        ("a: x\n\n   \n  y", "{\"a\":\"x\\n\\ny\"}"),
-        ("{a: b #c\n, d: e}", "{\"a\":\"b\",\"d\":\"e\"}"),
-        (
-            "{a: \"b\"#c\n}",
-            "ERR:YAML: missed comma between flow collection entries",
-        ),
-        (
-            "[a:b, c: d, e :f, g:]",
-            "[\"a:b\",\"c: d\",\"e :f\",\"g:\"]",
-        ),
-        ("{a:b}", "{\"a:b\":null}"),
-        ("{a: [b:c]}", "{\"a\":[\"b:c\"]}"),
-        ("{: x}", "{\"null\":\"x\"}"),
-        ("{a}", "{\"a\":null}"),
-        ("{a, b: c}", "{\"a\":null,\"b\":\"c\"}"),
-        ("[{a: 1}, {b: 2}]", "[{\"a\":1},{\"b\":2}]"),
-        (
-            "{\"key with: colon\": \"v\"}",
-            "{\"key with: colon\":\"v\"}",
-        ),
-        ("{a: 1}\n", "{\"a\":1}"),
-        ("  {a: 1}  ", "{\"a\":1}"),
-        ("[1, [2, [3]]]\n# c", "[1,[2,[3]]]"),
-        ("[1]\n...", "[1]"),
-        ("a: 1 # c\n# full\nb: 2", "{\"a\":1,\"b\":2}"),
-        ("a:    \n  b: 1", "{\"a\":{\"b\":1}}"),
-        ("a: # c\n  b: 1", "{\"a\":{\"b\":1}}"),
-        ("a:\nb: 1", "{\"a\":null,\"b\":1}"),
-        ("a:\n- 1\n- 2\nb: 3", "{\"a\":[1,2],\"b\":3}"),
-        (
-            "a:\n  - 1\n - 2",
-            "ERR:YAML: bad indentation of a mapping entry",
-        ),
-        ("a: 'x\n\n\n  y'", "{\"a\":\"x\\n\\ny\"}"),
-        ("a: \"  lead  \n  trail  \"", "{\"a\":\"  lead trail  \"}"),
-        ("a: \"\\\n\"", "{\"a\":\"\"}"),
-        ("a: \"x\\\\\ny\"", "ERR:YAML: unknown escape sequence"),
-        (
-            "a: true\nb: TRUE\nc: tRUE\nd: yes\ne: on\nf: ~\ng: null\nh: Null\ni: nULL",
-            "{\"a\":true,\"b\":true,\"c\":\"tRUE\",\"d\":\"yes\",\"e\":\"on\",\"f\":null,\"g\":null,\"h\":null,\"i\":\"nULL\"}",
-        ),
-        (
-            "a: 1.0\nb: 1.5\nc: 100\nd: 1e2\ne: -1.5e-10\nf: 0.000001\ng: 0.0000001\nh: 123456789012345680000\ni: 1234567890123456789012",
-            "{\"a\":1,\"b\":1.5,\"c\":100,\"d\":100,\"e\":-1.5e-10,\"f\":0.000001,\"g\":1e-7,\"h\":123456789012345680000,\"i\":1.2345678901234568e+21}",
-        ),
-    ];
-
-    #[expect(
-        clippy::unreadable_literal,
-        reason = "written as JavaScript's toExponential prints them"
-    )]
-    const NUMBERS: &[(f64, &str)] = &[
-        (0e0, "0"),
-        (-0.0, "0"),
-        (1e0, "1"),
-        (-1e0, "-1"),
-        (1e-1, "0.1"),
-        (5e-1, "0.5"),
-        (1.5e0, "1.5"),
-        (1e2, "100"),
-        (1e20, "100000000000000000000"),
-        (1e21, "1e+21"),
-        (1.5e21, "1.5e+21"),
-        (1.2345678901234568e20, "123456789012345680000"),
-        (1e-6, "0.000001"),
-        (1e-7, "1e-7"),
-        (1.234e-7, "1.234e-7"),
-        (5e-324, "5e-324"),
-        (1.7976931348623157e308, "1.7976931348623157e+308"),
-        (9.007199254740992e15, "9007199254740992"),
-        (9.007199254740994e15, "9007199254740994"),
-        (3.0000000000000004e-1, "0.30000000000000004"),
-        (3.333333333333333e-1, "0.3333333333333333"),
-        (1.23456e2, "123.456"),
-        (4.35e0, "4.35"),
-        (1.234e-6, "0.000001234"),
-        (9.95e0, "9.95"),
-        (1e100, "1e+100"),
-        (2.5e-5, "0.000025"),
-        (f64::NAN, "NaN"),
-        (f64::INFINITY, "Infinity"),
-        (f64::NEG_INFINITY, "-Infinity"),
-        (2.99792458e8, "299792458"),
-        (6.02214076e23, "6.02214076e+23"),
-        (1.0000000000000002e0, "1.0000000000000002"),
-    ];
 }

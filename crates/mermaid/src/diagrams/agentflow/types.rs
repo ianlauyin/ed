@@ -3,9 +3,11 @@
 //! Labels, class definitions, and subgraph body items have the flowchart's shape, so those types
 //! come from the flowchart module.
 
+pub(crate) use crate::diagrams::flowchart::types::DocItem;
+pub(crate) use crate::diagrams::flowchart::types::FlowClassDef;
+pub(crate) use crate::diagrams::flowchart::types::FlowText;
+pub(crate) use crate::diagrams::flowchart::types::LabelType;
 use crate::yaml::Value;
-
-pub(crate) use crate::diagrams::flowchart::types::{DocItem, FlowClassDef, FlowText, LabelType};
 
 /// Metadata from `@{ ... }` blocks, merged in JavaScript property order.
 pub(crate) type Metadata = Vec<(String, Value)>;

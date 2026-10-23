@@ -3,8 +3,11 @@
 
 use std::collections::BTreeMap;
 
-use super::parser::{CommitTypeName, GitGraphAst, StatementAst};
-use crate::error::{Code, Error};
+use super::parser::CommitTypeName;
+use super::parser::GitGraphAst;
+use super::parser::StatementAst;
+use crate::error::Code;
+use crate::error::Error;
 use crate::util::chars::is_space;
 use crate::yaml::Value;
 
@@ -95,10 +98,7 @@ fn property<'v>(value: &'v Value, key: &str) -> Option<&'v Value> {
     let Value::Object(entries) = value else {
         return None;
     };
-    entries
-        .iter()
-        .find(|(own, _)| own == key)
-        .map(|(_, value)| value)
+    entries.iter().find(|(own, _)| own == key).map(|(_, value)| value)
 }
 
 /// Appends `value` in lowercase hexadecimal, padded to eight digits.
@@ -132,10 +132,7 @@ impl Builder {
     }
 
     fn branch(&self, name: &str) -> Option<&Option<String>> {
-        self.branches
-            .iter()
-            .find(|(own, _)| own == name)
-            .map(|(_, head)| head)
+        self.branches.iter().find(|(own, _)| own == name).map(|(_, head)| head)
     }
 
     fn set_branch(&mut self, name: &str, head: Option<String>) {
@@ -186,11 +183,8 @@ impl Builder {
                 "\")",
             ])));
         };
-        let head = id
-            .as_deref()
-            .filter(|id| !id.is_empty())
-            .and_then(|id| self.get(id))
-            .map(|commit| commit.id.clone());
+        let head =
+            id.as_deref().filter(|id| !id.is_empty()).and_then(|id| self.get(id)).map(|commit| commit.id.clone());
         branch.clone_into(&mut self.current);
         self.head = head;
         Ok(())
@@ -213,8 +207,7 @@ impl Builder {
         };
         self.seq += 1;
         if self.has(&commit.id) {
-            self.warnings
-                .push(join(&["Commit ID ", &commit.id, " already exists"]));
+            self.warnings.push(join(&["Commit ID ", &commit.id, " already exists"]));
         }
         self.add(commit);
     }
@@ -233,44 +226,22 @@ impl Builder {
         self.checkout(name)
     }
 
-    fn merge(
-        &mut self,
-        other: &str,
-        custom_id: &str,
-        r#type: Option<u8>,
-        tags: &[String],
-    ) -> Result<(), Error> {
+    fn merge(&mut self, other: &str, custom_id: &str, r#type: Option<u8>, tags: &[String]) -> Result<(), Error> {
         let current = self.current.clone();
         let current_head = self.branch(&current).cloned().flatten();
         let other_head = self.branch(other).cloned().flatten();
-        let current_commit = current_head
-            .as_deref()
-            .filter(|id| !id.is_empty())
-            .and_then(|id| self.get(id));
-        let other_commit = other_head
-            .as_deref()
-            .filter(|id| !id.is_empty())
-            .and_then(|id| self.get(id));
+        let current_commit = current_head.as_deref().filter(|id| !id.is_empty()).and_then(|id| self.get(id));
+        let other_commit = other_head.as_deref().filter(|id| !id.is_empty()).and_then(|id| self.get(id));
         if let (Some(a), Some(_)) = (current_commit, other_commit)
             && a.branch == other
         {
-            return Err(fail(join(&[
-                "Cannot merge branch '",
-                other,
-                "' into itself.",
-            ])));
+            return Err(fail(join(&["Cannot merge branch '", other, "' into itself."])));
         }
         if current == other {
-            return Err(fail(String::from(
-                "Incorrect usage of \"merge\". Cannot merge a branch to itself",
-            )));
+            return Err(fail(String::from("Incorrect usage of \"merge\". Cannot merge a branch to itself")));
         }
         let Some(current_commit) = current_commit else {
-            return Err(fail(join(&[
-                "Incorrect usage of \"merge\". Current branch (",
-                &current,
-                ")has no commits",
-            ])));
+            return Err(fail(join(&["Incorrect usage of \"merge\". Current branch (", &current, ")has no commits"])));
         };
         if self.branch(other).is_none() {
             return Err(fail(join(&[
@@ -288,9 +259,7 @@ impl Builder {
         };
         // `currentCommit === otherCommit` compares the objects the map holds.
         if std::ptr::eq(current_commit, other_commit) {
-            return Err(fail(String::from(
-                "Incorrect usage of \"merge\". Both branches have same head",
-            )));
+            return Err(fail(String::from("Incorrect usage of \"merge\". Both branches have same head")));
         }
         if !custom_id.is_empty() && self.has(custom_id) {
             return Err(fail(join(&[
@@ -309,11 +278,7 @@ impl Builder {
             branch: current,
             custom_id: Some(!custom_id.is_empty()),
             custom_type: r#type,
-            id: if custom_id.is_empty() {
-                self.next_id()
-            } else {
-                custom_id.to_owned()
-            },
+            id: if custom_id.is_empty() { self.next_id() } else { custom_id.to_owned() },
             message,
             parents,
             seq: self.seq,
@@ -331,10 +296,7 @@ impl Builder {
         tags: Option<&[String]>,
         parent: Option<&str>,
     ) -> Result<(), Error> {
-        let Some(source) = source_id
-            .filter(|id| !id.is_empty())
-            .and_then(|id| self.get(id))
-        else {
+        let Some(source) = source_id.filter(|id| !id.is_empty()).and_then(|id| self.get(id)) else {
             return Err(fail(String::from(
                 "Incorrect usage of \"cherryPick\". Source commit id should exist and provided",
             )));
@@ -358,10 +320,7 @@ impl Builder {
             )));
         }
         let current_head = self.branch(&self.current).cloned().flatten();
-        if !current_head
-            .as_deref()
-            .is_some_and(|id| !id.is_empty() && self.has(id))
-        {
+        if !current_head.as_deref().is_some_and(|id| !id.is_empty() && self.has(id)) {
             return Err(fail(join(&[
                 "Incorrect usage of \"cherry-pick\". Current branch (",
                 &self.current,
@@ -423,11 +382,7 @@ fn squeeze_line_starts(text: &str) -> String {
 ///
 /// Returns a semantic error for a statement Mermaid rejects, such as checking out a branch that
 /// does not exist.
-pub(crate) fn build_git(
-    ast: GitGraphAst,
-    config: &Value,
-    title: Option<&str>,
-) -> Result<GitModel, Error> {
+pub(crate) fn build_git(ast: GitGraphAst, config: &Value, title: Option<&str>) -> Result<GitModel, Error> {
     let git = property(config, "gitGraph");
     let main_name = match git.and_then(|git| property(git, "mainBranchName")) {
         Some(Value::String(name)) => name.clone(),
@@ -455,37 +410,19 @@ pub(crate) fn build_git(
     }
     for statement in &ast.statements {
         match statement {
-            StatementAst::Commit {
-                id,
-                message,
-                tags,
-                r#type,
-            } => b.commit(
-                id.as_deref(),
-                message.as_deref().unwrap_or(""),
-                r#type.map_or(NORMAL, type_code),
-                tags,
-            ),
+            StatementAst::Commit { id, message, tags, r#type } => {
+                b.commit(id.as_deref(), message.as_deref().unwrap_or(""), r#type.map_or(NORMAL, type_code), tags);
+            }
             StatementAst::Branch { name, order } => {
                 b.branch_statement(name, order.unwrap_or(0.0))?;
             }
-            StatementAst::Merge {
-                branch,
-                id,
-                tags,
-                r#type,
-            } => b.merge(
-                branch,
-                id.as_deref().unwrap_or(""),
-                r#type.map(type_code),
-                tags,
-            )?,
+            StatementAst::Merge { branch, id, tags, r#type } => {
+                b.merge(branch, id.as_deref().unwrap_or(""), r#type.map(type_code), tags)?;
+            }
             StatementAst::Checkout { branch } => b.checkout(branch)?,
-            StatementAst::CherryPicking { id, parent, tags } => b.cherry_pick(
-                id.as_deref(),
-                (!tags.is_empty()).then_some(tags.as_slice()),
-                parent.as_deref(),
-            )?,
+            StatementAst::CherryPicking { id, parent, tags } => {
+                b.cherry_pick(id.as_deref(), (!tags.is_empty()).then_some(tags.as_slice()), parent.as_deref())?;
+            }
         }
     }
 
@@ -495,17 +432,12 @@ pub(crate) fn build_git(
     let mut orders = b.orders;
     orders.sort_by(|a, b| {
         let key = |order: f64| if order.is_nan() { 0.0 } else { order };
-        key(a.1)
-            .partial_cmp(&key(b.1))
-            .unwrap_or(std::cmp::Ordering::Equal)
+        key(a.1).partial_cmp(&key(b.1)).unwrap_or(std::cmp::Ordering::Equal)
     });
     let lanes = orders.into_iter().map(|(name, _)| name).collect();
 
     Ok(GitModel {
-        acc_descr: ast
-            .acc_descr
-            .filter(|text| !text.is_empty())
-            .map(|text| squeeze_line_starts(&text)),
+        acc_descr: ast.acc_descr.filter(|text| !text.is_empty()).map(|text| squeeze_line_starts(&text)),
         acc_title: ast
             .acc_title
             .filter(|text| !text.is_empty())

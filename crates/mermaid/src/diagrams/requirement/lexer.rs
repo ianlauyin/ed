@@ -5,9 +5,12 @@
 //! ASCII, and non-ASCII characters are decoded whole wherever `\s` tests them, so token
 //! boundaries match. Each regular expression in Pele is a hand-written matcher below.
 
-use super::tokens::{T, keyword};
+use super::tokens::T;
+use super::tokens::keyword;
 use crate::text::label::trim;
-use crate::util::chars::{is_line_end, is_space, is_word};
+use crate::util::chars::is_line_end;
+use crate::util::chars::is_space;
+use crate::util::chars::is_word;
 
 /// A token: its kind, its start as a UTF-8 offset, and its text.
 #[derive(Clone, Copy, Debug)]
@@ -36,32 +39,23 @@ const LONGEST_KEYWORD: usize = 22;
 
 /// Characters that end an unquoted string: `:,{<>-=` and line breaks.
 fn is_stop(c: u8) -> bool {
-    matches!(
-        c,
-        b':' | b',' | b'\r' | b'\n' | b'{' | b'<' | b'>' | b'-' | b'='
-    )
+    matches!(c, b':' | b',' | b'\r' | b'\n' | b'{' | b'<' | b'>' | b'-' | b'=')
 }
 
 /// The character at byte `at`, as a code point, or `None` past the end.
 fn char_at(src: &str, at: usize) -> Option<u32> {
-    src.get(at..)
-        .and_then(|rest| rest.chars().next())
-        .map(u32::from)
+    src.get(at..).and_then(|rest| rest.chars().next()).map(u32::from)
 }
 
 /// The end of a run of JavaScript `\s` characters from `at`.
 fn skip_spaces(src: &str, at: usize) -> usize {
     let rest = src.get(at..).unwrap_or("");
-    at + rest
-        .char_indices()
-        .find(|&(_, c)| !is_space(u32::from(c)))
-        .map_or(rest.len(), |(i, _)| i)
+    at + rest.char_indices().find(|&(_, c)| !is_space(u32::from(c))).map_or(rest.len(), |(i, _)| i)
 }
 
 /// Whether `src` at `at` spells the ASCII `word` in any case.
 fn starts_with_ci(src: &str, at: usize, word: &str) -> bool {
-    src.get(at..at + word.len())
-        .is_some_and(|text| text.eq_ignore_ascii_case(word))
+    src.get(at..at + word.len()).is_some_and(|text| text.eq_ignore_ascii_case(word))
 }
 
 /// `/<word>\s*<sep>\s*/iy` at `at`: the end of the match.
@@ -130,17 +124,9 @@ pub(crate) fn tokenize<'a>(src: &'a str) -> Vec<Token<'a>> {
     let mut line_end: Option<usize> = None;
 
     let at = |i: usize| bytes.get(i).copied();
-    let line_break = |q: usize| {
-        src.get(q..)
-            .and_then(|rest| rest.find('\n'))
-            .map_or(n, |e| q + e)
-    };
+    let line_break = |q: usize| src.get(q..).and_then(|rest| rest.find('\n')).map_or(n, |e| q + e);
     let emit = |tokens: &mut Vec<Token<'a>>, kind: T, s: usize, e: usize| -> usize {
-        tokens.push(Token {
-            kind,
-            start: s,
-            text: src.get(s..e).unwrap_or(""),
-        });
+        tokens.push(Token { kind, start: s, text: src.get(s..e).unwrap_or("") });
         e
     };
 
@@ -151,14 +137,8 @@ pub(crate) fn tokenize<'a>(src: &'a str) -> Vec<Token<'a>> {
         let ok = match state {
             S::Initial => 'initial: {
                 let lower = c | 32;
-                if lower == b't'
-                    && starts_with_ci(src, p + 1, "itle")
-                    && char_at(src, p + 5).is_some_and(is_space)
-                {
-                    let space = src
-                        .get(p + 5..)
-                        .and_then(|rest| rest.chars().next())
-                        .map_or(1, char::len_utf8);
+                if lower == b't' && starts_with_ci(src, p + 1, "itle") && char_at(src, p + 5).is_some_and(is_space) {
+                    let space = src.get(p + 5..).and_then(|rest| rest.chars().next()).map_or(1, char::len_utf8);
                     let from = p + 5 + space;
                     let mut q = from;
                     while let Some(d) = at(q) {
@@ -263,11 +243,7 @@ pub(crate) fn tokenize<'a>(src: &'a str) -> Vec<Token<'a>> {
                     while at(q).is_some_and(|d| !is_stop(d)) {
                         q += 1;
                     }
-                    tokens.push(Token {
-                        kind: T::UnqString,
-                        start: p,
-                        text: trim(src.get(p..q).unwrap_or("")),
-                    });
+                    tokens.push(Token { kind: T::UnqString, start: p, text: trim(src.get(p..q).unwrap_or("")) });
                     p = q;
                     break 'initial true;
                 }
@@ -357,20 +333,13 @@ pub(crate) fn tokenize<'a>(src: &'a str) -> Vec<Token<'a>> {
                     }
                     p += 1;
                 } else {
-                    let e = src
-                        .get(p..)
-                        .and_then(|rest| rest.find('"'))
-                        .map_or(n, |e| p + e);
+                    let e = src.get(p..).and_then(|rest| rest.find('"')).map_or(n, |e| p + e);
                     p = emit(&mut tokens, T::QString, p, e);
                 }
                 true
             }
             S::AccTitle | S::AccDescr => {
-                let kind = if state == S::AccTitle {
-                    T::AccTitleValue
-                } else {
-                    T::AccDescrValue
-                };
+                let kind = if state == S::AccTitle { T::AccTitleValue } else { T::AccDescrValue };
                 if let Some(previous) = stack.pop() {
                     state = previous;
                 }
@@ -384,21 +353,14 @@ pub(crate) fn tokenize<'a>(src: &'a str) -> Vec<Token<'a>> {
                     }
                     p += 1;
                 } else {
-                    let e = src
-                        .get(p..)
-                        .and_then(|rest| rest.find('}'))
-                        .map_or(n, |e| p + e);
+                    let e = src.get(p..).and_then(|rest| rest.find('}')).map_or(n, |e| p + e);
                     p = emit(&mut tokens, T::AccDescrMultilineValue, p, e);
                 }
                 true
             }
         };
         if !ok {
-            tokens.push(Token {
-                kind: T::Error,
-                start: p,
-                text: "",
-            });
+            tokens.push(Token { kind: T::Error, start: p, text: "" });
             return tokens;
         }
     }

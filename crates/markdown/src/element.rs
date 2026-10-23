@@ -1,4 +1,7 @@
 use super::*;
+use crate::parser::HtmlStyle;
+use gpui::{Empty, ListAlignment, ListSizingBehavior, ListState, UnderlineStyle, list};
+use std::cell::RefCell;
 
 pub(crate) type UrlHoverCallback = Rc<dyn Fn(Option<SharedString>, &mut Window, &mut App)>;
 pub(crate) type SourceClickCallback = Box<dyn Fn(usize, usize, &mut Window, &mut App) -> bool>;
@@ -15,40 +18,134 @@ pub enum AutoscrollBehavior {
 }
 
 pub struct MarkdownElement {
+    renderer: Rc<BlockRenderer>,
+    input_focus_handle: Option<FocusHandle>,
+    on_url_hover: Option<UrlHoverCallback>,
+    on_source_click: Option<SourceClickCallback>,
+    autoscroll: AutoscrollBehavior,
+    list_state: Option<MarkdownListState>,
+}
+
+/// What rendering a range of events needs. Shared with the item renderer of a
+/// virtualized element, which outlives the element's own layout call.
+pub(crate) struct BlockRenderer {
     markdown: Entity<Markdown>,
     pub(crate) style: MarkdownStyle,
     show_code_block_copy_button: bool,
     render_code_block: Option<CodeBlockRenderFn>,
-    input_focus_handle: Option<FocusHandle>,
     on_url_click: Option<Rc<dyn Fn(SharedString, &mut Window, &mut App)>>,
-    on_url_hover: Option<UrlHoverCallback>,
-    on_source_click: Option<SourceClickCallback>,
     on_checkbox_toggle: Option<CheckboxToggleCallback>,
     pub(crate) image_resolver: Option<Box<dyn Fn(&str, &App) -> Option<ImageSource>>>,
     show_root_block_markers: bool,
-    autoscroll: AutoscrollBehavior,
+}
+
+/// The parse state a frame renders from, shared by all of its blocks.
+pub(crate) struct RenderFrame {
+    parsed: Arc<ParsedMarkdown>,
+    images: HashMap<usize, Arc<Image>>,
+    active_root_block: Option<usize>,
+}
+
+/// Scroll position and measured block heights of a virtualized
+/// [`MarkdownElement`]. Keep one per view, across frames.
+#[derive(Clone)]
+pub struct MarkdownListState(Rc<RefCell<ListSync>>);
+
+struct ListSync {
+    list: ListState,
+    /// The blocks the list's items were last synced to.
+    blocks: Arc<[RenderBlock]>,
+    layout_key: Option<ListLayoutKey>,
+}
+
+/// What every block's height depends on, besides its own contents and the
+/// list's width (which the list tracks itself).
+type ListLayoutKey = (Pixels, Pixels, SharedString);
+
+impl MarkdownListState {
+    pub fn new() -> Self {
+        Self(Rc::new(RefCell::new(ListSync {
+            list: ListState::new(0, ListAlignment::Top, px(1000.)),
+            blocks: Arc::default(),
+            layout_key: None,
+        })))
+    }
+
+    /// The underlying list, for scrolling and scrollbars.
+    pub fn list(&self) -> ListState {
+        self.0.borrow().list.clone()
+    }
+
+    /// Updates the list's items to a new parse. Only the blocks between the
+    /// unchanged prefix and suffix lose their measured height.
+    fn sync(&self, blocks: &Arc<[RenderBlock]>, layout_key: ListLayoutKey) -> ListState {
+        let this = &mut *self.0.borrow_mut();
+        if this.layout_key.as_ref() != Some(&layout_key) {
+            if this.layout_key.is_some() {
+                this.list.remeasure();
+            }
+            this.layout_key = Some(layout_key);
+        }
+        if !Arc::ptr_eq(&this.blocks, blocks) {
+            let old = &this.blocks;
+            let unchanged = |(old, new): &(&RenderBlock, &RenderBlock)| old.hash == new.hash;
+            let prefix = old.iter().zip(blocks.iter()).take_while(unchanged).count();
+            let suffix = old
+                .iter()
+                .rev()
+                .zip(blocks.iter().rev())
+                .take(old.len().min(blocks.len()) - prefix)
+                .take_while(unchanged)
+                .count();
+            let old_range = prefix..old.len() - suffix;
+            let new_count = blocks.len() - prefix - suffix;
+            if old_range.len() == new_count {
+                // Keeps the scroll position within an edited block.
+                if new_count > 0 {
+                    this.list.remeasure_items(old_range);
+                }
+            } else {
+                this.list.splice(old_range, new_count);
+            }
+            this.blocks = blocks.clone();
+        }
+        this.list.clone()
+    }
+}
+
+impl Default for MarkdownListState {
+    fn default() -> Self {
+        Self::new()
+    }
 }
 
 impl MarkdownElement {
     pub fn new(markdown: Entity<Markdown>, style: MarkdownStyle) -> Self {
         Self {
-            markdown,
-            style,
-            show_code_block_copy_button: true,
-            render_code_block: None,
+            renderer: Rc::new(BlockRenderer {
+                markdown,
+                style,
+                show_code_block_copy_button: true,
+                render_code_block: None,
+                on_url_click: None,
+                on_checkbox_toggle: None,
+                image_resolver: None,
+                show_root_block_markers: false,
+            }),
             input_focus_handle: None,
-            on_url_click: None,
             on_url_hover: None,
             on_source_click: None,
-            on_checkbox_toggle: None,
-            image_resolver: None,
-            show_root_block_markers: false,
             autoscroll: AutoscrollBehavior::Propagate,
+            list_state: None,
         }
     }
 
+    fn renderer_mut(&mut self) -> &mut BlockRenderer {
+        Rc::get_mut(&mut self.renderer).expect("MarkdownElement is configured before layout")
+    }
+
     pub fn hide_code_block_copy_button(mut self) -> Self {
-        self.show_code_block_copy_button = false;
+        self.renderer_mut().show_code_block_copy_button = false;
         self
     }
 
@@ -59,7 +156,7 @@ impl MarkdownElement {
         render: impl Fn(&CodeBlock, &MarkdownStyle, &mut Window, &mut App) -> Option<AnyElement>
         + 'static,
     ) -> Self {
-        self.render_code_block = Some(Rc::new(render));
+        self.renderer_mut().render_code_block = Some(Rc::new(render));
         self
     }
 
@@ -72,7 +169,7 @@ impl MarkdownElement {
         mut self,
         handler: impl Fn(SharedString, &mut Window, &mut App) + 'static,
     ) -> Self {
-        self.on_url_click = Some(Rc::new(handler));
+        self.renderer_mut().on_url_click = Some(Rc::new(handler));
         self
     }
 
@@ -96,7 +193,7 @@ impl MarkdownElement {
         mut self,
         handler: impl Fn(Range<usize>, bool, &mut Window, &mut App) + 'static,
     ) -> Self {
-        self.on_checkbox_toggle = Some(Rc::new(handler));
+        self.renderer_mut().on_checkbox_toggle = Some(Rc::new(handler));
         self
     }
 
@@ -104,12 +201,12 @@ impl MarkdownElement {
         mut self,
         resolver: impl Fn(&str, &App) -> Option<ImageSource> + 'static,
     ) -> Self {
-        self.image_resolver = Some(Box::new(resolver));
+        self.renderer_mut().image_resolver = Some(Box::new(resolver));
         self
     }
 
     pub fn show_root_block_markers(mut self) -> Self {
-        self.show_root_block_markers = true;
+        self.renderer_mut().show_root_block_markers = true;
         self
     }
 
@@ -118,6 +215,18 @@ impl MarkdownElement {
         self
     }
 
+    /// Makes the element a scroll container that lays out only the visible
+    /// top-level blocks, so a frame's cost doesn't grow with the document.
+    /// The container style applies to each block, except its vertical
+    /// padding, which pads the list. Copying a selection then takes its text
+    /// from the parse, since off-screen blocks have no rendered text.
+    pub fn virtualized(mut self, list_state: MarkdownListState) -> Self {
+        self.list_state = Some(list_state);
+        self
+    }
+}
+
+impl BlockRenderer {
     fn push_markdown_code_span(
         &self,
         builder: &mut MarkdownElementBuilder,
@@ -220,7 +329,7 @@ impl MarkdownElement {
         markdown_end: usize,
         text_align_override: Option<TextAlign>,
     ) {
-        let align = text_align_override.unwrap_or(self.style.base_text_style.text_align);
+        let align = text_align_override.unwrap_or(builder.text_style().text_align);
         let mut paragraph = div().when(!self.style.height_is_multiple_of_line_height, |el| {
             el.mb(self.style.paragraph_spacing)
                 .line_height(self.style.paragraph_line_height)
@@ -252,7 +361,7 @@ impl MarkdownElement {
         markdown_end: usize,
         text_align_override: Option<TextAlign>,
     ) {
-        let align = text_align_override.unwrap_or(self.style.base_text_style.text_align);
+        let align = text_align_override.unwrap_or(builder.text_style().text_align);
         let mut heading = div().mt_4().mb_2();
         heading = apply_heading_style(
             heading,
@@ -481,16 +590,21 @@ impl MarkdownElement {
         builder.pop_div();
         builder.pop_div();
     }
+}
 
-    fn paint_mouse_listeners(
-        &mut self,
+impl BlockRenderer {
+    /// Sets the cursor for the text under the mouse, and returns whether it is
+    /// over something clickable. Called before the children paint, so their
+    /// cursors take precedence.
+    fn paint_cursor_style(
+        &self,
         hitbox: &Hitbox,
         rendered_text: &RenderedText,
         window: &mut Window,
         cx: &mut App,
-    ) {
+    ) -> bool {
         if self.style.prevent_mouse_interaction {
-            return;
+            return false;
         }
 
         let is_hovering_clickable = hitbox.is_hovered(window)
@@ -513,10 +627,31 @@ impl MarkdownElement {
         } else {
             window.set_cursor_style(CursorStyle::IBeam, hitbox);
         }
+        is_hovering_clickable
+    }
+}
 
-        let on_open_url = self.on_url_click.take();
+impl MarkdownElement {
+    /// Registered before the children paint, so their handlers run first in
+    /// the bubble phase. `rendered_text` and `was_hovering_clickable` are
+    /// read when an event arrives, since a virtualized element only knows its
+    /// text once its blocks have painted.
+    fn paint_mouse_listeners(
+        &mut self,
+        hitbox: &Hitbox,
+        rendered_text: &Rc<RefCell<RenderedText>>,
+        was_hovering_clickable: &Rc<Cell<bool>>,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        if self.renderer.style.prevent_mouse_interaction {
+            return;
+        }
+
+        let on_open_url = self.renderer.on_url_click.clone();
         let on_url_hover = self.on_url_hover.take();
         let on_source_click = self.on_source_click.take();
+        let text_covers_document = self.list_state.is_none();
 
         self.on_mouse_event(window, cx, {
             let hitbox = hitbox.clone();
@@ -526,12 +661,16 @@ impl MarkdownElement {
                     && event.button == MouseButton::Right
                     && hitbox.is_hovered(window)
                 {
+                    let rendered_text = rendered_text.borrow().clone();
                     let link = rendered_text
                         .source_index_for_position(event.position)
                         .ok()
                         .and_then(|ix| rendered_text.link_for_source_index(ix))
                         .map(|link| link.destination_url.clone());
-                    markdown.capture_for_context_menu(link, Some(&rendered_text));
+                    markdown.capture_for_context_menu(
+                        link,
+                        text_covers_document.then_some(&rendered_text),
+                    );
                 }
             }
         });
@@ -540,6 +679,7 @@ impl MarkdownElement {
             let rendered_text = rendered_text.clone();
             let hitbox = hitbox.clone();
             move |markdown, event: &MouseDownEvent, phase, window, cx| {
+                let rendered_text = rendered_text.borrow().clone();
                 if hitbox.is_hovered(window) {
                     if phase.bubble() && event.button != MouseButton::Right {
                         let position_result =
@@ -597,11 +737,7 @@ impl MarkdownElement {
                                     (range.clone(), SelectMode::Line(range), false)
                                 }
                                 _ => {
-                                    let range = 0..rendered_text
-                                        .lines
-                                        .last()
-                                        .map(|line| line.source_end)
-                                        .unwrap_or(0);
+                                    let range = 0..rendered_text.select_all_end();
                                     (range, SelectMode::All, false)
                                 }
                             };
@@ -628,11 +764,12 @@ impl MarkdownElement {
         self.on_mouse_event(window, cx, {
             let rendered_text = rendered_text.clone();
             let hitbox = hitbox.clone();
-            let was_hovering_clickable = is_hovering_clickable;
+            let was_hovering_clickable = was_hovering_clickable.clone();
             move |markdown, event: &MouseMoveEvent, phase, window, cx| {
                 if phase.capture() {
                     return;
                 }
+                let rendered_text = rendered_text.borrow().clone();
 
                 if markdown.selection.pending {
                     let source_index = match rendered_text.source_index_for_position(event.position)
@@ -668,7 +805,7 @@ impl MarkdownElement {
                     if let Some(on_url_hover) = on_url_hover.as_ref() {
                         on_url_hover(hovered_url, window, cx);
                     }
-                    if is_hovering_clickable != was_hovering_clickable {
+                    if is_hovering_clickable != was_hovering_clickable.get() {
                         cx.notify();
                     }
                 }
@@ -677,6 +814,7 @@ impl MarkdownElement {
         self.on_mouse_event(window, cx, {
             let rendered_text = rendered_text.clone();
             move |markdown, event: &MouseUpEvent, phase, window, cx| {
+                let rendered_text = rendered_text.borrow().clone();
                 if phase.bubble() {
                     let source_index = rendered_text.source_index_for_position(event.position).ok();
                     if let Some(pressed_footnote_ref) = markdown.pressed_footnote_ref.take()
@@ -716,12 +854,14 @@ impl MarkdownElement {
         cx: &mut App,
     ) -> Option<()> {
         let autoscroll_index = self
+            .renderer
             .markdown
             .update(cx, |markdown, _| markdown.autoscroll_request.take())?;
-        let (position, line_height) = rendered_text.position_for_source_index(autoscroll_index)?;
 
         match &self.autoscroll {
             AutoscrollBehavior::Controlled(scroll_handle) => {
+                let (position, line_height) =
+                    rendered_text.position_for_source_index(autoscroll_index)?;
                 let viewport = scroll_handle.bounds();
                 let margin = line_height * 3.;
                 let top_goal = viewport.top() + margin;
@@ -742,14 +882,12 @@ impl MarkdownElement {
                 ));
             }
             AutoscrollBehavior::Propagate => {
-                let text_style = self.style.base_text_style.clone();
-                let font_id = window.text_system().resolve_font(&text_style.font());
-                let font_size = text_style.font_size.to_pixels(window.rem_size());
-                let em_width = window.text_system().em_width(font_id, font_size).unwrap();
-                window.request_autoscroll(Bounds::from_corners(
-                    point(position.x - 3. * em_width, position.y - 3. * line_height),
-                    point(position.x + 3. * em_width, position.y + 3. * line_height),
-                ));
+                request_autoscroll(
+                    rendered_text,
+                    autoscroll_index,
+                    &self.renderer.style,
+                    window,
+                )?;
             }
         }
         Some(())
@@ -763,7 +901,7 @@ impl MarkdownElement {
         + FnMut(&mut Markdown, &T, DispatchPhase, &mut Window, &mut Context<Markdown>),
     ) {
         window.on_mouse_event({
-            let markdown = self.markdown.downgrade();
+            let markdown = self.renderer.markdown.downgrade();
             move |event, phase, window, cx| {
                 markdown
                     .update(cx, |markdown, cx| f(markdown, event, phase, window, cx))
@@ -773,14 +911,52 @@ impl MarkdownElement {
     }
 }
 
+/// Asks the nearest scrollable ancestor to reveal `source_index`, with a few
+/// lines and characters of margin.
+fn request_autoscroll(
+    rendered_text: &RenderedText,
+    source_index: usize,
+    style: &MarkdownStyle,
+    window: &mut Window,
+) -> Option<()> {
+    let (position, line_height) = rendered_text.position_for_source_index(source_index)?;
+    let text_style = &style.base_text_style;
+    let font_id = window.text_system().resolve_font(&text_style.font());
+    let font_size = text_style.font_size.to_pixels(window.rem_size());
+    let em_width = window.text_system().em_width(font_id, font_size).ok()?;
+    window.request_autoscroll(Bounds::from_corners(
+        point(position.x - 3. * em_width, position.y - 3. * line_height),
+        point(position.x + 3. * em_width, position.y + 3. * line_height),
+    ));
+    Some(())
+}
+
 impl Styled for MarkdownElement {
     fn style(&mut self) -> &mut StyleRefinement {
-        &mut self.style.container_style
+        &mut self.renderer_mut().style.container_style
     }
 }
 
-impl Element for MarkdownElement {
-    type RequestLayoutState = RenderedMarkdown;
+/// One top-level block of a virtualized [`MarkdownElement`]: an item of its
+/// list.
+struct MarkdownBlock {
+    element: AnyElement,
+    text: RenderedText,
+    block_index: usize,
+    renderer: Rc<BlockRenderer>,
+    painted: Rc<PaintedBlocks>,
+}
+
+/// What the visible blocks of a virtualized element report as they paint.
+#[derive(Default)]
+struct PaintedBlocks {
+    /// The texts of the blocks painted this frame, in order.
+    texts: RefCell<Vec<RenderedText>>,
+    hovering_clickable: Cell<bool>,
+}
+
+impl Element for MarkdownBlock {
+    type RequestLayoutState = ();
     type PrepaintState = Hitbox;
 
     fn id(&self) -> Option<ElementId> {
@@ -797,6 +973,78 @@ impl Element for MarkdownElement {
         window: &mut Window,
         cx: &mut App,
     ) -> (gpui::LayoutId, Self::RequestLayoutState) {
+        (self.element.request_layout(window, cx), ())
+    }
+
+    fn prepaint(
+        &mut self,
+        _id: Option<&GlobalElementId>,
+        bounds: Bounds<Pixels>,
+        _: &mut Self::RequestLayoutState,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> Hitbox {
+        let hitbox = window.insert_hitbox(bounds, HitboxBehavior::Normal);
+        self.element.prepaint(window, cx);
+        // The list scrolls to reveal what its items request while they prepaint.
+        let autoscroll_index = self.renderer.markdown.update(cx, |markdown, _| {
+            let index = markdown.autoscroll_request?;
+            let block_index = markdown.parsed_markdown.block_for_source_index(index)?;
+            (block_index == self.block_index).then(|| markdown.autoscroll_request.take())?
+        });
+        if let Some(index) = autoscroll_index {
+            request_autoscroll(&self.text, index, &self.renderer.style, window);
+        }
+        hitbox
+    }
+
+    fn paint(
+        &mut self,
+        _id: Option<&GlobalElementId>,
+        _bounds: Bounds<Pixels>,
+        _: &mut Self::RequestLayoutState,
+        hitbox: &mut Hitbox,
+        window: &mut Window,
+        cx: &mut App,
+    ) {
+        if self
+            .renderer
+            .paint_cursor_style(hitbox, &self.text, window, cx)
+        {
+            self.painted.hovering_clickable.set(true);
+        }
+        self.element.paint(window, cx);
+        self.painted.texts.borrow_mut().push(self.text.clone());
+    }
+}
+
+impl IntoElement for MarkdownBlock {
+    type Element = Self;
+
+    fn into_element(self) -> Self::Element {
+        self
+    }
+}
+
+pub struct MarkdownLayout {
+    element: AnyElement,
+    /// For a virtualized element, filled in once the visible blocks painted.
+    text: Rc<RefCell<RenderedText>>,
+    painted: Option<Rc<PaintedBlocks>>,
+}
+
+impl BlockRenderer {
+    /// Renders the events in `events`, which must open and close the same
+    /// containers.
+    fn render(
+        &self,
+        frame: &RenderFrame,
+        events: Range<usize>,
+        footnote_separator_rendered: bool,
+        container_style: &StyleRefinement,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> RenderedMarkdown {
         let highlights = {
             let markdown = self.markdown.read(cx);
             let colors = cx.theme().colors();
@@ -818,16 +1066,11 @@ impl Element for MarkdownElement {
             }
         };
 
-        let (parsed_markdown, images, active_root_block) = {
-            let markdown = self.markdown.read(cx);
-            (
-                markdown.parsed_markdown.clone(),
-                markdown.images_by_source_offset.clone(),
-                markdown.active_root_block,
-            )
-        };
+        let parsed_markdown = &frame.parsed;
+        let images = &frame.images;
+        let active_root_block = frame.active_root_block;
         let mut builder = MarkdownElementBuilder::new(
-            &self.style.container_style,
+            container_style,
             self.style.base_text_style.clone(),
             self.style.syntax.clone(),
             highlights,
@@ -837,28 +1080,25 @@ impl Element for MarkdownElement {
         } else {
             0
         };
-        let mut code_block_ids = HashSet::default();
+        builder.rendered_footnote_separator = footnote_separator_rendered;
         let mut current_code_block_text = None;
 
         let mut current_img_block_range: Option<Range<usize>> = None;
-        let mut handled_html_block = false;
         let mut rendered_custom_code_block = false;
         let mut rendered_metadata_block = false;
-        for (index, (range, event)) in parsed_markdown.events.iter().enumerate() {
+        for (index, (range, event)) in parsed_markdown
+            .events
+            .iter()
+            .enumerate()
+            .take(events.end)
+            .skip(events.start)
+        {
             let event_index = MarkdownEventIndex(index);
             // Skip alt text for images that rendered
             if let Some(current_img_block_range) = &current_img_block_range
                 && current_img_block_range.end > range.end
             {
                 continue;
-            }
-
-            if handled_html_block {
-                if let MarkdownEvent::End(MarkdownTagEnd::HtmlBlock) = event {
-                    handled_html_block = false;
-                } else {
-                    continue;
-                }
             }
 
             if rendered_custom_code_block {
@@ -892,7 +1132,12 @@ impl Element for MarkdownElement {
                 }
                 MarkdownEvent::Start(tag) => {
                     match tag {
-                        MarkdownTag::Image { dest_url, .. } => {
+                        MarkdownTag::Image {
+                            dest_url,
+                            width,
+                            height,
+                            ..
+                        } => {
                             let alt_text = collect_image_alt_text(
                                 &parsed_markdown.events[index..],
                                 &parsed_markdown.source,
@@ -905,8 +1150,8 @@ impl Element for MarkdownElement {
                                     image.clone().into(),
                                     dest_url.clone(),
                                     alt_text,
-                                    None,
-                                    None,
+                                    *width,
+                                    *height,
                                 );
                             } else if let Some(source) = self
                                 .image_resolver
@@ -920,8 +1165,8 @@ impl Element for MarkdownElement {
                                     source,
                                     dest_url.clone(),
                                     alt_text,
-                                    None,
-                                    None,
+                                    *width,
+                                    *height,
                                 );
                             }
                         }
@@ -980,7 +1225,6 @@ impl Element for MarkdownElement {
                             let language = parsed_markdown.code_block_language(kind);
 
                             let scroll_handle = if self.style.code_block_overflow_x_scroll {
-                                code_block_ids.insert(range.start);
                                 Some(self.markdown.update(cx, |markdown, _| {
                                     markdown.code_block_scroll_handle(range.start)
                                 }))
@@ -1043,12 +1287,12 @@ impl Element for MarkdownElement {
                             builder.push_code_block(language);
                             builder.push_div(code_block, range, markdown_end);
                         }
-                        MarkdownTag::HtmlBlock => {
+                        MarkdownTag::HtmlBlock { align } => {
+                            builder.push_text_style(TextStyleRefinement {
+                                text_align: *align,
+                                ..Default::default()
+                            });
                             builder.push_div(div(), range, markdown_end);
-                            if let Some(block) = parsed_markdown.html_blocks.get(&range.start) {
-                                self.render_html_block(block, &mut builder, markdown_end, cx);
-                                handled_html_block = true;
-                            }
                         }
                         MarkdownTag::List(bullet_index) => {
                             builder.push_list(*bullet_index);
@@ -1315,7 +1559,10 @@ impl Element for MarkdownElement {
                         // Pop the parent container.
                         builder.pop_div();
                     }
-                    MarkdownTagEnd::HtmlBlock => builder.pop_div(),
+                    MarkdownTagEnd::HtmlBlock => {
+                        builder.pop_div();
+                        builder.pop_text_style();
+                    }
                     MarkdownTagEnd::List(_) => {
                         builder.pop_list();
                         builder.pop_div();
@@ -1427,6 +1674,21 @@ impl Element for MarkdownElement {
                     }
                     builder.push_text(&parsed_markdown.source[range.clone()], range.clone());
                 }
+                MarkdownEvent::StartHtmlStyle(style) => builder.push_text_style(match style {
+                    HtmlStyle::Underline => TextStyleRefinement {
+                        underline: Some(UnderlineStyle {
+                            thickness: px(1.),
+                            ..Default::default()
+                        }),
+                        ..Default::default()
+                    },
+                    HtmlStyle::Mark => TextStyleRefinement {
+                        background_color: Some(cx.theme().colors().search_match_background),
+                        ..Default::default()
+                    },
+                    HtmlStyle::Code => self.style.inline_code.clone(),
+                }),
+                MarkdownEvent::EndHtmlStyle => builder.pop_text_style(),
                 MarkdownEvent::Rule => {
                     builder.push_div(
                         div()
@@ -1455,36 +1717,154 @@ impl Element for MarkdownElement {
                 }
             }
         }
-        if self.style.code_block_overflow_x_scroll {
-            let code_block_ids = code_block_ids;
-            self.markdown.update(cx, move |markdown, _| {
-                markdown.retain_code_block_scroll_handles(&code_block_ids);
-            });
-        } else {
-            self.markdown
-                .update(cx, |markdown, _| markdown.clear_code_block_scroll_handles());
-        }
-        let mut rendered_markdown = builder.build();
-        let child_layout_id = rendered_markdown.element.request_layout(window, cx);
-        let layout_id = window.request_layout(gpui::Style::default(), [child_layout_id], cx);
-        (layout_id, rendered_markdown)
+        builder.build()
+    }
+}
+
+impl Element for MarkdownElement {
+    type RequestLayoutState = MarkdownLayout;
+    type PrepaintState = Hitbox;
+
+    fn id(&self) -> Option<ElementId> {
+        None
+    }
+
+    fn source_location(&self) -> Option<&'static core::panic::Location<'static>> {
+        None
+    }
+
+    fn request_layout(
+        &mut self,
+        _id: Option<&GlobalElementId>,
+        window: &mut Window,
+        cx: &mut App,
+    ) -> (gpui::LayoutId, Self::RequestLayoutState) {
+        let frame = {
+            let markdown = self.renderer.markdown.read(cx);
+            RenderFrame {
+                parsed: markdown.parsed_markdown.clone(),
+                images: markdown.images_by_source_offset.clone(),
+                active_root_block: markdown.active_root_block,
+            }
+        };
+
+        let Some(list_state) = &self.list_state else {
+            let rendered = self.renderer.render(
+                &frame,
+                0..frame.parsed.events.len(),
+                false,
+                &self.renderer.style.container_style,
+                window,
+                cx,
+            );
+            let mut element = rendered.element;
+            let child_layout_id = element.request_layout(window, cx);
+            let layout_id = window.request_layout(gpui::Style::default(), [child_layout_id], cx);
+            return (
+                layout_id,
+                MarkdownLayout {
+                    element,
+                    text: Rc::new(RefCell::new(rendered.text)),
+                    painted: None,
+                },
+            );
+        };
+
+        let text_style = &self.renderer.style.base_text_style;
+        let list_state = list_state.sync(
+            &frame.parsed.blocks,
+            (
+                window.rem_size(),
+                text_style.font_size.to_pixels(window.rem_size()),
+                text_style.font_family.clone(),
+            ),
+        );
+        let mut block_container_style = self.renderer.style.container_style.clone();
+        let vertical_padding = (
+            block_container_style.padding.top.take(),
+            block_container_style.padding.bottom.take(),
+        );
+        let painted = Rc::new(PaintedBlocks::default());
+        let mut element = list(list_state, {
+            let renderer = self.renderer.clone();
+            let painted = painted.clone();
+            move |block_index, window, cx| {
+                let Some(block) = frame.parsed.blocks.get(block_index) else {
+                    return Empty.into_any_element();
+                };
+                let rendered = renderer.render(
+                    &frame,
+                    block.events.clone(),
+                    block.after_footnote_definition,
+                    &block_container_style,
+                    window,
+                    cx,
+                );
+                MarkdownBlock {
+                    element: div().w_full().child(rendered.element).into_any_element(),
+                    text: rendered.text,
+                    block_index,
+                    renderer: renderer.clone(),
+                    painted: painted.clone(),
+                }
+                .into_any_element()
+            }
+        })
+        .with_sizing_behavior(ListSizingBehavior::Auto)
+        .size_full();
+        element.style().padding.top = vertical_padding.0;
+        element.style().padding.bottom = vertical_padding.1;
+        let mut element = element.into_any_element();
+        let layout_id = element.request_layout(window, cx);
+        (
+            layout_id,
+            MarkdownLayout {
+                element,
+                text: Rc::default(),
+                painted: Some(painted),
+            },
+        )
     }
 
     fn prepaint(
         &mut self,
         _id: Option<&GlobalElementId>,
         bounds: Bounds<Pixels>,
-        rendered_markdown: &mut Self::RequestLayoutState,
+        layout: &mut Self::RequestLayoutState,
         window: &mut Window,
         cx: &mut App,
     ) -> Self::PrepaintState {
-        let focus_handle = self.markdown.read(cx).focus_handle.clone();
+        let markdown = self.renderer.markdown.clone();
+        let focus_handle = markdown.read(cx).focus_handle.clone();
         window.set_focus_handle(&focus_handle, cx);
-        window.set_view_id(self.markdown.entity_id());
+        window.set_view_id(markdown.entity_id());
 
         let hitbox = window.insert_hitbox(bounds, HitboxBehavior::Normal);
-        rendered_markdown.element.prepaint(window, cx);
-        self.autoscroll(&rendered_markdown.text, window, cx);
+        let Some(list_state) = &self.list_state else {
+            layout.element.prepaint(window, cx);
+            self.autoscroll(&layout.text.borrow(), window, cx);
+            return hitbox;
+        };
+
+        // Bring the block holding the autoscroll target into view; the block
+        // then requests the exact position as it prepaints.
+        let target_block = {
+            let markdown = markdown.read(cx);
+            markdown
+                .autoscroll_request
+                .and_then(|index| markdown.parsed_markdown.block_for_source_index(index))
+        };
+        if let Some(block_index) = target_block {
+            let list = list_state.list();
+            if list.item_is_above_viewport(block_index) != Some(false)
+                || list.item_is_below_viewport(block_index) != Some(false)
+            {
+                list.scroll_to_reveal_item(block_index);
+            }
+        }
+        layout.element.prepaint(window, cx);
+        // A target its block couldn't place (it has no text) is dropped.
+        markdown.update(cx, |markdown, _| markdown.autoscroll_request = None);
         hitbox
     }
 
@@ -1492,7 +1872,7 @@ impl Element for MarkdownElement {
         &mut self,
         _id: Option<&GlobalElementId>,
         _bounds: Bounds<Pixels>,
-        rendered_markdown: &mut Self::RequestLayoutState,
+        layout: &mut Self::RequestLayoutState,
         hitbox: &mut Self::PrepaintState,
         window: &mut Window,
         cx: &mut App,
@@ -1501,7 +1881,31 @@ impl Element for MarkdownElement {
         context.add("Markdown");
         window.set_key_context(context);
 
-        let markdown_focus_handle = self.markdown.read(cx).focus_handle.clone();
+        let was_hovering_clickable = Rc::new(Cell::new(false));
+        self.paint_mouse_listeners(hitbox, &layout.text, &was_hovering_clickable, window, cx);
+        if let Some(painted) = &layout.painted {
+            // Blocks set the cursor over their own text as they paint.
+            if !self.renderer.style.prevent_mouse_interaction {
+                window.set_cursor_style(CursorStyle::IBeam, hitbox);
+            }
+            layout.element.paint(window, cx);
+            let document_end = self.renderer.markdown.read(cx).parsed_markdown.source.len();
+            *layout.text.borrow_mut() = RenderedText::concat(painted.texts.take(), document_end);
+            was_hovering_clickable.set(painted.hovering_clickable.get());
+        } else {
+            let rendered_text = layout.text.borrow().clone();
+            was_hovering_clickable.set(self.renderer.paint_cursor_style(
+                hitbox,
+                &rendered_text,
+                window,
+                cx,
+            ));
+            layout.element.paint(window, cx);
+        }
+        let rendered_text = layout.text.borrow().clone();
+
+        let markdown = self.renderer.markdown.clone();
+        let markdown_focus_handle = markdown.read(cx).focus_handle.clone();
         let input_focus_handle = if markdown_focus_handle.is_focused(window) {
             Some(markdown_focus_handle)
         } else {
@@ -1512,32 +1916,28 @@ impl Element for MarkdownElement {
         if let Some(input_focus_handle) = input_focus_handle {
             window.handle_input(
                 &input_focus_handle,
-                MarkdownInputHandler::new(self.markdown.clone(), rendered_markdown.text.clone()),
+                MarkdownInputHandler::new(markdown.clone(), rendered_text.clone()),
                 cx,
             );
         }
 
         window.on_action(std::any::TypeId::of::<crate::Copy>(), {
-            let entity = self.markdown.clone();
-            let text = rendered_markdown.text.clone();
+            let entity = markdown.clone();
+            let text = self.list_state.is_none().then_some(rendered_text);
             move |_, phase, window, cx| {
-                let text = text.clone();
                 if phase == DispatchPhase::Bubble {
-                    entity.update(cx, move |this, cx| this.copy(&text, window, cx))
+                    entity.update(cx, |this, cx| this.copy(text.as_ref(), window, cx))
                 }
             }
         });
         window.on_action(std::any::TypeId::of::<crate::CopyAsMarkdown>(), {
-            let entity = self.markdown.clone();
+            let entity = markdown;
             move |_, phase, window, cx| {
                 if phase == DispatchPhase::Bubble {
                     entity.update(cx, move |this, cx| this.copy_as_markdown(window, cx))
                 }
             }
         });
-
-        self.paint_mouse_listeners(hitbox, &rendered_markdown.text, window, cx);
-        rendered_markdown.element.paint(window, cx);
     }
 }
 
@@ -1550,6 +1950,7 @@ pub(crate) fn collect_image_alt_text(
         match event {
             MarkdownEvent::End(MarkdownTagEnd::Image) => break,
             MarkdownEvent::Text => alt_text.push_str(&source[range.clone()]),
+            MarkdownEvent::SubstitutedText(text) => alt_text.push_str(text),
             _ => {}
         }
     }
@@ -1903,5 +2304,34 @@ impl InputHandler for MarkdownInputHandler {
 
     fn accepts_text_input(&mut self, _: &mut Window, _: &mut App) -> bool {
         false
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn blocks(hashes: &[u64]) -> Arc<[RenderBlock]> {
+        hashes
+            .iter()
+            .map(|&hash| RenderBlock {
+                events: 0..0,
+                source_range: 0..0,
+                hash,
+                after_footnote_definition: false,
+            })
+            .collect()
+    }
+
+    #[test]
+    fn list_follows_block_changes() {
+        let state = MarkdownListState::new();
+        let key = (px(16.), px(16.), SharedString::default());
+        let count = |hashes| state.sync(&blocks(hashes), key.clone()).item_count();
+        assert_eq!(count(&[1, 2, 3]), 3);
+        assert_eq!(count(&[1, 4, 5, 3]), 4);
+        assert_eq!(count(&[1, 1]), 2);
+        assert_eq!(count(&[1]), 1);
+        assert_eq!(count(&[]), 0);
     }
 }

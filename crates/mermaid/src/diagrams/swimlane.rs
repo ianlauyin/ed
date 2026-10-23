@@ -1,63 +1,41 @@
 //! Swimlane diagrams: flowcharts whose top-level subgraphs are lanes, with the same syntax and
 //! model. Port of Pele's `src/diagrams/swimlane/index.ts`.
 
-/// The JSON reader of the parity fixtures, loaded once per build.
-#[cfg(all(test, not(feature = "sankey")))]
-#[path = "../../tests/fixtures/json.rs"]
-mod fixture;
-#[cfg(all(test, feature = "sankey"))]
-use super::sankey::fixture;
-
-use super::flowchart::graph::{FlowGraph, GraphNode};
-use super::flowchart::render::{self, Variant};
+use super::Diagram;
+use super::Input;
+use super::Rendered;
+use super::flowchart::graph::FlowGraph;
+use super::flowchart::graph::GraphNode;
+use super::flowchart::render::Variant;
+use super::flowchart::render::{self};
 use super::flowchart::types::LabelType;
-use super::{Diagram, Input, Rendered};
 use crate::error::Error;
-use crate::layout::compound::{CEdge, CNode, CompoundResult, Dir};
-use crate::layout::lanes::{LANE_PAD, lane_layout};
+use crate::layout::compound::CEdge;
+use crate::layout::compound::CNode;
+use crate::layout::compound::CompoundResult;
+use crate::layout::compound::Dir;
+use crate::layout::lanes::LANE_PAD;
+use crate::layout::lanes::lane_layout;
 use crate::layout::layered::LayeredOptions;
-use crate::svg::builder::{label_svg, push_num};
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
 use crate::svg::root::RenderOptions;
 use crate::svg::theme::ResolvedStyle;
 use crate::text::label::Label;
 use crate::util::url::UrlOptions;
 
 /// The `swimlane` diagram type.
-pub(crate) const DIAGRAM: Diagram = Diagram {
-    keep_comments: false,
-    render: render_input,
-    section: None,
-};
+pub(crate) const DIAGRAM: Diagram = Diagram { keep_comments: false, render: render_input, section: None };
 
 /// The lane that holds nodes outside every lane.
 const DEFAULT_LANE: &str = "__swimlane_default__";
 
 /// The flowchart variant that draws lanes.
-const VARIANT: Variant = Variant {
-    draw_group: Some(draw_lane),
-    layout,
-    prepare,
-    r#type: "swimlane",
-};
+const VARIANT: Variant = Variant { draw_group: Some(draw_lane), layout, prepare, r#type: "swimlane" };
 
-fn render_input(
-    input: &Input<'_>,
-    options: &RenderOptions,
-    url: &UrlOptions<'_>,
-) -> Result<Rendered, Error> {
-    let db = super::flowchart::parse(
-        input.source,
-        input.config,
-        input.title,
-        Some(input.max_edges),
-    )?;
-    Ok(render::render(
-        &db,
-        input.config,
-        options,
-        url,
-        Some(&VARIANT),
-    ))
+fn render_input(input: &Input<'_>, options: &RenderOptions, url: &UrlOptions<'_>) -> Result<Rendered, Error> {
+    let db = super::flowchart::parse(input.source, input.config, input.title, Some(input.max_edges))?;
+    Ok(render::render(&db, input.config, options, url, Some(&VARIANT)))
 }
 
 /// Nodes outside every lane share one unnamed lane, as in Mermaid. Lanes all run the same way, so
@@ -103,39 +81,16 @@ fn prepare(graph: &mut FlowGraph) {
     });
 }
 
-fn layout(
-    nodes: &mut [CNode],
-    edges: &mut [CEdge],
-    dir: Dir,
-    options: &LayeredOptions,
-    tight: bool,
-) -> CompoundResult {
-    lane_layout(
-        nodes,
-        edges,
-        dir,
-        options,
-        if tight { 12.0 } else { LANE_PAD },
-    )
+fn layout(nodes: &mut [CNode], edges: &mut [CEdge], dir: Dir, options: &LayeredOptions, tight: bool) -> CompoundResult {
+    lane_layout(nodes, edges, dir, options, if tight { 12.0 } else { LANE_PAD })
 }
 
 /// A lane: an outline the length of the diagram, with its title in a band at the start.
-fn draw_lane(
-    c: &CNode,
-    label: &Label,
-    style: &ResolvedStyle,
-    classes: &str,
-    id: &str,
-    dir: Dir,
-) -> String {
+fn draw_lane(c: &CNode, label: &Label, style: &ResolvedStyle, classes: &str, id: &str, dir: Dir) -> String {
     let left = c.x - c.w / 2.0;
     let top = c.y - c.h / 2.0;
     let sideways = matches!(dir, Dir::Lr | Dir::Rl);
-    let cx = if sideways {
-        left + c.pad_top / 2.0
-    } else {
-        c.x
-    };
+    let cx = if sideways { left + c.pad_top / 2.0 } else { c.x };
     let cy = if sideways { c.y } else { top + c.pad_top / 2.0 };
     let mut attrs = String::from(" class=\"ondine-cluster-label\" fill=\"var(--_m)\"");
     attrs.push_str(&style.text);
@@ -177,72 +132,4 @@ fn draw_lane(
     }
     out.push_str("</g>");
     out
-}
-
-#[cfg(test)]
-mod tests {
-    //! Parity with Pele's `swimlane.parse`, which is the flowchart's, over every swimlane vector,
-    //! hand-written cases, and fuzzed variants, as recorded by running Pele's TypeScript.
-
-    use super::fixture::{Json, cases};
-    use crate::diagrams::flowchart::parse;
-    use crate::yaml::Value;
-
-    /// The parity fixture: Pele's parser input and its model JSON or error.
-    const FIXTURE: &str = include_str!("../../tests/fixtures/swimlane-parse.json");
-
-    #[test]
-    fn matches_pele() {
-        let mut differing = Vec::new();
-        let cases = cases(FIXTURE);
-        for case in &cases {
-            let input = case.str("input").unwrap_or_default();
-            let inherit = matches!(case.get("inheritDir"), Some(Json::Bool(true)));
-            let config = Value::Object(vec![(
-                "flowchart".to_owned(),
-                Value::Object(vec![("inheritDir".to_owned(), Value::Bool(inherit))]),
-            )]);
-            #[expect(
-                clippy::cast_possible_truncation,
-                clippy::cast_sign_loss,
-                reason = "test data"
-            )]
-            let max_edges = case.num("maxEdges").map(|n| n as usize);
-            let actual = parse(input, &config, case.str("title"), max_edges);
-            let same = match (&actual, case.get("error")) {
-                (Ok(_), None) => {
-                    #[cfg(feature = "model")]
-                    {
-                        actual
-                            .as_ref()
-                            .map(crate::diagrams::flowchart::to_json)
-                            .ok()
-                            .as_deref()
-                            == case.str("model")
-                    }
-                    #[cfg(not(feature = "model"))]
-                    {
-                        true
-                    }
-                }
-                (Err(error), Some(expected)) => {
-                    Some(error.code.as_str()) == expected.str("code")
-                        && Some(error.message.as_str()) == expected.str("message")
-                        && Some(f64::from(error.line)) == expected.num("line")
-                        && Some(f64::from(error.column)) == expected.num("column")
-                }
-                _ => false,
-            };
-            if !same {
-                differing.push((case.str("origin").unwrap_or("?"), input, actual));
-            }
-        }
-        assert!(
-            differing.is_empty(),
-            "{} of {} cases differ from Pele: {:#?}",
-            differing.len(),
-            cases.len(),
-            differing.iter().take(10).collect::<Vec<_>>()
-        );
-    }
 }

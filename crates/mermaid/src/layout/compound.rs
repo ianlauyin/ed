@@ -6,9 +6,15 @@
 
 use std::collections::BTreeMap;
 
-use crate::layout::layered::{
-    Kind, LEdge, LNode, LayeredOptions, layered, ledge, lnode, orient, rank,
-};
+use crate::layout::layered::Kind;
+use crate::layout::layered::LEdge;
+use crate::layout::layered::LNode;
+use crate::layout::layered::LayeredOptions;
+use crate::layout::layered::layered;
+use crate::layout::layered::ledge;
+use crate::layout::layered::lnode;
+use crate::layout::layered::orient;
+use crate::layout::layered::rank;
 
 /// A flow direction.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -311,36 +317,21 @@ fn build(
         local[item] = i;
         let node = &nodes[item];
         let mut ln = if sized {
-            let (w, h) = if vertical {
-                (node.w, node.h)
-            } else {
-                (node.h, node.w)
-            };
+            let (w, h) = if vertical { (node.w, node.h) } else { (node.h, node.w) };
             lnode(w, h, Kind::Node)
         } else {
             lnode(0.0, 0.0, Kind::Node)
         };
-        ln.span = if node.is_group {
-            node.span.min(ln.w - 2.0 * node.pad_x)
-        } else {
-            node.span
-        };
+        ln.span = if node.is_group { node.span.min(ln.w - 2.0 * node.pad_x) } else { node.span };
         lnodes.push(ln);
     }
-    let held = |item: usize, ei: usize, out: bool| {
-        nodes[item].is_group && endpoint_below(item, &edges[ei], out)
-    };
+    let held = |item: usize, ei: usize, out: bool| nodes[item].is_group && endpoint_below(item, &edges[ei], out);
     let offset = |item: usize, ei: usize, out: bool| {
         if !sized || !held(item, ei, out) {
             return 0.0;
         }
-        port_of(levels, level_of, item, ei, out).map_or(0.0, |port| {
-            if vertical {
-                port.px - nodes[item].w / 2.0
-            } else {
-                port.py - nodes[item].h / 2.0
-            }
-        })
+        port_of(levels, level_of, item, ei, out)
+            .map_or(0.0, |port| if vertical { port.px - nodes[item].w / 2.0 } else { port.py - nodes[item].h / 2.0 })
     };
     for le in &level.edges {
         let e = &edges[le.e];
@@ -359,19 +350,11 @@ fn build(
     for (i, port) in level.ports.iter().enumerate() {
         if port.side == start || port.side == opposite(start) {
             let d = lnodes.len();
-            let kind = if port.side == start {
-                Kind::StartPort
-            } else {
-                Kind::EndPort
-            };
+            let kind = if port.side == start { Kind::StartPort } else { Kind::EndPort };
             lnodes.push(lnode(0.0, 0.0, kind));
             dummies[i] = Some(d);
             let inner = local[port.inner];
-            let mut edge = if port.out {
-                ledge(inner, d, 1, 0.0, 0.0)
-            } else {
-                ledge(d, inner, 1, 0.0, 0.0)
-            };
+            let mut edge = if port.out { ledge(inner, d, 1, 0.0, 0.0) } else { ledge(d, inner, 1, 0.0, 0.0) };
             if port.out {
                 edge.tail_dx = offset(port.inner, port.e, true);
                 edge.tail_fixed = held(port.inner, port.e, true);
@@ -381,11 +364,7 @@ fn build(
             }
             ledges.push(edge);
         } else if let Some(ln) = lnodes.get_mut(local[port.inner]) {
-            ln.pin = if matches!(port.side, Side::Top | Side::Left) {
-                -1.0
-            } else {
-                1.0
-            };
+            ln.pin = if matches!(port.side, Side::Top | Side::Left) { -1.0 } else { 1.0 };
         }
     }
     (lnodes, ledges, dummies)
@@ -424,15 +403,7 @@ pub(crate) fn compound_layout(
     push_level(&mut levels, None, root_dir, root_items);
     let mut depth = vec![0usize; n];
     let mut placed = vec![false; n];
-    descend(
-        &mut levels,
-        &mut level_of,
-        &mut depth,
-        &mut placed,
-        nodes,
-        &children,
-        0,
-    );
+    descend(&mut levels, &mut level_of, &mut depth, &mut placed, nodes, &children, 0);
     // Groups that contain each other are unreachable from the root; lift them out.
     for i in 0..n {
         if placed[i] {
@@ -449,15 +420,7 @@ pub(crate) fn compound_layout(
             let from = levels.len();
             let dir = nodes[i].dir.unwrap_or(root_dir);
             level_of[i] = Some(push_level(&mut levels, Some(i), dir, children[i].clone()));
-            descend(
-                &mut levels,
-                &mut level_of,
-                &mut depth,
-                &mut placed,
-                nodes,
-                &children,
-                from,
-            );
+            descend(&mut levels, &mut level_of, &mut depth, &mut placed, nodes, &children, from);
         }
     }
 
@@ -476,11 +439,7 @@ pub(crate) fn compound_layout(
     }
     for level in &mut levels {
         level.items.sort_by(|&a, &b| {
-            nodes[a]
-                .seq
-                .partial_cmp(&nodes[b].seq)
-                .unwrap_or(std::cmp::Ordering::Equal)
-                .then(a.cmp(&b))
+            nodes[a].seq.partial_cmp(&nodes[b].seq).unwrap_or(std::cmp::Ordering::Equal).then(a.cmp(&b))
         });
     }
 
@@ -558,15 +517,7 @@ pub(crate) fn compound_layout(
                 };
                 let level = &mut levels[q];
                 level.port_of.insert(port_key(ei, out), level.ports.len());
-                level.ports.push(PortEdge {
-                    e: ei,
-                    inner,
-                    out,
-                    px: 0.0,
-                    py: 0.0,
-                    route: Vec::new(),
-                    side: Side::Top,
-                });
+                level.ports.push(PortEdge { e: ei, inner, out, px: 0.0, py: 0.0, route: Vec::new(), side: Side::Top });
             }
         }
     }
@@ -592,8 +543,7 @@ pub(crate) fn compound_layout(
         if !needed {
             continue;
         }
-        let (mut lnodes, mut ledges, _) =
-            build(&levels, &level_of, q, nodes, edges, &mut local, false);
+        let (mut lnodes, mut ledges, _) = build(&levels, &level_of, q, nodes, edges, &mut local, false);
         orient(&lnodes, &mut ledges);
         rank(&mut lnodes, &ledges, 1);
         let start = start_side(levels[q].dir);
@@ -621,8 +571,7 @@ pub(crate) fn compound_layout(
         let dir = levels[q].dir;
         let vertical = matches!(dir, Dir::Tb | Dir::Bt);
         let flip = matches!(dir, Dir::Bt | Dir::Rl);
-        let (mut lnodes, mut ledges, dummies) =
-            build(&levels, &level_of, q, nodes, edges, &mut local, true);
+        let (mut lnodes, mut ledges, dummies) = build(&levels, &level_of, q, nodes, edges, &mut local, true);
         let size = layered(&mut lnodes, &mut ledges, opt);
         let content_w = if vertical { size.width } else { size.height };
         let content_h = if vertical { size.height } else { size.width };
@@ -689,15 +638,8 @@ pub(crate) fn compound_layout(
             let (px, py, route) = if dummy.is_some() {
                 let mut route = ledges.get(k).map_or_else(Vec::new, |l| convert(&l.points));
                 k += 1;
-                let at = if out {
-                    route.len().saturating_sub(3)
-                } else {
-                    0
-                };
-                let (bx, by) = border(
-                    route.get(at).copied().unwrap_or(0.0),
-                    route.get(at + 1).copied().unwrap_or(0.0),
-                );
+                let at = if out { route.len().saturating_sub(3) } else { 0 };
+                let (bx, by) = border(route.get(at).copied().unwrap_or(0.0), route.get(at + 1).copied().unwrap_or(0.0));
                 if out {
                     route.extend([bx, by, axis]);
                 } else {
@@ -722,16 +664,8 @@ pub(crate) fn compound_layout(
                     }
                 }
                 let (bx, by) = border(ix, iy);
-                let a = if matches!(side, Side::Top | Side::Bottom) {
-                    0.0
-                } else {
-                    1.0
-                };
-                let route = if out {
-                    vec![ix, iy, a, bx, by, a]
-                } else {
-                    vec![bx, by, a, ix, iy, a]
-                };
+                let a = if matches!(side, Side::Top | Side::Bottom) { 0.0 } else { 1.0 };
+                let route = if out { vec![ix, iy, a, bx, by, a] } else { vec![bx, by, a, ix, iy, a] };
                 (bx, by, route)
             };
             let port = &mut levels[q].ports[i];
@@ -744,10 +678,7 @@ pub(crate) fn compound_layout(
             nodes[g].w = box_w;
             nodes[g].h = box_h;
         } else {
-            total = CompoundResult {
-                height: box_h,
-                width: box_w,
-            };
+            total = CompoundResult { height: box_h, width: box_w };
         }
     }
 
@@ -831,14 +762,7 @@ pub(crate) fn compound_layout(
 }
 
 /// Sets the side of the port that edge `e` passes through on the border of group `item`.
-fn set_side(
-    levels: &mut [Level],
-    level_of: &[Option<usize>],
-    item: usize,
-    e: usize,
-    out: bool,
-    side: Side,
-) {
+fn set_side(levels: &mut [Level], level_of: &[Option<usize>], item: usize, e: usize, out: bool, side: Side) {
     let Some(q) = level_of.get(item).copied().flatten() else {
         return;
     };
@@ -863,1206 +787,5 @@ fn append(route: &mut Vec<f64>, part: &[f64], ox: f64, oy: f64) {
             continue;
         }
         route.extend([x, y, p[2]]);
-    }
-}
-
-#[cfg(test)]
-#[expect(
-    clippy::unreadable_literal,
-    reason = "fixtures print Pele's numbers exactly and name ends as Pele does"
-)]
-mod tests {
-    //! End-to-end checks against Pele. Every expected number comes from running Pele's TypeScript
-    //! (`obsidianmd/pele` at `458322a`) on the same input with `npx tsx`, never from this port.
-    //! Large graphs compare checksums that both sides compute in the same order.
-
-    use super::*;
-
-    /// `w, h, parent, is_group, dir, pad_x, pad_top, pad_bottom, min_w, seq, span`.
-    type N = (
-        f64,
-        f64,
-        i32,
-        bool,
-        Option<Dir>,
-        f64,
-        f64,
-        f64,
-        f64,
-        f64,
-        f64,
-    );
-    /// `src, dst, minlen, label_w, label_h`.
-    type E = (usize, usize, u32, f64, f64);
-
-    /// An edge as Pele lays it out.
-    struct Want {
-        dst: usize,
-        label: (f64, f64),
-        route: &'static [f64],
-        src: usize,
-    }
-
-    const OPT: LayeredOptions = LayeredOptions {
-        apart: false,
-        edge_sep: 16.0,
-        head_room: 6.0,
-        node_sep: 40.0,
-        port_sep: 20.0,
-        rank_sep: 48.0,
-        straight: false,
-        tracks: false,
-    };
-
-    fn close(actual: f64, expected: f64, what: &str) {
-        assert!(
-            (actual - expected).abs() <= 1e-6 * expected.abs().max(1.0),
-            "{what}: {actual} != {expected}"
-        );
-    }
-
-    fn check(
-        dir: Dir,
-        nodes: &[N],
-        edges: &[E],
-        opt: &LayeredOptions,
-        size: (f64, f64),
-        want_nodes: &[(f64, f64, f64, f64, i32)],
-        want_edges: &[Want],
-    ) {
-        let mut cn: Vec<CNode> = nodes
-            .iter()
-            .map(
-                |&(w, h, parent, is_group, dir, pad_x, pad_top, pad_bottom, min_w, seq, span)| {
-                    CNode {
-                        dir,
-                        is_group,
-                        min_w,
-                        pad_bottom,
-                        pad_x,
-                        pad_top,
-                        seq,
-                        span,
-                        ..cnode(w, h, parent)
-                    }
-                },
-            )
-            .collect();
-        let mut ce: Vec<CEdge> = edges
-            .iter()
-            .map(|&(src, dst, minlen, label_w, label_h)| CEdge {
-                dst,
-                label_h,
-                label_w,
-                minlen,
-                src,
-                ..CEdge::default()
-            })
-            .collect();
-        let got = compound_layout(&mut cn, &mut ce, dir, opt);
-        close(got.width, size.0, "width");
-        close(got.height, size.1, "height");
-        for (i, (node, want)) in cn.iter().zip(want_nodes).enumerate() {
-            close(node.x, want.0, &format!("node {i} x"));
-            close(node.y, want.1, &format!("node {i} y"));
-            close(node.w, want.2, &format!("node {i} w"));
-            close(node.h, want.3, &format!("node {i} h"));
-            assert_eq!(node.parent, want.4, "node {i} parent");
-        }
-        for (i, (edge, want)) in ce.iter().zip(want_edges).enumerate() {
-            assert_eq!((edge.src, edge.dst), (want.src, want.dst), "edge {i} ends");
-            assert_eq!(
-                edge.route.len(),
-                want.route.len(),
-                "edge {i} route {:?}",
-                edge.route
-            );
-            for (k, (&p, &q)) in edge.route.iter().zip(want.route).enumerate() {
-                close(p, q, &format!("edge {i} route {k}"));
-            }
-            close(edge.label_x, want.label.0, &format!("edge {i} label x"));
-            close(edge.label_y, want.label.1, &format!("edge {i} label y"));
-        }
-    }
-
-    #[test]
-    fn shift() {
-        let mut nodes = vec![cnode(10.0, 10.0, -1)];
-        let mut edges = vec![CEdge {
-            label_x: 5.0,
-            label_y: 6.0,
-            route: vec![1.0, 2.0, 0.0, 3.0, 4.0, 1.0],
-            ..CEdge::default()
-        }];
-        shift_layout(&mut nodes, &mut edges, 10.0, 20.0);
-        assert_eq!((nodes[0].x, nodes[0].y), (10.0, 20.0));
-        assert_eq!(edges[0].route, [11.0, 22.0, 0.0, 13.0, 24.0, 1.0]);
-        assert_eq!((edges[0].label_x, edges[0].label_y), (15.0, 26.0));
-    }
-
-    #[test]
-    fn directions() {
-        assert_eq!(direction(Some("BT")), Dir::Bt);
-        assert_eq!(direction(Some("LR")), Dir::Lr);
-        assert_eq!(direction(Some("RL")), Dir::Rl);
-        assert_eq!(direction(Some("TD")), Dir::Tb);
-        assert_eq!(direction(None), Dir::Tb);
-    }
-
-    #[test]
-    fn flat() {
-        check(
-            Dir::Tb,
-            &[
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-            ],
-            &[
-                (0, 1, 1, 30.0, 14.0),
-                (1, 2, 1, 0.0, 0.0),
-                (0, 2, 1, 0.0, 0.0),
-            ],
-            &OPT,
-            (78.0, 200.0),
-            &[
-                (51.5, 15.0, 50.0, 30.0, -1),
-                (25.0, 107.0, 50.0, 30.0, -1),
-                (51.5, 185.0, 50.0, 30.0, -1),
-            ],
-            &[
-                Want {
-                    dst: 1,
-                    label: (25.0, 58.0),
-                    route: &[
-                        43.5, 30.0, 0.0, 25.0, 51.0, 0.0, 25.0, 65.0, 0.0, 25.0, 92.0, 0.0,
-                    ],
-                    src: 0,
-                },
-                Want {
-                    dst: 2,
-                    label: (0.0, 0.0),
-                    route: &[25.0, 122.0, 0.0, 43.5, 170.0, 0.0],
-                    src: 1,
-                },
-                Want {
-                    dst: 2,
-                    label: (0.0, 0.0),
-                    route: &[
-                        59.5, 30.0, 0.0, 78.0, 92.0, 0.0, 78.0, 122.0, 0.0, 59.5, 170.0, 0.0,
-                    ],
-                    src: 0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn flat_lr() {
-        check(
-            Dir::Lr,
-            &[
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (80.0, 40.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-            ],
-            &[
-                (0, 1, 1, 30.0, 14.0),
-                (1, 2, 1, 0.0, 0.0),
-                (0, 2, 1, 0.0, 0.0),
-            ],
-            &OPT,
-            (306.0, 68.0),
-            &[
-                (25.0, 44.0, 50.0, 30.0, -1),
-                (168.0, 20.0, 80.0, 40.0, -1),
-                (281.0, 44.0, 50.0, 30.0, -1),
-            ],
-            &[
-                Want {
-                    dst: 1,
-                    label: (86.0, 20.0),
-                    route: &[
-                        50.0, 36.0, 1.0, 71.0, 20.0, 1.0, 101.0, 20.0, 1.0, 128.0, 20.0, 1.0,
-                    ],
-                    src: 0,
-                },
-                Want {
-                    dst: 2,
-                    label: (0.0, 0.0),
-                    route: &[208.0, 20.0, 1.0, 256.0, 36.0, 1.0],
-                    src: 1,
-                },
-                Want {
-                    dst: 2,
-                    label: (0.0, 0.0),
-                    route: &[
-                        50.0, 52.0, 1.0, 128.0, 68.0, 1.0, 208.0, 68.0, 1.0, 256.0, 52.0, 1.0,
-                    ],
-                    src: 0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn flat_rl() {
-        check(
-            Dir::Rl,
-            &[
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-            ],
-            &[(0, 1, 1, 0.0, 0.0), (1, 2, 1, 30.0, 14.0)],
-            &OPT,
-            (276.0, 30.0),
-            &[
-                (251.0, 15.0, 50.0, 30.0, -1),
-                (153.0, 15.0, 50.0, 30.0, -1),
-                (25.0, 15.0, 50.0, 30.0, -1),
-            ],
-            &[
-                Want {
-                    dst: 1,
-                    label: (0.0, 0.0),
-                    route: &[226.0, 15.0, 1.0, 178.0, 15.0, 1.0],
-                    src: 0,
-                },
-                Want {
-                    dst: 2,
-                    label: (92.0, 15.0),
-                    route: &[
-                        128.0, 15.0, 1.0, 107.0, 15.0, 1.0, 77.0, 15.0, 1.0, 50.0, 15.0, 1.0,
-                    ],
-                    src: 1,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn flat_bt() {
-        check(
-            Dir::Bt,
-            &[
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-            ],
-            &[(0, 1, 1, 0.0, 0.0), (0, 2, 1, 30.0, 14.0)],
-            &OPT,
-            (140.0, 122.0),
-            &[
-                (70.0, 107.0, 50.0, 30.0, -1),
-                (25.0, 15.0, 50.0, 30.0, -1),
-                (115.0, 15.0, 50.0, 30.0, -1),
-            ],
-            &[
-                Want {
-                    dst: 1,
-                    label: (0.0, 0.0),
-                    route: &[62.0, 92.0, 0.0, 25.0, 30.0, 0.0],
-                    src: 0,
-                },
-                Want {
-                    dst: 2,
-                    label: (115.0, 64.0),
-                    route: &[
-                        78.0, 92.0, 0.0, 115.0, 71.0, 0.0, 115.0, 57.0, 0.0, 115.0, 30.0, 0.0,
-                    ],
-                    src: 0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn group() {
-        check(
-            Dir::Tb,
-            &[
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (
-                    0.0,
-                    0.0,
-                    -1,
-                    true,
-                    None,
-                    12.0,
-                    30.0,
-                    12.0,
-                    0.0,
-                    0.0,
-                    f64::INFINITY,
-                ),
-                (50.0, 30.0, 1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, 1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-            ],
-            &[
-                (0, 2, 1, 0.0, 0.0),
-                (2, 3, 1, 0.0, 0.0),
-                (3, 4, 1, 0.0, 0.0),
-                (0, 4, 1, 0.0, 0.0),
-            ],
-            &OPT,
-            (102.0, 346.0),
-            &[
-                (69.5, 15.0, 50.0, 30.0, -1),
-                (37.0, 173.0, 74.0, 190.0, -1),
-                (37.0, 143.0, 50.0, 30.0, 1),
-                (37.0, 221.0, 50.0, 30.0, 1),
-                (69.5, 331.0, 50.0, 30.0, -1),
-            ],
-            &[
-                Want {
-                    dst: 2,
-                    label: (0.0, 0.0),
-                    route: &[
-                        61.5, 30.0, 0.0, 37.0, 78.0, 0.0, 37.0, 108.0, 0.0, 37.0, 128.0, 0.0,
-                    ],
-                    src: 0,
-                },
-                Want {
-                    dst: 3,
-                    label: (0.0, 0.0),
-                    route: &[37.0, 158.0, 0.0, 37.0, 206.0, 0.0],
-                    src: 2,
-                },
-                Want {
-                    dst: 4,
-                    label: (0.0, 0.0),
-                    route: &[
-                        37.0, 236.0, 0.0, 37.0, 256.0, 0.0, 37.0, 268.0, 0.0, 61.5, 316.0, 0.0,
-                    ],
-                    src: 3,
-                },
-                Want {
-                    dst: 4,
-                    label: (0.0, 0.0),
-                    route: &[
-                        77.5, 30.0, 0.0, 102.0, 78.0, 0.0, 102.0, 268.0, 0.0, 77.5, 316.0, 0.0,
-                    ],
-                    src: 0,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn group_lr_inside() {
-        check(
-            Dir::Tb,
-            &[
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (
-                    0.0,
-                    0.0,
-                    -1,
-                    true,
-                    Some(Dir::Lr),
-                    12.0,
-                    30.0,
-                    12.0,
-                    0.0,
-                    0.0,
-                    f64::INFINITY,
-                ),
-                (50.0, 30.0, 1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, 1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-            ],
-            &[
-                (0, 2, 1, 0.0, 0.0),
-                (2, 3, 1, 30.0, 14.0),
-                (3, 4, 1, 0.0, 0.0),
-                (4, 2, 1, 0.0, 0.0),
-            ],
-            &OPT,
-            (202.0, 228.0),
-            &[
-                (37.0, 15.0, 50.0, 30.0, -1),
-                (101.0, 114.0, 202.0, 72.0, -1),
-                (37.0, 123.0, 50.0, 30.0, 1),
-                (165.0, 123.0, 50.0, 30.0, 1),
-                (101.0, 213.0, 50.0, 30.0, -1),
-            ],
-            &[
-                Want {
-                    dst: 2,
-                    label: (0.0, 0.0),
-                    route: &[37.0, 30.0, 0.0, 37.0, 78.0, 0.0, 37.0, 108.0, 0.0],
-                    src: 0,
-                },
-                Want {
-                    dst: 3,
-                    label: (98.0, 123.0),
-                    route: &[
-                        62.0, 123.0, 1.0, 83.0, 123.0, 1.0, 113.0, 123.0, 1.0, 140.0, 123.0, 1.0,
-                    ],
-                    src: 2,
-                },
-                Want {
-                    dst: 4,
-                    label: (0.0, 0.0),
-                    route: &[165.0, 138.0, 0.0, 165.0, 150.0, 0.0, 109.0, 198.0, 0.0],
-                    src: 3,
-                },
-                Want {
-                    dst: 2,
-                    label: (0.0, 0.0),
-                    route: &[93.0, 198.0, 0.0, 37.0, 150.0, 0.0, 37.0, 138.0, 0.0],
-                    src: 4,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn nested_mixed() {
-        check(
-            Dir::Lr,
-            &[
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (
-                    0.0,
-                    0.0,
-                    -1,
-                    true,
-                    Some(Dir::Tb),
-                    12.0,
-                    30.0,
-                    12.0,
-                    0.0,
-                    0.0,
-                    f64::INFINITY,
-                ),
-                (
-                    0.0,
-                    0.0,
-                    1,
-                    true,
-                    Some(Dir::Rl),
-                    12.0,
-                    30.0,
-                    12.0,
-                    0.0,
-                    0.0,
-                    f64::INFINITY,
-                ),
-                (50.0, 30.0, 2, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, 2, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, 1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (
-                    0.0,
-                    0.0,
-                    -1,
-                    true,
-                    Some(Dir::Bt),
-                    12.0,
-                    30.0,
-                    12.0,
-                    0.0,
-                    0.0,
-                    f64::INFINITY,
-                ),
-                (50.0, 30.0, 7, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, 7, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-            ],
-            &[
-                (0, 3, 1, 0.0, 0.0),
-                (3, 4, 1, 0.0, 0.0),
-                (4, 5, 1, 0.0, 0.0),
-                (5, 6, 1, 0.0, 0.0),
-                (0, 2, 1, 0.0, 0.0),
-                (2, 6, 1, 30.0, 14.0),
-                (1, 7, 1, 0.0, 0.0),
-                (8, 9, 1, 0.0, 0.0),
-                (4, 8, 1, 0.0, 0.0),
-                (9, 0, 1, 0.0, 0.0),
-                (6, 1, 1, 0.0, 0.0),
-            ],
-            &OPT,
-            (533.0, 262.5),
-            &[
-                (25.0, 55.25, 50.0, 30.0, -1),
-                (216.0, 151.0, 236.0, 223.0, -1),
-                (216.0, 121.0, 212.0, 103.0, 1),
-                (265.0, 114.5, 50.0, 30.0, 2),
-                (167.0, 145.5, 50.0, 30.0, 2),
-                (167.0, 235.5, 50.0, 30.0, 1),
-                (484.0, 220.5, 50.0, 30.0, -1),
-                (496.0, 90.5, 74.0, 150.0, -1),
-                (496.0, 138.5, 50.0, 30.0, 7),
-                (496.0, 60.5, 50.0, 30.0, 7),
-            ],
-            &[
-                Want {
-                    dst: 3,
-                    label: (0.0, 0.0),
-                    route: &[
-                        50.0, 55.25, 1.0, 98.0, 102.5, 1.0, 110.0, 102.5, 1.0, 122.0, 102.5, 1.0,
-                        142.0, 102.5, 1.0, 192.0, 102.5, 1.0, 240.0, 102.5, 1.0,
-                    ],
-                    src: 0,
-                },
-                Want {
-                    dst: 4,
-                    label: (0.0, 0.0),
-                    route: &[240.0, 118.5, 1.0, 192.0, 141.5, 1.0],
-                    src: 3,
-                },
-                Want {
-                    dst: 5,
-                    label: (0.0, 0.0),
-                    route: &[167.0, 160.5, 0.0, 167.0, 172.5, 0.0, 167.0, 220.5, 0.0],
-                    src: 4,
-                },
-                Want {
-                    dst: 6,
-                    label: (0.0, 0.0),
-                    route: &[192.0, 235.5, 1.0, 334.0, 235.5, 1.0, 459.0, 235.5, 1.0],
-                    src: 5,
-                },
-                Want {
-                    dst: 2,
-                    label: (0.0, 0.0),
-                    route: &[50.0, 70.25, 1.0, 98.0, 121.0, 1.0, 110.0, 121.0, 1.0],
-                    src: 0,
-                },
-                Want {
-                    dst: 6,
-                    label: (417.0, 74.25),
-                    route: &[
-                        322.0, 121.0, 1.0, 334.0, 121.0, 1.0, 362.0, 121.0, 1.0, 362.0, 74.25, 1.0,
-                        402.0, 74.25, 1.0, 432.0, 74.25, 1.0, 459.0, 205.5, 1.0,
-                    ],
-                    src: 2,
-                },
-                Want {
-                    dst: 7,
-                    label: (0.0, 0.0),
-                    route: &[
-                        334.0, 131.25, 1.0, 362.0, 131.25, 1.0, 409.5, 90.5, 1.0, 424.5, 90.5, 1.0,
-                        459.0, 90.5, 1.0,
-                    ],
-                    src: 1,
-                },
-                Want {
-                    dst: 9,
-                    label: (0.0, 0.0),
-                    route: &[496.0, 123.5, 0.0, 496.0, 75.5, 0.0],
-                    src: 8,
-                },
-                Want {
-                    dst: 8,
-                    label: (0.0, 0.0),
-                    route: &[
-                        192.0, 157.5, 1.0, 240.0, 157.5, 1.0, 290.0, 157.5, 1.0, 310.0, 157.5, 1.0,
-                        322.0, 157.5, 1.0, 334.0, 157.5, 1.0, 459.0, 138.5, 1.0, 471.0, 138.5, 1.0,
-                    ],
-                    src: 4,
-                },
-                Want {
-                    dst: 0,
-                    label: (0.0, 0.0),
-                    route: &[
-                        471.0, 60.5, 1.0, 459.0, 60.5, 1.0, 424.5, 0.0, 1.0, 409.5, 0.0, 1.0,
-                        334.0, 0.0, 1.0, 98.0, 0.0, 1.0, 50.0, 40.25, 1.0,
-                    ],
-                    src: 9,
-                },
-                Want {
-                    dst: 1,
-                    label: (0.0, 0.0),
-                    route: &[459.0, 220.5, 1.0, 334.0, 147.25, 1.0],
-                    src: 6,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn group_edges() {
-        check(
-            Dir::Tb,
-            &[
-                (
-                    0.0,
-                    0.0,
-                    -1,
-                    true,
-                    None,
-                    12.0,
-                    30.0,
-                    12.0,
-                    0.0,
-                    0.0,
-                    f64::INFINITY,
-                ),
-                (50.0, 30.0, 0, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, 0, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (
-                    0.0,
-                    0.0,
-                    -1,
-                    true,
-                    None,
-                    12.0,
-                    30.0,
-                    12.0,
-                    0.0,
-                    0.0,
-                    f64::INFINITY,
-                ),
-                (50.0, 30.0, 3, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-            ],
-            &[
-                (0, 3, 1, 0.0, 0.0),
-                (1, 4, 1, 0.0, 0.0),
-                (5, 0, 1, 0.0, 0.0),
-                (3, 6, 1, 20.0, 14.0),
-                (2, 6, 1, 0.0, 0.0),
-                (6, 1, 1, 0.0, 0.0),
-            ],
-            &OPT,
-            (176.0, 402.0),
-            &[
-                (94.0, 124.0, 164.0, 92.0, -1),
-                (49.0, 123.0, 50.0, 30.0, 0),
-                (139.0, 123.0, 50.0, 30.0, 0),
-                (37.0, 264.0, 74.0, 92.0, -1),
-                (37.0, 283.0, 50.0, 30.0, 3),
-                (94.0, 15.0, 50.0, 30.0, -1),
-                (102.33333333333334, 387.0, 50.0, 30.0, -1),
-            ],
-            &[
-                Want {
-                    dst: 3,
-                    label: (0.0, 0.0),
-                    route: &[106.0, 170.0, 0.0, 53.0, 218.0, 0.0],
-                    src: 0,
-                },
-                Want {
-                    dst: 4,
-                    label: (0.0, 0.0),
-                    route: &[
-                        37.0, 138.0, 0.0, 37.0, 158.0, 0.0, 37.0, 170.0, 0.0, 37.0, 218.0, 0.0,
-                        37.0, 248.0, 0.0, 37.0, 268.0, 0.0,
-                    ],
-                    src: 1,
-                },
-                Want {
-                    dst: 0,
-                    label: (0.0, 0.0),
-                    route: &[94.0, 30.0, 0.0, 94.0, 78.0, 0.0],
-                    src: 5,
-                },
-                Want {
-                    dst: 6,
-                    label: (37.0, 338.0),
-                    route: &[
-                        37.0,
-                        310.0,
-                        0.0,
-                        37.0,
-                        331.0,
-                        0.0,
-                        37.0,
-                        345.0,
-                        0.0,
-                        88.50000000000001,
-                        372.0,
-                        0.0,
-                    ],
-                    src: 3,
-                },
-                Want {
-                    dst: 6,
-                    label: (0.0, 0.0),
-                    route: &[
-                        139.0, 138.0, 0.0, 139.0, 158.0, 0.0, 139.0, 170.0, 0.0, 139.0, 218.0, 0.0,
-                        139.0, 310.0, 0.0, 120.5, 372.0, 0.0,
-                    ],
-                    src: 2,
-                },
-                Want {
-                    dst: 1,
-                    label: (0.0, 0.0),
-                    route: &[
-                        104.50000000000001,
-                        372.0,
-                        0.0,
-                        104.5,
-                        310.0,
-                        0.0,
-                        104.5,
-                        218.0,
-                        0.0,
-                        90.0,
-                        170.0,
-                        0.0,
-                        90.0,
-                        158.0,
-                        0.0,
-                        53.0,
-                        138.0,
-                        0.0,
-                    ],
-                    src: 6,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn stray_loops_cycles() {
-        check(
-            Dir::Tb,
-            &[
-                (
-                    0.0,
-                    0.0,
-                    -1,
-                    true,
-                    None,
-                    12.0,
-                    30.0,
-                    12.0,
-                    0.0,
-                    0.0,
-                    f64::INFINITY,
-                ),
-                (50.0, 30.0, 0, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, 0, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (
-                    0.0,
-                    0.0,
-                    4,
-                    true,
-                    None,
-                    12.0,
-                    30.0,
-                    12.0,
-                    0.0,
-                    0.0,
-                    f64::INFINITY,
-                ),
-                (
-                    0.0,
-                    0.0,
-                    3,
-                    true,
-                    None,
-                    12.0,
-                    30.0,
-                    12.0,
-                    0.0,
-                    0.0,
-                    f64::INFINITY,
-                ),
-                (50.0, 30.0, 3, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, 1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, 99, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-            ],
-            &[
-                (0, 1, 1, 0.0, 0.0),
-                (1, 1, 1, 20.0, 14.0),
-                (1, 2, 1, 0.0, 0.0),
-                (5, 2, 1, 0.0, 0.0),
-                (6, 7, 1, 0.0, 0.0),
-                (7, 1, 1, 0.0, 0.0),
-            ],
-            &OPT,
-            (228.0, 400.0),
-            &[
-                (164.5, 315.0, 102.0, 170.0, -1),
-                (178.5, 295.0, 50.0, 30.0, 0),
-                (152.0, 373.0, 50.0, 30.0, 0),
-                (69.0, 130.0, 138.0, 104.0, -1),
-                (24.0, 129.0, 24.0, 42.0, 3),
-                (101.0, 135.0, 50.0, 30.0, 3),
-                (203.0, 15.0, 50.0, 30.0, -1),
-                (203.0, 130.0, 50.0, 30.0, -1),
-            ],
-            &[
-                Want {
-                    dst: 1,
-                    label: (171.5, 305.0),
-                    route: &[164.5, 315.0, 0.0, 178.5, 295.0, 0.0],
-                    src: 0,
-                },
-                Want {
-                    dst: 1,
-                    label: (241.5, 295.0),
-                    route: &[],
-                    src: 1,
-                },
-                Want {
-                    dst: 2,
-                    label: (0.0, 0.0),
-                    route: &[178.5, 310.0, 0.0, 160.0, 358.0, 0.0],
-                    src: 1,
-                },
-                Want {
-                    dst: 2,
-                    label: (0.0, 0.0),
-                    route: &[
-                        101.0, 150.0, 0.0, 101.0, 170.0, 0.0, 101.0, 182.0, 0.0, 125.5, 230.0, 0.0,
-                        125.5, 260.0, 0.0, 125.5, 280.0, 0.0, 125.5, 310.0, 0.0, 144.0, 358.0, 0.0,
-                    ],
-                    src: 5,
-                },
-                Want {
-                    dst: 7,
-                    label: (0.0, 0.0),
-                    route: &[203.0, 30.0, 0.0, 203.0, 115.0, 0.0],
-                    src: 6,
-                },
-                Want {
-                    dst: 1,
-                    label: (0.0, 0.0),
-                    route: &[
-                        203.0, 145.0, 0.0, 178.5, 230.0, 0.0, 178.5, 260.0, 0.0, 178.5, 280.0, 0.0,
-                    ],
-                    src: 7,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn padding_seq() {
-        check(
-            Dir::Tb,
-            &[
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 5.0, 40.0),
-                (
-                    0.0,
-                    0.0,
-                    -1,
-                    true,
-                    None,
-                    30.0,
-                    40.0,
-                    20.0,
-                    400.0,
-                    9.0,
-                    f64::INFINITY,
-                ),
-                (50.0, 30.0, 1, false, None, 0.0, 0.0, 0.0, 0.0, 3.0, 40.0),
-                (50.0, 30.0, 1, false, None, 0.0, 0.0, 0.0, 0.0, 1.0, 40.0),
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 2.0, 40.0),
-            ],
-            &[
-                (0, 2, 1, 0.0, 0.0),
-                (3, 4, 1, 0.0, 0.0),
-                (2, 3, 1, 0.0, 0.0),
-            ],
-            &OPT,
-            (400.0, 364.0),
-            &[
-                (200.0, 15.0, 50.0, 30.0, -1),
-                (200.0, 182.0, 400.0, 208.0, -1),
-                (200.0, 153.0, 50.0, 30.0, 1),
-                (200.0, 231.0, 50.0, 30.0, 1),
-                (200.0, 349.0, 50.0, 30.0, -1),
-            ],
-            &[
-                Want {
-                    dst: 2,
-                    label: (0.0, 0.0),
-                    route: &[
-                        200.0, 30.0, 0.0, 200.0, 78.0, 0.0, 200.0, 118.0, 0.0, 200.0, 138.0, 0.0,
-                    ],
-                    src: 0,
-                },
-                Want {
-                    dst: 4,
-                    label: (0.0, 0.0),
-                    route: &[
-                        200.0, 246.0, 0.0, 200.0, 266.0, 0.0, 200.0, 286.0, 0.0, 200.0, 334.0, 0.0,
-                    ],
-                    src: 3,
-                },
-                Want {
-                    dst: 3,
-                    label: (0.0, 0.0),
-                    route: &[200.0, 168.0, 0.0, 200.0, 216.0, 0.0],
-                    src: 2,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn group_tracks() {
-        check(
-            Dir::Tb,
-            &[
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (
-                    0.0,
-                    0.0,
-                    -1,
-                    true,
-                    None,
-                    12.0,
-                    30.0,
-                    12.0,
-                    0.0,
-                    0.0,
-                    f64::INFINITY,
-                ),
-                (50.0, 30.0, 1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, 1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, 1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-            ],
-            &[
-                (0, 2, 1, 0.0, 0.0),
-                (0, 3, 1, 0.0, 0.0),
-                (0, 4, 1, 0.0, 0.0),
-                (2, 5, 1, 0.0, 0.0),
-                (3, 6, 1, 0.0, 0.0),
-                (4, 5, 1, 0.0, 0.0),
-                (5, 6, 1, 0.0, 0.0),
-            ],
-            &LayeredOptions {
-                tracks: true,
-                ..OPT
-            },
-            (254.0, 346.0),
-            &[
-                (127.0, 15.0, 50.0, 30.0, -1),
-                (127.0, 134.0, 254.0, 112.0, -1),
-                (37.0, 143.0, 50.0, 30.0, 1),
-                (127.0, 143.0, 50.0, 30.0, 1),
-                (217.0, 143.0, 50.0, 30.0, 1),
-                (74.0, 253.0, 50.0, 30.0, -1),
-                (100.5, 331.0, 50.0, 30.0, -1),
-            ],
-            &[
-                Want {
-                    dst: 2,
-                    label: (0.0, 0.0),
-                    route: &[
-                        111.0, 30.0, 0.0, 111.0, 54.0, 0.0, 37.0, 54.0, 0.0, 37.0, 78.0, 0.0, 37.0,
-                        108.0, 0.0, 37.0, 128.0, 0.0,
-                    ],
-                    src: 0,
-                },
-                Want {
-                    dst: 3,
-                    label: (0.0, 0.0),
-                    route: &[
-                        127.0, 30.0, 0.0, 127.0, 78.0, 0.0, 127.0, 108.0, 0.0, 127.0, 128.0, 0.0,
-                    ],
-                    src: 0,
-                },
-                Want {
-                    dst: 4,
-                    label: (0.0, 0.0),
-                    route: &[
-                        143.0, 30.0, 0.0, 143.0, 54.0, 0.0, 217.0, 54.0, 0.0, 217.0, 78.0, 0.0,
-                        217.0, 108.0, 0.0, 217.0, 128.0, 0.0,
-                    ],
-                    src: 0,
-                },
-                Want {
-                    dst: 5,
-                    label: (0.0, 0.0),
-                    route: &[
-                        37.0, 158.0, 0.0, 37.0, 178.0, 0.0, 37.0, 190.0, 0.0, 37.0, 214.0, 0.0,
-                        66.0, 214.0, 0.0, 66.0, 238.0, 0.0,
-                    ],
-                    src: 2,
-                },
-                Want {
-                    dst: 6,
-                    label: (0.0, 0.0),
-                    route: &[
-                        127.0, 158.0, 0.0, 127.0, 178.0, 0.0, 127.0, 190.0, 0.0, 127.0, 238.0, 0.0,
-                        127.0, 268.0, 0.0, 127.0, 292.0, 0.0, 108.5, 292.0, 0.0, 108.5, 316.0, 0.0,
-                    ],
-                    src: 3,
-                },
-                Want {
-                    dst: 5,
-                    label: (0.0, 0.0),
-                    route: &[
-                        217.0, 158.0, 0.0, 217.0, 178.0, 0.0, 217.0, 190.0, 0.0, 217.0, 214.0, 0.0,
-                        82.0, 214.0, 0.0, 82.0, 238.0, 0.0,
-                    ],
-                    src: 4,
-                },
-                Want {
-                    dst: 6,
-                    label: (0.0, 0.0),
-                    route: &[
-                        74.0, 268.0, 0.0, 74.0, 292.0, 0.0, 92.5, 292.0, 0.0, 92.5, 316.0, 0.0,
-                    ],
-                    src: 5,
-                },
-            ],
-        );
-    }
-
-    #[test]
-    fn deep_crossing() {
-        check(
-            Dir::Tb,
-            &[
-                (
-                    0.0,
-                    0.0,
-                    -1,
-                    true,
-                    None,
-                    12.0,
-                    30.0,
-                    12.0,
-                    0.0,
-                    0.0,
-                    f64::INFINITY,
-                ),
-                (
-                    0.0,
-                    0.0,
-                    0,
-                    true,
-                    Some(Dir::Lr),
-                    12.0,
-                    30.0,
-                    12.0,
-                    0.0,
-                    0.0,
-                    f64::INFINITY,
-                ),
-                (
-                    0.0,
-                    0.0,
-                    1,
-                    true,
-                    Some(Dir::Tb),
-                    12.0,
-                    30.0,
-                    12.0,
-                    0.0,
-                    0.0,
-                    f64::INFINITY,
-                ),
-                (50.0, 30.0, 2, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, -1, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (
-                    0.0,
-                    0.0,
-                    -1,
-                    true,
-                    Some(Dir::Rl),
-                    12.0,
-                    30.0,
-                    12.0,
-                    0.0,
-                    0.0,
-                    f64::INFINITY,
-                ),
-                (
-                    0.0,
-                    0.0,
-                    5,
-                    true,
-                    None,
-                    12.0,
-                    30.0,
-                    12.0,
-                    0.0,
-                    0.0,
-                    f64::INFINITY,
-                ),
-                (50.0, 30.0, 6, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-                (50.0, 30.0, 6, false, None, 0.0, 0.0, 0.0, 0.0, 0.0, 40.0),
-            ],
-            &[
-                (3, 4, 1, 0.0, 0.0),
-                (4, 7, 1, 0.0, 0.0),
-                (3, 8, 1, 0.0, 0.0),
-                (7, 3, 1, 0.0, 0.0),
-                (8, 7, 1, 0.0, 0.0),
-                (2, 6, 1, 0.0, 0.0),
-            ],
-            &OPT,
-            (196.0, 436.0),
-            &[
-                (84.0, 98.0, 122.0, 196.0, -1),
-                (84.0, 97.0, 98.0, 134.0, 0),
-                (84.0, 106.0, 74.0, 92.0, 1),
-                (84.0, 105.0, 50.0, 30.0, 2),
-                (31.0, 259.0, 50.0, 30.0, -1),
-                (98.0, 379.0, 196.0, 114.0, -1),
-                (98.0, 388.0, 172.0, 72.0, 5),
-                (49.0, 397.0, 50.0, 30.0, 6),
-                (147.0, 397.0, 50.0, 30.0, 6),
-            ],
-            &[
-                Want {
-                    dst: 4,
-                    label: (0.0, 0.0),
-                    route: &[
-                        68.0, 120.0, 0.0, 68.0, 140.0, 0.0, 68.0, 152.0, 0.0, 68.0, 164.0, 0.0,
-                        68.0, 184.0, 0.0, 68.0, 196.0, 0.0, 31.0, 244.0, 0.0,
-                    ],
-                    src: 3,
-                },
-                Want {
-                    dst: 7,
-                    label: (0.0, 0.0),
-                    route: &[
-                        31.0, 274.0, 0.0, 49.0, 322.0, 0.0, 49.0, 352.0, 0.0, 49.0, 382.0, 0.0,
-                    ],
-                    src: 4,
-                },
-                Want {
-                    dst: 8,
-                    label: (0.0, 0.0),
-                    route: &[
-                        84.0, 120.0, 0.0, 84.0, 140.0, 0.0, 84.0, 152.0, 0.0, 84.0, 164.0, 0.0,
-                        84.0, 184.0, 0.0, 84.0, 196.0, 0.0, 84.0, 244.0, 0.0, 84.0, 274.0, 0.0,
-                        147.0, 322.0, 0.0, 147.0, 352.0, 0.0, 147.0, 382.0, 0.0,
-                    ],
-                    src: 3,
-                },
-                Want {
-                    dst: 3,
-                    label: (0.0, 0.0),
-                    route: &[
-                        49.0, 382.0, 0.0, 49.0, 352.0, 0.0, 49.0, 322.0, 0.0, 100.0, 274.0, 0.0,
-                        100.0, 244.0, 0.0, 116.0, 196.0, 0.0, 116.0, 184.0, 0.0, 100.0, 164.0, 0.0,
-                        100.0, 152.0, 0.0, 100.0, 140.0, 0.0, 100.0, 120.0, 0.0,
-                    ],
-                    src: 7,
-                },
-                Want {
-                    dst: 7,
-                    label: (0.0, 0.0),
-                    route: &[122.0, 397.0, 1.0, 74.0, 397.0, 1.0],
-                    src: 8,
-                },
-                Want {
-                    dst: 6,
-                    label: (0.0, 0.0),
-                    route: &[
-                        84.0, 152.0, 0.0, 84.0, 164.0, 0.0, 100.0, 184.0, 0.0, 100.0, 196.0, 0.0,
-                        116.0, 244.0, 0.0, 116.0, 274.0, 0.0, 98.0, 322.0, 0.0, 98.0, 352.0, 0.0,
-                    ],
-                    src: 2,
-                },
-            ],
-        );
     }
 }

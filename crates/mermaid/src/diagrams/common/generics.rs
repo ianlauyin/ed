@@ -13,13 +13,8 @@ fn pair_tildes(text: &str) -> String {
 
     let lead = !count.is_multiple_of(2) && text.starts_with('~');
     let mut chars: Vec<char> = text.chars().collect();
-    let at: Vec<usize> = chars
-        .iter()
-        .enumerate()
-        .skip(usize::from(lead))
-        .filter(|&(_, &c)| c == '~')
-        .map(|(i, _)| i)
-        .collect();
+    let at: Vec<usize> =
+        chars.iter().enumerate().skip(usize::from(lead)).filter(|&(_, &c)| c == '~').map(|(i, _)| i).collect();
     for (&lo, &hi) in at.iter().zip(at.iter().rev()).take(at.len() / 2) {
         if let Some(c) = chars.get_mut(lo) {
             *c = '<';
@@ -69,64 +64,4 @@ pub(crate) fn parse_generic_types(input: &str) -> String {
         i += 1;
     }
     output.concat()
-}
-
-#[cfg(test)]
-mod tests {
-    //! Checks against Pele (`obsidianmd/pele` at `458322a`). Every expected value comes from
-    //! running Pele's `parseGenericTypes` with `bun` on corpus lines with tildes and on edge
-    //! cases, never from this port.
-
-    use super::*;
-
-    #[test]
-    fn parse_generic_types_matches_pele() {
-        let cases: &[(&str, &str)] = &[
-            ("class Square~Shape~{", "class Square<Shape>{"),
-            ("    List~int~ position", "    List<int> position"),
-            (
-                "    setPoints(List~int~ points)",
-                "    setPoints(List<int> points)",
-            ),
-            ("    getPoints() List~int~", "    getPoints() List<int>"),
-            (
-                "Square : -List~string~ messages",
-                "Square : -List<string> messages",
-            ),
-            (
-                "Square : +setMessages(List~string~ messages)",
-                "Square : +setMessages(List<string> messages)",
-            ),
-            (
-                "Square : +getMessages() List~string~",
-                "Square : +getMessages() List<string>",
-            ),
-            (
-                "Square : +getDistanceMatrix() List~List~int~~",
-                "Square : +getDistanceMatrix() List<List<int>>",
-            ),
-            ("    A ~~~ B", "    A <~> B"),
-            ("List~int~", "List<int>"),
-            ("Map~K,V~", "Map<K,V>"),
-            ("a~b,c~d", "a<b,c>d"),
-            ("~x~y~", "~x<y>"),
-            ("~~~", "~<>"),
-            ("Map~List~int~,Set~str~~", "Map<List~int>,Set<str~>"),
-            ("a~,b~", "a<,b>"),
-            ("x,~y~,z", "x,<y>,z"),
-            ("a~b~,c~d~", "a<b>,c<d>"),
-            ("~a", "~a"),
-            (",", ","),
-            ("a~~b,c", "a<>b,c"),
-            ("no tildes", "no tildes"),
-            ("", ""),
-            ("~", "~"),
-            (",~,~,", ",<,>,"),
-            ("f~a,b,c~", "f~a,b,c~"),
-            ("~é~,😀~x~", "<é>,😀<x>"),
-        ];
-        for &(input, expected) in cases {
-            assert_eq!(parse_generic_types(input), expected, "{input:?}");
-        }
-    }
 }

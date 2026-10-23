@@ -7,7 +7,10 @@
 //! regular expression in Pele is a hand-written matcher below.
 
 use super::tokens::T;
-use crate::util::chars::{is_digit, is_line_end, is_space, is_word};
+use crate::util::chars::is_digit;
+use crate::util::chars::is_line_end;
+use crate::util::chars::is_space;
+use crate::util::chars::is_word;
 
 /// A token: its kind, its start as a UTF-8 offset, and its text.
 #[derive(Clone, Copy, Debug)]
@@ -78,9 +81,7 @@ fn is_text(c: Option<u8>, kind: u8) -> bool {
 fn is_attr(c: char, kind: u8) -> bool {
     let code = u32::from(c);
     if code < 128 {
-        CLASS
-            .get(usize::try_from(code).unwrap_or(0))
-            .is_some_and(|&k| k & kind != 0)
+        CLASS.get(usize::try_from(code).unwrap_or(0)).is_some_and(|&k| k & kind != 0)
     } else {
         code >= 0xc0 || code == 0xb5
     }
@@ -99,25 +100,17 @@ fn space_at(src: &str, at: usize) -> bool {
 /// The end of a run of JavaScript `\s` characters from `at`.
 fn skip_spaces(src: &str, at: usize) -> usize {
     let rest = src.get(at..).unwrap_or("");
-    at + rest
-        .char_indices()
-        .find(|&(_, c)| !is_space(u32::from(c)))
-        .map_or(rest.len(), |(i, _)| i)
+    at + rest.char_indices().find(|&(_, c)| !is_space(u32::from(c))).map_or(rest.len(), |(i, _)| i)
 }
 
 /// The first `byte` at or after `from`.
 fn find(src: &str, from: usize, byte: u8) -> Option<usize> {
-    src.as_bytes()
-        .get(from..)
-        .and_then(|rest| rest.iter().position(|&b| b == byte))
-        .map(|at| from + at)
+    src.as_bytes().get(from..).and_then(|rest| rest.iter().position(|&b| b == byte)).map(|at| from + at)
 }
 
 /// Whether `src` at `at` spells the ASCII `word`, letters in any case.
 fn starts_ci(src: &str, at: usize, word: &str) -> bool {
-    src.as_bytes()
-        .get(at..at + word.len())
-        .is_some_and(|text| text.eq_ignore_ascii_case(word.as_bytes()))
+    src.as_bytes().get(at..at + word.len()).is_some_and(|text| text.eq_ignore_ascii_case(word.as_bytes()))
 }
 
 /// The first `direction`, in any case, at or after `from`.
@@ -128,9 +121,7 @@ fn find_direction(src: &str, from: usize) -> Option<usize> {
 
 /// The end of the next line terminator's line from `from`: its index, or the end of `src`.
 fn next_line_end(src: &str, from: usize) -> usize {
-    src.get(from..)
-        .and_then(|rest| rest.find(|c: char| is_line_end(u32::from(c))))
-        .map_or(src.len(), |at| from + at)
+    src.get(from..).and_then(|rest| rest.find(|c: char| is_line_end(u32::from(c)))).map_or(src.len(), |at| from + at)
 }
 
 /// `/<word>\s*<sep>\s*/iy` at `at`: the end of the match.
@@ -158,8 +149,7 @@ fn direction_end(src: &str, p: usize, line_end: usize, pair: &str) -> Option<usi
     }
     candidates.into_iter().rev().find_map(|start| {
         let q = skip_spaces(src, start + 9);
-        (q > start + 9 && starts_ci(src, q, pair))
-            .then(|| find(src, q + 2, b'\n').unwrap_or(src.len()))
+        (q > start + 9 && starts_ci(src, q, pair)).then(|| find(src, q + 2, b'\n').unwrap_or(src.len()))
     })
 }
 
@@ -217,11 +207,7 @@ impl<'a> Lexer<'a> {
 
     /// Emits a token from `s` to `e` and moves to `e`.
     fn emit(&mut self, kind: T, s: usize, e: usize) {
-        self.tokens.push(Token {
-            kind,
-            start: s,
-            text: self.src.get(s..e).unwrap_or(""),
-        });
+        self.tokens.push(Token { kind, start: s, text: self.src.get(s..e).unwrap_or("") });
         self.p = e;
     }
 
@@ -232,10 +218,7 @@ impl<'a> Lexer<'a> {
 
     /// Matches a lower-case keyword at the position, ignoring case, at a word boundary.
     fn kwb(&self, word: &str) -> bool {
-        self.kw(word)
-            && !self
-                .at(self.p + word.len())
-                .is_some_and(|c| is_word(u32::from(c)))
+        self.kw(word) && !self.at(self.p + word.len()).is_some_and(|c| is_word(u32::from(c)))
     }
 
     /// The byte at `q`, lower-cased if it is an ASCII letter.
@@ -280,12 +263,7 @@ impl<'a> Lexer<'a> {
         if next >= line_end {
             return false;
         }
-        let kinds = [
-            (T::DirectionTb, "TB"),
-            (T::DirectionBt, "BT"),
-            (T::DirectionRl, "RL"),
-            (T::DirectionLr, "LR"),
-        ];
+        let kinds = [(T::DirectionTb, "TB"), (T::DirectionBt, "BT"), (T::DirectionRl, "RL"), (T::DirectionLr, "LR")];
         for (kind, pair) in kinds {
             if let Some(end) = direction_end(self.src, p, line_end, pair) {
                 self.emit(kind, p, end);
@@ -304,10 +282,11 @@ impl<'a> Lexer<'a> {
             return;
         };
         let name = e > p + 1
-            && !self.src.as_bytes().get(p + 1..e).is_some_and(|text| {
-                text.iter()
-                    .any(|c| matches!(c, b'%' | b'\\' | b'\r' | b'\n' | 11 | 8))
-            });
+            && !self
+                .src
+                .as_bytes()
+                .get(p + 1..e)
+                .is_some_and(|text| text.iter().any(|c| matches!(c, b'%' | b'\\' | b'\r' | b'\n' | 11 | 8)));
         self.emit(if name { T::EntityName } else { T::Word }, p, e + 1);
     }
 
@@ -317,11 +296,7 @@ impl<'a> Lexer<'a> {
         let p = self.p;
         let d = self.at(p + 1);
         if d == Some(b'+') && (c == b'1' || c == b'0') {
-            let kind = if c == b'1' {
-                T::OneOrMore
-            } else {
-                T::ZeroOrMore
-            };
+            let kind = if c == b'1' { T::OneOrMore } else { T::ZeroOrMore };
             self.emit(kind, p, p + 2);
             return;
         }
@@ -334,15 +309,11 @@ impl<'a> Lexer<'a> {
         if c == b'1' {
             if let Some(space) = char_at(self.src, p + 1).filter(|&d| is_space(u32::from(d))) {
                 let r = skip_spaces(self.src, p + 1 + space.len_utf8());
-                if self
-                    .at(r)
-                    .is_some_and(|f| is_word(u32::from(f)) || f == b'"' || f == b'\'')
-                {
+                if self.at(r).is_some_and(|f| is_word(u32::from(f)) || f == b'"' || f == b'\'') {
                     self.emit(T::OnlyOne, p, p + 1);
                     return;
                 }
-            } else if matches!(d, Some(b'-' | b'.')) && matches!(self.at(p + 2), Some(b'-' | b'.'))
-            {
+            } else if matches!(d, Some(b'-' | b'.')) && matches!(self.at(p + 2), Some(b'-' | b'.')) {
                 self.emit(T::OnlyOne, p, p + 1);
                 return;
             }
@@ -355,10 +326,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// The keywords and relationship symbols, by lower-cased first character.
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one arm per keyword letter, as in Pele"
-    )]
+    #[expect(clippy::too_many_lines, reason = "one arm per keyword letter, as in Pele")]
     fn keyword(&mut self, lc: u8) -> bool {
         let p = self.p;
         let d = self.at(p + 1);
@@ -445,8 +413,7 @@ impl<'a> Lexer<'a> {
                 self.emit(T::MdParent, p, p + 1);
             }
             b'|' => {
-                let o = self.lower(p + 1) == Some(b'o')
-                    && !self.at(p + 2).is_some_and(|c| is_word(u32::from(c)));
+                let o = self.lower(p + 1) == Some(b'o') && !self.at(p + 2).is_some_and(|c| is_word(u32::from(c)));
                 if o {
                     self.emit(T::ZeroOrOne, p, p + 2);
                 } else if d == Some(b'|') {
@@ -458,8 +425,7 @@ impl<'a> Lexer<'a> {
                 }
             }
             b'}' => {
-                let o = self.lower(p + 1) == Some(b'o')
-                    && !self.at(p + 2).is_some_and(|c| is_word(u32::from(c)));
+                let o = self.lower(p + 1) == Some(b'o') && !self.at(p + 2).is_some_and(|c| is_word(u32::from(c)));
                 if o {
                     self.emit(T::ZeroOrMore, p, p + 2);
                 } else if d == Some(b'|') {
@@ -618,11 +584,7 @@ impl<'a> Lexer<'a> {
         if self.tilde_line.is_none_or(|line| line < p) {
             let line = next_line_end(self.src, p);
             self.tilde_line = Some(line);
-            self.tilde_last = self
-                .src
-                .as_bytes()
-                .get(..line)
-                .and_then(|head| head.iter().rposition(|&b| b == b'~'));
+            self.tilde_last = self.src.as_bytes().get(..line).and_then(|head| head.iter().rposition(|&b| b == b'~'));
         }
         let Some(last) = self.tilde_last.filter(|&last| last > tilde_next) else {
             return false;
@@ -702,11 +664,7 @@ impl<'a> Lexer<'a> {
                 }
                 S::AccTitle | S::AccDescr => {
                     let e = find(self.src, p, b'\n').unwrap_or(n);
-                    let kind = if self.state == S::AccTitle {
-                        T::AccTitleValue
-                    } else {
-                        T::AccDescrValue
-                    };
+                    let kind = if self.state == S::AccTitle { T::AccTitleValue } else { T::AccDescrValue };
                     self.emit(kind, p, e);
                     self.state = S::Initial;
                 }
@@ -744,11 +702,7 @@ impl<'a> Lexer<'a> {
                         }
                         self.emit(T::StyleText, p, e);
                     } else {
-                        self.tokens.push(Token {
-                            kind: T::Error,
-                            start: p,
-                            text: "",
-                        });
+                        self.tokens.push(Token { kind: T::Error, start: p, text: "" });
                         return self.tokens;
                     }
                 }

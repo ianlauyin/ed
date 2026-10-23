@@ -99,29 +99,14 @@ pub(crate) fn make_date(day: f64, time: f64) -> f64 {
 
 /// The year `new Date(year, ...)` and `Date.UTC` use: 0 to 99 mean 1900 to 1999.
 fn full_year(year: f64) -> f64 {
-    if year.is_finite() && (0.0..100.0).contains(&year.trunc()) {
-        1900.0 + year.trunc()
-    } else {
-        year
-    }
+    if year.is_finite() && (0.0..100.0).contains(&year.trunc()) { 1900.0 + year.trunc() } else { year }
 }
 
 impl Date {
     /// `new Date(year, month, date, hours, minutes, seconds, ms)` in local time, which is UTC.
-    pub(crate) fn local(
-        year: f64,
-        month: f64,
-        date: f64,
-        hours: f64,
-        minutes: f64,
-        seconds: f64,
-        ms: f64,
-    ) -> Self {
+    pub(crate) fn local(year: f64, month: f64, date: f64, hours: f64, minutes: f64, seconds: f64, ms: f64) -> Self {
         let day = make_day(full_year(year), month, date);
-        Self(time_clip(make_date(
-            day,
-            make_time(hours, minutes, seconds, ms),
-        )))
+        Self(time_clip(make_date(day, make_time(hours, minutes, seconds, ms))))
     }
 
     /// The time value, as `+date` reads it.
@@ -144,20 +129,13 @@ impl Date {
         let day = t.div_euclid(86_400_000);
         let time = t.rem_euclid(86_400_000);
         let (year, month, date) = civil_from_days(day);
-        Some(Fields {
-            date,
-            day,
-            month,
-            time,
-            year,
-        })
+        Some(Fields { date, day, month, time, year })
     }
 
     #[expect(clippy::cast_precision_loss, reason = "calendar fields stay small")]
     /// One calendar field, or NaN for an invalid date.
     fn get(self, field: impl Fn(Fields) -> i64) -> f64 {
-        self.fields()
-            .map_or(f64::NAN, |fields| field(fields) as f64)
+        self.fields().map_or(f64::NAN, |fields| field(fields) as f64)
     }
 
     /// `getFullYear`.
@@ -248,15 +226,7 @@ impl Date {
 }
 
 /// `Date.UTC(year, month, date, hours, minutes, seconds, ms)`.
-pub(crate) fn utc(
-    year: f64,
-    month: f64,
-    date: f64,
-    hours: f64,
-    minutes: f64,
-    seconds: f64,
-    ms: f64,
-) -> f64 {
+pub(crate) fn utc(year: f64, month: f64, date: f64, hours: f64, minutes: f64, seconds: f64, ms: f64) -> f64 {
     Date::local(year, month, date, hours, minutes, seconds, ms).0
 }
 
@@ -275,10 +245,7 @@ pub(crate) fn parse(text: &str) -> Date {
     };
 
     let [year, month, date, hours, minutes, seconds, ms, offset] = fields;
-    let value = make_date(
-        make_day(year, month, date),
-        make_time(hours, minutes, seconds, ms),
-    );
+    let value = make_date(make_day(year, month, date), make_time(hours, minutes, seconds, ms));
     if offset.is_nan() {
         if !(-(MAX_TIME + 864e6)..=MAX_TIME + 864e6).contains(&value) {
             return Date(f64::NAN);
@@ -382,14 +349,7 @@ impl Token {
 
     /// Whether the token is the time zone `Z`.
     fn is_z(self) -> bool {
-        matches!(
-            self,
-            Self::Keyword {
-                kind: Keyword::TimeZoneName,
-                length: 1,
-                value: 0
-            }
-        )
+        matches!(self, Self::Keyword { kind: Keyword::TimeZoneName, length: 1, value: 0 })
     }
 }
 
@@ -439,12 +399,7 @@ struct Scanner<'a> {
 impl<'a> Scanner<'a> {
     /// A scanner at the start of `units`, with the first token read.
     fn new(units: &'a [u16]) -> Self {
-        let mut scanner = Self {
-            ch: 0,
-            index: 0,
-            next: Token::End,
-            units,
-        };
+        let mut scanner = Self { ch: 0, index: 0, next: Token::End, units };
         scanner.advance();
         scanner.next = scanner.scan();
         scanner
@@ -452,10 +407,7 @@ impl<'a> Scanner<'a> {
 
     /// Reads the next code unit.
     fn advance(&mut self) {
-        self.ch = self
-            .units
-            .get(self.index)
-            .map_or(0, |&unit| u32::from(unit));
+        self.ch = self.units.get(self.index).map_or(0, |&unit| u32::from(unit));
         self.index += 1;
     }
 
@@ -494,10 +446,7 @@ impl<'a> Scanner<'a> {
                 digits += 1;
                 self.advance();
             }
-            return Token::Number {
-                length: self.index - start,
-                value,
-            };
+            return Token::Number { length: self.index - start, value };
         }
         for symbol in *b":-+.)" {
             if self.skip(symbol) {
@@ -515,16 +464,10 @@ impl<'a> Scanner<'a> {
                 self.advance();
             }
             let found = KEYWORDS.iter().find(|(word, kind, _)| {
-                word.iter().zip(prefix).all(|(&w, p)| u32::from(w) == p)
-                    && (length <= 3 || *kind == Keyword::MonthName)
+                word.iter().zip(prefix).all(|(&w, p)| u32::from(w) == p) && (length <= 3 || *kind == Keyword::MonthName)
             });
-            let (kind, value) =
-                found.map_or((Keyword::Invalid, 0), |&(_, kind, value)| (kind, value));
-            return Token::Keyword {
-                kind,
-                length,
-                value,
-            };
+            let (kind, value) = found.map_or((Keyword::Invalid, 0), |&(_, kind, value)| (kind, value));
+            return Token::Keyword { kind, length, value };
         }
         if is_space(self.ch) {
             self.advance();
@@ -643,11 +586,7 @@ struct TimeComposer {
 
 impl Default for TimeComposer {
     fn default() -> Self {
-        Self {
-            comp: [0; 4],
-            hour_offset: NONE,
-            index: 0,
-        }
+        Self { comp: [0; 4], hour_offset: NONE, index: 0 }
     }
 }
 
@@ -695,19 +634,11 @@ impl TimeComposer {
             }
             hour = hour % 12 + self.hour_offset;
         }
-        let valid = between(hour, 0, 23)
-            && between(minute, 0, 59)
-            && between(second, 0, 59)
-            && between(ms, 0, 999);
+        let valid = between(hour, 0, 23) && between(minute, 0, 59) && between(second, 0, 59) && between(ms, 0, 999);
         if !valid && (hour != 24 || minute != 0 || second != 0 || ms != 0) {
             return None;
         }
-        Some([
-            f64::from(hour),
-            f64::from(minute),
-            f64::from(second),
-            f64::from(ms),
-        ])
+        Some([f64::from(hour), f64::from(minute), f64::from(second), f64::from(ms)])
     }
 }
 
@@ -723,11 +654,7 @@ struct ZoneComposer {
 
 impl Default for ZoneComposer {
     fn default() -> Self {
-        Self {
-            hour: NONE,
-            minute: NONE,
-            sign: NONE,
-        }
+        Self { hour: NONE, minute: NONE, sign: NONE }
     }
 }
 
@@ -949,11 +876,7 @@ fn parse_tokens(
                     time.add_final(n);
                     // A finished time must be followed by the end, a space, `Z`, or a sign.
                     let peek = scanner.peek();
-                    if peek != Token::End
-                        && peek != Token::WhiteSpace
-                        && !peek.is_z()
-                        && !peek.is_sign()
-                    {
+                    if peek != Token::End && peek != Token::WhiteSpace && !peek.is_z() && !peek.is_sign() {
                         return None;
                     }
                 } else {
@@ -981,11 +904,7 @@ fn parse_tokens(
             _ if token.is_sign() && (tz.is_utc() || !time.is_empty()) => {
                 tz.sign = token.sign();
                 let (mut n, mut length) = (0, 0);
-                if let Token::Number {
-                    length: digits,
-                    value,
-                } = scanner.peek()
-                {
+                if let Token::Number { length: digits, value } = scanner.peek() {
                     scanner.next();
                     n = value;
                     length = digits;

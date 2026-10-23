@@ -2,21 +2,49 @@
 
 use std::collections::BTreeSet;
 
-use super::db::{C4Db, ElementRef};
-use super::layout::{HEAD_LEFT, HEAD_TOP, layout_c4};
-use super::route::{Form, HEAD, LANE, Lanes, Route, crosses, cyl_ry, queue_rx, route};
+use super::db::C4Db;
+use super::db::ElementRef;
+use super::layout::HEAD_LEFT;
+use super::layout::HEAD_TOP;
+use super::layout::layout_c4;
+use super::route::Form;
+use super::route::HEAD;
+use super::route::LANE;
+use super::route::Lanes;
+use super::route::Route;
+use super::route::crosses;
+use super::route::cyl_ry;
+use super::route::queue_rx;
+use super::route::route;
 use crate::diagrams::Rendered;
-use crate::diagrams::common::fit_width::{Drawn, tighten, title_room};
+use crate::diagrams::common::fit_width::Drawn;
+use crate::diagrams::common::fit_width::tighten;
+use crate::diagrams::common::fit_width::title_room;
 use crate::diagrams::common::literal_label::left_label_svg;
-use crate::error::{Code, Error};
-use crate::svg::builder::{esc, esc_text, js_round, label_svg, push_num};
-use crate::svg::edges::{ARROW, marker, marker_trim};
-use crate::svg::root::{Accessible, RenderOptions, svg_document};
+use crate::error::Code;
+use crate::error::Error;
+use crate::svg::builder::esc;
+use crate::svg::builder::esc_text;
+use crate::svg::builder::js_round;
+use crate::svg::builder::label_svg;
+use crate::svg::builder::push_num;
+use crate::svg::edges::ARROW;
+use crate::svg::edges::marker;
+use crate::svg::edges::marker_trim;
+use crate::svg::root::Accessible;
+use crate::svg::root::RenderOptions;
+use crate::svg::root::svg_document;
 use crate::svg::shapes::draw_shape;
-use crate::svg::theme::{RADIUS, ResolvedStyle, resolve_style};
+use crate::svg::theme::RADIUS;
+use crate::svg::theme::ResolvedStyle;
+use crate::svg::theme::resolve_style;
 use crate::text::label::layout_label;
-use crate::text::measure::{BOLD, ITALIC};
-use crate::util::url::{LinkInfo, UrlOptions, linked, sanitize_url};
+use crate::text::measure::BOLD;
+use crate::text::measure::ITALIC;
+use crate::util::url::LinkInfo;
+use crate::util::url::UrlOptions;
+use crate::util::url::linked;
+use crate::util::url::sanitize_url;
 use crate::yaml::push_number;
 
 const PAIR_SHIFT: f64 = 7.0;
@@ -75,14 +103,7 @@ struct Links<'a> {
 impl Links<'_> {
     fn link(&mut self, body: &str, url: Option<&str>, id: &str) -> String {
         match url.filter(|url| !url.is_empty()) {
-            Some(url) => linked(
-                body,
-                &sanitize_url(&unhide(url)),
-                id,
-                &mut self.links,
-                self.url,
-                "",
-            ),
+            Some(url) => linked(body, &sanitize_url(&unhide(url)), id, &mut self.links, self.url, ""),
             None => body.to_owned(),
         }
     }
@@ -102,11 +123,7 @@ impl Drawn for Drawing {
 /// # Errors
 ///
 /// Returns a semantic error for a relation that names an unknown shape or boundary.
-pub(crate) fn render(
-    db: &C4Db,
-    options: &RenderOptions,
-    url: &UrlOptions<'_>,
-) -> Result<Rendered, Error> {
+pub(crate) fn render(db: &C4Db, options: &RenderOptions, url: &UrlOptions<'_>) -> Result<Rendered, Error> {
     let result = tighten(options, |tight| {
         if !tight {
             return Drawing(draw(db, options, url, false, NARROW_GAP).map(|drawn| drawn.0));
@@ -136,14 +153,7 @@ pub(crate) fn render(
 fn unknown(from: &str, to: &str) -> Error {
     let mut error = Error::new(
         Code::Semantic,
-        [
-            "C4 rel \"",
-            from,
-            "\" -> \"",
-            to,
-            "\" references an unknown shape or boundary",
-        ]
-        .concat(),
+        ["C4 rel \"", from, "\" -> \"", to, "\" references an unknown shape or boundary"].concat(),
     );
     error.r#type = Some("c4");
     error
@@ -160,18 +170,10 @@ fn draw(
     let size = options.font_size.unwrap_or(16.0);
     let small = js_round(size * 0.8125);
     let pad = options.padding.unwrap_or(8.0);
-    let mut links = Links {
-        links: Vec::new(),
-        url,
-    };
+    let mut links = Links { links: Vec::new(), url };
     let room = tight.then(|| 80.0_f64.max(options.max_width.unwrap_or(320.0) - 2.0 * pad));
     let mut layout = layout_c4(db, size, small, room, gap);
-    let root = layout
-        .groups
-        .first()
-        .and_then(|group| layout.boxes.get(group.id))
-        .copied()
-        .unwrap_or_default();
+    let root = layout.groups.first().and_then(|group| layout.boxes.get(group.id)).copied().unwrap_or_default();
 
     let mut min_x = 0.0_f64;
     let mut min_y = 0.0_f64;
@@ -192,16 +194,8 @@ fn draw(
     let mut ends: Vec<(usize, usize)> = Vec::with_capacity(db.rels.len());
     let mut pairs: BTreeSet<(usize, usize)> = BTreeSet::new();
     for rel in &db.rels {
-        let from = if rel.from_attr.is_some() {
-            None
-        } else {
-            db.get_c4_shape(&rel.from)
-        };
-        let to = if rel.to_attr.is_some() {
-            None
-        } else {
-            db.get_c4_shape(&rel.to)
-        };
+        let from = if rel.from_attr.is_some() { None } else { db.get_c4_shape(&rel.from) };
+        let to = if rel.to_attr.is_some() { None } else { db.get_c4_shape(&rel.to) };
         let (Some(a), Some(b)) = (box_of(from), box_of(to)) else {
             return Err(unknown(&rel.from, &rel.to));
         };
@@ -222,8 +216,7 @@ fn draw(
         }
     }
     #[expect(clippy::cast_precision_loss, reason = "counts stay far below 2^52")]
-    let careful = db.rels.len() as f64
-        * (nodes.len() as f64 + layout.order.len() as f64 + 3.0 * db.rels.len() as f64)
+    let careful = db.rels.len() as f64 * (nodes.len() as f64 + layout.order.len() as f64 + 3.0 * db.rels.len() as f64)
         <= CARE_BUDGET;
     let covered = |taken: &[f64], x0: f64, y0: f64, x1: f64, y1: f64| {
         let mut area = 0.0;
@@ -273,12 +266,7 @@ fn draw(
             if start_arrow { trim } else { 0.0 },
             if end_arrow { trim } else { 0.0 },
         );
-        grow(
-            r.x0.min(r.x1),
-            r.y0.min(r.y1),
-            r.x0.max(r.x1),
-            r.y0.max(r.y1),
-        );
+        grow(r.x0.min(r.x1), r.y0.min(r.y1), r.x0.max(r.x1), r.y0.max(r.y1));
         if start_arrow && careful {
             taken.extend([r.sx - ARROW, r.sy - ARROW, r.sx + ARROW, r.sy + ARROW]);
         }
@@ -317,22 +305,10 @@ fn draw(
         let top = own.y + HEAD_TOP;
         let bottom = own.y + group.head - LANE;
         let mut fewest = usize::MAX;
-        for x in [
-            HEAD_LEFT,
-            (own.w - group.head_w) / 2.0,
-            own.w - HEAD_LEFT - group.head_w,
-        ] {
+        for x in [HEAD_LEFT, (own.w - group.head_w) / 2.0, own.w - HEAD_LEFT - group.head_w] {
             let count = routes
                 .iter()
-                .filter(|r| {
-                    crosses(
-                        &r.points,
-                        own.x + x - 4.0,
-                        top,
-                        own.x + x + group.head_w + 4.0,
-                        bottom,
-                    )
-                })
+                .filter(|r| crosses(&r.points, own.x + x - 4.0, top, own.x + x + group.head_w + 4.0, bottom))
                 .count();
             if count < fewest {
                 fewest = count;
@@ -342,12 +318,7 @@ fn draw(
                 break;
             }
         }
-        taken.extend([
-            own.x + group.head_x - 4.0,
-            top,
-            own.x + group.head_x + group.head_w + 4.0,
-            bottom,
-        ]);
+        taken.extend([own.x + group.head_x - 4.0, top, own.x + group.head_x + group.head_w + 4.0, bottom]);
     }
 
     let mut labels_out = String::new();
@@ -363,11 +334,7 @@ fn draw(
         }
         text.push_str(&rel.label);
         let label = layout_label(Some(&text), false, small, r.room, 0, None);
-        let techn_text = rel
-            .techn
-            .as_deref()
-            .filter(|techn| !techn.is_empty())
-            .map(|techn| ["[", techn, "]"].concat());
+        let techn_text = rel.techn.as_deref().filter(|techn| !techn.is_empty()).map(|techn| ["[", techn, "]"].concat());
         let techn = layout_label(techn_text.as_deref(), false, small, r.room, ITALIC, None);
         let lw = label.width.max(techn.width) + 8.0;
         let lh = label.height + techn.height;
@@ -378,11 +345,7 @@ fn draw(
         // The label sits on the line, or just beside it when another relation runs the opposite
         // way.
         let beside = r.nx.abs() * (lw / 2.0) + r.ny.abs() * (lh / 2.0) + 2.0;
-        let aside = if r.lean == 0.0 {
-            beside
-        } else {
-            0.0_f64.max(r.lean.min(beside - 14.0))
-        };
+        let aside = if r.lean == 0.0 { beside } else { 0.0_f64.max(r.lean.min(beside - 14.0)) };
         // Manual offsets are tuned to the original spacing. Reposition compact labels beside
         // their routed arrows so an offset cannot leave them floating outside a boundary.
         let mut dx = r.nx * aside + if tight { 0.0 } else { offset(rel.offset_x) };
@@ -403,13 +366,7 @@ fn draw(
                 for t in SLIDE {
                     let cx = r.x0 + (r.x1 - r.x0) * t + px;
                     let cy = r.y0 + (r.y1 - r.y0) * t + py;
-                    let area = covered(
-                        &taken,
-                        cx - lw / 2.0,
-                        cy - lh / 2.0,
-                        cx + lw / 2.0,
-                        cy + lh / 2.0,
-                    );
+                    let area = covered(&taken, cx - lw / 2.0, cy - lh / 2.0, cx + lw / 2.0, cy + lh / 2.0);
                     if area < least {
                         least = area;
                         at = t;
@@ -450,13 +407,7 @@ fn draw(
         let mut body = label_svg(&label, cx, top + label.height / 2.0, &style.text, None);
         let mut techn_attrs = String::from(" class=\"ondine-c4-techn\" fill=\"var(--_m)\"");
         techn_attrs.push_str(&style.text);
-        body.push_str(&label_svg(
-            &techn,
-            cx,
-            top + label.height + techn.height / 2.0,
-            &techn_attrs,
-            None,
-        ));
+        body.push_str(&label_svg(&techn, cx, top + label.height + techn.height / 2.0, &techn_attrs, None));
         labels_out.push_str(&links.link(&body, rel.link.as_deref(), &id));
         labels_out.push_str("</g>");
     }
@@ -472,10 +423,7 @@ fn draw(
             continue;
         };
         if at != 0
-            && let (Some(boundary), Some(&own)) = (
-                db.boundaries.get(group.boundary),
-                layout.boxes.get(group.id),
-            )
+            && let (Some(boundary), Some(&own)) = (db.boundaries.get(group.boundary), layout.boxes.get(group.id))
         {
             let style = user_style(
                 boundary.bg_color.as_deref(),
@@ -490,37 +438,22 @@ fn draw(
                 heading(0),
                 x,
                 y,
-                &[
-                    " class=\"ondine-cluster-label\" font-weight=\"var(--_hw)\"",
-                    &style.text,
-                ]
-                .concat(),
+                &[" class=\"ondine-cluster-label\" font-weight=\"var(--_hw)\"", &style.text].concat(),
             );
             y += heading(0).height;
             text.push_str(&left_label_svg(
                 heading(1),
                 x,
                 y,
-                &[
-                    " class=\"ondine-c4-type\" font-size=\"",
-                    &small_text,
-                    "\" fill=\"var(--_m)\"",
-                    &style.text,
-                ]
-                .concat(),
+                &[" class=\"ondine-c4-type\" font-size=\"", &small_text, "\" fill=\"var(--_m)\"", &style.text].concat(),
             ));
             y += heading(1).height;
             text.push_str(&left_label_svg(
                 heading(2),
                 x,
                 y,
-                &[
-                    " class=\"ondine-c4-descr\" font-size=\"",
-                    &small_text,
-                    "\" fill=\"var(--_m)\"",
-                    &style.text,
-                ]
-                .concat(),
+                &[" class=\"ondine-c4-descr\" font-size=\"", &small_text, "\" fill=\"var(--_m)\"", &style.text]
+                    .concat(),
             ));
             let deployment = boundary.node_type.as_deref().is_some_and(|t| !t.is_empty());
             clusters.push_str("<g class=\"ondine-cluster ondine-c4-");
@@ -547,26 +480,18 @@ fn draw(
             clusters.push_str("</g>");
         }
         for node in &group.nodes {
-            let (Some(shape), Some(&own)) = (db.shapes.get(node.shape), layout.boxes.get(node.id))
-            else {
+            let (Some(shape), Some(&own)) = (db.shapes.get(node.shape), layout.boxes.get(node.id)) else {
                 continue;
             };
             let external = shape.kind.starts_with("external");
-            let style = user_style(
-                shape.bg_color.as_deref(),
-                shape.border_color.as_deref(),
-                shape.font_color.as_deref(),
-            );
+            let style =
+                user_style(shape.bg_color.as_deref(), shape.border_color.as_deref(), shape.font_color.as_deref());
             let mut stroke = String::from(" stroke=\"var(--_b)\"");
             if external {
                 stroke.push_str(" stroke-dasharray=\"4 3\"");
             }
             let (w, h, form, labels) = (own.w, own.h, own.form, &node.labels);
-            let dx = if form == Form::HCyl {
-                -queue_rx(h) / 2.0
-            } else {
-                0.0
-            };
+            let dx = if form == Form::HCyl { -queue_rx(h) / 2.0 } else { 0.0 };
             let dy = match form {
                 Form::Person => HEAD / 2.0,
                 Form::Cyl => cyl_ry(w) / 2.0,
@@ -578,13 +503,7 @@ fn draw(
                 &labels[0],
                 dx,
                 y + labels[0].height / 2.0,
-                &[
-                    " class=\"ondine-c4-type\" font-size=\"",
-                    &smaller_text,
-                    "\"",
-                    &muted,
-                ]
-                .concat(),
+                &[" class=\"ondine-c4-type\" font-size=\"", &smaller_text, "\"", &muted].concat(),
                 None,
             );
             y += labels[0].height;
@@ -592,11 +511,7 @@ fn draw(
                 &labels[1],
                 dx,
                 y + labels[1].height / 2.0,
-                &[
-                    " class=\"ondine-label\" font-weight=\"var(--_hw)\"",
-                    &style.text,
-                ]
-                .concat(),
+                &[" class=\"ondine-label\" font-weight=\"var(--_hw)\"", &style.text].concat(),
                 None,
             ));
             y += labels[1].height;
@@ -604,13 +519,7 @@ fn draw(
                 &labels[2],
                 dx,
                 y + labels[2].height / 2.0,
-                &[
-                    " class=\"ondine-c4-techn\" font-size=\"",
-                    &small_text,
-                    "\"",
-                    &muted,
-                ]
-                .concat(),
+                &[" class=\"ondine-c4-techn\" font-size=\"", &small_text, "\"", &muted].concat(),
                 None,
             ));
             y += labels[2].height + 4.0;
@@ -618,13 +527,7 @@ fn draw(
                 &labels[3],
                 dx,
                 y + labels[3].height / 2.0,
-                &[
-                    " class=\"ondine-c4-descr\" font-size=\"",
-                    &small_text,
-                    "\"",
-                    &style.text,
-                ]
-                .concat(),
+                &[" class=\"ondine-c4-descr\" font-size=\"", &small_text, "\"", &style.text].concat(),
                 None,
             ));
             nodes_out.push_str("<g class=\"ondine-node ondine-shape-");
@@ -641,40 +544,17 @@ fn draw(
             nodes_out.push(',');
             push_num(&mut nodes_out, own.y + h / 2.0);
             nodes_out.push_str(")\">");
-            let fill = [
-                " fill=\"var(",
-                if external { "--_bg" } else { "--_s" },
-                ")\"",
-                &stroke,
-                &style.shape,
-            ]
-            .concat();
-            let mut body = draw_shape(
-                form.name(),
-                w,
-                h,
-                &fill,
-                &[stroke.as_str(), &style.line].concat(),
-            );
+            let fill = [" fill=\"var(", if external { "--_bg" } else { "--_s" }, ")\"", &stroke, &style.shape].concat();
+            let mut body = draw_shape(form.name(), w, h, &fill, &[stroke.as_str(), &style.line].concat());
             body.push_str(&text);
             nodes_out.push_str(&links.link(&body, shape.link.as_deref(), &shape.alias));
             nodes_out.push_str("</g>");
         }
     }
 
-    let title = layout_label(
-        db.title.as_deref(),
-        false,
-        size,
-        if tight { title_room(options) } else { 4000.0 },
-        BOLD,
-        None,
-    );
-    let title_height = if title.height > 0.0 {
-        title.height + 12.0
-    } else {
-        0.0
-    };
+    let title =
+        layout_label(db.title.as_deref(), false, size, if tight { title_room(options) } else { 4000.0 }, BOLD, None);
+    let title_height = if title.height > 0.0 { title.height + 12.0 } else { 0.0 };
     let inner = (max_x - min_x).max(title.width);
     let width = (inner + 2.0 * pad).ceil();
     let height = (max_y - min_y + title_height + 2.0 * pad).ceil();
@@ -699,9 +579,7 @@ fn draw(
         content.push_str("</g>");
     }
     if !edges_out.is_empty() {
-        content.push_str(
-            "<g class=\"ondine-edges\" fill=\"none\" stroke=\"var(--_l)\" stroke-linecap=\"round\">",
-        );
+        content.push_str("<g class=\"ondine-edges\" fill=\"none\" stroke=\"var(--_l)\" stroke-linecap=\"round\">");
         content.push_str(&edges_out);
         content.push_str("</g>");
     }
@@ -725,19 +603,8 @@ fn draw(
         height,
         size,
         options,
-        Accessible {
-            acc_descr: db.acc_descr.as_deref(),
-            acc_title: db.acc_title.as_deref(),
-        },
+        Accessible { acc_descr: db.acc_descr.as_deref(), acc_title: db.acc_title.as_deref() },
         &content,
     );
-    Ok((
-        Rendered {
-            height,
-            links: links.links,
-            svg,
-            width,
-        },
-        lanes.squeezed,
-    ))
+    Ok((Rendered { height, links: links.links, svg, width }, lanes.squeezed))
 }

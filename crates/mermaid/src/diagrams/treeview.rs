@@ -7,31 +7,18 @@ pub(crate) mod model;
 pub(crate) mod parser;
 pub(crate) mod render;
 
-/// The JSON reader of the parity fixtures, loaded once per build.
-#[cfg(all(test, not(feature = "sankey")))]
-#[path = "../../tests/fixtures/json.rs"]
-mod fixture;
-#[cfg(all(test, feature = "sankey"))]
-use super::sankey::fixture;
-
-use super::{Diagram, Input, Rendered};
+use super::Diagram;
+use super::Input;
+use super::Rendered;
 use crate::error::Error;
 use crate::svg::root::RenderOptions;
 use crate::util::url::UrlOptions;
 
 /// The `treeView` diagram type.
-pub(crate) const DIAGRAM: Diagram = Diagram {
-    keep_comments: false,
-    render: render_input,
-    section: None,
-};
+pub(crate) const DIAGRAM: Diagram = Diagram { keep_comments: false, render: render_input, section: None };
 
 /// Parses and draws the diagram.
-fn render_input(
-    input: &Input<'_>,
-    options: &RenderOptions,
-    _url: &UrlOptions<'_>,
-) -> Result<Rendered, Error> {
+fn render_input(input: &Input<'_>, options: &RenderOptions, _url: &UrlOptions<'_>) -> Result<Rendered, Error> {
     let model = parse(input.source, input.title)?;
     Ok(render::render(&model, input.config, options))
 }
@@ -46,15 +33,11 @@ pub(crate) use model::TreeViewModel as Model;
 ///
 /// Returns a syntax error for input Mermaid rejects.
 pub(crate) fn parse(source: &str, title: Option<&str>) -> Result<Model, Error> {
-    Ok(model::build_tree_view(
-        model::read_tree_view(source)?,
-        title,
-    ))
+    Ok(model::build_tree_view(model::read_tree_view(source)?, title))
 }
 
 /// Serializes `model` as the parity tests serialize Pele's `TreeViewModel`: object keys sorted,
 /// absent fields left out.
-#[cfg(feature = "model")]
 pub(crate) fn to_json(model: &Model) -> String {
     use crate::yaml::push_number;
 
@@ -123,7 +106,6 @@ pub(crate) fn to_json(model: &Model) -> String {
 }
 
 /// Appends `text` as `JSON.stringify` quotes it.
-#[cfg(feature = "model")]
 fn push_json_string(out: &mut String, text: &str) {
     const HEX: &[u8; 16] = b"0123456789abcdef";
     out.push('"');
@@ -146,56 +128,4 @@ fn push_json_string(out: &mut String, text: &str) {
         }
     }
     out.push('"');
-}
-
-#[cfg(test)]
-mod tests {
-    //! Parity with Pele's `treeView.parse` over every string literal of Pele's tree view compat
-    //! specs and the documents the specs build at runtime, as recorded by running Pele's
-    //! TypeScript.
-
-    use super::fixture::cases;
-    use super::parse;
-
-    /// The parity fixture: Pele's parser input and its model JSON or error.
-    const FIXTURE: &str = include_str!("../../tests/fixtures/treeview-parse.json");
-
-    #[test]
-    fn matches_pele() {
-        let mut differing = Vec::new();
-        let cases = cases(FIXTURE);
-        for case in &cases {
-            let input = case.str("input").unwrap_or_default();
-            let actual = parse(input, case.str("title"));
-            let same = match (&actual, case.get("error")) {
-                (Ok(_), None) => {
-                    #[cfg(feature = "model")]
-                    {
-                        actual.as_ref().map(super::to_json).ok().as_deref() == case.str("model")
-                    }
-                    #[cfg(not(feature = "model"))]
-                    {
-                        true
-                    }
-                }
-                (Err(error), Some(expected)) => {
-                    Some(error.code.as_str()) == expected.str("code")
-                        && Some(error.message.as_str()) == expected.str("message")
-                        && Some(f64::from(error.line)) == expected.num("line")
-                        && Some(f64::from(error.column)) == expected.num("column")
-                }
-                _ => false,
-            };
-            if !same {
-                differing.push((case.str("origin").unwrap_or("?"), input, actual));
-            }
-        }
-        assert!(
-            differing.is_empty(),
-            "{} of {} cases differ from Pele: {:#?}",
-            differing.len(),
-            cases.len(),
-            differing.iter().take(10).collect::<Vec<_>>()
-        );
-    }
 }

@@ -2,7 +2,9 @@
 //! `src/diagrams/sankey/parser.ts`.
 
 use super::db::SankeyDb;
-use super::lexer::{T, Token, tokenize};
+use super::lexer::T;
+use super::lexer::Token;
+use super::lexer::tokenize;
 use crate::error::Error;
 use crate::text::label::trim;
 
@@ -44,11 +46,7 @@ pub(crate) fn prepare_text_for_parsing(text: &str) -> String {
         }
     }
     let trimmed = trim(&out);
-    if trimmed.len() == out.len() {
-        out
-    } else {
-        trimmed.to_owned()
-    }
+    if trimmed.len() == out.len() { out } else { trimmed.to_owned() }
 }
 
 /// JavaScript's `parseFloat`: the longest leading decimal literal after whitespace, or `NaN`.
@@ -58,25 +56,11 @@ pub(crate) fn parse_float(text: &str) -> f64 {
     let sign = usize::from(matches!(bytes.first(), Some(b'+' | b'-')));
     let negative = bytes.first() == Some(&b'-');
 
-    if text
-        .get(sign..)
-        .is_some_and(|rest| rest.starts_with("Infinity"))
-    {
-        return if negative {
-            f64::NEG_INFINITY
-        } else {
-            f64::INFINITY
-        };
+    if text.get(sign..).is_some_and(|rest| rest.starts_with("Infinity")) {
+        return if negative { f64::NEG_INFINITY } else { f64::INFINITY };
     }
 
-    let digits = |from: usize| {
-        bytes
-            .get(from..)
-            .unwrap_or(&[])
-            .iter()
-            .take_while(|c| c.is_ascii_digit())
-            .count()
-    };
+    let digits = |from: usize| bytes.get(from..).unwrap_or(&[]).iter().take_while(|c| c.is_ascii_digit()).count();
     let int = digits(sign);
     let mut end = sign + int;
     let mut fraction = 0;
@@ -96,9 +80,7 @@ pub(crate) fn parse_float(text: &str) -> f64 {
             end += 1 + exponent_sign + exponent;
         }
     }
-    text.get(..end)
-        .and_then(|number| number.parse().ok())
-        .unwrap_or(f64::NAN)
+    text.get(..end).and_then(|number| number.parse().ok()).unwrap_or(f64::NAN)
 }
 
 /// `text` with each `""` read as one `"`.
@@ -121,11 +103,7 @@ fn unescape(text: &str) -> String {
 /// Returns a syntax error, with Mermaid's message, where the text leaves the grammar.
 pub(crate) fn parse_sankey(src: &str, db: &mut SankeyDb) -> Result<(), Error> {
     let tokens = tokenize(src);
-    let mut parser = Parser {
-        i: 0,
-        src,
-        tokens: &tokens,
-    };
+    let mut parser = Parser { i: 0, src, tokens: &tokens };
 
     parser.expect(T::Sankey, "")?;
     parser.expect(T::Newline, "")?;
@@ -168,11 +146,9 @@ impl<'s> Parser<'s, '_> {
     fn fail(&self, expected: &str) -> Error {
         let token = self.tokens.get(self.i);
         let got = match token.map(|token| token.kind) {
-            Some(T::Stuck) => self
-                .i
-                .checked_sub(1)
-                .and_then(|i| self.tokens.get(i))
-                .map_or("undefined", |token| token.kind.name()),
+            Some(T::Stuck) => {
+                self.i.checked_sub(1).and_then(|i| self.tokens.get(i)).map_or("undefined", |token| token.kind.name())
+            }
             Some(kind) => kind.name(),
             None => "undefined",
         };
@@ -208,11 +184,7 @@ impl<'s> Parser<'s, '_> {
             return Err(self.fail("'DQUOTE', 'NON_ESCAPED_TEXT'"));
         }
         self.i += 1;
-        let Some(token) = self
-            .tokens
-            .get(self.i)
-            .filter(|token| token.kind == T::EscapedText)
-        else {
+        let Some(token) = self.tokens.get(self.i).filter(|token| token.kind == T::EscapedText) else {
             return Err(self.fail("'ESCAPED_TEXT'"));
         };
         self.i += 1;

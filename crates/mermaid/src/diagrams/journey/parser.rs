@@ -2,22 +2,29 @@
 //! `src/diagrams/journey/parser.ts`.
 
 use super::db::JourneyDb;
-use super::lexer::{
-    ACC_DESCR, ACC_DESCR_MULTILINE_VALUE, ACC_TITLE, END, EOF, JOURNEY, NEWLINE, SECTION,
-    TASK_DATA, TASK_NAME, TITLE, TOKEN_NAMES, tokenize,
-};
+use super::lexer::ACC_DESCR;
+use super::lexer::ACC_DESCR_MULTILINE_VALUE;
+use super::lexer::ACC_TITLE;
+use super::lexer::END;
+use super::lexer::EOF;
+use super::lexer::JOURNEY;
+use super::lexer::NEWLINE;
+use super::lexer::SECTION;
+use super::lexer::TASK_DATA;
+use super::lexer::TASK_NAME;
+use super::lexer::TITLE;
+use super::lexer::TOKEN_NAMES;
+use super::lexer::tokenize;
 use crate::error::Error;
 use crate::text::label::trim;
 
-const STATEMENT: &str = "'EOF', 'SPACE', 'NEWLINE', 'title', 'acc_title', 'acc_descr', 'acc_descr_multiline_value', 'section', 'taskName'";
+const STATEMENT: &str =
+    "'EOF', 'SPACE', 'NEWLINE', 'title', 'acc_title', 'acc_descr', 'acc_descr_multiline_value', 'section', 'taskName'";
 
 /// `text` without the ASCII `keyword` bytes at its start and the one whitespace character after
 /// them, as Pele's `substring` leaves it.
 fn after(text: &str, keyword: usize) -> &str {
-    let space = text
-        .get(keyword..)
-        .and_then(|rest| rest.chars().next())
-        .map_or(0, char::len_utf8);
+    let space = text.get(keyword..).and_then(|rest| rest.chars().next()).map_or(0, char::len_utf8);
     text.get(keyword + space..).unwrap_or("")
 }
 

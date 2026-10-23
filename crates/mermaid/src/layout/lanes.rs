@@ -8,8 +8,18 @@
 use std::cmp::Ordering;
 use std::collections::BTreeSet;
 
-use crate::layout::compound::{CEdge, CNode, CompoundResult, Dir};
-use crate::layout::layered::{Kind, LEdge, LNode, LayeredOptions, ledge, lnode, orient, rank};
+use crate::layout::compound::CEdge;
+use crate::layout::compound::CNode;
+use crate::layout::compound::CompoundResult;
+use crate::layout::compound::Dir;
+use crate::layout::layered::Kind;
+use crate::layout::layered::LEdge;
+use crate::layout::layered::LNode;
+use crate::layout::layered::LayeredOptions;
+use crate::layout::layered::ledge;
+use crate::layout::layered::lnode;
+use crate::layout::layered::orient;
+use crate::layout::layered::rank;
 use crate::svg::builder::js_round;
 
 const LANE_HEAD: f64 = 34.0;
@@ -78,9 +88,7 @@ struct Placed {
 
 /// The enclosing group of node `i`, when it names one.
 fn parent(nodes: &[CNode], i: usize) -> Option<usize> {
-    usize::try_from(nodes[i].parent)
-        .ok()
-        .filter(|&p| p < nodes.len())
+    usize::try_from(nodes[i].parent).ok().filter(|&p| p < nodes.len())
 }
 
 /// Lays out `nodes` and `edges` with every top-level group as a lane, flowing in `dir`. Sets the
@@ -103,10 +111,7 @@ pub(crate) fn lane_layout(
     let flipped = matches!(dir, Dir::Bt | Dir::Rl);
 
     // The graph lists groups last-declared first.
-    let lanes: Vec<usize> = (0..n)
-        .rev()
-        .filter(|&i| nodes[i].parent < 0 && nodes[i].is_group)
-        .collect();
+    let lanes: Vec<usize> = (0..n).rev().filter(|&i| nodes[i].parent < 0 && nodes[i].is_group).collect();
     let lane_count = lanes.len().max(1);
     let mut lane_slot = vec![None; n];
     for (k, &id) in lanes.iter().enumerate() {
@@ -131,10 +136,7 @@ pub(crate) fn lane_layout(
         {
             t = p;
             if lane_slot[t].is_none() {
-                room += nodes[t]
-                    .pad_x
-                    .max(nodes[t].pad_top)
-                    .max(nodes[t].pad_bottom);
+                room += nodes[t].pad_x.max(nodes[t].pad_top).max(nodes[t].pad_bottom);
             }
             hops += 1;
         }
@@ -163,10 +165,7 @@ pub(crate) fn lane_layout(
     let along = |c: &CNode| if sideways { c.w } else { c.h };
     let cross = |c: &CNode| if sideways { c.h } else { c.w };
 
-    let mut lnodes: Vec<LNode> = real
-        .iter()
-        .map(|&i| lnode(cross(&nodes[i]), along(&nodes[i]), Kind::Node))
-        .collect();
+    let mut lnodes: Vec<LNode> = real.iter().map(|&i| lnode(cross(&nodes[i]), along(&nodes[i]), Kind::Node)).collect();
     let mut ledges = Vec::new();
     let mut edge_of = Vec::new();
     let mut step = 1;
@@ -183,11 +182,7 @@ pub(crate) fn lane_layout(
             step = 2;
         }
         seen.insert(key);
-        let (label_w, label_h) = if sideways {
-            (e.label_h, e.label_w)
-        } else {
-            (e.label_w, e.label_h)
-        };
+        let (label_w, label_h) = if sideways { (e.label_h, e.label_w) } else { (e.label_w, e.label_h) };
         ledges.push(ledge(a, b, e.minlen, label_w, label_h));
         edge_of.push(ei);
     }
@@ -225,11 +220,7 @@ pub(crate) fn lane_layout(
         let next: Vec<bool> = if round == 0 {
             placed.routed.clone()
         } else {
-            plain
-                .iter()
-                .zip(&placed.routed)
-                .map(|(&on, &routed)| on && routed)
-                .collect()
+            plain.iter().zip(&placed.routed).map(|(&on, &routed)| on && routed).collect()
         };
         if next == plain && placed.margins == margins {
             break;
@@ -239,23 +230,10 @@ pub(crate) fn lane_layout(
         placed = place(&ctx, nodes, edges, &plain, &margins);
         round += 1;
     }
-    if plain
-        .iter()
-        .zip(&placed.routed)
-        .any(|(&on, &routed)| on && !routed)
-    {
-        placed = place(
-            &ctx,
-            nodes,
-            edges,
-            &vec![false; m],
-            &vec![false; lane_count],
-        );
+    if plain.iter().zip(&placed.routed).any(|(&on, &routed)| on && !routed) {
+        placed = place(&ctx, nodes, edges, &vec![false; m], &vec![false; lane_count]);
     }
-    CompoundResult {
-        height: placed.height,
-        width: placed.width,
-    }
+    CompoundResult { height: placed.height, width: placed.width }
 }
 
 /// Lays the ranked items out and routes the relations. A `plain` relation is a handoff that takes
@@ -269,17 +247,8 @@ pub(crate) fn lane_layout(
     reason = "ranks, lanes, and counts are small whole numbers, as in Pele's typed arrays"
 )]
 #[expect(clippy::float_cmp, reason = "Pele compares route coordinates exactly")]
-#[expect(
-    clippy::many_single_char_names,
-    reason = "names mirror Pele's lanes.ts for side-by-side review"
-)]
-fn place(
-    ctx: &Ctx<'_>,
-    nodes: &mut [CNode],
-    edges: &mut [CEdge],
-    plain: &[bool],
-    margins: &[bool],
-) -> Placed {
+#[expect(clippy::many_single_char_names, reason = "names mirror Pele's lanes.ts for side-by-side review")]
+fn place(ctx: &Ctx<'_>, nodes: &mut [CNode], edges: &mut [CEdge], plain: &[bool], margins: &[bool]) -> Placed {
     let Ctx {
         edge_of,
         end_pad,
@@ -297,24 +266,18 @@ fn place(
         sideways,
         step,
     } = ctx;
-    let (end_pad, flipped, lane_count, sideways, step) =
-        (*end_pad, *flipped, *lane_count, *sideways, *step);
+    let (end_pad, flipped, lane_count, sideways, step) = (*end_pad, *flipped, *lane_count, *sideways, *step);
     let n = nodes.len();
     let m = ledges.len();
 
-    let pad: Vec<f64> = lane_pads
-        .iter()
-        .zip(margins)
-        .map(|(&room, &margin)| if margin { room.max(MARGIN) } else { room })
-        .collect();
+    let pad: Vec<f64> =
+        lane_pads.iter().zip(margins).map(|(&room, &margin)| if margin { room.max(MARGIN) } else { room }).collect();
     let mut used = vec![false; lane_count];
 
     // Items: the real ones, then a dummy for every rank an edge passes through.
     let mut dummies: i64 = 0;
-    let span: Vec<i64> = ledges
-        .iter()
-        .map(|e| (lnodes[e.head].rank as i64 - lnodes[e.tail].rank as i64).abs())
-        .collect();
+    let span: Vec<i64> =
+        ledges.iter().map(|e| (lnodes[e.head].rank as i64 - lnodes[e.tail].rank as i64).abs()).collect();
     for k in 0..m {
         if !plain[k] {
             dummies += span[k] - 1;
@@ -341,11 +304,7 @@ fn place(
     {
         let mut next = real.len();
         for (k, e) in ledges.iter().enumerate() {
-            let (a, b) = if e.reversed {
-                (e.head, e.tail)
-            } else {
-                (e.tail, e.head)
-            };
+            let (a, b) = if e.reversed { (e.head, e.tail) } else { (e.tail, e.head) };
             if direct || span[k] < 2 || plain[k] {
                 links.extend([a, b]);
                 continue;
@@ -441,22 +400,14 @@ fn place(
         let downward = sweep & 1 == 0;
         for s in 1..=max_rank {
             let row = &mut rows[if downward { s } else { max_rank - s }];
-            let (start, list) = if downward {
-                (&up_start, &up)
-            } else {
-                (&down_start, &down)
-            };
+            let (start, list) = if downward { (&up_start, &up) } else { (&down_start, &down) };
             for &i in row.iter() {
                 let mut sum = 0.0;
                 let count = start[i + 1] - start[i];
                 for k in start[i]..start[i + 1] {
                     sum += pos[list[k]];
                 }
-                key[i] = if count > 0 {
-                    sum / count as f64
-                } else {
-                    pos[i]
-                };
+                key[i] = if count > 0 { sum / count as f64 } else { pos[i] };
             }
             settle(row, &key, &mut pos);
         }
@@ -464,11 +415,7 @@ fn place(
 
     // The items of one rank that share a lane sit side by side as a run.
     let gap = |a: usize, b: usize| {
-        if dummy[a] || dummy[b] {
-            opt.edge_sep
-        } else {
-            opt.node_sep
-        }
+        if dummy[a] || dummy[b] { opt.edge_sep } else { opt.node_sep }
     };
     let runs = |row: &[usize]| {
         let mut out = Vec::new();
@@ -522,10 +469,9 @@ fn place(
     for row in &rows {
         for (from, to) in runs(row) {
             let at_lane = lane[row[from]];
-            let mut at =
-                (lane_start[at_lane] + pad[at_lane] + (lane_start[at_lane + 1] - pad[at_lane])
-                    - run_size(row, from, to))
-                    / 2.0;
+            let mut at = (lane_start[at_lane] + pad[at_lane] + (lane_start[at_lane + 1] - pad[at_lane])
+                - run_size(row, from, to))
+                / 2.0;
             for k in from..=to {
                 c[row[k]] = at + size[row[k]] / 2.0;
                 if k < to {
@@ -541,11 +487,7 @@ fn place(
         let downward = pass & 1 == 0;
         for s in 1..=max_rank {
             let row = &rows[if downward { s } else { max_rank - s }];
-            let (start, list) = if downward {
-                (&up_start, &up)
-            } else {
-                (&down_start, &down)
-            };
+            let (start, list) = if downward { (&up_start, &up) } else { (&down_start, &down) };
             for &i in row {
                 let mut sum = 0.0;
                 let mut count = 0;
@@ -556,11 +498,7 @@ fn place(
                     sum += c[list[k]];
                     count += 1;
                 }
-                want[i] = if count > 0 {
-                    sum / f64::from(count)
-                } else {
-                    c[i]
-                };
+                want[i] = if count > 0 { sum / f64::from(count) } else { c[i] };
             }
             for (from, to) in runs(row) {
                 let at_lane = lane[row[from]];
@@ -595,17 +533,12 @@ fn place(
         let full = opt.rank_sep / step as f64;
         sep.fill(full / CLOSE);
         for (k, e) in ledges.iter().enumerate() {
-            let (a, b) = if e.reversed {
-                (e.head, e.tail)
-            } else {
-                (e.tail, e.head)
-            };
+            let (a, b) = if e.reversed { (e.head, e.tail) } else { (e.tail, e.head) };
             if plain[k] {
                 if e.label_h <= 0.0 || span[k] > step as i64 {
                     continue;
                 }
-                let room = full
-                    .min((e.label_h + 2.0 * TURN - depth[a].min(depth[b]) / 2.0) / span[k] as f64);
+                let room = full.min((e.label_h + 2.0 * TURN - depth[a].min(depth[b]) / 2.0) / span[k] as f64);
                 for s in &mut sep[rank_of[a]..rank_of[b]] {
                     if room > *s {
                         *s = room;
@@ -613,8 +546,7 @@ fn place(
                 }
                 continue;
             }
-            let Some(d0) = first_dummy[k].filter(|_| span[k] > step as i64 * i64::from(e.minlen))
-            else {
+            let Some(d0) = first_dummy[k].filter(|_| span[k] > step as i64 * i64::from(e.minlen)) else {
                 sep[rank_of[a]..rank_of[b]].fill(full);
                 continue;
             };
@@ -682,15 +614,7 @@ fn place(
         inner.push(i);
     }
     inner.sort_by(|&a, &b| depth_of[b].cmp(&depth_of[a]).then(a.cmp(&b)));
-    let mut bounds = vec![
-        [
-            f64::INFINITY,
-            f64::INFINITY,
-            f64::NEG_INFINITY,
-            f64::NEG_INFINITY
-        ];
-        n
-    ];
+    let mut bounds = vec![[f64::INFINITY, f64::INFINITY, f64::NEG_INFINITY, f64::NEG_INFINITY]; n];
     let grow = |bounds: &mut [[f64; 4]], g: usize, c: &CNode| {
         let b = &mut bounds[g];
         if c.x - c.w / 2.0 < b[0] {
@@ -735,16 +659,9 @@ fn place(
         e.route = Vec::new();
     }
     for (k, e) in ledges.iter().enumerate() {
-        let (a, b) = if e.reversed {
-            (e.head, e.tail)
-        } else {
-            (e.tail, e.head)
-        };
+        let (a, b) = if e.reversed { (e.head, e.tail) } else { (e.tail, e.head) };
         let (ra, rb) = (rank_of[a], rank_of[b]);
-        let mut pts = vec![
-            c[a],
-            band_end[ra] - (band_end[ra] - band_start[ra] - depth[a]) / 2.0,
-        ];
+        let mut pts = vec![c[a], band_end[ra] - (band_end[ra] - band_start[ra] - depth[a]) / 2.0];
         if let Some(d0) = first_dummy[k] {
             for d in d0..d0 + span[k] as usize - 1 {
                 let rd = rank_of[d];
@@ -754,10 +671,7 @@ fn place(
                 }
             }
         }
-        pts.extend([
-            c[b],
-            band_start[rb] + (band_end[rb] - band_start[rb] - depth[b]) / 2.0,
-        ]);
+        pts.extend([c[b], band_start[rb] + (band_end[rb] - band_start[rb] - depth[b]) / 2.0]);
         let mut route = Vec::with_capacity(pts.len() / 2 * 3);
         for p in pts.chunks_exact(2) {
             route.extend([px(p[0], p[1]), py(p[0], p[1]), axis]);
@@ -791,11 +705,7 @@ fn place(
         }
         let (ax, ay) = border(&nodes[e.src], &nodes[e.dst]);
         let (bx, by) = border(&nodes[e.dst], &nodes[e.src]);
-        let flat = if (bx - ax).abs() > (by - ay).abs() {
-            1.0
-        } else {
-            0.0
-        };
+        let flat = if (bx - ax).abs() > (by - ay).abs() { 1.0 } else { 0.0 };
         e.route = vec![ax, ay, flat, bx, by, flat];
         e.label_x = f64::midpoint(ax, bx);
         e.label_y = f64::midpoint(ay, by);
@@ -812,12 +722,7 @@ fn place(
         let amid = |i: usize| f64::midpoint(band_start[rank_of[i]], band_end[rank_of[i]]);
         let mut labels: Vec<[f64; 2]> = edges
             .iter()
-            .map(|e| {
-                [
-                    if sideways { e.label_y } else { e.label_x },
-                    flip(if sideways { e.label_x } else { e.label_y }),
-                ]
-            })
+            .map(|e| [if sideways { e.label_y } else { e.label_x }, flip(if sideways { e.label_x } else { e.label_y })])
             .collect();
         let overlaps = |c0: f64, a0: f64, c1: f64, a1: f64, lc: f64, la: f64, cw: f64, ah: f64| {
             c1 > lc - cw / 2.0 && c0 < lc + cw / 2.0 && a1 > la - ah / 2.0 && a0 < la + ah / 2.0
@@ -837,11 +742,7 @@ fn place(
             }
             for (i, e) in edges.iter().enumerate() {
                 // A step's own loop keeps its label inside the step's box, and has no place here.
-                let (w, h) = if sideways {
-                    (e.label_h, e.label_w)
-                } else {
-                    (e.label_w, e.label_h)
-                };
+                let (w, h) = if sideways { (e.label_h, e.label_w) } else { (e.label_w, e.label_h) };
                 if i != ei
                     && e.label_w > 0.0
                     && e.src != e.dst
@@ -929,159 +830,121 @@ fn place(
             let (ac, bc, aa, ba) = (c[a], c[b], amid(a), amid(b));
             let dc = sign(bc - ac);
             let da = sign(ba - aa);
-            let attempt =
-                |edges: &mut [CEdge], labels: &mut [[f64; 2]], pts: &[f64], margin: f64| {
+            let attempt = |edges: &mut [CEdge], labels: &mut [[f64; 2]], pts: &[f64], margin: f64| {
+                let mut p = 2;
+                while p + 1 < pts.len() {
+                    let bounds = (
+                        pts[p - 2].min(pts[p]) - margin,
+                        pts[p - 1].min(pts[p + 1]) - margin,
+                        pts[p - 2].max(pts[p]) + margin,
+                        pts[p - 1].max(pts[p + 1]) + margin,
+                    );
+                    if !clear(edges, labels, bounds, Some((a, b)), ei) {
+                        return false;
+                    }
+                    let (x0, y0) = (px(pts[p - 2], pts[p - 1]), py(pts[p - 2], pts[p - 1]));
+                    let (x1, y1) = (px(pts[p], pts[p + 1]), py(pts[p], pts[p + 1]));
+                    if retraces(edges, x0, y0, x1, y1, ei) {
+                        return false;
+                    }
+                    p += 2;
+                }
+
+                let (out_w, out_h) = (edges[ei].label_w, edges[ei].label_h);
+                let (mut lc, mut la, mut longest) = (0.0, 0.0, -1.0);
+                if out_w > 0.0 {
+                    let (cw, ah) = (e.label_w, e.label_h);
                     let mut p = 2;
                     while p + 1 < pts.len() {
-                        let bounds = (
-                            pts[p - 2].min(pts[p]) - margin,
-                            pts[p - 1].min(pts[p + 1]) - margin,
-                            pts[p - 2].max(pts[p]) + margin,
-                            pts[p - 1].max(pts[p + 1]) + margin,
-                        );
-                        if !clear(edges, labels, bounds, Some((a, b)), ei) {
-                            return false;
-                        }
-                        let (x0, y0) = (px(pts[p - 2], pts[p - 1]), py(pts[p - 2], pts[p - 1]));
-                        let (x1, y1) = (px(pts[p], pts[p + 1]), py(pts[p], pts[p + 1]));
-                        if retraces(edges, x0, y0, x1, y1, ei) {
-                            return false;
-                        }
+                        let cc = f64::midpoint(pts[p - 2], pts[p]);
+                        let ca = f64::midpoint(pts[p - 1], pts[p + 1]);
+                        let across = (pts[p] - pts[p - 2]).abs();
+                        let along = (pts[p + 1] - pts[p - 1]).abs();
+                        let run = across + along;
                         p += 2;
-                    }
-
-                    let (out_w, out_h) = (edges[ei].label_w, edges[ei].label_h);
-                    let (mut lc, mut la, mut longest) = (0.0, 0.0, -1.0);
-                    if out_w > 0.0 {
-                        let (cw, ah) = (e.label_w, e.label_h);
-                        let mut p = 2;
-                        while p + 1 < pts.len() {
-                            let cc = f64::midpoint(pts[p - 2], pts[p]);
-                            let ca = f64::midpoint(pts[p - 1], pts[p + 1]);
-                            let across = (pts[p] - pts[p - 2]).abs();
-                            let along = (pts[p + 1] - pts[p - 1]).abs();
-                            let run = across + along;
-                            p += 2;
-                            let short = if across > 0.0 {
-                                across < cw + 8.0
-                            } else {
-                                along < ah + 8.0
-                            };
-                            if run <= longest || short {
-                                continue;
-                            }
-                            if cc - cw / 2.0 < 0.0
-                                || cc + cw / 2.0 > breadth_total
-                                || ca - ah / 2.0 < 0.0
-                                || ca + ah / 2.0 > length
-                            {
-                                continue;
-                            }
-                            // Include the ends here: the label must clear both shapes it connects.
-                            let bounds =
-                                (cc - cw / 2.0, ca - ah / 2.0, cc + cw / 2.0, ca + ah / 2.0);
-                            if !clear(edges, labels, bounds, None, ei) {
-                                continue;
-                            }
-                            // A label moved onto a handoff must not cover a return path that keeps its
-                            // ranked route. A segment's whole box is kept clear, including its curve.
-                            let (lx, ly) = (px(cc, ca), py(cc, ca));
-                            if crossings(
-                                edges,
-                                lx - out_w / 2.0,
-                                ly - out_h / 2.0,
-                                lx + out_w / 2.0,
-                                ly + out_h / 2.0,
-                                ei,
-                            ) > 0
-                            {
-                                continue;
-                            }
-                            lc = cc;
-                            la = ca;
-                            longest = run;
+                        let short = if across > 0.0 { across < cw + 8.0 } else { along < ah + 8.0 };
+                        if run <= longest || short {
+                            continue;
                         }
-                        if longest < 0.0 {
-                            return false;
+                        if cc - cw / 2.0 < 0.0
+                            || cc + cw / 2.0 > breadth_total
+                            || ca - ah / 2.0 < 0.0
+                            || ca + ah / 2.0 > length
+                        {
+                            continue;
+                        }
+                        // Include the ends here: the label must clear both shapes it connects.
+                        let bounds = (cc - cw / 2.0, ca - ah / 2.0, cc + cw / 2.0, ca + ah / 2.0);
+                        if !clear(edges, labels, bounds, None, ei) {
+                            continue;
+                        }
+                        // A label moved onto a handoff must not cover a return path that keeps its
+                        // ranked route. A segment's whole box is kept clear, including its curve.
+                        let (lx, ly) = (px(cc, ca), py(cc, ca));
+                        if crossings(edges, lx - out_w / 2.0, ly - out_h / 2.0, lx + out_w / 2.0, ly + out_h / 2.0, ei)
+                            > 0
+                        {
+                            continue;
+                        }
+                        lc = cc;
+                        la = ca;
+                        longest = run;
+                    }
+                    if longest < 0.0 {
+                        return false;
+                    }
+                }
+
+                // A point short of each corner and one past it keep the turn close to the corner,
+                // so that the line stays under its label and the handoff takes little room.
+                let mut way = vec![pts[0], pts[1]];
+                let mut p = 2;
+                while p + 1 < pts.len() {
+                    let dx = pts[p] - pts[p - 2];
+                    let dy = pts[p + 1] - pts[p - 1];
+                    let run = dx.abs() + dy.abs();
+                    let first = if p > 2 { TURN } else { 0.0 };
+                    let last = if p + 2 < pts.len() { TURN } else { 0.0 };
+                    if run > first + last + 1.0 {
+                        if first != 0.0 {
+                            way.extend([pts[p - 2] + (dx / run) * first, pts[p - 1] + (dy / run) * first]);
+                        }
+                        if last != 0.0 {
+                            way.extend([pts[p] - (dx / run) * last, pts[p + 1] - (dy / run) * last]);
                         }
                     }
+                    way.extend([pts[p], pts[p + 1]]);
+                    p += 2;
+                }
+                let out = &mut edges[ei];
+                out.route = Vec::with_capacity(way.len() / 2 * 3);
+                let mut p = 0;
+                while p + 1 < way.len() {
+                    let crosswise =
+                        if p == 0 { way.get(2).is_none_or(|&next| way[0] != next) } else { way[p] != way[p - 2] };
+                    out.route.extend([
+                        px(way[p], way[p + 1]),
+                        py(way[p], way[p + 1]),
+                        if crosswise { 1.0 - axis } else { axis },
+                    ]);
+                    p += 2;
+                }
+                if out.label_w > 0.0 {
+                    out.label_x = px(lc, la);
+                    out.label_y = py(lc, la);
+                    labels[ei] = [lc, la];
+                }
+                true
+            };
 
-                    // A point short of each corner and one past it keep the turn close to the corner,
-                    // so that the line stays under its label and the handoff takes little room.
-                    let mut way = vec![pts[0], pts[1]];
-                    let mut p = 2;
-                    while p + 1 < pts.len() {
-                        let dx = pts[p] - pts[p - 2];
-                        let dy = pts[p + 1] - pts[p - 1];
-                        let run = dx.abs() + dy.abs();
-                        let first = if p > 2 { TURN } else { 0.0 };
-                        let last = if p + 2 < pts.len() { TURN } else { 0.0 };
-                        if run > first + last + 1.0 {
-                            if first != 0.0 {
-                                way.extend([
-                                    pts[p - 2] + (dx / run) * first,
-                                    pts[p - 1] + (dy / run) * first,
-                                ]);
-                            }
-                            if last != 0.0 {
-                                way.extend([
-                                    pts[p] - (dx / run) * last,
-                                    pts[p + 1] - (dy / run) * last,
-                                ]);
-                            }
-                        }
-                        way.extend([pts[p], pts[p + 1]]);
-                        p += 2;
-                    }
-                    let out = &mut edges[ei];
-                    out.route = Vec::with_capacity(way.len() / 2 * 3);
-                    let mut p = 0;
-                    while p + 1 < way.len() {
-                        let crosswise = if p == 0 {
-                            way.get(2).is_none_or(|&next| way[0] != next)
-                        } else {
-                            way[p] != way[p - 2]
-                        };
-                        out.route.extend([
-                            px(way[p], way[p + 1]),
-                            py(way[p], way[p + 1]),
-                            if crosswise { 1.0 - axis } else { axis },
-                        ]);
-                        p += 2;
-                    }
-                    if out.label_w > 0.0 {
-                        out.label_x = px(lc, la);
-                        out.label_y = py(lc, la);
-                        labels[ei] = [lc, la];
-                    }
-                    true
-                };
-
-            if attempt(
-                edges,
-                &mut labels,
-                &[
-                    ac + dc * size[a] / 2.0,
-                    aa,
-                    bc,
-                    aa,
-                    bc,
-                    ba - da * depth[b] / 2.0,
-                ],
-                2.0,
-            ) || attempt(
-                edges,
-                &mut labels,
-                &[
-                    ac,
-                    aa + da * depth[a] / 2.0,
-                    ac,
-                    ba,
-                    bc - dc * size[b] / 2.0,
-                    ba,
-                ],
-                2.0,
-            ) {
+            if attempt(edges, &mut labels, &[ac + dc * size[a] / 2.0, aa, bc, aa, bc, ba - da * depth[b] / 2.0], 2.0)
+                || attempt(
+                    edges,
+                    &mut labels,
+                    &[ac, aa + da * depth[a] / 2.0, ac, ba, bc - dc * size[b] / 2.0, ba],
+                    2.0,
+                )
+            {
                 routed[k] = true;
                 continue;
             }
@@ -1094,19 +957,13 @@ fn place(
                 continue;
             }
             let mut around: Vec<([f64; 8], f64, usize)> = Vec::new();
-            let order = if lane[a] < lane[b] {
-                [lane[b], lane[a]]
-            } else {
-                [lane[a], lane[b]]
-            };
+            let order = if lane[a] < lane[b] { [lane[b], lane[a]] } else { [lane[a], lane[b]] };
             for at_lane in order {
                 // A lane that keeps no margin yet has less room there, and the handoff stays
                 // inside it.
                 let inset = (pad[at_lane] - LEG).max((pad[at_lane] / 2.0).min(MARGIN - LEG));
                 for ch in [lane_start[at_lane] + inset, lane_start[at_lane + 1] - inset] {
-                    if (ch - ac).abs() < size[a] / 2.0 + 4.0
-                        || (ch - bc).abs() < size[b] / 2.0 + 4.0
-                    {
+                    if (ch - ac).abs() < size[a] / 2.0 + 4.0 || (ch - bc).abs() < size[b] / 2.0 + 4.0 {
                         continue;
                     }
                     let pts = [
@@ -1125,8 +982,7 @@ fn place(
                     for p in [2, 4, 6] {
                         let (x0, y0) = (px(pts[p - 2], pts[p - 1]), py(pts[p - 2], pts[p - 1]));
                         let (x1, y1) = (px(pts[p], pts[p + 1]), py(pts[p], pts[p + 1]));
-                        let crossed =
-                            crossings(edges, x0.min(x1), y0.min(y1), x0.max(x1), y0.max(y1), ei);
+                        let crossed = crossings(edges, x0.min(x1), y0.min(y1), x0.max(x1), y0.max(y1), ei);
                         cost += f64::from(crossed) * 1e6 + (x1 - x0).abs() + (y1 - y0).abs();
                     }
                     around.push((pts, cost, at_lane));
@@ -1169,501 +1025,8 @@ fn border(from: &CNode, to: &CNode) -> (f64, f64) {
             (to.x, from.y + if dy < 0.0 { -hh } else { hh })
         };
     }
-    let sx = if dx == 0.0 {
-        f64::INFINITY
-    } else {
-        hw / dx.abs()
-    };
-    let sy = if dy == 0.0 {
-        f64::INFINITY
-    } else {
-        hh / dy.abs()
-    };
+    let sx = if dx == 0.0 { f64::INFINITY } else { hw / dx.abs() };
+    let sy = if dy == 0.0 { f64::INFINITY } else { hh / dy.abs() };
     let scale = sx.min(sy);
     (from.x + dx * scale, from.y + dy * scale)
-}
-
-#[cfg(test)]
-#[expect(
-    clippy::unreadable_literal,
-    reason = "hashes as the Pele scripts print them"
-)]
-#[expect(
-    clippy::cast_possible_truncation,
-    clippy::cast_possible_wrap,
-    clippy::cast_precision_loss,
-    clippy::cast_sign_loss,
-    clippy::float_cmp,
-    reason = "test graphs hold small whole numbers, built as the Pele script builds them"
-)]
-mod tests {
-    //! Checks against Pele (`obsidianmd/pele` at `458322a`). Every expected value comes from
-    //! running Pele's `laneLayout` with `bun`, never from this port: on the graphs Pele's
-    //! swimlane renderer builds for the swimlane corpus, and on random graphs both sides build
-    //! from the same seeded generator. Each case compares an FNV-1a hash of the exact bits of the
-    //! size, every node's box, and every edge's label and route.
-
-    use super::*;
-    use crate::diagrams::common::tokens::tests::fnv;
-    use crate::layout::compound::cnode;
-
-    struct Case {
-        dir: Dir,
-        edges: Vec<CEdge>,
-        nodes: Vec<CNode>,
-        opt: LayeredOptions,
-        pad: f64,
-    }
-
-    fn options(node_sep: f64, edge_sep: f64, rank_sep: f64) -> LayeredOptions {
-        LayeredOptions {
-            edge_sep,
-            node_sep,
-            port_sep: 20.0,
-            rank_sep,
-            ..LayeredOptions::default()
-        }
-    }
-
-    fn dir(name: &str) -> Dir {
-        match name {
-            "BT" => Dir::Bt,
-            "LR" => Dir::Lr,
-            "RL" => Dir::Rl,
-            _ => Dir::Tb,
-        }
-    }
-
-    fn edge(src: usize, dst: usize, minlen: u32, label_w: f64, label_h: f64) -> CEdge {
-        CEdge {
-            dst,
-            label_h,
-            label_w,
-            minlen,
-            src,
-            ..CEdge::default()
-        }
-    }
-
-    /// A graph in the scripts' compact form: `dir|pad|opt|nodes|edges`.
-    fn parse(text: &str) -> Case {
-        let parts: Vec<&str> = text.split('|').collect();
-        let numbers = |item: &str| {
-            item.split(',')
-                .map(|n| n.parse::<f64>().unwrap())
-                .collect::<Vec<_>>()
-        };
-        let opt = numbers(parts[2]);
-        let nodes = parts[3]
-            .split(';')
-            .filter(|item| !item.is_empty())
-            .map(|item| {
-                let v = numbers(item);
-                CNode {
-                    is_group: v[3] == 1.0,
-                    min_w: v[7],
-                    pad_bottom: v[6],
-                    pad_x: v[4],
-                    pad_top: v[5],
-                    ..cnode(v[0], v[1], v[2] as i32)
-                }
-            })
-            .collect();
-        let edges = parts[4]
-            .split(';')
-            .filter(|item| !item.is_empty())
-            .map(|item| {
-                let v = numbers(item);
-                edge(v[0] as usize, v[1] as usize, v[2] as u32, v[3], v[4])
-            })
-            .collect();
-        Case {
-            dir: dir(parts[0]),
-            edges,
-            nodes,
-            opt: options(opt[0], opt[1], opt[2]),
-            pad: parts[1].parse().unwrap(),
-        }
-    }
-
-    /// The random graph for `seed`, built as the Pele script's `randomCase` builds it.
-    fn random(seed: u32) -> Case {
-        let mut s = seed;
-        let mut int = |n: usize| {
-            s = s.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
-            (f64::from(s) / 4_294_967_296.0 * n as f64).floor() as usize
-        };
-        let mut nodes = Vec::new();
-        let lanes = 1 + int(4);
-        for _ in 0..lanes {
-            let pad_top = (20 + int(30)) as f64;
-            let min_w = (int(3) * 60) as f64;
-            nodes.push(CNode {
-                is_group: true,
-                min_w,
-                pad_top,
-                ..cnode(0.0, 0.0, -1)
-            });
-        }
-        let groups = int(3);
-        for _ in 0..groups {
-            let parent = int(nodes.len()) as i32;
-            let pad_x = (8 + int(10)) as f64;
-            let pad_top = (16 + int(10)) as f64;
-            let min_w = (int(2) * 80) as f64;
-            nodes.push(CNode {
-                is_group: true,
-                min_w,
-                pad_bottom: 8.0,
-                pad_x,
-                pad_top,
-                ..cnode(0.0, 0.0, parent)
-            });
-        }
-        let count = 2 + int(14);
-        for _ in 0..count {
-            let w = (40 + int(80)) as f64;
-            let h = (30 + int(30)) as f64;
-            let parent = int(nodes.len()) as i32;
-            nodes.push(cnode(w, h, parent));
-        }
-        let mut edges = Vec::new();
-        let m = int(count * 2);
-        for _ in 0..m {
-            let label = int(3) == 0;
-            let src = int(nodes.len());
-            let dst = int(nodes.len());
-            let minlen = 1 + int(2) * int(2);
-            let label_w = if label { (20 + int(60)) as f64 } else { 0.0 };
-            edges.push(edge(
-                src,
-                dst,
-                minlen as u32,
-                label_w,
-                if label { 18.0 } else { 0.0 },
-            ));
-        }
-        let node_sep = (30 + int(20)) as f64;
-        let edge_sep = (10 + int(10)) as f64;
-        let rank_sep = (40 + int(30)) as f64;
-        let dir = [Dir::Tb, Dir::Lr, Dir::Bt, Dir::Rl][int(4)];
-        let pad = if int(2) == 0 { LANE_PAD } else { 12.0 };
-        Case {
-            dir,
-            edges,
-            nodes,
-            opt: options(node_sep, edge_sep, rank_sep),
-            pad,
-        }
-    }
-
-    fn bits(values: &[f64]) -> String {
-        values
-            .iter()
-            .map(|&v| format!("{:x}", if v == 0.0 { 0.0f64 } else { v }.to_bits()))
-            .collect::<Vec<_>>()
-            .join(",")
-    }
-
-    fn outcome(mut case: Case) -> u32 {
-        let size = lane_layout(
-            &mut case.nodes,
-            &mut case.edges,
-            case.dir,
-            &case.opt,
-            case.pad,
-        );
-        let mut out = vec![bits(&[size.width]), bits(&[size.height])];
-        for n in &case.nodes {
-            out.push(bits(&[n.x, n.y, n.w, n.h, n.pad_top]));
-        }
-        for e in &case.edges {
-            let mut values = vec![e.label_x, e.label_y];
-            values.extend(&e.route);
-            out.push(bits(&values));
-        }
-        fnv(&out.join("\n"))
-    }
-
-    #[test]
-    fn lane_layout_matches_pele_on_swimlane_corpus() {
-        let cases: &[(&str, u32)] = &[
-            (
-                "LR|24|40,16,48|0,0,-1,1,20,40,20,84.912;0,0,-1,1,20,40,20,109.808;0,0,-1,1,20,40,20,97.344;163.168,48,2,0,0,0,0,0;63.568,48,2,0,0,0,0,0;108.896,48,1,0,0,0,0,0;109.808,48,1,0,0,0,0,0;131.136,48,0,0,0,0,0,0|3,4,1,0,0;4,5,1,0,0;5,6,1,0,0;4,7,1,0,0",
-                0x4dcc9821,
-            ),
-            (
-                "LR|24|40,16,48|0,0,-1,1,20,40,20,84.912;0,0,-1,1,20,40,20,109.808;0,0,-1,1,20,40,20,97.344;163.168,48,2,0,0,0,0,0;63.568,48,2,0,0,0,0,0;108.896,48,1,0,0,0,0,0;109.808,48,1,0,0,0,0,0;131.136,48,0,0,0,0,0,0|3,4,1,0,0;4,5,1,0,0;5,6,1,0,0;4,7,1,0,0",
-                0x4dcc9821,
-            ),
-            (
-                "LR|24|40,16,48|0,0,-1,1,20,40,20,113.376;0,0,-1,1,20,40,20,84.032;0,0,-1,1,20,40,20,97.344;150.704,48,2,0,0,0,0,0;147.168,48,2,0,0,0,0,0;139.152,48,1,0,0,0,0,0;129.376,48,1,0,0,0,0,0;155.168,48,0,0,0,0,0,0;113.36,48,0,0,0,0,0,0|3,5,1,0,0;5,6,1,91.366,25;5,7,1,136.51600000000002,25;7,8,1,0,0;8,6,1,0,0;6,4,1,0,0",
-                0x5d496276,
-            ),
-            (
-                "TB|24|40,16,48|0,0,-1,1,20,40,20,68.01599999999999;120.48,48,0,0,0,0,0,0;137.392,48,0,0,0,0,0,0|",
-                0x67b643f0,
-            ),
-            (
-                "LR|24|40,16,48|0,0,-1,1,20,40,20,124.928;0,0,-1,1,20,40,20,108.032;120.48,48,1,0,0,0,0,0;137.392,48,1,0,0,0,0,0;132.89600000000002,48,0,0,0,0,0,0;140.064,48,0,0,0,0,0,0|2,3,1,0,0;3,4,1,0,0;4,5,1,0,0",
-                0xccfd53e8,
-            ),
-            (
-                "LR|24|40,16,48|0,0,-1,1,20,40,20,96.464;0,0,-1,1,20,40,20,80.44800000000001;0,0,-1,1,20,40,20,71.584;85.792,48,2,0,0,0,0,0;94.672,48,2,0,0,0,0,0;107.12,48,2,0,0,0,0,0;122.336,76.46,1,0,0,0,0,0;61.14750934437026,61.14750934437026,0,0,0,0,0,0|3,4,1,0,0;4,6,1,0,0;6,7,1,36.122,25;6,5,1,29.892,25;5,4,1,0,0",
-                0xdbb54a87,
-            ),
-            (
-                "LR|24|40,16,48|0,0,-1,1,20,40,20,66.24000000000001;0,0,-1,1,20,40,20,69.792;148.94400000000002,48,1,0,0,0,0,0;117.808,48,1,0,0,0,0,0;137.36,48,0,0,0,0,0,0;125.824,48,0,0,0,0,0,0|2,4,1,0,0;4,3,1,95.258,25;3,5,1,0,0",
-                0x7ed65878,
-            ),
-            (
-                "LR|24|40,16,48|0,0,-1,1,20,40,20,113.376;0,0,-1,1,20,40,20,84.032;0,0,-1,1,20,40,20,97.344;132.94400000000002,48,2,0,0,0,0,0;81.344,48,1,0,0,0,0,0;93.792,48,0,0,0,0,0,0|3,4,1,0,0;4,5,1,0,0",
-                0xa1192cc0,
-            ),
-            (
-                "LR|24|40,16,48|0,0,-1,1,20,40,20,76.88;0,0,-1,1,20,40,20,66.24000000000001;0,0,-1,1,20,40,20,97.344;127.584,48,2,0,0,0,0,0;151.56799999999998,48,2,0,0,0,0,0;123.136,48,1,0,0,0,0,0;114.24,48,1,0,0,0,0,0;149.824,48,0,0,0,0,0,0;150.704,48,0,0,0,0,0,0|3,5,1,0,0;5,6,1,0,0;6,7,1,0,0;7,8,1,0,0;8,4,1,0,0",
-                0x2764150a,
-            ),
-            (
-                "LR|24|40,16,48|0,0,-1,1,20,40,20,81.344;0,0,-1,1,20,40,20,94.672;0,0,-1,1,20,40,20,93.808;166.72,48,2,0,0,0,0,0;148.94400000000002,48,2,0,0,0,0,0;167.616,48,1,0,0,0,0,0;144.57600000000002,90.36,1,0,0,0,0,0;144.49599999999998,48,0,0,0,0,0,0;183.6,48,0,0,0,0,0,0|3,5,1,137.272,25;5,6,1,0,0;6,7,1,71.92,25;7,8,1,0,0;8,4,1,0,0;6,3,1,109.272,25",
-                0x1834dcc5,
-            ),
-            (
-                "TB|24|40,16,48|0,0,-1,1,20,40,20,85.77600000000001;0,0,-1,1,20,40,20,80.44800000000001;0,0,-1,1,20,40,20,71.584;142.704,48,2,0,0,0,0,0;144.49599999999998,48,2,0,0,0,0,0;146.256,48,1,0,0,0,0,0;122.336,76.46,1,0,0,0,0,0;140.928,48,0,0,0,0,0,0;142.688,48,0,0,0,0,0,0|3,4,1,0,0;4,5,1,0,0;5,6,1,0,0;6,7,1,36.122,25;7,8,1,0,0;6,3,1,29.892,25",
-                0x675985e9,
-            ),
-            (
-                "LR|24|40,16,48|0,0,-1,1,20,40,20,67.136;0,0,-1,1,20,40,20,106.256;151.6,48,1,0,0,0,0,0;106.24,48,1,0,0,0,0,0;149.808,48,0,0,0,0,0,0|2,3,1,0,0;3,4,1,0,0",
-                0x2fde33e7,
-            ),
-            (
-                "LR|24|40,16,48|0,0,-1,1,20,40,20,113.376;0,0,-1,1,20,40,20,83.136;0,0,-1,1,20,40,20,84.032;217.488,135.93,2,0,0,0,0,0;188.064,48,2,0,0,0,0,0;118.672,48,1,0,0,0,0,0;131.136,48,0,0,0,0,0,0|3,4,1,36.122,25;3,5,1,29.892,25;5,6,1,0,0;6,4,1,0,0",
-                0xefce4d6b,
-            ),
-        ];
-        for &(graph, hash) in cases {
-            assert_eq!(outcome(parse(graph)), hash, "{graph}");
-        }
-    }
-
-    #[test]
-    fn lane_layout_matches_pele_on_random_graphs() {
-        let cases: &[(u32, u32)] = &[
-            (1, 0x363eac50),
-            (2, 0xe6bfdc8),
-            (3, 0x2c58df2c),
-            (4, 0xefffc62f),
-            (5, 0xae05cd78),
-            (6, 0x59f5cd22),
-            (7, 0x96dfe9d6),
-            (8, 0xe0184a67),
-            (9, 0xf8d3e4fd),
-            (10, 0x1354893),
-            (11, 0x84080dfe),
-            (12, 0xa4a9d1ed),
-            (13, 0x92de611d),
-            (14, 0x854f7e66),
-            (15, 0xb7102917),
-            (16, 0x3b00d9a2),
-            (17, 0x53c14461),
-            (18, 0xa90ec47a),
-            (19, 0xfc2b736b),
-            (20, 0xce740002),
-            (21, 0x340ffa04),
-            (22, 0x27927704),
-            (23, 0xc48b2064),
-            (24, 0x2b0832a7),
-            (25, 0xbb0723c1),
-            (26, 0x5c39fccb),
-            (27, 0x8c7253cc),
-            (28, 0x2cc0aee9),
-            (29, 0xd2cfb742),
-            (30, 0xe6863e78),
-            (31, 0x7e14d4d7),
-            (32, 0x372a0fc2),
-            (33, 0xa5e756c1),
-            (34, 0xada6673d),
-            (35, 0x9286683f),
-            (36, 0xe426dd5b),
-            (37, 0x8473bccb),
-            (38, 0x93c54525),
-            (39, 0x1fedc9a),
-            (40, 0x63a5cef6),
-            (41, 0x942a5caa),
-            (42, 0xb0b904ea),
-            (43, 0x141263f5),
-            (44, 0xc15aadb),
-            (45, 0x4536b27),
-            (46, 0xca09173b),
-            (47, 0x945dfbd6),
-            (48, 0x9468b6a4),
-            (49, 0x42b45aba),
-            (50, 0x28d9c0f),
-            (51, 0x601dfc88),
-            (52, 0xa09ca0e),
-            (53, 0x5034028f),
-            (54, 0xfcab3a7e),
-            (55, 0xa19a490),
-            (56, 0x76360819),
-            (57, 0x9507ecca),
-            (58, 0xc5bc660),
-            (59, 0x3823ea66),
-            (60, 0x5eb9d3c6),
-            (61, 0x59305436),
-            (62, 0x6c9f6cfe),
-            (63, 0x482613a2),
-            (64, 0x9906478b),
-            (65, 0x766a7180),
-            (66, 0x1aa579fc),
-            (67, 0xf13b9745),
-            (68, 0x80ec9091),
-            (69, 0xa76fa198),
-            (70, 0x5defe181),
-            (71, 0x35f45518),
-            (72, 0x648a8dd7),
-            (73, 0xc948ea26),
-            (74, 0x564ef6c5),
-            (75, 0x1aaee29b),
-            (76, 0x27f782a1),
-            (77, 0x18939245),
-            (78, 0xe940cf59),
-            (79, 0x95c19128),
-            (80, 0xbf08fa0d),
-            (81, 0xa79ddb79),
-            (82, 0x477db143),
-            (83, 0x4b53b450),
-            (84, 0x5ad22b52),
-            (85, 0xfcaee964),
-            (86, 0xa57b980d),
-            (87, 0xc65e515),
-            (88, 0x2cb39e10),
-            (89, 0xf63eaa1b),
-            (90, 0xa4f00a89),
-            (91, 0xfac5a1b6),
-            (92, 0x8d6d9443),
-            (93, 0xf958bd2c),
-            (94, 0x352632d2),
-            (95, 0x9d280255),
-            (96, 0xdad400de),
-            (97, 0x6c18a03c),
-            (98, 0xc1b88dff),
-            (99, 0x25e63059),
-            (100, 0x8687974e),
-            (101, 0xf808dfdd),
-            (102, 0xb7305fef),
-            (103, 0x6ef5178b),
-            (104, 0x81886ee5),
-            (105, 0xe5dc26a0),
-            (106, 0x8887bd86),
-            (107, 0x3f821216),
-            (108, 0x4a5350e6),
-            (109, 0x252ddd6a),
-            (110, 0x8cc617ea),
-            (111, 0x8847fe27),
-            (112, 0xf6be8258),
-            (113, 0xa2889d1c),
-            (114, 0x831e0a1f),
-            (115, 0x1ff12aa5),
-            (116, 0xd14f1862),
-            (117, 0xb01bb009),
-            (118, 0xf46d9475),
-            (119, 0x796ede47),
-            (120, 0x8433c6d),
-            (121, 0xa20fdac1),
-            (122, 0x8b0974a8),
-            (123, 0x934cda0e),
-            (124, 0x3202054b),
-            (125, 0x5a42ec31),
-            (126, 0x5c04a804),
-            (127, 0xb5af9194),
-            (128, 0x23085c1f),
-            (129, 0x54877b55),
-            (130, 0xf78a5402),
-            (131, 0x5524a63e),
-            (132, 0x6a1075c0),
-            (133, 0x1f0c3612),
-            (134, 0x398a7eec),
-            (135, 0x5ae985a9),
-            (136, 0xa20ff27b),
-            (137, 0xcee33b21),
-            (138, 0x4bcdfedd),
-            (139, 0xa189b6c2),
-            (140, 0x2cd17782),
-            (141, 0x49f15a0),
-            (142, 0x59ff6ec8),
-            (143, 0xf4afca17),
-            (144, 0xd6981953),
-            (145, 0xf658d792),
-            (146, 0x4067d2df),
-            (147, 0x2faeed61),
-            (148, 0x85c42b3b),
-            (149, 0x69aad717),
-            (150, 0x5f0351bb),
-            (151, 0xdd19b78b),
-            (152, 0x18704623),
-            (153, 0xdf9cb4eb),
-            (154, 0x49e55aa),
-            (155, 0x6b43bc08),
-            (156, 0xe72669a7),
-            (157, 0xd9cb3a64),
-            (158, 0xeebd964e),
-            (159, 0xdeb565fd),
-            (160, 0x73876496),
-            (161, 0xe3079d7a),
-            (162, 0xb0e8dad8),
-            (163, 0x3b405257),
-            (164, 0x8f476d41),
-            (165, 0x23ef0516),
-            (166, 0xb45f5ae5),
-            (167, 0x5d1cf92f),
-            (168, 0x670c7d7a),
-            (169, 0xe7a33d9c),
-            (170, 0x9c510114),
-            (171, 0x96cd8abd),
-            (172, 0x80b790f9),
-            (173, 0x381788fb),
-            (174, 0x3892496e),
-            (175, 0xa8923d80),
-            (176, 0x28f60f91),
-            (177, 0xda22abbf),
-            (178, 0xc48da71e),
-            (179, 0x24d7ab1c),
-            (180, 0x9667136b),
-            (181, 0x6c21f41b),
-            (182, 0x4ab816ee),
-            (183, 0xb6701907),
-            (184, 0xe5e9a99),
-            (185, 0xf39a5ba3),
-            (186, 0x1bd5e1da),
-            (187, 0xb88cdf6a),
-            (188, 0x305e5cbd),
-            (189, 0x4b61843e),
-            (190, 0x63827f16),
-            (191, 0xa913f52f),
-            (192, 0x8ecfda91),
-            (193, 0x6f6c487e),
-            (194, 0xbe14c1c4),
-            (195, 0xabc35336),
-            (196, 0xfa18ba4a),
-            (197, 0x210939c),
-            (198, 0x6a069778),
-            (199, 0x66296669),
-            (200, 0x4a311f4e),
-        ];
-        for &(seed, hash) in cases {
-            assert_eq!(outcome(random(seed)), hash, "seed {seed}");
-        }
-    }
-
-    #[test]
-    fn lane_layout_of_nothing_is_empty() {
-        let size = lane_layout(
-            &mut [],
-            &mut [],
-            Dir::Tb,
-            &options(40.0, 16.0, 48.0),
-            LANE_PAD,
-        );
-        assert_eq!((size.width, size.height), (0.0, 0.0));
-    }
 }
