@@ -4,7 +4,9 @@ This fork is a single-user editor. Collaboration panels, channels and channel
 notes, calls, screen sharing, participant controls, account menus, and sign-in
 entry points are removed, together with the collaboration server, UI, client,
 and account API crates. Unused account, channel, call, and following protocol
-definitions are removed. Local services use HTTP directly; remote editing uses RPC.
+definitions are removed. Local services use HTTP directly; remote editing uses RPC
+over the SSH channel only. The collab websocket transport (`Peer`, websocket
+message framing, `async-tungstenite`) is removed.
 GPUI has no screen-capture API or `screen-capture` feature, and the app does not
 link ScreenCaptureKit or ReplayKit.
 GPUI has no video `surface` element or CoreVideo pixel-buffer render path.

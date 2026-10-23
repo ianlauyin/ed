@@ -235,7 +235,6 @@ async-lock = { version = "3.4", default-features = false }
 async-process = "2.5.0"
 async-task = "4.7"
 async-trait = "0.1"
-async-tungstenite = "0.33"
 base64 = "0.22"
 bitflags = "2.6.0"
 block2 = "0.6"
@@ -448,7 +447,6 @@ vte = { version = "0.15.0", features = ["ansi"] }
 walkdir = "2.5"
 wax = { version = "0.7", default-features = false }
 which = "8"
-zstd = { version = "0.13", default-features = false, features = ["legacy", "arrays"] }
 
 [patch.crates-io]
 # Unify `tree_sitter_language::LanguageFn` between crates.io grammar crates and

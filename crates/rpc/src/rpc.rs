@@ -1,14 +1,7 @@
-mod conn;
-mod message_stream;
-mod peer;
-
-pub use conn::Connection;
-pub use peer::*;
 pub use proto;
 pub use proto::Receipt;
 pub use proto::TypedEnvelope;
 pub use proto::error::*;
-mod macros;
 
 #[cfg(feature = "gpui")]
 mod proto_client;

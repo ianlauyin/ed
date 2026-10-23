@@ -454,8 +454,8 @@ impl AnyProtoClient {
                 let request_id = envelope.message_id();
                 let stream = handler(entity, *envelope, cx);
                 async move {
-                    // An Error response is itself a terminal stream frame on
-                    // both transports (Peer and ChannelClient), so we don't
+                    // An Error response is itself a terminal stream frame on the
+                    // ChannelClient transport, so we don't
                     // need to follow it with an EndStream.
                     match stream.await {
                         Ok(stream) => {

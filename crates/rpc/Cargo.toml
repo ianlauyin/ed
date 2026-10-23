@@ -12,17 +12,12 @@ path = "src/rpc.rs"
 doctest = false
 
 [features]
-gpui = ["dep:gpui"]
+gpui = ["dep:gpui", "dep:anyhow", "dep:collections", "dep:futures", "dep:parking_lot"]
 
 [dependencies]
-anyhow.workspace = true
-async-tungstenite.workspace = true
-collections.workspace = true
-futures.workspace = true
+anyhow = { workspace = true, optional = true }
+collections = { workspace = true, optional = true }
+futures = { workspace = true, optional = true }
 gpui = { workspace = true, optional = true }
-gpui_util.workspace = true
-log.workspace = true
-parking_lot.workspace = true
+parking_lot = { workspace = true, optional = true }
 proto.workspace = true
-serde.workspace = true
-zstd.workspace = true
