@@ -17,3 +17,6 @@
   Into a remote project they are uploaded.
 - Cut followed by paste in another window copies rather than moves; only the
   window that cut can move.
+- Duplicate copies the selected entries next to themselves ("copy" renaming)
+  without touching either clipboard: a pending Copy/Cut and the system
+  clipboard survive it.
