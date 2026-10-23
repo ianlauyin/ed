@@ -24,6 +24,9 @@ use crate::text::label::Span;
 use crate::text::label::layout_label;
 use crate::text::label::trim;
 use crate::text::measure::BOLD;
+use crate::text::measure::SUB;
+use crate::text::measure::SUP;
+use crate::text::measure::UNDERLINE;
 use crate::text::measure::{self};
 use crate::yaml::Value;
 use crate::yaml::push_number;
@@ -135,6 +138,7 @@ fn text_block(label: &Label, x: f64, y: f64, attrs: &str, icons: Option<IconReso
     for (line, &width) in label.lines.iter().zip(&label.widths) {
         if let [span] = line.as_slice()
             && span.icon.is_none()
+            && span.style & (SUB | SUP | UNDERLINE) == 0
         {
             out.push_str("<text");
             out.push_str(&text_style(attrs, span.style));

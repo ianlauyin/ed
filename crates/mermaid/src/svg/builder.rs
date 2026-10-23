@@ -8,6 +8,9 @@ use crate::text::icons::IconResolver;
 use crate::text::label::Label;
 use crate::text::measure::BOLD;
 use crate::text::measure::ITALIC;
+use crate::text::measure::SUB;
+use crate::text::measure::SUP;
+use crate::text::measure::UNDERLINE;
 
 /// Rounds as JavaScript's `Math.round` does: halves toward positive infinity.
 pub(crate) fn js_round(value: f64) -> f64 {
@@ -181,7 +184,7 @@ pub(crate) fn label_svg(label: &Label, cx: f64, cy: f64, attrs: &str, icons: Opt
                     body.push_str("\" y=\"");
                     push_num(&mut body, y);
                     body.push_str("\" text-anchor=\"start\"");
-                    body.push_str(span_style(span.style & !shared));
+                    body.push_str(&span_style(span.style & !shared));
                     body.push('>');
                     body.push_str(&esc(&span.text));
                     body.push_str("</tspan>");
@@ -198,7 +201,7 @@ pub(crate) fn label_svg(label: &Label, cx: f64, cy: f64, attrs: &str, icons: Opt
                     push_num(&mut body, y);
                     body.push('"');
                 }
-                body.push_str(span_style(span.style & !shared));
+                body.push_str(&span_style(span.style & !shared));
                 body.push('>');
                 body.push_str(&esc(&span.text));
                 body.push_str("</tspan>");
@@ -228,14 +231,31 @@ const BOLD_ATTR: &str = " font-weight=\"var(--_w)\"";
 /// The attribute that makes text italic.
 const ITALIC_ATTR: &str = " font-style=\"italic\"";
 
-/// The attributes for a span's emphasis bits.
-pub(crate) fn span_style(style: u8) -> &'static str {
-    match (style & BOLD != 0, style & ITALIC != 0) {
-        (true, true) => " font-weight=\"var(--_w)\" font-style=\"italic\"",
-        (true, false) => BOLD_ATTR,
-        (false, true) => ITALIC_ATTR,
-        (false, false) => "",
+/// The attribute that underlines text.
+const UNDERLINE_ATTR: &str = " text-decoration=\"underline\"";
+/// The attributes that make text a subscript.
+const SUB_ATTR: &str = " baseline-shift=\"sub\" font-size=\"smaller\"";
+/// The attributes that make text a superscript.
+const SUP_ATTR: &str = " baseline-shift=\"super\" font-size=\"smaller\"";
+
+/// The attributes for a span's style bits. Monospace needs none: every label is monospace.
+pub(crate) fn span_style(style: u8) -> String {
+    let mut out = String::new();
+    if style & BOLD != 0 {
+        out.push_str(BOLD_ATTR);
     }
+    if style & ITALIC != 0 {
+        out.push_str(ITALIC_ATTR);
+    }
+    if style & UNDERLINE != 0 {
+        out.push_str(UNDERLINE_ATTR);
+    }
+    if style & SUB != 0 {
+        out.push_str(SUB_ATTR);
+    } else if style & SUP != 0 {
+        out.push_str(SUP_ATTR);
+    }
+    out
 }
 
 /// The emphasis every span of a label has. It is written once, on the text element, where a CSS

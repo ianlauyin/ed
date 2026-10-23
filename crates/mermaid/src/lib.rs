@@ -201,6 +201,38 @@ mod tests {
         }
     }
 
+    fn svg(source: &str) -> String {
+        let theme = Theme::monochrome(Color::rgb(0xff, 0xff, 0xff), Color::rgb(0, 0, 0));
+        render(source, &Options::default(), &theme).unwrap().svg
+    }
+
+    #[test]
+    fn decodes_entities_in_labels() {
+        let out = svg("flowchart LR\n  A[\"GET /plans/&lcub;id&rcub;\"] --> B[\"items#lsqb;0#rsqb; #verbar; none\"]");
+        assert!(out.contains("GET /plans/{id}"), "{out}");
+        assert!(out.contains("items[0] | none"), "{out}");
+        let out = svg("flowchart LR\n  A[\"x #amp;lt; y #38;gt; z\"]");
+        assert!(out.contains("x &amp;lt; y &amp;gt; z"), "{out}");
+    }
+
+    #[test]
+    fn styles_label_markup() {
+        let out = svg("flowchart LR\n  A[\"H<sub>2</sub>O\"] --> B[\"x<sup>2</sup>\"]");
+        assert!(out.contains("baseline-shift=\"sub\" font-size=\"smaller\">2</tspan>"), "{out}");
+        assert!(out.contains("baseline-shift=\"super\" font-size=\"smaller\">2</tspan>"), "{out}");
+        assert!(!out.contains("<sub>") && !out.contains("&lt;sub"), "{out}");
+
+        let out = svg("flowchart LR\n  A[\"a <u>underlined</u> word\"]");
+        assert!(out.contains("<tspan text-decoration=\"underline\">underlined</tspan>"), "{out}");
+        let out = svg("kanban\n  todo[Todo]\n    t1[<u>card</u>]");
+        assert!(out.contains("text-decoration=\"underline\">card</tspan>"), "{out}");
+
+        let out = svg("flowchart LR\n  A[\"List<T>\"]");
+        assert!(out.contains("List&lt;T&gt;"), "{out}");
+        let out = svg("flowchart LR\n  A[\"<span title=x>red</span> and <small>print</small><img src=x>\"]");
+        assert!(out.contains("red and print"), "{out}");
+    }
+
     #[test]
     fn limits_reject_long_source() {
         let theme = Theme::monochrome(Color::rgb(0xff, 0xff, 0xff), Color::rgb(0, 0, 0));

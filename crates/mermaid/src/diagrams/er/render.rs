@@ -190,7 +190,7 @@ fn text_left(label: &Label, x: f64, mut y: f64, attrs: &str) -> String {
                     push_num(&mut body, y);
                     body.push('"');
                 }
-                body.push_str(span_style(span.style & !shared));
+                body.push_str(&span_style(span.style & !shared));
                 body.push('>');
                 body.push_str(&esc(&span.text));
                 body.push_str("</tspan>");

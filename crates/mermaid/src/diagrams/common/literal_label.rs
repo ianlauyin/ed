@@ -200,7 +200,7 @@ pub(crate) fn left_label_svg(label: &Label, x: f64, top: f64, attrs: &str) -> St
                 text.push_str(&esc(&span.text));
             } else {
                 text.push_str("<tspan");
-                text.push_str(own);
+                text.push_str(&own);
                 text.push('>');
                 text.push_str(&esc(&span.text));
                 text.push_str("</tspan>");

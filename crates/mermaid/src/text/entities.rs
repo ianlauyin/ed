@@ -1,17 +1,22 @@
 //! Decodes Mermaid's entity placeholders and HTML entities, as Pele's `decodeEntities` does.
 
 /// Named entities Pele recognizes, sorted by name for binary search.
-const NAMED: [(&str, u32); 176] = [
+const NAMED: [(&str, u32); 191] = [
+    ("AMP", 38),
     ("Alpha", 913),
     ("Beta", 914),
     ("Chi", 935),
     ("Dagger", 8225),
     ("Delta", 916),
+    ("DiacriticalGrave", 96),
     ("Epsilon", 917),
     ("Eta", 919),
+    ("GT", 62),
     ("Gamma", 915),
+    ("Hat", 94),
     ("Iota", 921),
     ("Kappa", 922),
+    ("LT", 60),
     ("Lambda", 923),
     ("Mu", 924),
     ("Nu", 925),
@@ -21,11 +26,14 @@ const NAMED: [(&str, u32); 176] = [
     ("Pi", 928),
     ("Prime", 8243),
     ("Psi", 936),
+    ("QUOT", 34),
     ("Rho", 929),
     ("Sigma", 931),
     ("Tau", 932),
     ("Theta", 920),
+    ("UnderBar", 95),
     ("Upsilon", 933),
+    ("VerticalLine", 124),
     ("Xi", 926),
     ("Zeta", 918),
     ("alpha", 945),
@@ -93,16 +101,19 @@ const NAMED: [(&str, u32); 176] = [
     ("larr", 8592),
     ("lbrace", 123),
     ("lbrack", 91),
+    ("lcub", 123),
     ("ldquo", 8220),
     ("le", 8804),
     ("lowbar", 95),
     ("loz", 9674),
     ("lpar", 40),
     ("lsaquo", 8249),
+    ("lsqb", 91),
     ("lsquo", 8216),
     ("lt", 60),
     ("mdash", 8212),
     ("micro", 181),
+    ("midast", 42),
     ("middot", 183),
     ("minus", 8722),
     ("mu", 956),
@@ -142,16 +153,19 @@ const NAMED: [(&str, u32); 176] = [
     ("rarr", 8594),
     ("rbrace", 125),
     ("rbrack", 93),
+    ("rcub", 125),
     ("rdquo", 8221),
     ("reg", 174),
     ("rho", 961),
     ("rpar", 41),
     ("rsaquo", 8250),
+    ("rsqb", 93),
     ("rsquo", 8217),
     ("sbquo", 8218),
     ("sdot", 8901),
     ("sect", 167),
     ("semi", 59),
+    ("shy", 173),
     ("sigma", 963),
     ("sigmaf", 962),
     ("sim", 8764),
@@ -174,6 +188,7 @@ const NAMED: [(&str, u32); 176] = [
     ("uArr", 8657),
     ("uarr", 8593),
     ("upsilon", 965),
+    ("verbar", 124),
     ("vert", 124),
     ("xi", 958),
     ("yen", 165),
@@ -188,7 +203,7 @@ const CLOSE: &str = "\u{b6}\u{df}";
 /// Turns Mermaid's `#35;` and `#quot;` codes, as hidden by preprocessing, and HTML entities into
 /// characters. Unknown or invalid references stay as written.
 pub(crate) fn decode(text: &str) -> std::borrow::Cow<'_, str> {
-    let placeholders = if text.contains(CLOSE) { decode_placeholders(text) } else { std::borrow::Cow::Borrowed(text) };
+    let placeholders = if text.contains(CLOSE) { restore_placeholders(text) } else { std::borrow::Cow::Borrowed(text) };
 
     if !placeholders.contains('&') {
         return placeholders;
@@ -211,7 +226,9 @@ fn code_point(value: u64) -> Option<char> {
     u32::try_from(value).ok().and_then(char::from_u32)
 }
 
-fn decode_placeholders(text: &str) -> std::borrow::Cow<'_, str> {
+/// Turns Mermaid's placeholders back into entities, as Mermaid does, so that each code is decoded
+/// once: `#amp;lt;` shows `&lt;`, not `<`.
+fn restore_placeholders(text: &str) -> std::borrow::Cow<'_, str> {
     let mut out = String::new();
     let mut last = 0;
     let mut from = text.find(OPEN);
@@ -229,18 +246,9 @@ fn decode_placeholders(text: &str) -> std::borrow::Cow<'_, str> {
             let body = &text[if numeric { body_start + '\u{b0}'.len_utf8() } else { body_start }..stop];
 
             out.push_str(&text[last..start]);
-            if numeric {
-                match parse_decimal(body).and_then(code_point) {
-                    Some(c) => out.push(c),
-                    None => out.push_str(&text[start..end]),
-                }
-            } else if let Some(c) = lookup(body) {
-                out.push(c);
-            } else {
-                out.push('&');
-                out.push_str(body);
-                out.push(';');
-            }
+            out.push_str(if numeric { "&#" } else { "&" });
+            out.push_str(body);
+            out.push(';');
             last = end;
         }
 
@@ -323,4 +331,33 @@ fn parse_hex(digits: &str) -> u64 {
         };
         n.saturating_mul(16).saturating_add(u64::from(d))
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn names_are_sorted_for_binary_search() {
+        assert!(NAMED.windows(2).all(|pair| pair[0].0 < pair[1].0));
+    }
+
+    #[test]
+    fn decodes_html5_aliases() {
+        assert_eq!(decode("GET /plans/&lcub;id&rcub;"), "GET /plans/{id}");
+        assert_eq!(
+            decode("&lsqb;0&rsqb; &verbar; &VerticalLine; &midast; &Hat; &UnderBar; &DiacriticalGrave;"),
+            "[0] | | * ^ _ `"
+        );
+        assert_eq!(decode("&AMP; &LT; &GT; &QUOT; &shy;"), "& < > \" \u{ad}");
+    }
+
+    #[test]
+    fn decodes_each_code_once() {
+        // Mermaid's placeholders for `#amp;lt;` and `#38;gt;`.
+        let text = "x \u{fb02}\u{b0}amp\u{b6}\u{df}lt; y \u{fb02}\u{b0}\u{b0}38\u{b6}\u{df}gt; z";
+        assert_eq!(decode(text), "x &lt; y &gt; z");
+        assert_eq!(decode("\u{fb02}\u{b0}\u{b0}0\u{b6}\u{df}"), "&#0;");
+        assert_eq!(decode("\u{fb02}\u{b0}lsqb\u{b6}\u{df}"), "[");
+    }
 }
