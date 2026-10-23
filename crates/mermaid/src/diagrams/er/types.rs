@@ -46,17 +46,6 @@ pub(crate) enum Cardinality {
 }
 
 impl Cardinality {
-    /// Mermaid's name.
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::MdParent => "MD_PARENT",
-            Self::OneOrMore => "ONE_OR_MORE",
-            Self::OnlyOne => "ONLY_ONE",
-            Self::ZeroOrMore => "ZERO_OR_MORE",
-            Self::ZeroOrOne => "ZERO_OR_ONE",
-        }
-    }
-
     /// The lower-case name, which names the marker drawn for it.
     pub(crate) fn marker(self) -> &'static str {
         match self {

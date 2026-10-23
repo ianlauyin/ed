@@ -9,6 +9,7 @@ use super::flowchart::graph::GraphNode;
 use super::flowchart::render::Variant;
 use super::flowchart::render::{self};
 use super::flowchart::types::LabelType;
+use crate::Options;
 use crate::error::Error;
 use crate::layout::compound::CEdge;
 use crate::layout::compound::CNode;
@@ -19,13 +20,11 @@ use crate::layout::lanes::lane_layout;
 use crate::layout::layered::LayeredOptions;
 use crate::svg::builder::label_svg;
 use crate::svg::builder::push_num;
-use crate::svg::root::RenderOptions;
 use crate::svg::theme::ResolvedStyle;
 use crate::text::label::Label;
-use crate::util::url::UrlOptions;
 
 /// The `swimlane` diagram type.
-pub(crate) const DIAGRAM: Diagram = Diagram { keep_comments: false, render: render_input, section: None };
+pub(crate) const DIAGRAM: Diagram = Diagram { keep_comments: false, render: render_input };
 
 /// The lane that holds nodes outside every lane.
 const DEFAULT_LANE: &str = "__swimlane_default__";
@@ -33,9 +32,9 @@ const DEFAULT_LANE: &str = "__swimlane_default__";
 /// The flowchart variant that draws lanes.
 const VARIANT: Variant = Variant { draw_group: Some(draw_lane), layout, prepare, r#type: "swimlane" };
 
-fn render_input(input: &Input<'_>, options: &RenderOptions, url: &UrlOptions<'_>) -> Result<Rendered, Error> {
+fn render_input(input: &Input<'_>, options: &Options) -> Result<Rendered, Error> {
     let db = super::flowchart::parse(input.source, input.config, input.title, Some(input.max_edges))?;
-    Ok(render::render(&db, input.config, options, url, Some(&VARIANT)))
+    Ok(render::render(&db, input.config, options, Some(&VARIANT)))
 }
 
 /// Nodes outside every lane share one unnamed lane, as in Mermaid. Lanes all run the same way, so
@@ -72,12 +71,9 @@ fn prepare(graph: &mut FlowGraph) {
         is_group: true,
         label: None,
         label_type: LabelType::Text,
-        link: None,
-        link_target: None,
         parent_id: None,
         pos: None,
         shape: "rect".to_owned(),
-        tooltip: None,
     });
 }
 

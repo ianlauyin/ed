@@ -3,6 +3,7 @@
 
 use super::db::JourneyDb;
 use super::db::journey_actors;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit::fit_label;
 use crate::diagrams::common::fit::plain_label;
@@ -11,8 +12,6 @@ use crate::svg::builder::esc_text;
 use crate::svg::builder::js_round;
 use crate::svg::builder::label_svg;
 use crate::svg::builder::push_num;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::ROUNDED;
 use crate::svg::theme::series_color;
@@ -78,7 +77,7 @@ fn font_size(size: f64) -> String {
 }
 
 /// Draws `model`, running down when across does not fit.
-pub(crate) fn render(model: &JourneyDb, options: &RenderOptions) -> Rendered {
+pub(crate) fn render(model: &JourneyDb, options: &Options) -> Rendered {
     turn_to_fit(options, |down| if down { vertical(model, options) } else { draw(model, options) })
 }
 
@@ -99,11 +98,11 @@ struct Run {
 }
 
 #[expect(clippy::cast_precision_loss, reason = "counts and indexes are far below 2^52")]
-fn draw(model: &JourneyDb, options: &RenderOptions) -> Rendered {
-    let size = options.font_size.unwrap_or(16.0);
+fn draw(model: &JourneyDb, options: &Options) -> Rendered {
+    let size = options.font_size;
     let small = js_round(size * 0.875);
     let tiny = js_round(size * 0.75);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
     let tasks = &model.tasks;
     let n = tasks.len();
 
@@ -261,9 +260,7 @@ fn draw(model: &JourneyDb, options: &RenderOptions) -> Rendered {
                 push_number(&mut card, DOT);
                 card.push_str("\" fill=\"");
                 card.push_str(&series(actor(name)));
-                card.push_str("\" stroke=\"var(--_s)\"><title>");
-                card.push_str(&esc_text(name));
-                card.push_str("</title></circle>");
+                card.push_str("\" stroke=\"var(--_s)\"/>");
             }
             card.push_str("</g>");
             cards.push(card);
@@ -356,33 +353,20 @@ fn draw(model: &JourneyDb, options: &RenderOptions) -> Rendered {
         None,
     );
     content.push_str(&body);
-    document(model, options, size, total_width, total_height, &content)
+    document(size, total_width, total_height, &content)
 }
 
 /// Wraps `content` in the root document.
-fn document(model: &JourneyDb, options: &RenderOptions, size: f64, width: f64, height: f64, content: &str) -> Rendered {
-    Rendered {
-        height,
-        links: Vec::new(),
-        svg: svg_document(
-            "journey",
-            width,
-            height,
-            size,
-            options,
-            Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
-            content,
-        ),
-        width,
-    }
+fn document(size: f64, width: f64, height: f64, content: &str) -> Rendered {
+    Rendered { height, svg: svg_document("journey", width, height, size, content), width }
 }
 
 /// Draws the journey as a column of steps.
 #[expect(clippy::cast_precision_loss, reason = "indexes are far below 2^52")]
-fn vertical(model: &JourneyDb, options: &RenderOptions) -> Rendered {
-    let size = options.font_size.unwrap_or(16.0);
+fn vertical(model: &JourneyDb, options: &Options) -> Rendered {
+    let size = options.font_size;
     let small = js_round(size * 0.875);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
     let room = 140.0_f64.max(options.max_width.unwrap_or(320.0) - 2.0 * pad);
     let title = fit_label(model.title.as_deref(), size, room, BOLD);
     let names: Vec<&str> = journey_actors(&model.tasks).into_iter().filter(|name| !name.is_empty()).collect();
@@ -498,5 +482,5 @@ fn vertical(model: &JourneyDb, options: &RenderOptions) -> Rendered {
         None,
     );
     content.push_str(&body);
-    document(model, options, size, total_width, height, &content)
+    document(size, total_width, height, &content)
 }

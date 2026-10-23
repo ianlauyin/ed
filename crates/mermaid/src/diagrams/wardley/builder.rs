@@ -14,16 +14,7 @@ pub(crate) enum Flow {
     Forward,
 }
 
-impl Flow {
-    /// The flow as Pele names it.
-    pub(crate) const fn as_str(self) -> &'static str {
-        match self {
-            Self::Backward => "backward",
-            Self::Bidirectional => "bidirectional",
-            Self::Forward => "forward",
-        }
-    }
-}
+impl Flow {}
 
 /// A node. Coordinates are percentages: `x` is evolution, `y` is visibility.
 #[derive(Clone, Debug, Default)]

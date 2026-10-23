@@ -93,10 +93,6 @@ pub(crate) struct AgentflowDb {
     tooltip_index: BTreeMap<String, usize>,
 }
 
-/// Metadata keys that only change how an element looks, left out of the semantic model.
-pub(crate) const PRESENTATION_KEYS: [&str; 11] =
-    ["shape", "view", "icon", "img", "form", "pos", "w", "h", "class", "style", "labelType"];
-
 /// Shapes that define a tool.
 const TOOL_SHAPES: [&str; 5] = ["subroutine", "subprocess", "subproc", "framed-rectangle", "tool"];
 

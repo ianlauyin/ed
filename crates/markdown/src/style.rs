@@ -2,7 +2,7 @@ use super::*;
 
 /// A callback function that can be used to customize the style of links based on the destination URL.
 /// If the callback returns `None`, the default link style will be used.
-pub(crate) type LinkStyleCallback = Rc<dyn Fn(&str, &App) -> Option<TextStyleRefinement>>;
+type LinkStyleCallback = Rc<dyn Fn(&str, &App) -> Option<TextStyleRefinement>>;
 
 #[derive(Clone, Copy, Default)]
 pub struct BlockQuoteKindColors {

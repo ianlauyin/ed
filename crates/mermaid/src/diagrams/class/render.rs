@@ -11,6 +11,7 @@ use super::markers::class_marker;
 use super::markers::class_marker_trim;
 use super::members::ClassMember;
 use super::types::ClassNode;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::runs_across;
 use crate::diagrams::common::fit_width::tighten;
@@ -36,8 +37,6 @@ use crate::svg::cluster::title_crossed;
 use crate::svg::edges::EdgePath;
 use crate::svg::edges::edge_label_svg;
 use crate::svg::edges::route_path;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::shapes::end_side;
 use crate::svg::theme::RADIUS;
@@ -53,9 +52,6 @@ use crate::text::measure::BOLD;
 use crate::text::measure::ITALIC;
 use crate::text::measure::width;
 use crate::util::chars::is_space;
-use crate::util::url::LinkInfo;
-use crate::util::url::UrlOptions;
-use crate::util::url::linked;
 use crate::yaml::Value;
 
 /// Room between nodes in a rank.
@@ -82,8 +78,6 @@ const MIN_WIDTH: f64 = 64.0;
 const FOLD: f64 = 8.0;
 /// The color of lines and markers.
 const LINE: &str = "var(--_l)";
-/// The link targets written out.
-const TARGETS: [&str; 4] = ["_self", "_blank", "_parent", "_top"];
 
 /// The value under `key` of a YAML mapping.
 fn get<'v>(value: &'v Value, key: &str) -> Option<&'v Value> {
@@ -172,8 +166,8 @@ fn strip_default(classes: &str) -> &str {
 
 /// Draws a class diagram, turning one that runs across to run down, and tightening it, when it
 /// does not fit the host's width.
-pub(crate) fn render(db: &ClassDb, config: &Value, options: &RenderOptions, url: &UrlOptions<'_>) -> Rendered {
-    let fitted = |down: bool| tighten(options, |tight| draw(db, config, options, url, down, tight));
+pub(crate) fn render(db: &ClassDb, config: &Value, options: &Options) -> Rendered {
+    let fitted = |down: bool| tighten(options, |tight| draw(db, config, options, down, tight));
     if runs_across(Some(db.direction)) { turn_to_fit(options, fitted) } else { fitted(false) }
 }
 
@@ -249,23 +243,16 @@ impl Styler<'_> {
     clippy::too_many_lines,
     reason = "mirrors Pele's draw, one pass per drawing stage, and its exact comparisons"
 )]
-fn draw(
-    db: &ClassDb,
-    config: &Value,
-    options: &RenderOptions,
-    url: &UrlOptions<'_>,
-    turned: bool,
-    tight: bool,
-) -> Rendered {
+fn draw(db: &ClassDb, config: &Value, options: &Options, turned: bool, tight: bool) -> Rendered {
     let conf = get(config, "class").filter(|value| matches!(value, Value::Object(_)));
     let hierarchical = !matches!(conf.and_then(|conf| get(conf, "hierarchicalNamespaces")), Some(Value::Bool(false)));
     let graph = graph::build(db, hierarchical);
     let hide_empty = matches!(conf.and_then(|conf| get(conf, "hideEmptyMembersBox")), Some(Value::Bool(true)));
-    let size = options.font_size.unwrap_or(16.0);
+    let size = options.font_size;
     let small = js_round(size * 0.875);
     let tiny = js_round(size * 0.8);
     let tiny_height = js_round(tiny * 1.4);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
     let root_dir = if turned { Dir::Tb } else { direction(Some(db.direction)) };
     let n = graph.nodes.len();
 
@@ -725,7 +712,6 @@ fn draw(
     let oy = pad - min_y;
     let width = (max_x - min_x + 2.0 * pad).ceil();
     let height = (max_y - min_y + 2.0 * pad).ceil();
-    let mut links: Vec<LinkInfo> = Vec::new();
 
     let mut crossings = Crossings::new();
     if graph.nodes.first().is_some_and(|node| node.is_group) {
@@ -788,7 +774,7 @@ fn draw(
         at.push_str(")\"");
         if let Some(cls) = node.class_node {
             let sizes = Sizes { size, tiny, tiny_height };
-            nodes_out.push_str(&class_svg(view, cls, &id, &at, &sizes, url, &mut links));
+            nodes_out.push_str(&class_svg(view, cls, &id, &at, &sizes));
         } else if node.shape == NodeShape::Note {
             let r = w / 2.0;
             let t = -h / 2.0;
@@ -954,10 +940,9 @@ fn draw(
     content.push_str("</g>");
 
     let titled = with_title(db.title.as_deref(), size, pad, width, height, content);
-    let accessible = Accessible { acc_descr: db.acc_descr.as_deref(), acc_title: db.acc_title.as_deref() };
-    let svg = svg_document("class", titled.width, titled.height, size, options, accessible, &titled.content);
+    let svg = svg_document("class", titled.width, titled.height, size, &titled.content);
 
-    Rendered { height: titled.height, links, svg, width: titled.width }
+    Rendered { height: titled.height, svg, width: titled.width }
 }
 
 /// The attributes of a note's or an interface's label.
@@ -1052,15 +1037,7 @@ fn class_view(
 
 /// Draws a class box.
 #[expect(clippy::float_cmp, reason = "Pele compares the sizes exactly")]
-fn class_svg(
-    view: &View,
-    cls: &ClassNode,
-    id: &str,
-    at: &str,
-    sizes: &Sizes,
-    url: &UrlOptions<'_>,
-    links: &mut Vec<LinkInfo>,
-) -> String {
+fn class_svg(view: &View, cls: &ClassNode, id: &str, at: &str, sizes: &Sizes) -> String {
     let (w, h, style) = (view.w, view.h, &view.style);
     let left = -w / 2.0;
     let top = -h / 2.0;
@@ -1172,23 +1149,6 @@ fn class_svg(
         body.push_str(&lines(&view.attributes, "attribute", first));
         body.push_str(&lines(&view.methods, "method", second));
         body.push_str("</g>");
-    }
-
-    if let Some(tooltip) = cls.tooltip.as_deref().filter(|t| !t.is_empty()) {
-        let mut titled = String::from("<title>");
-        titled.push_str(&esc_text(tooltip));
-        titled.push_str("</title>");
-        titled.push_str(&body);
-        body = titled;
-    }
-    if let Some(link) = cls.link.as_deref().filter(|l| !l.is_empty()) {
-        let mut attrs = String::new();
-        if let Some(target) = cls.link_target.as_deref().filter(|target| TARGETS.contains(target)) {
-            attrs.push_str(" target=\"");
-            attrs.push_str(target);
-            attrs.push('"');
-        }
-        body = linked(&body, link, &cls.id, links, url, &attrs);
     }
 
     let mut out = String::from("<g class=\"ondine-node ondine-class");

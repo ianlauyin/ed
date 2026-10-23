@@ -42,8 +42,8 @@ const FORMAT_STEP: f64 = 400.0;
 
 /// The time to schedule against: the host's `now` when it is finite. Pele reads the clock
 /// otherwise, which the compiler does not, so it counts from the epoch.
-pub(crate) fn clock(now: Option<f64>) -> f64 {
-    now.filter(|now| now.is_finite()).unwrap_or(0.0)
+pub(crate) fn clock(now: f64) -> f64 {
+    if now.is_finite() { now } else { 0.0 }
 }
 
 /// A duration such as `3d` or `1.5h`, as Mermaid reads one. NaN and milliseconds when the text

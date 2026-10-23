@@ -1,5 +1,8 @@
-use crate::parser::{MarkdownEvent, MarkdownTag, MarkdownTagEnd};
 use std::ops::Range;
+
+use crate::parser::MarkdownEvent;
+use crate::parser::MarkdownTag;
+use crate::parser::MarkdownTagEnd;
 
 struct InlineSpan {
     range: Range<usize>,
@@ -9,9 +12,7 @@ struct InlineSpan {
 
 impl InlineSpan {
     fn opening<'a>(&self, source: &'a str) -> &'a str {
-        source
-            .get(self.range.start..self.content.start)
-            .unwrap_or("")
+        source.get(self.range.start..self.content.start).unwrap_or("")
     }
 
     fn closing<'a>(&self, source: &'a str) -> &'a str {
@@ -44,15 +45,8 @@ fn is_inline_span_tag_end(tag: &MarkdownTagEnd) -> bool {
 }
 
 fn inline_code_full_range(source: &str, content: &Range<usize>) -> Range<usize> {
-    let opening_ticks = source[..content.start]
-        .bytes()
-        .rev()
-        .take_while(|&byte| byte == b'`')
-        .count();
-    let closing_ticks = source[content.end..]
-        .bytes()
-        .take_while(|&byte| byte == b'`')
-        .count();
+    let opening_ticks = source[..content.start].bytes().rev().take_while(|&byte| byte == b'`').count();
+    let closing_ticks = source[content.end..].bytes().take_while(|&byte| byte == b'`').count();
     let ticks = opening_ticks.min(closing_ticks);
     content.start - ticks..content.end + ticks
 }
@@ -78,22 +72,14 @@ fn collect_inline_spans(source: &str, events: &[(Range<usize>, MarkdownEvent)]) 
             MarkdownEvent::End(tag) if is_inline_span_tag_end(tag) => {
                 if let Some((range, content)) = stack.pop() {
                     let content = content.unwrap_or(range.clone());
-                    spans.push(InlineSpan {
-                        range,
-                        content,
-                        is_code: false,
-                    });
+                    spans.push(InlineSpan { range, content, is_code: false });
                 }
                 note_child(&mut stack, event_range);
             }
             MarkdownEvent::Code | MarkdownEvent::SubstitutedCode(_) => {
                 let range = inline_code_full_range(source, event_range);
                 note_child(&mut stack, &range);
-                spans.push(InlineSpan {
-                    range,
-                    content: event_range.clone(),
-                    is_code: true,
-                });
+                spans.push(InlineSpan { range, content: event_range.clone(), is_code: true });
             }
             _ => note_child(&mut stack, event_range),
         }
@@ -132,10 +118,7 @@ fn boundary_block_events<'a>(
     events: &'a [(Range<usize>, MarkdownEvent)],
     root_block_starts: &[usize],
     selection: &Range<usize>,
-) -> (
-    &'a [(Range<usize>, MarkdownEvent)],
-    &'a [(Range<usize>, MarkdownEvent)],
-) {
+) -> (&'a [(Range<usize>, MarkdownEvent)], &'a [(Range<usize>, MarkdownEvent)]) {
     if root_block_starts.is_empty() {
         return (events, &[]);
     }
@@ -145,17 +128,12 @@ fn boundary_block_events<'a>(
     if end_block == start_block {
         (start_events, &[])
     } else {
-        (
-            start_events,
-            root_block_events(events, root_block_starts, end_block),
-        )
+        (start_events, root_block_events(events, root_block_starts, end_block))
     }
 }
 
 fn root_block_index(root_block_starts: &[usize], offset: usize) -> usize {
-    root_block_starts
-        .partition_point(|block_start| *block_start <= offset)
-        .saturating_sub(1)
+    root_block_starts.partition_point(|block_start| *block_start <= offset).saturating_sub(1)
 }
 
 fn root_block_events<'a>(
@@ -168,9 +146,7 @@ fn root_block_events<'a>(
     };
     let start = events.partition_point(|(range, _)| range.start < block_start);
     let end = match root_block_starts.get(block + 1) {
-        Some(&next_block_start) => {
-            events.partition_point(|(range, _)| range.start < next_block_start)
-        }
+        Some(&next_block_start) => events.partition_point(|(range, _)| range.start < next_block_start),
         None => events.len(),
     };
     events.get(start..end).unwrap_or(events)
@@ -228,11 +204,8 @@ fn snap_out_of_delimiters(spans: &[InlineSpan], selection: Range<usize>) -> Opti
 }
 
 fn selection_is_only_inside_code_spans(spans: &[InlineSpan], selection: &Range<usize>) -> bool {
-    let contains = |span: &InlineSpan| {
-        span.content.start <= selection.start && selection.end <= span.content.end
-    };
-    spans.iter().any(|span| span.is_code && contains(span))
-        && !spans.iter().any(|span| !span.is_code && contains(span))
+    let contains = |span: &InlineSpan| span.content.start <= selection.start && selection.end <= span.content.end;
+    spans.iter().any(|span| span.is_code && contains(span)) && !spans.iter().any(|span| !span.is_code && contains(span))
 }
 
 /// Re-adds delimiters cut off by the selection so the result is well-formed
@@ -242,12 +215,8 @@ fn selection_is_only_inside_code_spans(spans: &[InlineSpan], selection: &Range<u
 /// - nested spans are reopened outermost first: selecting `alic` in
 ///   `**bold _italic_**` yields `**_alic_**`
 fn rebalance_delimiters(source: &str, spans: &[InlineSpan], selection: &Range<usize>) -> String {
-    let nesting_order = |a: &&InlineSpan, b: &&InlineSpan| {
-        a.range
-            .start
-            .cmp(&b.range.start)
-            .then(b.range.end.cmp(&a.range.end))
-    };
+    let nesting_order =
+        |a: &&InlineSpan, b: &&InlineSpan| a.range.start.cmp(&b.range.start).then(b.range.end.cmp(&a.range.end));
 
     let mut open_at_start = spans
         .iter()

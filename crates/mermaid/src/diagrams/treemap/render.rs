@@ -6,6 +6,7 @@ use super::format::formatter;
 use super::layout::Insets;
 use super::layout::layout_treemap;
 use super::model::TreemapModel;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_text::fit_text;
 use crate::diagrams::common::fit_width::cap_width;
@@ -15,8 +16,6 @@ use crate::svg::builder::esc_text;
 use crate::svg::builder::js_round;
 use crate::svg::builder::label_svg;
 use crate::svg::builder::push_num;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::RADIUS;
 use crate::svg::theme::class_names;
@@ -55,13 +54,13 @@ fn option(config: &Value, key: &str, fallback: f64, min: f64, max: f64) -> f64 {
 }
 
 /// Draws `model` with the `treemap` section of `config`.
-pub(crate) fn render(model: &TreemapModel, config: &Value, options: &RenderOptions) -> Rendered {
-    let size = options.font_size.unwrap_or(16.0);
+pub(crate) fn render(model: &TreemapModel, config: &Value, options: &Options) -> Rendered {
+    let size = options.font_size;
     let small = js_round(size * 0.875);
     let tiny = js_round(size * 0.75);
     let least = js_round(size * 0.5625);
     let treemap = property(config, "treemap");
-    let pad = options.padding.unwrap_or_else(|| option(config, "diagramPadding", 8.0, 0.0, 2000.0));
+    let pad = option(config, "diagramPadding", options.padding, 0.0, 2000.0);
 
     // Mermaid sizes the diagram as ten times `nodeWidth` by ten times `nodeHeight`.
     let width = js_round(cap_width(options, option(config, "nodeWidth", 64.0, 1.0, 400.0) * 10.0, 200.0, 2.0 * pad));
@@ -231,14 +230,6 @@ pub(crate) fn render(model: &TreemapModel, config: &Value, options: &RenderOptio
         content.push_str("</g>");
     }
 
-    let svg = svg_document(
-        "treemap",
-        total_width,
-        total_height,
-        size,
-        options,
-        Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
-        &content,
-    );
-    Rendered { height: total_height, links: Vec::new(), svg, width: total_width }
+    let svg = svg_document("treemap", total_width, total_height, size, &content);
+    Rendered { height: total_height, svg, width: total_width }
 }

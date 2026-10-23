@@ -98,6 +98,27 @@ Phase 3 – virtualized preview (uncommitted as of 2026-10-23):
 - Not done: per-block render caching (elements are rebuilt every frame for
   the visible blocks), and avoiding `rope.to_string()` per edit.
 
+Phase 4 – cleanup (uncommitted as of 2026-10-23):
+- `crates/mermaid`: typed `mermaid::Options` replaces the JSON options string
+  (`render(source, &Options, &Theme)`, `now` folded in). Browser-only output
+  removed: `responsive`/`useMaxWidth`, `idPrefix`, `<title>`/`<desc>`/`aria-*`
+  and node tooltips, links (`<a>`, `Rendered.links`, link schemes/rel),
+  image scheme knobs (fixed: relative, http, https), `mermaid::model` and
+  every model-to-JSON serializer (~−6.2k lines).
+- `markdown`: 44 `pub(crate)` items narrowed to private;
+  `BlockRenderer::render` split into a `RenderPass` with per-event/tag
+  methods (`start`, `end`, `start_code_block`, `start_item`, `start_table`,
+  …); nightly rustfmt applied to the crate.
+- Preview: `MarkdownPreviewView` observes `MermaidDiagrams` — it is not a
+  view, so its notify alone left the cached pane replaying a frame that
+  painted the freed fallback raster (diagrams blanked on zoom until the next
+  unrelated redraw).
+- Seen in the running app (screenshot only; synthetic input was blocked):
+  HTML (centered `<p>`, `<kbd>`, `<mark>`, `<u>`, `<details>`, an HTML table
+  with a short row padded), flowchart, wide sequence diagram clipped for
+  horizontal scroll. Still not exercised interactively: zoom, scrolling,
+  selection, tabs, copy buttons, large-document profiling.
+
 Verified: `cargo check -p zed`, clippy clean on touched crates,
 `cargo test -p markdown_preview` (1 test renders a themed flowchart), sample
 diagrams (flowchart, sequence, pie, class, state, gantt) rasterized with resvg
@@ -118,18 +139,8 @@ copy buttons).
    keys, font size changes); profile a large document before adding
    per-block caches; avoid the preview's `rope.to_string()` copy per edit if
    it shows up in profiles.
-3. **`crates/mermaid` cleanup** (owned code now):
-   - typed options struct instead of the JSON string (`options_from_json`,
-     `yaml` JSON path);
-   - drop browser-only features (link/image schemes, `idPrefix`,
-     accessibility title/desc, `responsive`);
-   - drop the `model` feature's serializers (~80 `cfg(feature = "model")`
-     sites), which only Ondine's parity tests read; those tests were deleted
-     2026-10-23 (they needed fixtures that were never copied);
-   - optionally a text-measure callback so layout can use real font widths.
-4. **Tidy `markdown`**: the split widened many fields/methods to
-   `pub(crate)`; tighten where possible. `element.rs::request_layout` is still
-   ~700 lines; break it into per-tag functions.
+3. **`crates/mermaid`**: optionally a text-measure callback so layout can use
+   real font widths.
 
 ## Gotchas
 

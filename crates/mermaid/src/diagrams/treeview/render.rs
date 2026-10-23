@@ -7,6 +7,7 @@ use super::icons::glyph;
 use super::icons::icon_config;
 use super::model::NodeType;
 use super::model::TreeViewModel;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::tighten;
 use crate::diagrams::common::fit_width::title_room;
@@ -17,8 +18,6 @@ use crate::svg::builder::esc_text;
 use crate::svg::builder::js_round;
 use crate::svg::builder::label_svg;
 use crate::svg::builder::push_num;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::RADIUS;
 use crate::svg::theme::class_names;
@@ -107,14 +106,14 @@ struct Row {
 }
 
 /// Draws `model` with the `treeView` section of `config`.
-pub(crate) fn render(model: &TreeViewModel, config: &Value, options: &RenderOptions) -> Rendered {
+pub(crate) fn render(model: &TreeViewModel, config: &Value, options: &Options) -> Rendered {
     tighten(options, |tight| draw(model, config, options, tight))
 }
 
 /// Draws `model` with room to spare, or `tight`ly within the host's width.
-fn draw(model: &TreeViewModel, config: &Value, options: &RenderOptions, tight: bool) -> Rendered {
-    let size = options.font_size.unwrap_or(16.0);
-    let pad = options.padding.unwrap_or(8.0);
+fn draw(model: &TreeViewModel, config: &Value, options: &Options, tight: bool) -> Rendered {
+    let size = options.font_size;
+    let pad = options.padding;
     let max_width = options.max_width.unwrap_or(320.0);
     let icons = icon_config(config);
 
@@ -378,16 +377,7 @@ fn draw(model: &TreeViewModel, config: &Value, options: &RenderOptions, tight: b
 
     Rendered {
         height: total_height,
-        links: Vec::new(),
-        svg: svg_document(
-            "treeView",
-            total_width,
-            total_height,
-            size,
-            options,
-            Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
-            &content,
-        ),
+        svg: svg_document("treeView", total_width, total_height, size, &content),
         width: total_width,
     }
 }

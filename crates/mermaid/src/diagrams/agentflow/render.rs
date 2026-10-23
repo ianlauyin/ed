@@ -9,6 +9,7 @@ use super::graph::AgentGraph;
 use super::graph::GraphEdge;
 use super::graph::GraphNode;
 use super::types::LabelType;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::runs_across;
 use crate::diagrams::common::fit_width::turn_to_fit;
@@ -34,8 +35,6 @@ use crate::svg::edges::loop_path;
 use crate::svg::edges::marker;
 use crate::svg::edges::marker_trim;
 use crate::svg::edges::route_path;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::shapes::PAD_X;
 use crate::svg::shapes::PAD_Y;
@@ -47,14 +46,10 @@ use crate::svg::theme::ResolvedStyle;
 use crate::svg::theme::class_names;
 use crate::svg::theme::resolve_style;
 use crate::svg::theme::series_color;
-use crate::text::entities;
 use crate::text::label::Label;
 use crate::text::label::layout_label;
 use crate::text::measure::BOLD;
 use crate::text::measure::ITALIC;
-use crate::util::url::LinkInfo;
-use crate::util::url::UrlOptions;
-use crate::util::url::{self};
 use crate::yaml::Value;
 
 /// The number of series colors, which is the palette Mermaid's slot rules are applied to.
@@ -133,17 +128,11 @@ struct Held<'g> {
 
 /// Draws an agentflow, turning one that runs across to run down when it does not fit the host's
 /// width.
-pub(crate) fn render(
-    db: &AgentflowDb,
-    graph: &AgentGraph,
-    config: &Value,
-    options: &RenderOptions,
-    url: &UrlOptions<'_>,
-) -> Rendered {
+pub(crate) fn render(db: &AgentflowDb, graph: &AgentGraph, config: &Value, options: &Options) -> Rendered {
     if !runs_across(db.direction.as_deref()) {
-        return draw(db, graph, config, options, url, false);
+        return draw(db, graph, config, options, false);
     }
-    turn_to_fit(options, |down| draw(db, graph, config, options, url, down))
+    turn_to_fit(options, |down| draw(db, graph, config, options, down))
 }
 
 #[expect(clippy::cast_precision_loss, reason = "counts stay far below 2^52")]
@@ -180,19 +169,12 @@ fn strip_edge_classes(classes: &str) -> String {
     clippy::many_single_char_names,
     reason = "mirrors Pele's draw, one pass per drawing stage, with its names"
 )]
-fn draw(
-    db: &AgentflowDb,
-    graph: &AgentGraph,
-    config: &Value,
-    options: &RenderOptions,
-    url: &UrlOptions<'_>,
-    turned: bool,
-) -> Rendered {
-    let size = options.font_size.unwrap_or(16.0);
+fn draw(db: &AgentflowDb, graph: &AgentGraph, config: &Value, options: &Options, turned: bool) -> Rendered {
+    let size = options.font_size;
     let edge_size = crate::svg::builder::js_round(size * 0.875);
     let wrap_width = number_option(config, "wrappingWidth", 120.0);
     let min_width = number_option(config, "minNodeWidth", 120.0);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
 
     let mut index: BTreeMap<&str, usize> = BTreeMap::new();
     for (i, node) in graph.nodes.iter().enumerate() {
@@ -374,7 +356,6 @@ fn draw(
     shift_layout(&mut cnodes, &mut cedges, ox, oy);
     let width = (inner + 2.0 * pad).ceil();
     let height = (layout.height + title_height + 2.0 * pad).ceil();
-    let mut links: Vec<LinkInfo> = Vec::new();
 
     // An edge between a node and a flow around it runs straight between the node and the flow's
     // border: out along the flow, or in against it. If another node is in the way it takes a
@@ -501,52 +482,8 @@ fn draw(
 
         let mut label_attrs = String::from(" class=\"ondine-label\"");
         label_attrs.push_str(&view.style.text);
-        let mut text = label_svg(&view.label, 0.0, view.dy, &label_attrs, None);
-
-        let mut spaced = classes.clone();
-        spaced.push(' ');
-        let internal = spaced.contains(" internal-link ");
-        if let Some(label) = node.label.as_deref().filter(|label| internal && !label.is_empty())
-            && url.links != Some(false)
-        {
-            // The label is a note name, but it still ends up in an href, so it gets the same
-            // check as a URL.
-            let name = entities::decode(label).into_owned();
-            let safe = url::link_url(&url::sanitize_url(&name), url).is_some();
-            let target = esc(&name).into_owned();
-            let mut anchor = String::from("<a class=\"internal-link\"");
-            if safe {
-                anchor.push_str(" href=\"");
-                anchor.push_str(&target);
-                anchor.push('"');
-                anchor.push_str(&url::rel_attr(url));
-            }
-            anchor.push_str(" data-href=\"");
-            anchor.push_str(&target);
-            anchor.push_str("\">");
-            anchor.push_str(&text);
-            anchor.push_str("</a>");
-            text = anchor;
-            links.push(LinkInfo { href: name, id: node.id.clone(), internal: true });
-        }
-
-        let mut body = String::new();
-        if let Some(tooltip) = node.tooltip.as_deref().filter(|tooltip| !tooltip.is_empty()) {
-            body.push_str("<title>");
-            body.push_str(&esc_text(tooltip));
-            body.push_str("</title>");
-        }
-        body.push_str(&shape);
-        body.push_str(&text);
-        if let Some(link) = node.link.as_deref().filter(|link| !link.is_empty()) {
-            let mut attrs = String::new();
-            if let Some(target) = node.link_target.as_deref().filter(|target| !target.is_empty()) {
-                attrs.push_str(" target=\"");
-                attrs.push_str(&esc(target));
-                attrs.push('"');
-            }
-            body = url::linked(&body, link, &node.id, &mut links, url, &attrs);
-        }
+        let mut body = shape;
+        body.push_str(&label_svg(&view.label, 0.0, view.dy, &label_attrs, None));
 
         nodes_out.push_str("<g class=\"ondine-node ondine-shape-");
         nodes_out.push_str(view.shape);
@@ -685,11 +622,9 @@ fn draw(
     content.push_str("<g class=\"ondine-nodes\">");
     content.push_str(&nodes_out);
     content.push_str("</g>");
+    let svg = svg_document("agentflow", width, height, size, &content);
 
-    let accessible = Accessible { acc_descr: db.acc_descr.as_deref(), acc_title: db.acc_title.as_deref() };
-    let svg = svg_document("agentflow", width, height, size, options, accessible, &content);
-
-    Rendered { height, links, svg, width }
+    Rendered { height, svg, width }
 }
 
 /// A collapsed flow: its box, a dashed rule, and three dots below the title.

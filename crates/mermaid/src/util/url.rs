@@ -1,5 +1,5 @@
-//! Sanitizes click targets as Mermaid does, and keeps links and images to the schemes a host
-//! allows. Port of Pele's `src/util/url.ts`.
+//! Sanitizes URLs as Mermaid does, and keeps images to relative, `http`, and `https` addresses.
+//! Port of Pele's `src/util/url.ts`.
 
 use crate::text::entities;
 use crate::util::chars::is_line_end;
@@ -7,32 +7,6 @@ use crate::util::chars::is_space;
 use crate::util::chars::is_word;
 
 const BLANK: &str = "about:blank";
-
-/// A link in a drawing, as Pele's `LinkInfo` reports it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub(crate) struct LinkInfo {
-    /// The sanitized target.
-    pub(crate) href: String,
-    /// The element the link wraps.
-    pub(crate) id: String,
-    /// Whether the link points inside the document.
-    pub(crate) internal: bool,
-}
-
-/// The render options the link and image helpers read.
-#[derive(Clone, Copy, Debug, Default)]
-pub(crate) struct UrlOptions<'a> {
-    /// Schemes an image may use. `None` allows `http` and `https`.
-    pub(crate) image_schemes: Option<&'a [&'a str]>,
-    /// `Some(false)` leaves every image out.
-    pub(crate) images: Option<bool>,
-    /// The `rel` of each link. `None` writes `noopener`, and an empty value writes none.
-    pub(crate) link_rel: Option<&'a str>,
-    /// Schemes a link may use. `None` allows `http`, `https`, `mailto`, and `tel`.
-    pub(crate) link_schemes: Option<&'a [&'a str]>,
-    /// `Some(false)` leaves every link out.
-    pub(crate) links: Option<bool>,
-}
 
 fn space(c: char) -> bool {
     is_space(u32::from(c))
@@ -776,11 +750,10 @@ pub(crate) fn safe_url(url: &str) -> String {
     sanitize_url(&entities::decode(url))
 }
 
-const LINK_SCHEMES: [&str; 4] = ["http", "https", "mailto", "tel"];
 const IMAGE_SCHEMES: [&str; 2] = ["http", "https"];
 
 // Stricter than Mermaid, which lets any scheme but three through: a diagram in a shared note
-// could otherwise open a local file, a network share, or another application.
+// could otherwise reach a local file, a network share, or another application.
 fn allow<'a>(url: &'a str, schemes: &[&str]) -> Option<&'a str> {
     let bytes = url.as_bytes();
     if matches!(bytes.first(), Some(b'/' | b'\\')) && matches!(bytes.get(1), Some(b'/' | b'\\')) {
@@ -799,75 +772,7 @@ fn allow<'a>(url: &'a str, schemes: &[&str]) -> Option<&'a str> {
     schemes.iter().any(|scheme| scheme.bytes().eq(name.bytes().map(|b| b.to_ascii_lowercase()))).then_some(url)
 }
 
-/// Keeps a URL that `sanitize_url` has passed when it is relative or its scheme is one the host
-/// allows for links. A refused link is left out of the drawing: written as `about:blank`, it
-/// would still navigate the page when clicked.
-pub(crate) fn link_url<'a>(url: &'a str, options: &UrlOptions<'_>) -> Option<&'a str> {
-    if options.links == Some(false) {
-        return None;
-    }
-    allow(url, options.link_schemes.unwrap_or(&LINK_SCHEMES))
-}
-
-/// Keeps a URL that `sanitize_url` has passed when it is relative or its scheme is one the host
-/// allows for images.
-pub(crate) fn image_url<'a>(url: &'a str, options: &UrlOptions<'_>) -> Option<&'a str> {
-    if options.images == Some(false) {
-        return None;
-    }
-    allow(url, options.image_schemes.unwrap_or(&IMAGE_SCHEMES))
-}
-
-/// Wraps `body` in a link to `url` and records it in `links`, or returns `body` alone when the
-/// link is refused. `attrs` is written into the `<a>` tag as is.
-pub(crate) fn linked(
-    body: &str,
-    url: &str,
-    id: &str,
-    links: &mut Vec<LinkInfo>,
-    options: &UrlOptions<'_>,
-    attrs: &str,
-) -> String {
-    let Some(href) = link_url(url, options) else {
-        return body.to_owned();
-    };
-    links.push(LinkInfo { href: href.to_owned(), id: id.to_owned(), internal: false });
-
-    let mut out = String::with_capacity(body.len() + href.len() + 32);
-    out.push_str("<a href=\"");
-    push_escaped(&mut out, href);
-    out.push('"');
-    out.push_str(attrs);
-    out.push_str(&rel_attr(options));
-    out.push('>');
-    out.push_str(body);
-    out.push_str("</a>");
-    out
-}
-
-/// The ` rel="..."` attribute for links, or nothing when the host sets an empty `rel`.
-pub(crate) fn rel_attr(options: &UrlOptions<'_>) -> String {
-    let rel = options.link_rel.unwrap_or("noopener");
-    if rel.is_empty() {
-        return String::new();
-    }
-    let mut out = String::from(" rel=\"");
-    push_escaped(&mut out, rel);
-    out.push('"');
-    out
-}
-
-// Pele's `esc`: escapes XML text and drops the control characters XML does not allow. Kept here
-// until `svg::builder` is ported.
-fn push_escaped(out: &mut String, text: &str) {
-    for c in text.chars() {
-        match c {
-            '&' => out.push_str("&amp;"),
-            '<' => out.push_str("&lt;"),
-            '>' => out.push_str("&gt;"),
-            '"' => out.push_str("&quot;"),
-            '\u{0}'..='\u{8}' | '\u{b}' | '\u{c}' | '\u{e}'..='\u{1f}' | '\u{7f}' => {}
-            c => out.push(c),
-        }
-    }
+/// Keeps a URL that `sanitize_url` has passed when it is relative or uses `http` or `https`.
+pub(crate) fn image_url(url: &str) -> Option<&str> {
+    allow(url, &IMAGE_SCHEMES)
 }

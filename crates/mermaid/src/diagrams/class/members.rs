@@ -15,15 +15,7 @@ pub(crate) enum MemberType {
     Method,
 }
 
-impl MemberType {
-    /// The name Pele uses.
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::Attribute => "attribute",
-            Self::Method => "method",
-        }
-    }
-}
+impl MemberType {}
 
 /// A parsed member line: Pele's `ClassMember`.
 #[derive(Clone, Debug, PartialEq)]

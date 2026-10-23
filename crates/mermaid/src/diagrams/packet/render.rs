@@ -5,6 +5,7 @@ use super::model::PacketBlock;
 use super::model::PacketModel;
 use super::model::packet_option;
 use super::model::property;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_text::fit_text;
 use crate::diagrams::common::fit_width::title_room;
@@ -14,8 +15,6 @@ use crate::svg::builder::esc;
 use crate::svg::builder::js_round;
 use crate::svg::builder::label_svg;
 use crate::svg::builder::push_num;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::RADIUS;
 use crate::text::entities::decode;
@@ -28,7 +27,7 @@ use crate::yaml::push_number;
 
 /// Draws `model` with the `packet` section of `config`, running down when it does not fit the
 /// host's width.
-pub(crate) fn render(model: &PacketModel, config: &Value, options: &RenderOptions) -> Rendered {
+pub(crate) fn render(model: &PacketModel, config: &Value, options: &Options) -> Rendered {
     turn_to_fit(options, |down| draw(model, config, options, down))
 }
 
@@ -80,11 +79,11 @@ fn regroup(model: &PacketModel, bits_per_row: f64) -> Vec<Vec<PacketBlock>> {
 
 #[expect(clippy::float_cmp, reason = "sizes compare exactly, as in Pele")]
 /// Draws `model`, running down when `down` is set.
-fn draw(model: &PacketModel, config: &Value, options: &RenderOptions, down: bool) -> Rendered {
-    let size = options.font_size.unwrap_or(16.0);
+fn draw(model: &PacketModel, config: &Value, options: &Options, down: bool) -> Rendered {
+    let size = options.font_size;
     let label_size = js_round(size * 0.875);
     let bit_size = js_round(size * 0.625);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
 
     let packet = property(config, "packet");
     let row_height = packet_option(config, "rowHeight", 32.0, 1.0, 400.0);
@@ -264,14 +263,6 @@ fn draw(model: &PacketModel, config: &Value, options: &RenderOptions, down: bool
         None,
     ));
 
-    let svg = svg_document(
-        "packet",
-        total_width,
-        total_height,
-        size,
-        options,
-        Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
-        &content,
-    );
-    Rendered { height: total_height, links: Vec::new(), svg, width: total_width }
+    let svg = svg_document("packet", total_width, total_height, size, &content);
+    Rendered { height: total_height, svg, width: total_width }
 }

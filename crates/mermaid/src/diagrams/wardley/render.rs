@@ -7,6 +7,7 @@ use std::collections::BTreeSet;
 use super::builder::Flow;
 use super::builder::WardleyNode;
 use super::model::WardleyModel;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::fit_width;
 use crate::svg::builder::esc;
@@ -19,8 +20,6 @@ use crate::svg::builder::span_style;
 use crate::svg::builder::text_style;
 use crate::svg::edges::marker;
 use crate::svg::edges::marker_trim;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::RADIUS;
 use crate::text::label::Label;
@@ -126,7 +125,7 @@ fn start_label(label: &Label, x: f64, y: f64, attrs: &str) -> String {
 }
 
 /// Draws `model` with the `wardley-beta` section of `config`, narrowed to fit the host's width.
-pub(crate) fn render(model: &WardleyModel, config: &Value, options: &RenderOptions) -> Rendered {
+pub(crate) fn render(model: &WardleyModel, config: &Value, options: &Options) -> Rendered {
     let natural = dimension(config, model.build.size.map(|size| size.0), "width", 900.0);
     fit_width(options, natural, 160.0, |plot_w, tight| draw(model, config, options, plot_w, natural, tight))
 }
@@ -205,19 +204,12 @@ fn quadrant(ux: f64, uy: f64) -> u8 {
 }
 
 #[expect(clippy::too_many_lines, reason = "mirrors Pele's draw")]
-fn draw(
-    model: &WardleyModel,
-    config: &Value,
-    options: &RenderOptions,
-    plot_w: f64,
-    natural_w: f64,
-    tight: bool,
-) -> Rendered {
+fn draw(model: &WardleyModel, config: &Value, options: &Options, plot_w: f64, natural_w: f64, tight: bool) -> Rendered {
     let build = &model.build;
-    let size = options.font_size.unwrap_or(16.0);
+    let size = options.font_size;
     let small = js_round(size * 0.8125);
     let tiny = js_round(size * 0.6875);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
 
     // A narrower map is not as much shorter, so that components keep some room between them.
     let plot_h = dimension(config, build.size.map(|size| size.1), "height", 600.0) * 0.75_f64.max(plot_w / natural_w);
@@ -849,16 +841,7 @@ fn draw(
 
     Rendered {
         height: total_height,
-        links: Vec::new(),
-        svg: svg_document(
-            "wardley",
-            total_width,
-            total_height,
-            size,
-            options,
-            Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
-            &content,
-        ),
+        svg: svg_document("wardley", total_width, total_height, size, &content),
         width: total_width,
     }
 }

@@ -16,6 +16,7 @@ use super::route::crosses;
 use super::route::cyl_ry;
 use super::route::queue_rx;
 use super::route::route;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::Drawn;
 use crate::diagrams::common::fit_width::tighten;
@@ -31,8 +32,6 @@ use crate::svg::builder::push_num;
 use crate::svg::edges::ARROW;
 use crate::svg::edges::marker;
 use crate::svg::edges::marker_trim;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::shapes::draw_shape;
 use crate::svg::theme::RADIUS;
@@ -41,10 +40,6 @@ use crate::svg::theme::resolve_style;
 use crate::text::label::layout_label;
 use crate::text::measure::BOLD;
 use crate::text::measure::ITALIC;
-use crate::util::url::LinkInfo;
-use crate::util::url::UrlOptions;
-use crate::util::url::linked;
-use crate::util::url::sanitize_url;
 use crate::yaml::push_number;
 
 const PAIR_SHIFT: f64 = 7.0;
@@ -69,46 +64,6 @@ fn user_style(fill: Option<&str>, stroke: Option<&str>, color: Option<&str>) -> 
     resolve_style(&declarations)
 }
 
-/// Entity encoding has hidden any `#name;` in an address. This puts it back, so that the check
-/// sees what a browser would.
-fn unhide(url: &str) -> String {
-    if !url.contains("\u{b6}\u{df}") {
-        return url.to_owned();
-    }
-    // Pele replaces `ﬂ°` or `ﬂ°°` first, then `¶ß`. Neither can make or break the other, so one
-    // pass does both.
-    let mut out = String::with_capacity(url.len());
-    let mut rest = url;
-    while let Some(c) = rest.chars().next() {
-        if let Some(tail) = rest.strip_prefix("\u{fb02}\u{b0}") {
-            out.push('#');
-            rest = tail.strip_prefix('\u{b0}').unwrap_or(tail);
-        } else if let Some(tail) = rest.strip_prefix("\u{b6}\u{df}") {
-            out.push(';');
-            rest = tail;
-        } else {
-            out.push(c);
-            rest = rest.get(c.len_utf8()..).unwrap_or("");
-        }
-    }
-    out
-}
-
-/// The context every link of one drawing shares.
-struct Links<'a> {
-    links: Vec<LinkInfo>,
-    url: &'a UrlOptions<'a>,
-}
-
-impl Links<'_> {
-    fn link(&mut self, body: &str, url: Option<&str>, id: &str) -> String {
-        match url.filter(|url| !url.is_empty()) {
-            Some(url) => linked(body, &sanitize_url(&unhide(url)), id, &mut self.links, self.url, ""),
-            None => body.to_owned(),
-        }
-    }
-}
-
 /// A drawing or the error that stopped it, as [`tighten`] takes it.
 struct Drawing(Result<Rendered, Error>);
 
@@ -123,18 +78,18 @@ impl Drawn for Drawing {
 /// # Errors
 ///
 /// Returns a semantic error for a relation that names an unknown shape or boundary.
-pub(crate) fn render(db: &C4Db, options: &RenderOptions, url: &UrlOptions<'_>) -> Result<Rendered, Error> {
+pub(crate) fn render(db: &C4Db, options: &Options) -> Result<Rendered, Error> {
     let result = tighten(options, |tight| {
         if !tight {
-            return Drawing(draw(db, options, url, false, NARROW_GAP).map(|drawn| drawn.0));
+            return Drawing(draw(db, options, false, NARROW_GAP).map(|drawn| drawn.0));
         }
-        let (mut best, mut squeezed) = match draw(db, options, url, true, NARROW_GAP) {
+        let (mut best, mut squeezed) = match draw(db, options, true, NARROW_GAP) {
             Ok(drawn) => drawn,
             Err(error) => return Drawing(Err(error)),
         };
         let mut gap = NARROW_GAP + WIDEN;
         while squeezed > 0 && gap <= NARROW_GAP + 3.0 * WIDEN {
-            match draw(db, options, url, true, gap) {
+            match draw(db, options, true, gap) {
                 Ok((wider, left)) if left < squeezed => {
                     best = wider;
                     squeezed = left;
@@ -160,17 +115,10 @@ fn unknown(from: &str, to: &str) -> Error {
 }
 
 #[expect(clippy::too_many_lines, reason = "mirrors Pele's draw")]
-fn draw(
-    db: &C4Db,
-    options: &RenderOptions,
-    url: &UrlOptions<'_>,
-    tight: bool,
-    gap: f64,
-) -> Result<(Rendered, usize), Error> {
-    let size = options.font_size.unwrap_or(16.0);
+fn draw(db: &C4Db, options: &Options, tight: bool, gap: f64) -> Result<(Rendered, usize), Error> {
+    let size = options.font_size;
     let small = js_round(size * 0.8125);
-    let pad = options.padding.unwrap_or(8.0);
-    let mut links = Links { links: Vec::new(), url };
+    let pad = options.padding;
     let room = tight.then(|| 80.0_f64.max(options.max_width.unwrap_or(320.0) - 2.0 * pad));
     let mut layout = layout_c4(db, size, small, room, gap);
     let root = layout.groups.first().and_then(|group| layout.boxes.get(group.id)).copied().unwrap_or_default();
@@ -390,11 +338,6 @@ fn draw(
         labels_out.push_str("<g class=\"ondine-edge-label\" data-id=\"");
         labels_out.push_str(&esc_text(&id));
         labels_out.push_str("\">");
-        if let Some(descr) = rel.descr.as_deref().filter(|descr| !descr.is_empty()) {
-            labels_out.push_str("<title>");
-            labels_out.push_str(&esc_text(descr));
-            labels_out.push_str("</title>");
-        }
         labels_out.push_str("<rect x=\"");
         push_num(&mut labels_out, cx - lw / 2.0);
         labels_out.push_str("\" y=\"");
@@ -408,7 +351,7 @@ fn draw(
         let mut techn_attrs = String::from(" class=\"ondine-c4-techn\" fill=\"var(--_m)\"");
         techn_attrs.push_str(&style.text);
         body.push_str(&label_svg(&techn, cx, top + label.height + techn.height / 2.0, &techn_attrs, None));
-        labels_out.push_str(&links.link(&body, rel.link.as_deref(), &id));
+        labels_out.push_str(&body);
         labels_out.push_str("</g>");
     }
 
@@ -476,7 +419,7 @@ fn draw(
             }
             clusters.push_str(&style.shape);
             clusters.push_str("/>");
-            clusters.push_str(&links.link(&text, boundary.link.as_deref(), &boundary.alias));
+            clusters.push_str(&text);
             clusters.push_str("</g>");
         }
         for node in &group.nodes {
@@ -547,7 +490,7 @@ fn draw(
             let fill = [" fill=\"var(", if external { "--_bg" } else { "--_s" }, ")\"", &stroke, &style.shape].concat();
             let mut body = draw_shape(form.name(), w, h, &fill, &[stroke.as_str(), &style.line].concat());
             body.push_str(&text);
-            nodes_out.push_str(&links.link(&body, shape.link.as_deref(), &shape.alias));
+            nodes_out.push_str(&body);
             nodes_out.push_str("</g>");
         }
     }
@@ -597,14 +540,6 @@ fn draw(
     }
     content.push_str("</g>");
 
-    let svg = svg_document(
-        "c4",
-        width,
-        height,
-        size,
-        options,
-        Accessible { acc_descr: db.acc_descr.as_deref(), acc_title: db.acc_title.as_deref() },
-        &content,
-    );
-    Ok((Rendered { height, links: links.links, svg, width }, lanes.squeezed))
+    let svg = svg_document("c4", width, height, size, &content);
+    Ok((Rendered { height, svg, width }, lanes.squeezed))
 }

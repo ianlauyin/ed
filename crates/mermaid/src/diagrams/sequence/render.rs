@@ -14,6 +14,7 @@ use super::types::SeqActor;
 use super::types::SeqMessage;
 use super::types::line;
 use super::types::placement;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::tighten;
 use crate::diagrams::common::fit_width::title_room;
@@ -26,8 +27,6 @@ use crate::svg::builder::num;
 use crate::svg::builder::push_num;
 use crate::svg::edges::ARROW;
 use crate::svg::edges::marker;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::RADIUS;
 use crate::svg::theme::class_names;
@@ -329,17 +328,17 @@ fn trim_of(r#type: Head) -> f64 {
 }
 
 /// Draws a sequence diagram, tightening its spacing when it does not fit the host's width.
-pub(crate) fn render(db: &SeqDb, config: &Value, options: &RenderOptions) -> Rendered {
+pub(crate) fn render(db: &SeqDb, config: &Value, options: &Options) -> Rendered {
     tighten(options, |tight| draw(db, config, options, tight))
 }
 
 #[expect(clippy::many_single_char_names, reason = "mirrors the names of Pele's draw")]
-fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Rendered {
+fn draw(db: &SeqDb, config: &Value, options: &Options, tight: bool) -> Rendered {
     let conf = get(Some(config), "sequence");
-    let size = options.font_size.unwrap_or(16.0);
+    let size = options.font_size;
     let small = js_round(size * 0.875);
     let tiny = js_round(size * 0.75);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
     let mirror = get(conf, "mirrorActors") != Some(&Value::Bool(false));
     let right_angles = get(conf, "rightAngles") == Some(&Value::Bool(true));
     let loose = |value: f64, tight_value: f64| if tight { value.min(tight_value) } else { value };
@@ -1420,8 +1419,6 @@ fn draw(db: &SeqDb, config: &Value, options: &RenderOptions, tight: bool) -> Ren
     );
     group(&mut content, "<g class=\"ondine-nodes\">", &actors_out);
     content.push_str("</g>");
-
-    let accessible = Accessible { acc_descr: db.acc_descr.as_deref(), acc_title: db.acc_title.as_deref() };
-    let svg = svg_document("sequence", width, height, size, options, accessible, &content);
-    Rendered { height, links: Vec::new(), svg, width }
+    let svg = svg_document("sequence", width, height, size, &content);
+    Rendered { height, svg, width }
 }

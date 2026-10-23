@@ -62,17 +62,7 @@ pub(crate) enum Notation {
     Railroad,
 }
 
-impl Notation {
-    /// The notation as Pele names it.
-    pub(crate) const fn as_str(self) -> &'static str {
-        match self {
-            Self::Abnf => "abnf",
-            Self::Ebnf => "ebnf",
-            Self::Peg => "peg",
-            Self::Railroad => "railroad",
-        }
-    }
-}
+impl Notation {}
 
 /// The parsed railroad diagram: Pele's `RailroadModel`.
 #[derive(Clone, Debug, PartialEq)]

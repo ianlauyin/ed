@@ -11,13 +11,12 @@ use super::layout::find_spot;
 use super::layout::hypot;
 use super::layout::layout_circles;
 use super::layout::region_path;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::svg::builder::esc_text;
 use crate::svg::builder::js_round;
 use crate::svg::builder::label_svg;
 use crate::svg::builder::push_num;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::ResolvedStyle;
 use crate::svg::theme::resolve_style;
@@ -63,11 +62,11 @@ fn style_of(styles: &Styles, key: &[String]) -> ResolvedStyle {
 
 /// Draws a venn diagram.
 #[expect(clippy::float_cmp, clippy::too_many_lines, reason = "mirrors Pele's renderVenn, which compares sizes exactly")]
-pub(crate) fn render(model: &VennDb, options: &RenderOptions) -> Rendered {
-    let size = options.font_size.unwrap_or(16.0);
+pub(crate) fn render(model: &VennDb, options: &Options) -> Rendered {
+    let size = options.font_size;
     let small = js_round(size * 0.875);
     let tiny = js_round(size * 0.8125);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
 
     let circles = layout_circles(&model.subsets);
     let mut index: BTreeMap<&str, usize> = BTreeMap::new();
@@ -353,6 +352,6 @@ pub(crate) fn render(model: &VennDb, options: &RenderOptions) -> Rendered {
         content.push_str("</g>");
     }
 
-    let svg = svg_document("venn", width, height, size, options, Accessible::default(), &content);
-    Rendered { height, links: Vec::new(), svg, width }
+    let svg = svg_document("venn", width, height, size, &content);
+    Rendered { height, svg, width }
 }

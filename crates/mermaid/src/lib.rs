@@ -2,11 +2,16 @@
 //!
 //! The pipeline follows Pele (MIT): preprocessing removes front matter, directives, and comments,
 //! detection picks a diagram type, and each type parses into a model, lays it out, and emits SVG.
+//!
+//! The SVG is meant to be rasterized, not shown in a browser: the document always has a fixed
+//! size, and there are no links (`click`, `href`, and `link` statements parse but are ignored),
+//! tooltips, or accessibility markup (`accTitle` and `accDescr` parse but are not written). Ids
+//! that the drawing references internally (markers, gradients, clip paths) use a fixed prefix.
+//! Image nodes keep relative, `http`, and `https` addresses; what loads is up to the rasterizer.
 #![expect(dead_code, reason = "Shared helpers are ported ahead of the diagram types that use them.")]
 
 mod detect;
 mod error;
-mod model;
 mod preprocess;
 mod yaml;
 
@@ -44,20 +49,52 @@ mod diagrams;
 
 pub use error::Code;
 pub use error::Error;
-pub use model::Model;
-pub use model::model;
 pub use svg::theme::Color;
 pub use svg::theme::Theme;
 
-/// A link drawn in a diagram, as Pele's `LinkInfo` reports it.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Link {
-    /// The address.
-    pub href: String,
-    /// The id of the element that carries the link.
-    pub id: String,
-    /// Whether the address points inside the page.
-    pub internal: bool,
+/// What the host sets for a render. There are no font options, since the font comes from the
+/// [`Theme`] and every width is monospace.
+#[derive(Clone, Debug)]
+pub struct Options {
+    /// Whether a diagram that runs across may be drawn running down when it does not fit
+    /// `max_width`.
+    pub auto_direction: bool,
+    /// The width under which a diagram may turn to run down.
+    pub direction_breakpoint: f64,
+    /// Font size in pixels.
+    pub font_size: f64,
+    /// The most UTF-16 units of source to accept. Mermaid's default `maxTextSize`.
+    pub limit: usize,
+    /// The most edges a flowchart may have. `A & B --> C & D` multiplies edges, so a few
+    /// kilobytes of source can ask for millions.
+    pub max_edges: usize,
+    /// The width the host has for the diagram, in pixels. A type that can draw itself narrower
+    /// does, so its text is not shrunk with it. `None` leaves every diagram at its natural width.
+    pub max_width: Option<f64>,
+    /// The time a gantt chart schedules against, in milliseconds since the epoch. The compiler
+    /// reads no clock, so this defaults to the epoch.
+    pub now: f64,
+    /// The most UTF-16 units of SVG to produce. A source within the limit can still describe
+    /// megabytes of drawing, which would stall rasterizing.
+    pub output_limit: usize,
+    /// Space around a diagram. A treemap's `diagramPadding` config takes precedence.
+    pub padding: f64,
+}
+
+impl Default for Options {
+    fn default() -> Self {
+        Self {
+            auto_direction: true,
+            direction_breakpoint: 640.0,
+            font_size: 16.0,
+            limit: 50_000,
+            max_edges: 5_000,
+            max_width: None,
+            now: 0.0,
+            output_limit: 4_000_000,
+            padding: 8.0,
+        }
+    }
 }
 
 /// A rendered diagram.
@@ -65,9 +102,7 @@ pub struct Link {
 pub struct Rendered {
     /// Height in pixels.
     pub height: f64,
-    /// Links in drawing order.
-    pub links: Vec<Link>,
-    /// The SVG document.
+    /// The SVG document, sized `width` by `height`.
     pub svg: String,
     /// The detected diagram type, using Pele's names.
     pub r#type: &'static str,
@@ -75,33 +110,17 @@ pub struct Rendered {
     pub width: f64,
 }
 
-/// Mermaid's default `maxTextSize`.
-const DEFAULT_LIMIT: f64 = 50_000.0;
-/// A source within the limit can still describe megabytes of drawing, which would stall a page.
-const DEFAULT_OUTPUT_LIMIT: f64 = 4_000_000.0;
-/// `A & B --> C & D` multiplies edges, so a few kilobytes of source can ask for millions.
-const DEFAULT_MAX_EDGES: f64 = 5_000.0;
-
-/// Renders Mermaid `source` to SVG drawn with `theme`. `options` is a JSON object with Pele's
-/// `RenderOptions` fields, or empty for defaults. `now` is the time a gantt chart schedules
-/// against when `options` sets none, in milliseconds since the epoch. A non-finite `now` means
-/// the epoch.
+/// Renders Mermaid `source` to SVG drawn with `theme`.
 ///
 /// # Errors
 ///
 /// Returns an [`Error`] for unsupported diagram types, syntax errors, and exceeded limits.
-pub fn render(source: &str, options: &str, now: f64, theme: &Theme) -> Result<Rendered, Error> {
-    let mut options = options_from_json(options)?;
-    if options.now.is_none() && now.is_finite() {
-        options.now = Some(now);
-    }
-
-    let limit = options.limit.unwrap_or(DEFAULT_LIMIT);
-    if exceeds(source, limit) {
-        let mut message = String::from("Diagram source is longer than the limit of ");
-        yaml::push_number(&mut message, limit);
-        message.push_str(" characters.");
-        return Err(Error::new(Code::Limit, message));
+pub fn render(source: &str, options: &Options, theme: &Theme) -> Result<Rendered, Error> {
+    if exceeds(source, options.limit) {
+        return Err(Error::new(
+            Code::Limit,
+            format!("Diagram source is longer than the limit of {} characters.", options.limit),
+        ));
     }
 
     let pre = preprocess::preprocess(source)?;
@@ -111,167 +130,82 @@ pub fn render(source: &str, options: &str, now: f64, theme: &Theme) -> Result<Re
     let config = yaml::Value::Object(pre.config);
 
     let Some(diagram) = diagrams::find(r#type) else {
-        let mut message = String::from("Diagram type \"");
-        message.push_str(r#type);
-        message.push_str("\" is not supported yet.");
-        let mut error = Error::new(Code::UnsupportedDiagram, message);
+        let mut error = Error::new(Code::UnsupportedDiagram, format!("Diagram type \"{type}\" is not supported yet."));
         error.r#type = Some(r#type);
         return Err(error);
     };
-
-    // A diagram whose config section sets `useMaxWidth: false` keeps its natural size.
-    let section = match &config {
-        yaml::Value::Object(entries) => {
-            entries.iter().find(|(key, _)| key == diagram.section.unwrap_or(r#type)).map(|(_, value)| value)
-        }
-        _ => None,
-    };
-    let fixed = matches!(
-        section,
-        Some(yaml::Value::Object(entries))
-            if entries.iter().any(|(key, value)| key == "useMaxWidth" && *value == yaml::Value::Bool(false))
-    );
-    options.responsive = Some(options.responsive.unwrap_or(!fixed));
 
     let mut source =
         preprocess::encode_entities(if diagram.keep_comments { &pre.with_comments } else { &pre.text }).into_owned();
     source.push('\n');
 
-    let max_edges = options.max_edges.unwrap_or(DEFAULT_MAX_EDGES);
-    #[expect(
-        clippy::cast_possible_truncation,
-        clippy::cast_sign_loss,
-        reason = "a negative or fractional limit saturates, as a count comparison would"
-    )]
-    let max_edges = max_edges as usize;
     let input = diagrams::Input {
         config: &config,
         line_offset: pre.line_offset,
-        max_edges,
+        max_edges: options.max_edges,
         source: &source,
         title: pre.title.as_deref(),
     };
 
-    let link_schemes = schemes(options.link_schemes.as_ref());
-    let image_schemes = schemes(options.image_schemes.as_ref());
-    let url = util::url::UrlOptions {
-        image_schemes: image_schemes.as_deref(),
-        images: options.images,
-        link_rel: options.link_rel.as_deref(),
-        link_schemes: link_schemes.as_deref(),
-        links: options.links,
-    };
+    let drawn = (diagram.render)(&input, options)?;
+    let rendered =
+        Rendered { height: drawn.height, svg: svg::theme::resolve(&drawn.svg, theme), r#type, width: drawn.width };
 
-    let drawn = (diagram.render)(&input, &options, &url)?;
-    let mut rendered = Rendered {
-        height: drawn.height,
-        links: drawn
-            .links
-            .into_iter()
-            .map(|link| Link { href: link.href, id: link.id, internal: link.internal })
-            .collect(),
-        svg: svg::theme::resolve(&drawn.svg, theme),
-        r#type,
-        width: drawn.width,
-    };
-
-    let output_limit = options.output_limit.unwrap_or(DEFAULT_OUTPUT_LIMIT);
-    if exceeds(&rendered.svg, output_limit) {
-        let mut message = String::from("Diagram output is longer than the limit of ");
-        yaml::push_number(&mut message, output_limit);
-        message.push_str(" characters.");
-        let mut error = Error::new(Code::Limit, message);
+    if exceeds(&rendered.svg, options.output_limit) {
+        let mut error = Error::new(
+            Code::Limit,
+            format!("Diagram output is longer than the limit of {} characters.", options.output_limit),
+        );
         error.r#type = Some(r#type);
         return Err(error);
-    }
-
-    // Hosts see link ids as the author meant them, with entity codes turned into characters.
-    for link in &mut rendered.links {
-        if let std::borrow::Cow::Owned(decoded) = text::entities::decode(&link.id) {
-            link.id = decoded;
-        }
     }
 
     Ok(rendered)
 }
 
-fn schemes(list: Option<&Vec<String>>) -> Option<Vec<&str>> {
-    list.map(|list| list.iter().map(String::as_str).collect())
-}
-
 /// Whether `text` is longer than `limit` UTF-16 units.
-#[expect(clippy::cast_precision_loss, reason = "source lengths stay far below 2^52")]
-fn exceeds(text: &str, limit: f64) -> bool {
+fn exceeds(text: &str, limit: usize) -> bool {
     // No scalar takes more UTF-16 units than UTF-8 bytes, so text within the limit in bytes is
     // within it in units without a count.
-    if text.len() as f64 <= limit {
+    if text.len() <= limit {
         return false;
     }
 
     // Each scalar starts with one non-continuation byte, and only four-byte scalars need a second
     // UTF-16 unit. Counting bytes avoids decoding the whole SVG.
     let units = text.bytes().map(|byte| usize::from(byte & 0xc0 != 0x80) + usize::from(byte >= 0xf0)).sum::<usize>();
-    units as f64 > limit
+    units > limit
 }
 
-/// Reads host options from JSON. Unknown fields are ignored, as in Pele.
-fn options_from_json(json: &str) -> Result<svg::root::RenderOptions, Error> {
-    let mut options = svg::root::RenderOptions::default();
-    if json.trim().is_empty() {
-        return Ok(options);
-    }
+#[cfg(test)]
+mod tests {
+    use super::*;
 
-    let value = yaml::parse(json).map_err(|message| Error::new(Code::Limit, message))?;
-    let yaml::Value::Object(entries) = value else {
-        return Ok(options);
-    };
-
-    let number = |value: &yaml::Value| match value {
-        yaml::Value::Number(n) if n.is_finite() => Some(*n),
-        _ => None,
-    };
-    let boolean = |value: &yaml::Value| match value {
-        yaml::Value::Bool(b) => Some(*b),
-        _ => None,
-    };
-    let string = |value: &yaml::Value| match value {
-        yaml::Value::String(s) => Some(s.clone()),
-        _ => None,
-    };
-    let strings = |value: &yaml::Value| match value {
-        yaml::Value::Array(items) => Some(
-            items
-                .iter()
-                .filter_map(|item| match item {
-                    yaml::Value::String(s) => Some(s.clone()),
-                    _ => None,
-                })
-                .collect(),
-        ),
-        _ => None,
-    };
-
-    for (key, value) in &entries {
-        match key.as_str() {
-            "autoDirection" => options.auto_direction = boolean(value),
-            "directionBreakpoint" => options.direction_breakpoint = number(value),
-            "fontSize" => options.font_size = number(value),
-            "idPrefix" => options.id_prefix = string(value),
-            "imageSchemes" => options.image_schemes = strings(value),
-            "images" => options.images = boolean(value),
-            "limit" => options.limit = number(value),
-            "linkRel" => options.link_rel = string(value),
-            "linkSchemes" => options.link_schemes = strings(value),
-            "links" => options.links = boolean(value),
-            "maxEdges" => options.max_edges = number(value),
-            "maxWidth" => options.max_width = number(value),
-            "now" => options.now = number(value),
-            "outputLimit" => options.output_limit = number(value),
-            "padding" => options.padding = number(value),
-            "responsive" => options.responsive = boolean(value),
-            _ => {}
+    #[test]
+    fn output_has_no_browser_markup() {
+        let theme = Theme::monochrome(Color::rgb(0xff, 0xff, 0xff), Color::rgb(0, 0, 0));
+        let sources = [
+            "flowchart LR\n  accTitle: Steps\n  accDescr: How it goes\n  A[Start] --> B[Done]\n  click A href \"https://example.com\" \"tip\"\n  click B call back()",
+            "sequenceDiagram\n  accTitle: Greeting\n  Alice->>Bob: Hello\n  link Alice: Home @ https://example.com",
+            "pie title Pets\n  accDescr: Pet counts\n  \"Dogs\" : 3\n  \"Cats\" : 2",
+            "gantt\n  dateFormat YYYY-MM-DD\n  accTitle: Plan\n  section A\n  Task one :a1, 2024-01-01, 3d\n  click a1 href \"https://example.com\"",
+            "stateDiagram-v2\n  [*] --> Still\n  click Still \"https://example.com\" \"tip\"",
+            "classDiagram\n  class Duck\n  link Duck \"https://example.com\" \"tip\"",
+        ];
+        for source in sources {
+            let rendered = render(source, &Options::default(), &theme).unwrap();
+            for needle in ["<a ", "aria-", "role=", "<title", "<desc", "max-width:100%"] {
+                assert!(!rendered.svg.contains(needle), "{needle} in {}", rendered.svg);
+            }
+            assert!(rendered.svg.contains(" width=\""), "{}", rendered.svg);
         }
     }
 
-    Ok(options)
+    #[test]
+    fn limits_reject_long_source() {
+        let theme = Theme::monochrome(Color::rgb(0xff, 0xff, 0xff), Color::rgb(0, 0, 0));
+        let options = Options { limit: 10, ..Options::default() };
+        let error = render("flowchart LR\n  A --> B", &options, &theme).unwrap_err();
+        assert_eq!(error.code, Code::Limit);
+    }
 }

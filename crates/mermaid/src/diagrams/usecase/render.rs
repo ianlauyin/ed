@@ -8,6 +8,7 @@ use super::graph::NodeShape;
 use super::graph::build_usecase_graph;
 use super::types::ActorType;
 use super::types::UsecaseModel;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::runs_across;
 use crate::diagrams::common::fit_width::turn_to_fit;
@@ -31,8 +32,6 @@ use crate::svg::edges::edge_label_svg;
 use crate::svg::edges::marker;
 use crate::svg::edges::marker_trim;
 use crate::svg::edges::route_path;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::ROUNDED;
 use crate::svg::theme::ResolvedStyle;
@@ -358,7 +357,7 @@ fn figure(view: &View, node: &GraphNode<'_>) -> String {
 
 /// Draws `model` with the `usecase` section of `config`, turned to run down when it runs across
 /// and does not fit the host's width.
-pub(crate) fn render(model: &UsecaseModel, config: &Value, options: &RenderOptions) -> Rendered {
+pub(crate) fn render(model: &UsecaseModel, config: &Value, options: &Options) -> Rendered {
     if !runs_across(Some(model.direction)) {
         return draw(model, config, options, false);
     }
@@ -479,12 +478,12 @@ fn measure(node: &GraphNode<'_>, size: f64, small: f64, tiny: f64) -> View {
 
 /// `turned` draws a diagram that runs across as one that runs down.
 #[expect(clippy::too_many_lines, reason = "mirrors Pele's draw")]
-fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: bool) -> Rendered {
+fn draw(model: &UsecaseModel, config: &Value, options: &Options, turned: bool) -> Rendered {
     let graph = build_usecase_graph(model);
-    let size = options.font_size.unwrap_or(16.0);
+    let size = options.font_size;
     let small = js_round(size * 0.875);
     let tiny = js_round(size * 0.8125);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
     let root_dir = if turned { Dir::Tb } else { direction(Some(model.direction)) };
     let sideways = matches!(root_dir, Dir::Lr | Dir::Rl);
 
@@ -996,10 +995,8 @@ fn draw(model: &UsecaseModel, config: &Value, options: &RenderOptions, turned: b
     content.push_str("<g class=\"ondine-nodes\">");
     content.push_str(&nodes_out);
     content.push_str("</g>");
-
-    let accessible = Accessible { acc_descr: Some(&model.acc_descr), acc_title: Some(&model.acc_title) };
-    let svg = svg_document("usecase", width, height, size, options, accessible, &content);
-    Rendered { height, links: Vec::new(), svg, width }
+    let svg = svg_document("usecase", width, height, size, &content);
+    Rendered { height, svg, width }
 }
 
 /// A boundary's title sits in the middle of its top edge. Where edges enter through that edge it

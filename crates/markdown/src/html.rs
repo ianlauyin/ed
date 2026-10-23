@@ -6,29 +6,31 @@
 //! their children; `style`, `class` and scripts are ignored. Tags may span
 //! several HTML blocks (`<div align="center">`, markdown, `</div>`).
 
-use std::{borrow::Cow, ops::Range};
+use std::borrow::Cow;
+use std::ops::Range;
 
-use gpui::{DefiniteLength, SharedString, TextAlign, px, relative};
-use pulldown_cmark::{Alignment, HeadingLevel, LinkType};
+use gpui::DefiniteLength;
+use gpui::SharedString;
+use gpui::TextAlign;
+use gpui::px;
+use gpui::relative;
+use pulldown_cmark::Alignment;
+use pulldown_cmark::HeadingLevel;
+use pulldown_cmark::LinkType;
 
-use crate::parser::{
-    CodeBlockKind, CodeBlockMetadata, HtmlStyle, MarkdownEvent, MarkdownTag, MarkdownTagEnd,
-    ParseState,
-};
+use crate::parser::CodeBlockKind;
+use crate::parser::CodeBlockMetadata;
+use crate::parser::HtmlStyle;
+use crate::parser::MarkdownEvent;
+use crate::parser::MarkdownTag;
+use crate::parser::MarkdownTagEnd;
+use crate::parser::ParseState;
 
 #[derive(Debug, PartialEq)]
 pub(crate) enum Token {
     Text(Range<usize>),
-    Start {
-        name: String,
-        attrs: Vec<(String, String)>,
-        self_closing: bool,
-        range: Range<usize>,
-    },
-    End {
-        name: String,
-        range: Range<usize>,
-    },
+    Start { name: String, attrs: Vec<(String, String)>, self_closing: bool, range: Range<usize> },
+    End { name: String, range: Range<usize> },
 }
 
 /// Splits HTML into text and tags. Comments, doctypes and processing
@@ -52,9 +54,7 @@ pub(crate) fn lex(html: &str) -> Vec<Token> {
         let rest = &html[ix..];
         if let Some(comment) = rest.strip_prefix("<!--") {
             flush_text(&mut tokens, text_start, ix);
-            ix = comment
-                .find("-->")
-                .map_or(html.len(), |end| ix + 4 + end + 3);
+            ix = comment.find("-->").map_or(html.len(), |end| ix + 4 + end + 3);
             text_start = ix;
         } else if rest.starts_with("<!") || rest.starts_with("<?") {
             flush_text(&mut tokens, text_start, ix);
@@ -66,10 +66,7 @@ pub(crate) fn lex(html: &str) -> Vec<Token> {
             flush_text(&mut tokens, text_start, ix);
             let name = tag_name(after_slash);
             let end = rest.find('>').map_or(html.len(), |end| ix + end + 1);
-            tokens.push(Token::End {
-                name,
-                range: ix..end,
-            });
+            tokens.push(Token::End { name, range: ix..end });
             ix = end;
             text_start = ix;
         } else if rest[1..].starts_with(|c: char| c.is_ascii_alphabetic())
@@ -78,18 +75,13 @@ pub(crate) fn lex(html: &str) -> Vec<Token> {
             flush_text(&mut tokens, text_start, ix);
             let end = ix + len;
             let raw_text = matches!(name.as_str(), "script" | "style" | "textarea" | "title");
-            tokens.push(Token::Start {
-                name: name.clone(),
-                attrs,
-                self_closing,
-                range: ix..end,
-            });
+            tokens.push(Token::Start { name: name.clone(), attrs, self_closing, range: ix..end });
             ix = end;
             text_start = ix;
             if raw_text && !self_closing {
                 let close = format!("</{name}");
-                let content_end = find_ascii_case_insensitive(&html[ix..], &close)
-                    .map_or(html.len(), |offset| ix + offset);
+                let content_end =
+                    find_ascii_case_insensitive(&html[ix..], &close).map_or(html.len(), |offset| ix + offset);
                 flush_text(&mut tokens, ix, content_end);
                 ix = content_end;
                 text_start = ix;
@@ -110,10 +102,7 @@ fn tag_name(text: &str) -> String {
 }
 
 fn find_ascii_case_insensitive(haystack: &str, needle: &str) -> Option<usize> {
-    haystack
-        .as_bytes()
-        .windows(needle.len())
-        .position(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
+    haystack.as_bytes().windows(needle.len()).position(|window| window.eq_ignore_ascii_case(needle.as_bytes()))
 }
 
 /// Lexes `<name attr=value ...>` at the start of `text`. Returns the lowercase
@@ -139,10 +128,7 @@ fn lex_start_tag(text: &str) -> Option<(String, Vec<(String, String)>, bool, usi
         }
 
         let name_start = ix;
-        while ix < bytes.len()
-            && !bytes[ix].is_ascii_whitespace()
-            && !matches!(bytes[ix], b'=' | b'>' | b'/')
-        {
+        while ix < bytes.len() && !bytes[ix].is_ascii_whitespace() && !matches!(bytes[ix], b'=' | b'>' | b'/') {
             ix += 1;
         }
         let attr_name = text[name_start..ix].to_ascii_lowercase();
@@ -164,8 +150,7 @@ fn lex_start_tag(text: &str) -> Option<(String, Vec<(String, String)>, bool, usi
                 }
                 _ => {
                     let start = ix;
-                    while ix < bytes.len() && !bytes[ix].is_ascii_whitespace() && bytes[ix] != b'>'
-                    {
+                    while ix < bytes.len() && !bytes[ix].is_ascii_whitespace() && bytes[ix] != b'>' {
                         ix += 1;
                     }
                     start..ix
@@ -178,7 +163,7 @@ fn lex_start_tag(text: &str) -> Option<(String, Vec<(String, String)>, bool, usi
 }
 
 /// Decodes numeric character references and the common named entities.
-pub(crate) fn decode_entities(text: &str) -> Cow<'_, str> {
+fn decode_entities(text: &str) -> Cow<'_, str> {
     if !text.contains('&') {
         return Cow::Borrowed(text);
     }
@@ -333,15 +318,11 @@ pub(crate) struct HtmlConverter {
     link_depth: usize,
 }
 
-const VOID_ELEMENTS: &[&str] = &[
-    "area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source",
-    "track", "wbr",
-];
+const VOID_ELEMENTS: &[&str] =
+    &["area", "base", "br", "col", "embed", "hr", "img", "input", "link", "meta", "param", "source", "track", "wbr"];
 
-const SKIPPED_ELEMENTS: &[&str] = &[
-    "script", "style", "title", "head", "template", "svg", "caption", "iframe", "textarea",
-    "noscript",
-];
+const SKIPPED_ELEMENTS: &[&str] =
+    &["script", "style", "title", "head", "template", "svg", "caption", "iframe", "textarea", "noscript"];
 
 const BLOCK_ELEMENTS: &[&str] = &[
     "address",
@@ -398,15 +379,8 @@ impl HtmlConverter {
         }
         for (index, token) in tokens.iter().enumerate() {
             match token {
-                Token::Text(range) => {
-                    self.text(source, &html[range.clone()], map.range(range), state)
-                }
-                Token::Start {
-                    name,
-                    attrs,
-                    self_closing,
-                    range,
-                } => {
+                Token::Text(range) => self.text(source, &html[range.clone()], map.range(range), state),
+                Token::Start { name, attrs, self_closing, range } => {
                     if self.skipping.is_some() {
                         continue;
                     }
@@ -431,11 +405,7 @@ impl HtmlConverter {
     /// end.
     pub(crate) fn before_markdown_end(&mut self, range: &Range<usize>, state: &mut ParseState) {
         let depth = self.markdown_depth(state);
-        while self
-            .stack
-            .last()
-            .is_some_and(|frame| frame.markdown_depth >= depth)
-        {
+        while self.stack.last().is_some_and(|frame| frame.markdown_depth >= depth) {
             self.pop_frame(range.end..range.end, state);
         }
     }
@@ -457,10 +427,8 @@ impl HtmlConverter {
         }
         if self.in_pre() {
             // A newline right after `<pre>` is not part of its content.
-            let after_start = matches!(
-                state.events.last(),
-                Some((_, MarkdownEvent::Start(MarkdownTag::CodeBlock { .. })))
-            );
+            let after_start =
+                matches!(state.events.last(), Some((_, MarkdownEvent::Start(MarkdownTag::CodeBlock { .. }))));
             let (text, range) = match text.strip_prefix('\n') {
                 Some(text) if after_start => (text, range.start + 1..range.end),
                 _ => (text, range),
@@ -502,12 +470,7 @@ impl HtmlConverter {
         html: &str,
         state: &mut ParseState,
     ) {
-        let attr = |key: &str| {
-            attrs
-                .iter()
-                .find(|(attr, _)| attr == key)
-                .map(|(_, value)| value.as_str())
-        };
+        let attr = |key: &str| attrs.iter().find(|(attr, _)| attr == key).map(|(_, value)| value.as_str());
         let align = || match name {
             "center" => Some(TextAlign::Center),
             _ => attr("align").and_then(parse_text_align),
@@ -554,10 +517,7 @@ impl HtmlConverter {
                 };
                 state.push_event(range.clone(), MarkdownEvent::Start(image));
                 if let Some(alt) = attr("alt").filter(|alt| !alt.is_empty()) {
-                    state.push_event(
-                        range.clone(),
-                        MarkdownEvent::SubstitutedText(alt.to_string()),
-                    );
+                    state.push_event(range.clone(), MarkdownEvent::SubstitutedText(alt.to_string()));
                 }
                 state.push_event(range, MarkdownEvent::End(MarkdownTagEnd::Image));
                 self.last_inline = true;
@@ -594,11 +554,7 @@ impl HtmlConverter {
             "blockquote" => starts.push(MarkdownTag::BlockQuote(None)),
             "ul" | "ol" => {
                 kind = FrameKind::List;
-                let start = (name == "ol").then(|| {
-                    attr("start")
-                        .and_then(|start| start.parse().ok())
-                        .unwrap_or(1)
-                });
+                let start = (name == "ol").then(|| attr("start").and_then(|start| start.parse().ok()).unwrap_or(1));
                 starts.push(MarkdownTag::List(start));
             }
             "li" => {
@@ -611,8 +567,7 @@ impl HtmlConverter {
                 kind = FrameKind::Pre;
                 let content = pre_content(html, lookahead);
                 let content = content.strip_prefix('\n').unwrap_or(&content);
-                let content_start =
-                    range.end + usize::from(pre_starts_with_newline(lookahead, html));
+                let content_start = range.end + usize::from(pre_starts_with_newline(lookahead, html));
                 starts.push(MarkdownTag::CodeBlock {
                     kind: CodeBlockKind::Indented,
                     metadata: CodeBlockMetadata {
@@ -626,11 +581,7 @@ impl HtmlConverter {
                 let (columns, first_row_is_header) = table_shape(lookahead);
                 if columns > 0 {
                     kind = FrameKind::Table;
-                    self.tables.push(TableContext {
-                        columns,
-                        first_row_is_header,
-                        ..Default::default()
-                    });
+                    self.tables.push(TableContext { columns, first_row_is_header, ..Default::default() });
                     starts.push(MarkdownTag::Table(vec![Alignment::None; columns]));
                 }
             }
@@ -680,8 +631,8 @@ impl HtmlConverter {
                     }
                 }
             }
-            "div" | "center" | "address" | "article" | "aside" | "details" | "dl"
-            | "figcaption" | "figure" | "footer" | "header" | "main" | "nav" | "section" => {
+            "div" | "center" | "address" | "article" | "aside" | "details" | "dl" | "figcaption" | "figure"
+            | "footer" | "header" | "main" | "nav" | "section" => {
                 starts.push(MarkdownTag::HtmlBlock { align: align() });
             }
             "a" => {
@@ -711,10 +662,7 @@ impl HtmlConverter {
         }
 
         let block = BLOCK_ELEMENTS.contains(&name)
-            || matches!(
-                kind,
-                FrameKind::Table | FrameKind::TableRow | FrameKind::TableCell
-            )
+            || matches!(kind, FrameKind::Table | FrameKind::TableRow | FrameKind::TableCell)
             || name == "li";
         let markdown_depth = self.markdown_depth(state);
         let mut ends = Vec::new();
@@ -727,12 +675,7 @@ impl HtmlConverter {
             ends.push(FrameEnd::Style);
             state.push_event(range.clone(), MarkdownEvent::StartHtmlStyle(style));
         }
-        self.stack.push(Frame {
-            name: name.to_string(),
-            kind,
-            markdown_depth,
-            ends,
-        });
+        self.stack.push(Frame { name: name.to_string(), kind, markdown_depth, ends });
         if block {
             self.last_inline = false;
         }
@@ -741,19 +684,11 @@ impl HtmlConverter {
     /// Whether the innermost table row is part of the table head: a row in
     /// `<thead>`, or a leading row of `<th>` cells.
     fn in_table_head(&self) -> bool {
-        let mut frames = self
-            .stack
-            .iter()
-            .rev()
-            .filter(|frame| frame.kind != FrameKind::Plain);
+        let mut frames = self.stack.iter().rev().filter(|frame| frame.kind != FrameKind::Plain);
         frames.next().is_some_and(|row| {
             row.kind == FrameKind::TableRow
-                && (matches!(
-                    row.ends.first(),
-                    Some(FrameEnd::Tag(MarkdownTagEnd::TableHead))
-                ) || frames
-                    .next()
-                    .is_some_and(|frame| frame.kind == FrameKind::TableHead))
+                && (matches!(row.ends.first(), Some(FrameEnd::Tag(MarkdownTagEnd::TableHead)))
+                    || frames.next().is_some_and(|frame| frame.kind == FrameKind::TableHead))
         })
     }
 
@@ -774,10 +709,7 @@ impl HtmlConverter {
             return;
         }
         let depth = self.markdown_depth(state);
-        let Some(index) = self
-            .stack
-            .iter()
-            .rposition(|frame| frame.name == name || frame.markdown_depth < depth)
+        let Some(index) = self.stack.iter().rposition(|frame| frame.name == name || frame.markdown_depth < depth)
         else {
             return;
         };
@@ -791,13 +723,7 @@ impl HtmlConverter {
 
     /// Implicitly closes an open element named in `names`, unless an element
     /// named in `stop_at` is nearer.
-    fn close_up_to(
-        &mut self,
-        names: &[&str],
-        stop_at: &[&str],
-        range: &Range<usize>,
-        state: &mut ParseState,
-    ) {
+    fn close_up_to(&mut self, names: &[&str], stop_at: &[&str], range: &Range<usize>, state: &mut ParseState) {
         let depth = self.markdown_depth(state);
         let Some(index) = self.stack.iter().rposition(|frame| {
             names.contains(&frame.name.as_str())
@@ -816,10 +742,8 @@ impl HtmlConverter {
 
     fn close_open_paragraph(&mut self, range: &Range<usize>, state: &mut ParseState) {
         let depth = self.markdown_depth(state);
-        let Some(index) = self
-            .stack
-            .iter()
-            .rposition(|frame| frame.name == "p" || BLOCK_ELEMENTS.contains(&frame.name.as_str()))
+        let Some(index) =
+            self.stack.iter().rposition(|frame| frame.name == "p" || BLOCK_ELEMENTS.contains(&frame.name.as_str()))
         else {
             return;
         };
@@ -838,14 +762,8 @@ impl HtmlConverter {
             FrameKind::TableRow => {
                 if let Some(table) = self.tables.last_mut() {
                     for _ in table.cells_in_row..table.columns {
-                        state.push_event(
-                            range.clone(),
-                            MarkdownEvent::Start(MarkdownTag::TableCell),
-                        );
-                        state.push_event(
-                            range.clone(),
-                            MarkdownEvent::End(MarkdownTagEnd::TableCell),
-                        );
+                        state.push_event(range.clone(), MarkdownEvent::Start(MarkdownTag::TableCell));
+                        state.push_event(range.clone(), MarkdownEvent::End(MarkdownTagEnd::TableCell));
                     }
                     table.cells_in_row = table.columns;
                 }
@@ -862,18 +780,10 @@ impl HtmlConverter {
                         self.link_depth = self.link_depth.saturating_sub(1);
                     }
                     if tag == MarkdownTagEnd::CodeBlock
-                        && let Some(start) =
-                            state
-                                .events
-                                .iter_mut()
-                                .rev()
-                                .find_map(|(_, event)| match event {
-                                    MarkdownEvent::Start(MarkdownTag::CodeBlock {
-                                        metadata,
-                                        ..
-                                    }) => Some(metadata),
-                                    _ => None,
-                                })
+                        && let Some(start) = state.events.iter_mut().rev().find_map(|(_, event)| match event {
+                            MarkdownEvent::Start(MarkdownTag::CodeBlock { metadata, .. }) => Some(metadata),
+                            _ => None,
+                        })
                     {
                         start.content_range.end = range.start.max(start.content_range.start);
                     }
@@ -894,9 +804,7 @@ fn push_text(source: &str, state: &mut ParseState, range: Range<usize>, text: Co
         return;
     }
     match text {
-        Cow::Borrowed(text) if source.get(range.clone()) == Some(text) => {
-            state.push_event(range, MarkdownEvent::Text)
-        }
+        Cow::Borrowed(text) if source.get(range.clone()) == Some(text) => state.push_event(range, MarkdownEvent::Text),
         text => state.push_event(range, MarkdownEvent::SubstitutedText(text.into_owned())),
     }
 }
@@ -989,13 +897,9 @@ fn pre_content(html: &str, tokens: &[Token]) -> String {
 }
 
 fn collapse_whitespace(text: &str) -> Cow<'_, str> {
-    let needs_collapse = text
-        .as_bytes()
-        .windows(2)
-        .any(|pair| pair[0].is_ascii_whitespace() && pair[1].is_ascii_whitespace())
-        || text
-            .bytes()
-            .any(|byte| byte.is_ascii_whitespace() && byte != b' ');
+    let needs_collapse =
+        text.as_bytes().windows(2).any(|pair| pair[0].is_ascii_whitespace() && pair[1].is_ascii_whitespace())
+            || text.bytes().any(|byte| byte.is_ascii_whitespace() && byte != b' ');
     if !needs_collapse {
         return Cow::Borrowed(text);
     }
@@ -1027,16 +931,9 @@ fn parse_text_align(value: &str) -> Option<TextAlign> {
 fn parse_dimension(value: &str) -> Option<DefiniteLength> {
     let value = value.trim();
     if let Some(percent) = value.strip_suffix('%') {
-        percent
-            .parse::<f32>()
-            .ok()
-            .map(|value| relative(value / 100.))
+        percent.parse::<f32>().ok().map(|value| relative(value / 100.))
     } else {
-        value
-            .trim_end_matches("px")
-            .parse::<f32>()
-            .ok()
-            .map(|value| px(value).into())
+        value.trim_end_matches("px").parse::<f32>().ok().map(|value| px(value).into())
     }
 }
 
@@ -1060,17 +957,11 @@ mod tests {
                 Token::Text(18..27),
                 Token::Start {
                     name: "img".into(),
-                    attrs: vec![
-                        ("src".into(), "x.png".into()),
-                        ("alt".into(), "logo/".into())
-                    ],
+                    attrs: vec![("src".into(), "x.png".into()), ("alt".into(), "logo/".into())],
                     self_closing: false,
                     range: 37..64,
                 },
-                Token::End {
-                    name: "p".into(),
-                    range: 64..68,
-                },
+                Token::End { name: "p".into(), range: 64..68 },
             ]
         );
     }
@@ -1088,10 +979,7 @@ mod tests {
     fn events(markdown: &str) -> Vec<String> {
         let parsed = crate::parser::parse_markdown_with_options(
             markdown,
-            crate::MarkdownOptions {
-                parse_html: true,
-                ..Default::default()
-            },
+            crate::MarkdownOptions { parse_html: true, ..Default::default() },
         );
         let mut depth = 0i32;
         let events = parsed
@@ -1194,9 +1082,7 @@ mod tests {
     #[test]
     fn converts_tables_and_lists() {
         assert_eq!(
-            events(
-                "<table>\n<tr><th>A</th><th>B</th></tr>\n<tr><td>1\n</table>\n\n<ul><li>one<li>two</ul>\n"
-            ),
+            events("<table>\n<tr><th>A</th><th>B</th></tr>\n<tr><td>1\n</table>\n\n<ul><li>one<li>two</ul>\n"),
             [
                 "Table([None, None])",
                 "TableHead",
@@ -1230,9 +1116,7 @@ mod tests {
     #[test]
     fn drops_comments_scripts_and_unknown_tags() {
         assert_eq!(
-            events(
-                "<!-- note -->\n\n<script>alert('<b>')</script>\n\n<span>kept</span>\n\n<pre>\nfn a() {}\n</pre>\n"
-            ),
+            events("<!-- note -->\n\n<script>alert('<b>')</script>\n\n<span>kept</span>\n\n<pre>\nfn a() {}\n</pre>\n"),
             [
                 "Paragraph",
                 "Text(\"kept\")",
@@ -1249,17 +1133,12 @@ mod tests {
         let html = "<!doctype html>\n<html>\n  <head><title>T</title><style>p {}</style></head>\n  <body>\n    <h1>Title</h1>\n\n        <p>Indented, not code</p>\n  </body>\n</html>\n";
         let parsed = crate::parser::parse_markdown_with_options(
             html,
-            crate::MarkdownOptions {
-                html_document: true,
-                ..Default::default()
-            },
+            crate::MarkdownOptions { html_document: true, ..Default::default() },
         );
         let events = parsed
             .events
             .iter()
-            .filter(|(_, event)| {
-                !matches!(event, MarkdownEvent::RootStart | MarkdownEvent::RootEnd(_))
-            })
+            .filter(|(_, event)| !matches!(event, MarkdownEvent::RootStart | MarkdownEvent::RootEnd(_)))
             .map(|(range, event)| match event {
                 MarkdownEvent::Text => format!("Text({:?})", &html[range.clone()]),
                 MarkdownEvent::Start(MarkdownTag::Heading { .. }) => "Heading".to_string(),
@@ -1287,9 +1166,6 @@ mod tests {
 
     #[test]
     fn decodes_entities() {
-        assert_eq!(
-            decode_entities("a &amp; &#65;&#x42; &bogus; &"),
-            "a & AB &bogus; &"
-        );
+        assert_eq!(decode_entities("a &amp; &#65;&#x42; &bogus; &"), "a & AB &bogus; &");
     }
 }

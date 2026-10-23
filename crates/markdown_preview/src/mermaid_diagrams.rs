@@ -1,21 +1,47 @@
-use collections::{HashMap, HashSet};
-use gpui::{
-    Animation, AnimationExt, AnyElement, App, Context, Entity, Hsla, ImageSource, RenderImage,
-    SMOOTH_SVG_SCALE_FACTOR, ScrollHandle, Size, Stateful, StyledText, Subscription, Task, Window,
-    img, pulsating_between, size,
-};
-use markdown::parser::CodeBlockKind;
-use markdown::parser::MarkdownEvent;
-use markdown::{CodeBlock, Markdown, MarkdownStyle};
 use std::collections::BTreeMap;
 use std::ops::Range;
 use std::path::Path;
-use std::sync::{Arc, OnceLock};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
-use ui::{CopyButton, ScrollAxes, Scrollbars, TintColor, WithScrollbar, prelude::*};
+use std::sync::Arc;
+use std::sync::OnceLock;
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
+use collections::HashMap;
+use collections::HashSet;
+use gpui::Animation;
+use gpui::AnimationExt;
+use gpui::AnyElement;
+use gpui::App;
+use gpui::Context;
+use gpui::Entity;
+use gpui::Hsla;
+use gpui::ImageSource;
+use gpui::RenderImage;
+use gpui::SMOOTH_SVG_SCALE_FACTOR;
+use gpui::ScrollHandle;
+use gpui::Size;
+use gpui::Stateful;
+use gpui::StyledText;
+use gpui::Subscription;
+use gpui::Task;
+use gpui::Window;
+use gpui::img;
+use gpui::pulsating_between;
+use gpui::size;
+use markdown::CodeBlock;
+use markdown::Markdown;
+use markdown::MarkdownStyle;
+use markdown::parser::CodeBlockKind;
+use markdown::parser::MarkdownEvent;
 use settings::Settings as _;
 use theme_settings::ThemeSettings;
+use ui::CopyButton;
+use ui::ScrollAxes;
+use ui::Scrollbars;
+use ui::TintColor;
+use ui::WithScrollbar;
+use ui::prelude::*;
 
 type MermaidDiagramCache = HashMap<DiagramContents, Arc<CachedMermaidDiagram>>;
 
@@ -79,20 +105,13 @@ impl MermaidDiagrams {
     /// and dropping the rasters and view state of removed ones.
     pub(crate) fn sync(&mut self, markdown: &Entity<Markdown>, cx: &mut Context<Self>) {
         let parsed = markdown.read(cx).parsed_markdown();
-        if self
-            .synced_events
-            .as_ref()
-            .is_some_and(|events| Arc::ptr_eq(events, parsed.events()))
-        {
+        if self.synced_events.as_ref().is_some_and(|events| Arc::ptr_eq(events, parsed.events())) {
             return;
         }
         self.synced_events = Some(parsed.events().clone());
-        self.diagrams = parsed
-            .code_blocks()
-            .filter_map(|block| Some((block.source_offset, diagram_contents(&block)?)))
-            .collect();
-        self.views
-            .retain(|offset, _| self.diagrams.contains_key(offset));
+        self.diagrams =
+            parsed.code_blocks().filter_map(|block| Some((block.source_offset, diagram_contents(&block)?))).collect();
+        self.views.retain(|offset, _| self.diagrams.contains_key(offset));
         self.update_cache(cx);
     }
 
@@ -101,12 +120,7 @@ impl MermaidDiagrams {
     fn rerender_all(&mut self, cx: &mut Context<Self>) {
         for (contents, cached) in &mut self.cache {
             let fallback = cached.latest_image();
-            *cached = Arc::new(CachedMermaidDiagram::new(
-                contents.clone(),
-                self.zoom,
-                fallback,
-                cx,
-            ));
+            *cached = Arc::new(CachedMermaidDiagram::new(contents.clone(), self.zoom, fallback, cx));
         }
     }
 
@@ -127,9 +141,7 @@ impl MermaidDiagrams {
             return None;
         }
 
-        old_order
-            .get(idx)
-            .and_then(|old_content| cache.get(old_content)?.latest_image())
+        old_order.get(idx).and_then(|old_content| cache.get(old_content)?.latest_image())
     }
 
     fn update_cache(&mut self, cx: &mut Context<Self>) {
@@ -141,12 +153,7 @@ impl MermaidDiagrams {
             let fallback = Self::fallback_image(idx, &self.order, new_order.len(), &self.cache);
             self.cache.insert(
                 new_content.clone(),
-                Arc::new(CachedMermaidDiagram::new(
-                    new_content.clone(),
-                    self.zoom,
-                    fallback,
-                    cx,
-                )),
+                Arc::new(CachedMermaidDiagram::new(new_content.clone(), self.zoom, fallback, cx)),
             );
         }
 
@@ -162,17 +169,10 @@ impl MermaidDiagrams {
     }
 
     fn is_showing_code(&self, source_offset: usize) -> bool {
-        self.views
-            .get(&source_offset)
-            .is_some_and(|view| view.showing_code)
+        self.views.get(&source_offset).is_some_and(|view| view.showing_code)
     }
 
-    fn set_showing_code(
-        &mut self,
-        source_offset: usize,
-        showing_code: bool,
-        cx: &mut Context<Self>,
-    ) {
+    fn set_showing_code(&mut self, source_offset: usize, showing_code: bool, cx: &mut Context<Self>) {
         let view = self.views.entry(source_offset).or_default();
         if view.showing_code != showing_code {
             view.showing_code = showing_code;
@@ -181,11 +181,7 @@ impl MermaidDiagrams {
     }
 
     fn scroll_handle(&mut self, source_offset: usize) -> ScrollHandle {
-        self.views
-            .entry(source_offset)
-            .or_default()
-            .scroll_handle
-            .clone()
+        self.views.entry(source_offset).or_default().scroll_handle.clone()
     }
 
     /// Renders `block` as a diagram, or returns `None` if it isn't one.
@@ -200,11 +196,8 @@ impl MermaidDiagrams {
         self.set_zoom(preview_zoom(cx), cx);
         // The diagrams may lag behind the rendered parse for a frame; render
         // anything that doesn't match as a plain code block.
-        let contents = self
-            .diagrams
-            .get(&source_offset)
-            .filter(|contents| contents.contents.as_ref() == block.contents)?
-            .clone();
+        let contents =
+            self.diagrams.get(&source_offset).filter(|contents| contents.contents.as_ref() == block.contents)?.clone();
         let showing_code = self.is_showing_code(source_offset);
         let this = cx.entity();
         let cached = self.cache.get(&contents);
@@ -229,9 +222,8 @@ impl MermaidDiagrams {
                 } else {
                     let scroll_handle = self.scroll_handle(source_offset);
                     let display_size = mermaid_display_size(&image);
-                    let image_element = img(ImageSource::Render(image)).with_fallback(|| {
-                        Label::new("Failed to Load Mermaid Diagram").into_any_element()
-                    });
+                    let image_element = img(ImageSource::Render(image))
+                        .with_fallback(|| Label::new("Failed to Load Mermaid Diagram").into_any_element());
                     let body = scroll_container(source_offset, &scroll_handle)
                         .child(image_element.w(display_size.width).h(display_size.height))
                         .into_any_element();
@@ -245,20 +237,13 @@ impl MermaidDiagrams {
             None => container
                 .child(render_code_view(&code))
                 .when(is_rendering, |container| {
-                    container.child(
-                        div().absolute().top_1().right_2().child(
-                            Label::new("Rendering...")
-                                .size(LabelSize::XSmall)
-                                .color(Color::Muted)
-                                .with_animation(
-                                    "mermaid-loading-pulse",
-                                    Animation::new(Duration::from_secs(2))
-                                        .repeat()
-                                        .with_easing(pulsating_between(0.4, 0.8)),
-                                    |label, delta| label.alpha(delta),
-                                ),
+                    container.child(div().absolute().top_1().right_2().child(
+                        Label::new("Rendering...").size(LabelSize::XSmall).color(Color::Muted).with_animation(
+                            "mermaid-loading-pulse",
+                            Animation::new(Duration::from_secs(2)).repeat().with_easing(pulsating_between(0.4, 0.8)),
+                            |label, delta| label.alpha(delta),
                         ),
-                    )
+                    ))
                 })
                 .child(render_copy_button(source_offset, code)),
         };
@@ -297,11 +282,7 @@ impl CachedMermaidDiagram {
             }
         });
 
-        Self {
-            render_image,
-            fallback_image,
-            _task: task,
-        }
+        Self { render_image, fallback_image, _task: task }
     }
 
     /// The rendered raster, or the previous one while it is pending.
@@ -339,13 +320,9 @@ impl CachedMermaidDiagram {
 }
 
 fn render_to_svg(source: &str, theme: &mermaid::Theme) -> anyhow::Result<String> {
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0.0, |now| now.as_millis() as f64);
-    // The raster has a fixed size, so the SVG must not scale to a container.
-    mermaid::render(source, r#"{"responsive":false}"#, now, theme)
-        .map(|rendered| rendered.svg)
-        .map_err(|error| anyhow::anyhow!("{error:?}"))
+    let now = SystemTime::now().duration_since(UNIX_EPOCH).map_or(0.0, |now| now.as_millis() as f64);
+    let options = mermaid::Options { now, ..mermaid::Options::default() };
+    mermaid::render(source, &options, theme).map(|rendered| rendered.svg).map_err(|error| anyhow::anyhow!("{error:?}"))
 }
 
 /// How far the preview font is zoomed (cmd +/-) from its configured size.
@@ -353,9 +330,7 @@ fn render_to_svg(source: &str, theme: &mermaid::Theme) -> anyhow::Result<String>
 fn preview_zoom(cx: &App) -> f32 {
     let settings = ThemeSettings::get_global(cx);
     let configured = theme_settings::clamp_font_size(
-        settings
-            .markdown_preview_font_size_settings()
-            .unwrap_or(settings.ui_font_size_settings()),
+        settings.markdown_preview_font_size_settings().unwrap_or(settings.ui_font_size_settings()),
     );
     settings.markdown_preview_font_size(cx) / configured
 }
@@ -401,20 +376,14 @@ fn diagram_contents(block: &CodeBlock) -> Option<DiagramContents> {
     let scale = match block.kind {
         CodeBlockKind::FencedLang(info) => parse_mermaid_info(info)?,
         CodeBlockKind::FencedSrc(path_range) => {
-            match Path::new(path_range.path.as_ref())
-                .extension()
-                .and_then(|ext| ext.to_str())
-            {
+            match Path::new(path_range.path.as_ref()).extension().and_then(|ext| ext.to_str()) {
                 Some("mermaid" | "mmd") => 100,
                 _ => return None,
             }
         }
         _ => return None,
     };
-    Some(DiagramContents {
-        contents: block.contents.to_string().into(),
-        scale,
-    })
+    Some(DiagramContents { contents: block.contents.to_string().into(), scale })
 }
 
 fn parse_mermaid_info(info: &str) -> Option<u32> {
@@ -423,13 +392,7 @@ fn parse_mermaid_info(info: &str) -> Option<u32> {
         return None;
     }
 
-    Some(
-        parts
-            .next()
-            .and_then(|scale| scale.parse().ok())
-            .unwrap_or(100)
-            .clamp(10, 500),
-    )
+    Some(parts.next().and_then(|scale| scale.parse().ok()).unwrap_or(100).clamp(10, 500))
 }
 
 /// The logical size of a diagram's raster.
@@ -450,10 +413,7 @@ fn mermaid_display_size(image: &RenderImage) -> Size<Pixels> {
 /// scroll instead of being crushed via max_w_full (#61051).
 fn scroll_container(source_offset: usize, scroll_handle: &ScrollHandle) -> Stateful<Div> {
     let mut container = div()
-        .id(ElementId::named_usize(
-            "mermaid-diagram-body",
-            source_offset,
-        ))
+        .id(ElementId::named_usize("mermaid-diagram-body", source_offset))
         .w_full()
         .overflow_x_scroll()
         .track_scroll(scroll_handle);
@@ -479,24 +439,13 @@ fn with_horizontal_scrollbar(
     let scrollbars = Scrollbars::always_visible(ScrollAxes::Horizontal)
         .id(("mermaid-diagram-scrollbar", source_offset))
         .tracked_scroll_handle(scroll_handle)
-        .with_track_along(
-            ScrollAxes::Horizontal,
-            cx.theme().colors().editor_background,
-        )
+        .with_track_along(ScrollAxes::Horizontal, cx.theme().colors().editor_background)
         .notify_content();
 
-    div()
-        .w_full()
-        .custom_scrollbars(scrollbars, window, cx)
-        .child(body)
-        .into_any_element()
+    div().w_full().custom_scrollbars(scrollbars, window, cx).child(body).into_any_element()
 }
 
-fn render_tab_header(
-    source_offset: usize,
-    showing_code: bool,
-    diagrams: Entity<MermaidDiagrams>,
-) -> impl IntoElement {
+fn render_tab_header(source_offset: usize, showing_code: bool, diagrams: Entity<MermaidDiagrams>) -> impl IntoElement {
     let tab = |name: &'static str, label: &'static str, selected: bool, show_code: bool| {
         let diagrams = diagrams.clone();
         Button::new(ElementId::named_usize(name, source_offset), label)
@@ -504,36 +453,29 @@ fn render_tab_header(
             .selected_style(ButtonStyle::Tinted(TintColor::Accent))
             .toggle_state(selected)
             .on_click(move |_event, _window, cx| {
-                diagrams.update(cx, |diagrams, cx| {
-                    diagrams.set_showing_code(source_offset, show_code, cx)
-                });
+                diagrams.update(cx, |diagrams, cx| diagrams.set_showing_code(source_offset, show_code, cx));
             })
     };
 
-    h_flex()
-        .gap_0p5()
-        .mb_2p5()
-        .child(tab("mermaid-tab-preview", "Preview", !showing_code, false))
-        .child(tab("mermaid-tab-code", "Code", showing_code, true))
+    h_flex().gap_0p5().mb_2p5().child(tab("mermaid-tab-preview", "Preview", !showing_code, false)).child(tab(
+        "mermaid-tab-code",
+        "Code",
+        showing_code,
+        true,
+    ))
 }
 
 /// The hover-revealed copy button anchored to the top-right corner of a
 /// diagram.
 fn render_copy_button(source_offset: usize, code: SharedString) -> impl IntoElement {
     div().absolute().top_1().right_1().child(
-        CopyButton::new(
-            ElementId::named_usize("copy-mermaid-code", source_offset),
-            code,
-        )
-        .visible_on_hover("code_block"),
+        CopyButton::new(ElementId::named_usize("copy-mermaid-code", source_offset), code)
+            .visible_on_hover("code_block"),
     )
 }
 
 fn render_code_view(contents: &SharedString) -> AnyElement {
-    div()
-        .w_full()
-        .child(StyledText::new(contents.clone()))
-        .into_any_element()
+    div().w_full().child(StyledText::new(contents.clone())).into_any_element()
 }
 
 #[cfg(test)]
@@ -544,16 +486,9 @@ mod tests {
     fn renders_themed_svg_without_css_functions() {
         let theme = mermaid::Theme {
             foreground: mermaid::Color::rgb(0xd4, 0xd4, 0xd4),
-            ..mermaid::Theme::monochrome(
-                mermaid::Color::rgb(0x1e, 0x1e, 0x1e),
-                mermaid::Color::rgb(0xd4, 0xd4, 0xd4),
-            )
+            ..mermaid::Theme::monochrome(mermaid::Color::rgb(0x1e, 0x1e, 0x1e), mermaid::Color::rgb(0xd4, 0xd4, 0xd4))
         };
-        let svg = render_to_svg(
-            "flowchart LR\n  A[Start] --> B{Ok?}\n  B -->|yes| C[Done]",
-            &theme,
-        )
-        .unwrap();
+        let svg = render_to_svg("flowchart LR\n  A[Start] --> B{Ok?}\n  B -->|yes| C[Done]", &theme).unwrap();
         assert!(!svg.contains("var("), "{svg}");
         assert!(!svg.contains("color-mix("), "{svg}");
         // usvg does not parse `normal` spacing and logs a warning per diagram.

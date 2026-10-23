@@ -5,6 +5,7 @@ use super::db::SankeyDb;
 use super::layout::Alignment;
 use super::layout::LayoutOptions;
 use super::layout::layout_sankey;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::fit_width;
 use crate::diagrams::common::fit_width::title_room;
@@ -14,8 +15,6 @@ use crate::svg::builder::esc_text;
 use crate::svg::builder::js_round;
 use crate::svg::builder::label_svg;
 use crate::svg::builder::push_num;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::resolve_style;
 use crate::svg::theme::series_color;
@@ -80,7 +79,7 @@ fn fill_style(color: Option<&Value>) -> String {
 /// # Errors
 ///
 /// Returns a semantic error when the links form a cycle.
-pub(crate) fn render(model: &SankeyDb, config: &Value, options: &RenderOptions) -> Result<Rendered, Error> {
+pub(crate) fn render(model: &SankeyDb, config: &Value, options: &Options) -> Result<Rendered, Error> {
     let empty = Value::Object(Vec::new());
     let conf = match property(config, "sankey") {
         Some(value @ Value::Object(_)) => value,
@@ -104,10 +103,10 @@ impl crate::diagrams::common::fit_width::Drawn for Drawn {
 }
 
 #[expect(clippy::too_many_lines, reason = "mirrors Pele's draw")]
-fn draw(model: &SankeyDb, conf: &Value, options: &RenderOptions, chart_width: f64) -> Drawn {
-    let size = options.font_size.unwrap_or(16.0);
+fn draw(model: &SankeyDb, conf: &Value, options: &Options, chart_width: f64) -> Drawn {
+    let size = options.font_size;
     let small = js_round(size * 0.875);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
 
     let chart_height = number_option(conf, "height", 400.0, 1.0, 10000.0);
     let node_width = number_option(conf, "nodeWidth", 10.0, 1.0, 200.0).min(chart_width);
@@ -319,15 +318,7 @@ fn draw(model: &SankeyDb, conf: &Value, options: &RenderOptions, chart_width: f6
         } else {
             out.push_str(&fixed);
         }
-        out.push_str("><title>");
-        out.push_str(&from);
-        out.push_str(" → ");
-        out.push_str(&to);
-        out.push_str(": ");
-        out.push_str(&esc_text(&prefix));
-        push_number(out, rounded(link.value));
-        out.push_str(&esc_text(&suffix));
-        out.push_str("</title></path>");
+        out.push_str("/>");
     }
 
     let title = layout_label(model.title.as_deref(), false, size, title_room(options), BOLD, None);
@@ -358,9 +349,7 @@ fn draw(model: &SankeyDb, conf: &Value, options: &RenderOptions, chart_width: f6
     content.push_str("\">");
     content.push_str(&labels_out);
     content.push_str("</g></g>");
+    let svg = svg_document("sankey", width, height, size, &content);
 
-    let accessible = Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() };
-    let svg = svg_document("sankey", width, height, size, options, accessible, &content);
-
-    Drawn(Ok(Rendered { height, links: Vec::new(), svg, width }))
+    Drawn(Ok(Rendered { height, svg, width }))
 }

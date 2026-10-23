@@ -1,4 +1,5 @@
-use std::{ops::Range, sync::Arc};
+use std::ops::Range;
+use std::sync::Arc;
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct PathWithRange {
@@ -26,10 +27,7 @@ impl LineCol {
         let str = str.as_ref();
         match str.split_once(':') {
             Some((line, col)) => match (line.parse::<u32>(), col.parse::<u32>()) {
-                (Ok(line), Ok(col)) => Some(Self {
-                    line,
-                    col: Some(col),
-                }),
+                (Ok(line), Ok(col)) => Some(Self { line, col: Some(col) }),
                 _ => None,
             },
             None => match str.parse::<u32>() {
@@ -73,19 +71,12 @@ impl PathWithRange {
 
                 let range = {
                     let mut iter = after_hash.split('-').flat_map(LineCol::new);
-                    iter.next()
-                        .map(|start| iter.next().map(|end| start..end).unwrap_or(start..start))
+                    iter.next().map(|start| iter.next().map(|end| start..end).unwrap_or(start..start))
                 };
 
-                Self {
-                    path: path.into(),
-                    range,
-                }
+                Self { path: path.into(), range }
             }
-            None => Self {
-                path: str.into(),
-                range: None,
-            },
+            None => Self { path: str.into(), range: None },
         }
     }
 }

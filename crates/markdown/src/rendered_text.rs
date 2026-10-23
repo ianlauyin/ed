@@ -36,9 +36,7 @@ impl Element for RenderedLineElement {
         window: &mut Window,
         cx: &mut App,
     ) -> Self::PrepaintState {
-        self.line
-            .visible_bounds
-            .set(Some(bounds.intersect(&window.content_mask().bounds)));
+        self.line.visible_bounds.set(Some(bounds.intersect(&window.content_mask().bounds)));
         self.text.prepaint(None, bounds, request_layout, window, cx);
     }
 
@@ -94,36 +92,26 @@ impl RenderedLine {
         }
 
         for (rendered_range, color) in &self.code_chips {
-            self.for_each_bounds_in_rendered_range(
-                &wrapped_line_segments,
-                rendered_range.clone(),
-                |bounds| {
-                    // Kept to a hair since the layout reserves no padding and
-                    // anything wider eats the gap to neighboring words
-                    let horizontal_outset = px(1.);
-                    // Inset vertically so the chip hugs the glyphs like a badge
-                    // instead of filling the whole line box
-                    let vertical_inset = bounds.size.height * 0.1;
-                    let chip_bounds = Bounds {
-                        origin: point(
-                            bounds.origin.x - horizontal_outset,
-                            bounds.origin.y + vertical_inset,
-                        ),
-                        size: size(
-                            bounds.size.width + horizontal_outset * 2.,
-                            bounds.size.height - vertical_inset * 2.,
-                        ),
-                    };
-                    window.paint_quad(quad(
-                        chip_bounds,
-                        CHIP_CORNER_RADIUS,
-                        *color,
-                        Edges::default(),
-                        Hsla::transparent_black(),
-                        BorderStyle::default(),
-                    ));
-                },
-            );
+            self.for_each_bounds_in_rendered_range(&wrapped_line_segments, rendered_range.clone(), |bounds| {
+                // Kept to a hair since the layout reserves no padding and
+                // anything wider eats the gap to neighboring words
+                let horizontal_outset = px(1.);
+                // Inset vertically so the chip hugs the glyphs like a badge
+                // instead of filling the whole line box
+                let vertical_inset = bounds.size.height * 0.1;
+                let chip_bounds = Bounds {
+                    origin: point(bounds.origin.x - horizontal_outset, bounds.origin.y + vertical_inset),
+                    size: size(bounds.size.width + horizontal_outset * 2., bounds.size.height - vertical_inset * 2.),
+                };
+                window.paint_quad(quad(
+                    chip_bounds,
+                    CHIP_CORNER_RADIUS,
+                    *color,
+                    Edges::default(),
+                    Hsla::transparent_black(),
+                    BorderStyle::default(),
+                ));
+            });
         }
     }
 
@@ -139,20 +127,16 @@ impl RenderedLine {
         }
 
         for (source_range, color) in &self.highlights {
-            self.for_each_bounds_in_source_range(
-                &wrapped_line_segments,
-                source_range.clone(),
-                |bounds| {
-                    window.paint_quad(quad(
-                        bounds,
-                        Pixels::ZERO,
-                        *color,
-                        Edges::default(),
-                        Hsla::transparent_black(),
-                        BorderStyle::default(),
-                    ));
-                },
-            );
+            self.for_each_bounds_in_source_range(&wrapped_line_segments, source_range.clone(), |bounds| {
+                window.paint_quad(quad(
+                    bounds,
+                    Pixels::ZERO,
+                    *color,
+                    Edges::default(),
+                    Hsla::transparent_black(),
+                    BorderStyle::default(),
+                ));
+            });
         }
     }
 
@@ -192,11 +176,7 @@ impl RenderedLine {
 
         let rendered_start = self.rendered_index_for_source_index(range.start);
         let rendered_end = self.rendered_index_for_source_index(range.end);
-        self.for_each_bounds_in_rendered_range(
-            wrapped_line_segments,
-            rendered_start..rendered_end,
-            f,
-        );
+        self.for_each_bounds_in_rendered_range(wrapped_line_segments, rendered_start..rendered_end, f);
     }
 
     fn for_each_bounds_in_rendered_range(
@@ -230,8 +210,7 @@ impl RenderedLine {
                 .wrap_boundaries()
                 .iter()
                 .map(|wrap_boundary| {
-                    let glyph =
-                        &unwrapped_layout.runs[wrap_boundary.run_ix].glyphs[wrap_boundary.glyph_ix];
+                    let glyph = &unwrapped_layout.runs[wrap_boundary.run_ix].glyphs[wrap_boundary.glyph_ix];
                     (wrapped_line_start + glyph.index, glyph.position.x)
                 })
                 .chain([(wrapped_line_end, unwrapped_layout.width)]);
@@ -244,15 +223,10 @@ impl RenderedLine {
                 let selection_end = rendered_end.min(row_end);
 
                 if selection_start < selection_end {
-                    let alignment_offset = self.alignment_offset_for_segment(
-                        line_bounds.size.width,
-                        row_start_x,
-                        row_end_x,
-                    );
+                    let alignment_offset =
+                        self.alignment_offset_for_segment(line_bounds.size.width, row_start_x, row_end_x);
                     let x_for_index = |index| {
-                        line_bounds.left()
-                            + alignment_offset
-                            + unwrapped_layout.x_for_index(index - wrapped_line_start)
+                        line_bounds.left() + alignment_offset + unwrapped_layout.x_for_index(index - wrapped_line_start)
                             - row_start_x
                     };
                     f(Bounds::from_corners(
@@ -269,12 +243,7 @@ impl RenderedLine {
     }
 
     fn rendered_index_for_source_index(&self, source_index: usize) -> usize {
-        rendered_index_for_source_index(
-            &self.source_mappings,
-            self.source_end,
-            self.layout.len(),
-            source_index,
-        )
+        rendered_index_for_source_index(&self.source_mappings, self.source_end, self.layout.len(), source_index)
     }
 
     fn source_index_for_rendered_index(&self, rendered_index: usize) -> usize {
@@ -282,10 +251,7 @@ impl RenderedLine {
             return self.source_end;
         }
 
-        let mapping = match self
-            .source_mappings
-            .binary_search_by_key(&rendered_index, |probe| probe.rendered_index)
-        {
+        let mapping = match self.source_mappings.binary_search_by_key(&rendered_index, |probe| probe.rendered_index) {
             Ok(ix) => &self.source_mappings[ix],
             Err(ix) => &self.source_mappings[ix - 1],
         };
@@ -301,10 +267,7 @@ impl RenderedLine {
             return self.source_end;
         }
 
-        let ix = match self
-            .source_mappings
-            .binary_search_by_key(&rendered_index, |probe| probe.rendered_index)
-        {
+        let ix = match self.source_mappings.binary_search_by_key(&rendered_index, |probe| probe.rendered_index) {
             Ok(ix) => ix,
             Err(ix) => {
                 return self.source_mappings[ix - 1].source_index
@@ -340,10 +303,7 @@ impl RenderedLine {
         }
     }
 
-    pub(crate) fn source_index_for_position(
-        &self,
-        position: Point<Pixels>,
-    ) -> Result<usize, usize> {
+    pub(crate) fn source_index_for_position(&self, position: Point<Pixels>) -> Result<usize, usize> {
         let adjusted_position = maybe!({
             if self.text_align == TextAlign::Left {
                 return None;
@@ -364,27 +324,15 @@ impl RenderedLine {
             } else {
                 boundaries
                     .get(wrapped_row_ix - 1)
-                    .map(|b| {
-                        wrapped_line.unwrapped_layout.runs[b.run_ix].glyphs[b.glyph_ix]
-                            .position
-                            .x
-                    })
+                    .map(|b| wrapped_line.unwrapped_layout.runs[b.run_ix].glyphs[b.glyph_ix].position.x)
                     .unwrap_or(px(0.))
             };
             let segment_end_x = boundaries
                 .get(wrapped_row_ix)
-                .map(|b| {
-                    wrapped_line.unwrapped_layout.runs[b.run_ix].glyphs[b.glyph_ix]
-                        .position
-                        .x
-                })
+                .map(|b| wrapped_line.unwrapped_layout.runs[b.run_ix].glyphs[b.glyph_ix].position.x)
                 .unwrap_or(wrapped_line.unwrapped_layout.width);
 
-            let alignment_offset = self.alignment_offset_for_segment(
-                bounds.size.width,
-                segment_start_x,
-                segment_end_x,
-            );
+            let alignment_offset = self.alignment_offset_for_segment(bounds.size.width, segment_start_x, segment_end_x);
             Some(point(position.x - alignment_offset, position.y))
         })
         .unwrap_or(position);
@@ -402,11 +350,7 @@ impl RenderedLine {
             }
         };
         let source_index = self.source_index_for_rendered_index(line_rendered_index);
-        if out_of_bounds {
-            Err(source_index)
-        } else {
-            Ok(source_index)
-        }
+        if out_of_bounds { Err(source_index) } else { Ok(source_index) }
     }
 }
 
@@ -433,10 +377,7 @@ pub(crate) fn rendered_index_for_source_index(
     (mapping.rendered_index + (source_index - mapping.source_index)).min(rendered_len)
 }
 
-pub(crate) fn source_range_for_rendered(
-    mappings: &[SourceMapping],
-    rendered: &Range<usize>,
-) -> Option<Range<usize>> {
+pub(crate) fn source_range_for_rendered(mappings: &[SourceMapping], rendered: &Range<usize>) -> Option<Range<usize>> {
     if rendered.start >= rendered.end {
         return None;
     }
@@ -445,10 +386,7 @@ pub(crate) fn source_range_for_rendered(
     Some(start..end)
 }
 
-pub(crate) fn source_index_for_rendered(
-    mappings: &[SourceMapping],
-    rendered_index: usize,
-) -> Option<usize> {
+fn source_index_for_rendered(mappings: &[SourceMapping], rendered_index: usize) -> Option<usize> {
     let mut last: Option<&SourceMapping> = None;
     for mapping in mappings {
         if mapping.rendered_index <= rendered_index {
@@ -475,7 +413,7 @@ pub(crate) struct RenderedText {
     pub(crate) document_end: Option<usize>,
 }
 
-pub(crate) struct WrappedLineSegment {
+struct WrappedLineSegment {
     start: usize,
     end: usize,
     row_top: Pixels,
@@ -507,30 +445,16 @@ impl RenderedText {
     /// document ending at `document_end`.
     pub(crate) fn concat(texts: Vec<RenderedText>, document_end: usize) -> Self {
         Self {
-            lines: texts
-                .iter()
-                .flat_map(|text| text.lines.iter().cloned())
-                .collect(),
-            links: texts
-                .iter()
-                .flat_map(|text| text.links.iter().cloned())
-                .collect(),
-            image_links: texts
-                .iter()
-                .flat_map(|text| text.image_links.iter().cloned())
-                .collect(),
-            footnote_refs: texts
-                .iter()
-                .flat_map(|text| text.footnote_refs.iter().cloned())
-                .collect(),
+            lines: texts.iter().flat_map(|text| text.lines.iter().cloned()).collect(),
+            links: texts.iter().flat_map(|text| text.links.iter().cloned()).collect(),
+            image_links: texts.iter().flat_map(|text| text.image_links.iter().cloned()).collect(),
+            footnote_refs: texts.iter().flat_map(|text| text.footnote_refs.iter().cloned()).collect(),
             document_end: Some(document_end),
         }
     }
 
     pub(crate) fn select_all_end(&self) -> usize {
-        self.document_end
-            .or_else(|| self.lines.last().map(|line| line.source_end))
-            .unwrap_or(0)
+        self.document_end.or_else(|| self.lines.last().map(|line| line.source_end)).unwrap_or(0)
     }
 
     pub(crate) fn bounds_for_source_range(&self, range: Range<usize>) -> Vec<Bounds<Pixels>> {
@@ -593,8 +517,7 @@ impl RenderedText {
     }
 
     pub(crate) fn source_range_for_utf16_range(&self, range_utf16: Range<usize>) -> Range<usize> {
-        self.source_index_for_utf16_index(range_utf16.start)
-            ..self.source_index_for_utf16_index(range_utf16.end)
+        self.source_index_for_utf16_index(range_utf16.start)..self.source_index_for_utf16_index(range_utf16.end)
     }
 
     pub(crate) fn text_for_utf16_range(
@@ -619,17 +542,11 @@ impl RenderedText {
         }
 
         rendered_text
-            .chunks_in_range(
-                rendered_text.offset_utf16_to_offset(start)
-                    ..rendered_text.offset_utf16_to_offset(end),
-            )
+            .chunks_in_range(rendered_text.offset_utf16_to_offset(start)..rendered_text.offset_utf16_to_offset(end))
             .collect()
     }
 
-    pub(crate) fn source_index_for_position(
-        &self,
-        position: Point<Pixels>,
-    ) -> Result<usize, usize> {
+    pub(crate) fn source_index_for_position(&self, position: Point<Pixels>) -> Result<usize, usize> {
         let mut lines = self.lines.iter().peekable();
         let mut fallback_line: Option<&Rc<RenderedLine>> = None;
         let mut gap_source_index: Option<usize> = None;
@@ -671,10 +588,7 @@ impl RenderedText {
         Err(self.lines.last().map_or(0, |line| line.source_end))
     }
 
-    pub(crate) fn source_index_for_visible_position(
-        &self,
-        position: Point<Pixels>,
-    ) -> Option<usize> {
+    pub(crate) fn source_index_for_visible_position(&self, position: Point<Pixels>) -> Option<usize> {
         self.lines.iter().find_map(|line| {
             if line.visible_bounds.get()?.contains(&position) {
                 line.source_index_for_position(position).ok()
@@ -684,10 +598,7 @@ impl RenderedText {
         })
     }
 
-    pub(crate) fn position_for_source_index(
-        &self,
-        source_index: usize,
-    ) -> Option<(Point<Pixels>, Pixels)> {
+    pub(crate) fn position_for_source_index(&self, source_index: usize) -> Option<(Point<Pixels>, Pixels)> {
         for line in self.lines.iter() {
             if source_index > line.source_end {
                 continue;
@@ -709,8 +620,7 @@ impl RenderedText {
             }
 
             let line_rendered_start = line.source_mappings.first().unwrap().rendered_index;
-            let rendered_index_in_line =
-                line.rendered_index_for_source_index(source_index) - line_rendered_start;
+            let rendered_index_in_line = line.rendered_index_for_source_index(source_index) - line_rendered_start;
             let text = line.layout.text();
 
             let scope = line.language.as_ref().map(|l| l.default_scope());
@@ -775,11 +685,8 @@ impl RenderedText {
 
             let text = line.layout.text();
 
-            let start = if range.start < line_source_start {
-                0
-            } else {
-                line.rendered_index_for_source_index(range.start)
-            };
+            let start =
+                if range.start < line_source_start { 0 } else { line.rendered_index_for_source_index(range.start) };
             let end = if range.end > line.source_end {
                 line.rendered_index_for_source_index(line.source_end)
             } else {
@@ -796,29 +703,14 @@ impl RenderedText {
     }
 
     pub(crate) fn link_for_source_index(&self, source_index: usize) -> Option<&RenderedLink> {
-        self.links
-            .iter()
-            .find(|link| link.source_range.contains(&source_index))
+        self.links.iter().find(|link| link.source_range.contains(&source_index))
     }
 
-    pub(crate) fn image_link_for_position(
-        &self,
-        position: Point<Pixels>,
-    ) -> Option<&RenderedImageLink> {
-        self.image_links.iter().find(|image| {
-            image
-                .bounds
-                .get()
-                .is_some_and(|bounds| bounds.contains(&position))
-        })
+    pub(crate) fn image_link_for_position(&self, position: Point<Pixels>) -> Option<&RenderedImageLink> {
+        self.image_links.iter().find(|image| image.bounds.get().is_some_and(|bounds| bounds.contains(&position)))
     }
 
-    pub(crate) fn footnote_ref_for_source_index(
-        &self,
-        source_index: usize,
-    ) -> Option<&RenderedFootnoteRef> {
-        self.footnote_refs
-            .iter()
-            .find(|fref| fref.source_range.contains(&source_index))
+    pub(crate) fn footnote_ref_for_source_index(&self, source_index: usize) -> Option<&RenderedFootnoteRef> {
+        self.footnote_refs.iter().find(|fref| fref.source_range.contains(&source_index))
     }
 }

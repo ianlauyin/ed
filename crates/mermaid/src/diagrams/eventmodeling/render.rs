@@ -5,6 +5,7 @@
 use super::model::EmBox;
 use super::model::EntityKind;
 use super::model::EventModelingModel;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::turn_to_fit;
 use crate::diagrams::common::literal_label::break_label;
@@ -17,8 +18,6 @@ use crate::svg::builder::label_svg;
 use crate::svg::builder::push_num;
 use crate::svg::edges::marker;
 use crate::svg::edges::marker_trim;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::FONT_MONO;
 use crate::svg::theme::RADIUS;
@@ -235,33 +234,13 @@ fn push_move(out: &mut String, x: f64, y: f64) {
 }
 
 /// Draws `model`, running down when across does not fit the host.
-pub(crate) fn render(model: &EventModelingModel, options: &RenderOptions) -> Rendered {
+pub(crate) fn render(model: &EventModelingModel, options: &Options) -> Rendered {
     turn_to_fit(options, |down| if down { vertical(model, options) } else { horizontal(model, options) })
 }
 
 /// The document around drawn content.
-fn document(
-    model: &EventModelingModel,
-    options: &RenderOptions,
-    width: f64,
-    height: f64,
-    size: f64,
-    content: &str,
-) -> Rendered {
-    Rendered {
-        height,
-        links: Vec::new(),
-        svg: svg_document(
-            "eventmodeling",
-            width,
-            height,
-            size,
-            options,
-            Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
-            content,
-        ),
-        width,
-    }
+fn document(width: f64, height: f64, size: f64, content: &str) -> Rendered {
+    Rendered { height, svg: svg_document("eventmodeling", width, height, size, content), width }
 }
 
 /// A box placed in its lane.
@@ -293,14 +272,14 @@ struct Band {
 }
 
 /// Draws `model` with time running across and one band per lane.
-fn horizontal(model: &EventModelingModel, options: &RenderOptions) -> Rendered {
-    let size = options.font_size.unwrap_or(16.0);
+fn horizontal(model: &EventModelingModel, options: &Options) -> Rendered {
+    let size = options.font_size;
     let name_size = js_round(size * 0.875);
     let small = js_round(size * 0.8125);
     let mono = js_round(size * 0.75);
     let mono_step = js_round(mono * 1.4);
     let small_step = js_round(small * 1.5);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
 
     let mut bands: Vec<Band> = Vec::new();
     let mut label_column: f64 = 0.0;
@@ -566,7 +545,7 @@ fn horizontal(model: &EventModelingModel, options: &RenderOptions) -> Rendered {
     content.push_str(&edges);
     content.push_str(&nodes);
     content.push_str(&cards);
-    document(model, options, total_width, total_height, size, &content)
+    document(total_width, total_height, size, &content)
 }
 
 /// A card placed when running down.
@@ -585,11 +564,11 @@ struct Card {
 }
 
 /// Draws `model` as cards running down, with relations that skip cards on rails beside them.
-fn vertical(model: &EventModelingModel, options: &RenderOptions) -> Rendered {
-    let size = options.font_size.unwrap_or(16.0);
+fn vertical(model: &EventModelingModel, options: &Options) -> Rendered {
+    let size = options.font_size;
     let small = js_round(size * 0.875);
     let mono = js_round(size * 0.75);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
     let room = 160.0_f64.max(options.max_width.unwrap_or(320.0) - 2.0 * pad);
 
     // A relation that skips a card runs down a rail beside the cards. Relations into one card
@@ -817,5 +796,5 @@ fn vertical(model: &EventModelingModel, options: &RenderOptions) -> Rendered {
     content.push_str(&edges);
     content.push_str(&nodes);
     content.push_str(&cards);
-    document(model, options, total_width, height, size, &content)
+    document(total_width, height, size, &content)
 }

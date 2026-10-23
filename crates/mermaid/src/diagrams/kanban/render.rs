@@ -3,6 +3,7 @@
 
 use super::db::KanbanDb;
 use super::db::KanbanNode;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::title_room;
 use crate::diagrams::common::icon::icon_svg;
@@ -12,8 +13,6 @@ use crate::svg::builder::js_round;
 use crate::svg::builder::label_svg;
 use crate::svg::builder::push_num;
 use crate::svg::builder::text_style;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::CRITICAL;
 use crate::svg::theme::ROUNDED;
@@ -26,11 +25,6 @@ use crate::text::label::layout_label;
 use crate::text::label::trim;
 use crate::text::measure::BOLD;
 use crate::text::measure::{self};
-use crate::util::url::LinkInfo;
-use crate::util::url::UrlOptions;
-use crate::util::url::link_url;
-use crate::util::url::rel_attr;
-use crate::util::url::safe_url;
 use crate::yaml::Value;
 use crate::yaml::push_number;
 
@@ -185,19 +179,13 @@ struct Card<'m> {
 
 /// Draws `model` with the `kanban` section of `config`.
 #[expect(clippy::cast_precision_loss, reason = "counts and indexes are far below 2^52")]
-pub(crate) fn render(
-    model: &KanbanDb,
-    config: &Value,
-    options: &RenderOptions,
-    url: &UrlOptions<'_>,
-    icons: Option<IconResolver<'_>>,
-) -> Rendered {
+pub(crate) fn render(model: &KanbanDb, config: &Value, options: &Options, icons: Option<IconResolver<'_>>) -> Rendered {
     let has = |name: Option<&str>| name.is_some_and(|name| !name.is_empty() && !icon_markup(icons, name).is_empty());
-    let size = options.font_size.unwrap_or(16.0);
+    let size = options.font_size;
     let small = js_round(size * 0.875);
     let line = js_round(size * 1.5);
     let small_line = js_round(small * 1.5);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
     let conf = property(config, "kanban");
     let own_width = match conf.and_then(|conf| property(conf, "sectionWidth")) {
         Some(Value::Number(width)) if *width > 0.0 => width.clamp(80.0, 2000.0),
@@ -219,14 +207,9 @@ pub(crate) fn render(
     } else {
         own_width.min(room).max((((room + COLUMN_GAP) / per_row).floor() - COLUMN_GAP).min(own_width * 2.0))
     };
-    let base_url = match conf.and_then(|conf| property(conf, "ticketBaseUrl")) {
-        Some(Value::String(base)) => base.as_str(),
-        _ => "",
-    };
     let card_width = column_width - 2.0 * COLUMN_PAD;
     let text_width = card_width - 2.0 * CARD_PAD;
     let glyph = small * 1.25;
-    let mut links: Vec<LinkInfo> = Vec::new();
 
     let mut titles: Vec<Label> = Vec::with_capacity(sections.len());
     let mut count_widths: Vec<f64> = Vec::with_capacity(sections.len());
@@ -364,41 +347,16 @@ pub(crate) fn render(
                 ));
             }
             let bottom = card.height - CARD_PAD;
-            if let Some(ticket) = item.ticket.as_deref().filter(|ticket| !ticket.is_empty()) {
+            if item.ticket.as_deref().is_some_and(|ticket| !ticket.is_empty()) {
                 let top = bottom - card.meta;
-                // `String.prototype.replace` with a string pattern replaces the first match only.
-                let target = base_url.find("#TICKET#").map_or_else(
-                    || base_url.to_owned(),
-                    |at| [base_url.get(..at).unwrap_or(""), ticket, base_url.get(at + 8..).unwrap_or("")].concat(),
-                );
-                let safe = if base_url.is_empty() { String::new() } else { safe_url(&target) };
-                let href = if base_url.is_empty() { None } else { link_url(&safe, url) };
-                if let Some(href) = href {
-                    inner.push_str("<a href=\"");
-                    inner.push_str(&esc(href));
-                    inner.push_str("\" target=\"_blank\"");
-                    inner.push_str(&rel_attr(url));
-                    inner.push('>');
-                    inner.push_str(&text_block(
-                        &card.ticket,
-                        CARD_PAD,
-                        top,
-                        " class=\"ondine-ticket\" fill=\"var(--_c)\"",
-                        icons,
-                        false,
-                    ));
-                    inner.push_str("</a>");
-                    links.push(LinkInfo { href: href.to_owned(), id: item.id.clone(), internal: false });
-                } else {
-                    inner.push_str(&text_block(
-                        &card.ticket,
-                        CARD_PAD,
-                        top,
-                        " class=\"ondine-ticket\" fill=\"var(--_m)\"",
-                        icons,
-                        false,
-                    ));
-                }
+                inner.push_str(&text_block(
+                    &card.ticket,
+                    CARD_PAD,
+                    top,
+                    " class=\"ondine-ticket\" fill=\"var(--_m)\"",
+                    icons,
+                    false,
+                ));
             }
             if item.assigned.as_deref().is_some_and(|assigned| !assigned.is_empty()) {
                 inner.push_str(&text_block(
@@ -457,8 +415,7 @@ pub(crate) fn render(
 
     Rendered {
         height: total_height,
-        links,
-        svg: svg_document("kanban", total_width, total_height, size, options, Accessible::default(), &content),
+        svg: svg_document("kanban", total_width, total_height, size, &content),
         width: total_width,
     }
 }

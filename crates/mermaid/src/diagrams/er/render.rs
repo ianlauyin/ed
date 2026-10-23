@@ -8,6 +8,7 @@ use super::graph::ErGraphNode;
 use super::graph::{self};
 use super::markers::MARKER_LENGTH;
 use super::markers::er_marker;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::runs_across;
 use crate::diagrams::common::fit_width::turn_to_fit;
@@ -33,22 +34,16 @@ use crate::svg::cluster::cluster_title_x;
 use crate::svg::cluster::mark_crossings;
 use crate::svg::edges::edge_label_svg;
 use crate::svg::edges::route_path;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::RADIUS;
 use crate::svg::theme::ResolvedStyle;
 use crate::svg::theme::class_names;
 use crate::svg::theme::resolve_style;
-use crate::text::entities;
 use crate::text::label::Label;
 use crate::text::label::layout_label;
 use crate::text::measure::BOLD;
 use crate::text::measure::ITALIC;
 use crate::util::chars::is_space;
-use crate::util::url::LinkInfo;
-use crate::util::url::UrlOptions;
-use crate::util::url::{self};
 use crate::yaml::Value;
 
 /// Room between nodes in a rank.
@@ -246,11 +241,11 @@ fn strip_default(classes: &str) -> &str {
 
 /// Draws an ER diagram, turning one that runs across to run down when it does not fit the host's
 /// width.
-pub(crate) fn render(db: &ErDb, config: &Value, options: &RenderOptions, url: &UrlOptions<'_>) -> Rendered {
+pub(crate) fn render(db: &ErDb, config: &Value, options: &Options) -> Rendered {
     if !runs_across(Some(db.direction)) {
-        return draw(db, config, options, url, false);
+        return draw(db, config, options, false);
     }
-    turn_to_fit(options, |down| draw(db, config, options, url, down))
+    turn_to_fit(options, |down| draw(db, config, options, down))
 }
 
 /// `turned` draws a diagram that runs across as one that runs down.
@@ -259,11 +254,11 @@ pub(crate) fn render(db: &ErDb, config: &Value, options: &RenderOptions, url: &U
     clippy::too_many_lines,
     reason = "mirrors Pele's draw, one pass per drawing stage"
 )]
-fn draw(db: &ErDb, config: &Value, options: &RenderOptions, url: &UrlOptions<'_>, turned: bool) -> Rendered {
+fn draw(db: &ErDb, config: &Value, options: &Options, turned: bool) -> Rendered {
     let graph = graph::build(db);
-    let size = options.font_size.unwrap_or(16.0);
+    let size = options.font_size;
     let small_size = js_round(size * 0.875);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
     let n = graph.nodes.len();
 
     let mut index: BTreeMap<&str, usize> = BTreeMap::new();
@@ -489,7 +484,6 @@ fn draw(db: &ErDb, config: &Value, options: &RenderOptions, url: &UrlOptions<'_>
     shift_layout(&mut cnodes, &mut cedges, ox, oy);
     let width = (inner + 2.0 * pad).ceil();
     let height = (layout.height + title_height + 2.0 * pad).ceil();
-    let mut links: Vec<LinkInfo> = Vec::new();
 
     let mut crossings = Crossings::new();
     if cnodes.iter().any(|c| c.is_group) {
@@ -552,35 +546,13 @@ fn draw(db: &ErDb, config: &Value, options: &RenderOptions, url: &UrlOptions<'_>
         shape.push('"');
         let mut name_attrs = String::from(" class=\"ondine-label\"");
         name_attrs.push_str(text);
-        let mut name = label_svg(
+        let name = label_svg(
             &view.label,
             0.0,
             if view.rows.is_empty() { 0.0 } else { y0 + view.head_h / 2.0 },
             &name_attrs,
             None,
         );
-        let display = entities::decode(if node.alias.is_empty() { node.label } else { node.alias }).into_owned();
-        let mut spaced = classes.clone();
-        spaced.push(' ');
-        if spaced.contains(" internal-link ") && !name.is_empty() && url.links != Some(false) {
-            // The name ends up in an href, so it gets the same check as a URL.
-            let safe = url::link_url(&url::sanitize_url(&display), url).is_some();
-            let target = esc(&display).into_owned();
-            let mut anchor = String::from("<a class=\"internal-link\"");
-            if safe {
-                anchor.push_str(" href=\"");
-                anchor.push_str(&target);
-                anchor.push('"');
-                anchor.push_str(&url::rel_attr(url));
-            }
-            anchor.push_str(" data-href=\"");
-            anchor.push_str(&target);
-            anchor.push_str("\">");
-            anchor.push_str(&name);
-            anchor.push_str("</a>");
-            name = anchor;
-            links.push(LinkInfo { href: display, id: node.label.to_owned(), internal: true });
-        }
 
         let mut body = String::from("<rect ");
         body.push_str(&shape);
@@ -867,10 +839,8 @@ fn draw(db: &ErDb, config: &Value, options: &RenderOptions, url: &UrlOptions<'_>
     content.push_str("<g class=\"ondine-nodes\">");
     content.push_str(&nodes_out);
     content.push_str("</g>");
-
-    let accessible = Accessible { acc_descr: db.acc_descr.as_deref(), acc_title: db.acc_title.as_deref() };
-    let svg = svg_document("er", width, height, size, options, accessible, &content);
-    Rendered { height, links, svg, width }
+    let svg = svg_document("er", width, height, size, &content);
+    Rendered { height, svg, width }
 }
 
 /// Drops the middle points of straight runs.

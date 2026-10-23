@@ -4,6 +4,7 @@
 use std::f64::consts::PI;
 
 use super::model::PieModel;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::fit_width;
 use crate::diagrams::common::fit_width::title_room;
@@ -11,8 +12,6 @@ use crate::svg::builder::esc_text;
 use crate::svg::builder::js_round;
 use crate::svg::builder::label_svg;
 use crate::svg::builder::push_num;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::series_color;
 use crate::text::label::Label;
@@ -112,7 +111,7 @@ fn fixed0(value: f64) -> String {
 }
 
 /// Draws `model` with the `pie` section of `config`, narrowed to fit the host's width.
-pub(crate) fn render(model: &PieModel, config: &Value, options: &RenderOptions) -> Rendered {
+pub(crate) fn render(model: &PieModel, config: &Value, options: &Options) -> Rendered {
     fit_width(options, RADIUS * 2.0, 140.0, |diameter, tight| draw(model, config, options, diameter / 2.0, tight))
 }
 
@@ -124,10 +123,10 @@ struct Outside {
 }
 
 /// `tight` is set when the chart does not fit the width it has with its legend beside it.
-fn draw(model: &PieModel, config: &Value, options: &RenderOptions, radius: f64, tight: bool) -> Rendered {
-    let size = options.font_size.unwrap_or(16.0);
+fn draw(model: &PieModel, config: &Value, options: &Options, radius: f64, tight: bool) -> Rendered {
+    let size = options.font_size;
     let small = js_round(size * 0.875);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
 
     let text_position = match option(config, "textPosition") {
         Some(Value::Number(position)) if (0.0..=1.0).contains(position) => *position,
@@ -369,14 +368,6 @@ fn draw(model: &PieModel, config: &Value, options: &RenderOptions, radius: f64, 
         content.push_str("</g>");
     }
 
-    let svg = svg_document(
-        "pie",
-        total_width,
-        total_height,
-        size,
-        options,
-        Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
-        &content,
-    );
-    Rendered { height: total_height, links: Vec::new(), svg, width: total_width }
+    let svg = svg_document("pie", total_width, total_height, size, &content);
+    Rendered { height: total_height, svg, width: total_width }
 }

@@ -2,6 +2,7 @@
 //! running down. Port of Pele's `src/diagrams/timeline/render.ts`.
 
 use super::db::TimelineDb;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit::fit_label;
 use crate::diagrams::common::fit::plain_label;
@@ -12,8 +13,6 @@ use crate::svg::builder::label_svg;
 use crate::svg::builder::push_num;
 use crate::svg::edges::ARROW;
 use crate::svg::edges::marker;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::ROUNDED;
 use crate::svg::theme::series_color;
@@ -75,7 +74,7 @@ fn push_box(out: &mut String, x: f64, y: f64, w: f64, h: f64, attrs: &str) {
 
 /// Draws `model` with the `timeline` section of `config`. A `TD` timeline always runs down;
 /// another runs down when across does not fit.
-pub(crate) fn render(model: &TimelineDb, config: &Value, options: &RenderOptions) -> Rendered {
+pub(crate) fn render(model: &TimelineDb, config: &Value, options: &Options) -> Rendered {
     if model.direction == "TD" {
         return draw(model, config, options, true);
     }
@@ -83,10 +82,10 @@ pub(crate) fn render(model: &TimelineDb, config: &Value, options: &RenderOptions
 }
 
 #[expect(clippy::cast_precision_loss, reason = "counts and indexes are far below 2^52")]
-fn draw(model: &TimelineDb, config: &Value, options: &RenderOptions, vertical: bool) -> Rendered {
-    let size = options.font_size.unwrap_or(16.0);
+fn draw(model: &TimelineDb, config: &Value, options: &Options, vertical: bool) -> Rendered {
+    let size = options.font_size;
     let small = js_round(size * 0.875);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
     let multicolor = !matches!(
         property(config, "timeline").and_then(|conf| property(conf, "disableMulticolor")),
         Some(Value::Bool(true))
@@ -417,16 +416,7 @@ fn draw(model: &TimelineDb, config: &Value, options: &RenderOptions, vertical: b
     content.push_str(&body);
     Rendered {
         height: total_height,
-        links: Vec::new(),
-        svg: svg_document(
-            "timeline",
-            total_width,
-            total_height,
-            size,
-            options,
-            Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
-            &content,
-        ),
+        svg: svg_document("timeline", total_width, total_height, size, &content),
         width: total_width,
     }
 }

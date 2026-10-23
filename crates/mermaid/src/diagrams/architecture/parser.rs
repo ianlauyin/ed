@@ -203,16 +203,6 @@ impl Side {
             _ => Self::B,
         }
     }
-
-    /// The side's letter.
-    pub(crate) fn as_str(self) -> &'static str {
-        match self {
-            Self::B => "B",
-            Self::L => "L",
-            Self::R => "R",
-            Self::T => "T",
-        }
-    }
 }
 
 /// The direction of an alignment.

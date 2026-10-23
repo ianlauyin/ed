@@ -7,6 +7,7 @@ use super::graph::GraphEdge;
 use super::graph::GraphNode;
 use super::graph::{self};
 use super::shapes::canonical_shape;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::runs_across;
 use crate::diagrams::common::fit_width::tighten;
@@ -37,8 +38,6 @@ use crate::svg::edges::loop_path;
 use crate::svg::edges::marker;
 use crate::svg::edges::marker_trim;
 use crate::svg::edges::route_path;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::shapes::draw_shape;
 use crate::svg::shapes::end_side;
@@ -50,13 +49,10 @@ use crate::svg::theme::RADIUS;
 use crate::svg::theme::ResolvedStyle;
 use crate::svg::theme::class_names;
 use crate::svg::theme::resolve_style;
-use crate::text::entities;
 use crate::text::label::Label;
 use crate::text::label::layout_label;
 use crate::text::measure::BOLD;
 use crate::text::measure::ITALIC;
-use crate::util::url::LinkInfo;
-use crate::util::url::UrlOptions;
 use crate::util::url::{self};
 use crate::yaml::Value;
 
@@ -120,14 +116,8 @@ fn asset_size(value: Option<f64>, fallback: f64) -> f64 {
 
 /// Draws a flowchart, or the flowchart `variant`, turning one that runs across to run down, and
 /// tightening its spacing, when it does not fit the host's width.
-pub(crate) fn render(
-    db: &FlowDb,
-    config: &Value,
-    options: &RenderOptions,
-    url: &UrlOptions<'_>,
-    variant: Option<&Variant>,
-) -> Rendered {
-    let fitted = |down: bool| tighten(options, |tight| draw(db, config, options, url, variant, down, tight));
+pub(crate) fn render(db: &FlowDb, config: &Value, options: &Options, variant: Option<&Variant>) -> Rendered {
+    let fitted = |down: bool| tighten(options, |tight| draw(db, config, options, variant, down, tight));
 
     if runs_across(db.direction.as_deref()) { turn_to_fit(options, fitted) } else { fitted(false) }
 }
@@ -137,8 +127,7 @@ pub(crate) fn render(
 fn draw(
     db: &FlowDb,
     config: &Value,
-    options: &RenderOptions,
-    url: &UrlOptions<'_>,
+    options: &Options,
     variant: Option<&Variant>,
     turned: bool,
     tight: bool,
@@ -154,12 +143,12 @@ fn draw(
     if let Some(variant) = variant {
         (variant.prepare)(&mut graph);
     }
-    let size = options.font_size.unwrap_or(16.0);
+    let size = options.font_size;
     let edge_size = crate::svg::builder::js_round(size * 0.875);
     let squeezed = variant.is_some() && tight;
     let wrap_width = number_option(flow, "wrappingWidth", 200.0).min(if squeezed { 100.0 } else { f64::INFINITY });
     let group_title_width = if squeezed { 80.0_f64.max(title_room(options) / 2.0) } else { 4000.0 };
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
 
     let mut index: std::collections::BTreeMap<&str, usize> = std::collections::BTreeMap::new();
     for (i, node) in graph.nodes.iter().enumerate() {
@@ -331,7 +320,6 @@ fn draw(
     shift_layout(&mut cnodes, &mut cedges, ox, oy);
     let width = (inner + 2.0 * pad).ceil();
     let height = (layout.height + title_height + 2.0 * pad).ceil();
-    let mut links: Vec<LinkInfo> = Vec::new();
 
     let mut crossings = Crossings::new();
     if cnodes.iter().any(|c| c.is_group) {
@@ -403,7 +391,7 @@ fn draw(
 
         let (w, h) = (view.w, view.h);
         let inner = if let Some(img) = node.img.as_deref().filter(|img| !img.is_empty()) {
-            image(node, view, img, url)
+            image(node, view, img)
         } else if let Some(icon) = node.icon.as_deref().filter(|icon| !icon.is_empty()) {
             icon_svg(node, view, icon)
         } else {
@@ -416,52 +404,10 @@ fn draw(
 
         let mut label_attrs = String::from(" class=\"ondine-label\"");
         label_attrs.push_str(&view.style.text);
-        let mut text = label_svg(&view.label, 0.0, view.dy, &label_attrs, None);
+        let text = label_svg(&view.label, 0.0, view.dy, &label_attrs, None);
 
-        let mut spaced = classes.clone();
-        spaced.push(' ');
-        let internal = spaced.contains(" internal-link ");
-        if let Some(label) = node.label.as_deref().filter(|label| internal && !label.is_empty())
-            && url.links != Some(false)
-        {
-            // The label is a note name, but it still ends up in an href, so it gets the same check
-            // as a URL.
-            let name = entities::decode(label).into_owned();
-            let safe = url::link_url(&url::sanitize_url(&name), url).is_some();
-            let target = esc(&name).into_owned();
-            let mut anchor = String::from("<a class=\"internal-link\"");
-            if safe {
-                anchor.push_str(" href=\"");
-                anchor.push_str(&target);
-                anchor.push('"');
-                anchor.push_str(&url::rel_attr(url));
-            }
-            anchor.push_str(" data-href=\"");
-            anchor.push_str(&target);
-            anchor.push_str("\">");
-            anchor.push_str(&text);
-            anchor.push_str("</a>");
-            text = anchor;
-            links.push(LinkInfo { href: name, id: node.id.clone(), internal: true });
-        }
-
-        let mut body = String::new();
-        if let Some(tooltip) = node.tooltip.as_deref().filter(|tooltip| !tooltip.is_empty()) {
-            body.push_str("<title>");
-            body.push_str(&esc_text(tooltip));
-            body.push_str("</title>");
-        }
-        body.push_str(&inner);
+        let mut body = inner;
         body.push_str(&text);
-        if let Some(link) = node.link.as_deref().filter(|link| !link.is_empty()) {
-            let mut attrs = String::new();
-            if let Some(target) = node.link_target.as_deref().filter(|target| !target.is_empty()) {
-                attrs.push_str(" target=\"");
-                attrs.push_str(&esc(target));
-                attrs.push('"');
-            }
-            body = url::linked(&body, link, &node.id, &mut links, url, &attrs);
-        }
 
         nodes_out.push_str("<g class=\"ondine-node ondine-shape-");
         nodes_out.push_str(view.shape);
@@ -614,19 +560,9 @@ fn draw(
     content.push_str("<g class=\"ondine-nodes\">");
     content.push_str(&nodes_out);
     content.push_str("</g>");
+    let svg = svg_document(variant.map_or("flowchart", |variant| variant.r#type), width, height, size, &content);
 
-    let accessible = Accessible { acc_descr: db.acc_descr.as_deref(), acc_title: db.acc_title.as_deref() };
-    let svg = svg_document(
-        variant.map_or("flowchart", |variant| variant.r#type),
-        width,
-        height,
-        size,
-        options,
-        accessible,
-        &content,
-    );
-
-    Rendered { height, links, svg, width }
+    Rendered { height, svg, width }
 }
 
 fn present(value: Option<&str>) -> bool {
@@ -661,7 +597,7 @@ fn strip_edge_classes(classes: &str) -> String {
     out
 }
 
-fn image(node: &GraphNode, view: &NodeView<'_>, img: &str, url: &UrlOptions<'_>) -> String {
+fn image(node: &GraphNode, view: &NodeView<'_>, img: &str) -> String {
     let aw = asset_size(node.asset_width, 80.0);
     let ah = asset_size(node.asset_height, 80.0);
     let top = if view.label.height > 0.0 {
@@ -670,7 +606,7 @@ fn image(node: &GraphNode, view: &NodeView<'_>, img: &str, url: &UrlOptions<'_>)
         -ah / 2.0
     };
     let safe = url::safe_url(img);
-    let Some(src) = url::image_url(&safe, url) else {
+    let Some(src) = url::image_url(&safe) else {
         return String::new();
     };
 

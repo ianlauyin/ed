@@ -10,6 +10,7 @@ use super::db::GitModel;
 use super::db::HIGHLIGHT;
 use super::db::MERGE;
 use super::db::REVERSE;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit::plain_label;
 use crate::diagrams::common::fit_width::turn_to_fit;
@@ -17,8 +18,6 @@ use crate::svg::builder::esc_text;
 use crate::svg::builder::js_round;
 use crate::svg::builder::label_svg;
 use crate::svg::builder::push_num;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::RADIUS;
 use crate::svg::theme::series_color;
@@ -163,7 +162,7 @@ fn symbol(r#type: u8, x: f64, y: f64, color: &str) -> String {
 
 /// Draws `model` with the `gitGraph` section of `config`. A left-to-right graph that does not fit
 /// the host's width may run down instead.
-pub(crate) fn render(model: &GitModel, config: &Value, options: &RenderOptions) -> Rendered {
+pub(crate) fn render(model: &GitModel, config: &Value, options: &Options) -> Rendered {
     if model.direction != "LR" {
         return draw(model, config, options, model.direction);
     }
@@ -252,10 +251,10 @@ fn room(views: &[View<'_>], lane_count: usize, vertical: bool, rotate: bool) -> 
 }
 
 #[expect(clippy::many_single_char_names, clippy::too_many_lines, reason = "mirrors Pele's draw")]
-fn draw(model: &GitModel, config: &Value, options: &RenderOptions, direction: &'static str) -> Rendered {
-    let size = options.font_size.unwrap_or(16.0);
+fn draw(model: &GitModel, config: &Value, options: &Options, direction: &'static str) -> Rendered {
+    let size = options.font_size;
     let small = js_round(size * 0.75);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
 
     let show_branches = flag(config, "showBranches", true);
     let show_commit_label = flag(config, "showCommitLabel", true);
@@ -562,15 +561,7 @@ fn draw(model: &GitModel, config: &Value, options: &RenderOptions, direction: &'
         let y = py(view.m, c);
         let r#type = commit.custom_type.unwrap_or(commit.r#type);
         bounds.grow(x - DOT - 1.0, y - DOT - 1.0, x + DOT + 1.0, y + DOT + 1.0);
-        // Merges and cherry-picks carry a message Mermaid makes up; only a written one is worth
-        // showing.
-        let mut body = String::new();
-        if commit.r#type < MERGE && !commit.message.is_empty() {
-            body.push_str("<title>");
-            body.push_str(&esc_text(&commit.message));
-            body.push_str("</title>");
-        }
-        body.push_str(&symbol(r#type, x, y, &color(view.lane)));
+        let mut body = symbol(r#type, x, y, &color(view.lane));
 
         if let Some(label) = view.label.as_ref().filter(|label| !label.lines.is_empty()) {
             let w = label.width;
@@ -699,12 +690,5 @@ fn draw(model: &GitModel, config: &Value, options: &RenderOptions, direction: &'
         content.push_str("</g>");
     }
     content.push_str("</g>");
-
-    let acc = Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() };
-    Rendered {
-        height,
-        links: Vec::new(),
-        svg: svg_document("gitGraph", width, height, size, options, acc, &content),
-        width,
-    }
+    Rendered { height, svg: svg_document("gitGraph", width, height, size, &content), width }
 }

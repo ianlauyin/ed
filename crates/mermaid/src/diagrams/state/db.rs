@@ -125,11 +125,6 @@ impl StateDb {
         self.class_index.get(id).and_then(|&at| self.classes.get(at))
     }
 
-    /// The link on the state named `id`.
-    pub(crate) fn link(&self, id: &str) -> Option<&StateLink> {
-        self.link_index.get(id).and_then(|&at| self.links.get(at)).map(|(_, link)| link)
-    }
-
     /// Only the root document's statements become states, relations, and classes here. The
     /// statements inside composites are read when the graph is built.
     fn extract(&mut self) {

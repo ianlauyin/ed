@@ -778,30 +778,30 @@ impl Selection {
 pub struct ParsedMarkdown {
     pub source: SharedString,
     pub events: Arc<[(Range<usize>, MarkdownEvent)]>,
-    pub(crate) blocks: Arc<[RenderBlock]>,
+    blocks: Arc<[RenderBlock]>,
     pub languages_by_name: TreeMap<SharedString, Arc<Language>>,
     pub languages_by_path: TreeMap<Arc<str>, Arc<Language>>,
     pub root_block_starts: Arc<[usize]>,
-    pub(crate) metadata_blocks: BTreeMap<usize, ParsedMetadataBlock>,
+    metadata_blocks: BTreeMap<usize, ParsedMetadataBlock>,
     pub heading_slugs: HashMap<SharedString, usize>,
     pub footnote_definitions: HashMap<SharedString, usize>,
-    pub(crate) link_definition_spans: Arc<[Range<usize>]>,
-    pub(crate) fallback_code_block_language: Option<Arc<Language>>,
-    pub(crate) code_block_highlights: Arc<CodeBlockHighlights>,
+    link_definition_spans: Arc<[Range<usize>]>,
+    fallback_code_block_language: Option<Arc<Language>>,
+    code_block_highlights: Arc<CodeBlockHighlights>,
 }
 
 /// A top-level block of the parse: the unit that virtualized rendering lays
 /// out, measures and caches.
 #[derive(Clone, Debug, PartialEq)]
-pub(crate) struct RenderBlock {
+struct RenderBlock {
     pub(crate) events: Range<usize>,
     pub(crate) source_range: Range<usize>,
     /// Hash of everything the block's rendering depends on besides its source
     /// offsets, so a reparse can tell which blocks changed.
-    pub(crate) hash: u64,
+    hash: u64,
     /// Whether a footnote definition precedes the block, so the footnote
     /// separator was already drawn.
-    pub(crate) after_footnote_definition: bool,
+    after_footnote_definition: bool,
 }
 
 /// Splits the events at each root block start. Events outside root blocks join
@@ -845,9 +845,9 @@ fn render_blocks(source: &str, events: &[(Range<usize>, MarkdownEvent)]) -> Vec<
 }
 
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub(crate) struct MarkdownEventIndex(usize);
+struct MarkdownEventIndex(usize);
 
-pub(crate) type CodeBlockHighlights = HashMap<MarkdownEventIndex, ResolvedHighlights>;
+type CodeBlockHighlights = HashMap<MarkdownEventIndex, ResolvedHighlights>;
 
 impl ParsedMarkdown {
     pub fn source(&self) -> &SharedString {
@@ -1004,7 +1004,7 @@ impl ParsedMarkdown {
     }
 
     /// The index into [`Self::blocks`] of the block containing `source_index`.
-    pub(crate) fn block_for_source_index(&self, source_index: usize) -> Option<usize> {
+    fn block_for_source_index(&self, source_index: usize) -> Option<usize> {
         if self.blocks.is_empty() {
             return None;
         }
@@ -1032,7 +1032,7 @@ impl ParsedMarkdown {
         selection::rebalanced_markdown_for_selection(&self.source, &self.events, &self.root_block_starts, selection)
     }
 
-    pub(crate) fn code_block_language(&self, kind: &CodeBlockKind) -> Option<Arc<Language>> {
+    fn code_block_language(&self, kind: &CodeBlockKind) -> Option<Arc<Language>> {
         match kind {
             CodeBlockKind::FencedLang(name) => self.languages_by_name.get(name).cloned(),
             CodeBlockKind::FencedSrc(path_range) => self.languages_by_path.get(&path_range.path).cloned(),

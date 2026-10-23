@@ -3,60 +3,121 @@ use std::borrow::Cow;
 use std::cmp::min;
 use std::collections::HashSet;
 use std::ops::Range;
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 
-use anyhow::{Context as _, Result};
+use anyhow::Context as _;
+use anyhow::Result;
+use editor::Editor;
+use editor::EditorEvent;
+use editor::EditorSettings;
+use editor::MAX_TAB_TITLE_LEN;
+use editor::MultiBufferOffset;
+use editor::SelectionEffects;
 use editor::items::open_resolved_target;
 use editor::scroll::Autoscroll;
-use editor::{
-    Editor, EditorEvent, EditorSettings, MAX_TAB_TITLE_LEN, MultiBufferOffset, SelectionEffects,
-};
-use gpui::{
-    Action, AnyElement, App, ClipboardItem, Context, Entity, EntityId, EventEmitter, FocusHandle,
-    Focusable, Global, ImageSource, InteractiveElement, IntoElement, IsZero, ListOffset, Pixels,
-    Render, Resource, RetainAllImageCache, SharedString, SharedUri, Subscription, Task, WeakEntity,
-    Window, px,
-};
-use language::{Buffer, LanguageRegistry};
-use markdown::{Markdown, MarkdownElement, MarkdownListState, MarkdownOptions};
+use gpui::Action;
+use gpui::AnyElement;
+use gpui::App;
+use gpui::ClipboardItem;
+use gpui::Context;
+use gpui::Entity;
+use gpui::EntityId;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::Global;
+use gpui::ImageSource;
+use gpui::InteractiveElement;
+use gpui::IntoElement;
+use gpui::IsZero;
+use gpui::ListOffset;
+use gpui::Pixels;
+use gpui::Render;
+use gpui::Resource;
+use gpui::RetainAllImageCache;
+use gpui::SharedString;
+use gpui::SharedUri;
+use gpui::Subscription;
+use gpui::Task;
+use gpui::WeakEntity;
+use gpui::Window;
+use gpui::px;
+use language::Buffer;
+use language::LanguageRegistry;
+use markdown::Markdown;
+use markdown::MarkdownElement;
+use markdown::MarkdownListState;
+use markdown::MarkdownOptions;
+use project::Project;
+use project::ProjectPath;
+use project::image_store;
 use project::search::SearchQuery;
-use project::{Project, ProjectPath, image_store};
-use settings::{SeedQuerySetting, Settings, update_settings_file};
-use theme::{SystemAppearance, Theme, ThemeRegistry};
+use settings::SeedQuerySetting;
+use settings::Settings;
+use settings::update_settings_file;
+use theme::SystemAppearance;
+use theme::Theme;
+use theme::ThemeRegistry;
 use theme_settings::ThemeSettings;
+use ui::ContextMenu;
+use ui::LinkPreview;
+use ui::ScrollAxes;
+use ui::Scrollbars;
+use ui::WithScrollbar;
+use ui::prelude::*;
+use ui::right_click_menu;
 use ui::utils::WithRemSize;
-use ui::{
-    ContextMenu, LinkPreview, ScrollAxes, Scrollbars, WithScrollbar, prelude::*, right_click_menu,
-};
-use util::{
-    ResultExt,
-    markdown::{source_position_from_fragment, split_local_url_fragment},
-    paths::{PathStyle, PathWithPosition},
-    rel_path::RelPath,
-};
-use workspace::item::{
-    Item, ItemBufferKind, ItemHandle, SaveOptions, SerializableItem, TabContentParams,
-};
-use workspace::notifications::{NotifyResultExt, NotifyTaskExt};
-use workspace::path_link::{PathMatching, resolve_open_target};
-use workspace::searchable::{
-    Direction, SearchEvent, SearchOptions, SearchToken, SearchableItem, SearchableItemHandle,
-};
-use workspace::{
-    ItemId, ItemNavHistory, Pane, SaveIntent, Workspace, WorkspaceId, delete_unloaded_items,
-};
-use zed_actions::{DecreaseBufferFontSize, IncreaseBufferFontSize, ResetBufferFontSize};
+use util::ResultExt;
+use util::markdown::source_position_from_fragment;
+use util::markdown::split_local_url_fragment;
+use util::paths::PathStyle;
+use util::paths::PathWithPosition;
+use util::rel_path::RelPath;
+use workspace::ItemId;
+use workspace::ItemNavHistory;
+use workspace::Pane;
+use workspace::SaveIntent;
+use workspace::Workspace;
+use workspace::WorkspaceId;
+use workspace::delete_unloaded_items;
+use workspace::item::Item;
+use workspace::item::ItemBufferKind;
+use workspace::item::ItemHandle;
+use workspace::item::SaveOptions;
+use workspace::item::SerializableItem;
+use workspace::item::TabContentParams;
+use workspace::notifications::NotifyResultExt;
+use workspace::notifications::NotifyTaskExt;
+use workspace::path_link::PathMatching;
+use workspace::path_link::resolve_open_target;
+use workspace::searchable::Direction;
+use workspace::searchable::SearchEvent;
+use workspace::searchable::SearchOptions;
+use workspace::searchable::SearchToken;
+use workspace::searchable::SearchableItem;
+use workspace::searchable::SearchableItemHandle;
+use zed_actions::DecreaseBufferFontSize;
+use zed_actions::IncreaseBufferFontSize;
+use zed_actions::ResetBufferFontSize;
 
+use crate::CloseAndReturnToEditor;
+use crate::OpenFollowingPreview;
+use crate::OpenPreview;
+use crate::OpenPreviewToTheSide;
+use crate::ScrollDown;
+use crate::ScrollDownByItem;
+use crate::ScrollPageDown;
+use crate::ScrollPageUp;
+use crate::ScrollToBottom;
+use crate::ScrollToTop;
+use crate::ScrollUp;
+use crate::ScrollUpByItem;
 use crate::markdown_preview_settings::MarkdownPreviewSettings;
 use crate::markdown_preview_style::preview_markdown_style;
 use crate::mermaid_diagrams::MermaidDiagrams;
-use crate::{
-    CloseAndReturnToEditor, OpenFollowingPreview, OpenPreview, OpenPreviewToTheSide, ScrollDown,
-    ScrollDownByItem,
-};
-use crate::{ScrollPageDown, ScrollPageUp, ScrollToBottom, ScrollToTop, ScrollUp, ScrollUpByItem};
 
 /// Languages the preview renders.
 const PREVIEW_LANGUAGES: [&str; 2] = ["Markdown", "HTML"];
@@ -76,6 +137,10 @@ pub struct MarkdownPreviewView {
     markdown: Entity<Markdown>,
     mermaid_diagrams: Entity<MermaidDiagrams>,
     _markdown_subscription: Subscription,
+    /// The diagrams entity isn't a view, so its notifications (a raster
+    /// finished rendering) must re-render this view, or the cached pane keeps
+    /// replaying a frame that paints the old, already-freed raster.
+    _mermaid_subscription: Subscription,
     active_source_index: Option<usize>,
     list_state: MarkdownListState,
     image_cache: Entity<RetainAllImageCache>,
@@ -138,64 +203,42 @@ impl MarkdownPreviewView {
     pub fn register(workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace>) {
         cx.default_global::<SuppressedAutoPreviews>();
         let workspace_entity = cx.entity();
-        cx.subscribe_in(
-            &workspace_entity,
-            window,
-            |workspace, _, event: &workspace::Event, window, cx| {
-                let workspace::Event::ItemAdded { item } = event else {
-                    return;
-                };
-                if cx
-                    .global_mut::<SuppressedAutoPreviews>()
-                    .0
-                    .remove(&item.item_id())
-                {
-                    return;
+        cx.subscribe_in(&workspace_entity, window, |workspace, _, event: &workspace::Event, window, cx| {
+            let workspace::Event::ItemAdded { item } = event else {
+                return;
+            };
+            if cx.global_mut::<SuppressedAutoPreviews>().0.remove(&item.item_id()) {
+                return;
+            }
+            if !MarkdownPreviewSettings::get_global(cx).open_markdown_files_in_preview || workspace.is_restoring() {
+                return;
+            }
+            let Some(editor) = item.downcast::<Editor>() else {
+                return;
+            };
+            if !Self::is_markdown_editor(workspace, &editor, cx) {
+                return;
+            }
+            let Some(pane) = workspace.pane_for_item_id(item.item_id()) else {
+                return;
+            };
+            let replaces_editor = !item.is_dirty(cx);
+            let replaces_temporary_editor = replaces_editor && pane.read(cx).is_active_preview_item(item.item_id());
+            let activate = workspace.active_pane() == &pane
+                && pane.read(cx).active_item().is_some_and(|active_item| active_item.item_id() == item.item_id());
+            let focus = editor.focus_handle(cx).contains_focused(window, cx);
+            let preview = Self::activate_or_add_preview(workspace, editor, pane.clone(), activate, focus, window, cx);
+            if !replaces_editor {
+                return;
+            }
+            pane.update(cx, |pane, cx| {
+                if replaces_temporary_editor {
+                    pane.replace_preview_item_id(preview.entity_id(), window, cx);
+                } else {
+                    pane.remove_item(item.item_id(), false, false, window, cx);
                 }
-                if !MarkdownPreviewSettings::get_global(cx).open_markdown_files_in_preview
-                    || workspace.is_restoring()
-                {
-                    return;
-                }
-                let Some(editor) = item.downcast::<Editor>() else {
-                    return;
-                };
-                if !Self::is_markdown_editor(workspace, &editor, cx) {
-                    return;
-                }
-                let Some(pane) = workspace.pane_for_item_id(item.item_id()) else {
-                    return;
-                };
-                let replaces_editor = !item.is_dirty(cx);
-                let replaces_temporary_editor =
-                    replaces_editor && pane.read(cx).is_active_preview_item(item.item_id());
-                let activate = workspace.active_pane() == &pane
-                    && pane
-                        .read(cx)
-                        .active_item()
-                        .is_some_and(|active_item| active_item.item_id() == item.item_id());
-                let focus = editor.focus_handle(cx).contains_focused(window, cx);
-                let preview = Self::activate_or_add_preview(
-                    workspace,
-                    editor,
-                    pane.clone(),
-                    activate,
-                    focus,
-                    window,
-                    cx,
-                );
-                if !replaces_editor {
-                    return;
-                }
-                pane.update(cx, |pane, cx| {
-                    if replaces_temporary_editor {
-                        pane.replace_preview_item_id(preview.entity_id(), window, cx);
-                    } else {
-                        pane.remove_item(item.item_id(), false, false, window, cx);
-                    }
-                });
-            },
-        )
+            });
+        })
         .detach();
 
         workspace.register_action(move |workspace, _: &OpenPreview, window, cx| {
@@ -232,9 +275,9 @@ impl MarkdownPreviewView {
                     });
                 } else {
                     let view = Self::create_following_markdown_view(workspace, editor, window, cx);
-                    workspace.active_pane().update(cx, |pane, cx| {
-                        pane.add_item(Box::new(view.clone()), true, true, None, window, cx)
-                    });
+                    workspace
+                        .active_pane()
+                        .update(cx, |pane, cx| pane.add_item(Box::new(view.clone()), true, true, None, window, cx));
                 }
                 cx.notify();
             }
@@ -259,15 +302,7 @@ impl MarkdownPreviewView {
         cx: &mut Context<Workspace>,
     ) {
         let target_pane = workspace.adjacent_pane_of(&origin_pane, window, cx);
-        Self::activate_or_add_preview(
-            workspace,
-            editor.clone(),
-            target_pane,
-            false,
-            false,
-            window,
-            cx,
-        );
+        Self::activate_or_add_preview(workspace, editor.clone(), target_pane, false, false, window, cx);
         editor.focus_handle(cx).focus(window, cx);
     }
 
@@ -280,8 +315,7 @@ impl MarkdownPreviewView {
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) -> Entity<MarkdownPreviewView> {
-        let existing_view =
-            Self::find_existing_independent_preview_item_idx(pane.read(cx), &editor, cx);
+        let existing_view = Self::find_existing_independent_preview_item_idx(pane.read(cx), &editor, cx);
         let view = if let Some((existing_view, existing_view_idx)) = existing_view {
             pane.update(cx, |pane, cx| {
                 pane.activate_item(existing_view_idx, activate, focus, window, cx);
@@ -289,9 +323,7 @@ impl MarkdownPreviewView {
             existing_view
         } else {
             let view = Self::create_markdown_view(workspace, editor, window, cx);
-            pane.update(cx, |pane, cx| {
-                pane.add_item(Box::new(view.clone()), activate, focus, None, window, cx)
-            });
+            pane.update(cx, |pane, cx| pane.add_item(Box::new(view.clone()), activate, focus, None, window, cx));
             view
         };
         cx.notify();
@@ -310,33 +342,23 @@ impl MarkdownPreviewView {
             // workspace restoration, where the preview's bound editor may differ from
             // the editor the user is currently invoking the action on even though both
             // wrap the same source buffer.
-            view.read(cx).mode == MarkdownPreviewMode::Default
-                && view.read(cx).is_previewing(&target_buffer, cx)
+            view.read(cx).mode == MarkdownPreviewMode::Default && view.read(cx).is_previewing(&target_buffer, cx)
         })?;
         let index = pane.index_for_item(&view)?;
         Some((view, index))
     }
 
     fn is_previewing(&self, buffer: &Entity<Buffer>, cx: &App) -> bool {
-        self.active_editor.as_ref().is_some_and(|state| {
-            state
-                .editor
-                .read(cx)
-                .buffer()
-                .read(cx)
-                .as_singleton()
-                .as_ref()
-                == Some(buffer)
-        })
+        self.active_editor
+            .as_ref()
+            .is_some_and(|state| state.editor.read(cx).buffer().read(cx).as_singleton().as_ref() == Some(buffer))
     }
 
     pub fn resolve_active_item_as_markdown_editor(
         workspace: &Workspace,
         cx: &mut Context<Workspace>,
     ) -> Option<Entity<Editor>> {
-        if let Some(editor) = workspace
-            .active_item(cx)
-            .and_then(|item| item.act_as::<Editor>(cx))
+        if let Some(editor) = workspace.active_item(cx).and_then(|item| item.act_as::<Editor>(cx))
             && Self::is_previewable_file(&editor, cx)
         {
             return Some(editor);
@@ -352,14 +374,7 @@ impl MarkdownPreviewView {
     ) -> Entity<MarkdownPreviewView> {
         let language_registry = workspace.project().read(cx).languages().clone();
         let workspace_handle = workspace.weak_handle();
-        MarkdownPreviewView::new(
-            MarkdownPreviewMode::Default,
-            editor,
-            workspace_handle,
-            language_registry,
-            window,
-            cx,
-        )
+        MarkdownPreviewView::new(MarkdownPreviewMode::Default, editor, workspace_handle, language_registry, window, cx)
     }
 
     fn create_following_markdown_view(
@@ -370,14 +385,7 @@ impl MarkdownPreviewView {
     ) -> Entity<MarkdownPreviewView> {
         let language_registry = workspace.project().read(cx).languages().clone();
         let workspace_handle = workspace.weak_handle();
-        MarkdownPreviewView::new(
-            MarkdownPreviewMode::Follow,
-            editor,
-            workspace_handle,
-            language_registry,
-            window,
-            cx,
-        )
+        MarkdownPreviewView::new(MarkdownPreviewMode::Follow, editor, workspace_handle, language_registry, window, cx)
     }
 
     pub fn new(
@@ -403,26 +411,24 @@ impl MarkdownPreviewView {
                     cx,
                 )
             });
+            let mermaid_diagrams = cx.new(MermaidDiagrams::new);
             let mut this = Self {
                 active_editor: None,
                 focus_handle: cx.focus_handle(),
                 workspace: workspace.clone(),
                 self_handle: cx.weak_entity(),
-                _markdown_subscription: cx.observe(
-                    &markdown,
-                    |this: &mut Self, markdown: Entity<Markdown>, cx| {
-                        this.mermaid_diagrams
-                            .update(cx, |diagrams, cx| diagrams.sync(&markdown, cx));
-                        this.sync_active_root_block(cx);
-                        let is_parsing = markdown.read(cx).is_parsing();
-                        if this.markdown_parse_pending && !is_parsing {
-                            cx.emit(SearchEvent::MatchesInvalidated);
-                        }
-                        this.markdown_parse_pending = is_parsing;
-                    },
-                ),
+                _markdown_subscription: cx.observe(&markdown, |this: &mut Self, markdown: Entity<Markdown>, cx| {
+                    this.mermaid_diagrams.update(cx, |diagrams, cx| diagrams.sync(&markdown, cx));
+                    this.sync_active_root_block(cx);
+                    let is_parsing = markdown.read(cx).is_parsing();
+                    if this.markdown_parse_pending && !is_parsing {
+                        cx.emit(SearchEvent::MatchesInvalidated);
+                    }
+                    this.markdown_parse_pending = is_parsing;
+                }),
                 markdown,
-                mermaid_diagrams: cx.new(MermaidDiagrams::new),
+                _mermaid_subscription: cx.observe(&mermaid_diagrams, |_, _, cx| cx.notify()),
+                mermaid_diagrams,
                 active_source_index: None,
                 list_state: MarkdownListState::new(),
                 image_cache: RetainAllImageCache::new(cx),
@@ -459,8 +465,7 @@ impl MarkdownPreviewView {
                     // rebind check off the cursor-move hot path; `observe` would fire on
                     // every workspace `cx.notify`.
                     if let Some(workspace) = &workspace.upgrade() {
-                        cx.subscribe_in(workspace, window, Self::on_workspace_event)
-                            .detach();
+                        cx.subscribe_in(workspace, window, Self::on_workspace_event).detach();
                     }
                 }
             }
@@ -494,15 +499,11 @@ impl MarkdownPreviewView {
     }
 
     fn path_has_language(path: &Path, names: &[&str], languages: &Arc<LanguageRegistry>) -> bool {
-        languages
-            .language_for_file_path(path)
-            .is_some_and(|language_id| {
-                names.iter().any(|name| {
-                    languages
-                        .available_language_for_name(name)
-                        .is_some_and(|language| language.id() == language_id)
-                })
+        languages.language_for_file_path(path).is_some_and(|language_id| {
+            names.iter().any(|name| {
+                languages.available_language_for_name(name).is_some_and(|language| language.id() == language_id)
             })
+        })
     }
 
     pub fn open_for_project_path(
@@ -511,15 +512,10 @@ impl MarkdownPreviewView {
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) {
-        let open_buffer = workspace
-            .project()
-            .update(cx, |project, cx| project.open_buffer(project_path, cx));
+        let open_buffer = workspace.project().update(cx, |project, cx| project.open_buffer(project_path, cx));
 
         cx.spawn_in(window, async move |workspace, mut cx| {
-            let Some(buffer) = open_buffer
-                .await
-                .notify_workspace_async_err(workspace.clone(), &mut cx)
-            else {
+            let Some(buffer) = open_buffer.await.notify_workspace_async_err(workspace.clone(), &mut cx) else {
                 return;
             };
             workspace
@@ -579,47 +575,38 @@ impl MarkdownPreviewView {
         }
 
         let had_active_editor = self.active_editor.is_some();
-        let subscription = cx.subscribe_in(
-            &editor,
-            window,
-            |this, editor, event: &EditorEvent, window, cx| {
-                match event {
-                    EditorEvent::Edited { .. }
-                    | EditorEvent::BufferEdited { .. }
-                    | EditorEvent::DirtyChanged
-                    | EditorEvent::BuffersEdited { .. } => {
-                        this.update_markdown_from_active_editor(true, false, window, cx);
+        let subscription = cx.subscribe_in(&editor, window, |this, editor, event: &EditorEvent, window, cx| {
+            match event {
+                EditorEvent::Edited { .. }
+                | EditorEvent::BufferEdited { .. }
+                | EditorEvent::DirtyChanged
+                | EditorEvent::BuffersEdited { .. } => {
+                    this.update_markdown_from_active_editor(true, false, window, cx);
+                }
+                EditorEvent::FileHandleChanged => {
+                    this.base_directory = Self::get_folder_for_active_editor(editor.read(cx), cx);
+                    this.update_markdown_from_active_editor(false, false, window, cx);
+                    cx.emit(MarkdownPreviewEvent::SourceFileHandleChanged);
+                }
+                EditorEvent::SelectionsChanged { .. } => {
+                    let (selection_start, editor_is_focused) = editor.update(cx, |editor, cx| {
+                        let index = Self::selected_source_index(editor, cx);
+                        let focused = editor.focus_handle(cx).is_focused(window);
+                        (index, focused)
+                    });
+                    if let Some(selection_start) = selection_start {
+                        let reveal = editor_is_focused || this.focus_handle.is_focused(window);
+                        this.sync_preview_to_source_index(selection_start, reveal, cx);
+                        cx.notify();
                     }
-                    EditorEvent::FileHandleChanged => {
-                        this.base_directory =
-                            Self::get_folder_for_active_editor(editor.read(cx), cx);
-                        this.update_markdown_from_active_editor(false, false, window, cx);
-                        cx.emit(MarkdownPreviewEvent::SourceFileHandleChanged);
-                    }
-                    EditorEvent::SelectionsChanged { .. } => {
-                        let (selection_start, editor_is_focused) =
-                            editor.update(cx, |editor, cx| {
-                                let index = Self::selected_source_index(editor, cx);
-                                let focused = editor.focus_handle(cx).is_focused(window);
-                                (index, focused)
-                            });
-                        if let Some(selection_start) = selection_start {
-                            let reveal = editor_is_focused || this.focus_handle.is_focused(window);
-                            this.sync_preview_to_source_index(selection_start, reveal, cx);
-                            cx.notify();
-                        }
-                    }
-                    _ => {}
-                };
-            },
-        );
+                }
+                _ => {}
+            };
+        });
 
         self.base_directory = Self::get_folder_for_active_editor(editor.read(cx), cx);
         self.hovered_url = None;
-        self.active_editor = Some(EditorState {
-            editor,
-            _subscription: subscription,
-        });
+        self.active_editor = Some(EditorState { editor, _subscription: subscription });
         self.update_markdown_from_active_editor(false, true, window, cx);
         if had_active_editor {
             cx.emit(MarkdownPreviewEvent::SourceEditorChanged);
@@ -633,18 +620,12 @@ impl MarkdownPreviewView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
-        if !matches!(
-            event,
-            workspace::Event::ItemAdded { .. } | workspace::Event::ItemRemoved { .. }
-        ) {
+        if !matches!(event, workspace::Event::ItemAdded { .. } | workspace::Event::ItemRemoved { .. }) {
             return;
         }
         let candidate = self.find_canonical_editor(workspace.read(cx), cx);
         if let Some(editor) = candidate
-            && self
-                .active_editor
-                .as_ref()
-                .is_none_or(|s| s.editor != editor)
+            && self.active_editor.as_ref().is_none_or(|s| s.editor != editor)
         {
             self.set_editor(editor, window, cx);
         }
@@ -678,13 +659,8 @@ impl MarkdownPreviewView {
             if wait_for_debounce && self.pending_update_task.is_some() {
                 return;
             }
-            self.pending_update_task = Some(self.schedule_markdown_update(
-                wait_for_debounce,
-                should_reveal,
-                state.editor.clone(),
-                window,
-                cx,
-            ));
+            self.pending_update_task =
+                Some(self.schedule_markdown_update(wait_for_debounce, should_reveal, state.editor.clone(), window, cx));
         }
     }
 
@@ -703,24 +679,15 @@ impl MarkdownPreviewView {
             }
 
             let update = view.update(cx, |view, cx| {
-                let is_active_editor = view
-                    .active_editor
-                    .as_ref()
-                    .is_some_and(|active_editor| active_editor.editor == editor);
+                let is_active_editor =
+                    view.active_editor.as_ref().is_some_and(|active_editor| active_editor.editor == editor);
                 if !is_active_editor {
                     return None;
                 }
 
                 let is_html = Self::is_html_file(&editor, cx);
                 editor.update(cx, |editor, cx| {
-                    let contents = editor
-                        .buffer()
-                        .read(cx)
-                        .as_singleton()?
-                        .read(cx)
-                        .as_rope()
-                        .to_string()
-                        .into();
+                    let contents = editor.buffer().read(cx).as_singleton()?.read(cx).as_rope().to_string().into();
                     let selection_start = Self::selected_source_index(editor, cx)?;
                     Some((contents, selection_start, is_html))
                 })
@@ -745,30 +712,16 @@ impl MarkdownPreviewView {
 
     fn selected_source_index(editor: &Editor, cx: &mut App) -> Option<usize> {
         let display_snapshot = editor.display_snapshot(cx);
-        let source_offset = editor
-            .selections
-            .last::<MultiBufferOffset>(&display_snapshot)
-            .range()
-            .start;
+        let source_offset = editor.selections.last::<MultiBufferOffset>(&display_snapshot).range().start;
         let buffer = editor.buffer().read(cx).as_singleton()?;
         let buffer_id = buffer.read(cx).remote_id();
-        let (buffer_snapshot, buffer_offset) = display_snapshot
-            .buffer_snapshot()
-            .point_to_buffer_offset(source_offset)?;
+        let (buffer_snapshot, buffer_offset) =
+            display_snapshot.buffer_snapshot().point_to_buffer_offset(source_offset)?;
 
-        if buffer_snapshot.remote_id() == buffer_id {
-            Some(buffer_offset.0)
-        } else {
-            None
-        }
+        if buffer_snapshot.remote_id() == buffer_id { Some(buffer_offset.0) } else { None }
     }
 
-    fn sync_preview_to_source_index(
-        &mut self,
-        source_index: usize,
-        reveal: bool,
-        cx: &mut Context<Self>,
-    ) {
+    fn sync_preview_to_source_index(&mut self, source_index: usize, reveal: bool, cx: &mut Context<Self>) {
         self.active_source_index = Some(source_index);
         self.sync_active_root_block(cx);
         self.markdown.update(cx, |markdown, cx| {
@@ -798,25 +751,14 @@ impl MarkdownPreviewView {
                 });
             }
             Some(PreviewLinkTarget::Position { row, column }) => {
-                let Some(editor) = self
-                    .active_editor
-                    .as_ref()
-                    .map(|state| state.editor.clone())
-                else {
+                let Some(editor) = self.active_editor.as_ref().map(|state| state.editor.clone()) else {
                     return;
                 };
-                let Some(source_index) =
-                    editor
-                        .read(cx)
-                        .buffer()
-                        .read(cx)
-                        .as_singleton()
-                        .map(|buffer| {
-                            let snapshot = buffer.read(cx).snapshot();
-                            let point = snapshot.point_from_external_input(row, column);
-                            snapshot.point_to_offset(point)
-                        })
-                else {
+                let Some(source_index) = editor.read(cx).buffer().read(cx).as_singleton().map(|buffer| {
+                    let snapshot = buffer.read(cx).snapshot();
+                    let point = snapshot.point_from_external_input(row, column);
+                    snapshot.point_to_offset(point)
+                }) else {
                     return;
                 };
                 Self::change_selection_to_source_index(&editor, source_index, false, window, cx);
@@ -834,12 +776,9 @@ impl MarkdownPreviewView {
     ) {
         editor.update(cx, |editor, cx| {
             let selection = MultiBufferOffset(source_index)..MultiBufferOffset(source_index);
-            editor.change_selections(
-                SelectionEffects::scroll(Autoscroll::center()),
-                window,
-                cx,
-                |selections| selections.select_ranges(vec![selection]),
-            );
+            editor.change_selections(SelectionEffects::scroll(Autoscroll::center()), window, cx, |selections| {
+                selections.select_ranges(vec![selection])
+            });
             if move_focus {
                 window.focus(&editor.focus_handle(cx), cx);
             }
@@ -867,30 +806,17 @@ impl MarkdownPreviewView {
         settings.markdown_preview_font_size(cx) * settings.buffer_line_height.value()
     }
 
-    fn increase_font_size(
-        &mut self,
-        action: &IncreaseBufferFontSize,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn increase_font_size(&mut self, action: &IncreaseBufferFontSize, _: &mut Window, cx: &mut Context<Self>) {
         self.adjust_font_size(action.persist, px(1.0), cx);
     }
 
-    fn decrease_font_size(
-        &mut self,
-        action: &DecreaseBufferFontSize,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn decrease_font_size(&mut self, action: &DecreaseBufferFontSize, _: &mut Window, cx: &mut Context<Self>) {
         self.adjust_font_size(action.persist, px(-1.0), cx);
     }
 
     fn adjust_font_size(&mut self, persist: bool, delta: Pixels, cx: &mut Context<Self>) {
         if persist {
-            let Ok(fs) = self
-                .workspace
-                .read_with(cx, |workspace, _| workspace.app_state().fs.clone())
-            else {
+            let Ok(fs) = self.workspace.read_with(cx, |workspace, _| workspace.app_state().fs.clone()) else {
                 return;
             };
             update_settings_file(fs, cx, move |settings, cx| {
@@ -903,17 +829,9 @@ impl MarkdownPreviewView {
         }
     }
 
-    fn reset_font_size(
-        &mut self,
-        action: &ResetBufferFontSize,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn reset_font_size(&mut self, action: &ResetBufferFontSize, _: &mut Window, cx: &mut Context<Self>) {
         if action.persist {
-            let Ok(fs) = self
-                .workspace
-                .read_with(cx, |workspace, _| workspace.app_state().fs.clone())
-            else {
+            let Ok(fs) = self.workspace.read_with(cx, |workspace, _| workspace.app_state().fs.clone()) else {
                 return;
             };
             update_settings_file(fs, cx, move |settings, _| {
@@ -938,12 +856,7 @@ impl MarkdownPreviewView {
         cx.notify();
     }
 
-    fn scroll_page_down(
-        &mut self,
-        _: &ScrollPageDown,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn scroll_page_down(&mut self, _: &ScrollPageDown, _window: &mut Window, cx: &mut Context<Self>) {
         let viewport_height = self.list_state.list().viewport_bounds().size.height;
         if viewport_height.is_zero() {
             return;
@@ -973,37 +886,17 @@ impl MarkdownPreviewView {
         cx.notify();
     }
 
-    fn scroll_up_by_item(
-        &mut self,
-        _: &ScrollUpByItem,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn scroll_up_by_item(&mut self, _: &ScrollUpByItem, _window: &mut Window, cx: &mut Context<Self>) {
         let list = self.list_state.list();
         let top = list.logical_scroll_top();
-        let item_ix = if top.offset_in_item > px(0.) {
-            top.item_ix
-        } else {
-            top.item_ix.saturating_sub(1)
-        };
-        list.scroll_to(ListOffset {
-            item_ix,
-            offset_in_item: px(0.),
-        });
+        let item_ix = if top.offset_in_item > px(0.) { top.item_ix } else { top.item_ix.saturating_sub(1) };
+        list.scroll_to(ListOffset { item_ix, offset_in_item: px(0.) });
         cx.notify();
     }
 
-    fn scroll_down_by_item(
-        &mut self,
-        _: &ScrollDownByItem,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn scroll_down_by_item(&mut self, _: &ScrollDownByItem, _window: &mut Window, cx: &mut Context<Self>) {
         let list = self.list_state.list();
-        list.scroll_to(ListOffset {
-            item_ix: list.logical_scroll_top().item_ix + 1,
-            offset_in_item: px(0.),
-        });
+        list.scroll_to(ListOffset { item_ix: list.logical_scroll_top().item_ix + 1, offset_in_item: px(0.) });
         cx.notify();
     }
 
@@ -1012,27 +905,13 @@ impl MarkdownPreviewView {
         cx.notify();
     }
 
-    fn scroll_to_bottom(
-        &mut self,
-        _: &ScrollToBottom,
-        _window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn scroll_to_bottom(&mut self, _: &ScrollToBottom, _window: &mut Window, cx: &mut Context<Self>) {
         self.list_state.list().scroll_to_end();
         cx.notify();
     }
 
-    fn close_and_return_to_editor(
-        &mut self,
-        _: &CloseAndReturnToEditor,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        let Some(editor) = self
-            .active_editor
-            .as_ref()
-            .map(|state| state.editor.clone())
-        else {
+    fn close_and_return_to_editor(&mut self, _: &CloseAndReturnToEditor, window: &mut Window, cx: &mut Context<Self>) {
+        let Some(editor) = self.active_editor.as_ref().map(|state| state.editor.clone()) else {
             return;
         };
         let Some(workspace) = self.workspace.upgrade() else {
@@ -1047,24 +926,12 @@ impl MarkdownPreviewView {
                 };
                 if !workspace.activate_item(&editor, true, true, window, cx) {
                     // Re-adding the source emits `ItemAdded`; suppress its automatic preview once.
-                    cx.global_mut::<SuppressedAutoPreviews>()
-                        .0
-                        .insert(editor.entity_id());
-                    workspace.add_item(
-                        pane.clone(),
-                        Box::new(editor),
-                        None,
-                        true,
-                        true,
-                        window,
-                        cx,
-                    );
+                    cx.global_mut::<SuppressedAutoPreviews>().0.insert(editor.entity_id());
+                    workspace.add_item(pane.clone(), Box::new(editor), None, true, true, window, cx);
                 }
 
-                pane.update(cx, |pane, cx| {
-                    pane.close_item_by_id(preview_id, SaveIntent::Skip, window, cx)
-                })
-                .detach_and_log_err(cx);
+                pane.update(cx, |pane, cx| pane.close_item_by_id(preview_id, SaveIntent::Skip, window, cx))
+                    .detach_and_log_err(cx);
             });
         });
     }
@@ -1084,13 +951,9 @@ impl MarkdownPreviewView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> MarkdownElement {
-        let active_editor = self
-            .active_editor
-            .as_ref()
-            .map(|state| state.editor.clone());
-        let source_project_path = active_editor
-            .as_ref()
-            .and_then(|editor| Self::project_path_for_active_editor(editor.read(cx), cx));
+        let active_editor = self.active_editor.as_ref().map(|state| state.editor.clone());
+        let source_project_path =
+            active_editor.as_ref().and_then(|editor| Self::project_path_for_active_editor(editor.read(cx), cx));
 
         let mut project = None;
         let mut workspace_directory = None;
@@ -1107,16 +970,14 @@ impl MarkdownPreviewView {
         } else {
             preview_markdown_style(cx.theme().colors(), cx.theme().syntax(), window, cx)
         };
-        markdown_style.minimum_highlight_contrast =
-            EditorSettings::get_global(cx).minimum_contrast_for_highlights;
+        markdown_style.minimum_highlight_contrast = EditorSettings::get_global(cx).minimum_contrast_for_highlights;
 
         let mut markdown_element = MarkdownElement::new(self.markdown.clone(), markdown_style)
             .input_focus_handle(self.focus_handle.clone())
             .render_code_block_with({
                 let mermaid_diagrams = self.mermaid_diagrams.clone();
                 move |block, style, window, cx| {
-                    mermaid_diagrams
-                        .update(cx, |diagrams, cx| diagrams.render(block, style, window, cx))
+                    mermaid_diagrams.update(cx, |diagrams, cx| diagrams.render(block, style, window, cx))
                 }
             })
             .virtualized(self.list_state.clone())
@@ -1140,14 +1001,7 @@ impl MarkdownPreviewView {
                 let workspace = self.workspace.clone();
                 let base_directory = self.base_directory.clone();
                 move |url, window, cx| {
-                    handle_url_click(
-                        url,
-                        &view_handle,
-                        base_directory.clone(),
-                        &workspace,
-                        window,
-                        cx,
-                    );
+                    handle_url_click(url, &view_handle, base_directory.clone(), &workspace, window, cx);
                 }
             })
             .on_url_hover({
@@ -1170,23 +1024,12 @@ impl MarkdownPreviewView {
             markdown_element = markdown_element
                 .on_source_click(move |source_index, click_count, window, cx| {
                     if click_count == 1 {
-                        Self::change_selection_to_source_index(
-                            &active_editor,
-                            source_index,
-                            false,
-                            window,
-                            cx,
-                        );
+                        Self::change_selection_to_source_index(&active_editor, source_index, false, window, cx);
                     }
                     false
                 })
                 .on_checkbox_toggle(move |source_range, new_checked, window, cx| {
-                    Self::apply_checkbox_toggle_to_editor(
-                        &editor_for_checkbox,
-                        source_range,
-                        new_checked,
-                        cx,
-                    );
+                    Self::apply_checkbox_toggle_to_editor(&editor_for_checkbox, source_range, new_checked, cx);
                     Self::refresh_preview(view_handle.clone(), window, cx);
                 });
         }
@@ -1208,20 +1051,13 @@ impl MarkdownPreviewView {
                 .buffer()
                 .read(cx)
                 .snapshot(cx)
-                .text_for_range(
-                    MultiBufferOffset(source_range.start)..MultiBufferOffset(source_range.end),
-                )
+                .text_for_range(MultiBufferOffset(source_range.start)..MultiBufferOffset(source_range.end))
                 .collect();
 
             debug_assert_eq!(existing_marker, expected_existing_marker);
 
-            editor.edit(
-                [(
-                    MultiBufferOffset(source_range.start)..MultiBufferOffset(source_range.end),
-                    task_marker,
-                )],
-                cx,
-            );
+            editor
+                .edit([(MultiBufferOffset(source_range.start)..MultiBufferOffset(source_range.end), task_marker)], cx);
         });
     }
 
@@ -1256,14 +1092,9 @@ fn handle_url_click(
             window.defer(cx, move |window, cx| {
                 if let Some(view) = view.upgrade() {
                     let markdown = view.read(cx).markdown.clone();
-                    let active_editor = view
-                        .read(cx)
-                        .active_editor
-                        .as_ref()
-                        .map(|state| state.editor.clone());
+                    let active_editor = view.read(cx).active_editor.as_ref().map(|state| state.editor.clone());
 
-                    let source_index =
-                        markdown.update(cx, |markdown, cx| markdown.scroll_to_heading(&slug, cx));
+                    let source_index = markdown.update(cx, |markdown, cx| markdown.scroll_to_heading(&slug, cx));
 
                     if let Some(source_index) = source_index {
                         if let Some(editor) = active_editor {
@@ -1306,18 +1137,13 @@ fn open_preview_url(
     // Only `://` URLs skip local handling (a scheme check would misclassify `main.rs:2`); ambiguous links like `tel:123` are tried as files first, then fall back to the URL handler.
     if !decoded_path.contains("://") {
         let parsed_path = PathWithPosition::parse_str(&decoded_path);
-        let fragment_position = fragment
-            .as_deref()
-            .and_then(|fragment| fragment.strip_prefix('L'))
-            .and_then(source_position_from_fragment);
+        let fragment_position =
+            fragment.as_deref().and_then(|fragment| fragment.strip_prefix('L')).and_then(source_position_from_fragment);
 
         if !window.modifiers().alt
             && workspace
                 .read_with(cx, |workspace, cx| {
-                    MarkdownPreviewView::is_markdown_path(
-                        &parsed_path.path,
-                        workspace.project().read(cx).languages(),
-                    )
+                    MarkdownPreviewView::is_markdown_path(&parsed_path.path, workspace.project().read(cx).languages())
                 })
                 .is_ok_and(|is_markdown| is_markdown)
         {
@@ -1385,10 +1211,7 @@ fn find_preview_for_buffer(
 ) -> Option<Entity<MarkdownPreviewView>> {
     workspace
         .items_of_type::<MarkdownPreviewView>(cx)
-        .find(|view| {
-            view.read(cx).mode == MarkdownPreviewMode::Default
-                && view.read(cx).is_previewing(buffer, cx)
-        })
+        .find(|view| view.read(cx).mode == MarkdownPreviewMode::Default && view.read(cx).is_previewing(buffer, cx))
 }
 
 fn open_markdown_link_in_preview(
@@ -1401,13 +1224,7 @@ fn open_markdown_link_in_preview(
     window: &mut Window,
     cx: &mut App,
 ) {
-    let open_target = resolve_open_target(
-        workspace,
-        PathMatching::Exact,
-        &path,
-        base_directory.as_deref(),
-        cx,
-    );
+    let open_target = resolve_open_target(workspace, PathMatching::Exact, &path, base_directory.as_deref(), cx);
     let workspace = workspace.clone();
     let workspace_for_error = workspace.clone();
     let task = window.spawn(cx, async move |cx| {
@@ -1424,22 +1241,12 @@ fn open_markdown_link_in_preview(
 
         let project = workspace.read_with(cx, |workspace, _| workspace.project().clone())?;
         let (worktree, relative_path) = project
-            .update(cx, |project, cx| {
-                project.find_or_create_worktree(abs_path, false, cx)
-            })
+            .update(cx, |project, cx| project.find_or_create_worktree(abs_path, false, cx))
             .await
             .context("resolving Markdown preview link worktree")?;
         let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
         let buffer = project
-            .update(cx, |project, cx| {
-                project.open_buffer(
-                    ProjectPath {
-                        worktree_id,
-                        path: relative_path,
-                    },
-                    cx,
-                )
-            })
+            .update(cx, |project, cx| project.open_buffer(ProjectPath { worktree_id, path: relative_path }, cx))
             .await
             .context("opening Markdown preview link buffer")?;
 
@@ -1461,9 +1268,7 @@ fn open_markdown_link_in_preview(
                 return;
             }
 
-            let editor = cx.new(|cx| {
-                Editor::for_buffer(buffer, Some(workspace.project().clone()), window, cx)
-            });
+            let editor = cx.new(|cx| Editor::for_buffer(buffer, Some(workspace.project().clone()), window, cx));
             let preview = MarkdownPreviewView::create_markdown_view(workspace, editor, window, cx);
             let pane = source_view
                 .as_ref()
@@ -1490,20 +1295,13 @@ fn open_preview_path_with_position(
     window: &mut Window,
     cx: &mut App,
 ) {
-    let open_target = resolve_open_target(
-        workspace,
-        PathMatching::Exact,
-        &path_with_position,
-        base_directory.as_deref(),
-        cx,
-    );
+    let open_target =
+        resolve_open_target(workspace, PathMatching::Exact, &path_with_position, base_directory.as_deref(), cx);
     let workspace = workspace.clone();
     let workspace_for_error = workspace.clone();
     let task = window.spawn(cx, async move |cx| {
         let opened = if let Some(open_target) = open_target.await {
-            open_resolved_target(&workspace, &open_target, cx)
-                .await
-                .context("opening Markdown preview link")?
+            open_resolved_target(&workspace, &open_target, cx).await.context("opening Markdown preview link")?
         } else {
             false
         };
@@ -1533,49 +1331,33 @@ fn resolve_preview_image(
     }
 
     if dest_url.starts_with("http://") || dest_url.starts_with("https://") {
-        return Some(ImageSource::Resource(Resource::Uri(SharedUri::from(
-            dest_url.to_string(),
-        ))));
+        return Some(ImageSource::Resource(Resource::Uri(SharedUri::from(dest_url.to_string()))));
     }
 
-    let decoded = urlencoding::decode(dest_url)
-        .map(|decoded| decoded.into_owned())
-        .unwrap_or_else(|_| dest_url.to_string());
-    let workspace_relative_path = ['/', '\\']
-        .iter()
-        .find_map(|prefix| decoded.strip_prefix(*prefix));
+    let decoded =
+        urlencoding::decode(dest_url).map(|decoded| decoded.into_owned()).unwrap_or_else(|_| dest_url.to_string());
+    let workspace_relative_path = ['/', '\\'].iter().find_map(|prefix| decoded.strip_prefix(*prefix));
 
     if let (Some(project), Some(source_project_path)) = (project, source_project_path) {
-        let project_path = resolve_project_path_for_preview_image(
-            &decoded,
-            workspace_relative_path,
-            source_project_path,
-            project,
-            cx,
-        );
+        let project_path =
+            resolve_project_path_for_preview_image(&decoded, workspace_relative_path, source_project_path, project, cx);
         if let Some(project_path) = project_path {
             let is_remote = project
                 .read(cx)
                 .worktree_for_id(project_path.worktree_id, cx)
                 .is_some_and(|worktree| !worktree.read(cx).is_local());
             if is_remote {
-                return Some(image_store::project_image_source(
-                    project.downgrade(),
-                    project_path,
-                ));
+                return Some(image_store::project_image_source(project.downgrade(), project_path));
             }
 
             let path = project.read(cx).absolute_path(&project_path, cx)?;
-            return path
-                .exists()
-                .then(|| ImageSource::Resource(Resource::Path(Arc::from(path.as_path()))));
+            return path.exists().then(|| ImageSource::Resource(Resource::Path(Arc::from(path.as_path()))));
         } else if project.read(cx).is_remote() {
             return None;
         }
     }
 
-    let path = if let (Some(stripped), Some(root)) = (workspace_relative_path, workspace_directory)
-    {
+    let path = if let (Some(stripped), Some(root)) = (workspace_relative_path, workspace_directory) {
         client_path_style.join_path(root, stripped).ok()?
     } else if client_path_style.has_root(Path::new(&decoded)) {
         PathBuf::from(decoded)
@@ -1583,8 +1365,7 @@ fn resolve_preview_image(
         client_path_style.join_path(base_directory?, decoded).ok()?
     };
 
-    path.exists()
-        .then(|| ImageSource::Resource(Resource::Path(Arc::from(path.as_path()))))
+    path.exists().then(|| ImageSource::Resource(Resource::Path(Arc::from(path.as_path()))))
 }
 
 fn resolve_project_path_for_preview_image(
@@ -1594,33 +1375,22 @@ fn resolve_project_path_for_preview_image(
     project: &Entity<Project>,
     cx: &App,
 ) -> Option<ProjectPath> {
-    let worktree = project
-        .read(cx)
-        .worktree_for_id(source_project_path.worktree_id, cx)?;
+    let worktree = project.read(cx).worktree_for_id(source_project_path.worktree_id, cx)?;
     let path_style = worktree.read(cx).path_style();
 
     if workspace_relative_path.is_none() && path_style.is_absolute(Path::new(decoded_path)) {
-        return project
-            .read(cx)
-            .project_path_for_absolute_path(Path::new(decoded_path), cx);
+        return project.read(cx).project_path_for_absolute_path(Path::new(decoded_path), cx);
     }
 
     let source_directory = source_project_path.path.parent()?;
     let path = if let Some(workspace_relative_path) = workspace_relative_path {
-        RelPath::new(Path::new(workspace_relative_path), path_style)
-            .ok()?
-            .into_owned()
+        RelPath::new(Path::new(workspace_relative_path), path_style).ok()?.into_owned()
     } else {
-        let joined_path = path_style
-            .join_path(source_directory.as_std_path(), decoded_path)
-            .ok()?;
+        let joined_path = path_style.join_path(source_directory.as_std_path(), decoded_path).ok()?;
         RelPath::new(&joined_path, path_style).ok()?.into_owned()
     };
 
-    Some(ProjectPath {
-        worktree_id: source_project_path.worktree_id,
-        path: path.into(),
-    })
+    Some(ProjectPath { worktree_id: source_project_path.worktree_id, path: path.into() })
 }
 
 impl Focusable for MarkdownPreviewView {
@@ -1644,9 +1414,7 @@ impl Item for MarkdownPreviewView {
         if type_id == TypeId::of::<Self>() {
             Some(self_handle.clone().into())
         } else if type_id == TypeId::of::<Editor>() {
-            self.active_editor
-                .as_ref()
-                .map(|state| state.editor.clone().into())
+            self.active_editor.as_ref().map(|state| state.editor.clone().into())
         } else {
             None
         }
@@ -1658,10 +1426,7 @@ impl Item for MarkdownPreviewView {
 
     fn tab_content(&self, params: TabContentParams, _window: &Window, cx: &App) -> AnyElement {
         let preview = self.self_handle.clone();
-        let editor = self
-            .active_editor
-            .as_ref()
-            .map(|editor_state| editor_state.editor.read(cx));
+        let editor = self.active_editor.as_ref().map(|editor_state| editor_state.editor.read(cx));
         let max_title_len = params.max_title_len.unwrap_or(MAX_TAB_TITLE_LEN);
 
         // Like editor tabs, the title is only the file name, since `tab_content_text` can be a
@@ -1669,10 +1434,7 @@ impl Item for MarkdownPreviewView {
         // with the same name are shown in the description.
         let title = match editor {
             Some(editor) if params.truncate_title_middle => format!("Preview {}", editor.title(cx)),
-            Some(editor) => format!(
-                "Preview {}",
-                util::truncate_and_trailoff(&editor.title(cx), max_title_len)
-            ),
+            Some(editor) => format!("Preview {}", util::truncate_and_trailoff(&editor.title(cx), max_title_len)),
             None => "Markdown Preview".to_string(),
         };
         let description = editor
@@ -1683,9 +1445,7 @@ impl Item for MarkdownPreviewView {
         h_flex()
             .gap_1()
             .when(!params.selected, |tab| tab.track_focus(&self.focus_handle))
-            .when(params.truncate_title_middle, |this| {
-                this.w_full().min_w_0().overflow_hidden()
-            })
+            .when(params.truncate_title_middle, |this| this.w_full().min_w_0().overflow_hidden())
             .on_action(move |action: &CloseAndReturnToEditor, window, cx| {
                 preview
                     .update(cx, |preview, cx| {
@@ -1697,18 +1457,14 @@ impl Item for MarkdownPreviewView {
                 Label::new(title)
                     .single_line()
                     .color(params.text_color())
-                    .when(params.truncate_title_middle, |this| {
-                        this.truncate_middle().flex_1()
-                    }),
+                    .when(params.truncate_title_middle, |this| this.truncate_middle().flex_1()),
             )
             .when_some(description, |this, description| {
                 this.child(
                     Label::new(description)
                         .single_line()
                         .size(LabelSize::XSmall)
-                        .when(params.truncate_title_middle, |this| {
-                            this.truncate_start().flex_shrink()
-                        })
+                        .when(params.truncate_title_middle, |this| this.truncate_start().flex_shrink())
                         .color(Color::Muted),
                 )
             })
@@ -1735,11 +1491,7 @@ impl Item for MarkdownPreviewView {
     }
 
     fn tab_tooltip_text(&self, cx: &App) -> Option<SharedString> {
-        self.active_editor
-            .as_ref()?
-            .editor
-            .read(cx)
-            .tab_tooltip_text(cx)
+        self.active_editor.as_ref()?.editor.read(cx).tab_tooltip_text(cx)
     }
 
     fn tab_extra_context_menu_actions(
@@ -1750,35 +1502,23 @@ impl Item for MarkdownPreviewView {
         vec![("Show Source".into(), Box::new(CloseAndReturnToEditor))]
     }
 
-    fn added_to_workspace(
-        &mut self,
-        workspace: &mut Workspace,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn added_to_workspace(&mut self, workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Self>) {
         if self.mode != MarkdownPreviewMode::Default {
             return;
         }
         if let Some(editor) = self.find_canonical_editor(workspace, cx)
-            && self
-                .active_editor
-                .as_ref()
-                .is_none_or(|s| s.editor != editor)
+            && self.active_editor.as_ref().is_none_or(|s| s.editor != editor)
         {
             self.set_editor(editor, window, cx);
         }
     }
 
     fn can_save(&self, cx: &App) -> bool {
-        self.active_editor
-            .as_ref()
-            .is_some_and(|editor_state| editor_state.editor.read(cx).can_save(cx))
+        self.active_editor.as_ref().is_some_and(|editor_state| editor_state.editor.read(cx).can_save(cx))
     }
 
     fn can_save_as(&self, cx: &App) -> bool {
-        self.active_editor
-            .as_ref()
-            .is_some_and(|editor_state| editor_state.editor.read(cx).can_save_as(cx))
+        self.active_editor.as_ref().is_some_and(|editor_state| editor_state.editor.read(cx).can_save_as(cx))
     }
 
     fn save(
@@ -1790,11 +1530,7 @@ impl Item for MarkdownPreviewView {
     ) -> Task<Result<()>> {
         self.active_editor
             .as_ref()
-            .map(|editor_state| {
-                editor_state
-                    .editor
-                    .update(cx, |editor, cx| editor.save(options, project, window, cx))
-            })
+            .map(|editor_state| editor_state.editor.update(cx, |editor, cx| editor.save(options, project, window, cx)))
             .unwrap_or_else(|| Task::ready(Ok(())))
     }
 
@@ -1807,28 +1543,18 @@ impl Item for MarkdownPreviewView {
     ) -> Task<Result<()>> {
         self.active_editor
             .as_ref()
-            .map(|editor_state| {
-                editor_state
-                    .editor
-                    .update(cx, |editor, cx| editor.save_as(project, path, window, cx))
-            })
+            .map(|editor_state| editor_state.editor.update(cx, |editor, cx| editor.save_as(project, path, window, cx)))
             .unwrap_or_else(|| Task::ready(Ok(())))
     }
 
-    fn reload(
-        &mut self,
-        _project: Entity<Project>,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) -> Task<Result<()>> {
+    fn reload(&mut self, _project: Entity<Project>, _window: &mut Window, _cx: &mut Context<Self>) -> Task<Result<()>> {
         // The preview is not the owner of the source editor's buffer, so force-closing it should not discard editor changes.
         Task::ready(Ok(()))
     }
 
     fn to_item_events(event: &Self::Event, f: &mut dyn FnMut(workspace::item::ItemEvent)) {
         match event {
-            MarkdownPreviewEvent::SourceEditorChanged
-            | MarkdownPreviewEvent::SourceFileHandleChanged => {
+            MarkdownPreviewEvent::SourceEditorChanged | MarkdownPreviewEvent::SourceFileHandleChanged => {
                 f(workspace::item::ItemEvent::UpdateTab);
                 f(workspace::item::ItemEvent::UpdateBreadcrumbs);
             }
@@ -1839,11 +1565,7 @@ impl Item for MarkdownPreviewView {
         ItemBufferKind::Singleton
     }
 
-    fn as_searchable(
-        &self,
-        handle: &Entity<Self>,
-        _: &App,
-    ) -> Option<Box<dyn SearchableItemHandle>> {
+    fn as_searchable(&self, handle: &Entity<Self>, _: &App) -> Option<Box<dyn SearchableItemHandle>> {
         Some(Box::new(handle.clone()))
     }
 
@@ -1880,12 +1602,7 @@ impl Item for MarkdownPreviewView {
         )))
     }
 
-    fn set_nav_history(
-        &mut self,
-        history: ItemNavHistory,
-        _window: &mut Window,
-        _: &mut Context<Self>,
-    ) {
+    fn set_nav_history(&mut self, history: ItemNavHistory, _window: &mut Window, _: &mut Context<Self>) {
         self.nav_history = Some(history);
     }
 
@@ -1932,74 +1649,53 @@ impl Render for MarkdownPreviewView {
             .min_h_0()
             .relative()
             .bg(bg_color)
-            .child(
-                WithRemSize::new(preview_font_size)
+            .child(WithRemSize::new(preview_font_size).size_full().child(div().size_full().child({
+                let max_width = MarkdownPreviewSettings::get_global(cx).max_width;
+                // Styles each block; the vertical padding pads the list.
+                let markdown_element = self
+                    .render_markdown_element(&preview_theme, window, cx)
+                    .w_full()
+                    .p_4()
+                    .when_some(max_width, |this, max_width| this.max_w(max_width).mx_auto());
+                let markdown = self.markdown.clone();
+                right_click_menu("markdown-preview-context-menu")
                     .size_full()
-                    .child(div().size_full().child({
-                        let max_width = MarkdownPreviewSettings::get_global(cx).max_width;
-                        // Styles each block; the vertical padding pads the list.
-                        let markdown_element = self
-                            .render_markdown_element(&preview_theme, window, cx)
-                            .w_full()
-                            .p_4()
-                            .when_some(max_width, |this, max_width| {
-                                this.max_w(max_width).mx_auto()
-                            });
-                        let markdown = self.markdown.clone();
-                        right_click_menu("markdown-preview-context-menu")
-                            .size_full()
-                            .trigger(move |_, _, _| markdown_element)
-                            .maybe_menu(move |window, cx| {
-                                let focus = window.focused(cx);
-                                let markdown = markdown.read(cx);
-                                let context_menu_link = markdown.context_menu_link().cloned();
-                                let selected_text = markdown.context_menu_selected_text().cloned();
-                                let selected_markdown =
-                                    markdown.context_menu_selected_markdown().cloned();
-                                if context_menu_link.is_none()
-                                    && selected_text.is_none()
-                                    && selected_markdown.is_none()
-                                {
-                                    return None;
-                                }
-                                Some(ContextMenu::build(window, cx, move |menu, _, _cx| {
-                                    menu.when_some(focus, |menu, focus| menu.context(focus))
-                                        .when_some(selected_text, |menu, text| {
-                                            menu.entry(
-                                                "Copy",
-                                                Some(Box::new(markdown::Copy)),
-                                                move |_, cx| {
-                                                    cx.write_to_clipboard(
-                                                        ClipboardItem::new_string(text.to_string()),
-                                                    );
-                                                },
-                                            )
-                                        })
-                                        .when_some(selected_markdown, |menu, text| {
-                                            menu.entry(
-                                                "Copy as Markdown",
-                                                Some(Box::new(markdown::CopyAsMarkdown)),
-                                                move |_, cx| {
-                                                    cx.write_to_clipboard(
-                                                        ClipboardItem::new_string(text.to_string()),
-                                                    );
-                                                },
-                                            )
-                                        })
-                                        .when_some(context_menu_link, |menu, url| {
-                                            menu.entry("Copy Link", None, move |_, cx| {
-                                                cx.write_to_clipboard(ClipboardItem::new_string(
-                                                    url.to_string(),
-                                                ));
-                                            })
-                                        })
-                                }))
-                            })
-                    })),
-            )
+                    .trigger(move |_, _, _| markdown_element)
+                    .maybe_menu(move |window, cx| {
+                        let focus = window.focused(cx);
+                        let markdown = markdown.read(cx);
+                        let context_menu_link = markdown.context_menu_link().cloned();
+                        let selected_text = markdown.context_menu_selected_text().cloned();
+                        let selected_markdown = markdown.context_menu_selected_markdown().cloned();
+                        if context_menu_link.is_none() && selected_text.is_none() && selected_markdown.is_none() {
+                            return None;
+                        }
+                        Some(ContextMenu::build(window, cx, move |menu, _, _cx| {
+                            menu.when_some(focus, |menu, focus| menu.context(focus))
+                                .when_some(selected_text, |menu, text| {
+                                    menu.entry("Copy", Some(Box::new(markdown::Copy)), move |_, cx| {
+                                        cx.write_to_clipboard(ClipboardItem::new_string(text.to_string()));
+                                    })
+                                })
+                                .when_some(selected_markdown, |menu, text| {
+                                    menu.entry(
+                                        "Copy as Markdown",
+                                        Some(Box::new(markdown::CopyAsMarkdown)),
+                                        move |_, cx| {
+                                            cx.write_to_clipboard(ClipboardItem::new_string(text.to_string()));
+                                        },
+                                    )
+                                })
+                                .when_some(context_menu_link, |menu, url| {
+                                    menu.entry("Copy Link", None, move |_, cx| {
+                                        cx.write_to_clipboard(ClipboardItem::new_string(url.to_string()));
+                                    })
+                                })
+                        }))
+                    })
+            })))
             .custom_scrollbars(
-                Scrollbars::new(ScrollAxes::Vertical)
-                    .tracked_scroll_handle(&self.list_state.list()),
+                Scrollbars::new(ScrollAxes::Vertical).tracked_scroll_handle(&self.list_state.list()),
                 window,
                 cx,
             )
@@ -2033,10 +1729,7 @@ impl SearchableItem for MarkdownPreviewView {
     }
 
     fn get_matches(&self, _window: &mut Window, cx: &mut App) -> (Vec<Self::Match>, SearchToken) {
-        (
-            self.markdown.read(cx).search_highlights().to_vec(),
-            SearchToken::default(),
-        )
+        (self.markdown.read(cx).search_highlights().to_vec(), SearchToken::default())
     }
 
     fn clear_matches(&mut self, _window: &mut Window, cx: &mut Context<Self>) {
@@ -2058,9 +1751,7 @@ impl SearchableItem for MarkdownPreviewView {
         cx: &mut Context<Self>,
     ) {
         debug_assert!(
-            matches
-                .windows(2)
-                .all(|ranges| (ranges[0].start, ranges[0].end) <= (ranges[1].start, ranges[1].end))
+            matches.windows(2).all(|ranges| (ranges[0].start, ranges[0].end) <= (ranges[1].start, ranges[1].end))
         );
         let old_highlights = self.markdown.read(cx).search_highlights();
         let changed = old_highlights != matches;
@@ -2078,11 +1769,7 @@ impl SearchableItem for MarkdownPreviewView {
         _window: &mut Window,
         cx: &mut Context<Self>,
     ) -> String {
-        self.markdown
-            .read(cx)
-            .selected_source()
-            .unwrap_or_default()
-            .to_string()
+        self.markdown.read(cx).selected_source().unwrap_or_default().to_string()
     }
 
     fn activate_match(
@@ -2130,9 +1817,7 @@ impl SearchableItem for MarkdownPreviewView {
         let markdown = self.markdown.read(cx);
         let source = markdown.source().to_string();
         let non_rendered_ranges = markdown.non_rendered_source_ranges();
-        cx.background_spawn(async move {
-            filter_non_rendered_matches(query.search_str(&source), &non_rendered_ranges)
-        })
+        cx.background_spawn(async move { filter_non_rendered_matches(query.search_str(&source), &non_rendered_ranges) })
     }
 
     fn active_match_index(
@@ -2156,33 +1841,23 @@ impl SearchableItem for MarkdownPreviewView {
             .unwrap_or(0);
 
         match direction {
-            Direction::Next => matches
-                .iter()
-                .position(|m| m.start >= current_source_index)
-                .or(Some(0)),
-            Direction::Prev => matches
-                .iter()
-                .rposition(|m| m.start <= current_source_index)
-                .or(Some(matches.len().saturating_sub(1))),
+            Direction::Next => matches.iter().position(|m| m.start >= current_source_index).or(Some(0)),
+            Direction::Prev => {
+                matches.iter().rposition(|m| m.start <= current_source_index).or(Some(matches.len().saturating_sub(1)))
+            }
         }
     }
 }
 
 /// `non_rendered_ranges` must be sorted by start and disjoint, as returned by
 /// [`Markdown::non_rendered_source_ranges`]. Matches may arrive in any order.
-fn filter_non_rendered_matches(
-    matches: Vec<Range<usize>>,
-    non_rendered_ranges: &[Range<usize>],
-) -> Vec<Range<usize>> {
+fn filter_non_rendered_matches(matches: Vec<Range<usize>>, non_rendered_ranges: &[Range<usize>]) -> Vec<Range<usize>> {
     matches
         .into_iter()
         .filter(|match_range| {
-            let candidate =
-                non_rendered_ranges.partition_point(|range| range.end <= match_range.start);
+            let candidate = non_rendered_ranges.partition_point(|range| range.end <= match_range.start);
 
-            !non_rendered_ranges
-                .get(candidate)
-                .is_some_and(|range| range.start < match_range.end)
+            !non_rendered_ranges.get(candidate).is_some_and(|range| range.start < match_range.end)
         })
         .collect()
 }
@@ -2202,32 +1877,23 @@ impl SerializableItem for MarkdownPreviewView {
     ) -> Task<Result<Entity<Self>>> {
         let db = persistence::MarkdownPreviewDb::global(cx);
         window.spawn(cx, async move |cx| {
-            let (abs_path, mode_value) = db
-                .get_preview(item_id, workspace_id)?
-                .context("No markdown preview entry found")?;
+            let (abs_path, mode_value) =
+                db.get_preview(item_id, workspace_id)?.context("No markdown preview entry found")?;
             let mode = MarkdownPreviewMode::from_db(mode_value);
 
             let (worktree, relative_path) = project
-                .update(cx, |project, cx| {
-                    project.find_or_create_worktree(abs_path.clone(), false, cx)
-                })
+                .update(cx, |project, cx| project.find_or_create_worktree(abs_path.clone(), false, cx))
                 .await
                 .context("Path not found")?;
             let worktree_id = worktree.read_with(cx, |worktree, _| worktree.id());
 
-            let project_path = ProjectPath {
-                worktree_id,
-                path: relative_path,
-            };
+            let project_path = ProjectPath { worktree_id, path: relative_path };
 
-            let buffer = project
-                .update(cx, |project, cx| project.open_buffer(project_path, cx))
-                .await?;
+            let buffer = project.update(cx, |project, cx| project.open_buffer(project_path, cx)).await?;
 
             cx.update(|window, cx| {
                 let language_registry = project.read(cx).languages().clone();
-                let editor =
-                    cx.new(|cx| Editor::for_buffer(buffer, Some(project.clone()), window, cx));
+                let editor = cx.new(|cx| Editor::for_buffer(buffer, Some(project.clone()), window, cx));
                 MarkdownPreviewView::new(mode, editor, workspace, language_registry, window, cx)
             })
         })
@@ -2255,37 +1921,27 @@ impl SerializableItem for MarkdownPreviewView {
         let buffer = editor.read(cx).buffer().read(cx).as_singleton()?;
         let file = buffer.read(cx).file()?;
         let worktree_id = file.worktree_id(cx);
-        let abs_path = workspace
-            .project()
-            .read(cx)
-            .worktree_for_id(worktree_id, cx)?
-            .read(cx)
-            .absolutize(file.path());
+        let abs_path = workspace.project().read(cx).worktree_for_id(worktree_id, cx)?.read(cx).absolutize(file.path());
         let mode = self.mode.to_db();
         let db = persistence::MarkdownPreviewDb::global(cx);
-        Some(cx.background_spawn(async move {
-            db.save_preview(item_id, workspace_id, abs_path, mode).await
-        }))
+        Some(cx.background_spawn(async move { db.save_preview(item_id, workspace_id, abs_path, mode).await }))
     }
 
     fn should_serialize(&self, event: &Self::Event) -> bool {
-        matches!(
-            event,
-            MarkdownPreviewEvent::SourceEditorChanged
-                | MarkdownPreviewEvent::SourceFileHandleChanged
-        )
+        matches!(event, MarkdownPreviewEvent::SourceEditorChanged | MarkdownPreviewEvent::SourceFileHandleChanged)
     }
 }
 
 mod persistence {
     use std::path::PathBuf;
 
-    use db::{
-        query,
-        sqlez::{domain::Domain, thread_safe_connection::ThreadSafeConnection},
-        sqlez_macros::sql,
-    };
-    use workspace::{ItemId, WorkspaceDb, WorkspaceId};
+    use db::query;
+    use db::sqlez::domain::Domain;
+    use db::sqlez::thread_safe_connection::ThreadSafeConnection;
+    use db::sqlez_macros::sql;
+    use workspace::ItemId;
+    use workspace::WorkspaceDb;
+    use workspace::WorkspaceId;
 
     pub struct MarkdownPreviewDb(ThreadSafeConnection);
 

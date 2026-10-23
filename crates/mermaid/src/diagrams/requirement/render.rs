@@ -4,6 +4,7 @@
 use super::db::RequirementDb;
 use super::graph::GraphEdge;
 use super::graph::build_requirement_graph;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::runs_across;
 use crate::diagrams::common::fit_width::turn_to_fit;
@@ -24,8 +25,6 @@ use crate::svg::builder::text_style;
 use crate::svg::edges::EdgePath;
 use crate::svg::edges::edge_label_svg;
 use crate::svg::edges::route_path;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::ROUNDED;
 use crate::svg::theme::ResolvedStyle;
@@ -262,7 +261,7 @@ fn spread_ends(cnodes: &[CNode], cedges: &mut [CEdge], views: &[NodeView]) {
 }
 
 /// Draws `model`, turned to run down when it runs across and does not fit the host's width.
-pub(crate) fn render(model: &RequirementDb, options: &RenderOptions) -> Rendered {
+pub(crate) fn render(model: &RequirementDb, options: &Options) -> Rendered {
     if !runs_across(Some(model.direction)) {
         return draw(model, options, false);
     }
@@ -292,11 +291,11 @@ fn stereotype(text: &str) -> String {
 
 /// `turned` draws a diagram that runs across as one that runs down.
 #[expect(clippy::too_many_lines, reason = "mirrors Pele's draw")]
-fn draw(model: &RequirementDb, options: &RenderOptions, turned: bool) -> Rendered {
+fn draw(model: &RequirementDb, options: &Options, turned: bool) -> Rendered {
     let graph = build_requirement_graph(model);
-    let size = options.font_size.unwrap_or(16.0);
+    let size = options.font_size;
     let small = crate::svg::builder::js_round(size * 0.875);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
 
     let mut index: Vec<(&str, usize)> = Vec::new();
     let mut views: Vec<NodeView> = Vec::new();
@@ -614,9 +613,7 @@ fn draw(model: &RequirementDb, options: &RenderOptions, turned: bool) -> Rendere
     content.push_str("<g class=\"ondine-nodes\">");
     content.push_str(&nodes_out);
     content.push_str("</g>");
+    let svg = svg_document("requirement", width, height, size, &content);
 
-    let accessible = Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() };
-    let svg = svg_document("requirement", width, height, size, options, accessible, &content);
-
-    Rendered { height, links: Vec::new(), svg, width }
+    Rendered { height, svg, width }
 }

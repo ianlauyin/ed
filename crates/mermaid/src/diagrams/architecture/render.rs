@@ -6,6 +6,7 @@ use super::db::NodeKind;
 use super::icons::builtin_icon;
 use super::layout::place_on_grid;
 use super::layout::side_index;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::tighten;
 use crate::diagrams::common::fit_width::title_room;
@@ -16,8 +17,6 @@ use crate::svg::builder::push_num;
 use crate::svg::edges::edge_label_svg;
 use crate::svg::edges::marker;
 use crate::svg::edges::marker_trim;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::RADIUS;
 use crate::text::label::Label;
@@ -336,18 +335,18 @@ fn path_data(out: &mut String, p: &[f64], start_trim: f64, end_trim: f64) {
 }
 
 /// Draws `model` with the `architecture` section of `config`, tightened to fit the host's width.
-pub(crate) fn render_architecture(model: &ArchitectureDb, config: &Value, options: &RenderOptions) -> Rendered {
+pub(crate) fn render_architecture(model: &ArchitectureDb, config: &Value, options: &Options) -> Rendered {
     tighten(options, |tight| draw(model, config, options, tight))
 }
 
 /// Draws `model` once, tightly spaced when `tight`.
 #[expect(clippy::many_single_char_names, reason = "names mirror Pele's draw")]
-fn draw(model: &ArchitectureDb, config: &Value, options: &RenderOptions, tight: bool) -> Rendered {
+fn draw(model: &ArchitectureDb, config: &Value, options: &Options, tight: bool) -> Rendered {
     let icon_size = setting(config, "iconSize", 48.0, 8.0, 512.0);
-    let size = setting(config, "fontSize", options.font_size.unwrap_or(16.0), 4.0, 128.0);
+    let size = setting(config, "fontSize", options.font_size, 4.0, 128.0);
     let group_pad = setting(config, "padding", 20.0, 0.0, 256.0).min(if tight { 12.0 } else { f64::INFINITY });
     let small = js_round(size * 0.875);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
     let half = icon_size / 2.0;
 
     let nodes = &model.nodes;
@@ -878,7 +877,6 @@ fn draw(model: &ArchitectureDb, config: &Value, options: &RenderOptions, tight: 
         content.push_str(&body);
         content.push_str("</g>");
     }
-    let accessible = Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() };
-    let svg = svg_document("architecture", width, height, size, options, accessible, &content);
-    Rendered { height, links: Vec::new(), svg, width }
+    let svg = svg_document("architecture", width, height, size, &content);
+    Rendered { height, svg, width }
 }

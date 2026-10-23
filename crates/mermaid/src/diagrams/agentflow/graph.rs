@@ -91,8 +91,6 @@ pub(crate) struct GraphEdge {
 }
 
 impl GraphEdge {
-    /// Marker at the tail, which agentflow never draws.
-    pub(crate) const ARROW_TYPE_START: &'static str = "none";
     /// The class names Mermaid gives every agentflow edge.
     pub(crate) const CLASSES: &'static str = "edge-thickness-normal edge-pattern-solid flowchart-link";
 }

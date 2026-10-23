@@ -1,18 +1,28 @@
-use collections::{BTreeMap, HashMap, HashSet};
-use gpui::{DefiniteLength, SharedString, TextAlign};
+use std::ops::Range;
+use std::sync::Arc;
+
+use collections::BTreeMap;
+use collections::HashMap;
+use collections::HashSet;
+use gpui::DefiniteLength;
+use gpui::SharedString;
+use gpui::TextAlign;
 use linkify::LinkFinder;
+use pulldown_cmark::Alignment;
+use pulldown_cmark::CowStr;
+use pulldown_cmark::HeadingLevel;
+use pulldown_cmark::LinkType;
+use pulldown_cmark::MetadataBlockKind;
+use pulldown_cmark::Options;
+use pulldown_cmark::Parser;
 pub use pulldown_cmark::TagEnd as MarkdownTagEnd;
-use pulldown_cmark::{
-    Alignment, CowStr, HeadingLevel, LinkType, MetadataBlockKind, Options, Parser,
-};
-use std::{ops::Range, sync::Arc};
 use util::markdown::generate_heading_slug;
 
-use crate::{
-    MarkdownOptions,
-    html::{self, HtmlConverter, SourceMap},
-    path_range::PathWithRange,
-};
+use crate::MarkdownOptions;
+use crate::html::HtmlConverter;
+use crate::html::SourceMap;
+use crate::html::{self};
+use crate::path_range::PathWithRange;
 
 pub const PARSE_OPTIONS: Options = Options::ENABLE_TABLES
     .union(Options::ENABLE_FOOTNOTES)
@@ -77,8 +87,7 @@ impl ParseState {
                     self.depth -= 1;
                     if self.depth == 0 {
                         let root_block_index = self.root_block_starts.len() - 1;
-                        self.events
-                            .push((range, MarkdownEvent::RootEnd(root_block_index)));
+                        self.events.push((range, MarkdownEvent::RootEnd(root_block_index)));
                     }
                 }
             }
@@ -88,8 +97,7 @@ impl ParseState {
                     let root_block_index = self.root_block_starts.len() - 1;
                     self.events.push((range.clone(), MarkdownEvent::RootStart));
                     self.events.push((range.clone(), event));
-                    self.events
-                        .push((range, MarkdownEvent::RootEnd(root_block_index)));
+                    self.events.push((range, MarkdownEvent::RootEnd(root_block_index)));
                 } else {
                     self.events.push((range, event));
                 }
@@ -103,10 +111,7 @@ impl ParseState {
 
 const MAX_DUPLICATE_HEADING_SLUGS: usize = 128;
 
-fn build_heading_slugs(
-    source: &str,
-    events: &[(Range<usize>, MarkdownEvent)],
-) -> HashMap<SharedString, usize> {
+fn build_heading_slugs(source: &str, events: &[(Range<usize>, MarkdownEvent)]) -> HashMap<SharedString, usize> {
     let mut slugs = HashMap::default();
     let mut slug_counts: HashMap<String, usize> = HashMap::default();
     let mut inside_heading = false;
@@ -125,11 +130,7 @@ fn build_heading_slugs(
                     let source_offset = heading_source_start.unwrap_or(range.start);
                     let base_slug = generate_heading_slug(&heading_text);
                     let count = slug_counts.entry(base_slug.clone()).or_insert(0);
-                    let mut slug = if *count == 0 {
-                        base_slug.clone()
-                    } else {
-                        format!("{base_slug}-{count}")
-                    };
+                    let mut slug = if *count == 0 { base_slug.clone() } else { format!("{base_slug}-{count}") };
                     *count += 1;
                     while slugs.contains_key(slug.as_str()) {
                         let Some(count) = slug_counts.get_mut(&base_slug) else {
@@ -184,21 +185,13 @@ fn parse_metadata_table_rows(source: &str, source_range: Range<usize>) -> Option
         let content_range = line_start..content_end;
         let line_text = &source[content_range.clone()];
 
-        if line_text.is_empty()
-            || line_text
-                .chars()
-                .next()
-                .is_some_and(|character| character.is_whitespace())
-        {
+        if line_text.is_empty() || line_text.chars().next().is_some_and(|character| character.is_whitespace()) {
             return None;
         }
 
         let delimiter = line_text.find(':')?;
         let key = trim_metadata_range(source, content_range.start..content_range.start + delimiter);
-        let value = trim_metadata_range(
-            source,
-            content_range.start + delimiter + 1..content_range.end,
-        );
+        let value = trim_metadata_range(source, content_range.start + delimiter + 1..content_range.end);
         if key.is_empty() || value.is_empty() {
             return None;
         }
@@ -221,13 +214,9 @@ fn trim_metadata_range(source: &str, range: Range<usize>) -> Range<usize> {
 
 fn yaml_frontmatter_candidate(text: &str) -> Option<&str> {
     let after_fence = text.strip_prefix("---")?;
-    let opening_whitespace_length = after_fence
-        .bytes()
-        .take_while(|byte| *byte != b'\n' && byte.is_ascii_whitespace())
-        .count();
-    let after_opening_line = after_fence
-        .get(opening_whitespace_length..)?
-        .strip_prefix('\n')?;
+    let opening_whitespace_length =
+        after_fence.bytes().take_while(|byte| *byte != b'\n' && byte.is_ascii_whitespace()).count();
+    let after_opening_line = after_fence.get(opening_whitespace_length..)?.strip_prefix('\n')?;
 
     let first_content = after_opening_line.trim_start_matches([' ', '\t', '\u{b}', '\u{c}']);
     if first_content.is_empty() || first_content.starts_with(['\r', '\n']) {
@@ -237,10 +226,7 @@ fn yaml_frontmatter_candidate(text: &str) -> Option<&str> {
     let mut line_start = text.len() - after_opening_line.len();
     let lines = after_opening_line.split_inclusive('\n');
     for line in lines {
-        if let Some(suffix) = line
-            .strip_prefix("---")
-            .or_else(|| line.strip_prefix("..."))
-        {
+        if let Some(suffix) = line.strip_prefix("---").or_else(|| line.strip_prefix("...")) {
             let suffix = suffix.trim_start_matches(' ');
             let line_ending_length = if suffix.starts_with("\r\n") {
                 Some(2)
@@ -260,10 +246,7 @@ fn yaml_frontmatter_candidate(text: &str) -> Option<&str> {
     None
 }
 
-pub(crate) fn parse_markdown_with_options(
-    text: &str,
-    options: MarkdownOptions,
-) -> ParsedMarkdownData {
+pub(crate) fn parse_markdown_with_options(text: &str, options: MarkdownOptions) -> ParsedMarkdownData {
     let MarkdownOptions {
         parse_html,
         html_document,
@@ -287,16 +270,11 @@ pub(crate) fn parse_markdown_with_options(
     let mut metadata_block_content_range: Option<Range<usize>> = None;
     let mut frontmatter = Vec::new();
     if parse_metadata_blocks && let Some(candidate) = yaml_frontmatter_candidate(text) {
-        let mut parser = Parser::new_ext(
-            candidate,
-            PARSE_OPTIONS.union(Options::ENABLE_YAML_STYLE_METADATA_BLOCKS),
-        )
-        .into_offset_iter()
-        .peekable();
+        let mut parser = Parser::new_ext(candidate, PARSE_OPTIONS.union(Options::ENABLE_YAML_STYLE_METADATA_BLOCKS))
+            .into_offset_iter()
+            .peekable();
         if let Some((
-            pulldown_cmark::Event::Start(pulldown_cmark::Tag::MetadataBlock(
-                MetadataBlockKind::YamlStyle,
-            )),
+            pulldown_cmark::Event::Start(pulldown_cmark::Tag::MetadataBlock(MetadataBlockKind::YamlStyle)),
             range,
         )) = parser.peek()
         {
@@ -315,16 +293,12 @@ pub(crate) fn parse_markdown_with_options(
     let mut parser = frontmatter
         .into_iter()
         .chain(
-            parser
-                .into_offset_iter()
-                .map(|(event, range)| (event, range.start + body_start..range.end + body_start)),
+            parser.into_offset_iter().map(|(event, range)| (event, range.start + body_start..range.end + body_start)),
         )
         .peekable();
     while let Some((pulldown_event, range)) = parser.next() {
         if within_metadata && !parse_metadata_blocks {
-            if let pulldown_cmark::Event::End(pulldown_cmark::TagEnd::MetadataBlock(_)) =
-                pulldown_event
-            {
+            if let pulldown_cmark::Event::End(pulldown_cmark::TagEnd::MetadataBlock(_)) = pulldown_event {
                 within_metadata = false;
                 current_metadata_block_start = None;
                 metadata_block_content_range = None;
@@ -359,12 +333,7 @@ pub(crate) fn parse_markdown_with_options(
                 }
 
                 let tag = match tag {
-                    pulldown_cmark::Tag::Link {
-                        link_type,
-                        dest_url,
-                        title,
-                        id,
-                    } => {
+                    pulldown_cmark::Tag::Link { link_type, dest_url, title, id } => {
                         within_link = true;
                         MarkdownTag::Link {
                             link_type,
@@ -393,27 +362,17 @@ pub(crate) fn parse_markdown_with_options(
                             },
                         }
                     }
-                    pulldown_cmark::Tag::CodeBlock(pulldown_cmark::CodeBlockKind::Fenced(
-                        ref info,
-                    )) => {
+                    pulldown_cmark::Tag::CodeBlock(pulldown_cmark::CodeBlockKind::Fenced(ref info)) => {
                         within_code_block = true;
                         let code_block_source = &text[range.clone()];
                         let content_range = extract_code_block_content_range(code_block_source);
                         let is_fenced_closed = content_range.end < code_block_source.len();
-                        let content_range =
-                            content_range.start + range.start..content_range.end + range.start;
+                        let content_range = content_range.start + range.start..content_range.end + range.start;
 
                         // Valid to use bytes since multi-byte UTF-8 doesn't use ASCII chars.
-                        let line_count = text[content_range.clone()]
-                            .bytes()
-                            .filter(|c| *c == b'\n')
-                            .count();
+                        let line_count = text[content_range.clone()].bytes().filter(|c| *c == b'\n').count();
 
-                        let metadata = CodeBlockMetadata {
-                            content_range,
-                            line_count,
-                            is_fenced_closed,
-                        };
+                        let metadata = CodeBlockMetadata { content_range, line_count, is_fenced_closed };
 
                         let info = info.trim();
                         let kind = if info.is_empty() {
@@ -434,17 +393,9 @@ pub(crate) fn parse_markdown_with_options(
                         MarkdownTag::CodeBlock { kind, metadata }
                     }
                     pulldown_cmark::Tag::Paragraph => MarkdownTag::Paragraph,
-                    pulldown_cmark::Tag::Heading {
-                        level,
-                        id,
-                        classes,
-                        attrs,
-                    } => {
+                    pulldown_cmark::Tag::Heading { level, id, classes, attrs } => {
                         let id = id.map(|id| SharedString::from(id.into_string()));
-                        let classes = classes
-                            .into_iter()
-                            .map(|c| SharedString::from(c.into_string()))
-                            .collect();
+                        let classes = classes.into_iter().map(|c| SharedString::from(c.into_string())).collect();
                         let attrs = attrs
                             .into_iter()
                             .map(|(key, value)| {
@@ -454,12 +405,7 @@ pub(crate) fn parse_markdown_with_options(
                                 )
                             })
                             .collect();
-                        MarkdownTag::Heading {
-                            level,
-                            id,
-                            classes,
-                            attrs,
-                        }
+                        MarkdownTag::Heading { level, id, classes, attrs }
                     }
                     pulldown_cmark::Tag::BlockQuote(kind) => MarkdownTag::BlockQuote(kind),
                     pulldown_cmark::Tag::List(start_number) => MarkdownTag::List(start_number),
@@ -479,12 +425,7 @@ pub(crate) fn parse_markdown_with_options(
                     pulldown_cmark::Tag::Strikethrough => MarkdownTag::Strikethrough,
                     pulldown_cmark::Tag::Superscript => MarkdownTag::Superscript,
                     pulldown_cmark::Tag::Subscript => MarkdownTag::Subscript,
-                    pulldown_cmark::Tag::Image {
-                        link_type,
-                        dest_url,
-                        title,
-                        id,
-                    } => MarkdownTag::Image {
+                    pulldown_cmark::Tag::Image { link_type, dest_url, title, id } => MarkdownTag::Image {
                         link_type,
                         dest_url: SharedString::from(dest_url.into_string()),
                         title: SharedString::from(title.into_string()),
@@ -495,9 +436,7 @@ pub(crate) fn parse_markdown_with_options(
                     pulldown_cmark::Tag::HtmlBlock => MarkdownTag::HtmlBlock { align: None },
                     pulldown_cmark::Tag::DefinitionList => MarkdownTag::DefinitionList,
                     pulldown_cmark::Tag::DefinitionListTitle => MarkdownTag::DefinitionListTitle,
-                    pulldown_cmark::Tag::DefinitionListDefinition => {
-                        MarkdownTag::DefinitionListDefinition
-                    }
+                    pulldown_cmark::Tag::DefinitionListDefinition => MarkdownTag::DefinitionListDefinition,
                 };
                 state.push_event(range, MarkdownEvent::Start(tag))
             }
@@ -511,8 +450,7 @@ pub(crate) fn parse_markdown_with_options(
                     let block_start = current_metadata_block_start.take();
                     let content_range = metadata_block_content_range.take();
                     if parse_metadata_blocks
-                        && let (Some(block_start), Some(content_range)) =
-                            (block_start, content_range)
+                        && let (Some(block_start), Some(content_range)) = (block_start, content_range)
                     {
                         metadata_blocks.insert(
                             block_start,
@@ -534,11 +472,7 @@ pub(crate) fn parse_markdown_with_options(
                 state.push_event(range, MarkdownEvent::End(tag));
             }
             pulldown_cmark::Event::Text(parsed) => {
-                fn event_for(
-                    text: &str,
-                    range: Range<usize>,
-                    str: &str,
-                ) -> (Range<usize>, MarkdownEvent) {
+                fn event_for(text: &str, range: Range<usize>, str: &str) -> (Range<usize>, MarkdownEvent) {
                     if str == &text[range.clone()] {
                         (range, MarkdownEvent::Text)
                     } else {
@@ -572,15 +506,10 @@ pub(crate) fn parse_markdown_with_options(
                 }
 
                 let mut last_len = parsed.len();
-                let mut ranges = vec![TextRange {
-                    source_range: range.clone(),
-                    merged_range: 0..last_len,
-                    parsed,
-                }];
+                let mut ranges = vec![TextRange { source_range: range.clone(), merged_range: 0..last_len, parsed }];
 
                 while let Some((pulldown_cmark::Event::Text(_), _)) = parser.peek() {
-                    let Some((pulldown_cmark::Event::Text(next_text), next_range)) = parser.next()
-                    else {
+                    let Some((pulldown_cmark::Event::Text(next_text), next_range)) = parser.next() else {
                         unreachable!()
                     };
                     let next_len = last_len + next_text.len();
@@ -592,18 +521,14 @@ pub(crate) fn parse_markdown_with_options(
                     last_len = next_len;
                 }
 
-                let mut merged_text =
-                    String::with_capacity(ranges.last().unwrap().merged_range.end);
+                let mut merged_text = String::with_capacity(ranges.last().unwrap().merged_range.end);
                 for range in &ranges {
                     merged_text.push_str(&range.parsed);
                 }
 
                 let mut ranges = ranges.into_iter().peekable();
 
-                if !within_link
-                    && !within_code_block
-                    && !html.as_ref().is_some_and(HtmlConverter::in_link)
-                {
+                if !within_link && !within_code_block && !html.as_ref().is_some_and(HtmlConverter::in_link) {
                     let mut finder = LinkFinder::new();
                     finder.kinds(&[linkify::LinkKind::Url]);
 
@@ -612,10 +537,7 @@ pub(crate) fn parse_markdown_with_options(
                         let link_start_in_merged = link.start();
                         let link_end_in_merged = link.end();
 
-                        while ranges
-                            .peek()
-                            .is_some_and(|range| range.merged_range.end <= link_start_in_merged)
-                        {
+                        while ranges.peek().is_some_and(|range| range.merged_range.end <= link_start_in_merged) {
                             let range = ranges.next().unwrap();
                             let (range, event) = event_for(text, range.source_range, &range.parsed);
                             state.push_event(range, event);
@@ -627,11 +549,8 @@ pub(crate) fn parse_markdown_with_options(
                         let prefix_len = link_start_in_merged - range.merged_range.start;
                         if prefix_len > 0 {
                             let (head, tail) = range.parsed.split_at(prefix_len);
-                            let (event_range, event) = event_for(
-                                text,
-                                range.source_range.start..range.source_range.start + prefix_len,
-                                head,
-                            );
+                            let (event_range, event) =
+                                event_for(text, range.source_range.start..range.source_range.start + prefix_len, head);
                             state.push_event(event_range, event);
                             range.parsed = CowStr::Boxed(tail.into());
                             range.merged_range.start += prefix_len;
@@ -642,10 +561,7 @@ pub(crate) fn parse_markdown_with_options(
                         let mut link_end_in_source = range.source_range.end;
                         let mut link_events = Vec::new();
 
-                        while ranges
-                            .peek()
-                            .is_some_and(|range| range.merged_range.end <= link_end_in_merged)
-                        {
+                        while ranges.peek().is_some_and(|range| range.merged_range.end <= link_end_in_merged) {
                             let range = ranges.next().unwrap();
                             link_end_in_source = range.source_range.end;
                             link_events.push(event_for(text, range.source_range, &range.parsed));
@@ -680,10 +596,7 @@ pub(crate) fn parse_markdown_with_options(
                         for (range, event) in link_events {
                             state.push_event(range, event);
                         }
-                        state.push_event(
-                            link_range.clone(),
-                            MarkdownEvent::End(MarkdownTagEnd::Link),
-                        );
+                        state.push_event(link_range.clone(), MarkdownEvent::End(MarkdownTagEnd::Link));
                     }
                 }
 
@@ -694,8 +607,7 @@ pub(crate) fn parse_markdown_with_options(
             }
             pulldown_cmark::Event::Code(parsed) => {
                 let content_range = extract_code_content_range(&text[range.clone()]);
-                let content_range =
-                    content_range.start + range.start..content_range.end + range.start;
+                let content_range = content_range.start + range.start..content_range.end + range.start;
                 let source = &text[content_range.clone()];
                 let event = if within_table && source.contains(r"\|") {
                     MarkdownEvent::SubstitutedCode(parsed.to_string())
@@ -713,10 +625,9 @@ pub(crate) fn parse_markdown_with_options(
                 }
                 None => state.push_event(range, MarkdownEvent::InlineHtml),
             },
-            pulldown_cmark::Event::FootnoteReference(label) => state.push_event(
-                range,
-                MarkdownEvent::FootnoteReference(SharedString::from(label.to_string())),
-            ),
+            pulldown_cmark::Event::FootnoteReference(label) => {
+                state.push_event(range, MarkdownEvent::FootnoteReference(SharedString::from(label.to_string())))
+            }
             pulldown_cmark::Event::SoftBreak => state.push_event(range, MarkdownEvent::SoftBreak),
             pulldown_cmark::Event::HardBreak => state.push_event(range, MarkdownEvent::HardBreak),
             pulldown_cmark::Event::Rule => state.push_event(range, MarkdownEvent::Rule),
@@ -731,11 +642,7 @@ pub(crate) fn parse_markdown_with_options(
         html.finish(text.len(), &mut state);
     }
 
-    let heading_slugs = if parse_heading_slugs {
-        build_heading_slugs(text, &state.events)
-    } else {
-        HashMap::default()
-    };
+    let heading_slugs = if parse_heading_slugs { build_heading_slugs(text, &state.events) } else { HashMap::default() };
     let footnote_definitions = build_footnote_definitions(&state.events);
 
     ParsedMarkdownData {
@@ -755,20 +662,9 @@ fn parse_html_document(text: &str, parse_heading_slugs: bool) -> ParsedMarkdownD
     let mut state = ParseState::default();
     let mut html = HtmlConverter::default();
     let tokens = html::lex(text);
-    html.convert(
-        text,
-        text,
-        &tokens,
-        &SourceMap::new(vec![(0, 0)]),
-        true,
-        &mut state,
-    );
+    html.convert(text, text, &tokens, &SourceMap::new(vec![(0, 0)]), true, &mut state);
     html.finish(text.len(), &mut state);
-    let heading_slugs = if parse_heading_slugs {
-        build_heading_slugs(text, &state.events)
-    } else {
-        HashMap::default()
-    };
+    let heading_slugs = if parse_heading_slugs { build_heading_slugs(text, &state.events) } else { HashMap::default() };
     ParsedMarkdownData {
         events: state.events,
         root_block_starts: state.root_block_starts,
@@ -777,9 +673,7 @@ fn parse_html_document(text: &str, parse_heading_slugs: bool) -> ParsedMarkdownD
     }
 }
 
-fn build_footnote_definitions(
-    events: &[(Range<usize>, MarkdownEvent)],
-) -> HashMap<SharedString, usize> {
+fn build_footnote_definitions(events: &[(Range<usize>, MarkdownEvent)]) -> HashMap<SharedString, usize> {
     let mut definitions = HashMap::default();
     let mut current_label: Option<SharedString> = None;
 
@@ -988,20 +882,13 @@ fn extract_code_content_range(text: &str) -> Range<usize> {
     start_ticks..text_len - end_ticks
 }
 
-pub(crate) fn extract_code_block_content_range(text: &str) -> Range<usize> {
+fn extract_code_block_content_range(text: &str) -> Range<usize> {
     let mut range = 0..text.len();
-    let Some(fence_character) = text
-        .as_bytes()
-        .first()
-        .copied()
-        .filter(|character| matches!(character, b'`' | b'~'))
+    let Some(fence_character) = text.as_bytes().first().copied().filter(|character| matches!(character, b'`' | b'~'))
     else {
         return range;
     };
-    let opening_fence_len = text
-        .bytes()
-        .take_while(|character| *character == fence_character)
-        .count();
+    let opening_fence_len = text.bytes().take_while(|character| *character == fence_character).count();
     if opening_fence_len < 3 {
         return range;
     }
@@ -1011,25 +898,17 @@ pub(crate) fn extract_code_block_content_range(text: &str) -> Range<usize> {
         range.start += newline_ix + 1;
     }
 
-    let text_without_line_ending =
-        text.trim_end_matches(|character| matches!(character, '\r' | '\n'));
-    let closing_line_start = text_without_line_ending
-        .rfind('\n')
-        .map_or(0, |newline_ix| newline_ix + 1);
+    let text_without_line_ending = text.trim_end_matches(|character| matches!(character, '\r' | '\n'));
+    let closing_line_start = text_without_line_ending.rfind('\n').map_or(0, |newline_ix| newline_ix + 1);
     if closing_line_start >= range.start {
         let closing_line = &text_without_line_ending[closing_line_start..];
         let closing_fence = closing_line.trim_start_matches(' ');
         let indentation_len = closing_line.len() - closing_fence.len();
-        let closing_fence_len = closing_fence
-            .bytes()
-            .take_while(|character| *character == fence_character)
-            .count();
+        let closing_fence_len = closing_fence.bytes().take_while(|character| *character == fence_character).count();
         let trailing_characters = &closing_fence[closing_fence_len..];
         if indentation_len <= 3
             && closing_fence_len >= opening_fence_len
-            && trailing_characters
-                .bytes()
-                .all(|character| matches!(character, b' ' | b'\t'))
+            && trailing_characters.bytes().all(|character| matches!(character, b' ' | b'\t'))
         {
             range.end = closing_line_start;
         }

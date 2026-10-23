@@ -3,6 +3,7 @@
 
 use super::db::MindmapDb;
 use super::db::MindmapNode;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::title_room;
 use crate::diagrams::common::fit_width::turn_to_fit;
@@ -11,8 +12,6 @@ use crate::svg::builder::esc_text;
 use crate::svg::builder::js_round;
 use crate::svg::builder::label_svg;
 use crate::svg::builder::push_num;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::shapes::draw_shape;
 use crate::svg::shapes::shape_inset;
@@ -90,7 +89,7 @@ fn left_label(label: &Label, left: f64, cy: f64, icons: Option<IconResolver<'_>>
 pub(crate) fn render(
     model: &MindmapDb,
     config: &Value,
-    options: &RenderOptions,
+    options: &Options,
     icons: Option<IconResolver<'_>>,
 ) -> Rendered {
     turn_to_fit(options, |down| draw(model, config, options, icons, down))
@@ -131,15 +130,9 @@ fn stack(
 /// to be.
 #[expect(clippy::cast_precision_loss, reason = "depths and counts are far below 2^52")]
 #[expect(clippy::many_single_char_names, reason = "Pele's names")]
-fn draw(
-    model: &MindmapDb,
-    config: &Value,
-    options: &RenderOptions,
-    icons: Option<IconResolver<'_>>,
-    down: bool,
-) -> Rendered {
-    let size = options.font_size.unwrap_or(16.0);
-    let pad = options.padding.unwrap_or(8.0);
+fn draw(model: &MindmapDb, config: &Value, options: &Options, icons: Option<IconResolver<'_>>, down: bool) -> Rendered {
+    let size = options.font_size;
+    let pad = options.padding;
     let wrap = match property(config, "mindmap").and_then(|conf| property(conf, "maxNodeWidth")) {
         Some(Value::Number(width)) if *width > 0.0 => width.min(2000.0),
         _ => 200.0,
@@ -530,8 +523,7 @@ fn draw(
 
     Rendered {
         height: total_height,
-        links: Vec::new(),
-        svg: svg_document("mindmap", total_width, total_height, size, options, Accessible::default(), &content),
+        svg: svg_document("mindmap", total_width, total_height, size, &content),
         width: total_width,
     }
 }

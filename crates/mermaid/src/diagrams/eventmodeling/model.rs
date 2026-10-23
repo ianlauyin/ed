@@ -56,15 +56,6 @@ pub(crate) enum LaneGroup {
 }
 
 impl LaneGroup {
-    /// The group as Pele names it.
-    pub(crate) const fn as_str(self) -> &'static str {
-        match self {
-            Self::State => "state",
-            Self::Stream => "stream",
-            Self::Trigger => "trigger",
-        }
-    }
-
     /// The group's first index, its label, and its label prefix for a namespace.
     const fn meta(self) -> (u32, &'static str, &'static str) {
         match self {

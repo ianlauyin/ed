@@ -6,6 +6,7 @@ use super::ticks::tick_index;
 use super::ticks::tick_step;
 use super::ticks::tick_value;
 use super::ticks::ticks_between;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::cap_width;
 use crate::error::Code;
@@ -15,8 +16,6 @@ use crate::svg::builder::esc_text;
 use crate::svg::builder::js_round;
 use crate::svg::builder::label_svg;
 use crate::svg::builder::push_num;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::series_color;
 use crate::text::label::Label;
@@ -168,7 +167,7 @@ impl Values {
 ///
 /// Returns a semantic error for a chart without a series.
 #[expect(clippy::too_many_lines, clippy::many_single_char_names, reason = "mirrors Pele's renderXyChart")]
-pub(crate) fn render(model: &XyChartDb, config: &Value, options: &RenderOptions) -> Result<Rendered, Error> {
+pub(crate) fn render(model: &XyChartDb, config: &Value, options: &Options) -> Result<Rendered, Error> {
     if model.plots.is_empty() {
         let mut error = Error::new(Code::Semantic, "No Plot to render, please provide a plot with some data");
         error.r#type = Some("xychart");
@@ -176,10 +175,10 @@ pub(crate) fn render(model: &XyChartDb, config: &Value, options: &RenderOptions)
     }
     let chart = record(property(config, "xyChart"));
     let setting = |key: &str| chart.and_then(|chart| property(chart, key));
-    let size = options.font_size.unwrap_or(16.0);
+    let size = options.font_size;
     let small = js_round(size * 0.875);
     let tiny = js_round(size * 0.75);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
     let natural = dimension(setting("width"), 700.0);
     let width = cap_width(options, natural, 240.0, 0.0);
     // A narrower chart is not as much shorter, so that the plot keeps room for its marks.
@@ -840,18 +839,5 @@ pub(crate) fn render(model: &XyChartDb, config: &Value, options: &RenderOptions)
     group(&mut content, "ondine-point-labels", tiny, "", &point_labels);
     group(&mut content, "ondine-legend", small, "", &legend_out);
 
-    Ok(Rendered {
-        height,
-        links: Vec::new(),
-        svg: svg_document(
-            "xychart",
-            width,
-            height,
-            size,
-            options,
-            Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
-            &content,
-        ),
-        width,
-    })
+    Ok(Rendered { height, svg: svg_document("xychart", width, height, size, &content), width })
 }

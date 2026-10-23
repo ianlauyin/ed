@@ -4,6 +4,7 @@
 use super::common::fold;
 use super::types::RailroadModel;
 use super::types::RailroadNode;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::tighten;
 use crate::diagrams::common::fit_width::title_room;
@@ -13,8 +14,6 @@ use crate::svg::builder::js_round;
 use crate::svg::builder::label_svg;
 use crate::svg::builder::num;
 use crate::svg::builder::push_num;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::FONT_MONO;
 use crate::svg::theme::RADIUS;
@@ -422,7 +421,7 @@ fn sequence(boxes: &mut Boxes, kids: Vec<usize>, room: f64, m: &Metrics) -> usiz
 }
 
 /// Draws `model` with the `railroad` section of `config`.
-pub(crate) fn render(model: &RailroadModel, config: &Value, options: &RenderOptions) -> Rendered {
+pub(crate) fn render(model: &RailroadModel, config: &Value, options: &Options) -> Rendered {
     tighten(options, |tight| draw(model, config, options, tight))
 }
 
@@ -782,8 +781,8 @@ fn push_leaf(out: &mut String, item: &LaidOut, x: f64, y: f64, leaves: &Leaves<'
 }
 
 /// Draws `model` with room to spare, or `tight`ly within the host's width.
-fn draw(model: &RailroadModel, config: &Value, options: &RenderOptions, tight: bool) -> Rendered {
-    let base = options.font_size.unwrap_or(16.0);
+fn draw(model: &RailroadModel, config: &Value, options: &Options, tight: bool) -> Rendered {
+    let base = options.font_size;
     let font_size = option(config, "fontSize", 0.0, 200.0);
     let size = if font_size == 0.0 { js_round(base * 0.875) } else { font_size };
     let head_size = if font_size == 0.0 { base } else { font_size };
@@ -809,7 +808,7 @@ fn draw(model: &RailroadModel, config: &Value, options: &RenderOptions, tight: b
     } else {
         String::new()
     };
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
     let turns = Turns::new(m.arc);
 
     let title =
@@ -902,16 +901,7 @@ fn draw(model: &RailroadModel, config: &Value, options: &RenderOptions, tight: b
 
     Rendered {
         height: total_height,
-        links: Vec::new(),
-        svg: svg_document(
-            "railroad",
-            total_width,
-            total_height,
-            base,
-            options,
-            Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
-            &content,
-        ),
+        svg: svg_document("railroad", total_width, total_height, base, &content),
         width: total_width,
     }
 }

@@ -18,6 +18,7 @@ use super::layout::Cell;
 use super::layout::check_columns;
 use super::layout::layout;
 use super::types::Block;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::tighten;
 use crate::diagrams::common::fit_width::title_room;
@@ -30,8 +31,6 @@ use crate::svg::edges::EdgePath;
 use crate::svg::edges::edge_label_svg;
 use crate::svg::edges::marker;
 use crate::svg::edges::marker_trim;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::shapes::draw_shape;
 use crate::svg::shapes::shape_inset;
@@ -552,16 +551,16 @@ fn check(model: &BlockDb) -> Result<(), Error> {
 /// # Errors
 ///
 /// Returns a semantic error for a container whose grid has 0 columns.
-pub(crate) fn render(model: &BlockDb, config: &Value, options: &RenderOptions) -> Result<Rendered, Error> {
+pub(crate) fn render(model: &BlockDb, config: &Value, options: &Options) -> Result<Rendered, Error> {
     check(model)?;
     Ok(tighten(options, |tight| draw(model, config, options, tight)))
 }
 
 #[expect(clippy::too_many_lines, reason = "mirrors Pele's draw")]
-fn draw(model: &BlockDb, config: &Value, options: &RenderOptions, tight: bool) -> Rendered {
-    let size = options.font_size.unwrap_or(16.0);
+fn draw(model: &BlockDb, config: &Value, options: &Options, tight: bool) -> Rendered {
+    let size = options.font_size;
     let edge_size = js_round(size * 0.875);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
     let configured = match get(config, "block").and_then(|block| get(block, "padding")) {
         Some(Value::Number(value)) if *value >= 0.0 => value.min(200.0),
         _ => GAP,
@@ -924,6 +923,6 @@ fn draw(model: &BlockDb, config: &Value, options: &RenderOptions, tight: bool) -
         content.push_str("</g>");
     }
 
-    let svg = svg_document("block", width, height, size, options, Accessible::default(), &content);
-    Rendered { height, links: Vec::new(), svg, width }
+    let svg = svg_document("block", width, height, size, &content);
+    Rendered { height, svg, width }
 }

@@ -49,10 +49,8 @@ pub(crate) mod venn;
 pub(crate) mod wardley;
 pub(crate) mod xychart;
 
+use crate::Options;
 use crate::error::Error;
-use crate::svg::root::RenderOptions;
-use crate::util::url::LinkInfo;
-use crate::util::url::UrlOptions;
 use crate::yaml::Value;
 
 /// What a diagram type receives, as Pele's `Diagram.parse` does.
@@ -75,8 +73,6 @@ pub(crate) struct Input<'a> {
 pub(crate) struct Rendered {
     /// Height in pixels.
     pub(crate) height: f64,
-    /// Links in drawing order.
-    pub(crate) links: Vec<LinkInfo>,
     /// The SVG document.
     pub(crate) svg: String,
     /// Width in pixels.
@@ -95,9 +91,7 @@ pub(crate) struct Diagram {
     /// Whether the type parses source with its `%%` comment lines kept.
     pub(crate) keep_comments: bool,
     /// Parses and draws the diagram.
-    pub(crate) render: fn(&Input<'_>, &RenderOptions, &UrlOptions<'_>) -> Result<Rendered, Error>,
-    /// The type's section in Mermaid's config, when it is not the type's own name.
-    pub(crate) section: Option<&'static str>,
+    pub(crate) render: fn(&Input<'_>, &Options) -> Result<Rendered, Error>,
 }
 
 /// The diagram type named `type` (Pele's names), when this build includes it.

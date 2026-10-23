@@ -13,6 +13,7 @@ use super::boundaries::forward;
 use super::boundaries::resolve_seed;
 use super::boundaries::wave;
 use super::model::CynefinModel;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::svg::builder::esc_text;
 use crate::svg::builder::js_round;
@@ -20,8 +21,6 @@ use crate::svg::builder::label_svg;
 use crate::svg::builder::push_num;
 use crate::svg::edges::marker;
 use crate::svg::edges::marker_trim;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::RADIUS;
 use crate::svg::theme::series_color;
@@ -147,18 +146,18 @@ fn push_pair(out: &mut String, x: f64, y: f64) {
 }
 
 /// Draws `model` with the `cynefin` section of `config`.
-pub(crate) fn render(model: &CynefinModel, config: &Value, options: &RenderOptions) -> Rendered {
-    let size = options.font_size.unwrap_or(16.0);
+pub(crate) fn render(model: &CynefinModel, config: &Value, options: &Options) -> Rendered {
+    let size = options.font_size;
     let small = js_round(size * 0.8125);
     let item_size = js_round(size * 0.875);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
     let show_descriptions = !matches!(
         property(config, "cynefin").and_then(|cynefin| property(cynefin, "showDomainDescriptions")),
         Some(Value::Bool(false))
     );
     let amplitude = setting(config, "boundaryAmplitude", 8.0, 0.0, 50.0);
-    // Pele seeds from its default prefix. Ondine keeps that seed, so the default boundaries match.
-    let seed = resolve_seed(setting(config, "seed", 0.0, -1e15, 1e15), options.id_prefix.as_deref().unwrap_or("pele"));
+    // Pele seeds from its default id prefix. Ondine keeps that seed, so the default boundaries match.
+    let seed = resolve_seed(setting(config, "seed", 0.0, -1e15, 1e15), "pele");
     let item_line = js_round(item_size * 1.5);
 
     let badge = |text: String, overflow: bool| {
@@ -553,14 +552,6 @@ pub(crate) fn render(model: &CynefinModel, config: &Value, options: &RenderOptio
         content.push_str("</g>");
     }
 
-    let svg = svg_document(
-        "cynefin",
-        total_width,
-        total_height,
-        size,
-        options,
-        Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
-        &content,
-    );
-    Rendered { height: total_height, links: Vec::new(), svg, width: total_width }
+    let svg = svg_document("cynefin", total_width, total_height, size, &content);
+    Rendered { height: total_height, svg, width: total_width }
 }

@@ -1,6 +1,7 @@
 //! Draws an Ishikawa diagram. Port of Pele's `src/diagrams/ishikawa/render.ts`.
 
 use super::db::IshikawaDb;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::title_room;
 use crate::diagrams::common::fit_width::turn_to_fit;
@@ -11,8 +12,6 @@ use crate::svg::builder::label_svg;
 use crate::svg::builder::push_num;
 use crate::svg::edges::ARROW;
 use crate::svg::edges::marker;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::RADIUS;
 use crate::text::label::Label;
@@ -168,14 +167,14 @@ fn arrange(model: &IshikawaDb, node: usize, up: bool, size: f64, small: f64) -> 
 }
 
 /// Draws an Ishikawa diagram, turned to run down when it does not fit the host's width.
-pub(crate) fn render(model: &IshikawaDb, options: &RenderOptions) -> Rendered {
+pub(crate) fn render(model: &IshikawaDb, options: &Options) -> Rendered {
     turn_to_fit(options, |down| draw(model, options, down))
 }
 
-fn draw(model: &IshikawaDb, options: &RenderOptions, down: bool) -> Rendered {
-    let size = options.font_size.unwrap_or(16.0);
+fn draw(model: &IshikawaDb, options: &Options, down: bool) -> Rendered {
+    let size = options.font_size;
     let small = js_round(size * 0.875);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
     if down {
         return vertical_causes(model, options);
     }
@@ -365,8 +364,8 @@ fn draw(model: &IshikawaDb, options: &RenderOptions, down: bool) -> Rendered {
         content.push_str(&body);
         content.push_str("</g>");
     }
-    let svg = svg_document("ishikawa", width, height, size, options, Accessible::default(), &content);
-    Rendered { height, links: Vec::new(), svg, width }
+    let svg = svg_document("ishikawa", width, height, size, &content);
+    Rendered { height, svg, width }
 }
 
 /// A line of the outline drawn running down.
@@ -381,10 +380,10 @@ struct Entry {
     y: f64,
 }
 
-fn vertical_causes(model: &IshikawaDb, options: &RenderOptions) -> Rendered {
-    let size = options.font_size.unwrap_or(16.0);
+fn vertical_causes(model: &IshikawaDb, options: &Options) -> Rendered {
+    let size = options.font_size;
     let small = js_round(size * 0.875);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
     let room = 140.0_f64.max(options.max_width.unwrap_or(320.0) - 2.0 * pad);
     let title = layout_label(model.title.as_deref(), false, size, title_room(options), BOLD, None);
 
@@ -484,10 +483,5 @@ fn vertical_causes(model: &IshikawaDb, options: &RenderOptions) -> Rendered {
     );
     content.push_str(&edges);
     content.push_str(&nodes);
-    Rendered {
-        height,
-        links: Vec::new(),
-        svg: svg_document("ishikawa", total_width, height, size, options, Accessible::default(), &content),
-        width: total_width,
-    }
+    Rendered { height, svg: svg_document("ishikawa", total_width, height, size, &content), width: total_width }
 }

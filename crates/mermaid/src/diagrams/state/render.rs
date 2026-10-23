@@ -5,6 +5,7 @@ use std::collections::BTreeMap;
 use super::db::StateDb;
 use super::graph::StateEdge;
 use super::graph::StateNode;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::runs_across;
 use crate::diagrams::common::fit_width::turn_to_fit;
@@ -15,7 +16,6 @@ use crate::layout::compound::cnode;
 use crate::layout::compound::compound_layout;
 use crate::layout::compound::direction;
 use crate::layout::layered::LayeredOptions;
-use crate::svg::builder::esc;
 use crate::svg::builder::esc_text;
 use crate::svg::builder::js_round;
 use crate::svg::builder::label_svg;
@@ -27,22 +27,16 @@ use crate::svg::edges::edge_label_svg;
 use crate::svg::edges::marker;
 use crate::svg::edges::marker_trim;
 use crate::svg::edges::route_path;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::shapes::end_side;
 use crate::svg::theme::ResolvedStyle;
 use crate::svg::theme::class_names;
 use crate::svg::theme::resolve_style;
 use crate::svg::title::with_title;
-use crate::text::entities;
 use crate::text::label::Label;
 use crate::text::label::layout_label;
 use crate::text::measure::BOLD;
 use crate::text::measure::ITALIC;
-use crate::util::url::LinkInfo;
-use crate::util::url::UrlOptions;
-use crate::util::url::{self};
 use crate::yaml::Value;
 
 const NODE_SEP: f64 = 40.0;
@@ -180,11 +174,6 @@ fn number_option(config: &Value, key: &str, fallback: f64) -> f64 {
     }
 }
 
-/// Mermaid keeps the quotes of a click statement's strings and strips them when it draws.
-fn unquote(text: &str) -> &str {
-    text.trim_matches('"')
-}
-
 fn clamp(value: f64, min: f64, max: f64) -> f64 {
     if value < min {
         min
@@ -275,11 +264,11 @@ fn strip_mermaid_classes(classes: &str) -> String {
 
 /// Draws a state diagram, turning one that runs across to run down when it does not fit the
 /// host's width.
-pub(crate) fn render(db: &StateDb, config: &Value, options: &RenderOptions, url: &UrlOptions<'_>) -> Rendered {
+pub(crate) fn render(db: &StateDb, config: &Value, options: &Options) -> Rendered {
     if !runs_across(Some(db.direction())) {
-        return draw(db, config, options, url, false);
+        return draw(db, config, options, false);
     }
-    turn_to_fit(options, |down| draw(db, config, options, url, down))
+    turn_to_fit(options, |down| draw(db, config, options, down))
 }
 
 /// Pele's comparison of the order states take in their flow: initial states first, then the
@@ -306,12 +295,12 @@ fn by_flow(views: &[View<'_>], appear: &[f64], a: usize, b: usize) -> std::cmp::
     clippy::many_single_char_names,
     reason = "mirrors Pele's draw and its geometry names, one pass per drawing stage"
 )]
-fn draw(db: &StateDb, config: &Value, options: &RenderOptions, url: &UrlOptions<'_>, turned: bool) -> Rendered {
+fn draw(db: &StateDb, config: &Value, options: &Options, turned: bool) -> Rendered {
     let graph = &db.graph;
-    let size = options.font_size.unwrap_or(16.0);
+    let size = options.font_size;
     let small = js_round(size * 0.875);
     let wrap_width = number_option(config, "wrappingWidth", 200.0);
-    let pad = options.padding.unwrap_or(8.0);
+    let pad = options.padding;
     let root_dir = if turned { Dir::Tb } else { direction(Some(db.direction())) };
     let text =
         |raw: Option<&str>, font_size: f64, wrap: f64, style: u8| layout_label(raw, true, font_size, wrap, style, None);
@@ -688,7 +677,6 @@ fn draw(db: &StateDb, config: &Value, options: &RenderOptions, url: &UrlOptions<
 
     let width = (layout.width + 2.0 * pad).ceil();
     let height = (layout.height + 2.0 * pad).ceil();
-    let mut links: Vec<LinkInfo> = Vec::new();
 
     // Route points by rounded y, to find the edges that cross a composite's title bar.
     let mut crossings: BTreeMap<i64, Vec<f64>> = BTreeMap::new();
@@ -883,21 +871,6 @@ fn draw(db: &StateDb, config: &Value, options: &RenderOptions, url: &UrlOptions<
                     }
                 }
             }
-        }
-
-        if let Some(link) = db.link(&node.id) {
-            // Entity codes are resolved first, so the URL is checked in the form a browser would
-            // follow.
-            let tooltip = entities::decode(unquote(&link.tooltip));
-            if !tooltip.is_empty() {
-                let mut titled = String::from("<title>");
-                titled.push_str(&esc(&tooltip));
-                titled.push_str("</title>");
-                titled.push_str(&body);
-                body = titled;
-            }
-            body =
-                url::linked(&body, &url::safe_url(unquote(&link.url)), &node.id, &mut links, url, " target=\"_blank\"");
         }
 
         let mut open = String::from("<g class=\"");
@@ -1096,10 +1069,9 @@ fn draw(db: &StateDb, config: &Value, options: &RenderOptions, url: &UrlOptions<
     content.push_str("</g>");
 
     let titled = with_title(db.title.as_deref(), size, pad, width, height, content);
-    let accessible = Accessible { acc_descr: db.acc_descr.as_deref(), acc_title: db.acc_title.as_deref() };
-    let svg = svg_document("state", titled.width, titled.height, size, options, accessible, &titled.content);
+    let svg = svg_document("state", titled.width, titled.height, size, &titled.content);
 
-    Rendered { height: titled.height, links, svg, width: titled.width }
+    Rendered { height: titled.height, svg, width: titled.width }
 }
 
 /// A rounded coordinate as a map key.

@@ -2,14 +2,13 @@
 
 use super::db::QuadrantDb;
 use super::db::QuadrantText;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::cap_width;
 use crate::svg::builder::esc_text;
 use crate::svg::builder::js_round;
 use crate::svg::builder::label_svg;
 use crate::svg::builder::push_num;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::RADIUS;
 use crate::svg::theme::class_names;
@@ -63,14 +62,14 @@ fn parse_int(text: &str) -> f64 {
 
 /// Draws a quadrant chart at its configured size, or narrower to fit the host's width.
 #[expect(clippy::too_many_lines, reason = "mirrors Pele's renderQuadrant")]
-pub(crate) fn render(model: &QuadrantDb, config: &Value, options: &RenderOptions) -> Rendered {
-    let size = options.font_size.unwrap_or(16.0);
+pub(crate) fn render(model: &QuadrantDb, config: &Value, options: &Options) -> Rendered {
+    let size = options.font_size;
     let axis_size = js_round(size * 0.875);
     let point_size = js_round(size * 0.75);
     let natural = js_round(100.0_f64.max(length(config, "chartWidth", 500.0, 4000.0)));
     let width = js_round(cap_width(options, natural, 280.0, 0.0));
     let height = js_round((100.0_f64.max(length(config, "chartHeight", 500.0, 4000.0)) * width) / natural);
-    let outer = length(config, "quadrantPadding", options.padding.unwrap_or(8.0), 200.0);
+    let outer = length(config, "quadrantPadding", options.padding, 200.0);
     let x_pad = length(config, "xAxisLabelPadding", 5.0, 200.0);
     let y_pad = length(config, "yAxisLabelPadding", 5.0, 200.0);
     let has_points = !model.points.is_empty();
@@ -338,18 +337,5 @@ pub(crate) fn render(model: &QuadrantDb, config: &Value, options: &RenderOptions
         content.push_str("</g>");
     }
 
-    Rendered {
-        height,
-        links: Vec::new(),
-        svg: svg_document(
-            "quadrantChart",
-            width,
-            height,
-            size,
-            options,
-            Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
-            &content,
-        ),
-        width,
-    }
+    Rendered { height, svg: svg_document("quadrantChart", width, height, size, &content), width }
 }

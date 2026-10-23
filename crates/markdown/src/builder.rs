@@ -41,10 +41,7 @@ pub(crate) struct MarkdownHighlights {
 impl MarkdownHighlights {
     /// Returns the highlighted ranges intersecting the given source range,
     /// clamped to it, in paint order.
-    fn highlights_for_line(
-        &mut self,
-        source_range: Range<usize>,
-    ) -> SmallVec<[(Range<usize>, Hsla); 1]> {
+    fn highlights_for_line(&mut self, source_range: Range<usize>) -> SmallVec<[(Range<usize>, Hsla); 1]> {
         let mut highlights = SmallVec::new();
 
         self.next_search_highlight_ix += self.search_highlights[self.next_search_highlight_ix..]
@@ -52,12 +49,7 @@ impl MarkdownHighlights {
             .take_while(|range| range.end <= source_range.start)
             .count();
 
-        for (ix, range) in self
-            .search_highlights
-            .iter()
-            .enumerate()
-            .skip(self.next_search_highlight_ix)
-        {
+        for (ix, range) in self.search_highlights.iter().enumerate().skip(self.next_search_highlight_ix) {
             if range.start >= source_range.end {
                 break;
             }
@@ -81,28 +73,25 @@ impl MarkdownHighlights {
     }
 }
 
-pub(crate) struct DivStackEntry {
+struct DivStackEntry {
     div: AnyDiv,
     line_break_mode: LineBreakMode,
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
-pub(crate) enum LineBreakMode {
+enum LineBreakMode {
     TextLayout,
     FlexWrap,
 }
 
 impl DivStackEntry {
     pub(crate) fn new(div: impl Into<AnyDiv>) -> Self {
-        Self {
-            div: div.into(),
-            line_break_mode: LineBreakMode::TextLayout,
-        }
+        Self { div: div.into(), line_break_mode: LineBreakMode::TextLayout }
     }
 }
 
 #[derive(Default)]
-pub(crate) struct PendingLine {
+struct PendingLine {
     text: String,
     runs: Vec<TextRun>,
     source_mappings: Vec<SourceMapping>,
@@ -158,9 +147,7 @@ impl MarkdownElementBuilder {
         if let Some(background) = chip_background {
             let chip_end = self.pending_line.text.len();
             if chip_start < chip_end {
-                self.pending_line
-                    .code_chips
-                    .push((chip_start..chip_end, background));
+                self.pending_line.code_chips.push((chip_start..chip_end, background));
             }
         }
     }
@@ -181,12 +168,7 @@ impl MarkdownElementBuilder {
         self.text_style_stack.pop();
     }
 
-    pub(crate) fn push_div(
-        &mut self,
-        div: impl Into<AnyDiv>,
-        range: &Range<usize>,
-        markdown_end: usize,
-    ) {
+    pub(crate) fn push_div(&mut self, div: impl Into<AnyDiv>, range: &Range<usize>, markdown_end: usize) {
         let mut div = div.into();
         self.flush_text();
 
@@ -219,20 +201,13 @@ impl MarkdownElementBuilder {
     }
 
     pub(crate) fn push_root_block(&mut self, range: &Range<usize>, markdown_end: usize) {
-        self.push_div(
-            div().group("markdown-root-block").relative(),
-            range,
-            markdown_end,
-        );
+        self.push_div(div().group("markdown-root-block").relative(), range, markdown_end);
         self.push_div(div().pl_4(), range, markdown_end);
     }
 
     pub(crate) fn push_image_child(&mut self, child: impl IntoElement) {
         let text_align = self.text_style().text_align;
-        let table_cell_alignment = self
-            .table
-            .in_cell
-            .then(|| self.table.current_cell_alignment());
+        let table_cell_alignment = self.table.in_cell.then(|| self.table.current_cell_alignment());
         self.modify_current_div(|el| {
             let el = el.flex().flex_row().flex_wrap();
             // Table cells center their content vertically and apply column alignment via a
@@ -283,9 +258,7 @@ impl MarkdownElementBuilder {
     }
 
     fn uses_flex_line_breaks(&self) -> bool {
-        self.div_stack
-            .last()
-            .is_some_and(|entry| entry.line_break_mode == LineBreakMode::FlexWrap)
+        self.div_stack.last().is_some_and(|entry| entry.line_break_mode == LineBreakMode::FlexWrap)
     }
 
     pub(crate) fn modify_current_div(&mut self, f: impl FnOnce(AnyDiv) -> AnyDiv) {
@@ -296,12 +269,7 @@ impl MarkdownElementBuilder {
         }
     }
 
-    pub(crate) fn pop_root_block(
-        &mut self,
-        is_active: bool,
-        active_gutter_color: Hsla,
-        hovered_gutter_color: Hsla,
-    ) {
+    pub(crate) fn pop_root_block(&mut self, is_active: bool, active_gutter_color: Hsla, hovered_gutter_color: Hsla) {
         self.pop_div();
         self.modify_current_div(|el| {
             el.child(
@@ -309,13 +277,12 @@ impl MarkdownElementBuilder {
                     .h_full()
                     .w(px(4.0))
                     .when(is_active, |this| this.bg(active_gutter_color))
-                    .group_hover("markdown-root-block", |this| {
-                        if is_active {
-                            this
-                        } else {
-                            this.bg(hovered_gutter_color)
-                        }
-                    })
+                    .group_hover(
+                        "markdown-root-block",
+                        |this| {
+                            if is_active { this } else { this.bg(hovered_gutter_color) }
+                        },
+                    )
                     .rounded_xs()
                     .absolute()
                     .left_0()
@@ -331,20 +298,10 @@ impl MarkdownElementBuilder {
         self.append_child(div);
     }
 
-    pub(crate) fn push_sourced_element(
-        &mut self,
-        source_range: Range<usize>,
-        element: impl Into<AnyElement>,
-    ) {
+    pub(crate) fn push_sourced_element(&mut self, source_range: Range<usize>, element: impl Into<AnyElement>) {
         self.flush_text();
         let anchor = self.render_source_anchor(source_range);
-        self.append_child(
-            div()
-                .relative()
-                .child(anchor)
-                .child(element.into())
-                .into_any_element(),
-        );
+        self.append_child(div().relative().child(anchor).child(element.into()).into_any_element());
     }
 
     pub(crate) fn push_list(&mut self, bullet_index: Option<u64>) {
@@ -372,28 +329,15 @@ impl MarkdownElementBuilder {
     }
 
     pub(crate) fn push_link(&mut self, destination_url: SharedString, source_range: Range<usize>) {
-        self.rendered_links.push(RenderedLink {
-            source_range,
-            destination_url,
-        });
+        self.rendered_links.push(RenderedLink { source_range, destination_url });
     }
 
-    pub(crate) fn push_image_link(
-        &mut self,
-        destination_url: SharedString,
-        bounds: Rc<Cell<Option<Bounds<Pixels>>>>,
-    ) {
-        self.rendered_image_links.push(RenderedImageLink {
-            bounds,
-            destination_url,
-        });
+    pub(crate) fn push_image_link(&mut self, destination_url: SharedString, bounds: Rc<Cell<Option<Bounds<Pixels>>>>) {
+        self.rendered_image_links.push(RenderedImageLink { bounds, destination_url });
     }
 
     pub(crate) fn push_footnote_ref(&mut self, label: SharedString, source_range: Range<usize>) {
-        self.rendered_footnote_refs.push(RenderedFootnoteRef {
-            source_range,
-            label,
-        });
+        self.rendered_footnote_refs.push(RenderedFootnoteRef { source_range, label });
     }
 
     pub(crate) fn push_text(&mut self, text: &str, source_range: Range<usize>) {
@@ -406,10 +350,9 @@ impl MarkdownElementBuilder {
         source_range: Range<usize>,
         highlights: Option<&ResolvedHighlights>,
     ) {
-        self.pending_line.source_mappings.push(SourceMapping {
-            rendered_index: self.pending_line.text.len(),
-            source_index: source_range.start,
-        });
+        self.pending_line
+            .source_mappings
+            .push(SourceMapping { rendered_index: self.pending_line.text.len(), source_index: source_range.start });
         self.pending_line.text.push_str(text);
         self.current_source_index = source_range.end;
 
@@ -427,17 +370,13 @@ impl MarkdownElementBuilder {
             let mut offset = 0;
             for (run_range, highlight_id) in runs.iter() {
                 if run_range.start > offset {
-                    self.pending_line
-                        .runs
-                        .push(text_style.to_run(run_range.start - offset));
+                    self.pending_line.runs.push(text_style.to_run(run_range.start - offset));
                 }
 
                 let run_len = run_range.len();
                 let highlight = self.syntax_theme.get(*highlight_id).cloned();
                 if let Some(highlight) = highlight {
-                    self.pending_line
-                        .runs
-                        .push(text_style.clone().highlight(highlight).to_run(run_len));
+                    self.pending_line.runs.push(text_style.clone().highlight(highlight).to_run(run_len));
                 } else {
                     self.pending_line.runs.push(text_style.to_run(run_len));
                 }
@@ -445,9 +384,7 @@ impl MarkdownElementBuilder {
             }
 
             if offset < text.len() {
-                self.pending_line
-                    .runs
-                    .push(text_style.to_run(text.len() - offset));
+                self.pending_line.runs.push(text_style.to_run(text.len() - offset));
             }
         } else {
             self.pending_line.runs.push(text_style.to_run(text.len()));
@@ -456,9 +393,7 @@ impl MarkdownElementBuilder {
 
     pub(crate) fn trim_trailing_newline(&mut self) {
         if self.pending_line.text.ends_with('\n') {
-            self.pending_line
-                .text
-                .truncate(self.pending_line.text.len() - 1);
+            self.pending_line.text.truncate(self.pending_line.text.len() - 1);
             self.pending_line.runs.last_mut().unwrap().len -= 1;
             self.current_source_index -= 1;
         }
@@ -474,25 +409,14 @@ impl MarkdownElementBuilder {
 
         let leading_ws = text.len() - text.trim_start().len();
         let marker_rendered = leading_ws..leading_ws + trimmed.len();
-        let marker_source = self
-            .source_range_for_rendered(&marker_rendered)
-            .expect("pending checkbox text must have source mappings");
+        let marker_source =
+            self.source_range_for_rendered(&marker_rendered).expect("pending checkbox text must have source mappings");
 
         self.pending_line = PendingLine::default();
 
-        let toggle_state = if checked {
-            ToggleState::Selected
-        } else {
-            ToggleState::Unselected
-        };
+        let toggle_state = if checked { ToggleState::Selected } else { ToggleState::Unselected };
         let checkbox = Checkbox::new(
-            ElementId::Name(
-                format!(
-                    "table_checkbox_{}_{}",
-                    marker_source.start, marker_source.end
-                )
-                .into(),
-            ),
+            ElementId::Name(format!("table_checkbox_{}_{}", marker_source.start, marker_source.end).into()),
             toggle_state,
         )
         .fill();
@@ -529,23 +453,14 @@ impl MarkdownElementBuilder {
         self.rendered_lines.push(Rc::new(RenderedLine {
             layout: styled_text.layout().clone(),
             visible_bounds: Cell::new(None),
-            source_mappings: vec![SourceMapping {
-                rendered_index: 0,
-                source_index: source_range.start,
-            }],
+            source_mappings: vec![SourceMapping { rendered_index: 0, source_index: source_range.start }],
             source_end: source_range.end,
             language: None,
             text_align: TextAlign::Left,
             highlights: SmallVec::new(),
             code_chips: SmallVec::new(),
         }));
-        div()
-            .absolute()
-            .top_0()
-            .left_0()
-            .opacity(0.)
-            .child(styled_text)
-            .into_any_element()
+        div().absolute().top_0().left_0().opacity(0.).child(styled_text).into_any_element()
     }
 
     fn flush_text(&mut self) {
@@ -559,8 +474,7 @@ impl MarkdownElementBuilder {
             .source_mappings
             .first()
             .map(|first_mapping| {
-                self.highlights
-                    .highlights_for_line(first_mapping.source_index..self.current_source_index)
+                self.highlights.highlights_for_line(first_mapping.source_index..self.current_source_index)
             })
             .unwrap_or_default();
         let runs = if highlights.is_empty()
@@ -578,17 +492,10 @@ impl MarkdownElementBuilder {
                 )
             };
             let backgrounds = merge_highlight_backgrounds(
-                highlights.iter().map(|(range, color)| {
-                    (to_rendered(range.start)..to_rendered(range.end), *color)
-                }),
+                highlights.iter().map(|(range, color)| (to_rendered(range.start)..to_rendered(range.end), *color)),
                 self.highlights.base_background,
             );
-            ensure_highlight_contrast(
-                &line.runs,
-                &backgrounds,
-                self.highlights.minimum_contrast,
-                0,
-            )
+            ensure_highlight_contrast(&line.runs, &backgrounds, self.highlights.minimum_contrast, 0)
         };
         let text = StyledText::new(line.text).with_runs(runs);
         let rendered_line = Rc::new(RenderedLine {
@@ -596,23 +503,13 @@ impl MarkdownElementBuilder {
             visible_bounds: Cell::new(None),
             source_mappings: line.source_mappings,
             source_end: self.current_source_index,
-            language: self
-                .code_block_stack
-                .last()
-                .and_then(|entry| entry.as_ref())
-                .cloned(),
+            language: self.code_block_stack.last().and_then(|entry| entry.as_ref()).cloned(),
             text_align,
             highlights,
             code_chips: line.code_chips.into_iter().collect(),
         });
         self.rendered_lines.push(rendered_line.clone());
-        self.append_child(
-            RenderedLineElement {
-                text,
-                line: rendered_line,
-            }
-            .into_any_element(),
-        );
+        self.append_child(RenderedLineElement { text, line: rendered_line }.into_any_element());
     }
 
     pub(crate) fn build(mut self) -> RenderedMarkdown {

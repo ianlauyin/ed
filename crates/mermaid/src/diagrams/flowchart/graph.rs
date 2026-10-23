@@ -39,18 +39,12 @@ pub(crate) struct GraphNode {
     pub(crate) label: Option<String>,
     /// How the label is written.
     pub(crate) label_type: LabelType,
-    /// Link address.
-    pub(crate) link: Option<String>,
-    /// Link target.
-    pub(crate) link_target: Option<String>,
     /// The enclosing group's id.
     pub(crate) parent_id: Option<String>,
     /// Label position beside an image or icon (`t` or `b`).
     pub(crate) pos: Option<String>,
     /// Shape name.
     pub(crate) shape: String,
-    /// Tooltip text.
-    pub(crate) tooltip: Option<String>,
 }
 
 /// An edge to draw. Mirrors Pele's `GraphEdge`; fields no renderer reads are omitted.
@@ -204,7 +198,6 @@ pub(crate) fn build(model: &FlowDb, default_curve: Option<&str>) -> FlowGraph {
             parent_of.insert(id, &sg.id);
         }
     }
-    let tooltips: BTreeMap<&str, &str> = model.tooltips.iter().map(|(id, text)| (id.as_str(), text.as_str())).collect();
 
     let mut nodes: Vec<GraphNode> = Vec::new();
     let mut by_id: BTreeMap<&str, usize> = BTreeMap::new();
@@ -228,12 +221,9 @@ pub(crate) fn build(model: &FlowDb, default_curve: Option<&str>) -> FlowGraph {
             is_group: !collapsed,
             label: Some(sg.title.clone()),
             label_type: sg.label_type,
-            link: None,
-            link_target: None,
             parent_id: parent_of.get(sg.id.as_str()).map(|id| String::from(*id)),
             pos: None,
             shape: String::from(if collapsed { "collapsedGroup" } else { "rect" }),
-            tooltip: None,
         };
         by_id.insert(&sg.id, nodes.len());
         nodes.push(node);
@@ -271,12 +261,9 @@ pub(crate) fn build(model: &FlowDb, default_curve: Option<&str>) -> FlowGraph {
             is_group,
             label: vertex.text.clone(),
             label_type: vertex.label_type,
-            link: vertex.link.clone(),
-            link_target: vertex.link_target.clone(),
             parent_id: parent_of.get(vertex.id.as_str()).map(|id| String::from(*id)),
             pos: vertex.pos.clone(),
             shape: if is_group { String::from("rect") } else { shape_of(vertex) },
-            tooltip: tooltips.get(vertex.id.as_str()).map(|text| String::from(*text)),
         };
         by_id.insert(&vertex.id, nodes.len());
         nodes.push(node);

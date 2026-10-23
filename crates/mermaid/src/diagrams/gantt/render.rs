@@ -17,6 +17,7 @@ use super::db::GanttDb;
 use super::db::clock;
 use super::js_date::Date;
 use super::types::GanttTask;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::diagrams::common::fit_width::cap_width;
 use crate::error::Error;
@@ -25,8 +26,6 @@ use crate::svg::builder::esc_text;
 use crate::svg::builder::js_round;
 use crate::svg::builder::label_svg;
 use crate::svg::builder::push_num;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::svg::theme::CRITICAL;
 use crate::svg::theme::RADIUS;
@@ -36,9 +35,6 @@ use crate::text::label::layout_label;
 use crate::text::measure::BOLD;
 use crate::text::measure::{self};
 use crate::util::chars::is_space;
-use crate::util::url::LinkInfo;
-use crate::util::url::UrlOptions;
-use crate::util::url::linked;
 use crate::yaml::Value;
 
 /// The default width of a chart.
@@ -224,14 +220,9 @@ fn push_xy(out: &mut String, x: f64, y: f64) {
 ///
 /// Returns the scheduler's errors: a start that is not a date, or too much work.
 #[expect(clippy::too_many_lines, reason = "mirrors Pele's single render function")]
-pub(crate) fn render(
-    model: &mut GanttDb,
-    config: &Value,
-    options: &RenderOptions,
-    url: &UrlOptions<'_>,
-) -> Result<Rendered, Error> {
-    let size = options.font_size.unwrap_or(16.0);
-    let pad = options.padding.unwrap_or(8.0);
+pub(crate) fn render(model: &mut GanttDb, config: &Value, options: &Options) -> Result<Rendered, Error> {
+    let size = options.font_size;
+    let pad = options.padding;
     let now = clock(options.now);
 
     let label_size = setting(config, "fontSize", 4.0, 72.0).unwrap_or_else(|| js_round(size * 0.8125));
@@ -299,8 +290,6 @@ pub(crate) fn render(
 
     let title = layout_label(model.title.as_deref(), false, size, 4000.0, BOLD, None);
     let title_height = if title.height > 0.0 { title.height + 16.0 } else { 0.0 };
-    let (acc_descr, acc_title) = (model.acc_descr.clone(), model.acc_title.clone());
-    let acc = Accessible { acc_descr: acc_descr.as_deref(), acc_title: acc_title.as_deref() };
 
     if !has_plot {
         let width = (title.width.max(1.0) + 2.0 * pad).ceil();
@@ -312,12 +301,7 @@ pub(crate) fn render(
             " class=\"ondine-title\" font-weight=\"var(--_tw)\"",
             None,
         );
-        return Ok(Rendered {
-            height,
-            links: Vec::new(),
-            svg: svg_document("gantt", width, height, size, options, acc, &content),
-            width,
-        });
+        return Ok(Rendered { height, svg: svg_document("gantt", width, height, size, &content), width });
     }
 
     let mut section_labels: Vec<Label> = Vec::with_capacity(categories.len());
@@ -581,7 +565,6 @@ pub(crate) fn render(
         flush(&mut run, &mut excluded);
     }
 
-    let mut links: Vec<LinkInfo> = Vec::new();
     let mut tasks_out = String::new();
     for bar in &bars {
         let Some(task) = tasks.get(bar.task) else {
@@ -684,9 +667,6 @@ pub(crate) fn render(
         attrs.push_str(text_fill);
         let mut body = shape;
         body.push_str(&label_svg(&bar.label, bar.label_x, cy, &attrs, None));
-        if let Some((_, href)) = model.links.iter().find(|(id, _)| *id == task.id) {
-            body = linked(&body, href, &task.id, &mut links, url, "");
-        }
         tasks_out.push_str("<g class=\"");
         tasks_out.push_str(&classes);
         tasks_out.push_str("\" data-id=\"");
@@ -796,5 +776,5 @@ pub(crate) fn render(
         content.push_str("</g>");
     }
 
-    Ok(Rendered { height, links, svg: svg_document("gantt", width, height, size, options, acc, &content), width })
+    Ok(Rendered { height, svg: svg_document("gantt", width, height, size, &content), width })
 }

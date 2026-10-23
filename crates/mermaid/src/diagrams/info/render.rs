@@ -2,10 +2,9 @@
 //! `src/diagrams/info/render.ts`.
 
 use super::model::InfoModel;
+use crate::Options;
 use crate::diagrams::Rendered;
 use crate::svg::builder::label_svg;
-use crate::svg::root::Accessible;
-use crate::svg::root::RenderOptions;
 use crate::svg::root::svg_document;
 use crate::text::label::layout_label;
 use crate::text::measure::BOLD;
@@ -14,9 +13,9 @@ use crate::text::measure::BOLD;
 const VERSION: &str = concat!("Ondine v", env!("CARGO_PKG_VERSION"));
 
 /// Draws `model`.
-pub(crate) fn render(model: &InfoModel, options: &RenderOptions) -> Rendered {
-    let size = options.font_size.unwrap_or(16.0);
-    let pad = options.padding.unwrap_or(8.0);
+pub(crate) fn render(model: &InfoModel, options: &Options) -> Rendered {
+    let size = options.font_size;
+    let pad = options.padding;
 
     let title = layout_label(model.title.as_deref(), false, size, 4000.0, BOLD, None);
     let title_height = if title.height > 0.0 { title.height + 8.0 } else { 0.0 };
@@ -39,14 +38,6 @@ pub(crate) fn render(model: &InfoModel, options: &RenderOptions) -> Rendered {
         None,
     ));
 
-    let svg = svg_document(
-        "info",
-        width,
-        height,
-        size,
-        options,
-        Accessible { acc_descr: model.acc_descr.as_deref(), acc_title: model.acc_title.as_deref() },
-        &content,
-    );
-    Rendered { height, links: Vec::new(), svg, width }
+    let svg = svg_document("info", width, height, size, &content);
+    Rendered { height, svg, width }
 }

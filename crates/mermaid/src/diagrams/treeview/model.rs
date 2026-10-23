@@ -18,15 +18,7 @@ pub(crate) enum NodeType {
     File,
 }
 
-impl NodeType {
-    /// The type as Pele names it.
-    pub(crate) const fn as_str(self) -> &'static str {
-        match self {
-            Self::Directory => "directory",
-            Self::File => "file",
-        }
-    }
-}
+impl NodeType {}
 
 /// An entry: Pele's `TreeNode`, with its children as indices into [`TreeViewModel::nodes`].
 #[derive(Clone, Debug, PartialEq)]
