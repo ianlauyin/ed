@@ -1,21 +1,29 @@
 use std::str;
 use std::sync::Arc;
 
-use anyhow::{Context as _, Result};
+use anyhow::Context as _;
+use anyhow::Result;
 use collections::HashMap;
-use futures::{
-    AsyncBufReadExt, AsyncRead, AsyncReadExt as _, SinkExt as _,
-    channel::mpsc::{Receiver, Sender, channel},
-    io::BufReader,
-};
-use gpui::{BackgroundExecutor, Task};
+use futures::AsyncBufReadExt;
+use futures::AsyncRead;
+use futures::AsyncReadExt as _;
+use futures::SinkExt as _;
+use futures::channel::mpsc::Receiver;
+use futures::channel::mpsc::Sender;
+use futures::channel::mpsc::channel;
+use futures::io::BufReader;
+use gpui::BackgroundExecutor;
+use gpui::Task;
 use log::warn;
 use parking_lot::Mutex;
 
-use crate::{
-    AnyResponse, CONTENT_LEN_HEADER, IoHandler, IoKind, NotificationOrRequest, RequestId,
-    ResponseHandler,
-};
+use crate::AnyResponse;
+use crate::CONTENT_LEN_HEADER;
+use crate::IoHandler;
+use crate::IoKind;
+use crate::NotificationOrRequest;
+use crate::RequestId;
+use crate::ResponseHandler;
 
 const HEADER_DELIMITER: &[u8; 4] = b"\r\n\r\n";
 
@@ -61,10 +69,7 @@ impl LspStdoutHandler {
     {
         let (tx, notifications_channel) = channel(INCOMING_MESSAGE_QUEUE_CAPACITY);
         let loop_handle = cx.spawn(Self::handler(stdout, tx, response_handlers, io_handlers));
-        Self {
-            loop_handle,
-            incoming_messages: notifications_channel,
-        }
+        Self { loop_handle, incoming_messages: notifications_channel }
     }
 
     async fn handler<Input>(
@@ -107,16 +112,8 @@ impl LspStdoutHandler {
 
             if let Ok(msg) = serde_json::from_slice::<NotificationOrRequest>(&buffer) {
                 notifications_sender.send(msg).await?;
-            } else if let Ok(AnyResponse {
-                id, error, result, ..
-            }) = serde_json::from_slice(&buffer)
-            {
-                let handler = {
-                    response_handlers
-                        .lock()
-                        .as_mut()
-                        .and_then(|handlers| handlers.remove(&id))
-                };
+            } else if let Ok(AnyResponse { id, error, result, .. }) = serde_json::from_slice(&buffer) {
+                let handler = { response_handlers.lock().as_mut().and_then(|handlers| handlers.remove(&id)) };
                 if let Some(handler) = handler {
                     if let Some(error) = error {
                         handler(Err(error)).await;
@@ -127,10 +124,7 @@ impl LspStdoutHandler {
                     }
                 }
             } else {
-                warn!(
-                    "failed to deserialize LSP message:\n{}",
-                    std::str::from_utf8(&buffer)?
-                );
+                warn!("failed to deserialize LSP message:\n{}", std::str::from_utf8(&buffer)?);
             }
         }
     }

@@ -64,6 +64,10 @@
   - `terminal.detect_venv` (bool, default true): terminals and tasks opened in a
     worktree with a `.venv` get `VIRTUAL_ENV` set and `.venv/bin` prepended to
     `PATH`; no activation script is run.
+- Messages to a language server (requests, responses, notifications) are written
+  in the order they were sent, through one queue. Notifications are serialized
+  lazily but never overtake an earlier request, so e.g. a formatting request
+  always sees the document version from the `didChange` sent before it.
 - `editor::RestartLanguageServer` restarts the servers relevant to the current
   buffer, including servers previously stopped with `editor::StopLanguageServer`.
 - There is no managed Node.js runtime and no `node` settings (`node.path`,
