@@ -108,6 +108,10 @@ remote detection, command execution, and proxy startup are removed.
   copy-system-specs action.
 - The filesystem-watcher debug window, recording API, and JSON exports are removed.
   Filesystem watching and rescan error logging remain available.
+  - Watch registrations are keyed by path components, so equivalent spellings
+    (`/a/b/`, `/a//b`, `/a/./b`) share one backend watch and receive the same
+    events; on case-insensitive volumes the key is also case-folded and
+    Unicode-normalized.
 - File formats and protocol data may describe other operating systems, paths,
   line endings, or remote hosts; these do not imply editor host support.
 
