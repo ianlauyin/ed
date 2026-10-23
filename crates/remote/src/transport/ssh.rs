@@ -228,7 +228,7 @@ impl RemoteConnection for SshRemoteConnection {
             ssh_shell,
             *ssh_shell_kind,
             socket.ssh_command_options(),
-            &socket.connection_options.ssh_destination(),
+            socket.connection_options.ssh_destination_args(),
             interactive,
         )
     }
@@ -246,7 +246,7 @@ impl RemoteConnection for SshRemoteConnection {
             self.socket.ssh_command_options(),
             None,
             Interactive::No,
-            &self.socket.connection_options.ssh_destination(),
+            self.socket.connection_options.ssh_destination_args(),
             exec,
             self.socket.envs.clone(),
         );
@@ -261,7 +261,7 @@ impl RemoteConnection for SshRemoteConnection {
             args.push("-L".into());
             args.push(format!("{}:{}:{}", local_port, bracket_ipv6(&host), remote_port));
         }
-        args.push(socket.connection_options.ssh_destination());
+        args.extend(socket.connection_options.ssh_destination_args());
         Ok(CommandTemplate { program: "ssh".into(), args, env: HashMap::default() })
     }
 
@@ -456,7 +456,13 @@ impl SshRemoteConnection {
         if let Some(args) = additional_args {
             command.args(args);
         }
-        command.arg(src_path).arg(format!("{}:{}", self.socket.connection_options.scp_destination(), dest_path_str));
+        // scp and sftp have no option for the username, so `--` keeps a destination beginning
+        // with `-` from being parsed as an option. They pass the username on to ssh via `-l`.
+        command.arg("--").arg(src_path).arg(format!(
+            "{}:{}",
+            self.socket.connection_options.scp_destination(),
+            dest_path_str
+        ));
         command
     }
 
@@ -473,7 +479,7 @@ impl SshRemoteConnection {
                 .unwrap_or_default(),
         );
         command.arg("-b").arg("-");
-        command.arg(self.socket.connection_options.scp_destination());
+        command.arg("--").arg(self.socket.connection_options.scp_destination());
         command.stdin(Stdio::piped());
         command
     }
@@ -511,11 +517,11 @@ impl SshSocket {
         }
         let separator = shell_kind.sequential_commands_separator();
         let to_run = format!("cd{separator} {to_run}");
-        self.ssh_options(&mut command, true, None).arg(self.connection_options.ssh_destination());
+        self.ssh_options(&mut command, true, None);
         if !allow_pseudo_tty {
             command.arg("-T");
         }
-        command.arg(to_run);
+        command.args(self.connection_options.ssh_destination_args()).arg(to_run);
         log::debug!("ssh {:?}", command);
         command
     }
@@ -764,17 +770,19 @@ impl SshConnectionOptions {
         })
     }
 
-    pub fn ssh_destination(&self) -> String {
-        let mut result = String::default();
+    /// Arguments identifying the remote for `ssh`, which must come after all other options.
+    ///
+    /// The username is passed verbatim via `-l` (so `DOMAIN\user` works) and the host after
+    /// `--`, so that neither is parsed as an option when it begins with `-`.
+    fn ssh_destination_args(&self) -> Vec<String> {
+        let mut args = Vec::new();
         if let Some(username) = &self.username {
-            // Username might be: username1@username2@ip2
-            let username = urlencoding::encode(username);
-            result.push_str(&username);
-            result.push('@');
+            args.push("-l".to_string());
+            args.push(username.clone());
         }
-
-        result.push_str(&self.host.to_string());
-        result
+        args.push("--".to_string());
+        args.push(self.host.to_string());
+        args
     }
 
     pub fn additional_args_for_scp(&self) -> Vec<String> {
@@ -848,7 +856,7 @@ fn build_command_posix(
     ssh_shell: &str,
     ssh_shell_kind: ShellKind,
     ssh_options: Vec<String>,
-    ssh_destination: &str,
+    ssh_destination_args: Vec<String>,
     interactive: Interactive,
 ) -> Result<CommandTemplate> {
     let mut exec = posix_working_dir_prefix(working_dir, ssh_shell_kind)?;
@@ -870,7 +878,7 @@ fn build_command_posix(
         write!(exec, "{ssh_shell} -l")?;
     };
 
-    Ok(ssh_command_template(ssh_options, port_forward, interactive, ssh_destination, exec, ssh_env))
+    Ok(ssh_command_template(ssh_options, port_forward, interactive, ssh_destination_args, exec, ssh_env))
 }
 
 fn posix_working_dir_prefix(working_dir: Option<String>, ssh_shell_kind: ShellKind) -> Result<String> {
@@ -904,7 +912,7 @@ fn ssh_command_template(
     ssh_options: Vec<String>,
     port_forward: Option<(u16, String, u16)>,
     interactive: Interactive,
-    ssh_destination: &str,
+    ssh_destination_args: Vec<String>,
     exec: String,
     ssh_env: HashMap<String, String>,
 ) -> CommandTemplate {
@@ -926,7 +934,7 @@ fn ssh_command_template(
         Interactive::No => args.push("-T".into()),
     }
     // The destination must come after all options but before the command
-    args.push(ssh_destination.into());
+    args.extend(ssh_destination_args);
     args.push(exec);
 
     CommandTemplate { program: "ssh".into(), args, env: ssh_env }

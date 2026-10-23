@@ -28,6 +28,5 @@ serde_json.workspace = true
 settings_content.workspace = true
 smol.workspace = true
 thiserror.workspace = true
-urlencoding.workspace = true
 util.workspace = true
 which.workspace = true

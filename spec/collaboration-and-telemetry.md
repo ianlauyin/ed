@@ -35,6 +35,10 @@ WSL transport, UI, settings, CLI requests, and saved connection restoration are 
 Reconnection uses separate timeouts for the new connection's handshake and
 for the resync that follows; the resync timeout starts only once the handshake
 completes.
+The SSH username is passed verbatim with `-l` and the host after `--`
+(`ssh … -l <user> -- <host>`), so domain usernames like `DOMAIN\user` work and
+neither can be parsed as an ssh option; scp and sftp also put `--` before the
+destination.
 
 The application updater, update checks, downloads/installers, helper executable,
 release-note actions, and update indicators are removed. Updates are installed
