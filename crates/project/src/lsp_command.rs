@@ -7,7 +7,6 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use anyhow::Result;
-use async_trait::async_trait;
 use collections::HashMap;
 use gpui::App;
 use gpui::AsyncApp;
@@ -139,9 +138,8 @@ pub(crate) fn make_lsp_text_document_position(
     })
 }
 
-// async_trait marks its boxed futures `#[must_use]`
-#[allow(clippy::double_must_use)]
-#[async_trait(?Send)]
+// Futures are polled on the foreground executor, so no `Send` bound is wanted
+#[allow(async_fn_in_trait)]
 pub trait LspCommand: 'static + Sized + Send + std::fmt::Debug {
     type Response: 'static + Default + Send + std::fmt::Debug;
     type LspRequest: 'static + Send + lsp::request::Request;
@@ -494,7 +492,6 @@ async fn call_hierarchy_item_from_proto(
     Ok(item)
 }
 
-#[async_trait(?Send)]
 impl LspCommand for PrepareCallHierarchy {
     type Response = Vec<CallHierarchyItem>;
     type LspRequest = lsp::request::CallHierarchyPrepare;
@@ -635,7 +632,6 @@ async fn location_from_proto(
     Ok(Location { buffer, range: start..end })
 }
 
-#[async_trait(?Send)]
 impl LspCommand for GetIncomingCalls {
     type Response = Vec<IncomingCall>;
     type LspRequest = lsp::request::CallHierarchyIncomingCalls;
@@ -757,7 +753,6 @@ pub struct GetOutgoingCalls {
     pub item: CallHierarchyItem,
 }
 
-#[async_trait(?Send)]
 impl LspCommand for GetOutgoingCalls {
     type Response = Vec<OutgoingCall>;
     type LspRequest = lsp::request::CallHierarchyOutgoingCalls;
@@ -877,7 +872,6 @@ impl LspCommand for GetOutgoingCalls {
     }
 }
 
-#[async_trait(?Send)]
 impl LspCommand for PrepareRename {
     type Response = PrepareRenameResponse;
     type LspRequest = lsp::request::PrepareRenameRequest;
@@ -1037,7 +1031,6 @@ impl LspCommand for PrepareRename {
     }
 }
 
-#[async_trait(?Send)]
 impl LspCommand for PerformRename {
     type Response = ProjectTransaction;
     type LspRequest = lsp::request::Rename;
@@ -1152,7 +1145,6 @@ impl LspCommand for PerformRename {
     }
 }
 
-#[async_trait(?Send)]
 impl LspCommand for GetDefinitions {
     type Response = Vec<LocationLink>;
     type LspRequest = lsp::request::GotoDefinition;
@@ -1234,7 +1226,6 @@ impl LspCommand for GetDefinitions {
     }
 }
 
-#[async_trait(?Send)]
 impl LspCommand for GetDeclarations {
     type Response = Vec<LocationLink>;
     type LspRequest = lsp::request::GotoDeclaration;
@@ -1317,7 +1308,6 @@ impl LspCommand for GetDeclarations {
     }
 }
 
-#[async_trait(?Send)]
 impl LspCommand for GetImplementations {
     type Response = Vec<LocationLink>;
     type LspRequest = lsp::request::GotoImplementation;
@@ -1405,7 +1395,6 @@ impl LspCommand for GetImplementations {
     }
 }
 
-#[async_trait(?Send)]
 impl LspCommand for GetTypeDefinitions {
     type Response = Vec<LocationLink>;
     type LspRequest = lsp::request::GotoTypeDefinition;
@@ -1710,7 +1699,6 @@ pub fn location_link_to_proto(
     proto::LocationLink { origin, target: Some(target) }
 }
 
-#[async_trait(?Send)]
 impl LspCommand for GetReferences {
     type Response = Vec<Location>;
     type LspRequest = lsp::request::References;
@@ -1844,7 +1832,6 @@ impl LspCommand for GetReferences {
     }
 }
 
-#[async_trait(?Send)]
 impl LspCommand for GetDocumentHighlights {
     type Response = Vec<DocumentHighlight>;
     type LspRequest = lsp::request::DocumentHighlightRequest;
@@ -1973,7 +1960,6 @@ impl LspCommand for GetDocumentHighlights {
     }
 }
 
-#[async_trait(?Send)]
 impl LspCommand for GetDocumentSymbols {
     type Response = Vec<DocumentSymbol>;
     type LspRequest = lsp::request::DocumentSymbolRequest;
@@ -2139,7 +2125,6 @@ impl LspCommand for GetDocumentSymbols {
     }
 }
 
-#[async_trait(?Send)]
 impl LspCommand for GetHover {
     type Response = Option<Hover>;
     type LspRequest = lsp::request::HoverRequest;
@@ -2321,7 +2306,6 @@ impl GetCompletions {
     }
 }
 
-#[async_trait(?Send)]
 impl LspCommand for GetCompletions {
     type Response = CoreCompletionResponse;
     type LspRequest = lsp::request::Completion;
@@ -2588,7 +2572,6 @@ pub(crate) fn parse_completion_text_edit(
     Some(ParsedCompletionEdit { insert_range, replace_range, new_text: new_text.clone() })
 }
 
-#[async_trait(?Send)]
 impl LspCommand for GetCodeActions {
     type Response = Vec<CodeAction>;
     type LspRequest = lsp::request::CodeActionRequest;
@@ -2797,7 +2780,6 @@ impl OnTypeFormatting {
     }
 }
 
-#[async_trait(?Send)]
 impl LspCommand for OnTypeFormatting {
     type Response = Option<Transaction>;
     type LspRequest = lsp::request::OnTypeFormatting;
@@ -3433,7 +3415,6 @@ impl InlayHints {
     }
 }
 
-#[async_trait(?Send)]
 impl LspCommand for InlayHints {
     type Response = Vec<InlayHint>;
     type LspRequest = lsp::InlayHintRequest;
@@ -3563,7 +3544,6 @@ impl LspCommand for InlayHints {
     }
 }
 
-#[async_trait(?Send)]
 impl LspCommand for SemanticTokensFull {
     type Response = SemanticTokensResponse;
     type LspRequest = lsp::SemanticTokensFullRequest;
@@ -3685,7 +3665,6 @@ impl LspCommand for SemanticTokensFull {
     }
 }
 
-#[async_trait(?Send)]
 impl LspCommand for SemanticTokensDelta {
     type Response = SemanticTokensResponse;
     type LspRequest = lsp::SemanticTokensFullDeltaRequest;
@@ -3814,7 +3793,6 @@ impl LspCommand for SemanticTokensDelta {
     }
 }
 
-#[async_trait(?Send)]
 impl LspCommand for GetCodeLens {
     type Response = Vec<CodeAction>;
     type LspRequest = lsp::CodeLensRequest;
@@ -3924,7 +3902,6 @@ impl LinkedEditingRange {
     }
 }
 
-#[async_trait(?Send)]
 impl LspCommand for LinkedEditingRange {
     type Response = Vec<Range<Anchor>>;
     type LspRequest = lsp::request::LinkedEditingRange;
@@ -4313,7 +4290,6 @@ fn process_unchanged_workspace_diagnostics_report(
     }));
 }
 
-#[async_trait(?Send)]
 impl LspCommand for GetDocumentDiagnostics {
     type Response = Vec<LspPullDiagnostics>;
     type LspRequest = lsp::request::DocumentDiagnosticRequest;
@@ -4492,7 +4468,6 @@ impl LspCommand for GetDocumentDiagnostics {
     }
 }
 
-#[async_trait(?Send)]
 impl LspCommand for GetDocumentColor {
     type Response = Vec<DocumentColor>;
     type LspRequest = lsp::request::DocumentColor;
@@ -4606,7 +4581,6 @@ impl LspCommand for GetDocumentColor {
     }
 }
 
-#[async_trait(?Send)]
 impl LspCommand for GetFoldingRanges {
     type Response = Vec<LspFoldingRange>;
     type LspRequest = lsp::request::FoldingRangeRequest;
@@ -4721,7 +4695,6 @@ impl LspCommand for GetFoldingRanges {
     }
 }
 
-#[async_trait(?Send)]
 impl LspCommand for GetDocumentLinks {
     type Response = Vec<LspDocumentLink>;
     type LspRequest = lsp::request::DocumentLinkRequest;

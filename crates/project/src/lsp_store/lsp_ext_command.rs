@@ -4,7 +4,6 @@ use std::sync::Arc;
 
 use anyhow::Context as _;
 use anyhow::Result;
-use async_trait::async_trait;
 use collections::HashMap;
 use gpui::App;
 use gpui::AsyncApp;
@@ -72,7 +71,6 @@ pub struct ExpandMacro {
     pub server_id: LanguageServerId,
 }
 
-#[async_trait(?Send)]
 impl LspCommand for ExpandMacro {
     type Response = ExpandedMacro;
     type LspRequest = LspExtExpandMacro;
@@ -191,7 +189,6 @@ pub struct OpenDocs {
     pub server_id: LanguageServerId,
 }
 
-#[async_trait(?Send)]
 impl LspCommand for OpenDocs {
     type Response = DocsUrls;
     type LspRequest = LspOpenDocs;
@@ -286,7 +283,6 @@ impl lsp::request::Request for LspGoToParentModule {
     const METHOD: &'static str = "experimental/parentModule";
 }
 
-#[async_trait(?Send)]
 impl LspCommand for GoToParentModule {
     type Response = Vec<LocationLink>;
     type LspRequest = LspGoToParentModule;
@@ -525,7 +521,6 @@ pub fn runnable_to_task_template(label: String, args: RunnableArgs) -> TaskTempl
     task_template
 }
 
-#[async_trait(?Send)]
 impl LspCommand for GetLspRunnables {
     type Response = LspRunnables;
     type LspRequest = Runnables;
