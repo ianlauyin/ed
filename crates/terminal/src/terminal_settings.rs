@@ -1,14 +1,19 @@
 use collections::HashMap;
-use gpui::{FontFallbacks, FontFeatures, FontWeight, Pixels};
+use gpui::FontFallbacks;
+use gpui::FontFeatures;
+use gpui::FontWeight;
+use gpui::Pixels;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-
+use serde::Deserialize;
+use serde::Serialize;
 pub use settings::AlternateScroll;
-
-use settings::{
-    IntoGpui, PathHyperlinkRegex, RegisterSetting, TerminalBlink, TerminalDockPosition,
-    TerminalLineHeight, WorkingDirectory,
-};
+use settings::IntoGpui;
+use settings::PathHyperlinkRegex;
+use settings::RegisterSetting;
+use settings::TerminalBlink;
+use settings::TerminalDockPosition;
+use settings::TerminalLineHeight;
+use settings::WorkingDirectory;
 use task::Shell;
 use theme_settings::FontFamilyName;
 
@@ -47,15 +52,9 @@ fn settings_shell_to_task_shell(shell: settings::Shell) -> Shell {
     match shell {
         settings::Shell::System => Shell::System,
         settings::Shell::Program(program) => Shell::Program(program),
-        settings::Shell::WithArguments {
-            program,
-            args,
-            title_override,
-        } => Shell::WithArguments {
-            program,
-            args,
-            title_override,
-        },
+        settings::Shell::WithArguments { program, args, title_override } => {
+            Shell::WithArguments { program, args, title_override }
+        }
     }
 }
 
@@ -69,12 +68,7 @@ impl settings::Settings for TerminalSettings {
             font_size: user_content.font_size.map(|s| s.into_gpui()),
             font_family: user_content.font_family,
             font_fallbacks: user_content.font_fallbacks.map(|fallbacks| {
-                FontFallbacks::from_fonts(
-                    fallbacks
-                        .into_iter()
-                        .map(|family| family.0.to_string())
-                        .collect(),
-                )
+                FontFallbacks::from_fonts(fallbacks.into_iter().map(|family| family.0.to_string()).collect())
             }),
             font_features: user_content.font_features.map(|f| f.into_gpui()),
             font_weight: user_content.font_weight.map(|w| w.into_gpui()),

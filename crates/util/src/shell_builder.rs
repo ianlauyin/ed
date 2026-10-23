@@ -13,29 +13,23 @@ pub struct ShellBuilder {
     interactive: bool,
     /// Whether to redirect stdin to /dev/null for the spawned command as a subshell.
     redirect_stdin: bool,
-    substitute_variables: bool,
     kind: ShellKind,
 }
 
 impl ShellBuilder {
     /// Create a new ShellBuilder as configured.
-    pub fn new(shell: &Shell, is_windows: bool) -> Self {
+    pub fn new(shell: &Shell) -> Self {
         let (program, args) = match shell {
             Shell::System => (get_system_shell(), Vec::new()),
             Shell::Program(shell) => (shell.clone(), Vec::new()),
             Shell::WithArguments { program, args, .. } => (program.clone(), args.clone()),
         };
 
-        let kind = ShellKind::new(&program, is_windows);
-        Self { program, args, interactive: true, kind, redirect_stdin: false, substitute_variables: true }
+        let kind = ShellKind::new(&program);
+        Self { program, args, interactive: true, kind, redirect_stdin: false }
     }
     pub const fn non_interactive(mut self) -> Self {
         self.interactive = false;
-        self
-    }
-
-    pub const fn literal_args(mut self) -> Self {
-        self.substitute_variables = false;
         self
     }
 
@@ -44,25 +38,8 @@ impl ShellBuilder {
         if command_to_use_in_label.trim().is_empty() {
             self.program.clone()
         } else {
-            match self.kind {
-                ShellKind::PowerShell | ShellKind::Pwsh => {
-                    format!("{} -C '{}'", self.program, command_to_use_in_label)
-                }
-                ShellKind::Cmd => {
-                    format!("{} /C \"{}\"", self.program, command_to_use_in_label)
-                }
-                ShellKind::Posix
-                | ShellKind::Nushell
-                | ShellKind::Fish
-                | ShellKind::Csh
-                | ShellKind::Tcsh
-                | ShellKind::Rc
-                | ShellKind::Xonsh
-                | ShellKind::Elvish => {
-                    let interactivity = if self.interactive { "-i " } else { Default::default() };
-                    format!("{PROGRAM} {interactivity}-c '{command_to_use_in_label}'", PROGRAM = self.program)
-                }
-            }
+            let interactivity = if self.interactive { "-i " } else { Default::default() };
+            format!("{PROGRAM} {interactivity}-c '{command_to_use_in_label}'", PROGRAM = self.program)
         }
     }
 
@@ -75,7 +52,7 @@ impl ShellBuilder {
     pub fn build(mut self, task_command: Option<String>, task_args: &[String]) -> (String, Vec<String>) {
         if let Some(task_command) = task_command {
             let task_command = if !task_args.is_empty() {
-                match self.kind.try_quote_prefix_aware(&task_command) {
+                match self.kind.try_quote(&task_command) {
                     Some(task_command) => task_command.into_owned(),
                     None => task_command,
                 }
@@ -84,15 +61,7 @@ impl ShellBuilder {
             };
             let mut combined_command = task_args.iter().fold(task_command, |mut command, arg| {
                 command.push(' ');
-                let shell_variable = if self.substitute_variables {
-                    Cow::Owned(self.kind.to_shell_variable(arg))
-                } else {
-                    Cow::Borrowed(arg.as_str())
-                };
-                command.push_str(&match self.kind.try_quote(&shell_variable) {
-                    Some(shell_variable) => shell_variable,
-                    None => shell_variable,
-                });
+                command.push_str(&self.kind.try_quote(arg).unwrap_or(Cow::Borrowed(arg)));
                 command
             });
             if self.redirect_stdin {
@@ -109,21 +78,9 @@ impl ShellBuilder {
                         combined_command.insert_str(0, "begin; ");
                         combined_command.push_str("; end </dev/null");
                     }
-                    ShellKind::Nushell
-                    | ShellKind::Csh
-                    | ShellKind::Tcsh
-                    | ShellKind::Rc
-                    | ShellKind::Xonsh
-                    | ShellKind::Elvish => {
+                    ShellKind::Csh | ShellKind::Tcsh | ShellKind::Rc => {
                         combined_command.insert(0, '(');
                         combined_command.push_str("\n) </dev/null");
-                    }
-                    ShellKind::PowerShell | ShellKind::Pwsh => {
-                        combined_command.insert_str(0, "$null | & {");
-                        combined_command.push('}');
-                    }
-                    ShellKind::Cmd => {
-                        combined_command.push_str("< NUL");
                     }
                 }
             }
@@ -140,7 +97,7 @@ impl ShellBuilder {
         if let Some(task_command) = task_command {
             let mut combined_command = task_args.iter().fold(task_command, |mut command, arg| {
                 command.push(' ');
-                command.push_str(&self.kind.to_shell_variable(arg));
+                command.push_str(arg);
                 command
             });
             if self.redirect_stdin {
@@ -152,21 +109,9 @@ impl ShellBuilder {
                         combined_command.insert_str(0, "begin; ");
                         combined_command.push_str("; end </dev/null");
                     }
-                    ShellKind::Nushell
-                    | ShellKind::Csh
-                    | ShellKind::Tcsh
-                    | ShellKind::Rc
-                    | ShellKind::Xonsh
-                    | ShellKind::Elvish => {
+                    ShellKind::Csh | ShellKind::Tcsh | ShellKind::Rc => {
                         combined_command.insert(0, '(');
                         combined_command.push_str("\n) </dev/null");
-                    }
-                    ShellKind::PowerShell | ShellKind::Pwsh => {
-                        combined_command.insert_str(0, "$null | & {");
-                        combined_command.push('}');
-                    }
-                    ShellKind::Cmd => {
-                        combined_command.push_str("< NUL");
                     }
                 }
             }
@@ -191,10 +136,8 @@ impl ShellBuilder {
     /// as this method handles `cmd` weirdness on windows correctly.
     pub fn build_std_command(self, mut task_command: Option<String>, task_args: &[String]) -> std::process::Command {
         if task_args.is_empty() {
-            task_command = task_command
-                .as_ref()
-                .map(|cmd| self.kind.try_quote_prefix_aware(cmd).map(Cow::into_owned))
-                .unwrap_or(task_command);
+            task_command =
+                task_command.as_ref().map(|cmd| self.kind.try_quote(cmd).map(Cow::into_owned)).unwrap_or(task_command);
         }
         let (program, args) = self.build(task_command, task_args);
 

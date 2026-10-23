@@ -30,6 +30,10 @@ remote detection, command execution, and proxy startup are removed.
 - CLI installation is manual. The editor has no CLI installer, installation menu
   item, or commands for installing the CLI or registering its URL scheme.
 - CLI shell completions are generated for bash, fish, and zsh only.
+- Terminals, tasks, environment capture, and SSH commands only understand
+  POSIX-family shells (sh/bash/zsh, fish, csh/tcsh, rc). Any other shell is
+  treated as POSIX; PowerShell, cmd, Nushell, Xonsh, and Elvish quoting and
+  syntax are not supported.
 - Git operations (including clones and commit signing) and SSH connections require
   authentication that works without user input, such as an SSH agent or cached
   credentials. Password/passphrase requests fail instead of opening a prompt.

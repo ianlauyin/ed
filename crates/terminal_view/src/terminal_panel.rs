@@ -604,7 +604,6 @@ impl TerminalPanel {
         let project = workspace.read(cx).project().read(cx);
 
         let remote_client = project.remote_client();
-        let is_windows = project.path_style(cx).is_windows();
         let remote_shell = remote_client.as_ref().and_then(|remote_client| remote_client.read(cx).shell());
 
         let shell = if let Some(remote_shell) = remote_shell
@@ -615,7 +614,7 @@ impl TerminalPanel {
             task.shell.clone()
         };
 
-        let task = prepare_task_for_spawn(task, &shell, is_windows);
+        let task = prepare_task_for_spawn(task, &shell);
 
         if task.allow_concurrent_runs && task.use_new_terminal {
             return self.spawn_in_new_terminal(task, window, cx);
@@ -1121,8 +1120,8 @@ impl TerminalPanel {
 /// Prepares a `SpawnInTerminal` by computing the command, args, and command_label
 /// based on the shell configuration. This is a pure function that can be tested
 /// without spawning actual terminals.
-pub fn prepare_task_for_spawn(task: &SpawnInTerminal, shell: &Shell, is_windows: bool) -> SpawnInTerminal {
-    let builder = ShellBuilder::new(shell, is_windows);
+pub fn prepare_task_for_spawn(task: &SpawnInTerminal, shell: &Shell) -> SpawnInTerminal {
+    let builder = ShellBuilder::new(shell);
     let command_label = builder.command_label(task.command.as_deref().unwrap_or(""));
     let (command, args) = builder.build_no_quote(task.command.clone(), &task.args);
 

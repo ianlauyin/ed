@@ -1,6 +1,7 @@
 use std::path::Path;
 
-use anyhow::{Context as _, Result};
+use anyhow::Context as _;
+use anyhow::Result;
 use collections::HashMap;
 use serde::Deserialize;
 
@@ -61,9 +62,7 @@ fn parse_env_output(
                 );
             }
 
-            anyhow::bail!(
-                "Failed to deserialize environment variables from json: {parse_error}. output: {env_output}"
-            );
+            anyhow::bail!("Failed to deserialize environment variables from json: {parse_error}. output: {env_output}");
         }
     }
 }
@@ -77,7 +76,7 @@ async fn capture_unix(
 
     use crate::command::new_std_command;
 
-    let shell_kind = ShellKind::new(shell_path, false);
+    let shell_kind = ShellKind::new(shell_path);
     let quoted_zed_path = super::get_shell_safe_zed_path(shell_kind)?;
 
     let mut command_string = String::new();
@@ -88,15 +87,10 @@ async fn capture_unix(
     // See: https://github.com/zed-industries/zed/pull/32136#issuecomment-2999645482
     const FD_STDIN: std::os::fd::RawFd = 0;
     const FD_STDOUT: std::os::fd::RawFd = 1;
-    const FD_STDERR: std::os::fd::RawFd = 2;
 
     let (fd_num, redir) = match shell_kind {
         ShellKind::Rc => (FD_STDIN, format!(">[1={}]", FD_STDIN)), // `[1=0]`
-        ShellKind::Nushell | ShellKind::Tcsh => (FD_STDOUT, "".to_string()),
-        // xonsh doesn't support redirecting to stdin, and control sequences are printed to
-        // stdout on startup
-        ShellKind::Xonsh => (FD_STDERR, "o>e".to_string()),
-        ShellKind::PowerShell => (FD_STDIN, format!(">{}", FD_STDIN)),
+        ShellKind::Tcsh => (FD_STDOUT, "".to_string()),
         _ => (FD_STDIN, format!(">&{}", FD_STDIN)), // `>&0`
     };
 
@@ -115,35 +109,16 @@ async fn capture_unix(
         }
     }
 
-    match shell_kind {
-        // Nushell does not allow non-interactive login shells.
-        // Instead of doing "-l -i -c '<command>'"
-        // use "-l -e '<command>; exit'" instead
-        ShellKind::Nushell => command.arg("-e"),
-        _ => command.args(["-i", "-c"]),
-    };
+    command.args(["-i", "-c"]);
 
     // Prefix with "./" if the path starts with "-" to prevent cd from interpreting it as a flag
     let dir_str = directory.to_string_lossy();
-    let dir_str = if dir_str.starts_with('-') {
-        format!("./{dir_str}").into()
-    } else {
-        dir_str
-    };
-    let quoted_dir = shell_kind
-        .try_quote(&dir_str)
-        .context("unexpected null in directory name")?;
+    let dir_str = if dir_str.starts_with('-') { format!("./{dir_str}").into() } else { dir_str };
+    let quoted_dir = shell_kind.try_quote(&dir_str).context("unexpected null in directory name")?;
 
     // cd into the directory, triggering directory specific side-effects (asdf, direnv, etc)
     command_string.push_str(&format!("cd {};", quoted_dir));
-    if let Some(prefix) = shell_kind.command_prefix() {
-        command_string.push(prefix);
-    }
     command_string.push_str(&format!("{} --printenv {}", quoted_zed_path, redir));
-
-    if let ShellKind::Nushell = shell_kind {
-        command_string.push_str("; exit");
-    }
 
     command.arg(&command_string);
 
@@ -177,15 +152,15 @@ async fn spawn_and_read_fd(
     mut command: std::process::Command,
     child_fd: std::os::fd::RawFd,
 ) -> anyhow::Result<(Vec<u8>, std::process::Output)> {
-    use command_fds::{CommandFdExt, FdMapping};
-    use std::{io::Read, process::Stdio};
+    use std::io::Read;
+    use std::process::Stdio;
+
+    use command_fds::CommandFdExt;
+    use command_fds::FdMapping;
 
     let (mut reader, writer) = std::io::pipe()?;
 
-    command.fd_mappings(vec![FdMapping {
-        parent_fd: writer.into(),
-        child_fd,
-    }])?;
+    command.fd_mappings(vec![FdMapping { parent_fd: writer.into(), child_fd }])?;
 
     let process = smol::process::Command::from(command)
         .stdin(Stdio::null())

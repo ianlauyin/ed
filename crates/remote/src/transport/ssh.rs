@@ -399,7 +399,7 @@ impl SshRemoteConnection {
         let RemoteEnvironment { shell: ssh_shell, platform: ssh_platform, os_version: ssh_os_version } = environment;
         log::info!("Remote shell discovered: {}", ssh_shell);
 
-        let ssh_shell_kind = ShellKind::new(&ssh_shell, false);
+        let ssh_shell_kind = ShellKind::new(&ssh_shell);
         log::info!("Remote platform discovered: {:?}", ssh_platform);
 
         log::info!("Remote OS version discovered: {:?}", ssh_os_version);
@@ -502,8 +502,7 @@ impl SshSocket {
         allow_pseudo_tty: bool,
     ) -> util::command::Command {
         let mut command = util::command::new_command("ssh");
-        let program = shell_kind.prepend_command_prefix(program);
-        let mut to_run = shell_kind.try_quote_prefix_aware(&program).expect("shell quoting").into_owned();
+        let mut to_run = shell_kind.try_quote(program).expect("shell quoting").into_owned();
         for arg in args {
             // We're trying to work with: sh, bash, zsh, fish, tcsh, ...?
             debug_assert!(!arg.as_ref().contains('\n'), "multiline arguments do not work in all shells");
@@ -862,7 +861,7 @@ fn build_command_posix(
     }
 
     if let Some(input_program) = input_program {
-        write!(exec, "{}", ssh_shell_kind.try_quote_prefix_aware(&input_program).context("shell quoting")?)?;
+        write!(exec, "{}", ssh_shell_kind.try_quote(&input_program).context("shell quoting")?)?;
         for arg in input_args {
             let arg = ssh_shell_kind.try_quote(arg).context("shell quoting")?;
             write!(exec, " {arg}")?;

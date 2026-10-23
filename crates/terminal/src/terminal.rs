@@ -77,7 +77,6 @@ use serde::Serialize;
 use settings::Settings;
 use task::HideStrategy;
 use task::Shell;
-use task::ShellKind;
 use task::SpawnInTerminal;
 use terminal_settings::AlternateScroll;
 use terminal_settings::CursorShape as SettingsCursorShape;
@@ -878,31 +877,10 @@ fn init_command_startup_marker(marker_id: u64) -> String {
     format!("{INIT_COMMAND_STARTUP_MARKER_PREFIX}{marker_id}{INIT_COMMAND_STARTUP_MARKER_SUFFIX}")
 }
 
-fn init_command_startup_marker_command(shell_kind: ShellKind, marker_id: u64) -> String {
+fn init_command_startup_marker_command(marker_id: u64) -> String {
     // Split the marker across the command so its echo can't satisfy the
     // handshake; only the command's output contains the contiguous marker.
-    match shell_kind {
-        ShellKind::PowerShell | ShellKind::Pwsh => format!(
-            "Write-Output ('{INIT_COMMAND_STARTUP_MARKER_PREFIX}' + '{marker_id}' + '{INIT_COMMAND_STARTUP_MARKER_SUFFIX}')"
-        ),
-        ShellKind::Cmd => {
-            format!(
-                "<nul set /p zed_init_ready={INIT_COMMAND_STARTUP_MARKER_PREFIX}&echo {marker_id}{INIT_COMMAND_STARTUP_MARKER_SUFFIX}"
-            )
-        }
-        ShellKind::Nushell => {
-            format!("print $\"{INIT_COMMAND_STARTUP_MARKER_PREFIX}({marker_id}){INIT_COMMAND_STARTUP_MARKER_SUFFIX}\"")
-        }
-        ShellKind::Posix
-        | ShellKind::Csh
-        | ShellKind::Tcsh
-        | ShellKind::Rc
-        | ShellKind::Fish
-        | ShellKind::Xonsh
-        | ShellKind::Elvish => format!(
-            "printf '%s%s%s\\n' {INIT_COMMAND_STARTUP_MARKER_PREFIX} {marker_id} {INIT_COMMAND_STARTUP_MARKER_SUFFIX}"
-        ),
-    }
+    format!("printf '%s%s%s\\n' {INIT_COMMAND_STARTUP_MARKER_PREFIX} {marker_id} {INIT_COMMAND_STARTUP_MARKER_SUFFIX}")
 }
 
 /// Configures whether a terminal runs an interactive shell or a tracked task.
@@ -1931,8 +1909,7 @@ impl Terminal {
         self.init_command_startup_marker = Some(init_command_startup_marker(marker_id));
         self.init_command_startup_tx = Some(startup_tx);
 
-        let shell_kind = self.template.shell.shell_kind(self.path_style.is_windows());
-        let mut input = init_command_startup_marker_command(shell_kind, marker_id).into_bytes();
+        let mut input = init_command_startup_marker_command(marker_id).into_bytes();
         input.push(b'\x0d');
         self.write_to_pty(input);
 
