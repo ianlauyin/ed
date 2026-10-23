@@ -61,7 +61,7 @@ const BROKEN_RULE: &str = concat!(
 );
 
 /// The token of a one-character ASCII rule.
-fn single(c: u32) -> Option<T> {
+const fn single(c: u32) -> Option<T> {
     Some(match c {
         58 => T::Colon,
         43 => T::Plus,

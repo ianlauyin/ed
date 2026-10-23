@@ -319,19 +319,19 @@ fn cmp(a: f64, b: f64) -> Ordering {
 
 /// An index or count as a float.
 #[expect(clippy::cast_precision_loss, reason = "indices and counts stay far below 2^52")]
-fn float(i: usize) -> f64 {
+const fn float(i: usize) -> f64 {
     i as f64
 }
 
 /// An index as a signed number, for arithmetic that may go below zero.
 #[expect(clippy::cast_possible_wrap, reason = "indices stay below isize::MAX, since they index allocations")]
-fn signed(i: usize) -> isize {
+const fn signed(i: usize) -> isize {
     i as isize
 }
 
 /// `Math.max(lo, Math.min(hi, x))`, which returns `lo` when `lo > hi` where `f64::clamp`
 /// panics.
-fn clamp(x: f64, lo: f64, hi: f64) -> f64 {
+const fn clamp(x: f64, lo: f64, hi: f64) -> f64 {
     lo.max(hi.min(x))
 }
 

@@ -191,7 +191,8 @@ impl SvgRenderer {
             let pixmap = self.render_pixmap(bytes, SvgSize::Size(params.size))?;
 
             // Convert the pixmap's pixels into an alpha mask.
-            let size = Size::new(DevicePixels(pixmap.width() as i32), DevicePixels(pixmap.height() as i32));
+            let size =
+                Size::new(DevicePixels(pixmap.width().cast_signed()), DevicePixels(pixmap.height().cast_signed()));
             let alpha_mask = pixmap.pixels().iter().map(|p| p.alpha()).collect::<Vec<_>>();
 
             Ok(Some((size, alpha_mask)))

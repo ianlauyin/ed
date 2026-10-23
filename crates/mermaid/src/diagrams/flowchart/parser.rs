@@ -16,7 +16,7 @@ use crate::error::Error;
 use crate::util::chars::is_space;
 
 /// Tokens that continue an id.
-fn is_id(t: T) -> bool {
+const fn is_id(t: T) -> bool {
     matches!(
         t,
         T::Num
@@ -34,7 +34,7 @@ fn is_id(t: T) -> bool {
 }
 
 /// Tokens of an alphanumeric name, such as a callback or curve.
-fn is_alpha_num(t: T) -> bool {
+const fn is_alpha_num(t: T) -> bool {
     matches!(
         t,
         T::Num
@@ -52,7 +52,7 @@ fn is_alpha_num(t: T) -> bool {
 }
 
 /// Tokens of a subgraph id written without brackets.
-fn is_no_tags(t: T) -> bool {
+const fn is_no_tags(t: T) -> bool {
     matches!(
         t,
         T::Num
@@ -80,12 +80,12 @@ fn is_no_tags(t: T) -> bool {
 }
 
 /// Tokens of one style declaration.
-fn is_style_part(t: T) -> bool {
+const fn is_style_part(t: T) -> bool {
     matches!(t, T::Num | T::NodeString | T::Colon | T::Space | T::Brkt | T::Style)
 }
 
 /// Tokens that continue a node label.
-fn is_text(t: T) -> bool {
+const fn is_text(t: T) -> bool {
     matches!(t, T::Text | T::TagStart | T::TagEnd | T::UnicodeText)
 }
 

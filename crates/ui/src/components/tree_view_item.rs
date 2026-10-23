@@ -20,10 +20,15 @@ pub struct TreeViewItem {
     focused: bool,
     default_expanded: bool,
     root_item: bool,
+    #[allow(clippy::type_complexity)]
     tooltip: Option<Box<dyn Fn(&mut Window, &mut App) -> AnyView + 'static>>,
+    #[allow(clippy::type_complexity)]
     on_click: Option<Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
+    #[allow(clippy::type_complexity)]
     on_hover: Option<Box<dyn Fn(&bool, &mut Window, &mut App) + 'static>>,
+    #[allow(clippy::type_complexity)]
     on_toggle: Option<Arc<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
+    #[allow(clippy::type_complexity)]
     on_secondary_mouse_down: Option<Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App) + 'static>>,
     tab_index: Option<isize>,
     focus_handle: Option<gpui::FocusHandle>,

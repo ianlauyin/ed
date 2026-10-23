@@ -2762,7 +2762,7 @@ impl From<i32> for DevicePixels {
 
 impl From<u32> for DevicePixels {
     fn from(device_pixels: u32) -> Self {
-        DevicePixels(device_pixels as i32)
+        DevicePixels(device_pixels.cast_signed())
     }
 }
 
@@ -2780,7 +2780,7 @@ impl From<DevicePixels> for u64 {
 
 impl From<u64> for DevicePixels {
     fn from(device_pixels: u64) -> Self {
-        DevicePixels(device_pixels as i32)
+        DevicePixels((device_pixels as u32).cast_signed())
     }
 }
 
@@ -2792,7 +2792,7 @@ impl From<DevicePixels> for usize {
 
 impl From<usize> for DevicePixels {
     fn from(device_pixels: usize) -> Self {
-        DevicePixels(device_pixels as i32)
+        DevicePixels((device_pixels as u32).cast_signed())
     }
 }
 

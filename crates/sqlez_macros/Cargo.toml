@@ -15,6 +15,4 @@ test = false
 
 [dependencies]
 syn.workspace = true
-
-[target.'cfg(not(any(target_os = "linux", target_os = "freebsd")))'.dependencies]
 sqlez.workspace = true

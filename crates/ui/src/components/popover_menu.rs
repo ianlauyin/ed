@@ -77,8 +77,10 @@ impl<M> Default for PopoverMenuHandle<M> {
 }
 
 struct PopoverMenuHandleState<M> {
+    #[allow(clippy::type_complexity)]
     menu_builder: Rc<dyn Fn(&mut Window, &mut App) -> Option<Entity<M>>>,
     menu: Rc<RefCell<Option<Entity<M>>>>,
+    #[allow(clippy::type_complexity)]
     on_open: Option<Rc<dyn Fn(&mut Window, &mut App)>>,
 }
 
@@ -117,6 +119,7 @@ impl<M: ManagedView> PopoverMenuHandle<M> {
         })
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn refresh_menu(
         &self,
         window: &mut Window,
@@ -138,6 +141,7 @@ impl<M: ManagedView> PopoverMenuHandle<M> {
 
 pub struct PopoverMenu<M: ManagedView> {
     id: ElementId,
+    #[allow(clippy::type_complexity)]
     child_builder: Option<
         Box<
             dyn FnOnce(
@@ -147,11 +151,13 @@ pub struct PopoverMenu<M: ManagedView> {
                 + 'static,
         >,
     >,
+    #[allow(clippy::type_complexity)]
     menu_builder: Option<Rc<dyn Fn(&mut Window, &mut App) -> Option<Entity<M>> + 'static>>,
     anchor: Anchor,
     attach: Option<Anchor>,
     offset: Option<Point<Pixels>>,
     trigger_handle: Option<PopoverMenuHandle<M>>,
+    #[allow(clippy::type_complexity)]
     on_open: Option<Rc<dyn Fn(&mut Window, &mut App)>>,
     full_width: bool,
 }
@@ -239,6 +245,7 @@ impl<M: ManagedView> PopoverMenu<M> {
     }
 
     /// Attaches something upon opening the menu.
+    #[allow(clippy::type_complexity)]
     pub fn on_open(mut self, on_open: Rc<dyn Fn(&mut Window, &mut App)>) -> Self {
         self.on_open = Some(on_open);
         self
@@ -270,6 +277,7 @@ impl<M: ManagedView> PopoverMenu<M> {
     }
 }
 
+#[allow(clippy::type_complexity)]
 fn show_menu<M: ManagedView>(
     builder: &Rc<dyn Fn(&mut Window, &mut App) -> Option<Entity<M>>>,
     menu: &Rc<RefCell<Option<Entity<M>>>>,

@@ -237,22 +237,22 @@ pub(crate) const EVENTMODELING_TOKENS: &[TokenType] = &[
 ];
 
 /// `tf` or `timeframe`.
-fn is_time_frame(kind: u16) -> bool {
+const fn is_time_frame(kind: u16) -> bool {
     matches!(kind, t::TF | t::TIMEFRAME)
 }
 
 /// `rf` or `resetframe`.
-fn is_reset_frame(kind: u16) -> bool {
+const fn is_reset_frame(kind: u16) -> bool {
     matches!(kind, t::RF | t::RESETFRAME)
 }
 
 /// A model entity type keyword.
-fn is_entity_type(kind: u16) -> bool {
+const fn is_entity_type(kind: u16) -> bool {
     matches!(kind, t::RMO | t::READMODEL | t::UI | t::CMD | t::COMMAND | t::EVT | t::EVENT | t::PCR | t::PROCESSOR)
 }
 
 /// A data type keyword.
-fn is_data_type(kind: u16) -> bool {
+const fn is_data_type(kind: u16) -> bool {
     matches!(kind, t::JSON | t::JSOBJ | t::FIGMA | t::SALT | t::URI | t::MD | t::HTML | t::TEXT)
 }
 

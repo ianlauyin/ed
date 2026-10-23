@@ -39,8 +39,10 @@ struct BlockRenderer {
     style: MarkdownStyle,
     show_code_block_copy_button: bool,
     render_code_block: Option<CodeBlockRenderFn>,
+    #[allow(clippy::type_complexity)]
     on_url_click: Option<Rc<dyn Fn(SharedString, &mut Window, &mut App)>>,
     on_checkbox_toggle: Option<CheckboxToggleCallback>,
+    #[allow(clippy::type_complexity)]
     image_resolver: Option<Box<dyn Fn(&str, &App) -> Option<ImageSource>>>,
     show_root_block_markers: bool,
 }

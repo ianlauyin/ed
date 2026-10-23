@@ -227,6 +227,7 @@ pub trait PickerDelegate: Sized + 'static {
     }
 
     // Allows binding some optional effect to when the selection changes.
+    #[allow(clippy::type_complexity)]
     fn selected_index_changed(
         &self,
         _ix: usize,

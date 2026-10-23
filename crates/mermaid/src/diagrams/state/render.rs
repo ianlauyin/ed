@@ -74,7 +74,7 @@ enum K {
 
 impl K {
     /// The classes of the drawn element, or `None` for kinds that draw no element of their own.
-    fn classes(self) -> Option<&'static str> {
+    const fn classes(self) -> Option<&'static str> {
         match self {
             Self::State | Self::Described => Some("ondine-node ondine-state"),
             Self::Start => Some("ondine-node ondine-state-start"),
@@ -155,7 +155,7 @@ fn inner_dir(views: &[View<'_>], composite: usize) -> Dir {
     direction(node_of(views, composite).and_then(|node| node.dir))
 }
 
-fn vertical(dir: Option<Dir>) -> bool {
+const fn vertical(dir: Option<Dir>) -> bool {
     matches!(dir, Some(Dir::Tb | Dir::Bt))
 }
 
@@ -195,7 +195,7 @@ fn or_one(value: f64) -> f64 {
 }
 
 #[expect(clippy::cast_precision_loss, reason = "counts stay far below 2^52")]
-fn to_f64(value: usize) -> f64 {
+const fn to_f64(value: usize) -> f64 {
     value as f64
 }
 
@@ -218,7 +218,7 @@ fn rect(x: f64, y: f64, w: f64, h: f64, rest: &str) -> String {
     out
 }
 
-fn group(dir: Dir, pad_x: f64, pad_top: f64, pad_bottom: f64) -> CNode {
+const fn group(dir: Dir, pad_x: f64, pad_top: f64, pad_bottom: f64) -> CNode {
     let mut c = cnode(0.0, 0.0, -1);
     c.is_group = true;
     c.dir = Some(dir);
@@ -988,11 +988,10 @@ fn draw(db: &StateDb, config: &Value, options: &Options, turned: bool) -> Render
             let last = route.len().saturating_sub(3);
             let leaves = reach.of(src, end_side(&route, 0, src_node));
             let arrives = reach.of(dst, end_side(&route, last, dst_node));
-            for point in route.chunks_exact_mut(3) {
-                if let [x, y, _] = point {
-                    *x += pad;
-                    *y += pad;
-                }
+            for point in route.as_chunks_mut::<3>().0 {
+                let [x, y, _] = point;
+                *x += pad;
+                *y += pad;
             }
             frame.attach(&mut route, 0, src);
             frame.attach(&mut route, last, dst);

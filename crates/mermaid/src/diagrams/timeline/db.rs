@@ -81,7 +81,7 @@ impl TimelineDb {
     }
 
     /// Sets the direction: `LR` or `TD`.
-    pub(crate) fn set_direction(&mut self, direction: &'static str) {
+    pub(crate) const fn set_direction(&mut self, direction: &'static str) {
         self.direction = direction;
     }
 

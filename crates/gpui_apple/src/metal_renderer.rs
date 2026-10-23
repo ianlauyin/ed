@@ -868,7 +868,10 @@ impl MetalRenderer {
         let Some(texture) = self.sprite_atlas.metal_texture(texture_id) else {
             return;
         };
-        let texture_size = size(DevicePixels(texture.width() as i32), DevicePixels(texture.height() as i32));
+        let texture_size = size(
+            DevicePixels((texture.width() as u32).cast_signed()),
+            DevicePixels((texture.height() as u32).cast_signed()),
+        );
         command_encoder.setRenderPipelineState(&self.monochrome_sprites_pipeline_state);
         unsafe {
             command_encoder.setVertexBuffer_offset_atIndex(
@@ -921,7 +924,10 @@ impl MetalRenderer {
         let Some(texture) = self.sprite_atlas.metal_texture(texture_id) else {
             return;
         };
-        let texture_size = size(DevicePixels(texture.width() as i32), DevicePixels(texture.height() as i32));
+        let texture_size = size(
+            DevicePixels((texture.width() as u32).cast_signed()),
+            DevicePixels((texture.height() as u32).cast_signed()),
+        );
         command_encoder.setRenderPipelineState(&self.polychrome_sprites_pipeline_state);
         unsafe {
             command_encoder.setVertexBuffer_offset_atIndex(

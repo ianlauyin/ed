@@ -1,18 +1,26 @@
-use gpui::{App, Context, WeakEntity, Window};
-use notifications::status_toast::StatusToast;
 use std::sync::Arc;
-use ui::{Color, Icon, IconName, IconSize, SharedString};
-use util::ResultExt;
-use workspace::{self, Workspace};
 
+use gpui::App;
+use gpui::Context;
+use gpui::WeakEntity;
+use gpui::Window;
+use notifications::status_toast::StatusToast;
+use ui::Color;
+use ui::Icon;
+use ui::IconName;
+use ui::IconSize;
+use ui::SharedString;
+use util::ResultExt;
+use workspace::Workspace;
+use workspace::{self};
+
+#[allow(clippy::type_complexity)]
 pub fn clone_and_open(
     repo_url: SharedString,
     workspace: WeakEntity<Workspace>,
     window: &mut Window,
     cx: &mut App,
-    on_success: Arc<
-        dyn Fn(&mut Workspace, &mut Window, &mut Context<Workspace>) + Send + Sync + 'static,
-    >,
+    on_success: Arc<dyn Fn(&mut Workspace, &mut Window, &mut Context<Workspace>) + Send + Sync + 'static>,
 ) {
     let destination_prompt = cx.prompt_for_paths(gpui::PathPromptOptions {
         files: false,
@@ -38,9 +46,7 @@ pub fn clone_and_open(
                     let fs = workspace.app_state().fs.clone();
                     let destination_dir = destination_dir.clone();
                     let repo_url = repo_url.clone();
-                    cx.spawn(async move |_workspace, _cx| {
-                        fs.git_clone(destination_dir.as_path(), &repo_url).await
-                    })
+                    cx.spawn(async move |_workspace, _cx| fs.git_clone(destination_dir.as_path(), &repo_url).await)
                 })
                 .ok()?;
 
@@ -48,12 +54,8 @@ pub fn clone_and_open(
                 workspace
                     .update(cx, |workspace, cx| {
                         let toast = StatusToast::new(error.to_string(), cx, |this, _| {
-                            this.icon(
-                                Icon::new(IconName::XCircle)
-                                    .size(IconSize::Small)
-                                    .color(Color::Error),
-                            )
-                            .dismiss_button(true)
+                            this.icon(Icon::new(IconName::XCircle).size(IconSize::Small).color(Color::Error))
+                                .dismiss_button(true)
                         });
                         workspace.toggle_status_toast(toast, cx);
                     })
@@ -62,9 +64,7 @@ pub fn clone_and_open(
             }
 
             let has_worktrees = workspace
-                .read_with(cx, |workspace, cx| {
-                    workspace.project().read(cx).worktrees(cx).next().is_some()
-                })
+                .read_with(cx, |workspace, cx| workspace.project().read(cx).worktrees(cx).next().is_some())
                 .ok()?;
 
             let prompt_answer = if has_worktrees {
@@ -91,9 +91,9 @@ pub fn clone_and_open(
                 0 => {
                     workspace
                         .update_in(cx, |workspace, window, cx| {
-                            let create_task = workspace.project().update(cx, |project, cx| {
-                                project.create_worktree(destination_dir.as_path(), true, cx)
-                            });
+                            let create_task = workspace
+                                .project()
+                                .update(cx, |project, cx| project.create_worktree(destination_dir.as_path(), true, cx));
 
                             let workspace_weak = cx.weak_entity();
                             let on_success = on_success.clone();
@@ -117,35 +117,25 @@ pub fn clone_and_open(
                             let destination_path = destination_dir.clone();
                             let on_success = on_success.clone();
 
-                            workspace::open_new(
-                                Default::default(),
-                                app_state,
-                                cx,
-                                move |workspace, window, cx| {
-                                    cx.activate(true);
+                            workspace::open_new(Default::default(), app_state, cx, move |workspace, window, cx| {
+                                cx.activate(true);
 
-                                    let create_task =
-                                        workspace.project().update(cx, |project, cx| {
-                                            project.create_worktree(
-                                                destination_path.as_path(),
-                                                true,
-                                                cx,
-                                            )
-                                        });
+                                let create_task = workspace.project().update(cx, |project, cx| {
+                                    project.create_worktree(destination_path.as_path(), true, cx)
+                                });
 
-                                    let workspace_weak = cx.weak_entity();
-                                    cx.spawn_in(window, async move |_window, cx| {
-                                        if create_task.await.log_err().is_some() {
-                                            workspace_weak
-                                                .update_in(cx, |workspace, window, cx| {
-                                                    (on_success)(workspace, window, cx);
-                                                })
-                                                .ok();
-                                        }
-                                    })
-                                    .detach();
-                                },
-                            )
+                                let workspace_weak = cx.weak_entity();
+                                cx.spawn_in(window, async move |_window, cx| {
+                                    if create_task.await.log_err().is_some() {
+                                        workspace_weak
+                                            .update_in(cx, |workspace, window, cx| {
+                                                (on_success)(workspace, window, cx);
+                                            })
+                                            .ok();
+                                    }
+                                })
+                                .detach();
+                            })
                             .detach();
                         })
                         .ok();

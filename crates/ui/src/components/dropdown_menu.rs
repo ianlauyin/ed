@@ -29,6 +29,7 @@ pub struct DropdownMenu {
     id: ElementId,
     label: LabelKind,
     trigger_size: ButtonSize,
+    #[allow(clippy::type_complexity)]
     trigger_tooltip: Option<Box<dyn Fn(&mut Window, &mut App) -> AnyView + 'static>>,
     trigger_icon: Option<IconName>,
     style: DropdownStyle,

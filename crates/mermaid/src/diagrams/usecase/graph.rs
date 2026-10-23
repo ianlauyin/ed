@@ -200,7 +200,7 @@ fn class_list<'a>(names: impl IntoIterator<Item = &'a str>) -> String {
 }
 
 /// The start and end markers of a relationship.
-fn markers(relationship: &Relationship) -> (&'static str, &'static str) {
+const fn markers(relationship: &Relationship) -> (&'static str, &'static str) {
     match relationship.r#type {
         RelationshipType::Generalization => ("none", "extension"),
         RelationshipType::Include | RelationshipType::Extend => ("none", "arrow_point"),

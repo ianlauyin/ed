@@ -193,7 +193,7 @@ fn is_html_tag(tag: &str) -> bool {
 
 /// Whether `c` is Chinese or Japanese, where a line may break between any two characters.
 /// Hangul is left out: Korean puts spaces between words.
-fn is_cjk(c: char) -> bool {
+const fn is_cjk(c: char) -> bool {
     matches!(c, '\u{2e80}'..='\u{9fff}' | '\u{f900}'..='\u{faff}' | '\u{ff00}'..='\u{ff60}')
 }
 
@@ -208,7 +208,7 @@ fn is_open(c: char) -> bool {
 }
 
 /// Whether `c` is a break hint: a zero-width space or a soft hyphen.
-fn is_hint(c: char) -> bool {
+const fn is_hint(c: char) -> bool {
     c == '\u{200b}' || c == SHY
 }
 

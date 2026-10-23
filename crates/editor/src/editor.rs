@@ -1115,6 +1115,7 @@ pub struct Editor {
     style: Option<EditorStyle>,
     text_style_refinement: Option<TextStyleRefinement>,
     next_editor_action_id: EditorActionId,
+    #[allow(clippy::type_complexity)]
     editor_actions: Rc<RefCell<BTreeMap<EditorActionId, Box<dyn Fn(&Editor, &mut Window, &mut Context<Self>)>>>>,
     use_autoclose: bool,
     use_auto_surround: bool,
@@ -1125,6 +1126,7 @@ pub struct Editor {
     buffer_serialization: Option<BufferSerialization>,
     blame: Option<Entity<GitBlame>>,
     blame_subscription: Option<Subscription>,
+    #[allow(clippy::type_complexity)]
     custom_context_menu: Option<
         Box<
             dyn 'static
@@ -1179,6 +1181,7 @@ pub struct Editor {
     folding_newlines: Task<()>,
     select_next_options: Option<SelectSearchOptions>,
     pub lookup_key: Option<Box<dyn Any + Send + Sync>>,
+    #[allow(clippy::type_complexity)]
     on_local_selections_changed: Option<Box<dyn Fn(Point, &mut Window, &mut Context<Self>) + 'static>>,
     suppress_selection_callback: bool,
     applicable_language_settings: HashMap<Option<LanguageName>, Arc<LanguageSettings>>,
@@ -3697,7 +3700,7 @@ impl Editor {
                     let is_end_tabstop = tabstop
                         .ranges
                         .first()
-                        .is_some_and(|tabstop| tabstop.is_empty() && tabstop.start == snippet.text.len() as isize);
+                        .is_some_and(|tabstop| tabstop.is_empty() && tabstop.start == snippet.text.len().cast_signed());
                     let mut tabstop_ranges = tabstop
                         .ranges
                         .iter()
@@ -3705,8 +3708,8 @@ impl Editor {
                             let mut delta = 0_isize;
                             insertion_ranges.iter().map(move |insertion_range| {
                                 let insertion_start = insertion_range.start + delta;
-                                delta += snippet.text.len() as isize
-                                    - (insertion_range.end - insertion_range.start) as isize;
+                                delta += snippet.text.len().cast_signed()
+                                    - (insertion_range.end - insertion_range.start).cast_signed();
 
                                 let start = (insertion_start + tabstop_range.start).min(snapshot.len());
                                 let end = (insertion_start + tabstop_range.end).min(snapshot.len());
@@ -4808,10 +4811,12 @@ impl Editor {
                     .iter()
                     .zip(selected_texts.iter())
                     .map(|(selection, new_text)| {
-                        let old_len = (selection.end.0 - selection.start.0) as i64;
-                        let new_len = new_text.len() as i64;
-                        let adjusted_start = MultiBufferOffset((selection.start.0 as i64 + offset_delta) as usize);
-                        let adjusted_end = MultiBufferOffset((adjusted_start.0 as i64 + new_len) as usize);
+                        let old_len = ((selection.end.0 - selection.start.0) as u64).cast_signed();
+                        let new_len = (new_text.len() as u64).cast_signed();
+                        let adjusted_start =
+                            MultiBufferOffset(((selection.start.0 as u64).cast_signed() + offset_delta) as usize);
+                        let adjusted_end =
+                            MultiBufferOffset(((adjusted_start.0 as u64).cast_signed() + new_len) as usize);
 
                         new_selections.push(Selection {
                             id: selection.id,
@@ -5704,6 +5709,7 @@ impl Editor {
         });
     }
 
+    #[allow(clippy::type_complexity)]
     fn restore_selections(
         &mut self,
         selections: Option<(Arc<[Selection<Anchor>]>, Option<AddSelectionsState>)>,
@@ -5907,7 +5913,7 @@ impl Editor {
                                 move |cx: &mut BlockContext| {
                                     let mut text_style = cx.editor_style.text.clone();
                                     if let Some(highlight_style) =
-                                        old_highlight_id.and_then(|h| cx.editor_style.syntax.get(h).cloned())
+                                        old_highlight_id.and_then(|h| cx.editor_style.syntax.get(h).copied())
                                     {
                                         text_style = text_style.highlight(highlight_style);
                                     }
@@ -7669,6 +7675,7 @@ impl Editor {
         Self::open_buffers_in_workspace(workspace.downgrade(), new_selections_by_buffer, split, window, cx);
     }
 
+    #[allow(clippy::type_complexity)]
     pub(crate) fn open_buffers_in_workspace(
         workspace: WeakEntity<Workspace>,
         new_selections_by_buffer: HashMap<Entity<language::Buffer>, (Vec<Range<BufferOffset>>, Option<u32>)>,
@@ -7772,14 +7779,14 @@ impl Editor {
     ) -> Vec<Range<MultiBufferOffsetUtf16>> {
         let selections = self.selections.all::<MultiBufferOffsetUtf16>(&self.display_snapshot(cx));
         let newest_selection = selections.iter().max_by_key(|selection| selection.id).unwrap();
-        let start_delta = range.start.0.0 as isize - newest_selection.start.0.0 as isize;
-        let end_delta = range.end.0.0 as isize - newest_selection.end.0.0 as isize;
+        let start_delta = range.start.0.0.cast_signed() - newest_selection.start.0.0.cast_signed();
+        let end_delta = range.end.0.0.cast_signed() - newest_selection.end.0.0.cast_signed();
         let snapshot = self.buffer.read(cx).read(cx);
         selections
             .into_iter()
             .map(|mut selection| {
-                selection.start.0.0 = (selection.start.0.0 as isize).saturating_add(start_delta) as usize;
-                selection.end.0.0 = (selection.end.0.0 as isize).saturating_add(end_delta) as usize;
+                selection.start.0.0 = selection.start.0.0.cast_signed().saturating_add(start_delta) as usize;
+                selection.end.0.0 = selection.end.0.0.cast_signed().saturating_add(end_delta) as usize;
                 snapshot.clip_offset_utf16(selection.start, Bias::Left)
                     ..snapshot.clip_offset_utf16(selection.end, Bias::Right)
             })
@@ -7965,6 +7972,7 @@ impl Editor {
         )
     }
 
+    #[allow(clippy::type_complexity)]
     fn register_action_erased(
         &mut self,
         action_type: TypeId,
@@ -8570,6 +8578,7 @@ pub trait SemanticsProvider {
         cx: &mut App,
     ) -> Option<HashMap<Range<BufferRow>, Task<Result<CacheInlayHints>>>>;
 
+    #[allow(clippy::type_complexity)]
     fn semantic_tokens(
         &self,
         buffer: Entity<Buffer>,
@@ -9321,7 +9330,7 @@ pub fn styled_runs_for_code_label<'a>(
             HighlightStyle { color: Some(local_player.cursor), ..Default::default() }
         } else if *highlight_id == language::HighlightId::TABSTOP_REPLACE_ID {
             HighlightStyle { background_color: Some(local_player.selection), ..Default::default() }
-        } else if let Some(style) = syntax_theme.get(*highlight_id).cloned() {
+        } else if let Some(style) = syntax_theme.get(*highlight_id).copied() {
             style
         } else {
             return Default::default();

@@ -383,6 +383,7 @@ async fn fetch_remote_for_worktree_base(
 /// so we create the new worktree only once and remap every contributing
 /// work directory onto it. Without this dedup, the second `git worktree add`
 /// fails with "already exists".
+#[allow(clippy::type_complexity)]
 fn start_worktree_creations(
     git_repos: &[Entity<Repository>],
     worktree_name: Option<String>,
@@ -918,17 +919,19 @@ async fn open_worktree_workspace(
         let active_workspace = multi_workspace.workspace().clone();
         let modal_workspace = active_workspace.clone();
 
-        let init: Option<Box<dyn FnOnce(&mut Workspace, &mut gpui::Window, &mut gpui::Context<Workspace>) + Send>> =
-            if transfer_state {
-                let dock_structure = previous_state.dock_structure;
-                Some(Box::new(
-                    move |workspace: &mut Workspace, window: &mut gpui::Window, cx: &mut gpui::Context<Workspace>| {
-                        workspace.set_dock_structure(dock_structure, window, cx);
-                    },
-                ))
-            } else {
-                None
-            };
+        #[allow(clippy::type_complexity)]
+        let init: Option<
+            Box<dyn FnOnce(&mut Workspace, &mut gpui::Window, &mut gpui::Context<Workspace>) + Send>,
+        > = if transfer_state {
+            let dock_structure = previous_state.dock_structure;
+            Some(Box::new(
+                move |workspace: &mut Workspace, window: &mut gpui::Window, cx: &mut gpui::Context<Workspace>| {
+                    workspace.set_dock_structure(dock_structure, window, cx);
+                },
+            ))
+        } else {
+            None
+        };
 
         let task = multi_workspace.find_or_create_workspace(
             path_list,

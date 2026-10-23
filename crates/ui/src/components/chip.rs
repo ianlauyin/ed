@@ -27,6 +27,7 @@ pub struct Chip {
     border_color: Option<Hsla>,
     height: Option<Pixels>,
     truncate: bool,
+    #[allow(clippy::type_complexity)]
     tooltip: Option<Box<dyn Fn(&mut Window, &mut App) -> AnyView + 'static>>,
 }
 

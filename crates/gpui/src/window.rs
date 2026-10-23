@@ -2945,7 +2945,7 @@ impl Window {
     }
 
     /// Produces a new frame and assigns it to `rendered_frame`. To actually show
-    /// the contents of the new [`Scene`], use [`Self::present`].
+    /// the contents of the new [`Scene`], the window must present it.
     pub fn draw(&mut self, cx: &mut App) -> ArenaClearNeeded {
         // Set up the per-App arena for element allocation during this draw.
         // This ensures that multiple test Apps have isolated arenas.
@@ -3575,7 +3575,7 @@ impl Window {
         self.invalidator.debug_assert_paint_or_prepaint();
         self.content_mask_stack
             .last()
-            .cloned()
+            .copied()
             .unwrap_or_else(|| ContentMask { bounds: Bounds { origin: Point::default(), size: self.viewport_size } })
     }
 

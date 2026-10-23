@@ -11,17 +11,17 @@ use crate::util::chars::is_blank;
 use crate::util::chars::is_space;
 
 /// `[─━│┃└┗├┣]`.
-fn is_box(c: char) -> bool {
+const fn is_box(c: char) -> bool {
     matches!(c, '─' | '━' | '│' | '┃' | '└' | '┗' | '├' | '┣')
 }
 
 /// `[└┗├┣]`.
-fn is_branch(c: char) -> bool {
+const fn is_branch(c: char) -> bool {
     matches!(c, '└' | '┗' | '├' | '┣')
 }
 
 /// `[─━]`.
-fn is_dash(c: char) -> bool {
+const fn is_dash(c: char) -> bool {
     matches!(c, '─' | '━')
 }
 

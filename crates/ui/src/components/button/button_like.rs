@@ -478,10 +478,14 @@ pub struct ButtonLike {
     tab_index: Option<isize>,
     size: ButtonSize,
     rounding: Option<ButtonLikeRounding>,
+    #[allow(clippy::type_complexity)]
     tooltip: Option<Box<dyn Fn(&mut Window, &mut App) -> AnyView>>,
+    #[allow(clippy::type_complexity)]
     hoverable_tooltip: Option<Box<dyn Fn(&mut Window, &mut App) -> AnyView>>,
     cursor_style: CursorStyle,
+    #[allow(clippy::type_complexity)]
     on_click: Option<Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
+    #[allow(clippy::type_complexity)]
     on_right_click: Option<Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
     children: SmallVec<[AnyElement; 2]>,
     focus_handle: Option<FocusHandle>,

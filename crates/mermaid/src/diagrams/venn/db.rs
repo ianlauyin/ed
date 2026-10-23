@@ -118,12 +118,12 @@ impl VennDb {
     }
 
     /// Whether an indented `text` line belongs to the set or union before it.
-    pub(crate) fn indent_mode(&self) -> bool {
+    pub(crate) const fn indent_mode(&self) -> bool {
         self.indent
     }
 
     /// Sets whether an indented `text` line belongs to the set or union before it.
-    pub(crate) fn set_indent_mode(&mut self, enabled: bool) {
+    pub(crate) const fn set_indent_mode(&mut self, enabled: bool) {
         self.indent = enabled;
     }
 }

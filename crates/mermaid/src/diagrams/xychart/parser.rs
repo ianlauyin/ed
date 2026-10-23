@@ -9,7 +9,7 @@ use crate::error::Error;
 use crate::text::label::trim;
 
 /// Tokens that continue a text.
-fn is_word(t: T) -> bool {
+const fn is_word(t: T) -> bool {
     matches!(
         t,
         T::Amp | T::Num | T::Alpha | T::Plus | T::Equals | T::Mult | T::Dot | T::Brkt | T::Minus | T::Underscore
@@ -17,7 +17,7 @@ fn is_word(t: T) -> bool {
 }
 
 /// Tokens that end a statement.
-fn is_eol(t: T) -> bool {
+const fn is_eol(t: T) -> bool {
     matches!(t, T::Newline | T::Semi | T::Eof)
 }
 

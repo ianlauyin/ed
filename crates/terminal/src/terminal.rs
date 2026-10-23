@@ -1755,7 +1755,7 @@ impl Terminal {
     //- Editor search snapping behavior
 
     pub fn activate_match(&mut self, index: usize) {
-        if let Some(search_match) = self.matches.get(index).cloned() {
+        if let Some(search_match) = self.matches.get(index).copied() {
             self.set_selection(Some(Selection::simple_range(search_match)));
             if self.vi_mode_enabled {
                 self.events.push_back(InternalEvent::MoveViCursorToPoint(search_match.end()));
@@ -1767,7 +1767,7 @@ impl Terminal {
 
     pub fn select_matches(&mut self, matches: &[Range]) {
         let matches_to_select =
-            self.matches.iter().filter(|self_match| matches.contains(self_match)).cloned().collect::<Vec<_>>();
+            self.matches.iter().filter(|self_match| matches.contains(self_match)).copied().collect::<Vec<_>>();
         for match_to_select in matches_to_select {
             self.set_selection(Some(Selection::simple_range(match_to_select)));
         }
@@ -1801,7 +1801,7 @@ impl Terminal {
     }
 
     pub fn scroll_up_by(&mut self, lines: usize) {
-        self.events.push_back(InternalEvent::Scroll(Scroll::Delta(lines as i32)));
+        self.events.push_back(InternalEvent::Scroll(Scroll::Delta((lines as u32).cast_signed())));
     }
 
     pub fn scroll_line_down(&mut self) {
@@ -1809,7 +1809,7 @@ impl Terminal {
     }
 
     pub fn scroll_down_by(&mut self, lines: usize) {
-        self.events.push_back(InternalEvent::Scroll(Scroll::Delta(-(lines as i32))));
+        self.events.push_back(InternalEvent::Scroll(Scroll::Delta(-((lines as u32).cast_signed()))));
     }
 
     pub fn scroll_page_up(&mut self) {
@@ -2333,42 +2333,40 @@ impl Terminal {
             if let Some(bytes) = bytes {
                 self.write_to_pty(bytes);
             }
-        } else {
-            if e.button == MouseButton::Left {
-                self.mouse_down_position = Some(e.position);
-                let (point, side) =
-                    grid_point_and_side(position, self.last_content.terminal_bounds, self.last_content.display_offset);
+        } else if e.button == MouseButton::Left {
+            self.mouse_down_position = Some(e.position);
+            let (point, side) =
+                grid_point_and_side(position, self.last_content.terminal_bounds, self.last_content.display_offset);
 
-                let selection_type = match e.click_count {
-                    0 => return, //This is a release
-                    1 => Some(SelectionType::Simple),
-                    2 => Some(SelectionType::Semantic),
-                    3 => Some(SelectionType::Lines),
-                    _ => None,
-                };
+            let selection_type = match e.click_count {
+                0 => return, //This is a release
+                1 => Some(SelectionType::Simple),
+                2 => Some(SelectionType::Semantic),
+                3 => Some(SelectionType::Lines),
+                _ => None,
+            };
 
-                if selection_type == Some(SelectionType::Simple) && e.modifiers.shift {
-                    if self.last_content.selection.is_some() {
-                        // Shift+click extends the existing selection to this point.
-                        self.events.push_back(InternalEvent::UpdateSelection(position));
-                    } else {
-                        // With no selection yet, Shift is the escape hatch for
-                        // selecting text while an app has mouse tracking enabled,
-                        // so anchor a selection here for the drag to extend.
-                        self.events.push_back(InternalEvent::SetSelection(Some(Selection::new(
-                            SelectionType::Simple,
-                            point,
-                            side,
-                        ))));
-                    }
-                    return;
+            if selection_type == Some(SelectionType::Simple) && e.modifiers.shift {
+                if self.last_content.selection.is_some() {
+                    // Shift+click extends the existing selection to this point.
+                    self.events.push_back(InternalEvent::UpdateSelection(position));
+                } else {
+                    // With no selection yet, Shift is the escape hatch for
+                    // selecting text while an app has mouse tracking enabled,
+                    // so anchor a selection here for the drag to extend.
+                    self.events.push_back(InternalEvent::SetSelection(Some(Selection::new(
+                        SelectionType::Simple,
+                        point,
+                        side,
+                    ))));
                 }
+                return;
+            }
 
-                let selection = selection_type.map(|selection_type| Selection::new(selection_type, point, side));
+            let selection = selection_type.map(|selection_type| Selection::new(selection_type, point, side));
 
-                if let Some(selection) = selection {
-                    self.events.push_back(InternalEvent::SetSelection(Some(selection)));
-                }
+            if let Some(selection) = selection {
+                self.events.push_back(InternalEvent::SetSelection(Some(selection)));
             }
         }
     }

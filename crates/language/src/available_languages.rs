@@ -175,6 +175,7 @@ impl AvailableLanguages {
         })
     }
 
+    #[allow(clippy::type_complexity)]
     pub(super) fn find_for_file(
         &self,
         filename: Option<&str>,

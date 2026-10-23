@@ -86,6 +86,7 @@ async fn lsp_task_context(
     })
 }
 
+#[allow(clippy::type_complexity)]
 pub fn lsp_tasks(
     project: Entity<Project>,
     task_sources: &HashMap<LanguageServerName, Vec<BufferId>>,

@@ -24,7 +24,7 @@ use crate::text::label::trim;
 const SIGNAL_TOKENS: &str = "'SOLID_OPEN_ARROW', 'DOTTED_OPEN_ARROW', 'SOLID_ARROW', 'DOTTED_ARROW', 'SOLID_CROSS', 'DOTTED_CROSS', 'SOLID_POINT', 'DOTTED_POINT'";
 
 /// The message kind of an arrow token.
-fn signal_of(kind: T) -> Option<u8> {
+const fn signal_of(kind: T) -> Option<u8> {
     Some(match kind {
         T::SolidOpenArrow => line::SOLID_OPEN,
         T::DottedOpenArrow => line::DOTTED_OPEN,

@@ -292,6 +292,7 @@ pub struct CompletionsMenu {
     resolve_completions: bool,
     show_completion_documentation: bool,
     last_rendered_range: Rc<RefCell<Option<Range<usize>>>>,
+    #[allow(clippy::type_complexity)]
     markdown_cache: Rc<RefCell<VecDeque<(MarkdownCacheKey, Entity<Markdown>)>>>,
     language_registry: Option<Arc<LanguageRegistry>>,
     language: Option<LanguageName>,
@@ -1605,6 +1606,7 @@ const fn completion_kind_highlight_name(kind: CompletionItemKind) -> Option<&'st
     })
 }
 
+#[allow(clippy::type_complexity)]
 fn split_completion_label<'a>(
     text: &'a str,
     filter_range: &Range<usize>,

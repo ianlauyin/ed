@@ -286,7 +286,7 @@ impl WardleyBuilder {
     }
 
     /// Places the annotation list.
-    pub(crate) fn set_annotations_box(&mut self, x: f64, y: f64) {
+    pub(crate) const fn set_annotations_box(&mut self, x: f64, y: f64) {
         self.result.annotations_box = Some((x, y));
     }
 
@@ -296,7 +296,7 @@ impl WardleyBuilder {
     }
 
     /// Sets the size.
-    pub(crate) fn set_size(&mut self, width: f64, height: f64) {
+    pub(crate) const fn set_size(&mut self, width: f64, height: f64) {
         self.result.size = Some((width, height));
     }
 

@@ -27,6 +27,7 @@ pub struct ListHeader {
     end_hover_slot: Option<AnyElement>,
     toggle: Option<bool>,
     disclosure_shape: Option<IconButtonShape>,
+    #[allow(clippy::type_complexity)]
     on_toggle: Option<Arc<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
     inset: bool,
     selected: bool,

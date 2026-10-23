@@ -68,7 +68,9 @@ pub struct Checkbox {
     label: Option<SharedString>,
     label_size: LabelSize,
     label_color: Color,
+    #[allow(clippy::type_complexity)]
     tooltip: Option<Box<dyn Fn(&mut Window, &mut App) -> AnyView>>,
+    #[allow(clippy::type_complexity)]
     on_click: Option<Box<dyn Fn(&ToggleState, &ClickEvent, &mut Window, &mut App) + 'static>>,
 }
 
@@ -314,6 +316,7 @@ pub struct Switch {
     id: ElementId,
     toggle_state: ToggleState,
     disabled: bool,
+    #[allow(clippy::type_complexity)]
     on_click: Option<Rc<dyn Fn(&ToggleState, &mut Window, &mut App) + 'static>>,
     label: Option<SharedString>,
     label_position: Option<SwitchLabelPosition>,
@@ -514,9 +517,11 @@ pub struct SwitchField {
     label: Option<SharedString>,
     description: Option<SharedString>,
     toggle_state: ToggleState,
+    #[allow(clippy::type_complexity)]
     on_click: Arc<dyn Fn(&ToggleState, &mut Window, &mut App) + 'static>,
     disabled: bool,
     color: SwitchColor,
+    #[allow(clippy::type_complexity)]
     tooltip: Option<Rc<dyn Fn(&mut Window, &mut App) -> AnyView>>,
     tab_index: Option<isize>,
 }

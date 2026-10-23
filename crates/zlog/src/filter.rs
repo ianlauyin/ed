@@ -202,7 +202,7 @@ impl ScopeMap {
             Some((scope_str.as_str(), level_filter))
         });
 
-        let all_filters = default_filters.iter().cloned().chain(env_filters).chain(new_filters);
+        let all_filters = default_filters.iter().copied().chain(env_filters).chain(new_filters);
 
         for (scope_str, level_filter) in all_filters {
             if scope_str.contains("::") {

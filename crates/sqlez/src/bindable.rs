@@ -1,11 +1,12 @@
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
 
-use anyhow::{Context as _, Result};
+use anyhow::Context as _;
+use anyhow::Result;
 
-use crate::statement::{SqlType, Statement};
+use crate::statement::SqlType;
+use crate::statement::Statement;
 
 /// Define the number of columns that a type occupies in a query/database
 pub trait StaticColumnCount {
@@ -122,8 +123,7 @@ impl Column for f32 {
     fn column(statement: &mut Statement, start_index: i32) -> Result<(Self, i32)> {
         let result = statement
             .column_double(start_index)
-            .with_context(|| format!("Failed to parse f32 at index {start_index}"))?
-            as f32;
+            .with_context(|| format!("Failed to parse f32 at index {start_index}"))? as f32;
 
         Ok((result, start_index + 1))
     }
@@ -132,9 +132,7 @@ impl Column for f32 {
 impl StaticColumnCount for i32 {}
 impl Bind for i32 {
     fn bind(&self, statement: &Statement, start_index: i32) -> Result<i32> {
-        statement
-            .bind_int(start_index, *self)
-            .with_context(|| format!("Failed to bind i32 at index {start_index}"))?;
+        statement.bind_int(start_index, *self).with_context(|| format!("Failed to bind i32 at index {start_index}"))?;
 
         Ok(start_index + 1)
     }
@@ -168,7 +166,7 @@ impl StaticColumnCount for u64 {}
 impl Bind for u64 {
     fn bind(&self, statement: &Statement, start_index: i32) -> Result<i32> {
         statement
-            .bind_int64(start_index, (*self) as i64)
+            .bind_int64(start_index, (*self).cast_signed())
             .with_context(|| format!("Failed to bind i64 at index {start_index}"))?;
         Ok(start_index + 1)
     }
@@ -216,7 +214,8 @@ impl Column for u16 {
 impl StaticColumnCount for usize {}
 impl Bind for usize {
     fn bind(&self, statement: &Statement, start_index: i32) -> Result<i32> {
-        (*self as i64)
+        (*self as u64)
+            .cast_signed()
             .bind(statement, start_index)
             .with_context(|| format!("Failed to bind usize at index {start_index}"))
     }
@@ -289,7 +288,7 @@ impl<T: Bind + StaticColumnCount> Bind for Option<T> {
 impl<T: Column + StaticColumnCount> Column for Option<T> {
     fn column(statement: &mut Statement, start_index: i32) -> Result<(Self, i32)> {
         if let SqlType::Null = statement.column_type(start_index)? {
-            Ok((None, start_index + T::column_count() as i32))
+            Ok((None, start_index + (T::column_count() as u32).cast_signed()))
         } else {
             T::column(statement, start_index).map(|(result, next_index)| (Some(result), next_index))
         }
@@ -315,9 +314,7 @@ impl<T: Bind, const COUNT: usize> Bind for [T; COUNT] {
 impl StaticColumnCount for &Path {}
 impl Bind for &Path {
     fn bind(&self, statement: &Statement, start_index: i32) -> Result<i32> {
-        self.as_os_str()
-            .as_encoded_bytes()
-            .bind(statement, start_index)
+        self.as_os_str().as_encoded_bytes().bind(statement, start_index)
     }
 }
 
@@ -331,8 +328,7 @@ impl Column for Arc<Path> {
     fn column(statement: &mut Statement, start_index: i32) -> Result<(Self, i32)> {
         let blob = statement.column_blob(start_index)?;
 
-        path::try_from_bytes::<PathBuf>(blob)
-            .map(|path| (Arc::from(path.as_path()), start_index + 1))
+        path::try_from_bytes::<PathBuf>(blob).map(|path| (Arc::from(path.as_path()), start_index + 1))
     }
 }
 

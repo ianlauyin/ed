@@ -514,7 +514,6 @@ mod mac_os {
     use anyhow::Result;
     use cli::FORCE_CLI_MODE_ENV_VAR_NAME;
     use core_foundation::array::CFArray;
-    use core_foundation::array::CFIndex;
     use core_foundation::base::TCFType as _;
     use core_foundation::string::kCFStringEncodingUTF8;
     use core_foundation::url::CFURL;
@@ -586,7 +585,7 @@ mod mac_os {
                         let url_to_open = CFURL::wrap_under_create_rule(CFURLCreateWithBytes(
                             ptr::null(),
                             url.as_ptr(),
-                            url.len() as CFIndex,
+                            url.len().cast_signed(),
                             kCFStringEncodingUTF8,
                             ptr::null(),
                         ));

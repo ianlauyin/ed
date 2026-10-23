@@ -249,8 +249,8 @@ impl SyntaxTreeView {
                     snapshot.syntax_layers().filter(|layer| layer.language == &prev_layer.language).min_by_key(
                         |layer| {
                             let range = layer.node().byte_range();
-                            ((range.start as i64) - (prev_range.start as i64)).abs()
-                                + ((range.end as i64) - (prev_range.end as i64)).abs()
+                            ((range.start as u64).cast_signed() - (prev_range.start as u64).cast_signed()).abs()
+                                + ((range.end as u64).cast_signed() - (prev_range.end as u64).cast_signed()).abs()
                         },
                     )?
                 } else {
@@ -288,6 +288,7 @@ impl SyntaxTreeView {
         Some(())
     }
 
+    #[allow(clippy::type_complexity)]
     fn update_editor_with_range_for_descendant_ix(
         &self,
         descendant_ix: usize,

@@ -97,7 +97,7 @@ fn number(src: &str, at: usize, memo: &mut Memo) -> Option<usize> {
 }
 
 /// A character of JavaScript's `\w`.
-fn is_word(c: u8) -> bool {
+const fn is_word(c: u8) -> bool {
     c.is_ascii_alphanumeric() || c == b'_'
 }
 

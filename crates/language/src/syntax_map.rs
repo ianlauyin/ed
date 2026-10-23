@@ -1716,7 +1716,7 @@ pub(crate) fn splice_included_ranges(
     new_ranges: &[tree_sitter::Range],
 ) -> (Vec<tree_sitter::Range>, Range<usize>) {
     let mut removed_ranges = removed_ranges.iter().cloned().peekable();
-    let mut new_ranges = new_ranges.iter().cloned().peekable();
+    let mut new_ranges = new_ranges.iter().copied().peekable();
     let mut ranges_ix = 0;
     let mut changed_portion: Option<Range<usize>> = None;
     loop {

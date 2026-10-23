@@ -238,7 +238,7 @@ enum SymbolKind {
 
 impl SymbolKind {
     /// The kind as Mermaid names it in messages.
-    fn as_str(self) -> &'static str {
+    const fn as_str(self) -> &'static str {
         match self {
             Self::Actor => "actor",
             Self::Boundary => "boundary",
@@ -320,7 +320,7 @@ struct Ordered<V> {
 
 impl<V> Ordered<V> {
     /// An empty collection.
-    fn new() -> Self {
+    const fn new() -> Self {
         Self { index: BTreeMap::new(), values: Vec::new() }
     }
 

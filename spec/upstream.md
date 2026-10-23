@@ -14,6 +14,9 @@ from upstream in layout as well as in behaviour.
   pedantic lints. The workspace stays warning-free; where a lint fights a
   deliberate API shape or macro output, it is allowed at that item with a reason
   rather than disabled globally.
+- Warning cleanup must preserve runtime behaviour, including integer truncation,
+  signed reinterpretation, overflow handling, branch order, and rendering output.
+  It must not add clamping, new panics, or fallback values to silence a lint.
 - Upstream changes are ported by reading and understanding them, then
   re-applying the intent against the fork's code. There are no merges, rebases,
   cherry-picks, or `git diff | git apply` — textual patches are not expected to

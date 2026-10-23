@@ -28,6 +28,7 @@ pub struct Tooltip {
 #[derive(Clone, IntoElement)]
 enum Title {
     Str(SharedString),
+    #[allow(clippy::type_complexity)]
     Callback(Rc<dyn Fn(&mut Window, &mut App) -> AnyElement>),
 }
 

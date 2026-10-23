@@ -47,7 +47,7 @@ pub(crate) enum T {
 
 /// The name the generated parser prints for a token type. It has no name for the end of input
 /// and prints its number.
-pub(crate) fn token_name(kind: T, kanban: bool) -> &'static str {
+pub(crate) const fn token_name(kind: T, kanban: bool) -> &'static str {
     match kind {
         T::End => "1",
         T::Error => "INVALID",
@@ -353,11 +353,11 @@ pub(crate) fn tokenize<'a>(src: &'a str, kanban: bool) -> Tokens<'a> {
 const STOP: &str = "'SPACELINE', 'NL', 'EOF'";
 
 /// Token types that can start a statement after the first.
-fn starts_statement(kind: T) -> bool {
+const fn starts_statement(kind: T) -> bool {
     matches!(kind, T::Spaceline | T::Spacelist | T::Icon | T::Class | T::NodeDstart | T::NodeId)
 }
 
-fn is_stop(kind: T) -> bool {
+const fn is_stop(kind: T) -> bool {
     matches!(kind, T::Spaceline | T::Nl | T::Eof)
 }
 

@@ -545,7 +545,7 @@ fn domain_to_ascii(domain: &str) -> Option<String> {
     (!out.is_empty()).then_some(out)
 }
 
-fn forbidden_domain(c: char) -> bool {
+const fn forbidden_domain(c: char) -> bool {
     c <= '\u{1f}'
         || c == '\u{7f}'
         || matches!(c, ' ' | '#' | '%' | '/' | ':' | '<' | '>' | '?' | '@' | '[' | '\\' | ']' | '^' | '|')
@@ -555,7 +555,7 @@ fn forbidden_domain(c: char) -> bool {
 const BASE: u32 = 36;
 
 // Punycode's bias adaptation (RFC 3492, section 6.1).
-fn adapt(delta: u32, points: u32, first: bool) -> u32 {
+const fn adapt(delta: u32, points: u32, first: bool) -> u32 {
     let mut delta = if first { delta / 700 } else { delta / 2 };
     delta += delta / points;
     let mut k = 0;
@@ -566,7 +566,7 @@ fn adapt(delta: u32, points: u32, first: bool) -> u32 {
     k + BASE * delta / (delta + 38)
 }
 
-fn threshold(step: u32, bias: u32) -> u32 {
+const fn threshold(step: u32, bias: u32) -> u32 {
     if step <= bias {
         1
     } else if step >= bias + 26 {

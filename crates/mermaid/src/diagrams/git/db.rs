@@ -85,7 +85,7 @@ fn join(parts: &[&str]) -> String {
     parts.concat()
 }
 
-fn type_code(name: CommitTypeName) -> u8 {
+const fn type_code(name: CommitTypeName) -> u8 {
     match name {
         CommitTypeName::Highlight => HIGHLIGHT,
         CommitTypeName::Normal => NORMAL,

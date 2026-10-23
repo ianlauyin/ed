@@ -104,6 +104,7 @@ fn buffer_range_to_base_text_range(
     Point::new(start.row, 0)..Point::new(end.row, end_column)
 }
 
+#[allow(clippy::type_complexity)]
 fn translate_lhs_selections_to_rhs(
     selections_by_buffer: &HashMap<BufferId, (Vec<Range<BufferOffset>>, Option<u32>)>,
     splittable: &SplittableEditor,
@@ -114,6 +115,7 @@ fn translate_lhs_selections_to_rhs(
     };
     let lhs_snapshot = lhs.multibuffer.read(cx).snapshot(cx);
 
+    #[allow(clippy::type_complexity)]
     let mut translated: HashMap<Entity<Buffer>, (Vec<Range<BufferOffset>>, Option<u32>)> = HashMap::default();
 
     for (lhs_buffer_id, (ranges, scroll_offset)) in selections_by_buffer {

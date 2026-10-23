@@ -111,7 +111,7 @@ const SMART_CASE_PENALTY_PER_MISMATCH: f64 = 0.9;
 
 #[inline]
 pub(crate) fn case_penalty(mismatches: u32) -> f64 {
-    if mismatches == 0 { 1.0 } else { SMART_CASE_PENALTY_PER_MISMATCH.powi(mismatches as i32) }
+    if mismatches == 0 { 1.0 } else { SMART_CASE_PENALTY_PER_MISMATCH.powi(mismatches.cast_signed()) }
 }
 
 /// Reconstruct byte-offset match positions from a list of matched char offsets

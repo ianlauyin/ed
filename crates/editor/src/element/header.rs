@@ -328,16 +328,14 @@ pub(crate) fn render_buffer_header(
                                         editor.update(cx, |editor, cx| {
                                             editor.toggle_fold_all(&ToggleFoldAll, window, cx);
                                         });
+                                    } else if is_folded {
+                                        editor.update(cx, |editor, cx| {
+                                            editor.unfold_buffer(buffer_id, cx);
+                                        });
                                     } else {
-                                        if is_folded {
-                                            editor.update(cx, |editor, cx| {
-                                                editor.unfold_buffer(buffer_id, cx);
-                                            });
-                                        } else {
-                                            editor.update(cx, |editor, cx| {
-                                                editor.fold_buffer(buffer_id, cx);
-                                            });
-                                        }
+                                        editor.update(cx, |editor, cx| {
+                                            editor.fold_buffer(buffer_id, cx);
+                                        });
                                     }
                                 }),
                         ),

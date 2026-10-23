@@ -51,9 +51,12 @@ pub struct IndentGuides {
     colors: IndentGuideColors,
     indent_size: Pixels,
     left_offset: Pixels,
+    #[allow(clippy::type_complexity)]
     compute_indents_fn: Option<Box<dyn Fn(Range<usize>, &mut Window, &mut App) -> SmallVec<[usize; 64]>>>,
+    #[allow(clippy::type_complexity)]
     render_fn:
         Option<Box<dyn Fn(RenderIndentGuideParams, &mut Window, &mut App) -> SmallVec<[RenderedIndentGuide; 12]>>>,
+    #[allow(clippy::type_complexity)]
     on_click: Option<Rc<dyn Fn(&IndentGuideLayout, &mut Window, &mut App)>>,
 }
 
@@ -238,6 +241,7 @@ mod sticky_items {
 struct IndentGuidesElement {
     colors: IndentGuideColors,
     indent_guides: Rc<SmallVec<[RenderedIndentGuide; 12]>>,
+    #[allow(clippy::type_complexity)]
     on_hovered_indent_guide_click: Option<Rc<dyn Fn(&IndentGuideLayout, &mut Window, &mut App)>>,
 }
 
@@ -245,6 +249,7 @@ enum IndentGuidesElementPrepaintState {
     Static,
     Interactive {
         hitboxes: Rc<SmallVec<[Hitbox; 12]>>,
+        #[allow(clippy::type_complexity)]
         on_hovered_indent_guide_click: Rc<dyn Fn(&IndentGuideLayout, &mut Window, &mut App)>,
     },
 }

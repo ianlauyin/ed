@@ -19,7 +19,7 @@ pub(crate) fn js_round(value: f64) -> f64 {
 }
 
 /// Whether XML text needs escaping: markup characters, or control characters XML does not allow.
-fn needs_esc(c: char) -> bool {
+const fn needs_esc(c: char) -> bool {
     matches!(c, '&' | '<' | '>' | '"' | '\0'..='\x08' | '\x0b' | '\x0c' | '\x0e'..='\x1f' | '\x7f')
 }
 

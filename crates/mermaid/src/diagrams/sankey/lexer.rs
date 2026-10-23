@@ -62,7 +62,7 @@ enum S {
 
 /// RFC 4180 TEXTDATA extended to Unicode: printable ASCII except the double quote and the comma,
 /// and anything past Latin-1's controls that XML allows.
-fn is_text_data(c: char) -> bool {
+const fn is_text_data(c: char) -> bool {
     matches!(c, ' '..='~' | '\u{a0}'..='\u{d7ff}' | '\u{e000}'..='\u{fffd}' | '\u{10000}'..) && c != '"' && c != ','
 }
 

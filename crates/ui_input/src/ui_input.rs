@@ -4,14 +4,16 @@
 //!
 mod input_field;
 
-use std::{
-    any::Any,
-    sync::{Arc, OnceLock},
-};
+use std::any::Any;
+use std::sync::Arc;
+use std::sync::OnceLock;
 
-use gpui::{FocusHandle, Subscription};
+use gpui::FocusHandle;
+use gpui::Subscription;
 pub use input_field::*;
-use ui::{AnyElement, App, Window};
+use ui::AnyElement;
+use ui::App;
+use ui::Window;
 
 pub trait ErasedEditor: 'static {
     fn text(&self, cx: &App) -> String;
@@ -26,6 +28,7 @@ pub trait ErasedEditor: 'static {
 
     fn focus_handle(&self, cx: &App) -> FocusHandle;
 
+    #[allow(clippy::type_complexity)]
     fn subscribe(
         &self,
         callback: Box<dyn FnMut(ErasedEditorEvent, &mut Window, &mut App) + 'static>,
@@ -41,5 +44,5 @@ pub enum ErasedEditorEvent {
     BufferEdited,
     Blurred,
 }
-pub static ERASED_EDITOR_FACTORY: OnceLock<fn(&mut Window, &mut App) -> Arc<dyn ErasedEditor>> =
-    OnceLock::new();
+#[allow(clippy::type_complexity)]
+pub static ERASED_EDITOR_FACTORY: OnceLock<fn(&mut Window, &mut App) -> Arc<dyn ErasedEditor>> = OnceLock::new();

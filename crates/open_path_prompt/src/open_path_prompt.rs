@@ -49,6 +49,7 @@ pub struct OpenPathDelegate {
     prompt_root: String,
     path_style: PathStyle,
     replace_prompt: Task<()>,
+    #[allow(clippy::type_complexity)]
     render_footer: Arc<dyn Fn(&mut Window, &mut Context<Picker<Self>>) -> Option<AnyElement> + 'static>,
     hidden_entries: bool,
     sort_mode: ProjectPanelSortMode,
@@ -86,6 +87,7 @@ impl OpenPathDelegate {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn with_footer(
         mut self,
         footer: Arc<dyn Fn(&mut Window, &mut Context<Picker<Self>>) -> Option<AnyElement> + 'static>,

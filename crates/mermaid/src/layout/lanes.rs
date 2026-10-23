@@ -342,7 +342,7 @@ fn place(ctx: &Ctx<'_>, nodes: &mut [CNode], edges: &mut [CEdge], plain: &[bool]
 
     let mut up_start = vec![0usize; total + 1];
     let mut down_start = vec![0usize; total + 1];
-    for pair in links.chunks_exact(2) {
+    for pair in links.as_chunks::<2>().0 {
         down_start[pair[0] + 1] += 1;
         up_start[pair[1] + 1] += 1;
     }
@@ -355,7 +355,7 @@ fn place(ctx: &Ctx<'_>, nodes: &mut [CNode], edges: &mut [CEdge], plain: &[bool]
     {
         let mut uf = up_start[..total].to_vec();
         let mut df = down_start[..total].to_vec();
-        for pair in links.chunks_exact(2) {
+        for pair in links.as_chunks::<2>().0 {
             down[df[pair[0]]] = pair[1];
             df[pair[0]] += 1;
             up[uf[pair[1]]] = pair[0];
@@ -673,7 +673,7 @@ fn place(ctx: &Ctx<'_>, nodes: &mut [CNode], edges: &mut [CEdge], plain: &[bool]
         }
         pts.extend([c[b], band_start[rb] + (band_end[rb] - band_start[rb] - depth[b]) / 2.0]);
         let mut route = Vec::with_capacity(pts.len() / 2 * 3);
-        for p in pts.chunks_exact(2) {
+        for p in pts.as_chunks::<2>().0 {
             route.extend([px(p[0], p[1]), py(p[0], p[1]), axis]);
         }
         if e.reversed && route.len() >= 6 {

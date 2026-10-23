@@ -163,6 +163,7 @@ impl TabContentParams {
 
 pub enum TabTooltipContent {
     Text(SharedString),
+    #[allow(clippy::type_complexity)]
     Custom(Box<dyn Fn(&mut Window, &mut App) -> AnyView>),
 }
 
@@ -420,6 +421,7 @@ where
 
 pub trait ItemHandle: 'static + Send {
     fn item_focus_handle(&self, cx: &App) -> FocusHandle;
+    #[allow(clippy::type_complexity)]
     fn subscribe_to_item_events(
         &self,
         window: &mut Window,
@@ -522,6 +524,7 @@ impl dyn ItemHandle {
 }
 
 impl<T: Item> ItemHandle for Entity<T> {
+    #[allow(clippy::type_complexity)]
     fn subscribe_to_item_events(
         &self,
         window: &mut Window,

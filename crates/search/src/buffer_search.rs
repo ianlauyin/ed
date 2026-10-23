@@ -721,7 +721,6 @@ impl BufferSearchBar {
             replacement_editor_focused: false,
             active_searchable_item: None,
             active_searchable_item_subscriptions: None,
-            #[cfg(target_os = "macos")]
             pending_external_query: None,
             active_match_index: None,
             searchable_items_with_matches: Default::default(),

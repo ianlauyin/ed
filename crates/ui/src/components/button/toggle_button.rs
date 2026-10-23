@@ -41,8 +41,10 @@ impl ToggleButtonPosition {
 pub struct ButtonConfiguration {
     label: SharedString,
     icon: Option<IconName>,
+    #[allow(clippy::type_complexity)]
     on_click: Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
     selected: bool,
+    #[allow(clippy::type_complexity)]
     tooltip: Option<Rc<dyn Fn(&mut Window, &mut App) -> AnyView>>,
 }
 
@@ -56,8 +58,10 @@ pub trait ButtonBuilder: 'static + private::ToggleButtonStyle {
 
 pub struct ToggleButtonSimple {
     label: SharedString,
+    #[allow(clippy::type_complexity)]
     on_click: Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
     selected: bool,
+    #[allow(clippy::type_complexity)]
     tooltip: Option<Rc<dyn Fn(&mut Window, &mut App) -> AnyView>>,
 }
 
@@ -97,8 +101,10 @@ impl ButtonBuilder for ToggleButtonSimple {
 pub struct ToggleButtonWithIcon {
     label: SharedString,
     icon: IconName,
+    #[allow(clippy::type_complexity)]
     on_click: Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>,
     selected: bool,
+    #[allow(clippy::type_complexity)]
     tooltip: Option<Rc<dyn Fn(&mut Window, &mut App) -> AnyView>>,
 }
 
@@ -232,7 +238,7 @@ impl<T: ButtonBuilder, const COLS: usize, const ROWS: usize> ToggleButtonGroup<T
     /// value is incremented by the number of buttons in the group.
     pub const fn tab_index(mut self, tab_index: &mut isize) -> Self {
         self.tab_index = Some(*tab_index);
-        *tab_index += (COLS * ROWS) as isize;
+        *tab_index += (COLS * ROWS).cast_signed();
         self
     }
 
@@ -278,7 +284,7 @@ impl<T: ButtonBuilder, const COLS: usize, const ROWS: usize> RenderOnce for Togg
                         }
                         .to_rounding(),
                     ))
-                    .when_some(self.tab_index, |this, tab_index| this.tab_index(tab_index + entry_index as isize))
+                    .when_some(self.tab_index, |this, tab_index| this.tab_index(tab_index + entry_index.cast_signed()))
                     .when(entry_index == self.selected_index || selected, |this| {
                         this.toggle_state(true).selected_style(ButtonStyle::Tinted(TintColor::Accent))
                     })

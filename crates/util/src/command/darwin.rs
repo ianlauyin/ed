@@ -403,7 +403,7 @@ fn spawn_posix_spawn(
             &raw mut attr,
             EXC_MASK_ALL,
             MACH_PORT_NULL,
-            EXCEPTION_DEFAULT as exception_behavior_t,
+            EXCEPTION_DEFAULT.cast_signed(),
             THREAD_STATE_NONE,
         ))?;
 

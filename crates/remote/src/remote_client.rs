@@ -966,6 +966,7 @@ impl RemoteClient {
 }
 
 enum ConnectionPoolEntry {
+    #[allow(clippy::type_complexity)]
     Connecting(WeakShared<Task<Result<Arc<dyn RemoteConnection>, Arc<anyhow::Error>>>>),
     Connected(Weak<dyn RemoteConnection>),
 }
@@ -978,6 +979,7 @@ struct ConnectionPool {
 impl Global for ConnectionPool {}
 
 impl ConnectionPool {
+    #[allow(clippy::type_complexity)]
     fn connect(
         &mut self,
         opts: RemoteConnectionOptions,

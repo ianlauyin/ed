@@ -21,7 +21,7 @@ pub fn new_std_command(program: impl AsRef<OsStr>) -> std::process::Command {
 #[inline]
 pub const fn is_utf8_char_boundary(u8: u8) -> bool {
     // This is bit magic equivalent to: b < 128 || b >= 192
-    (u8 as i8) >= -0x40
+    u8.cast_signed() >= -0x40
 }
 
 pub fn post_inc<T: From<u8> + AddAssign<T> + Copy>(value: &mut T) -> T {

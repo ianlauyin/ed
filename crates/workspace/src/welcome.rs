@@ -130,7 +130,7 @@ impl RenderOnce for SectionButton {
         let action_ref: &dyn Action = &*self.action;
 
         ButtonLike::new(id)
-            .tab_index(self.tab_index as isize)
+            .tab_index(self.tab_index.cast_signed())
             .full_width()
             .size(ButtonSize::Medium)
             .child(

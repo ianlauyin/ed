@@ -131,7 +131,7 @@ struct Loop {
 
 /// A count as a coordinate.
 #[expect(clippy::cast_precision_loss, reason = "counts stay far below 2^52")]
-fn to_f64(value: usize) -> f64 {
+const fn to_f64(value: usize) -> f64 {
     value as f64
 }
 

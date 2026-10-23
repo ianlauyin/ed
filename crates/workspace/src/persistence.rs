@@ -331,7 +331,7 @@ impl sqlez::bindable::StaticColumnCount for SerializedPixels {}
 
 impl sqlez::bindable::Bind for SerializedPixels {
     fn bind(&self, statement: &sqlez::statement::Statement, start_index: i32) -> anyhow::Result<i32> {
-        let this: i32 = u32::from(self.0) as _;
+        let this: i32 = u32::from(self.0).cast_signed();
         this.bind(statement, start_index)
     }
 }
@@ -489,6 +489,7 @@ impl WorkspaceDb {
 
         // Note that we re-assign the workspace_id here in case it's empty
         // and we've grabbed the most recent workspace
+        #[allow(clippy::type_complexity)]
         let (
             workspace_id,
             paths,
@@ -581,6 +582,7 @@ impl WorkspaceDb {
 
     /// Returns the workspace with the given ID, loading all associated data.
     pub(crate) fn workspace_for_id(&self, workspace_id: WorkspaceId) -> Option<SerializedWorkspace> {
+        #[allow(clippy::type_complexity)]
         let (
             paths,
             paths_order,
@@ -862,6 +864,7 @@ impl WorkspaceDb {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     fn recent_workspaces(
         &self,
     ) -> Result<Vec<(WorkspaceId, PathList, Option<PathList>, Option<RemoteConnectionId>, Option<String>, DateTime<Utc>)>>
@@ -909,6 +912,7 @@ impl WorkspaceDb {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     fn session_workspaces(
         &self,
         session_id: String,

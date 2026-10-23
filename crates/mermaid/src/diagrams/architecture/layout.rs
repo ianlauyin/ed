@@ -45,7 +45,7 @@ const DX: [i64; 4] = [-1, 1, 0, 0];
 const DY: [i64; 4] = [0, 0, -1, 1];
 
 /// The index of `side` in [`DX`] and [`DY`].
-pub(crate) fn side_index(side: Side) -> usize {
+pub(crate) const fn side_index(side: Side) -> usize {
     match side {
         Side::L => 0,
         Side::R => 1,
@@ -70,7 +70,7 @@ fn set<T>(values: &mut [T], i: usize, value: T) {
     }
 }
 
-fn cell_key(cx: i64, cy: i64) -> i64 {
+const fn cell_key(cx: i64, cy: i64) -> i64 {
     (cx + OFFSET) * SPAN + cy + OFFSET
 }
 

@@ -173,6 +173,7 @@ impl LocalExecutor {
 /// expected by [`Scheduler::spawn_dedicated`]. The user's `Fut::Output` is
 /// boxed as `Box<dyn Any + Send + Sync>` on the dedicated side and downcast
 /// back to `Fut::Output` by [`Task::downcast`] in the wrapper.
+#[allow(clippy::type_complexity)]
 fn box_dedicated<F, Fut>(
     f: F,
 ) -> Box<

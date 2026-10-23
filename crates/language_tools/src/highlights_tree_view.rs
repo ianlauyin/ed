@@ -197,6 +197,7 @@ struct SemanticHighlightEntry {
 
 struct HighlightRefreshInput {
     multi_buffer_snapshot: MultiBufferSnapshot,
+    #[allow(clippy::type_complexity)]
     text_highlights: Vec<(HighlightKey, Arc<(HighlightStyle, Vec<Range<Anchor>>)>)>,
     semantic_highlights: Vec<SemanticHighlightEntry>,
     syntax_theme: Arc<SyntaxTheme>,
@@ -528,6 +529,7 @@ impl HighlightsTreeView {
         changed
     }
 
+    #[allow(clippy::type_complexity)]
     fn update_editor_with_range_for_entry(
         &self,
         entry_ix: usize,
@@ -1075,7 +1077,7 @@ fn build_highlight_entries(
             else {
                 continue;
             };
-            let Some(style) = syntax_theme.get(highlight_id).cloned() else {
+            let Some(style) = syntax_theme.get(highlight_id).copied() else {
                 continue;
             };
 

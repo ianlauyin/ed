@@ -781,7 +781,7 @@ impl HighlightedTextBuilder {
             self.text.push_str(chunk.text);
             let end = self.text.len();
 
-            if let Some(highlight_style) = chunk.syntax_highlight_id.and_then(|id| syntax_theme.get(id).cloned()) {
+            if let Some(highlight_style) = chunk.syntax_highlight_id.and_then(|id| syntax_theme.get(id).copied()) {
                 let highlight_style =
                     override_style.map_or(highlight_style, |override_style| highlight_style.highlight(override_style));
                 self.highlights.push((start..end, highlight_style));
@@ -2267,7 +2267,7 @@ impl Buffer {
                 // If the edit precedes the diff hunk, then adjust the hunk
                 // to reflect the edit.
                 else if edit_since.old.end < range.start {
-                    delta += edit_since.new_len() as i64 - edit_since.old_len() as i64;
+                    delta += (edit_since.new_len() as u64).cast_signed() - (edit_since.old_len() as u64).cast_signed();
                     edits_since.next();
                 }
                 // If the edit intersects a diff hunk, then discard that hunk.
@@ -2276,8 +2276,8 @@ impl Buffer {
                 }
             }
 
-            let start = (range.start as i64 + delta) as usize;
-            let end = (range.end as i64 + delta) as usize;
+            let start = ((range.start as u64).cast_signed() + delta) as usize;
+            let end = ((range.end as u64).cast_signed() + delta) as usize;
             Some((start..end, new_text))
         });
 
@@ -2687,9 +2687,9 @@ impl Buffer {
                     let new_text_length = new_text.len();
                     let old_start = range.start.to_point(&before_edit);
                     let old_end = range.end.to_point(&before_edit);
-                    let new_start = (delta + range.start as isize) as usize;
+                    let new_start = (delta + range.start.cast_signed()) as usize;
                     let range_len = range.end - range.start;
-                    delta += new_text_length as isize - range_len as isize;
+                    delta += new_text_length.cast_signed() - range_len.cast_signed();
 
                     // Decide what range of the insertion to auto-indent, and whether
                     // the first line of the insertion should be considered a newly-inserted line
@@ -4410,12 +4410,10 @@ impl BufferSnapshot {
                 || (Some(capture.index) == config.extra_context_capture_ix && include_extra_context)
             {
                 add_to_buffer_ranges(capture.node, false);
-            } else {
-                if Some(capture.index) == config.open_capture_ix {
-                    open_point = Some(Point::from_ts_point(capture.node.end_position()));
-                } else if Some(capture.index) == config.close_capture_ix {
-                    close_point = Some(Point::from_ts_point(capture.node.start_position()));
-                }
+            } else if Some(capture.index) == config.open_capture_ix {
+                open_point = Some(Point::from_ts_point(capture.node.end_position()));
+            } else if Some(capture.index) == config.close_capture_ix {
+                close_point = Some(Point::from_ts_point(capture.node.start_position()));
             }
         }
 
@@ -4454,7 +4452,7 @@ impl BufferSnapshot {
                     offset += chunk.text.len();
                 }
                 let style =
-                    chunk.syntax_highlight_id.zip(theme).and_then(|(highlight, theme)| theme.get(highlight).cloned());
+                    chunk.syntax_highlight_id.zip(theme).and_then(|(highlight, theme)| theme.get(highlight).copied());
 
                 if let Some(style) = style {
                     let start = text.len();

@@ -251,8 +251,8 @@ impl GoToLine {
         let value = line_part.parse::<u32>().ok()?;
 
         match direction {
-            '+' | 'f' | 'F' => Some(value as i32),
-            '-' | 'b' | 'B' => Some(-(value as i32)),
+            '+' | 'f' | 'F' => Some(value.cast_signed()),
+            '-' | 'b' | 'B' => Some(-value.cast_signed()),
             _ => None,
         }
     }

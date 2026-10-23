@@ -108,6 +108,7 @@ fn find_ascii_case_insensitive(haystack: &str, needle: &str) -> Option<usize> {
 /// Lexes `<name attr=value ...>` at the start of `text`. Returns the lowercase
 /// name, attributes (lowercase names, entity-decoded values), whether the tag
 /// is self-closing and the tag's length. `None` if the tag is not closed.
+#[allow(clippy::type_complexity)]
 fn lex_start_tag(text: &str) -> Option<(String, Vec<(String, String)>, bool, usize)> {
     let bytes = text.as_bytes();
     let name = tag_name(&text[1..]);

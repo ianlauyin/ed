@@ -1305,7 +1305,7 @@ impl App {
     ///
     /// Used to share the current search string between apps.
     ///
-    /// https://developer.apple.com/documentation/appkit/nspasteboard/name-swift.struct/find
+    /// <https://developer.apple.com/documentation/appkit/nspasteboard/name-swift.struct/find>
     pub fn read_from_find_pasteboard(&self) -> Option<ClipboardItem> {
         self.platform.read_from_find_pasteboard()
     }
@@ -1314,7 +1314,7 @@ impl App {
     ///
     /// Used to share the current search string between apps.
     ///
-    /// https://developer.apple.com/documentation/appkit/nspasteboard/name-swift.struct/find
+    /// <https://developer.apple.com/documentation/appkit/nspasteboard/name-swift.struct/find>
     pub fn write_to_find_pasteboard(&self, item: ClipboardItem) {
         self.platform.write_to_find_pasteboard(item)
     }
@@ -2496,7 +2496,7 @@ impl AppContext for App {
             cx.push_effect(Effect::EntityCreated {
                 entity: handle.into_any(),
                 tid: TypeId::of::<T>(),
-                window: cx.window_update_stack.last().cloned(),
+                window: cx.window_update_stack.last().copied(),
             });
 
             cx.entities.insert(slot, entity)

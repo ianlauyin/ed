@@ -12,7 +12,7 @@ pub(crate) enum Description {
 
 impl Description {
     /// Whether JavaScript reads the value as true: a non-empty string, or any array.
-    pub(crate) fn truthy(&self) -> bool {
+    pub(crate) const fn truthy(&self) -> bool {
         match self {
             Self::Many(_) => true,
             Self::One(text) => !text.is_empty(),

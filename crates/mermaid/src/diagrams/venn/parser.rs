@@ -41,7 +41,7 @@ impl<'a> Parser<'a, '_> {
         Error::syntax("venn", self.src, self.lexer.start, &detail, false)
     }
 
-    fn take(&mut self) -> &'a str {
+    const fn take(&mut self) -> &'a str {
         self.kind = None;
         self.lexer.text
     }

@@ -31,7 +31,7 @@ use crate::text::measure::{self};
 use crate::yaml::push_number;
 
 /// The series slot of each kind of entity. A UI has none and is drawn plain.
-fn series(kind: EntityKind) -> Option<i64> {
+const fn series(kind: EntityKind) -> Option<i64> {
     match kind {
         EntityKind::Command => Some(0),
         EntityKind::Event => Some(1),

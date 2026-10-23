@@ -29,7 +29,7 @@ pub(crate) enum XAxis {
 }
 
 impl XAxis {
-    fn title_mut(&mut self) -> &mut String {
+    const fn title_mut(&mut self) -> &mut String {
         match self {
             Self::Band { title, .. } | Self::Linear(LinearAxis { title, .. }) => title,
         }
@@ -158,7 +158,7 @@ impl XyChartDb {
     }
 
     /// Sets the range of the y axis.
-    pub(crate) fn set_y_axis_range_data(&mut self, min: f64, max: f64) {
+    pub(crate) const fn set_y_axis_range_data(&mut self, min: f64, max: f64) {
         self.y_axis.min = min;
         self.y_axis.max = max;
         self.has_set_y_axis = true;

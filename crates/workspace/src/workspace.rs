@@ -761,6 +761,7 @@ pub struct Toast {
     id: NotificationId,
     message: Cow<'static, str>,
     autohide: bool,
+    #[allow(clippy::type_complexity)]
     on_click: Option<(Cow<'static, str>, Arc<dyn Fn(&mut Window, &mut App)>)>,
 }
 
@@ -1031,6 +1032,7 @@ pub fn register_project_item<I: ProjectItem>(cx: &mut App) {
 
 #[derive(Copy, Clone)]
 struct SerializableItemDescriptor {
+    #[allow(clippy::type_complexity)]
     deserialize: fn(
         Entity<Project>,
         WeakEntity<Workspace>,
@@ -1039,6 +1041,7 @@ struct SerializableItemDescriptor {
         &mut Window,
         &mut Context<Pane>,
     ) -> Task<Result<Box<dyn ItemHandle>>>,
+    #[allow(clippy::type_complexity)]
     cleanup: fn(WorkspaceId, Vec<ItemId>, &mut Window, &mut App) -> Task<Result<()>>,
     view_to_serializable_item: fn(AnyView) -> Box<dyn SerializableItemHandle>,
 }
@@ -1271,6 +1274,7 @@ struct DispatchingKeystrokes {
 /// that can be used to register a global action to be triggered from any place in the window.
 pub struct Workspace {
     weak_self: WeakEntity<Self>,
+    #[allow(clippy::type_complexity)]
     workspace_actions: Vec<Box<dyn Fn(Div, &Workspace, &mut Window, &mut Context<Self>) -> Div>>,
     zoomed: Option<AnyWeakView>,
     previous_dock_drag_coordinates: Option<Point<Pixels>>,
@@ -1670,6 +1674,7 @@ impl Workspace {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn new_local(
         abs_paths: Vec<PathBuf>,
         app_state: Arc<AppState>,
@@ -2269,7 +2274,7 @@ impl Workspace {
 
             for entry in pane.activation_history() {
                 history
-                    .insert(entry.entity_id, history.get(&entry.entity_id).cloned().unwrap_or(0).max(entry.timestamp));
+                    .insert(entry.entity_id, history.get(&entry.entity_id).copied().unwrap_or(0).max(entry.timestamp));
             }
         }
 
@@ -3659,6 +3664,7 @@ impl Workspace {
     }
 
     /// Focus or unfocus the given panel type, depending on the given callback.
+    #[allow(clippy::type_complexity)]
     fn focus_or_unfocus_panel<T: Panel>(
         &mut self,
         window: &mut Window,
@@ -5499,6 +5505,7 @@ impl Workspace {
             .map_err(|err| anyhow!("failed to send serializable item over channel: {err}"))
     }
 
+    #[allow(clippy::type_complexity)]
     pub(crate) fn load_workspace(
         serialized_workspace: SerializedWorkspace,
         paths_to_open: Vec<Option<ProjectPath>>,
@@ -6395,6 +6402,7 @@ fn window_bounds_env_override() -> Option<Bounds<Pixels>> {
     ZED_WINDOW_POSITION.zip(*ZED_WINDOW_SIZE).map(|(position, size)| Bounds { origin: position, size })
 }
 
+#[allow(clippy::type_complexity)]
 fn open_items(
     serialized_workspace: Option<SerializedWorkspace>,
     mut project_paths_to_open: Vec<(PathBuf, Option<ProjectPath>)>,
@@ -7721,6 +7729,7 @@ pub fn create_and_open_local_file(
     })
 }
 
+#[allow(clippy::type_complexity)]
 pub fn open_remote_project_with_new_connection(
     window: WindowHandle<MultiWorkspace>,
     remote_connection: Arc<dyn RemoteConnection>,
@@ -7770,6 +7779,7 @@ pub fn open_remote_project_with_new_connection(
     })
 }
 
+#[allow(clippy::type_complexity)]
 pub fn open_remote_project_with_existing_connection(
     connection_options: RemoteConnectionOptions,
     project: Entity<Project>,

@@ -79,7 +79,7 @@ fn tail(rest: &str) -> Option<Format> {
 }
 
 /// A d3-format alignment character.
-fn is_align(c: char) -> bool {
+const fn is_align(c: char) -> bool {
     matches!(c, '<' | '>' | '=' | '^')
 }
 

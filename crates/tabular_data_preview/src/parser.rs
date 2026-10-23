@@ -274,6 +274,7 @@ pub fn from_buffer_with_delimiter(buffer_snapshot: &BufferSnapshot, delimiter: c
 }
 
 /// Parse delimited text and track byte positions for each cell
+#[allow(clippy::type_complexity)]
 fn parse_delimited_text_with_positions(
     text: &str,
     delimiter: char,

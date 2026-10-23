@@ -52,7 +52,7 @@ impl<V> Ordered<V> {
     }
 
     /// The number of records.
-    pub(crate) fn len(&self) -> usize {
+    pub(crate) const fn len(&self) -> usize {
         self.values.len()
     }
 
@@ -368,7 +368,7 @@ impl ClassDb {
     }
 
     /// Sets the flow direction.
-    pub(crate) fn set_direction(&mut self, dir: &'static str) {
+    pub(crate) const fn set_direction(&mut self, dir: &'static str) {
         self.direction = dir;
     }
 

@@ -39,7 +39,7 @@ pub(crate) fn time_clip(time: f64) -> f64 {
 }
 
 /// Days from 1970-01-01 to the first of `month` (0 to 11) in `year`.
-fn days_from_civil(year: i64, month: i64) -> i64 {
+const fn days_from_civil(year: i64, month: i64) -> i64 {
     let y = if month < 2 { year - 1 } else { year };
     let era = y.div_euclid(400);
     let yoe = y - era * 400;
@@ -110,12 +110,12 @@ impl Date {
     }
 
     /// The time value, as `+date` reads it.
-    pub(crate) fn time(self) -> f64 {
+    pub(crate) const fn time(self) -> f64 {
         self.0
     }
 
     /// Whether the time value is a number.
-    pub(crate) fn is_valid(self) -> bool {
+    pub(crate) const fn is_valid(self) -> bool {
         !self.0.is_nan()
     }
 
@@ -310,17 +310,17 @@ enum Token {
 
 impl Token {
     /// Whether the token is a number.
-    fn is_number(self) -> bool {
+    const fn is_number(self) -> bool {
         matches!(self, Self::Number { .. })
     }
 
     /// Whether the token is a number of exactly `n` digits.
-    fn is_fixed(self, n: usize) -> bool {
+    const fn is_fixed(self, n: usize) -> bool {
         matches!(self, Self::Number { length, .. } if length == n)
     }
 
     /// The value of a number token, or 0.
-    fn number(self) -> i32 {
+    const fn number(self) -> i32 {
         match self {
             Self::Number { value, .. } => value,
             _ => 0,
@@ -348,7 +348,7 @@ impl Token {
     }
 
     /// Whether the token is the time zone `Z`.
-    fn is_z(self) -> bool {
+    const fn is_z(self) -> bool {
         matches!(self, Self::Keyword { kind: Keyword::TimeZoneName, length: 1, value: 0 })
     }
 }
@@ -500,7 +500,7 @@ impl<'a> Scanner<'a> {
     }
 
     /// The token ahead.
-    fn peek(&self) -> Token {
+    const fn peek(&self) -> Token {
         self.next
     }
 
@@ -592,7 +592,7 @@ impl Default for TimeComposer {
 
 impl TimeComposer {
     /// Whether no time component was read.
-    fn is_empty(&self) -> bool {
+    const fn is_empty(&self) -> bool {
         self.index == 0
     }
 
@@ -660,7 +660,7 @@ impl Default for ZoneComposer {
 
 impl ZoneComposer {
     /// Sets a whole-hour offset.
-    fn set(&mut self, hours: i32) {
+    const fn set(&mut self, hours: i32) {
         self.sign = if hours < 0 { -1 } else { 1 };
         self.hour = hours.abs();
         self.minute = 0;
@@ -672,12 +672,12 @@ impl ZoneComposer {
     }
 
     /// Whether the offset is zero.
-    fn is_utc(&self) -> bool {
+    const fn is_utc(&self) -> bool {
         self.hour == 0 && self.minute == 0
     }
 
     /// The offset in seconds, NaN when none was given.
-    fn write(&mut self) -> Option<f64> {
+    fn write(&self) -> Option<f64> {
         if self.sign == NONE {
             return Some(f64::NAN);
         }

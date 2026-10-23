@@ -55,6 +55,7 @@ use crate::display_map::inlay_map::InlayChunk;
 #[derive(Clone)]
 pub struct FoldPlaceholder {
     /// Creates an element to represent this fold's placeholder.
+    #[allow(clippy::type_complexity)]
     pub render: Arc<dyn Send + Sync + Fn(FoldId, Range<Anchor>, &mut App) -> AnyElement>,
     /// If true, the element is constrained to the shaped width of an ellipsis.
     pub constrain_width: bool,
@@ -417,7 +418,7 @@ impl FoldMap {
                 cursor.seek(&edit.old.end, Bias::Right);
                 cursor.next();
 
-                let mut delta = edit.new_len() as isize - edit.old_len() as isize;
+                let mut delta = edit.new_len().cast_signed() - edit.old_len().cast_signed();
                 loop {
                     edit.old.end = *cursor.start();
 
@@ -427,7 +428,7 @@ impl FoldMap {
                         }
 
                         let next_edit = inlay_edits_iter.next().unwrap();
-                        delta += next_edit.new_len() as isize - next_edit.old_len() as isize;
+                        delta += next_edit.new_len().cast_signed() - next_edit.old_len().cast_signed();
 
                         if next_edit.old.end >= edit.old.end {
                             edit.old.end = next_edit.old.end;
@@ -439,8 +440,9 @@ impl FoldMap {
                     }
                 }
 
-                edit.new.end =
-                    InlayOffset(MultiBufferOffset(((edit.new.start + edit.old_len()).0.0 as isize + delta) as usize));
+                edit.new.end = InlayOffset(MultiBufferOffset(
+                    ((edit.new.start + edit.old_len()).0.0.cast_signed() + delta) as usize,
+                ));
 
                 let mut folds_cursor = self.snapshot.folds.cursor::<FoldRange>(&inlay_snapshot.buffer);
                 folds_cursor.seek(&inlay_snapshot.to_buffer_offset(edit.new.start), Bias::Left);

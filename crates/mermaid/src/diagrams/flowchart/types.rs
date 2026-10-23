@@ -15,7 +15,7 @@ pub(crate) enum LabelType {
 
 impl LabelType {
     /// The name Pele stores.
-    pub(crate) fn as_str(self) -> &'static str {
+    pub(crate) const fn as_str(self) -> &'static str {
         match self {
             Self::Markdown => "markdown",
             Self::String => "string",

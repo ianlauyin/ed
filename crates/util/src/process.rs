@@ -1,5 +1,7 @@
-use anyhow::{Context as _, Result};
 use std::process::Stdio;
+
+use anyhow::Context as _;
+use anyhow::Result;
 
 /// A wrapper around `smol::process::Child` that attempts to clean up subprocess
 /// trees: on Unix by using process groups, and on Windows by using job objects.
@@ -27,12 +29,7 @@ impl std::ops::DerefMut for Child {
 }
 
 impl Child {
-    pub fn spawn(
-        mut command: std::process::Command,
-        stdin: Stdio,
-        stdout: Stdio,
-        stderr: Stdio,
-    ) -> Result<Self> {
+    pub fn spawn(mut command: std::process::Command, stdin: Stdio, stdout: Stdio, stderr: Stdio) -> Result<Self> {
         crate::set_pre_exec_to_start_new_session(&mut command);
         let mut command = smol::process::Command::from(command);
         let process = command
@@ -57,7 +54,7 @@ impl Child {
     pub fn kill(&mut self) -> Result<()> {
         let pid = self.process.id();
         unsafe {
-            libc::killpg(pid as i32, libc::SIGKILL);
+            libc::killpg(pid.cast_signed(), libc::SIGKILL);
         }
         Ok(())
     }

@@ -1,4 +1,5 @@
-use std::{cell::RefCell, fmt::Display};
+use std::cell::RefCell;
+use std::fmt::Display;
 
 use serde::Deserialize;
 
@@ -21,22 +22,13 @@ where
     let value = match value {
         Ok(value) => value,
         Err(error) => {
-            return (
-                None,
-                ParseStatus::Failed {
-                    error: error.into_inner().to_string(),
-                },
-            );
+            return (None, ParseStatus::Failed { error: error.into_inner().to_string() });
         }
     };
 
     if let Some(errors) = ERRORS.with_borrow_mut(|errors| errors.take().filter(|e| !e.is_empty())) {
-        let error = errors
-            .into_iter()
-            .map(|e| e.to_string())
-            .flat_map(|e| ["\n".to_owned(), e])
-            .skip(1)
-            .collect::<String>();
+        let error =
+            errors.into_iter().map(|e| e.to_string()).flat_map(|e| ["\n".to_owned(), e]).skip(1).collect::<String>();
         return (Some(value), ParseStatus::Failed { error });
     }
 
@@ -155,6 +147,7 @@ where
 }
 
 #[inline(never)]
+#[allow(clippy::type_complexity)]
 fn recover_deserialization_error(recover: &mut dyn FnMut(&mut dyn FnMut(&dyn Display))) {
     ERRORS.with_borrow_mut(|errors| {
         if let Some(errors) = errors {

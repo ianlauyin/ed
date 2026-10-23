@@ -1050,7 +1050,7 @@ pub fn poll_interval() -> Duration {
 }
 
 #[cfg(target_os = "linux")]
-pub(crate) fn case_insensitive_path(_path: &Path) -> bool {
+pub(crate) const fn case_insensitive_path(_path: &Path) -> bool {
     false
 }
 
@@ -1065,7 +1065,7 @@ fn detect_requires_poll_watcher_linux(path: &Path) -> bool {
     };
 
     let mut stat: libc::statfs = unsafe { std::mem::zeroed() };
-    if unsafe { libc::statfs(c_path.as_ptr(), &mut stat) } != 0 {
+    if unsafe { libc::statfs(c_path.as_ptr(), &raw mut stat) } != 0 {
         return false;
     }
 

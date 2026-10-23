@@ -140,7 +140,7 @@ struct Builder<'a> {
 }
 
 impl Builder<'_> {
-    fn next_counter(&mut self) -> u32 {
+    const fn next_counter(&mut self) -> u32 {
         let value = self.counter;
         self.counter += 1;
         value

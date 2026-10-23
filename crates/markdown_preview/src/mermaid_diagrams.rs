@@ -56,6 +56,7 @@ struct DiagramContents {
 /// offset of their code block.
 pub(crate) struct MermaidDiagrams {
     /// The parse the diagrams were last synced against.
+    #[allow(clippy::type_complexity)]
     synced_events: Option<Arc<[(Range<usize>, MarkdownEvent)]>>,
     diagrams: BTreeMap<usize, DiagramContents>,
     cache: MermaidDiagramCache,

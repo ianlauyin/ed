@@ -35,6 +35,7 @@ use crate::project_settings::LspSettings;
 
 #[derive(Clone, Debug, Default)]
 pub(crate) struct ServersForWorktree {
+    #[allow(clippy::type_complexity)]
     pub(crate) roots:
         BTreeMap<Arc<RelPath>, BTreeMap<LanguageServerName, (Arc<InnerTreeNode>, BTreeSet<LanguageName>)>>,
 }

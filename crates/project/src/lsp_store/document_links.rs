@@ -251,6 +251,7 @@ impl LspStore {
         cx.background_spawn(async move { new_task.await.ok().flatten() })
     }
 
+    #[allow(clippy::type_complexity)]
     fn fetch_document_links_for_buffer(
         &mut self,
         buffer: &Entity<Buffer>,

@@ -2969,7 +2969,8 @@ impl GitGraph {
 
                         let line_x = lane_center_x(bounds, start_column as f32);
 
-                        let start_row = line.full_interval.start as i32 - first_visible_row as i32;
+                        let start_row =
+                            (line.full_interval.start as u32).cast_signed() - (first_visible_row as u32).cast_signed();
 
                         let from_y = bounds.origin.y + start_row as f32 * row_height + row_height / 2.0
                             - vertical_scroll_offset

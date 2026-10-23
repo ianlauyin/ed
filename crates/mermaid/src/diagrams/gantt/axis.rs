@@ -99,7 +99,7 @@ impl Unit {
     }
 
     /// How many values `field` cycles through, which bounds how far apart filtered ticks are.
-    fn cycle(self) -> f64 {
+    const fn cycle(self) -> f64 {
         match self {
             Self::Second | Self::Minute => 60.0,
             Self::Hour => 24.0,
@@ -110,7 +110,7 @@ impl Unit {
     }
 
     /// The approximate length of the unit in milliseconds.
-    fn ms(self) -> f64 {
+    const fn ms(self) -> f64 {
         match self {
             Self::Millisecond => 1.0,
             Self::Second => SECOND,
@@ -141,7 +141,7 @@ enum Calendar {
 
 impl Calendar {
     /// The unit the interval counts in.
-    fn unit(self) -> Unit {
+    const fn unit(self) -> Unit {
         match self {
             Self::Base(unit) | Self::Filtered(unit, _) | Self::Weeks(unit, _, _) => unit,
             Self::Millis(_) => Unit::Millisecond,

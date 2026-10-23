@@ -31,12 +31,12 @@ pub(crate) fn has(text: &str, needle: &str) -> bool {
 }
 
 /// A space or a tab.
-pub(crate) fn is_blank(c: u32) -> bool {
+pub(crate) const fn is_blank(c: u32) -> bool {
     c == 32 || c == 9
 }
 
 /// A line terminator: what JavaScript's `.` does not match.
-pub(crate) fn is_line_end(c: u32) -> bool {
+pub(crate) const fn is_line_end(c: u32) -> bool {
     c == 10 || c == 13 || c == 0x2028 || c == 0x2029
 }
 

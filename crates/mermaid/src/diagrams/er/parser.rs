@@ -13,7 +13,7 @@ use crate::error::Error;
 use crate::text::label::trim;
 
 /// The cardinality a token stands for.
-fn cardinality(t: T) -> Option<Cardinality> {
+const fn cardinality(t: T) -> Option<Cardinality> {
     match t {
         T::ZeroOrOne => Some(Cardinality::ZeroOrOne),
         T::ZeroOrMore => Some(Cardinality::ZeroOrMore),
@@ -25,12 +25,12 @@ fn cardinality(t: T) -> Option<Cardinality> {
 }
 
 /// Whether a token can be an entity name.
-fn is_name(t: T) -> bool {
+const fn is_name(t: T) -> bool {
     matches!(t, T::UnicodeText | T::EntityName | T::Num | T::DecimalNum | T::EntityOne)
 }
 
 /// Whether a token can be part of a style declaration.
-fn is_style_component(t: T) -> bool {
+const fn is_style_component(t: T) -> bool {
     matches!(t, T::StyleText | T::Num | T::Colon | T::Brkt)
 }
 
@@ -310,7 +310,7 @@ impl<'s> Parser<'s, '_> {
 /// # Errors
 ///
 /// Returns a syntax error for input Mermaid rejects.
-#[expect(clippy::too_many_lines, reason = "mirrors Pele's parseEr")]
+#[allow(clippy::too_many_lines, reason = "mirrors Pele's parseEr")]
 pub(crate) fn parse_er(src: &str, db: &mut ErDb) -> Result<(), Error> {
     let tokens = tokenize(src);
     let mut p = Parser { i: 0, src, tokens: &tokens };

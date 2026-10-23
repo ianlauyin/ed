@@ -11,17 +11,17 @@ use crate::error::Error;
 use crate::text::label::trim;
 
 /// The kinds that a name is made of.
-fn is_alpha_num(t: T) -> bool {
+const fn is_alpha_num(t: T) -> bool {
     matches!(t, T::UnicodeText | T::Alpha | T::Minus)
 }
 
 /// The kinds that make up a style declaration.
-fn is_style_part(t: T) -> bool {
+const fn is_style_part(t: T) -> bool {
     matches!(t, T::Alpha | T::Colon | T::Brkt | T::Style | T::Pct | T::Label)
 }
 
 /// Mermaid's relation type of an end marker token.
-fn end_type(t: T) -> Option<u8> {
+const fn end_type(t: T) -> Option<u8> {
     match t {
         T::Aggregation => Some(0),
         T::Extension => Some(1),

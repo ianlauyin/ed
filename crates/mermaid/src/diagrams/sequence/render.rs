@@ -100,7 +100,7 @@ fn style_of(r#type: u8) -> Option<LineStyle> {
     })
 }
 
-fn frame_kind(r#type: u8) -> Option<&'static str> {
+const fn frame_kind(r#type: u8) -> Option<&'static str> {
     Some(match r#type {
         line::LOOP_START => "loop",
         line::ALT_START => "alt",

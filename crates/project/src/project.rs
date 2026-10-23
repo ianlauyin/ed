@@ -539,6 +539,7 @@ pub struct Completion {
     /// Returns whether new completions should be retriggered after the current one.
     /// If `true` is returned, the editor will show a new completion menu after this completion is confirmed.
     /// if no confirmation is provided or `false` is returned, the completion will be committed.
+    #[allow(clippy::type_complexity)]
     pub confirm: Option<Arc<dyn Send + Sync + Fn(CompletionIntent, &mut Window, &mut App) -> bool>>,
     /// An optional group for this completion. When the group changes between consecutive
     /// items, the completion menu inserts a divider. If the group also carries a label,
@@ -618,10 +619,10 @@ impl CompletionSource {
                         }
                     }
                     if completion_with_defaults.insert_text_format.is_none() && default_insert_text_format.is_some() {
-                        completion_with_defaults.insert_text_format = default_insert_text_format.cloned()
+                        completion_with_defaults.insert_text_format = default_insert_text_format.copied()
                     }
                     if completion_with_defaults.insert_text_mode.is_none() && default_insert_text_mode.is_some() {
-                        completion_with_defaults.insert_text_mode = default_insert_text_mode.cloned()
+                        completion_with_defaults.insert_text_mode = default_insert_text_mode.copied()
                     }
                 }
                 return Some(Cow::Owned(completion_with_defaults));
@@ -3530,7 +3531,11 @@ impl Project {
                 );
 
                 // Extract data while holding the lock, then release it before await
-                let (key_to_remove, write_info): (Option<(WorktreeId, String)>, Option<(PathBuf, Vec<u8>)>) = {
+                #[allow(clippy::type_complexity)]
+                let (key_to_remove, write_info): (
+                    Option<(WorktreeId, String)>,
+                    Option<(PathBuf, Vec<u8>)>,
+                ) = {
                     let mut files = downloading_files.lock();
                     let mut found_key: Option<(WorktreeId, String)> = None;
                     let mut write_data: Option<(PathBuf, Vec<u8>)> = None;

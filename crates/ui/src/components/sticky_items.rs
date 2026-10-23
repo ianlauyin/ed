@@ -1,10 +1,26 @@
-use std::{ops::Range, rc::Rc};
+use std::ops::Range;
+use std::rc::Rc;
 
-use gpui::{
-    AnyElement, App, AvailableSpace, Bounds, Context, Element, ElementId, Entity, GlobalElementId,
-    IntoElement, LayoutId, Pixels, Point, Render, Style, UniformListDecoration, Window, point, px,
-    size,
-};
+use gpui::AnyElement;
+use gpui::App;
+use gpui::AvailableSpace;
+use gpui::Bounds;
+use gpui::Context;
+use gpui::Element;
+use gpui::ElementId;
+use gpui::Entity;
+use gpui::GlobalElementId;
+use gpui::IntoElement;
+use gpui::LayoutId;
+use gpui::Pixels;
+use gpui::Point;
+use gpui::Render;
+use gpui::Style;
+use gpui::UniformListDecoration;
+use gpui::Window;
+use gpui::point;
+use gpui::px;
+use gpui::size;
 use smallvec::SmallVec;
 
 pub trait StickyCandidate {
@@ -12,15 +28,16 @@ pub trait StickyCandidate {
 }
 
 pub struct StickyItems<T> {
+    #[allow(clippy::type_complexity)]
     compute_fn: Rc<dyn Fn(Range<usize>, &mut Window, &mut App) -> SmallVec<[T; 8]>>,
+    #[allow(clippy::type_complexity)]
     render_fn: Rc<dyn Fn(T, &mut Window, &mut App) -> SmallVec<[AnyElement; 8]>>,
     decorations: Vec<Box<dyn StickyItemsDecoration>>,
 }
 
 pub fn sticky_items<V, T>(
     entity: Entity<V>,
-    compute_fn: impl Fn(&mut V, Range<usize>, &mut Window, &mut Context<V>) -> SmallVec<[T; 8]>
-    + 'static,
+    compute_fn: impl Fn(&mut V, Range<usize>, &mut Window, &mut Context<V>) -> SmallVec<[T; 8]> + 'static,
     render_fn: impl Fn(&mut V, T, &mut Window, &mut Context<V>) -> SmallVec<[AnyElement; 8]> + 'static,
 ) -> StickyItems<T>
 where
@@ -30,22 +47,14 @@ where
     let entity_compute = entity.clone();
     let entity_render = entity;
 
-    let compute_fn = Rc::new(
-        move |range: Range<usize>, window: &mut Window, cx: &mut App| -> SmallVec<[T; 8]> {
-            entity_compute.update(cx, |view, cx| compute_fn(view, range, window, cx))
-        },
-    );
-    let render_fn = Rc::new(
-        move |entry: T, window: &mut Window, cx: &mut App| -> SmallVec<[AnyElement; 8]> {
-            entity_render.update(cx, |view, cx| render_fn(view, entry, window, cx))
-        },
-    );
+    let compute_fn = Rc::new(move |range: Range<usize>, window: &mut Window, cx: &mut App| -> SmallVec<[T; 8]> {
+        entity_compute.update(cx, |view, cx| compute_fn(view, range, window, cx))
+    });
+    let render_fn = Rc::new(move |entry: T, window: &mut Window, cx: &mut App| -> SmallVec<[AnyElement; 8]> {
+        entity_render.update(cx, |view, cx| render_fn(view, entry, window, cx))
+    });
 
-    StickyItems {
-        compute_fn,
-        render_fn,
-        decorations: Vec::new(),
-    }
+    StickyItems { compute_fn, render_fn, decorations: Vec::new() }
 }
 
 impl<T> StickyItems<T>
@@ -159,19 +168,16 @@ where
         let mut elements = (self.render_fn)(sticky_anchor.entry, window, cx);
         let items_count = elements.len();
 
-        let indents: SmallVec<[usize; 8]> = (0..items_count)
-            .map(|ix| anchor_depth.saturating_sub(items_count.saturating_sub(ix)))
-            .collect();
+        let indents: SmallVec<[usize; 8]> =
+            (0..items_count).map(|ix| anchor_depth.saturating_sub(items_count.saturating_sub(ix))).collect();
 
         let mut last_decoration_element = None;
         let mut rest_decoration_elements = SmallVec::new();
 
         let expanded_width = bounds.size.width + scroll_offset.x.abs();
 
-        let decor_available_space = size(
-            AvailableSpace::Definite(expanded_width),
-            AvailableSpace::Definite(bounds.size.height),
-        );
+        let decor_available_space =
+            size(AvailableSpace::Definite(expanded_width), AvailableSpace::Definite(bounds.size.height));
 
         let drifting_y_offset = if sticky_anchor.drifting {
             let scroll_top = -scroll_offset.y;
@@ -194,11 +200,9 @@ where
 
         for decoration in &self.decorations {
             if let Some(drifting_indent) = drifting_indent {
-                let drifting_indent_vec: SmallVec<[usize; 8]> =
-                    [drifting_indent].into_iter().collect();
+                let drifting_indent_vec: SmallVec<[usize; 8]> = [drifting_indent].into_iter().collect();
 
-                let sticky_origin = base_origin
-                    + point(px(0.), item_height * rest_indents.len() + drifting_y_offset);
+                let sticky_origin = base_origin + point(px(0.), item_height * rest_indents.len() + drifting_y_offset);
                 let decoration_bounds = Bounds::new(sticky_origin, bounds.size);
 
                 let mut drifting_dec = decoration.as_ref().compute(
@@ -230,27 +234,20 @@ where
             }
         }
 
-        let (mut drifting_element, mut rest_elements) =
-            if sticky_anchor.drifting && !elements.is_empty() {
-                let last = elements.pop().unwrap();
-                (Some(last), elements)
-            } else {
-                (None, elements)
-            };
+        let (mut drifting_element, mut rest_elements) = if sticky_anchor.drifting && !elements.is_empty() {
+            let last = elements.pop().unwrap();
+            (Some(last), elements)
+        } else {
+            (None, elements)
+        };
 
-        let element_available_space = size(
-            AvailableSpace::Definite(expanded_width),
-            AvailableSpace::Definite(item_height),
-        );
+        let element_available_space =
+            size(AvailableSpace::Definite(expanded_width), AvailableSpace::Definite(item_height));
 
         // order of prepaint is important here
         // mouse events checks hitboxes in reverse insertion order
         if let Some(ref mut drifting_element) = drifting_element {
-            let sticky_origin = base_origin
-                + point(
-                    px(0.),
-                    item_height * rest_elements.len() + drifting_y_offset,
-                );
+            let sticky_origin = base_origin + point(px(0.), item_height * rest_elements.len() + drifting_y_offset);
 
             drifting_element.layout_as_root(element_available_space, window, cx);
             drifting_element.prepaint_at(sticky_origin, window, cx);

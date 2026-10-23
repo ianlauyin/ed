@@ -226,7 +226,7 @@ pub(crate) enum Style {
 }
 
 /// The style that a layout with `opt` is drawn in.
-pub(crate) fn style_of(opt: &LayeredOptions) -> Style {
+pub(crate) const fn style_of(opt: &LayeredOptions) -> Style {
     if opt.tracks {
         Style::Stepped
     } else if opt.straight {
@@ -238,7 +238,7 @@ pub(crate) fn style_of(opt: &LayeredOptions) -> Style {
 
 /// An index or count as a float.
 #[expect(clippy::cast_precision_loss, reason = "indices and counts stay far below 2^52")]
-fn float(i: usize) -> f64 {
+const fn float(i: usize) -> f64 {
     i as f64
 }
 
@@ -248,7 +248,7 @@ fn float(i: usize) -> f64 {
     clippy::cast_sign_loss,
     reason = "callers pass small non-negative whole numbers"
 )]
-fn whole(x: f64) -> usize {
+const fn whole(x: f64) -> usize {
     x as usize
 }
 
@@ -323,7 +323,7 @@ impl Lines {
 /// How often the routes of different edges cross, drawn in `style`. Crossings where two edges
 /// fan out from or into a node they share are not counted: near the node, where both are on
 /// their first or last piece, or where both are on the straight run that joins them to it.
-#[expect(clippy::float_cmp, reason = "Pele compares route axes exactly")]
+#[allow(clippy::float_cmp, reason = "Pele compares route axes exactly")]
 #[expect(clippy::many_single_char_names, reason = "names mirror Pele's compound.ts for side-by-side review")]
 pub(crate) fn route_crossings(nodes: &[CNode], edges: &[CEdge], style: Style) -> usize {
     let mut size = 0;
@@ -566,7 +566,7 @@ pub(crate) fn shift_layout(nodes: &mut [CNode], edges: &mut [CEdge], ox: f64, oy
         c.y += oy;
     }
     for e in edges.iter_mut() {
-        for point in e.route.chunks_exact_mut(3) {
+        for point in e.route.as_chunks_mut::<3>().0 {
             point[0] += ox;
             point[1] += oy;
         }
@@ -576,7 +576,7 @@ pub(crate) fn shift_layout(nodes: &mut [CNode], edges: &mut [CEdge], ox: f64, oy
 }
 
 /// A node of the given size inside `parent`, as Pele's `cnode` creates it.
-pub(crate) fn cnode(w: f64, h: f64, parent: i32) -> CNode {
+pub(crate) const fn cnode(w: f64, h: f64, parent: i32) -> CNode {
     CNode {
         dir: None,
         h,
@@ -595,7 +595,7 @@ pub(crate) fn cnode(w: f64, h: f64, parent: i32) -> CNode {
 }
 
 /// The side that a flow starts from.
-fn start_side(dir: Dir) -> Side {
+const fn start_side(dir: Dir) -> Side {
     match dir {
         Dir::Tb => Side::Top,
         Dir::Bt => Side::Bottom,
@@ -605,7 +605,7 @@ fn start_side(dir: Dir) -> Side {
 }
 
 /// The side across from `side`.
-fn opposite(side: Side) -> Side {
+const fn opposite(side: Side) -> Side {
     match side {
         Side::Top => Side::Bottom,
         Side::Right => Side::Left,
@@ -674,7 +674,7 @@ fn port_of<'a>(
 }
 
 /// Whether the edge's end lies below `item` rather than at it.
-fn endpoint_below(item: usize, e: &CEdge, out: bool) -> bool {
+const fn endpoint_below(item: usize, e: &CEdge, out: bool) -> bool {
     (if out { e.src } else { e.dst }) != item
 }
 
@@ -1000,7 +1000,7 @@ pub(crate) fn compound_layout(
 
 /// Whether two inputs are the same as JavaScript's `Object.is` tells: `NaN` is itself, and 0 is
 /// not -0.
-fn same(a: f64, b: f64) -> bool {
+const fn same(a: f64, b: f64) -> bool {
     a.to_bits() == b.to_bits() || (a.is_nan() && b.is_nan())
 }
 
@@ -1030,7 +1030,7 @@ impl Flat {
         }
         let mut inside = self.key[edges[port.e].src];
         let mut outside = 0.0;
-        for point in self.ledges[le].points.chunks_exact(2) {
+        for point in self.ledges[le].points.as_chunks::<2>().0 {
             if point[0] == self.last[id] {
                 inside = point[1];
             }
@@ -1270,7 +1270,7 @@ impl Placer<'_> {
             let axis = if vertical { 0.0 } else { 1.0 };
             let convert = |points: &[f64]| {
                 let mut out = Vec::with_capacity(points.len() / 2 * 3);
-                for p in points.chunks_exact(2) {
+                for p in points.as_chunks::<2>().0 {
                     out.extend([tx(p[0], p[1]), ty(p[0], p[1]), axis]);
                 }
                 out
@@ -1544,7 +1544,7 @@ fn set_side(levels: &mut [Level], level_of: &[Option<usize>], item: usize, e: us
 /// Appends the points of `part`, moved by `ox`, `oy`, to `route`, skipping a point that
 /// repeats the last one.
 fn append(route: &mut Vec<f64>, part: &[f64], ox: f64, oy: f64) {
-    for p in part.chunks_exact(3) {
+    for p in part.as_chunks::<3>().0 {
         let x = p[0] + ox;
         let y = p[1] + oy;
         let len = route.len();
@@ -1683,7 +1683,12 @@ mod tests {
             compound_layout(&mut nodes, &mut edges, dir, &options());
             let across = usize::from(dir != Dir::Tb);
             let at = |e: &CEdge, g: usize| {
-                e.route.chunks_exact(3).find(|p| on_border(&nodes[g], p[0], p[1])).map_or(f64::NAN, |p| p[across])
+                e.route
+                    .as_chunks::<3>()
+                    .0
+                    .iter()
+                    .find(|p| on_border(&nodes[g], p[0], p[1]))
+                    .map_or(f64::NAN, |p| p[across])
             };
             let fan: Vec<&CEdge> = edges.iter().filter(|e| e.dst == 3).collect();
             let leave: Vec<f64> = fan.iter().map(|e| at(e, parent_of(&nodes, e.src).unwrap())).collect();

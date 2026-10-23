@@ -4622,6 +4622,7 @@ impl ProjectPanel {
         None
     }
 
+    #[allow(clippy::type_complexity)]
     fn iter_visible_entries(
         &self,
         range: Range<usize>,
@@ -4652,6 +4653,7 @@ impl ProjectPanel {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     fn for_each_visible_entry(
         &self,
         range: Range<usize>,
@@ -5679,7 +5681,7 @@ impl ProjectPanel {
                 .hover(|style| style.bg(cx.theme().colors().element_active))
                 .when(!is_sticky, |div| {
                     div.when(index != components_len - 1, |div| {
-                        let target_entry_id = folded_ancestors.ancestors.get(components_len - 1 - index).cloned();
+                        let target_entry_id = folded_ancestors.ancestors.get(components_len - 1 - index).copied();
                         let drag_target = FoldedDirectoryDragTarget { entry_id, index, is_delimiter_target: false };
                         div.when(drag_and_drop_enabled, |div| {
                             div.on_drag_move(cx.listener(move |this, event: &DragMoveEvent<DraggedSelection>, _, _| {
@@ -5776,7 +5778,7 @@ impl ProjectPanel {
         cx: &Context<Self>,
     ) -> Div {
         let delimiter_target_index = index - 1;
-        let target_entry_id = folded_ancestors.ancestors.get(components_len - 1 - delimiter_target_index).cloned();
+        let target_entry_id = folded_ancestors.ancestors.get(components_len - 1 - delimiter_target_index).copied();
         let drag_target =
             FoldedDirectoryDragTarget { entry_id, index: delimiter_target_index, is_delimiter_target: true };
         div()
@@ -5866,7 +5868,7 @@ impl ProjectPanel {
         let is_marked = self.marked_entries.contains(&selection);
         let is_selected = self.selection == Some(selection);
 
-        let diagnostic_severity = self.diagnostics.get(&(worktree_id, entry.path.clone())).cloned();
+        let diagnostic_severity = self.diagnostics.get(&(worktree_id, entry.path.clone())).copied();
 
         let diagnostic_count = self.diagnostic_counts.get(&(worktree_id, entry.path.clone())).copied();
 
@@ -6531,14 +6533,12 @@ impl Render for ProjectPanel {
                                         };
                                         if event.bounds.contains(&event.event.position) {
                                             this.drag_target_entry = Some(DragTarget::Background);
-                                        } else {
-                                            if this
-                                                .drag_target_entry
-                                                .as_ref()
-                                                .is_some_and(|e| matches!(e, DragTarget::Background))
-                                            {
-                                                this.drag_target_entry = None;
-                                            }
+                                        } else if this
+                                            .drag_target_entry
+                                            .as_ref()
+                                            .is_some_and(|e| matches!(e, DragTarget::Background))
+                                        {
+                                            this.drag_target_entry = None;
                                         }
                                     },
                                 ))
@@ -6556,14 +6556,12 @@ impl Render for ProjectPanel {
                                             ) {
                                                 this.drag_target_entry = Some(DragTarget::Background);
                                             }
-                                        } else {
-                                            if this
-                                                .drag_target_entry
-                                                .as_ref()
-                                                .is_some_and(|e| matches!(e, DragTarget::Background))
-                                            {
-                                                this.drag_target_entry = None;
-                                            }
+                                        } else if this
+                                            .drag_target_entry
+                                            .as_ref()
+                                            .is_some_and(|e| matches!(e, DragTarget::Background))
+                                        {
+                                            this.drag_target_entry = None;
                                         }
                                     },
                                 ))

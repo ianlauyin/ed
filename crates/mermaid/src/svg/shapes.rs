@@ -59,7 +59,7 @@ const STAR: [(f64, f64); 28] = [
 ];
 
 /// A size with no label shift.
-fn size(w: f64, h: f64) -> ShapeSize {
+const fn size(w: f64, h: f64) -> ShapeSize {
     ShapeSize { dy: 0.0, h, w }
 }
 

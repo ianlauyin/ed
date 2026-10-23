@@ -1097,7 +1097,8 @@ impl Render for TerminalView {
 
         if let Some(new_display_offset) = self.scroll_handle.future_display_offset.take() {
             self.terminal.update(cx, |term, _| {
-                let delta = new_display_offset as i32 - term.last_content.display_offset as i32;
+                let delta =
+                    (new_display_offset as u32).cast_signed() - (term.last_content.display_offset as u32).cast_signed();
                 match delta.cmp(&0) {
                     cmp::Ordering::Greater => term.scroll_up_by(delta as usize),
                     cmp::Ordering::Less => term.scroll_down_by(-delta as usize),
@@ -1395,13 +1396,11 @@ impl Item for TerminalView {
                     .detach();
 
                 return true;
-            } else {
-                if let Some(project_path) = item.project_path(cx)
-                    && let Some(path) = project.read(cx).absolute_path(&project_path, cx)
-                {
-                    self.add_paths_to_terminal(&[path], window, cx);
-                    return true;
-                }
+            } else if let Some(project_path) = item.project_path(cx)
+                && let Some(path) = project.read(cx).absolute_path(&project_path, cx)
+            {
+                self.add_paths_to_terminal(&[path], window, cx);
+                return true;
             }
 
             return false;

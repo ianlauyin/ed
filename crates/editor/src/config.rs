@@ -268,6 +268,7 @@ impl Editor {
         self.delegate_expand_excerpts = delegate;
     }
 
+    #[allow(clippy::type_complexity)]
     pub(super) fn set_on_local_selections_changed(
         &mut self,
         callback: Option<Box<dyn Fn(Point, &mut Window, &mut Context<Self>) + 'static>>,

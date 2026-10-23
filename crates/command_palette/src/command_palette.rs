@@ -178,6 +178,7 @@ pub struct CommandPaletteDelegate {
     matches: Vec<StringMatch>,
     selected_ix: usize,
     previous_focus_handle: FocusHandle,
+    #[allow(clippy::type_complexity)]
     updating_matches: Option<(Task<()>, postage::dispatch::Receiver<(Vec<Command>, Vec<StringMatch>)>)>,
     query_history: QueryHistory,
 }

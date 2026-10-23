@@ -33,7 +33,7 @@ const VALUES: [&str; 21] = [
     "traces",
 ];
 
-fn is_style_part(t: T) -> bool {
+const fn is_style_part(t: T) -> bool {
     matches!(t, T::Alpha | T::Colon | T::Brkt | T::Minus | T::Semicolon)
 }
 

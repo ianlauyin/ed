@@ -604,7 +604,7 @@ impl Editor {
 
         // scroll based on transformation done to the last selection created by the user
         let (last_old, last_new) =
-            old_selections.last().zip(new_selections.last().cloned()).expect("old_selections isn't empty");
+            old_selections.last().zip(new_selections.last().copied()).expect("old_selections isn't empty");
 
         let is_selection_reversed = if new_selections.len() == 1 {
             let should_be_reversed = last_old.start != last_new.start;

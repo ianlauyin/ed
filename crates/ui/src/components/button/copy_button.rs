@@ -44,6 +44,7 @@ pub struct CopyButton {
     disabled: bool,
     tooltip_label: SharedString,
     visible_on_hover: Option<SharedString>,
+    #[allow(clippy::type_complexity)]
     custom_on_click: Option<Box<dyn Fn(&mut Window, &mut App) + 'static>>,
 }
 

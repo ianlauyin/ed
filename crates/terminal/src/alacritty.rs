@@ -712,7 +712,7 @@ pub(super) fn make_content(term: &Term<ZedListener>, last_content: &Content) -> 
     let grid = term.grid();
     let (last_hovered_word, grid_lines_change) = adjusted_last_hovered_word(grid, last_content);
 
-    let bottom_line = term.screen_lines() as i32 - 1 - content.display_offset as i32;
+    let bottom_line = (term.screen_lines() as u32).cast_signed() - 1 - (content.display_offset as u32).cast_signed();
     let bottom_row_occupied = content.cursor.point.line.0 >= bottom_line
         || cells
             .iter()
@@ -787,11 +787,11 @@ pub(super) fn update_vi_cursor_for_scroll(term: &mut Term<ZedListener>, scroll: 
             term.vi_mode_cursor = term.vi_mode_cursor.scroll(term, delta);
         }
         Scroll::PageUp => {
-            let lines = term.screen_lines() as i32;
+            let lines = (term.screen_lines() as u32).cast_signed();
             term.vi_mode_cursor = term.vi_mode_cursor.scroll(term, lines);
         }
         Scroll::PageDown => {
-            let lines = -(term.screen_lines() as i32);
+            let lines = -((term.screen_lines() as u32).cast_signed());
             term.vi_mode_cursor = term.vi_mode_cursor.scroll(term, lines);
         }
         Scroll::Top => {

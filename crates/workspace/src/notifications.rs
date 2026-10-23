@@ -604,6 +604,7 @@ pub mod simple_message_notification {
     #[derive(RegisterComponent)]
     pub struct MessageNotification {
         focus_handle: FocusHandle,
+        #[allow(clippy::type_complexity)]
         build_content: Box<dyn Fn(&mut Window, &mut Context<Self>) -> AnyElement>,
         button_style: Option<ButtonStyle>,
         content_icon: Option<IconName>,
@@ -613,11 +614,14 @@ pub mod simple_message_notification {
         primary_message: Option<SharedString>,
         primary_icon: Option<ActionIcon>,
         primary_icon_color: Option<Color>,
+        #[allow(clippy::type_complexity)]
         primary_on_click: Option<Arc<dyn Fn(&mut Window, &mut Context<Self>)>>,
         secondary_message: Option<SharedString>,
         secondary_icon: Option<ActionIcon>,
         secondary_icon_color: Option<Color>,
+        #[allow(clippy::type_complexity)]
         secondary_on_click: Option<Arc<dyn Fn(&mut Window, &mut Context<Self>)>>,
+        #[allow(clippy::type_complexity)]
         secondary_menu_entries: Vec<(SharedString, Arc<dyn Fn(&mut Window, &mut Context<Self>)>)>,
         more_info_message: Option<SharedString>,
         more_info_url: Option<Arc<str>>,
@@ -1333,10 +1337,12 @@ static GLOBAL_APP_NOTIFICATIONS: LazyLock<Mutex<AppNotifications>> =
 
 /// Stores app notifications so that they can be shown in new workspaces.
 struct AppNotifications {
+    #[allow(clippy::type_complexity)]
     app_notifications: Vec<(NotificationId, Arc<dyn Fn(&mut Context<Workspace>) -> AnyView + Send + Sync>)>,
 }
 
 impl AppNotifications {
+    #[allow(clippy::type_complexity)]
     pub fn insert(
         &mut self,
         id: NotificationId,
@@ -1362,6 +1368,7 @@ pub fn show_app_notification<V: Notification + 'static>(
     // Defer notification creation so that windows on the stack can be returned to GPUI
     cx.defer(move |cx| {
         // Handle dismiss events by removing the notification from all workspaces.
+        #[allow(clippy::type_complexity)]
         let build_notification: Arc<dyn Fn(&mut Context<Workspace>) -> AnyView + Send + Sync> = Arc::new({
             let id = id.clone();
             move |cx| {

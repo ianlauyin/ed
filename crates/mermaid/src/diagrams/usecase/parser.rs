@@ -141,12 +141,12 @@ fn is_boundary_line(t: T) -> bool {
 }
 
 /// Whether `t` may close a label that `--` opened.
-fn closes_label(t: T) -> bool {
+const fn closes_label(t: T) -> bool {
     matches!(t, T::ForwardSolid | T::MarkerlessSolid | T::ForwardCircle | T::ForwardCross)
 }
 
 /// Whether `t` may come first inside a metadata block.
-fn is_metadata_first(t: T) -> bool {
+const fn is_metadata_first(t: T) -> bool {
     matches!(t, T::Newline | T::Identifier | T::PlainString | T::RBrace)
 }
 
@@ -835,7 +835,7 @@ impl Parser<'_> {
         Ok(out)
     }
 
-    #[expect(clippy::too_many_lines, reason = "mirrors Pele's topStatement")]
+    #[allow(clippy::too_many_lines, reason = "mirrors Pele's topStatement")]
     /// Reads a statement at the top level.
     fn top_statement(&mut self) -> Result<(), Error> {
         let k = self.p;

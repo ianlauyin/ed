@@ -40,8 +40,8 @@ impl Bind for SerializedEditor {
 
         let start_index = match self.mtime.and_then(|mtime| mtime.to_seconds_and_nanos_for_persistence()) {
             Some((seconds, nanos)) => {
-                let start_index = statement.bind(&(seconds as i64), start_index)?;
-                statement.bind(&(nanos as i32), start_index)?
+                let start_index = statement.bind(&seconds.cast_signed(), start_index)?;
+                statement.bind(&nanos.cast_signed(), start_index)?
             }
             None => {
                 let start_index = statement.bind::<Option<i64>>(&None, start_index)?;

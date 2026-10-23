@@ -321,7 +321,7 @@ impl SearchState {
                         } else {
                             offset += chunk.text.len();
                         }
-                        let style = chunk.syntax_highlight_id.and_then(|highlight| theme.get(highlight).cloned());
+                        let style = chunk.syntax_highlight_id.and_then(|highlight| theme.get(highlight).copied());
 
                         if let Some(style) = style {
                             let start = context_text.len();
@@ -730,6 +730,7 @@ struct SearchData {
 
 struct SearchPrecomputed {
     multi_buffer_snapshot: MultiBufferSnapshot,
+    #[allow(clippy::type_complexity)]
     matches_by_buffer: HashMap<BufferId, Vec<(Range<editor::Anchor>, Arc<OnceLock<SearchData>>)>>,
     folded_buffers: HashSet<BufferId>,
 }

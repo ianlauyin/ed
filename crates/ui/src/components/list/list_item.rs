@@ -55,10 +55,15 @@ pub struct ListItem {
     end_slot_visibility: EndSlotVisibility,
     toggle: Option<bool>,
     inset: bool,
+    #[allow(clippy::type_complexity)]
     on_click: Option<Box<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
+    #[allow(clippy::type_complexity)]
     on_hover: Option<Box<dyn Fn(&bool, &mut Window, &mut App) + 'static>>,
+    #[allow(clippy::type_complexity)]
     on_toggle: Option<Arc<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
+    #[allow(clippy::type_complexity)]
     tooltip: Option<Box<dyn Fn(&mut Window, &mut App) -> AnyView + 'static>>,
+    #[allow(clippy::type_complexity)]
     on_secondary_mouse_down: Option<Box<dyn Fn(&MouseDownEvent, &mut Window, &mut App) + 'static>>,
     children: SmallVec<[AnyElement; 2]>,
     selectable: bool,

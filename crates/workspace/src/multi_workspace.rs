@@ -626,10 +626,8 @@ impl MultiWorkspace {
                     group.key = new_key.clone();
                 }
             }
-        } else {
-            if let Some(group) = self.project_groups.iter_mut().find(|g| g.key == *old_key) {
-                group.key = new_key.clone();
-            }
+        } else if let Some(group) = self.project_groups.iter_mut().find(|g| g.key == *old_key) {
+            group.key = new_key.clone();
         }
 
         // If another retained workspace still has the old key (e.g. a
@@ -916,6 +914,7 @@ impl MultiWorkspace {
     /// options and should return a [`Task`] that resolves to the
     /// [`RemoteClient`] session, or `None` if the connection was
     /// cancelled.
+    #[allow(clippy::type_complexity)]
     pub fn find_or_create_workspace(
         &mut self,
         paths: PathList,
@@ -1007,6 +1006,7 @@ impl MultiWorkspace {
     /// or creates a new one (deserializing its saved state from the database).
     /// Never searches other windows or matches workspaces with a superset of
     /// the requested paths.
+    #[allow(clippy::type_complexity)]
     pub fn find_or_create_local_workspace(
         &mut self,
         path_list: PathList,

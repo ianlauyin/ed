@@ -97,6 +97,7 @@ enum ActivityIcon {
 struct Content {
     icon: ActivityIcon,
     message: String,
+    #[allow(clippy::type_complexity)]
     on_click: Option<Arc<dyn Fn(&mut ActivityIndicator, &mut Window, &mut Context<ActivityIndicator>)>>,
     tooltip_message: Option<String>,
 }

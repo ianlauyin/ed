@@ -170,6 +170,7 @@ impl ResizableColumnsState {
 }
 
 struct UniformListData {
+    #[allow(clippy::type_complexity)]
     render_list_of_rows_fn: Box<dyn Fn(Range<usize>, &mut Window, &mut App) -> Vec<UncheckedTableRow<AnyElement>>>,
     element_id: ElementId,
     row_count: usize,
@@ -177,6 +178,7 @@ struct UniformListData {
 
 struct VariableRowHeightListData {
     /// Unlike UniformList, this closure renders only single row, allowing each one to have its own height
+    #[allow(clippy::type_complexity)]
     render_row_fn: Box<dyn Fn(usize, &mut Window, &mut App) -> UncheckedTableRow<AnyElement>>,
     list_state: ListState,
     row_count: usize,
@@ -355,8 +357,10 @@ pub struct Table {
     rows: TableContents,
     interaction_state: Option<WeakEntity<TableInteractionState>>,
     column_width_config: ColumnWidthConfig,
+    #[allow(clippy::type_complexity)]
     map_row: Option<Rc<dyn Fn((usize, Stateful<Div>), &mut Window, &mut App) -> AnyElement>>,
     use_ui_font: bool,
+    #[allow(clippy::type_complexity)]
     empty_table_callback: Option<Rc<dyn Fn(&mut Window, &mut App) -> AnyElement>>,
     /// The number of columns in the table. Used to assert column numbers in `TableRow` collections
     cols: usize,
@@ -785,6 +789,7 @@ pub struct TableRenderContext {
     pub show_row_hover: bool,
     pub total_row_count: usize,
     pub column_widths: Option<TableRow<Length>>,
+    #[allow(clippy::type_complexity)]
     pub map_row: Option<Rc<dyn Fn((usize, Stateful<Div>), &mut Window, &mut App) -> AnyElement>>,
     pub use_ui_font: bool,
     pub disable_base_cell_style: bool,
@@ -871,6 +876,7 @@ fn build_resize_dividers(
         // by the overflow_hidden content container.
         let divider_left = if col_idx == last { accumulated - px(RESIZE_DIVIDER_WIDTH) } else { accumulated };
         let divider = div().id(col_idx).absolute().top_0().left(divider_left);
+        #[allow(clippy::type_complexity)]
         let on_reset: Rc<dyn Fn(&mut Window, &mut App)> = {
             let columns_state = columns_state.clone();
             Rc::new(move |_window, cx| {

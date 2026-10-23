@@ -114,6 +114,7 @@ pub(crate) fn rebalanced_markdown_for_selection(
 
 /// Returns the events of the root blocks containing each selection boundary.
 /// The second slice is empty when both boundaries share a block.
+#[allow(clippy::type_complexity)]
 fn boundary_block_events<'a>(
     events: &'a [(Range<usize>, MarkdownEvent)],
     root_block_starts: &[usize],

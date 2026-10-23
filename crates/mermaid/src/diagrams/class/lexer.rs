@@ -41,7 +41,7 @@ enum S {
 }
 
 /// The token each state gives at the end of input, before the parser sees the end itself.
-fn at_end(state: S) -> T {
+const fn at_end(state: S) -> T {
     match state {
         S::Initial | S::Bqstring | S::Cls | S::Namespace => T::Eof,
         S::String => T::Str,

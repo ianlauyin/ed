@@ -259,7 +259,9 @@ pub(crate) struct MacPlatformState {
     on_system_wake: Option<Box<dyn FnMut()>>,
     system_power_observers_registered: bool,
     quit: Option<Box<dyn FnMut() -> bool>>,
+    #[allow(clippy::type_complexity)]
     menu_command: Option<Box<dyn FnMut(&dyn Action)>>,
+    #[allow(clippy::type_complexity)]
     validate_menu_command: Option<Box<dyn FnMut(&dyn Action) -> bool>>,
     will_open_menu: Option<Box<dyn FnMut()>>,
     menu_actions: Vec<Box<dyn Action>>,
@@ -505,7 +507,7 @@ impl MacPlatform {
                     }
                     let _: () = msg_send![item, setEnabled: !*disabled];
 
-                    let tag = actions.len() as NSInteger;
+                    let tag = actions.len().cast_signed();
                     let _: () = msg_send![item, setTag: tag];
                     actions.push(action.boxed_clone());
                     item

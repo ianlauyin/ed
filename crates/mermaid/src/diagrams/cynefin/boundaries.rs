@@ -161,15 +161,14 @@ fn push_pair(out: &mut String, x: f64, y: f64) {
 
 /// Appends path commands that continue from the curve's start point to its end.
 pub(crate) fn forward(out: &mut String, curve: &[f64]) {
-    for segment in curve.get(2..).unwrap_or(&[]).chunks_exact(6) {
-        if let [ax, ay, bx, by, x, y] = *segment {
-            out.push('C');
-            push_pair(out, ax, ay);
-            out.push(' ');
-            push_pair(out, bx, by);
-            out.push(' ');
-            push_pair(out, x, y);
-        }
+    for segment in curve.get(2..).unwrap_or(&[]).as_chunks::<6>().0 {
+        let [ax, ay, bx, by, x, y] = *segment;
+        out.push('C');
+        push_pair(out, ax, ay);
+        out.push(' ');
+        push_pair(out, bx, by);
+        out.push(' ');
+        push_pair(out, x, y);
     }
 }
 

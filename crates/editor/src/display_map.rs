@@ -1062,6 +1062,7 @@ impl DisplayMap {
         Some((highlights.0, &highlights.1))
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn all_text_highlights(
         &self,
     ) -> impl Iterator<Item = (&HighlightKey, &Arc<(HighlightStyle, Vec<Range<Anchor>>)>)> {
@@ -1670,7 +1671,7 @@ impl DisplaySnapshot {
 
                 move |chunk| {
                     let syntax_highlight_style =
-                        chunk.syntax_highlight_id.and_then(|id| editor_style.syntax.get(id).cloned());
+                        chunk.syntax_highlight_id.and_then(|id| editor_style.syntax.get(id).copied());
 
                     let chunk_highlight = chunk.highlight_style.map(|chunk_highlight| {
                         HighlightStyle {
@@ -1757,7 +1758,7 @@ impl DisplaySnapshot {
                 continue;
             }
 
-            let syntax_style = chunk.syntax_highlight_id.and_then(|id| syntax_theme.get(id).cloned());
+            let syntax_style = chunk.syntax_highlight_id.and_then(|id| syntax_theme.get(id).copied());
 
             let overlay_style = chunk.highlight_style;
 
@@ -2146,7 +2147,7 @@ impl DisplaySnapshot {
     /// important when soft wrapping is enabled.
     pub fn start_of_relative_buffer_row(&self, point: DisplayPoint, times: isize) -> DisplayPoint {
         let start = self.display_point_to_fold_point(point, Bias::Left);
-        let target = start.row() as isize + times;
+        let target = (start.row() as usize).cast_signed() + times;
         let new_row = (target.max(0) as u32).min(self.fold_snapshot().max_point().row());
 
         self.clip_point(

@@ -42,7 +42,7 @@ fn starts_no_case(b: &[u8], i: usize, word: &[u8]) -> bool {
 }
 
 /// The length of each keyword.
-fn keyword_length(t: T) -> usize {
+const fn keyword_length(t: T) -> usize {
     match t {
         T::Usecase => 12,
         T::Actor | T::Style | T::Class | T::False => 5,

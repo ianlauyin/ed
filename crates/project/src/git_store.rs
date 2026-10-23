@@ -821,6 +821,7 @@ impl EventEmitter<GitStoreEvent> for GitStore {}
 
 pub struct GitJob {
     id: JobId,
+    #[allow(clippy::type_complexity)]
     job: Box<dyn FnOnce(RepositoryState, &mut AsyncApp) -> Task<()>>,
     key: Option<GitJobKey>,
 }
@@ -2078,12 +2079,10 @@ impl GitStore {
                             existing.schedule_scan(updates_tx.clone(), cx);
                         });
                     }
-                } else {
-                    if let Some(worktree_ids) = self.worktree_ids.get_mut(&repo_id) {
-                        worktree_ids.remove(&worktree_id);
-                        if worktree_ids.is_empty() {
-                            removed_ids.push(repo_id);
-                        }
+                } else if let Some(worktree_ids) = self.worktree_ids.get_mut(&repo_id) {
+                    worktree_ids.remove(&worktree_id);
+                    if worktree_ids.is_empty() {
+                        removed_ids.push(repo_id);
                     }
                 }
             } else if let UpdatedGitRepository {
@@ -4293,6 +4292,7 @@ impl BufferGitState {
         let prev_hunk_staging_operation_count = self.hunk_staging_operation_count_as_of_write;
         let index_matches_head = self.index_matches_head();
 
+        #[allow(clippy::type_complexity)]
         let oid_diffs: Vec<(Option<git::Oid>, Entity<BufferDiff>, Entity<Buffer>, Option<Arc<str>>)> = self
             .oid_diffs
             .iter()
@@ -7763,7 +7763,7 @@ impl Repository {
     fn clear_pending_ops(&mut self, cx: &mut Context<Self>) {
         let updated = SumTree::from_iter(
             self.pending_ops.iter().filter_map(|ops| {
-                let inner_ops: Vec<PendingOp> = ops.ops.iter().filter(|op| op.running()).cloned().collect();
+                let inner_ops: Vec<PendingOp> = ops.ops.iter().filter(|op| op.running()).copied().collect();
                 if inner_ops.is_empty() {
                     None
                 } else {

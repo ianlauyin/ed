@@ -1136,6 +1136,7 @@ impl Editor {
         display_map.current_inlays().filter(move |inlay| matches!(inlay.id, InlayId::Hint(_))).cloned()
     }
 
+    #[allow(clippy::type_complexity)]
     fn inlay_hints_for_buffer(
         &self,
         invalidate_cache: InvalidationStrategy,

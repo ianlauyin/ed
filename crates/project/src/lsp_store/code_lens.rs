@@ -245,6 +245,7 @@ impl LspStore {
         new_task
     }
 
+    #[allow(clippy::type_complexity)]
     fn fetch_code_lens_for_buffer(
         &mut self,
         buffer: &Entity<Buffer>,

@@ -83,7 +83,7 @@ enum ElementField {
 }
 
 impl C4Element {
-    fn field(&mut self, field: ElementField) -> &mut Option<String> {
+    const fn field(&mut self, field: ElementField) -> &mut Option<String> {
         match field {
             ElementField::BgColor => &mut self.bg_color,
             ElementField::BorderColor => &mut self.border_color,
@@ -176,7 +176,7 @@ enum RelField {
 }
 
 impl C4Rel {
-    fn field(&mut self, field: RelField) -> &mut Option<String> {
+    const fn field(&mut self, field: RelField) -> &mut Option<String> {
         match field {
             RelField::Descr => &mut self.descr,
             RelField::LineColor => &mut self.line_color,

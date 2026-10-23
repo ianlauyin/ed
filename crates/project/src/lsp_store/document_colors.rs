@@ -300,6 +300,7 @@ impl LspStore {
         }
     }
 
+    #[allow(clippy::type_complexity)]
     pub(super) fn fetch_document_colors_for_buffer(
         &mut self,
         buffer: &Entity<Buffer>,

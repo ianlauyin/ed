@@ -1230,7 +1230,7 @@ impl BlockMap {
         ) -> (i32, Option<(WrapRow, u32)>) {
             let our_wrap = our_wrapper(our_point, bias);
             let companion_wrap = companion_wrapper(their_point, bias);
-            let new_delta = companion_wrap.0 as i32 - our_wrap.0 as i32;
+            let new_delta = companion_wrap.0.cast_signed() - our_wrap.0.cast_signed();
 
             let spacer = if new_delta > delta {
                 let height = (new_delta - delta) as u32;
@@ -1281,7 +1281,7 @@ impl BlockMap {
             let our_baseline = our_wrapper(our_baseline, Bias::Left);
             let their_baseline = companion_wrapper(their_baseline.min(excerpt.target_excerpt_range.end), Bias::Left);
 
-            let mut delta = their_baseline.0 as i32 - our_baseline.0 as i32;
+            let mut delta = their_baseline.0.cast_signed() - our_baseline.0.cast_signed();
 
             while let Some(source_point) = source_points.next() {
                 let mut current_boundary = source_point;

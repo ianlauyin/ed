@@ -900,6 +900,7 @@ impl EditorElement {
         });
     }
 
+    #[allow(clippy::type_complexity)]
     fn layout_selections(
         &self,
         start_anchor: Anchor,
@@ -923,7 +924,7 @@ impl EditorElement {
             if editor.show_local_selections {
                 let mut layouts = Vec::new();
                 let newest = editor.selections.newest(&editor.display_snapshot(cx));
-                for selection in local_selections.iter().cloned() {
+                for selection in local_selections.iter().copied() {
                     let is_empty = selection.start == selection.end;
                     let is_newest = selection == newest;
 
@@ -2537,7 +2538,7 @@ impl EditorElement {
         };
         let mut element_height_in_lines = ((final_size.height / line_height).ceil() as u32).max(1);
 
-        let effective_row_start = block_row_start.0 as i32 + *block_resize_offset;
+        let effective_row_start = block_row_start.0.cast_signed() + *block_resize_offset;
         debug_assert!(effective_row_start >= 0);
         let mut row = DisplayRow(effective_row_start.max(0) as u32);
 
@@ -2568,7 +2569,7 @@ impl EditorElement {
                 }
             };
             if element_height_in_lines != block.height() {
-                *block_resize_offset += element_height_in_lines as i32 - block.height() as i32;
+                *block_resize_offset += element_height_in_lines.cast_signed() - block.height().cast_signed();
                 resized_blocks.insert(custom_block_id, element_height_in_lines);
             }
         }
@@ -3113,6 +3114,7 @@ impl EditorElement {
         );
     }
 
+    #[allow(clippy::type_complexity)]
     fn layout_popovers_above_or_below_line(
         &self,
         target_position: gpui::Point<Pixels>,
@@ -5712,6 +5714,7 @@ impl LineWithInvisibles {
                 // We'll need to keep track of the last invisible we've seen and then check if we are adjacent to it for some of
                 // the above cases.
                 // Note: We zip in the original `invisibles` to check for tab equality
+                #[allow(clippy::type_complexity)]
                 let mut last_seen: Option<(bool, usize, Box<dyn Fn(&mut Window, &mut App)>)> = None;
                 for (([start, end], paint), invisible) in invisible_iter.zip_eq(self.invisibles.iter()) {
                     let should_render = match (&last_seen, invisible) {
@@ -6434,7 +6437,7 @@ impl Element for EditorElement {
                         self.layout_crease_toggles(start_row..end_row, &row_infos, &active_rows, &snapshot, window, cx)
                     });
                     let crease_trailers = window.with_element_namespace("crease_trailers", |window| {
-                        self.layout_crease_trailers(row_infos.iter().cloned(), &snapshot, window, cx)
+                        self.layout_crease_trailers(row_infos.iter().copied(), &snapshot, window, cx)
                     });
 
                     let display_hunks = self.layout_gutter_diff_hunks(
@@ -7250,6 +7253,7 @@ pub struct EditorLayout {
     tab_invisible: ShapedLine,
     space_invisible: ShapedLine,
     sticky_buffer_header: Option<AnyElement>,
+    #[allow(clippy::type_complexity)]
     document_colors: Option<(DocumentColorsRenderMode, Vec<(Range<DisplayPoint>, Hsla)>)>,
     text_align: TextAlign,
     content_width: Pixels,
@@ -7987,6 +7991,7 @@ pub fn register_action<T: Action>(
     )
 }
 
+#[allow(clippy::type_complexity)]
 fn register_action_erased(
     editor: &Entity<Editor>,
     window: &mut Window,

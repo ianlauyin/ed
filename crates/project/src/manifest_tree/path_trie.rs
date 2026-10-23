@@ -69,6 +69,7 @@ impl<Label: Ord + Clone> RootPathTrie<Label> {
         self.insert_inner(path, value, presence);
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn walk<'a>(
         &'a self,
         path: &TriePath,

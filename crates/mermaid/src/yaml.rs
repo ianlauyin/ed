@@ -412,7 +412,7 @@ impl Reader {
     }
 }
 
-fn is_blank(b: Option<&u8>) -> bool {
+const fn is_blank(b: Option<&u8>) -> bool {
     matches!(b, Some(b' ' | b'\t' | b'\n' | b'\r'))
 }
 

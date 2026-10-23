@@ -39,7 +39,7 @@ fn letter_at(src: &str, at: usize) -> bool {
 }
 
 /// Whether `[\w-]` is the byte `b`.
-fn word_or_dash(b: u8) -> bool {
+const fn word_or_dash(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_' || b == b'-'
 }
 

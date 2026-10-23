@@ -42,7 +42,7 @@ const FORMAT_STEP: f64 = 400.0;
 
 /// The time to schedule against: the host's `now` when it is finite. Pele reads the clock
 /// otherwise, which the compiler does not, so it counts from the epoch.
-pub(crate) fn clock(now: f64) -> f64 {
+pub(crate) const fn clock(now: f64) -> f64 {
     if now.is_finite() { now } else { 0.0 }
 }
 

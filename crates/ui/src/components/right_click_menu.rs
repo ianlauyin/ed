@@ -32,7 +32,9 @@ use gpui::px;
 
 pub struct RightClickMenu<M: ManagedView> {
     id: ElementId,
+    #[allow(clippy::type_complexity)]
     child_builder: Option<Box<dyn FnOnce(bool, &mut Window, &mut App) -> AnyElement + 'static>>,
+    #[allow(clippy::type_complexity)]
     menu_builder: Option<Rc<dyn Fn(&mut Window, &mut App) -> Option<Entity<M>> + 'static>>,
     anchor: Option<Anchor>,
     attach: Option<Anchor>,

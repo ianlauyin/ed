@@ -38,7 +38,7 @@ enum S {
 const LONGEST_KEYWORD: usize = 22;
 
 /// Characters that end an unquoted string: `:,{<>-=` and line breaks.
-fn is_stop(c: u8) -> bool {
+const fn is_stop(c: u8) -> bool {
     matches!(c, b':' | b',' | b'\r' | b'\n' | b'{' | b'<' | b'>' | b'-' | b'=')
 }
 

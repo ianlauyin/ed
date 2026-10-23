@@ -38,12 +38,12 @@ struct Mark {
 }
 
 /// JavaScript's `Math.min`, which is `NaN` when either value is.
-fn min(a: f64, b: f64) -> f64 {
+const fn min(a: f64, b: f64) -> f64 {
     if a.is_nan() || b.is_nan() { f64::NAN } else { a.min(b) }
 }
 
 /// JavaScript's `Math.max`, which is `NaN` when either value is.
-fn max(a: f64, b: f64) -> f64 {
+const fn max(a: f64, b: f64) -> f64 {
     if a.is_nan() || b.is_nan() { f64::NAN } else { a.max(b) }
 }
 

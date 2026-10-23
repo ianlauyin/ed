@@ -47,7 +47,7 @@ pub(crate) enum Cardinality {
 
 impl Cardinality {
     /// The lower-case name, which names the marker drawn for it.
-    pub(crate) fn marker(self) -> &'static str {
+    pub(crate) const fn marker(self) -> &'static str {
         match self {
             Self::MdParent => "md_parent",
             Self::OneOrMore => "one_or_more",

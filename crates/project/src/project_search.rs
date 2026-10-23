@@ -87,6 +87,7 @@ enum SearchKind {
 pub struct SearchResultsHandle {
     results: Receiver<SearchResult>,
     matching_buffers: Receiver<(Entity<Buffer>, MatchPositionHint)>,
+    #[allow(clippy::type_complexity)]
     trigger_search: Box<dyn FnOnce(&mut App) -> Task<()> + Send + Sync>,
 }
 
@@ -505,6 +506,7 @@ impl Search {
     }
 
     /// Background workers cannot open buffers by themselves, hence main thread will do it on their behalf.
+    #[allow(clippy::type_complexity)]
     async fn open_buffers(
         buffer_store: Entity<BufferStore>,
         rx: Receiver<(ProjectPath, MatchPositionHint)>,
@@ -549,6 +551,7 @@ impl Search {
         .await;
     }
 
+    #[allow(clippy::type_complexity)]
     async fn grab_buffer_snapshots(
         rx: Receiver<(Entity<Buffer>, MatchPositionHint)>,
         find_all_matches_tx: Sender<FindAllMatchesRequest>,
@@ -570,6 +573,7 @@ impl Search {
         .await;
     }
 
+    #[allow(clippy::type_complexity)]
     async fn ensure_matched_ranges_are_reported_in_order(
         rx: Receiver<oneshot::Receiver<(Entity<Buffer>, Vec<Range<language::Anchor>>)>>,
         tx: Sender<SearchResult>,

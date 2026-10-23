@@ -216,7 +216,7 @@ pub(crate) enum Direction {
 
 impl Direction {
     /// The direction's keyword.
-    pub(crate) fn as_str(self) -> &'static str {
+    pub(crate) const fn as_str(self) -> &'static str {
         match self {
             Self::Column => "column",
             Self::Row => "row",

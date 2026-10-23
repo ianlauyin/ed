@@ -866,11 +866,10 @@ fn draw(model: &BlockDb, config: &Value, options: &Options, tight: bool) -> Rend
         let path = if route.loop_ > 0.0 {
             loop_path(shape(&cells, &views, s), route.loop_, marker_trim(start_type), marker_trim(end_type))
         } else {
-            for pair in route.points.chunks_exact_mut(2) {
-                if let [x, y] = pair {
-                    *x += ox;
-                    *y += oy;
-                }
+            for pair in route.points.as_chunks_mut::<2>().0 {
+                let [x, y] = pair;
+                *x += ox;
+                *y += oy;
             }
             trace(&route.points, marker_trim(start_type), marker_trim(end_type))
         };

@@ -529,6 +529,7 @@ pub fn render_redistributable_columns_resize_handles(
         let columns_state = columns_state.clone();
         let divider = div().id(col_idx).relative().top_0();
         let entity_id = columns_state.entity_id();
+        #[allow(clippy::type_complexity)]
         let on_reset: Rc<dyn Fn(&mut Window, &mut App)> = {
             let columns_state = columns_state.clone();
             Rc::new(move |window, cx| {
@@ -538,6 +539,7 @@ pub fn render_redistributable_columns_resize_handles(
                 });
             })
         };
+        #[allow(clippy::type_complexity)]
         let on_drag_end: Option<Rc<dyn Fn(&mut App)>> = {
             Some(Rc::new(move |cx| {
                 columns_state.update(cx, |state, _| state.commit_preview());
@@ -567,6 +569,7 @@ pub fn render_redistributable_columns_resize_handles(
 /// - `entity_id`: the `EntityId` of the owning column state (for the drag payload)
 /// - `on_reset`: called on double-click to reset the column to its initial width
 /// - `on_drag_end`: called when the drag ends (e.g. to commit preview widths)
+#[allow(clippy::type_complexity)]
 pub(crate) fn render_column_resize_divider(
     divider: Stateful<Div>,
     col_idx: usize,

@@ -49,7 +49,7 @@ enum P {
     AfterDiagram,
 }
 
-fn is_other(t: T) -> bool {
+const fn is_other(t: T) -> bool {
     matches!(t, T::Title | T::AccDescription | T::AccTitle | T::AccDescr | T::AccDescrMultilineValue)
 }
 

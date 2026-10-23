@@ -35,7 +35,7 @@ pub(crate) struct ClassMember {
 }
 
 /// Whether `c` is a visibility marker.
-fn is_visibility(c: u8) -> bool {
+const fn is_visibility(c: u8) -> bool {
     matches!(c, b'#' | b'+' | b'~' | b'-')
 }
 

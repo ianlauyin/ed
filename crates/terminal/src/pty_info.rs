@@ -132,7 +132,7 @@ impl PtyProcessInfo {
         let Some(pid) = self.pid_getter.pid() else {
             return false;
         };
-        unsafe { libc::killpg(pid.as_u32() as i32, libc::SIGKILL) == 0 }
+        unsafe { libc::killpg(pid.as_u32().cast_signed(), libc::SIGKILL) == 0 }
     }
 
     pub(crate) fn kill_child_process(&self) -> bool {
@@ -141,7 +141,7 @@ impl PtyProcessInfo {
 
     pub(crate) fn terminate_child_process(&self) -> bool {
         let pid = self.pid_getter.fallback_pid();
-        unsafe { libc::killpg(pid.as_u32() as i32, libc::SIGTERM) == 0 }
+        unsafe { libc::killpg(pid.as_u32().cast_signed(), libc::SIGTERM) == 0 }
     }
 
     fn load(&self) -> Option<ProcessInfo> {

@@ -622,7 +622,7 @@ pub(crate) struct Reader<'a> {
 
 impl<'a> Reader<'a> {
     /// A reader at the first token.
-    pub(crate) fn new(tokens: Tokens<'a>, types: &'a [TokenType], diagram: &'static str) -> Self {
+    pub(crate) const fn new(tokens: Tokens<'a>, types: &'a [TokenType], diagram: &'static str) -> Self {
         Self { diagram, i: 0, tokens, types }
     }
 

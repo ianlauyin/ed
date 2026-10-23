@@ -162,7 +162,7 @@ fn kind_of(keyword: &str) -> EntityKind {
 }
 
 /// The group of lanes `kind` goes in.
-fn group_of(kind: EntityKind) -> LaneGroup {
+const fn group_of(kind: EntityKind) -> LaneGroup {
     match kind {
         EntityKind::Ui | EntityKind::Processor => LaneGroup::Trigger,
         EntityKind::Event => LaneGroup::Stream,

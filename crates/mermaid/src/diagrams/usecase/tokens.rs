@@ -141,7 +141,7 @@ pub(crate) enum T {
 }
 
 /// Mermaid's name for `t`, as its errors print it.
-pub(crate) fn name(t: T) -> &'static str {
+pub(crate) const fn name(t: T) -> &'static str {
     match t {
         T::Eof => "EOF",
         T::Usecase => "USECASE",

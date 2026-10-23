@@ -447,6 +447,7 @@ impl fmt::Debug for Event {
 /// responsible for managing item tabs, focus and zoom states and drag and drop features.
 /// Can be split, see `PaneGroup` for more details.
 pub struct Pane {
+    #[allow(clippy::type_complexity)]
     alternate_file_items: (Option<Box<dyn WeakItemHandle>>, Option<Box<dyn WeakItemHandle>>),
     focus_handle: FocusHandle,
     items: Vec<Box<dyn ItemHandle>>,
@@ -462,16 +463,21 @@ pub struct Pane {
     pub(crate) workspace: WeakEntity<Workspace>,
     project: WeakEntity<Project>,
     pub drag_split_direction: Option<SplitDirection>,
+    #[allow(clippy::type_complexity)]
     can_drop_predicate: Option<Arc<dyn Fn(&dyn Any, &mut Window, &mut App) -> bool>>,
+    #[allow(clippy::type_complexity)]
     can_split_predicate: Option<Arc<dyn Fn(&mut Self, &dyn Any, &mut Window, &mut Context<Self>) -> bool>>,
     can_toggle_zoom: bool,
+    #[allow(clippy::type_complexity)]
     should_display_tab_bar: Rc<dyn Fn(&Window, &mut Context<Pane>) -> bool>,
     /// Whether the last render showed the tab bar strip above the card.
     tab_bar_displayed: bool,
     tab_style: TabStyle,
     should_display_welcome_page: bool,
+    #[allow(clippy::type_complexity)]
     render_tab_bar_buttons:
         Rc<dyn Fn(&mut Pane, &mut Window, &mut Context<Pane>) -> (Option<AnyElement>, Option<AnyElement>)>,
+    #[allow(clippy::type_complexity)]
     render_tab_bar: Rc<dyn Fn(&mut Pane, &mut Window, &mut Context<Pane>) -> AnyElement>,
     show_tab_bar_buttons: bool,
     max_tabs: Option<NonZeroUsize>,
@@ -587,6 +593,7 @@ enum PinOperation {
 }
 
 impl Pane {
+    #[allow(clippy::type_complexity)]
     pub fn new(
         workspace: WeakEntity<Workspace>,
         project: Entity<Project>,
@@ -870,6 +877,7 @@ impl Pane {
         self.should_display_welcome_page = should_display_welcome_page;
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn set_can_split(
         &mut self,
         can_split_predicate: Option<
@@ -3360,7 +3368,7 @@ impl Pane {
                     SplitDirection::Down => rect.height - relative_cursor.y,
                     SplitDirection::Left => relative_cursor.x,
                 })
-                .cloned()
+                .copied()
         } else {
             None
         };
@@ -4132,6 +4140,7 @@ impl ItemNavHistory {
 }
 
 impl NavHistory {
+    #[allow(clippy::type_complexity)]
     pub fn for_each_entry(&self, cx: &App, f: &mut dyn FnMut(&NavigationEntry, (ProjectPath, Option<PathBuf>))) {
         let borrowed_history = self.0.lock();
         borrowed_history

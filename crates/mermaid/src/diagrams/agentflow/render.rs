@@ -64,7 +64,7 @@ const DOTS: f64 = 14.0;
 const COLLAPSED: &str = "collapsed";
 
 /// The side a flow runs toward, with sides numbered clockwise from the top.
-fn flow_end(dir: Dir) -> u8 {
+const fn flow_end(dir: Dir) -> u8 {
     match dir {
         Dir::Tb => 2,
         Dir::Rl => 3,
@@ -136,7 +136,7 @@ pub(crate) fn render(db: &AgentflowDb, graph: &AgentGraph, config: &Value, optio
 }
 
 #[expect(clippy::cast_precision_loss, reason = "counts stay far below 2^52")]
-fn to_f64(value: usize) -> f64 {
+const fn to_f64(value: usize) -> f64 {
     value as f64
 }
 

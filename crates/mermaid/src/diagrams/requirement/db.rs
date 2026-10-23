@@ -133,7 +133,7 @@ impl RequirementDb {
     }
 
     /// Sets the flow direction.
-    pub(crate) fn set_direction(&mut self, dir: &'static str) {
+    pub(crate) const fn set_direction(&mut self, dir: &'static str) {
         self.direction = dir;
     }
 

@@ -28,7 +28,9 @@ use crate::worktree_store::WorktreeStore;
 
 pub struct ProjectEnvironment {
     cli_environment: Option<HashMap<String, String>>,
+    #[allow(clippy::type_complexity)]
     local_environments: HashMap<(Shell, Arc<Path>), Shared<Task<Option<HashMap<String, String>>>>>,
+    #[allow(clippy::type_complexity)]
     remote_environments: HashMap<(Shell, Arc<Path>), Shared<Task<Option<HashMap<String, String>>>>>,
     environment_error_messages: VecDeque<String>,
     environment_error_messages_tx: mpsc::UnboundedSender<String>,

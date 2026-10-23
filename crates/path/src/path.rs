@@ -298,7 +298,7 @@ impl PathStyle {
 pub fn normalize_path(path: &Path) -> PathBuf {
     use std::path::Component;
     let mut components = path.components().peekable();
-    let mut ret = if let Some(c @ Component::Prefix(..)) = components.peek().cloned() {
+    let mut ret = if let Some(c @ Component::Prefix(..)) = components.peek().copied() {
         components.next();
         PathBuf::from(c.as_os_str())
     } else {

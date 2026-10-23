@@ -59,6 +59,7 @@ pub(crate) struct SpellCheckState {
     project_words: HashMap<WorktreeId, ProjectWords>,
     /// Shared with [`SpellCheckActions`], which runs while the editor is
     /// being updated and so cannot read it.
+    #[allow(clippy::type_complexity)]
     misspellings: Rc<RefCell<Vec<(BufferId, Range<text::Anchor>)>>>,
 }
 
@@ -363,6 +364,7 @@ fn subtract(ranges: Vec<Range<usize>>, holes: Vec<Range<usize>>) -> Vec<Range<us
 /// misspelled word under the cursor.
 pub(crate) struct SpellCheckActions {
     editor: WeakEntity<Editor>,
+    #[allow(clippy::type_complexity)]
     misspellings: Rc<RefCell<Vec<(BufferId, Range<text::Anchor>)>>>,
     has_project: bool,
 }

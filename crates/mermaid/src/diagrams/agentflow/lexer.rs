@@ -203,7 +203,7 @@ impl Lexer<'_> {
         self.p = e;
     }
 
-    fn start_loc(&self) -> Loc {
+    const fn start_loc(&self) -> Loc {
         Loc { first_column: self.col, first_line: self.line, last_column: self.col, last_line: self.line }
     }
 

@@ -42,7 +42,7 @@ fn semantic(message: String) -> Error {
 /// `value` in percent: values up to 1 are fractions, larger ones are already percentages.
 fn to_percent(value: f64, context: &str) -> Result<f64, Error> {
     let normalized = if value <= 1.0 { value * 100.0 } else { value };
-    #[expect(clippy::manual_range_contains, reason = "NaN passes, as in JavaScript")]
+    #[allow(clippy::manual_range_contains, reason = "NaN passes, as in JavaScript")]
     if normalized < 0.0 || normalized > 100.0 {
         let mut message = String::from(context);
         message.push_str(" must be between 0-1 (decimal) or 0-100 (percentage). Received: ");

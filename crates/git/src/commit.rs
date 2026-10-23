@@ -1,8 +1,14 @@
-use crate::{Oid, repository::GitBinary, status::StatusCode};
-use anyhow::{Context as _, Result};
-use collections::{HashMap, HashSet};
-use gpui::SharedString;
 use std::str::FromStr;
+
+use anyhow::Context as _;
+use anyhow::Result;
+use collections::HashMap;
+use collections::HashSet;
+use gpui::SharedString;
+
+use crate::Oid;
+use crate::repository::GitBinary;
+use crate::status::StatusCode;
 
 #[derive(Clone, Debug, Default)]
 pub struct ParsedCommitMessage {
@@ -16,17 +22,10 @@ pub(crate) async fn get_messages(git: &GitBinary, shas: &[Oid]) -> Result<HashMa
 
     let output = { get_messages_impl(git, shas).await? };
 
-    Ok(shas
-        .iter()
-        .cloned()
-        .zip(output)
-        .collect::<HashMap<Oid, String>>())
+    Ok(shas.iter().copied().zip(output).collect::<HashMap<Oid, String>>())
 }
 
-pub(crate) async fn get_tag_names(
-    git: &GitBinary,
-    shas: &[Oid],
-) -> Result<HashMap<Oid, Vec<String>>> {
+pub(crate) async fn get_tag_names(git: &GitBinary, shas: &[Oid]) -> Result<HashMap<Oid, Vec<String>>> {
     if shas.is_empty() {
         return Ok(HashMap::default());
     }
@@ -47,10 +46,7 @@ pub(crate) async fn get_tag_names(
         String::from_utf8_lossy(&output.stderr)
     );
 
-    Ok(parse_tag_names(
-        &String::from_utf8_lossy(&output.stdout),
-        shas,
-    ))
+    Ok(parse_tag_names(&String::from_utf8_lossy(&output.stdout), shas))
 }
 
 fn parse_tag_names(output: &str, shas: &[Oid]) -> HashMap<Oid, Vec<String>> {
@@ -61,10 +57,7 @@ fn parse_tag_names(output: &str, shas: &[Oid]) -> HashMap<Oid, Vec<String>> {
         let mut fields = line.split('\0');
         let object_sha = fields.next();
         let peeled_sha = fields.next().filter(|sha| !sha.is_empty());
-        let Some(sha) = peeled_sha
-            .or(object_sha)
-            .and_then(|sha| Oid::from_str(sha).ok())
-        else {
+        let Some(sha) = peeled_sha.or(object_sha).and_then(|sha| Oid::from_str(sha).ok()) else {
             continue;
         };
         let Some(tag_name) = fields.next().filter(|tag_name| !tag_name.is_empty()) else {
@@ -122,9 +115,7 @@ pub(crate) struct CommitDiffEntry<'a> {
 }
 
 /// Parses the output of `git diff --raw --no-abbrev -z`.
-pub(crate) fn parse_git_diff_raw(
-    content: &str,
-) -> impl Iterator<Item = Result<CommitDiffEntry<'_>>> {
+pub(crate) fn parse_git_diff_raw(content: &str) -> impl Iterator<Item = Result<CommitDiffEntry<'_>>> {
     let mut parts = content.split('\0');
     std::iter::from_fn(move || {
         let metadata = parts.next()?;
@@ -141,18 +132,12 @@ pub(crate) fn parse_git_diff_raw(
 }
 
 fn parse_git_diff_raw_entry<'a>(metadata: &'a str, path: &'a str) -> Result<CommitDiffEntry<'a>> {
-    let mut fields = metadata
-        .strip_prefix(':')
-        .context("raw diff metadata is missing its ':' prefix")?
-        .split_ascii_whitespace();
+    let mut fields =
+        metadata.strip_prefix(':').context("raw diff metadata is missing its ':' prefix")?.split_ascii_whitespace();
     let old_mode = fields.next().context("raw diff is missing the old mode")?;
     let new_mode = fields.next().context("raw diff is missing the new mode")?;
-    let old_oid = fields
-        .next()
-        .context("raw diff is missing the old object ID")?;
-    let new_oid = fields
-        .next()
-        .context("raw diff is missing the new object ID")?;
+    let old_oid = fields.next().context("raw diff is missing the old object ID")?;
+    let new_oid = fields.next().context("raw diff is missing the new object ID")?;
     let status = match fields.next() {
         Some("M") => StatusCode::Modified,
         Some("T") => StatusCode::TypeChanged,
@@ -167,19 +152,11 @@ fn parse_git_diff_raw_entry<'a>(metadata: &'a str, path: &'a str) -> Result<Comm
         status,
         old_object: (!old_oid.bytes().all(|byte| byte == b'0')).then(|| CommitDiffObject {
             oid: old_oid,
-            kind: if old_mode == GITLINK_MODE {
-                CommitDiffObjectKind::Gitlink
-            } else {
-                CommitDiffObjectKind::Blob
-            },
+            kind: if old_mode == GITLINK_MODE { CommitDiffObjectKind::Gitlink } else { CommitDiffObjectKind::Blob },
         }),
         new_object: (!new_oid.bytes().all(|byte| byte == b'0')).then(|| CommitDiffObject {
             oid: new_oid,
-            kind: if new_mode == GITLINK_MODE {
-                CommitDiffObjectKind::Gitlink
-            } else {
-                CommitDiffObjectKind::Blob
-            },
+            kind: if new_mode == GITLINK_MODE { CommitDiffObjectKind::Gitlink } else { CommitDiffObjectKind::Blob },
         }),
     })
 }

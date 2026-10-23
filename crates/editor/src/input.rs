@@ -2392,8 +2392,8 @@ impl EntityInputHandler for Editor {
                     .find_map(|(selection, range)| {
                         if selection.id == newest_selection_id {
                             Some(
-                                (range.start.0.0 as isize - selection.head().0.0 as isize)
-                                    ..(range.end.0.0 as isize - selection.head().0.0 as isize),
+                                (range.start.0.0.cast_signed() - selection.head().0.0.cast_signed())
+                                    ..(range.end.0.0.cast_signed() - selection.head().0.0.cast_signed()),
                             )
                         } else {
                             None
@@ -2470,8 +2470,8 @@ impl EntityInputHandler for Editor {
                     .find_map(|(selection, range)| {
                         if selection.id == newest_selection_id {
                             Some(
-                                (range.start.0.0 as isize - selection.head().0.0 as isize)
-                                    ..(range.end.0.0 as isize - selection.head().0.0 as isize),
+                                (range.start.0.0.cast_signed() - selection.head().0.0.cast_signed())
+                                    ..(range.end.0.0.cast_signed() - selection.head().0.0.cast_signed()),
                             )
                         } else {
                             None

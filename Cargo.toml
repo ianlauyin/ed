@@ -525,6 +525,11 @@ needless_pass_by_ref_mut = "warn"
 # pedantic
 assigning_clones = "warn"
 borrow_as_ptr = "warn"
+cast_possible_wrap = "warn"
+cast_ptr_alignment = "warn"
+checked_conversions = "warn"
+cloned_instead_of_copied = "warn"
+collapsible_else_if = "warn"
 
 # old lint rules
 dbg_macro = "deny"
@@ -535,8 +540,6 @@ declare_interior_mutable_const = "deny"
 redundant_clone = "deny"
 disallowed_methods = "deny"
 
-# Individual rules that have violations in the codebase:
-type_complexity = "allow"
 
 # Motivation: We use `vec![a..b]` a lot when dealing with ranges in text, so
 # warning on this rule produces a lot of noise.

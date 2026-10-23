@@ -9,7 +9,7 @@ use crate::error::Error;
 use crate::text::label::trim;
 
 /// Tokens that continue a label.
-fn is_word(t: T) -> bool {
+const fn is_word(t: T) -> bool {
     matches!(
         t,
         T::Punctuation
@@ -28,17 +28,17 @@ fn is_word(t: T) -> bool {
 }
 
 /// Tokens of a class name.
-fn is_id(t: T) -> bool {
+const fn is_id(t: T) -> bool {
     matches!(t, T::Alpha | T::Num | T::Minus | T::Comma | T::Colon | T::Amp | T::Brkt | T::Mult | T::UnicodeText)
 }
 
 /// Tokens of a style.
-fn is_style(t: T) -> bool {
+const fn is_style(t: T) -> bool {
     matches!(t, T::Alpha | T::Num | T::Colon | T::Space | T::Brkt | T::Minus)
 }
 
 /// Tokens that end a statement.
-fn is_eol(t: T) -> bool {
+const fn is_eol(t: T) -> bool {
     matches!(t, T::Newline | T::Semi | T::Eof)
 }
 

@@ -59,10 +59,12 @@ pub trait ToastView: ManagedView {
 pub struct ToastAction {
     pub id: ElementId,
     pub label: SharedString,
+    #[allow(clippy::type_complexity)]
     pub on_click: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
 }
 
 impl ToastAction {
+    #[allow(clippy::type_complexity)]
     pub fn new(label: SharedString, on_click: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>) -> Self {
         let id = ElementId::Name(label.clone());
 

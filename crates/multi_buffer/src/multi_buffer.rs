@@ -512,7 +512,7 @@ impl ops::Add<isize> for MultiBufferOffset {
     type Output = Self;
 
     fn add(self, rhs: isize) -> Self::Output {
-        MultiBufferOffset((self.0 as isize + rhs) as usize)
+        MultiBufferOffset((self.0.cast_signed() + rhs) as usize)
     }
 }
 
@@ -2505,7 +2505,7 @@ impl MultiBuffer {
             // Compute the start of the edit in output coordinates.
             let edit_start_overshoot = edit.old.start - old_diff_transforms.start().0;
             let edit_old_start = old_diff_transforms.start().1 + edit_start_overshoot;
-            let edit_new_start = MultiBufferOffset((edit_old_start.0 as isize + output_delta) as usize);
+            let edit_new_start = MultiBufferOffset((edit_old_start.0.cast_signed() + output_delta) as usize);
 
             let changed_diff_hunks = Self::recompute_diff_transforms_for_edit(
                 &edit,
@@ -2525,8 +2525,8 @@ impl MultiBuffer {
             let edit_new_end = new_diff_transforms.summary().output.len + edit_new_end_overshoot;
             let output_edit = Edit { old: edit_old_start..edit_old_end, new: edit_new_start..edit_new_end };
 
-            output_delta += (output_edit.new.end - output_edit.new.start) as isize;
-            output_delta -= (output_edit.old.end - output_edit.old.start) as isize;
+            output_delta += (output_edit.new.end - output_edit.new.start).cast_signed();
+            output_delta -= (output_edit.old.end - output_edit.old.start).cast_signed();
             if changed_diff_hunks || matches!(change_kind, DiffChangeKind::BufferEdited) {
                 output_edits.push(output_edit);
             }
@@ -4885,6 +4885,7 @@ impl MultiBufferSnapshot {
     /// excerpt
     ///
     /// Can optionally pass a range_filter to filter the ranges of brackets to consider
+    #[allow(clippy::type_complexity)]
     pub fn innermost_enclosing_bracket_ranges<T: ToOffset>(
         &self,
         range: Range<T>,

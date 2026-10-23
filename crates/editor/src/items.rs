@@ -1243,32 +1243,33 @@ impl SearchableItem for Editor {
         };
 
         let buffer = self.buffer().read(cx).snapshot(cx);
-        let new_idx = match direction {
+        let new_idx = (match direction {
             Direction::Next => matches.iter().position(|m| m.start.cmp(&cursor, &buffer).is_gt()).unwrap_or(0),
             Direction::Prev => {
                 matches.iter().rposition(|m| m.end.cmp(&cursor, &buffer).is_lt()).unwrap_or(matches.len() - 1)
             }
-        } as isize;
+        })
+        .cast_signed();
 
         // We'll use `count - 1` because the first jump to the next or previous
         // match already happens in the scenario above, when we find the next or
         // previous match starting from the cursor position.
         let count = count.saturating_sub(1);
         let count = match direction {
-            Direction::Prev => -(count as isize),
-            Direction::Next => count as isize,
+            Direction::Prev => -count.cast_signed(),
+            Direction::Next => count.cast_signed(),
         };
 
-        let new_idx = (new_idx + count) % matches.len() as isize;
+        let new_idx = (new_idx + count) % matches.len().cast_signed();
         let new_idx = if new_idx.is_negative() {
             // We need a `matches.len() - 1` here in case `next_idx` has now been
             // set to `0`, otherwise we'd end up returning `matches.len()`, which
             // would be out of bounds.
-            new_idx + (matches.len() - 1) as isize
+            new_idx + (matches.len() - 1).cast_signed()
         } else {
             new_idx
         };
-        assert!(new_idx < matches.len() as isize);
+        assert!(new_idx < matches.len().cast_signed());
         new_idx as usize
     }
 

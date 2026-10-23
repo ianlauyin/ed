@@ -55,7 +55,7 @@ impl S {
 }
 
 /// The token of a one-character ASCII rule.
-fn single(c: u8) -> Option<T> {
+const fn single(c: u8) -> Option<T> {
     Some(match c {
         b':' => T::Colon,
         b'+' => T::Plus,

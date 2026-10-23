@@ -4,7 +4,8 @@
 
 use std::ffi::CString;
 
-use anyhow::{Context as _, Result};
+use anyhow::Context as _;
+use anyhow::Result;
 use libsqlite3_sys::sqlite3_exec;
 
 use crate::connection::Connection;
@@ -13,16 +14,9 @@ impl Connection {
     fn eager_exec(&self, sql: &str) -> anyhow::Result<()> {
         let sql_str = CString::new(sql).context("Error creating cstr")?;
         unsafe {
-            sqlite3_exec(
-                self.sqlite3,
-                sql_str.as_c_str().as_ptr(),
-                None,
-                std::ptr::null_mut(),
-                std::ptr::null_mut(),
-            );
+            sqlite3_exec(self.sqlite3, sql_str.as_c_str().as_ptr(), None, std::ptr::null_mut(), std::ptr::null_mut());
         }
-        self.last_error()
-            .with_context(|| format!("Prepare call failed for query:\n{}", sql))?;
+        self.last_error().with_context(|| format!("Prepare call failed for query:\n{}", sql))?;
 
         Ok(())
     }
@@ -72,7 +66,7 @@ fn schema_version(schema: &[&str]) -> i32 {
             hash = hash.wrapping_mul(0x01000193);
         }
     }
-    match hash as i32 {
+    match hash.cast_signed() {
         0 => 1,
         version => version,
     }

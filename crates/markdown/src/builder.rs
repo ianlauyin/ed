@@ -374,7 +374,7 @@ impl MarkdownElementBuilder {
                 }
 
                 let run_len = run_range.len();
-                let highlight = self.syntax_theme.get(*highlight_id).cloned();
+                let highlight = self.syntax_theme.get(*highlight_id).copied();
                 if let Some(highlight) = highlight {
                     self.pending_line.runs.push(text_style.clone().highlight(highlight).to_run(run_len));
                 } else {

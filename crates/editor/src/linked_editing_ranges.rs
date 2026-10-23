@@ -22,6 +22,7 @@ use crate::Editor;
 #[derive(Clone, Default)]
 pub(super) struct LinkedEditingRanges(
     /// Ranges are non-overlapping and sorted by .0 (thus, [x + 1].start > [x].end must hold)
+    #[allow(clippy::type_complexity)]
     pub HashMap<BufferId, Vec<(Range<Anchor>, Vec<Range<Anchor>>)>>,
 );
 
@@ -159,6 +160,7 @@ pub(super) fn refresh_linked_ranges(editor: &mut Editor, window: &Window, cx: &C
 /// HTML/JSX tags, across one or more buffers. Edits are stored as anchor ranges
 /// so they track buffer changes and are only resolved to concrete points at
 /// apply time.
+#[allow(clippy::type_complexity)]
 pub struct LinkedEdits(HashMap<Entity<Buffer>, Vec<(Range<Anchor>, Arc<str>)>>);
 
 impl LinkedEdits {

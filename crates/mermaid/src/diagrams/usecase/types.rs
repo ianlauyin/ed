@@ -20,7 +20,7 @@ pub(crate) enum ActorType {
 
 impl ActorType {
     /// The type as Pele names it.
-    pub(crate) fn as_str(self) -> &'static str {
+    pub(crate) const fn as_str(self) -> &'static str {
         match self {
             Self::Awesome => "awesome",
             Self::Hollow => "hollow",
@@ -41,7 +41,7 @@ pub(crate) enum Shape {
 
 impl Shape {
     /// The shape as Pele names it.
-    pub(crate) fn as_str(self) -> &'static str {
+    pub(crate) const fn as_str(self) -> &'static str {
         match self {
             Self::Ellipse => "ellipse",
             Self::Rect => "rect",
@@ -131,7 +131,7 @@ pub(crate) enum RelationshipType {
 
 impl RelationshipType {
     /// The type as Pele names it.
-    pub(crate) fn as_str(self) -> &'static str {
+    pub(crate) const fn as_str(self) -> &'static str {
         match self {
             Self::Association => "association",
             Self::Extend => "extend",

@@ -16,7 +16,9 @@ pub struct Disclosure {
     closed_icon: IconName,
     shape: Option<IconButtonShape>,
     visible_on_hover: Option<SharedString>,
+    #[allow(clippy::type_complexity)]
     tooltip: Option<Box<dyn Fn(&mut Window, &mut App) -> AnyView + 'static>>,
+    #[allow(clippy::type_complexity)]
     on_toggle_expanded: Option<Arc<dyn Fn(&ClickEvent, &mut Window, &mut App) + 'static>>,
     opened_icon: IconName,
 }

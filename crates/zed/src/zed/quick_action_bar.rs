@@ -1,29 +1,69 @@
 mod preview;
 
-use editor::actions::{
-    AddSelectionAbove, AddSelectionBelow, CodeActionSource, DuplicateLineDown, GoToDiagnostic,
-    GoToHunk, GoToPreviousDiagnostic, GoToPreviousHunk, MoveLineDown, MoveLineUp, SelectAll,
-    SelectLargerSyntaxNode, SelectNext, SelectSmallerSyntaxNode, ToggleCodeActions,
-    ToggleDiagnostics, ToggleGoToLine, ToggleInlineDiagnostics,
-};
-use editor::code_context_menus::{CodeContextMenu, ContextMenuOrigin};
-use editor::{Editor, EditorSettings};
-use gpui::{
-    Action, Anchor, AnchoredPositionMode, ClickEvent, Context, ElementId, Entity, EventEmitter,
-    FocusHandle, Focusable, InteractiveElement, ParentElement, Render, Styled, Subscription,
-    WeakEntity, Window, anchored, deferred, point,
-};
+use editor::Editor;
+use editor::EditorSettings;
+use editor::actions::AddSelectionAbove;
+use editor::actions::AddSelectionBelow;
+use editor::actions::CodeActionSource;
+use editor::actions::DuplicateLineDown;
+use editor::actions::GoToDiagnostic;
+use editor::actions::GoToHunk;
+use editor::actions::GoToPreviousDiagnostic;
+use editor::actions::GoToPreviousHunk;
+use editor::actions::MoveLineDown;
+use editor::actions::MoveLineUp;
+use editor::actions::SelectAll;
+use editor::actions::SelectLargerSyntaxNode;
+use editor::actions::SelectNext;
+use editor::actions::SelectSmallerSyntaxNode;
+use editor::actions::ToggleCodeActions;
+use editor::actions::ToggleDiagnostics;
+use editor::actions::ToggleGoToLine;
+use editor::actions::ToggleInlineDiagnostics;
+use editor::code_context_menus::CodeContextMenu;
+use editor::code_context_menus::ContextMenuOrigin;
+use gpui::Action;
+use gpui::Anchor;
+use gpui::AnchoredPositionMode;
+use gpui::ClickEvent;
+use gpui::Context;
+use gpui::ElementId;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::InteractiveElement;
+use gpui::ParentElement;
+use gpui::Render;
+use gpui::Styled;
+use gpui::Subscription;
+use gpui::WeakEntity;
+use gpui::Window;
+use gpui::anchored;
+use gpui::deferred;
+use gpui::point;
 use project::project_settings::DiagnosticSeverity;
-use search::{BufferSearchBar, buffer_search};
-use settings::{Settings, SettingsStore};
-use ui::{
-    ButtonStyle, ContextMenu, ContextMenuEntry, DocumentationSide, IconButton, IconName, IconSize,
-    PopoverMenu, PopoverMenuHandle, Tooltip, prelude::*,
-};
+use search::BufferSearchBar;
+use search::buffer_search;
+use settings::Settings;
+use settings::SettingsStore;
+use ui::ButtonStyle;
+use ui::ContextMenu;
+use ui::ContextMenuEntry;
+use ui::DocumentationSide;
+use ui::IconButton;
+use ui::IconName;
+use ui::IconSize;
+use ui::PopoverMenu;
+use ui::PopoverMenuHandle;
+use ui::Tooltip;
+use ui::prelude::*;
+use workspace::ToolbarItemEvent;
+use workspace::ToolbarItemLocation;
+use workspace::ToolbarItemView;
+use workspace::Workspace;
 use workspace::item::ItemBufferKind;
-use workspace::{
-    ToolbarItemEvent, ToolbarItemLocation, ToolbarItemView, Workspace, item::ItemHandle,
-};
+use workspace::item::ItemHandle;
 use zed_actions::outline::ToggleOutline;
 
 const MAX_CODE_ACTION_MENU_LINES: u32 = 16;
@@ -40,11 +80,7 @@ pub struct QuickActionBar {
 }
 
 impl QuickActionBar {
-    pub fn new(
-        buffer_search_bar: Entity<BufferSearchBar>,
-        workspace: &Workspace,
-        cx: &mut Context<Self>,
-    ) -> Self {
+    pub fn new(buffer_search_bar: Entity<BufferSearchBar>, workspace: &Workspace, cx: &mut Context<Self>) -> Self {
         let mut this = Self {
             _inlay_hints_enabled_subscription: None,
 
@@ -56,24 +92,19 @@ impl QuickActionBar {
             workspace: workspace.weak_handle(),
         };
         this.apply_settings(cx);
-        cx.observe_global::<SettingsStore>(|this, cx| this.apply_settings(cx))
-            .detach();
+        cx.observe_global::<SettingsStore>(|this, cx| this.apply_settings(cx)).detach();
         this
     }
 
     fn active_editor(&self) -> Option<Entity<Editor>> {
-        self.active_item
-            .as_ref()
-            .and_then(|item| item.downcast::<Editor>())
+        self.active_item.as_ref().and_then(|item| item.downcast::<Editor>())
     }
 
     fn apply_settings(&mut self, cx: &mut Context<Self>) {
         let new_show = EditorSettings::get_global(cx).toolbar.quick_actions;
         if new_show != self.show {
             self.show = new_show;
-            cx.emit(ToolbarItemEvent::ChangeLocation(
-                self.get_toolbar_item_location(),
-            ));
+            cx.emit(ToolbarItemEvent::ChangeLocation(self.get_toolbar_item_location()));
         }
     }
 
@@ -93,14 +124,13 @@ impl Render for QuickActionBar {
         };
 
         let supports_inlay_hints = editor.update(cx, |editor, cx| editor.supports_inlay_hints(cx));
-        let supports_semantic_tokens =
-            editor.update(cx, |editor, cx| editor.supports_semantic_tokens(cx));
+        let supports_semantic_tokens = editor.update(cx, |editor, cx| editor.supports_semantic_tokens(cx));
         let editor_value = editor.read(cx);
         let inlay_hints_enabled = editor_value.inlay_hints_enabled();
         let semantic_highlights_enabled = editor_value.semantic_highlights_enabled();
         let is_full = editor_value.mode().is_full();
-        let diagnostics_enabled = editor_value.diagnostics_enabled()
-            && editor_value.diagnostics_max_severity != DiagnosticSeverity::Off;
+        let diagnostics_enabled =
+            editor_value.diagnostics_enabled() && editor_value.diagnostics_max_severity != DiagnosticSeverity::Off;
         let supports_inline_diagnostics = editor_value.inline_diagnostics_enabled();
         let inline_diagnostics_enabled = editor_value.show_inline_diagnostics();
         let show_git_blame_gutter = editor_value.show_git_blame_gutter();
@@ -122,9 +152,8 @@ impl Render for QuickActionBar {
                 {
                     let buffer_search_bar = self.buffer_search_bar.clone();
                     move |_, window, cx| {
-                        buffer_search_bar.update(cx, |search_bar, cx| {
-                            search_bar.toggle(&buffer_search::Deploy::find(), window, cx)
-                        });
+                        buffer_search_bar
+                            .update(cx, |search_bar, cx| search_bar.toggle(&buffer_search::Deploy::find(), window, cx));
                     }
                 },
             )
@@ -133,18 +162,13 @@ impl Render for QuickActionBar {
         let code_actions_dropdown = code_action_enabled.then(|| {
             let is_deployed = {
                 let menu_ref = editor.read(cx).context_menu().borrow();
-                let code_action_menu = menu_ref
-                    .as_ref()
-                    .filter(|menu| matches!(menu, CodeContextMenu::CodeActions(..)));
-                code_action_menu
-                    .as_ref()
-                    .is_some_and(|menu| matches!(menu.origin(), ContextMenuOrigin::QuickActionBar))
+                let code_action_menu =
+                    menu_ref.as_ref().filter(|menu| matches!(menu, CodeContextMenu::CodeActions(..)));
+                code_action_menu.as_ref().is_some_and(|menu| matches!(menu.origin(), ContextMenuOrigin::QuickActionBar))
             };
             let code_action_element = is_deployed
                 .then(|| {
-                    editor.update(cx, |editor, cx| {
-                        editor.render_context_menu(MAX_CODE_ACTION_MENU_LINES, window, cx)
-                    })
+                    editor.update(cx, |editor, cx| editor.render_context_menu(MAX_CODE_ACTION_MENU_LINES, window, cx))
                 })
                 .flatten();
             v_flex()
@@ -156,20 +180,14 @@ impl Render for QuickActionBar {
                         .toggle_state(is_deployed)
                         .when(!is_deployed, |this| {
                             this.when(has_available_code_actions, |this| {
+                                this.tooltip(Tooltip::for_action_title("Code Actions", &ToggleCodeActions::default()))
+                            })
+                            .when(!has_available_code_actions, |this| {
                                 this.tooltip(Tooltip::for_action_title(
-                                    "Code Actions",
+                                    "No Code Actions Available",
                                     &ToggleCodeActions::default(),
                                 ))
                             })
-                            .when(
-                                !has_available_code_actions,
-                                |this| {
-                                    this.tooltip(Tooltip::for_action_title(
-                                        "No Code Actions Available",
-                                        &ToggleCodeActions::default(),
-                                    ))
-                                },
-                            )
                         })
                         .on_click({
                             let editor = editor.clone();
@@ -199,15 +217,9 @@ impl Render for QuickActionBar {
         });
 
         let editor_selections_dropdown = {
-            let has_diff_hunks = editor
-                .read(cx)
-                .buffer()
-                .read(cx)
-                .snapshot(cx)
-                .has_diff_hunks();
-            let _has_selection = editor.update(cx, |editor, cx| {
-                editor.has_non_empty_selection(&editor.display_snapshot(cx))
-            });
+            let has_diff_hunks = editor.read(cx).buffer().read(cx).snapshot(cx).has_diff_hunks();
+            let _has_selection =
+                editor.update(cx, |editor, cx| editor.has_non_empty_selection(&editor.display_snapshot(cx)));
 
             let focus = editor.focus_handle(cx);
 
@@ -226,42 +238,20 @@ impl Render for QuickActionBar {
                     let menu = ContextMenu::build(window, cx, move |menu, _, _| {
                         menu.context(focus.clone())
                             .action("Select All", Box::new(SelectAll))
-                            .action(
-                                "Select Next Occurrence",
-                                Box::new(SelectNext {
-                                    replace_newest: false,
-                                }),
-                            )
+                            .action("Select Next Occurrence", Box::new(SelectNext { replace_newest: false }))
                             .action("Expand Selection", Box::new(SelectLargerSyntaxNode))
                             .action("Shrink Selection", Box::new(SelectSmallerSyntaxNode))
-                            .action(
-                                "Add Cursor Above",
-                                Box::new(AddSelectionAbove {
-                                    skip_soft_wrap: true,
-                                }),
-                            )
-                            .action(
-                                "Add Cursor Below",
-                                Box::new(AddSelectionBelow {
-                                    skip_soft_wrap: true,
-                                }),
-                            )
+                            .action("Add Cursor Above", Box::new(AddSelectionAbove { skip_soft_wrap: true }))
+                            .action("Add Cursor Below", Box::new(AddSelectionBelow { skip_soft_wrap: true }))
                             .separator()
                             .action("Go to Symbol", Box::new(ToggleOutline))
                             .action("Go to Line/Column", Box::new(ToggleGoToLine))
                             .separator()
                             .action("Next Problem", Box::new(GoToDiagnostic::default()))
-                            .action(
-                                "Previous Problem",
-                                Box::new(GoToPreviousDiagnostic::default()),
-                            )
+                            .action("Previous Problem", Box::new(GoToPreviousDiagnostic::default()))
                             .separator()
                             .action_disabled_when(!has_diff_hunks, "Next Hunk", Box::new(GoToHunk))
-                            .action_disabled_when(
-                                !has_diff_hunks,
-                                "Previous Hunk",
-                                Box::new(GoToPreviousHunk),
-                            )
+                            .action_disabled_when(!has_diff_hunks, "Previous Hunk", Box::new(GoToPreviousHunk))
                             .separator()
                             .action("Move Line Up", Box::new(MoveLineUp))
                             .action("Move Line Down", Box::new(MoveLineDown))
@@ -455,6 +445,7 @@ struct QuickActionBarButton {
     action: Box<dyn Action>,
     focus_handle: FocusHandle,
     tooltip: SharedString,
+    #[allow(clippy::type_complexity)]
     on_click: Box<dyn Fn(&ClickEvent, &mut Window, &mut App)>,
 }
 
@@ -489,9 +480,7 @@ impl RenderOnce for QuickActionBarButton {
             .icon_size(IconSize::Small)
             .style(ButtonStyle::Subtle)
             .toggle_state(self.toggled)
-            .tooltip(move |_window, cx| {
-                Tooltip::for_action_in(tooltip.clone(), &*action, &self.focus_handle, cx)
-            })
+            .tooltip(move |_window, cx| Tooltip::for_action_in(tooltip.clone(), &*action, &self.focus_handle, cx))
             .on_click(move |event, window, cx| (self.on_click)(event, window, cx))
     }
 }
@@ -508,40 +497,33 @@ impl ToolbarItemView for QuickActionBar {
             self._inlay_hints_enabled_subscription.take();
 
             if let Some(editor) = active_item.downcast::<Editor>() {
-                let (
-                    mut inlay_hints_enabled,
-                    mut supports_inlay_hints,
-                    mut supports_semantic_tokens,
-                ) = editor.update(cx, |editor, cx| {
-                    (
-                        editor.inlay_hints_enabled(),
-                        editor.supports_inlay_hints(cx),
-                        editor.supports_semantic_tokens(cx),
-                    )
-                });
-                self._inlay_hints_enabled_subscription =
-                    Some(cx.observe(&editor, move |_, editor, cx| {
-                        let (
-                            new_inlay_hints_enabled,
-                            new_supports_inlay_hints,
-                            new_supports_semantic_tokens,
-                        ) = editor.update(cx, |editor, cx| {
+                let (mut inlay_hints_enabled, mut supports_inlay_hints, mut supports_semantic_tokens) =
+                    editor.update(cx, |editor, cx| {
+                        (
+                            editor.inlay_hints_enabled(),
+                            editor.supports_inlay_hints(cx),
+                            editor.supports_semantic_tokens(cx),
+                        )
+                    });
+                self._inlay_hints_enabled_subscription = Some(cx.observe(&editor, move |_, editor, cx| {
+                    let (new_inlay_hints_enabled, new_supports_inlay_hints, new_supports_semantic_tokens) = editor
+                        .update(cx, |editor, cx| {
                             (
                                 editor.inlay_hints_enabled(),
                                 editor.supports_inlay_hints(cx),
                                 editor.supports_semantic_tokens(cx),
                             )
                         });
-                        let should_notify = inlay_hints_enabled != new_inlay_hints_enabled
-                            || supports_inlay_hints != new_supports_inlay_hints
-                            || supports_semantic_tokens != new_supports_semantic_tokens;
-                        inlay_hints_enabled = new_inlay_hints_enabled;
-                        supports_inlay_hints = new_supports_inlay_hints;
-                        supports_semantic_tokens = new_supports_semantic_tokens;
-                        if should_notify {
-                            cx.notify()
-                        }
-                    }));
+                    let should_notify = inlay_hints_enabled != new_inlay_hints_enabled
+                        || supports_inlay_hints != new_supports_inlay_hints
+                        || supports_semantic_tokens != new_supports_semantic_tokens;
+                    inlay_hints_enabled = new_inlay_hints_enabled;
+                    supports_inlay_hints = new_supports_inlay_hints;
+                    supports_semantic_tokens = new_supports_semantic_tokens;
+                    if should_notify {
+                        cx.notify()
+                    }
+                }));
             }
         }
         self.get_toolbar_item_location()

@@ -159,7 +159,7 @@ impl StreamingDiff {
                     let equal_run = previous_equal_runs[i - 1] + 1;
                     current_equal_runs[i] = equal_run;
 
-                    let exponent = cmp::min(equal_run as i32 / 4, Self::MAX_EQUALITY_EXPONENT);
+                    let exponent = cmp::min(equal_run.cast_signed() / 4, Self::MAX_EQUALITY_EXPONENT);
                     previous_scores[i - 1] + Self::EQUALITY_BASE.powi(exponent)
                 } else {
                     f64::NEG_INFINITY

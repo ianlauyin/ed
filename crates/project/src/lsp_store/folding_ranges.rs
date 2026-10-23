@@ -221,6 +221,7 @@ impl LspStore {
         cx.background_spawn(async move { new_task.await.unwrap_or_default() })
     }
 
+    #[allow(clippy::type_complexity)]
     fn fetch_folding_ranges_for_buffer(
         &mut self,
         buffer: &Entity<Buffer>,

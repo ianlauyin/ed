@@ -100,6 +100,7 @@ pub trait Scheduler: Send + Sync {
     /// [`LocalExecutor::spawn_dedicated`] and
     /// [`BackgroundExecutor::spawn_dedicated`], which compose this method
     /// with [`Task::downcast`] to recover the closure's concrete return type.
+    #[allow(clippy::type_complexity)]
     fn spawn_dedicated(
         self: Arc<Self>,
         f: Box<

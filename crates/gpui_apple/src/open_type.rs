@@ -48,7 +48,7 @@ pub fn apply_features_and_fallbacks(
             kCFAllocatorDefault,
             keys.as_ptr() as _,
             values.as_ptr() as _,
-            keys.len() as isize,
+            keys.len().cast_signed(),
             &raw const kCFTypeDictionaryKeyCallBacks,
             &raw const kCFTypeDictionaryValueCallBacks,
         );
@@ -80,7 +80,7 @@ fn generate_feature_array(features: &FontFeatures) -> CFMutableArrayRef {
         for (tag, value) in features.tag_value_list() {
             let keys = [kCTFontOpenTypeFeatureTag as *const _, kCTFontOpenTypeFeatureValue as *const _];
             let tag = CFString::new(tag);
-            let value = CFNumber::from(*value as i32);
+            let value = CFNumber::from((*value).cast_signed());
             let values = [tag.as_CFTypeRef(), value.as_CFTypeRef()];
             let dict = CFDictionaryCreate(
                 kCFAllocatorDefault,
@@ -114,7 +114,7 @@ fn generate_fallback_array(fallbacks: &FontFallbacks, font: &mut FontKitFont) ->
                 kCFAllocatorDefault,
                 &raw const traits_keys as _,
                 &raw const traits_values as _,
-                traits_keys.len() as isize,
+                traits_keys.len().cast_signed(),
                 &raw const kCFTypeDictionaryKeyCallBacks,
                 &raw const kCFTypeDictionaryValueCallBacks,
             );
@@ -127,7 +127,7 @@ fn generate_fallback_array(fallbacks: &FontFallbacks, font: &mut FontKitFont) ->
                 kCFAllocatorDefault,
                 &raw const attr_keys as _,
                 &raw const attr_values as _,
-                attr_keys.len() as isize,
+                attr_keys.len().cast_signed(),
                 &raw const kCFTypeDictionaryKeyCallBacks,
                 &raw const kCFTypeDictionaryValueCallBacks,
             );

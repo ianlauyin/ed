@@ -108,7 +108,7 @@ struct DisplayCursor {
 
 impl DisplayCursor {
     const fn from(cursor_point: Point, display_offset: usize) -> Self {
-        Self { line: cursor_point.line + display_offset as i32, col: cursor_point.column }
+        Self { line: cursor_point.line + (display_offset as u32).cast_signed(), col: cursor_point.column }
     }
 
     pub const fn line(&self) -> i32 {
@@ -234,7 +234,7 @@ impl BlockElementLayoutRect {
     }
 
     pub const fn line(&self) -> i32 {
-        (self.point.line + self.num_of_lines as i32 - 1) / BLOCK_SUBCELL_LINES
+        (self.point.line + (self.num_of_lines as u32).cast_signed() - 1) / BLOCK_SUBCELL_LINES
     }
 }
 
@@ -439,7 +439,7 @@ impl TerminalElement {
         // First pass: collect all cells and their backgrounds
         let linegroups = grid.into_iter().chunk_by(|cell| cell.point().line);
         for (line_index, (_, line)) in linegroups.into_iter().enumerate() {
-            let display_line = start_line_offset + line_index as i32;
+            let display_line = start_line_offset + (line_index as u32).cast_signed();
 
             // Flush any existing batch at line boundaries
             if let Some(batch) = current_batch.take() {
@@ -460,7 +460,7 @@ impl TerminalElement {
                 // Collect background regions (skip default background)
                 if !is_default_background_color(bg) {
                     let color = convert_color(&bg, theme);
-                    let col = point.column as i32;
+                    let col = (point.column as u32).cast_signed();
 
                     // Try to extend the last region if it's on the same line with the same color
                     if let Some(last_region) = background_regions.last_mut()
@@ -502,7 +502,7 @@ impl TerminalElement {
                             minimum_contrast,
                         );
 
-                        let cell_point = LayoutPoint::new(display_line, point.column as i32);
+                        let cell_point = LayoutPoint::new(display_line, (point.column as u32).cast_signed());
                         if Self::collect_block_element_regions(
                             cell_point,
                             cell.character(),
@@ -521,7 +521,8 @@ impl TerminalElement {
                         if let Some(ref mut batch) = current_batch {
                             if batch.can_append(&cell_style)
                                 && batch.start_point.line == cell_point.line
-                                && batch.start_point.column + batch.cell_count as i32 == cell_point.column
+                                && batch.start_point.column + (batch.cell_count as u32).cast_signed()
+                                    == cell_point.column
                             {
                                 batch.append_char(cell.character());
                                 if let Some(chars) = zero_width_chars {
@@ -604,7 +605,7 @@ impl TerminalElement {
 
     /// Computes the cursor position based on the cursor point and terminal dimensions.
     fn cursor_position(cursor_point: DisplayCursor, size: TerminalBounds) -> Option<GpuiPoint<Pixels>> {
-        if cursor_point.line() < size.num_lines() as i32 {
+        if cursor_point.line() < (size.num_lines() as u32).cast_signed() {
             // When on pixel boundaries round the origin down
             Some(point(
                 (cursor_point.col() as f32 * size.cell_width()).floor(),
@@ -693,11 +694,11 @@ impl TerminalElement {
             0x2580 => (0, 0, 8, 12),
             // ▁▂▃▄▅▆▇█ lower blocks of 1..=8 eighths
             0x2581..=0x2588 => {
-                let eighths = (codepoint - 0x2580) as i32;
+                let eighths = (codepoint - 0x2580).cast_signed();
                 (0, 24 - eighths * 3, 8, eighths * 3)
             }
             // ▉▊▋▌▍▎▏ left blocks of 7..=1 eighths
-            0x2589..=0x258F => (0, 0, (0x2590 - codepoint) as i32, 24),
+            0x2589..=0x258F => (0, 0, (0x2590 - codepoint).cast_signed(), 24),
             // ▐ right half
             0x2590 => (4, 0, 4, 24),
             // ▔ upper eighth
@@ -1129,7 +1130,7 @@ impl Element for TerminalElement {
                 let available_height_device_px = (f32::from(available_height) * scale_factor).floor().max(0.0) as i32;
 
                 let rows = ((available_height_device_px / line_height_device_px) as usize).max(1);
-                let snapped_height_device_px = (rows as i32) * line_height_device_px;
+                let snapped_height_device_px = (rows as u32).cast_signed() * line_height_device_px;
                 let padding_device_px = (available_height_device_px - snapped_height_device_px).max(0);
 
                 let snapped_height = px(snapped_height_device_px as f32 / scale_factor.max(1.0));
@@ -1245,7 +1246,7 @@ impl Element for TerminalElement {
                             .skip(rows_above_viewport)
                             .take(visible_row_count)
                             .flat_map(|(_, line_cells)| line_cells),
-                        rows_above_viewport as i32,
+                        (rows_above_viewport as u32).cast_signed(),
                         &text_style,
                         hover_match.as_ref().map(|hover_match| (link_style, hover_match)),
                         minimum_contrast,
@@ -1666,13 +1667,13 @@ fn to_highlighted_range_lines(
     let unclamped_end_column = range.end().column;
 
     // Step 2. Clamp range to viewport, and return None if it doesn't overlap
-    if unclamped_end_line < 0 || unclamped_start_line > layout.dimensions.num_lines() as i32 {
+    if unclamped_end_line < 0 || unclamped_start_line > (layout.dimensions.num_lines() as u32).cast_signed() {
         return None;
     }
 
     let clamped_start_line = unclamped_start_line.max(0) as usize;
 
-    let clamped_end_line = unclamped_end_line.min(layout.dimensions.num_lines() as i32) as usize;
+    let clamped_end_line = unclamped_end_line.min((layout.dimensions.num_lines() as u32).cast_signed()) as usize;
 
     // Convert the start of the range to pixels
     let start_y = origin.y + clamped_start_line as f32 * layout.dimensions.line_height;
@@ -1687,7 +1688,7 @@ fn to_highlighted_range_lines(
         if line == clamped_start_line && unclamped_start_line >= 0 {
             line_start = unclamped_start_column;
         }
-        if line == clamped_end_line && unclamped_end_line <= layout.dimensions.num_lines() as i32 {
+        if line == clamped_end_line && unclamped_end_line <= (layout.dimensions.num_lines() as u32).cast_signed() {
             line_end = unclamped_end_column + 1; // +1 for inclusive
         }
 

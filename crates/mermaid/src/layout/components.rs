@@ -101,10 +101,9 @@ pub(crate) fn wrap_components(
             continue;
         };
         part.edges.push(k);
-        for point in e.route.chunks_exact(3) {
-            if let [x, y, _] = point {
-                part.include(*x, *y, 0.0, 0.0);
-            }
+        for point in e.route.as_chunks::<3>().0 {
+            let [x, y, _] = point;
+            part.include(*x, *y, 0.0, 0.0);
         }
         if e.label_w > 0.0 {
             part.include(e.label_x, e.label_y, e.label_w, e.label_h);
@@ -140,11 +139,10 @@ pub(crate) fn wrap_components(
         }
         for &k in &part.edges {
             if let Some(e) = edges.get_mut(k) {
-                for point in e.route.chunks_exact_mut(3) {
-                    if let [x, y, _] = point {
-                        *x += ox;
-                        *y += oy;
-                    }
+                for point in e.route.as_chunks_mut::<3>().0 {
+                    let [x, y, _] = point;
+                    *x += ox;
+                    *y += oy;
                 }
                 e.label_x += ox;
                 e.label_y += oy;

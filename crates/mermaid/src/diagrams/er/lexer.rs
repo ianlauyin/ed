@@ -326,7 +326,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// The keywords and relationship symbols, by lower-cased first character.
-    #[expect(clippy::too_many_lines, reason = "one arm per keyword letter, as in Pele")]
+    #[allow(clippy::too_many_lines, reason = "one arm per keyword letter, as in Pele")]
     fn keyword(&mut self, lc: u8) -> bool {
         let p = self.p;
         let d = self.at(p + 1);

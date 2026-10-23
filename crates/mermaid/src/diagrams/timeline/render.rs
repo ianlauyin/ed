@@ -233,9 +233,8 @@ fn draw(model: &TimelineDb, config: &Value, options: &Options, vertical: bool) -
     let events_of = |i: usize| event_labels.get(i).map_or(no_labels, Vec::as_slice);
 
     let mut body = String::new();
-    let height;
 
-    if vertical {
+    let height = if vertical {
         let axis_x = left + col_w + AXIS;
         let spine_x = axis_x + SPINE;
         let events_x = spine_x + SPINE;
@@ -322,7 +321,7 @@ fn draw(model: &TimelineDb, config: &Value, options: &Options, vertical: bool) -
             body = axis;
             y = tip;
         }
-        height = y + pad;
+        y + pad
     } else {
         let mut header_h: f64 = 0.0;
         let section_labels: Vec<Option<Label>> = groups
@@ -404,8 +403,8 @@ fn draw(model: &TimelineDb, config: &Value, options: &Options, vertical: bool) -
             axis.push_str(&body);
             body = axis;
         }
-        height = bottom + pad;
-    }
+        bottom + pad
+    };
 
     let total_width = (width + 2.0 * pad).ceil();
     let total_height = height.max(pad * 2.0).ceil();

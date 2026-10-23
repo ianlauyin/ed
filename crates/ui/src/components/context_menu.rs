@@ -86,7 +86,9 @@ pub enum ContextMenuItem {
     Label(SharedString),
     Entry(ContextMenuEntry),
     CustomEntry {
+        #[allow(clippy::type_complexity)]
         entry_render: Box<dyn Fn(&mut Window, &mut App) -> AnyElement>,
+        #[allow(clippy::type_complexity)]
         handler: Rc<dyn Fn(Option<&FocusHandle>, &mut Window, &mut App)>,
         selectable: bool,
         documentation_aside: Option<DocumentationAside>,
@@ -95,6 +97,7 @@ pub enum ContextMenuItem {
         label: SharedString,
         icon: Option<IconName>,
         icon_color: Option<Color>,
+        #[allow(clippy::type_complexity)]
         builder: Rc<dyn Fn(ContextMenu, &mut Window, &mut Context<ContextMenu>) -> ContextMenu>,
     },
 }
@@ -123,13 +126,16 @@ pub struct ContextMenuEntry {
     icon_position: IconPosition,
     icon_size: IconSize,
     icon_color: Option<Color>,
+    #[allow(clippy::type_complexity)]
     handler: Rc<dyn Fn(Option<&FocusHandle>, &mut Window, &mut App)>,
+    #[allow(clippy::type_complexity)]
     secondary_handler: Option<Rc<dyn Fn(Option<&FocusHandle>, &mut Window, &mut App)>>,
     action: Option<Box<dyn Action>>,
     disabled: bool,
     documentation_aside: Option<DocumentationAside>,
     end_slot_icon: Option<IconName>,
     end_slot_title: Option<SharedString>,
+    #[allow(clippy::type_complexity)]
     end_slot_handler: Option<Rc<dyn Fn(Option<&FocusHandle>, &mut Window, &mut App)>>,
     show_end_slot_on_hover: bool,
 }
@@ -241,6 +247,7 @@ impl From<ContextMenuEntry> for ContextMenuItem {
 }
 
 pub struct ContextMenu {
+    #[allow(clippy::type_complexity)]
     builder: Option<Rc<dyn Fn(Self, &mut Window, &mut Context<Self>) -> Self>>,
     items: Vec<ContextMenuItem>,
     focus_handle: FocusHandle,
@@ -1138,6 +1145,7 @@ impl ContextMenu {
         Some(ix)
     }
 
+    #[allow(clippy::type_complexity)]
     fn create_submenu(
         builder: Rc<dyn Fn(ContextMenu, &mut Window, &mut Context<ContextMenu>) -> ContextMenu>,
         parent_entity: Entity<ContextMenu>,
@@ -1159,6 +1167,7 @@ impl ContextMenu {
         (submenu, dismiss_subscription)
     }
 
+    #[allow(clippy::type_complexity)]
     fn build_submenu(
         builder: Rc<dyn Fn(ContextMenu, &mut Window, &mut Context<ContextMenu>) -> ContextMenu>,
         parent_entity: Entity<ContextMenu>,
@@ -1215,6 +1224,7 @@ impl ContextMenu {
         cx.notify();
     }
 
+    #[allow(clippy::type_complexity)]
     fn open_submenu(
         &mut self,
         item_index: usize,

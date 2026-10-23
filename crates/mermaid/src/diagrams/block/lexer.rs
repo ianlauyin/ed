@@ -47,7 +47,7 @@ const NONE: u32 = u32::MAX;
 const DIRECTIONS: [&str; 6] = ["right", "left", "x", "y", "up", "down"];
 
 /// Whether an ASCII character ends a node id: `( ) [ { } < > - : =` and whitespace.
-fn id_stop(c: u32) -> bool {
+const fn id_stop(c: u32) -> bool {
     matches!(c, 9 | 10 | 11 | 12 | 13 | 32 | 40 | 41 | 45 | 58 | 60 | 61 | 62 | 91 | 123 | 125)
 }
 
@@ -455,7 +455,7 @@ impl<'a> Lexer<'a> {
     }
 
     /// The token kind a state yields at the end of input, if any.
-    fn final_kind(&self) -> Option<T> {
+    const fn final_kind(&self) -> Option<T> {
         match self.state {
             S::Initial => Some(T::Eof),
             S::String => Some(T::Str),
@@ -474,7 +474,7 @@ impl<'a> Lexer<'a> {
         self.src.get(self.p..).and_then(|rest| rest.find(needle)).map_or(self.src.len(), |at| self.p + at)
     }
 
-    #[expect(clippy::too_many_lines, reason = "mirrors Pele's tokenize loop")]
+    #[allow(clippy::too_many_lines, reason = "mirrors Pele's tokenize loop")]
     fn step(&mut self, c: u32) -> bool {
         let p = self.p;
         match self.state {

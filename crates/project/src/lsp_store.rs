@@ -436,6 +436,7 @@ pub struct LocalLspStore {
     language_server_dynamic_registrations: HashMap<LanguageServerId, DynamicRegistrations>,
     initial_server_capabilities: HashMap<LanguageServerId, lsp::ServerCapabilities>,
     next_diagnostic_group_id: usize,
+    #[allow(clippy::type_complexity)]
     diagnostics: HashMap<
         WorktreeId,
         HashMap<Arc<RelPath>, Vec<(LanguageServerId, Vec<DiagnosticEntry<Unclipped<PointUtf16>>>)>>,
@@ -446,8 +447,10 @@ pub struct LocalLspStore {
     lsp_tree: LanguageServerTree,
     registered_buffers: HashMap<BufferId, usize>,
     buffers_opened_in_servers: HashMap<BufferId, HashSet<LanguageServerId>>,
+    #[allow(clippy::type_complexity)]
     buffer_pull_diagnostics_result_ids:
         HashMap<LanguageServerId, HashMap<Option<SharedString>, HashMap<PathBuf, Option<SharedString>>>>,
+    #[allow(clippy::type_complexity)]
     workspace_pull_diagnostics_result_ids:
         HashMap<LanguageServerId, HashMap<Option<SharedString>, HashMap<PathBuf, Option<SharedString>>>>,
     restricted_worktrees_tasks: HashMap<WorktreeId, (Subscription, watch::Receiver<bool>)>,

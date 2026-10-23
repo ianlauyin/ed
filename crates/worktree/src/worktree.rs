@@ -593,13 +593,11 @@ impl Worktree {
                     if !scanning_enabled {
                         entry.kind = EntryKind::UnloadedDir;
                     }
-                } else {
-                    if let Some(file_name) = abs_path.file_name()
-                        && let Some(file_name) = file_name.to_str()
-                        && let Ok(path) = RelPath::from_unix_str(file_name)
-                    {
-                        entry.is_hidden = settings.is_path_hidden(path);
-                    }
+                } else if let Some(file_name) = abs_path.file_name()
+                    && let Some(file_name) = file_name.to_str()
+                    && let Ok(path) = RelPath::from_unix_str(file_name)
+                {
+                    entry.is_hidden = settings.is_path_hidden(path);
                 }
                 cx.foreground_executor().block_on(snapshot.insert_entry(entry, fs.as_ref()));
             }
@@ -3968,6 +3966,7 @@ impl BackgroundScanner {
         events.retain(|event| {
             let abs_path = SanitizedPath::new(&event.path);
 
+            #[allow(clippy::type_complexity)]
             let mut best_match: Option<(&Arc<Path>, &SmallVec<[Arc<RelPath>; 1]>)> = None;
             let mut best_depth = 0;
             for (target_root, symlink_paths) in &state.symlink_paths_by_target {

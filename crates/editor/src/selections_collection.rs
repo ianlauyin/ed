@@ -308,7 +308,7 @@ impl SelectionsCollection {
         self.pending
             .as_ref()
             .map(|pending| pending.selection)
-            .unwrap_or_else(|| self.disjoint.first().cloned().unwrap())
+            .unwrap_or_else(|| self.disjoint.first().copied().unwrap())
     }
 
     pub fn first<D>(&self, snapshot: &DisplaySnapshot) -> Selection<D>
@@ -620,7 +620,7 @@ impl<'snap, 'a> MutableSelectionsCollection<'snap, 'a> {
                 changed |= found;
                 !found
             })
-            .cloned()
+            .copied()
             .collect();
 
         self.selections_changed |= changed;
@@ -641,7 +641,7 @@ impl<'snap, 'a> MutableSelectionsCollection<'snap, 'a> {
                         true
                     }
                 })
-                .cloned()
+                .copied()
                 .collect()
         };
 
@@ -986,6 +986,7 @@ impl<'snap, 'a> MutableSelectionsCollection<'snap, 'a> {
         });
     }
 
+    #[allow(clippy::type_complexity)]
     pub fn maybe_move_cursors_with(
         &mut self,
         update_cursor_position: &mut dyn FnMut(

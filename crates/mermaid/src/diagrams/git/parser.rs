@@ -56,7 +56,7 @@ mod t {
 }
 
 /// Whether `b` is a regular expression `\w` character.
-fn is_word(b: u8) -> bool {
+const fn is_word(b: u8) -> bool {
     b.is_ascii_alphanumeric() || b == b'_'
 }
 

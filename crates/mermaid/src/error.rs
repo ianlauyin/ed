@@ -107,7 +107,7 @@ pub(crate) fn locate(src: &str, offset: usize) -> Location {
     Location { column: u32::try_from(width + 1).unwrap_or(u32::MAX), line, snippet }
 }
 
-fn floor_boundary(src: &str, mut offset: usize) -> usize {
+const fn floor_boundary(src: &str, mut offset: usize) -> usize {
     while !src.is_char_boundary(offset) {
         offset -= 1;
     }

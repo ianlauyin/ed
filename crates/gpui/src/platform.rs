@@ -233,7 +233,7 @@ pub trait Platform: 'static {
     /// Switches a capable platform between headless and windowed modes. See
     /// [`App::request_windowing`].
     /// Sets the windowing mode the platform starts in. Called before `run`. See
-    /// [`Application::with_windowing`].
+    /// [`crate::Application::with_windowing`].
     fn set_initial_windowing(&self, _request: WindowingRequest) {}
     fn request_windowing(&self, _request: WindowingRequest) -> Task<anyhow::Result<()>> {
         Task::ready(Err(anyhow::anyhow!("this platform cannot switch between headless and windowed modes")))
@@ -574,8 +574,7 @@ pub const MAX_BUTTONS_PER_SIDE: usize = 3;
 
 /// Describes which [`WindowButton`]s appear on each side of the titlebar.
 ///
-/// On Linux, this is read from the desktop environment's configuration
-/// (e.g. GNOME's `gtk-decoration-layout` gsetting) via [`WindowButtonLayout::parse`].
+/// Each side holds up to [`MAX_BUTTONS_PER_SIDE`] buttons.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct WindowButtonLayout {
     /// Buttons on the left side of the titlebar.

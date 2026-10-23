@@ -234,6 +234,7 @@ impl LspStore {
         cx.background_spawn(async move { new_task.await.log_err().unwrap_or_default() })
     }
 
+    #[allow(clippy::type_complexity)]
     fn fetch_document_symbols_for_buffer(
         &mut self,
         buffer: &Entity<Buffer>,

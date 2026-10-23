@@ -181,12 +181,12 @@ fn lead(reach: f64, trim: f64, run: f64) -> f64 {
 }
 
 /// JavaScript's two-argument `Math.min`, which passes `NaN` on.
-fn js_min(a: f64, b: f64) -> f64 {
+const fn js_min(a: f64, b: f64) -> f64 {
     if a.is_nan() || b.is_nan() { f64::NAN } else { a.min(b) }
 }
 
 /// JavaScript's two-argument `Math.max`, which passes `NaN` on.
-fn js_max(a: f64, b: f64) -> f64 {
+const fn js_max(a: f64, b: f64) -> f64 {
     if a.is_nan() || b.is_nan() { f64::NAN } else { a.max(b) }
 }
 

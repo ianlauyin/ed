@@ -97,12 +97,12 @@ fn ordinal(n: f64) -> String {
 }
 
 /// `+00:00`: the zone of every date, since local time is UTC.
-fn zone() -> &'static str {
+const fn zone() -> &'static str {
     "+00:00"
 }
 
 /// `isValid`.
-pub(crate) fn is_valid(date: Date) -> bool {
+pub(crate) const fn is_valid(date: Date) -> bool {
     date.is_valid()
 }
 
@@ -151,12 +151,12 @@ pub(crate) fn add(date: Date, amount: f64, unit: Unit) -> Date {
 }
 
 /// `Math.min` of two numbers: NaN when either is.
-pub(crate) fn js_min(a: f64, b: f64) -> f64 {
+pub(crate) const fn js_min(a: f64, b: f64) -> f64 {
     if a.is_nan() || b.is_nan() { f64::NAN } else { a.min(b) }
 }
 
 /// `Math.max` of two numbers: NaN when either is.
-pub(crate) fn js_max(a: f64, b: f64) -> f64 {
+pub(crate) const fn js_max(a: f64, b: f64) -> f64 {
     if a.is_nan() || b.is_nan() { f64::NAN } else { a.max(b) }
 }
 

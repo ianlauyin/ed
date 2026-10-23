@@ -835,6 +835,7 @@ struct MacWindowState {
     // `None` until a callback is registered, so notifications during
     // construction are not queued for delivery to a callback registered later.
     last_visibility: Option<WindowVisibility>,
+    #[allow(clippy::type_complexity)]
     resize_callback: Option<Box<dyn FnMut(Size<Pixels>, f32)>>,
     moved_callback: Option<Box<dyn FnMut()>>,
     display_changed_callback: Option<Box<dyn FnMut()>>,
@@ -1690,7 +1691,7 @@ impl PlatformWindow for MacWindow {
         for (ix, answer) in answers.iter().enumerate() {
             let title = NSString::from_str(answer.label());
             let button = alert.addButtonWithTitle(&title);
-            button.setTag(ix as NSInteger);
+            button.setTag(ix.cast_signed());
 
             if answer.is_cancel() {
                 if let Some(key) = core::char::from_u32(crate::events::ESCAPE_KEY as u32) {

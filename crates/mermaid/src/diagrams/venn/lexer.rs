@@ -105,7 +105,7 @@ pub(crate) struct VennLexer<'a> {
 
 impl<'a> VennLexer<'a> {
     /// A lexer at the start of `src`.
-    pub(crate) fn new(src: &'a str) -> Self {
+    pub(crate) const fn new(src: &'a str) -> Self {
         Self { at: 0, ended: false, line_start: false, src, start: 0, text: "" }
     }
 

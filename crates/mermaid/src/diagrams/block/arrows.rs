@@ -47,14 +47,14 @@ pub(crate) fn arrow_mask(directions: Option<&[String]>) -> u32 {
     mask
 }
 
-fn bit(mask: u32, flag: u32) -> f64 {
+const fn bit(mask: u32, flag: u32) -> f64 {
     if mask & flag == 0 { 0.0 } else { 1.0 }
 }
 
 /// The axis an arrow points along: `x`, `y`, or neither. An arrow along one axis has a shaft and
 /// heads wider than it. One that points along both axes is a box with a small point on each side
 /// it names.
-pub(crate) fn arrow_axis(mask: u32) -> u8 {
+pub(crate) const fn arrow_axis(mask: u32) -> u8 {
     if mask != 0 && mask & (UP | DOWN) == 0 {
         return b'x';
     }
@@ -151,15 +151,14 @@ pub(crate) fn draw_arrow(mask: u32, w: f64, h: f64, attrs: &str) -> String {
     }
 
     let mut out = String::from("<polygon points=\"");
-    for (i, pair) in p.chunks_exact(2).enumerate() {
+    for (i, pair) in p.as_chunks::<2>().0.iter().enumerate() {
         if i > 0 {
             out.push(' ');
         }
-        if let [px, py] = pair {
-            push_num(&mut out, *px);
-            out.push(',');
-            push_num(&mut out, *py);
-        }
+        let [px, py] = pair;
+        push_num(&mut out, *px);
+        out.push(',');
+        push_num(&mut out, *py);
     }
     out.push_str("\" stroke-linejoin=\"round\"");
     out.push_str(attrs);

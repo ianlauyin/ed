@@ -1644,11 +1644,12 @@ impl Editor {
                         // Find the closest outline item by distance between outline text and cursor location
                         let source_range = buffer_range(&item.source_range_for_text)?;
                         let distance_to_closest_endpoint = cmp::min(
-                            (source_range.start.0 as isize - cursor_offset.0 as isize).abs(),
-                            (source_range.end.0 as isize - cursor_offset.0 as isize).abs(),
+                            (source_range.start.0.cast_signed() - cursor_offset.0.cast_signed()).abs(),
+                            (source_range.end.0.cast_signed() - cursor_offset.0.cast_signed()).abs(),
                         );
 
-                        let item_towards_offset = (source_range.start.0 as isize - cursor_offset.0 as isize).signum()
+                        let item_towards_offset = (source_range.start.0.cast_signed() - cursor_offset.0.cast_signed())
+                            .signum()
                             == (offset as isize).signum();
 
                         let source_range_contains_cursor = source_range.contains(&cursor_offset);

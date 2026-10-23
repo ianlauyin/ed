@@ -214,6 +214,7 @@ pub trait SearchableItemHandle: ItemHandle {
     fn downgrade(&self) -> Box<dyn WeakSearchableItemHandle>;
     fn boxed_clone(&self) -> Box<dyn SearchableItemHandle>;
     fn supported_options(&self, cx: &App) -> SearchOptions;
+    #[allow(clippy::type_complexity)]
     fn subscribe_to_search_events(
         &self,
         window: &mut Window,
@@ -310,6 +311,7 @@ impl<T: SearchableItem> SearchableItemHandle for Entity<T> {
         self.read(cx).supported_options()
     }
 
+    #[allow(clippy::type_complexity)]
     fn subscribe_to_search_events(
         &self,
         window: &mut Window,

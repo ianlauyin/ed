@@ -655,10 +655,10 @@ impl PaneAxis {
             return Some(true);
         }
 
-        let flex_changes = |pixel_dx, target_ix, next: isize, flexes: &[f32]| {
+        let flex_changes = |pixel_dx, target_ix: usize, next: isize, flexes: &[f32]| {
             let flex_change = flexes.len() as f32 * pixel_dx / container_size.along(axis);
             let current_target_flex = flexes[target_ix] + flex_change;
-            let next_target_flex = flexes[(target_ix as isize + next) as usize] - flex_change;
+            let next_target_flex = flexes[(target_ix.cast_signed() + next) as usize] - flex_change;
             (current_target_flex, next_target_flex)
         };
 
@@ -1043,10 +1043,10 @@ mod element {
 
             // This takes a pixel change, and computes the flex changes that correspond to this pixel change
             // as well as the next one, for some reason
-            let flex_changes = |pixel_dx, target_ix, next: isize, flexes: &[f32]| {
+            let flex_changes = |pixel_dx, target_ix: usize, next: isize, flexes: &[f32]| {
                 let flex_change = pixel_dx / container_size.along(axis);
                 let current_target_flex = flexes[target_ix] + flex_change;
-                let next_target_flex = flexes[(target_ix as isize + next) as usize] - flex_change;
+                let next_target_flex = flexes[(target_ix.cast_signed() + next) as usize] - flex_change;
                 (current_target_flex, next_target_flex)
             };
 
@@ -1061,7 +1061,7 @@ mod element {
                     let result = if forward {
                         (ix + 1 + ix_offset < len).then(|| ix + ix_offset)
                     } else {
-                        (ix as isize - ix_offset as isize >= 0).then(|| ix - ix_offset)
+                        (ix.cast_signed() - ix_offset.cast_signed() >= 0).then(|| ix - ix_offset)
                     };
 
                     ix_offset += 1;

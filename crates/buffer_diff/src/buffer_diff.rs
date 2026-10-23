@@ -656,6 +656,7 @@ impl BufferDiffSnapshot {
 impl BufferDiffSnapshot {
     // Compute the edits to apply to the index, and the resulting pending hunks,
     // for a stage or unstage operation on the uncommitted diff.
+    #[allow(clippy::type_complexity)]
     pub fn compute_uncommitted_index_edits(
         &self,
         unstaged_diff: &Self,
@@ -1187,12 +1188,10 @@ fn compare_hunks(
                             base_text_end.replace(
                                 *old_hunk_diff_base_range_end.max(&new_hunk_diff_base_range_end, new_base_text),
                             );
-                        } else {
-                            if !has_changes {
-                                last_unchanged_new_hunk_end = Some(new_hunk.buffer_range.end);
-                            } else if extended_end_candidate.is_none() {
-                                extended_end_candidate = Some(new_hunk.buffer_range.start);
-                            }
+                        } else if !has_changes {
+                            last_unchanged_new_hunk_end = Some(new_hunk.buffer_range.end);
+                        } else if extended_end_candidate.is_none() {
+                            extended_end_candidate = Some(new_hunk.buffer_range.start);
                         }
 
                         new_cursor.next();

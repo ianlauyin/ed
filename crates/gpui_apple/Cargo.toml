@@ -14,19 +14,27 @@ doctest = false
 [features]
 default = ["runtime_shaders"]
 runtime_shaders = []
-font-kit = ["dep:font-kit", "dep:core-text", "dep:objc2-core-text", "dep:pathfinder_geometry"]
-
-[dependencies]
-gpui.workspace = true
+font-kit = [
+    "dep:font-kit",
+    "dep:collections",
+    "dep:core-foundation",
+    "dep:core-foundation-sys",
+    "dep:core-graphics",
+    "dep:core-text",
+    "dep:objc2-core-text",
+    "dep:pathfinder_geometry",
+    "dep:smallvec",
+]
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.dependencies]
+gpui.workspace = true
 anyhow.workspace = true
 async-task.workspace = true
 block2.workspace = true
-collections.workspace = true
-core-foundation.workspace = true
-core-foundation-sys.workspace = true
-core-graphics.workspace = true
+collections = { workspace = true, optional = true }
+core-foundation = { workspace = true, optional = true }
+core-foundation-sys = { workspace = true, optional = true }
+core-graphics = { workspace = true, optional = true }
 core-text = { workspace = true, optional = true }
 derive_more.workspace = true
 dispatch2.workspace = true
@@ -64,7 +72,7 @@ objc2-quartz-core = { workspace = true, features = ["objc2-core-foundation", "ob
 objc2-security.workspace = true
 parking_lot.workspace = true
 pathfinder_geometry = { workspace = true, optional = true }
-smallvec.workspace = true
+smallvec = { workspace = true, optional = true }
 thiserror.workspace = true
 
 [target.'cfg(any(target_os = "macos", target_os = "ios"))'.build-dependencies]

@@ -864,21 +864,19 @@ impl PickerDelegate for WorktreePickerDelegate {
                 if !is_current {
                     if secondary {
                         window.dispatch_action(Box::new(OpenWorktreeInNewWindow { path: worktree.path.clone() }), cx);
-                    } else {
-                        if let Some(workspace) = self.workspace.upgrade() {
-                            workspace.update(cx, |workspace, cx| {
-                                crate::worktree_service::handle_switch_worktree(
-                                    workspace,
-                                    &SwitchWorktree {
-                                        path: worktree.path.clone(),
-                                        display_name: worktree.directory_name(self.worktree_name_anchor()),
-                                    },
-                                    window,
-                                    self.focused_dock,
-                                    cx,
-                                );
-                            });
-                        }
+                    } else if let Some(workspace) = self.workspace.upgrade() {
+                        workspace.update(cx, |workspace, cx| {
+                            crate::worktree_service::handle_switch_worktree(
+                                workspace,
+                                &SwitchWorktree {
+                                    path: worktree.path.clone(),
+                                    display_name: worktree.directory_name(self.worktree_name_anchor()),
+                                },
+                                window,
+                                self.focused_dock,
+                                cx,
+                            );
+                        });
                     }
                 }
             }
