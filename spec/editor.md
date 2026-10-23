@@ -92,6 +92,10 @@
   format/save. There is no line-ending selector or status bar indicator; to
   keep CRLF for specific files, set `line_ending` (e.g. `detect`) per language
   or project.
+- LSP on-type formatting (e.g. after Enter) waits for pending autoindent: the
+  request position and the cursors kept in place by the formatting edits are
+  both taken after the indentation is inserted, so the server sees the
+  indented column.
 - There is no notion of private files or secrets: no `private_files` or
   `redact_private_values` settings, no `redactions.scm` queries, and no
   is-private flag on worktree entries or files. Over SSH, `.env`, key and
