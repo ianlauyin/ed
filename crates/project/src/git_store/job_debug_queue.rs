@@ -1,4 +1,5 @@
-use std::{collections::VecDeque, time::Instant};
+use std::collections::VecDeque;
+use std::time::Instant;
 
 use gpui::SharedString;
 
@@ -48,20 +49,11 @@ pub enum CompletedJobStatus {
 
 impl GitJobDebugQueue {
     pub fn new() -> Self {
-        Self {
-            pending: VecDeque::new(),
-            running: VecDeque::new(),
-            completed: VecDeque::new(),
-        }
+        Self { pending: VecDeque::new(), running: VecDeque::new(), completed: VecDeque::new() }
     }
 
     pub fn add(&mut self, id: JobId, description: &'static str, key: Option<SharedString>) {
-        self.pending.push_back(PendingJob {
-            id,
-            description: description.into(),
-            key,
-            enqueued_at: Instant::now(),
-        });
+        self.pending.push_back(PendingJob { id, description: description.into(), key, enqueued_at: Instant::now() });
     }
 
     pub fn mark_running(&mut self, id: JobId) {
@@ -81,12 +73,8 @@ impl GitJobDebugQueue {
     }
 
     pub fn mark_unfinished_complete(&mut self, status: CompletedJobStatus) {
-        let ids = self
-            .pending
-            .iter()
-            .map(|job| job.id)
-            .chain(self.running.iter().map(|job| job.id))
-            .collect::<Vec<_>>();
+        let ids =
+            self.pending.iter().map(|job| job.id).chain(self.running.iter().map(|job| job.id)).collect::<Vec<_>>();
         for id in ids {
             self.mark_complete(id, status);
         }
@@ -96,12 +84,7 @@ impl GitJobDebugQueue {
         let (enqueued_at, started_at, description, key) =
             if let Some(index) = self.running.iter().position(|job| job.id == id) {
                 let running = self.running.remove(index).unwrap();
-                (
-                    running.enqueued_at,
-                    Some(running.started_at),
-                    running.description,
-                    running.key,
-                )
+                (running.enqueued_at, Some(running.started_at), running.description, running.key)
             } else if let Some(index) = self.pending.iter().position(|job| job.id == id) {
                 let pending = self.pending.remove(index).unwrap();
                 (pending.enqueued_at, None, pending.description, pending.key)
@@ -154,8 +137,7 @@ impl GitJobDebugQueue {
 
         entries.sort_by_key(|(enqueued_at, _)| *enqueued_at);
 
-        let json_entries: Vec<serde_json::Value> =
-            entries.into_iter().map(|(_, json)| json).collect();
+        let json_entries: Vec<serde_json::Value> = entries.into_iter().map(|(_, json)| json).collect();
 
         serde_json::json!({
             "summary": {
@@ -201,10 +183,7 @@ impl GitJobDebugQueue {
             let run = format_duration(job.completed_at.duration_since(started));
             (wait, Some(run))
         } else {
-            let wait = format!(
-                "{} (skipped)",
-                format_duration(job.completed_at.duration_since(job.enqueued_at))
-            );
+            let wait = format!("{} (skipped)", format_duration(job.completed_at.duration_since(job.enqueued_at)));
             (wait, None)
         };
 

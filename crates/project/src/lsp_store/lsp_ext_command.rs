@@ -1,30 +1,43 @@
-use crate::{
-    LocationLink,
-    lsp_command::{
-        LspCommand, file_path_to_lsp_url, location_link_from_lsp, location_link_from_proto,
-        location_link_to_proto, location_links_from_lsp, location_links_from_proto,
-        location_links_to_proto,
-    },
-    lsp_store::{LanguageServerToQuery, LspStore},
-    make_lsp_text_document_position, make_text_document_identifier,
-};
-use anyhow::{Context as _, Result};
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use anyhow::Context as _;
+use anyhow::Result;
 use async_trait::async_trait;
 use collections::HashMap;
-use gpui::{App, AsyncApp, Entity};
-use language::{
-    Buffer, point_to_lsp,
-    proto::{deserialize_anchor, serialize_anchor},
-};
-use lsp::{AdapterServerCapabilities, LanguageServer, LanguageServerId};
-use rpc::proto::{self, PeerId};
-use serde::{Deserialize, Serialize};
-use std::{
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use gpui::App;
+use gpui::AsyncApp;
+use gpui::Entity;
+use language::Buffer;
+use language::point_to_lsp;
+use language::proto::deserialize_anchor;
+use language::proto::serialize_anchor;
+use lsp::AdapterServerCapabilities;
+use lsp::LanguageServer;
+use lsp::LanguageServerId;
+use rpc::proto::PeerId;
+use rpc::proto::{self};
+use serde::Deserialize;
+use serde::Serialize;
 use task::TaskTemplate;
-use text::{BufferId, PointUtf16, ToPointUtf16};
+use text::BufferId;
+use text::PointUtf16;
+use text::ToPointUtf16;
+
+use crate::LocationLink;
+use crate::lsp_command::LspCommand;
+use crate::lsp_command::file_path_to_lsp_url;
+use crate::lsp_command::location_link_from_lsp;
+use crate::lsp_command::location_link_from_proto;
+use crate::lsp_command::location_link_to_proto;
+use crate::lsp_command::location_links_from_lsp;
+use crate::lsp_command::location_links_from_proto;
+use crate::lsp_command::location_links_to_proto;
+use crate::lsp_store::LanguageServerToQuery;
+use crate::lsp_store::LspStore;
+use crate::make_lsp_text_document_position;
+use crate::make_text_document_identifier;
 
 pub enum LspExtExpandMacro {}
 
@@ -77,13 +90,7 @@ impl LspCommand for ExpandMacro {
         LanguageServerToQuery::Other(self.server_id)
     }
 
-    fn to_lsp(
-        &self,
-        path: &Path,
-        _: &Buffer,
-        _: &Arc<LanguageServer>,
-        _: &App,
-    ) -> Result<ExpandMacroParams> {
+    fn to_lsp(&self, path: &Path, _: &Buffer, _: &Arc<LanguageServer>, _: &App) -> Result<ExpandMacroParams> {
         Ok(ExpandMacroParams {
             text_document: make_text_document_identifier(path)?,
             position: point_to_lsp(self.position),
@@ -99,10 +106,7 @@ impl LspCommand for ExpandMacro {
         _: AsyncApp,
     ) -> anyhow::Result<ExpandedMacro> {
         Ok(message
-            .map(|message| ExpandedMacro {
-                name: message.name,
-                expansion: message.expansion,
-            })
+            .map(|message| ExpandedMacro { name: message.name, expansion: message.expansion })
             .unwrap_or_default())
     }
 
@@ -110,9 +114,7 @@ impl LspCommand for ExpandMacro {
         proto::LspExtExpandMacro {
             project_id,
             buffer_id: buffer.remote_id().into(),
-            position: Some(language::proto::serialize_anchor(
-                &buffer.anchor_before(self.position),
-            )),
+            position: Some(language::proto::serialize_anchor(&buffer.anchor_before(self.position))),
             server_id: self.server_id.to_proto(),
         }
     }
@@ -123,10 +125,7 @@ impl LspCommand for ExpandMacro {
         buffer: Entity<Buffer>,
         cx: AsyncApp,
     ) -> anyhow::Result<Self> {
-        let position = message
-            .position
-            .and_then(deserialize_anchor)
-            .context("invalid position")?;
+        let position = message.position.and_then(deserialize_anchor).context("invalid position")?;
         Ok(Self {
             position: buffer.read_with(&cx, |buffer, _| position.to_point_utf16(buffer)),
             server_id: LanguageServerId::from_proto(message.server_id),
@@ -140,10 +139,7 @@ impl LspCommand for ExpandMacro {
         _: &clock::Global,
         _: &mut App,
     ) -> proto::LspExtExpandMacroResponse {
-        proto::LspExtExpandMacroResponse {
-            name: response.name,
-            expansion: response.expansion,
-        }
+        proto::LspExtExpandMacroResponse { name: response.name, expansion: response.expansion }
     }
 
     async fn response_from_proto(
@@ -153,10 +149,7 @@ impl LspCommand for ExpandMacro {
         _: Entity<Buffer>,
         _: AsyncApp,
     ) -> anyhow::Result<ExpandedMacro> {
-        Ok(ExpandedMacro {
-            name: message.name,
-            expansion: message.expansion,
-        })
+        Ok(ExpandedMacro { name: message.name, expansion: message.expansion })
     }
 
     fn buffer_id_from_proto(message: &proto::LspExtExpandMacro) -> Result<BufferId> {
@@ -216,19 +209,9 @@ impl LspCommand for OpenDocs {
         LanguageServerToQuery::Other(self.server_id)
     }
 
-    fn to_lsp(
-        &self,
-        path: &Path,
-        _: &Buffer,
-        _: &Arc<LanguageServer>,
-        _: &App,
-    ) -> Result<OpenDocsParams> {
-        let uri = lsp::Uri::from_file_path(path)
-            .map_err(|()| anyhow::anyhow!("{path:?} is not a valid URI"))?;
-        Ok(OpenDocsParams {
-            text_document: lsp::TextDocumentIdentifier { uri },
-            position: point_to_lsp(self.position),
-        })
+    fn to_lsp(&self, path: &Path, _: &Buffer, _: &Arc<LanguageServer>, _: &App) -> Result<OpenDocsParams> {
+        let uri = lsp::Uri::from_file_path(path).map_err(|()| anyhow::anyhow!("{path:?} is not a valid URI"))?;
+        Ok(OpenDocsParams { text_document: lsp::TextDocumentIdentifier { uri }, position: point_to_lsp(self.position) })
     }
 
     async fn response_from_lsp(
@@ -239,21 +222,14 @@ impl LspCommand for OpenDocs {
         _: LanguageServerId,
         _: AsyncApp,
     ) -> anyhow::Result<DocsUrls> {
-        Ok(message
-            .map(|message| DocsUrls {
-                web: message.web,
-                local: message.local,
-            })
-            .unwrap_or_default())
+        Ok(message.map(|message| DocsUrls { web: message.web, local: message.local }).unwrap_or_default())
     }
 
     fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::LspExtOpenDocs {
         proto::LspExtOpenDocs {
             project_id,
             buffer_id: buffer.remote_id().into(),
-            position: Some(language::proto::serialize_anchor(
-                &buffer.anchor_before(self.position),
-            )),
+            position: Some(language::proto::serialize_anchor(&buffer.anchor_before(self.position))),
             server_id: self.server_id.to_proto(),
         }
     }
@@ -264,10 +240,7 @@ impl LspCommand for OpenDocs {
         buffer: Entity<Buffer>,
         cx: AsyncApp,
     ) -> anyhow::Result<Self> {
-        let position = message
-            .position
-            .and_then(deserialize_anchor)
-            .context("invalid position")?;
+        let position = message.position.and_then(deserialize_anchor).context("invalid position")?;
         Ok(Self {
             position: buffer.read_with(&cx, |buffer, _| position.to_point_utf16(buffer)),
             server_id: LanguageServerId::from_proto(message.server_id),
@@ -281,10 +254,7 @@ impl LspCommand for OpenDocs {
         _: &clock::Global,
         _: &mut App,
     ) -> proto::LspExtOpenDocsResponse {
-        proto::LspExtOpenDocsResponse {
-            web: response.web,
-            local: response.local,
-        }
+        proto::LspExtOpenDocsResponse { web: response.web, local: response.local }
     }
 
     async fn response_from_proto(
@@ -294,10 +264,7 @@ impl LspCommand for OpenDocs {
         _: Entity<Buffer>,
         _: AsyncApp,
     ) -> anyhow::Result<DocsUrls> {
-        Ok(DocsUrls {
-            web: message.web,
-            local: message.local,
-        })
+        Ok(DocsUrls { web: message.web, local: message.local })
     }
 
     fn buffer_id_from_proto(message: &proto::LspExtOpenDocs) -> Result<BufferId> {
@@ -355,23 +322,14 @@ impl LspCommand for GoToParentModule {
         server_id: LanguageServerId,
         cx: AsyncApp,
     ) -> anyhow::Result<Vec<LocationLink>> {
-        location_links_from_lsp(
-            links.map(lsp::GotoDefinitionResponse::Link),
-            lsp_store,
-            buffer,
-            server_id,
-            cx,
-        )
-        .await
+        location_links_from_lsp(links.map(lsp::GotoDefinitionResponse::Link), lsp_store, buffer, server_id, cx).await
     }
 
     fn to_proto(&self, project_id: u64, buffer: &Buffer) -> proto::LspExtGoToParentModule {
         proto::LspExtGoToParentModule {
             project_id,
             buffer_id: buffer.remote_id().to_proto(),
-            position: Some(language::proto::serialize_anchor(
-                &buffer.anchor_before(self.position),
-            )),
+            position: Some(language::proto::serialize_anchor(&buffer.anchor_before(self.position))),
             server_id: self.server_id.to_proto(),
         }
     }
@@ -382,10 +340,7 @@ impl LspCommand for GoToParentModule {
         buffer: Entity<Buffer>,
         cx: AsyncApp,
     ) -> anyhow::Result<Self> {
-        let position = request
-            .position
-            .and_then(deserialize_anchor)
-            .context("bad request with bad position")?;
+        let position = request.position.and_then(deserialize_anchor).context("bad request with bad position")?;
         Ok(Self {
             position: buffer.read_with(&cx, |buffer, _| position.to_point_utf16(buffer)),
             server_id: LanguageServerId::from_proto(request.server_id),
@@ -399,9 +354,7 @@ impl LspCommand for GoToParentModule {
         _: &clock::Global,
         cx: &mut App,
     ) -> proto::LspExtGoToParentModuleResponse {
-        proto::LspExtGoToParentModuleResponse {
-            links: location_links_to_proto(links, lsp_store, peer_id, cx),
-        }
+        proto::LspExtGoToParentModuleResponse { links: location_links_to_proto(links, lsp_store, peer_id, cx) }
     }
 
     async fn response_from_proto(
@@ -541,21 +494,13 @@ pub fn runnable_to_task_template(label: String, args: RunnableArgs) -> TaskTempl
             match cargo.override_cargo {
                 Some(override_cargo) => {
                     let mut override_parts = override_cargo.split(" ").map(|s| s.to_string());
-                    task_template.command = override_parts
-                        .next()
-                        .unwrap_or_else(|| override_cargo.clone());
+                    task_template.command = override_parts.next().unwrap_or_else(|| override_cargo.clone());
                     task_template.args.extend(override_parts);
                 }
                 None => task_template.command = "cargo".to_string(),
             };
             task_template.env = cargo.environment;
-            task_template.cwd = Some(
-                cargo
-                    .workspace_root
-                    .unwrap_or(cargo.cwd)
-                    .to_string_lossy()
-                    .to_string(),
-            );
+            task_template.cwd = Some(cargo.workspace_root.unwrap_or(cargo.cwd).to_string_lossy().to_string());
             task_template.args.extend(cargo.cargo_args);
             if !cargo.executable_args.is_empty() {
                 let shell_kind = task_template.shell.shell_kind(false);
@@ -567,9 +512,7 @@ pub fn runnable_to_task_template(label: String, args: RunnableArgs) -> TaskTempl
                         // rust-analyzer's doctest data may contain things like `X<T>::new`
                         // which cause shell issues when run as `$SHELL -i -c "cargo test ..."`.
                         // Escape extra cargo args unconditionally as those are unlikely to contain `~`.
-                        .flat_map(|extra_arg| {
-                            shell_kind.try_quote(&extra_arg).map(|s| s.to_string())
-                        }),
+                        .flat_map(|extra_arg| shell_kind.try_quote(&extra_arg).map(|s| s.to_string())),
                 );
             }
         }
@@ -601,19 +544,11 @@ impl LspCommand for GetLspRunnables {
         LanguageServerToQuery::Other(self.server_id)
     }
 
-    fn to_lsp(
-        &self,
-        path: &Path,
-        buffer: &Buffer,
-        _: &Arc<LanguageServer>,
-        _: &App,
-    ) -> Result<RunnablesParams> {
+    fn to_lsp(&self, path: &Path, buffer: &Buffer, _: &Arc<LanguageServer>, _: &App) -> Result<RunnablesParams> {
         let url = file_path_to_lsp_url(path)?;
         Ok(RunnablesParams {
             text_document: lsp::TextDocumentIdentifier::new(url),
-            position: self
-                .position
-                .map(|anchor| point_to_lsp(anchor.to_point_utf16(&buffer.snapshot()))),
+            position: self.position.map(|anchor| point_to_lsp(anchor.to_point_utf16(&buffer.snapshot()))),
         })
     }
 
@@ -629,10 +564,9 @@ impl LspCommand for GetLspRunnables {
 
         for runnable in lsp_runnables {
             let location = match runnable.location {
-                Some(location) => Some(
-                    location_link_from_lsp(location, &lsp_store, &buffer, server_id, &mut cx)
-                        .await?,
-                ),
+                Some(location) => {
+                    Some(location_link_from_lsp(location, &lsp_store, &buffer, server_id, &mut cx).await?)
+                }
                 None => None,
             };
             let task_template = runnable_to_task_template(runnable.label, runnable.args);
@@ -659,11 +593,7 @@ impl LspCommand for GetLspRunnables {
     ) -> Result<Self> {
         let buffer_id = Self::buffer_id_from_proto(&message)?;
         let position = message.position.and_then(deserialize_anchor);
-        Ok(Self {
-            buffer_id,
-            position,
-            server_id: LanguageServerId::from_proto(message.server_id),
-        })
+        Ok(Self { buffer_id, position, server_id: LanguageServerId::from_proto(message.server_id) })
     }
 
     fn response_to_proto(
@@ -678,8 +608,7 @@ impl LspCommand for GetLspRunnables {
                 .runnables
                 .into_iter()
                 .map(|(location, task_template)| proto::LspRunnable {
-                    location: location
-                        .map(|location| location_link_to_proto(location, lsp_store, peer_id, cx)),
+                    location: location.map(|location| location_link_to_proto(location, lsp_store, peer_id, cx)),
                     task_template: serde_json::to_vec(&task_template).unwrap(),
                 })
                 .collect(),
@@ -693,15 +622,11 @@ impl LspCommand for GetLspRunnables {
         _: Entity<Buffer>,
         mut cx: AsyncApp,
     ) -> Result<LspRunnables> {
-        let mut runnables = LspRunnables {
-            runnables: Vec::new(),
-        };
+        let mut runnables = LspRunnables { runnables: Vec::new() };
 
         for lsp_runnable in message.runnables {
             let location = match lsp_runnable.location {
-                Some(location) => {
-                    Some(location_link_from_proto(location, lsp_store.clone(), &mut cx).await?)
-                }
+                Some(location) => Some(location_link_from_proto(location, lsp_store.clone(), &mut cx).await?),
                 None => None,
             };
             let task_template = serde_json::from_slice(&lsp_runnable.task_template)

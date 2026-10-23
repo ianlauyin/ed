@@ -1,12 +1,20 @@
-use crate::Workspace;
-use gpui::{App, AppContext, Entity, Task, WeakEntity};
+use std::path::Path;
+use std::path::PathBuf;
+
+use gpui::App;
+use gpui::AppContext;
+use gpui::Entity;
+use gpui::Task;
+use gpui::WeakEntity;
 use itertools::Itertools;
-use project::{Entry, Worktree};
-use std::path::{Path, PathBuf};
-use util::{
-    paths::{PathStyle, PathWithPosition, normalize_lexically},
-    rel_path::RelPath,
-};
+use project::Entry;
+use project::Worktree;
+use util::paths::PathStyle;
+use util::paths::PathWithPosition;
+use util::paths::normalize_lexically;
+use util::rel_path::RelPath;
+
+use crate::Workspace;
 
 #[derive(Debug, Clone, Copy, Eq, PartialEq)]
 pub enum BackgroundPathChecks {
@@ -56,13 +64,11 @@ pub fn sanitize_path_text(text: &str) -> &str {
     let start = first_unbalanced_open_paren(text).unwrap_or(0);
     let mut sanitized = &text[start..];
     let (open_parens, mut close_parens) =
-        sanitized
-            .chars()
-            .fold((0, 0), |(opens, closes), character| match character {
-                '(' => (opens + 1, closes),
-                ')' => (opens, closes + 1),
-                _ => (opens, closes),
-            });
+        sanitized.chars().fold((0, 0), |(opens, closes), character| match character {
+            '(' => (opens + 1, closes),
+            ')' => (opens, closes + 1),
+            _ => (opens, closes),
+        });
 
     while let Some(last_char) = sanitized.chars().last() {
         let should_remove = match last_char {
@@ -200,10 +206,7 @@ fn resolve_open_target_internal(
                 };
                 match worktree.read(cx).root_entry() {
                     Some(root_entry) => {
-                        open_target = Some(OpenTarget::Worktree(
-                            root_path_with_position,
-                            root_entry.clone(),
-                        ));
+                        open_target = Some(OpenTarget::Worktree(root_path_with_position, root_entry.clone()));
                         break 'worktree_loop;
                     }
                     None => root_path_with_position,
@@ -222,15 +225,10 @@ fn resolve_open_target_internal(
 
             let normalized_path = if path_to_check.path.is_relative() {
                 relative_cwd.as_ref().and_then(|relative_cwd| {
-                    let joined = relative_cwd
-                        .as_ref()
-                        .as_std_path()
-                        .join(&path_to_check.path);
-                    normalize_lexically(&joined).ok().and_then(|path| {
-                        RelPath::new(&path, PathStyle::local())
-                            .ok()
-                            .map(std::borrow::Cow::into_owned)
-                    })
+                    let joined = relative_cwd.as_ref().as_std_path().join(&path_to_check.path);
+                    normalize_lexically(&joined)
+                        .ok()
+                        .and_then(|path| RelPath::new(&path, PathStyle::local()).ok().map(std::borrow::Cow::into_owned))
                 })
             } else {
                 None
@@ -241,11 +239,7 @@ fn resolve_open_target_internal(
                 && let Some(entry) = normalized_path
                     .as_ref()
                     .and_then(|path| worktree.read(cx).entry_for_path(path))
-                    .or_else(|| {
-                        original_path
-                            .as_ref()
-                            .and_then(|path| worktree.read(cx).entry_for_path(path.as_ref()))
-                    })
+                    .or_else(|| original_path.as_ref().and_then(|path| worktree.read(cx).entry_for_path(path.as_ref())))
             {
                 open_target = Some(OpenTarget::Worktree(
                     PathWithPosition {
@@ -283,8 +277,7 @@ fn resolve_open_target_internal(
 
     let background_resolution_task = match background_path_checks {
         BackgroundPathChecks::LocalFileSystem => {
-            let fs_paths_to_check =
-                local_paths_to_check(&potential_paths, matching, cwd, &worktree_candidates, cx);
+            let fs_paths_to_check = local_paths_to_check(&potential_paths, matching, cwd, &worktree_candidates, cx);
             let fs = project.read(cx).fs().clone();
             cx.background_spawn(async move {
                 for mut path_to_check in fs_paths_to_check {
@@ -312,16 +305,12 @@ fn resolve_open_target_internal(
             cx.spawn(async move |cx| {
                 for mut path_to_check in paths_to_check {
                     let path = path_to_check.path.to_string_lossy();
-                    let resolve_task = project.update(cx, |project, cx| {
-                        project.resolve_abs_path(path.as_ref(), cx)
-                    });
+                    let resolve_task = project.update(cx, |project, cx| project.resolve_abs_path(path.as_ref(), cx));
 
                     if let Some(resolved_path) = resolve_task.await
                         && let Some(resolved_abs_path) = {
                             let is_dir = resolved_path.is_dir();
-                            resolved_path
-                                .into_abs_path()
-                                .map(|resolved_abs_path| (resolved_abs_path, is_dir))
+                            resolved_path.into_abs_path().map(|resolved_abs_path| (resolved_abs_path, is_dir))
                         }
                     {
                         let (resolved_abs_path, is_dir) = resolved_abs_path;
@@ -360,28 +349,20 @@ fn resolve_open_target_internal(
                 let paths_to_check = paths_to_check
                     .into_iter()
                     .filter_map(|path_with_position| {
-                        let path = RelPath::new(&path_with_position.path, PathStyle::local())
-                            .ok()?
-                            .into_owned();
+                        let path = RelPath::new(&path_with_position.path, PathStyle::local()).ok()?.into_owned();
                         Some((path_with_position, path))
                     })
                     .collect::<Vec<_>>();
-                (
-                    worktree.read_with(cx, |worktree, _| worktree.snapshot()),
-                    paths_to_check,
-                )
+                (worktree.read_with(cx, |worktree, _| worktree.snapshot()), paths_to_check)
             })
             .collect::<Vec<_>>();
         cx.background_spawn(async move {
             for (snapshot, paths_to_check) in worktree_paths_to_check {
                 let traversal = snapshot.traverse_from_path(true, true, false, RelPath::empty());
                 for entry in traversal {
-                    if let Some(path_with_position) =
-                        paths_to_check
-                            .iter()
-                            .find_map(|(path_with_position, path)| {
-                                entry.path.ends_with(path).then_some(path_with_position)
-                            })
+                    if let Some(path_with_position) = paths_to_check
+                        .iter()
+                        .find_map(|(path_with_position, path)| entry.path.ends_with(path).then_some(path_with_position))
                     {
                         return Some(OpenTarget::Worktree(
                             PathWithPosition {
@@ -421,13 +402,10 @@ fn local_paths_to_check(
             let mut paths_to_check = Vec::new();
             let maybe_path = &path_to_check.path;
             if maybe_path.starts_with("~") {
-                if let Some(home_path) =
-                    maybe_path
-                        .strip_prefix("~")
-                        .ok()
-                        .and_then(|stripped_maybe_path| {
-                            Some(dirs::home_dir()?.join(stripped_maybe_path))
-                        })
+                if let Some(home_path) = maybe_path
+                    .strip_prefix("~")
+                    .ok()
+                    .and_then(|stripped_maybe_path| Some(dirs::home_dir()?.join(stripped_maybe_path)))
                 {
                     paths_to_check.push(PathWithPosition {
                         path: home_path,
@@ -460,15 +438,10 @@ fn local_paths_to_check(
         .collect()
 }
 
-fn project_paths_to_check(
-    potential_paths: &[PathWithPosition],
-    cwd: Option<&Path>,
-) -> Vec<PathWithPosition> {
+fn project_paths_to_check(potential_paths: &[PathWithPosition], cwd: Option<&Path>) -> Vec<PathWithPosition> {
     cwd.iter()
         .flat_map(|cwd| {
-            potential_paths
-                .iter()
-                .filter_map(|path_to_check| normalize_absolute_candidate(cwd, path_to_check))
+            potential_paths.iter().filter_map(|path_to_check| normalize_absolute_candidate(cwd, path_to_check))
         })
         .chain(potential_paths.iter().filter_map(|path_to_check| {
             let maybe_path = &path_to_check.path;
@@ -477,17 +450,12 @@ fn project_paths_to_check(
         .collect()
 }
 
-fn normalize_absolute_candidate(
-    cwd: &Path,
-    path_to_check: &PathWithPosition,
-) -> Option<PathWithPosition> {
+fn normalize_absolute_candidate(cwd: &Path, path_to_check: &PathWithPosition) -> Option<PathWithPosition> {
     path_to_check.path.is_relative().then(|| {
-        normalize_lexically(&cwd.join(&path_to_check.path))
-            .ok()
-            .map(|path| PathWithPosition {
-                path,
-                row: path_to_check.row,
-                column: path_to_check.column,
-            })
+        normalize_lexically(&cwd.join(&path_to_check.path)).ok().map(|path| PathWithPosition {
+            path,
+            row: path_to_check.row,
+            column: path_to_check.column,
+        })
     })?
 }

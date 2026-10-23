@@ -1,11 +1,28 @@
-use std::{path::Path, sync::Arc};
+use std::path::Path;
+use std::sync::Arc;
 
-use gpui::{EventEmitter, FocusHandle, Focusable};
-use ui::{
-    App, Button, ButtonCommon, ButtonStyle, Clickable, Context, FluentBuilder, InteractiveElement,
-    KeyBinding, Label, LabelCommon, LabelSize, ParentElement, Render, SharedString, Styled as _,
-    Window, h_flex, v_flex,
-};
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use ui::App;
+use ui::Button;
+use ui::ButtonCommon;
+use ui::ButtonStyle;
+use ui::Clickable;
+use ui::Context;
+use ui::FluentBuilder;
+use ui::InteractiveElement;
+use ui::KeyBinding;
+use ui::Label;
+use ui::LabelCommon;
+use ui::LabelSize;
+use ui::ParentElement;
+use ui::Render;
+use ui::SharedString;
+use ui::Styled as _;
+use ui::Window;
+use ui::h_flex;
+use ui::v_flex;
 use zed_actions::workspace::OpenWithSystem;
 
 use crate::Item;
@@ -22,13 +39,7 @@ pub struct InvalidItemView {
 }
 
 impl InvalidItemView {
-    pub fn new(
-        abs_path: &Path,
-        is_local: bool,
-        e: &anyhow::Error,
-        _: &mut Window,
-        cx: &mut App,
-    ) -> Self {
+    pub fn new(abs_path: &Path, is_local: bool, e: &anyhow::Error, _: &mut Window, cx: &mut App) -> Self {
         Self {
             is_local,
             abs_path: Arc::from(abs_path),
@@ -57,11 +68,7 @@ impl Item for InvalidItemView {
             }
         }
 
-        let path = if detail > 0 {
-            path
-        } else {
-            path.strip_prefix(prefix).unwrap_or(path)
-        };
+        let path = if detail > 0 { path } else { path.strip_prefix(prefix).unwrap_or(path) };
 
         SharedString::new(path.to_string_lossy())
     }
@@ -91,11 +98,7 @@ impl Render for InvalidItemView {
                         .justify_center()
                         .gap_2()
                         .child(h_flex().justify_center().child("Could not open file"))
-                        .child(
-                            h_flex()
-                                .justify_center()
-                                .child(Label::new(self.error.clone()).size(LabelSize::Small)),
-                        )
+                        .child(h_flex().justify_center().child(Label::new(self.error.clone()).size(LabelSize::Small)))
                         .when(self.is_local, |contents| {
                             contents.child(
                                 h_flex().justify_center().child(

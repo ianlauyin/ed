@@ -3,28 +3,41 @@ use std::sync::Arc;
 use std::time::Duration;
 
 use anyhow::Context as _;
-use collections::{HashMap, HashSet};
+use collections::HashMap;
+use collections::HashSet;
 use futures::FutureExt as _;
-use futures::future::{Shared, join_all};
-use gpui::{AppContext as _, AsyncApp, Context, Entity, Task};
+use futures::future::Shared;
+use futures::future::join_all;
+use gpui::AppContext as _;
+use gpui::AsyncApp;
+use gpui::Context;
+use gpui::Entity;
+use gpui::Task;
 use itertools::Itertools;
-use language::{Buffer, BufferSnapshot, OutlineItem};
+use language::Buffer;
+use language::BufferSnapshot;
+use language::OutlineItem;
 use lsp::LanguageServerId;
-use rpc::{TypedEnvelope, proto};
+use rpc::TypedEnvelope;
+use rpc::proto;
 use settings::Settings as _;
-use text::{Anchor, Bias, PointUtf16};
+use text::Anchor;
+use text::Bias;
+use text::PointUtf16;
 use util::ResultExt;
 
 use crate::DocumentSymbol;
-use crate::lsp_command::{GetDocumentSymbols, LspCommand as _};
-use crate::lsp_store::{
-    LspStore, LspStoreEvent, RunningFetch, missing_servers_to_query, next_lsp_fetch_id,
-    upstream_lsp_query_server_filter,
-};
+use crate::lsp_command::GetDocumentSymbols;
+use crate::lsp_command::LspCommand as _;
+use crate::lsp_store::LspStore;
+use crate::lsp_store::LspStoreEvent;
+use crate::lsp_store::RunningFetch;
+use crate::lsp_store::missing_servers_to_query;
+use crate::lsp_store::next_lsp_fetch_id;
+use crate::lsp_store::upstream_lsp_query_server_filter;
 use crate::project_settings::ProjectSettings;
 
-pub(super) type DocumentSymbolsTask =
-    Shared<Task<std::result::Result<Vec<OutlineItem<Anchor>>, Arc<anyhow::Error>>>>;
+pub(super) type DocumentSymbolsTask = Shared<Task<std::result::Result<Vec<OutlineItem<Anchor>>, Arc<anyhow::Error>>>>;
 
 #[derive(Debug, Default)]
 pub(super) struct DocumentSymbolsData {
@@ -53,20 +66,14 @@ impl DocumentSymbolsData {
 }
 
 impl LspStore {
-    pub(super) fn refresh_document_symbols(
-        &mut self,
-        for_server: Option<LanguageServerId>,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn refresh_document_symbols(&mut self, for_server: Option<LanguageServerId>, cx: &mut Context<Self>) {
         for lsp_data in self.lsp_data.values_mut() {
             if let Some(document_symbols) = &mut lsp_data.document_symbols {
                 document_symbols.evict(for_server);
             }
         }
 
-        cx.emit(LspStoreEvent::RefreshDocumentSymbols {
-            server_id: for_server,
-        });
+        cx.emit(LspStoreEvent::RefreshDocumentSymbols { server_id: for_server });
         if let Some((downstream_client, project_id)) = self.downstream_client.as_ref() {
             downstream_client
                 .send(proto::RefreshDocumentSymbols {
@@ -114,11 +121,7 @@ impl LspStore {
             if !version_queried_for.changed_since(&lsp_data.buffer_version)
                 && let Some(cached) = &mut lsp_data.document_symbols
             {
-                match missing_servers_to_query(
-                    &mut cached.symbols,
-                    &mut cached.fetched_servers,
-                    &current_servers,
-                ) {
+                match missing_servers_to_query(&mut cached.symbols, &mut cached.fetched_servers, &current_servers) {
                     Some(missing_servers) => servers_to_query = Some(missing_servers),
                     None => {
                         let snapshot = buffer.read(cx).snapshot();
@@ -138,41 +141,27 @@ impl LspStore {
             if let Some(document_symbols) = &lsp_data.document_symbols
                 && let Some(running) = &document_symbols.symbols_update
                 && !version_queried_for.changed_since(&running.version)
-                && servers_to_query
-                    .as_ref()
-                    .is_none_or(|missing| missing.is_subset(&running.servers))
+                && servers_to_query.as_ref().is_none_or(|missing| missing.is_subset(&running.servers))
             {
                 let running = running.task.clone();
-                return cx
-                    .background_spawn(async move { running.await.log_err().unwrap_or_default() });
+                return cx.background_spawn(async move { running.await.log_err().unwrap_or_default() });
             }
         }
 
-        let doc_symbols_data = self
-            .latest_lsp_data(buffer, cx)
-            .document_symbols
-            .get_or_insert_default();
+        let doc_symbols_data = self.latest_lsp_data(buffer, cx).document_symbols.get_or_insert_default();
         let fetch_id = next_lsp_fetch_id();
-        let queried_servers = servers_to_query
-            .clone()
-            .unwrap_or_else(|| current_servers.clone());
+        let queried_servers = servers_to_query.clone().unwrap_or_else(|| current_servers.clone());
         let buffer = buffer.clone();
         let query_version = version_queried_for.clone();
         let new_task = cx
             .spawn({
                 let queried_servers = queried_servers.clone();
                 async move |lsp_store, cx| {
-                    cx.background_executor()
-                        .timer(Duration::from_millis(30))
-                        .await;
+                    cx.background_executor().timer(Duration::from_millis(30)).await;
 
                     let fetched = lsp_store
                         .update(cx, |lsp_store, cx| {
-                            lsp_store.fetch_document_symbols_for_buffer(
-                                &buffer,
-                                servers_to_query,
-                                cx,
-                            )
+                            lsp_store.fetch_document_symbols_for_buffer(&buffer, servers_to_query, cx)
                         })
                         .map_err(Arc::new)?
                         .await
@@ -185,13 +174,9 @@ impl LspStore {
                             lsp_store
                                 .update(cx, |lsp_store, _| {
                                     if let Some(lsp_data) = lsp_store.lsp_data.get_mut(&buffer_id)
-                                        && let Some(document_symbols) =
-                                            &mut lsp_data.document_symbols
+                                        && let Some(document_symbols) = &mut lsp_data.document_symbols
                                     {
-                                        RunningFetch::take_finished(
-                                            &mut document_symbols.symbols_update,
-                                            fetch_id,
-                                        );
+                                        RunningFetch::take_finished(&mut document_symbols.symbols_update, fetch_id);
                                     }
                                 })
                                 .ok();
@@ -205,10 +190,8 @@ impl LspStore {
                             let lsp_data = lsp_store.latest_lsp_data(&buffer, cx);
                             let doc_symbols = lsp_data.document_symbols.get_or_insert_default();
 
-                            if RunningFetch::take_finished(
-                                &mut doc_symbols.symbols_update,
-                                fetch_id,
-                            ) && let Some(fetched_symbols) = fetched
+                            if RunningFetch::take_finished(&mut doc_symbols.symbols_update, fetch_id)
+                                && let Some(fetched_symbols) = fetched
                             {
                                 let converted = fetched_symbols
                                     .iter()
@@ -263,9 +246,7 @@ impl LspStore {
                 return Task::ready(Ok(None));
             }
 
-            let request_timeout = ProjectSettings::get_global(cx)
-                .global_lsp_settings
-                .get_request_timeout();
+            let request_timeout = ProjectSettings::get_global(cx).global_lsp_settings.get_request_timeout();
             let request_task = client.request_lsp(
                 project_id,
                 upstream_lsp_query_server_filter(for_servers.as_ref()),
@@ -289,9 +270,7 @@ impl LspStore {
                     async move {
                         (
                             LanguageServerId::from_proto(response.server_id),
-                            GetDocumentSymbols
-                                .response_from_proto(response.response, lsp_store, buffer, cx)
-                                .await,
+                            GetDocumentSymbols.response_from_proto(response.response, lsp_store, buffer, cx).await,
                         )
                     }
                 }))
@@ -309,19 +288,11 @@ impl LspStore {
                         }
                     })
                     .collect::<HashMap<_, _>>();
-                anyhow::ensure!(
-                    !has_errors || !result.is_empty(),
-                    "Failed to fetch document symbols"
-                );
+                anyhow::ensure!(!has_errors || !result.is_empty(), "Failed to fetch document symbols");
                 Ok(Some(result))
             })
         } else {
-            let symbols_task = self.request_filtered_lsp_locally(
-                buffer,
-                GetDocumentSymbols,
-                for_servers.as_ref(),
-                cx,
-            );
+            let symbols_task = self.request_filtered_lsp_locally(buffer, GetDocumentSymbols, for_servers.as_ref(), cx);
             cx.background_spawn(async move { Ok(Some(symbols_task.await.into_iter().collect())) })
         }
     }
@@ -342,15 +313,13 @@ fn flatten_document_symbols(
         let selection_end = snapshot.clip_point_utf16(symbol.selection_range.end, Bias::Left);
 
         let range = snapshot.anchor_after(start)..snapshot.anchor_before(end);
-        let selection_range =
-            snapshot.anchor_after(selection_start)..snapshot.anchor_before(selection_end);
+        let selection_range = snapshot.anchor_after(selection_start)..snapshot.anchor_before(selection_end);
 
         let (text, name_ranges, source_range_for_text) =
-            enriched_symbol_text(&name, start, selection_start, selection_end, snapshot)
-                .unwrap_or_else(|| {
-                    let name_len = name.len();
-                    (name.clone(), vec![0..name_len], selection_range.clone())
-                });
+            enriched_symbol_text(&name, start, selection_start, selection_end, snapshot).unwrap_or_else(|| {
+                let name_len = name.len();
+                (name.clone(), vec![0..name_len], selection_range.clone())
+            });
 
         output.push(OutlineItem {
             depth,
@@ -380,11 +349,8 @@ fn enriched_symbol_text(
     selection_end: PointUtf16,
     snapshot: &BufferSnapshot,
 ) -> Option<(String, Vec<Range<usize>>, Range<Anchor>)> {
-    let text_start = if range_start.row == selection_start.row {
-        range_start
-    } else {
-        PointUtf16::new(selection_start.row, 0)
-    };
+    let text_start =
+        if range_start.row == selection_start.row { range_start } else { PointUtf16::new(selection_start.row, 0) };
 
     let start_offset = snapshot.point_utf16_to_offset(text_start);
     let end_offset = snapshot.point_utf16_to_offset(selection_end);

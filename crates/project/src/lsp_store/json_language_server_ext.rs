@@ -1,5 +1,11 @@
-use anyhow::{Context, Result};
-use gpui::{App, AsyncApp, Entity, Global, Task, WeakEntity};
+use anyhow::Context;
+use anyhow::Result;
+use gpui::App;
+use gpui::AsyncApp;
+use gpui::Entity;
+use gpui::Global;
+use gpui::Task;
+use gpui::WeakEntity;
 use lsp::LanguageServer;
 
 use crate::LspStore;
@@ -28,10 +34,7 @@ pub struct SchemaHandlingImpl(SchemaRequestHandler);
 impl Global for SchemaHandlingImpl {}
 
 pub fn register_schema_handler(handler: SchemaRequestHandler, cx: &mut App) {
-    debug_assert!(
-        !cx.has_global::<SchemaHandlingImpl>(),
-        "SchemaHandlingImpl already registered"
-    );
+    debug_assert!(!cx.has_global::<SchemaHandlingImpl>(), "SchemaHandlingImpl already registered");
     cx.set_global(SchemaHandlingImpl(handler));
 }
 
@@ -52,9 +55,11 @@ pub fn notify_schemas_changed(lsp_store: Entity<LspStore>, uris: &[String], cx: 
 
         for states in local.language_servers.values() {
             let json_server = match states {
-                super::LanguageServerState::Running {
-                    adapter, server, ..
-                } if adapter.adapter.is_primary_zed_json_schema_adapter() => server.clone(),
+                super::LanguageServerState::Running { adapter, server, .. }
+                    if adapter.adapter.is_primary_zed_json_schema_adapter() =>
+                {
+                    server.clone()
+                }
                 _ => continue,
             };
 
@@ -96,8 +101,12 @@ pub fn register_requests(lsp_store: WeakEntity<LspStore>, language_server: &Lang
                 zlog::trace!(LOGGER => "Handling schema request for {:?}", &params);
                 let result = resolution.await;
                 match &result {
-                    Ok(content) => {zlog::trace!(LOGGER => "Schema request resolved with {}B schema", content.len());},
-                    Err(err) => {zlog::warn!(LOGGER => "Schema request failed: {}", err);},
+                    Ok(content) => {
+                        zlog::trace!(LOGGER => "Schema request resolved with {}B schema", content.len());
+                    }
+                    Err(err) => {
+                        zlog::warn!(LOGGER => "Schema request failed: {}", err);
+                    }
                 }
                 result
             }

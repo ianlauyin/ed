@@ -1,12 +1,21 @@
 use std::process::ExitStatus;
 
 use anyhow::Result;
-use gpui::{AppContext, AsyncWindowContext, Context, Task, WeakEntity};
-use task::{ResolvedTask, SaveStrategy, SpawnInTerminal};
+use gpui::AppContext;
+use gpui::AsyncWindowContext;
+use gpui::Context;
+use gpui::Task;
+use gpui::WeakEntity;
+use task::ResolvedTask;
+use task::SaveStrategy;
+use task::SpawnInTerminal;
 use ui::Window;
 use util::TryFutureExt;
 
-use crate::{SaveIntent, Toast, Workspace, notifications::NotificationId};
+use crate::SaveIntent;
+use crate::Toast;
+use crate::Workspace;
+use crate::notifications::NotificationId;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ScheduledTaskResult {
@@ -45,12 +54,7 @@ impl Workspace {
         window: &mut Window,
         cx: &mut Context<Workspace>,
     ) {
-        self.schedule_spawn_internal(
-            resolved_task.resolved,
-            Some(Box::new(on_complete)),
-            window,
-            cx,
-        );
+        self.schedule_spawn_internal(resolved_task.resolved, Some(Box::new(on_complete)), window, cx);
     }
 
     fn schedule_spawn_internal(
@@ -68,9 +72,7 @@ impl Workspace {
                     workspace
                         .terminal_provider
                         .as_ref()
-                        .map(|terminal_provider| {
-                            terminal_provider.spawn(spawn_in_terminal, window, cx)
-                        })
+                        .map(|terminal_provider| terminal_provider.spawn(spawn_in_terminal, window, cx))
                 });
                 if let Some(spawn_task) = spawn_task.ok().flatten() {
                     let res = cx.background_spawn(spawn_task).await;
@@ -108,11 +110,7 @@ impl Workspace {
         }
     }
 
-    pub async fn save_for_task(
-        workspace: &WeakEntity<Self>,
-        save_strategy: SaveStrategy,
-        cx: &mut AsyncWindowContext,
-    ) {
+    pub async fn save_for_task(workspace: &WeakEntity<Self>, save_strategy: SaveStrategy, cx: &mut AsyncWindowContext) {
         let save_action = match save_strategy {
             SaveStrategy::All => {
                 let save_all = workspace.update_in(cx, |workspace, window, cx| {
@@ -122,9 +120,8 @@ impl Workspace {
                 save_all.ok()
             }
             SaveStrategy::Current => {
-                let save_current = workspace.update_in(cx, |workspace, window, cx| {
-                    workspace.save_active_item(SaveIntent::SaveAll, window, cx)
-                });
+                let save_current = workspace
+                    .update_in(cx, |workspace, window, cx| workspace.save_active_item(SaveIntent::SaveAll, window, cx));
                 save_current.ok()
             }
             SaveStrategy::None => None,

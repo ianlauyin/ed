@@ -1,24 +1,39 @@
-use std::{
-    collections::VecDeque,
-    sync::{Arc, Weak},
-    time::{Duration, Instant},
-};
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::Weak;
+use std::time::Duration;
+use std::time::Instant;
 
-use collections::{HashMap, HashSet};
-use futures::{StreamExt, channel::mpsc};
-use gpui::{
-    App, AppContext as _, Context, Entity, EventEmitter, Global, Subscription, TaskExt, WeakEntity,
-};
-use lsp::{
-    IoKind, LanguageServer, LanguageServerId, LanguageServerName, LanguageServerSelector,
-    MessageType, RequestId, TraceValue,
-};
+use collections::HashMap;
+use collections::HashSet;
+use futures::StreamExt;
+use futures::channel::mpsc;
+use gpui::App;
+use gpui::AppContext as _;
+use gpui::Context;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::Global;
+use gpui::Subscription;
+use gpui::TaskExt;
+use gpui::WeakEntity;
+use lsp::IoKind;
+use lsp::LanguageServer;
+use lsp::LanguageServerId;
+use lsp::LanguageServerName;
+use lsp::LanguageServerSelector;
+use lsp::MessageType;
+use lsp::RequestId;
+use lsp::TraceValue;
 use rpc::proto;
 use serde::Deserialize;
 use settings::WorktreeId;
 use util::ResultExt as _;
 
-use crate::{LanguageServerLogType, LspStore, Project, ProjectItem as _};
+use crate::LanguageServerLogType;
+use crate::LspStore;
+use crate::Project;
+use crate::ProjectItem as _;
 
 const MAX_STORED_LOG_ENTRIES: usize = 2000;
 const MAX_PENDING_REQUESTS: usize = MAX_STORED_LOG_ENTRIES;
@@ -35,11 +50,7 @@ impl Global for GlobalLogStore {}
 
 #[derive(Debug)]
 pub enum Event {
-    NewServerLogEntry {
-        key: LanguageServerLogKey,
-        kind: LanguageServerLogType,
-        text: String,
-    },
+    NewServerLogEntry { key: LanguageServerLogKey, kind: LanguageServerLogType, text: String },
 }
 
 impl EventEmitter<Event> for LogStore {}
@@ -156,9 +167,7 @@ impl LanguageServerState {
     }
 
     fn has_downstream_log_stream(&self, log_kind: LogKind) -> bool {
-        self.downstream_log_streams
-            .values()
-            .any(|log_kinds| log_kinds.contains(&log_kind))
+        self.downstream_log_streams.values().any(|log_kinds| log_kinds.contains(&log_kind))
     }
 
     fn has_log_stream(&self, log_kind: LogKind) -> bool {
@@ -167,12 +176,11 @@ impl LanguageServerState {
 
     fn synchronize_rpc_state(&mut self) {
         if self.has_log_stream(LogKind::Rpc) {
-            self.rpc_state
-                .get_or_insert_with(|| LanguageServerRpcState {
-                    rpc_messages: VecDeque::with_capacity(MAX_STORED_LOG_ENTRIES),
-                    header_state: RpcLogHeaderState::default(),
-                    request_tracker: RpcRequestTracker::default(),
-                });
+            self.rpc_state.get_or_insert_with(|| LanguageServerRpcState {
+                rpc_messages: VecDeque::with_capacity(MAX_STORED_LOG_ENTRIES),
+                header_state: RpcLogHeaderState::default(),
+                request_tracker: RpcRequestTracker::default(),
+            });
         } else {
             self.rpc_state.take();
         }
@@ -224,11 +232,7 @@ impl LanguageServerLogKey {
         Self { kind, server_id }
     }
 
-    pub fn is_for_project(
-        &self,
-        project: &WeakEntity<Project>,
-        lsp_store: &WeakEntity<LspStore>,
-    ) -> bool {
+    pub fn is_for_project(&self, project: &WeakEntity<Project>, lsp_store: &WeakEntity<LspStore>) -> bool {
         self.kind.is_for_project(project, lsp_store)
     }
 }
@@ -241,21 +245,12 @@ impl LanguageServerKind {
         }
     }
 
-    pub fn is_for_project(
-        &self,
-        project: &WeakEntity<Project>,
-        lsp_store: &WeakEntity<LspStore>,
-    ) -> bool {
+    pub fn is_for_project(&self, project: &WeakEntity<Project>, lsp_store: &WeakEntity<LspStore>) -> bool {
         match self {
-            Self::Local {
-                project: server_project,
+            Self::Local { project: server_project } | Self::Remote { project: server_project } => {
+                server_project == project
             }
-            | Self::Remote {
-                project: server_project,
-            } => server_project == project,
-            Self::LocalSsh {
-                lsp_store: server_lsp_store,
-            } => server_lsp_store == lsp_store,
+            Self::LocalSsh { lsp_store: server_lsp_store } => server_lsp_store == lsp_store,
         }
     }
 }
@@ -306,23 +301,14 @@ impl MessageKind {
 }
 
 impl RpcLogHeaderState {
-    fn header_for_message(
-        &mut self,
-        kind: MessageKind,
-        elapsed: Option<Duration>,
-    ) -> Option<String> {
-        let starts_new_group = self.last_message_kind != Some(kind)
-            || self.last_message_had_elapsed
-            || elapsed.is_some();
+    fn header_for_message(&mut self, kind: MessageKind, elapsed: Option<Duration>) -> Option<String> {
+        let starts_new_group =
+            self.last_message_kind != Some(kind) || self.last_message_had_elapsed || elapsed.is_some();
         self.last_message_kind = Some(kind);
         self.last_message_had_elapsed = elapsed.is_some();
 
         starts_new_group.then(|| {
-            let direction = if kind == MessageKind::Receive {
-                "Receive"
-            } else {
-                "Send"
-            };
+            let direction = if kind == MessageKind::Receive { "Receive" } else { "Send" };
             match elapsed {
                 Some(elapsed) => format!("\n// {direction} (took {}):", format_duration(elapsed)),
                 None => format!("\n// {direction}:"),
@@ -332,12 +318,7 @@ impl RpcLogHeaderState {
 }
 
 impl RpcRequestTracker {
-    fn observe(
-        &mut self,
-        kind: MessageKind,
-        message: &str,
-        observed_at: Instant,
-    ) -> Option<Duration> {
+    fn observe(&mut self, kind: MessageKind, message: &str, observed_at: Instant) -> Option<Duration> {
         let envelope = serde_json::from_str::<RpcEnvelope>(message).ok()?;
         let id = envelope.id?;
         if envelope.method.is_some() {
@@ -345,10 +326,7 @@ impl RpcRequestTracker {
             None
         } else {
             self.pending_requests
-                .remove(&PendingRequestKey {
-                    kind: kind.opposite(),
-                    id,
-                })
+                .remove(&PendingRequestKey { kind: kind.opposite(), id })
                 .and_then(|started_at| observed_at.checked_duration_since(started_at))
         }
     }
@@ -356,11 +334,8 @@ impl RpcRequestTracker {
     fn insert(&mut self, key: PendingRequestKey, observed_at: Instant) {
         if self.pending_requests.len() >= MAX_PENDING_REQUESTS
             && !self.pending_requests.contains_key(&key)
-            && let Some(oldest_key) = self
-                .pending_requests
-                .iter()
-                .min_by_key(|(_, started_at)| **started_at)
-                .map(|(key, _)| key.clone())
+            && let Some(oldest_key) =
+                self.pending_requests.iter().min_by_key(|(_, started_at)| **started_at).map(|(key, _)| key.clone())
         {
             self.pending_requests.remove(&oldest_key);
         }
@@ -447,18 +422,13 @@ impl LogStore {
                 _subscriptions: [
                     cx.observe_release(project, move |this, _, _| {
                         this.projects.remove(&weak_project);
-                        this.language_servers
-                            .retain(|key, _| key.kind.project() != Some(&weak_project));
+                        this.language_servers.retain(|key, _| key.kind.project() != Some(&weak_project));
                     }),
                     cx.subscribe(project, move |log_store, project, event, cx| {
                         let server_kind = if project.read(cx).is_local() {
-                            LanguageServerKind::Local {
-                                project: project.downgrade(),
-                            }
+                            LanguageServerKind::Local { project: project.downgrade() }
                         } else {
-                            LanguageServerKind::Remote {
-                                project: project.downgrade(),
-                            }
+                            LanguageServerKind::Remote { project: project.downgrade() }
                         };
                         match event {
                             crate::Event::LanguageServerAdded(id, name, worktree_id) => {
@@ -467,26 +437,15 @@ impl LogStore {
                                     *id,
                                     Some(name.clone()),
                                     *worktree_id,
-                                    project
-                                        .read(cx)
-                                        .lsp_store()
-                                        .read(cx)
-                                        .language_server_for_id(*id),
+                                    project.read(cx).lsp_store().read(cx).language_server_for_id(*id),
                                     cx,
                                 );
                             }
-                            crate::Event::LanguageServerBufferRegistered {
-                                server_id,
-                                buffer_id,
-                                name,
-                                ..
-                            } => {
+                            crate::Event::LanguageServerBufferRegistered { server_id, buffer_id, name, .. } => {
                                 let worktree_id = project
                                     .read(cx)
                                     .buffer_for_id(*buffer_id, cx)
-                                    .and_then(|buffer| {
-                                        Some(buffer.read(cx).project_path(cx)?.worktree_id)
-                                    });
+                                    .and_then(|buffer| Some(buffer.read(cx).project_path(cx)?.worktree_id));
                                 let name = name.clone().or_else(|| {
                                     project
                                         .read(cx)
@@ -496,38 +455,18 @@ impl LogStore {
                                         .get(server_id)
                                         .map(|status| status.name.clone())
                                 });
-                                log_store.add_language_server(
-                                    server_kind,
-                                    *server_id,
-                                    name,
-                                    worktree_id,
-                                    None,
-                                    cx,
-                                );
+                                log_store.add_language_server(server_kind, *server_id, name, worktree_id, None, cx);
                             }
                             crate::Event::LanguageServerRemoved(id) => {
                                 let server_key = LanguageServerLogKey::new(server_kind, *id);
                                 log_store.remove_language_server(&server_key, cx);
                             }
                             crate::Event::LanguageServerLog(id, typ, message) => {
-                                let server_key =
-                                    LanguageServerLogKey::new(server_kind.clone(), *id);
-                                log_store.add_language_server(
-                                    server_kind,
-                                    *id,
-                                    None,
-                                    None,
-                                    None,
-                                    cx,
-                                );
+                                let server_key = LanguageServerLogKey::new(server_kind.clone(), *id);
+                                log_store.add_language_server(server_kind, *id, None, None, None, cx);
                                 match typ {
                                     crate::LanguageServerLogType::Log(typ) => {
-                                        log_store.add_language_server_log(
-                                            &server_key,
-                                            *typ,
-                                            message,
-                                            cx,
-                                        );
+                                        log_store.add_language_server_log(&server_key, *typ, message, cx);
                                     }
                                     crate::LanguageServerLogType::Trace { verbose_info } => {
                                         log_store.add_language_server_trace(
@@ -538,11 +477,7 @@ impl LogStore {
                                         );
                                     }
                                     crate::LanguageServerLogType::Rpc { received, elapsed } => {
-                                        let kind = if *received {
-                                            MessageKind::Receive
-                                        } else {
-                                            MessageKind::Send
-                                        };
+                                        let kind = if *received { MessageKind::Receive } else { MessageKind::Send };
                                         log_store.add_language_server_rpc(
                                             &server_key,
                                             kind,
@@ -553,12 +488,7 @@ impl LogStore {
                                     }
                                 }
                             }
-                            crate::Event::ToggleLspLogs {
-                                peer_id,
-                                server_id,
-                                enabled,
-                                toggled_log_kind,
-                            } => {
+                            crate::Event::ToggleLspLogs { peer_id, server_id, enabled, toggled_log_kind } => {
                                 let server_key = LanguageServerLogKey::new(server_kind, *server_id);
                                 log_store.set_downstream_log_stream(
                                     &server_key,
@@ -569,11 +499,7 @@ impl LogStore {
                                 );
                             }
                             crate::Event::RemoteIdChanged(None) => {
-                                log_store.release_downstream_log_streams(
-                                    &project.downgrade(),
-                                    None,
-                                    cx,
-                                );
+                                log_store.release_downstream_log_streams(&project.downgrade(), None, cx);
                             }
                             _ => {}
                         }
@@ -583,10 +509,7 @@ impl LogStore {
         );
     }
 
-    pub fn get_language_server_state(
-        &mut self,
-        key: &LanguageServerLogKey,
-    ) -> Option<&mut LanguageServerState> {
+    pub fn get_language_server_state(&mut self, key: &LanguageServerLogKey) -> Option<&mut LanguageServerState> {
         self.language_servers.get_mut(key)
     }
 
@@ -600,28 +523,25 @@ impl LogStore {
         cx: &mut Context<Self>,
     ) -> Option<&mut LanguageServerState> {
         let server_key = LanguageServerLogKey::new(kind, server_id);
-        let server_state = self
-            .language_servers
-            .entry(server_key.clone())
-            .or_insert_with(|| {
-                let generation = self.next_server_generation;
-                self.next_server_generation += 1;
-                cx.notify();
-                LanguageServerState {
-                    generation,
-                    name: None,
-                    worktree_id: None,
-                    server: server.as_ref().map(Arc::downgrade),
-                    rpc_state: None,
-                    log_messages: VecDeque::with_capacity(MAX_STORED_LOG_ENTRIES),
-                    trace_messages: VecDeque::with_capacity(MAX_STORED_LOG_ENTRIES),
-                    trace_level: TraceValue::Off,
-                    log_level: MessageType::LOG,
-                    io_logs_subscription: None,
-                    view_log_stream_refcounts: HashMap::default(),
-                    downstream_log_streams: HashMap::default(),
-                }
-            });
+        let server_state = self.language_servers.entry(server_key.clone()).or_insert_with(|| {
+            let generation = self.next_server_generation;
+            self.next_server_generation += 1;
+            cx.notify();
+            LanguageServerState {
+                generation,
+                name: None,
+                worktree_id: None,
+                server: server.as_ref().map(Arc::downgrade),
+                rpc_state: None,
+                log_messages: VecDeque::with_capacity(MAX_STORED_LOG_ENTRIES),
+                trace_messages: VecDeque::with_capacity(MAX_STORED_LOG_ENTRIES),
+                trace_level: TraceValue::Off,
+                log_level: MessageType::LOG,
+                io_logs_subscription: None,
+                view_log_stream_refcounts: HashMap::default(),
+                downstream_log_streams: HashMap::default(),
+            }
+        });
 
         if let Some(name) = name {
             server_state.name = Some(name);
@@ -643,14 +563,7 @@ impl LogStore {
                 let io_tx = self.io_tx.clone();
                 server_state.io_logs_subscription = Some(server.on_io(move |io_kind, message| {
                     let observed_at = Instant::now();
-                    io_tx
-                        .unbounded_send((
-                            server_key.clone(),
-                            io_kind,
-                            message.to_string(),
-                            observed_at,
-                        ))
-                        .ok();
+                    io_tx.unbounded_send((server_key.clone(), io_kind, message.to_string(), observed_at)).ok();
                 }));
             }
         }
@@ -673,24 +586,14 @@ impl LogStore {
         if !store_logs {
             // Send all messages regardless of the visibility in case of not storing, to notify the receiver anyway
             self.emit_event(
-                Event::NewServerLogEntry {
-                    key: key.clone(),
-                    kind: LanguageServerLogType::Log(typ),
-                    text: message,
-                },
+                Event::NewServerLogEntry { key: key.clone(), kind: LanguageServerLogType::Log(typ), text: message },
                 cx,
             );
-        } else if let Some(new_message) = Self::push_new_message(
-            log_lines,
-            LogMessage { message, typ },
-            language_server_state.log_level,
-        ) {
+        } else if let Some(new_message) =
+            Self::push_new_message(log_lines, LogMessage { message, typ }, language_server_state.log_level)
+        {
             self.emit_event(
-                Event::NewServerLogEntry {
-                    key: key.clone(),
-                    kind: LanguageServerLogType::Log(typ),
-                    text: new_message,
-                },
+                Event::NewServerLogEntry { key: key.clone(), kind: LanguageServerLogType::Log(typ), text: new_message },
                 cx,
             );
         }
@@ -720,19 +623,13 @@ impl LogStore {
             );
         } else if let Some(new_message) = Self::push_new_message(
             log_lines,
-            TraceMessage {
-                message: message.trim().to_string(),
-                is_verbose: false,
-            },
+            TraceMessage { message: message.trim().to_string(), is_verbose: false },
             TraceValue::Messages,
         ) {
             if let Some(verbose_message) = verbose_info.as_ref() {
                 Self::push_new_message(
                     log_lines,
-                    TraceMessage {
-                        message: verbose_message.clone(),
-                        is_verbose: true,
-                    },
+                    TraceMessage { message: verbose_message.clone(), is_verbose: true },
                     TraceValue::Verbose,
                 );
             }
@@ -772,17 +669,12 @@ impl LogStore {
         cx: &mut Context<'_, Self>,
     ) {
         let store_logs = !self.on_headless_host;
-        let Some(state) = self
-            .get_language_server_state(key)
-            .and_then(|state| state.rpc_state.as_mut())
-        else {
+        let Some(state) = self.get_language_server_state(key).and_then(|state| state.rpc_state.as_mut()) else {
             return;
         };
 
         let elapsed = match timing {
-            RpcTiming::ObservedAt(observed_at) => {
-                state.request_tracker.observe(kind, message, observed_at)
-            }
+            RpcTiming::ObservedAt(observed_at) => state.request_tracker.observe(kind, message, observed_at),
             RpcTiming::Forwarded(elapsed) => elapsed,
         };
 
@@ -807,10 +699,7 @@ impl LogStore {
             // Do not send a synthetic message over the wire, it will be derived from the actual RPC message
             cx.emit(Event::NewServerLogEntry {
                 key: key.clone(),
-                kind: LanguageServerLogType::Rpc {
-                    received,
-                    elapsed: None,
-                },
+                kind: LanguageServerLogType::Rpc { received, elapsed: None },
                 text: header,
             });
         }
@@ -843,10 +732,7 @@ impl LogStore {
         project: &'a WeakEntity<Project>,
         lsp_store: &'a WeakEntity<LspStore>,
     ) -> impl Iterator<Item = LanguageServerLogKey> + 'a {
-        self.language_servers
-            .keys()
-            .filter(move |key| key.is_for_project(project, lsp_store))
-            .cloned()
+        self.language_servers.keys().filter(move |key| key.is_for_project(project, lsp_store)).cloned()
     }
 
     pub fn has_server_logs(
@@ -881,11 +767,7 @@ impl LogStore {
             }
         };
 
-        let kind = if is_received {
-            MessageKind::Receive
-        } else {
-            MessageKind::Send
-        };
+        let kind = if is_received { MessageKind::Receive } else { MessageKind::Send };
 
         self.add_language_server_rpc(key, kind, message, RpcTiming::ObservedAt(observed_at), cx);
         cx.notify();
@@ -897,10 +779,9 @@ impl LogStore {
             Event::NewServerLogEntry { key, kind, text } => {
                 if let Some(state) = self.get_language_server_state(key) {
                     let downstream_client = match &key.kind {
-                        LanguageServerKind::Remote { project }
-                        | LanguageServerKind::Local { project } => project
-                            .upgrade()
-                            .map(|project| project.read(cx).lsp_store()),
+                        LanguageServerKind::Remote { project } | LanguageServerKind::Local { project } => {
+                            project.upgrade().map(|project| project.read(cx).lsp_store())
+                        }
                         LanguageServerKind::LocalSsh { lsp_store } => lsp_store.upgrade(),
                     }
                     .and_then(|lsp_store| lsp_store.read(cx).downstream_client());
@@ -972,11 +853,7 @@ impl LogStore {
             log_kind,
             |state| {
                 if enabled {
-                    state
-                        .downstream_log_streams
-                        .entry(peer_id)
-                        .or_default()
-                        .insert(log_kind);
+                    state.downstream_log_streams.entry(peer_id).or_default().insert(log_kind);
                 } else if let Some(log_kinds) = state.downstream_log_streams.get_mut(&peer_id) {
                     log_kinds.remove(&log_kind);
                     if log_kinds.is_empty() {
@@ -1001,11 +878,7 @@ impl LogStore {
             }
             for (downstream_peer_id, log_kinds) in &state.downstream_log_streams {
                 if peer_id.is_none_or(|peer_id| peer_id == *downstream_peer_id) {
-                    streams.extend(
-                        log_kinds
-                            .iter()
-                            .map(|log_kind| (key.clone(), *downstream_peer_id, *log_kind)),
-                    );
+                    streams.extend(log_kinds.iter().map(|log_kind| (key.clone(), *downstream_peer_id, *log_kind)));
                 }
             }
         }
@@ -1039,12 +912,7 @@ impl LogStore {
         Some(())
     }
 
-    fn send_toggle_log_message(
-        key: &LanguageServerLogKey,
-        enabled: bool,
-        log_kind: LogKind,
-        cx: &mut App,
-    ) {
+    fn send_toggle_log_message(key: &LanguageServerLogKey, enabled: bool, log_kind: LogKind, cx: &mut App) {
         let LanguageServerKind::Remote { project } = &key.kind else {
             return;
         };

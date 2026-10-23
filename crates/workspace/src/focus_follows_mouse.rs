@@ -1,7 +1,11 @@
-use gpui::{
-    AnyWindowHandle, AppContext as _, Context, FocusHandle, Focusable, Global,
-    StatefulInteractiveElement, Task,
-};
+use gpui::AnyWindowHandle;
+use gpui::AppContext as _;
+use gpui::Context;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::Global;
+use gpui::StatefulInteractiveElement;
+use gpui::Task;
 
 use crate::workspace_settings;
 
@@ -16,11 +20,7 @@ struct FfmState {
 impl Global for FfmState {}
 
 pub trait FocusFollowsMouse<E: Focusable>: StatefulInteractiveElement {
-    fn focus_follows_mouse(
-        self,
-        settings: workspace_settings::FocusFollowsMouse,
-        cx: &Context<E>,
-    ) -> Self {
+    fn focus_follows_mouse(self, settings: workspace_settings::FocusFollowsMouse, cx: &Context<E>) -> Self {
         if settings.enabled {
             self.on_hover(cx.listener(move |this, enter, window, cx| {
                 if *enter {

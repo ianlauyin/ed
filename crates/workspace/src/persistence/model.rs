@@ -1,26 +1,39 @@
-use super::{SerializedAxis, SerializedWindowBounds};
-use crate::{
-    Member, Pane, PaneAxis, SerializableItemRegistry, Workspace, WorkspaceId, item::ItemHandle,
-    multi_workspace::SerializedProjectGroupState, path_list::PathList,
-};
-use anyhow::{Context, Result};
-use async_recursion::async_recursion;
-use db::sqlez::{
-    bindable::{Bind, Column, StaticColumnCount},
-    statement::Statement,
-};
-use gpui::{AsyncWindowContext, Entity, WeakEntity, WindowId};
+use std::path::PathBuf;
+use std::sync::Arc;
 
-use project::{Project, ProjectGroupKey};
+use anyhow::Context;
+use anyhow::Result;
+use async_recursion::async_recursion;
+use db::sqlez::bindable::Bind;
+use db::sqlez::bindable::Column;
+use db::sqlez::bindable::StaticColumnCount;
+use db::sqlez::statement::Statement;
+use gpui::AsyncWindowContext;
+use gpui::Entity;
+use gpui::WeakEntity;
+use gpui::WindowId;
+use project::Project;
+use project::ProjectGroupKey;
 use remote::RemoteConnectionOptions;
-use serde::{Deserialize, Serialize};
-use std::{path::PathBuf, sync::Arc};
-use util::{ResultExt, path_list::SerializedPathList};
+use serde::Deserialize;
+use serde::Serialize;
+use util::ResultExt;
+use util::path_list::SerializedPathList;
 use uuid::Uuid;
 
-#[derive(
-    Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, serde::Serialize, serde::Deserialize,
-)]
+use super::SerializedAxis;
+use super::SerializedWindowBounds;
+use crate::Member;
+use crate::Pane;
+use crate::PaneAxis;
+use crate::SerializableItemRegistry;
+use crate::Workspace;
+use crate::WorkspaceId;
+use crate::item::ItemHandle;
+use crate::multi_workspace::SerializedProjectGroupState;
+use crate::path_list::PathList;
+
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord, Hash, Clone, Copy, serde::Serialize, serde::Deserialize)]
 pub(crate) struct RemoteConnectionId(pub u64);
 
 #[derive(Debug, PartialEq, Eq, Clone, Copy)]
@@ -81,10 +94,7 @@ impl SerializedProjectGroup {
             SerializedWorkspaceLocation::Local => None,
             SerializedWorkspaceLocation::Remote(opts) => Some(opts),
         };
-        SerializedProjectGroupState {
-            key: ProjectGroupKey::new(host, path_list),
-            expanded: self.expanded,
-        }
+        SerializedProjectGroupState { key: ProjectGroupKey::new(host, path_list), expanded: self.expanded }
     }
 }
 
@@ -163,14 +173,7 @@ impl Column for DockStructure {
         let (left, next_index) = DockData::column(statement, start_index)?;
         let (right, next_index) = DockData::column(statement, next_index)?;
         let (bottom, next_index) = DockData::column(statement, next_index)?;
-        Ok((
-            DockStructure {
-                left,
-                right,
-                bottom,
-            },
-            next_index,
-        ))
+        Ok((DockStructure { left, right, bottom }, next_index))
     }
 }
 
@@ -194,14 +197,7 @@ impl Column for DockData {
         let (visible, next_index) = Option::<bool>::column(statement, start_index)?;
         let (active_panel, next_index) = Option::<String>::column(statement, next_index)?;
         let (zoom, next_index) = Option::<bool>::column(statement, next_index)?;
-        Ok((
-            DockData {
-                visible: visible.unwrap_or(false),
-                active_panel,
-                zoom: zoom.unwrap_or(false),
-            },
-            next_index,
-        ))
+        Ok((DockData { visible: visible.unwrap_or(false), active_panel, zoom: zoom.unwrap_or(false) }, next_index))
     }
 }
 
@@ -215,11 +211,7 @@ impl Bind for DockData {
 
 #[derive(Debug, PartialEq, Clone)]
 pub(crate) enum SerializedPaneGroup {
-    Group {
-        axis: SerializedAxis,
-        flexes: Option<Vec<f32>>,
-        children: Vec<SerializedPaneGroup>,
-    },
+    Group { axis: SerializedAxis, flexes: Option<Vec<f32>>, children: Vec<SerializedPaneGroup> },
     Pane(SerializedPane),
 }
 
@@ -231,24 +223,15 @@ impl SerializedPaneGroup {
         workspace_id: WorkspaceId,
         workspace: WeakEntity<Workspace>,
         cx: &mut AsyncWindowContext,
-    ) -> Option<(
-        Member,
-        Option<Entity<Pane>>,
-        Vec<Option<Box<dyn ItemHandle>>>,
-    )> {
+    ) -> Option<(Member, Option<Entity<Pane>>, Vec<Option<Box<dyn ItemHandle>>>)> {
         match self {
-            SerializedPaneGroup::Group {
-                axis,
-                children,
-                flexes,
-            } => {
+            SerializedPaneGroup::Group { axis, children, flexes } => {
                 let mut current_active_pane = None;
                 let mut members = Vec::new();
                 let mut items = Vec::new();
                 for child in children {
-                    if let Some((new_member, active_pane, new_items)) = child
-                        .deserialize(project, workspace_id, workspace.clone(), cx)
-                        .await
+                    if let Some((new_member, active_pane, new_items)) =
+                        child.deserialize(project, workspace_id, workspace.clone(), cx).await
                     {
                         members.push(new_member);
                         items.extend(new_items);
@@ -264,17 +247,11 @@ impl SerializedPaneGroup {
                     return Some((members.remove(0), current_active_pane, items));
                 }
 
-                Some((
-                    Member::Axis(PaneAxis::load(axis.0, members, flexes)),
-                    current_active_pane,
-                    items,
-                ))
+                Some((Member::Axis(PaneAxis::load(axis.0, members, flexes)), current_active_pane, items))
             }
             SerializedPaneGroup::Pane(serialized_pane) => {
                 let pane = workspace
-                    .update_in(cx, |workspace, window, cx| {
-                        workspace.add_pane(window, cx).downgrade()
-                    })
+                    .update_in(cx, |workspace, window, cx| workspace.add_pane(window, cx).downgrade())
                     .log_err()?;
                 let active = serialized_pane.active;
                 let new_items = serialized_pane
@@ -283,22 +260,13 @@ impl SerializedPaneGroup {
                     .context("Could not deserialize pane)")
                     .log_err()?;
 
-                if pane
-                    .read_with(cx, |pane, _| pane.items_len() != 0)
-                    .log_err()?
-                {
+                if pane.read_with(cx, |pane, _| pane.items_len() != 0).log_err()? {
                     let pane = pane.upgrade()?;
-                    Some((
-                        Member::Pane(pane.clone()),
-                        active.then_some(pane),
-                        new_items,
-                    ))
+                    Some((Member::Pane(pane.clone()), active.then_some(pane), new_items))
                 } else {
                     let pane = pane.upgrade()?;
                     workspace
-                        .update_in(cx, |workspace, window, cx| {
-                            workspace.force_remove_pane(&pane, &None, window, cx)
-                        })
+                        .update_in(cx, |workspace, window, cx| workspace.force_remove_pane(&pane, &None, window, cx))
                         .log_err()?;
                     None
                 }
@@ -316,11 +284,7 @@ pub struct SerializedPane {
 
 impl SerializedPane {
     pub fn new(children: Vec<SerializedItem>, active: bool, pinned_count: usize) -> Self {
-        SerializedPane {
-            children,
-            active,
-            pinned_count,
-        }
+        SerializedPane { children, active, pinned_count }
     }
 
     pub async fn deserialize_to(
@@ -384,11 +348,7 @@ impl SerializedPane {
         // `items` keeps a `None` for every item that failed to deserialize, and those
         // were never added to the pane. Counting them would leave the pinned count
         // pointing past the pinned tabs and pin unpinned ones in their place.
-        let pinned_count = items
-            .iter()
-            .take(self.pinned_count)
-            .filter(|item| item.is_some())
-            .count();
+        let pinned_count = items.iter().take(self.pinned_count).filter(|item| item.is_some()).count();
         pane.update(cx, |pane, _| {
             pane.set_pinned_count(pinned_count);
         })?;
@@ -411,12 +371,7 @@ pub struct SerializedItem {
 
 impl SerializedItem {
     pub fn new(kind: impl AsRef<str>, item_id: ItemId, active: bool, preview: bool) -> Self {
-        Self {
-            kind: Arc::from(kind.as_ref()),
-            item_id,
-            active,
-            preview,
-        }
+        Self { kind: Arc::from(kind.as_ref()), item_id, active, preview }
     }
 }
 
@@ -440,14 +395,6 @@ impl Column for SerializedItem {
         let (item_id, next_index) = ItemId::column(statement, next_index)?;
         let (active, next_index) = bool::column(statement, next_index)?;
         let (preview, next_index) = bool::column(statement, next_index)?;
-        Ok((
-            SerializedItem {
-                kind,
-                item_id,
-                active,
-                preview,
-            },
-            next_index,
-        ))
+        Ok((SerializedItem { kind, item_id, active, preview }, next_index))
     }
 }

@@ -1,7 +1,14 @@
-use gpui::{
-    AnyView, App, DismissEvent, Entity, EventEmitter, FocusHandle, Global, ManagedView,
-    MouseButton, Subscription, WeakFocusHandle,
-};
+use gpui::AnyView;
+use gpui::App;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Global;
+use gpui::ManagedView;
+use gpui::MouseButton;
+use gpui::Subscription;
+use gpui::WeakFocusHandle;
 use ui::prelude::*;
 
 #[derive(Debug)]
@@ -30,28 +37,17 @@ pub fn register_reopenable_picker(focus_handle: &FocusHandle, cx: &mut App) {
 
 pub fn deregister_reopenable_picker(focus_handle: &FocusHandle, cx: &mut App) {
     let registry = cx.default_global::<ReopenablePickerRegistry>();
-    registry
-        .handles
-        .retain(|handle| handle.upgrade().is_some() && handle != focus_handle);
+    registry.handles.retain(|handle| handle.upgrade().is_some() && handle != focus_handle);
 }
 
 fn focus_handle_is_reopenable(focus_handle: &FocusHandle, cx: &App) -> bool {
-    cx.try_global::<ReopenablePickerRegistry>()
-        .is_some_and(|registry| {
-            registry
-                .handles
-                .iter()
-                .filter_map(|handle| handle.upgrade())
-                .any(|handle| &handle == focus_handle)
-        })
+    cx.try_global::<ReopenablePickerRegistry>().is_some_and(|registry| {
+        registry.handles.iter().filter_map(|handle| handle.upgrade()).any(|handle| &handle == focus_handle)
+    })
 }
 
 pub trait ModalView: ManagedView {
-    fn on_before_dismiss(
-        &mut self,
-        _window: &mut Window,
-        _: &mut Context<Self>,
-    ) -> DismissDecision {
+    fn on_before_dismiss(&mut self, _window: &mut Window, _: &mut Context<Self>) -> DismissDecision {
         DismissDecision::Dismiss(true)
     }
 
@@ -134,12 +130,7 @@ impl Default for ModalLayer {
 
 impl ModalLayer {
     pub fn new() -> Self {
-        Self {
-            active_modal: None,
-            stashed_modal: None,
-            reveal_stash_when_free: false,
-            dismiss_on_focus_lost: false,
-        }
+        Self { active_modal: None, stashed_modal: None, reveal_stash_when_free: false, dismiss_on_focus_lost: false }
     }
 
     /// Toggles a modal of type `V`. If a modal of the same type is currently active,
@@ -311,21 +302,11 @@ impl Render for ModalLayer {
                     this.hide_modal(window, cx);
                 }),
             )
-            .child(
-                v_flex()
-                    .h(px(0.0))
-                    .top_20()
-                    .items_center()
-                    .track_focus(&active_modal.focus_handle)
-                    .child(
-                        h_flex()
-                            .occlude()
-                            .child(active_modal.modal.view())
-                            .on_mouse_down(MouseButton::Left, |_, _, cx| {
-                                cx.stop_propagation();
-                            }),
-                    ),
-            )
+            .child(v_flex().h(px(0.0)).top_20().items_center().track_focus(&active_modal.focus_handle).child(
+                h_flex().occlude().child(active_modal.modal.view()).on_mouse_down(MouseButton::Left, |_, _, cx| {
+                    cx.stop_propagation();
+                }),
+            ))
             .into_any_element()
     }
 }

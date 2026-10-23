@@ -1,30 +1,40 @@
 //! A UI interface for managing the [`TrustedWorktrees`] data.
 
-use std::{
-    borrow::Cow,
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::borrow::Cow;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
 
-use collections::{HashMap, HashSet};
-use gpui::{DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, ScrollHandle, WeakEntity};
-
-use project::{
-    WorktreeId,
-    trusted_worktrees::{PathTrust, RemoteHostLocation, TrustedWorktrees},
-    worktree_store::WorktreeStore,
-};
+use collections::HashMap;
+use collections::HashSet;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::ScrollHandle;
+use gpui::WeakEntity;
+use project::WorktreeId;
+use project::trusted_worktrees::PathTrust;
+use project::trusted_worktrees::RemoteHostLocation;
+use project::trusted_worktrees::TrustedWorktrees;
+use project::worktree_store::WorktreeStore;
 use smallvec::SmallVec;
 use theme::ActiveTheme;
-use ui::{
-    AlertModal, Checkbox, FluentBuilder, KeyBinding, ListBulletItem, ToggleState, WithScrollbar,
-    prelude::*,
-};
+use ui::AlertModal;
+use ui::Checkbox;
+use ui::FluentBuilder;
+use ui::KeyBinding;
+use ui::ListBulletItem;
+use ui::ToggleState;
+use ui::WithScrollbar;
+use ui::prelude::*;
 use ui_input::InputField;
-
 use util::paths::PathStyle;
 
-use crate::{DismissDecision, ModalView, ToggleWorktreeSecurity};
+use crate::DismissDecision;
+use crate::ModalView;
+use crate::ToggleWorktreeSecurity;
 
 pub struct SecurityModal {
     restricted_paths: HashMap<WorktreeId, RestrictedPath>,
@@ -88,10 +98,7 @@ impl Render for SecurityModal {
 
         // The editable trust-scope field is shown only when a single project is
         // being prompted for (Delta opens one worktree per thread).
-        let trust_input = self
-            .single_trustable_path()
-            .is_some()
-            .then(|| self.trust_path_input.clone());
+        let trust_input = self.single_trustable_path().is_some().then(|| self.trust_path_input.clone());
 
         AlertModal::new("security-modal")
             .width(rems(40.))
@@ -383,11 +390,8 @@ impl SecurityModal {
             return Ok(None);
         };
         let typed = self.trust_path_input.read(cx).text(cx);
-        let path_style = self
-            .worktree_store
-            .upgrade()
-            .map(|store| store.read(cx).path_style())
-            .unwrap_or_else(PathStyle::local);
+        let path_style =
+            self.worktree_store.upgrade().map(|store| store.read(cx).path_style()).unwrap_or_else(PathStyle::local);
         validate_trust_scope(&typed, &project, self.home_dir.as_deref(), path_style).map(Some)
     }
 
@@ -396,8 +400,7 @@ impl SecurityModal {
             Ok(scope) => scope,
             Err(error) => {
                 // Invalid path: flag the field and keep the modal open.
-                self.trust_path_input
-                    .update(cx, |input, cx| input.set_error(Some(error), cx));
+                self.trust_path_input.update(cx, |input, cx| input.set_error(Some(error), cx));
                 return;
             }
         };
@@ -406,27 +409,20 @@ impl SecurityModal {
             TrustedWorktrees::try_get_global(cx).zip(self.worktree_store.upgrade())
         {
             trusted_worktrees.update(cx, |trusted_worktrees, cx| {
-                let mut paths_to_trust = self
-                    .restricted_paths
-                    .keys()
-                    .copied()
-                    .map(PathTrust::Worktree)
-                    .collect::<HashSet<_>>();
+                let mut paths_to_trust =
+                    self.restricted_paths.keys().copied().map(PathTrust::Worktree).collect::<HashSet<_>>();
                 if self.trust_parents {
                     if let Some(scope) = scope_override {
                         paths_to_trust.insert(PathTrust::AbsPath(scope));
                     } else {
-                        paths_to_trust.extend(self.restricted_paths.values().filter_map(
-                            |restricted_paths| {
-                                if restricted_paths.is_file {
-                                    None
-                                } else {
-                                    let parent_abs_path =
-                                        restricted_paths.abs_path.parent()?.to_owned();
-                                    Some(PathTrust::AbsPath(parent_abs_path))
-                                }
-                            },
-                        ));
+                        paths_to_trust.extend(self.restricted_paths.values().filter_map(|restricted_paths| {
+                            if restricted_paths.is_file {
+                                None
+                            } else {
+                                let parent_abs_path = restricted_paths.abs_path.parent()?.to_owned();
+                                Some(PathTrust::AbsPath(parent_abs_path))
+                            }
+                        }));
                     }
                 }
                 trusted_worktrees.trust(&worktree_store, paths_to_trust, cx);
@@ -506,10 +502,9 @@ fn validate_trust_scope(
         return Err("Enter a folder to trust".into());
     }
     let expanded = match (trimmed.strip_prefix('~'), home_dir) {
-        (Some(rest), Some(home_dir)) => home_dir.join(
-            rest.strip_prefix(path_style.primary_separator())
-                .unwrap_or(rest),
-        ),
+        (Some(rest), Some(home_dir)) => {
+            home_dir.join(rest.strip_prefix(path_style.primary_separator()).unwrap_or(rest))
+        }
         _ => PathBuf::from(trimmed),
     };
     if !path_style.is_absolute(&expanded) {

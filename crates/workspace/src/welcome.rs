@@ -1,23 +1,46 @@
-use crate::{
-    NewFile, Open, OpenMode, PathList, RecentWorkspace, SerializedWorkspaceLocation, Workspace,
-    WorkspaceSettings,
-    item::{Item, ItemEvent},
-    persistence::WorkspaceDb,
-};
 use git::Clone as GitClone;
+use gpui::Action;
+use gpui::App;
+use gpui::Context;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::InteractiveElement;
+use gpui::ParentElement;
+use gpui::Render;
+use gpui::Styled;
+use gpui::Task;
+use gpui::TaskExt;
 use gpui::WeakEntity;
-use gpui::{
-    Action, App, Context, Entity, EventEmitter, FocusHandle, Focusable, InteractiveElement,
-    ParentElement, Render, Styled, Task, TaskExt, Window, actions,
-};
-use menu::{SelectNext, SelectPrevious};
-
+use gpui::Window;
+use gpui::actions;
+use menu::SelectNext;
+use menu::SelectPrevious;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use settings::{DefaultOpenBehavior, Settings};
-use ui::{ButtonLike, Divider, DividerColor, KeyBinding, prelude::*};
+use serde::Deserialize;
+use serde::Serialize;
+use settings::DefaultOpenBehavior;
+use settings::Settings;
+use ui::ButtonLike;
+use ui::Divider;
+use ui::DividerColor;
+use ui::KeyBinding;
+use ui::prelude::*;
 use util::ResultExt;
 use zed_actions::command_palette;
+
+use crate::NewFile;
+use crate::Open;
+use crate::OpenMode;
+use crate::PathList;
+use crate::RecentWorkspace;
+use crate::SerializedWorkspaceLocation;
+use crate::Workspace;
+use crate::WorkspaceSettings;
+use crate::item::Item;
+use crate::item::ItemEvent;
+use crate::persistence::WorkspaceDb;
 
 #[derive(PartialEq, Clone, Debug, Deserialize, Serialize, JsonSchema, Action)]
 #[action(namespace = welcome)]
@@ -39,24 +62,14 @@ pub fn init(cx: &mut App) {
         crate::with_active_or_new_workspace(cx, |workspace, window, cx| {
             workspace
                 .with_local_workspace(window, cx, |workspace, window, cx| {
-                    let existing = workspace
-                        .active_pane()
-                        .read(cx)
-                        .items()
-                        .find_map(|item| item.downcast::<WelcomePage>());
+                    let existing =
+                        workspace.active_pane().read(cx).items().find_map(|item| item.downcast::<WelcomePage>());
 
                     if let Some(existing) = existing {
                         workspace.activate_item(&existing, true, true, window, cx);
                     } else {
-                        let welcome_page = cx
-                            .new(|cx| WelcomePage::new(workspace.weak_handle(), false, window, cx));
-                        workspace.add_item_to_active_pane(
-                            Box::new(welcome_page),
-                            None,
-                            true,
-                            window,
-                            cx,
-                        )
+                        let welcome_page = cx.new(|cx| WelcomePage::new(workspace.weak_handle(), false, window, cx));
+                        workspace.add_item_to_active_pane(Box::new(welcome_page), None, true, window, cx)
                     }
                 })
                 .detach();
@@ -73,9 +86,7 @@ struct SectionHeader {
 
 impl SectionHeader {
     fn new(title: impl Into<SharedString>) -> Self {
-        Self {
-            title: title.into(),
-        }
+        Self { title: title.into() }
     }
 }
 
@@ -86,10 +97,7 @@ impl RenderOnce for SectionHeader {
             .mb_2()
             .gap_2()
             .child(
-                Label::new(self.title.to_ascii_uppercase())
-                    .buffer_font(cx)
-                    .color(Color::Muted)
-                    .size(LabelSize::XSmall),
+                Label::new(self.title.to_ascii_uppercase()).buffer_font(cx).color(Color::Muted).size(LabelSize::XSmall),
             )
             .child(Divider::horizontal().color(DividerColor::BorderVariant))
     }
@@ -112,13 +120,7 @@ impl SectionButton {
         tab_index: usize,
         focus_handle: FocusHandle,
     ) -> Self {
-        Self {
-            label: label.into(),
-            icon,
-            action: action.boxed_clone(),
-            tab_index,
-            focus_handle,
-        }
+        Self { label: label.into(), icon, action: action.boxed_clone(), tab_index, focus_handle }
     }
 }
 
@@ -138,21 +140,12 @@ impl RenderOnce for SectionButton {
                     .child(
                         h_flex()
                             .gap_2()
-                            .child(
-                                Icon::new(self.icon)
-                                    .color(Color::Muted)
-                                    .size(IconSize::Small),
-                            )
+                            .child(Icon::new(self.icon).color(Color::Muted).size(IconSize::Small))
                             .child(Label::new(self.label)),
                     )
-                    .child(
-                        KeyBinding::for_action_in(action_ref, &self.focus_handle, cx)
-                            .size(rems_from_px(12_f32)),
-                    ),
+                    .child(KeyBinding::for_action_in(action_ref, &self.focus_handle, cx).size(rems_from_px(12_f32))),
             )
-            .on_click(move |_, window, cx| {
-                self.focus_handle.dispatch_action(&*self.action, window, cx)
-            })
+            .on_click(move |_, window, cx| self.focus_handle.dispatch_action(&*self.action, window, cx))
     }
 }
 
@@ -177,15 +170,9 @@ struct SectionEntry {
 
 impl SectionEntry {
     fn render(&self, button_index: usize, focus: &FocusHandle) -> Option<impl IntoElement> {
-        self.visibility_guard.is_visible().then(|| {
-            SectionButton::new(
-                self.title,
-                self.icon,
-                self.action,
-                button_index,
-                focus.clone(),
-            )
-        })
+        self.visibility_guard
+            .is_visible()
+            .then(|| SectionButton::new(self.title, self.icon, self.action, button_index, focus.clone()))
     }
 }
 
@@ -226,15 +213,9 @@ struct Section<const COLS: usize> {
 
 impl<const COLS: usize> Section<COLS> {
     fn render(self, index_offset: usize, focus: &FocusHandle) -> impl IntoElement {
-        v_flex()
-            .min_w_full()
-            .child(SectionHeader::new(self.title))
-            .children(
-                self.entries
-                    .iter()
-                    .enumerate()
-                    .filter_map(|(index, entry)| entry.render(index_offset + index, focus)),
-            )
+        v_flex().min_w_full().child(SectionHeader::new(self.title)).children(
+            self.entries.iter().enumerate().filter_map(|(index, entry)| entry.render(index_offset + index, focus)),
+        )
     }
 }
 
@@ -253,21 +234,14 @@ impl WelcomePage {
         cx: &mut Context<Self>,
     ) -> Self {
         let focus_handle = cx.focus_handle();
-        cx.on_focus(&focus_handle, window, |_, _, cx| cx.notify())
-            .detach();
+        cx.on_focus(&focus_handle, window, |_, _, cx| cx.notify()).detach();
 
         if fallback_to_recent_projects {
-            let fs = workspace
-                .upgrade()
-                .map(|ws| ws.read(cx).app_state().fs.clone());
+            let fs = workspace.upgrade().map(|ws| ws.read(cx).app_state().fs.clone());
             let db = WorkspaceDb::global(cx);
             cx.spawn_in(window, async move |this: WeakEntity<Self>, cx| {
                 let Some(fs) = fs else { return };
-                let workspaces = db
-                    .recent_project_workspaces(fs.as_ref())
-                    .await
-                    .log_err()
-                    .unwrap_or_default();
+                let workspaces = db.recent_project_workspaces(fs.as_ref()).await.log_err().unwrap_or_default();
 
                 this.update(cx, |this, cx| {
                     this.recent_workspaces = Some(workspaces);
@@ -278,12 +252,7 @@ impl WelcomePage {
             .detach();
         }
 
-        WelcomePage {
-            workspace,
-            focus_handle,
-            fallback_to_recent_projects,
-            recent_workspaces: None,
-        }
+        WelcomePage { workspace, focus_handle, fallback_to_recent_projects, recent_workspaces: None }
     }
 
     fn select_next(&mut self, _: &SelectNext, window: &mut Window, cx: &mut Context<Self>) {
@@ -296,12 +265,7 @@ impl WelcomePage {
         cx.notify();
     }
 
-    fn open_recent_project(
-        &mut self,
-        action: &OpenRecentProject,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn open_recent_project(&mut self, action: &OpenRecentProject, window: &mut Window, cx: &mut Context<Self>) {
         if let Some(recent_workspaces) = &self.recent_workspaces {
             if let Some(workspace) = recent_workspaces.get(action.index) {
                 let is_local = matches!(workspace.location, SerializedWorkspaceLocation::Local);
@@ -314,9 +278,7 @@ impl WelcomePage {
                     };
                     self.workspace
                         .update(cx, |workspace, cx| {
-                            workspace
-                                .open_workspace_for_paths(open_mode, paths, window, cx)
-                                .detach_and_log_err(cx);
+                            workspace.open_workspace_for_paths(open_mode, paths, window, cx).detach_and_log_err(cx);
                         })
                         .log_err();
                 } else {
@@ -327,14 +289,8 @@ impl WelcomePage {
         }
     }
 
-    fn render_recent_project_section(
-        &self,
-        recent_projects: Vec<impl IntoElement>,
-    ) -> impl IntoElement {
-        v_flex()
-            .w_full()
-            .child(SectionHeader::new("Recent Projects"))
-            .children(recent_projects)
+    fn render_recent_project_section(&self, recent_projects: Vec<impl IntoElement>) -> impl IntoElement {
+        v_flex().w_full().child(SectionHeader::new("Recent Projects")).children(recent_projects)
     }
 
     fn render_recent_project(
@@ -354,9 +310,7 @@ impl WelcomePage {
         SectionButton::new(
             title,
             icon,
-            &OpenRecentProject {
-                index: project_index,
-            },
+            &OpenRecentProject { index: project_index },
             tab_index,
             self.focus_handle.clone(),
         )
@@ -385,11 +339,9 @@ impl Render for WelcomePage {
             })
             .collect::<Vec<_>>();
 
-        let showing_recent_projects =
-            self.fallback_to_recent_projects && !recent_projects.is_empty();
+        let showing_recent_projects = self.fallback_to_recent_projects && !recent_projects.is_empty();
         let second_section = if showing_recent_projects {
-            self.render_recent_project_section(recent_projects)
-                .into_any_element()
+            self.render_recent_project_section(recent_projects).into_any_element()
         } else {
             div().into_any_element()
         };
@@ -475,9 +427,7 @@ impl crate::SerializableItem for WelcomePage {
             .ok()
             .is_some_and(|is_open| is_open)
         {
-            Task::ready(Ok(
-                cx.new(|cx| WelcomePage::new(workspace, false, window, cx))
-            ))
+            Task::ready(Ok(cx.new(|cx| WelcomePage::new(workspace, false, window, cx))))
         } else {
             Task::ready(Err(anyhow::anyhow!("No welcome page to deserialize")))
         }
@@ -492,9 +442,7 @@ impl crate::SerializableItem for WelcomePage {
     ) -> Option<Task<gpui::Result<()>>> {
         let workspace_id = workspace.database_id()?;
         let db = persistence::WelcomePagesDb::global(cx);
-        Some(cx.background_spawn(
-            async move { db.save_welcome_page(item_id, workspace_id, true).await },
-        ))
+        Some(cx.background_spawn(async move { db.save_welcome_page(item_id, workspace_id, true).await }))
     }
 
     fn should_serialize(&self, event: &Self::Event) -> bool {
@@ -503,12 +451,12 @@ impl crate::SerializableItem for WelcomePage {
 }
 
 mod persistence {
+    use db::query;
+    use db::sqlez::domain::Domain;
+    use db::sqlez::thread_safe_connection::ThreadSafeConnection;
+    use db::sqlez_macros::sql;
+
     use crate::WorkspaceDb;
-    use db::{
-        query,
-        sqlez::{domain::Domain, thread_safe_connection::ThreadSafeConnection},
-        sqlez_macros::sql,
-    };
 
     pub struct WelcomePagesDb(ThreadSafeConnection);
 
@@ -562,9 +510,5 @@ fn project_name(paths: &PathList) -> String {
         .filter_map(|p| p.file_name().map(|n| n.to_string_lossy().to_string()))
         .collect::<Vec<_>>()
         .join(", ");
-    if joined.is_empty() {
-        "Untitled".to_string()
-    } else {
-        joined
-    }
+    if joined.is_empty() { "Untitled".to_string() } else { joined }
 }

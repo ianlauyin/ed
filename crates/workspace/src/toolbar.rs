@@ -1,10 +1,21 @@
-use crate::ItemHandle;
-use gpui::{
-    AnyView, App, Context, Div, Entity, EntityId, EventEmitter, Global, KeyContext,
-    ParentElement as _, Render, Styled, Window,
-};
+use gpui::AnyView;
+use gpui::App;
+use gpui::Context;
+use gpui::Div;
+use gpui::Entity;
+use gpui::EntityId;
+use gpui::EventEmitter;
+use gpui::Global;
+use gpui::KeyContext;
+use gpui::ParentElement as _;
+use gpui::Render;
+use gpui::Styled;
+use gpui::Window;
+use ui::h_flex;
 use ui::prelude::*;
-use ui::{h_flex, v_flex};
+use ui::v_flex;
+
+use crate::ItemHandle;
 
 pub struct PaneSearchBarCallbacks {
     pub setup_search_bar: fn(&Entity<Toolbar>, &mut Window, &mut App),
@@ -26,13 +37,7 @@ pub trait ToolbarItemView: Render + EventEmitter<ToolbarItemEvent> {
         cx: &mut Context<Self>,
     ) -> ToolbarItemLocation;
 
-    fn pane_focus_update(
-        &mut self,
-        _pane_focused: bool,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) {
-    }
+    fn pane_focus_update(&mut self, _pane_focused: bool, _window: &mut Window, _cx: &mut Context<Self>) {}
 
     fn contribute_context(&self, _context: &mut KeyContext, _cx: &App) {}
 }
@@ -67,38 +72,24 @@ pub struct Toolbar {
 
 impl Toolbar {
     fn has_any_visible_items(&self) -> bool {
-        self.items
-            .iter()
-            .any(|(_item, location)| *location != ToolbarItemLocation::Hidden)
+        self.items.iter().any(|(_item, location)| *location != ToolbarItemLocation::Hidden)
     }
 
     fn left_items(&self) -> impl Iterator<Item = &dyn ToolbarItemViewHandle> {
         self.items.iter().filter_map(|(item, location)| {
-            if *location == ToolbarItemLocation::PrimaryLeft {
-                Some(item.as_ref())
-            } else {
-                None
-            }
+            if *location == ToolbarItemLocation::PrimaryLeft { Some(item.as_ref()) } else { None }
         })
     }
 
     fn right_items(&self) -> impl Iterator<Item = &dyn ToolbarItemViewHandle> {
         self.items.iter().filter_map(|(item, location)| {
-            if *location == ToolbarItemLocation::PrimaryRight {
-                Some(item.as_ref())
-            } else {
-                None
-            }
+            if *location == ToolbarItemLocation::PrimaryRight { Some(item.as_ref()) } else { None }
         })
     }
 
     fn secondary_items(&self) -> impl Iterator<Item = &dyn ToolbarItemViewHandle> {
         self.items.iter().rev().filter_map(|(item, location)| {
-            if *location == ToolbarItemLocation::Secondary {
-                Some(item.as_ref())
-            } else {
-                None
-            }
+            if *location == ToolbarItemLocation::Secondary { Some(item.as_ref()) } else { None }
         })
     }
 }
@@ -119,9 +110,7 @@ impl Render for Toolbar {
             .relative()
             .py(DynamicSpacing::Base06.rems(cx))
             .px(DynamicSpacing::Base08.rems(cx))
-            .when(has_left_items || has_right_items, |this| {
-                this.gap(DynamicSpacing::Base06.rems(cx))
-            })
+            .when(has_left_items || has_right_items, |this| this.gap(DynamicSpacing::Base06.rems(cx)))
             .bg(cx.theme().colors().toolbar_background)
             .when(has_left_items || has_right_items, |this| {
                 this.child(
@@ -163,12 +152,7 @@ impl Default for Toolbar {
 
 impl Toolbar {
     pub fn new() -> Self {
-        Self {
-            active_item: None,
-            items: Default::default(),
-            hidden: false,
-            can_navigate: true,
-        }
+        Self { active_item: None, items: Default::default(), hidden: false, can_navigate: true }
     }
 
     pub fn set_can_navigate(&mut self, can_navigate: bool, cx: &mut Context<Self>) {
@@ -182,11 +166,7 @@ impl Toolbar {
     {
         let location = item.set_active_pane_item(self.active_item.as_deref(), window, cx);
         cx.subscribe(&item, |this, item, event, cx| {
-            if let Some((_, current_location)) = this
-                .items
-                .iter_mut()
-                .find(|(i, _)| i.id() == item.entity_id())
-            {
+            if let Some((_, current_location)) = this.items.iter_mut().find(|(i, _)| i.id() == item.entity_id()) {
                 match event {
                     ToolbarItemEvent::ChangeLocation(new_location) => {
                         if new_location != current_location {
@@ -202,18 +182,9 @@ impl Toolbar {
         cx.notify();
     }
 
-    pub fn set_active_item(
-        &mut self,
-        item: Option<&dyn ItemHandle>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn set_active_item(&mut self, item: Option<&dyn ItemHandle>, window: &mut Window, cx: &mut Context<Self>) {
         self.active_item = item.map(|item| item.boxed_clone());
-        self.hidden = self
-            .active_item
-            .as_ref()
-            .map(|item| !item.show_toolbar(cx))
-            .unwrap_or(false);
+        self.hidden = self.active_item.as_ref().map(|item| !item.show_toolbar(cx)).unwrap_or(false);
 
         for (toolbar_item, current_location) in self.items.iter_mut() {
             let new_location = toolbar_item.set_active_pane_item(item, window, cx);
@@ -231,9 +202,7 @@ impl Toolbar {
     }
 
     pub fn item_of_type<T: ToolbarItemView>(&self) -> Option<Entity<T>> {
-        self.items
-            .iter()
-            .find_map(|(item, _)| item.to_any().downcast().ok())
+        self.items.iter().find_map(|(item, _)| item.to_any().downcast().ok())
     }
 
     pub fn hidden(&self) -> bool {
@@ -264,9 +233,7 @@ impl<T: ToolbarItemView> ToolbarItemViewHandle for Entity<T> {
         window: &mut Window,
         cx: &mut App,
     ) -> ToolbarItemLocation {
-        self.update(cx, |this, cx| {
-            this.set_active_pane_item(active_pane_item, window, cx)
-        })
+        self.update(cx, |this, cx| this.set_active_pane_item(active_pane_item, window, cx))
     }
 
     fn focus_changed(&mut self, pane_focused: bool, window: &mut Window, cx: &mut App) {

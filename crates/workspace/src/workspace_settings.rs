@@ -1,14 +1,20 @@
-use std::{num::NonZeroUsize, time::Duration};
+use std::num::NonZeroUsize;
+use std::time::Duration;
 
-use crate::DockPosition;
 use collections::HashMap;
 use serde::Deserialize;
+pub use settings::AutosaveSetting;
+pub use settings::BottomDockLayout;
 use settings::CommandAliasTarget;
-pub use settings::{
-    AutosaveSetting, BottomDockLayout, EncodingDisplayOptions, InactiveOpacity,
-    PaneSplitDirectionHorizontal, PaneSplitDirectionVertical, RegisterSetting,
-    RestoreOnStartupBehavior, Settings,
-};
+pub use settings::EncodingDisplayOptions;
+pub use settings::InactiveOpacity;
+pub use settings::PaneSplitDirectionHorizontal;
+pub use settings::PaneSplitDirectionVertical;
+pub use settings::RegisterSetting;
+pub use settings::RestoreOnStartupBehavior;
+pub use settings::Settings;
+
+use crate::DockPosition;
 
 #[derive(RegisterSetting)]
 pub struct WorkspaceSettings {
@@ -79,20 +85,8 @@ impl Settings for WorkspaceSettings {
         let workspace = &content.workspace;
         Self {
             active_pane_modifiers: ActivePanelModifiers {
-                border_size: Some(
-                    *workspace
-                        .active_pane_modifiers
-                        .unwrap()
-                        .border_size
-                        .unwrap(),
-                ),
-                inactive_opacity: Some(
-                    workspace
-                        .active_pane_modifiers
-                        .unwrap()
-                        .inactive_opacity
-                        .unwrap(),
-                ),
+                border_size: Some(*workspace.active_pane_modifiers.unwrap().border_size.unwrap()),
+                inactive_opacity: Some(workspace.active_pane_modifiers.unwrap().inactive_opacity.unwrap()),
             },
             bottom_dock_layout: workspace.bottom_dock_layout.unwrap(),
             pane_split_direction_horizontal: workspace.pane_split_direction_horizontal.unwrap(),
@@ -126,18 +120,8 @@ impl Settings for WorkspaceSettings {
             fullscreen_mode: workspace.fullscreen_mode.unwrap(),
             window_decorations: workspace.window_decorations.unwrap(),
             focus_follows_mouse: FocusFollowsMouse {
-                enabled: workspace
-                    .focus_follows_mouse
-                    .unwrap()
-                    .enabled
-                    .unwrap_or(false),
-                debounce: Duration::from_millis(
-                    workspace
-                        .focus_follows_mouse
-                        .unwrap()
-                        .debounce_ms
-                        .unwrap_or(250),
-                ),
+                enabled: workspace.focus_follows_mouse.unwrap().enabled.unwrap_or(false),
+                debounce: Duration::from_millis(workspace.focus_follows_mouse.unwrap().debounce_ms.unwrap_or(250)),
             },
         }
     }

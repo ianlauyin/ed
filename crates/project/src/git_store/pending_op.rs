@@ -1,7 +1,11 @@
-use git::repository::RepoPath;
 use std::ops::Add;
-use sum_tree::{ContextLessSummary, Item, KeyedItem};
-use worktree::{PathKey, PathSummary};
+
+use git::repository::RepoPath;
+use sum_tree::ContextLessSummary;
+use sum_tree::Item;
+use sum_tree::KeyedItem;
+use worktree::PathKey;
+use worktree::PathSummary;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum GitStatus {
@@ -57,10 +61,7 @@ impl Item for PendingOps {
 
 impl ContextLessSummary for PendingOpsSummary {
     fn zero() -> Self {
-        Self {
-            staged_count: 0,
-            staging_count: 0,
-        }
+        Self { staged_count: 0, staging_count: 0 }
     }
 
     fn add_summary(&mut self, summary: &Self) {
@@ -93,10 +94,7 @@ impl From<u16> for PendingOpId {
 
 impl PendingOps {
     pub fn new(path: &RepoPath) -> Self {
-        Self {
-            repo_path: path.clone(),
-            ops: Vec::new(),
-        }
+        Self { repo_path: path.clone(), ops: Vec::new() }
     }
 
     pub fn max_id(&self) -> PendingOpId {

@@ -1,7 +1,10 @@
-use std::{sync::Arc, time::Duration};
+use std::sync::Arc;
+use std::time::Duration;
 
-use gpui::{Action, SharedString};
-use ui::{IconName, IconPosition};
+use gpui::Action;
+use gpui::SharedString;
+use ui::IconName;
+use ui::IconPosition;
 use zed_actions::OpenBrowser;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -43,18 +46,12 @@ pub struct ActionIcon {
 impl ActionIcon {
     /// Show `name` at the start (left) of the action button label.
     pub fn start(name: IconName) -> Self {
-        Self {
-            name,
-            position: IconPosition::Start,
-        }
+        Self { name, position: IconPosition::Start }
     }
 
     /// Show `name` at the end (right) of the action button label.
     pub fn end(name: IconName) -> Self {
-        Self {
-            name,
-            position: IconPosition::End,
-        }
+        Self { name, position: IconPosition::End }
     }
 }
 
@@ -67,12 +64,7 @@ pub struct ErrorAction {
 
 impl ErrorAction {
     pub fn new<A: Action + 'static>(label: impl Into<SharedString>, handler: A) -> Self {
-        Self {
-            label: label.into(),
-            icon: None,
-            tooltip: None,
-            handler: ErrorActionHandler::Action(Box::new(handler)),
-        }
+        Self { label: label.into(), icon: None, tooltip: None, handler: ErrorActionHandler::Action(Box::new(handler)) }
     }
 
     /// Creates a dismiss-only action labelled "Dismiss".
@@ -80,12 +72,7 @@ impl ErrorAction {
     /// Useful as a sensible default for [`WorkspaceError::primary_action`] when the error has no
     /// recovery affordance beyond closing the notification.
     pub fn dismiss() -> Self {
-        Self {
-            label: "Dismiss".into(),
-            icon: None,
-            tooltip: None,
-            handler: ErrorActionHandler::Dismiss,
-        }
+        Self { label: "Dismiss".into(), icon: None, tooltip: None, handler: ErrorActionHandler::Dismiss }
     }
 
     /// Show `icon` at the start (left) of the action button label.
@@ -180,9 +167,7 @@ pub struct PortalError {
 
 impl PortalError {
     pub fn new(message: impl Into<String>) -> Self {
-        Self {
-            message: message.into(),
-        }
+        Self { message: message.into() }
     }
 }
 
@@ -196,9 +181,6 @@ impl WorkspaceError for PortalError {
     }
 
     fn primary_action(&self) -> ErrorAction {
-        ErrorAction::link(
-            "See docs",
-            "https://zed.dev/docs/linux#i-cant-open-any-files",
-        )
+        ErrorAction::link("See docs", "https://zed.dev/docs/linux#i-cant-open-any-files")
     }
 }

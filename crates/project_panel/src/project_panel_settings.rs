@@ -1,11 +1,18 @@
 use gpui::Pixels;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use settings::{
-    DockSide, FolderIndicator, IntoGpui, ProjectPanelEntrySpacing, ProjectPanelSortMode,
-    ProjectPanelSortOrder, ProjectPanelTitleTooltipDelay, RegisterSetting, Settings,
-    ShowDiagnostics, ShowIndentGuides,
-};
+use serde::Deserialize;
+use serde::Serialize;
+use settings::DockSide;
+use settings::FolderIndicator;
+use settings::IntoGpui;
+use settings::ProjectPanelEntrySpacing;
+use settings::ProjectPanelSortMode;
+use settings::ProjectPanelSortOrder;
+use settings::ProjectPanelTitleTooltipDelay;
+use settings::RegisterSetting;
+use settings::Settings;
+use settings::ShowDiagnostics;
+use settings::ShowIndentGuides;
 
 #[derive(Deserialize, Debug, Clone, Copy, PartialEq, RegisterSetting)]
 pub struct ProjectPanelSettings {
@@ -77,17 +84,9 @@ impl Settings for ProjectPanelSettings {
             file_icons: project_panel.file_icons.unwrap(),
             folder_indicator: project_panel.folder_indicator.unwrap(),
             git_status: project_panel.git_status.unwrap()
-                && content
-                    .git
-                    .as_ref()
-                    .unwrap()
-                    .enabled
-                    .unwrap()
-                    .is_git_status_enabled(),
+                && content.git.as_ref().unwrap().enabled.unwrap().is_git_status_enabled(),
             indent_size: *project_panel.indent_size.unwrap(),
-            indent_guides: IndentGuidesSettings {
-                show: project_panel.indent_guides.unwrap().show.unwrap(),
-            },
+            indent_guides: IndentGuidesSettings { show: project_panel.indent_guides.unwrap().show.unwrap() },
             sticky_scroll: project_panel.sticky_scroll.unwrap(),
             auto_reveal_entries: project_panel.auto_reveal_entries.unwrap(),
             auto_fold_dirs: project_panel.auto_fold_dirs.unwrap(),

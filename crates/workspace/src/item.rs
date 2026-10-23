@@ -1,34 +1,64 @@
-use crate::{
-    DelayedDebouncedEditAction, ItemNavHistory, SerializableItemRegistry, ToolbarItemLocation,
-    Workspace, WorkspaceId,
-    invalid_item_view::InvalidItemView,
-    pane::{self, Pane},
-    persistence::model::ItemId,
-    searchable::SearchableItemHandle,
-    workspace_settings::{AutosaveSetting, WorkspaceSettings},
-};
+use std::any::Any;
+use std::any::TypeId;
+use std::path::Path;
+use std::sync::Arc;
+use std::time::Duration;
+
 use anyhow::Result;
-use gpui::{
-    Action, AnyElement, AnyEntity, AnyView, App, AppContext, Context, Entity, EntityId,
-    EventEmitter, FocusHandle, Focusable, Font, Pixels, Point, Render, SharedString, Task, TaskExt,
-    WeakEntity, Window,
-};
+use gpui::Action;
+use gpui::AnyElement;
+use gpui::AnyEntity;
+use gpui::AnyView;
+use gpui::App;
+use gpui::AppContext;
+use gpui::Context;
+use gpui::Entity;
+use gpui::EntityId;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::Font;
+use gpui::Pixels;
+use gpui::Point;
+use gpui::Render;
+use gpui::SharedString;
+use gpui::Task;
+use gpui::TaskExt;
+use gpui::WeakEntity;
+use gpui::Window;
 use language::Capability;
 pub use language::HighlightedText;
-use project::{Project, ProjectEntryId, ProjectPath};
-pub use settings::{
-    ActivateOnClose, ClosePosition, RegisterSetting, Settings, SettingsLocation, ShowCloseButton,
-    ShowDiagnostics,
-};
+use project::Project;
+use project::ProjectEntryId;
+use project::ProjectPath;
+pub use settings::ActivateOnClose;
+pub use settings::ClosePosition;
+pub use settings::RegisterSetting;
+pub use settings::Settings;
+pub use settings::SettingsLocation;
+pub use settings::ShowCloseButton;
+pub use settings::ShowDiagnostics;
 use smallvec::SmallVec;
-use std::{
-    any::{Any, TypeId},
-    path::Path,
-    sync::Arc,
-    time::Duration,
-};
-use ui::{Color, Icon, IntoElement, Label, LabelCommon};
+use ui::Color;
+use ui::Icon;
+use ui::IntoElement;
+use ui::Label;
+use ui::LabelCommon;
 use util::ResultExt;
+
+use crate::DelayedDebouncedEditAction;
+use crate::ItemNavHistory;
+use crate::SerializableItemRegistry;
+use crate::ToolbarItemLocation;
+use crate::Workspace;
+use crate::WorkspaceId;
+use crate::invalid_item_view::InvalidItemView;
+use crate::pane::Pane;
+use crate::pane::{self};
+use crate::persistence::model::ItemId;
+use crate::searchable::SearchableItemHandle;
+use crate::workspace_settings::AutosaveSetting;
+use crate::workspace_settings::WorkspaceSettings;
 
 pub const LEADER_UPDATE_THROTTLE: Duration = Duration::from_millis(200);
 
@@ -41,11 +71,7 @@ pub struct SaveOptions {
 
 impl Default for SaveOptions {
     fn default() -> Self {
-        Self {
-            format: true,
-            force_format: false,
-            autosave: false,
-        }
+        Self { format: true, force_format: false, autosave: false }
     }
 }
 
@@ -75,13 +101,7 @@ impl Settings for ItemSettings {
         let tabs = content.tabs.as_ref().unwrap();
         Self {
             git_status: tabs.git_status.unwrap()
-                && content
-                    .git
-                    .as_ref()
-                    .unwrap()
-                    .enabled
-                    .unwrap()
-                    .is_git_status_enabled(),
+                && content.git.as_ref().unwrap().enabled.unwrap().is_git_status_enabled(),
             close_position: tabs.close_position.unwrap(),
             activate_on_close: tabs.activate_on_close.unwrap(),
             file_icons: tabs.file_icons.unwrap(),
@@ -96,20 +116,14 @@ impl Settings for PreviewTabsSettings {
         let preview_tabs = content.preview_tabs.as_ref().unwrap();
         Self {
             enabled: preview_tabs.enabled.unwrap(),
-            enable_preview_from_project_panel: preview_tabs
-                .enable_preview_from_project_panel
-                .unwrap(),
+            enable_preview_from_project_panel: preview_tabs.enable_preview_from_project_panel.unwrap(),
             enable_preview_from_file_finder: preview_tabs.enable_preview_from_file_finder.unwrap(),
             enable_preview_from_multibuffer: preview_tabs.enable_preview_from_multibuffer.unwrap(),
             enable_preview_multibuffer_from_code_navigation: preview_tabs
                 .enable_preview_multibuffer_from_code_navigation
                 .unwrap(),
-            enable_preview_file_from_code_navigation: preview_tabs
-                .enable_preview_file_from_code_navigation
-                .unwrap(),
-            enable_keep_preview_on_code_navigation: preview_tabs
-                .enable_keep_preview_on_code_navigation
-                .unwrap(),
+            enable_preview_file_from_code_navigation: preview_tabs.enable_preview_file_from_code_navigation.unwrap(),
+            enable_keep_preview_on_code_navigation: preview_tabs.enable_keep_preview_on_code_navigation.unwrap(),
         }
     }
 }
@@ -138,11 +152,7 @@ impl TabContentParams {
     /// Returns the text color to be used for the tab content.
     pub fn text_color(&self) -> Color {
         if self.deemphasized {
-            if self.selected {
-                Color::Muted
-            } else {
-                Color::Hidden
-            }
+            if self.selected { Color::Muted } else { Color::Hidden }
         } else if self.selected {
             Color::Default
         } else {
@@ -173,10 +183,7 @@ pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized {
     fn tab_content(&self, params: TabContentParams, _window: &Window, cx: &App) -> AnyElement {
         let text = self.tab_content_text(params.detail.unwrap_or_default(), cx);
 
-        Label::new(text)
-            .single_line()
-            .color(params.text_color())
-            .into_any_element()
+        Label::new(text).single_line().color(params.text_color()).into_any_element()
     }
 
     /// Returns the textual contents of the tab.
@@ -214,22 +221,12 @@ pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized {
     fn on_removed(&self, _cx: &mut Context<Self>) {}
     fn workspace_deactivated(&mut self, _window: &mut Window, _: &mut Context<Self>) {}
     fn pane_changed(&mut self, _new_pane_id: EntityId, _cx: &mut Context<Self>) {}
-    fn navigate(
-        &mut self,
-        _: Arc<dyn Any + Send>,
-        _window: &mut Window,
-        _: &mut Context<Self>,
-    ) -> bool {
+    fn navigate(&mut self, _: Arc<dyn Any + Send>, _window: &mut Window, _: &mut Context<Self>) -> bool {
         false
     }
 
     /// (model id, Item)
-    fn for_each_project_item(
-        &self,
-        _: &App,
-        _: &mut dyn FnMut(EntityId, &dyn project::ProjectItem),
-    ) {
-    }
+    fn for_each_project_item(&self, _: &App, _: &mut dyn FnMut(EntityId, &dyn project::ProjectItem)) {}
     fn buffer_kind(&self, _cx: &App) -> ItemBufferKind {
         ItemBufferKind::None
     }
@@ -308,26 +305,12 @@ pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized {
     ) -> Task<Result<()>> {
         unimplemented!("save_as() must be implemented if can_save() returns true")
     }
-    fn reload(
-        &mut self,
-        _project: Entity<Project>,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) -> Task<Result<()>> {
+    fn reload(&mut self, _project: Entity<Project>, _window: &mut Window, _cx: &mut Context<Self>) -> Task<Result<()>> {
         unimplemented!("reload() must be implemented if can_save() returns true")
     }
 
-    fn act_as_type<'a>(
-        &'a self,
-        type_id: TypeId,
-        self_handle: &'a Entity<Self>,
-        _: &'a App,
-    ) -> Option<AnyEntity> {
-        if TypeId::of::<Self>() == type_id {
-            Some(self_handle.clone().into())
-        } else {
-            None
-        }
+    fn act_as_type<'a>(&'a self, type_id: TypeId, self_handle: &'a Entity<Self>, _: &'a App) -> Option<AnyEntity> {
+        if TypeId::of::<Self>() == type_id { Some(self_handle.clone().into()) } else { None }
     }
 
     fn as_searchable(&self, _: &Entity<Self>, _: &App) -> Option<Box<dyn SearchableItemHandle>> {
@@ -343,21 +326,11 @@ pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized {
     }
 
     /// Returns optional elements to render to the left of the breadcrumb.
-    fn breadcrumb_prefix(
-        &self,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) -> Option<gpui::AnyElement> {
+    fn breadcrumb_prefix(&self, _window: &mut Window, _cx: &mut Context<Self>) -> Option<gpui::AnyElement> {
         None
     }
 
-    fn added_to_workspace(
-        &mut self,
-        _workspace: &mut Workspace,
-        _window: &mut Window,
-        _cx: &mut Context<Self>,
-    ) {
-    }
+    fn added_to_workspace(&mut self, _workspace: &mut Workspace, _window: &mut Window, _cx: &mut Context<Self>) {}
 
     fn show_toolbar(&self) -> bool {
         true
@@ -377,13 +350,7 @@ pub trait Item: Focusable + EventEmitter<Self::Event> + Render + Sized {
 
     /// Called when the containing pane receives a drop on the item or the item's tab.
     /// Returns `true` to consume it and suppress the pane's default drop behavior.
-    fn handle_drop(
-        &self,
-        _active_pane: &Pane,
-        _dropped: &dyn Any,
-        _window: &mut Window,
-        _cx: &mut App,
-    ) -> bool {
+    fn handle_drop(&self, _active_pane: &Pane, _dropped: &dyn Any, _window: &mut Window, _cx: &mut App) -> bool {
         false
     }
 
@@ -430,12 +397,7 @@ pub trait SerializableItem: Item {
 
 pub trait SerializableItemHandle: ItemHandle {
     fn serialized_item_kind(&self) -> &'static str;
-    fn serialize(
-        &self,
-        workspace: &mut Workspace,
-        closing: bool,
-        cx: &mut App,
-    ) -> Option<Task<Result<()>>>;
+    fn serialize(&self, workspace: &mut Workspace, closing: bool, cx: &mut App) -> Option<Task<Result<()>>>;
     fn should_serialize(&self, event: &dyn Any, cx: &App) -> bool;
 }
 
@@ -447,21 +409,12 @@ where
         T::serialized_item_kind()
     }
 
-    fn serialize(
-        &self,
-        workspace: &mut Workspace,
-        closing: bool,
-        cx: &mut App,
-    ) -> Option<Task<Result<()>>> {
-        self.update(cx, |this, cx| {
-            this.serialize(workspace, cx.entity_id().as_u64(), closing, cx)
-        })
+    fn serialize(&self, workspace: &mut Workspace, closing: bool, cx: &mut App) -> Option<Task<Result<()>>> {
+        self.update(cx, |this, cx| this.serialize(workspace, cx.entity_id().as_u64(), closing, cx))
     }
 
     fn should_serialize(&self, event: &dyn Any, cx: &App) -> bool {
-        event
-            .downcast_ref::<T::Event>()
-            .is_some_and(|event| self.read(cx).should_serialize(event))
+        event.downcast_ref::<T::Event>().is_some_and(|event| self.read(cx).should_serialize(event))
     }
 }
 
@@ -479,21 +432,12 @@ pub trait ItemHandle: 'static + Send {
     fn tab_icon(&self, window: &Window, cx: &App) -> Option<Icon>;
     fn tab_tooltip_text(&self, cx: &App) -> Option<SharedString>;
     fn tab_tooltip_content(&self, cx: &App) -> Option<TabTooltipContent>;
-    fn dragged_tab_content(
-        &self,
-        params: TabContentParams,
-        window: &Window,
-        cx: &App,
-    ) -> AnyElement;
+    fn dragged_tab_content(&self, params: TabContentParams, window: &Window, cx: &App) -> AnyElement;
     fn project_path(&self, cx: &App) -> Option<ProjectPath>;
     fn project_entry_ids(&self, cx: &App) -> SmallVec<[ProjectEntryId; 3]>;
     fn project_paths(&self, cx: &App) -> SmallVec<[ProjectPath; 3]>;
     fn project_item_model_ids(&self, cx: &App) -> SmallVec<[EntityId; 3]>;
-    fn for_each_project_item(
-        &self,
-        _: &App,
-        _: &mut dyn FnMut(EntityId, &dyn project::ProjectItem),
-    );
+    fn for_each_project_item(&self, _: &App, _: &mut dyn FnMut(EntityId, &dyn project::ProjectItem));
     fn buffer_kind(&self, cx: &App) -> ItemBufferKind;
     fn boxed_clone(&self) -> Box<dyn ItemHandle>;
     fn can_split(&self, cx: &App) -> bool;
@@ -537,19 +481,10 @@ pub trait ItemHandle: 'static + Send {
         window: &mut Window,
         cx: &mut App,
     ) -> Task<Result<()>>;
-    fn reload(
-        &self,
-        project: Entity<Project>,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Task<Result<()>>;
+    fn reload(&self, project: Entity<Project>, window: &mut Window, cx: &mut App) -> Task<Result<()>>;
     fn act_as_type(&self, type_id: TypeId, cx: &App) -> Option<AnyEntity>;
     fn to_serializable_item_handle(&self, cx: &App) -> Option<Box<dyn SerializableItemHandle>>;
-    fn on_release(
-        &self,
-        cx: &mut App,
-        callback: Box<dyn FnOnce(&mut App) + Send>,
-    ) -> gpui::Subscription;
+    fn on_release(&self, cx: &mut App, callback: Box<dyn FnOnce(&mut App) + Send>) -> gpui::Subscription;
     fn to_searchable_item_handle(&self, cx: &App) -> Option<Box<dyn SearchableItemHandle>>;
     fn breadcrumb_location(&self, cx: &App) -> ToolbarItemLocation;
     fn breadcrumbs(&self, cx: &App) -> Option<(Vec<HighlightedText>, Option<Font>)>;
@@ -561,18 +496,9 @@ pub trait ItemHandle: 'static + Send {
     fn preserve_preview(&self, cx: &App) -> bool;
     fn include_in_nav_history(&self) -> bool;
     fn relay_action(&self, action: Box<dyn Action>, window: &mut Window, cx: &mut App);
-    fn handle_drop(
-        &self,
-        active_pane: &Pane,
-        dropped: &dyn Any,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> bool;
-    fn tab_extra_context_menu_actions(
-        &self,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Vec<(SharedString, Box<dyn Action>)>;
+    fn handle_drop(&self, active_pane: &Pane, dropped: &dyn Any, window: &mut Window, cx: &mut App) -> bool;
+    fn tab_extra_context_menu_actions(&self, window: &mut Window, cx: &mut App)
+    -> Vec<(SharedString, Box<dyn Action>)>;
     fn can_autosave(&self, cx: &App) -> bool {
         let is_deleted = self.project_entry_ids(cx).is_empty();
         self.is_dirty(cx) && !self.has_conflict(cx) && self.can_save(cx) && !is_deleted
@@ -591,8 +517,7 @@ impl dyn ItemHandle {
     }
 
     pub fn act_as<V: 'static>(&self, cx: &App) -> Option<Entity<V>> {
-        self.act_as_type(TypeId::of::<V>(), cx)
-            .and_then(|t| t.downcast().ok())
+        self.act_as_type(TypeId::of::<V>(), cx).and_then(|t| t.downcast().ok())
     }
 }
 
@@ -635,20 +560,8 @@ impl<T: Item> ItemHandle for Entity<T> {
         self.read(cx).tab_tooltip_text(cx)
     }
 
-    fn dragged_tab_content(
-        &self,
-        params: TabContentParams,
-        window: &Window,
-        cx: &App,
-    ) -> AnyElement {
-        self.read(cx).tab_content(
-            TabContentParams {
-                selected: true,
-                ..params
-            },
-            window,
-            cx,
-        )
+    fn dragged_tab_content(&self, params: TabContentParams, window: &Window, cx: &App) -> AnyElement {
+        self.read(cx).tab_content(TabContentParams { selected: true, ..params }, window, cx)
     }
 
     fn project_path(&self, cx: &App) -> Option<ProjectPath> {
@@ -658,10 +571,7 @@ impl<T: Item> ItemHandle for Entity<T> {
     fn workspace_settings<'a>(&self, cx: &'a App) -> &'a WorkspaceSettings {
         if let Some(project_path) = self.project_path(cx) {
             WorkspaceSettings::get(
-                Some(SettingsLocation {
-                    worktree_id: project_path.worktree_id,
-                    path: &project_path.path,
-                }),
+                Some(SettingsLocation { worktree_id: project_path.worktree_id, path: &project_path.path }),
                 cx,
             )
         } else {
@@ -697,11 +607,7 @@ impl<T: Item> ItemHandle for Entity<T> {
         result
     }
 
-    fn for_each_project_item(
-        &self,
-        cx: &App,
-        f: &mut dyn FnMut(EntityId, &dyn project::ProjectItem),
-    ) {
+    fn for_each_project_item(&self, cx: &App, f: &mut dyn FnMut(EntityId, &dyn project::ProjectItem)) {
         self.read(cx).for_each_project_item(cx, f)
     }
 
@@ -724,10 +630,7 @@ impl<T: Item> ItemHandle for Entity<T> {
         cx: &mut App,
     ) -> Task<Option<Box<dyn ItemHandle>>> {
         let task = self.update(cx, |item, cx| item.clone_on_split(workspace_id, window, cx));
-        cx.background_spawn(async move {
-            task.await
-                .map(|handle| Box::new(handle) as Box<dyn ItemHandle>)
-        })
+        cx.background_spawn(async move { task.await.map(|handle| Box::new(handle) as Box<dyn ItemHandle>) })
     }
 
     fn added_to_pane(
@@ -745,21 +648,16 @@ impl<T: Item> ItemHandle for Entity<T> {
         });
 
         if let Some(serializable_item) = self.to_serializable_item_handle(cx) {
-            workspace
-                .enqueue_item_serialization(serializable_item)
-                .log_err();
+            workspace.enqueue_item_serialization(serializable_item).log_err();
         }
 
         let new_pane_id = pane.entity_id();
-        let old_item_pane = workspace
-            .panes_by_item
-            .insert(self.item_id(), pane.downgrade());
+        let old_item_pane = workspace.panes_by_item.insert(self.item_id(), pane.downgrade());
 
-        if old_item_pane.as_ref().is_none_or(|old_pane| {
-            old_pane
-                .upgrade()
-                .is_some_and(|old_pane| old_pane.entity_id() != new_pane_id)
-        }) {
+        if old_item_pane
+            .as_ref()
+            .is_none_or(|old_pane| old_pane.upgrade().is_some_and(|old_pane| old_pane.entity_id() != new_pane_id))
+        {
             self.update(cx, |this, cx| {
                 this.pane_changed(new_pane_id, cx);
             });
@@ -767,14 +665,10 @@ impl<T: Item> ItemHandle for Entity<T> {
 
         if old_item_pane.is_none() {
             let mut pending_autosave = DelayedDebouncedEditAction::new();
-            let mut event_subscription = Some(cx.subscribe_in(
-                self,
-                window,
-                move |workspace, item: &Entity<T>, event, window, cx| {
-                    let pane = if let Some(pane) = workspace
-                        .panes_by_item
-                        .get(&item.item_id())
-                        .and_then(|pane| pane.upgrade())
+            let mut event_subscription =
+                Some(cx.subscribe_in(self, window, move |workspace, item: &Entity<T>, event, window, cx| {
+                    let pane = if let Some(pane) =
+                        workspace.panes_by_item.get(&item.item_id()).and_then(|pane| pane.upgrade())
                     {
                         pane
                     } else {
@@ -790,12 +684,7 @@ impl<T: Item> ItemHandle for Entity<T> {
                     T::to_item_events(event, &mut |event| match event {
                         ItemEvent::CloseItem => {
                             pane.update(cx, |pane, cx| {
-                                pane.close_item_by_id(
-                                    item.item_id(),
-                                    crate::SaveIntent::Close,
-                                    window,
-                                    cx,
-                                )
+                                pane.close_item_by_id(item.item_id(), crate::SaveIntent::Close, window, cx)
                             })
                             .detach_and_log_err(cx);
                         }
@@ -809,12 +698,7 @@ impl<T: Item> ItemHandle for Entity<T> {
                             {
                                 let item_id = item.item_id();
                                 let close_item_task = pane.update(cx, |pane, cx| {
-                                    pane.close_item_by_id(
-                                        item_id,
-                                        crate::SaveIntent::Close,
-                                        window,
-                                        cx,
-                                    )
+                                    pane.close_item_by_id(item_id, crate::SaveIntent::Close, window, cx)
                                 });
                                 cx.spawn_in(window, {
                                     let pane = pane.clone();
@@ -837,9 +721,10 @@ impl<T: Item> ItemHandle for Entity<T> {
 
                         ItemEvent::UpdateBreadcrumbs => {
                             if &pane == workspace.active_pane()
-                                && pane.read(cx).active_item().is_some_and(|active_item| {
-                                    active_item.item_id() == item.item_id()
-                                })
+                                && pane
+                                    .read(cx)
+                                    .active_item()
+                                    .is_some_and(|active_item| active_item.item_id() == item.item_id())
                             {
                                 workspace.active_item_path_changed(false, window, cx);
                             }
@@ -851,61 +736,46 @@ impl<T: Item> ItemHandle for Entity<T> {
                             if let AutosaveSetting::AfterDelay { milliseconds } = autosave {
                                 let delay = Duration::from_millis(milliseconds.0);
                                 let item = item.clone();
-                                pending_autosave.fire_new(
-                                    delay,
-                                    window,
-                                    cx,
-                                    move |workspace, window, cx| {
-                                        Pane::autosave_item(
-                                            &item,
-                                            workspace.project().clone(),
-                                            window,
-                                            cx,
-                                        )
-                                    },
-                                );
+                                pending_autosave.fire_new(delay, window, cx, move |workspace, window, cx| {
+                                    Pane::autosave_item(&item, workspace.project().clone(), window, cx)
+                                });
                             }
                             pane.update(cx, |pane, cx| pane.handle_item_edit(item.item_id(), cx));
                         }
                     });
-                },
-            ));
+                }));
 
-            cx.on_focus_out(
-                &self.read(cx).focus_handle(cx),
-                window,
-                move |workspace, _event, window, cx| {
-                    if let Some(item) = weak_item.upgrade()
-                        && item.workspace_settings(cx).autosave == AutosaveSetting::OnFocusChange
-                    {
-                        // Only trigger autosave if focus has truly left the item.
-                        // If focus is still within the item's hierarchy (e.g., moved to a context menu),
-                        // don't trigger autosave to avoid unwanted formatting and cursor jumps.
-                        let focus_handle = item.item_focus_handle(cx);
-                        if focus_handle.contains_focused(window, cx) {
-                            return;
-                        }
-
-                        // Add the item to a deferred save list. The actual save will happen when
-                        // focus lands on a pane or panel (via handle_pane_focused or
-                        // handle_panel_focused), or when the window deactivates.
-                        // This avoids saving when opening modals and skips saving if focus
-                        // returns to the same item.
-                        workspace.deferred_save_items.push(item.downgrade_item());
-
-                        // Defer the flush to ensure all focus events are processed first.
-                        // This is needed because on_focus_out fires before handle_pane_focused
-                        // when switching items.
-                        cx.defer_in(window, |workspace, window, cx| {
-                            // Don't flush if a modal is active - the user might return
-                            // to the original item when the modal is dismissed.
-                            if !workspace.has_active_modal(window, cx) {
-                                workspace.flush_deferred_saves(window, cx);
-                            }
-                        });
+            cx.on_focus_out(&self.read(cx).focus_handle(cx), window, move |workspace, _event, window, cx| {
+                if let Some(item) = weak_item.upgrade()
+                    && item.workspace_settings(cx).autosave == AutosaveSetting::OnFocusChange
+                {
+                    // Only trigger autosave if focus has truly left the item.
+                    // If focus is still within the item's hierarchy (e.g., moved to a context menu),
+                    // don't trigger autosave to avoid unwanted formatting and cursor jumps.
+                    let focus_handle = item.item_focus_handle(cx);
+                    if focus_handle.contains_focused(window, cx) {
+                        return;
                     }
-                },
-            )
+
+                    // Add the item to a deferred save list. The actual save will happen when
+                    // focus lands on a pane or panel (via handle_pane_focused or
+                    // handle_panel_focused), or when the window deactivates.
+                    // This avoids saving when opening modals and skips saving if focus
+                    // returns to the same item.
+                    workspace.deferred_save_items.push(item.downgrade_item());
+
+                    // Defer the flush to ensure all focus events are processed first.
+                    // This is needed because on_focus_out fires before handle_pane_focused
+                    // when switching items.
+                    cx.defer_in(window, |workspace, window, cx| {
+                        // Don't flush if a modal is active - the user might return
+                        // to the original item when the modal is dismissed.
+                        if !workspace.has_active_modal(window, cx) {
+                            workspace.flush_deferred_saves(window, cx);
+                        }
+                    });
+                }
+            })
             .detach();
 
             let item_id = self.item_id();
@@ -996,12 +866,7 @@ impl<T: Item> ItemHandle for Entity<T> {
         self.update(cx, |item, cx| item.save_as(project, path, window, cx))
     }
 
-    fn reload(
-        &self,
-        project: Entity<Project>,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> Task<Result<()>> {
+    fn reload(&self, project: Entity<Project>, window: &mut Window, cx: &mut App) -> Task<Result<()>> {
         self.update(cx, |item, cx| item.reload(project, window, cx))
     }
 
@@ -1009,11 +874,7 @@ impl<T: Item> ItemHandle for Entity<T> {
         self.read(cx).act_as_type(type_id, self, cx)
     }
 
-    fn on_release(
-        &self,
-        cx: &mut App,
-        callback: Box<dyn FnOnce(&mut App) + Send>,
-    ) -> gpui::Subscription {
+    fn on_release(&self, cx: &mut App, callback: Box<dyn FnOnce(&mut App) + Send>) -> gpui::Subscription {
         cx.observe_release(self, move |_, cx| callback(cx))
     }
 
@@ -1066,16 +927,8 @@ impl<T: Item> ItemHandle for Entity<T> {
 
     /// Called when the containing pane receives a drop on the item or the item's tab.
     /// Returns `true` if the item handled it and the pane should skip its default drop behavior.
-    fn handle_drop(
-        &self,
-        active_pane: &Pane,
-        dropped: &dyn Any,
-        window: &mut Window,
-        cx: &mut App,
-    ) -> bool {
-        self.update(cx, |this, cx| {
-            this.handle_drop(active_pane, dropped, window, cx)
-        })
+    fn handle_drop(&self, active_pane: &Pane, dropped: &dyn Any, window: &mut Window, cx: &mut App) -> bool {
+        self.update(cx, |this, cx| this.handle_drop(active_pane, dropped, window, cx))
     }
 
     fn tab_extra_context_menu_actions(
@@ -1083,9 +936,7 @@ impl<T: Item> ItemHandle for Entity<T> {
         window: &mut Window,
         cx: &mut App,
     ) -> Vec<(SharedString, Box<dyn Action>)> {
-        self.update(cx, |this, cx| {
-            this.tab_extra_context_menu_actions(window, cx)
-        })
+        self.update(cx, |this, cx| this.tab_extra_context_menu_actions(window, cx))
     }
 }
 

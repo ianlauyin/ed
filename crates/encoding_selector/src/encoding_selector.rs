@@ -1,19 +1,40 @@
 mod active_buffer_encoding;
-pub use active_buffer_encoding::ActiveBufferEncoding;
+use std::sync::Arc;
 
+pub use active_buffer_encoding::ActiveBufferEncoding;
 use editor::Editor;
 use encoding_rs::Encoding;
-use fuzzy::{StringMatch, StringMatchCandidate, match_strings};
-use gpui::{
-    App, AppContext, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable,
-    InteractiveElement, ParentElement, Render, Task, WeakEntity, Window, actions,
-};
+use fuzzy::StringMatch;
+use fuzzy::StringMatchCandidate;
+use fuzzy::match_strings;
+use gpui::App;
+use gpui::AppContext;
+use gpui::Context;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::InteractiveElement;
+use gpui::ParentElement;
+use gpui::Render;
+use gpui::Task;
+use gpui::WeakEntity;
+use gpui::Window;
+use gpui::actions;
 use language::Buffer;
-use picker::{Picker, PickerDelegate};
-use std::sync::Arc;
-use ui::{HighlightedLabel, ListItem, ListItemSpacing, Toggleable, v_flex};
+use picker::Picker;
+use picker::PickerDelegate;
+use ui::HighlightedLabel;
+use ui::ListItem;
+use ui::ListItemSpacing;
+use ui::Toggleable;
+use ui::v_flex;
 use util::ResultExt;
-use workspace::{ModalView, Toast, Workspace, notifications::NotificationId};
+use workspace::ModalView;
+use workspace::Toast;
+use workspace::Workspace;
+use workspace::notifications::NotificationId;
 
 actions!(
     encoding_selector,
@@ -32,36 +53,21 @@ pub struct EncodingSelector {
 }
 
 impl EncodingSelector {
-    fn register(
-        workspace: &mut Workspace,
-        _window: Option<&mut Window>,
-        _: &mut Context<Workspace>,
-    ) {
+    fn register(workspace: &mut Workspace, _window: Option<&mut Window>, _: &mut Context<Workspace>) {
         workspace.register_action(move |workspace, _: &Toggle, window, cx| {
             Self::toggle(workspace, window, cx);
         });
     }
 
-    pub fn toggle(
-        workspace: &mut Workspace,
-        window: &mut Window,
-        cx: &mut Context<Workspace>,
-    ) -> Option<()> {
-        let buffer = workspace
-            .active_item(cx)?
-            .act_as::<Editor>(cx)?
-            .read(cx)
-            .active_buffer(cx)?;
+    pub fn toggle(workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Workspace>) -> Option<()> {
+        let buffer = workspace.active_item(cx)?.act_as::<Editor>(cx)?.read(cx).active_buffer(cx)?;
 
         let buffer_handle = buffer.read(cx);
         let project = workspace.project().read(cx);
 
         if buffer_handle.is_dirty() {
             workspace.show_toast(
-                Toast::new(
-                    NotificationId::unique::<EncodingSelector>(),
-                    "Save file to change encoding",
-                ),
+                Toast::new(NotificationId::unique::<EncodingSelector>(), "Save file to change encoding"),
                 cx,
             );
             return Some(());
@@ -78,9 +84,7 @@ impl EncodingSelector {
             return Some(());
         }
 
-        workspace.toggle_modal(window, cx, move |window, cx| {
-            EncodingSelector::new(buffer, window, cx)
-        });
+        workspace.toggle_modal(window, cx, move |window, cx| EncodingSelector::new(buffer, window, cx));
         Some(())
     }
 
@@ -93,9 +97,7 @@ impl EncodingSelector {
 
 impl Render for EncodingSelector {
     fn render(&mut self, _window: &mut Window, _cx: &mut Context<Self>) -> impl gpui::IntoElement {
-        v_flex()
-            .key_context("EncodingSelector")
-            .child(self.picker.clone())
+        v_flex().key_context("EncodingSelector").child(self.picker.clone())
     }
 }
 
@@ -120,11 +122,8 @@ pub struct EncodingSelectorDelegate {
 impl EncodingSelectorDelegate {
     fn new(encoding_selector: WeakEntity<EncodingSelector>, buffer: Entity<Buffer>) -> Self {
         let encodings = available_encodings();
-        let match_candidates = encodings
-            .iter()
-            .enumerate()
-            .map(|(id, enc)| StringMatchCandidate::new(id, enc.name()))
-            .collect::<Vec<_>>();
+        let match_candidates =
+            encodings.iter().enumerate().map(|(id, enc)| StringMatchCandidate::new(id, enc.name())).collect::<Vec<_>>();
         Self {
             encoding_selector,
             buffer,
@@ -227,21 +226,11 @@ impl PickerDelegate for EncodingSelectorDelegate {
         self.selected_index
     }
 
-    fn set_selected_index(
-        &mut self,
-        ix: usize,
-        _window: &mut Window,
-        _: &mut Context<Picker<Self>>,
-    ) {
+    fn set_selected_index(&mut self, ix: usize, _window: &mut Window, _: &mut Context<Picker<Self>>) {
         self.selected_index = ix;
     }
 
-    fn update_matches(
-        &mut self,
-        query: String,
-        window: &mut Window,
-        cx: &mut Context<Picker<Self>>,
-    ) -> Task<()> {
+    fn update_matches(&mut self, query: String, window: &mut Window, cx: &mut Context<Picker<Self>>) -> Task<()> {
         let background = cx.background_executor().clone();
         let candidates = self.match_candidates.clone();
 
@@ -258,24 +247,13 @@ impl PickerDelegate for EncodingSelectorDelegate {
                     })
                     .collect()
             } else {
-                match_strings(
-                    &candidates,
-                    &query,
-                    false,
-                    true,
-                    100,
-                    &Default::default(),
-                    background,
-                )
-                .await
+                match_strings(&candidates, &query, false, true, 100, &Default::default(), background).await
             };
 
             this.update(cx, |this, cx| {
                 let delegate = &mut this.delegate;
                 delegate.matches = matches;
-                delegate.selected_index = delegate
-                    .selected_index
-                    .min(delegate.matches.len().saturating_sub(1));
+                delegate.selected_index = delegate.selected_index.min(delegate.matches.len().saturating_sub(1));
                 cx.notify();
             })
             .log_err();
@@ -287,16 +265,14 @@ impl PickerDelegate for EncodingSelectorDelegate {
             let selected_encoding = self.encodings[mat.candidate_id];
 
             self.buffer.update(cx, |buffer, cx| {
-                let _ = buffer.reload_with_encoding(selected_encoding, cx);
+                drop(buffer.reload_with_encoding(selected_encoding, cx));
             });
         }
         self.dismissed(window, cx);
     }
 
     fn dismissed(&mut self, _: &mut Window, cx: &mut Context<Picker<Self>>) {
-        self.encoding_selector
-            .update(cx, |_, cx| cx.emit(DismissEvent))
-            .ok();
+        self.encoding_selector.update(cx, |_, cx| cx.emit(DismissEvent)).ok();
     }
 
     fn render_match(

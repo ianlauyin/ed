@@ -17,11 +17,7 @@ where
     where
         F: FnMut(&Item) -> bool,
     {
-        if self.reverse {
-            self.it.filter(pred).last()
-        } else {
-            self.it.find(pred)
-        }
+        if self.reverse { self.it.filter(pred).last() } else { self.it.find(pred) }
     }
 }
 
@@ -33,10 +29,6 @@ where
     where
         F: FnMut(&Item) -> bool,
     {
-        if self.reverse {
-            self.it.rfind(|x| pred(x))
-        } else {
-            self.it.find(|x| pred(x))
-        }
+        if self.reverse { self.it.rfind(|x| pred(x)) } else { self.it.find(|x| pred(x)) }
     }
 }

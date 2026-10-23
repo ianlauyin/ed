@@ -130,27 +130,45 @@
 
 //! List of "tainted files" that the user may not operate on
 
-use crate::{ProjectPanel, RemovalKind};
-use anyhow::{Context, Result, anyhow};
-use fs::{TrashId, TrashRestoreError};
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering;
+
+use anyhow::Context;
+use anyhow::Result;
+use anyhow::anyhow;
+use fs::TrashId;
+use fs::TrashRestoreError;
 use futures::channel::mpsc;
-use gpui::{
-    AppContext, AsyncApp, IntoElement, PromptLevel, SharedString, Styled, Task, WeakEntity,
-};
-use markdown::{Markdown, MarkdownElement};
+use gpui::AppContext;
+use gpui::AsyncApp;
+use gpui::IntoElement;
+use gpui::PromptLevel;
+use gpui::SharedString;
+use gpui::Styled;
+use gpui::Task;
+use gpui::WeakEntity;
+use markdown::Markdown;
+use markdown::MarkdownElement;
 use project::Project;
-use project::{ProjectPath, WorktreeId};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::{collections::VecDeque, sync::Arc};
-use ui::{App, TextSize};
-use util::{paths::PathStyle, rel_path::RelPath};
-use workspace::{
-    Pane, SaveIntent, Workspace,
-    notifications::{
-        NotificationId, markdown_style, simple_message_notification::MessageNotification,
-    },
-};
-use worktree::{CreatedEntry, Worktree};
+use project::ProjectPath;
+use project::WorktreeId;
+use ui::App;
+use ui::TextSize;
+use util::paths::PathStyle;
+use util::rel_path::RelPath;
+use workspace::Pane;
+use workspace::SaveIntent;
+use workspace::Workspace;
+use workspace::notifications::NotificationId;
+use workspace::notifications::markdown_style;
+use workspace::notifications::simple_message_notification::MessageNotification;
+use worktree::CreatedEntry;
+use worktree::Worktree;
+
+use crate::ProjectPanel;
+use crate::RemovalKind;
 
 enum Operation {
     Trash(ProjectPath),
@@ -185,9 +203,7 @@ impl Operation {
                     operation.trash_paths(&mut trash_paths);
                 }
 
-                if !trash_paths.is_empty()
-                    && !undo_manager.confirm_batch_trash(trash_paths, cx).await?
-                {
+                if !trash_paths.is_empty() && !undo_manager.confirm_batch_trash(trash_paths, cx).await? {
                     return Ok(None);
                 }
 
@@ -200,10 +216,7 @@ impl Operation {
                 Change::Batched(changes)
             }
             operation => {
-                return operation
-                    .execute_confirmed(undo_manager, cx)
-                    .await
-                    .map(Some);
+                return operation.execute_confirmed(undo_manager, cx).await.map(Some);
             }
         };
 
@@ -220,9 +233,7 @@ impl Operation {
     async fn execute_confirmed(self, undo_manager: &Inner, cx: &mut AsyncApp) -> Result<Change> {
         let change = match self {
             Operation::Trash(project_path) => {
-                let trash_id = undo_manager
-                    .trash_without_confirmation(&project_path, cx)
-                    .await?;
+                let trash_id = undo_manager.trash_without_confirmation(&project_path, cx).await?;
 
                 Change::Trashed(project_path.worktree_id, trash_id)
             }
@@ -298,9 +309,7 @@ impl Change {
             //
             // If we first tried to revert the directory creation, it would fail
             // because there's still files inside the directory.
-            Change::Batched(changes) => {
-                Operation::Batch(changes.into_iter().rev().map(Change::to_inverse).collect())
-            }
+            Change::Batched(changes) => Operation::Batch(changes.into_iter().rev().map(Change::to_inverse).collect()),
         }
     }
 }
@@ -308,11 +317,7 @@ impl Change {
 /// Returns the parent directories of `path` that do not yet exist in the given
 /// worktree and would therefore be created when an entry is placed at `path`,
 /// ordered from the deepest to the shallowest.
-pub(crate) fn missing_parent_dirs(
-    worktree: &Worktree,
-    worktree_id: WorktreeId,
-    path: &RelPath,
-) -> Vec<ProjectPath> {
+pub(crate) fn missing_parent_dirs(worktree: &Worktree, worktree_id: WorktreeId, path: &RelPath) -> Vec<ProjectPath> {
     let mut dirs = Vec::new();
     let mut current = path.parent();
     while let Some(parent) = current {
@@ -320,10 +325,7 @@ pub(crate) fn missing_parent_dirs(
             break;
         }
         if worktree.entry_for_path(parent).is_none() {
-            dirs.push(ProjectPath {
-                worktree_id,
-                path: parent.into_arc(),
-            });
+            dirs.push(ProjectPath { worktree_id, path: parent.into_arc() });
         }
         current = parent.parent();
     }
@@ -355,37 +357,22 @@ pub struct UndoManager {
 }
 
 impl UndoManager {
-    pub fn new(
-        workspace: WeakEntity<Workspace>,
-        panel: WeakEntity<ProjectPanel>,
-
-        cx: &App,
-    ) -> Self {
+    pub fn new(workspace: WeakEntity<Workspace>, panel: WeakEntity<ProjectPanel>, cx: &App) -> Self {
         let (tx, rx) = mpsc::channel(1024);
         let inner = Inner::new(workspace, panel, rx);
 
-        let this = Self {
-            tx,
+        let this = Self { tx, can_undo: Arc::clone(&inner.can_undo), can_redo: Arc::clone(&inner.can_redo) };
 
-            can_undo: Arc::clone(&inner.can_undo),
-            can_redo: Arc::clone(&inner.can_redo),
-        };
-
-        cx.spawn(async move |cx| inner.manage_undo_and_redo(cx.clone()).await)
-            .detach();
+        cx.spawn(async move |cx| inner.manage_undo_and_redo(cx.clone()).await).detach();
 
         this
     }
 
     pub fn undo(&mut self) -> Result<()> {
-        self.tx
-            .try_send(UndoMessage::Undo)
-            .context("Undo and redo task can not keep up")
+        self.tx.try_send(UndoMessage::Undo).context("Undo and redo task can not keep up")
     }
     pub fn redo(&mut self) -> Result<()> {
-        self.tx
-            .try_send(UndoMessage::Redo)
-            .context("Undo and redo task can not keep up")
+        self.tx.try_send(UndoMessage::Redo).context("Undo and redo task can not keep up")
     }
     pub fn record(&mut self, changes: impl IntoIterator<Item = Change>) -> Result<()> {
         self.tx
@@ -414,21 +401,14 @@ enum UndoMessage {
 impl UndoMessage {
     fn error_title(&self) -> &'static str {
         match self {
-            UndoMessage::Changed(_) => {
-                "this is a bug in the manage_undo_and_redo task please report"
-            }
+            UndoMessage::Changed(_) => "this is a bug in the manage_undo_and_redo task please report",
             UndoMessage::Undo => "Undo Failed",
             UndoMessage::Redo => "Redo Failed",
         }
     }
 }
 
-fn project_path_display(
-    project: &Project,
-    project_path: &ProjectPath,
-    path_style: PathStyle,
-    cx: &App,
-) -> String {
+fn project_path_display(project: &Project, project_path: &ProjectPath, path_style: PathStyle, cx: &App) -> String {
     project
         .short_full_path_for_project_path(project_path, cx)
         .unwrap_or_else(|| project_path.path.display(path_style).to_string())
@@ -461,12 +441,7 @@ impl Inner {
             };
 
             if let Err(e) = res {
-                Self::show_error(
-                    error_title,
-                    self.workspace.clone(),
-                    format!("{e:#}"),
-                    &mut cx,
-                );
+                Self::show_error(error_title, self.workspace.clone(), format!("{e:#}"), &mut cx);
             }
 
             self.can_undo.store(self.can_undo(), Ordering::Relaxed);
@@ -608,12 +583,7 @@ impl Inner {
         self.history.push_back(change);
     }
 
-    async fn rename(
-        &self,
-        from: &ProjectPath,
-        to: &ProjectPath,
-        cx: &mut AsyncApp,
-    ) -> Result<CreatedEntry> {
+    async fn rename(&self, from: &ProjectPath, to: &ProjectPath, cx: &mut AsyncApp) -> Result<CreatedEntry> {
         let Some(workspace) = self.workspace.upgrade() else {
             return Err(anyhow!("Failed to obtain workspace."));
         };
@@ -622,30 +592,21 @@ impl Inner {
             let project = workspace.project().read(cx);
             let path_style = project.path_style(cx);
 
-            (
-                project_path_display(project, from, path_style, cx),
-                project_path_display(project, to, path_style, cx),
-            )
+            (project_path_display(project, from, path_style, cx), project_path_display(project, to, path_style, cx))
         });
 
         // Since the Project Panel's rename operation is used for both renaming
         // and moving files and directories, we'll assume that, if both paths
         // share the parent folder, then it was a simple rename, otherwise it
         // was a move.
-        let operation = if from.path.parent() == to.path.parent() {
-            "rename"
-        } else {
-            "move"
-        };
+        let operation = if from.path.parent() == to.path.parent() { "rename" } else { "move" };
 
         let res: Result<Task<Result<CreatedEntry>>> = workspace.update(cx, |workspace, cx| {
             workspace.project().update(cx, |project, cx| {
                 let entry_id = project
                     .entry_for_path(from, cx)
                     .map(|entry| entry.id)
-                    .with_context(|| {
-                        format!("Failed to {operation} `{from_name}`. It no longer exists.")
-                    })?;
+                    .with_context(|| format!("Failed to {operation} `{from_name}`. It no longer exists."))?;
 
                 Ok(project.rename_entry(entry_id, to.clone(), cx))
             })
@@ -662,9 +623,7 @@ impl Inner {
             }) || format!("{err:#}").contains("already exists");
 
             if already_exists {
-                anyhow!(
-                    "Failed to {operation} `{from_name}` to `{to_name}`. A file or folder already exists there."
-                )
+                anyhow!("Failed to {operation} `{from_name}` to `{to_name}`. A file or folder already exists there.")
             } else {
                 err
             }
@@ -708,9 +667,7 @@ impl Inner {
                 let entry_id = {
                     let worktree = worktree.read(cx);
                     let entry = worktree.entry_for_path(path.path.as_ref())?;
-                    if !entry.is_dir()
-                        || worktree.child_entries(path.path.as_ref()).next().is_some()
-                    {
+                    if !entry.is_dir() || worktree.child_entries(path.path.as_ref()).next().is_some() {
                         return None;
                     }
                     entry.id
@@ -732,11 +689,7 @@ impl Inner {
     /// user save or discard them.
     ///
     /// Returns `Ok(None)` if the user cancels the operation.
-    async fn trash(
-        &self,
-        project_path: &ProjectPath,
-        cx: &mut AsyncApp,
-    ) -> Result<Option<TrashId>> {
+    async fn trash(&self, project_path: &ProjectPath, cx: &mut AsyncApp) -> Result<Option<TrashId>> {
         let Some(workspace) = self.workspace.upgrade() else {
             return Err(anyhow!("Failed to obtain workspace."));
         };
@@ -752,18 +705,12 @@ impl Inner {
             return Ok(None);
         }
 
-        self.trash_without_confirmation(project_path, cx)
-            .await
-            .map(Some)
+        self.trash_without_confirmation(project_path, cx).await.map(Some)
     }
 
     /// Same as [`Self::trash`] but proceeds without confirming if the user
     /// wishes to trash the file.
-    async fn trash_without_confirmation(
-        &self,
-        project_path: &ProjectPath,
-        cx: &mut AsyncApp,
-    ) -> Result<TrashId> {
+    async fn trash_without_confirmation(&self, project_path: &ProjectPath, cx: &mut AsyncApp) -> Result<TrashId> {
         let Some(workspace) = self.workspace.upgrade() else {
             return Err(anyhow!("Failed to obtain workspace."));
         };
@@ -782,9 +729,7 @@ impl Inner {
                     .map(|entry| entry.id)
                     .with_context(|| format!("Failed to trash `{name}`. It no longer exists."))?;
 
-                project
-                    .trash_entry(entry_id, cx)
-                    .with_context(|| format!("Failed to trash `{name}`."))
+                project.trash_entry(entry_id, cx).with_context(|| format!("Failed to trash `{name}`."))
             })
         })?;
 
@@ -794,56 +739,45 @@ impl Inner {
         }
     }
 
-    async fn restore(
-        &self,
-        worktree_id: WorktreeId,
-        trash_id: TrashId,
-        cx: &mut AsyncApp,
-    ) -> Result<ProjectPath> {
+    async fn restore(&self, worktree_id: WorktreeId, trash_id: TrashId, cx: &mut AsyncApp) -> Result<ProjectPath> {
         let Some(workspace) = self.workspace.upgrade() else {
             return Err(anyhow!("Failed to obtain workspace."));
         };
 
-        let name = workspace
-            .update(cx, |workspace, cx| {
-                let project = workspace.project().read(cx);
-                let path_style = project.path_style(cx);
-                let original_path = project.fs().original_path_for_trash_id(trash_id)?;
-                let original_name = original_path
-                    .file_name()
-                    .map(|name| name.to_string_lossy().into_owned())
-                    .unwrap_or_else(|| original_path.display().to_string());
+        let name =
+            workspace
+                .update(cx, |workspace, cx| {
+                    let project = workspace.project().read(cx);
+                    let path_style = project.path_style(cx);
+                    let original_path = project.fs().original_path_for_trash_id(trash_id)?;
+                    let original_name = original_path
+                        .file_name()
+                        .map(|name| name.to_string_lossy().into_owned())
+                        .unwrap_or_else(|| original_path.display().to_string());
 
-                let project_path = (|| {
-                    let worktree = project.worktree_for_id(worktree_id, cx)?;
-                    let worktree_abs_path = worktree.read(cx).abs_path();
-                    let relative_path = original_path
-                        .strip_prefix(worktree_abs_path.as_ref())
-                        .ok()?;
-                    let relative_path = RelPath::new(relative_path, path_style).ok()?;
-                    Some(ProjectPath {
-                        worktree_id,
-                        path: relative_path.into_arc(),
-                    })
-                })();
+                    let project_path = (|| {
+                        let worktree = project.worktree_for_id(worktree_id, cx)?;
+                        let worktree_abs_path = worktree.read(cx).abs_path();
+                        let relative_path = original_path.strip_prefix(worktree_abs_path.as_ref()).ok()?;
+                        let relative_path = RelPath::new(relative_path, path_style).ok()?;
+                        Some(ProjectPath { worktree_id, path: relative_path.into_arc() })
+                    })();
 
-                Some(project_path.map_or(original_name, |project_path| {
-                    project_path_display(project, &project_path, path_style, cx)
-                }))
-            })
-            .unwrap_or_else(|| "item".to_string());
+                    Some(project_path.map_or(original_name, |project_path| {
+                        project_path_display(project, &project_path, path_style, cx)
+                    }))
+                })
+                .unwrap_or_else(|| "item".to_string());
 
         workspace
             .update(cx, |workspace, cx| {
-                workspace.project().update(cx, |project, cx| {
-                    project.restore_entry(worktree_id, trash_id, cx)
-                })
+                workspace.project().update(cx, |project, cx| project.restore_entry(worktree_id, trash_id, cx))
             })
             .await
             .map_err(|err| match err.downcast_ref::<TrashRestoreError>() {
-                Some(TrashRestoreError::Collision { .. }) => anyhow!(
-                    "Failed to restore `{name}`. Something already exists at its original location."
-                ),
+                Some(TrashRestoreError::Collision { .. }) => {
+                    anyhow!("Failed to restore `{name}`. Something already exists at its original location.")
+                }
                 _ => anyhow!("Failed to restore `{name}`. It may have been permanently deleted."),
             })
     }
@@ -851,17 +785,11 @@ impl Inner {
     /// Displays a notification with the provided `title` and `error`. The
     /// `error` is rendered as markdown, so file names wrapped in backticks show
     /// up as inline code.
-    fn show_error(
-        title: impl Into<SharedString>,
-        workspace: WeakEntity<Workspace>,
-        error: String,
-        cx: &mut AsyncApp,
-    ) {
+    fn show_error(title: impl Into<SharedString>, workspace: WeakEntity<Workspace>, error: String, cx: &mut AsyncApp) {
         let title = title.into();
         workspace
             .update(cx, move |workspace, cx| {
-                let notification_id =
-                    NotificationId::Named(SharedString::new_static("project_panel_undo"));
+                let notification_id = NotificationId::Named(SharedString::new_static("project_panel_undo"));
 
                 workspace.show_notification(notification_id, cx, move |cx| {
                     cx.new(move |cx| {
@@ -884,21 +812,12 @@ impl Inner {
     ///
     /// Returns `true` if the user confirmed they want to trash the file,
     /// `false` otherwise.
-    async fn confirm_trash(
-        &self,
-        project_path: &ProjectPath,
-        name: &str,
-        cx: &mut AsyncApp,
-    ) -> Result<bool> {
+    async fn confirm_trash(&self, project_path: &ProjectPath, name: &str, cx: &mut AsyncApp) -> Result<bool> {
         let open_item = self.workspace.update(cx, |workspace, cx| {
             workspace.panes().iter().find_map(|pane| {
                 pane.read(cx).items().find_map(|item| {
-                    (item.is_dirty(cx)
-                        && item
-                            .project_path(cx)
-                            .iter()
-                            .any(|item_path| item_path == project_path))
-                    .then(|| (pane.clone(), item.boxed_clone()))
+                    (item.is_dirty(cx) && item.project_path(cx).iter().any(|item_path| item_path == project_path))
+                        .then(|| (pane.clone(), item.boxed_clone()))
                 })
             })
         })?;
@@ -907,21 +826,10 @@ impl Inner {
             return self.trash_prompt(&[name], 0, cx).await;
         };
 
-        let mut async_window_cx = self
-            .panel
-            .update_in(cx, |_panel, window, cx| window.to_async(cx))?;
-        let project = self
-            .panel
-            .read_with(cx, |panel, _cx| panel.project.clone())?;
+        let mut async_window_cx = self.panel.update_in(cx, |_panel, window, cx| window.to_async(cx))?;
+        let project = self.panel.read_with(cx, |panel, _cx| panel.project.clone())?;
 
-        Pane::save_item(
-            project,
-            pane,
-            item.as_ref(),
-            SaveIntent::Close,
-            &mut async_window_cx,
-        )
-        .await
+        Pane::save_item(project, pane, item.as_ref(), SaveIntent::Close, &mut async_window_cx).await
     }
 
     /// Prompts the user to confirm whether they really want to trash all of the
@@ -932,18 +840,12 @@ impl Inner {
     ///
     /// Returns `true` if the user confirmed they want to trash the files,
     /// `false` otherwise.
-    async fn confirm_batch_trash(
-        &self,
-        trash_paths: Vec<&ProjectPath>,
-        cx: &mut AsyncApp,
-    ) -> Result<bool> {
+    async fn confirm_batch_trash(&self, trash_paths: Vec<&ProjectPath>, cx: &mut AsyncApp) -> Result<bool> {
         let (names, dirty_buffers) = self.workspace.update(cx, |workspace, cx| {
             let project = workspace.project().read(cx);
             let path_style = project.path_style(cx);
-            let dirty_buffers = project
-                .dirty_buffers(cx)
-                .filter(|dirty_path| trash_paths.contains(&dirty_path))
-                .count();
+            let dirty_buffers =
+                project.dirty_buffers(cx).filter(|dirty_path| trash_paths.contains(&dirty_path)).count();
             let names = trash_paths
                 .iter()
                 .map(|project_path| project_path_display(project, project_path, path_style, cx))
@@ -959,12 +861,7 @@ impl Inner {
     /// file.
     ///
     /// Returns `true` if the user confirms, `false` otherwise.
-    async fn trash_prompt<S>(
-        &self,
-        names: &[S],
-        dirty_buffers: usize,
-        cx: &mut AsyncApp,
-    ) -> Result<bool>
+    async fn trash_prompt<S>(&self, names: &[S], dirty_buffers: usize, cx: &mut AsyncApp) -> Result<bool>
     where
         S: AsRef<str>,
     {

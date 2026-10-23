@@ -1,13 +1,18 @@
-use std::{
-    rc::Rc,
-    time::{Duration, Instant},
-};
+use std::rc::Rc;
+use std::time::Duration;
+use std::time::Instant;
 
-use gpui::{
-    AnyView, DismissEvent, Entity, EntityId, FocusHandle, ManagedView, MouseButton, Subscription,
-    Task,
-};
-use ui::{animation::DefaultAnimations, prelude::*};
+use gpui::AnyView;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::EntityId;
+use gpui::FocusHandle;
+use gpui::ManagedView;
+use gpui::MouseButton;
+use gpui::Subscription;
+use gpui::Task;
+use ui::animation::DefaultAnimations;
+use ui::prelude::*;
 use zed_actions::toast;
 
 use crate::Workspace;
@@ -58,17 +63,10 @@ pub struct ToastAction {
 }
 
 impl ToastAction {
-    pub fn new(
-        label: SharedString,
-        on_click: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>,
-    ) -> Self {
+    pub fn new(label: SharedString, on_click: Option<Rc<dyn Fn(&mut Window, &mut App) + 'static>>) -> Self {
         let id = ElementId::Name(label.clone());
 
-        Self {
-            id,
-            label,
-            on_click,
-        }
+        Self { id, label, on_click }
     }
 }
 
@@ -109,11 +107,7 @@ impl Default for ToastLayer {
 
 impl ToastLayer {
     pub fn new() -> Self {
-        Self {
-            active_toast: None,
-            duration_remaining: None,
-            dismiss_timer: None,
-        }
+        Self { active_toast: None, duration_remaining: None, dismiss_timer: None }
     }
 
     pub fn toggle_toast<V>(&mut self, cx: &mut Context<Self>, new_toast: Entity<V>)
@@ -179,8 +173,7 @@ impl ToastLayer {
         let Some(duration_remaining) = self.duration_remaining.as_mut() else {
             return;
         };
-        *duration_remaining =
-            duration_remaining.saturating_sub(dismiss_timer.instant_started.elapsed());
+        *duration_remaining = duration_remaining.saturating_sub(dismiss_timer.instant_started.elapsed());
         if *duration_remaining < MINIMUM_RESUME_DURATION {
             *duration_remaining = MINIMUM_RESUME_DURATION;
         }
@@ -200,10 +193,7 @@ impl ToastLayer {
         });
 
         self.duration_remaining = Some(duration);
-        self.dismiss_timer = Some(DismissTimer {
-            instant_started,
-            _task: task,
-        });
+        self.dismiss_timer = Some(DismissTimer { instant_started, _task: task });
         cx.notify();
     }
 

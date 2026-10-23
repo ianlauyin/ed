@@ -1,15 +1,22 @@
-use std::{path::PathBuf, sync::Arc};
+use std::path::PathBuf;
+use std::sync::Arc;
 
 use fs::Fs;
-use gpui::{AppContext, Entity, Global, MenuItem};
+use gpui::AppContext;
+use gpui::Entity;
+use gpui::Global;
+use gpui::MenuItem;
 use smallvec::SmallVec;
-use ui::{App, Context};
-use util::{ResultExt, paths::PathExt};
+use ui::App;
+use ui::Context;
+use util::ResultExt;
+use util::paths::PathExt;
 
-use crate::{
-    NewWindow, SerializedWorkspaceLocation, WorkspaceId, path_list::PathList,
-    persistence::WorkspaceDb,
-};
+use crate::NewWindow;
+use crate::SerializedWorkspaceLocation;
+use crate::WorkspaceId;
+use crate::path_list::PathList;
+use crate::persistence::WorkspaceDb;
 
 pub fn init(fs: Arc<dyn Fs>, cx: &mut App) {
     let manager = cx.new(|_| HistoryManager::new());
@@ -35,9 +42,7 @@ impl Global for GlobalHistoryManager {}
 
 impl HistoryManager {
     fn new() -> Self {
-        Self {
-            history: Vec::new(),
-        }
+        Self { history: Vec::new() }
     }
 
     fn init(this: Entity<HistoryManager>, fs: Arc<dyn Fs>, cx: &App) {
@@ -51,10 +56,7 @@ impl HistoryManager {
                 .rev()
                 .filter_map(|workspace| {
                     if matches!(workspace.location, SerializedWorkspaceLocation::Local) {
-                        Some(HistoryManagerEntry::new(
-                            workspace.workspace_id,
-                            &workspace.paths,
-                        ))
+                        Some(HistoryManagerEntry::new(workspace.workspace_id, &workspace.paths))
                     } else {
                         None
                     }
@@ -69,8 +71,7 @@ impl HistoryManager {
     }
 
     pub fn global(cx: &App) -> Option<Entity<Self>> {
-        cx.try_global::<GlobalHistoryManager>()
-            .map(|model| model.0.clone())
+        cx.try_global::<GlobalHistoryManager>().map(|model| model.0.clone())
     }
 
     fn set_global(history_manager: Entity<Self>, cx: &mut App) {
@@ -100,12 +101,7 @@ impl HistoryManager {
 
     fn update_jump_list(&mut self, cx: &mut Context<'_, HistoryManager>) {
         let menus = vec![MenuItem::action("New Window", NewWindow)];
-        let entries = self
-            .history
-            .iter()
-            .rev()
-            .map(|entry| entry.path.clone())
-            .collect::<Vec<_>>();
+        let entries = self.history.iter().rev().map(|entry| entry.path.clone()).collect::<Vec<_>>();
         let user_removed = cx.update_jump_list(menus, entries);
         let db = WorkspaceDb::global(cx);
         cx.spawn(async move |this, cx| {
@@ -135,10 +131,7 @@ impl HistoryManager {
 
 impl HistoryManagerEntry {
     pub fn new(id: WorkspaceId, paths: &PathList) -> Self {
-        let path = paths
-            .ordered_paths()
-            .map(|path| path.compact())
-            .collect::<SmallVec<[PathBuf; 2]>>();
+        let path = paths.ordered_paths().map(|path| path.compact()).collect::<SmallVec<[PathBuf; 2]>>();
         Self { id, path }
     }
 }

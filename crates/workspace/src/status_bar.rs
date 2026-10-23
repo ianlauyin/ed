@@ -1,15 +1,39 @@
-use crate::{
-    ItemHandle, MultiWorkspace, Pane, SidebarSide, ToggleWorkspaceSidebar,
-    sidebar_side_context_menu,
-};
-use gpui::{
-    Anchor, AnyView, App, Context, Decorations, Entity, FocusHandle, Focusable, IntoElement,
-    ParentElement, Render, SharedString, Styled, Subscription, WeakEntity, Window,
-};
-use settings::{SettingsContent, update_settings_file};
-use std::{any::TypeId, sync::Arc};
+use std::any::TypeId;
+use std::sync::Arc;
+
+use gpui::Anchor;
+use gpui::AnyView;
+use gpui::App;
+use gpui::Context;
+use gpui::Decorations;
+use gpui::Entity;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::IntoElement;
+use gpui::ParentElement;
+use gpui::Render;
+use gpui::SharedString;
+use gpui::Styled;
+use gpui::Subscription;
+use gpui::WeakEntity;
+use gpui::Window;
+use settings::SettingsContent;
+use settings::update_settings_file;
 use theme::CLIENT_SIDE_DECORATION_ROUNDING;
-use ui::{ContextMenu, Divider, IconPosition, Indicator, Tooltip, prelude::*, right_click_menu};
+use ui::ContextMenu;
+use ui::Divider;
+use ui::IconPosition;
+use ui::Indicator;
+use ui::Tooltip;
+use ui::prelude::*;
+use ui::right_click_menu;
+
+use crate::ItemHandle;
+use crate::MultiWorkspace;
+use crate::Pane;
+use crate::SidebarSide;
+use crate::ToggleWorkspaceSidebar;
+use crate::sidebar_side_context_menu;
 
 /// Describes how a status-bar item can be hidden by the user.
 ///
@@ -26,9 +50,7 @@ pub struct HideStatusItem {
 
 impl HideStatusItem {
     pub fn new(hide: impl Fn(&mut SettingsContent) + Send + Sync + 'static) -> Self {
-        Self {
-            hide: Arc::new(hide),
-        }
+        Self { hide: Arc::new(hide) }
     }
 
     /// Persists the hide by updating the user settings file.
@@ -60,12 +82,7 @@ pub trait StatusItemView: Render {
 
 trait StatusItemViewHandle: Send {
     fn to_any(&self) -> AnyView;
-    fn set_active_pane_item(
-        &self,
-        active_pane_item: Option<&dyn ItemHandle>,
-        window: &mut Window,
-        cx: &mut App,
-    );
+    fn set_active_pane_item(&self, active_pane_item: Option<&dyn ItemHandle>, window: &mut Window, cx: &mut App);
     fn item_type(&self) -> TypeId;
     fn hide_setting(&self, cx: &App) -> Option<HideStatusItem>;
 }
@@ -124,24 +141,22 @@ impl Render for StatusBar {
             // reach them: it lands on the first control, Tab steps through them,
             // and arrow keys move between them once focus is inside.
             .tab_group()
-            .on_key_down(
-                cx.listener(|status_bar, event: &gpui::KeyDownEvent, window, cx| {
-                    if event.keystroke.modifiers.modified() {
-                        return;
+            .on_key_down(cx.listener(|status_bar, event: &gpui::KeyDownEvent, window, cx| {
+                if event.keystroke.modifiers.modified() {
+                    return;
+                }
+                match event.keystroke.key.as_str() {
+                    "right" => {
+                        status_bar.move_item_focus(true, window, cx);
+                        cx.stop_propagation();
                     }
-                    match event.keystroke.key.as_str() {
-                        "right" => {
-                            status_bar.move_item_focus(true, window, cx);
-                            cx.stop_propagation();
-                        }
-                        "left" => {
-                            status_bar.move_item_focus(false, window, cx);
-                            cx.stop_propagation();
-                        }
-                        _ => {}
+                    "left" => {
+                        status_bar.move_item_focus(false, window, cx);
+                        cx.stop_propagation();
                     }
-                }),
-            )
+                    _ => {}
+                }
+            }))
             .w_full()
             .justify_between()
             .gap(DynamicSpacing::Base08.rems(cx))
@@ -153,13 +168,11 @@ impl Render for StatusBar {
                 Decorations::Server => el,
                 Decorations::Client { tiling, .. } => el
                     .when(
-                        !(tiling.bottom || tiling.right)
-                            && !(sidebar.open && sidebar.side == SidebarSide::Right),
+                        !(tiling.bottom || tiling.right) && !(sidebar.open && sidebar.side == SidebarSide::Right),
                         |el| el.rounded_br(CLIENT_SIDE_DECORATION_ROUNDING),
                     )
                     .when(
-                        !(tiling.bottom || tiling.left)
-                            && !(sidebar.open && sidebar.side == SidebarSide::Left),
+                        !(tiling.bottom || tiling.left) && !(sidebar.open && sidebar.side == SidebarSide::Left),
                         |el| el.rounded_bl(CLIENT_SIDE_DECORATION_ROUNDING),
                     )
                     // This border is to avoid a transparent gap in the rounded corners
@@ -177,29 +190,23 @@ impl Render for StatusBar {
 }
 
 impl StatusBar {
-    fn render_left_tools(
-        &self,
-        sidebar: &SidebarStatus,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    fn render_left_tools(&self, sidebar: &SidebarStatus, cx: &mut Context<Self>) -> impl IntoElement {
         h_flex()
             .gap_1()
             .min_w_0()
             .overflow_x_hidden()
-            .when(
-                sidebar.show_toggle && !sidebar.open && sidebar.side == SidebarSide::Left,
-                |this| this.child(self.render_sidebar_toggle(sidebar, cx)),
+            .when(sidebar.show_toggle && !sidebar.open && sidebar.side == SidebarSide::Left, |this| {
+                this.child(self.render_sidebar_toggle(sidebar, cx))
+            })
+            .children(
+                self.left_items
+                    .iter()
+                    .enumerate()
+                    .map(|(index, item)| render_hideable_item("status-bar-left", index, item.as_ref(), cx)),
             )
-            .children(self.left_items.iter().enumerate().map(|(index, item)| {
-                render_hideable_item("status-bar-left", index, item.as_ref(), cx)
-            }))
     }
 
-    fn render_right_tools(
-        &self,
-        sidebar: &SidebarStatus,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    fn render_right_tools(&self, sidebar: &SidebarStatus, cx: &mut Context<Self>) -> impl IntoElement {
         h_flex()
             .flex_shrink_0()
             .gap_1()
@@ -209,54 +216,32 @@ impl StatusBar {
                     .iter()
                     .enumerate()
                     .rev()
-                    .map(|(index, item)| {
-                        render_hideable_item("status-bar-right", index, item.as_ref(), cx)
-                    }),
+                    .map(|(index, item)| render_hideable_item("status-bar-right", index, item.as_ref(), cx)),
             )
-            .when(
-                sidebar.show_toggle && !sidebar.open && sidebar.side == SidebarSide::Right,
-                |this| this.child(self.render_sidebar_toggle(sidebar, cx)),
-            )
+            .when(sidebar.show_toggle && !sidebar.open && sidebar.side == SidebarSide::Right, |this| {
+                this.child(self.render_sidebar_toggle(sidebar, cx))
+            })
     }
 
-    fn render_sidebar_toggle(
-        &self,
-        sidebar: &SidebarStatus,
-        cx: &mut Context<Self>,
-    ) -> impl IntoElement {
+    fn render_sidebar_toggle(&self, sidebar: &SidebarStatus, cx: &mut Context<Self>) -> impl IntoElement {
         let on_right = sidebar.side == SidebarSide::Right;
         let has_notifications = sidebar.has_notifications;
         let indicator_border = cx.theme().colors().status_bar_background;
 
         let toggle = sidebar_side_context_menu("sidebar-status-toggle-menu", cx)
-            .anchor(if on_right {
-                Anchor::BottomRight
-            } else {
-                Anchor::BottomLeft
-            })
-            .attach(if on_right {
-                Anchor::TopRight
-            } else {
-                Anchor::TopLeft
-            })
+            .anchor(if on_right { Anchor::BottomRight } else { Anchor::BottomLeft })
+            .attach(if on_right { Anchor::TopRight } else { Anchor::TopLeft })
             .trigger(move |_is_active, _window, _cx| {
                 IconButton::new(
                     "toggle-workspace-sidebar",
-                    if on_right {
-                        IconName::ThreadsSidebarRightClosed
-                    } else {
-                        IconName::ThreadsSidebarLeftClosed
-                    },
+                    if on_right { IconName::ThreadsSidebarRightClosed } else { IconName::ThreadsSidebarLeftClosed },
                 )
                 .icon_size(IconSize::Small)
                 .tab_index(0isize)
                 .when(has_notifications, |this| {
-                    this.indicator(Indicator::dot().color(Color::Accent))
-                        .indicator_border_color(Some(indicator_border))
+                    this.indicator(Indicator::dot().color(Color::Accent)).indicator_border_color(Some(indicator_border))
                 })
-                .tooltip(move |_, cx| {
-                    Tooltip::for_action("Open Threads Sidebar", &ToggleWorkspaceSidebar, cx)
-                })
+                .tooltip(move |_, cx| Tooltip::for_action("Open Threads Sidebar", &ToggleWorkspaceSidebar, cx))
                 .on_click(move |_, window, cx| {
                     if let Some(multi_workspace) = window.root::<MultiWorkspace>().flatten() {
                         multi_workspace.update(cx, |multi_workspace, cx| {
@@ -268,13 +253,9 @@ impl StatusBar {
 
         h_flex()
             .gap_0p5()
-            .when(on_right, |this| {
-                this.child(Divider::vertical().color(ui::DividerColor::Border))
-            })
+            .when(on_right, |this| this.child(Divider::vertical().color(ui::DividerColor::Border)))
             .child(toggle)
-            .when(!on_right, |this| {
-                this.child(Divider::vertical().color(ui::DividerColor::Border))
-            })
+            .when(!on_right, |this| this.child(Divider::vertical().color(ui::DividerColor::Border)))
     }
 }
 
@@ -294,22 +275,14 @@ fn render_hideable_item(
         .trigger(move |_is_active, _window, _cx| view)
         .menu(move |window, cx| {
             let hide = hide.clone();
-            ContextMenu::build(window, cx, move |menu, _window, _cx| {
-                add_hide_button_entry(menu, hide)
-            })
+            ContextMenu::build(window, cx, move |menu, _window, _cx| add_hide_button_entry(menu, hide))
         })
         .into_any_element()
 }
 
 /// Appends a "Hide Button" entry aligned with surrounding toggleable entries.
 pub fn add_hide_button_entry(menu: ContextMenu, hide: HideStatusItem) -> ContextMenu {
-    menu.toggleable_entry(
-        "Hide Button",
-        false,
-        IconPosition::Start,
-        None,
-        move |_window, cx| hide.apply(cx),
-    )
+    menu.toggleable_entry("Hide Button", false, IconPosition::Start, None, move |_window, cx| hide.apply(cx))
 }
 
 impl StatusBar {
@@ -325,19 +298,14 @@ impl StatusBar {
             active_pane: active_pane.clone(),
             multi_workspace,
             focus_handle: cx.focus_handle(),
-            _observe_active_pane: cx.observe_in(active_pane, window, |this, _, window, cx| {
-                this.update_active_pane_item(window, cx)
-            }),
+            _observe_active_pane: cx
+                .observe_in(active_pane, window, |this, _, window, cx| this.update_active_pane_item(window, cx)),
         };
         this.update_active_pane_item(window, cx);
         this
     }
 
-    pub fn set_multi_workspace(
-        &mut self,
-        multi_workspace: WeakEntity<MultiWorkspace>,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn set_multi_workspace(&mut self, multi_workspace: WeakEntity<MultiWorkspace>, cx: &mut Context<Self>) {
         self.multi_workspace = Some(multi_workspace);
         cx.notify();
     }
@@ -354,10 +322,7 @@ impl StatusBar {
     }
 
     pub fn item_of_type<T: StatusItemView>(&self) -> Option<Entity<T>> {
-        self.left_items
-            .iter()
-            .chain(self.right_items.iter())
-            .find_map(|item| item.to_any().downcast().ok())
+        self.left_items.iter().chain(self.right_items.iter()).find_map(|item| item.to_any().downcast().ok())
     }
 
     pub fn position_of_item<T>(&self) -> Option<usize>
@@ -392,8 +357,7 @@ impl StatusBar {
         if position < self.left_items.len() {
             self.left_items.insert(position + 1, Box::new(item))
         } else {
-            self.right_items
-                .insert(position + 1 - self.left_items.len(), Box::new(item))
+            self.right_items.insert(position + 1 - self.left_items.len(), Box::new(item))
         }
         cx.notify()
     }
@@ -407,12 +371,8 @@ impl StatusBar {
         cx.notify();
     }
 
-    pub fn add_right_item<T>(
-        &mut self,
-        item: Entity<T>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) where
+    pub fn add_right_item<T>(&mut self, item: Entity<T>, window: &mut Window, cx: &mut Context<Self>)
+    where
         T: 'static + StatusItemView,
     {
         let active_pane_item = self.active_pane.read(cx).active_item();
@@ -422,16 +382,10 @@ impl StatusBar {
         cx.notify();
     }
 
-    pub fn set_active_pane(
-        &mut self,
-        active_pane: &Entity<Pane>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn set_active_pane(&mut self, active_pane: &Entity<Pane>, window: &mut Window, cx: &mut Context<Self>) {
         self.active_pane = active_pane.clone();
-        self._observe_active_pane = cx.observe_in(active_pane, window, |this, _, window, cx| {
-            this.update_active_pane_item(window, cx)
-        });
+        self._observe_active_pane =
+            cx.observe_in(active_pane, window, |this, _, window, cx| this.update_active_pane_item(window, cx));
         self.update_active_pane_item(window, cx);
     }
 
@@ -453,9 +407,7 @@ impl StatusBar {
         } else {
             window.focus_prev(cx);
         }
-        let landed_in_status_bar = window
-            .focused(cx)
-            .is_some_and(|handle| self.focus_handle.contains(&handle, window));
+        let landed_in_status_bar = window.focused(cx).is_some_and(|handle| self.focus_handle.contains(&handle, window));
         if !landed_in_status_bar && let Some(previous) = previous {
             window.focus(&previous, cx);
         }
@@ -468,15 +420,8 @@ impl<T: StatusItemView> StatusItemViewHandle for Entity<T> {
         self.clone().into()
     }
 
-    fn set_active_pane_item(
-        &self,
-        active_pane_item: Option<&dyn ItemHandle>,
-        window: &mut Window,
-        cx: &mut App,
-    ) {
-        self.update(cx, |this, cx| {
-            this.set_active_pane_item(active_pane_item, window, cx)
-        });
+    fn set_active_pane_item(&self, active_pane_item: Option<&dyn ItemHandle>, window: &mut Window, cx: &mut App) {
+        self.update(cx, |this, cx| this.set_active_pane_item(active_pane_item, window, cx));
     }
 
     fn item_type(&self) -> TypeId {

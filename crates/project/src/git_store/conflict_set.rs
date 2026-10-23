@@ -1,6 +1,15 @@
-use gpui::{App, Context, Entity, EventEmitter, SharedString};
-use std::{cmp::Ordering, ops::Range, sync::Arc};
-use text::{Anchor, BufferId, OffsetRangeExt as _};
+use std::cmp::Ordering;
+use std::ops::Range;
+use std::sync::Arc;
+
+use gpui::App;
+use gpui::Context;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::SharedString;
+use text::Anchor;
+use text::BufferId;
+use text::OffsetRangeExt as _;
 
 pub struct ConflictSet {
     pub has_conflict: bool,
@@ -21,60 +30,36 @@ pub struct ConflictSetSnapshot {
 }
 
 impl ConflictSetSnapshot {
-    pub fn conflicts_in_range(
-        &self,
-        range: Range<Anchor>,
-        buffer: &text::BufferSnapshot,
-    ) -> &[ConflictRegion] {
+    pub fn conflicts_in_range(&self, range: Range<Anchor>, buffer: &text::BufferSnapshot) -> &[ConflictRegion] {
         let start_ix = self
             .conflicts
-            .binary_search_by(|conflict| {
-                conflict
-                    .range
-                    .end
-                    .cmp(&range.start, buffer)
-                    .then(Ordering::Greater)
-            })
+            .binary_search_by(|conflict| conflict.range.end.cmp(&range.start, buffer).then(Ordering::Greater))
             .unwrap_err();
         let end_ix = start_ix
             + self.conflicts[start_ix..]
-                .binary_search_by(|conflict| {
-                    conflict
-                        .range
-                        .start
-                        .cmp(&range.end, buffer)
-                        .then(Ordering::Less)
-                })
+                .binary_search_by(|conflict| conflict.range.start.cmp(&range.end, buffer).then(Ordering::Less))
                 .unwrap_err();
         &self.conflicts[start_ix..end_ix]
     }
 
     pub fn compare(&self, other: &Self, buffer: &text::BufferSnapshot) -> ConflictSetUpdate {
-        let common_prefix_len = self
-            .conflicts
-            .iter()
-            .zip(other.conflicts.iter())
-            .take_while(|(old, new)| old == new)
-            .count();
+        let common_prefix_len =
+            self.conflicts.iter().zip(other.conflicts.iter()).take_while(|(old, new)| old == new).count();
         let common_suffix_len = self.conflicts[common_prefix_len..]
             .iter()
             .rev()
             .zip(other.conflicts[common_prefix_len..].iter().rev())
             .take_while(|(old, new)| old == new)
             .count();
-        let old_conflicts =
-            &self.conflicts[common_prefix_len..(self.conflicts.len() - common_suffix_len)];
-        let new_conflicts =
-            &other.conflicts[common_prefix_len..(other.conflicts.len() - common_suffix_len)];
+        let old_conflicts = &self.conflicts[common_prefix_len..(self.conflicts.len() - common_suffix_len)];
+        let new_conflicts = &other.conflicts[common_prefix_len..(other.conflicts.len() - common_suffix_len)];
         let old_range = common_prefix_len..(common_prefix_len + old_conflicts.len());
         let new_range = common_prefix_len..(common_prefix_len + new_conflicts.len());
         let start = match (old_conflicts.first(), new_conflicts.first()) {
             (None, None) => None,
             (None, Some(conflict)) => Some(conflict.range.start),
             (Some(conflict), None) => Some(conflict.range.start),
-            (Some(first), Some(second)) => {
-                Some(*first.range.start.min(&second.range.start, buffer))
-            }
+            (Some(first), Some(second)) => Some(*first.range.start.min(&second.range.start, buffer)),
         };
         let end = match (old_conflicts.last(), new_conflicts.last()) {
             (None, None) => None,
@@ -82,11 +67,7 @@ impl ConflictSetSnapshot {
             (Some(first), None) => Some(first.range.end),
             (Some(first), Some(second)) => Some(*first.range.end.max(&second.range.end, buffer)),
         };
-        ConflictSetUpdate {
-            buffer_range: start.zip(end).map(|(start, end)| start..end),
-            old_range,
-            new_range,
-        }
+        ConflictSetUpdate { buffer_range: start.zip(end).map(|(start, end)| start..end), old_range, new_range }
     }
 }
 
@@ -112,12 +93,7 @@ pub struct ConflictRegion {
 }
 
 impl ConflictRegion {
-    pub fn resolve(
-        &self,
-        buffer: Entity<language::Buffer>,
-        ranges: &[Range<Anchor>],
-        cx: &mut App,
-    ) {
+    pub fn resolve(&self, buffer: Entity<language::Buffer>, ranges: &[Range<Anchor>], cx: &mut App) {
         let buffer_snapshot = buffer.read(cx).snapshot();
         let mut deletions = Vec::new();
         let empty = "";
@@ -142,13 +118,7 @@ impl ConflictRegion {
 
 impl ConflictSet {
     pub fn new(buffer_id: BufferId, has_conflict: bool, _: &mut Context<Self>) -> Self {
-        Self {
-            has_conflict,
-            snapshot: ConflictSetSnapshot {
-                buffer_id,
-                conflicts: Default::default(),
-            },
-        }
+        Self { has_conflict, snapshot: ConflictSetSnapshot { buffer_id, conflicts: Default::default() } }
     }
 
     pub fn set_has_conflict(&mut self, has_conflict: bool, cx: &mut Context<Self>) -> bool {
@@ -172,12 +142,7 @@ impl ConflictSet {
         self.snapshot.clone()
     }
 
-    pub fn set_snapshot(
-        &mut self,
-        snapshot: ConflictSetSnapshot,
-        update: ConflictSetUpdate,
-        cx: &mut Context<Self>,
-    ) {
+    pub fn set_snapshot(&mut self, snapshot: ConflictSetSnapshot, update: ConflictSetUpdate, cx: &mut Context<Self>) {
         self.snapshot = snapshot;
         cx.emit(update);
     }
@@ -211,16 +176,10 @@ impl ConflictSet {
                 if !branch_name.is_empty() {
                     ours_branch_name = Some(SharedString::new(branch_name));
                 }
-            } else if line.starts_with("||||||| ")
-                && conflict_start.is_some()
-                && ours_start.is_some()
-            {
+            } else if line.starts_with("||||||| ") && conflict_start.is_some() && ours_start.is_some() {
                 ours_end = Some(line_pos);
                 base_start = Some(line_end + 1);
-            } else if line.starts_with("=======")
-                && conflict_start.is_some()
-                && ours_start.is_some()
-            {
+            } else if line.starts_with("=======") && conflict_start.is_some() && ours_start.is_some() {
                 // Set ours_end if not already set (would be set if we have base markers)
                 if ours_end.is_none() {
                     ours_end = Some(line_pos);
@@ -242,21 +201,14 @@ impl ConflictSet {
                 let theirs_end = line_pos;
                 let conflict_end = (line_end + 1).min(buffer_len);
 
-                let range = buffer.anchor_after(conflict_start.unwrap())
-                    ..buffer.anchor_before(conflict_end);
+                let range = buffer.anchor_after(conflict_start.unwrap())..buffer.anchor_before(conflict_end);
                 let ours = side_range(buffer, ours_start.unwrap(), ours_end.unwrap());
                 let theirs = side_range(buffer, theirs_start.unwrap(), theirs_end);
-                let base = base_start
-                    .zip(base_end)
-                    .map(|(start, end)| side_range(buffer, start, end));
+                let base = base_start.zip(base_end).map(|(start, end)| side_range(buffer, start, end));
 
                 conflicts.push(ConflictRegion {
-                    ours_branch_name: ours_branch_name
-                        .take()
-                        .unwrap_or_else(|| SharedString::new_static("HEAD")),
-                    theirs_branch_name: theirs_branch_name
-                        .take()
-                        .unwrap_or_else(|| SharedString::new_static("Origin")),
+                    ours_branch_name: ours_branch_name.take().unwrap_or_else(|| SharedString::new_static("HEAD")),
+                    theirs_branch_name: theirs_branch_name.take().unwrap_or_else(|| SharedString::new_static("Origin")),
                     range,
                     ours,
                     theirs,
@@ -274,10 +226,7 @@ impl ConflictSet {
             line_pos = line_end + 1;
         }
 
-        ConflictSetSnapshot {
-            conflicts: conflicts.into(),
-            buffer_id: buffer.remote_id(),
-        }
+        ConflictSetSnapshot { conflicts: conflicts.into(), buffer_id: buffer.remote_id() }
     }
 }
 

@@ -1,22 +1,28 @@
+use std::collections::BTreeMap;
+use std::ops::Deref;
+use std::path::Path;
+
 use collections::HashMap;
-use git::{repository::RepoPath, status::GitSummary};
-use std::{collections::BTreeMap, ops::Deref, path::Path};
+use git::repository::RepoPath;
+use git::status::GitSummary;
 use sum_tree::Cursor;
 use text::Bias;
 use util::rel_path::RelPath;
-use worktree::{Entry, PathProgress, PathTarget, Traversal};
+use worktree::Entry;
+use worktree::PathProgress;
+use worktree::PathTarget;
+use worktree::Traversal;
 
-use super::{RepositoryId, RepositorySnapshot, StatusEntry};
+use super::RepositoryId;
+use super::RepositorySnapshot;
+use super::StatusEntry;
 
 /// Walks the worktree entries and their associated git statuses.
 pub struct GitTraversal<'a> {
     traversal: Traversal<'a>,
     current_entry_summary: Option<GitSummary>,
     repo_root_to_snapshot: BTreeMap<&'a Path, &'a RepositorySnapshot>,
-    repo_location: Option<(
-        RepositoryId,
-        Cursor<'a, 'static, StatusEntry, PathProgress<'a>>,
-    )>,
+    repo_location: Option<(RepositoryId, Cursor<'a, 'static, StatusEntry, PathProgress<'a>>)>,
 }
 
 impl<'a> GitTraversal<'a> {
@@ -24,16 +30,10 @@ impl<'a> GitTraversal<'a> {
         repo_snapshots: &'a HashMap<RepositoryId, RepositorySnapshot>,
         traversal: Traversal<'a>,
     ) -> GitTraversal<'a> {
-        let repo_root_to_snapshot = repo_snapshots
-            .values()
-            .map(|snapshot| (&*snapshot.work_directory_abs_path, snapshot))
-            .collect();
-        let mut this = GitTraversal {
-            traversal,
-            current_entry_summary: None,
-            repo_location: None,
-            repo_root_to_snapshot,
-        };
+        let repo_root_to_snapshot =
+            repo_snapshots.values().map(|snapshot| (&*snapshot.work_directory_abs_path, snapshot)).collect();
+        let mut this =
+            GitTraversal { traversal, current_entry_summary: None, repo_location: None, repo_root_to_snapshot };
         this.synchronize_statuses(true);
         this
     }
@@ -48,14 +48,9 @@ impl<'a> GitTraversal<'a> {
         //   our_query.txt
         let query = path.ancestors();
         for query in query {
-            let (_, snapshot) = self
-                .repo_root_to_snapshot
-                .range(Path::new("")..=query)
-                .last()?;
+            let (_, snapshot) = self.repo_root_to_snapshot.range(Path::new("")..=query).last()?;
 
-            let stripped = snapshot
-                .abs_path_to_repo_path(path)
-                .map(|repo_path| (*snapshot, repo_path));
+            let stripped = snapshot.abs_path_to_repo_path(path).map(|repo_path| (*snapshot, repo_path));
             if stripped.is_some() {
                 return stripped;
             }
@@ -79,13 +74,7 @@ impl<'a> GitTraversal<'a> {
         };
 
         // Update our state if we changed repositories.
-        if reset
-            || self
-                .repo_location
-                .as_ref()
-                .map(|(prev_repo_id, _)| *prev_repo_id)
-                != Some(repo.id)
-        {
+        if reset || self.repo_location.as_ref().map(|(prev_repo_id, _)| *prev_repo_id) != Some(repo.id) {
             self.repo_location = Some((repo.id, repo.statuses_by_path.cursor::<PathProgress>(())));
         }
 
@@ -167,15 +156,10 @@ impl<'a> ChildEntriesGitIter<'a> {
         worktree_snapshot: &'a worktree::Snapshot,
         parent_path: &'a RelPath,
     ) -> Self {
-        let mut traversal = GitTraversal::new(
-            repo_snapshots,
-            worktree_snapshot.traverse_from_path(true, true, true, parent_path),
-        );
+        let mut traversal =
+            GitTraversal::new(repo_snapshots, worktree_snapshot.traverse_from_path(true, true, true, parent_path));
         traversal.advance();
-        ChildEntriesGitIter {
-            parent_path,
-            traversal,
-        }
+        ChildEntriesGitIter { parent_path, traversal }
     }
 }
 
@@ -201,10 +185,7 @@ pub struct GitEntryRef<'a> {
 
 impl GitEntryRef<'_> {
     pub fn to_owned(self) -> GitEntry {
-        GitEntry {
-            entry: self.entry.clone(),
-            git_summary: self.git_summary,
-        }
+        GitEntry { entry: self.entry.clone(), git_summary: self.git_summary }
     }
 }
 
@@ -230,10 +211,7 @@ pub struct GitEntry {
 
 impl GitEntry {
     pub fn to_ref(&self) -> GitEntryRef<'_> {
-        GitEntryRef {
-            entry: &self.entry,
-            git_summary: self.git_summary,
-        }
+        GitEntryRef { entry: &self.entry, git_summary: self.git_summary }
     }
 }
 

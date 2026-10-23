@@ -1,17 +1,33 @@
-use crate::{EncodingSelector, Toggle};
-
 use editor::Editor;
-use encoding_rs::{Encoding, UTF_8};
-use gpui::{
-    App, Context, Entity, IntoElement, ParentElement, Render, Styled, Subscription, WeakEntity,
-    Window, div,
-};
+use encoding_rs::Encoding;
+use encoding_rs::UTF_8;
+use gpui::App;
+use gpui::Context;
+use gpui::Entity;
+use gpui::IntoElement;
+use gpui::ParentElement;
+use gpui::Render;
+use gpui::Styled;
+use gpui::Subscription;
+use gpui::WeakEntity;
+use gpui::Window;
+use gpui::div;
 use project::Project;
-use ui::{Button, ButtonCommon, Clickable, LabelSize, Tooltip};
-use workspace::{
-    EncodingDisplayOptions, HideStatusItem, StatusBarSettings, StatusItemView, Workspace,
-    item::{ItemHandle, Settings},
-};
+use ui::Button;
+use ui::ButtonCommon;
+use ui::Clickable;
+use ui::LabelSize;
+use ui::Tooltip;
+use workspace::EncodingDisplayOptions;
+use workspace::HideStatusItem;
+use workspace::StatusBarSettings;
+use workspace::StatusItemView;
+use workspace::Workspace;
+use workspace::item::ItemHandle;
+use workspace::item::Settings;
+
+use crate::EncodingSelector;
+use crate::Toggle;
 
 pub struct ActiveBufferEncoding {
     active_encoding: Option<&'static Encoding>,
@@ -89,9 +105,7 @@ impl Render for ActiveBufferEncoding {
                         return;
                     }
                     if let Some(workspace) = this.workspace.upgrade() {
-                        workspace.update(cx, |workspace, cx| {
-                            EncodingSelector::toggle(workspace, window, cx)
-                        });
+                        workspace.update(cx, |workspace, cx| EncodingSelector::toggle(workspace, window, cx));
                     }
                 }))
                 .tooltip(move |_window, cx| {
@@ -113,8 +127,7 @@ impl StatusItemView for ActiveBufferEncoding {
         cx: &mut Context<Self>,
     ) {
         if let Some(editor) = active_pane_item.and_then(|item| item.downcast::<Editor>()) {
-            self._observe_active_editor =
-                Some(cx.observe_in(&editor, window, Self::update_encoding));
+            self._observe_active_editor = Some(cx.observe_in(&editor, window, Self::update_encoding));
             self.update_encoding(editor, window, cx);
         } else {
             self.active_encoding = None;
@@ -129,10 +142,7 @@ impl StatusItemView for ActiveBufferEncoding {
 
     fn hide_setting(&self, _: &App) -> Option<HideStatusItem> {
         Some(HideStatusItem::new(|settings| {
-            settings
-                .status_bar
-                .get_or_insert_default()
-                .active_encoding_button = Some(EncodingDisplayOptions::Disabled);
+            settings.status_bar.get_or_insert_default().active_encoding_button = Some(EncodingDisplayOptions::Disabled);
         }))
     }
 }

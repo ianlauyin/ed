@@ -1,26 +1,38 @@
 use anyhow::Result;
 use buffer_diff::BufferDiff;
-use collections::{HashMap, HashSet};
-use futures::{FutureExt, StreamExt, future::LocalBoxFuture};
-use git::{
-    repository::RepoPath,
-    status::{DiffTreeType, FileStatus, StatusCode, TrackedStatus, TreeDiff, TreeDiffStatus},
-};
-use gpui::{
-    App, AsyncApp, Context, Entity, EventEmitter, SharedString, Subscription, Task, WeakEntity,
-};
-
+use collections::HashMap;
+use collections::HashSet;
+use futures::FutureExt;
+use futures::StreamExt;
+use futures::future::LocalBoxFuture;
+use git::repository::RepoPath;
+use git::status::DiffTreeType;
+use git::status::FileStatus;
+use git::status::StatusCode;
+use git::status::TrackedStatus;
+use git::status::TreeDiff;
+use git::status::TreeDiffStatus;
+use gpui::App;
+use gpui::AsyncApp;
+use gpui::Context;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::SharedString;
+use gpui::Subscription;
+use gpui::Task;
+use gpui::WeakEntity;
 use language::Buffer;
 use sum_tree::SumTree;
 use text::BufferId;
 use util::ResultExt;
 
-use crate::{
-    ConflictSet,
-    git_store::{
-        GitStore, GitStoreEvent, Repository, RepositoryEvent, RepositorySnapshot, StatusEntry,
-    },
-};
+use crate::ConflictSet;
+use crate::git_store::GitStore;
+use crate::git_store::GitStoreEvent;
+use crate::git_store::Repository;
+use crate::git_store::RepositoryEvent;
+use crate::git_store::RepositorySnapshot;
+use crate::git_store::StatusEntry;
 
 #[derive(Debug, Clone, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
 pub enum DiffBase {
@@ -66,19 +78,14 @@ impl DiffBufferList {
         let repo = repo.or_else(|| git_store.read(cx).active_repository());
         let git_store_subscription = cx.subscribe(&git_store, move |this, _, event, cx| {
             let should_update = match event {
-                GitStoreEvent::ActiveRepositoryChanged(new_repo_id) => {
-                    this.repo.is_none() && new_repo_id.is_some()
-                }
+                GitStoreEvent::ActiveRepositoryChanged(new_repo_id) => this.repo.is_none() && new_repo_id.is_some(),
                 GitStoreEvent::RepositoryUpdated(
                     event_repo_id,
                     RepositoryEvent::StatusesChanged
                     | RepositoryEvent::HeadChanged
                     | RepositoryEvent::BranchListChanged,
                     _,
-                ) => this
-                    .repo
-                    .as_ref()
-                    .is_some_and(|repo| repo.read(cx).snapshot().id == *event_repo_id),
+                ) => this.repo.as_ref().is_some_and(|repo| repo.read(cx).snapshot().id == *event_repo_id),
                 _ => false,
             };
 
@@ -93,8 +100,7 @@ impl DiffBufferList {
         });
 
         let (send, recv) = postage::watch::channel::<()>();
-        let worker =
-            cx.spawn(async move |this, cx| Self::handle_status_updates(this, recv, cx).await);
+        let worker = cx.spawn(async move |this, cx| Self::handle_status_updates(this, recv, cx).await);
 
         Self {
             diff_base: source,
@@ -154,15 +160,11 @@ impl DiffBufferList {
         mut recv: postage::watch::Receiver<()>,
         cx: &mut AsyncApp,
     ) {
-        this.update(cx, |this, cx| this.spawn_reload_tree_diff(cx))
-            .log_err();
+        this.update(cx, |this, cx| this.spawn_reload_tree_diff(cx)).log_err();
         while recv.next().await.is_some() {
             let Ok(()) = this.update(cx, |this, cx| {
                 if this.repo.is_none() {
-                    this.repo = this
-                        .git_store
-                        .upgrade()
-                        .and_then(|git_store| git_store.read(cx).active_repository());
+                    this.repo = this.git_store.upgrade().and_then(|git_store| git_store.read(cx).active_repository());
                 }
                 this.spawn_reload_tree_diff(cx);
             }) else {
@@ -173,34 +175,19 @@ impl DiffBufferList {
 
     pub fn status_for_buffer_id(&self, buffer_id: BufferId, cx: &App) -> Option<FileStatus> {
         let git_store = self.git_store.upgrade()?;
-        let (repo, path) = git_store
-            .read(cx)
-            .repository_and_path_for_buffer_id(buffer_id, cx)?;
-        (self.repo() == Some(&repo))
-            .then(|| self.status_for_path(&path, cx))
-            .flatten()
+        let (repo, path) = git_store.read(cx).repository_and_path_for_buffer_id(buffer_id, cx)?;
+        (self.repo() == Some(&repo)).then(|| self.status_for_path(&path, cx)).flatten()
     }
 
     pub fn status_for_path(&self, path: &RepoPath, cx: &App) -> Option<FileStatus> {
-        let repo_status = self
-            .repo
-            .as_ref()
-            .and_then(|repo| repo.read(cx).status_for_path(path))
-            .map(|entry| entry.status);
+        let repo_status =
+            self.repo.as_ref().and_then(|repo| repo.read(cx).status_for_path(path)).map(|entry| entry.status);
         if repo_status.is_some_and(|status| {
-            status_overrides_tree(
-                status,
-                self.committed_tree_diff
-                    .as_ref()
-                    .and_then(|diff| diff.entries.get(path)),
-            )
+            status_overrides_tree(status, self.committed_tree_diff.as_ref().and_then(|diff| diff.entries.get(path)))
         }) {
             return repo_status;
         }
-        self.tree_diff
-            .as_ref()
-            .and_then(|diff| diff.entries.get(path))
-            .map(diff_status_to_file_status)
+        self.tree_diff.as_ref().and_then(|diff| diff.entries.get(path)).map(diff_status_to_file_status)
     }
 
     pub fn statuses_by_path(&self) -> Option<SumTree<StatusEntry>> {
@@ -212,11 +199,7 @@ impl DiffBufferList {
             .tree_diff
             .as_ref()
             .and_then(|diff| diff.entries.get(path))
-            .or_else(|| {
-                self.committed_tree_diff
-                    .as_ref()
-                    .and_then(|diff| diff.entries.get(path))
-            })?;
+            .or_else(|| self.committed_tree_diff.as_ref().and_then(|diff| diff.entries.get(path)))?;
         Some(match status {
             TreeDiffStatus::Added => None,
             TreeDiffStatus::Modified { old } | TreeDiffStatus::Deleted { old } => Some(*old),
@@ -237,9 +220,7 @@ impl DiffBufferList {
     }
 
     pub fn is_tree_base_loading(&self) -> bool {
-        self.tree_diff_base_task
-            .as_ref()
-            .is_some_and(|task| !task.is_ready())
+        self.tree_diff_base_task.as_ref().is_some_and(|task| !task.is_ready())
     }
 
     pub async fn reload_tree_diff(this: WeakEntity<Self>, cx: &mut AsyncApp) -> Result<()> {
@@ -255,13 +236,7 @@ impl DiffBufferList {
             };
             Some(repo.update(cx, |repo, cx| {
                 (
-                    repo.diff_tree(
-                        DiffTreeType::MergeBase {
-                            base: base_ref.clone(),
-                            head: "HEAD".into(),
-                        },
-                        cx,
-                    ),
+                    repo.diff_tree(DiffTreeType::MergeBase { base: base_ref.clone(), head: "HEAD".into() }, cx),
                     repo.diff_tree(DiffTreeType::MergeBaseWithWorktree { base: base_ref }, cx),
                 )
             }))
@@ -274,9 +249,10 @@ impl DiffBufferList {
         let committed_tree_diff = committed_tree_diff?;
         let tree_diff = tree_diff?;
         this.update(cx, |this, cx| {
-            let statuses_by_path = this.repo.as_ref().map(|repo| {
-                build_statuses(&repo.read(cx).snapshot, &committed_tree_diff, &tree_diff)
-            });
+            let statuses_by_path = this
+                .repo
+                .as_ref()
+                .map(|repo| build_statuses(&repo.read(cx).snapshot, &committed_tree_diff, &tree_diff));
             this.committed_tree_diff = Some(committed_tree_diff);
             this.tree_diff = Some(tree_diff);
             this.statuses_by_path = statuses_by_path;
@@ -311,9 +287,7 @@ impl DiffBufferList {
                     DiffBase::Staged => item.status.staging().has_staged().then_some(item.status),
                     DiffBase::Merge { .. } => status_overrides_tree(
                         item.status,
-                        self.committed_tree_diff
-                            .as_ref()
-                            .and_then(|diff| diff.entries.get(&item.repo_path)),
+                        self.committed_tree_diff.as_ref().and_then(|diff| diff.entries.get(&item.repo_path)),
                     )
                     .then_some(item.status),
                 };
@@ -322,16 +296,10 @@ impl DiffBufferList {
                 };
                 seen.insert(item.repo_path.clone());
 
-                let Some(project_path) =
-                    repo.read(cx).repo_path_to_project_path(&item.repo_path, cx)
-                else {
+                let Some(project_path) = repo.read(cx).repo_path_to_project_path(&item.repo_path, cx) else {
                     continue;
                 };
-                let branch_diff = self
-                    .tree_diff
-                    .as_ref()
-                    .and_then(|tree| tree.entries.get(&item.repo_path))
-                    .cloned();
+                let branch_diff = self.tree_diff.as_ref().and_then(|tree| tree.entries.get(&item.repo_path)).cloned();
                 let task = Self::load_buffer(
                     self.diff_base.clone(),
                     branch_diff,
@@ -341,11 +309,7 @@ impl DiffBufferList {
                     cx,
                 );
 
-                output.push(DiffBuffer {
-                    repo_path: item.repo_path.clone(),
-                    load: task,
-                    file_status: status,
-                });
+                output.push(DiffBuffer { repo_path: item.repo_path.clone(), load: task, file_status: status });
             }
             let Some(tree_diff) = self.tree_diff.as_ref() else {
                 output.sort_by(|left, right| left.repo_path.cmp(&right.repo_path));
@@ -393,9 +357,7 @@ impl DiffBufferList {
             let cx = &mut cx;
             let buffer = git_store
                 .update(cx, |git_store, cx| {
-                    git_store.buffer_store.update(cx, |buffer_store, cx| {
-                        buffer_store.open_buffer(project_path, cx)
-                    })
+                    git_store.buffer_store.update(cx, |buffer_store, cx| buffer_store.open_buffer(project_path, cx))
                 })
                 .await?;
 
@@ -404,26 +366,18 @@ impl DiffBufferList {
             let (display_buffer, changes) = match diff_base {
                 DiffBase::Head => {
                     let diff = git_store
-                        .update(cx, |git_store, cx| {
-                            git_store.open_uncommitted_diff(buffer.clone(), cx)
-                        })
+                        .update(cx, |git_store, cx| git_store.open_uncommitted_diff(buffer.clone(), cx))
                         .await?;
                     (buffer, diff)
                 }
                 DiffBase::Index => {
-                    let diff = git_store
-                        .update(cx, |git_store, cx| {
-                            git_store.open_unstaged_diff(buffer.clone(), cx)
-                        })
-                        .await?;
+                    let diff =
+                        git_store.update(cx, |git_store, cx| git_store.open_unstaged_diff(buffer.clone(), cx)).await?;
                     (buffer, diff)
                 }
                 DiffBase::Staged => {
-                    let (diff, index_buffer) = git_store
-                        .update(cx, |git_store, cx| {
-                            git_store.open_staged_diff(buffer.clone(), cx)
-                        })
-                        .await?;
+                    let (diff, index_buffer) =
+                        git_store.update(cx, |git_store, cx| git_store.open_staged_diff(buffer.clone(), cx)).await?;
                     (index_buffer, diff)
                 }
                 DiffBase::Merge { .. } => {
@@ -434,37 +388,22 @@ impl DiffBufferList {
                             | git::status::TreeDiffStatus::Deleted { old } => Some(old),
                         };
                         git_store
-                            .update(cx, |git_store, cx| {
-                                git_store.open_diff_since(oid, buffer.clone(), repo, cx)
-                            })
+                            .update(cx, |git_store, cx| git_store.open_diff_since(oid, buffer.clone(), repo, cx))
                             .await?
                     } else {
                         git_store
-                            .update(cx, |git_store, cx| {
-                                git_store.open_uncommitted_diff(buffer.clone(), cx)
-                            })
+                            .update(cx, |git_store, cx| git_store.open_uncommitted_diff(buffer.clone(), cx))
                             .await?
                     };
                     (buffer, diff)
                 }
             };
             let conflict_set = if load_conflict_set {
-                Some(
-                    git_store
-                        .update(cx, |git_store, cx| {
-                            git_store.open_conflict_set(main_buffer.clone(), cx)
-                        })
-                        .await,
-                )
+                Some(git_store.update(cx, |git_store, cx| git_store.open_conflict_set(main_buffer.clone(), cx)).await)
             } else {
                 None
             };
-            Ok(LoadedDiffBuffer {
-                display_buffer,
-                main_buffer,
-                diff: changes,
-                conflict_set,
-            })
+            Ok(LoadedDiffBuffer { display_buffer, main_buffer, diff: changes, conflict_set })
         }
         .boxed_local()
     }
@@ -492,10 +431,7 @@ fn build_statuses(
         })
         .collect::<HashMap<_, _>>();
     for entry in snapshot.statuses_by_path.iter() {
-        if status_overrides_tree(
-            entry.status,
-            committed_tree_diff.entries.get(&entry.repo_path),
-        ) {
+        if status_overrides_tree(entry.status, committed_tree_diff.entries.get(&entry.repo_path)) {
             entries.insert(entry.repo_path.clone(), entry.clone());
         }
     }
@@ -505,17 +441,14 @@ fn build_statuses(
 }
 
 fn status_overrides_tree(status: FileStatus, committed_status: Option<&TreeDiffStatus>) -> bool {
-    status.is_conflicted()
-        || status.is_untracked()
-            && !matches!(committed_status, Some(TreeDiffStatus::Deleted { .. }))
+    status.is_conflicted() || status.is_untracked() && !matches!(committed_status, Some(TreeDiffStatus::Deleted { .. }))
 }
 
 fn diff_status_to_file_status(branch_diff: &git::status::TreeDiffStatus) -> FileStatus {
     let file_status = match branch_diff {
-        git::status::TreeDiffStatus::Added { .. } => FileStatus::Tracked(TrackedStatus {
-            index_status: StatusCode::Added,
-            worktree_status: StatusCode::Added,
-        }),
+        git::status::TreeDiffStatus::Added { .. } => {
+            FileStatus::Tracked(TrackedStatus { index_status: StatusCode::Added, worktree_status: StatusCode::Added })
+        }
         git::status::TreeDiffStatus::Modified { .. } => FileStatus::Tracked(TrackedStatus {
             index_status: StatusCode::Modified,
             worktree_status: StatusCode::Modified,

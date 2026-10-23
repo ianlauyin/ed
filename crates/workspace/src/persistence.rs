@@ -1,51 +1,65 @@
 pub mod model;
 
-use std::path::{Path, PathBuf};
+use std::path::Path;
+use std::path::PathBuf;
 
-use chrono::{DateTime, NaiveDateTime, Utc};
+use anyhow::Context as _;
+use anyhow::Result;
+use anyhow::bail;
+use chrono::DateTime;
+use chrono::NaiveDateTime;
+use chrono::Utc;
+use collections::HashMap;
+use collections::HashSet;
+use db::kvp::KeyValueStore;
+use db::query;
+use db::sqlez::connection::Connection;
+use db::sqlez::domain::Domain;
+use db::sqlez_macros::sql;
 use fs::Fs;
-
-use anyhow::{Context as _, Result, bail};
-use collections::{HashMap, HashSet};
-use db::{
-    kvp::KeyValueStore,
-    query,
-    sqlez::{connection::Connection, domain::Domain},
-    sqlez_macros::sql,
-};
-use gpui::{Axis, Bounds, Task, WindowBounds, WindowId, point, size};
-use project::{
-    ProjectGroupKey,
-    trusted_worktrees::{DbTrustedPaths, RemoteHostLocation},
-};
-
-use remote::{
-    RemoteConnectionIdentity, RemoteConnectionOptions, SshConnectionOptions,
-    remote_connection_identity,
-};
-use serde::{Deserialize, Serialize};
-use sqlez::{
-    bindable::{Bind, Column, StaticColumnCount},
-    statement::Statement,
-    thread_safe_connection::ThreadSafeConnection,
-};
-
-use ui::{App, SharedString, px};
-use util::{ResultExt, maybe};
+use gpui::Axis;
+use gpui::Bounds;
+use gpui::Task;
+use gpui::WindowBounds;
+use gpui::WindowId;
+use gpui::point;
+use gpui::size;
+use model::GroupId;
+use model::ItemId;
+use model::PaneId;
+use model::RemoteConnectionId;
+use model::SerializedItem;
+use model::SerializedPane;
+use model::SerializedPaneGroup;
+use model::SerializedWorkspace;
+use project::ProjectGroupKey;
+use project::trusted_worktrees::DbTrustedPaths;
+use project::trusted_worktrees::RemoteHostLocation;
+use remote::RemoteConnectionIdentity;
+use remote::RemoteConnectionOptions;
+use remote::SshConnectionOptions;
+use remote::remote_connection_identity;
+use serde::Deserialize;
+use serde::Serialize;
+use sqlez::bindable::Bind;
+use sqlez::bindable::Column;
+use sqlez::bindable::StaticColumnCount;
+use sqlez::statement::Statement;
+use sqlez::thread_safe_connection::ThreadSafeConnection;
+use ui::App;
+use ui::SharedString;
+use ui::px;
+use util::ResultExt;
+use util::maybe;
 use uuid::Uuid;
 
-use crate::{
-    WorkspaceId,
-    path_list::{PathList, SerializedPathList},
-    persistence::model::RemoteConnectionKind,
-};
-
-use model::{
-    GroupId, ItemId, PaneId, RemoteConnectionId, SerializedItem, SerializedPane,
-    SerializedPaneGroup, SerializedWorkspace,
-};
-
-use self::model::{DockStructure, SerializedWorkspaceLocation, SessionWorkspace};
+use self::model::DockStructure;
+use self::model::SerializedWorkspaceLocation;
+use self::model::SessionWorkspace;
+use crate::WorkspaceId;
+use crate::path_list::PathList;
+use crate::path_list::SerializedPathList;
+use crate::persistence::model::RemoteConnectionKind;
 
 // https://www.sqlite.org/limits.html
 // > <..> the maximum value of a host parameter number is SQLITE_MAX_VARIABLE_NUMBER,
@@ -53,20 +67,14 @@ use self::model::{DockStructure, SerializedWorkspaceLocation, SessionWorkspace};
 const MAX_QUERY_PLACEHOLDERS: usize = 32000;
 
 fn parse_timestamp(text: &str) -> DateTime<Utc> {
-    NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M:%S")
-        .map(|naive| naive.and_utc())
-        .unwrap_or_else(|_| Utc::now())
+    NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M:%S").map(|naive| naive.and_utc()).unwrap_or_else(|_| Utc::now())
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
 pub(crate) struct SerializedAxis(pub(crate) gpui::Axis);
 impl sqlez::bindable::StaticColumnCount for SerializedAxis {}
 impl sqlez::bindable::Bind for SerializedAxis {
-    fn bind(
-        &self,
-        statement: &sqlez::statement::Statement,
-        start_index: i32,
-    ) -> anyhow::Result<i32> {
+    fn bind(&self, statement: &sqlez::statement::Statement, start_index: i32) -> anyhow::Result<i32> {
         match self.0 {
             gpui::Axis::Horizontal => "Horizontal",
             gpui::Axis::Vertical => "Vertical",
@@ -76,10 +84,7 @@ impl sqlez::bindable::Bind for SerializedAxis {
 }
 
 impl sqlez::bindable::Column for SerializedAxis {
-    fn column(
-        statement: &mut sqlez::statement::Statement,
-        start_index: i32,
-    ) -> anyhow::Result<(Self, i32)> {
+    fn column(statement: &mut sqlez::statement::Statement, start_index: i32) -> anyhow::Result<(Self, i32)> {
         String::column(statement, start_index).and_then(|(axis_text, next_index)| {
             Ok((
                 match axis_text.as_str() {
@@ -148,12 +153,9 @@ impl Bind for SerializedWindowBounds {
 impl Column for SerializedWindowBounds {
     fn column(statement: &mut Statement, start_index: i32) -> Result<(Self, i32)> {
         let (window_state, next_index) = String::column(statement, start_index)?;
-        let ((x, y, width, height), _): ((i32, i32, i32, i32), _) =
-            Column::column(statement, next_index)?;
-        let bounds = Bounds {
-            origin: point(px(x as f32), px(y as f32)),
-            size: size(px(width as f32), px(height as f32)),
-        };
+        let ((x, y, width, height), _): ((i32, i32, i32, i32), _) = Column::column(statement, next_index)?;
+        let bounds =
+            Bounds { origin: point(px(x as f32), px(y as f32)), size: size(px(width as f32), px(height as f32)) };
 
         let status = match window_state.as_str() {
             "Windowed" | "Fixed" => SerializedWindowBounds(WindowBounds::Windowed(bounds)),
@@ -169,13 +171,9 @@ impl Column for SerializedWindowBounds {
 const DEFAULT_WINDOW_BOUNDS_KEY: &str = "default_window_bounds";
 
 pub fn read_default_window_bounds(kvp: &KeyValueStore) -> Option<(Uuid, WindowBounds)> {
-    let json_str = kvp
-        .read_kvp(DEFAULT_WINDOW_BOUNDS_KEY)
-        .log_err()
-        .flatten()?;
+    let json_str = kvp.read_kvp(DEFAULT_WINDOW_BOUNDS_KEY).log_err().flatten()?;
 
-    let (display_uuid, persisted) =
-        serde_json::from_str::<(Uuid, WindowBoundsJson)>(&json_str).ok()?;
+    let (display_uuid, persisted) = serde_json::from_str::<(Uuid, WindowBoundsJson)>(&json_str).ok()?;
     Some((display_uuid, persisted.into()))
 }
 
@@ -186,31 +184,15 @@ pub async fn write_default_window_bounds(
 ) -> anyhow::Result<()> {
     let persisted = WindowBoundsJson::from(bounds);
     let json_str = serde_json::to_string(&(display_uuid, persisted))?;
-    kvp.write_kvp(DEFAULT_WINDOW_BOUNDS_KEY.to_string(), json_str)
-        .await?;
+    kvp.write_kvp(DEFAULT_WINDOW_BOUNDS_KEY.to_string(), json_str).await?;
     Ok(())
 }
 
 #[derive(Serialize, Deserialize)]
 pub enum WindowBoundsJson {
-    Windowed {
-        x: i32,
-        y: i32,
-        width: i32,
-        height: i32,
-    },
-    Maximized {
-        x: i32,
-        y: i32,
-        width: i32,
-        height: i32,
-    },
-    Fullscreen {
-        x: i32,
-        y: i32,
-        width: i32,
-        height: i32,
-    },
+    Windowed { x: i32, y: i32, width: i32, height: i32 },
+    Maximized { x: i32, y: i32, width: i32, height: i32 },
+    Fullscreen { x: i32, y: i32, width: i32, height: i32 },
 }
 
 impl From<WindowBounds> for WindowBoundsJson {
@@ -253,30 +235,15 @@ impl From<WindowBounds> for WindowBoundsJson {
 impl From<WindowBoundsJson> for WindowBounds {
     fn from(n: WindowBoundsJson) -> Self {
         match n {
-            WindowBoundsJson::Windowed {
-                x,
-                y,
-                width,
-                height,
-            } => WindowBounds::Windowed(Bounds {
+            WindowBoundsJson::Windowed { x, y, width, height } => WindowBounds::Windowed(Bounds {
                 origin: point(px(x as f32), px(y as f32)),
                 size: size(px(width as f32), px(height as f32)),
             }),
-            WindowBoundsJson::Maximized {
-                x,
-                y,
-                width,
-                height,
-            } => WindowBounds::Maximized(Bounds {
+            WindowBoundsJson::Maximized { x, y, width, height } => WindowBounds::Maximized(Bounds {
                 origin: point(px(x as f32), px(y as f32)),
                 size: size(px(width as f32), px(height as f32)),
             }),
-            WindowBoundsJson::Fullscreen {
-                x,
-                y,
-                width,
-                height,
-            } => WindowBounds::Fullscreen(Bounds {
+            WindowBoundsJson::Fullscreen { x, y, width, height } => WindowBounds::Fullscreen(Bounds {
                 origin: point(px(x as f32), px(y as f32)),
                 size: size(px(width as f32), px(height as f32)),
             }),
@@ -294,16 +261,9 @@ fn read_multi_workspace_state(window_id: WindowId, cx: &App) -> model::MultiWork
         .unwrap_or_default()
 }
 
-pub async fn write_multi_workspace_state(
-    kvp: &KeyValueStore,
-    window_id: WindowId,
-    state: model::MultiWorkspaceState,
-) {
+pub async fn write_multi_workspace_state(kvp: &KeyValueStore, window_id: WindowId, state: model::MultiWorkspaceState) {
     if let Ok(json_str) = serde_json::to_string(&state) {
-        kvp.scoped("multi_workspace_state")
-            .write(window_id.as_u64().to_string(), json_str)
-            .await
-            .log_err();
+        kvp.scoped("multi_workspace_state").write(window_id.as_u64().to_string(), json_str).await.log_err();
     }
 }
 
@@ -333,9 +293,7 @@ pub fn read_serialized_multi_workspaces(
         .into_iter()
         .filter_map(|group| {
             let window_id = group.first().and_then(|sw| sw.window_id);
-            let state = window_id
-                .map(|wid| read_multi_workspace_state(wid, cx))
-                .unwrap_or_default();
+            let state = window_id.map(|wid| read_multi_workspace_state(wid, cx)).unwrap_or_default();
             let active_workspace = state
                 .active_workspace_id
                 .and_then(|id| group.iter().position(|ws| ws.workspace_id == id))
@@ -348,10 +306,7 @@ pub fn read_serialized_multi_workspaces(
                 .or_else(|| group.iter().position(|ws| !ws.paths.is_empty()))
                 .or(Some(0))
                 .and_then(|index| group.into_iter().nth(index))?;
-            Some(model::SerializedMultiWorkspace {
-                active_workspace,
-                state,
-            })
+            Some(model::SerializedMultiWorkspace { active_workspace, state })
         })
         .collect()
 }
@@ -364,13 +319,9 @@ pub fn read_default_dock_state(kvp: &KeyValueStore) -> Option<DockStructure> {
     serde_json::from_str::<DockStructure>(&json_str).ok()
 }
 
-pub async fn write_default_dock_state(
-    kvp: &KeyValueStore,
-    docks: DockStructure,
-) -> anyhow::Result<()> {
+pub async fn write_default_dock_state(kvp: &KeyValueStore, docks: DockStructure) -> anyhow::Result<()> {
     let json_str = serde_json::to_string(&docks)?;
-    kvp.write_kvp(DEFAULT_DOCK_STATE_KEY.to_string(), json_str)
-        .await?;
+    kvp.write_kvp(DEFAULT_DOCK_STATE_KEY.to_string(), json_str).await?;
     Ok(())
 }
 
@@ -379,11 +330,7 @@ struct SerializedPixels(gpui::Pixels);
 impl sqlez::bindable::StaticColumnCount for SerializedPixels {}
 
 impl sqlez::bindable::Bind for SerializedPixels {
-    fn bind(
-        &self,
-        statement: &sqlez::statement::Statement,
-        start_index: i32,
-    ) -> anyhow::Result<i32> {
+    fn bind(&self, statement: &sqlez::statement::Statement, start_index: i32) -> anyhow::Result<i32> {
         let this: i32 = u32::from(self.0) as _;
         this.bind(statement, start_index)
     }
@@ -513,10 +460,7 @@ impl WorkspaceDb {
     /// Returns a serialized workspace for the given worktree_roots. If the passed array
     /// is empty, the most recent workspace is returned instead. If no workspace for the
     /// passed roots is stored, returns none.
-    pub(crate) fn workspace_for_roots<P: AsRef<Path>>(
-        &self,
-        worktree_roots: &[P],
-    ) -> Option<SerializedWorkspace> {
+    pub(crate) fn workspace_for_roots<P: AsRef<Path>>(&self, worktree_roots: &[P]) -> Option<SerializedWorkspace> {
         self.workspace_for_roots_internal(worktree_roots, None)
     }
 
@@ -599,30 +543,19 @@ impl WorkspaceDb {
                 LIMIT 1
             })
             .and_then(|mut prepared_statement| {
-                (prepared_statement)((
-                    root_paths.serialize().paths,
-                    remote_connection_id.map(|id| id.0 as i32),
-                ))
+                (prepared_statement)((root_paths.serialize().paths, remote_connection_id.map(|id| id.0 as i32)))
             })
             .context("No workspaces found")
             .warn_on_err()
             .flatten()?;
 
-        let paths = PathList::deserialize(&SerializedPathList {
-            paths,
-            order: paths_order,
-        });
+        let paths = PathList::deserialize(&SerializedPathList { paths, order: paths_order });
         let identity_paths = identity_paths.map(|paths| {
-            PathList::deserialize(&SerializedPathList {
-                paths,
-                order: identity_paths_order.unwrap_or_default(),
-            })
+            PathList::deserialize(&SerializedPathList { paths, order: identity_paths_order.unwrap_or_default() })
         });
 
         let remote_connection_options = if let Some(remote_connection_id) = remote_connection_id {
-            self.remote_connection(remote_connection_id)
-                .context("Get remote connection")
-                .log_err()
+            self.remote_connection(remote_connection_id).context("Get remote connection").log_err()
         } else {
             None
         };
@@ -635,10 +568,7 @@ impl WorkspaceDb {
             },
             paths,
             identity_paths,
-            center_group: self
-                .get_center_pane_group(workspace_id)
-                .context("Getting center group")
-                .log_err()?,
+            center_group: self.get_center_pane_group(workspace_id).context("Getting center group").log_err()?,
             window_bounds,
             centered_layout: centered_layout.unwrap_or(false),
             display,
@@ -650,10 +580,7 @@ impl WorkspaceDb {
     }
 
     /// Returns the workspace with the given ID, loading all associated data.
-    pub(crate) fn workspace_for_id(
-        &self,
-        workspace_id: WorkspaceId,
-    ) -> Option<SerializedWorkspace> {
+    pub(crate) fn workspace_for_id(&self, workspace_id: WorkspaceId) -> Option<SerializedWorkspace> {
         let (
             paths,
             paths_order,
@@ -709,22 +636,14 @@ impl WorkspaceDb {
             .warn_on_err()
             .flatten()?;
 
-        let paths = PathList::deserialize(&SerializedPathList {
-            paths,
-            order: paths_order,
-        });
+        let paths = PathList::deserialize(&SerializedPathList { paths, order: paths_order });
         let identity_paths = identity_paths.map(|paths| {
-            PathList::deserialize(&SerializedPathList {
-                paths,
-                order: identity_paths_order.unwrap_or_default(),
-            })
+            PathList::deserialize(&SerializedPathList { paths, order: identity_paths_order.unwrap_or_default() })
         });
 
         let remote_connection_id = remote_connection_id.map(|id| RemoteConnectionId(id as u64));
         let remote_connection_options = if let Some(remote_connection_id) = remote_connection_id {
-            self.remote_connection(remote_connection_id)
-                .context("Get remote connection")
-                .log_err()
+            self.remote_connection(remote_connection_id).context("Get remote connection").log_err()
         } else {
             None
         };
@@ -737,10 +656,7 @@ impl WorkspaceDb {
             },
             paths,
             identity_paths,
-            center_group: self
-                .get_center_pane_group(workspace_id)
-                .context("Getting center group")
-                .log_err()?,
+            center_group: self.get_center_pane_group(workspace_id).context("Getting center group").log_err()?,
             window_bounds,
             centered_layout: centered_layout.unwrap_or(false),
             display,
@@ -892,27 +808,15 @@ impl WorkspaceDb {
         &self,
         options: RemoteConnectionOptions,
     ) -> Result<RemoteConnectionId> {
-        self.write(move |conn| Self::get_or_create_remote_connection_internal(conn, options))
-            .await
+        self.write(move |conn| Self::get_or_create_remote_connection_internal(conn, options)).await
     }
 
     fn get_or_create_remote_connection_internal(
         this: &Connection,
         options: RemoteConnectionOptions,
     ) -> Result<RemoteConnectionId> {
-        let RemoteConnectionIdentity::Ssh {
-            host,
-            username,
-            port,
-        } = remote_connection_identity(&options);
-        Self::get_or_create_remote_connection_query(
-            this,
-            RemoteConnectionKind::Ssh,
-            Some(host),
-            port,
-            username,
-            None,
-        )
+        let RemoteConnectionIdentity::Ssh { host, username, port } = remote_connection_identity(&options);
+        Self::get_or_create_remote_connection_query(this, RemoteConnectionKind::Ssh, Some(host), port, username, None)
     }
 
     fn get_or_create_remote_connection_query(
@@ -933,13 +837,8 @@ impl WorkspaceDb {
                 user IS ? AND
                 distro IS ?
             LIMIT 1
-        ))?((
-            kind.serialize(),
-            host.clone(),
-            port,
-            user.clone(),
-            distro.clone(),
-        ))? {
+        ))?((kind.serialize(), host.clone(), port, user.clone(), distro.clone()))?
+        {
             Ok(RemoteConnectionId(id))
         } else {
             let id = this.select_row_bound(sql!(
@@ -965,16 +864,8 @@ impl WorkspaceDb {
 
     fn recent_workspaces(
         &self,
-    ) -> Result<
-        Vec<(
-            WorkspaceId,
-            PathList,
-            Option<PathList>,
-            Option<RemoteConnectionId>,
-            Option<String>,
-            DateTime<Utc>,
-        )>,
-    > {
+    ) -> Result<Vec<(WorkspaceId, PathList, Option<PathList>, Option<RemoteConnectionId>, Option<String>, DateTime<Utc>)>>
+    {
         Ok(self
             .recent_workspaces_query()?
             .into_iter()
@@ -1021,27 +912,18 @@ impl WorkspaceDb {
     fn session_workspaces(
         &self,
         session_id: String,
-    ) -> Result<
-        Vec<(
-            WorkspaceId,
-            PathList,
-            Option<u64>,
-            Option<RemoteConnectionId>,
-        )>,
-    > {
+    ) -> Result<Vec<(WorkspaceId, PathList, Option<u64>, Option<RemoteConnectionId>)>> {
         Ok(self
             .session_workspaces_query(session_id)?
             .into_iter()
-            .map(
-                |(workspace_id, paths, order, window_id, remote_connection_id)| {
-                    (
-                        WorkspaceId(workspace_id),
-                        PathList::deserialize(&SerializedPathList { paths, order }),
-                        window_id,
-                        remote_connection_id.map(RemoteConnectionId),
-                    )
-                },
-            )
+            .map(|(workspace_id, paths, order, window_id, remote_connection_id)| {
+                (
+                    WorkspaceId(workspace_id),
+                    PathList::deserialize(&SerializedPathList { paths, order }),
+                    window_id,
+                    remote_connection_id.map(RemoteConnectionId),
+                )
+            })
             .collect())
     }
 
@@ -1063,26 +945,19 @@ impl WorkspaceDb {
         ))?()?
         .into_iter()
         .filter_map(|(id, kind, host, port, user, distro)| {
-            Some((
-                RemoteConnectionId(id),
-                Self::remote_connection_from_row(kind, host, port, user, distro)?,
-            ))
+            Some((RemoteConnectionId(id), Self::remote_connection_from_row(kind, host, port, user, distro)?))
         })
         .collect())
     }
 
-    pub(crate) fn remote_connection(
-        &self,
-        id: RemoteConnectionId,
-    ) -> Result<RemoteConnectionOptions> {
+    pub(crate) fn remote_connection(&self, id: RemoteConnectionId) -> Result<RemoteConnectionOptions> {
         let (kind, host, port, user, distro) = self.select_row_bound(sql!(
             SELECT kind, host, port, user, distro
             FROM remote_connections
             WHERE id = ?
         ))?(id.0)?
         .context("no such remote connection")?;
-        Self::remote_connection_from_row(kind, host, port, user, distro)
-            .context("invalid remote_connection row")
+        Self::remote_connection_from_row(kind, host, port, user, distro).context("invalid remote_connection row")
     }
 
     fn remote_connection_from_row(
@@ -1126,10 +1001,7 @@ impl WorkspaceDb {
 
     // Returns the raw recent workspace history. Scratch workspaces (no paths) are filtered
     // out because they are restored separately by `last_session_workspace_locations`.
-    pub async fn recent_project_workspaces_ungrouped(
-        &self,
-        fs: &dyn Fs,
-    ) -> Result<Vec<RecentWorkspace>> {
+    pub async fn recent_project_workspaces_ungrouped(&self, fs: &dyn Fs) -> Result<Vec<RecentWorkspace>> {
         let remote_connections = self.remote_connections()?;
         let mut result = Vec::new();
         for (id, paths, identity_paths_hint, remote_connection_id, _session_id, timestamp) in
@@ -1174,29 +1046,20 @@ impl WorkspaceDb {
     // Entries are deduplicated by git worktree identity, but preserve the original
     // serialized paths for reopening.
     pub async fn recent_project_workspaces(&self, fs: &dyn Fs) -> Result<Vec<RecentWorkspace>> {
-        Ok(dedupe_recent_workspaces(
-            self.recent_project_workspaces_ungrouped(fs).await?,
-        ))
+        Ok(dedupe_recent_workspaces(self.recent_project_workspaces_ungrouped(fs).await?))
     }
 
-    pub async fn delete_recent_workspace_group(
-        &self,
-        target: &RecentWorkspace,
-    ) -> Result<Vec<WorkspaceId>> {
+    pub async fn delete_recent_workspace_group(&self, target: &RecentWorkspace) -> Result<Vec<WorkspaceId>> {
         let target_paths = &target.identity_paths;
         let target_remote_connection = match &target.location {
             SerializedWorkspaceLocation::Local => None,
-            SerializedWorkspaceLocation::Remote(connection) => {
-                Some(remote_connection_identity(connection))
-            }
+            SerializedWorkspaceLocation::Remote(connection) => Some(remote_connection_identity(connection)),
         };
 
         let remote_connections = self.remote_connections()?;
 
         let mut workspace_ids = Vec::new();
-        for (workspace_id, paths, identity_paths, remote_connection_id, _, _) in
-            self.recent_workspaces()?
-        {
+        for (workspace_id, paths, identity_paths, remote_connection_id, _, _) in self.recent_workspaces()? {
             let remote_connection = if let Some(id) = remote_connection_id {
                 let Some(connection_options) = remote_connections.get(&id) else {
                     continue;
@@ -1205,18 +1068,13 @@ impl WorkspaceDb {
             } else {
                 None
             };
-            if remote_connection == target_remote_connection
-                && &identity_paths.unwrap_or(paths) == target_paths
-            {
+            if remote_connection == target_remote_connection && &identity_paths.unwrap_or(paths) == target_paths {
                 workspace_ids.push(workspace_id);
             }
         }
 
         futures::future::join_all(
-            workspace_ids
-                .iter()
-                .copied()
-                .map(|workspace_id| self.delete_workspace_by_id(workspace_id)),
+            workspace_ids.iter().copied().map(|workspace_id| self.delete_workspace_by_id(workspace_id)),
         )
         .await;
 
@@ -1260,12 +1118,7 @@ impl WorkspaceDb {
             }
         }
 
-        futures::future::join_all(
-            workspaces_to_delete
-                .into_iter()
-                .map(|id| self.delete_workspace_by_id(id)),
-        )
-        .await;
+        futures::future::join_all(workspaces_to_delete.into_iter().map(|id| self.delete_workspace_by_id(id))).await;
         Ok(())
     }
 
@@ -1293,9 +1146,7 @@ impl WorkspaceDb {
             if let Some(remote_connection_id) = remote_connection_id {
                 workspaces.push(SessionWorkspace {
                     workspace_id,
-                    location: SerializedWorkspaceLocation::Remote(
-                        self.remote_connection(remote_connection_id)?,
-                    ),
+                    location: SerializedWorkspaceLocation::Remote(self.remote_connection(remote_connection_id)?),
                     paths,
                     window_id,
                 });
@@ -1325,33 +1176,15 @@ impl WorkspaceDb {
     }
 
     fn get_center_pane_group(&self, workspace_id: WorkspaceId) -> Result<SerializedPaneGroup> {
-        Ok(self
-            .get_pane_group(workspace_id, None)?
-            .into_iter()
-            .next()
-            .unwrap_or_else(|| {
-                SerializedPaneGroup::Pane(SerializedPane {
-                    active: true,
-                    children: vec![],
-                    pinned_count: 0,
-                })
-            }))
+        Ok(self.get_pane_group(workspace_id, None)?.into_iter().next().unwrap_or_else(|| {
+            SerializedPaneGroup::Pane(SerializedPane { active: true, children: vec![], pinned_count: 0 })
+        }))
     }
 
-    fn get_pane_group(
-        &self,
-        workspace_id: WorkspaceId,
-        group_id: Option<GroupId>,
-    ) -> Result<Vec<SerializedPaneGroup>> {
+    fn get_pane_group(&self, workspace_id: WorkspaceId, group_id: Option<GroupId>) -> Result<Vec<SerializedPaneGroup>> {
         type GroupKey = (Option<GroupId>, WorkspaceId);
-        type GroupOrPane = (
-            Option<GroupId>,
-            Option<SerializedAxis>,
-            Option<PaneId>,
-            Option<bool>,
-            Option<usize>,
-            Option<String>,
-        );
+        type GroupOrPane =
+            (Option<GroupId>, Option<SerializedAxis>, Option<PaneId>, Option<bool>, Option<usize>, Option<String>);
         self.select_bound::<GroupKey, GroupOrPane>(sql!(
             SELECT group_id, axis, pane_id, active, pinned_count, flexes
                 FROM (SELECT
@@ -1385,9 +1218,7 @@ impl WorkspaceDb {
         .map(|(group_id, axis, pane_id, active, pinned_count, flexes)| {
             let maybe_pane = maybe!({ Some((pane_id?, active?, pinned_count?)) });
             if let Some((group_id, axis)) = group_id.zip(axis) {
-                let flexes = flexes
-                    .map(|flexes: String| serde_json::from_str::<Vec<f32>>(&flexes))
-                    .transpose()?;
+                let flexes = flexes.map(|flexes: String| serde_json::from_str::<Vec<f32>>(&flexes)).transpose()?;
 
                 Ok(SerializedPaneGroup::Group {
                     axis,
@@ -1395,11 +1226,7 @@ impl WorkspaceDb {
                     flexes,
                 })
             } else if let Some((pane_id, active, pinned_count)) = maybe_pane {
-                Ok(SerializedPaneGroup::Pane(SerializedPane::new(
-                    self.get_items(pane_id)?,
-                    active,
-                    pinned_count,
-                )))
+                Ok(SerializedPaneGroup::Pane(SerializedPane::new(self.get_items(pane_id)?, active, pinned_count)))
             } else {
                 bail!("Pane Group Child was neither a pane group or a pane");
             }
@@ -1423,16 +1250,10 @@ impl WorkspaceDb {
             log::debug!("Saving a pane group for workspace {workspace_id:?}");
         }
         match pane_group {
-            SerializedPaneGroup::Group {
-                axis,
-                children,
-                flexes,
-            } => {
+            SerializedPaneGroup::Group { axis, children, flexes } => {
                 let (parent_id, position) = parent.unzip();
 
-                let flex_string = flexes
-                    .as_ref()
-                    .map(|flexes| serde_json::json!(flexes).to_string());
+                let flex_string = flexes.as_ref().map(|flexes| serde_json::json!(flexes).to_string());
 
                 let group_id = conn.select_row_bound::<_, i64>(sql!(
                     INSERT INTO pane_groups(
@@ -1444,13 +1265,7 @@ impl WorkspaceDb {
                     )
                     VALUES (?, ?, ?, ?, ?)
                     RETURNING group_id
-                ))?((
-                    workspace_id,
-                    parent_id,
-                    position,
-                    *axis,
-                    flex_string,
-                ))?
+                ))?((workspace_id, parent_id, position, *axis, flex_string))?
                 .context("Couldn't retrieve group_id from inserted pane_group")?;
 
                 for (position, group) in children.iter().enumerate() {
@@ -1568,17 +1383,11 @@ impl WorkspaceDb {
         use db::sqlez::statement::Statement;
         use itertools::Itertools as _;
 
-        self.clear_trusted_worktrees()
-            .await
-            .context("clearing previous trust state")?;
+        self.clear_trusted_worktrees().await.context("clearing previous trust state")?;
 
         let trusted_worktrees = trusted_worktrees
             .into_iter()
-            .flat_map(|(host, abs_paths)| {
-                abs_paths
-                    .into_iter()
-                    .map(move |abs_path| (Some(abs_path), host.clone()))
-            })
+            .flat_map(|(host, abs_paths)| abs_paths.into_iter().map(move |abs_path| (Some(abs_path), host.clone())))
             .collect::<Vec<_>>();
         let mut first_worktree;
         let mut last_worktree = 0_usize;
@@ -1611,20 +1420,11 @@ VALUES {placeholders};"#
                 let mut next_index = 1;
                 for (abs_path, host) in trusted_worktrees {
                     let abs_path = abs_path.as_ref().map(|abs_path| abs_path.to_string_lossy());
-                    next_index = statement.bind(
-                        &abs_path.as_ref().map(|abs_path| abs_path.as_ref()),
-                        next_index,
-                    )?;
-                    next_index = statement.bind(
-                        &host
-                            .as_ref()
-                            .and_then(|host| Some(host.user_name.as_ref()?.as_str())),
-                        next_index,
-                    )?;
-                    next_index = statement.bind(
-                        &host.as_ref().map(|host| host.host_identifier.as_str()),
-                        next_index,
-                    )?;
+                    next_index = statement.bind(&abs_path.as_ref().map(|abs_path| abs_path.as_ref()), next_index)?;
+                    next_index = statement
+                        .bind(&host.as_ref().and_then(|host| Some(host.user_name.as_ref()?.as_str())), next_index)?;
+                    next_index =
+                        statement.bind(&host.as_ref().map(|host| host.host_identifier.as_str()), next_index)?;
                 }
                 statement.exec()
             })
@@ -1640,10 +1440,9 @@ VALUES {placeholders};"#
             .into_iter()
             .filter_map(|(abs_path, user_name, host_name)| {
                 let db_host = match (user_name, host_name) {
-                    (None, Some(host_name)) => Some(RemoteHostLocation {
-                        user_name: None,
-                        host_identifier: SharedString::new(host_name),
-                    }),
+                    (None, Some(host_name)) => {
+                        Some(RemoteHostLocation { user_name: None, host_identifier: SharedString::new(host_name) })
+                    }
                     (Some(user_name), Some(host_name)) => Some(RemoteHostLocation {
                         user_name: Some(SharedString::new(user_name)),
                         host_identifier: SharedString::new(host_name),
@@ -1653,9 +1452,7 @@ VALUES {placeholders};"#
                 Some((db_host, abs_path?))
             })
             .fold(HashMap::default(), |mut acc, (remote_host, abs_path)| {
-                acc.entry(remote_host)
-                    .or_insert_with(HashSet::default)
-                    .insert(abs_path);
+                acc.entry(remote_host).or_insert_with(HashSet::default).insert(abs_path);
                 acc
             }))
     }
@@ -1696,9 +1493,7 @@ impl RecentWorkspace {
 async fn resolve_local_workspace_identity(fs: &dyn Fs, paths: &PathList) -> Option<PathList> {
     let raw_paths = paths.paths();
     let resolved_paths = futures::future::join_all(
-        raw_paths
-            .iter()
-            .map(|path| project::git_store::resolve_git_worktree_to_main_repo(fs, path)),
+        raw_paths.iter().map(|path| project::git_store::resolve_git_worktree_to_main_repo(fs, path)),
     )
     .await;
 
@@ -1709,29 +1504,19 @@ async fn resolve_local_workspace_identity(fs: &dyn Fs, paths: &PathList) -> Opti
     let resolved_paths: Vec<PathBuf> = raw_paths
         .iter()
         .zip(resolved_paths.iter())
-        .map(|(original, resolved)| {
-            resolved
-                .as_ref()
-                .cloned()
-                .unwrap_or_else(|| original.clone())
-        })
+        .map(|(original, resolved)| resolved.as_ref().cloned().unwrap_or_else(|| original.clone()))
         .collect();
     let resolved_path_refs: Vec<&Path> = resolved_paths.iter().map(PathBuf::as_path).collect();
     Some(PathList::new(&resolved_path_refs))
 }
 
-fn dedupe_recent_workspaces(
-    workspaces: impl IntoIterator<Item = RecentWorkspace>,
-) -> Vec<RecentWorkspace> {
-    let mut indices_by_key: HashMap<(Option<RemoteConnectionIdentity>, Vec<PathBuf>), usize> =
-        HashMap::default();
+fn dedupe_recent_workspaces(workspaces: impl IntoIterator<Item = RecentWorkspace>) -> Vec<RecentWorkspace> {
+    let mut indices_by_key: HashMap<(Option<RemoteConnectionIdentity>, Vec<PathBuf>), usize> = HashMap::default();
     let mut result: Vec<RecentWorkspace> = Vec::new();
     for workspace in workspaces {
         let location_identity = match &workspace.location {
             SerializedWorkspaceLocation::Local => None,
-            SerializedWorkspaceLocation::Remote(connection) => {
-                Some(remote_connection_identity(connection))
-            }
+            SerializedWorkspaceLocation::Remote(connection) => Some(remote_connection_identity(connection)),
         };
         let key = (location_identity, workspace.identity_paths.paths().to_vec());
         if let Some(&existing_index) = indices_by_key.get(&key) {
@@ -1756,15 +1541,9 @@ pub fn delete_unloaded_items(
 ) -> Task<Result<()>> {
     let db = db.clone();
     cx.spawn(async move |_| {
-        let placeholders = alive_items
-            .iter()
-            .map(|_| "?")
-            .collect::<Vec<&str>>()
-            .join(", ");
+        let placeholders = alive_items.iter().map(|_| "?").collect::<Vec<&str>>().join(", ");
 
-        let query = format!(
-            "DELETE FROM {table} WHERE workspace_id = ? AND item_id NOT IN ({placeholders})"
-        );
+        let query = format!("DELETE FROM {table} WHERE workspace_id = ? AND item_id NOT IN ({placeholders})");
 
         db.write(move |conn| {
             let mut statement = Statement::prepare(conn, query)?;
