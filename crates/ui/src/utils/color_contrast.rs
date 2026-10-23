@@ -1,4 +1,5 @@
-use gpui::{Hsla, Rgba};
+use gpui::Hsla;
+use gpui::Rgba;
 
 /// Calculates the contrast ratio between two colors according to WCAG 2.0 standards.
 ///
@@ -31,9 +32,5 @@ fn relative_luminance(color: Hsla) -> f32 {
 
 /// Linearizes an RGB component.
 fn linearize(component: f32) -> f32 {
-    if component <= 0.03928 {
-        component / 12.92
-    } else {
-        ((component + 0.055) / 1.055).powf(2.4)
-    }
+    if component <= 0.03928 { component / 12.92 } else { ((component + 0.055) / 1.055).powf(2.4) }
 }

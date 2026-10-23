@@ -15,6 +15,6 @@ default = []
 
 [dependencies]
 collections.workspace = true
-chrono = { workspace = true, default-features = true }
+time.workspace = true
 log = { workspace = true, features = ["kv_unstable_std"] }
 anyhow.workspace = true

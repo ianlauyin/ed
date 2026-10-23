@@ -7,8 +7,6 @@ use std::path::Path;
 use std::path::PathBuf;
 use std::sync::Arc;
 
-use chrono::DateTime;
-use chrono::Utc;
 use disconnected_overlay::DisconnectedOverlay;
 use fs::Fs;
 use fuzzy_nucleo::StringMatch;
@@ -49,6 +47,7 @@ pub use remote_servers::RemoteServerProjects;
 use settings::DefaultOpenBehavior;
 use settings::Settings;
 use settings::WorktreeId;
+use time::OffsetDateTime;
 use ui::ButtonLike;
 use ui::ContextMenu;
 use ui::Divider;
@@ -89,7 +88,7 @@ pub struct RecentProjectEntry {
     pub full_path: SharedString,
     pub paths: Vec<PathBuf>,
     pub workspace_id: WorkspaceId,
-    pub timestamp: DateTime<Utc>,
+    pub timestamp: OffsetDateTime,
 }
 
 #[derive(Clone, Debug)]

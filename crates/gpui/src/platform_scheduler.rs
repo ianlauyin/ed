@@ -9,8 +9,6 @@ use std::task::Poll;
 use std::time::Duration;
 
 use async_task::Runnable;
-use chrono::DateTime;
-use chrono::Utc;
 use futures::channel::oneshot;
 use scheduler::Clock;
 use scheduler::Instant;
@@ -150,10 +148,6 @@ struct PlatformClock {
 }
 
 impl Clock for PlatformClock {
-    fn utc_now(&self) -> DateTime<Utc> {
-        Utc::now()
-    }
-
     fn now(&self) -> Instant {
         self.dispatcher.now()
     }

@@ -16,7 +16,7 @@ default = []
 
 [dependencies]
 anyhow.workspace = true
-chrono.workspace = true
+time.workspace = true
 editor.workspace = true
 fs.workspace = true
 futures.workspace = true

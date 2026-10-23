@@ -25,9 +25,11 @@
 //! [`DefaultState::filtered_servers`] and renders by looking up each
 //! `server_index` / `project_index` against the unchanged source list.
 
-use std::sync::atomic::{self, AtomicBool};
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{self};
 
-use fuzzy_nucleo::{StringMatch, StringMatchCandidate};
+use fuzzy_nucleo::StringMatch;
+use fuzzy_nucleo::StringMatchCandidate;
 use gpui::BackgroundExecutor;
 
 use super::RemoteEntry;
@@ -103,24 +105,15 @@ impl FilterData {
                 }
             }
         }
-        Self {
-            candidates,
-            meta,
-            server_count: servers.len(),
-        }
+        Self { candidates, meta, server_count: servers.len() }
     }
 }
 
-pub(super) fn build_filter_results(
-    matches: Vec<StringMatch>,
-    filter_data: &FilterData,
-) -> Vec<FilteredServer> {
+pub(super) fn build_filter_results(matches: Vec<StringMatch>, filter_data: &FilterData) -> Vec<FilteredServer> {
     group_matches_by_server(matches, filter_data)
         .into_iter()
         .enumerate()
-        .filter_map(|(server_index, group)| {
-            (!group.is_empty()).then(|| build_server_result(server_index, group))
-        })
+        .filter_map(|(server_index, group)| (!group.is_empty()).then(|| build_server_result(server_index, group)))
         .collect()
 }
 
@@ -141,10 +134,7 @@ fn group_matches_by_server(
     buckets
 }
 
-fn build_server_result(
-    server_index: usize,
-    group: Vec<(StringMatch, &CandidateMeta)>,
-) -> FilteredServer {
+fn build_server_result(server_index: usize, group: Vec<(StringMatch, &CandidateMeta)>) -> FilteredServer {
     debug_assert!(!group.is_empty(), "empty groups are filtered out upstream");
 
     let mut host_positions = Vec::new();
@@ -159,11 +149,7 @@ fn build_server_result(
         // the `Some` arm.
         match meta.project_index {
             None => {
-                host_positions = m
-                    .positions
-                    .into_iter()
-                    .filter(|&p| p < meta.display_host_byte_len)
-                    .collect();
+                host_positions = m.positions.into_iter().filter(|&p| p < meta.display_host_byte_len).collect();
             }
             Some(project_index) => {
                 // +1 accounts for the single-byte space separator in
@@ -172,19 +158,10 @@ fn build_server_result(
                 // displayed host and the separator) are dropped from both
                 // sides — they index into content that isn't shown anywhere.
                 let host_prefix_len = meta.match_host_byte_len + 1;
-                host_positions.extend(
-                    m.positions
-                        .iter()
-                        .copied()
-                        .filter(|&p| p < meta.display_host_byte_len),
-                );
+                host_positions.extend(m.positions.iter().copied().filter(|&p| p < meta.display_host_byte_len));
                 project_matches.push(FilteredProject {
                     project_index,
-                    path_positions: m
-                        .positions
-                        .into_iter()
-                        .filter_map(|p| p.checked_sub(host_prefix_len))
-                        .collect(),
+                    path_positions: m.positions.into_iter().filter_map(|p| p.checked_sub(host_prefix_len)).collect(),
                 });
             }
         }
@@ -193,12 +170,7 @@ fn build_server_result(
     host_positions.sort_unstable();
     host_positions.dedup();
 
-    FilteredServer {
-        server_index,
-        host_positions,
-        project_matches,
-        score,
-    }
+    FilteredServer { server_index, host_positions, project_matches, score }
 }
 
 pub(super) fn run_sync(data: &FilterData, query: &str) -> Vec<FilteredServer> {

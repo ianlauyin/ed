@@ -1,8 +1,21 @@
-use gpui::{
-    AnyElement, App, Bounds, Div, DivFrameState, Element, ElementId, GlobalElementId, Hitbox,
-    InteractiveElement as _, IntoElement, LayoutId, ParentElement, Pixels, StyleRefinement, Styled,
-    Window, div,
-};
+use gpui::AnyElement;
+use gpui::App;
+use gpui::Bounds;
+use gpui::Div;
+use gpui::DivFrameState;
+use gpui::Element;
+use gpui::ElementId;
+use gpui::GlobalElementId;
+use gpui::Hitbox;
+use gpui::InteractiveElement as _;
+use gpui::IntoElement;
+use gpui::LayoutId;
+use gpui::ParentElement;
+use gpui::Pixels;
+use gpui::StyleRefinement;
+use gpui::Styled;
+use gpui::Window;
+use gpui::div;
 
 /// An element that sets a particular rem size for its children.
 pub struct WithRemSize {
@@ -14,10 +27,7 @@ impl WithRemSize {
     /// Create a new [WithRemSize] element, which sets a
     /// particular rem size for its children.
     pub fn new(rem_size: impl Into<Pixels>) -> Self {
-        Self {
-            div: div(),
-            rem_size: rem_size.into(),
-        }
+        Self { div: div(), rem_size: rem_size.into() }
     }
 
     /// Block the mouse from interacting with this element or any of its children
@@ -60,9 +70,7 @@ impl Element for WithRemSize {
         window: &mut Window,
         cx: &mut App,
     ) -> (LayoutId, Self::RequestLayoutState) {
-        window.with_rem_size(Some(self.rem_size), |window| {
-            self.div.request_layout(id, window, cx)
-        })
+        window.with_rem_size(Some(self.rem_size), |window| self.div.request_layout(id, window, cx))
     }
 
     fn prepaint(
@@ -73,9 +81,7 @@ impl Element for WithRemSize {
         window: &mut Window,
         cx: &mut App,
     ) -> Self::PrepaintState {
-        window.with_rem_size(Some(self.rem_size), |window| {
-            self.div.prepaint(id, bounds, request_layout, window, cx)
-        })
+        window.with_rem_size(Some(self.rem_size), |window| self.div.prepaint(id, bounds, request_layout, window, cx))
     }
 
     fn paint(
@@ -88,8 +94,7 @@ impl Element for WithRemSize {
         cx: &mut App,
     ) {
         window.with_rem_size(Some(self.rem_size), |window| {
-            self.div
-                .paint(id, bounds, request_layout, prepaint, window, cx)
+            self.div.paint(id, bounds, request_layout, prepaint, window, cx)
         })
     }
 }

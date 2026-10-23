@@ -1,4 +1,6 @@
-use gpui::{Pixels, Window, px};
+use gpui::Pixels;
+use gpui::Window;
+use gpui::px;
 
 pub const MACOS_SDK_26_OR_LATER: bool = cfg!(macos_sdk_26_or_later);
 

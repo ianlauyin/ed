@@ -1,6 +1,7 @@
 use std::ops::Range;
 
-use gpui::{Hsla, TextRun};
+use gpui::Hsla;
+use gpui::TextRun;
 use smallvec::SmallVec;
 
 use super::ensure_minimum_contrast;
@@ -22,18 +23,8 @@ pub fn merge_highlight_backgrounds<T: Ord + Copy>(
     let mut boundaries: SmallVec<[Boundary<T>; 16]> = SmallVec::new();
     for (index, (range, color)) in ranges.into_iter().enumerate() {
         if range.start < range.end {
-            boundaries.push(Boundary {
-                pos: range.start,
-                is_start: true,
-                index,
-                color,
-            });
-            boundaries.push(Boundary {
-                pos: range.end,
-                is_start: false,
-                index,
-                color,
-            });
+            boundaries.push(Boundary { pos: range.start, is_start: true, index, color });
+            boundaries.push(Boundary { pos: range.end, is_start: false, index, color });
         }
     }
 
@@ -58,9 +49,7 @@ pub fn merge_highlight_backgrounds<T: Ord + Copy>(
                 color = Hsla::blend(color, c);
             }
             match processed_ranges.last_mut() {
-                Some((last_range, last_color))
-                    if *last_color == color && last_range.end == start_pos =>
-                {
+                Some((last_range, last_color)) if *last_color == color && last_range.end == start_pos => {
                     last_range.end = current_boundary_pos;
                 }
                 _ => processed_ranges.push((start_pos..current_boundary_pos, color)),
@@ -110,21 +99,14 @@ pub fn ensure_highlight_contrast(
                 break;
             }
             if range.start > cursor {
-                output_runs.push(TextRun {
-                    len: range.start - cursor,
-                    ..text_run.clone()
-                });
+                output_runs.push(TextRun { len: range.start - cursor, ..text_run.clone() });
                 cursor = range.start;
             }
             let slice_end = range.end.min(run_end);
             if slice_end > cursor {
                 output_runs.push(TextRun {
                     len: slice_end - cursor,
-                    color: ensure_minimum_contrast(
-                        text_run.color,
-                        *highlight_color,
-                        minimum_apca_contrast,
-                    ),
+                    color: ensure_minimum_contrast(text_run.color, *highlight_color, minimum_apca_contrast),
                     ..text_run.clone()
                 });
                 cursor = slice_end;
@@ -135,10 +117,7 @@ pub fn ensure_highlight_contrast(
             local_highlight_ix += 1;
         }
         if cursor < run_end {
-            output_runs.push(TextRun {
-                len: run_end - cursor,
-                ..text_run.clone()
-            });
+            output_runs.push(TextRun { len: run_end - cursor, ..text_run.clone() });
         }
         run_start = run_end;
         highlight_ix = local_highlight_ix;
@@ -148,19 +127,13 @@ pub fn ensure_highlight_contrast(
 
 #[cfg(test)]
 mod tests {
-    use gpui::{font, hsla};
+    use gpui::font;
+    use gpui::hsla;
 
     use super::*;
 
     fn run(len: usize, color: Hsla) -> TextRun {
-        TextRun {
-            len,
-            font: font("Helvetica"),
-            color,
-            background_color: None,
-            underline: None,
-            strikethrough: None,
-        }
+        TextRun { len, font: font("Helvetica"), color, background_color: None, underline: None, strikethrough: None }
     }
 
     #[test]
@@ -177,10 +150,7 @@ mod tests {
         let text = hsla(0., 0., 0.5, 1.);
         let bg = hsla(0., 0., 0.55, 1.);
         let runs = ensure_highlight_contrast(&[run(4, text), run(4, text)], &[(3..5, bg)], 45., 0);
-        assert_eq!(
-            runs.iter().map(|run| run.len).collect::<Vec<_>>(),
-            vec![3, 1, 1, 3]
-        );
+        assert_eq!(runs.iter().map(|run| run.len).collect::<Vec<_>>(), vec![3, 1, 1, 3]);
         assert_eq!(runs[0].color, text);
         assert_ne!(runs[1].color, text);
         assert_ne!(runs[2].color, text);

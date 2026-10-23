@@ -1,4 +1,5 @@
-use gpui::{Pixels, px};
+use gpui::Pixels;
+use gpui::px;
 
 pub struct SearchInputWidth;
 
@@ -11,10 +12,6 @@ impl SearchInputWidth {
 
     /// Calculates the actual width in pixels based on the container width.
     pub fn calc_width(container_width: Pixels) -> Pixels {
-        if container_width < Self::THRESHOLD_WIDTH {
-            container_width
-        } else {
-            container_width.min(Self::MAX_WIDTH)
-        }
+        if container_width < Self::THRESHOLD_WIDTH { container_width } else { container_width.min(Self::MAX_WIDTH) }
     }
 }

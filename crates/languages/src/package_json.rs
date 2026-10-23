@@ -1,11 +1,14 @@
-use chrono::{DateTime, Local};
-use collections::{BTreeSet, HashMap};
+use std::path::Path;
+use std::sync::Arc;
+use std::time::SystemTime;
+
+use collections::BTreeSet;
+use collections::HashMap;
 use serde_json_lenient::Value;
-use std::{path::Path, sync::Arc};
 
 #[derive(Clone, Debug)]
 pub struct PackageJson {
-    pub mtime: DateTime<Local>,
+    pub mtime: SystemTime,
     pub data: PackageJsonData,
 }
 
@@ -25,12 +28,7 @@ impl PackageJsonData {
     pub fn new(path: Arc<Path>, package_json: HashMap<String, Value>) -> Self {
         let mut scripts = BTreeSet::new();
         if let Some(Value::Object(package_json_scripts)) = package_json.get("scripts") {
-            scripts.extend(
-                package_json_scripts
-                    .keys()
-                    .cloned()
-                    .map(|name| (path.clone(), name)),
-            );
+            scripts.extend(package_json_scripts.keys().cloned().map(|name| (path.clone(), name)));
         }
 
         let mut jest_package_path = None;
@@ -97,14 +95,8 @@ impl PackageJsonData {
     pub fn merge(&mut self, other: Self) {
         self.jest_package_path = self.jest_package_path.take().or(other.jest_package_path);
         self.mocha_package_path = self.mocha_package_path.take().or(other.mocha_package_path);
-        self.vitest_package_path = self
-            .vitest_package_path
-            .take()
-            .or(other.vitest_package_path);
-        self.jasmine_package_path = self
-            .jasmine_package_path
-            .take()
-            .or(other.jasmine_package_path);
+        self.vitest_package_path = self.vitest_package_path.take().or(other.vitest_package_path);
+        self.jasmine_package_path = self.jasmine_package_path.take().or(other.jasmine_package_path);
         self.bun_package_path = self.bun_package_path.take().or(other.bun_package_path);
         self.node_package_path = self.node_package_path.take().or(other.node_package_path);
         self.scripts.extend(other.scripts);
@@ -112,31 +104,22 @@ impl PackageJsonData {
     }
 }
 
-fn package_manager_from_package_json(
-    package_json: &HashMap<String, Value>,
-) -> Option<&'static str> {
-    package_json
-        .get("packageManager")
-        .and_then(|value| value.as_str())
-        .and_then(package_manager_name)
-        .or_else(|| {
-            package_json
-                .get("devEngines")
-                .and_then(|value| value.as_object())
-                .and_then(|dev_engines| dev_engines.get("packageManager"))
-                .and_then(package_manager_from_dev_engine)
-        })
+fn package_manager_from_package_json(package_json: &HashMap<String, Value>) -> Option<&'static str> {
+    package_json.get("packageManager").and_then(|value| value.as_str()).and_then(package_manager_name).or_else(|| {
+        package_json
+            .get("devEngines")
+            .and_then(|value| value.as_object())
+            .and_then(|dev_engines| dev_engines.get("packageManager"))
+            .and_then(package_manager_from_dev_engine)
+    })
 }
 
 fn package_manager_from_dev_engine(value: &Value) -> Option<&'static str> {
     match value {
-        Value::Object(package_manager) => package_manager
-            .get("name")
-            .and_then(|name| name.as_str())
-            .and_then(package_manager_name),
-        Value::Array(package_managers) => package_managers
-            .iter()
-            .find_map(package_manager_from_dev_engine),
+        Value::Object(package_manager) => {
+            package_manager.get("name").and_then(|name| name.as_str()).and_then(package_manager_name)
+        }
+        Value::Array(package_managers) => package_managers.iter().find_map(package_manager_from_dev_engine),
         _ => None,
     }
 }

@@ -16,7 +16,6 @@ load-grammars = ["grammars/load-grammars"]
 [dependencies]
 anyhow.workspace = true
 async-trait.workspace = true
-chrono.workspace = true
 collections.workspace = true
 futures.workspace = true
 gpui.workspace = true

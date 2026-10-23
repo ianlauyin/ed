@@ -6,9 +6,6 @@ use std::path::PathBuf;
 use anyhow::Context as _;
 use anyhow::Result;
 use anyhow::bail;
-use chrono::DateTime;
-use chrono::NaiveDateTime;
-use chrono::Utc;
 use collections::HashMap;
 use collections::HashSet;
 use db::kvp::KeyValueStore;
@@ -46,6 +43,9 @@ use sqlez::bindable::Column;
 use sqlez::bindable::StaticColumnCount;
 use sqlez::statement::Statement;
 use sqlez::thread_safe_connection::ThreadSafeConnection;
+use time::OffsetDateTime;
+use time::PrimitiveDateTime;
+use time::macros::format_description;
 use ui::App;
 use ui::SharedString;
 use ui::px;
@@ -66,8 +66,10 @@ use crate::persistence::model::RemoteConnectionKind;
 // > which defaults to <..> 32766 for SQLite versions after 3.32.0.
 const MAX_QUERY_PLACEHOLDERS: usize = 32000;
 
-fn parse_timestamp(text: &str) -> DateTime<Utc> {
-    NaiveDateTime::parse_from_str(text, "%Y-%m-%d %H:%M:%S").map(|naive| naive.and_utc()).unwrap_or_else(|_| Utc::now())
+fn parse_timestamp(text: &str) -> OffsetDateTime {
+    PrimitiveDateTime::parse(text, format_description!("[year]-[month]-[day] [hour]:[minute]:[second]"))
+        .map(PrimitiveDateTime::assume_utc)
+        .unwrap_or_else(|_| OffsetDateTime::now_utc())
 }
 
 #[derive(Copy, Clone, Debug, PartialEq)]
@@ -867,8 +869,9 @@ impl WorkspaceDb {
     #[allow(clippy::type_complexity)]
     fn recent_workspaces(
         &self,
-    ) -> Result<Vec<(WorkspaceId, PathList, Option<PathList>, Option<RemoteConnectionId>, Option<String>, DateTime<Utc>)>>
-    {
+    ) -> Result<
+        Vec<(WorkspaceId, PathList, Option<PathList>, Option<RemoteConnectionId>, Option<String>, OffsetDateTime)>,
+    > {
         Ok(self
             .recent_workspaces_query()?
             .into_iter()
@@ -1097,7 +1100,7 @@ impl WorkspaceDb {
         last_session_id: Option<&str>,
     ) -> Result<()> {
         let remote_connections = self.remote_connections()?;
-        let now = Utc::now();
+        let now = OffsetDateTime::now_utc();
         let mut workspaces_to_delete = Vec::new();
         for (id, paths, _identity_paths_hint, remote_connection_id, session_id, timestamp) in
             self.recent_workspaces()?
@@ -1116,7 +1119,7 @@ impl WorkspaceDb {
             }
 
             if !Self::all_paths_exist_with_a_directory(paths.paths(), fs).await
-                && now - timestamp >= chrono::Duration::days(7)
+                && now - timestamp >= time::Duration::days(7)
             {
                 workspaces_to_delete.push(id);
             }
@@ -1481,7 +1484,7 @@ pub struct RecentWorkspace {
     pub location: SerializedWorkspaceLocation,
     pub paths: PathList,
     pub identity_paths: PathList,
-    pub timestamp: DateTime<Utc>,
+    pub timestamp: OffsetDateTime,
 }
 
 impl RecentWorkspace {

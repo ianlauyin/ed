@@ -1,14 +1,19 @@
-use std::{
-    fs,
-    io::{self, Write},
-    path::PathBuf,
-    sync::{
-        Mutex, OnceLock,
-        atomic::{AtomicBool, AtomicU64, Ordering},
-    },
-};
+use std::fs;
+use std::io::Write;
+use std::io::{self};
+use std::path::PathBuf;
+use std::sync::Mutex;
+use std::sync::OnceLock;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::AtomicU64;
+use std::sync::atomic::Ordering;
 
-use crate::{SCOPE_STRING_SEP_CHAR, ScopeRef};
+use time::OffsetDateTime;
+use time::UtcOffset;
+use time::macros::format_description;
+
+use crate::SCOPE_STRING_SEP_CHAR;
+use crate::ScopeRef;
 
 // ANSI color escape codes for log levels
 const ANSI_RESET: &str = "\x1b[0m";
@@ -52,21 +57,12 @@ pub fn init_output_stderr() {
     ENABLED_SINKS_STDERR.store(true, Ordering::Release);
 }
 
-pub fn init_output_file(
-    path: &'static PathBuf,
-    path_rotate: Option<&'static PathBuf>,
-) -> io::Result<()> {
-    let mut enabled_sinks_file = ENABLED_SINKS_FILE
-        .try_lock()
-        .expect("Log file lock is available during init");
+pub fn init_output_file(path: &'static PathBuf, path_rotate: Option<&'static PathBuf>) -> io::Result<()> {
+    let mut enabled_sinks_file = ENABLED_SINKS_FILE.try_lock().expect("Log file lock is available during init");
 
-    SINK_FILE_PATH
-        .set(path)
-        .expect("Init file output should only be called once");
+    SINK_FILE_PATH.set(path).expect("Init file output should only be called once");
     if let Some(path_rotate) = path_rotate {
-        SINK_FILE_PATH_ROTATE
-            .set(path_rotate)
-            .expect("Init file output should only be called once");
+        SINK_FILE_PATH_ROTATE.set(path_rotate).expect("Init file output should only be called once");
     }
 
     let file = open_or_create_log_file(path, path_rotate, SINK_FILE_SIZE_BYTES_MAX)?;
@@ -86,10 +82,7 @@ fn open_or_create_log_file(
         Ok(size_bytes) if size_bytes >= sink_file_size_bytes_max => {
             rotate_log_file(Some(path), path_rotate).map(|it| it.unwrap())
         }
-        _ => std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open(path),
+        _ => std::fs::OpenOptions::new().create(true).append(true).open(path),
     }
 }
 
@@ -123,15 +116,10 @@ pub fn submit(mut record: Record) {
         _ = writeln!(
             &mut stdout,
             "{} {ANSI_BOLD}{}{}{ANSI_RESET} {} {}",
-            chrono::Local::now().format("%Y-%m-%dT%H:%M:%S%:z"),
+            LocalTimestamp,
             LEVEL_ANSI_COLORS[record.level as usize],
             LEVEL_OUTPUT_STRINGS[record.level as usize],
-            SourceFmt {
-                scope: record.scope,
-                module_path: record.module_path,
-                line: record.line,
-                ansi: true,
-            },
+            SourceFmt { scope: record.scope, module_path: record.module_path, line: record.line, ansi: true },
             record.message
         );
     } else if ENABLED_SINKS_STDERR.load(Ordering::Acquire) {
@@ -139,15 +127,10 @@ pub fn submit(mut record: Record) {
         _ = writeln!(
             &mut stdout,
             "{} {ANSI_BOLD}{}{}{ANSI_RESET} {} {}",
-            chrono::Local::now().format("%Y-%m-%dT%H:%M:%S%:z"),
+            LocalTimestamp,
             LEVEL_ANSI_COLORS[record.level as usize],
             LEVEL_OUTPUT_STRINGS[record.level as usize],
-            SourceFmt {
-                scope: record.scope,
-                module_path: record.module_path,
-                line: record.line,
-                ansi: true,
-            },
+            SourceFmt { scope: record.scope, module_path: record.module_path, line: record.line, ansi: true },
             record.message
         );
     }
@@ -176,14 +159,9 @@ pub fn submit(mut record: Record) {
             _ = writeln!(
                 &mut writer,
                 "{} {} {} {}",
-                chrono::Local::now().format("%Y-%m-%dT%H:%M:%S%:z"),
+                LocalTimestamp,
                 LEVEL_OUTPUT_STRINGS[record.level as usize],
-                SourceFmt {
-                    scope: record.scope,
-                    module_path: record.module_path,
-                    line: record.line,
-                    ansi: false,
-                },
+                SourceFmt { scope: record.scope, module_path: record.module_path, line: record.line, ansi: false },
                 record.message
             );
             SINK_FILE_SIZE_BYTES.fetch_add(writer.written, Ordering::AcqRel) + writer.written
@@ -257,10 +235,7 @@ impl std::fmt::Display for SourceFmt<'_> {
     }
 }
 
-fn rotate_log_file<PathRef>(
-    path: Option<PathRef>,
-    path_rotate: Option<PathRef>,
-) -> std::io::Result<Option<fs::File>>
+fn rotate_log_file<PathRef>(path: Option<PathRef>, path_rotate: Option<PathRef>) -> std::io::Result<Option<fs::File>>
 where
     PathRef: AsRef<std::path::Path>,
 {
@@ -268,19 +243,27 @@ where
     let rotation_error = match (path, path_rotate) {
         (Some(_), None) => Some(anyhow::anyhow!("No rotation log file path configured")),
         (None, _) => Some(anyhow::anyhow!("No log file path configured")),
-        (Some(path), Some(path_rotate)) => fs::copy(path, path_rotate)
-            .err()
-            .map(|err| anyhow::anyhow!(err)),
+        (Some(path), Some(path_rotate)) => fs::copy(path, path_rotate).err().map(|err| anyhow::anyhow!(err)),
     };
     if let Some(err) = rotation_error {
         eprintln!("Log file rotation failed. Truncating log file anyways: {err}",);
     }
-    path.map(|path| {
-        fs::OpenOptions::new()
-            .create(true)
-            .write(true)
-            .truncate(true)
-            .open(path)
-    })
-    .transpose()
+    path.map(|path| fs::OpenOptions::new().create(true).write(true).truncate(true).open(path)).transpose()
+}
+
+/// Current local time formatted as `YYYY-MM-DDTHH:MM:SS+HH:MM`.
+struct LocalTimestamp;
+
+impl std::fmt::Display for LocalTimestamp {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        // Querying the local offset can fail once multiple threads are running, so resolve it once.
+        static LOCAL_OFFSET: OnceLock<UtcOffset> = OnceLock::new();
+        let offset = *LOCAL_OFFSET.get_or_init(|| UtcOffset::current_local_offset().unwrap_or(UtcOffset::UTC));
+        let now = OffsetDateTime::now_utc().to_offset(offset);
+        let format = format_description!(
+            "[year]-[month]-[day]T[hour]:[minute]:[second][offset_hour sign:mandatory]:[offset_minute]"
+        );
+        let formatted = now.format(format).map_err(|_| std::fmt::Error)?;
+        f.write_str(&formatted)
+    }
 }
