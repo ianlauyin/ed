@@ -1,8 +1,8 @@
 - no support for hard click touchpad (lookup), add or put right click menu
 - rethink cmd+J, terminal/central terminal behavior
-- add webkit tab to render html?
+- add webkit tab to render html? still need markdown html preview? or just use webkit to open html, then how to open remote html? 
 - think about keymap/shortcut key, only need simple ones (retire which_key), cmd+enter = expand window
 - remove settingContent entirely? just hard code into code
 - add workspace scoped UI settings, like title or border color, do i really need this? to distinguish project
 - add complete rust / clippy lint
-- review async crates, replace with modern tokio?
+- review async crates, replace smol with tokio? (as smol dev seems to be stopped)
