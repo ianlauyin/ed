@@ -391,7 +391,7 @@ time = { version = "0.3", features = [
     "local-offset",
 ] }
 toml = { version = "0.9", default-features = false, features = ["std", "serde", "parse"] }
-tree-sitter = { git = "https://github.com/tree-sitter/tree-sitter", rev = "43623ec9bf0eaaf7113285c46e8a09018f181b18" }
+tree-sitter = "0.27.1"
 tree-sitter-bash = "0.25.1"
 tree-sitter-css = "0.23"
 tree-sitter-go = "0.25"
@@ -400,8 +400,8 @@ tree-sitter-json = "0.24"
 tree-sitter-md = "0.5.4"
 tree-sitter-python = "0.25"
 tree-sitter-rust = "0.24.2"
-tree-sitter-typescript = { git = "https://github.com/zed-industries/tree-sitter-typescript", rev = "e2c53597d6a5d9cf7bbe8dccde576fe1e46c5899" } # https://github.com/tree-sitter/tree-sitter-typescript/pull/347
-tree-sitter-yaml = { git = "https://github.com/zed-industries/tree-sitter-yaml", rev = "baff0b51c64ef6a1fb1f8390f3ad6015b83ec13a" }
+tree-sitter-typescript = "0.23.2"
+tree-sitter-yaml = "0.7.2"
 two-face = { version = "0.5.2", default-features = false, features = ["syntect-onig"] }
 unicase = "2.6"
 unicode-script = "0.5.7"
@@ -416,10 +416,6 @@ wax = { version = "0.7", default-features = false }
 which = "8"
 
 [patch.crates-io]
-# Unify `tree_sitter_language::LanguageFn` between crates.io grammar crates and
-# the git tree-sitter above; two instances of the crate would make grammar
-# constants type-incompatible with `tree_sitter::Language`.
-tree-sitter-language = { git = "https://github.com/tree-sitter/tree-sitter", rev = "43623ec9bf0eaaf7113285c46e8a09018f181b18" }
 async-process = { git = "https://github.com/zed-industries/async-process.git", rev = "0b6d6713570af61806e1e5cb40e0f757cb93fd9d" }
 async-task = { git = "https://github.com/zed-industries/async-task.git", rev = "015845a19fc31752c02367567d3b8900a406f9da" }
 notify = { git = "https://github.com/zed-industries/notify", rev = "d842f16b2716bd60f09caf3ae3a894237ab38f54" }
