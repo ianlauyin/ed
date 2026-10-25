@@ -1633,6 +1633,28 @@ impl Element for MarkdownElement {
         context.add("Markdown");
         window.set_key_context(context);
 
+        // Painting a child leaves its dispatch node active, so the actions go on
+        // this element's node before the blocks paint.
+        let markdown = self.renderer.markdown.clone();
+        window.on_action(std::any::TypeId::of::<crate::Copy>(), {
+            let entity = markdown.clone();
+            let text = self.list_state.is_none().then(|| layout.text.clone());
+            move |_, phase, window, cx| {
+                if phase == DispatchPhase::Bubble {
+                    let text = text.as_ref().map(|text| text.borrow().clone());
+                    entity.update(cx, |this, cx| this.copy(text.as_ref(), window, cx))
+                }
+            }
+        });
+        window.on_action(std::any::TypeId::of::<crate::CopyAsMarkdown>(), {
+            let entity = markdown.clone();
+            move |_, phase, window, cx| {
+                if phase == DispatchPhase::Bubble {
+                    entity.update(cx, move |this, cx| this.copy_as_markdown(window, cx))
+                }
+            }
+        });
+
         let was_hovering_clickable = Rc::new(Cell::new(false));
         self.paint_mouse_listeners(hitbox, &layout.text, &was_hovering_clickable, window, cx);
         if let Some(painted) = &layout.painted {
@@ -1651,7 +1673,6 @@ impl Element for MarkdownElement {
         }
         let rendered_text = layout.text.borrow().clone();
 
-        let markdown = self.renderer.markdown.clone();
         let markdown_focus_handle = markdown.read(cx).focus_handle.clone();
         let input_focus_handle = if markdown_focus_handle.is_focused(window) {
             Some(markdown_focus_handle)
@@ -1659,30 +1680,8 @@ impl Element for MarkdownElement {
             self.input_focus_handle.clone().filter(|focus_handle| focus_handle.is_focused(window))
         };
         if let Some(input_focus_handle) = input_focus_handle {
-            window.handle_input(
-                &input_focus_handle,
-                MarkdownInputHandler::new(markdown.clone(), rendered_text.clone()),
-                cx,
-            );
+            window.handle_input(&input_focus_handle, MarkdownInputHandler::new(markdown, rendered_text), cx);
         }
-
-        window.on_action(std::any::TypeId::of::<crate::Copy>(), {
-            let entity = markdown.clone();
-            let text = self.list_state.is_none().then_some(rendered_text);
-            move |_, phase, window, cx| {
-                if phase == DispatchPhase::Bubble {
-                    entity.update(cx, |this, cx| this.copy(text.as_ref(), window, cx))
-                }
-            }
-        });
-        window.on_action(std::any::TypeId::of::<crate::CopyAsMarkdown>(), {
-            let entity = markdown;
-            move |_, phase, window, cx| {
-                if phase == DispatchPhase::Bubble {
-                    entity.update(cx, move |this, cx| this.copy_as_markdown(window, cx))
-                }
-            }
-        });
     }
 }
 
