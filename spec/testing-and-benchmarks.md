@@ -1,10 +1,5 @@
 # Testing and benchmarks
 
-## Decision
-
-The fork carries no automated tests or benchmarks. Correctness is checked by
-building (`cargo check` / `cargo clippy`) and running the app.
-
 ## Behaviour
 
 - No `test-support`, `bench-support`, `bench`, or `visual-tests` Cargo
