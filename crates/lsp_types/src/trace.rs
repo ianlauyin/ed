@@ -1,4 +1,5 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 #[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]
 pub struct SetTraceParams {
@@ -40,29 +41,15 @@ mod tests {
 
     #[test]
     fn test_set_trace_params() {
-        test_serialization(
-            &SetTraceParams {
-                value: TraceValue::Off,
-            },
-            r#"{"value":"off"}"#,
-        );
+        test_serialization(&SetTraceParams { value: TraceValue::Off }, r#"{"value":"off"}"#);
     }
 
     #[test]
     fn test_log_trace_params() {
-        test_serialization(
-            &LogTraceParams {
-                message: "message".into(),
-                verbose: None,
-            },
-            r#"{"message":"message"}"#,
-        );
+        test_serialization(&LogTraceParams { message: "message".into(), verbose: None }, r#"{"message":"message"}"#);
 
         test_serialization(
-            &LogTraceParams {
-                message: "message".into(),
-                verbose: Some("verbose".into()),
-            },
+            &LogTraceParams { message: "message".into(), verbose: Some("verbose".into()) },
             r#"{"message":"message","verbose":"verbose"}"#,
         );
     }

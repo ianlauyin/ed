@@ -511,9 +511,7 @@ explicit_into_iter_loop = "warn"
 explicit_iter_loop = "warn"
 filter_map_next = "warn"
 flat_map_option = "warn"
-float_cmp = "warn"
 format_collect = "warn"
-format_push_string = "warn"
 
 # old lint rules
 

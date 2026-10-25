@@ -1,9 +1,15 @@
 use std::borrow::Cow;
-use std::fmt::{Display, Formatter, Result};
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::Result;
 
 use collections::HashMap;
-use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
-use serde::{Deserialize, Serialize};
+use schemars::JsonSchema;
+use schemars::Schema;
+use schemars::SchemaGenerator;
+use schemars::json_schema;
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::Value;
 use settings_macros::MergeFrom;
 
@@ -38,17 +44,10 @@ impl CommandAliasTarget {
             deprecation_messages,
         );
 
-        let mut alternatives = action_schema
-            .to_value()
-            .get("anyOf")
-            .and_then(Value::as_array)
-            .cloned()
-            .unwrap_or_default();
+        let mut alternatives =
+            action_schema.to_value().get("anyOf").and_then(Value::as_array).cloned().unwrap_or_default();
 
-        let mut exclude = action_names
-            .iter()
-            .map(|name| serde_json::json!({ "const": *name }))
-            .collect::<Vec<Value>>();
+        let mut exclude = action_names.iter().map(|name| serde_json::json!({ "const": *name })).collect::<Vec<Value>>();
 
         // Since we accept any arbitrary string, besides the list of registered
         // action names, we'll add any string that uses a `::` pattern to the

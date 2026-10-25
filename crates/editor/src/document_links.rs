@@ -1,15 +1,22 @@
 use collections::HashMap;
 use futures::future::join_all;
-use gpui::{App, Entity, Task};
+use gpui::App;
+use gpui::Entity;
+use gpui::Task;
 use itertools::Itertools;
-use language::{Buffer, BufferSnapshot};
+use language::Buffer;
+use language::BufferSnapshot;
 use lsp::LanguageServerId;
-use project::lsp_store::{BufferDocumentLinks, LspDocumentLink, ResolvedDocumentLink};
+use project::lsp_store::BufferDocumentLinks;
+use project::lsp_store::LspDocumentLink;
+use project::lsp_store::ResolvedDocumentLink;
 use settings::Settings;
 use text::BufferId;
 use ui::Context;
 
-use crate::{Editor, LSP_REQUEST_DEBOUNCE_TIMEOUT, editor_settings::EditorSettings};
+use crate::Editor;
+use crate::LSP_REQUEST_DEBOUNCE_TIMEOUT;
+use crate::editor_settings::EditorSettings;
 
 pub(super) struct LspDocumentLinks {
     pub(super) enabled: bool,
@@ -28,11 +35,7 @@ impl LspDocumentLinks {
 }
 
 impl Editor {
-    pub(super) fn refresh_document_links(
-        &mut self,
-        for_buffer: Option<BufferId>,
-        cx: &mut Context<Self>,
-    ) {
+    pub(super) fn refresh_document_links(&mut self, for_buffer: Option<BufferId>, cx: &mut Context<Self>) {
         if !self.lsp_data_enabled() || !self.lsp_document_links.enabled {
             return;
         }
@@ -47,8 +50,7 @@ impl Editor {
             .chain(for_buffer.and_then(|id| self.buffer.read(cx).buffer(id)))
             .filter(|buffer| {
                 let id = buffer.read(cx).remote_id();
-                for_buffer.is_none_or(|target| target == id)
-                    && self.registered_buffers.contains_key(&id)
+                for_buffer.is_none_or(|target| target == id) && self.registered_buffers.contains_key(&id)
             })
             .unique_by(|buffer| buffer.read(cx).remote_id())
             .collect::<Vec<_>>();
@@ -58,9 +60,7 @@ impl Editor {
         }
 
         self.lsp_document_links.refresh_task = cx.spawn(async move |editor, cx| {
-            cx.background_executor()
-                .timer(LSP_REQUEST_DEBOUNCE_TIMEOUT)
-                .await;
+            cx.background_executor().timer(LSP_REQUEST_DEBOUNCE_TIMEOUT).await;
 
             let Some(tasks_for_buffers) = project
                 .update(cx, |project, cx| {
@@ -90,10 +90,7 @@ impl Editor {
                         if links.is_empty() {
                             editor.lsp_document_links.per_buffer.remove(&buffer_id);
                         } else {
-                            editor
-                                .lsp_document_links
-                                .per_buffer
-                                .insert(buffer_id, links);
+                            editor.lsp_document_links.per_buffer.insert(buffer_id, links);
                         }
                     }
                 })
@@ -124,9 +121,7 @@ impl Editor {
             .get(&buffer_id)?
             .iter()
             .flat_map(|(server_id, per_server)| {
-                per_server
-                    .iter()
-                    .map(move |(link_id, link)| (*server_id, *link_id, link))
+                per_server.iter().map(move |(link_id, link)| (*server_id, *link_id, link))
             })
             .filter(|(_, _, link)| link_contains(link, &position, &snapshot))
             .map(|(server_id, link_id, link)| (server_id, link_id, link.clone()))
@@ -159,10 +154,7 @@ impl Editor {
 
         if pending.is_empty() {
             return Some(Task::ready(
-                resolved_links
-                    .into_iter()
-                    .map(|(server_id, _, link)| (server_id, link))
-                    .collect(),
+                resolved_links.into_iter().map(|(server_id, _, link)| (server_id, link)).collect(),
             ));
         }
 
@@ -175,14 +167,9 @@ impl Editor {
             resolved_links.extend(pending_results.into_iter().flatten());
             editor
                 .update(cx, |editor, cx| {
-                    if let Some(by_server) =
-                        editor.lsp_document_links.per_buffer.get_mut(&buffer_id)
-                    {
+                    if let Some(by_server) = editor.lsp_document_links.per_buffer.get_mut(&buffer_id) {
                         for (server_id, link_id, resolved) in &resolved_links {
-                            if let Some(slot) = by_server
-                                .get_mut(server_id)
-                                .and_then(|links| links.get_mut(link_id))
-                            {
+                            if let Some(slot) = by_server.get_mut(server_id).and_then(|links| links.get_mut(link_id)) {
                                 *slot = resolved.clone();
                             }
                         }
@@ -191,19 +178,11 @@ impl Editor {
                 })
                 .ok();
 
-            resolved_links
-                .into_iter()
-                .map(|(server_id, _, link)| (server_id, link))
-                .collect()
+            resolved_links.into_iter().map(|(server_id, _, link)| (server_id, link)).collect()
         }))
     }
 }
 
-fn link_contains(
-    link: &LspDocumentLink,
-    position: &text::Anchor,
-    snapshot: &BufferSnapshot,
-) -> bool {
-    link.range.start.cmp(position, snapshot).is_le()
-        && link.range.end.cmp(position, snapshot).is_ge()
+fn link_contains(link: &LspDocumentLink, position: &text::Anchor, snapshot: &BufferSnapshot) -> bool {
+    link.range.start.cmp(position, snapshot).is_le() && link.range.end.cmp(position, snapshot).is_ge()
 }

@@ -1,10 +1,9 @@
 #![allow(missing_docs)]
 
-use std::{
-    collections::{BTreeMap, btree_map::Entry},
-    ops::Range,
-    sync::Arc,
-};
+use std::collections::BTreeMap;
+use std::collections::btree_map::Entry;
+use std::ops::Range;
+use std::sync::Arc;
 
 use gpui::HighlightStyle;
 
@@ -18,18 +17,11 @@ impl SyntaxTheme {
     pub fn new(highlights: impl IntoIterator<Item = (String, HighlightStyle)>) -> Self {
         let (capture_names, highlights) = highlights.into_iter().unzip();
 
-        Self {
-            capture_name_map: Self::create_capture_name_map(capture_names),
-            highlights,
-        }
+        Self { capture_name_map: Self::create_capture_name_map(capture_names), highlights }
     }
 
     fn create_capture_name_map(highlights: Vec<String>) -> BTreeMap<String, usize> {
-        highlights
-            .into_iter()
-            .enumerate()
-            .map(|(i, key)| (key, i))
-            .collect()
+        highlights.into_iter().enumerate().map(|(i, key)| (key, i)).collect()
     }
 
     pub fn get(&self, highlight_index: impl Into<usize>) -> Option<&HighlightStyle> {
@@ -40,31 +32,25 @@ impl SyntaxTheme {
         &'a self,
         runs: impl IntoIterator<Item = &'a (Range<usize>, Id)> + 'a,
     ) -> impl Iterator<Item = (Range<usize>, HighlightStyle)> + 'a {
-        runs.into_iter()
-            .filter_map(|(range, highlight_id)| Some((range.clone(), *self.get(*highlight_id)?)))
+        runs.into_iter().filter_map(|(range, highlight_id)| Some((range.clone(), *self.get(*highlight_id)?)))
     }
 
     pub fn style_for_name(&self, name: &str) -> Option<HighlightStyle> {
-        self.capture_name_map
-            .get(name)
-            .map(|highlight_idx| self.highlights[*highlight_idx])
+        self.capture_name_map.get(name).map(|highlight_idx| self.highlights[*highlight_idx])
     }
 
     pub fn get_capture_name(&self, idx: impl Into<usize>) -> Option<&str> {
         let idx = idx.into();
-        self.capture_name_map
-            .iter()
-            .find(|(_, value)| **value == idx)
-            .map(|(key, _)| key.as_ref())
+        self.capture_name_map.iter().find(|(_, value)| **value == idx).map(|(key, _)| key.as_ref())
     }
 
     pub fn highlight_id(&self, capture_name: &str) -> Option<u32> {
         self.capture_name_map
             .range::<str, _>((
-                capture_name.split(".").next().map_or(
-                    std::ops::Bound::Included(capture_name),
-                    std::ops::Bound::Included,
-                ),
+                capture_name
+                    .split(".")
+                    .next()
+                    .map_or(std::ops::Bound::Included(capture_name), std::ops::Bound::Included),
                 std::ops::Bound::Included(capture_name),
             ))
             .rfind(|(prefix, _)| {
@@ -88,19 +74,13 @@ impl SyntaxTheme {
                 Entry::Occupied(entry) => {
                     if let Some(existing_highlight) = base.highlights.get_mut(*entry.get()) {
                         existing_highlight.color = highlight.color.or(existing_highlight.color);
-                        existing_highlight.font_weight =
-                            highlight.font_weight.or(existing_highlight.font_weight);
-                        existing_highlight.font_style =
-                            highlight.font_style.or(existing_highlight.font_style);
-                        existing_highlight.background_color = highlight
-                            .background_color
-                            .or(existing_highlight.background_color);
-                        existing_highlight.underline =
-                            highlight.underline.or(existing_highlight.underline);
-                        existing_highlight.strikethrough =
-                            highlight.strikethrough.or(existing_highlight.strikethrough);
-                        existing_highlight.fade_out =
-                            highlight.fade_out.or(existing_highlight.fade_out);
+                        existing_highlight.font_weight = highlight.font_weight.or(existing_highlight.font_weight);
+                        existing_highlight.font_style = highlight.font_style.or(existing_highlight.font_style);
+                        existing_highlight.background_color =
+                            highlight.background_color.or(existing_highlight.background_color);
+                        existing_highlight.underline = highlight.underline.or(existing_highlight.underline);
+                        existing_highlight.strikethrough = highlight.strikethrough.or(existing_highlight.strikethrough);
+                        existing_highlight.fade_out = highlight.fade_out.or(existing_highlight.fade_out);
                     }
                 }
                 Entry::Vacant(vacant) => {
@@ -119,7 +99,12 @@ mod bundled_themes {
     use std::collections::BTreeMap;
     use std::sync::Arc;
 
-    use gpui::{FontStyle, FontWeight, HighlightStyle, Hsla, Rgba, rgb};
+    use gpui::FontStyle;
+    use gpui::FontWeight;
+    use gpui::HighlightStyle;
+    use gpui::Hsla;
+    use gpui::Rgba;
+    use gpui::rgb;
     use serde::Deserialize;
 
     use super::SyntaxTheme;
@@ -189,11 +174,8 @@ mod bundled_themes {
             .find(|entry| entry.name == theme_name)
             .unwrap_or_else(|| panic!("theme {theme_name:?} not found in theme JSON"));
 
-        let highlights = theme_entry
-            .style
-            .syntax
-            .iter()
-            .map(|(name, entry)| (name.clone(), entry.to_highlight_style()));
+        let highlights =
+            theme_entry.style.syntax.iter().map(|(name, entry)| (name.clone(), entry.to_highlight_style()));
 
         Arc::new(SyntaxTheme::new(highlights))
     }
@@ -201,10 +183,7 @@ mod bundled_themes {
     impl SyntaxTheme {
         /// Load the "One Dark" syntax theme from the bundled theme JSON.
         pub fn one_dark() -> Arc<Self> {
-            load_theme(
-                include_str!("../../../assets/themes/one/one.json"),
-                "One Dark",
-            )
+            load_theme(include_str!("../../../assets/themes/one/one.json"), "One Dark")
         }
     }
 }

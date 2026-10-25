@@ -7,7 +7,8 @@ mod register_action;
 mod styles;
 
 use proc_macro::TokenStream;
-use syn::{DeriveInput, Ident};
+use syn::DeriveInput;
+use syn::Ident;
 
 /// `Action` derive macro - see the trait documentation for details.
 #[proc_macro_derive(Action, attributes(action))]

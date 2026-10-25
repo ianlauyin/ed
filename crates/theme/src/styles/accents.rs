@@ -3,9 +3,19 @@ use std::sync::Arc;
 use gpui::Hsla;
 use serde::Deserialize;
 
-use crate::{
-    amber, blue, cyan, gold, grass, indigo, iris, jade, lime, orange, pink, purple, tomato,
-};
+use crate::amber;
+use crate::blue;
+use crate::cyan;
+use crate::gold;
+use crate::grass;
+use crate::indigo;
+use crate::iris;
+use crate::jade;
+use crate::lime;
+use crate::orange;
+use crate::pink;
+use crate::purple;
+use crate::tomato;
 
 /// A collection of colors that are used to color indent aware lines in the editor.
 #[derive(Clone, Debug, Deserialize, PartialEq)]

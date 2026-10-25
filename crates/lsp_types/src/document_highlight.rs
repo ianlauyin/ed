@@ -1,9 +1,11 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
-use crate::{
-    DynamicRegistrationClientCapabilities, PartialResultParams, Range, TextDocumentPositionParams,
-    WorkDoneProgressParams,
-};
+use crate::DynamicRegistrationClientCapabilities;
+use crate::PartialResultParams;
+use crate::Range;
+use crate::TextDocumentPositionParams;
+use crate::WorkDoneProgressParams;
 
 pub type DocumentHighlightClientCapabilities = DynamicRegistrationClientCapabilities;
 

@@ -1,5 +1,6 @@
 use gpui_shared_string::SharedString;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum LanguageServerStatusUpdate {

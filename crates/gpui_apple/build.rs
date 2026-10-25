@@ -5,10 +5,9 @@ fn main() {
 }
 
 mod apple_build {
-    use std::{
-        env,
-        path::{Path, PathBuf},
-    };
+    use std::env;
+    use std::path::Path;
+    use std::path::PathBuf;
 
     use cbindgen::Config;
 
@@ -83,11 +82,7 @@ mod apple_build {
             builder = builder.with_src(src_path);
         }
 
-        builder
-            .with_config(config)
-            .generate()
-            .expect("Unable to generate bindings")
-            .write_to_file(&output_path);
+        builder.with_config(config).generate().expect("Unable to generate bindings").write_to_file(&output_path);
 
         output_path
     }
@@ -107,8 +102,7 @@ mod apple_build {
             let header_contents = std::fs::read_to_string(header)?;
             let shader_contents = std::fs::read_to_string(shader_path)?;
             let stitched_contents = format!("{header_contents}\n{shader_contents}");
-            let out_path =
-                PathBuf::from(env::var("OUT_DIR").unwrap()).join("stitched_shaders.metal");
+            let out_path = PathBuf::from(env::var("OUT_DIR").unwrap()).join("stitched_shaders.metal");
             std::fs::write(&out_path, stitched_contents)?;
             Ok(out_path)
         }
@@ -120,15 +114,14 @@ mod apple_build {
 
     #[cfg(not(feature = "runtime_shaders"))]
     fn compile_metal_shaders(header_path: &Path) {
-        use std::process::{self, Command};
+        use std::process::Command;
+        use std::process::{self};
 
         // Build scripts run on the host, so the target platform must come from
         // Cargo's environment rather than `cfg!`. The target environment, not the
         // target name, identifies simulators: `x86_64-apple-ios` has no `-sim` suffix.
-        let target_os = env::var("CARGO_CFG_TARGET_OS")
-            .expect("Cargo sets CARGO_CFG_TARGET_OS for build scripts");
-        let target_env = env::var("CARGO_CFG_TARGET_ENV")
-            .expect("Cargo sets CARGO_CFG_TARGET_ENV for build scripts");
+        let target_os = env::var("CARGO_CFG_TARGET_OS").expect("Cargo sets CARGO_CFG_TARGET_OS for build scripts");
+        let target_env = env::var("CARGO_CFG_TARGET_ENV").expect("Cargo sets CARGO_CFG_TARGET_ENV for build scripts");
         let (sdk, minimum_version_argument) = match (target_os.as_str(), target_env.as_str()) {
             ("macos", _) => ("macosx", "-mmacosx-version-min=10.15.7"),
             ("ios", "sim") => ("iphonesimulator", "-mios-simulator-version-min=15.0"),
@@ -143,8 +136,7 @@ mod apple_build {
 
         let shader_path = "./src/shaders.metal";
         let air_output_path = PathBuf::from(env::var("OUT_DIR").unwrap()).join("shaders.air");
-        let metallib_output_path =
-            PathBuf::from(env::var("OUT_DIR").unwrap()).join("shaders.metallib");
+        let metallib_output_path = PathBuf::from(env::var("OUT_DIR").unwrap()).join("shaders.metallib");
         println!("cargo:rerun-if-changed={}", shader_path);
 
         // The metal compiler records the resolved absolute path of its input
@@ -155,15 +147,7 @@ mod apple_build {
         std::fs::copy(shader_path, &staged_shader_path).unwrap();
 
         let output = Command::new("xcrun")
-            .args([
-                "-sdk",
-                sdk,
-                "metal",
-                "-gline-tables-only",
-                minimum_version_argument,
-                "-MO",
-                "-c",
-            ])
+            .args(["-sdk", sdk, "metal", "-gline-tables-only", minimum_version_argument, "-MO", "-c"])
             .arg(&staged_shader_path)
             .args(["-include", header_path.to_str().unwrap(), "-o"])
             .arg(&air_output_path)
@@ -171,10 +155,7 @@ mod apple_build {
             .unwrap();
 
         if !output.status.success() {
-            println!(
-                "cargo::error=metal shader compilation failed:\n{}",
-                String::from_utf8_lossy(&output.stderr)
-            );
+            println!("cargo::error=metal shader compilation failed:\n{}", String::from_utf8_lossy(&output.stderr));
             process::exit(1);
         }
 
@@ -187,10 +168,7 @@ mod apple_build {
             .unwrap();
 
         if !output.status.success() {
-            println!(
-                "cargo::error=metallib compilation failed:\n{}",
-                String::from_utf8_lossy(&output.stderr)
-            );
+            println!("cargo::error=metallib compilation failed:\n{}", String::from_utf8_lossy(&output.stderr));
             process::exit(1);
         }
 

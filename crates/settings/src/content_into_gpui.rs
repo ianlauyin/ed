@@ -1,12 +1,21 @@
-use gpui::{
-    FontFeatures, FontStyle, FontWeight, Modifiers, Pixels, SharedString,
-    WindowBackgroundAppearance, px,
-};
-use settings_content::{
-    FontFamilyName, FontFeaturesContent, FontSize, FontStyleContent, FontWeightContent,
-    ModifiersContent, PixelSetting, WindowBackgroundContent,
-};
 use std::sync::Arc;
+
+use gpui::FontFeatures;
+use gpui::FontStyle;
+use gpui::FontWeight;
+use gpui::Modifiers;
+use gpui::Pixels;
+use gpui::SharedString;
+use gpui::WindowBackgroundAppearance;
+use gpui::px;
+use settings_content::FontFamilyName;
+use settings_content::FontFeaturesContent;
+use settings_content::FontSize;
+use settings_content::FontStyleContent;
+use settings_content::FontWeightContent;
+use settings_content::ModifiersContent;
+use settings_content::PixelSetting;
+use settings_content::WindowBackgroundContent;
 
 /// A trait for converting settings content types into their GPUI equivalents.
 pub trait IntoGpui {

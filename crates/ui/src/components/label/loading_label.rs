@@ -1,6 +1,10 @@
-use crate::prelude::*;
-use gpui::{Animation, AnimationExt, FontWeight};
 use std::time::Duration;
+
+use gpui::Animation;
+use gpui::AnimationExt;
+use gpui::FontWeight;
+
+use crate::prelude::*;
 
 #[derive(IntoElement)]
 pub struct LoadingLabel {
@@ -11,10 +15,7 @@ pub struct LoadingLabel {
 impl LoadingLabel {
     pub fn new(text: impl Into<SharedString>) -> Self {
         let text = text.into();
-        LoadingLabel {
-            base: Label::new(text.clone()),
-            text,
-        }
+        LoadingLabel { base: Label::new(text.clone()), text }
     }
 }
 
@@ -86,15 +87,11 @@ impl RenderOnce for LoadingLabel {
 
         self.base.color(Color::Muted).with_animations(
             "loading_label",
-            vec![
-                Animation::new(Duration::from_secs(1)),
-                Animation::new(Duration::from_secs(1)).repeat(),
-            ],
+            vec![Animation::new(Duration::from_secs(1)), Animation::new(Duration::from_secs(1)).repeat()],
             move |mut label, animation_ix, delta| {
                 match animation_ix {
                     0 => {
-                        let byte_end =
-                            text.floor_char_boundary((delta * text.len() as f32).ceil() as usize);
+                        let byte_end = text.floor_char_boundary((delta * text.len() as f32).ceil() as usize);
                         let visible_text = SharedString::new(&text[0..byte_end]);
                         label.set_text(visible_text);
                     }

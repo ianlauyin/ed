@@ -1,8 +1,13 @@
 use gpui::Pixels;
-use settings::{
-    FolderIndicator, GitPanelClickBehavior, GitPanelCommitEditor, GitPanelGroupBy, GitPanelSortBy,
-    IntoGpui, RegisterSetting, Settings, StatusStyle,
-};
+use settings::FolderIndicator;
+use settings::GitPanelClickBehavior;
+use settings::GitPanelCommitEditor;
+use settings::GitPanelGroupBy;
+use settings::GitPanelSortBy;
+use settings::IntoGpui;
+use settings::RegisterSetting;
+use settings::Settings;
+use settings::StatusStyle;
 use workspace::dock::DockPosition;
 
 #[derive(Debug, Clone, PartialEq, RegisterSetting)]

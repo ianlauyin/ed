@@ -1,5 +1,7 @@
 use gpui::Pixels;
-use settings::{IntoGpui, RegisterSetting, Settings};
+use settings::IntoGpui;
+use settings::RegisterSetting;
+use settings::Settings;
 
 /// The settings for the markdown preview.
 #[derive(Clone, Copy, Debug, Default, RegisterSetting)]
@@ -14,14 +16,8 @@ pub struct MarkdownPreviewSettings {
 impl Settings for MarkdownPreviewSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
         let content = content.markdown_preview.clone().unwrap_or_default();
-        let max_width = if content.limit_content_width.unwrap_or(true) {
-            content.max_width.map(IntoGpui::into_gpui)
-        } else {
-            None
-        };
-        Self {
-            open_markdown_files_in_preview: content.open_markdown_files_in_preview.unwrap_or(false),
-            max_width,
-        }
+        let max_width =
+            if content.limit_content_width.unwrap_or(true) { content.max_width.map(IntoGpui::into_gpui) } else { None };
+        Self { open_markdown_files_in_preview: content.open_markdown_files_in_preview.unwrap_or(false), max_width }
     }
 }

@@ -1,9 +1,11 @@
 //! This module contains all actions supported by [`Editor`].
-use super::*;
-use gpui::{Action, actions};
+use gpui::Action;
+use gpui::actions;
 use project::project_settings::GoToDiagnosticSeverityFilter;
 use schemars::JsonSchema;
 use util::serde::default_true;
+
+use super::*;
 
 /// Selects the next occurrence of the current selection.
 #[derive(PartialEq, Clone, Deserialize, Default, JsonSchema, Action)]
@@ -158,11 +160,7 @@ pub struct ToggleComments {
 // defaults to true.
 impl Default for ToggleComments {
     fn default() -> Self {
-        Self {
-            advance_downwards: false,
-            ignore_indent: false,
-            comment_empty_lines: true,
-        }
+        Self { advance_downwards: false, ignore_indent: false, comment_empty_lines: true }
     }
 }
 
@@ -944,9 +942,6 @@ pub struct FindAllReferences {
 
 impl Default for FindAllReferences {
     fn default() -> Self {
-        Self {
-            always_open_multibuffer: true,
-            open_results_in: None,
-        }
+        Self { always_open_multibuffer: true, open_results_in: None }
     }
 }

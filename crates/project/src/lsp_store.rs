@@ -10198,7 +10198,7 @@ impl LspStore {
     fn buffer_ids_to_buffers(&self, buffer_ids: impl Iterator<Item = u64>, cx: &Context<Self>) -> Vec<Entity<Buffer>> {
         buffer_ids
             .into_iter()
-            .flat_map(|buffer_id| self.buffer_store.read(cx).get(BufferId::new(buffer_id).log_err()?))
+            .filter_map(|buffer_id| self.buffer_store.read(cx).get(BufferId::new(buffer_id).log_err()?))
             .collect::<Vec<_>>()
     }
 
@@ -10785,7 +10785,7 @@ impl LspStore {
         let mut language_server_names_to_stop = BTreeSet::default();
         let mut language_servers_to_stop = also_stop_servers
             .into_iter()
-            .flat_map(|selector| match selector {
+            .filter_map(|selector| match selector {
                 LanguageServerSelector::Id(id) => Some(id),
                 LanguageServerSelector::Name(name) => {
                     language_server_names_to_stop.insert(name);

@@ -1,8 +1,12 @@
-use crate::{
-    PartialResultParams, StaticTextDocumentColorProviderOptions, TextDocumentIdentifier,
-    WorkDoneProgressParams,
-};
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
+
+use crate::PartialResultParams;
+use crate::StaticTextDocumentColorProviderOptions;
+use crate::TextDocumentIdentifier;
+use crate::WorkDoneProgressParams;
 
 #[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

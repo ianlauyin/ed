@@ -1,9 +1,10 @@
-use crate::component_prelude::*;
-use crate::prelude::*;
-use gpui::{AnyElement, StyleRefinement};
+use gpui::AnyElement;
+use gpui::StyleRefinement;
 use smallvec::SmallVec;
 
 use super::Avatar;
+use crate::component_prelude::*;
+use crate::prelude::*;
 
 /// An element that displays a collection of (usually) faces stacked
 /// horizontally, with the left-most face on top, visually descending
@@ -65,18 +66,13 @@ impl Facepile {
 impl RenderOnce for Facepile {
     fn render(self, _window: &mut Window, _cx: &mut App) -> impl IntoElement {
         // Lay the faces out in reverse so they overlap in the desired order (left to right, front to back)
-        self.base
-            .flex()
-            .flex_row_reverse()
-            .items_center()
-            .justify_start()
-            .children(
-                self.faces
-                    .into_iter()
-                    .enumerate()
-                    .rev()
-                    .map(|(ix, player)| div().when(ix > 0, |div| div.ml_neg_1()).child(player)),
-            )
+        self.base.flex().flex_row_reverse().items_center().justify_start().children(
+            self.faces
+                .into_iter()
+                .enumerate()
+                .rev()
+                .map(|(ix, player)| div().when(ix > 0, |div| div.ml_neg_1()).child(player)),
+        )
     }
 }
 
@@ -107,13 +103,8 @@ impl Component for Facepile {
                 vec![
                     single_example(
                         "Default",
-                        Facepile::new(
-                            EXAMPLE_FACES
-                                .iter()
-                                .map(|&url| Avatar::new(url).into_any_element())
-                                .collect(),
-                        )
-                        .into_any_element(),
+                        Facepile::new(EXAMPLE_FACES.iter().map(|&url| Avatar::new(url).into_any_element()).collect())
+                            .into_any_element(),
                     ),
                     single_example(
                         "Custom Size",

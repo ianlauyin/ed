@@ -2,7 +2,8 @@
 
 #![deny(missing_docs)]
 
-use gpui::{App, Global};
+use gpui::App;
+use gpui::Global;
 use semver::Version;
 
 const ZED_DOCS_URL: &str = "https://zed.dev/docs";
@@ -40,9 +41,5 @@ pub fn init(app_version: Version, cx: &mut App) {
 
 /// Returns the documentation URL for a given slug.
 pub fn docs_url(slug: &str, _cx: &App) -> String {
-    if slug.is_empty() {
-        ZED_DOCS_URL.to_string()
-    } else {
-        format!("{ZED_DOCS_URL}/{slug}")
-    }
+    if slug.is_empty() { ZED_DOCS_URL.to_string() } else { format!("{ZED_DOCS_URL}/{slug}") }
 }

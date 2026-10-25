@@ -1,11 +1,15 @@
-use crate::{
-    Location, PartialResultParams, Range, SymbolKind, SymbolKindCapability, TextDocumentIdentifier,
-    WorkDoneProgressParams,
-};
+use serde::Deserialize;
+use serde::Serialize;
 
-use crate::{SymbolTag, TagSupport};
-
-use serde::{Deserialize, Serialize};
+use crate::Location;
+use crate::PartialResultParams;
+use crate::Range;
+use crate::SymbolKind;
+use crate::SymbolKindCapability;
+use crate::SymbolTag;
+use crate::TagSupport;
+use crate::TextDocumentIdentifier;
+use crate::WorkDoneProgressParams;
 
 #[derive(Debug, Eq, PartialEq, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -27,11 +31,7 @@ pub struct DocumentSymbolClientCapabilities {
     /// Clients supporting tags have to handle unknown tags gracefully.
     ///
     /// @since 3.16.0
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "TagSupport::deserialize_compat"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "TagSupport::deserialize_compat")]
     pub tag_support: Option<TagSupport<SymbolTag>>,
 }
 

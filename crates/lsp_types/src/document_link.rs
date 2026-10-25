@@ -1,9 +1,13 @@
-use crate::{
-    PartialResultParams, Range, TextDocumentIdentifier, Uri, WorkDoneProgressOptions,
-    WorkDoneProgressParams,
-};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::Value;
+
+use crate::PartialResultParams;
+use crate::Range;
+use crate::TextDocumentIdentifier;
+use crate::Uri;
+use crate::WorkDoneProgressOptions;
+use crate::WorkDoneProgressParams;
 
 #[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

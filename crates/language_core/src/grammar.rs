@@ -1,13 +1,22 @@
-use crate::{
-    CaptureId, HighlightId, HighlightMap, LanguageConfig, LanguageConfigOverride, LanguageName,
-    LanguageQueries, highlight_cache::TextHighlightCache, language_config::BracketPairConfig,
-};
-use anyhow::{Context as _, Result};
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering::SeqCst;
+
+use anyhow::Context as _;
+use anyhow::Result;
 use collections::HashMap;
 use gpui_shared_string::SharedString;
 use parking_lot::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering::SeqCst};
 use tree_sitter::Query;
+
+use crate::CaptureId;
+use crate::HighlightId;
+use crate::HighlightMap;
+use crate::LanguageConfig;
+use crate::LanguageConfigOverride;
+use crate::LanguageName;
+use crate::LanguageQueries;
+use crate::highlight_cache::TextHighlightCache;
+use crate::language_config::BracketPairConfig;
 
 pub static NEXT_GRAMMAR_ID: AtomicUsize = AtomicUsize::new(0);
 
@@ -233,11 +242,7 @@ fn populate_capture_indices(
                 _ => {}
             }
         }
-        if !name.starts_with("_")
-            && !expected_prefixes
-                .iter()
-                .any(|&prefix| name.starts_with(prefix))
-        {
+        if !name.starts_with("_") && !expected_prefixes.iter().any(|&prefix| name.starts_with(prefix)) {
             log::warn!(
                 "unrecognized capture name '{}' in {} {} TreeSitter query \
                 (suppress this warning by prefixing with '_')",
@@ -270,10 +275,8 @@ fn populate_capture_indices(
 impl Grammar {
     pub fn new(language: impl Into<ParseableLanguage>) -> Self {
         let parseable_language = language.into();
-        let error_query = parseable_language
-            .resolve()
-            .ok()
-            .and_then(|ts_language| Query::new(&ts_language, "(ERROR) @error").ok());
+        let error_query =
+            parseable_language.resolve().ok().and_then(|ts_language| Query::new(&ts_language, "(ERROR) @error").ok());
         Self {
             id: GrammarId::new(),
             highlights_config: None,
@@ -286,9 +289,7 @@ impl Grammar {
             spell_check_config: None,
             runnable_config: None,
             error_query,
-            ts_language: parseable_language
-                .resolve()
-                .expect("resolving a native parseable language cannot fail"),
+            ts_language: parseable_language.resolve().expect("resolving a native parseable language cannot fail"),
             highlight_map: Default::default(),
         }
     }
@@ -321,61 +322,36 @@ impl Grammar {
     /// Load all queries from `LanguageQueries` into this grammar, mutating the
     /// associated `LanguageConfig` (the override query clears
     /// `brackets.disabled_scopes_by_bracket_ix`).
-    pub fn with_queries(
-        mut self,
-        queries: LanguageQueries,
-        config: &mut LanguageConfig,
-    ) -> Result<Self> {
+    pub fn with_queries(mut self, queries: LanguageQueries, config: &mut LanguageConfig) -> Result<Self> {
         let name = &config.name;
         if let Some(query) = queries.highlights {
-            self = self
-                .with_highlights_query(query.as_ref())
-                .context("Error loading highlights query")?;
+            self = self.with_highlights_query(query.as_ref()).context("Error loading highlights query")?;
         }
         if let Some(query) = queries.brackets {
-            self = self
-                .with_brackets_query(query.as_ref(), name)
-                .context("Error loading brackets query")?;
+            self = self.with_brackets_query(query.as_ref(), name).context("Error loading brackets query")?;
         }
         if let Some(query) = queries.indents {
-            self = self
-                .with_indents_query(query.as_ref(), name)
-                .context("Error loading indents query")?;
+            self = self.with_indents_query(query.as_ref(), name).context("Error loading indents query")?;
         }
         if let Some(query) = queries.outline {
-            self = self
-                .with_outline_query(query.as_ref(), name)
-                .context("Error loading outline query")?;
+            self = self.with_outline_query(query.as_ref(), name).context("Error loading outline query")?;
         }
         if let Some(query) = queries.injections {
-            self = self
-                .with_injection_query(query.as_ref(), name)
-                .context("Error loading injection query")?;
+            self = self.with_injection_query(query.as_ref(), name).context("Error loading injection query")?;
         }
         if let Some(query) = queries.overrides {
             self = self
-                .with_override_query(
-                    query.as_ref(),
-                    name,
-                    &config.overrides,
-                    &mut config.brackets,
-                )
+                .with_override_query(query.as_ref(), name, &config.overrides, &mut config.brackets)
                 .context("Error loading override query")?;
         }
         if let Some(query) = queries.spell_check {
-            self = self
-                .with_spell_check_query(query.as_ref(), name)
-                .context("Error loading spell check query")?;
+            self = self.with_spell_check_query(query.as_ref(), name).context("Error loading spell check query")?;
         }
         if let Some(query) = queries.runnables {
-            self = self
-                .with_runnable_query(query.as_ref())
-                .context("Error loading runnables query")?;
+            self = self.with_runnable_query(query.as_ref()).context("Error loading runnables query")?;
         }
         if let Some(query) = queries.text_objects {
-            self = self
-                .with_text_object_query(query.as_ref(), name)
-                .context("Error loading textobject query")?;
+            self = self.with_text_object_query(query.as_ref(), name).context("Error loading textobject query")?;
         }
         Ok(self)
     }
@@ -419,24 +395,15 @@ impl Grammar {
                 name => RunnableCapture::Named(name.to_string().into()),
             })
             .collect();
-        let supports_grouped_runnables = extra_captures
-            .iter()
-            .any(|capture| matches!(capture, RunnableCapture::RunItem));
+        let supports_grouped_runnables =
+            extra_captures.iter().any(|capture| matches!(capture, RunnableCapture::RunItem));
 
-        self.runnable_config = Some(RunnableConfig {
-            extra_captures,
-            query,
-            supports_grouped_runnables,
-        });
+        self.runnable_config = Some(RunnableConfig { extra_captures, query, supports_grouped_runnables });
 
         Ok(self)
     }
 
-    pub fn with_outline_query(
-        mut self,
-        source: &str,
-        language_name: &LanguageName,
-    ) -> Result<Self> {
+    pub fn with_outline_query(mut self, source: &str, language_name: &LanguageName) -> Result<Self> {
         let query = Query::new(&self.parseable_language()?, source)?;
         let mut item_capture_ix = 0;
         let mut name_capture_ix = 0;
@@ -474,11 +441,7 @@ impl Grammar {
         Ok(self)
     }
 
-    pub fn with_text_object_query(
-        mut self,
-        source: &str,
-        language_name: &LanguageName,
-    ) -> Result<Self> {
+    pub fn with_text_object_query(mut self, source: &str, language_name: &LanguageName) -> Result<Self> {
         let query = Query::new(&self.parseable_language()?, source)?;
 
         let mut text_objects_by_capture_ix = Vec::new();
@@ -486,26 +449,15 @@ impl Grammar {
             if let Some(text_object) = TextObject::from_capture_name(name) {
                 text_objects_by_capture_ix.push((ix as u32, text_object));
             } else {
-                log::warn!(
-                    "unrecognized capture name '{}' in {} textobjects TreeSitter query",
-                    name,
-                    language_name,
-                );
+                log::warn!("unrecognized capture name '{}' in {} textobjects TreeSitter query", name, language_name,);
             }
         }
 
-        self.text_object_config = Some(TextObjectConfig {
-            query,
-            text_objects_by_capture_ix,
-        });
+        self.text_object_config = Some(TextObjectConfig { query, text_objects_by_capture_ix });
         Ok(self)
     }
 
-    pub fn with_brackets_query(
-        mut self,
-        source: &str,
-        language_name: &LanguageName,
-    ) -> Result<Self> {
+    pub fn with_brackets_query(mut self, source: &str, language_name: &LanguageName) -> Result<Self> {
         let query = Query::new(&self.parseable_language()?, source)?;
         let mut open_capture_ix = 0;
         let mut close_capture_ix = 0;
@@ -514,10 +466,7 @@ impl Grammar {
             language_name,
             "brackets",
             &[],
-            &mut [
-                Capture::Required("open", &mut open_capture_ix),
-                Capture::Required("close", &mut close_capture_ix),
-            ],
+            &mut [Capture::Required("open", &mut open_capture_ix), Capture::Required("close", &mut close_capture_ix)],
         ) {
             let patterns = (0..query.pattern_count())
                 .map(|ix| {
@@ -534,21 +483,12 @@ impl Grammar {
                     config
                 })
                 .collect();
-            self.brackets_config = Some(BracketsConfig {
-                query,
-                open_capture_ix,
-                close_capture_ix,
-                patterns,
-            });
+            self.brackets_config = Some(BracketsConfig { query, open_capture_ix, close_capture_ix, patterns });
         }
         Ok(self)
     }
 
-    pub fn with_indents_query(
-        mut self,
-        source: &str,
-        language_name: &LanguageName,
-    ) -> Result<Self> {
+    pub fn with_indents_query(mut self, source: &str, language_name: &LanguageName) -> Result<Self> {
         let query = Query::new(&self.parseable_language()?, source)?;
         let mut indent_capture_ix = 0;
         let mut start_capture_ix = None;
@@ -585,11 +525,7 @@ impl Grammar {
         Ok(self)
     }
 
-    pub fn with_injection_query(
-        mut self,
-        source: &str,
-        language_name: &LanguageName,
-    ) -> Result<Self> {
+    pub fn with_injection_query(mut self, source: &str, language_name: &LanguageName) -> Result<Self> {
         let query = Query::new(&self.parseable_language()?, source)?;
         let mut language_capture_ix = None;
         let mut injection_language_capture_ix = None;
@@ -641,13 +577,8 @@ impl Grammar {
                 })
                 .collect();
             if let Some(content_capture_ix) = content_capture_ix {
-                self.injection_config = Some(InjectionConfig {
-                    query,
-                    language_capture_ix,
-                    content_capture_ix,
-                    host_capture_ix,
-                    patterns,
-                });
+                self.injection_config =
+                    Some(InjectionConfig { query, language_capture_ix, content_capture_ix, host_capture_ix, patterns });
             } else {
                 log::error!(
                     "missing required capture in injections {} TreeSitter query: \
@@ -680,29 +611,15 @@ impl Grammar {
             }
 
             let value = overrides.get(name).cloned().unwrap_or_default();
-            override_configs_by_id.insert(
-                ix as u32,
-                OverrideEntry {
-                    name: name.to_string(),
-                    range_is_inclusive,
-                    value,
-                },
-            );
+            override_configs_by_id
+                .insert(ix as u32, OverrideEntry { name: name.to_string(), range_is_inclusive, value });
         }
 
-        let referenced_override_names = overrides
-            .keys()
-            .chain(brackets.disabled_scopes_by_bracket_ix.iter().flatten());
+        let referenced_override_names = overrides.keys().chain(brackets.disabled_scopes_by_bracket_ix.iter().flatten());
 
         for referenced_name in referenced_override_names {
-            if !override_configs_by_id
-                .values()
-                .any(|entry| entry.name == *referenced_name)
-            {
-                anyhow::bail!(
-                    "language {:?} has overrides in config not in query: {referenced_name:?}",
-                    language_name
-                );
+            if !override_configs_by_id.values().any(|entry| entry.name == *referenced_name) {
+                anyhow::bail!("language {:?} has overrides in config not in query: {referenced_name:?}", language_name);
             }
         }
 
@@ -711,30 +628,21 @@ impl Grammar {
                 .disabled_scopes_by_bracket_ix
                 .iter()
                 .enumerate()
-                .filter_map(|(ix, disabled_scope_names)| {
-                    if disabled_scope_names.contains(&entry.name) {
-                        Some(ix as u16)
-                    } else {
-                        None
-                    }
-                })
+                .filter_map(
+                    |(ix, disabled_scope_names)| {
+                        if disabled_scope_names.contains(&entry.name) { Some(ix as u16) } else { None }
+                    },
+                )
                 .collect();
         }
 
         brackets.disabled_scopes_by_bracket_ix.clear();
 
-        self.override_config = Some(OverrideConfig {
-            query,
-            values: override_configs_by_id,
-        });
+        self.override_config = Some(OverrideConfig { query, values: override_configs_by_id });
         Ok(self)
     }
 
-    pub fn with_spell_check_query(
-        mut self,
-        source: &str,
-        language_name: &LanguageName,
-    ) -> Result<Self> {
+    pub fn with_spell_check_query(mut self, source: &str, language_name: &LanguageName) -> Result<Self> {
         let query = Query::new(&self.parseable_language()?, source)?;
         let mut spell_capture_ix = None;
         let mut nospell_capture_ix = None;
@@ -751,11 +659,7 @@ impl Grammar {
             ],
         );
         if spell_capture_ix.is_some() || nospell_capture_ix.is_some() {
-            self.spell_check_config = Some(SpellCheckConfig {
-                query,
-                spell_capture_ix,
-                nospell_capture_ix,
-            });
+            self.spell_check_config = Some(SpellCheckConfig { query, spell_capture_ix, nospell_capture_ix });
         }
         Ok(self)
     }

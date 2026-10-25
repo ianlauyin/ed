@@ -1,11 +1,11 @@
-use std::{
-    borrow::{Borrow, Cow},
-    iter,
-    sync::Arc,
-};
+use std::borrow::Borrow;
+use std::borrow::Cow;
+use std::iter;
+use std::sync::Arc;
 
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use smol_str::SmolStr;
 
 /// A shared string is an immutable string that can be cheaply cloned in GPUI

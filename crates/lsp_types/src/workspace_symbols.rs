@@ -1,9 +1,17 @@
-use crate::{
-    LSPAny, Location, OneOf, PartialResultParams, SymbolInformation, SymbolKind,
-    SymbolKindCapability, SymbolTag, TagSupport, Uri, WorkDoneProgressParams,
-};
+use serde::Deserialize;
+use serde::Serialize;
 
-use serde::{Deserialize, Serialize};
+use crate::LSPAny;
+use crate::Location;
+use crate::OneOf;
+use crate::PartialResultParams;
+use crate::SymbolInformation;
+use crate::SymbolKind;
+use crate::SymbolKindCapability;
+use crate::SymbolTag;
+use crate::TagSupport;
+use crate::Uri;
+use crate::WorkDoneProgressParams;
 
 #[derive(Debug, Eq, PartialEq, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
@@ -20,11 +28,7 @@ pub struct WorkspaceSymbolClientCapabilities {
     /// Clients supporting tags have to handle unknown tags gracefully.
     ///
     /// @since 3.16.0
-    #[serde(
-        default,
-        skip_serializing_if = "Option::is_none",
-        deserialize_with = "TagSupport::deserialize_compat"
-    )]
+    #[serde(default, skip_serializing_if = "Option::is_none", deserialize_with = "TagSupport::deserialize_compat")]
     pub tag_support: Option<TagSupport<SymbolTag>>,
 
     /// The client support partial workspace symbols. The client will send the

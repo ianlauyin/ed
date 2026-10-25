@@ -1,9 +1,11 @@
-use gpui::{App, actions};
+use gpui::App;
+use gpui::actions;
 use workspace::Workspace;
 
 pub mod svg_preview_view;
 
-pub use zed_actions::preview::svg::{OpenPreview, OpenPreviewToTheSide};
+pub use zed_actions::preview::svg::OpenPreview;
+pub use zed_actions::preview::svg::OpenPreviewToTheSide;
 
 actions!(
     svg,

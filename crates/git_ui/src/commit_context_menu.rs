@@ -1,10 +1,21 @@
-use crate::{commit_view::CommitView, create_tag_at_commit};
 use git::Oid;
-use gpui::{Action, ClipboardItem, Entity, FocusHandle, SharedString, WeakEntity, Window, actions};
+use gpui::Action;
+use gpui::ClipboardItem;
+use gpui::Entity;
+use gpui::FocusHandle;
+use gpui::SharedString;
+use gpui::WeakEntity;
+use gpui::Window;
+use gpui::actions;
 use project::git_store::Repository;
-use ui::{ContextMenu, ContextMenuEntry, prelude::*};
+use ui::ContextMenu;
+use ui::ContextMenuEntry;
+use ui::prelude::*;
 use util::ResultExt as _;
 use workspace::Workspace;
+
+use crate::commit_view::CommitView;
+use crate::create_tag_at_commit;
 
 actions!(
     git_graph,
@@ -52,24 +63,12 @@ pub(crate) fn commit_context_menu(
                     let Some(repository) = repository.clone() else {
                         return;
                     };
-                    CommitView::open(
-                        sha.to_string(),
-                        repository,
-                        workspace.clone(),
-                        None,
-                        None,
-                        window,
-                        cx,
-                    );
+                    CommitView::open(sha.to_string(), repository, workspace.clone(), None, None, window, cx);
                 }
             })
-            .entry(
-                "Copy SHA",
-                Some(CopyCommitSha.boxed_clone()),
-                move |_window, cx| {
-                    cx.write_to_clipboard(ClipboardItem::new_string(sha.to_string()));
-                },
-            )
+            .entry("Copy SHA", Some(CopyCommitSha.boxed_clone()), move |_window, cx| {
+                cx.write_to_clipboard(ClipboardItem::new_string(sha.to_string()));
+            })
             .when_some(ref_name.clone(), |menu, ref_name| {
                 menu.entry("Copy Ref Name", None, move |_window, cx| {
                     cx.write_to_clipboard(ClipboardItem::new_string(ref_name.to_string()));
@@ -82,22 +81,14 @@ pub(crate) fn commit_context_menu(
 
                     match tag_names.as_slice() {
                         [] => menu.item(
-                            ContextMenuEntry::new(copy_tag_label)
-                                .action(CopyCommitTag.boxed_clone())
-                                .disabled(true),
+                            ContextMenuEntry::new(copy_tag_label).action(CopyCommitTag.boxed_clone()).disabled(true),
                         ),
                         [tag_name] => {
                             let tag_name = tag_name.clone();
                             let label = format!("{copy_tag_label}: {tag_name}");
-                            menu.entry(
-                                label,
-                                Some(CopyCommitTag.boxed_clone()),
-                                move |_window, cx| {
-                                    cx.write_to_clipboard(ClipboardItem::new_string(
-                                        tag_name.to_string(),
-                                    ));
-                                },
-                            )
+                            menu.entry(label, Some(CopyCommitTag.boxed_clone()), move |_window, cx| {
+                                cx.write_to_clipboard(ClipboardItem::new_string(tag_name.to_string()));
+                            })
                         }
                         _ => menu.submenu(copy_tag_label, move |menu, _window, _cx| {
                             let mut menu = menu.fixed_width(COMMIT_TAG_LIST_WIDTH_IN_REMS.into());
@@ -105,9 +96,7 @@ pub(crate) fn commit_context_menu(
                             for tag_name in tag_names.clone() {
                                 let tag_name_to_copy = tag_name.clone();
                                 menu = menu.entry(tag_name, None, move |_window, cx| {
-                                    cx.write_to_clipboard(ClipboardItem::new_string(
-                                        tag_name_to_copy.to_string(),
-                                    ));
+                                    cx.write_to_clipboard(ClipboardItem::new_string(tag_name_to_copy.to_string()));
                                 });
                             }
                             menu

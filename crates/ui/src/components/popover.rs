@@ -1,9 +1,17 @@
+use gpui::AnyElement;
+use gpui::App;
+use gpui::Element;
+use gpui::IntoElement;
+use gpui::ParentElement;
+use gpui::Pixels;
+use gpui::RenderOnce;
+use gpui::Styled;
+use gpui::Window;
+use gpui::div;
+use smallvec::SmallVec;
+
 use crate::prelude::*;
 use crate::v_flex;
-use gpui::{
-    AnyElement, App, Element, IntoElement, ParentElement, Pixels, RenderOnce, Styled, Window, div,
-};
-use smallvec::SmallVec;
 
 /// Y height added beyond the size of the contents.
 pub const POPOVER_Y_PADDING: Pixels = px(8.);
@@ -46,20 +54,9 @@ impl RenderOnce for Popover {
         div()
             .flex()
             .gap_1()
-            .child(
-                v_flex()
-                    .elevation_2(cx)
-                    .py(POPOVER_Y_PADDING / 2.)
-                    .child(div().children(self.children)),
-            )
+            .child(v_flex().elevation_2(cx).py(POPOVER_Y_PADDING / 2.).child(div().children(self.children)))
             .when_some(self.aside, |this, aside| {
-                this.child(
-                    v_flex()
-                        .elevation_2(cx)
-                        .bg(cx.theme().colors().surface_background)
-                        .px_1()
-                        .child(aside),
-                )
+                this.child(v_flex().elevation_2(cx).bg(cx.theme().colors().surface_background).px_1().child(aside))
             })
     }
 }
@@ -72,10 +69,7 @@ impl Default for Popover {
 
 impl Popover {
     pub fn new() -> Self {
-        Self {
-            children: SmallVec::new(),
-            aside: None,
-        }
+        Self { children: SmallVec::new(), aside: None }
     }
 
     pub fn aside(mut self, aside: impl IntoElement) -> Self

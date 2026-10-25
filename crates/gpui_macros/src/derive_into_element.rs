@@ -1,6 +1,7 @@
 use proc_macro::TokenStream;
 use quote::quote;
-use syn::{DeriveInput, parse_macro_input};
+use syn::DeriveInput;
+use syn::parse_macro_input;
 
 pub fn derive_into_element(input: TokenStream) -> TokenStream {
     let ast = parse_macro_input!(input as DeriveInput);

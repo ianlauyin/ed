@@ -1,8 +1,13 @@
-use crate::{
-    DocumentSelector, DynamicRegistrationClientCapabilities, PartialResultParams, Range,
-    TextDocumentIdentifier, TextEdit, WorkDoneProgressParams,
-};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
+
+use crate::DocumentSelector;
+use crate::DynamicRegistrationClientCapabilities;
+use crate::PartialResultParams;
+use crate::Range;
+use crate::TextDocumentIdentifier;
+use crate::TextEdit;
+use crate::WorkDoneProgressParams;
 
 pub type DocumentColorClientCapabilities = DynamicRegistrationClientCapabilities;
 

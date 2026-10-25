@@ -21,7 +21,8 @@
 //! This is invoked from a developer-only "show git job queue" action, so it
 //! is acceptable for the macOS path to spend a few seconds sampling.
 
-use serde_json::{Map, Value};
+use serde_json::Map;
+use serde_json::Value;
 
 pub async fn gather() -> Value {
     let mut diag = Map::new();
@@ -43,9 +44,7 @@ pub async fn gather() -> Value {
                 }
             }
             Err(err) => {
-                log::warn!(
-                    "git runtime diagnostics: failed to collect macOS git-child info: {err:#}"
-                );
+                log::warn!("git runtime diagnostics: failed to collect macOS git-child info: {err:#}");
             }
         }
     }
@@ -56,14 +55,16 @@ pub async fn gather() -> Value {
 /// Walk the descendant tree of the current process and return a JSON array
 /// describing each descendant. Cross-platform; uses `sysinfo`.
 fn collect_process_tree() -> anyhow::Result<Value> {
-    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, RefreshKind, System, UpdateKind};
+    use sysinfo::ProcessRefreshKind;
+    use sysinfo::ProcessesToUpdate;
+    use sysinfo::RefreshKind;
+    use sysinfo::System;
+    use sysinfo::UpdateKind;
 
-    let current_pid = sysinfo::get_current_pid()
-        .map_err(|e| anyhow::anyhow!("sysinfo::get_current_pid failed: {e}"))?;
+    let current_pid =
+        sysinfo::get_current_pid().map_err(|e| anyhow::anyhow!("sysinfo::get_current_pid failed: {e}"))?;
 
-    let refresh = ProcessRefreshKind::nothing()
-        .with_cmd(UpdateKind::Always)
-        .with_exe(UpdateKind::Always);
+    let refresh = ProcessRefreshKind::nothing().with_cmd(UpdateKind::Always).with_exe(UpdateKind::Always);
     let mut system = System::new_with_specifics(RefreshKind::nothing().with_processes(refresh));
     system.refresh_processes_specifics(ProcessesToUpdate::All, true, refresh);
 
@@ -73,12 +74,7 @@ fn collect_process_tree() -> anyhow::Result<Value> {
         .iter()
         .filter_map(|pid| {
             let process = system.process(*pid)?;
-            let cmd = sanitize_cmd(
-                process
-                    .cmd()
-                    .iter()
-                    .map(|s| s.to_string_lossy().into_owned()),
-            );
+            let cmd = sanitize_cmd(process.cmd().iter().map(|s| s.to_string_lossy().into_owned()));
             Some(serde_json::json!({
                 "pid": pid.as_u32(),
                 "ppid": process.parent().map(|p| p.as_u32()),
@@ -125,9 +121,7 @@ fn redact_env_var_entry(entry: String) -> String {
     };
     let key = &entry[..eq_index];
     if !key.is_empty()
-        && key
-            .chars()
-            .all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
+        && key.chars().all(|c| c.is_ascii_uppercase() || c.is_ascii_digit() || c == '_')
         && key.starts_with(|c: char| c.is_ascii_uppercase() || c == '_')
     {
         format!("{key}=<redacted>")
@@ -137,8 +131,7 @@ fn redact_env_var_entry(entry: String) -> String {
 }
 
 fn descendants_of(system: &sysinfo::System, root: sysinfo::Pid) -> Vec<sysinfo::Pid> {
-    let mut parent_map: std::collections::HashMap<sysinfo::Pid, Vec<sysinfo::Pid>> =
-        std::collections::HashMap::new();
+    let mut parent_map: std::collections::HashMap<sysinfo::Pid, Vec<sysinfo::Pid>> = std::collections::HashMap::new();
     for (pid, process) in system.processes() {
         if let Some(parent) = process.parent() {
             parent_map.entry(parent).or_default().push(*pid);
@@ -159,23 +152,23 @@ fn descendants_of(system: &sysinfo::System, root: sysinfo::Pid) -> Vec<sysinfo::
 
 async fn collect_macos_git_child_diagnostics() -> anyhow::Result<Value> {
     use std::path::Path;
-    use sysinfo::{ProcessRefreshKind, ProcessesToUpdate, RefreshKind, System, UpdateKind};
+
+    use sysinfo::ProcessRefreshKind;
+    use sysinfo::ProcessesToUpdate;
+    use sysinfo::RefreshKind;
+    use sysinfo::System;
+    use sysinfo::UpdateKind;
 
     let sample_available = Path::new("/usr/bin/sample").exists();
-    let lsof_available =
-        Path::new("/usr/sbin/lsof").exists() || Path::new("/usr/bin/lsof").exists();
-    let lsof_path = if Path::new("/usr/sbin/lsof").exists() {
-        "/usr/sbin/lsof"
-    } else {
-        "/usr/bin/lsof"
-    };
+    let lsof_available = Path::new("/usr/sbin/lsof").exists() || Path::new("/usr/bin/lsof").exists();
+    let lsof_path = if Path::new("/usr/sbin/lsof").exists() { "/usr/sbin/lsof" } else { "/usr/bin/lsof" };
 
     if !sample_available && !lsof_available {
         return Ok(Value::Null);
     }
 
-    let current_pid = sysinfo::get_current_pid()
-        .map_err(|e| anyhow::anyhow!("sysinfo::get_current_pid failed: {e}"))?;
+    let current_pid =
+        sysinfo::get_current_pid().map_err(|e| anyhow::anyhow!("sysinfo::get_current_pid failed: {e}"))?;
 
     let refresh = ProcessRefreshKind::nothing().with_exe(UpdateKind::Always);
     let mut system = System::new_with_specifics(RefreshKind::nothing().with_processes(refresh));
@@ -193,11 +186,7 @@ async fn collect_macos_git_child_diagnostics() -> anyhow::Result<Value> {
         .filter_map(|pid| {
             let process = system.process(*pid)?;
             let name = process.name().to_string_lossy();
-            if name.contains("git") {
-                Some(pid.as_u32())
-            } else {
-                None
-            }
+            if name.contains("git") { Some(pid.as_u32()) } else { None }
         })
         .collect();
 
@@ -239,16 +228,9 @@ async fn collect_macos_git_child_diagnostics() -> anyhow::Result<Value> {
 }
 
 async fn run_capturing(program: &str, args: &[&str]) -> anyhow::Result<String> {
-    let output = util::command::new_command(program)
-        .args(args)
-        .output()
-        .await?;
+    let output = util::command::new_command(program).args(args).output().await?;
     if !output.status.success() {
-        anyhow::bail!(
-            "{program} exited with status {:?}: {}",
-            output.status,
-            String::from_utf8_lossy(&output.stderr)
-        );
+        anyhow::bail!("{program} exited with status {:?}: {}", output.status, String::from_utf8_lossy(&output.stderr));
     }
     Ok(String::from_utf8_lossy(&output.stdout).into_owned())
 }

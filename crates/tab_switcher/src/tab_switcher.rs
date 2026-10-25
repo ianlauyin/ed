@@ -408,7 +408,7 @@ impl TabSwitcherDelegate {
             let candidates = all_items
                 .iter()
                 .enumerate()
-                .flat_map(|(ix, tab_match)| Some(StringMatchCandidate::new(ix, tab_match.item.tab_content_text(0, cx))))
+                .map(|(ix, tab_match)| StringMatchCandidate::new(ix, tab_match.item.tab_content_text(0, cx)))
                 .collect::<Vec<_>>();
             fuzzy_nucleo::match_strings(
                 &candidates,

@@ -1033,7 +1033,7 @@ impl App {
     /// Each handle could be downcast to a handle typed for the root view of that window.
     /// To find all windows of a given type, you could filter on
     pub fn windows(&self) -> Vec<AnyWindowHandle> {
-        self.windows.keys().flat_map(|window_id| self.window_handles.get(&window_id).copied()).collect()
+        self.windows.keys().filter_map(|window_id| self.window_handles.get(&window_id).copied()).collect()
     }
 
     /// Returns the window handles ordered by their appearance on screen, front to back.

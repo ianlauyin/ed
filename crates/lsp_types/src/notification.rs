@@ -1,6 +1,7 @@
-use super::*;
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 
-use serde::{de::DeserializeOwned, Serialize};
+use super::*;
 
 pub trait Notification {
     type Params: DeserializeOwned + Serialize + Send + Sync + 'static;

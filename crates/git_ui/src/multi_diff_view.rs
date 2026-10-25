@@ -1,31 +1,55 @@
+use std::any::Any;
+use std::any::TypeId;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+
 use anyhow::Result;
 use buffer_diff::BufferDiff;
-use editor::{
-    Editor, EditorEvent, EditorSettings, HiddenUnstagedDiffHunkRenderer, MultiBuffer,
-    SplittableEditor, multibuffer_context_lines,
-};
+use editor::Editor;
+use editor::EditorEvent;
+use editor::EditorSettings;
+use editor::HiddenUnstagedDiffHunkRenderer;
+use editor::MultiBuffer;
+use editor::SplittableEditor;
+use editor::multibuffer_context_lines;
 use git_ui_core::file_diff_view::build_buffer_diff;
-use gpui::{
-    App, AppContext as _, AsyncApp, Context, Entity, EventEmitter, FocusHandle, Focusable, Font,
-    IntoElement, Render, SharedString, Subscription, Task, Window,
-};
-use language::{Buffer, Capability, HighlightedText, OffsetRangeExt};
+use gpui::App;
+use gpui::AppContext as _;
+use gpui::AsyncApp;
+use gpui::Context;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::Font;
+use gpui::IntoElement;
+use gpui::Render;
+use gpui::SharedString;
+use gpui::Subscription;
+use gpui::Task;
+use gpui::Window;
+use language::Buffer;
+use language::Capability;
+use language::HighlightedText;
+use language::OffsetRangeExt;
 use multi_buffer::PathKey;
-use project::{Project, ProjectPath};
+use project::Project;
+use project::ProjectPath;
 use settings::Settings;
-use std::{
-    any::{Any, TypeId},
-    path::{Path, PathBuf},
-    sync::Arc,
-};
-use ui::{Color, Icon, IconName};
+use ui::Color;
+use ui::Icon;
+use ui::IconName;
 use util::paths::PathStyle;
 use util::rel_path::RelPath;
-use workspace::{
-    Item, ItemHandle as _, ItemNavHistory, ToolbarItemLocation, Workspace,
-    item::{ItemEvent, SaveOptions},
-    searchable::SearchableItemHandle,
-};
+use workspace::Item;
+use workspace::ItemHandle as _;
+use workspace::ItemNavHistory;
+use workspace::ToolbarItemLocation;
+use workspace::Workspace;
+use workspace::item::ItemEvent;
+use workspace::item::SaveOptions;
+use workspace::searchable::SearchableItemHandle;
 
 pub struct MultiDiffView {
     editor: Entity<SplittableEditor>,
@@ -53,22 +77,13 @@ async fn load_entries(
         let old_path = PathBuf::from(&pair[0]);
         let new_path = PathBuf::from(&pair[1]);
 
-        let old_buffer = project
-            .update(cx, |project, cx| project.open_local_buffer(&old_path, cx))
-            .await?;
-        let new_buffer = project
-            .update(cx, |project, cx| project.open_local_buffer(&new_path, cx))
-            .await?;
+        let old_buffer = project.update(cx, |project, cx| project.open_local_buffer(&old_path, cx)).await?;
+        let new_buffer = project.update(cx, |project, cx| project.open_local_buffer(&new_path, cx)).await?;
 
         let diff = build_buffer_diff(&old_buffer, &new_buffer, cx).await?;
 
         all_paths.push(new_path.clone());
-        entries.push(Entry {
-            index: ix,
-            new_path,
-            new_buffer: new_buffer.clone(),
-            diff,
-        });
+        entries.push(Entry { index: ix, new_path, new_buffer: new_buffer.clone(), diff });
     }
 
     let common_root = common_prefix(&all_paths);
@@ -85,23 +100,16 @@ fn register_entry(
     let snapshot = entry.new_buffer.read(cx).snapshot();
     let diff_snapshot = entry.diff.read(cx).snapshot(cx);
 
-    let ranges: Vec<std::ops::Range<language::Point>> = diff_snapshot
-        .hunks(&snapshot)
-        .map(|hunk| hunk.buffer_range.to_point(&snapshot))
-        .collect();
+    let ranges: Vec<std::ops::Range<language::Point>> =
+        diff_snapshot.hunks(&snapshot).map(|hunk| hunk.buffer_range.to_point(&snapshot)).collect();
 
     let display_rel = common_root
         .as_ref()
         .and_then(|root| entry.new_path.strip_prefix(root).ok())
         .map(|rel| {
-            RelPath::new(rel, PathStyle::local())
-                .map(|r| r.into_owned().into())
-                .unwrap_or_else(|_| {
-                    RelPath::new(Path::new(MultiBuffer::DEFAULT_TITLE), PathStyle::Unix)
-                        .unwrap()
-                        .into_owned()
-                        .into()
-                })
+            RelPath::new(rel, PathStyle::local()).map(|r| r.into_owned().into()).unwrap_or_else(|_| {
+                RelPath::new(Path::new(MultiBuffer::DEFAULT_TITLE), PathStyle::Unix).unwrap().into_owned().into()
+            })
         })
         .unwrap_or_else(|| {
             entry
@@ -111,23 +119,14 @@ fn register_entry(
                 .and_then(|s| RelPath::new(Path::new(s), PathStyle::Unix).ok())
                 .map(|r| r.into_owned().into())
                 .unwrap_or_else(|| {
-                    RelPath::new(Path::new(MultiBuffer::DEFAULT_TITLE), PathStyle::Unix)
-                        .unwrap()
-                        .into_owned()
-                        .into()
+                    RelPath::new(Path::new(MultiBuffer::DEFAULT_TITLE), PathStyle::Unix).unwrap().into_owned().into()
                 })
         });
 
     let path_key = PathKey::with_sort_prefix(entry.index as u64, display_rel);
 
     multibuffer.update(cx, |multibuffer, cx| {
-        multibuffer.set_excerpts_for_path(
-            path_key,
-            entry.new_buffer.clone(),
-            ranges,
-            context_lines,
-            cx,
-        );
+        multibuffer.set_excerpts_for_path(path_key, entry.new_buffer.clone(), ranges, context_lines, cx);
         multibuffer.add_diff(entry.diff.clone(), cx);
     });
 }
@@ -175,14 +174,7 @@ impl MultiDiffView {
 
                 let workspace_handle = cx.entity();
                 let diff_view = cx.new(|cx| {
-                    Self::new(
-                        multibuffer.clone(),
-                        project.clone(),
-                        file_count,
-                        window,
-                        workspace_handle,
-                        cx,
-                    )
+                    Self::new(multibuffer.clone(), project.clone(), file_count, window, workspace_handle, cx)
                 });
 
                 let pane = workspace.active_pane();
@@ -230,25 +222,24 @@ impl MultiDiffView {
         // The buffers' languages may load after the diff was built, e.g. when
         // opening the view on startup via `zed --diff`. Propagate them from rhs
         // to the corresponding lhs buffers when they change.
-        let buffer_language_subscription =
-            cx.subscribe(&multibuffer, |_, multibuffer, event, cx| {
-                let &multi_buffer::Event::LanguageChanged(buffer_id, _) = event else {
-                    return;
-                };
-                let Some(rhs_buffer) = multibuffer.read(cx).buffer(buffer_id) else {
-                    return;
-                };
-                let Some(diff) = multibuffer.read(cx).diff_for(buffer_id) else {
-                    return;
-                };
+        let buffer_language_subscription = cx.subscribe(&multibuffer, |_, multibuffer, event, cx| {
+            let &multi_buffer::Event::LanguageChanged(buffer_id, _) = event else {
+                return;
+            };
+            let Some(rhs_buffer) = multibuffer.read(cx).buffer(buffer_id) else {
+                return;
+            };
+            let Some(diff) = multibuffer.read(cx).diff_for(buffer_id) else {
+                return;
+            };
 
-                let language = rhs_buffer.read(cx).language().cloned();
-                let lhs_buffer = diff.read(cx).base_text_buffer().clone();
+            let language = rhs_buffer.read(cx).language().cloned();
+            let lhs_buffer = diff.read(cx).base_text_buffer().clone();
 
-                lhs_buffer.update(cx, |lhs_buffer, cx| {
-                    lhs_buffer.set_language_async(language, cx);
-                });
+            lhs_buffer.update(cx, |lhs_buffer, cx| {
+                lhs_buffer.set_language_async(language, cx);
             });
+        });
 
         Self {
             editor,
@@ -259,11 +250,7 @@ impl MultiDiffView {
     }
 
     fn title(&self) -> SharedString {
-        let suffix = if self.file_count == 1 {
-            "1 file".to_string()
-        } else {
-            format!("{} files", self.file_count)
-        };
+        let suffix = if self.file_count == 1 { "1 file".to_string() } else { format!("{} files", self.file_count) };
         format!("Diff ({suffix})").into()
     }
 }
@@ -296,8 +283,7 @@ impl Item for MultiDiffView {
     }
 
     fn deactivated(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        self.editor
-            .update(cx, |editor, cx| editor.deactivated(window, cx));
+        self.editor.update(cx, |editor, cx| editor.deactivated(window, cx));
     }
 
     fn act_as_type<'a>(
@@ -321,12 +307,7 @@ impl Item for MultiDiffView {
         self.editor.read(cx).active_project_path(cx)
     }
 
-    fn set_nav_history(
-        &mut self,
-        nav_history: ItemNavHistory,
-        _: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
+    fn set_nav_history(&mut self, nav_history: ItemNavHistory, _: &mut Window, cx: &mut Context<Self>) {
         self.editor.update(cx, |editor, cx| {
             editor.rhs_editor().update(cx, |editor, _| {
                 editor.set_nav_history(Some(nav_history));
@@ -334,14 +315,8 @@ impl Item for MultiDiffView {
         });
     }
 
-    fn navigate(
-        &mut self,
-        data: Arc<dyn Any + Send>,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) -> bool {
-        self.editor
-            .update(cx, |editor, cx| editor.navigate(data, window, cx))
+    fn navigate(&mut self, data: Arc<dyn Any + Send>, window: &mut Window, cx: &mut Context<Self>) -> bool {
+        self.editor.update(cx, |editor, cx| editor.navigate(data, window, cx))
     }
 
     fn breadcrumb_location(&self, _: &App) -> ToolbarItemLocation {
@@ -352,15 +327,8 @@ impl Item for MultiDiffView {
         self.editor.breadcrumbs(cx)
     }
 
-    fn added_to_workspace(
-        &mut self,
-        workspace: &mut Workspace,
-        window: &mut Window,
-        cx: &mut Context<Self>,
-    ) {
-        self.editor.update(cx, |editor, cx| {
-            editor.added_to_workspace(workspace, window, cx)
-        });
+    fn added_to_workspace(&mut self, workspace: &mut Workspace, window: &mut Window, cx: &mut Context<Self>) {
+        self.editor.update(cx, |editor, cx| editor.added_to_workspace(workspace, window, cx));
     }
 
     fn can_save(&self, cx: &App) -> bool {
@@ -374,8 +342,7 @@ impl Item for MultiDiffView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> gpui::Task<Result<()>> {
-        self.editor
-            .update(cx, |editor, cx| editor.save(options, project, window, cx))
+        self.editor.update(cx, |editor, cx| editor.save(options, project, window, cx))
     }
 }
 

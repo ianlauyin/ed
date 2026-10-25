@@ -1,11 +1,14 @@
 use proc_macro::TokenStream;
 use proc_macro2::TokenStream as TokenStream2;
-use quote::{format_ident, quote};
-use syn::{
-    Token, Visibility, braced,
-    parse::{Parse, ParseStream, Result},
-    parse_macro_input,
-};
+use quote::format_ident;
+use quote::quote;
+use syn::Token;
+use syn::Visibility;
+use syn::braced;
+use syn::parse::Parse;
+use syn::parse::ParseStream;
+use syn::parse::Result;
+use syn::parse_macro_input;
 
 #[derive(Debug)]
 struct StyleableMacroInput {
@@ -15,9 +18,7 @@ struct StyleableMacroInput {
 impl Parse for StyleableMacroInput {
     fn parse(input: ParseStream) -> Result<Self> {
         if !input.peek(syn::token::Brace) {
-            return Ok(Self {
-                method_visibility: Visibility::Inherited,
-            });
+            return Ok(Self { method_visibility: Visibility::Inherited });
         }
 
         let content;
@@ -31,9 +32,7 @@ impl Parse for StyleableMacroInput {
             method_visibility = Some(content.parse()?);
         }
 
-        Ok(Self {
-            method_visibility: method_visibility.unwrap_or(Visibility::Inherited),
-        })
+        Ok(Self { method_visibility: method_visibility.unwrap_or(Visibility::Inherited) })
     }
 }
 
@@ -71,11 +70,8 @@ pub fn visibility_style_methods(input: TokenStream) -> TokenStream {
 
 pub fn margin_style_methods(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as StyleableMacroInput);
-    let methods = generate_box_style_methods(
-        margin_box_style_prefixes(),
-        box_style_suffixes(),
-        input.method_visibility,
-    );
+    let methods =
+        generate_box_style_methods(margin_box_style_prefixes(), box_style_suffixes(), input.method_visibility);
     let output = quote! {
         #(#methods)*
     };
@@ -85,11 +81,8 @@ pub fn margin_style_methods(input: TokenStream) -> TokenStream {
 
 pub fn padding_style_methods(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as StyleableMacroInput);
-    let methods = generate_box_style_methods(
-        padding_box_style_prefixes(),
-        box_style_suffixes(),
-        input.method_visibility,
-    );
+    let methods =
+        generate_box_style_methods(padding_box_style_prefixes(), box_style_suffixes(), input.method_visibility);
     let output = quote! {
         #(#methods)*
     };
@@ -100,11 +93,7 @@ pub fn padding_style_methods(input: TokenStream) -> TokenStream {
 pub fn position_style_methods(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as StyleableMacroInput);
     let visibility = input.method_visibility;
-    let methods = generate_box_style_methods(
-        position_box_style_prefixes(),
-        box_style_suffixes(),
-        visibility.clone(),
-    );
+    let methods = generate_box_style_methods(position_box_style_prefixes(), box_style_suffixes(), visibility.clone());
     let output = quote! {
         /// Sets the position of the element to `relative`.
         /// [Docs](https://tailwindcss.com/docs/position)
@@ -588,8 +577,7 @@ fn generate_box_style_methods(
 
 fn generate_methods() -> Vec<TokenStream2> {
     let visibility = Visibility::Inherited;
-    let mut methods =
-        generate_box_style_methods(box_prefixes(), box_style_suffixes(), visibility.clone());
+    let mut methods = generate_box_style_methods(box_prefixes(), box_style_suffixes(), visibility.clone());
 
     for corner_style_prefix in corner_prefixes() {
         methods.push(generate_custom_value_setter(
@@ -629,11 +617,7 @@ fn generate_predefined_setter(
     negate: bool,
     doc_string: &str,
 ) -> TokenStream2 {
-    let (negation_qualifier, negation_token) = if negate {
-        ("_neg", quote! { - })
-    } else {
-        ("", quote! {})
-    };
+    let (negation_qualifier, negation_token) = if negate { ("_neg", quote! { - }) } else { ("", quote! {}) };
 
     let method_name = if length.is_empty() {
         format_ident!("{name}{negation_qualifier}")
@@ -805,12 +789,7 @@ fn position_box_style_prefixes() -> Vec<BoxStylePrefix> {
         BoxStylePrefix {
             prefix: "inset",
             auto_allowed: true,
-            fields: vec![
-                quote! { inset.top },
-                quote! { inset.right },
-                quote! { inset.bottom },
-                quote! { inset.left },
-            ],
+            fields: vec![quote! { inset.top }, quote! { inset.right }, quote! { inset.bottom }, quote! { inset.left }],
             doc_string_prefix: "Sets the top, right, bottom, and left values of a positioned element. [Docs](https://tailwindcss.com/docs/top-right-bottom-left)",
         },
         BoxStylePrefix {
@@ -925,236 +904,52 @@ fn box_prefixes() -> Vec<BoxStylePrefix> {
 
 fn box_style_suffixes() -> Vec<BoxStyleSuffix> {
     vec![
-        BoxStyleSuffix {
-            suffix: "0",
-            length_tokens: quote! { px(0.) },
-            doc_string_suffix: "0px",
-        },
-        BoxStyleSuffix {
-            suffix: "0p5",
-            length_tokens: quote! { rems(0.125) },
-            doc_string_suffix: "2px (0.125rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "1",
-            length_tokens: quote! { rems(0.25) },
-            doc_string_suffix: "4px (0.25rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "1p5",
-            length_tokens: quote! { rems(0.375) },
-            doc_string_suffix: "6px (0.375rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "2",
-            length_tokens: quote! { rems(0.5) },
-            doc_string_suffix: "8px (0.5rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "2p5",
-            length_tokens: quote! { rems(0.625) },
-            doc_string_suffix: "10px (0.625rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "3",
-            length_tokens: quote! { rems(0.75) },
-            doc_string_suffix: "12px (0.75rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "3p5",
-            length_tokens: quote! { rems(0.875) },
-            doc_string_suffix: "14px (0.875rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "4",
-            length_tokens: quote! { rems(1.) },
-            doc_string_suffix: "16px (1rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "5",
-            length_tokens: quote! { rems(1.25) },
-            doc_string_suffix: "20px (1.25rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "6",
-            length_tokens: quote! { rems(1.5) },
-            doc_string_suffix: "24px (1.5rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "7",
-            length_tokens: quote! { rems(1.75) },
-            doc_string_suffix: "28px (1.75rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "8",
-            length_tokens: quote! { rems(2.0) },
-            doc_string_suffix: "32px (2rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "9",
-            length_tokens: quote! { rems(2.25) },
-            doc_string_suffix: "36px (2.25rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "10",
-            length_tokens: quote! { rems(2.5) },
-            doc_string_suffix: "40px (2.5rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "11",
-            length_tokens: quote! { rems(2.75) },
-            doc_string_suffix: "44px (2.75rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "12",
-            length_tokens: quote! { rems(3.) },
-            doc_string_suffix: "48px (3rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "16",
-            length_tokens: quote! { rems(4.) },
-            doc_string_suffix: "64px (4rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "20",
-            length_tokens: quote! { rems(5.) },
-            doc_string_suffix: "80px (5rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "24",
-            length_tokens: quote! { rems(6.) },
-            doc_string_suffix: "96px (6rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "32",
-            length_tokens: quote! { rems(8.) },
-            doc_string_suffix: "128px (8rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "40",
-            length_tokens: quote! { rems(10.) },
-            doc_string_suffix: "160px (10rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "48",
-            length_tokens: quote! { rems(12.) },
-            doc_string_suffix: "192px (12rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "56",
-            length_tokens: quote! { rems(14.) },
-            doc_string_suffix: "224px (14rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "64",
-            length_tokens: quote! { rems(16.) },
-            doc_string_suffix: "256px (16rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "72",
-            length_tokens: quote! { rems(18.) },
-            doc_string_suffix: "288px (18rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "80",
-            length_tokens: quote! { rems(20.) },
-            doc_string_suffix: "320px (20rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "96",
-            length_tokens: quote! { rems(24.) },
-            doc_string_suffix: "384px (24rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "112",
-            length_tokens: quote! { rems(28.) },
-            doc_string_suffix: "448px (28rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "128",
-            length_tokens: quote! { rems(32.) },
-            doc_string_suffix: "512px (32rem)",
-        },
-        BoxStyleSuffix {
-            suffix: "auto",
-            length_tokens: quote! { auto() },
-            doc_string_suffix: "Auto",
-        },
-        BoxStyleSuffix {
-            suffix: "px",
-            length_tokens: quote! { px(1.) },
-            doc_string_suffix: "1px",
-        },
-        BoxStyleSuffix {
-            suffix: "full",
-            length_tokens: quote! { relative(1.) },
-            doc_string_suffix: "100%",
-        },
-        BoxStyleSuffix {
-            suffix: "1_2",
-            length_tokens: quote! { relative(0.5) },
-            doc_string_suffix: "50% (1/2)",
-        },
-        BoxStyleSuffix {
-            suffix: "1_3",
-            length_tokens: quote! { relative(1./3.) },
-            doc_string_suffix: "33% (1/3)",
-        },
-        BoxStyleSuffix {
-            suffix: "2_3",
-            length_tokens: quote! { relative(2./3.) },
-            doc_string_suffix: "66% (2/3)",
-        },
-        BoxStyleSuffix {
-            suffix: "1_4",
-            length_tokens: quote! { relative(0.25) },
-            doc_string_suffix: "25% (1/4)",
-        },
-        BoxStyleSuffix {
-            suffix: "2_4",
-            length_tokens: quote! { relative(0.5) },
-            doc_string_suffix: "50% (2/4)",
-        },
-        BoxStyleSuffix {
-            suffix: "3_4",
-            length_tokens: quote! { relative(0.75) },
-            doc_string_suffix: "75% (3/4)",
-        },
-        BoxStyleSuffix {
-            suffix: "1_5",
-            length_tokens: quote! { relative(0.2) },
-            doc_string_suffix: "20% (1/5)",
-        },
-        BoxStyleSuffix {
-            suffix: "2_5",
-            length_tokens: quote! { relative(0.4) },
-            doc_string_suffix: "40% (2/5)",
-        },
-        BoxStyleSuffix {
-            suffix: "3_5",
-            length_tokens: quote! { relative(0.6) },
-            doc_string_suffix: "60% (3/5)",
-        },
-        BoxStyleSuffix {
-            suffix: "4_5",
-            length_tokens: quote! { relative(0.8) },
-            doc_string_suffix: "80% (4/5)",
-        },
-        BoxStyleSuffix {
-            suffix: "1_6",
-            length_tokens: quote! { relative(1./6.) },
-            doc_string_suffix: "16% (1/6)",
-        },
-        BoxStyleSuffix {
-            suffix: "5_6",
-            length_tokens: quote! { relative(5./6.) },
-            doc_string_suffix: "80% (5/6)",
-        },
-        BoxStyleSuffix {
-            suffix: "1_12",
-            length_tokens: quote! { relative(1./12.) },
-            doc_string_suffix: "8% (1/12)",
-        },
+        BoxStyleSuffix { suffix: "0", length_tokens: quote! { px(0.) }, doc_string_suffix: "0px" },
+        BoxStyleSuffix { suffix: "0p5", length_tokens: quote! { rems(0.125) }, doc_string_suffix: "2px (0.125rem)" },
+        BoxStyleSuffix { suffix: "1", length_tokens: quote! { rems(0.25) }, doc_string_suffix: "4px (0.25rem)" },
+        BoxStyleSuffix { suffix: "1p5", length_tokens: quote! { rems(0.375) }, doc_string_suffix: "6px (0.375rem)" },
+        BoxStyleSuffix { suffix: "2", length_tokens: quote! { rems(0.5) }, doc_string_suffix: "8px (0.5rem)" },
+        BoxStyleSuffix { suffix: "2p5", length_tokens: quote! { rems(0.625) }, doc_string_suffix: "10px (0.625rem)" },
+        BoxStyleSuffix { suffix: "3", length_tokens: quote! { rems(0.75) }, doc_string_suffix: "12px (0.75rem)" },
+        BoxStyleSuffix { suffix: "3p5", length_tokens: quote! { rems(0.875) }, doc_string_suffix: "14px (0.875rem)" },
+        BoxStyleSuffix { suffix: "4", length_tokens: quote! { rems(1.) }, doc_string_suffix: "16px (1rem)" },
+        BoxStyleSuffix { suffix: "5", length_tokens: quote! { rems(1.25) }, doc_string_suffix: "20px (1.25rem)" },
+        BoxStyleSuffix { suffix: "6", length_tokens: quote! { rems(1.5) }, doc_string_suffix: "24px (1.5rem)" },
+        BoxStyleSuffix { suffix: "7", length_tokens: quote! { rems(1.75) }, doc_string_suffix: "28px (1.75rem)" },
+        BoxStyleSuffix { suffix: "8", length_tokens: quote! { rems(2.0) }, doc_string_suffix: "32px (2rem)" },
+        BoxStyleSuffix { suffix: "9", length_tokens: quote! { rems(2.25) }, doc_string_suffix: "36px (2.25rem)" },
+        BoxStyleSuffix { suffix: "10", length_tokens: quote! { rems(2.5) }, doc_string_suffix: "40px (2.5rem)" },
+        BoxStyleSuffix { suffix: "11", length_tokens: quote! { rems(2.75) }, doc_string_suffix: "44px (2.75rem)" },
+        BoxStyleSuffix { suffix: "12", length_tokens: quote! { rems(3.) }, doc_string_suffix: "48px (3rem)" },
+        BoxStyleSuffix { suffix: "16", length_tokens: quote! { rems(4.) }, doc_string_suffix: "64px (4rem)" },
+        BoxStyleSuffix { suffix: "20", length_tokens: quote! { rems(5.) }, doc_string_suffix: "80px (5rem)" },
+        BoxStyleSuffix { suffix: "24", length_tokens: quote! { rems(6.) }, doc_string_suffix: "96px (6rem)" },
+        BoxStyleSuffix { suffix: "32", length_tokens: quote! { rems(8.) }, doc_string_suffix: "128px (8rem)" },
+        BoxStyleSuffix { suffix: "40", length_tokens: quote! { rems(10.) }, doc_string_suffix: "160px (10rem)" },
+        BoxStyleSuffix { suffix: "48", length_tokens: quote! { rems(12.) }, doc_string_suffix: "192px (12rem)" },
+        BoxStyleSuffix { suffix: "56", length_tokens: quote! { rems(14.) }, doc_string_suffix: "224px (14rem)" },
+        BoxStyleSuffix { suffix: "64", length_tokens: quote! { rems(16.) }, doc_string_suffix: "256px (16rem)" },
+        BoxStyleSuffix { suffix: "72", length_tokens: quote! { rems(18.) }, doc_string_suffix: "288px (18rem)" },
+        BoxStyleSuffix { suffix: "80", length_tokens: quote! { rems(20.) }, doc_string_suffix: "320px (20rem)" },
+        BoxStyleSuffix { suffix: "96", length_tokens: quote! { rems(24.) }, doc_string_suffix: "384px (24rem)" },
+        BoxStyleSuffix { suffix: "112", length_tokens: quote! { rems(28.) }, doc_string_suffix: "448px (28rem)" },
+        BoxStyleSuffix { suffix: "128", length_tokens: quote! { rems(32.) }, doc_string_suffix: "512px (32rem)" },
+        BoxStyleSuffix { suffix: "auto", length_tokens: quote! { auto() }, doc_string_suffix: "Auto" },
+        BoxStyleSuffix { suffix: "px", length_tokens: quote! { px(1.) }, doc_string_suffix: "1px" },
+        BoxStyleSuffix { suffix: "full", length_tokens: quote! { relative(1.) }, doc_string_suffix: "100%" },
+        BoxStyleSuffix { suffix: "1_2", length_tokens: quote! { relative(0.5) }, doc_string_suffix: "50% (1/2)" },
+        BoxStyleSuffix { suffix: "1_3", length_tokens: quote! { relative(1./3.) }, doc_string_suffix: "33% (1/3)" },
+        BoxStyleSuffix { suffix: "2_3", length_tokens: quote! { relative(2./3.) }, doc_string_suffix: "66% (2/3)" },
+        BoxStyleSuffix { suffix: "1_4", length_tokens: quote! { relative(0.25) }, doc_string_suffix: "25% (1/4)" },
+        BoxStyleSuffix { suffix: "2_4", length_tokens: quote! { relative(0.5) }, doc_string_suffix: "50% (2/4)" },
+        BoxStyleSuffix { suffix: "3_4", length_tokens: quote! { relative(0.75) }, doc_string_suffix: "75% (3/4)" },
+        BoxStyleSuffix { suffix: "1_5", length_tokens: quote! { relative(0.2) }, doc_string_suffix: "20% (1/5)" },
+        BoxStyleSuffix { suffix: "2_5", length_tokens: quote! { relative(0.4) }, doc_string_suffix: "40% (2/5)" },
+        BoxStyleSuffix { suffix: "3_5", length_tokens: quote! { relative(0.6) }, doc_string_suffix: "60% (3/5)" },
+        BoxStyleSuffix { suffix: "4_5", length_tokens: quote! { relative(0.8) }, doc_string_suffix: "80% (4/5)" },
+        BoxStyleSuffix { suffix: "1_6", length_tokens: quote! { relative(1./6.) }, doc_string_suffix: "16% (1/6)" },
+        BoxStyleSuffix { suffix: "5_6", length_tokens: quote! { relative(5./6.) }, doc_string_suffix: "80% (5/6)" },
+        BoxStyleSuffix { suffix: "1_12", length_tokens: quote! { relative(1./12.) }, doc_string_suffix: "8% (1/12)" },
     ]
 }
 
@@ -1172,34 +967,22 @@ fn corner_prefixes() -> Vec<CornerStylePrefix> {
         },
         CornerStylePrefix {
             prefix: "rounded_t",
-            fields: vec![
-                quote! { corner_radii.top_left },
-                quote! { corner_radii.top_right },
-            ],
+            fields: vec![quote! { corner_radii.top_left }, quote! { corner_radii.top_right }],
             doc_string_prefix: "Sets the border radius of the top side of the element. [Docs](https://tailwindcss.com/docs/border-radius#rounding-sides-separately)",
         },
         CornerStylePrefix {
             prefix: "rounded_b",
-            fields: vec![
-                quote! { corner_radii.bottom_left },
-                quote! { corner_radii.bottom_right },
-            ],
+            fields: vec![quote! { corner_radii.bottom_left }, quote! { corner_radii.bottom_right }],
             doc_string_prefix: "Sets the border radius of the bottom side of the element. [Docs](https://tailwindcss.com/docs/border-radius#rounding-sides-separately)",
         },
         CornerStylePrefix {
             prefix: "rounded_r",
-            fields: vec![
-                quote! { corner_radii.top_right },
-                quote! { corner_radii.bottom_right },
-            ],
+            fields: vec![quote! { corner_radii.top_right }, quote! { corner_radii.bottom_right }],
             doc_string_prefix: "Sets the border radius of the right side of the element. [Docs](https://tailwindcss.com/docs/border-radius#rounding-sides-separately)",
         },
         CornerStylePrefix {
             prefix: "rounded_l",
-            fields: vec![
-                quote! { corner_radii.top_left },
-                quote! { corner_radii.bottom_left },
-            ],
+            fields: vec![quote! { corner_radii.top_left }, quote! { corner_radii.bottom_left }],
             doc_string_prefix: "Sets the border radius of the left side of the element. [Docs](https://tailwindcss.com/docs/border-radius#rounding-sides-separately)",
         },
         CornerStylePrefix {
@@ -1227,51 +1010,15 @@ fn corner_prefixes() -> Vec<CornerStylePrefix> {
 
 fn corner_suffixes() -> Vec<CornerStyleSuffix> {
     vec![
-        CornerStyleSuffix {
-            suffix: "none",
-            radius_tokens: quote! { px(0.) },
-            doc_string_suffix: "0px",
-        },
-        CornerStyleSuffix {
-            suffix: "xs",
-            radius_tokens: quote! { rems(0.125) },
-            doc_string_suffix: "2px (0.125rem)",
-        },
-        CornerStyleSuffix {
-            suffix: "sm",
-            radius_tokens: quote! { rems(0.25) },
-            doc_string_suffix: "4px (0.25rem)",
-        },
-        CornerStyleSuffix {
-            suffix: "md",
-            radius_tokens: quote! { rems(0.375) },
-            doc_string_suffix: "6px (0.375rem)",
-        },
-        CornerStyleSuffix {
-            suffix: "lg",
-            radius_tokens: quote! { rems(0.5) },
-            doc_string_suffix: "8px (0.5rem)",
-        },
-        CornerStyleSuffix {
-            suffix: "xl",
-            radius_tokens: quote! { rems(0.75) },
-            doc_string_suffix: "12px (0.75rem)",
-        },
-        CornerStyleSuffix {
-            suffix: "2xl",
-            radius_tokens: quote! { rems(1.) },
-            doc_string_suffix: "16px (1rem)",
-        },
-        CornerStyleSuffix {
-            suffix: "3xl",
-            radius_tokens: quote! { rems(1.5) },
-            doc_string_suffix: "24px (1.5rem)",
-        },
-        CornerStyleSuffix {
-            suffix: "full",
-            radius_tokens: quote! {  px(9999.) },
-            doc_string_suffix: "9999px",
-        },
+        CornerStyleSuffix { suffix: "none", radius_tokens: quote! { px(0.) }, doc_string_suffix: "0px" },
+        CornerStyleSuffix { suffix: "xs", radius_tokens: quote! { rems(0.125) }, doc_string_suffix: "2px (0.125rem)" },
+        CornerStyleSuffix { suffix: "sm", radius_tokens: quote! { rems(0.25) }, doc_string_suffix: "4px (0.25rem)" },
+        CornerStyleSuffix { suffix: "md", radius_tokens: quote! { rems(0.375) }, doc_string_suffix: "6px (0.375rem)" },
+        CornerStyleSuffix { suffix: "lg", radius_tokens: quote! { rems(0.5) }, doc_string_suffix: "8px (0.5rem)" },
+        CornerStyleSuffix { suffix: "xl", radius_tokens: quote! { rems(0.75) }, doc_string_suffix: "12px (0.75rem)" },
+        CornerStyleSuffix { suffix: "2xl", radius_tokens: quote! { rems(1.) }, doc_string_suffix: "16px (1rem)" },
+        CornerStyleSuffix { suffix: "3xl", radius_tokens: quote! { rems(1.5) }, doc_string_suffix: "24px (1.5rem)" },
+        CornerStyleSuffix { suffix: "full", radius_tokens: quote! {  px(9999.) }, doc_string_suffix: "9999px" },
     ]
 }
 
@@ -1309,18 +1056,12 @@ fn border_prefixes() -> Vec<BorderStylePrefix> {
         },
         BorderStylePrefix {
             prefix: "border_x",
-            fields: vec![
-                quote! { border_widths.left },
-                quote! { border_widths.right },
-            ],
+            fields: vec![quote! { border_widths.left }, quote! { border_widths.right }],
             doc_string_prefix: "Sets the border width of the vertical sides of the element. [Docs](https://tailwindcss.com/docs/border-width#horizontal-and-vertical-sides)",
         },
         BorderStylePrefix {
             prefix: "border_y",
-            fields: vec![
-                quote! { border_widths.top },
-                quote! { border_widths.bottom },
-            ],
+            fields: vec![quote! { border_widths.top }, quote! { border_widths.bottom }],
             doc_string_prefix: "Sets the border width of the horizontal sides of the element. [Docs](https://tailwindcss.com/docs/border-width#horizontal-and-vertical-sides)",
         },
     ]
@@ -1328,90 +1069,22 @@ fn border_prefixes() -> Vec<BorderStylePrefix> {
 
 fn border_suffixes() -> Vec<BorderStyleSuffix> {
     vec![
-        BorderStyleSuffix {
-            suffix: "0",
-            width_tokens: quote! { px(0.)},
-            doc_string_suffix: "0px",
-        },
-        BorderStyleSuffix {
-            suffix: "1",
-            width_tokens: quote! { px(1.) },
-            doc_string_suffix: "1px",
-        },
-        BorderStyleSuffix {
-            suffix: "2",
-            width_tokens: quote! { px(2.) },
-            doc_string_suffix: "2px",
-        },
-        BorderStyleSuffix {
-            suffix: "3",
-            width_tokens: quote! { px(3.) },
-            doc_string_suffix: "3px",
-        },
-        BorderStyleSuffix {
-            suffix: "4",
-            width_tokens: quote! { px(4.) },
-            doc_string_suffix: "4px",
-        },
-        BorderStyleSuffix {
-            suffix: "5",
-            width_tokens: quote! { px(5.) },
-            doc_string_suffix: "5px",
-        },
-        BorderStyleSuffix {
-            suffix: "6",
-            width_tokens: quote! { px(6.) },
-            doc_string_suffix: "6px",
-        },
-        BorderStyleSuffix {
-            suffix: "7",
-            width_tokens: quote! { px(7.) },
-            doc_string_suffix: "7px",
-        },
-        BorderStyleSuffix {
-            suffix: "8",
-            width_tokens: quote! { px(8.) },
-            doc_string_suffix: "8px",
-        },
-        BorderStyleSuffix {
-            suffix: "9",
-            width_tokens: quote! { px(9.) },
-            doc_string_suffix: "9px",
-        },
-        BorderStyleSuffix {
-            suffix: "10",
-            width_tokens: quote! { px(10.) },
-            doc_string_suffix: "10px",
-        },
-        BorderStyleSuffix {
-            suffix: "11",
-            width_tokens: quote! { px(11.) },
-            doc_string_suffix: "11px",
-        },
-        BorderStyleSuffix {
-            suffix: "12",
-            width_tokens: quote! { px(12.) },
-            doc_string_suffix: "12px",
-        },
-        BorderStyleSuffix {
-            suffix: "16",
-            width_tokens: quote! { px(16.) },
-            doc_string_suffix: "16px",
-        },
-        BorderStyleSuffix {
-            suffix: "20",
-            width_tokens: quote! { px(20.) },
-            doc_string_suffix: "20px",
-        },
-        BorderStyleSuffix {
-            suffix: "24",
-            width_tokens: quote! { px(24.) },
-            doc_string_suffix: "24px",
-        },
-        BorderStyleSuffix {
-            suffix: "32",
-            width_tokens: quote! { px(32.) },
-            doc_string_suffix: "32px",
-        },
+        BorderStyleSuffix { suffix: "0", width_tokens: quote! { px(0.)}, doc_string_suffix: "0px" },
+        BorderStyleSuffix { suffix: "1", width_tokens: quote! { px(1.) }, doc_string_suffix: "1px" },
+        BorderStyleSuffix { suffix: "2", width_tokens: quote! { px(2.) }, doc_string_suffix: "2px" },
+        BorderStyleSuffix { suffix: "3", width_tokens: quote! { px(3.) }, doc_string_suffix: "3px" },
+        BorderStyleSuffix { suffix: "4", width_tokens: quote! { px(4.) }, doc_string_suffix: "4px" },
+        BorderStyleSuffix { suffix: "5", width_tokens: quote! { px(5.) }, doc_string_suffix: "5px" },
+        BorderStyleSuffix { suffix: "6", width_tokens: quote! { px(6.) }, doc_string_suffix: "6px" },
+        BorderStyleSuffix { suffix: "7", width_tokens: quote! { px(7.) }, doc_string_suffix: "7px" },
+        BorderStyleSuffix { suffix: "8", width_tokens: quote! { px(8.) }, doc_string_suffix: "8px" },
+        BorderStyleSuffix { suffix: "9", width_tokens: quote! { px(9.) }, doc_string_suffix: "9px" },
+        BorderStyleSuffix { suffix: "10", width_tokens: quote! { px(10.) }, doc_string_suffix: "10px" },
+        BorderStyleSuffix { suffix: "11", width_tokens: quote! { px(11.) }, doc_string_suffix: "11px" },
+        BorderStyleSuffix { suffix: "12", width_tokens: quote! { px(12.) }, doc_string_suffix: "12px" },
+        BorderStyleSuffix { suffix: "16", width_tokens: quote! { px(16.) }, doc_string_suffix: "16px" },
+        BorderStyleSuffix { suffix: "20", width_tokens: quote! { px(20.) }, doc_string_suffix: "20px" },
+        BorderStyleSuffix { suffix: "24", width_tokens: quote! { px(24.) }, doc_string_suffix: "24px" },
+        BorderStyleSuffix { suffix: "32", width_tokens: quote! { px(32.) }, doc_string_suffix: "32px" },
     ]
 }

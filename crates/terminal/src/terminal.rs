@@ -3001,7 +3001,7 @@ fn foreground_process_command_from_argv(argv: &[String]) -> Option<String> {
         return command;
     }
 
-    argv.iter().skip(1).filter_map(|argument| normalize_script_command_name(argument)).next().or(command)
+    argv.iter().skip(1).find_map(|argument| normalize_script_command_name(argument)).or(command)
 }
 
 fn normalize_script_command_name(argument: &str) -> Option<String> {

@@ -1,8 +1,10 @@
 mod icons;
 
-use std::{path::Path, str};
+use std::path::Path;
+use std::str;
 
-use gpui::{App, SharedString};
+use gpui::App;
+use gpui::SharedString;
 use settings_content::FolderIndicator;
 use util::paths::PathExt;
 
@@ -113,14 +115,8 @@ impl FileIcons {
         path: &Path,
         cx: &App,
     ) -> FolderIndicators {
-        let chevron = indicator
-            .shows_chevron()
-            .then(|| Self::get_chevron_icon(expanded, cx))
-            .flatten();
-        let icon = indicator
-            .shows_icon()
-            .then(|| Self::get_folder_icon(expanded, path, cx))
-            .flatten();
+        let chevron = indicator.shows_chevron().then(|| Self::get_chevron_icon(expanded, cx)).flatten();
+        let icon = indicator.shows_icon().then(|| Self::get_folder_icon(expanded, path, cx)).flatten();
 
         FolderIndicators { chevron, icon }
     }

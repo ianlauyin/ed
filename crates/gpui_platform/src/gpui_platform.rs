@@ -6,8 +6,9 @@ compile_error!("Supported targets are macOS and the headless Linux remote server
 #[cfg(target_os = "linux")]
 mod linux;
 
-pub use gpui::Platform;
 use std::rc::Rc;
+
+pub use gpui::Platform;
 
 /// Returns a native background executor.
 pub fn background_executor() -> gpui::BackgroundExecutor {
@@ -31,10 +32,7 @@ pub fn current_platform(headless: bool) -> Rc<dyn Platform> {
     }
     #[cfg(target_os = "linux")]
     {
-        assert!(
-            headless,
-            "the Linux remote server only supports headless operation"
-        );
+        assert!(headless, "the Linux remote server only supports headless operation");
         Rc::new(linux::HeadlessPlatform::new())
     }
 }

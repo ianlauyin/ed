@@ -1,9 +1,11 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
-use crate::{
-    FullDocumentDiagnosticReport, PartialResultParams, UnchangedDocumentDiagnosticReport, Uri,
-    WorkDoneProgressParams,
-};
+use crate::FullDocumentDiagnosticReport;
+use crate::PartialResultParams;
+use crate::UnchangedDocumentDiagnosticReport;
+use crate::Uri;
+use crate::WorkDoneProgressParams;
 
 /// Workspace client capabilities specific to diagnostic pull requests.
 ///

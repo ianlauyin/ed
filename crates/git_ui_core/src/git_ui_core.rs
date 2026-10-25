@@ -1,10 +1,22 @@
 use std::rc::Rc;
 
-use gpui::{
-    AnyView, App, Context, DismissEvent, Entity, EventEmitter, FocusHandle, Focusable, Global,
-    IntoElement, ManagedView, Render, Subscription, WeakEntity, Window,
-};
-use project::{ProjectPath, git_store::Repository};
+use gpui::AnyView;
+use gpui::App;
+use gpui::Context;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::EventEmitter;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::Global;
+use gpui::IntoElement;
+use gpui::ManagedView;
+use gpui::Render;
+use gpui::Subscription;
+use gpui::WeakEntity;
+use gpui::Window;
+use project::ProjectPath;
+use project::git_store::Repository;
 use workspace::Workspace;
 
 pub mod created_worktrees;
@@ -29,8 +41,7 @@ impl GitPickerPopover {
     pub fn new<V: ManagedView>(view: Entity<V>, cx: &mut Context<Self>) -> Self {
         Self {
             focus_handle: view.focus_handle(cx),
-            _dismiss_subscription: cx
-                .subscribe(&view, |_, _, _: &DismissEvent, cx| cx.emit(DismissEvent)),
+            _dismiss_subscription: cx.subscribe(&view, |_, _, _: &DismissEvent, cx| cx.emit(DismissEvent)),
             view: view.into(),
         }
     }
@@ -50,24 +61,15 @@ impl Render for GitPickerPopover {
     }
 }
 
-type BranchPickerBuilder = dyn Fn(
-    WeakEntity<Workspace>,
-    Option<Entity<Repository>>,
-    &mut Window,
-    &mut App,
-) -> Entity<GitPickerPopover>;
+type BranchPickerBuilder =
+    dyn Fn(WeakEntity<Workspace>, Option<Entity<Repository>>, &mut Window, &mut App) -> Entity<GitPickerPopover>;
 
 struct BranchPickerBuilderGlobal(Rc<BranchPickerBuilder>);
 
 impl Global for BranchPickerBuilderGlobal {}
 
 pub fn set_branch_picker_builder(
-    builder: impl Fn(
-        WeakEntity<Workspace>,
-        Option<Entity<Repository>>,
-        &mut Window,
-        &mut App,
-    ) -> Entity<GitPickerPopover>
+    builder: impl Fn(WeakEntity<Workspace>, Option<Entity<Repository>>, &mut Window, &mut App) -> Entity<GitPickerPopover>
     + 'static,
     cx: &mut App,
 ) {
@@ -105,10 +107,7 @@ pub fn open_file_history(
     window: &mut Window,
     cx: &mut Context<Workspace>,
 ) {
-    let Some(opener) = cx
-        .try_global::<FileHistoryOpenerGlobal>()
-        .map(|opener| opener.0.clone())
-    else {
+    let Some(opener) = cx.try_global::<FileHistoryOpenerGlobal>().map(|opener| opener.0.clone()) else {
         return;
     };
     opener(workspace, path, window, cx);

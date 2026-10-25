@@ -1,10 +1,16 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::Value;
 
-use crate::{
-    DynamicRegistrationClientCapabilities, PartialResultParams, Range, SymbolKind, SymbolTag,
-    TextDocumentPositionParams, Uri, WorkDoneProgressOptions, WorkDoneProgressParams,
-};
+use crate::DynamicRegistrationClientCapabilities;
+use crate::PartialResultParams;
+use crate::Range;
+use crate::SymbolKind;
+use crate::SymbolTag;
+use crate::TextDocumentPositionParams;
+use crate::Uri;
+use crate::WorkDoneProgressOptions;
+use crate::WorkDoneProgressParams;
 
 pub type CallHierarchyClientCapabilities = DynamicRegistrationClientCapabilities;
 

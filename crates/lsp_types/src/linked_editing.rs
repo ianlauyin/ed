@@ -1,10 +1,13 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
-use crate::{
-    DynamicRegistrationClientCapabilities, Range, StaticRegistrationOptions,
-    TextDocumentPositionParams, TextDocumentRegistrationOptions, WorkDoneProgressOptions,
-    WorkDoneProgressParams,
-};
+use crate::DynamicRegistrationClientCapabilities;
+use crate::Range;
+use crate::StaticRegistrationOptions;
+use crate::TextDocumentPositionParams;
+use crate::TextDocumentRegistrationOptions;
+use crate::WorkDoneProgressOptions;
+use crate::WorkDoneProgressParams;
 
 pub type LinkedEditingRangeClientCapabilities = DynamicRegistrationClientCapabilities;
 

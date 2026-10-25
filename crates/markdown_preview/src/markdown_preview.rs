@@ -1,4 +1,5 @@
-use gpui::{App, actions};
+use gpui::App;
+use gpui::actions;
 use workspace::Workspace;
 
 pub mod markdown_preview_settings;
@@ -6,7 +7,8 @@ mod markdown_preview_style;
 pub mod markdown_preview_view;
 mod mermaid_diagrams;
 
-pub use zed_actions::preview::markdown::{OpenPreview, OpenPreviewToTheSide};
+pub use zed_actions::preview::markdown::OpenPreview;
+pub use zed_actions::preview::markdown::OpenPreviewToTheSide;
 
 use crate::markdown_preview_view::MarkdownPreviewView;
 

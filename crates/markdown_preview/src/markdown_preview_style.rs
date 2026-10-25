@@ -1,14 +1,27 @@
 use std::sync::Arc;
 
-use gpui::{
-    AbsoluteLength, BorderStyle, DefiniteLength, EdgesRefinement, Length, StyleRefinement,
-    TextStyleRefinement, UnderlineStyle, Window, point, px, relative, rems,
-};
-use markdown::{BlockQuoteKindColors, HeadingLevelStyles, MarkdownStyle};
+use gpui::AbsoluteLength;
+use gpui::BorderStyle;
+use gpui::DefiniteLength;
+use gpui::EdgesRefinement;
+use gpui::Length;
+use gpui::StyleRefinement;
+use gpui::TextStyleRefinement;
+use gpui::UnderlineStyle;
+use gpui::Window;
+use gpui::point;
+use gpui::px;
+use gpui::relative;
+use gpui::rems;
+use markdown::BlockQuoteKindColors;
+use markdown::HeadingLevelStyles;
+use markdown::MarkdownStyle;
 use settings::Settings as _;
-use theme::{SyntaxTheme, ThemeColors};
+use theme::SyntaxTheme;
+use theme::ThemeColors;
 use theme_settings::ThemeSettings;
-use ui::{Rems, prelude::*};
+use ui::Rems;
+use ui::prelude::*;
 
 /// The markdown style of the preview, rendered with `colors` and `syntax`
 /// (which may come from a theme other than the active editor theme).
@@ -108,10 +121,7 @@ pub(crate) fn preview_markdown_style(
             warning: status.warning,
             caution: status.error,
         },
-        block_quote: TextStyleRefinement {
-            color: Some(colors.text_muted),
-            ..Default::default()
-        },
+        block_quote: TextStyleRefinement { color: Some(colors.text_muted), ..Default::default() },
         code_block_overflow_x_scroll: true,
         code_block,
         inline_code: TextStyleRefinement {
@@ -140,10 +150,7 @@ pub(crate) fn preview_markdown_style(
             h3: Some(heading_text_style(rems(1.2))),
             h4: Some(heading_text_style(rems(1.0))),
             h5: Some(heading_text_style(rems(0.875))),
-            h6: Some(TextStyleRefinement {
-                color: Some(colors.text_muted),
-                ..heading_text_style(rems(0.85))
-            }),
+            h6: Some(TextStyleRefinement { color: Some(colors.text_muted), ..heading_text_style(rems(0.85)) }),
         }),
         heading_border_color: Some(colors.border_variant),
         paragraph_spacing: px(16.),

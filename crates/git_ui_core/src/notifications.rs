@@ -1,5 +1,8 @@
 use editor::Editor;
-use gpui::{App, Context, Entity, SharedString};
+use gpui::App;
+use gpui::Context;
+use gpui::Entity;
+use gpui::SharedString;
 use language::Buffer;
 use notifications::status_toast::StatusToast;
 use proto::RpcError;
@@ -33,32 +36,23 @@ pub fn open_output(
     workspace.add_item_to_center(Box::new(editor), window, cx);
 }
 
-pub fn show_error_toast(
-    workspace: Entity<Workspace>,
-    action: impl Into<SharedString>,
-    e: anyhow::Error,
-    cx: &mut App,
-) {
+pub fn show_error_toast(workspace: Entity<Workspace>, action: impl Into<SharedString>, e: anyhow::Error, cx: &mut App) {
     let action = action.into();
     let message = format_git_error_toast_message(&e);
     cx.defer(move |cx| {
         workspace.update(cx, |workspace, cx| {
             let workspace_weak = cx.weak_entity();
             let toast = StatusToast::new(format!("git {} failed", action), cx, |this, _cx| {
-                this.icon(
-                    Icon::new(IconName::XCircle)
-                        .size(IconSize::Small)
-                        .color(Color::Error),
+                this.icon(Icon::new(IconName::XCircle).size(IconSize::Small).color(Color::Error)).action(
+                    "View Log",
+                    move |window, cx| {
+                        let message = message.clone();
+                        let action = action.clone();
+                        workspace_weak
+                            .update(cx, move |workspace, cx| open_output(action, workspace, &message, window, cx))
+                            .ok();
+                    },
                 )
-                .action("View Log", move |window, cx| {
-                    let message = message.clone();
-                    let action = action.clone();
-                    workspace_weak
-                        .update(cx, move |workspace, cx| {
-                            open_output(action, workspace, &message, window, cx)
-                        })
-                        .ok();
-                })
             });
             workspace.toggle_status_toast(toast, cx)
         });
@@ -66,9 +60,7 @@ pub fn show_error_toast(
 }
 
 fn rpc_error_raw_message_from_chain(error: &anyhow::Error) -> Option<&str> {
-    error
-        .chain()
-        .find_map(|cause| cause.downcast_ref::<RpcError>().map(RpcError::raw_message))
+    error.chain().find_map(|cause| cause.downcast_ref::<RpcError>().map(RpcError::raw_message))
 }
 
 fn format_git_error_toast_message(error: &anyhow::Error) -> String {

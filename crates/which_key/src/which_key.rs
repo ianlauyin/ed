@@ -3,7 +3,12 @@
 mod pending_bindings;
 mod pending_keystrokes_indicator;
 
-use gpui::{Action, KeybindingKeystroke, Keystroke, PlatformKeyboardMapper, SharedString, Window};
+use gpui::Action;
+use gpui::KeybindingKeystroke;
+use gpui::Keystroke;
+use gpui::PlatformKeyboardMapper;
+use gpui::SharedString;
+use gpui::Window;
 pub use pending_keystrokes_indicator::PendingKeystrokesIndicator;
 
 gpui::actions!(
@@ -31,10 +36,7 @@ pub(crate) fn map_pending_keystrokes(
         .collect()
 }
 
-pub(crate) fn bindings_for_pending_input(
-    window: &Window,
-    pending_keystrokes: &[Keystroke],
-) -> Vec<PendingBinding> {
+pub(crate) fn bindings_for_pending_input(window: &Window, pending_keystrokes: &[Keystroke]) -> Vec<PendingBinding> {
     // Uses GPUI's candidate list as is, on purpose, instead of repeating dispatch rules.
     // The list can include a longer chord that can't be typed because a shorter binding for its
     // prefix comes later in the keymap. GPUI's shortcut display shows those chords too.
@@ -48,10 +50,7 @@ pub(crate) fn bindings_for_pending_input(
             }
             let remaining_keystrokes = remaining_keystrokes.to_vec();
             let action_name = binding_label(binding.action());
-            Some(PendingBinding {
-                remaining_keystrokes,
-                action_name,
-            })
+            Some(PendingBinding { remaining_keystrokes, action_name })
         })
         .collect()
 }

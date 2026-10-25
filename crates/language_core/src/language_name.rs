@@ -1,10 +1,11 @@
+use std::borrow::Borrow;
+use std::sync::atomic::AtomicUsize;
+use std::sync::atomic::Ordering::SeqCst;
+
 use gpui_shared_string::SharedString;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use std::{
-    borrow::Borrow,
-    sync::atomic::{AtomicUsize, Ordering::SeqCst},
-};
+use serde::Deserialize;
+use serde::Serialize;
 
 static NEXT_LANGUAGE_ID: AtomicUsize = AtomicUsize::new(0);
 
@@ -23,9 +24,7 @@ impl Default for LanguageId {
     }
 }
 
-#[derive(
-    Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema,
-)]
+#[derive(Debug, Clone, Hash, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize, JsonSchema)]
 pub struct LanguageName(pub SharedString);
 
 impl LanguageName {

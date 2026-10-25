@@ -6,12 +6,22 @@ pub mod remote_client;
 pub mod remote_identity;
 mod transport;
 
-pub use remote_client::{
-    CommandTemplate, ConnectionIdentifier, ConnectionState, Interactive, RemoteArch, RemoteClient,
-    RemoteClientDelegate, RemoteClientEvent, RemoteConnection, RemoteConnectionOptions, RemoteOs,
-    RemotePlatform, connect, has_active_connection,
-};
-pub use remote_identity::{
-    RemoteConnectionIdentity, remote_connection_identity, same_remote_connection_identity,
-};
-pub use transport::ssh::{SshConnectionOptions, SshPortForwardOption};
+pub use remote_client::CommandTemplate;
+pub use remote_client::ConnectionIdentifier;
+pub use remote_client::ConnectionState;
+pub use remote_client::Interactive;
+pub use remote_client::RemoteArch;
+pub use remote_client::RemoteClient;
+pub use remote_client::RemoteClientDelegate;
+pub use remote_client::RemoteClientEvent;
+pub use remote_client::RemoteConnection;
+pub use remote_client::RemoteConnectionOptions;
+pub use remote_client::RemoteOs;
+pub use remote_client::RemotePlatform;
+pub use remote_client::connect;
+pub use remote_client::has_active_connection;
+pub use remote_identity::RemoteConnectionIdentity;
+pub use remote_identity::remote_connection_identity;
+pub use remote_identity::same_remote_connection_identity;
+pub use transport::ssh::SshConnectionOptions;
+pub use transport::ssh::SshPortForwardOption;

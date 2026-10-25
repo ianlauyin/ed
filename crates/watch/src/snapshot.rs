@@ -11,18 +11,20 @@
 //! assert_eq!(*receiver.snapshot(), 2);
 //! ```
 
-use crate::{NoReceiverError, NoSenderError};
+use std::ops;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::sync::Weak;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::Ordering::SeqCst;
+use std::task::Context;
+use std::task::Poll;
+
 use arc_swap::ArcSwap;
 use futures::task::AtomicWaker;
-use std::{
-    ops,
-    pin::Pin,
-    sync::{
-        Arc, Weak,
-        atomic::{AtomicBool, Ordering::SeqCst},
-    },
-    task::{Context, Poll},
-};
+
+use crate::NoReceiverError;
+use crate::NoSenderError;
 
 struct Versioned<T> {
     value: T,
@@ -43,11 +45,7 @@ impl<T> State<T> {
             receivers.push(Arc::downgrade(&waker));
             receivers
         });
-        Receiver {
-            state: self.clone(),
-            waker,
-            version,
-        }
+        Receiver { state: self.clone(), waker, version }
     }
 
     fn wake_receivers(&self) -> Result<(), NoReceiverError> {
@@ -68,9 +66,7 @@ impl<T> State<T> {
 /// change, even when the value is equal; slow receivers skip intermediate values.
 pub fn channel<T>(value: T) -> (Sender<T>, Receiver<T>) {
     let receiver = Receiver::constant(value);
-    let sender = Sender {
-        state: receiver.state.clone(),
-    };
+    let sender = Sender { state: receiver.state.clone() };
     (sender, receiver)
 }
 
@@ -94,9 +90,7 @@ impl<T> Sender<T> {
     /// stored and can be read by a subsequently created receiver.
     pub fn send(&mut self, value: T) -> Result<(), NoReceiverError> {
         let version = self.state.latest.load().version.wrapping_add(1);
-        self.state
-            .latest
-            .store(Arc::new(Versioned { value, version }));
+        self.state.latest.store(Arc::new(Versioned { value, version }));
         self.state.wake_receivers()
     }
 }
@@ -129,13 +123,9 @@ impl<T> Clone for Receiver<T> {
 impl<T> Drop for Receiver<T> {
     fn drop(&mut self) {
         let waker = Arc::downgrade(&self.waker);
-        self.state.receivers.rcu(|receivers| {
-            receivers
-                .iter()
-                .filter(|receiver| !receiver.ptr_eq(&waker))
-                .cloned()
-                .collect::<Vec<_>>()
-        });
+        self.state
+            .receivers
+            .rcu(|receivers| receivers.iter().filter(|receiver| !receiver.ptr_eq(&waker)).cloned().collect::<Vec<_>>());
     }
 }
 

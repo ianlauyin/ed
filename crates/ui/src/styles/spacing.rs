@@ -1,4 +1,8 @@
-use gpui::{App, Pixels, Rems, px, rems};
+use gpui::App;
+use gpui::Pixels;
+use gpui::Rems;
+use gpui::px;
+use gpui::rems;
 use theme::UiDensity;
 use ui_macros::derive_dynamic_spacing;
 

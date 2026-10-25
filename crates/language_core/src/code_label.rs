@@ -1,5 +1,6 @@
-use crate::highlight_map::HighlightId;
 use std::ops::Range;
+
+use crate::highlight_map::HighlightId;
 
 #[derive(Debug, Eq, PartialEq, Copy, Clone)]
 pub enum SymbolKind {
@@ -124,26 +125,15 @@ impl CodeLabel {
         Self::new(text, filter_range, runs)
     }
 
-    pub fn new(
-        text: String,
-        filter_range: Range<usize>,
-        runs: Vec<(Range<usize>, HighlightId)>,
-    ) -> Self {
-        assert!(
-            text.get(filter_range.clone()).is_some(),
-            "invalid filter range"
-        );
+    pub fn new(text: String, filter_range: Range<usize>, runs: Vec<(Range<usize>, HighlightId)>) -> Self {
+        assert!(text.get(filter_range.clone()).is_some(), "invalid filter range");
         runs.iter().for_each(|(range, _)| {
             assert!(
                 text.get(range.clone()).is_some(),
                 "invalid run range with inputs. Requested range {range:?} in text '{text}'",
             );
         });
-        Self {
-            runs,
-            filter_range,
-            text,
-        }
+        Self { runs, filter_range, text }
     }
 
     pub fn text(&self) -> &str {
@@ -170,11 +160,7 @@ impl From<&str> for CodeLabel {
 impl CodeLabelBuilder {
     pub fn respan_filter_range(&mut self, filter_text: Option<&str>) {
         self.filter_range = filter_text
-            .and_then(|filter| {
-                self.text
-                    .find(filter)
-                    .map(|index| index..index + filter.len())
-            })
+            .and_then(|filter| self.text.find(filter).map(|index| index..index + filter.len()))
             .unwrap_or(0..self.text.len());
     }
 
@@ -191,10 +177,6 @@ impl CodeLabelBuilder {
         if self.filter_range.end == 0 {
             self.respan_filter_range(None);
         }
-        CodeLabel {
-            text: self.text,
-            runs: self.runs,
-            filter_range: self.filter_range,
-        }
+        CodeLabel { text: self.text, runs: self.runs, filter_range: self.filter_range }
     }
 }

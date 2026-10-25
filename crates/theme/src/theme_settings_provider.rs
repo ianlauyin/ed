@@ -1,4 +1,7 @@
-use gpui::{App, Font, Global, Pixels};
+use gpui::App;
+use gpui::Font;
+use gpui::Global;
+use gpui::Pixels;
 
 use crate::UiDensity;
 

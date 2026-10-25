@@ -1,9 +1,18 @@
-use crate::{
-    Command, LSPAny, Location, MarkupContent, Position, Range, StaticRegistrationOptions,
-    TextDocumentIdentifier, TextDocumentRegistrationOptions, TextEdit, WorkDoneProgressOptions,
-    WorkDoneProgressParams,
-};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
+
+use crate::Command;
+use crate::LSPAny;
+use crate::Location;
+use crate::MarkupContent;
+use crate::Position;
+use crate::Range;
+use crate::StaticRegistrationOptions;
+use crate::TextDocumentIdentifier;
+use crate::TextDocumentRegistrationOptions;
+use crate::TextEdit;
+use crate::WorkDoneProgressOptions;
+use crate::WorkDoneProgressParams;
 
 #[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]

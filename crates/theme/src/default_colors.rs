@@ -1,45 +1,24 @@
-use gpui::{Hsla, Rgba};
 use std::sync::LazyLock;
 
+use gpui::Hsla;
+use gpui::Rgba;
+
 use crate::ColorScale;
-use crate::scale::{ColorScaleSet, ColorScales};
-use crate::{SystemColors, ThemeColors};
+use crate::SystemColors;
+use crate::ThemeColors;
+use crate::scale::ColorScaleSet;
+use crate::scale::ColorScales;
 
 pub(crate) fn neutral() -> &'static ColorScaleSet {
     static NEUTRAL: LazyLock<ColorScaleSet> = LazyLock::new(sand);
     &NEUTRAL
 }
 
-const ADDED_COLOR: Hsla = Hsla {
-    h: 134. / 360.,
-    s: 0.55,
-    l: 0.40,
-    a: 1.0,
-};
-const WORD_ADDED_COLOR: Hsla = Hsla {
-    h: 134. / 360.,
-    s: 0.55,
-    l: 0.40,
-    a: 0.35,
-};
-const MODIFIED_COLOR: Hsla = Hsla {
-    h: 48. / 360.,
-    s: 0.76,
-    l: 0.47,
-    a: 1.0,
-};
-const REMOVED_COLOR: Hsla = Hsla {
-    h: 350. / 360.,
-    s: 0.88,
-    l: 0.25,
-    a: 1.0,
-};
-const WORD_DELETED_COLOR: Hsla = Hsla {
-    h: 350. / 360.,
-    s: 0.88,
-    l: 0.25,
-    a: 0.80,
-};
+const ADDED_COLOR: Hsla = Hsla { h: 134. / 360., s: 0.55, l: 0.40, a: 1.0 };
+const WORD_ADDED_COLOR: Hsla = Hsla { h: 134. / 360., s: 0.55, l: 0.40, a: 0.35 };
+const MODIFIED_COLOR: Hsla = Hsla { h: 48. / 360., s: 0.76, l: 0.47, a: 1.0 };
+const REMOVED_COLOR: Hsla = Hsla { h: 350. / 360., s: 0.88, l: 0.25, a: 1.0 };
+const WORD_DELETED_COLOR: Hsla = Hsla { h: 350. / 360., s: 0.88, l: 0.25, a: 0.80 };
 
 /// The default colors for the theme.
 ///

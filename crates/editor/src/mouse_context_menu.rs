@@ -1,19 +1,40 @@
-use crate::{
-    Copy, CopyAndTrim, Cut, DisplayPoint, DisplaySnapshot, Editor, FindAllReferences,
-    GoToDeclaration, GoToDefinition, GoToImplementation, GoToTypeDefinition, Paste, Rename,
-    RevealInFileManager, SelectMode, SelectionEffects, SelectionExt, ToDisplayPoint,
-    ToggleCodeActions,
-    actions::{Format, FormatSelections},
-    selections_collection::SelectionsCollection,
-};
-use gpui::prelude::FluentBuilder;
-use gpui::{Context, DismissEvent, Entity, Focusable as _, Pixels, Point, Subscription, Window};
-
 use std::ops::Range;
+
+use gpui::Context;
+use gpui::DismissEvent;
+use gpui::Entity;
+use gpui::Focusable as _;
+use gpui::Pixels;
+use gpui::Point;
+use gpui::Subscription;
+use gpui::Window;
+use gpui::prelude::FluentBuilder;
 use workspace::OpenInTerminal;
-use zed_actions::preview::{
-    markdown::OpenPreview as OpenMarkdownPreview, svg::OpenPreview as OpenSvgPreview,
-};
+use zed_actions::preview::markdown::OpenPreview as OpenMarkdownPreview;
+use zed_actions::preview::svg::OpenPreview as OpenSvgPreview;
+
+use crate::Copy;
+use crate::CopyAndTrim;
+use crate::Cut;
+use crate::DisplayPoint;
+use crate::DisplaySnapshot;
+use crate::Editor;
+use crate::FindAllReferences;
+use crate::GoToDeclaration;
+use crate::GoToDefinition;
+use crate::GoToImplementation;
+use crate::GoToTypeDefinition;
+use crate::Paste;
+use crate::Rename;
+use crate::RevealInFileManager;
+use crate::SelectMode;
+use crate::SelectionEffects;
+use crate::SelectionExt;
+use crate::ToDisplayPoint;
+use crate::ToggleCodeActions;
+use crate::actions::Format;
+use crate::actions::FormatSelections;
+use crate::selections_collection::SelectionsCollection;
 
 #[derive(Debug)]
 pub enum MenuPosition {
@@ -22,10 +43,7 @@ pub enum MenuPosition {
     PinnedToScreen(Point<Pixels>),
     /// When the editor is scrolled, the context menu follows the position it is associated with.
     /// Disappears when the position is no longer visible.
-    PinnedToEditor {
-        source: multi_buffer::Anchor,
-        offset: Point<Pixels>,
-    },
+    PinnedToEditor { source: multi_buffer::Anchor, offset: Point<Pixels> },
 }
 
 pub struct MouseContextMenu {
@@ -54,23 +72,11 @@ impl MouseContextMenu {
         cx: &mut Context<Editor>,
     ) -> Option<Self> {
         let editor_snapshot = editor.snapshot(window, cx);
-        let content_origin = editor.last_bounds?.origin
-            + Point {
-                x: editor.gutter_dimensions.width,
-                y: Pixels::ZERO,
-            };
+        let content_origin = editor.last_bounds?.origin + Point { x: editor.gutter_dimensions.width, y: Pixels::ZERO };
         let source_position = editor.to_pixel_point(source, &editor_snapshot, window, cx)?;
-        let menu_position = MenuPosition::PinnedToEditor {
-            source,
-            offset: position - (source_position + content_origin),
-        };
-        Some(MouseContextMenu::new(
-            editor,
-            menu_position,
-            context_menu,
-            window,
-            cx,
-        ))
+        let menu_position =
+            MenuPosition::PinnedToEditor { source, offset: position - (source_position + content_origin) };
+        Some(MouseContextMenu::new(editor, menu_position, context_menu, window, cx))
     }
 
     pub(crate) fn new(
@@ -107,21 +113,14 @@ impl MouseContextMenu {
 
         let selection_init = *editor.selections.newest_anchor();
 
-        let _cursor_move_subscription = cx.subscribe_in(
-            &cx.entity(),
-            window,
-            move |editor, _, event: &crate::EditorEvent, window, cx| {
+        let _cursor_move_subscription =
+            cx.subscribe_in(&cx.entity(), window, move |editor, _, event: &crate::EditorEvent, window, cx| {
                 let crate::EditorEvent::SelectionsChanged { local: true } = event else {
                     return;
                 };
-                let display_snapshot = &editor
-                    .display_map
-                    .update(cx, |display_map, cx| display_map.snapshot(cx));
+                let display_snapshot = &editor.display_map.update(cx, |display_map, cx| display_map.snapshot(cx));
                 let selection_init_range = selection_init.display_range(display_snapshot);
-                let selection_now_range = editor
-                    .selections
-                    .newest_anchor()
-                    .display_range(display_snapshot);
+                let selection_now_range = editor.selections.newest_anchor().display_range(display_snapshot);
                 if selection_now_range == selection_init_range {
                     return;
                 }
@@ -129,15 +128,9 @@ impl MouseContextMenu {
                 if context_menu_focus.contains_focused(window, cx) {
                     window.focus(&editor.focus_handle(cx), cx);
                 }
-            },
-        );
+            });
 
-        Self {
-            position,
-            context_menu,
-            _dismiss_subscription,
-            _cursor_move_subscription,
-        }
+        Self { position, context_menu, _dismiss_subscription, _cursor_move_subscription }
     }
 }
 
@@ -198,17 +191,14 @@ pub fn deploy_context_menu(
 
         let focus = window.focused(cx);
         let has_reveal_target = editor.target_file(cx).is_some();
-        let has_git_repo =
-            buffer
-                .anchor_to_buffer_anchor(anchor)
-                .is_some_and(|(buffer_anchor, _)| {
-                    project
-                        .read(cx)
-                        .git_store()
-                        .read(cx)
-                        .repository_and_path_for_buffer_id(buffer_anchor.buffer_id, cx)
-                        .is_some()
-                });
+        let has_git_repo = buffer.anchor_to_buffer_anchor(anchor).is_some_and(|(buffer_anchor, _)| {
+            project
+                .read(cx)
+                .git_store()
+                .read(cx)
+                .repository_and_path_for_buffer_id(buffer_anchor.buffer_id, cx)
+                .is_some()
+        });
 
         let format_selections = window.is_action_available(&FormatSelections, cx);
 
@@ -219,15 +209,9 @@ pub fn deploy_context_menu(
             .and_then(|buffer| buffer.read(cx).language())
             .is_some_and(|language| language.name().as_ref() == "Markdown");
 
-        let is_svg = editor
-            .buffer()
-            .read(cx)
-            .as_singleton()
-            .and_then(|buffer| buffer.read(cx).file())
-            .is_some_and(|file| {
-                std::path::Path::new(file.file_name(cx))
-                    .extension()
-                    .is_some_and(|ext| ext.eq_ignore_ascii_case("svg"))
+        let is_svg =
+            editor.buffer().read(cx).as_singleton().and_then(|buffer| buffer.read(cx).file()).is_some_and(|file| {
+                std::path::Path::new(file.file_name(cx)).extension().is_some_and(|ext| ext.eq_ignore_ascii_case("svg"))
             });
 
         ui::ContextMenu::build(window, cx, |menu, _window, _cx| {
@@ -235,39 +219,16 @@ pub fn deploy_context_menu(
                 .on_blur_subscription(Subscription::new(|| {}))
                 .action("Go to Definition", Box::new(GoToDefinition::default()))
                 .action("Go to Declaration", Box::new(GoToDeclaration::default()))
-                .action(
-                    "Go to Type Definition",
-                    Box::new(GoToTypeDefinition::default()),
-                )
-                .action(
-                    "Go to Implementation",
-                    Box::new(GoToImplementation::default()),
-                )
-                .action(
-                    "Find All References",
-                    Box::new(FindAllReferences::default()),
-                )
-                .action(
-                    "Show Incoming Calls",
-                    Box::new(zed_actions::ShowIncomingCalls),
-                )
-                .action(
-                    "Show Outgoing Calls",
-                    Box::new(zed_actions::ShowOutgoingCalls),
-                )
+                .action("Go to Type Definition", Box::new(GoToTypeDefinition::default()))
+                .action("Go to Implementation", Box::new(GoToImplementation::default()))
+                .action("Find All References", Box::new(FindAllReferences::default()))
+                .action("Show Incoming Calls", Box::new(zed_actions::ShowIncomingCalls))
+                .action("Show Outgoing Calls", Box::new(zed_actions::ShowOutgoingCalls))
                 .separator()
                 .action("Rename Symbol", Box::new(Rename))
                 .action("Format Buffer", Box::new(Format))
-                .when(format_selections, |cx| {
-                    cx.action("Format Selections", Box::new(FormatSelections))
-                })
-                .action(
-                    "Show Code Actions",
-                    Box::new(ToggleCodeActions {
-                        deployed_from: None,
-                        quick_launch: false,
-                    }),
-                )
+                .when(format_selections, |cx| cx.action("Format Selections", Box::new(FormatSelections)))
+                .action("Show Code Actions", Box::new(ToggleCodeActions { deployed_from: None, quick_launch: false }))
                 .separator()
                 .action("Cut", Box::new(Cut))
                 .action("Copy", Box::new(Copy))
@@ -279,22 +240,10 @@ pub fn deploy_context_menu(
                     ui::utils::reveal_in_file_manager_label(false),
                     Box::new(RevealInFileManager),
                 )
-                .when(is_markdown, |builder| {
-                    builder.action("Open Markdown Preview", Box::new(OpenMarkdownPreview))
-                })
-                .when(is_svg, |builder| {
-                    builder.action("Open SVG Preview", Box::new(OpenSvgPreview))
-                })
-                .action_disabled_when(
-                    !has_reveal_target,
-                    "Open in Terminal",
-                    Box::new(OpenInTerminal),
-                )
-                .action_disabled_when(
-                    !has_git_repo,
-                    "View File History",
-                    Box::new(git::FileHistory),
-                );
+                .when(is_markdown, |builder| builder.action("Open Markdown Preview", Box::new(OpenMarkdownPreview)))
+                .when(is_svg, |builder| builder.action("Open SVG Preview", Box::new(OpenSvgPreview)))
+                .action_disabled_when(!has_reveal_target, "Open in Terminal", Box::new(OpenInTerminal))
+                .action_disabled_when(!has_git_repo, "View File History", Box::new(git::FileHistory));
             match focus {
                 Some(focus) => builder.context(focus),
                 None => builder,
@@ -303,27 +252,14 @@ pub fn deploy_context_menu(
     };
 
     editor.mouse_context_menu = match position {
-        Some(position) => MouseContextMenu::pinned_to_editor(
-            editor,
-            source_anchor,
-            position,
-            context_menu,
-            window,
-            cx,
-        ),
+        Some(position) => MouseContextMenu::pinned_to_editor(editor, source_anchor, position, context_menu, window, cx),
         None => {
             let character_size = editor.character_dimensions(window, cx);
             let menu_position = MenuPosition::PinnedToEditor {
                 source: source_anchor,
                 offset: gpui::point(character_size.em_width, character_size.line_height),
             };
-            Some(MouseContextMenu::new(
-                editor,
-                menu_position,
-                context_menu,
-                window,
-                cx,
-            ))
+            Some(MouseContextMenu::new(editor, menu_position, context_menu, window, cx))
         }
     };
     cx.notify();

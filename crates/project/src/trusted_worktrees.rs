@@ -526,7 +526,7 @@ impl TrustedWorktreesStore {
                 let host = self.worktree_stores.get(worktree_store)?.host.clone();
                 let abs_paths = paths
                     .iter()
-                    .flat_map(|path| match path {
+                    .filter_map(|path| match path {
                         PathTrust::Worktree(worktree_id) => worktree_store
                             .upgrade()
                             .and_then(|worktree_store| worktree_store.read(cx).worktree_for_id(*worktree_id, cx))

@@ -2776,7 +2776,7 @@ impl Workspace {
         let keystrokes: Vec<Keystroke> = action
             .0
             .split(' ')
-            .flat_map(|k| Keystroke::parse(k).log_err())
+            .filter_map(|k| Keystroke::parse(k).log_err())
             .map(|k| cx.keyboard_mapper().map_key_equivalent(k, false).inner().clone())
             .collect();
         drop(self.send_keystrokes_impl(keystrokes, window, cx));
@@ -3264,19 +3264,17 @@ impl Workspace {
     }
 
     pub fn most_recent_active_path(&self, cx: &App) -> Option<PathBuf> {
-        self.recent_navigation_history_iter(cx)
-            .filter_map(|(path, abs_path)| {
-                let worktree = self.project.read(cx).worktree_for_id(path.worktree_id, cx)?;
-                if !worktree.read(cx).is_visible() {
-                    return None;
-                }
-                let settings_location = SettingsLocation { worktree_id: path.worktree_id, path: &path.path };
-                if WorktreeSettings::get(Some(settings_location), cx).is_path_read_only(&path.path) {
-                    return None;
-                }
-                abs_path
-            })
-            .next()
+        self.recent_navigation_history_iter(cx).find_map(|(path, abs_path)| {
+            let worktree = self.project.read(cx).worktree_for_id(path.worktree_id, cx)?;
+            if !worktree.read(cx).is_visible() {
+                return None;
+            }
+            let settings_location = SettingsLocation { worktree_id: path.worktree_id, path: &path.path };
+            if WorktreeSettings::get(Some(settings_location), cx).is_path_read_only(&path.path) {
+                return None;
+            }
+            abs_path
+        })
     }
 
     pub fn save_active_item(&mut self, save_intent: SaveIntent, window: &mut Window, cx: &mut App) -> Task<Result<()>> {

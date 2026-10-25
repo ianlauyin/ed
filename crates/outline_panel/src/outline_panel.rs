@@ -3093,7 +3093,7 @@ impl OutlinePanel {
             .get(&selection_anchor.buffer_id)
             .into_iter()
             .flat_map(|buffer| buffer.iter_outlines())
-            .flat_map(|outline| {
+            .filter_map(|outline| {
                 let snapshot = buffer_snapshot?;
                 let (start, end) = if outline.range.start.cmp(&outline.range.end, snapshot).is_gt() {
                     (outline.range.end, outline.range.start)
@@ -3142,7 +3142,7 @@ impl OutlinePanel {
 
         let outline_item = matching_outline_indices
             .into_iter()
-            .flat_map(|i| Some((i, excerpt_outlines.get(i)?)))
+            .filter_map(|i| Some((i, excerpt_outlines.get(i)?)))
             .filter(|(i, _)| {
                 children
                     .get(i)

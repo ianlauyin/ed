@@ -1,12 +1,16 @@
-use crate::component_prelude::*;
-use crate::prelude::*;
-use crate::{Checkbox, ListBulletItem, ToggleState};
 use gpui::Action;
 use gpui::FocusHandle;
 use gpui::IntoElement;
 use gpui::Stateful;
-use smallvec::{SmallVec, smallvec};
+use smallvec::SmallVec;
+use smallvec::smallvec;
 use theme::ActiveTheme;
+
+use crate::Checkbox;
+use crate::ListBulletItem;
+use crate::ToggleState;
+use crate::component_prelude::*;
+use crate::prelude::*;
 
 type ActionHandler = Box<dyn FnOnce(Stateful<Div>) -> Stateful<Div>>;
 
@@ -77,12 +81,8 @@ impl AlertModal {
         self
     }
 
-    pub fn on_action<A: Action>(
-        mut self,
-        listener: impl Fn(&A, &mut Window, &mut App) + 'static,
-    ) -> Self {
-        self.action_handlers
-            .push(Box::new(move |div| div.on_action(listener)));
+    pub fn on_action<A: Action>(mut self, listener: impl Fn(&A, &mut Window, &mut App) + 'static) -> Self {
+        self.action_handlers.push(Box::new(move |div| div.on_action(listener)));
         self
     }
 
@@ -98,12 +98,8 @@ impl RenderOnce for AlertModal {
         let has_default_footer = self.primary_action.is_some() || self.dismiss_label.is_some();
 
         let mut modal = v_flex()
-            .when_some(self.key_context, |this, key_context| {
-                this.key_context(key_context.as_str())
-            })
-            .when_some(self.focus_handle, |this, focus_handle| {
-                this.track_focus(&focus_handle)
-            })
+            .when_some(self.key_context, |this, key_context| this.key_context(key_context.as_str()))
+            .when_some(self.focus_handle, |this, focus_handle| this.track_focus(&focus_handle))
             .id(self.id)
             .elevation_3(cx)
             .w(width)
@@ -117,25 +113,13 @@ impl RenderOnce for AlertModal {
         if let Some(header) = self.header {
             modal = modal.child(header);
         } else if let Some(title) = self.title {
-            modal = modal.child(
-                v_flex()
-                    .pt_3()
-                    .pr_3()
-                    .pl_3()
-                    .pb_1()
-                    .child(Headline::new(title).size(HeadlineSize::Small)),
-            );
+            modal =
+                modal.child(v_flex().pt_3().pr_3().pl_3().pb_1().child(Headline::new(title).size(HeadlineSize::Small)));
         }
 
         if !self.children.is_empty() {
-            modal = modal.child(
-                v_flex()
-                    .p_3()
-                    .text_ui(cx)
-                    .text_color(Color::Muted.color(cx))
-                    .gap_1()
-                    .children(self.children),
-            );
+            modal = modal
+                .child(v_flex().p_3().text_ui(cx).text_color(Color::Muted.color(cx)).gap_1().children(self.children));
         }
 
         if let Some(footer) = self.footer {

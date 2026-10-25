@@ -31,11 +31,7 @@ pub fn parse(filter: &str) -> Result<EnvFilter> {
         };
     }
 
-    Ok(EnvFilter {
-        level_global: max_level,
-        directive_names,
-        directive_levels,
-    })
+    Ok(EnvFilter { level_global: max_level, directive_names, directive_levels })
 }
 
 fn parse_level(level: &str) -> Result<log::LevelFilter> {

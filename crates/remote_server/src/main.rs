@@ -3,9 +3,10 @@
     reason = "Cargo also passes the server library's dependencies to this binary entry point"
 )]
 
+use std::io::Write as _;
+
 use clap::Parser;
 use remote_server::Commands;
-use std::io::Write as _;
 
 #[derive(Parser)]
 #[command(disable_version_flag = true)]
@@ -41,9 +42,7 @@ fn main() -> anyhow::Result<()> {
         }
         res
     } else {
-        std::io::stderr()
-            .write_all(b"usage: remote <run|proxy|version|exec>\n")
-            .ok();
+        std::io::stderr().write_all(b"usage: remote <run|proxy|version|exec>\n").ok();
         std::process::exit(1);
     }
 }

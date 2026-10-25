@@ -3,7 +3,8 @@
 use gpui::Hsla;
 use palette::FromColor;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
 /// The appearance of a theme in serialized content.
 #[derive(Debug, PartialEq, Clone, Copy, Serialize, Deserialize, JsonSchema)]
@@ -19,12 +20,7 @@ pub fn try_parse_color(color: &str) -> anyhow::Result<Hsla> {
     let rgba = palette::rgb::Srgba::from_components((rgba.r, rgba.g, rgba.b, rgba.a));
     let hsla = palette::Hsla::from_color(rgba);
 
-    let hsla = gpui::hsla(
-        hsla.hue.into_positive_degrees() / 360.,
-        hsla.saturation,
-        hsla.lightness,
-        hsla.alpha,
-    );
+    let hsla = gpui::hsla(hsla.hue.into_positive_degrees() / 360., hsla.saturation, hsla.lightness, hsla.alpha);
 
     Ok(hsla)
 }

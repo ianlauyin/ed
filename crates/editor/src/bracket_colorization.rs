@@ -6,14 +6,30 @@ use std::cmp::Ordering;
 use std::ops::Range;
 use std::sync::Arc;
 
-use crate::{Editor, HighlightKey};
-use collections::{HashMap, HashSet};
-use gpui::{AppContext as _, Context, HighlightStyle, Hsla};
-use language::{BufferRow, BufferSnapshot, language_settings::LanguageSettings};
-use multi_buffer::{Anchor, BufferOffset, ExcerptRange, MultiBufferSnapshot};
+use collections::HashMap;
+use collections::HashSet;
+use gpui::AppContext as _;
+use gpui::Context;
+use gpui::HighlightStyle;
+use gpui::Hsla;
+use language::BufferRow;
+use language::BufferSnapshot;
+use language::language_settings::LanguageSettings;
+use multi_buffer::Anchor;
+use multi_buffer::BufferOffset;
+use multi_buffer::ExcerptRange;
+use multi_buffer::MultiBufferSnapshot;
 use text::OffsetRangeExt as _;
-use theme::{Appearance, Oklab, Oklch, hsla_to_oklab, hsla_to_oklch, oklch_to_hsla};
+use theme::Appearance;
+use theme::Oklab;
+use theme::Oklch;
+use theme::hsla_to_oklab;
+use theme::hsla_to_oklch;
+use theme::oklch_to_hsla;
 use ui::utils::apca_contrast;
+
+use crate::Editor;
+use crate::HighlightKey;
 
 impl Editor {
     pub(crate) fn colorize_brackets(&mut self, invalidate: bool, cx: &mut Context<Editor>) {
@@ -32,21 +48,14 @@ impl Editor {
         let multi_buffer_snapshot = self.buffer().read(cx).snapshot(cx);
 
         let visible_excerpts = self.visible_buffer_ranges(cx);
-        let excerpt_data: Vec<(
-            BufferSnapshot,
-            Range<BufferOffset>,
-            ExcerptRange<text::Anchor>,
-        )> = visible_excerpts
+        let excerpt_data: Vec<(BufferSnapshot, Range<BufferOffset>, ExcerptRange<text::Anchor>)> = visible_excerpts
             .into_iter()
             .filter(|(buffer_snapshot, _, _)| {
-                let Some(buffer) = self.buffer().read(cx).buffer(buffer_snapshot.remote_id())
-                else {
+                let Some(buffer) = self.buffer().read(cx).buffer(buffer_snapshot.remote_id()) else {
                     return false;
                 };
                 let buffer = buffer.read(cx);
-                buffer
-                    .language()
-                    .is_some_and(|language| language.grammar().is_some())
+                buffer.language().is_some_and(|language| language.grammar().is_some())
                     && LanguageSettings::for_buffer(buffer, cx).colorize_brackets
             })
             .collect();
@@ -59,10 +68,7 @@ impl Editor {
             .iter()
             .filter_map(|(_, _, excerpt_range)| {
                 let key = excerpt_range.context.clone();
-                Some((
-                    key.clone(),
-                    self.bracket_fetched_tree_sitter_chunks.get(&key).cloned()?,
-                ))
+                Some((key.clone(), self.bracket_fetched_tree_sitter_chunks.get(&key).cloned()?))
             })
             .collect::<HashMap<Range<text::Anchor>, HashSet<Range<BufferRow>>>>();
 
@@ -72,41 +78,34 @@ impl Editor {
                 return (HashMap::default(), fetched_tree_sitter_chunks);
             }
 
-            let bracket_matches_by_accent: HashMap<usize, Vec<Range<Anchor>>> =
-                excerpt_data.into_iter().fold(
-                    HashMap::default(),
-                    |mut acc, (buffer_snapshot, buffer_range, excerpt_range)| {
-                        let fetched_chunks = fetched_tree_sitter_chunks
-                            .entry(excerpt_range.context.clone())
-                            .or_default();
+            let bracket_matches_by_accent: HashMap<usize, Vec<Range<Anchor>>> = excerpt_data.into_iter().fold(
+                HashMap::default(),
+                |mut acc, (buffer_snapshot, buffer_range, excerpt_range)| {
+                    let fetched_chunks = fetched_tree_sitter_chunks.entry(excerpt_range.context.clone()).or_default();
 
-                        let brackets_by_accent = compute_bracket_ranges(
-                            &multi_buffer_snapshot,
-                            &buffer_snapshot,
-                            buffer_range,
-                            excerpt_range,
-                            fetched_chunks,
-                            accents_count,
-                        );
+                    let brackets_by_accent = compute_bracket_ranges(
+                        &multi_buffer_snapshot,
+                        &buffer_snapshot,
+                        buffer_range,
+                        excerpt_range,
+                        fetched_chunks,
+                        accents_count,
+                    );
 
-                        for (accent_number, new_ranges) in brackets_by_accent {
-                            let ranges = acc
-                                .entry(accent_number)
-                                .or_insert_with(Vec::<Range<Anchor>>::new);
+                    for (accent_number, new_ranges) in brackets_by_accent {
+                        let ranges = acc.entry(accent_number).or_insert_with(Vec::<Range<Anchor>>::new);
 
-                            for new_range in new_ranges {
-                                let i = ranges
-                                    .binary_search_by(|probe| {
-                                        probe.start.cmp(&new_range.start, &multi_buffer_snapshot)
-                                    })
-                                    .unwrap_or_else(|i| i);
-                                ranges.insert(i, new_range);
-                            }
+                        for new_range in new_ranges {
+                            let i = ranges
+                                .binary_search_by(|probe| probe.start.cmp(&new_range.start, &multi_buffer_snapshot))
+                                .unwrap_or_else(|i| i);
+                            ranges.insert(i, new_range);
                         }
+                    }
 
-                        acc
-                    },
-                );
+                    acc
+                },
+            );
 
             (bracket_matches_by_accent, fetched_tree_sitter_chunks)
         });
@@ -117,23 +116,15 @@ impl Editor {
             editor
                 .update(cx, |editor, cx| {
                     if invalidate {
-                        editor.clear_highlights_with(
-                            &mut |key| matches!(key, HighlightKey::ColorizeBracket(_)),
-                            cx,
-                        );
+                        editor.clear_highlights_with(&mut |key| matches!(key, HighlightKey::ColorizeBracket(_)), cx);
                     }
 
-                    editor
-                        .bracket_fetched_tree_sitter_chunks
-                        .extend(updated_chunks);
+                    editor.bracket_fetched_tree_sitter_chunks.extend(updated_chunks);
                     for (accent_number, bracket_highlights) in bracket_matches_by_accent {
                         let Some(&bracket_color) = accents.get(accent_number) else {
                             continue;
                         };
-                        let style = HighlightStyle {
-                            color: Some(bracket_color),
-                            ..HighlightStyle::default()
-                        };
+                        let style = HighlightStyle { color: Some(bracket_color), ..HighlightStyle::default() };
 
                         editor.highlight_text_key(
                             HighlightKey::ColorizeBracket(accent_number),
@@ -158,22 +149,10 @@ const ADJACENT_OKLAB_DARK_INTERVENTION: f32 = 0.08;
 const LIGHTNESS_CLAMP_MIN: f32 = 0.18;
 const LIGHTNESS_CLAMP_MAX: f32 = 0.92;
 
-pub(crate) fn bracket_colorization_accents(
-    accents: &[Hsla],
-    appearance: Appearance,
-    background: Hsla,
-) -> Arc<[Hsla]> {
+pub(crate) fn bracket_colorization_accents(accents: &[Hsla], appearance: Appearance, background: Hsla) -> Arc<[Hsla]> {
     let (intervention_distance, comfortable_distance, min_background_contrast) = match appearance {
-        Appearance::Light => (
-            ADJACENT_OKLAB_LIGHT_INTERVENTION,
-            ADJACENT_OKLAB_LIGHT,
-            BACKGROUND_APCA_LIGHT,
-        ),
-        Appearance::Dark => (
-            ADJACENT_OKLAB_DARK_INTERVENTION,
-            ADJACENT_OKLAB_DARK,
-            BACKGROUND_APCA_DARK,
-        ),
+        Appearance::Light => (ADJACENT_OKLAB_LIGHT_INTERVENTION, ADJACENT_OKLAB_LIGHT, BACKGROUND_APCA_LIGHT),
+        Appearance::Dark => (ADJACENT_OKLAB_DARK_INTERVENTION, ADJACENT_OKLAB_DARK, BACKGROUND_APCA_DARK),
     };
     let background_adjusted = accents
         .iter()
@@ -204,13 +183,10 @@ fn maximize_adjacent_separation(accents: &[Hsla], background: Hsla) -> Vec<Hsla>
     let mut last = first;
 
     while !remaining.is_empty() {
-        let Some((position, &next)) =
-            remaining
-                .iter()
-                .enumerate()
-                .max_by(|&(_, &left), &(_, &right)| {
-                    compare_candidates(background, last, first, left, right)
-                })
+        let Some((position, &next)) = remaining
+            .iter()
+            .enumerate()
+            .max_by(|&(_, &left), &(_, &right)| compare_candidates(background, last, first, left, right))
         else {
             break;
         };
@@ -222,13 +198,7 @@ fn maximize_adjacent_separation(accents: &[Hsla], background: Hsla) -> Vec<Hsla>
     order
 }
 
-fn compare_candidates(
-    background: Hsla,
-    last: Hsla,
-    first: Hsla,
-    left: Hsla,
-    right: Hsla,
-) -> Ordering {
+fn compare_candidates(background: Hsla, last: Hsla, first: Hsla, left: Hsla, right: Hsla) -> Ordering {
     adjacent_distance(last, left, background)
         .partial_cmp(&adjacent_distance(last, right, background))
         .unwrap_or(Ordering::Equal)
@@ -260,44 +230,25 @@ fn oklab_distance(left: Oklab, right: Oklab) -> f32 {
 }
 
 fn adjacent_distance(left: Hsla, right: Hsla, background: Hsla) -> f32 {
-    oklab_distance(
-        hsla_to_oklab(background.blend(left)),
-        hsla_to_oklab(background.blend(right)),
-    )
+    oklab_distance(hsla_to_oklab(background.blend(left)), hsla_to_oklab(background.blend(right)))
 }
 
-fn adjust_color_for_background(
-    color: Hsla,
-    background: Hsla,
-    minimum_background_contrast: f32,
-) -> Hsla {
+fn adjust_color_for_background(color: Hsla, background: Hsla, minimum_background_contrast: f32) -> Hsla {
     if background_contrast(color, background) >= minimum_background_contrast {
         return color;
     }
 
     let original = hsla_to_oklab(color);
-    let darker_candidate = adjusted_lightness_candidate(
-        color,
-        background,
-        minimum_background_contrast,
-        LIGHTNESS_CLAMP_MIN,
-    );
-    let lighter_candidate = adjusted_lightness_candidate(
-        color,
-        background,
-        minimum_background_contrast,
-        LIGHTNESS_CLAMP_MAX,
-    );
+    let darker_candidate =
+        adjusted_lightness_candidate(color, background, minimum_background_contrast, LIGHTNESS_CLAMP_MIN);
+    let lighter_candidate =
+        adjusted_lightness_candidate(color, background, minimum_background_contrast, LIGHTNESS_CLAMP_MAX);
 
     match (darker_candidate, lighter_candidate) {
         (Some(darker_candidate), Some(lighter_candidate)) => {
             let darker_distance = oklab_distance(original, hsla_to_oklab(darker_candidate));
             let lighter_distance = oklab_distance(original, hsla_to_oklab(lighter_candidate));
-            if darker_distance <= lighter_distance {
-                darker_candidate
-            } else {
-                lighter_candidate
-            }
+            if darker_distance <= lighter_distance { darker_candidate } else { lighter_candidate }
         }
         (Some(darker_candidate), None) => darker_candidate,
         (None, Some(lighter_candidate)) => lighter_candidate,
@@ -328,8 +279,7 @@ fn adjusted_lightness_candidate(
             },
             color.a,
         );
-        (background_contrast(candidate, background) >= minimum_background_contrast)
-            .then_some(candidate)
+        (background_contrast(candidate, background) >= minimum_background_contrast).then_some(candidate)
     })
 }
 
@@ -348,18 +298,9 @@ fn compute_bracket_ranges(
     let context = excerpt_range.context.to_offset(buffer_snapshot);
 
     buffer_snapshot
-        .fetch_bracket_ranges(
-            buffer_range.start.0..buffer_range.end.0,
-            Some(fetched_chunks),
-        )
+        .fetch_bracket_ranges(buffer_range.start.0..buffer_range.end.0, Some(fetched_chunks))
         .into_iter()
-        .flat_map(|(chunk_range, pairs)| {
-            if fetched_chunks.insert(chunk_range) {
-                pairs
-            } else {
-                Vec::new()
-            }
-        })
+        .flat_map(|(chunk_range, pairs)| if fetched_chunks.insert(chunk_range) { pairs } else { Vec::new() })
         .filter_map(|pair| {
             let color_index = pair.color_index?;
 

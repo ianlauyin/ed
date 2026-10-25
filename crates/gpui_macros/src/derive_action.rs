@@ -1,8 +1,13 @@
-use crate::register_action::generate_register_action;
 use proc_macro::TokenStream;
 use proc_macro2::Ident;
 use quote::quote;
-use syn::{Data, DeriveInput, LitStr, Token, parse::ParseStream};
+use syn::Data;
+use syn::DeriveInput;
+use syn::LitStr;
+use syn::Token;
+use syn::parse::ParseStream;
+
+use crate::register_action::generate_register_action;
 
 pub(crate) fn derive_action(input: TokenStream) -> TokenStream {
     let input = syn::parse_macro_input!(input as DeriveInput);
@@ -52,18 +57,13 @@ pub(crate) fn derive_action(input: TokenStream) -> TokenStream {
                     no_register = true;
                 } else if meta.path.is_ident("deprecated_aliases") {
                     if !deprecated_aliases.is_empty() {
-                        return Err(
-                            meta.error("'deprecated_aliases' argument specified multiple times")
-                        );
+                        return Err(meta.error("'deprecated_aliases' argument specified multiple times"));
                     }
                     meta.input.parse::<Token![=]>()?;
                     // Parse array of string literals
                     let content;
                     syn::bracketed!(content in meta.input);
-                    let aliases = content.parse_terminated(
-                        |input: ParseStream| input.parse::<LitStr>(),
-                        Token![,],
-                    )?;
+                    let aliases = content.parse_terminated(|input: ParseStream| input.parse::<LitStr>(), Token![,])?;
                     deprecated_aliases.extend(aliases.into_iter().map(|lit| lit.value()));
                 } else if meta.path.is_ident("deprecated") {
                     if deprecated.is_some() {
@@ -83,15 +83,12 @@ pub(crate) fn derive_action(input: TokenStream) -> TokenStream {
             })
             .unwrap_or_else(|e| panic!("in #[action] attribute: {}", e));
         } else if attr.path().is_ident("doc") {
-            use syn::{Expr::Lit, ExprLit, Lit::Str, Meta, MetaNameValue};
-            if let Meta::NameValue(MetaNameValue {
-                value:
-                    Lit(ExprLit {
-                        lit: Str(ref lit_str),
-                        ..
-                    }),
-                ..
-            }) = attr.meta
+            use syn::Expr::Lit;
+            use syn::ExprLit;
+            use syn::Lit::Str;
+            use syn::Meta;
+            use syn::MetaNameValue;
+            if let Meta::NameValue(MetaNameValue { value: Lit(ExprLit { lit: Str(ref lit_str), .. }), .. }) = attr.meta
             {
                 let doc = lit_str.value();
                 let doc_str = doc_str.get_or_insert_default();
@@ -110,11 +107,7 @@ pub(crate) fn derive_action(input: TokenStream) -> TokenStream {
         );
     }
 
-    let full_name = if let Some(namespace) = namespace {
-        format!("{namespace}::{name}")
-    } else {
-        name
-    };
+    let full_name = if let Some(namespace) = namespace { format!("{namespace}::{name}") } else { name };
 
     let is_unit_struct = matches!(&input.data, Data::Struct(data) if data.fields.is_empty());
 

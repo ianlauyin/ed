@@ -1,8 +1,9 @@
 //! # zlog_settings
 use collections::HashMap;
-
 use gpui::App;
-use settings::{RegisterSetting, Settings, SettingsStore};
+use settings::RegisterSetting;
+use settings::Settings;
+use settings::SettingsStore;
 
 pub fn init(cx: &mut App) {
     cx.observe_global::<SettingsStore>(|cx| {
@@ -23,8 +24,6 @@ pub struct ZlogSettings {
 
 impl Settings for ZlogSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        ZlogSettings {
-            scopes: content.log.clone().unwrap(),
-        }
+        ZlogSettings { scopes: content.log.clone().unwrap() }
     }
 }

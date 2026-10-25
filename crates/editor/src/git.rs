@@ -318,7 +318,7 @@ impl Editor {
         }
 
         let ranges =
-            buffer_ids.into_iter().flat_map(|buffer_id| snapshot.range_for_buffer(buffer_id)).collect::<Vec<_>>();
+            buffer_ids.into_iter().filter_map(|buffer_id| snapshot.range_for_buffer(buffer_id)).collect::<Vec<_>>();
 
         self.restore_hunks_in_ranges(ranges, window, cx);
     }

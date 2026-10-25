@@ -4,8 +4,7 @@ this is Zed fork and trim down everything i don't need
 
 # code style
 
-- use `rustfmt +nightly` to format the file you touched, noisy in git commit is fine
-- fix all the warnings
+- follow `spec/code_style.md`
 
 # spec
 

@@ -6,12 +6,17 @@
 
 #![allow(non_camel_case_types, non_upper_case_globals)]
 
-use objc2::{class, msg_send, runtime::AnyObject};
 use std::ptr;
 
-pub(crate) use objc2_foundation::{
-    NSInteger, NSOperatingSystemVersion, NSPoint, NSRect, NSSize, NSUInteger,
-};
+use objc2::class;
+use objc2::msg_send;
+use objc2::runtime::AnyObject;
+pub(crate) use objc2_foundation::NSInteger;
+pub(crate) use objc2_foundation::NSOperatingSystemVersion;
+pub(crate) use objc2_foundation::NSPoint;
+pub(crate) use objc2_foundation::NSRect;
+pub(crate) use objc2_foundation::NSSize;
+pub(crate) use objc2_foundation::NSUInteger;
 
 pub(crate) type id = *mut AnyObject;
 pub(crate) const nil: id = ptr::null_mut();
@@ -19,16 +24,8 @@ pub(crate) const nil: id = ptr::null_mut();
 pub(crate) const NSNotFound: NSInteger = NSInteger::MAX;
 
 /// Builds an `NSOperatingSystemVersion`.
-pub(crate) const fn os_version(
-    major: NSInteger,
-    minor: NSInteger,
-    patch: NSInteger,
-) -> NSOperatingSystemVersion {
-    NSOperatingSystemVersion {
-        majorVersion: major,
-        minorVersion: minor,
-        patchVersion: patch,
-    }
+pub(crate) const fn os_version(major: NSInteger, minor: NSInteger, patch: NSInteger) -> NSOperatingSystemVersion {
+    NSOperatingSystemVersion { majorVersion: major, minorVersion: minor, patchVersion: patch }
 }
 
 /// Creates a new `NSAutoreleasePool`; release it with `drain`.
@@ -55,10 +52,6 @@ pub(crate) unsafe fn array_object_at(array: id, index: NSUInteger) -> id {
 
 /// Iterates the elements of an `NSArray` (or other indexed collection).
 pub(crate) unsafe fn array_iter(array: id) -> impl Iterator<Item = id> {
-    let count = if array.is_null() {
-        0
-    } else {
-        unsafe { array_count(array) }
-    };
+    let count = if array.is_null() { 0 } else { unsafe { array_count(array) } };
     (0..count).map(move |index| unsafe { array_object_at(array, index) })
 }

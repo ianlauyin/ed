@@ -1,11 +1,14 @@
-use serde::{Deserialize, Serialize};
-
-use crate::{
-    DocumentSelector, DynamicRegistrationClientCapabilities, Range, TextDocumentIdentifier,
-    TextDocumentPositionParams, WorkDoneProgressParams,
-};
-
 use std::collections::HashMap;
+
+use serde::Deserialize;
+use serde::Serialize;
+
+use crate::DocumentSelector;
+use crate::DynamicRegistrationClientCapabilities;
+use crate::Range;
+use crate::TextDocumentIdentifier;
+use crate::TextDocumentPositionParams;
+use crate::WorkDoneProgressParams;
 
 pub type DocumentFormattingClientCapabilities = DynamicRegistrationClientCapabilities;
 pub type DocumentRangeFormattingClientCapabilities = DynamicRegistrationClientCapabilities;
@@ -140,9 +143,7 @@ mod tests {
             &FormattingOptions {
                 tab_size: 123,
                 insert_spaces: true,
-                properties: vec![("prop".to_string(), FormattingProperty::Number(1))]
-                    .into_iter()
-                    .collect(),
+                properties: vec![("prop".to_string(), FormattingProperty::Number(1))].into_iter().collect(),
                 trim_trailing_whitespace: None,
                 insert_final_newline: None,
                 trim_final_newlines: None,

@@ -1,8 +1,10 @@
-use crate::{
-    DynamicRegistrationClientCapabilities, PartialResultParams, TextDocumentPositionParams,
-    WorkDoneProgressParams,
-};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
+
+use crate::DynamicRegistrationClientCapabilities;
+use crate::PartialResultParams;
+use crate::TextDocumentPositionParams;
+use crate::WorkDoneProgressParams;
 
 pub type ReferenceClientCapabilities = DynamicRegistrationClientCapabilities;
 #[derive(Debug, Eq, PartialEq, Clone, Copy, Deserialize, Serialize)]

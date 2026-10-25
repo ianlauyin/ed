@@ -1,6 +1,8 @@
-use crate::{NSStringExt, ns::id};
 use gpui::WindowAppearance;
 use objc2::msg_send;
+
+use crate::NSStringExt;
+use crate::ns::id;
 
 pub(crate) unsafe fn window_appearance_from_native(appearance: id) -> WindowAppearance {
     let name: id = msg_send![appearance, name];

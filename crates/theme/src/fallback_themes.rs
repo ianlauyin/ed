@@ -1,12 +1,26 @@
 use std::sync::Arc;
 
-use gpui::{FontStyle, FontWeight, HighlightStyle, Hsla, WindowBackgroundAppearance, hsla};
+use gpui::FontStyle;
+use gpui::FontWeight;
+use gpui::HighlightStyle;
+use gpui::Hsla;
+use gpui::WindowBackgroundAppearance;
+use gpui::hsla;
 
-use crate::{
-    AccentColors, Appearance, DEFAULT_DARK_THEME, PlayerColor, StatusColors,
-    StatusColorsRefinement, SyntaxTheme, SystemColors, Theme, ThemeColors, ThemeColorsRefinement,
-    ThemeFamily, ThemeStyles, default_color_scales,
-};
+use crate::AccentColors;
+use crate::Appearance;
+use crate::DEFAULT_DARK_THEME;
+use crate::PlayerColor;
+use crate::StatusColors;
+use crate::StatusColorsRefinement;
+use crate::SyntaxTheme;
+use crate::SystemColors;
+use crate::Theme;
+use crate::ThemeColors;
+use crate::ThemeColorsRefinement;
+use crate::ThemeFamily;
+use crate::ThemeStyles;
+use crate::default_color_scales;
 
 /// The default theme family for Zed.
 ///
@@ -69,36 +83,11 @@ pub(crate) fn zed_default_dark() -> Theme {
     let teal = hsla(187. / 360., 47. / 100., 55. / 100., 1.0);
     let yellow = hsla(39. / 360., 67. / 100., 69. / 100., 1.0);
 
-    const ADDED_COLOR: Hsla = Hsla {
-        h: 134. / 360.,
-        s: 0.55,
-        l: 0.40,
-        a: 1.0,
-    };
-    const WORD_ADDED_COLOR: Hsla = Hsla {
-        h: 134. / 360.,
-        s: 0.55,
-        l: 0.40,
-        a: 0.35,
-    };
-    const MODIFIED_COLOR: Hsla = Hsla {
-        h: 48. / 360.,
-        s: 0.76,
-        l: 0.47,
-        a: 1.0,
-    };
-    const REMOVED_COLOR: Hsla = Hsla {
-        h: 350. / 360.,
-        s: 0.88,
-        l: 0.25,
-        a: 1.0,
-    };
-    const WORD_DELETED_COLOR: Hsla = Hsla {
-        h: 350. / 360.,
-        s: 0.88,
-        l: 0.25,
-        a: 0.80,
-    };
+    const ADDED_COLOR: Hsla = Hsla { h: 134. / 360., s: 0.55, l: 0.40, a: 1.0 };
+    const WORD_ADDED_COLOR: Hsla = Hsla { h: 134. / 360., s: 0.55, l: 0.40, a: 0.35 };
+    const MODIFIED_COLOR: Hsla = Hsla { h: 48. / 360., s: 0.76, l: 0.47, a: 1.0 };
+    const REMOVED_COLOR: Hsla = Hsla { h: 350. / 360., s: 0.88, l: 0.25, a: 1.0 };
+    const WORD_DELETED_COLOR: Hsla = Hsla { h: 350. / 360., s: 0.88, l: 0.25, a: 0.80 };
 
     let player = PlayerColor::dark();
     Theme {
@@ -108,9 +97,7 @@ pub(crate) fn zed_default_dark() -> Theme {
         styles: ThemeStyles {
             window_background_appearance: WindowBackgroundAppearance::Opaque,
             system: SystemColors::default(),
-            accents: AccentColors(Arc::from(vec![
-                blue, orange, purple, teal, red, green, yellow,
-            ])),
+            accents: AccentColors(Arc::from(vec![blue, orange, purple, teal, red, green, yellow])),
             colors: ThemeColors {
                 border: hsla(225. / 360., 13. / 100., 12. / 100., 1.),
                 border_variant: hsla(228. / 360., 8. / 100., 25. / 100., 1.),
@@ -167,12 +154,7 @@ pub(crate) fn zed_default_dark() -> Theme {
                 editor_active_wrap_guide: hsla(228. / 360., 8. / 100., 25. / 100., 1.),
                 editor_indent_guide: hsla(228. / 360., 8. / 100., 25. / 100., 1.),
                 editor_indent_guide_active: hsla(225. / 360., 13. / 100., 12. / 100., 1.),
-                editor_document_highlight_read_background: hsla(
-                    207.8 / 360.,
-                    81. / 100.,
-                    66. / 100.,
-                    0.2,
-                ),
+                editor_document_highlight_read_background: hsla(207.8 / 360., 81. / 100., 66. / 100., 0.2),
                 editor_document_highlight_write_background: gpui::red(),
                 editor_document_highlight_bracket_background: gpui::green(),
                 editor_diff_hunk_added_background: ADDED_COLOR.opacity(0.12),
@@ -223,12 +205,7 @@ pub(crate) fn zed_default_dark() -> Theme {
                 pane_group_border: hsla(225. / 360., 13. / 100., 12. / 100., 1.),
                 scrollbar_thumb_background: gpui::transparent_black(),
                 scrollbar_thumb_hover_background: hover,
-                scrollbar_thumb_active_background: hsla(
-                    225.0 / 360.,
-                    11.8 / 100.,
-                    26.7 / 100.,
-                    1.0,
-                ),
+                scrollbar_thumb_active_background: hsla(225.0 / 360., 11.8 / 100., 26.7 / 100., 1.0),
                 scrollbar_thumb_border: hsla(228. / 360., 8. / 100., 25. / 100., 1.),
                 scrollbar_track_background: gpui::transparent_black(),
                 scrollbar_track_border: hsla(228. / 360., 8. / 100., 25. / 100., 1.),
@@ -324,17 +301,11 @@ pub(crate) fn zed_default_dark() -> Theme {
                 ("embedded".into(), HighlightStyle::default()),
                 (
                     "emphasis".into(),
-                    HighlightStyle {
-                        font_style: Some(FontStyle::Italic),
-                        ..HighlightStyle::default()
-                    },
+                    HighlightStyle { font_style: Some(FontStyle::Italic), ..HighlightStyle::default() },
                 ),
                 (
                     "emphasis.strong".into(),
-                    HighlightStyle {
-                        font_weight: Some(FontWeight::BOLD),
-                        ..HighlightStyle::default()
-                    },
+                    HighlightStyle { font_weight: Some(FontWeight::BOLD), ..HighlightStyle::default() },
                 ),
                 ("enum".into(), teal.into()),
                 ("function".into(), blue.into()),

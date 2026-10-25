@@ -1,16 +1,18 @@
 //! Headless event loop for the Linux remote server. No display server or GPU is used.
 
-use std::{
-    cell::RefCell,
-    ffi::OsString,
-    path::{Path, PathBuf},
-    rc::Rc,
-    sync::Arc,
-    thread::{self, ThreadId},
-    time::Duration,
-};
+use std::cell::RefCell;
+use std::ffi::OsString;
+use std::path::Path;
+use std::path::PathBuf;
+use std::rc::Rc;
+use std::sync::Arc;
+use std::thread::ThreadId;
+use std::thread::{self};
+use std::time::Duration;
 
-use anyhow::{Result, anyhow, bail};
+use anyhow::Result;
+use anyhow::anyhow;
+use anyhow::bail;
 use futures::channel::oneshot;
 use gpui::*;
 
@@ -84,10 +86,7 @@ impl PlatformDispatcher for Dispatcher {
         }
     }
 
-    #[allow(
-        clippy::disallowed_methods,
-        reason = "the platform dispatcher implements executor timers"
-    )]
+    #[allow(clippy::disallowed_methods, reason = "the platform dispatcher implements executor timers")]
     fn dispatch_after(&self, duration: Duration, runnable: RunnableVariant) {
         self.executor
             .spawn(async move {
@@ -110,11 +109,7 @@ impl Platform for HeadlessPlatform {
     }
 
     fn run(&self, on_finish_launching: Box<dyn FnOnce()>) {
-        let receiver = self
-            .receiver
-            .borrow_mut()
-            .take()
-            .expect("event loop already started");
+        let receiver = self.receiver.borrow_mut().take().expect("event loop already started");
         on_finish_launching();
         while let Ok(event) = receiver.recv() {
             match event {
@@ -122,12 +117,7 @@ impl Platform for HeadlessPlatform {
                     runnable.run();
                 }
                 MainEvent::Quit => {
-                    if self
-                        .quit_callback
-                        .borrow_mut()
-                        .as_mut()
-                        .is_none_or(|callback| callback())
-                    {
+                    if self.quit_callback.borrow_mut().as_mut().is_none_or(|callback| callback()) {
                         break;
                     }
                 }
@@ -155,11 +145,7 @@ impl Platform for HeadlessPlatform {
     fn active_window(&self) -> Option<AnyWindowHandle> {
         None
     }
-    fn open_window(
-        &self,
-        _handle: AnyWindowHandle,
-        _options: WindowParams,
-    ) -> Result<Box<dyn PlatformWindow>> {
+    fn open_window(&self, _handle: AnyWindowHandle, _options: WindowParams) -> Result<Box<dyn PlatformWindow>> {
         bail!("the Linux remote server cannot open windows")
     }
     fn window_appearance(&self) -> WindowAppearance {
@@ -167,10 +153,7 @@ impl Platform for HeadlessPlatform {
     }
     fn open_url(&self, _url: &str) {}
     fn on_open_urls(&self, _callback: Box<dyn FnMut(Vec<String>)>) {}
-    fn prompt_for_paths(
-        &self,
-        _options: PathPromptOptions,
-    ) -> oneshot::Receiver<Result<Option<Vec<PathBuf>>>> {
+    fn prompt_for_paths(&self, _options: PathPromptOptions) -> oneshot::Receiver<Result<Option<Vec<PathBuf>>>> {
         let (sender, receiver) = oneshot::channel();
         let _ = sender.send(Ok(None));
         receiver
@@ -227,9 +210,7 @@ impl Platform for HeadlessPlatform {
     }
     fn write_to_find_pasteboard(&self, _item: ClipboardItem) {}
     fn write_credentials(&self, _url: &str, _username: &str, _password: &[u8]) -> Task<Result<()>> {
-        Task::ready(Err(anyhow!(
-            "credential storage is unavailable on the remote server"
-        )))
+        Task::ready(Err(anyhow!("credential storage is unavailable on the remote server")))
     }
     fn read_credentials(&self, _url: &str) -> Task<Result<Option<(String, Vec<u8>)>>> {
         Task::ready(Ok(None))

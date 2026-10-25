@@ -1,7 +1,10 @@
 use std::sync::Arc;
 use std::time::Instant;
 
-use gpui::{App, Global, ReadGlobal, SharedString};
+use gpui::App;
+use gpui::Global;
+use gpui::ReadGlobal;
+use gpui::SharedString;
 use parking_lot::RwLock;
 
 #[derive(Default)]
@@ -42,12 +45,7 @@ impl FontFamilyCache {
         }
 
         let mut lock = self.state.write();
-        lock.font_families = cx
-            .text_system()
-            .all_font_names()
-            .into_iter()
-            .map(SharedString::from)
-            .collect();
+        lock.font_families = cx.text_system().all_font_names().into_iter().map(SharedString::from).collect();
         lock.loaded_at = Some(Instant::now());
 
         lock.font_families.clone()
@@ -55,19 +53,12 @@ impl FontFamilyCache {
 
     /// Returns the list of font families if they have been loaded
     pub fn try_list_font_families(&self) -> Option<Vec<SharedString>> {
-        self.state
-            .try_read()
-            .filter(|state| state.loaded_at.is_some())
-            .map(|state| state.font_families.clone())
+        self.state.try_read().filter(|state| state.loaded_at.is_some()).map(|state| state.font_families.clone())
     }
 
     /// Prefetch all font names in the background
     pub async fn prefetch(&self, cx: &gpui::AsyncApp) {
-        if self
-            .state
-            .try_read()
-            .is_none_or(|state| state.loaded_at.is_some())
-        {
+        if self.state.try_read().is_none_or(|state| state.loaded_at.is_some()) {
             return;
         }
 
@@ -80,11 +71,7 @@ impl FontFamilyCache {
                 // We take this lock in the background executor to ensure that synchronous calls to `list_font_families` are blocked while we are prefetching,
                 // while not blocking the main thread and risking deadlocks
                 let mut lock = state.write();
-                let all_font_names = text_system
-                    .all_font_names()
-                    .into_iter()
-                    .map(SharedString::from)
-                    .collect();
+                let all_font_names = text_system.all_font_names().into_iter().map(SharedString::from).collect();
                 lock.font_families = all_font_names;
                 lock.loaded_at = Some(Instant::now());
             })

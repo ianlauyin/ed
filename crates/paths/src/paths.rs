@@ -60,9 +60,8 @@ pub fn set_custom_data_dir(dir: &str) -> &'static PathBuf {
     CUSTOM_DATA_DIR.get_or_init(|| {
         let path = PathBuf::from(dir);
         std::fs::create_dir_all(&path).expect("failed to create custom data directory");
-        let canonicalized = path
-            .canonicalize()
-            .expect("failed to canonicalize custom data directory's path to an absolute path");
+        let canonicalized =
+            path.canonicalize().expect("failed to canonicalize custom data directory's path to an absolute path");
         // On Windows, `canonicalize` produces extended-length paths prefixed
         // with `\\?\`. Strip that prefix so downstream consumers (e.g.
         // Node.js language servers) that receive derived paths as arguments
@@ -136,7 +135,5 @@ pub fn database_dir() -> &'static PathBuf {
 
 pub fn global_gitignore_path() -> Option<PathBuf> {
     static GLOBAL_GITIGNORE_PATH: OnceLock<Option<PathBuf>> = OnceLock::new();
-    GLOBAL_GITIGNORE_PATH
-        .get_or_init(::ignore::gitignore::gitconfig_excludes_path)
-        .clone()
+    GLOBAL_GITIGNORE_PATH.get_or_init(::ignore::gitignore::gitconfig_excludes_path).clone()
 }

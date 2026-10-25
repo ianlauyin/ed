@@ -1,4 +1,5 @@
-use time::{OffsetDateTime, UtcOffset};
+use time::OffsetDateTime;
+use time::UtcOffset;
 
 /// The formatting style for a timestamp.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -28,26 +29,19 @@ pub fn format_localized_timestamp(
 }
 
 /// Formats a timestamp, which respects the user's date and time preferences/custom format.
-pub fn format_local_timestamp(
-    timestamp: OffsetDateTime,
-    reference: OffsetDateTime,
-    format: TimestampFormat,
-) -> String {
+pub fn format_local_timestamp(timestamp: OffsetDateTime, reference: OffsetDateTime, format: TimestampFormat) -> String {
     match format {
         TimestampFormat::Absolute => format_absolute_timestamp(timestamp, reference, false),
         TimestampFormat::EnhancedAbsolute => format_absolute_timestamp(timestamp, reference, true),
         TimestampFormat::MediumAbsolute => format_absolute_timestamp_medium(timestamp, reference),
-        TimestampFormat::Relative => format_relative_time(timestamp, reference)
-            .unwrap_or_else(|| format_relative_date(timestamp, reference)),
+        TimestampFormat::Relative => {
+            format_relative_time(timestamp, reference).unwrap_or_else(|| format_relative_date(timestamp, reference))
+        }
     }
 }
 
 /// Formats the date component of a timestamp
-pub fn format_date(
-    timestamp: OffsetDateTime,
-    reference: OffsetDateTime,
-    enhanced_formatting: bool,
-) -> String {
+pub fn format_date(timestamp: OffsetDateTime, reference: OffsetDateTime, enhanced_formatting: bool) -> String {
     format_absolute_date(timestamp, reference, enhanced_formatting)
 }
 
@@ -57,11 +51,7 @@ pub fn format_time(timestamp: OffsetDateTime) -> String {
 }
 
 /// Formats the date component of a timestamp in medium style
-pub fn format_date_medium(
-    timestamp: OffsetDateTime,
-    reference: OffsetDateTime,
-    enhanced_formatting: bool,
-) -> String {
+pub fn format_date_medium(timestamp: OffsetDateTime, reference: OffsetDateTime, enhanced_formatting: bool) -> String {
     format_absolute_date_medium(timestamp, reference, enhanced_formatting)
 }
 
@@ -143,10 +133,7 @@ fn format_absolute_date_medium(
     }
 }
 
-fn format_absolute_timestamp_medium(
-    timestamp: OffsetDateTime,
-    reference: OffsetDateTime,
-) -> String {
+fn format_absolute_timestamp_medium(timestamp: OffsetDateTime, reference: OffsetDateTime) -> String {
     format_absolute_date_medium(timestamp, reference, false)
 }
 
@@ -250,11 +237,7 @@ fn format_timestamp_naive_time(timestamp_local: OffsetDateTime, is_12_hour_time:
     let timestamp_local_minute = timestamp_local.minute();
 
     let (hour, meridiem) = if is_12_hour_time {
-        let meridiem = if timestamp_local_hour >= 12 {
-            "PM"
-        } else {
-            "AM"
-        };
+        let meridiem = if timestamp_local_hour >= 12 { "PM" } else { "AM" };
 
         let hour_12 = match timestamp_local_hour {
             0 => 12,                              // Midnight
@@ -309,17 +292,15 @@ mod macos {
     use core_foundation::base::TCFType;
     use core_foundation::date::CFAbsoluteTime;
     use core_foundation::string::CFString;
+    use core_foundation_sys::base::kCFAllocatorDefault;
+    use core_foundation_sys::date_formatter::CFDateFormatterCreate;
     use core_foundation_sys::date_formatter::CFDateFormatterCreateStringWithAbsoluteTime;
     use core_foundation_sys::date_formatter::CFDateFormatterRef;
+    use core_foundation_sys::date_formatter::kCFDateFormatterMediumStyle;
+    use core_foundation_sys::date_formatter::kCFDateFormatterNoStyle;
+    use core_foundation_sys::date_formatter::kCFDateFormatterShortStyle;
+    use core_foundation_sys::locale::CFLocaleCopyCurrent;
     use core_foundation_sys::locale::CFLocaleRef;
-    use core_foundation_sys::{
-        base::kCFAllocatorDefault,
-        date_formatter::{
-            CFDateFormatterCreate, kCFDateFormatterMediumStyle, kCFDateFormatterNoStyle,
-            kCFDateFormatterShortStyle,
-        },
-        locale::CFLocaleCopyCurrent,
-    };
 
     pub fn format_time(timestamp: &time::OffsetDateTime) -> String {
         format_with_date_formatter(timestamp, TIME_FORMATTER.with(|f| *f))
@@ -333,20 +314,13 @@ mod macos {
         format_with_date_formatter(timestamp, MEDIUM_DATE_FORMATTER.with(|f| *f))
     }
 
-    fn format_with_date_formatter(
-        timestamp: &time::OffsetDateTime,
-        fmt: CFDateFormatterRef,
-    ) -> String {
+    fn format_with_date_formatter(timestamp: &time::OffsetDateTime, fmt: CFDateFormatterRef) -> String {
         const UNIX_TO_CF_ABSOLUTE_TIME_OFFSET: i64 = 978307200;
         // Convert timestamp to macOS absolute time
         let timestamp_macos = timestamp.unix_timestamp() - UNIX_TO_CF_ABSOLUTE_TIME_OFFSET;
         let cf_absolute_time = timestamp_macos as CFAbsoluteTime;
         unsafe {
-            let s = CFDateFormatterCreateStringWithAbsoluteTime(
-                kCFAllocatorDefault,
-                fmt,
-                cf_absolute_time,
-            );
+            let s = CFDateFormatterCreateStringWithAbsoluteTime(kCFAllocatorDefault, fmt, cf_absolute_time);
             CFString::wrap_under_create_rule(s).to_string()
         }
     }

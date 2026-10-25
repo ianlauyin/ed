@@ -507,7 +507,7 @@ pub fn runnable_to_task_template(label: String, args: RunnableArgs) -> TaskTempl
                         // rust-analyzer's doctest data may contain things like `X<T>::new`
                         // which cause shell issues when run as `$SHELL -i -c "cargo test ..."`.
                         // Escape extra cargo args unconditionally as those are unlikely to contain `~`.
-                        .flat_map(|extra_arg| shell_kind.try_quote(&extra_arg).map(|s| s.to_string())),
+                        .filter_map(|extra_arg| shell_kind.try_quote(&extra_arg).map(|s| s.to_string())),
                 );
             }
         }

@@ -1,9 +1,9 @@
-use std::{
-    borrow::Borrow,
-    sync::atomic::{self, AtomicBool},
-};
+use std::borrow::Borrow;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{self};
 
-use crate::{CharBag, char_bag::simple_lowercase};
+use crate::CharBag;
+use crate::char_bag::simple_lowercase;
 
 const BASE_DISTANCE_PENALTY: f64 = 0.6;
 const ADDITIONAL_DISTANCE_PENALTY: f64 = 0.05;
@@ -89,35 +89,21 @@ impl<'a> Matcher<'a> {
                 continue;
             }
 
-            let matrix_len =
-                self.query.len() * (lowercase_prefix.len() + lowercase_candidate_chars.len());
+            let matrix_len = self.query.len() * (lowercase_prefix.len() + lowercase_candidate_chars.len());
             self.score_matrix.clear();
             self.score_matrix.resize(matrix_len, None);
             self.best_position_matrix.clear();
             self.best_position_matrix.resize(matrix_len, 0);
 
-            let score = self.score_match(
-                &candidate_chars,
-                &lowercase_candidate_chars,
-                prefix,
-                lowercase_prefix,
-            );
+            let score = self.score_match(&candidate_chars, &lowercase_candidate_chars, prefix, lowercase_prefix);
 
             if score > 0.0 {
-                results.push(build_match(
-                    candidate.borrow(),
-                    score,
-                    &self.match_positions,
-                ));
+                results.push(build_match(candidate.borrow(), score, &self.match_positions));
             }
         }
     }
 
-    fn find_last_positions(
-        &mut self,
-        lowercase_prefix: &[char],
-        lowercase_candidate: &[char],
-    ) -> bool {
+    fn find_last_positions(&mut self, lowercase_prefix: &[char], lowercase_candidate: &[char]) -> bool {
         let mut lowercase_prefix = lowercase_prefix.iter();
         let mut lowercase_candidate = lowercase_candidate.iter();
         for (i, char) in self.lowercase_query.iter().enumerate().rev() {
@@ -139,15 +125,9 @@ impl<'a> Matcher<'a> {
         prefix: &[char],
         lowercase_prefix: &[char],
     ) -> f64 {
-        let score = self.recursive_score_match(
-            path,
-            path_lowercased,
-            prefix,
-            lowercase_prefix,
-            0,
-            0,
-            self.query.len() as f64,
-        ) * self.query.len() as f64;
+        let score =
+            self.recursive_score_match(path, path_lowercased, prefix, lowercase_prefix, 0, 0, self.query.len() as f64)
+                * self.query.len() as f64;
 
         if score <= 0.0 {
             return 0.0;
@@ -159,20 +139,14 @@ impl<'a> Matcher<'a> {
         for i in 0..self.query.len() {
             let match_char_ix = self.best_position_matrix[i * path_len + cur_start];
             while char_ix < match_char_ix {
-                let ch = prefix
-                    .get(char_ix)
-                    .or_else(|| path.get(char_ix - prefix.len()))
-                    .unwrap();
+                let ch = prefix.get(char_ix).or_else(|| path.get(char_ix - prefix.len())).unwrap();
                 byte_ix += ch.len_utf8();
                 char_ix += 1;
             }
 
             self.match_positions[i] = byte_ix;
 
-            let matched_ch = prefix
-                .get(match_char_ix)
-                .or_else(|| path.get(match_char_ix - prefix.len()))
-                .unwrap();
+            let matched_ch = prefix.get(match_char_ix).or_else(|| path.get(match_char_ix - prefix.len())).unwrap();
             byte_ix += matched_ch.len_utf8();
 
             cur_start = match_char_ix + 1;
@@ -256,10 +230,8 @@ impl<'a> Matcher<'a> {
                     } else if query_idx == 0 {
                         char_score = BASE_DISTANCE_PENALTY;
                     } else {
-                        char_score = MIN_DISTANCE_PENALTY.max(
-                            BASE_DISTANCE_PENALTY
-                                - (j - path_idx - 1) as f64 * ADDITIONAL_DISTANCE_PENALTY,
-                        );
+                        char_score = MIN_DISTANCE_PENALTY
+                            .max(BASE_DISTANCE_PENALTY - (j - path_idx - 1) as f64 * ADDITIONAL_DISTANCE_PENALTY);
                     }
                 }
 

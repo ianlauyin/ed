@@ -1,5 +1,10 @@
 use db::kvp::KeyValueStore;
-use gpui::{App, AppContext as _, Context, Subscription, Task, WindowId};
+use gpui::App;
+use gpui::AppContext as _;
+use gpui::Context;
+use gpui::Subscription;
+use gpui::Task;
+use gpui::WindowId;
 use util::ResultExt;
 
 pub struct Session {
@@ -15,26 +20,16 @@ impl Session {
     pub async fn new(session_id: String, db: KeyValueStore) -> Self {
         let old_session_id = db.read_kvp(SESSION_ID_KEY).ok().flatten();
 
-        db.write_kvp(SESSION_ID_KEY.to_string(), session_id.clone())
-            .await
-            .log_err();
+        db.write_kvp(SESSION_ID_KEY.to_string(), session_id.clone()).await.log_err();
 
         let old_window_ids = db
             .read_kvp(SESSION_WINDOW_STACK_KEY)
             .ok()
             .flatten()
             .and_then(|json| serde_json::from_str::<Vec<u64>>(&json).ok())
-            .map(|vec: Vec<u64>| {
-                vec.into_iter()
-                    .map(WindowId::from)
-                    .collect::<Vec<WindowId>>()
-            });
+            .map(|vec: Vec<u64>| vec.into_iter().map(WindowId::from).collect::<Vec<WindowId>>());
 
-        Self {
-            session_id,
-            old_session_id,
-            old_window_ids,
-        }
+        Self { session_id, old_session_id, old_window_ids }
     }
 
     pub fn id(&self) -> &str {
@@ -64,17 +59,11 @@ impl AppSession {
                     current_window_stack = windows;
                 }
 
-                cx.background_executor()
-                    .timer(std::time::Duration::from_millis(500))
-                    .await;
+                cx.background_executor().timer(std::time::Duration::from_millis(500)).await;
             }
         });
 
-        Self {
-            session,
-            _subscriptions,
-            _serialization_task,
-        }
+        Self { session, _subscriptions, _serialization_task }
     }
 
     fn app_will_quit(&mut self, cx: &mut Context<Self>) -> Task<()> {
@@ -102,18 +91,11 @@ impl AppSession {
 }
 
 fn window_stack(cx: &App) -> Option<Vec<u64>> {
-    Some(
-        cx.window_stack()?
-            .into_iter()
-            .map(|window| window.window_id().as_u64())
-            .collect(),
-    )
+    Some(cx.window_stack()?.into_iter().map(|window| window.window_id().as_u64()).collect())
 }
 
 async fn store_window_stack(db: KeyValueStore, windows: &[u64]) {
     if let Ok(window_ids_json) = serde_json::to_string(windows) {
-        db.write_kvp(SESSION_WINDOW_STACK_KEY.to_string(), window_ids_json)
-            .await
-            .log_err();
+        db.write_kvp(SESSION_WINDOW_STACK_KEY.to_string(), window_ids_json).await.log_err();
     }
 }

@@ -1,8 +1,14 @@
-use component::{Component, ComponentScope, example_group_with_title, single_example};
+use component::Component;
+use component::ComponentScope;
+use component::example_group_with_title;
+use component::single_example;
 use gpui::AnyElement;
 use smallvec::SmallVec;
 
-use crate::{Label, ListHeader, ListItem, prelude::*};
+use crate::Label;
+use crate::ListHeader;
+use crate::ListItem;
+use crate::prelude::*;
 
 pub enum EmptyMessage {
     Text(SharedString),
@@ -77,20 +83,16 @@ impl From<AnyElement> for EmptyMessage {
 
 impl RenderOnce for List {
     fn render(self, _window: &mut Window, cx: &mut App) -> impl IntoElement {
-        v_flex()
-            .w_full()
-            .py(DynamicSpacing::Base04.rems(cx))
-            .children(self.header)
-            .map(|this| match (self.children.is_empty(), self.toggle) {
+        v_flex().w_full().py(DynamicSpacing::Base04.rems(cx)).children(self.header).map(|this| {
+            match (self.children.is_empty(), self.toggle) {
                 (false, _) => this.children(self.children),
                 (true, Some(false)) => this,
                 (true, _) => match self.empty_message {
-                    EmptyMessage::Text(text) => {
-                        this.px_2().child(Label::new(text).color(Color::Muted))
-                    }
+                    EmptyMessage::Text(text) => this.px_2().child(Label::new(text).color(Color::Muted)),
                     EmptyMessage::Element(element) => this.child(element),
                 },
-            })
+            }
+        })
     }
 }
 
@@ -126,12 +128,7 @@ impl Component for List {
                             .child(ListItem::new("item2").child(Label::new("Item 2")))
                             .into_any_element(),
                     ),
-                    single_example(
-                        "Empty List",
-                        List::new()
-                            .empty_message("No items to display")
-                            .into_any_element(),
-                    ),
+                    single_example("Empty List", List::new().empty_message("No items to display").into_any_element()),
                 ],
             )])
             .into_any_element()

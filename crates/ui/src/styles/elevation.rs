@@ -1,7 +1,14 @@
-use std::fmt::{self, Display, Formatter};
+use std::fmt::Display;
+use std::fmt::Formatter;
+use std::fmt::{self};
 
-use gpui::{App, BoxShadow, Hsla, hsla, px};
-use theme::{ActiveTheme, Appearance};
+use gpui::App;
+use gpui::BoxShadow;
+use gpui::Hsla;
+use gpui::hsla;
+use gpui::px;
+use theme::ActiveTheme;
+use theme::Appearance;
 
 /// Today, elevation is primarily used to add shadows to elements, and set the correct background for elements like buttons.
 ///
@@ -48,32 +55,16 @@ impl ElevationIndex {
 
             ElevationIndex::ElevatedSurface => vec![
                 BoxShadow::new(px(0.), px(2.), hsla(0., 0., 0., 0.12)).blur_radius(px(3.)),
-                BoxShadow::new(
-                    px(0.),
-                    px(1.),
-                    hsla(0., 0., 0., if is_light { 0.03 } else { 0.06 }),
-                ),
+                BoxShadow::new(px(0.), px(1.), hsla(0., 0., 0., if is_light { 0.03 } else { 0.06 })),
             ],
 
             ElevationIndex::ModalSurface => vec![
-                BoxShadow::new(
-                    px(0.),
-                    px(2.),
-                    hsla(0., 0., 0., if is_light { 0.06 } else { 0.12 }),
-                )
-                .blur_radius(px(3.)),
-                BoxShadow::new(
-                    px(0.),
-                    px(3.),
-                    hsla(0., 0., 0., if is_light { 0.06 } else { 0.08 }),
-                )
-                .blur_radius(px(6.)),
+                BoxShadow::new(px(0.), px(2.), hsla(0., 0., 0., if is_light { 0.06 } else { 0.12 }))
+                    .blur_radius(px(3.)),
+                BoxShadow::new(px(0.), px(3.), hsla(0., 0., 0., if is_light { 0.06 } else { 0.08 }))
+                    .blur_radius(px(6.)),
                 BoxShadow::new(px(0.), px(6.), hsla(0., 0., 0., 0.04)).blur_radius(px(12.)),
-                BoxShadow::new(
-                    px(0.),
-                    px(1.),
-                    hsla(0., 0., 0., if is_light { 0.04 } else { 0.12 }),
-                ),
+                BoxShadow::new(px(0.), px(1.), hsla(0., 0., 0., if is_light { 0.04 } else { 0.12 })),
             ],
 
             _ => vec![],

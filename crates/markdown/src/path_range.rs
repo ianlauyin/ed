@@ -70,7 +70,7 @@ impl PathWithRange {
                 let after_hash = after_hash.replace(['L', 'l'], "");
 
                 let range = {
-                    let mut iter = after_hash.split('-').flat_map(LineCol::new);
+                    let mut iter = after_hash.split('-').filter_map(LineCol::new);
                     iter.next().map(|start| iter.next().map(|end| start..end).unwrap_or(start..start))
                 };
 

@@ -1,6 +1,9 @@
-pub use component::{
-    Component, ComponentId, ComponentScope, ComponentStatus, example_group,
-    example_group_with_title, single_example,
-};
+pub use component::Component;
+pub use component::ComponentId;
+pub use component::ComponentScope;
+pub use component::ComponentStatus;
+pub use component::example_group;
+pub use component::example_group_with_title;
+pub use component::single_example;
 pub use documented::Documented;
 pub use ui_macros::RegisterComponent;

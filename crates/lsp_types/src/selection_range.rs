@@ -1,9 +1,13 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
-use crate::{
-    PartialResultParams, Position, Range, StaticTextDocumentRegistrationOptions,
-    TextDocumentIdentifier, WorkDoneProgressOptions, WorkDoneProgressParams,
-};
+use crate::PartialResultParams;
+use crate::Position;
+use crate::Range;
+use crate::StaticTextDocumentRegistrationOptions;
+use crate::TextDocumentIdentifier;
+use crate::WorkDoneProgressOptions;
+use crate::WorkDoneProgressParams;
 #[derive(Debug, Eq, PartialEq, Clone, Default, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SelectionRangeClientCapabilities {

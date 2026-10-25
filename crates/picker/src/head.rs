@@ -1,8 +1,13 @@
 use std::sync::Arc;
 
-use gpui::{App, Entity, FocusHandle, Focusable, prelude::*};
+use gpui::App;
+use gpui::Entity;
+use gpui::FocusHandle;
+use gpui::Focusable;
+use gpui::prelude::*;
 use ui::prelude::*;
-use ui_input::{ErasedEditor, ErasedEditorEvent};
+use ui_input::ErasedEditor;
+use ui_input::ErasedEditorEvent;
 
 /// The head of a [`Picker`](crate::Picker).
 pub(crate) enum Head {
@@ -36,8 +41,7 @@ impl Head {
         editor
             .subscribe(
                 Box::new(move |event, window, cx| {
-                    this.update(cx, |this, cx| (edit_handler)(this, &event, window, cx))
-                        .ok();
+                    this.update(cx, |this, cx| (edit_handler)(this, &event, window, cx)).ok();
                 }),
                 window,
                 cx,
@@ -52,8 +56,7 @@ impl Head {
         cx: &mut Context<V>,
     ) -> Self {
         let head = cx.new(EmptyHead::new);
-        cx.on_blur(&head.focus_handle(cx), window, blur_handler)
-            .detach();
+        cx.on_blur(&head.focus_handle(cx), window, blur_handler).detach();
         Self::Empty(head)
     }
 }
@@ -65,9 +68,7 @@ pub(crate) struct EmptyHead {
 
 impl EmptyHead {
     fn new(cx: &mut Context<Self>) -> Self {
-        Self {
-            focus_handle: cx.focus_handle(),
-        }
+        Self { focus_handle: cx.focus_handle() }
     }
 }
 

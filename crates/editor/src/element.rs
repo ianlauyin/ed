@@ -1744,7 +1744,7 @@ impl EditorElement {
         let shaped_lines = blamed_rows
             .into_iter()
             .enumerate()
-            .flat_map(|(ix, blame_entry)| {
+            .filter_map(|(ix, blame_entry)| {
                 let (buffer_id, blame_entry) = blame_entry?;
                 let mut element = render_blame_entry(
                     ix,
@@ -1851,7 +1851,7 @@ impl EditorElement {
             .read(cx)
             .wrap_guides(cx)
             .into_iter()
-            .flat_map(|(guide, active)| {
+            .filter_map(|(guide, active)| {
                 let wrap_position = column_pixels(&self.style, guide, window);
                 let wrap_guide_x = wrap_position + horizontal_offset;
                 let display_wrap_guide = wrap_guide_x >= content_origin && wrap_guide_x <= hitbox.bounds.right();
@@ -2087,7 +2087,7 @@ impl EditorElement {
         }
 
         let mut line_number = String::new();
-        let segments = gutter.row_infos.iter().enumerate().flat_map(|(ix, row_info)| {
+        let segments = gutter.row_infos.iter().enumerate().filter_map(|(ix, row_info)| {
             let display_row = DisplayRow(gutter.range.start.0 + ix as u32);
             line_number.clear();
             let number = row_info.buffer_row? + 1;

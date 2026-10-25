@@ -1,20 +1,24 @@
-use std::{
-    borrow::Borrow,
-    cmp::Ordering,
-    iter,
-    ops::Range,
-    sync::atomic::{self, AtomicBool},
-};
+use std::borrow::Borrow;
+use std::cmp::Ordering;
+use std::iter;
+use std::ops::Range;
+use std::sync::atomic::AtomicBool;
+use std::sync::atomic::{self};
 
-use gpui::{BackgroundExecutor, SharedString};
+use fuzzy::CharBag;
+use gpui::BackgroundExecutor;
+use gpui::SharedString;
 use nucleo::Utf32Str;
 
-use crate::{
-    Cancelled, Case, LengthPenalty, Query, case_penalty, count_case_mismatches,
-    matcher::{self, LENGTH_PENALTY},
-    positions_from_sorted,
-};
-use fuzzy::CharBag;
+use crate::Cancelled;
+use crate::Case;
+use crate::LengthPenalty;
+use crate::Query;
+use crate::case_penalty;
+use crate::count_case_mismatches;
+use crate::matcher::LENGTH_PENALTY;
+use crate::matcher::{self};
+use crate::positions_from_sorted;
 
 #[derive(Clone, Debug)]
 pub struct StringMatchCandidate {
@@ -30,11 +34,7 @@ impl StringMatchCandidate {
 
     pub fn from_shared(id: usize, string: SharedString) -> Self {
         let char_bag = CharBag::from(string.as_ref());
-        Self {
-            id,
-            string,
-            char_bag,
-        }
+        Self { id, string, char_bag }
     }
 }
 
@@ -69,9 +69,7 @@ impl StringMatch {
     }
 
     fn char_len_at_index(&self, ix: usize) -> Option<usize> {
-        self.string
-            .get(ix..)
-            .and_then(|slice| slice.chars().next().map(|c| c.len_utf8()))
+        self.string.get(ix..).and_then(|slice| slice.chars().next().map(|c| c.len_utf8()))
     }
 }
 
@@ -91,9 +89,7 @@ impl PartialOrd for StringMatch {
 
 impl Ord for StringMatch {
     fn cmp(&self, other: &Self) -> Ordering {
-        self.score
-            .total_cmp(&other.score)
-            .then_with(|| self.candidate_id.cmp(&other.candidate_id))
+        self.score.total_cmp(&other.score).then_with(|| self.candidate_id.cmp(&other.candidate_id))
     }
 }
 
@@ -120,25 +116,19 @@ where
     let num_cpus = executor.num_cpus().min(candidates.len());
     let base_size = candidates.len() / num_cpus;
     let remainder = candidates.len() % num_cpus;
-    let mut segment_results = (0..num_cpus)
-        .map(|_| Vec::with_capacity(max_results.min(candidates.len())))
-        .collect::<Vec<_>>();
+    let mut segment_results =
+        (0..num_cpus).map(|_| Vec::with_capacity(max_results.min(candidates.len()))).collect::<Vec<_>>();
 
     let config = nucleo::Config::DEFAULT;
     let mut matchers = matcher::get_matchers(num_cpus, config);
 
     executor
         .scoped(|scope| {
-            for (segment_idx, (results, matcher)) in segment_results
-                .iter_mut()
-                .zip(matchers.iter_mut())
-                .enumerate()
-            {
+            for (segment_idx, (results, matcher)) in segment_results.iter_mut().zip(matchers.iter_mut()).enumerate() {
                 let query = &query;
                 scope.spawn(async move {
                     let segment_start = segment_idx * base_size + segment_idx.min(remainder);
-                    let segment_end =
-                        (segment_idx + 1) * base_size + (segment_idx + 1).min(remainder);
+                    let segment_end = (segment_idx + 1) * base_size + (segment_idx + 1).min(remainder);
 
                     match_string_helper(
                         &candidates[segment_start..segment_end],
@@ -187,36 +177,20 @@ where
     let mut matcher = matcher::get_matcher(config);
     let mut results = Vec::with_capacity(max_results.min(candidates.len()));
 
-    match_string_helper(
-        candidates,
-        &query,
-        &mut matcher,
-        length_penalty,
-        &mut results,
-        &AtomicBool::new(false),
-    )
-    .ok();
+    match_string_helper(candidates, &query, &mut matcher, length_penalty, &mut results, &AtomicBool::new(false)).ok();
 
     matcher::return_matcher(matcher);
     gpui_util::truncate_to_bottom_n_sorted_by(&mut results, max_results, &|a, b| b.cmp(a));
     results
 }
 
-fn empty_query_results<T: Borrow<StringMatchCandidate>>(
-    candidates: &[T],
-    max_results: usize,
-) -> Vec<StringMatch> {
+fn empty_query_results<T: Borrow<StringMatchCandidate>>(candidates: &[T], max_results: usize) -> Vec<StringMatch> {
     candidates
         .iter()
         .take(max_results)
         .map(|candidate| {
             let borrowed = candidate.borrow();
-            StringMatch {
-                candidate_id: borrowed.id,
-                score: 0.,
-                positions: Vec::new(),
-                string: borrowed.string.clone(),
-            }
+            StringMatch { candidate_id: borrowed.id, score: 0., positions: Vec::new(), string: borrowed.string.clone() }
         })
         .collect()
 }
@@ -266,8 +240,7 @@ where
         matched_chars.dedup();
 
         let positive = score as f64 * case_penalty(case_mismatches);
-        let adjusted_score =
-            positive - length_penalty_for(borrowed.string.as_ref(), length_penalty);
+        let adjusted_score = positive - length_penalty_for(borrowed.string.as_ref(), length_penalty);
         let positions = positions_from_sorted(borrowed.string.as_ref(), &matched_chars);
 
         results.push(StringMatch {
@@ -282,9 +255,5 @@ where
 
 #[inline]
 fn length_penalty_for(s: &str, length_penalty: LengthPenalty) -> f64 {
-    if length_penalty.is_on() {
-        s.len() as f64 * LENGTH_PENALTY
-    } else {
-        0.0
-    }
+    if length_penalty.is_on() { s.len() as f64 * LENGTH_PENALTY } else { 0.0 }
 }

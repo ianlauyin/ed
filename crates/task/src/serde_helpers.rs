@@ -1,5 +1,8 @@
-use serde::de::{self, Deserializer, Visitor};
 use std::fmt;
+
+use serde::de::Deserializer;
+use serde::de::Visitor;
+use serde::de::{self};
 
 /// Deserializes a non-empty string array.
 pub fn non_empty_string_vec<'de, D>(deserializer: D) -> Result<Vec<String>, D::Error>
@@ -22,10 +25,7 @@ where
             let mut vec = Vec::new();
             while let Some(value) = seq.next_element::<String>()? {
                 if value.is_empty() {
-                    return Err(de::Error::invalid_value(
-                        de::Unexpected::Str(&value),
-                        &"a non-empty string",
-                    ));
+                    return Err(de::Error::invalid_value(de::Unexpected::Str(&value), &"a non-empty string"));
                 }
                 vec.push(value);
             }

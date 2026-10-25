@@ -1,6 +1,8 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
-use crate::{NumberOrString, WorkspaceDiagnosticReportResult};
+use crate::NumberOrString;
+use crate::WorkspaceDiagnosticReportResult;
 
 pub type ProgressToken = NumberOrString;
 

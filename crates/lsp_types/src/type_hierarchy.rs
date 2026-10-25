@@ -1,10 +1,18 @@
-use crate::{
-    DynamicRegistrationClientCapabilities, LSPAny, PartialResultParams, Range,
-    StaticRegistrationOptions, SymbolKind, SymbolTag, TextDocumentPositionParams,
-    TextDocumentRegistrationOptions, Uri, WorkDoneProgressOptions, WorkDoneProgressParams,
-};
+use serde::Deserialize;
+use serde::Serialize;
 
-use serde::{Deserialize, Serialize};
+use crate::DynamicRegistrationClientCapabilities;
+use crate::LSPAny;
+use crate::PartialResultParams;
+use crate::Range;
+use crate::StaticRegistrationOptions;
+use crate::SymbolKind;
+use crate::SymbolTag;
+use crate::TextDocumentPositionParams;
+use crate::TextDocumentRegistrationOptions;
+use crate::Uri;
+use crate::WorkDoneProgressOptions;
+use crate::WorkDoneProgressParams;
 
 pub type TypeHierarchyClientCapabilities = DynamicRegistrationClientCapabilities;
 

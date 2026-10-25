@@ -1,7 +1,12 @@
-use crate::{settings_content::SettingsContent, settings_store::SettingsStore};
-use fs::Fs;
-use gpui::{App, ReadGlobal, UpdateGlobal};
 use std::sync::Arc;
+
+use fs::Fs;
+use gpui::App;
+use gpui::ReadGlobal;
+use gpui::UpdateGlobal;
+
+use crate::settings_content::SettingsContent;
+use crate::settings_store::SettingsStore;
 
 /// Apply a setting change for this session. The legacy helper name is retained
 /// for callers; settings are never persisted to a configuration file.

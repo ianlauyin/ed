@@ -1,7 +1,13 @@
-use crate::prelude::*;
-
 use documented::Documented;
-use gpui::{AnyElement, Hsla, ImageSource, Img, IntoElement, Styled, img};
+use gpui::AnyElement;
+use gpui::Hsla;
+use gpui::ImageSource;
+use gpui::Img;
+use gpui::IntoElement;
+use gpui::Styled;
+use gpui::img;
+
+use crate::prelude::*;
 
 /// An element that renders a user avatar with customizable appearance options.
 ///
@@ -25,12 +31,7 @@ pub struct Avatar {
 impl Avatar {
     /// Creates a new avatar element with the specified image source.
     pub fn new(src: impl Into<ImageSource>) -> Self {
-        Avatar {
-            image: img(src),
-            size: None,
-            border_color: None,
-            indicator: None,
-        }
+        Avatar { image: img(src), size: None, border_color: None, indicator: None }
     }
 
     /// Applies a grayscale filter to the avatar image.
@@ -72,11 +73,7 @@ impl Avatar {
 
 impl RenderOnce for Avatar {
     fn render(self, window: &mut Window, cx: &mut App) -> impl IntoElement {
-        let border_width = if self.border_color.is_some() {
-            px(1.)
-        } else {
-            px(0.)
-        };
+        let border_width = if self.border_color.is_some() { px(1.) } else { px(0.) };
 
         let image_size = self.size.unwrap_or_else(|| rems(1.).into());
         let container_size = image_size.to_pixels(window.rem_size()) + border_width * 2.;
@@ -84,26 +81,14 @@ impl RenderOnce for Avatar {
         div()
             .size(container_size)
             .rounded_full()
-            .when_some(self.border_color, |this, color| {
-                this.border(border_width).border_color(color)
-            })
-            .child(
-                self.image
+            .when_some(self.border_color, |this, color| this.border(border_width).border_color(color))
+            .child(self.image.size_full().rounded_full().bg(cx.theme().colors().element_disabled).with_fallback(|| {
+                h_flex()
                     .size_full()
-                    .rounded_full()
-                    .bg(cx.theme().colors().element_disabled)
-                    .with_fallback(|| {
-                        h_flex()
-                            .size_full()
-                            .justify_center()
-                            .child(
-                                Icon::new(IconName::Person)
-                                    .color(Color::Muted)
-                                    .size(IconSize::Small),
-                            )
-                            .into_any_element()
-                    }),
-            )
+                    .justify_center()
+                    .child(Icon::new(IconName::Person).color(Color::Muted).size(IconSize::Small))
+                    .into_any_element()
+            }))
             .children(self.indicator.map(|indicator| div().child(indicator)))
     }
 }

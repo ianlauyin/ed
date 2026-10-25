@@ -83,7 +83,7 @@ fn files_not_created_on_launch(errors: HashMap<io::ErrorKind, Vec<&Path>>) {
     let message = "ed failed to launch";
     let error_details = errors
         .into_iter()
-        .flat_map(|(kind, paths)| {
+        .filter_map(|(kind, paths)| {
             #[allow(unused_mut)] // for non-unix platforms
             let mut error_kind_details = match paths.len() {
                 0 => return None,

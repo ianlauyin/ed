@@ -1,11 +1,15 @@
 use std::borrow::Cow;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
-use crate::{
-    PartialResultParams, Range, StaticRegistrationOptions, TextDocumentIdentifier,
-    TextDocumentRegistrationOptions, WorkDoneProgressOptions, WorkDoneProgressParams,
-};
+use crate::PartialResultParams;
+use crate::Range;
+use crate::StaticRegistrationOptions;
+use crate::TextDocumentIdentifier;
+use crate::TextDocumentRegistrationOptions;
+use crate::WorkDoneProgressOptions;
+use crate::WorkDoneProgressParams;
 /// A set of predefined token types. This set is not fixed
 /// and clients can specify additional token types via the
 /// corresponding client capabilities.
@@ -451,130 +455,71 @@ impl From<SemanticTokensPartialResult> for SemanticTokensRangeResult {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tests::{test_deserialization, test_serialization};
+    use crate::tests::test_deserialization;
+    use crate::tests::test_serialization;
 
     #[test]
     fn test_semantic_tokens_support_serialization() {
-        test_serialization(
-            &SemanticTokens {
-                result_id: None,
-                data: vec![],
-            },
-            r#"{"data":[]}"#,
-        );
+        test_serialization(&SemanticTokens { result_id: None, data: vec![] }, r#"{"data":[]}"#);
+
+        test_serialization(&SemanticTokens { result_id: None, data: vec![2, 5, 3, 0, 3] }, r#"{"data":[2,5,3,0,3]}"#);
 
         test_serialization(
-            &SemanticTokens {
-                result_id: None,
-                data: vec![2, 5, 3, 0, 3],
-            },
-            r#"{"data":[2,5,3,0,3]}"#,
-        );
-
-        test_serialization(
-            &SemanticTokens {
-                result_id: None,
-                data: vec![2, 5, 3, 0, 3, 0, 5, 4, 1, 0],
-            },
+            &SemanticTokens { result_id: None, data: vec![2, 5, 3, 0, 3, 0, 5, 4, 1, 0] },
             r#"{"data":[2,5,3,0,3,0,5,4,1,0]}"#,
         );
     }
 
     #[test]
     fn test_semantic_tokens_support_deserialization() {
-        test_deserialization(
-            r#"{"data":[]}"#,
-            &SemanticTokens {
-                result_id: None,
-                data: vec![],
-            },
-        );
+        test_deserialization(r#"{"data":[]}"#, &SemanticTokens { result_id: None, data: vec![] });
 
-        test_deserialization(
-            r#"{"data":[2,5,3,0,3]}"#,
-            &SemanticTokens {
-                result_id: None,
-                data: vec![2, 5, 3, 0, 3],
-            },
-        );
+        test_deserialization(r#"{"data":[2,5,3,0,3]}"#, &SemanticTokens { result_id: None, data: vec![2, 5, 3, 0, 3] });
 
         test_deserialization(
             r#"{"data":[2,5,3,0,3,0,5,4,1,0]}"#,
-            &SemanticTokens {
-                result_id: None,
-                data: vec![2, 5, 3, 0, 3, 0, 5, 4, 1, 0],
-            },
+            &SemanticTokens { result_id: None, data: vec![2, 5, 3, 0, 3, 0, 5, 4, 1, 0] },
         );
     }
 
     #[test]
     #[should_panic]
     fn test_semantic_tokens_support_deserialization_err() {
-        test_deserialization(
-            r#"{"data":[1]}"#,
-            &SemanticTokens {
-                result_id: None,
-                data: vec![],
-            },
-        );
+        test_deserialization(r#"{"data":[1]}"#, &SemanticTokens { result_id: None, data: vec![] });
     }
 
     #[test]
     fn test_semantic_tokens_edit_support_deserialization() {
         test_deserialization(
             r#"{"start":0,"deleteCount":1,"data":[2]}"#,
-            &SemanticTokensEdit {
-                start: 0,
-                delete_count: 1,
-                data: Some(vec![2]),
-            },
+            &SemanticTokensEdit { start: 0, delete_count: 1, data: Some(vec![2]) },
         );
 
         test_deserialization(
             r#"{"start":0,"deleteCount":3,"data":[2,5,1]}"#,
-            &SemanticTokensEdit {
-                start: 0,
-                delete_count: 3,
-                data: Some(vec![2, 5, 1]),
-            },
+            &SemanticTokensEdit { start: 0, delete_count: 3, data: Some(vec![2, 5, 1]) },
         );
 
         test_deserialization(
             r#"{"start":0,"deleteCount":5}"#,
-            &SemanticTokensEdit {
-                start: 0,
-                delete_count: 5,
-                data: None,
-            },
+            &SemanticTokensEdit { start: 0, delete_count: 5, data: None },
         );
     }
 
     #[test]
     fn test_semantic_tokens_edit_support_serialization() {
         test_serialization(
-            &SemanticTokensEdit {
-                start: 0,
-                delete_count: 1,
-                data: Some(vec![2]),
-            },
+            &SemanticTokensEdit { start: 0, delete_count: 1, data: Some(vec![2]) },
             r#"{"start":0,"deleteCount":1,"data":[2]}"#,
         );
 
         test_serialization(
-            &SemanticTokensEdit {
-                start: 0,
-                delete_count: 3,
-                data: Some(vec![2, 5, 1]),
-            },
+            &SemanticTokensEdit { start: 0, delete_count: 3, data: Some(vec![2, 5, 1]) },
             r#"{"start":0,"deleteCount":3,"data":[2,5,1]}"#,
         );
 
         test_serialization(
-            &SemanticTokensEdit {
-                start: 0,
-                delete_count: 5,
-                data: None,
-            },
+            &SemanticTokensEdit { start: 0, delete_count: 5, data: None },
             r#"{"start":0,"deleteCount":5}"#,
         );
     }

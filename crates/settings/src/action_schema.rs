@@ -3,9 +3,7 @@ use gpui::generate_list_of_all_registered_actions;
 use util::schemars::AllowTrailingCommas;
 
 pub fn action_schema_generator() -> schemars::SchemaGenerator {
-    schemars::generate::SchemaSettings::draft2020_12()
-        .with_transform(AllowTrailingCommas)
-        .into_generator()
+    schemars::generate::SchemaSettings::draft2020_12().with_transform(AllowTrailingCommas).into_generator()
 }
 
 pub fn get_action_schema_by_name(

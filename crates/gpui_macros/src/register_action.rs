@@ -1,6 +1,8 @@
 use proc_macro::TokenStream;
-use proc_macro2::{Ident, TokenStream as TokenStream2};
-use quote::{format_ident, quote};
+use proc_macro2::Ident;
+use proc_macro2::TokenStream as TokenStream2;
+use quote::format_ident;
+use quote::quote;
 use syn::parse_macro_input;
 
 pub(crate) fn register_action(ident: TokenStream) -> TokenStream {
@@ -13,10 +15,7 @@ pub(crate) fn register_action(ident: TokenStream) -> TokenStream {
 }
 
 pub(crate) fn generate_register_action(type_name: &Ident) -> TokenStream2 {
-    let action_builder_fn_name = format_ident!(
-        "__gpui_actions_builder_{}",
-        type_name.to_string().to_lowercase()
-    );
+    let action_builder_fn_name = format_ident!("__gpui_actions_builder_{}", type_name.to_string().to_lowercase());
 
     quote! {
         impl #type_name {

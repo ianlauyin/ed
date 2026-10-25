@@ -1,8 +1,12 @@
 use proc_macro::TokenStream;
-use quote::{format_ident, quote};
-use syn::{
-    LitInt, Token, parse::Parse, parse::ParseStream, parse_macro_input, punctuated::Punctuated,
-};
+use quote::format_ident;
+use quote::quote;
+use syn::LitInt;
+use syn::Token;
+use syn::parse::Parse;
+use syn::parse::ParseStream;
+use syn::parse_macro_input;
+use syn::punctuated::Punctuated;
 
 struct DynamicSpacingInput {
     values: Punctuated<DynamicSpacingValue, Token![,]>,
@@ -22,9 +26,7 @@ enum DynamicSpacingValue {
 
 impl Parse for DynamicSpacingInput {
     fn parse(input: ParseStream) -> syn::Result<Self> {
-        Ok(DynamicSpacingInput {
-            values: input.parse_terminated(DynamicSpacingValue::parse, Token![,])?,
-        })
+        Ok(DynamicSpacingInput { values: input.parse_terminated(DynamicSpacingValue::parse, Token![,])? })
     }
 }
 
@@ -114,10 +116,7 @@ pub fn derive_spacing(input: TokenStream) -> TokenStream {
                     let a = a.base10_parse::<f32>().unwrap();
                     let b = b.base10_parse::<f32>().unwrap();
                     let c = c.base10_parse::<f32>().unwrap();
-                    format!(
-                        "`{}px`|`{}px`|`{}px (@16px/rem)` - Scales with the user's rem size.",
-                        a, b, c
-                    )
+                    format!("`{}px`|`{}px`|`{}px (@16px/rem)` - Scales with the user's rem size.", a, b, c)
                 }
             };
             (quote!(#variant), quote!(#doc_string))

@@ -1,10 +1,17 @@
 use std::ops::Range;
 
-use gpui::{FontWeight, HighlightStyle, StyleRefinement, StyledText};
+use gpui::FontWeight;
+use gpui::HighlightStyle;
+use gpui::StyleRefinement;
+use gpui::StyledText;
 use gpui_util::debug_panic;
 
+use crate::LabelCommon;
+use crate::LabelLike;
+use crate::LabelSize;
+use crate::LineHeightStyle;
+use crate::prelude::*;
 use crate::utils::replace_control_characters_remapping_offsets;
-use crate::{LabelCommon, LabelLike, LabelSize, LineHeightStyle, prelude::*};
 
 #[derive(IntoElement, RegisterComponent)]
 pub struct HighlightedLabel {
@@ -20,30 +27,18 @@ impl HighlightedLabel {
     pub fn new(label: impl Into<SharedString>, mut highlight_indices: Vec<usize>) -> Self {
         let label = label.into();
 
-        if let Some(index) = highlight_indices
-            .iter()
-            .find(|&i| !label.is_char_boundary(*i))
-        {
+        if let Some(index) = highlight_indices.iter().find(|&i| !label.is_char_boundary(*i)) {
             let location = std::panic::Location::caller();
-            debug_panic!(
-                "highlight index {index} is not a valid UTF-8 boundary (called from {location})"
-            );
+            debug_panic!("highlight index {index} is not a valid UTF-8 boundary (called from {location})");
             highlight_indices.clear();
         }
 
-        Self {
-            base: LabelLike::new(),
-            label,
-            highlight_indices,
-        }
+        Self { base: LabelLike::new(), label, highlight_indices }
     }
 
     /// Constructs a label with the given byte ranges highlighted.
     /// Assumes that the highlight ranges are valid UTF-8 byte positions.
-    pub fn from_ranges(
-        label: impl Into<SharedString>,
-        highlight_ranges: Vec<Range<usize>>,
-    ) -> Self {
+    pub fn from_ranges(label: impl Into<SharedString>, highlight_ranges: Vec<Range<usize>>) -> Self {
         let label = label.into();
         let highlight_indices = highlight_ranges
             .iter()
@@ -58,11 +53,7 @@ impl HighlightedLabel {
             })
             .collect();
 
-        Self {
-            base: LabelLike::new(),
-            label,
-            highlight_indices,
-        }
+        Self { base: LabelLike::new(), label, highlight_indices }
     }
 
     pub fn text(&self) -> &str {
@@ -172,9 +163,7 @@ impl LabelCommon for HighlightedLabel {
         // have to move with the text. Left alone they would index into the
         // middle of a character, which panics when the highlight ranges are
         // built — in release builds too.
-        if let Some(replaced) =
-            replace_control_characters_remapping_offsets(&self.label, &mut self.highlight_indices)
-        {
+        if let Some(replaced) = replace_control_characters_remapping_offsets(&self.label, &mut self.highlight_indices) {
             self.label = SharedString::from(replaced);
         }
         self.base = self.base.single_line();
@@ -192,11 +181,7 @@ impl LabelCommon for HighlightedLabel {
     }
 }
 
-pub fn highlight_ranges(
-    text: &str,
-    indices: &[usize],
-    style: HighlightStyle,
-) -> Vec<(Range<usize>, HighlightStyle)> {
+pub fn highlight_ranges(text: &str, indices: &[usize], style: HighlightStyle) -> Vec<(Range<usize>, HighlightStyle)> {
     let mut highlight_indices = indices.iter().copied().peekable();
     let mut highlights: Vec<(Range<usize>, HighlightStyle)> = Vec::new();
 
@@ -223,17 +208,13 @@ impl RenderOnce for HighlightedLabel {
         let highlights = highlight_ranges(
             &self.label,
             &self.highlight_indices,
-            HighlightStyle {
-                color: Some(highlight_color),
-                ..Default::default()
-            },
+            HighlightStyle { color: Some(highlight_color), ..Default::default() },
         );
 
         let mut text_style = window.text_style();
         text_style.color = self.base.color.color(cx);
 
-        self.base
-            .child(StyledText::new(self.label).with_default_highlights(&text_style, highlights))
+        self.base.child(StyledText::new(self.label).with_default_highlights(&text_style, highlights))
     }
 }
 
@@ -259,8 +240,7 @@ impl Component for HighlightedLabel {
                     vec![
                         single_example(
                             "Default",
-                            HighlightedLabel::new("Highlighted Text", vec![0, 1, 2, 3])
-                                .into_any_element(),
+                            HighlightedLabel::new("Highlighted Text", vec![0, 1, 2, 3]).into_any_element(),
                         ),
                         single_example(
                             "Custom Color",
@@ -281,9 +261,7 @@ impl Component for HighlightedLabel {
                         ),
                         single_example(
                             "Italic",
-                            HighlightedLabel::new("Italic Highlight", vec![0, 1, 6, 7, 8])
-                                .italic()
-                                .into_any_element(),
+                            HighlightedLabel::new("Italic Highlight", vec![0, 1, 6, 7, 8]).italic().into_any_element(),
                         ),
                         single_example(
                             "Underline",
@@ -315,12 +293,9 @@ impl Component for HighlightedLabel {
                     vec![
                         single_example(
                             "Single Line",
-                            HighlightedLabel::new(
-                                "Single Line Highlight\nWith Newline",
-                                vec![0, 1, 7, 8, 9],
-                            )
-                            .single_line()
-                            .into_any_element(),
+                            HighlightedLabel::new("Single Line Highlight\nWith Newline", vec![0, 1, 7, 8, 9])
+                                .single_line()
+                                .into_any_element(),
                         ),
                         single_example(
                             "Truncate",

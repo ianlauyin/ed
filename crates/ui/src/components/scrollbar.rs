@@ -860,7 +860,7 @@ impl<T: ScrollableHandle> ScrollbarState<T> {
         [ScrollbarAxis::Horizontal, ScrollbarAxis::Vertical]
             .into_iter()
             .filter(|&axis| self.visibility.along(axis).is_visible())
-            .flat_map(move |axis| {
+            .filter_map(move |axis| {
                 let max_offset = max_offset.along(axis);
                 let viewport_size = viewport_size.along(axis);
                 if max_offset.is_zero() || viewport_size.is_zero() {

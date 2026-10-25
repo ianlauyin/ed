@@ -361,7 +361,7 @@ impl LspStore {
                     join_all(token_tasks)
                         .await
                         .into_iter()
-                        .flat_map(|(server_id, response)| match response {
+                        .filter_map(|(server_id, response)| match response {
                             Ok(tokens) => Some((server_id, tokens)),
                             Err(e) => {
                                 log::error!("Failed to query remote semantic tokens for server {server_id:?}: {e:#}");

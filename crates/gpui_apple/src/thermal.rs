@@ -1,11 +1,17 @@
 use block2::RcBlock;
-use futures::{StreamExt, channel::mpsc};
-use gpui::{ForegroundExecutor, Task, ThermalState};
-use objc2::{rc::Retained, runtime::ProtocolObject};
-use objc2_foundation::{
-    NSNotification, NSNotificationCenter, NSObjectProtocol, NSProcessInfo,
-    NSProcessInfoThermalState, NSProcessInfoThermalStateDidChangeNotification,
-};
+use futures::StreamExt;
+use futures::channel::mpsc;
+use gpui::ForegroundExecutor;
+use gpui::Task;
+use gpui::ThermalState;
+use objc2::rc::Retained;
+use objc2::runtime::ProtocolObject;
+use objc2_foundation::NSNotification;
+use objc2_foundation::NSNotificationCenter;
+use objc2_foundation::NSObjectProtocol;
+use objc2_foundation::NSProcessInfo;
+use objc2_foundation::NSProcessInfoThermalState;
+use objc2_foundation::NSProcessInfoThermalStateDidChangeNotification;
 
 pub fn thermal_state() -> ThermalState {
     match NSProcessInfo::processInfo().thermalState() {
@@ -53,11 +59,7 @@ impl ThermalObserver {
                 callback();
             }
         });
-        Self {
-            center,
-            observer,
-            _task: task,
-        }
+        Self { center, observer, _task: task }
     }
 }
 

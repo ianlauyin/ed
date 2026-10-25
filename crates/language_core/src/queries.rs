@@ -1,11 +1,12 @@
 use std::borrow::Cow;
 
-use serde::{Deserialize, Deserializer, Serialize, Serializer};
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
 use strum::IntoEnumIterator;
 
-#[derive(
-    Clone, Copy, Debug, Eq, PartialEq, strum::EnumIter, strum::EnumString, strum::IntoStaticStr,
-)]
+#[derive(Clone, Copy, Debug, Eq, PartialEq, strum::EnumIter, strum::EnumString, strum::IntoStaticStr)]
 pub enum QueryFile {
     #[strum(serialize = "highlights.scm")]
     Highlights,
@@ -72,9 +73,7 @@ impl From<QueryFile> for QueryFiles {
 
 impl FromIterator<QueryFile> for QueryFiles {
     fn from_iter<T: IntoIterator<Item = QueryFile>>(query_files: T) -> Self {
-        query_files
-            .into_iter()
-            .fold(Self::empty(), |files, query_file| files | query_file.into())
+        query_files.into_iter().fold(Self::empty(), |files, query_file| files | query_file.into())
     }
 }
 
@@ -104,10 +103,7 @@ pub struct QueryFileContents {
 
 impl QueryFileContents {
     pub fn new(query_file: QueryFile, contents: Cow<'static, str>) -> Self {
-        Self {
-            query_file,
-            contents,
-        }
+        Self { query_file, contents }
     }
 }
 
@@ -128,11 +124,7 @@ pub struct LanguageQueries {
 impl LanguageQueries {
     pub fn from_files(files: impl IntoIterator<Item = QueryFileContents>) -> Self {
         let mut queries = Self::default();
-        for QueryFileContents {
-            query_file,
-            contents,
-        } in files
-        {
+        for QueryFileContents { query_file, contents } in files {
             let field = match query_file {
                 QueryFile::Highlights => &mut queries.highlights,
                 QueryFile::Brackets => &mut queries.brackets,

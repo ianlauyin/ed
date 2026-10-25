@@ -1,5 +1,9 @@
+use std::ops::Add;
+use std::ops::AddAssign;
+use std::ops::Sub;
+use std::ops::SubAssign;
+
 use crate::ChunkSummary;
-use std::ops::{Add, AddAssign, Sub, SubAssign};
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub struct Unclipped<T>(pub T);
@@ -10,9 +14,7 @@ impl<T> From<T> for Unclipped<T> {
     }
 }
 
-impl<'a, T: sum_tree::Dimension<'a, ChunkSummary>> sum_tree::Dimension<'a, ChunkSummary>
-    for Unclipped<T>
-{
+impl<'a, T: sum_tree::Dimension<'a, ChunkSummary>> sum_tree::Dimension<'a, ChunkSummary> for Unclipped<T> {
     fn zero(_: ()) -> Self {
         Self(T::zero(()))
     }

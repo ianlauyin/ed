@@ -1,4 +1,5 @@
-use std::{num::NonZeroU32, sync::Arc};
+use std::num::NonZeroU32;
+use std::sync::Arc;
 
 #[derive(Clone, Debug)]
 pub struct HighlightMap(Arc<[Option<HighlightId>]>);

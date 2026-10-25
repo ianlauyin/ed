@@ -4696,7 +4696,7 @@ impl BufferSnapshot {
 
         std::iter::from_fn(move || {
             let (next_ix, _) =
-                iterators.iter_mut().enumerate().flat_map(|(ix, (_, iter))| Some((ix, iter.peek()?))).min_by(
+                iterators.iter_mut().enumerate().filter_map(|(ix, (_, iter))| Some((ix, iter.peek()?))).min_by(
                     |(_, a), (_, b)| {
                         let cmp = a
                             .range

@@ -1,5 +1,6 @@
 pub use settings::ImageFileSizeUnit;
-use settings::{RegisterSetting, Settings};
+use settings::RegisterSetting;
+use settings::Settings;
 
 /// The settings for the image viewer.
 #[derive(Clone, Debug, Default, RegisterSetting)]
@@ -12,8 +13,6 @@ pub struct ImageViewerSettings {
 
 impl Settings for ImageViewerSettings {
     fn from_settings(content: &settings::SettingsContent) -> Self {
-        Self {
-            unit: content.image_viewer.clone().unwrap().unit.unwrap(),
-        }
+        Self { unit: content.image_viewer.clone().unwrap().unit.unwrap() }
     }
 }

@@ -16,6 +16,7 @@ mod open_type;
 #[cfg(feature = "font-kit")]
 mod text_system;
 
-pub use dispatcher::{AppleActivity, AppleDispatcher};
+pub use dispatcher::AppleActivity;
+pub use dispatcher::AppleDispatcher;
 #[cfg(feature = "font-kit")]
 pub use text_system::AppleTextSystem;

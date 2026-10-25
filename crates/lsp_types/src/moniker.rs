@@ -1,9 +1,12 @@
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
-use crate::{
-    DynamicRegistrationClientCapabilities, PartialResultParams, TextDocumentPositionParams,
-    TextDocumentRegistrationOptions, WorkDoneProgressOptions, WorkDoneProgressParams,
-};
+use crate::DynamicRegistrationClientCapabilities;
+use crate::PartialResultParams;
+use crate::TextDocumentPositionParams;
+use crate::TextDocumentRegistrationOptions;
+use crate::WorkDoneProgressOptions;
+use crate::WorkDoneProgressParams;
 
 pub type MonikerClientCapabilities = DynamicRegistrationClientCapabilities;
 

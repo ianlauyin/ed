@@ -17,18 +17,23 @@
 //! connecting to the same remote host) are treated as manually created and
 //! never archived. That is intentional: when in doubt, don't delete.
 
-use std::{
-    future::Future,
-    path::Path,
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+use std::future::Future;
+use std::path::Path;
+use std::time::Duration;
+use std::time::SystemTime;
+use std::time::UNIX_EPOCH;
 
-use anyhow::{Context as _, Result};
+use anyhow::Context as _;
+use anyhow::Result;
 use db::kvp::KeyValueStore;
-use gpui::{App, AsyncApp, Entity};
+use gpui::App;
+use gpui::AsyncApp;
+use gpui::Entity;
 use project::git_store::Repository;
-use remote::{RemoteConnectionOptions, remote_connection_identity};
-use serde::{Deserialize, Serialize};
+use remote::RemoteConnectionOptions;
+use remote::remote_connection_identity;
+use serde::Deserialize;
+use serde::Serialize;
 use util::ResultExt as _;
 
 const NAMESPACE: &str = "created_git_worktrees";
@@ -80,10 +85,7 @@ pub fn recorded_created_at(
     cx: &App,
 ) -> Option<SystemTime> {
     let store = KeyValueStore::global(cx);
-    let value = store
-        .scoped(NAMESPACE)
-        .read(&record_key(worktree_path, remote))
-        .log_err()??;
+    let value = store.scoped(NAMESPACE).read(&record_key(worktree_path, remote)).log_err()??;
     let record: CreatedWorktreeRecord = serde_json::from_str(&value).log_err()?;
     Some(UNIX_EPOCH + Duration::new(record.created_at_seconds, record.created_at_subsec_nanos))
 }
@@ -99,9 +101,7 @@ pub async fn record_created_worktree_for_repo(
     remote: Option<&RemoteConnectionOptions>,
     cx: &mut AsyncApp,
 ) {
-    let receiver = repo.update(cx, |repo, _cx| {
-        repo.worktree_created_at(worktree_path.to_path_buf())
-    });
+    let receiver = repo.update(cx, |repo, _cx| repo.worktree_created_at(worktree_path.to_path_buf()));
     let created_at = match receiver.await {
         Ok(Ok(Some(created_at))) => created_at,
         Ok(Ok(None)) => {
@@ -121,19 +121,13 @@ pub async fn record_created_worktree_for_repo(
             return;
         }
         Err(_) => {
-            log::warn!(
-                "Worktree creation time lookup was canceled for {}",
-                worktree_path.display()
-            );
+            log::warn!("Worktree creation time lookup was canceled for {}", worktree_path.display());
             return;
         }
     };
     let record = cx.update(|cx| record_created_worktree(worktree_path, remote, created_at, cx));
     if let Err(error) = record.await {
-        log::warn!(
-            "Failed to record created worktree {}: {error:#}",
-            worktree_path.display()
-        );
+        log::warn!("Failed to record created worktree {}: {error:#}", worktree_path.display());
     }
 }
 

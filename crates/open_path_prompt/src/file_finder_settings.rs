@@ -1,5 +1,7 @@
 use serde::Deserialize;
-use settings::{ModalWidthContent, RegisterSetting, Settings};
+use settings::ModalWidthContent;
+use settings::RegisterSetting;
+use settings::Settings;
 
 #[derive(Deserialize, Debug, Clone, Copy, PartialEq, RegisterSetting)]
 pub struct FileFinderSettings {

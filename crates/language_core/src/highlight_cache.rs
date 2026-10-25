@@ -1,15 +1,17 @@
-use crate::grammar::Grammar;
-use crate::highlight_map::{HighlightId, HighlightMap};
+use std::fmt;
+use std::hash::Hash;
+use std::hash::Hasher as _;
+use std::ops::Range;
+use std::sync::Arc;
+
 use collections::FxHasher;
 use lru::LruCache;
 use parking_lot::Mutex;
 use smallvec::SmallVec;
-use std::{
-    fmt,
-    hash::{Hash, Hasher as _},
-    ops::Range,
-    sync::Arc,
-};
+
+use crate::grammar::Grammar;
+use crate::highlight_map::HighlightId;
+use crate::highlight_map::HighlightMap;
 
 pub const MAX_TEXT_HIGHLIGHT_ENTRY_BYTES: usize = MAX_TEXT_HIGHLIGHT_CACHE_BYTES / 8;
 
@@ -29,10 +31,7 @@ impl TextHighlightKey {
         for chunk in text_chunks {
             hasher.write(chunk.as_bytes());
         }
-        Self {
-            text_hash: hasher.finish(),
-            text_len,
-        }
+        Self { text_hash: hasher.finish(), text_len }
     }
 }
 
@@ -43,17 +42,13 @@ pub struct ResolvedHighlights {
 }
 
 impl ResolvedHighlights {
-    pub fn runs_in_range(
-        self,
-        range: Range<usize>,
-    ) -> impl Iterator<Item = (Range<usize>, HighlightId)> {
+    pub fn runs_in_range(self, range: Range<usize>) -> impl Iterator<Item = (Range<usize>, HighlightId)> {
         let runs = self.runs;
         (0..runs.len()).filter_map(move |index| {
             let (run_range, highlight_id) = &runs[index];
             (run_range.start < range.end && run_range.end > range.start).then(|| {
                 (
-                    run_range.start.max(range.start) - range.start
-                        ..run_range.end.min(range.end) - range.start,
+                    run_range.start.max(range.start) - range.start..run_range.end.min(range.end) - range.start,
                     *highlight_id,
                 )
             })
@@ -61,9 +56,7 @@ impl ResolvedHighlights {
     }
 
     pub fn is_current(&self) -> bool {
-        self.sources
-            .iter()
-            .all(|(grammar, highlight_map)| grammar.highlight_map_matches(highlight_map))
+        self.sources.iter().all(|(grammar, highlight_map)| grammar.highlight_map_matches(highlight_map))
     }
 
     pub fn cost_bytes(&self) -> usize {
@@ -74,9 +67,7 @@ impl ResolvedHighlights {
 
 impl fmt::Debug for ResolvedHighlights {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ResolvedHighlights")
-            .field("runs", &self.runs)
-            .finish_non_exhaustive()
+        f.debug_struct("ResolvedHighlights").field("runs", &self.runs).finish_non_exhaustive()
     }
 }
 
@@ -84,10 +75,7 @@ pub struct TextHighlightCache(Mutex<CostBudgetedLru<TextHighlightKey, TextHighli
 
 impl Default for TextHighlightCache {
     fn default() -> Self {
-        Self(Mutex::new(CostBudgetedLru::new(
-            MAX_TEXT_HIGHLIGHT_CACHE_BYTES,
-            MAX_TEXT_HIGHLIGHT_ENTRY_BYTES,
-        )))
+        Self(Mutex::new(CostBudgetedLru::new(MAX_TEXT_HIGHLIGHT_CACHE_BYTES, MAX_TEXT_HIGHLIGHT_ENTRY_BYTES)))
     }
 }
 
@@ -108,21 +96,9 @@ impl TextHighlightCache {
         Some(entry.highlights.clone())
     }
 
-    pub fn insert(
-        &self,
-        key: TextHighlightKey,
-        text: String,
-        highlights: ResolvedHighlights,
-    ) -> ResolvedHighlights {
+    pub fn insert(&self, key: TextHighlightKey, text: String, highlights: ResolvedHighlights) -> ResolvedHighlights {
         let cost = text.len() + highlights.cost_bytes();
-        self.0.lock().insert(
-            key,
-            TextHighlightEntry {
-                text,
-                highlights: highlights.clone(),
-            },
-            cost,
-        );
+        self.0.lock().insert(key, TextHighlightEntry { text, highlights: highlights.clone() }, cost);
         highlights
     }
 }
@@ -131,17 +107,13 @@ pub struct ChunkHighlightCache(Mutex<CostBudgetedLru<usize, ResolvedHighlights>>
 
 impl Default for ChunkHighlightCache {
     fn default() -> Self {
-        Self(Mutex::new(CostBudgetedLru::new(
-            MAX_CHUNK_HIGHLIGHT_CACHE_BYTES,
-            MAX_CHUNK_HIGHLIGHT_CACHE_BYTES,
-        )))
+        Self(Mutex::new(CostBudgetedLru::new(MAX_CHUNK_HIGHLIGHT_CACHE_BYTES, MAX_CHUNK_HIGHLIGHT_CACHE_BYTES)))
     }
 }
 
 impl fmt::Debug for ChunkHighlightCache {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("ChunkHighlightCache")
-            .finish_non_exhaustive()
+        f.debug_struct("ChunkHighlightCache").finish_non_exhaustive()
     }
 }
 
@@ -173,16 +145,10 @@ struct CostBudgetedLru<K: Hash + Eq, V> {
 }
 
 impl<K: Hash + Eq, V> CostBudgetedLru<K, V> {
-    const ENTRY_OVERHEAD_BYTES: usize =
-        size_of::<K>() + size_of::<(V, usize)>() + APPROXIMATE_LRU_NODE_BYTES;
+    const ENTRY_OVERHEAD_BYTES: usize = size_of::<K>() + size_of::<(V, usize)>() + APPROXIMATE_LRU_NODE_BYTES;
 
     fn new(max_total_cost: usize, max_entry_cost: usize) -> Self {
-        Self {
-            entries: LruCache::unbounded(),
-            total_cost: 0,
-            max_total_cost,
-            max_entry_cost,
-        }
+        Self { entries: LruCache::unbounded(), total_cost: 0, max_total_cost, max_entry_cost }
     }
 
     fn get(&mut self, key: &K) -> Option<&V> {

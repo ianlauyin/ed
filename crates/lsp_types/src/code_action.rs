@@ -1,12 +1,17 @@
-use crate::{
-    Command, Diagnostic, PartialResultParams, Range, TextDocumentIdentifier,
-    WorkDoneProgressOptions, WorkDoneProgressParams, WorkspaceEdit,
-};
-use serde::{Deserialize, Serialize};
+use std::borrow::Cow;
 
+use serde::Deserialize;
+use serde::Serialize;
 use serde_json::Value;
 
-use std::borrow::Cow;
+use crate::Command;
+use crate::Diagnostic;
+use crate::PartialResultParams;
+use crate::Range;
+use crate::TextDocumentIdentifier;
+use crate::WorkDoneProgressOptions;
+use crate::WorkDoneProgressParams;
+use crate::WorkspaceEdit;
 #[derive(Debug, Eq, PartialEq, Clone, Deserialize, Serialize)]
 #[serde(untagged)]
 pub enum CodeActionProviderCapability {
@@ -200,8 +205,7 @@ impl CodeActionKind {
     pub const SOURCE: CodeActionKind = CodeActionKind::new("source");
 
     /// Base kind for an organize imports source action: `source.organizeImports`
-    pub const SOURCE_ORGANIZE_IMPORTS: CodeActionKind =
-        CodeActionKind::new("source.organizeImports");
+    pub const SOURCE_ORGANIZE_IMPORTS: CodeActionKind = CodeActionKind::new("source.organizeImports");
 
     /// Base kind for a 'fix all' source action: `source.fixAll`.
     ///

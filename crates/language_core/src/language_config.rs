@@ -1,10 +1,21 @@
-use crate::LanguageName;
-use collections::{HashMap, HashSet};
+use std::num::NonZeroU32;
+use std::path::Path;
+use std::sync::Arc;
+
+use collections::HashMap;
+use collections::HashSet;
 use gpui_shared_string::SharedString;
 use regex::Regex;
-use schemars::{JsonSchema, SchemaGenerator, json_schema};
-use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
-use std::{num::NonZeroU32, path::Path, sync::Arc};
+use schemars::JsonSchema;
+use schemars::SchemaGenerator;
+use schemars::json_schema;
+use serde::Deserialize;
+use serde::Deserializer;
+use serde::Serialize;
+use serde::Serializer;
+use serde::de;
+
+use crate::LanguageName;
 
 /// Controls the soft-wrapping behavior in the editor.
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema)]
@@ -215,11 +226,7 @@ pub struct LanguageMatcher {
     #[serde(default)]
     pub path_suffixes: Vec<SharedString>,
     /// A regex pattern that determines whether the language should be assigned to a file or not.
-    #[serde(
-        default,
-        serialize_with = "serialize_regex",
-        deserialize_with = "deserialize_regex"
-    )]
+    #[serde(default, serialize_with = "serialize_regex", deserialize_with = "deserialize_regex")]
     #[schemars(schema_with = "regex_json_schema")]
     pub first_line_pattern: Option<Regex>,
     /// Alternative names for this language used in vim/emacs modelines.
@@ -315,33 +322,17 @@ impl<'de> Deserialize<'de> for BlockCommentConfig {
         #[derive(Deserialize)]
         #[serde(untagged)]
         enum BlockCommentConfigHelper {
-            New {
-                start: Arc<str>,
-                end: Arc<str>,
-                prefix: Arc<str>,
-                tab_size: u32,
-            },
+            New { start: Arc<str>, end: Arc<str>, prefix: Arc<str>, tab_size: u32 },
             Old([Arc<str>; 2]),
         }
 
         match BlockCommentConfigHelper::deserialize(deserializer)? {
-            BlockCommentConfigHelper::New {
-                start,
-                end,
-                prefix,
-                tab_size,
-            } => Ok(BlockCommentConfig {
-                start,
-                end,
-                prefix,
-                tab_size,
-            }),
-            BlockCommentConfigHelper::Old([start, end]) => Ok(BlockCommentConfig {
-                start,
-                end,
-                prefix: "".into(),
-                tab_size: 0,
-            }),
+            BlockCommentConfigHelper::New { start, end, prefix, tab_size } => {
+                Ok(BlockCommentConfig { start, end, prefix, tab_size })
+            }
+            BlockCommentConfigHelper::Old([start, end]) => {
+                Ok(BlockCommentConfig { start, end, prefix: "".into(), tab_size: 0 })
+            }
         }
     }
 }
@@ -421,15 +412,10 @@ impl<'de> Deserialize<'de> for BracketPairConfig {
         D: Deserializer<'de>,
     {
         let result = Vec::<BracketPairContent>::deserialize(deserializer)?;
-        let (brackets, disabled_scopes_by_bracket_ix) = result
-            .into_iter()
-            .map(|entry| (entry.bracket_pair, entry.not_in))
-            .unzip();
+        let (brackets, disabled_scopes_by_bracket_ix) =
+            result.into_iter().map(|entry| (entry.bracket_pair, entry.not_in)).unzip();
 
-        Ok(BracketPairConfig {
-            pairs: brackets,
-            disabled_scopes_by_bracket_ix,
-        })
+        Ok(BracketPairConfig { pairs: brackets, disabled_scopes_by_bracket_ix })
     }
 }
 
@@ -469,11 +455,7 @@ pub fn default_true() -> bool {
 
 pub fn deserialize_regex<'de, D: Deserializer<'de>>(d: D) -> Result<Option<Regex>, D::Error> {
     let source = Option::<String>::deserialize(d)?;
-    if let Some(source) = source {
-        Ok(Some(regex::Regex::new(&source).map_err(de::Error::custom)?))
-    } else {
-        Ok(None)
-    }
+    if let Some(source) = source { Ok(Some(regex::Regex::new(&source).map_err(de::Error::custom)?)) } else { Ok(None) }
 }
 
 pub fn regex_json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
@@ -494,11 +476,7 @@ where
 
 pub fn deserialize_regex_vec<'de, D: Deserializer<'de>>(d: D) -> Result<Vec<Regex>, D::Error> {
     let sources = Vec::<String>::deserialize(d)?;
-    sources
-        .into_iter()
-        .map(|source| regex::Regex::new(&source))
-        .collect::<Result<_, _>>()
-        .map_err(de::Error::custom)
+    sources.into_iter().map(|source| regex::Regex::new(&source)).collect::<Result<_, _>>().map_err(de::Error::custom)
 }
 
 pub fn regex_vec_json_schema(_: &mut SchemaGenerator) -> schemars::Schema {

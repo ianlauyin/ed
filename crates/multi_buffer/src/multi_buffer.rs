@@ -5530,25 +5530,20 @@ impl MultiBufferSnapshot {
                     theme,
                 )
                 .into_iter()
-                .flat_map(|item| {
-                    Some(OutlineItem {
-                        depth: item.depth,
-                        selection_range: Anchor::range_in_buffer(excerpt.path_key_index, item.selection_range),
-                        source_range_for_text: Anchor::range_in_buffer(
-                            excerpt.path_key_index,
-                            item.source_range_for_text,
-                        ),
-                        range: Anchor::range_in_buffer(excerpt.path_key_index, item.range),
-                        text: item.text,
-                        highlight_ranges: item.highlight_ranges,
-                        name_ranges: item.name_ranges,
-                        body_range: item
-                            .body_range
-                            .map(|body_range| Anchor::range_in_buffer(excerpt.path_key_index, body_range)),
-                        annotation_range: item
-                            .annotation_range
-                            .map(|body_range| Anchor::range_in_buffer(excerpt.path_key_index, body_range)),
-                    })
+                .map(|item| OutlineItem {
+                    depth: item.depth,
+                    selection_range: Anchor::range_in_buffer(excerpt.path_key_index, item.selection_range),
+                    source_range_for_text: Anchor::range_in_buffer(excerpt.path_key_index, item.source_range_for_text),
+                    range: Anchor::range_in_buffer(excerpt.path_key_index, item.range),
+                    text: item.text,
+                    highlight_ranges: item.highlight_ranges,
+                    name_ranges: item.name_ranges,
+                    body_range: item
+                        .body_range
+                        .map(|body_range| Anchor::range_in_buffer(excerpt.path_key_index, body_range)),
+                    annotation_range: item
+                        .annotation_range
+                        .map(|body_range| Anchor::range_in_buffer(excerpt.path_key_index, body_range)),
                 })
                 .collect(),
         ))

@@ -26,28 +26,16 @@ pub(crate) struct FolderIcons {
 
 impl FolderIcons {
     pub fn get(&self, expanded: bool) -> SharedString {
-        if expanded {
-            self.expanded.clone()
-        } else {
-            self.collapsed.clone()
-        }
+        if expanded { self.expanded.clone() } else { self.collapsed.clone() }
     }
 }
 
-const FILE_STEMS_BY_ICON_KEY: &[(&str, &[&str])] = &[
-    ("docker", &["Containerfile", "Dockerfile", ".dockerignore"]),
-    ("ruby", &["Podfile"]),
-    ("heroku", &["Procfile"]),
-];
+const FILE_STEMS_BY_ICON_KEY: &[(&str, &[&str])] =
+    &[("docker", &["Containerfile", "Dockerfile", ".dockerignore"]), ("ruby", &["Podfile"]), ("heroku", &["Procfile"])];
 
 const FILE_SUFFIXES_BY_ICON_KEY: &[(&str, &[&str])] = &[
     ("astro", &["astro"]),
-    (
-        "audio",
-        &[
-            "aac", "flac", "m4a", "mka", "mp3", "ogg", "opus", "wav", "wma", "wv",
-        ],
-    ),
+    ("audio", &["aac", "flac", "m4a", "mka", "mp3", "ogg", "opus", "wav", "wma", "wv"]),
     ("backup", &["bak"]),
     ("ballerina", &["bal"]),
     ("bicep", &["bicep"]),
@@ -56,12 +44,7 @@ const FILE_SUFFIXES_BY_ICON_KEY: &[(&str, &[&str])] = &[
     ("cairo", &["cairo"]),
     ("code", &["handlebars", "metadata", "rkt", "scm"]),
     ("coffeescript", &["coffee"]),
-    (
-        "cpp",
-        &[
-            "c++", "h++", "cc", "cpp", "cppm", "cxx", "hh", "hpp", "hxx", "inl", "ixx",
-        ],
-    ),
+    ("cpp", &["c++", "h++", "cc", "cpp", "cppm", "cxx", "hh", "hpp", "hxx", "inl", "ixx"]),
     ("crystal", &["cr", "ecr"]),
     ("csharp", &["cs"]),
     ("csproj", &["csproj"]),
@@ -69,38 +52,12 @@ const FILE_SUFFIXES_BY_ICON_KEY: &[(&str, &[&str])] = &[
     ("cue", &["cue"]),
     ("dart", &["dart"]),
     ("diff", &["diff"]),
-    (
-        "docker",
-        &[
-            "docker-compose.yml",
-            "docker-compose.yaml",
-            "compose.yml",
-            "compose.yaml",
-        ],
-    ),
-    (
-        "document",
-        &[
-            "doc", "docx", "mdx", "odp", "ods", "odt", "pdf", "ppt", "pptx", "rtf", "txt", "xls",
-            "xlsx",
-        ],
-    ),
+    ("docker", &["docker-compose.yml", "docker-compose.yaml", "compose.yml", "compose.yaml"]),
+    ("document", &["doc", "docx", "mdx", "odp", "ods", "odt", "pdf", "ppt", "pptx", "rtf", "txt", "xls", "xlsx"]),
     ("editorconfig", &["editorconfig"]),
     ("elixir", &["eex", "ex", "exs", "heex", "leex", "neex"]),
     ("elm", &["elm"]),
-    (
-        "erlang",
-        &[
-            "Emakefile",
-            "app.src",
-            "erl",
-            "escript",
-            "hrl",
-            "rebar.config",
-            "xrl",
-            "yrl",
-        ],
-    ),
+    ("erlang", &["Emakefile", "app.src", "erl", "escript", "hrl", "rebar.config", "xrl", "yrl"]),
     (
         "eslint",
         &[
@@ -143,8 +100,8 @@ const FILE_SUFFIXES_BY_ICON_KEY: &[(&str, &[&str])] = &[
     (
         "image",
         &[
-            "avif", "bmp", "gif", "heic", "heif", "ico", "j2k", "jfif", "jp2", "jpeg", "jpg",
-            "jxl", "png", "psd", "qoi", "svg", "tiff", "webp",
+            "avif", "bmp", "gif", "heic", "heif", "ico", "j2k", "jfif", "jp2", "jpeg", "jpg", "jxl", "png", "psd",
+            "qoi", "svg", "tiff", "webp",
         ],
     ),
     ("ipynb", &["ipynb"]),
@@ -198,9 +155,8 @@ const FILE_SUFFIXES_BY_ICON_KEY: &[(&str, &[&str])] = &[
     (
         "storage",
         &[
-            "accdb", "csv", "dat", "db", "dbf", "dll", "fmp", "fp7", "frm", "gdb", "ib", "ldf",
-            "mdb", "mdf", "myd", "myi", "pdb", "psv", "RData", "rdata", "sav", "sdf", "sql",
-            "sqlite", "ssv", "tsv",
+            "accdb", "csv", "dat", "db", "dbf", "dll", "fmp", "fp7", "frm", "gdb", "ib", "ldf", "mdb", "mdf", "myd",
+            "myi", "pdb", "psv", "RData", "rdata", "sav", "sdf", "sql", "sqlite", "ssv", "tsv",
         ],
     ),
     (
@@ -374,9 +330,7 @@ const FILE_ICONS: &[(&str, &str)] = &[
 ];
 
 /// Returns a mapping of file associations to icon keys.
-fn icon_keys_by_association(
-    associations_by_icon_key: &[(&str, &[&str])],
-) -> HashMap<String, String> {
+fn icon_keys_by_association(associations_by_icon_key: &[(&str, &[&str])]) -> HashMap<String, String> {
     let mut icon_keys_by_association = HashMap::default();
     for (icon_key, associations) in associations_by_icon_key {
         for association in *associations {
@@ -399,8 +353,5 @@ pub(crate) static ICONS: LazyLock<Icons> = LazyLock::new(|| Icons {
     },
     file_stems: icon_keys_by_association(FILE_STEMS_BY_ICON_KEY),
     file_suffixes: icon_keys_by_association(FILE_SUFFIXES_BY_ICON_KEY),
-    file_icons: FILE_ICONS
-        .iter()
-        .map(|(ty, path)| (ty.to_string(), (*path).into()))
-        .collect(),
+    file_icons: FILE_ICONS.iter().map(|(ty, path)| (ty.to_string(), (*path).into())).collect(),
 });

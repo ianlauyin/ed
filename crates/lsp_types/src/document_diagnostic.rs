@@ -1,11 +1,16 @@
 use std::collections::HashMap;
 
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
+use serde::Serialize;
 
-use crate::{
-    Diagnostic, PartialResultParams, StaticRegistrationOptions, TextDocumentIdentifier,
-    TextDocumentRegistrationOptions, Uri, WorkDoneProgressOptions, WorkDoneProgressParams,
-};
+use crate::Diagnostic;
+use crate::PartialResultParams;
+use crate::StaticRegistrationOptions;
+use crate::TextDocumentIdentifier;
+use crate::TextDocumentRegistrationOptions;
+use crate::Uri;
+use crate::WorkDoneProgressOptions;
+use crate::WorkDoneProgressParams;
 
 /// Client capabilities specific to diagnostic pull requests.
 ///
@@ -269,8 +274,6 @@ pub struct DiagnosticServerCancellationData {
 
 impl Default for DiagnosticServerCancellationData {
     fn default() -> Self {
-        DiagnosticServerCancellationData {
-            retrigger_request: true,
-        }
+        DiagnosticServerCancellationData { retrigger_request: true }
     }
 }

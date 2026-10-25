@@ -1,6 +1,8 @@
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
-use settings_macros::{MergeFrom, with_fallible_options};
+use serde::Deserialize;
+use serde::Serialize;
+use settings_macros::MergeFrom;
+use settings_macros::with_fallible_options;
 
 #[with_fallible_options]
 #[derive(Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug)]

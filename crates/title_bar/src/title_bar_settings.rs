@@ -1,4 +1,6 @@
-use settings::{RegisterSetting, Settings, SettingsContent};
+use settings::RegisterSetting;
+use settings::Settings;
+use settings::SettingsContent;
 
 #[derive(Copy, Clone, Debug, RegisterSetting)]
 pub struct TitleBarSettings {

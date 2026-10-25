@@ -6,20 +6,47 @@ pub mod highlight_cache;
 pub mod highlight_map;
 pub mod language_config;
 
-pub use grammar::{
-    BracketsConfig, BracketsPatternConfig, Grammar, GrammarId, HighlightsConfig, IndentConfig,
-    InjectionConfig, InjectionPatternConfig, NEXT_GRAMMAR_ID, OutlineConfig, OverrideConfig,
-    OverrideEntry, ParseableLanguage, RunnableCapture, RunnableConfig, SpellCheckConfig,
-    TextObject, TextObjectConfig,
-};
-pub use highlight_map::{CaptureId, HighlightId, HighlightMap};
-pub use language_config::{
-    BlockCommentConfig, BracketPair, BracketPairConfig, BracketPairContent, DecreaseIndentConfig,
-    JsxTagAutoCloseConfig, LanguageConfig, LanguageConfigOverride, LanguageMatcher,
-    OrderedListConfig, Override, SoftWrap, TaskListConfig, WrapCharactersConfig, default_true,
-    deserialize_regex, deserialize_regex_vec, regex_json_schema, regex_vec_json_schema,
-    serialize_regex,
-};
+pub use grammar::BracketsConfig;
+pub use grammar::BracketsPatternConfig;
+pub use grammar::Grammar;
+pub use grammar::GrammarId;
+pub use grammar::HighlightsConfig;
+pub use grammar::IndentConfig;
+pub use grammar::InjectionConfig;
+pub use grammar::InjectionPatternConfig;
+pub use grammar::NEXT_GRAMMAR_ID;
+pub use grammar::OutlineConfig;
+pub use grammar::OverrideConfig;
+pub use grammar::OverrideEntry;
+pub use grammar::ParseableLanguage;
+pub use grammar::RunnableCapture;
+pub use grammar::RunnableConfig;
+pub use grammar::SpellCheckConfig;
+pub use grammar::TextObject;
+pub use grammar::TextObjectConfig;
+pub use highlight_map::CaptureId;
+pub use highlight_map::HighlightId;
+pub use highlight_map::HighlightMap;
+pub use language_config::BlockCommentConfig;
+pub use language_config::BracketPair;
+pub use language_config::BracketPairConfig;
+pub use language_config::BracketPairContent;
+pub use language_config::DecreaseIndentConfig;
+pub use language_config::JsxTagAutoCloseConfig;
+pub use language_config::LanguageConfig;
+pub use language_config::LanguageConfigOverride;
+pub use language_config::LanguageMatcher;
+pub use language_config::OrderedListConfig;
+pub use language_config::Override;
+pub use language_config::SoftWrap;
+pub use language_config::TaskListConfig;
+pub use language_config::WrapCharactersConfig;
+pub use language_config::default_true;
+pub use language_config::deserialize_regex;
+pub use language_config::deserialize_regex_vec;
+pub use language_config::regex_json_schema;
+pub use language_config::regex_vec_json_schema;
+pub use language_config::serialize_regex;
 
 pub mod code_label;
 pub mod language_name;
@@ -27,8 +54,17 @@ pub mod lsp_adapter;
 pub mod manifest;
 pub mod queries;
 
-pub use code_label::{CodeLabel, CodeLabelBuilder, Symbol, SymbolKind};
-pub use language_name::{LanguageId, LanguageName};
-pub use lsp_adapter::{BinaryStatus, LanguageServerStatusUpdate, ServerHealth};
+pub use code_label::CodeLabel;
+pub use code_label::CodeLabelBuilder;
+pub use code_label::Symbol;
+pub use code_label::SymbolKind;
+pub use language_name::LanguageId;
+pub use language_name::LanguageName;
+pub use lsp_adapter::BinaryStatus;
+pub use lsp_adapter::LanguageServerStatusUpdate;
+pub use lsp_adapter::ServerHealth;
 pub use manifest::ManifestName;
-pub use queries::{LanguageQueries, QueryFile, QueryFileContents, QueryFiles};
+pub use queries::LanguageQueries;
+pub use queries::QueryFile;
+pub use queries::QueryFileContents;
+pub use queries::QueryFiles;
