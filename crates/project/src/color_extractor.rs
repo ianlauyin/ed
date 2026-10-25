@@ -1,31 +1,26 @@
 use std::sync::LazyLock;
 
-use gpui::{Hsla, Rgba};
-use lsp::{CompletionItem, Documentation};
-use regex::{Regex, RegexBuilder};
+use gpui::Hsla;
+use gpui::Rgba;
+use lsp::CompletionItem;
+use lsp::Documentation;
+use regex::Regex;
+use regex::RegexBuilder;
 
 const HEX: &str = r#"(#(?:[\da-fA-F]{3}){1,2})"#;
-const RGB_OR_HSL: &str = r#"(rgba?|hsla?)\(\s*(\d{1,3}%?)\s*,\s*(\d{1,3}%?)\s*,\s*(\d{1,3}%?)\s*(?:,\s*(1|0?\.\d+))?\s*\)"#;
+const RGB_OR_HSL: &str =
+    r#"(rgba?|hsla?)\(\s*(\d{1,3}%?)\s*,\s*(\d{1,3}%?)\s*,\s*(\d{1,3}%?)\s*(?:,\s*(1|0?\.\d+))?\s*\)"#;
 
 static RELAXED_HEX_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    RegexBuilder::new(HEX)
-        .case_insensitive(false)
-        .build()
-        .expect("Failed to create RELAXED_HEX_REGEX")
+    RegexBuilder::new(HEX).case_insensitive(false).build().expect("Failed to create RELAXED_HEX_REGEX")
 });
 
 static STRICT_HEX_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    RegexBuilder::new(&format!("^{HEX}$"))
-        .case_insensitive(true)
-        .build()
-        .expect("Failed to create STRICT_HEX_REGEX")
+    RegexBuilder::new(&format!("^{HEX}$")).case_insensitive(true).build().expect("Failed to create STRICT_HEX_REGEX")
 });
 
 static RELAXED_RGB_OR_HSL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
-    RegexBuilder::new(RGB_OR_HSL)
-        .case_insensitive(false)
-        .build()
-        .expect("Failed to create RELAXED_RGB_OR_HSL_REGEX")
+    RegexBuilder::new(RGB_OR_HSL).case_insensitive(false).build().expect("Failed to create RELAXED_RGB_OR_HSL_REGEX")
 });
 
 static STRICT_RGB_OR_HSL_REGEX: LazyLock<Regex> = LazyLock::new(|| {
@@ -42,17 +37,11 @@ pub fn extract_color(item: &CompletionItem) -> Option<Hsla> {
     // Try to extract from entire `label` field.
     parse(&item.label, ParseMode::Strict)
         // Try to extract from entire `detail` field.
-        .or_else(|| {
-            item.detail
-                .as_ref()
-                .and_then(|detail| parse(detail, ParseMode::Strict))
-        })
+        .or_else(|| item.detail.as_ref().and_then(|detail| parse(detail, ParseMode::Strict)))
         // Try to extract from beginning or end of `documentation` field.
         .or_else(|| match item.documentation {
             Some(Documentation::String(ref str)) => parse(str, ParseMode::Relaxed),
-            Some(Documentation::MarkupContent(ref markup)) => {
-                parse(&markup.value, ParseMode::Relaxed)
-            }
+            Some(Documentation::MarkupContent(ref markup)) => parse(&markup.value, ParseMode::Relaxed),
             None => None,
         })
 }

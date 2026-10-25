@@ -55,7 +55,8 @@ Remote-server release fetching and archive caching are removed. The obsolete
 `upload_binary_over_ssh` setting is removed.
 
 The remote server keeps no log file. Its log records are streamed to the client
-as JSON and re-logged into the editor's own log. The only file it writes is a
+as JSON and re-logged into the editor's own log. The server and proxy log at a
+fixed `info` level; `RUST_LOG` is not read. The only file it writes is a
 panic report (`server-<id>-panic.log` in the remote logs dir, overwritten per
 panic), since a panicking server aborts before the record can be forwarded.
 

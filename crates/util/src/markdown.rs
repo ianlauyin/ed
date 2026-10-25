@@ -1,4 +1,5 @@
-use std::fmt::{Display, Formatter};
+use std::fmt::Display;
+use std::fmt::Formatter;
 
 /// Generates a URL-friendly slug from heading text (e.g. "Hello World" → "hello-world").
 pub fn generate_heading_slug(text: &str) -> String {
@@ -44,14 +45,7 @@ pub fn split_local_url_fragment(url: &str) -> (&str, Option<&str>) {
         Some(pos) => {
             let path = &url[..pos];
             let fragment = &url[pos + 1..];
-            (
-                path,
-                if fragment.is_empty() {
-                    None
-                } else {
-                    Some(fragment)
-                },
-            )
+            (path, if fragment.is_empty() { None } else { Some(fragment) })
         }
         None => (url, None),
     }
@@ -59,18 +53,14 @@ pub fn split_local_url_fragment(url: &str) -> (&str, Option<&str>) {
 
 pub fn source_position_from_fragment(fragment: &str) -> Option<(u32, u32)> {
     let fragment = fragment.strip_prefix('L').unwrap_or(fragment);
-    let fragment = fragment
-        .split_once('-')
-        .map_or(fragment, |(start, _)| start);
+    let fragment = fragment.split_once('-').map_or(fragment, |(start, _)| start);
     let (line, column) = match fragment.split_once([',', ':', 'C']) {
         Some((line, column)) => (line, Some(column)),
         None => (fragment, None),
     };
     let line = line.parse::<u32>().ok()?.checked_sub(1)?;
-    let column = column
-        .and_then(|column| column.parse::<u32>().ok())
-        .and_then(|column| column.checked_sub(1))
-        .unwrap_or(0);
+    let column =
+        column.and_then(|column| column.parse::<u32>().ok()).and_then(|column| column.checked_sub(1)).unwrap_or(0);
     Some((line, column))
 }
 

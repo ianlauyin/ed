@@ -45,7 +45,6 @@ use rpc::AnyProtoClient;
 use rpc::proto::Envelope;
 use settings_content::app_metadata::AppVersion;
 use smol::channel::Receiver;
-use smol::channel::Sender;
 use smol::io::AsyncReadExt;
 use smol::stream::StreamExt as _;
 use thiserror::Error;
@@ -167,41 +166,57 @@ fn exec_command(
     command
 }
 
+/// Forwards each log record as a JSON line, which the client parses and re-logs.
+/// The level is fixed rather than read from the environment.
+struct JsonLogger {
+    prefix: &'static str,
+    sink: Box<dyn Fn(Vec<u8>) + Send + Sync>,
+}
+
+impl JsonLogger {
+    const LEVEL: log::LevelFilter = log::LevelFilter::Info;
+
+    fn init(self) {
+        log::set_boxed_logger(Box::new(self)).ok();
+        log::set_max_level(Self::LEVEL);
+    }
+}
+
+impl log::Log for JsonLogger {
+    fn enabled(&self, metadata: &log::Metadata) -> bool {
+        metadata.level() <= Self::LEVEL
+    }
+
+    fn log(&self, record: &log::Record) {
+        if !self.enabled(record.metadata()) {
+            return;
+        }
+        let mut log_record = LogRecord::new(record);
+        log_record.message = std::borrow::Cow::Owned(format!("({}) {}", self.prefix, log_record.message));
+        if let Ok(mut line) = serde_json::to_vec(&log_record) {
+            line.push(b'\n');
+            (self.sink)(line);
+        }
+    }
+
+    fn flush(&self) {}
+}
+
 fn init_logging_proxy() {
-    env_logger::builder()
-        .format(|buf, record| {
-            let mut log_record = LogRecord::new(record);
-            log_record.message = std::borrow::Cow::Owned(format!("(remote proxy) {}", log_record.message));
-            serde_json::to_writer(&mut *buf, &log_record)?;
-            buf.write_all(b"\n")?;
-            Ok(())
-        })
-        .init();
+    JsonLogger {
+        prefix: "remote proxy",
+        sink: Box::new(|line| {
+            std::io::stderr().write_all(&line).ok();
+        }),
+    }
+    .init();
 }
 
 /// Server logs are only forwarded to the client as JSON records; there is no log file.
 /// Panics are the exception: the process aborts before the record can be forwarded, so the
 /// panic hook also writes them to `panic_file_path`.
 fn init_logging_server(panic_file_path: PathBuf) -> Receiver<Vec<u8>> {
-    struct ChannelWrite {
-        channel: Sender<Vec<u8>>,
-        buffer: Vec<u8>,
-    }
-
-    impl Write for ChannelWrite {
-        fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
-            self.buffer.extend_from_slice(buf);
-            Ok(buf.len())
-        }
-
-        fn flush(&mut self) -> std::io::Result<()> {
-            self.channel.send_blocking(std::mem::take(&mut self.buffer)).map_err(std::io::Error::other)
-        }
-    }
-
     let (tx, rx) = async_channel::unbounded();
-
-    let target = Box::new(ChannelWrite { channel: tx, buffer: Vec::new() });
 
     let old_hook = std::panic::take_hook();
     std::panic::set_hook(Box::new(move |info| {
@@ -216,18 +231,13 @@ fn init_logging_server(panic_file_path: PathBuf) -> Receiver<Vec<u8>> {
         log::error!("{msg}");
         old_hook(info);
     }));
-    env_logger::Builder::new()
-        .filter_level(log::LevelFilter::Info)
-        .parse_default_env()
-        .target(env_logger::Target::Pipe(target))
-        .format(|buf, record| {
-            let mut log_record = LogRecord::new(record);
-            log_record.message = std::borrow::Cow::Owned(format!("(remote server) {}", log_record.message));
-            serde_json::to_writer(&mut *buf, &log_record)?;
-            buf.write_all(b"\n")?;
-            Ok(())
-        })
-        .init();
+    JsonLogger {
+        prefix: "remote server",
+        sink: Box::new(move |line| {
+            tx.try_send(line).ok();
+        }),
+    }
+    .init();
 
     rx
 }

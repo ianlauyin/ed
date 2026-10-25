@@ -2,7 +2,7 @@
 
 ## Decision
 
-macOS is the only supported editor and CLI host. Both Apple Silicon and Intel
+macOS is the only supported editor host. Both Apple Silicon and Intel
 Macs remain supported, with a minimum macOS version of 10.15.7. The headless
 remote server supports macOS and Linux.
 
@@ -27,9 +27,11 @@ remote detection, command execution, and proxy startup are removed.
   Dock); the last workspace stays in the session for restore. There is no
   `on_last_window_closed` setting.
 - The native menu bar has no Help menu.
-- CLI installation is manual. The editor has no CLI installer, installation menu
-  item, or commands for installing the CLI or registering its URL scheme.
-- CLI shell completions are generated for bash, fish, and zsh only.
+- No `ed` CLI binary. Files and folders open through macOS (Finder, `open -a
+  ed`, Apple Events) or as arguments to the app binary itself. There is no
+  `--wait`, environment/cwd forwarding, open-mode flags (`-a`/`-n`/`-e`), or
+  `cli_default_open_behavior` setting; open requests follow
+  `default_open_behavior`.
 - Terminals, tasks, environment capture, and SSH commands only understand
   POSIX-family shells (sh/bash/zsh, fish, csh/tcsh, rc). Any other shell is
   treated as POSIX; PowerShell, cmd, Nushell, Xonsh, and Elvish quoting and
@@ -95,14 +97,13 @@ remote detection, command execution, and proxy startup are removed.
   registered in memory, never written to `~/Library/Preferences`.
 - No `zed://` URL scheme: the bundle registers no URL types, there is no
   open-URL prompt or `OpenZedUrl` action, and terminal links don't match
-  `zed://`. The app only accepts `file://`, `ssh://`, and the CLI's `ed-cli://`
-  handshake (delivered directly to the bundle, not via scheme registration).
+  `zed://`. The app only accepts `file://` and `ssh://` URLs.
   Dock-menu items dispatch their actions directly through AppKit, not via URLs.
 - Kept from upstream: `ZED_*` environment variables and the `.zed` project
   folder name.
 - Linux desktop, FreeBSD, Windows, and browser backends, packaging, and associated
   build/test/release tooling are removed.
-- Unsupported editor and CLI targets fail with a macOS-only diagnostic.
+- Unsupported editor targets fail with a macOS-only diagnostic.
 - System-specification reports are removed: no `--system-specs` flag or
   copy-system-specs action.
 - The filesystem-watcher debug window, recording API, and JSON exports are removed.
@@ -137,10 +138,10 @@ backtraces still work through sync CFI.
 - `install_remote_server.fish` runs on a Linux host with the build prerequisites
   installed, builds the remote server in release mode, and installs it as
   `~/.local/bin/ed_server` for SSH editing.
-- `release.fish` builds `target/release/ed.app` for the host Mac: `ed` and
-  `cli` binaries in `Contents/MacOS`, `crates/zed/resources/Info.plist` with the
+- `release.fish` builds `target/release/ed.app` for the host Mac: the `ed`
+  binary in `Contents/MacOS`, `crates/zed/resources/Info.plist` with the
   Cargo.toml version, an icon generated from `app-icon@2x.png`, and `Document.icns`.
-- `release.fish` signs `cli` and the bundle with a self-signed keychain identity
+- `release.fish` signs the bundle with a self-signed keychain identity
   (`ed-local`, or `ED_SIGN_IDENTITY`) and stops with setup instructions when it is
   missing. A stable signature keeps macOS privacy grants across rebuilds; ad-hoc
   signatures change every build, so Local Network access is lost and `ssh` to

@@ -1,12 +1,14 @@
-use std::{
-    hash::{Hash, Hasher},
-    path::{Path, PathBuf},
-    sync::Arc,
-};
+use std::hash::Hash;
+use std::hash::Hasher;
+use std::path::Path;
+use std::path::PathBuf;
+use std::sync::Arc;
+
+use itertools::Itertools;
+use serde::Deserialize;
+use serde::Serialize;
 
 use crate::paths::SanitizedPath;
-use itertools::Itertools;
-use serde::{Deserialize, Serialize};
 
 /// A list of absolute paths, with an associated display order.
 ///
@@ -46,18 +48,11 @@ pub struct SerializedPathList {
 
 impl PathList {
     pub fn new<P: AsRef<Path>>(paths: &[P]) -> Self {
-        let mut indexed_paths: Vec<(usize, PathBuf)> = paths
-            .iter()
-            .enumerate()
-            .map(|(ix, path)| (ix, SanitizedPath::new(path).into()))
-            .collect();
+        let mut indexed_paths: Vec<(usize, PathBuf)> =
+            paths.iter().enumerate().map(|(ix, path)| (ix, SanitizedPath::new(path).into())).collect();
         indexed_paths.sort_by(|(_, a), (_, b)| a.cmp(b));
         let order = indexed_paths.iter().map(|e| e.0).collect::<Vec<_>>().into();
-        let paths = indexed_paths
-            .into_iter()
-            .map(|e| e.1)
-            .collect::<Vec<_>>()
-            .into();
+        let paths = indexed_paths.into_iter().map(|e| e.1).collect::<Vec<_>>().into();
         Self { order, paths }
     }
 
@@ -67,11 +62,7 @@ impl PathList {
 
     /// Returns a new `PathList` with the given path removed.
     pub fn without_path(&self, path_to_remove: &Path) -> PathList {
-        let paths: Vec<PathBuf> = self
-            .ordered_paths()
-            .filter(|p| p.as_path() != path_to_remove)
-            .cloned()
-            .collect();
+        let paths: Vec<PathBuf> = self.ordered_paths().filter(|p| p.as_path() != path_to_remove).cloned().collect();
         PathList::new(&paths)
     }
 
@@ -92,11 +83,7 @@ impl PathList {
 
     /// Get the paths in the original order.
     pub fn ordered_paths(&self) -> impl Iterator<Item = &PathBuf> {
-        self.order
-            .iter()
-            .zip(self.paths.iter())
-            .sorted_by_key(|(i, _)| **i)
-            .map(|(_, path)| path)
+        self.order.iter().zip(self.paths.iter()).sorted_by_key(|(i, _)| **i).map(|(_, path)| path)
     }
 
     pub fn is_lexicographically_ordered(&self) -> bool {
@@ -110,21 +97,14 @@ impl PathList {
             serialized.paths.split('\n').map(PathBuf::from).collect()
         };
 
-        let mut order: Vec<usize> = serialized
-            .order
-            .split(',')
-            .filter_map(|s| s.parse().ok())
-            .collect();
+        let mut order: Vec<usize> = serialized.order.split(',').filter_map(|s| s.parse().ok()).collect();
 
         if !paths.is_sorted() || order.len() != paths.len() {
             order = (0..paths.len()).collect();
             paths.sort();
         }
 
-        Self {
-            paths: paths.into(),
-            order: order.into(),
-        }
+        Self { paths: paths.into(), order: order.into() }
     }
 
     pub fn serialize(&self) -> SerializedPathList {

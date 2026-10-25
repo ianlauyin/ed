@@ -23,7 +23,7 @@
   (including plain text) is highlighted with the Sublime/TextMate syntaxes
   bundled by `two-face` (syntect, Oniguruma regex). The syntax is picked by
   file name/extension, then language name, then the first line (shebang).
-  A single file opened from the CLI (the file is its own worktree root) is
+  A single file opened on its own (the file is its own worktree root) is
   detected by its file name like any other file.
   TextMate scopes are mapped onto the theme's syntax captures (keyword,
   string, comment, ...); accuracy is "good enough", not tree-sitter quality.

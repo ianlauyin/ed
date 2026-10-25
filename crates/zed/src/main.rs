@@ -19,12 +19,10 @@ use std::path::PathBuf;
 use std::process;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::LazyLock;
 
 use anyhow::Result;
 use assets::Assets;
 use clap::Parser;
-use cli::FORCE_CLI_MODE_ENV_VAR_NAME;
 use collections::HashMap;
 use db::kvp::KeyValueStore;
 use editor::Editor;
@@ -69,12 +67,9 @@ use zed::OpenRequest;
 use zed::RawOpenRequest;
 use zed::build_window_options;
 use zed::derive_paths_with_position;
-use zed::handle_cli_connection;
 use zed::initialize_keymap;
 use zed::initialize_workspace;
 use zed::open_paths_with_positions;
-
-use crate::zed::OpenRequestKind;
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -372,7 +367,7 @@ fn main() {
             args.diff.chunks(2).map(|chunk| [chunk[0].clone(), chunk[1].clone()]).collect();
 
         if !urls.is_empty() || !diff_paths.is_empty() {
-            open_listener.open(RawOpenRequest { urls, diff_paths, diff_all: diff_all_mode, ..Default::default() })
+            open_listener.open(RawOpenRequest { urls, diff_paths, diff_all: diff_all_mode })
         }
 
         let (current_session_id, last_session_id) = {
@@ -441,20 +436,8 @@ fn main() {
 }
 
 fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &App) {
-    if let Some(kind) = request.kind {
-        match kind {
-            OpenRequestKind::CliConnection(connection) => {
-                cx.spawn(async move |cx| handle_cli_connection(connection, app_state, cx).await).detach();
-            }
-        }
-
-        return;
-    }
-
     if let Some(connection_options) = request.remote_connection {
-        let open_behavior = request.open_behavior;
-        let location = workspace::SerializedWorkspaceLocation::Remote(connection_options.clone());
-        let base_open_options = zed::open_options_for_request(open_behavior, &location, cx);
+        let base_open_options = zed::open_options_for_request(cx);
         cx.spawn(async move |cx| {
             let paths: Vec<PathBuf> = request.open_paths.into_iter().map(PathBuf::from).collect();
             open_remote_project(connection_options, paths, app_state, base_open_options, cx).await
@@ -465,8 +448,7 @@ fn handle_open_request(request: OpenRequest, app_state: Arc<AppState>, cx: &App)
 
     let mut task = None;
     if !request.open_paths.is_empty() || !request.diff_paths.is_empty() {
-        let base_open_options =
-            zed::open_options_for_request(request.open_behavior, &workspace::SerializedWorkspaceLocation::Local, cx);
+        let base_open_options = zed::open_options_for_request(cx);
         task = Some(cx.spawn(async move |cx| {
             let paths_with_position = derive_paths_with_position(app_state.fs.as_ref(), request.open_paths).await;
             let (_window, results) = open_paths_with_positions(
@@ -709,14 +691,8 @@ fn init_paths() -> HashMap<io::ErrorKind, Vec<&'static Path>> {
     )
 }
 
-pub(crate) static FORCE_CLI_MODE: LazyLock<bool> = LazyLock::new(|| {
-    let env_var = std::env::var(FORCE_CLI_MODE_ENV_VAR_NAME).ok().is_some();
-    unsafe { std::env::remove_var(FORCE_CLI_MODE_ENV_VAR_NAME) };
-    env_var
-});
-
 fn stdout_is_a_pty() -> bool {
-    !*FORCE_CLI_MODE && io::stdout().is_terminal()
+    io::stdout().is_terminal()
 }
 
 #[derive(Parser, Debug)]
@@ -755,7 +731,7 @@ fn parse_url_arg(arg: &str, _cx: &App) -> String {
     match std::fs::canonicalize(Path::new(&arg)) {
         Ok(path) => format!("file://{}", path.display()),
         Err(_) => {
-            if arg.starts_with("file://") || arg.starts_with("ed-cli://") || arg.starts_with("ssh://") {
+            if arg.starts_with("file://") || arg.starts_with("ssh://") {
                 arg.into()
             } else {
                 format!("file://{arg}")

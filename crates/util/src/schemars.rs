@@ -1,4 +1,5 @@
-use schemars::{JsonSchema, transform::transform_subschemas};
+use schemars::JsonSchema;
+use schemars::transform::transform_subschemas;
 
 const DEFS_PATH: &str = "#/$defs/";
 

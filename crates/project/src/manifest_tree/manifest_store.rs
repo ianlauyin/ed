@@ -1,9 +1,14 @@
-use collections::{HashMap, HashSet};
-use gpui::{App, Global, SharedString};
-use parking_lot::RwLock;
-use std::{ops::Deref, sync::Arc};
+use std::ops::Deref;
+use std::sync::Arc;
 
-use language::{ManifestName, ManifestProvider};
+use collections::HashMap;
+use collections::HashSet;
+use gpui::App;
+use gpui::Global;
+use gpui::SharedString;
+use language::ManifestName;
+use language::ManifestProvider;
+use parking_lot::RwLock;
 
 #[derive(Default)]
 struct ManifestProvidersState {

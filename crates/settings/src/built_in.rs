@@ -320,7 +320,6 @@ fn workspace_settings() -> WorkspaceSettingsContent {
         confirm_quit: Some(false),
         autosave: Some(AutosaveSetting::OnFocusChange),
         restore_on_startup: Some(RestoreOnStartupBehavior::LastSession),
-        cli_default_open_behavior: Some(CliDefaultOpenBehavior::ExistingWindow),
         default_open_behavior: Some(DefaultOpenBehavior::ExistingWindow),
         restore_on_file_reopen: Some(true),
         reveal_if_open: Some(false),

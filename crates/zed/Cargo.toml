@@ -2,7 +2,7 @@
 description = "A focused single-user code editor."
 edition.workspace = true
 name = "zed"
-version = "1.38.0"
+version = "1.39.0"
 default-run = "ed"
 
 [lints]
@@ -19,7 +19,6 @@ assets.workspace = true
 breadcrumbs.workspace = true
 call_hierarchy.workspace = true
 clap.workspace = true
-cli.workspace = true
 collections.workspace = true
 command_palette.workspace = true
 db.workspace = true

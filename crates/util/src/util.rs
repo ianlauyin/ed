@@ -24,7 +24,6 @@ use std::cmp::Ordering;
 use std::cmp::{self};
 use std::ops::Range;
 use std::ops::RangeInclusive;
-use std::path::PathBuf;
 use std::sync::LazyLock;
 
 use anyhow::Result;
@@ -279,25 +278,6 @@ pub fn get_shell_safe_zed_path(shell_kind: shell::ShellKind) -> anyhow::Result<S
     }
 
     zed_path.try_shell_safe(shell_kind).context("Failed to shell-escape Zed executable path.")
-}
-
-/// Returns a path for the zed cli executable, this function
-/// should be called from the zed executable, not zed-cli.
-pub fn get_zed_cli_path() -> Result<PathBuf> {
-    use anyhow::Context as _;
-    let zed_path = std::env::current_exe().context("Failed to determine current zed executable path.")?;
-    let parent = zed_path.parent().context("Failed to determine parent directory of zed executable path.")?;
-
-    let possible_locations: &[&str] = {
-        // On macOS, the zed executable and zed-cli are inside the app bundle,
-        // so here ./cli is for both installed and development builds.
-        &["./cli"]
-    };
-
-    possible_locations
-        .iter()
-        .find_map(|p| parent.join(p).canonicalize().ok().filter(|p| p != &zed_path))
-        .with_context(|| format!("could not find zed-cli from any of: {}", possible_locations.join(", ")))
 }
 
 pub async fn load_login_shell_environment() -> Result<()> {

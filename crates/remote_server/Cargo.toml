@@ -19,7 +19,6 @@ anyhow.workspace = true
 async-channel.workspace = true
 clap.workspace = true
 collections.workspace = true
-env_logger.workspace = true
 fs.workspace = true
 futures.workspace = true
 gpui.workspace = true

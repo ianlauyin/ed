@@ -6,7 +6,6 @@ members = [
     "crates/breadcrumbs",
     "crates/buffer_diff",
     "crates/call_hierarchy",
-    "crates/cli",
     "crates/clock",
     "crates/collections",
     "crates/command_palette",
@@ -120,7 +119,6 @@ assets = { path = "crates/assets" }
 breadcrumbs = { path = "crates/breadcrumbs" }
 buffer_diff = { path = "crates/buffer_diff" }
 call_hierarchy = { path = "crates/call_hierarchy" }
-cli = { path = "crates/cli", default-features = false }
 clock = { path = "crates/clock" }
 collections = { path = "crates/collections", version = "0.1.0" }
 command_palette = { path = "crates/command_palette" }
@@ -257,7 +255,6 @@ documented = "0.10"
 dunce = "1.0"
 emojis = "0.9"
 encoding_rs = "0.8"
-env_logger = "0.11"
 etagere = "0.2"
 fancy-regex = "0.19"
 flume = { version = "0.12", default-features = false, features = ["async"] }

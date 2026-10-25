@@ -29,4 +29,3 @@ macOS; the remote server runs natively on macOS and Linux.
 
 - Native builds need a Rust toolchain and the target platform's SDK/C toolchain.
 - macOS Metal shaders compile at app startup; the Xcode Metal toolchain is not required.
-- The CLI has no bundled uninstall script, uninstall flag, or compatibility feature.

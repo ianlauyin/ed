@@ -51,11 +51,6 @@ pub struct WorkspaceSettingsContent {
     /// Values: empty_tab, last_workspace, last_session, launchpad
     /// Default: last_session
     pub restore_on_startup: Option<RestoreOnStartupBehavior>,
-    /// The default behavior when opening paths from the CLI without
-    /// an explicit `-e` or `-n` flag.
-    ///
-    /// Default: existing_window
-    pub cli_default_open_behavior: Option<CliDefaultOpenBehavior>,
     /// The default behavior when opening projects from the UI.
     ///
     /// Default: existing_window
@@ -425,31 +420,6 @@ impl CloseWindowWhenNoItems {
             CloseWindowWhenNoItems::KeepWindowOpen => false,
         }
     }
-}
-
-#[derive(
-    Copy,
-    Clone,
-    PartialEq,
-    Eq,
-    Default,
-    Serialize,
-    Deserialize,
-    JsonSchema,
-    MergeFrom,
-    Debug,
-    strum::VariantArray,
-    strum::VariantNames,
-)]
-#[serde(rename_all = "snake_case")]
-pub enum CliDefaultOpenBehavior {
-    /// Open directories as a new workspace in the current Zed window's sidebar.
-    #[default]
-    #[strum(serialize = "Add to Existing Window")]
-    ExistingWindow,
-    /// Open paths in a new window unless they are subpaths of an existing project.
-    #[strum(serialize = "Open a New Window")]
-    NewWindow,
 }
 
 #[derive(

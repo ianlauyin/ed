@@ -3,23 +3,14 @@
 //! Each format spawns a short-lived process; Biome is a native binary, so there is
 //! no long-running server to manage.
 
-use std::{
-    ffi::OsString,
-    path::{Path, PathBuf},
-};
+use std::ffi::OsString;
+use std::path::Path;
+use std::path::PathBuf;
 
 use language::Language;
 
 /// Languages that `formatter: "auto"` formats with Biome.
-const LANGUAGES: &[&str] = &[
-    "CSS",
-    "GraphQL",
-    "JavaScript",
-    "JSON",
-    "JSONC",
-    "TSX",
-    "TypeScript",
-];
+const LANGUAGES: &[&str] = &["CSS", "GraphQL", "JavaScript", "JSON", "JSONC", "TSX", "TypeScript"];
 
 const NPX_PACKAGE: &str = "@biomejs/biome";
 
@@ -36,26 +27,17 @@ pub(crate) struct BiomeCommand {
 /// Resolves Biome, in order: the nearest `node_modules/.bin/biome` above `start_dir`,
 /// `biome` on `PATH`, then `npx --yes @biomejs/biome`.
 pub(crate) fn resolve_command(start_dir: Option<&Path>, path_env: Option<&str>) -> BiomeCommand {
-    let local = start_dir
-        .into_iter()
-        .flat_map(Path::ancestors)
-        .find_map(|dir| {
-            let candidate = dir.join("node_modules").join(".bin").join("biome");
-            candidate.is_file().then_some(candidate)
-        });
+    let local = start_dir.into_iter().flat_map(Path::ancestors).find_map(|dir| {
+        let candidate = dir.join("node_modules").join(".bin").join("biome");
+        candidate.is_file().then_some(candidate)
+    });
     if let Some(program) = local {
-        return BiomeCommand {
-            program,
-            args: Vec::new(),
-        };
+        return BiomeCommand { program, args: Vec::new() };
     }
 
     let cwd = start_dir.unwrap_or_else(|| Path::new("/"));
     if let Ok(program) = which::which_in("biome", path_env, cwd) {
-        return BiomeCommand {
-            program,
-            args: Vec::new(),
-        };
+        return BiomeCommand { program, args: Vec::new() };
     }
 
     BiomeCommand {
@@ -112,10 +94,7 @@ mod tests {
 
         let command = resolve_command(Some(&root), Some(&path_env));
         assert_eq!(command.program, PathBuf::from("npx"));
-        assert_eq!(
-            command.args,
-            vec![OsString::from("--yes"), NPX_PACKAGE.into()]
-        );
+        assert_eq!(command.args, vec![OsString::from("--yes"), NPX_PACKAGE.into()]);
 
         let biome = path_dir.join("biome");
         std::fs::write(&biome, "").unwrap();

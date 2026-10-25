@@ -1,88 +1,45 @@
 use std::path::Path;
-use std::path::PathBuf;
 use std::sync::Arc;
-use std::thread;
-use std::time::Duration;
 
 use anyhow::Context as _;
 use anyhow::Result;
 use anyhow::anyhow;
-use cli::CliRequest;
-use cli::CliResponse;
-use cli::CliResponseSink;
-use cli::IpcHandshake;
-use cli::ipc;
-use editor::Editor;
 use fs::Fs;
-use futures::FutureExt;
-use futures::StreamExt;
 use futures::channel::mpsc;
 use futures::channel::mpsc::UnboundedReceiver;
 use futures::channel::mpsc::UnboundedSender;
-use futures::channel::oneshot;
-use futures::future;
 use git_ui::multi_diff_view::MultiDiffView;
 use git_ui_core::file_diff_view::FileDiffView;
 use gpui::App;
 use gpui::AsyncApp;
 use gpui::Global;
-use gpui::TaskExt;
 use gpui::WindowHandle;
 use recent_projects::RemoteSettings;
 use recent_projects::navigate_to_positions;
-use recent_projects::open_remote_project;
 use remote::RemoteConnectionOptions;
 use settings::Settings;
 use util::ResultExt;
-use util::debug_panic;
 use util::paths::PathWithPosition;
 use workspace::AppState;
 use workspace::MultiWorkspace;
-use workspace::OpenOptions;
 use workspace::OpenResult;
-use workspace::PathList;
-use workspace::SerializedWorkspaceLocation;
 use workspace::item::ItemHandle;
-
-use crate::handle_open_request;
-use crate::restore_or_create_workspace;
 
 #[derive(Default, Debug)]
 pub struct OpenRequest {
-    pub kind: Option<OpenRequestKind>,
     pub open_paths: Vec<String>,
     pub diff_paths: Vec<[String; 2]>,
     pub diff_all: bool,
 
     pub remote_connection: Option<RemoteConnectionOptions>,
-    pub open_behavior: Option<cli::OpenBehavior>,
-}
-
-pub enum OpenRequestKind {
-    CliConnection((mpsc::UnboundedReceiver<CliRequest>, Box<dyn CliResponseSink>)),
-}
-
-impl std::fmt::Debug for OpenRequestKind {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::CliConnection(_) => write!(f, "CliConnection(..)"),
-        }
-    }
 }
 
 impl OpenRequest {
     pub fn parse(request: RawOpenRequest, cx: &App) -> Result<Self> {
-        let mut this = Self {
-            diff_paths: request.diff_paths,
-            diff_all: request.diff_all,
-            open_behavior: request.open_behavior,
-            ..Default::default()
-        };
+        let mut this = Self { diff_paths: request.diff_paths, diff_all: request.diff_all, ..Default::default() };
 
         for url in request.urls {
-            if let Some(server_name) = url.strip_prefix("ed-cli://") {
-                this.kind = Some(OpenRequestKind::CliConnection(connect_to_cli(server_name)?));
-            } else if let Some(file) = url.strip_prefix("file://") {
+            if let Some(file) = url.strip_prefix("file://") {
                 this.parse_file_path(file)
             } else if url.starts_with("ssh://") {
                 this.parse_ssh_file_path(&url, cx)?
@@ -175,7 +132,6 @@ pub struct RawOpenRequest {
     pub urls: Vec<String>,
     pub diff_paths: Vec<[String; 2]>,
     pub diff_all: bool,
-    pub open_behavior: Option<cli::OpenBehavior>,
 }
 
 impl Global for OpenListener {}
@@ -189,29 +145,6 @@ impl OpenListener {
     pub fn open(&self, request: RawOpenRequest) {
         self.0.unbounded_send(request).context("no listener for open requests").log_err();
     }
-}
-
-fn connect_to_cli(server_name: &str) -> Result<(mpsc::UnboundedReceiver<CliRequest>, Box<dyn CliResponseSink>)> {
-    let handshake_tx =
-        ipc::IpcSender::<IpcHandshake>::connect(server_name.to_string()).context("error connecting to cli")?;
-    let (request_tx, request_rx) = ipc::channel::<CliRequest>()?;
-    let (response_tx, response_rx) = ipc::channel::<CliResponse>()?;
-
-    handshake_tx
-        .send(IpcHandshake { requests: request_tx, responses: response_rx })
-        .context("error sending ipc handshake")?;
-
-    let (async_request_tx, async_request_rx) = futures::channel::mpsc::unbounded::<CliRequest>();
-    thread::spawn(move || {
-        while let Ok(cli_request) = request_rx.recv() {
-            if async_request_tx.unbounded_send(cli_request).is_err() {
-                break;
-            }
-        }
-        anyhow::Ok(())
-    });
-
-    Ok((async_request_rx, Box::new(response_tx)))
 }
 
 pub async fn open_paths_with_positions(
@@ -296,327 +229,17 @@ pub async fn open_paths_with_positions(
     Ok((multi_workspace, items))
 }
 
-pub async fn handle_cli_connection(
-    (mut requests, responses): (mpsc::UnboundedReceiver<CliRequest>, Box<dyn CliResponseSink>),
-    app_state: Arc<AppState>,
-    cx: &mut AsyncApp,
-) {
-    if let Some(request) = requests.next().await {
-        match request {
-            CliRequest::Open {
-                urls,
-                paths,
-                diff_paths,
-                diff_all,
-                wait,
-                mut open_behavior,
-                env,
-                user_data_dir: _,
-                cwd,
-            } => {
-                if !urls.is_empty() {
-                    cx.update(|cx| {
-                        match OpenRequest::parse(
-                            RawOpenRequest { urls, diff_paths, diff_all, open_behavior: Some(open_behavior) },
-                            cx,
-                        ) {
-                            Ok(open_request) => {
-                                cx.activate(true);
-                                handle_open_request(open_request, app_state.clone(), cx);
-                                responses.send(CliResponse::Exit { status: 0 }).log_err();
-                            }
-                            Err(e) => {
-                                responses.send(CliResponse::Stderr { message: format!("{e}") }).log_err();
-                                responses.send(CliResponse::Exit { status: 1 }).log_err();
-                            }
-                        };
-                    });
-                    return;
-                }
-
-                if open_behavior == cli::OpenBehavior::Default {
-                    open_behavior = cx.update(|cx| open_behavior_for_default_setting(cx));
-                }
-
-                cx.update(|cx| cx.activate(true));
-
-                let open_workspace_result = open_workspaces(
-                    paths,
-                    diff_paths,
-                    diff_all,
-                    open_behavior,
-                    responses.as_ref(),
-                    wait,
-                    app_state.clone(),
-                    env,
-                    cwd,
-                    cx,
-                )
-                .await;
-
-                let status = if open_workspace_result.is_err() { 1 } else { 0 };
-                responses.send(CliResponse::Exit { status }).log_err();
-            }
-            CliRequest::SetOpenBehavior { .. } => {
-                debug_panic!("unexpected SetOpenBehavior message");
-            }
-        }
-    }
-}
-
-pub(crate) fn open_options_for_request(
-    open_behavior: Option<cli::OpenBehavior>,
-    location: &SerializedWorkspaceLocation,
-    cx: &App,
-) -> workspace::OpenOptions {
-    let open_behavior =
-        open_behavior.unwrap_or_else(|| match workspace::WorkspaceSettings::get_global(cx).default_open_behavior {
-            settings::DefaultOpenBehavior::ExistingWindow => cli::OpenBehavior::ExistingWindow,
-            settings::DefaultOpenBehavior::NewWindow => cli::OpenBehavior::PreferNewWindow,
-        });
-    open_options_for_behavior(open_behavior, location, cx)
-}
-
-pub(crate) fn open_options_for_behavior(
-    open_behavior: cli::OpenBehavior,
-    location: &SerializedWorkspaceLocation,
-    cx: &App,
-) -> workspace::OpenOptions {
-    let open_behavior =
-        if open_behavior == cli::OpenBehavior::Default { open_behavior_for_default_setting(cx) } else { open_behavior };
-
-    // If reuse flag is passed, open a new workspace in an existing window.
-    let requesting_window = if open_behavior == cli::OpenBehavior::Reuse {
-        workspace::workspace_windows_for_location(location, cx).into_iter().next()
-    } else {
-        None
-    };
-    workspace::OpenOptions {
-        workspace_matching: match open_behavior {
-            cli::OpenBehavior::AlwaysNew | cli::OpenBehavior::Reuse => workspace::WorkspaceMatching::None,
-            cli::OpenBehavior::PreferNewWindow => workspace::WorkspaceMatching::MatchSubpaths,
-            cli::OpenBehavior::Add => workspace::WorkspaceMatching::MatchSubdirectory,
-            _ => workspace::WorkspaceMatching::MatchExact,
+/// Open options for an open request (e.g. from Finder or a URL), following the
+/// `default_open_behavior` setting.
+pub(crate) fn open_options_for_request(cx: &App) -> workspace::OpenOptions {
+    match workspace::WorkspaceSettings::get_global(cx).default_open_behavior {
+        settings::DefaultOpenBehavior::ExistingWindow => workspace::OpenOptions::default(),
+        settings::DefaultOpenBehavior::NewWindow => workspace::OpenOptions {
+            workspace_matching: workspace::WorkspaceMatching::MatchSubpaths,
+            add_dirs_to_sidebar: false,
+            ..Default::default()
         },
-        add_dirs_to_sidebar: matches!(open_behavior, cli::OpenBehavior::ExistingWindow),
-        requesting_window,
-        ..Default::default()
     }
-}
-
-fn open_behavior_for_default_setting(cx: &App) -> cli::OpenBehavior {
-    match workspace::WorkspaceSettings::get_global(cx).cli_default_open_behavior {
-        settings::CliDefaultOpenBehavior::ExistingWindow => cli::OpenBehavior::ExistingWindow,
-        settings::CliDefaultOpenBehavior::NewWindow => cli::OpenBehavior::PreferNewWindow,
-    }
-}
-
-async fn open_workspaces(
-    paths: Vec<String>,
-    diff_paths: Vec<[String; 2]>,
-    diff_all: bool,
-    open_behavior: cli::OpenBehavior,
-    responses: &dyn CliResponseSink,
-    wait: bool,
-    app_state: Arc<AppState>,
-    env: Option<collections::HashMap<String, String>>,
-    cwd: Option<PathBuf>,
-    cx: &mut AsyncApp,
-) -> Result<()> {
-    if paths.is_empty() && diff_paths.is_empty() && !matches!(open_behavior, cli::OpenBehavior::AlwaysNew) {
-        return restore_or_create_workspace(app_state, cx).await;
-    }
-
-    let grouped_locations: Vec<(SerializedWorkspaceLocation, PathList)> = if paths.is_empty() && diff_paths.is_empty() {
-        Vec::new()
-    } else {
-        vec![(
-            SerializedWorkspaceLocation::Local,
-            PathList::new(&paths.into_iter().map(PathBuf::from).collect::<Vec<_>>()),
-        )]
-    };
-
-    if grouped_locations.is_empty() {
-        // If we have no paths to open, show an empty window with empty editor
-        cx.update(|cx| {
-            let open_options = OpenOptions { env, ..Default::default() };
-            workspace::open_new(open_options, app_state, cx, |workspace, window, cx| {
-                Editor::new_file(workspace, &workspace::NewFile, window, cx)
-            })
-            .detach_and_log_err(cx);
-        });
-        return Ok(());
-    }
-    // If there are paths to open, open a workspace for each grouping of paths
-    let mut errored = false;
-
-    for (location, workspace_paths) in grouped_locations {
-        let base_open_options = cx.update(|cx| open_options_for_behavior(open_behavior, &location, cx));
-        let open_options = workspace::OpenOptions { wait, env: env.clone(), ..base_open_options };
-
-        match location {
-            SerializedWorkspaceLocation::Local => {
-                let workspace_paths =
-                    workspace_paths.paths().iter().map(|path| path.to_string_lossy().into_owned()).collect();
-
-                let workspace_failed_to_open = open_local_workspace(
-                    workspace_paths,
-                    diff_paths.clone(),
-                    diff_all,
-                    open_options,
-                    cwd.clone(),
-                    responses,
-                    &app_state,
-                    cx,
-                )
-                .await;
-
-                if workspace_failed_to_open {
-                    errored = true
-                }
-            }
-            SerializedWorkspaceLocation::Remote(mut connection) => {
-                let app_state = app_state.clone();
-                let RemoteConnectionOptions::Ssh(options) = &mut connection;
-                cx.update(|cx| RemoteSettings::get_global(cx).fill_connection_options_from_settings(options));
-
-                cx.spawn(async move |cx| {
-                    open_remote_project(connection, workspace_paths.paths().to_vec(), app_state, open_options, cx)
-                        .await
-                        .log_err();
-                })
-                .detach();
-            }
-        }
-    }
-
-    anyhow::ensure!(!errored, "failed to open a workspace");
-
-    Ok(())
-}
-
-async fn open_local_workspace(
-    mut workspace_paths: Vec<String>,
-    diff_paths: Vec<[String; 2]>,
-    diff_all: bool,
-    open_options: workspace::OpenOptions,
-    cwd: Option<PathBuf>,
-    responses: &dyn CliResponseSink,
-    app_state: &Arc<AppState>,
-    cx: &mut AsyncApp,
-) -> bool {
-    let user_provided_paths = !workspace_paths.is_empty();
-
-    // When only diff paths are provided (no regular paths), add the CLI's
-    // working directory so the workspace opens with the right context.
-    // Note: must use the CLI process's cwd (forwarded via `cli_cwd`), not
-    // `std::env::current_dir()`, since the Zed app process's cwd is typically
-    // `/` on macOS bundles or the launch dir of an already-running instance.
-    if !user_provided_paths
-        && !diff_paths.is_empty()
-        && let Some(cwd) = cwd
-    {
-        workspace_paths.push(cwd.to_string_lossy().to_string());
-    }
-
-    let paths_with_position = derive_paths_with_position(app_state.fs.as_ref(), workspace_paths).await;
-
-    let (workspace, items) = match open_paths_with_positions(
-        &paths_with_position,
-        &diff_paths,
-        diff_all,
-        app_state.clone(),
-        open_options.clone(),
-        cx,
-    )
-    .await
-    {
-        Ok(result) => result,
-        Err(error) => {
-            let paths = paths_with_position.iter().map(|p| p.path.display().to_string()).collect::<Vec<_>>().join(", ");
-            log::error!("failed to open workspace [{paths}]: {error:#}");
-            responses.send(CliResponse::Stderr { message: format!("error opening [{paths}]: {error:#}") }).log_err();
-            return true;
-        }
-    };
-
-    let mut errored = false;
-    let mut item_release_futures = Vec::new();
-    let mut subscriptions = Vec::new();
-    // If --wait flag is used with no paths, or a directory, then wait until
-    // the entire workspace is closed.
-    if open_options.wait {
-        let mut wait_for_window_close = paths_with_position.is_empty() && diff_paths.is_empty();
-        if user_provided_paths {
-            for path_with_position in &paths_with_position {
-                if app_state.fs.is_dir(&path_with_position.path).await {
-                    wait_for_window_close = true;
-                    break;
-                }
-            }
-        }
-
-        if wait_for_window_close {
-            let (release_tx, release_rx) = oneshot::channel();
-            item_release_futures.push(release_rx);
-            subscriptions.push(workspace.update(cx, |_, _, cx| {
-                cx.on_release(move |_, _| {
-                    let _ = release_tx.send(());
-                })
-            }));
-        }
-    }
-
-    for item in items {
-        match item {
-            Some(Ok(item)) => {
-                if open_options.wait {
-                    let (release_tx, release_rx) = oneshot::channel();
-                    item_release_futures.push(release_rx);
-                    subscriptions.push(Ok(cx.update(|cx| {
-                        item.on_release(
-                            cx,
-                            Box::new(move |_| {
-                                release_tx.send(()).ok();
-                            }),
-                        )
-                    })));
-                }
-            }
-            Some(Err(err)) => {
-                log::error!("{err:#}");
-                responses.send(CliResponse::Stderr { message: format!("{err:#}") }).log_err();
-                errored = true;
-            }
-            None => {}
-        }
-    }
-
-    if open_options.wait {
-        let wait = async move {
-            let _subscriptions = subscriptions;
-            let _ = future::try_join_all(item_release_futures).await;
-        }
-        .fuse();
-        futures::pin_mut!(wait);
-
-        let background = cx.background_executor().clone();
-        loop {
-            // Repeatedly check if CLI is still open to avoid wasting resources
-            // waiting for files or workspaces to close.
-            let mut timer = background.timer(Duration::from_secs(1)).fuse();
-            futures::select_biased! {
-                _ = wait => break,
-                _ = timer => {
-                    if responses.send(CliResponse::Ping).is_err() {
-                        break;
-                    }
-                }
-            }
-        }
-    }
-
-    errored
 }
 
 pub async fn derive_paths_with_position(

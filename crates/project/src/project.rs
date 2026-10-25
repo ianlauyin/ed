@@ -1482,11 +1482,12 @@ impl Project {
     }
 
     #[inline]
-    pub fn visibility_for_paths(&self, paths: &[PathBuf], exclude_sub_dirs: bool, cx: &App) -> Option<bool> {
-        paths.iter().map(|path| self.visibility_for_path(path, exclude_sub_dirs, cx)).max().flatten()
+    pub fn visibility_for_paths(&self, paths: &[PathBuf], cx: &App) -> Option<bool> {
+        paths.iter().map(|path| self.visibility_for_path(path, cx)).max().flatten()
     }
 
-    pub fn visibility_for_path(&self, path: &Path, exclude_sub_dirs: bool, cx: &App) -> Option<bool> {
+    /// Matches worktree roots and files inside worktrees, but not subdirectories.
+    fn visibility_for_path(&self, path: &Path, cx: &App) -> Option<bool> {
         let path = SanitizedPath::new(path).as_path();
         let path_style = self.path_style(cx);
         self.worktrees(cx)
@@ -1507,7 +1508,7 @@ impl Project {
                     return None;
                 }
                 let is_dir = worktree.entry_for_path(&relative_path).is_some_and(|e| e.is_dir());
-                let contains = !exclude_sub_dirs || !is_dir || !is_subpath;
+                let contains = !is_dir || !is_subpath;
                 contains.then(|| worktree.is_visible())
             })
             .max()

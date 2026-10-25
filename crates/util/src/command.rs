@@ -6,8 +6,11 @@ use std::path::Path;
 mod darwin;
 
 #[cfg(target_os = "macos")]
-pub use darwin::{Child, Command, Stdio};
-
+pub use darwin::Child;
+#[cfg(target_os = "macos")]
+pub use darwin::Command;
+#[cfg(target_os = "macos")]
+pub use darwin::Stdio;
 pub use gpui_util::new_std_command;
 
 pub fn new_command(program: impl AsRef<OsStr>) -> Command {

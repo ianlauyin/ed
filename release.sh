@@ -26,12 +26,12 @@ if not security find-certificate -c $identity >/dev/null 2>&1
 end
 
 echo "Building ed $app_version"
-cargo build --release --package zed --package cli; or exit 1
+cargo build --release --package zed; or exit 1
 
 rm -rf $app
 mkdir -p $app/Contents/MacOS $app/Contents/Resources
 
-cp target/release/ed target/release/cli $app/Contents/MacOS/
+cp target/release/ed $app/Contents/MacOS/
 cp $resources/Info.plist $app/Contents/Info.plist
 plutil -replace CFBundleShortVersionString -string $app_version $app/Contents/Info.plist; or exit 1
 plutil -replace CFBundleVersion -string $app_version $app/Contents/Info.plist; or exit 1
@@ -47,7 +47,6 @@ iconutil -c icns $iconset -o $app/Contents/Resources/ed.icns; or exit 1
 rm -rf (path dirname $iconset)
 cp $resources/Document.icns $app/Contents/Resources/
 
-codesign --force --sign $identity $app/Contents/MacOS/cli; or exit 1
 codesign --force --sign $identity $app; or exit 1
 
 echo "Packaged $app"
