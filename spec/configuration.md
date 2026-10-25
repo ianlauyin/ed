@@ -19,6 +19,11 @@ migrator, or Vim/Helix mode.
 - Database schemas are not migrated. Each domain declares only its current
   schema; when the combined schema changes, the whole database is wiped and
   recreated on next launch, losing all persisted state.
+- Settings types use ordinary Serde derives without optional-field macros or
+  custom flattened-settings parsing. Ordinary optional fields reject invalid
+  values and remain `None` when missing. Settings JSON error recovery and
+  field-path diagnostics are removed. Bundled semantic-token rules use ordinary
+  Serde errors; callers identify the source file when reporting failures.
 - User, global, server, and `.zed/settings.json` files are not loaded, watched,
   created, or rewritten. There are no settings profiles or project overrides.
   Changing persistent preferences requires editing the built-in settings and

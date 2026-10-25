@@ -18,4 +18,4 @@ default = []
 
 [dependencies]
 quote.workspace = true
-syn = { workspace = true, features = ["derive", "full", "parsing", "printing"] }
+syn = { workspace = true, features = ["derive", "parsing", "printing"] }

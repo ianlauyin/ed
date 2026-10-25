@@ -5,14 +5,12 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use settings_macros::MergeFrom;
-use settings_macros::with_fallible_options;
 
 use crate::DelayMs;
 use crate::DiagnosticSeverityContent;
 use crate::ShowScrollbar;
 use crate::serialize_f32_with_two_decimal_places;
 
-#[with_fallible_options]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct EditorSettingsContent {
     /// Whether the cursor blinks in the editor.
@@ -282,7 +280,6 @@ pub enum CompletionMenuItemKind {
     Symbol,
 }
 
-#[with_fallible_options]
 #[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
 pub struct CursorAnimationSettingsContent {
     /// Whether cursor movement animation is enabled.
@@ -292,7 +289,6 @@ pub struct CursorAnimationSettingsContent {
 }
 
 // Toolbar related settings
-#[with_fallible_options]
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
 pub struct ToolbarContent {
     /// Whether to display breadcrumbs in the editor toolbar.
@@ -310,7 +306,6 @@ pub struct ToolbarContent {
 }
 
 /// Minimap related settings
-#[with_fallible_options]
 #[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
 pub struct MinimapContent {
     /// When to show the minimap in the editor.
@@ -721,7 +716,6 @@ pub enum DiffViewStyle {
 }
 
 /// Default options for buffer and project search items.
-#[with_fallible_options]
 #[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
 pub struct SearchSettingsContent {
     /// Whether to show the project search button in the status bar.
@@ -741,7 +735,6 @@ pub struct SearchSettingsContent {
 }
 
 /// Whether to allow drag and drop text selection in buffer.
-#[with_fallible_options]
 #[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
 pub struct DragAndDropSelectionContent {
     /// When true, enables drag and drop text selection in buffer.

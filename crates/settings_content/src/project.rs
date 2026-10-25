@@ -9,14 +9,12 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use settings_macros::MergeFrom;
-use settings_macros::with_fallible_options;
 use util::serde::default_true;
 
 use crate::AllLanguageSettingsContent;
 use crate::DelayMs;
 use crate::SplicingVec;
 
-#[with_fallible_options]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct LspSettingsMap(pub HashMap<Arc<str>, LspSettings>);
 
@@ -29,8 +27,7 @@ impl IntoIterator for LspSettingsMap {
     }
 }
 
-#[with_fallible_options]
-#[derive(Debug, PartialEq, Clone, Default, Serialize, JsonSchema, MergeFrom)]
+#[derive(Debug, PartialEq, Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct ProjectSettingsContent {
     #[serde(flatten)]
     pub all_languages: AllLanguageSettingsContent,
@@ -49,12 +46,6 @@ pub struct ProjectSettingsContent {
     #[serde(default)]
     pub lsp: LspSettingsMap,
 }
-
-crate::fallible_options::flattened_deserialize!(ProjectSettingsContent {
-    sections: { all_languages, worktree },
-    options: {},
-    defaults: { lsp },
-});
 
 /// When to scan content of linked directories.
 #[derive(
@@ -80,7 +71,6 @@ pub enum ScanSymlinksSetting {
     Expanded,
 }
 
-#[with_fallible_options]
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct WorktreeSettingsContent {
     /// Exclude files matching these glob patterns from file scans, file searches,
@@ -219,7 +209,6 @@ pub struct WorktreeSettingsContent {
     pub read_only_files: Option<SplicingVec>,
 }
 
-#[with_fallible_options]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom, Hash)]
 #[serde(rename_all = "snake_case")]
 pub struct LspSettings {
@@ -249,7 +238,6 @@ impl Default for LspSettings {
     }
 }
 
-#[with_fallible_options]
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq, JsonSchema, MergeFrom, Hash)]
 pub struct BinarySettings {
     pub arguments: Option<Vec<String>>,
@@ -257,7 +245,6 @@ pub struct BinarySettings {
 }
 
 /// Common language server settings.
-#[with_fallible_options]
 #[derive(Default, Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct GlobalLspSettingsContent {
     /// Whether to show the LSP servers button in the status bar.
@@ -280,7 +267,6 @@ pub struct GlobalLspSettingsContent {
     pub semantic_token_rules: Option<SemanticTokenRules>,
 }
 
-#[with_fallible_options]
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct LspNotificationSettingsContent {
     /// Timeout in milliseconds for automatically dismissing language server notifications.
@@ -396,7 +382,6 @@ pub enum SemanticTokenFontStyle {
     Italic,
 }
 
-#[with_fallible_options]
 #[derive(Default, Copy, Clone, PartialEq, Eq, Debug, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct SessionSettingsContent {
     /// Whether or not to restore unsaved buffers on restart.
@@ -414,7 +399,6 @@ pub struct SessionSettingsContent {
     pub trust_all_worktrees: Option<bool>,
 }
 
-#[with_fallible_options]
 #[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct GitSettings {
     /// Whether or not to enable git integration.
@@ -471,7 +455,6 @@ pub struct GitSettings {
     pub worktree_directory: Option<String>,
 }
 
-#[with_fallible_options]
 #[derive(Clone, Copy, Debug, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
 #[serde(rename_all = "snake_case")]
 pub struct GitEnabledSettings {
@@ -512,7 +495,6 @@ pub enum GitGutterSetting {
     Hide,
 }
 
-#[with_fallible_options]
 #[derive(Clone, Copy, PartialEq, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
 #[serde(rename_all = "snake_case")]
 pub struct BranchPickerSettingsContent {
@@ -522,7 +504,6 @@ pub struct BranchPickerSettingsContent {
     pub show_author_name: Option<bool>,
 }
 
-#[with_fallible_options]
 #[derive(Clone, Copy, PartialEq, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
 #[serde(rename_all = "snake_case")]
 pub struct FileDiffSettingsContent {
@@ -554,7 +535,6 @@ pub enum GitHunkStyleSetting {
     UnstagedHollow,
 }
 
-#[with_fallible_options]
 #[derive(
     Copy,
     Clone,
@@ -577,7 +557,6 @@ pub enum GitPathStyle {
     FilePathFirst,
 }
 
-#[with_fallible_options]
 #[derive(Clone, Debug, PartialEq, Eq, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct DiagnosticsSettingsContent {
     /// Whether to show the project diagnostics button in the status bar.
@@ -595,7 +574,6 @@ pub struct DiagnosticsSettingsContent {
     pub inline: Option<InlineDiagnosticsSettingsContent>,
 }
 
-#[with_fallible_options]
 #[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
 pub struct LspPullDiagnosticsSettingsContent {
     /// Whether to pull for diagnostics or not.
@@ -609,7 +587,6 @@ pub struct LspPullDiagnosticsSettingsContent {
     pub debounce_ms: Option<DelayMs>,
 }
 
-#[with_fallible_options]
 #[derive(Clone, Copy, Debug, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Eq)]
 pub struct InlineDiagnosticsSettingsContent {
     /// Whether or not to show inline diagnostics

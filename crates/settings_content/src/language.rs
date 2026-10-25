@@ -6,7 +6,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use settings_macros::MergeFrom;
-use settings_macros::with_fallible_options;
 
 use crate::DocumentFoldingRanges;
 use crate::DocumentSymbols;
@@ -37,8 +36,7 @@ pub struct ModifiersContent {
     pub function: bool,
 }
 
-#[with_fallible_options]
-#[derive(Debug, Clone, Default, PartialEq, Serialize, JsonSchema)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct AllLanguageSettingsContent {
     /// The default language settings.
     #[serde(flatten)]
@@ -50,12 +48,6 @@ pub struct AllLanguageSettingsContent {
     /// with languages.
     pub file_types: Option<FileTypeMap>,
 }
-
-crate::fallible_options::flattened_deserialize!(AllLanguageSettingsContent {
-    sections: { defaults },
-    options: { file_types },
-    defaults: { languages },
-});
 
 impl merge_from::MergeFrom for AllLanguageSettingsContent {
     fn merge_from(&mut self, other: &Self) {
@@ -165,7 +157,6 @@ pub enum SoftWrapIndent {
 }
 
 /// The settings for a particular language.
-#[with_fallible_options]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct LanguageSettingsContent {
     /// How many columns a tab should occupy.
@@ -398,7 +389,6 @@ pub enum ShowWhitespaceSetting {
     Trailing,
 }
 
-#[with_fallible_options]
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
 pub struct WhitespaceMapContent {
     pub space: Option<char>,
@@ -430,7 +420,6 @@ pub enum RewrapBehavior {
     Anywhere,
 }
 
-#[with_fallible_options]
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct JsxTagAutoCloseSettingsContent {
     /// Enables or disables auto-closing of JSX tags.
@@ -438,7 +427,6 @@ pub struct JsxTagAutoCloseSettingsContent {
 }
 
 /// The settings for inlay hints.
-#[with_fallible_options]
 #[derive(Clone, Default, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
 pub struct InlayHintSettingsContent {
     /// Global switch to toggle hints on and off.
@@ -516,7 +504,6 @@ impl InlayHintKind {
 }
 
 /// Controls how completions are processed for this language.
-#[with_fallible_options]
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq, JsonSchema, MergeFrom, Default)]
 #[serde(rename_all = "snake_case")]
 pub struct CompletionSettingsContent {
@@ -775,7 +762,6 @@ struct LanguageServerSpecifierContent {
 }
 
 /// The settings for indent guides.
-#[with_fallible_options]
 #[derive(Default, Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct IndentGuideSettingsContent {
     /// Whether to display indent guides in the editor.
@@ -801,7 +787,6 @@ pub struct IndentGuideSettingsContent {
 }
 
 /// The task settings for a particular language.
-#[with_fallible_options]
 #[derive(Debug, Clone, Default, Deserialize, PartialEq, Serialize, JsonSchema, MergeFrom)]
 pub struct LanguageTaskSettingsContent {
     /// Extra task variables to set for a particular language.
@@ -814,12 +799,10 @@ pub struct LanguageTaskSettingsContent {
 }
 
 /// Map from language name to settings.
-#[with_fallible_options]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct LanguageToSettingsMap(pub HashMap<String, LanguageSettingsContent>);
 
 /// Map from language name to file patterns.
-#[with_fallible_options]
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct FileTypeMap(pub HashMap<Arc<str>, ExtendingSet<String>>);
 

@@ -2,7 +2,6 @@ pub mod app_metadata;
 
 mod action;
 mod editor;
-mod fallible_options;
 mod language;
 pub mod merge_from;
 mod project;
@@ -19,18 +18,15 @@ use anyhow::Context;
 use collections::HashMap;
 use collections::IndexSet;
 pub use editor::*;
-pub use fallible_options::*;
 pub use language::*;
 pub use merge_from::MergeFrom as MergeFromTrait;
 pub use project::*;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
-use serde::de::DeserializeOwned;
 pub use serde_helper::serialize_f32_with_two_decimal_places;
 pub use serde_helper::serialize_optional_f32_with_two_decimal_places;
 use settings_macros::MergeFrom;
-use settings_macros::with_fallible_options;
 pub use terminal::*;
 pub use theme::*;
 pub use title_bar::*;
@@ -67,16 +63,6 @@ impl std::fmt::Display for PixelSetting {
 use std::hash::Hash;
 
 pub use util::serde::default_true;
-
-#[derive(Debug, Clone, PartialEq, Eq)]
-pub enum ParseStatus {
-    /// Settings were parsed successfully
-    Success,
-    /// Settings file was not changed, so no parsing was performed
-    Unchanged,
-    /// Settings failed to parse
-    Failed { error: String },
-}
 
 /// Determines when the mouse cursor should be hidden in response to keyboard
 /// input.
@@ -134,8 +120,7 @@ pub enum ReduceMotionMode {
     Off,
 }
 
-#[with_fallible_options]
-#[derive(Debug, PartialEq, Default, Clone, Serialize, JsonSchema, MergeFrom)]
+#[derive(Debug, PartialEq, Default, Clone, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct SettingsContent {
     #[serde(flatten)]
     pub project: ProjectSettingsContent,
@@ -231,20 +216,6 @@ impl SettingsContent {
     }
 }
 
-fallible_options::flattened_deserialize!(SettingsContent {
-    sections: { project, theme, workspace, editor, remote },
-    options: {
-        call_hierarchy, command_palette, file_finder, git_panel, tabs, tab_bar, tab_switcher, status_bar, preview_tabs,
-         diagnostics,
-        git,
-        global_lsp_settings, image_viewer, markdown_preview, hide_mouse,
-        log, line_indicator_format,   outline_panel, project_panel,
-        reduce_motion, session, terminal,
-        title_bar, modeline_lines,
-    },
-    defaults: {},
-});
-
 pub struct LanguageDefaultsContent {
     pub all_languages: AllLanguageSettingsContent,
 }
@@ -269,7 +240,6 @@ pub enum DockPosition {
     Right,
 }
 
-#[with_fallible_options]
 #[derive(Clone, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug)]
 pub struct GitPanelSettingsContent {
     /// Whether to show the panel button in the status bar.
@@ -454,7 +424,6 @@ pub enum StatusStyle {
     LabelColor,
 }
 
-#[with_fallible_options]
 #[derive(Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, PartialEq)]
 pub struct CommandPaletteSettingsContent {
     /// Whether to use command history ranking for sorting in the command palette.
@@ -463,7 +432,6 @@ pub struct CommandPaletteSettingsContent {
     pub use_command_history: Option<bool>,
 }
 
-#[with_fallible_options]
 #[derive(Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, PartialEq)]
 pub struct FileFinderSettingsContent {
     /// Whether to show file icons in the file finder.
@@ -551,7 +519,6 @@ impl ModalWidthContent {
     }
 }
 
-#[with_fallible_options]
 #[derive(Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, PartialEq)]
 pub struct CallHierarchySettingsContent {
     /// Determines how much space the call hierarchy picker can take up in relation to the available window width.
@@ -560,7 +527,6 @@ pub struct CallHierarchySettingsContent {
     pub modal_max_width: Option<ModalWidthContent>,
 }
 
-#[with_fallible_options]
 #[derive(Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, Debug, PartialEq)]
 pub struct OutlinePanelSettingsContent {
     /// Whether to show the outline panel button in the status bar.
@@ -658,7 +624,6 @@ pub enum ShowIndentGuides {
     Never,
 }
 
-#[with_fallible_options]
 #[derive(Copy, Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq, Default)]
 pub struct IndentGuidesSettingsContent {
     /// When to show the scrollbar in the outline panel.
@@ -674,7 +639,6 @@ pub enum LineIndicatorFormat {
 }
 
 /// The settings for the markdown preview.
-#[with_fallible_options]
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, Default, PartialEq)]
 pub struct MarkdownPreviewSettingsContent {
     /// The name of a font to use for rendering in the markdown preview.
@@ -712,7 +676,6 @@ pub struct MarkdownPreviewSettingsContent {
 }
 
 /// The settings for the image viewer.
-#[with_fallible_options]
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, Default, PartialEq)]
 pub struct ImageViewerSettingsContent {
     /// The unit to use for displaying image file sizes.
@@ -721,7 +684,6 @@ pub struct ImageViewerSettingsContent {
     pub unit: Option<ImageFileSizeUnit>,
 }
 
-#[with_fallible_options]
 #[derive(
     Clone,
     Copy,
@@ -744,13 +706,11 @@ pub enum ImageFileSizeUnit {
     Decimal,
 }
 
-#[with_fallible_options]
 #[derive(Clone, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
 pub struct RemoteSettingsContent {
     pub ssh_connections: Option<Vec<SshConnection>>,
 }
 
-#[with_fallible_options]
 #[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, JsonSchema, MergeFrom)]
 pub struct SshConnection {
     pub host: String,
@@ -768,13 +728,11 @@ pub struct SshConnection {
     pub connection_timeout: Option<u16>,
 }
 
-#[with_fallible_options]
 #[derive(Clone, Debug, Default, Serialize, PartialEq, Eq, PartialOrd, Ord, Deserialize, JsonSchema)]
 pub struct RemoteProject {
     pub paths: Vec<String>,
 }
 
-#[with_fallible_options]
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Deserialize, Serialize, JsonSchema, MergeFrom)]
 pub struct SshPortForwardOption {
     pub local_host: Option<String>,
@@ -908,12 +866,4 @@ impl std::str::FromStr for DelayMs {
             .map(DelayMs)
             .with_context(|| format!("failed to parse delay duration: {s}"))
     }
-}
-
-/// Parse JSON with comments and report the path to invalid values.
-pub fn parse_json_with_comments<T: DeserializeOwned>(content: &str) -> anyhow::Result<T> {
-    let mut deserializer = serde_json_lenient::Deserializer::from_str(content);
-    let value = serde_path_to_error::deserialize(&mut deserializer)?;
-    deserializer.end()?;
-    Ok(value)
 }

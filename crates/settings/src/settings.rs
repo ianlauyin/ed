@@ -16,11 +16,6 @@ pub mod settings_content {
     pub use ::settings_content::*;
 }
 
-pub mod fallible_options {
-    pub use ::settings_content::FallibleOption;
-    pub use ::settings_content::parse_json;
-}
-
 #[doc(hidden)]
 pub mod private {
     pub use inventory;

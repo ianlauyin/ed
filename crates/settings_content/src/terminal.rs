@@ -4,7 +4,6 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 use serde::Serialize;
 use settings_macros::MergeFrom;
-use settings_macros::with_fallible_options;
 
 use crate::FontFamilyName;
 use crate::FontFeaturesContent;
@@ -111,8 +110,7 @@ pub struct ProjectTerminalSettingsContent {
     pub path_hyperlink_timeout_ms: Option<u64>,
 }
 
-#[with_fallible_options]
-#[derive(Clone, Debug, PartialEq, Default, Serialize, JsonSchema, MergeFrom)]
+#[derive(Clone, Debug, PartialEq, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct TerminalSettingsContent {
     #[serde(flatten)]
     pub project: ProjectTerminalSettingsContent,
@@ -220,18 +218,6 @@ pub struct TerminalSettingsContent {
     #[serde(serialize_with = "crate::serialize_optional_f32_with_two_decimal_places")]
     pub minimum_contrast: Option<f32>,
 }
-
-crate::fallible_options::flattened_deserialize!(TerminalSettingsContent {
-    sections: { project },
-    options: {
-        font_size, font_family, font_fallbacks, line_height, font_features, font_weight,
-        cursor_shape, blinking, alternate_scroll, option_as_meta, copy_on_select,
-        keep_selection_on_copy, open_links_in_mouse_mode, button, dock,
-        default_width, default_height, max_scroll_history_lines, scroll_multiplier,
-        minimum_contrast,
-    },
-    defaults: {},
-});
 
 /// Shell configuration to open the terminal with.
 #[derive(

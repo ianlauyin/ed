@@ -11,7 +11,6 @@ use serde::Deserializer;
 use serde::Serialize;
 use serde_json::Value;
 use settings_macros::MergeFrom;
-use settings_macros::with_fallible_options;
 
 use crate::serialize_f32_with_two_decimal_places;
 
@@ -177,7 +176,6 @@ impl TryFrom<&ThemeColor> for gpui::Rgba {
 
 /// Settings for rendering text in UI and text buffers.
 
-#[with_fallible_options]
 #[derive(Clone, PartialEq, Debug, Default, Serialize, Deserialize, JsonSchema, MergeFrom)]
 pub struct ThemeSettingsContent {
     /// The default font size for text in the UI.
@@ -384,7 +382,6 @@ impl UiDensity {
 }
 
 /// Font family name.
-#[with_fallible_options]
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct FontFamilyName(pub Arc<str>);
@@ -436,7 +433,6 @@ where
 }
 
 /// The content of a serialized theme.
-#[with_fallible_options]
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
 #[serde(default)]
 pub struct ThemeStyleContent {
@@ -471,12 +467,10 @@ pub struct PlayerColorContent {
 }
 
 /// Theme name.
-#[with_fallible_options]
 #[derive(Clone, Debug, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq, Eq)]
 #[serde(transparent)]
 pub struct ThemeName(pub Arc<str>);
 
-#[with_fallible_options]
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
 #[serde(default)]
 pub struct ThemeColorsContent {
@@ -1099,7 +1093,6 @@ where
     Ok(T::deserialize(value).ok())
 }
 
-#[with_fallible_options]
 #[derive(Debug, Clone, Default, Serialize, Deserialize, JsonSchema, MergeFrom, PartialEq)]
 #[serde(default)]
 pub struct StatusColorsContent {
