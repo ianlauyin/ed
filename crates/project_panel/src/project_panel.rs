@@ -2548,7 +2548,7 @@ impl ProjectPanel {
                 message.push_str("\n\n1 of these has unsaved changes, which will be lost.");
             }
             dirty_buffers => {
-                message.push_str(&format!("\n\n{dirty_buffers} of these have unsaved changes, which will be lost."));
+                util::write_str!(message, "\n\n{dirty_buffers} of these have unsaved changes, which will be lost.");
             }
         }
 

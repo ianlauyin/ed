@@ -6906,9 +6906,9 @@ impl Repository {
         if rebase {
             status.push_str(" --rebase");
         }
-        status.push_str(&format!(" {}", remote));
+        util::write_str!(status, " {}", remote);
         if let Some(b) = &branch {
-            status.push_str(&format!(" {}", b));
+            util::write_str!(status, " {}", b);
         }
 
         self.send_job("pull", Some(status.into()), move |git_repo, cx| async move {

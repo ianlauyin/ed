@@ -2702,7 +2702,7 @@ impl GitPanel {
             .take(5)
             .join("\n");
         if entries.len() > 5 {
-            details.push_str(&format!("\nand {} more…", entries.len() - 5))
+            util::write_str!(details, "\nand {} more…", entries.len() - 5);
         }
 
         #[derive(strum::EnumIter, strum::VariantNames)]
@@ -2749,7 +2749,7 @@ impl GitPanel {
             .join("\n");
 
         if to_delete.len() > 5 {
-            details.push_str(&format!("\nand {} more…", to_delete.len() - 5))
+            util::write_str!(details, "\nand {} more…", to_delete.len() - 5);
         }
 
         let prompt = prompt("Trash these files?", Some(&details), window, cx);

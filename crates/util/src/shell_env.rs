@@ -117,8 +117,8 @@ async fn capture_unix(
     let quoted_dir = shell_kind.try_quote(&dir_str).context("unexpected null in directory name")?;
 
     // cd into the directory, triggering directory specific side-effects (asdf, direnv, etc)
-    command_string.push_str(&format!("cd {};", quoted_dir));
-    command_string.push_str(&format!("{} --printenv {}", quoted_zed_path, redir));
+    crate::write_str!(command_string, "cd {};", quoted_dir);
+    crate::write_str!(command_string, "{} --printenv {}", quoted_zed_path, redir);
 
     command.arg(&command_string);
 

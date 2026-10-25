@@ -354,8 +354,8 @@ fn path_match<T>(
                 {
                     let mut path = line[path_range].to_string();
                     position.inspect(|(line, column)| {
-                        path += &format!(":{line}");
-                        column.inspect(|column| path += &format!(":{column}"));
+                        util::write_str!(path, ":{line}");
+                        column.inspect(|column| util::write_str!(path, ":{column}"));
                     });
                     path
                 },

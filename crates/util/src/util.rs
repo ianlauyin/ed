@@ -17,6 +17,7 @@ pub mod paths;
 pub mod schemars;
 pub mod serde;
 pub mod size;
+pub mod string;
 pub mod time;
 
 use std::borrow::Cow;

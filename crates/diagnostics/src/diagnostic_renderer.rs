@@ -56,7 +56,7 @@ impl DiagnosticRenderer {
                     if entry.range.start.row.abs_diff(primary.range.start.row) >= 5 {
                         markdown.push_str("\n- hint: [");
                         markdown.push_str(&Markdown::escape(entry.diagnostic.message.as_str()));
-                        markdown.push_str(&format!("](file://#diagnostic-{buffer_id}-{group_id}-{ix})\n",))
+                        util::write_str!(markdown, "](file://#diagnostic-{buffer_id}-{group_id}-{ix})\n");
                     }
                 }
 
@@ -70,7 +70,7 @@ impl DiagnosticRenderer {
             } else {
                 append_source_and_code(&mut markdown, entry.diagnostic);
 
-                markdown.push_str(&format!(" ([back](file://#diagnostic-{buffer_id}-{group_id}-{primary_ix}))"));
+                util::write_str!(markdown, " ([back](file://#diagnostic-{buffer_id}-{group_id}-{primary_ix}))");
                 results.push(DiagnosticBlock {
                     initial_range: entry.range.clone(),
                     severity: entry.diagnostic.severity,

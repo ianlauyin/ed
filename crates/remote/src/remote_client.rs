@@ -413,8 +413,8 @@ impl RemoteClient {
                         let mut error = "remote client exited before becoming ready".to_owned();
                         if let Some(status) = io_task.now_or_never() {
                             match status {
-                                Ok(exit_code) => error.push_str(&format!(", exit_code={exit_code:?}")),
-                                Err(e) => error.push_str(&format!(", error={e:?}")),
+                                Ok(exit_code) => util::write_str!(error, ", exit_code={exit_code:?}"),
+                                Err(e) => util::write_str!(error, ", error={e:?}"),
                             }
                         }
                         let error = anyhow::anyhow!("{error}");
@@ -426,8 +426,8 @@ impl RemoteClient {
                         if let Some(status) = io_task.now_or_never() {
                             error.push_str("Client exited with ");
                             match status {
-                                Ok(exit_code) => error.push_str(&format!("exit_code {exit_code:?}")),
-                                Err(e) => error.push_str(&format!("error {e:?}")),
+                                Ok(exit_code) => util::write_str!(error, "exit_code {exit_code:?}"),
+                                Err(e) => util::write_str!(error, "error {e:?}"),
                             }
                         } else {
                             error.push_str("client did not become ready within the timeout");

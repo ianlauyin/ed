@@ -948,13 +948,14 @@ impl SyntaxSnapshot {
             let mut dump =
                 format!("layers out of order: {reason}\nbuffer: {:?}\nfile: {file_path}\nlayers:\n", text.remote_id(),);
             for layer in self.layers.iter() {
-                dump.push_str(&format!(
+                util::write_str!(
+                    dump,
                     "  depth={} range={:?} language={} id={:?}\n",
                     layer.depth,
                     layer.range.to_offset(text),
                     layer.content.language_name(),
                     layer.content.language_id(),
-                ));
+                );
             }
             panic!("{dump}");
         };
