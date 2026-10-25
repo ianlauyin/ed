@@ -36,6 +36,10 @@ remote detection, command execution, and proxy startup are removed.
   POSIX-family shells (sh/bash/zsh, fish, csh/tcsh, rc). Any other shell is
   treated as POSIX; PowerShell, cmd, Nushell, Xonsh, and Elvish quoting and
   syntax are not supported.
+- The terminal uses upstream `alacritty/alacritty` (`alacritty_terminal`, pinned
+  git rev), not Zed's fork. PTYs are spawned off the main thread; the spawning
+  thread temporarily takes the main thread's signal mask so the shell doesn't
+  inherit blocked signals (Ctrl-C).
 - Git operations (including clones and commit signing) and SSH connections require
   authentication that works without user input, such as an SSH agent or cached
   credentials. Password/passphrase requests fail instead of opening a prompt.

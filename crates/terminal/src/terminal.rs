@@ -1132,19 +1132,12 @@ impl TerminalBuilder {
                 let alacritty_shell = shell_params
                     .as_ref()
                     .map(|params| (params.program.clone(), params.args.clone().unwrap_or_default()));
-                let pty_options = pty_options(
-                    alacritty_shell,
-                    working_directory.clone(),
-                    env.clone(),
-                    // We pass in the foreground thread's signal mask to the child process via pty_options,
-                    // so terminal construction can run on a background thread without breaking Ctrl-C and other signals
-                    // otherwise the terminal would inherit the background executor's signal mask which blocks
-                    // some terminal signals
-                    child_signal_mask,
-                );
+                let pty_options = pty_options(alacritty_shell, working_directory.clone(), env.clone());
 
                 //Setup the pty...
-                let pty = match open_pty(&pty_options, TerminalBounds::default(), window_id) {
+                // Pass the foreground thread's signal mask so the PTY can be spawned on a background
+                // thread without the child inheriting that thread's blocked terminal signals (Ctrl-C).
+                let pty = match open_pty(&pty_options, TerminalBounds::default(), window_id, child_signal_mask) {
                     Ok(pty) => pty,
                     Err(error) => {
                         bail!(TerminalError {

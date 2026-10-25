@@ -1,8 +1,10 @@
 use std::borrow::Cow;
 use std::io;
+use std::mem::MaybeUninit;
 use std::ops::RangeInclusive;
 use std::os::fd::AsRawFd;
 use std::path::PathBuf;
+use std::ptr;
 use std::sync::Arc;
 
 mod hyperlinks;
@@ -170,15 +172,40 @@ pub(super) fn apply_config(term: &AlacrittyTermLock, config: &AlacrittyTermConfi
     term.lock().set_options(config.clone());
 }
 
-pub(super) fn current_child_signal_mask() -> io::Result<tty::SignalMask> {
-    tty::SignalMask::current()
+/// Signal mask captured on the foreground thread and applied to PTY children.
+#[derive(Clone, Copy)]
+pub(super) struct SignalMask(libc::sigset_t);
+
+pub(super) fn current_child_signal_mask() -> io::Result<SignalMask> {
+    let mut signal_set = MaybeUninit::<libc::sigset_t>::uninit();
+    // `pthread_sigmask` may only write part of `sigset_t`; start from an empty set.
+    if unsafe { libc::sigemptyset(signal_set.as_mut_ptr()) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let result = unsafe { libc::pthread_sigmask(libc::SIG_SETMASK, ptr::null(), signal_set.as_mut_ptr()) };
+    if result != 0 {
+        return Err(io::Error::from_raw_os_error(result));
+    }
+    Ok(SignalMask(unsafe { signal_set.assume_init() }))
+}
+
+/// Sets the calling thread's signal mask, returning the previous one.
+fn swap_thread_signal_mask(mask: &SignalMask) -> io::Result<SignalMask> {
+    let mut previous = MaybeUninit::<libc::sigset_t>::uninit();
+    if unsafe { libc::sigemptyset(previous.as_mut_ptr()) } != 0 {
+        return Err(io::Error::last_os_error());
+    }
+    let result = unsafe { libc::pthread_sigmask(libc::SIG_SETMASK, &raw const mask.0, previous.as_mut_ptr()) };
+    if result != 0 {
+        return Err(io::Error::from_raw_os_error(result));
+    }
+    Ok(SignalMask(unsafe { previous.assume_init() }))
 }
 
 pub(super) fn pty_options(
     shell: Option<(String, Vec<String>)>,
     working_directory: Option<PathBuf>,
     env: impl IntoIterator<Item = (String, String)>,
-    #[cfg(not(windows))] child_signal_mask: Option<tty::SignalMask>,
     #[cfg(windows)] escape_args: bool,
 ) -> tty::Options {
     tty::Options {
@@ -186,15 +213,28 @@ pub(super) fn pty_options(
         working_directory,
         drain_on_exit: true,
         env: env.into_iter().collect(),
-        #[cfg(not(windows))]
-        child_signal_mask,
         #[cfg(windows)]
         escape_args,
     }
 }
 
-pub(super) fn open_pty(options: &tty::Options, bounds: TerminalBounds, window_id: u64) -> io::Result<AlacrittyPty> {
-    tty::new(options, window_size_from_terminal_bounds(bounds), window_id)
+/// Spawns the PTY child with `child_signal_mask` instead of the calling thread's mask.
+///
+/// A forked child inherits the spawning thread's signal mask and `exec` keeps it. Background
+/// executor (GCD) threads block terminal signals such as `SIGINT`, so the foreground mask is
+/// swapped in on this thread for the duration of the spawn.
+pub(super) fn open_pty(
+    options: &tty::Options,
+    bounds: TerminalBounds,
+    window_id: u64,
+    child_signal_mask: Option<SignalMask>,
+) -> io::Result<AlacrittyPty> {
+    let previous_mask = child_signal_mask.as_ref().map(swap_thread_signal_mask).transpose()?;
+    let pty = tty::new(options, window_size_from_terminal_bounds(bounds), window_id);
+    if let Some(previous_mask) = previous_mask {
+        swap_thread_signal_mask(&previous_mask)?;
+    }
+    pty
 }
 
 pub(super) fn new_term(
